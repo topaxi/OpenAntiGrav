@@ -20,7 +20,9 @@
 // `lightmap_texcoord.zw`; `albedo` is the advert, `lightmap` the scanlines and
 // `pad_mask` the second layer. Samples are raw, as every HD program's are.
 
-import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene};
+import package::bindings::{emissives, scene};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask};
+@if(bindless) import package::bindings::{material_slots, samplers, textures};
 import oag_shaders::target::linear_out;
 import package::types::{VertexOutput};
 
@@ -36,10 +38,11 @@ fn overlay(base: vec3<f32>, layer: vec3<f32>) -> vec3<f32> {
 fn holo_billboard(in: VertexOutput) -> vec4<f32> {
     // The `bindless` variant's slot, as `lit_texel` takes it.
     @if(bindless) {
-        let albedo = albedo[in.material];
-        let albedo_sampler = albedo_sampler[in.material];
-        let lightmap = lightmap[in.material];
-        let pad_mask = pad_mask[in.material];
+        let slot = material_slots[in.material];
+        let albedo = textures[slot.albedo];
+        let albedo_sampler = samplers[slot.albedo_sampler];
+        let lightmap = textures[slot.lightmap];
+        let pad_mask = textures[slot.pad_mask];
     }
     let rates = emissives.tint_offset[in.slots >> 24u];
     let t = scene.time.x;

@@ -3,52 +3,88 @@
 //!
 //! Every draw of a drawable used to switch group 1 to its slot's group, and wgpu
 //! validates and tracks each switch when the encoder finishes: 55 to 65% of a
-//! view's `encoder.finish`. Here the five bindings of [`super::material_bind_group_layout`]
-//! become arrays with one element per slot, element `n` holding exactly what slot
-//! `n`'s group binds, so a draw names its slot by its first instance and the shader
-//! (`shaders/bindings.wesl`, the `bindless` feature) indexes every array by it. The
-//! pictures are the same by construction: the same texture and sampler per draw.
+//! view's `encoder.finish`. Here a drawable binds one group: every **distinct**
+//! texture its slots name in one array, its distinct samplers in another, and a
+//! table (a storage buffer) giving each slot the five indices its group named. A draw
+//! names its slot by its first instance, and the shader (`shaders/bindings.wesl`, the
+//! `bindless` feature) reads the slot's row and samples the same texture with the same
+//! sampler the slot's group bound, so the pictures are the same by construction.
 //!
-//! **The samplers are an array too, indexed by the same slot**, not a deduplicated
-//! set. A drawable binds one sampler for every slot (`build`'s repeat sampler), and
-//! the only other one a mesh draw binds is the billboard card's clamp sampler
-//! ([`super::albedo_bind_group`]), which an advert slot swaps in: two descriptors a
-//! race. A deduplicated set would need a per-slot index table, and wgpu refuses a
-//! uniform buffer in a group holding a binding array (Vulkan's update-after-bind), so
-//! the table would be a storage buffer read per fragment to save nothing measurable.
+//! **Distinct, and only the elements used.** wgpu walks one texture-initialisation
+//! check per array element each time the group is (re)bound in a pass, so an array of
+//! one element per slot and role (HD's Talon's Junction: 443 slots, four textures each)
+//! or one padded to a fixed length cost `finish` more than the switches it replaced
+//! (measured: Pulse's second view 288 to 440 us padded to 1,024, 318 to 216 padded to
+//! 256). So the arrays hold each texture once, the layout's length is a ceiling and a
+//! group supplies only what it uses, which is what [`wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY`]
+//! allows; and one fixed layout keeps a pipeline [`super::pipeline_cache`] built for one
+//! drawable valid for another's group.
+//!
+//! **The samplers are a small array too.** A drawable binds one sampler for every slot
+//! (`build`'s repeat sampler), and the only other a mesh draw binds is the billboard
+//! card's clamp sampler ([`super::albedo_bind_group`]), which an advert slot swaps in:
+//! two descriptors a race, one or two a drawable.
 //!
 //! Native only: WebGPU has no binding arrays, and a device without [`FEATURES`] keeps
 //! the per-slot groups and the default shader, byte for byte.
 
-/// The two device features the variant needs: texture and sampler arrays, indexed
-/// by a value the shader cannot prove uniform (a flat varying).
-pub const FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY.union(
-    wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-);
+/// The three device features the variant needs: texture and sampler arrays, indexed by
+/// a value the shader cannot prove uniform (a flat varying), and bound shorter than the
+/// layout's length.
+pub const FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY
+    .union(wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING)
+    .union(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
-/// Every array's length. **One fixed length**, so every bindless layout is equal and
-/// a pipeline [`super::pipeline_cache`] keeps for one drawable binds another's group;
-/// the elements past a drawable's own slots repeat slot 0. A drawable with more slots
-/// than this keeps the per-slot groups (and says so in the log).
+/// The texture array's length: the most distinct textures one drawable may bind. A
+/// drawable with more keeps the per-slot groups (and says so in the log).
 ///
-/// Chosen, not measured, with room over the circuits counted (slots, the white fallback
-/// included) on each title's default: 2048's Altima 524, Omega's Tech de Ra 462, HD's
-/// Talon's Junction 443 and Zone 18, Pure's Vineta K 189, Pulse's `16_Track` 136. A
-/// drawable past it draws exactly as before.
+/// Chosen, not measured, with room over the circuits counted: material slots (the white
+/// fallback included) on each title's default are 2048's Altima 524, Omega's Tech de Ra
+/// 462, HD's Talon's Junction 443 and Zone 18, Pure's Vineta K 189, Pulse's `16_Track`
+/// 136, and the distinct textures are fewer.
 pub const CAPACITY: u32 = 1024;
 
-/// Array elements of the five bindings together, which wgpu counts against
-/// `max_binding_array_elements_per_shader_stage`.
-const ELEMENTS: u32 = 5 * CAPACITY;
+/// The sampler array's length.
+pub const SAMPLERS: u32 = 16;
 
-/// Whether `device` can draw the variant: both features, and limits that hold
-/// [`CAPACITY`] in every array.
+/// The `u32`s of one slot's row in the table: `MaterialSlot` in `shaders/bindings.wesl`.
+const ROW: usize = 8;
+
+/// Whether `device` can draw the variant: the features, and limits that hold both arrays.
 #[must_use]
 pub fn supported(device: &wgpu::Device) -> bool {
     let limits = device.limits();
     device.features().contains(FEATURES)
-        && limits.max_binding_array_elements_per_shader_stage >= ELEMENTS
-        && limits.max_binding_array_sampler_elements_per_shader_stage >= CAPACITY
+        && limits.max_binding_array_elements_per_shader_stage >= CAPACITY + SAMPLERS
+        && limits.max_binding_array_sampler_elements_per_shader_stage >= SAMPLERS
+}
+
+/// Whether `model`'s slots fit the arrays: its distinct decoded textures, plus the three
+/// 1x1 fallbacks `build` shares between the slots that lack one, within [`CAPACITY`]. An
+/// upper bound on what [`Bindless::new`] places (a texture that does not upload becomes a
+/// fallback), so a model this passes always builds its group.
+#[must_use]
+pub fn fits(model: &crate::mesh::Model) -> bool {
+    let textures: std::collections::HashSet<_> = [
+        &model.textures,
+        &model.lightmaps,
+        &model.pad_masks,
+        &model.wave_maps,
+    ]
+    .into_iter()
+    .flatten()
+    .flatten()
+    .map(std::sync::Arc::as_ptr)
+    .collect();
+    let fits = textures.len() + 3 <= CAPACITY as usize;
+    if !fits {
+        log::info!(
+            "{}: {} distinct textures, over the bindless array's {CAPACITY}: per-slot groups",
+            model.label,
+            textures.len()
+        );
+    }
+    fits
 }
 
 /// Whether a drawable built on `device` uses the variant: [`supported`], unless
@@ -69,10 +105,10 @@ pub fn with_limits(limits: wgpu::Limits, adapter: &wgpu::Adapter) -> wgpu::Limit
     wgpu::Limits {
         max_binding_array_elements_per_shader_stage: own
             .max_binding_array_elements_per_shader_stage
-            .min(ELEMENTS),
+            .min(CAPACITY + SAMPLERS),
         max_binding_array_sampler_elements_per_shader_stage: own
             .max_binding_array_sampler_elements_per_shader_stage
-            .min(CAPACITY),
+            .min(SAMPLERS),
         ..limits
     }
 }
@@ -126,34 +162,38 @@ impl Material {
     }
 }
 
-/// The variant's group 1 layout: [`super::material_bind_group_layout`]'s five
-/// bindings, each an array of [`CAPACITY`].
+/// The variant's group 1 layout: the texture array, the sampler array and the table.
 #[must_use]
 pub fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-    let count = std::num::NonZeroU32::new(CAPACITY);
-    let texture = |binding| wgpu::BindGroupLayoutEntry {
-        binding,
-        visibility: wgpu::ShaderStages::FRAGMENT,
-        ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
-        },
-        count,
-    };
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("albedo arrays"),
+        label: Some("material arrays"),
         entries: &[
-            texture(0),
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: std::num::NonZeroU32::new(CAPACITY),
+            },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count,
+                count: std::num::NonZeroU32::new(SAMPLERS),
             },
-            texture(2),
-            texture(3),
-            texture(4),
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: std::num::NonZeroU64::new((ROW * 4) as u64),
+                },
+                count: None,
+            },
         ],
     })
 }
@@ -167,14 +207,19 @@ pub struct Bindless {
 }
 
 impl Bindless {
-    /// The group over `materials`, slot for slot, or `None` past [`CAPACITY`]
-    /// (or for no slot at all, which `build` never makes: slot 0 is its white).
+    /// The group over `materials`, slot for slot, or `None` past [`CAPACITY`] distinct
+    /// textures or [`SAMPLERS`] samplers (or for no slot at all, which `build` never
+    /// makes: slot 0 is its white).
     #[must_use]
     pub fn new(device: &wgpu::Device, materials: Vec<Material>) -> Option<Self> {
-        if materials.is_empty() || materials.len() > CAPACITY as usize {
+        let Some(group) = group(device, &materials) else {
+            log::info!(
+                "bindless: {} material slots name more than {CAPACITY} textures or \
+                 {SAMPLERS} samplers: per-slot groups",
+                materials.len()
+            );
             return None;
-        }
-        let group = group(device, &materials);
+        };
         Some(Self { materials, group })
     }
 
@@ -184,41 +229,87 @@ impl Bindless {
         &self.group
     }
 
-    /// How many slots are this drawable's own (the rest repeat slot 0).
-    #[must_use]
-    pub fn slots(&self) -> usize {
-        self.materials.len()
-    }
-
     /// Replaces slot `slot` with `material` and rebuilds the group. A slot this
-    /// drawable does not have is left alone.
+    /// drawable does not have, or one that would take the arrays past their length,
+    /// is left alone.
     pub fn set(&mut self, device: &wgpu::Device, slot: usize, material: Material) {
-        let Some(current) = self.materials.get_mut(slot) else {
+        if slot >= self.materials.len() {
             return;
-        };
-        *current = material;
-        self.group = group(device, &self.materials);
+        }
+        let previous = std::mem::replace(&mut self.materials[slot], material);
+        match group(device, &self.materials) {
+            Some(group) => self.group = group,
+            None => {
+                log::warn!("bindless: slot {slot}'s new material does not fit; kept the old");
+                self.materials[slot] = previous;
+            }
+        }
     }
 }
 
-fn group(device: &wgpu::Device, materials: &[Material]) -> wgpu::BindGroup {
-    let at = |index: usize| materials.get(index).unwrap_or(&materials[0]);
-    let all = 0..CAPACITY as usize;
-    let views = |pick: fn(&Material) -> &wgpu::TextureView| -> Vec<&wgpu::TextureView> {
-        all.clone().map(|index| pick(at(index))).collect()
-    };
-    let albedo = views(|m| &m.albedo);
-    let lightmap = views(|m| &m.lightmap);
-    let pad_mask = views(|m| &m.pad_mask);
-    let wave = views(|m| &m.wave);
-    let samplers: Vec<&wgpu::Sampler> = all.clone().map(|index| &at(index).sampler).collect();
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("albedo arrays"),
+/// The distinct items of `all`, in first-seen order, and each item's index among them.
+fn distinct<T: Clone + Eq + std::hash::Hash>(all: impl Iterator<Item = T>) -> (Vec<T>, Vec<u32>) {
+    let mut seen = std::collections::HashMap::new();
+    let mut items = Vec::new();
+    let indices = all
+        .map(|item| {
+            *seen.entry(item.clone()).or_insert_with(|| {
+                items.push(item);
+                (items.len() - 1) as u32
+            })
+        })
+        .collect();
+    (items, indices)
+}
+
+/// The group over `materials`: their distinct textures and samplers, and the table of
+/// each slot's indices into them, `[albedo, lightmap, pad_mask, wave, sampler, 0, 0, 0]`.
+fn group(device: &wgpu::Device, materials: &[Material]) -> Option<wgpu::BindGroup> {
+    let (views, view_index) = distinct(
+        materials
+            .iter()
+            .flat_map(|m| [&m.albedo, &m.lightmap, &m.pad_mask, &m.wave]),
+    );
+    let (samplers, sampler_index) = distinct(materials.iter().map(|m| &m.sampler));
+    log::debug!(
+        "bindless: {} slots, {} textures, {} samplers",
+        materials.len(),
+        views.len(),
+        samplers.len()
+    );
+    if views.is_empty() || views.len() > CAPACITY as usize || samplers.len() > SAMPLERS as usize
+    {
+        return None;
+    }
+    let table: Vec<u32> = view_index
+        .chunks_exact(4)
+        .zip(&sampler_index)
+        .flat_map(|(roles, &sampler)| {
+            let mut row = [0; ROW];
+            row[..4].copy_from_slice(roles);
+            row[4] = sampler;
+            row
+        })
+        .collect();
+    let table_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("material slots"),
+        size: std::mem::size_of_val(&table[..]) as u64,
+        usage: wgpu::BufferUsages::STORAGE,
+        mapped_at_creation: true,
+    });
+    table_buffer
+        .slice(..)
+        .get_mapped_range_mut()
+        .expect("mapped at creation")
+        .copy_from_slice(bytemuck::cast_slice(&table));
+    table_buffer.unmap();
+    Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("material arrays"),
         layout: &layout(device),
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&albedo),
+                resource: wgpu::BindingResource::TextureViewArray(&views),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -226,16 +317,8 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> wgpu::BindGroup {
             },
             wgpu::BindGroupEntry {
                 binding: 2,
-                resource: wgpu::BindingResource::TextureViewArray(&lightmap),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::TextureViewArray(&pad_mask),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::TextureViewArray(&wave),
+                resource: table_buffer.as_entire_binding(),
             },
         ],
-    })
+    }))
 }

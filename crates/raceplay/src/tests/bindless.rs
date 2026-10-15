@@ -8,9 +8,14 @@ use oag_mesh::mesh::{Bounds, DrawCall};
 const SIZE: u32 = 64;
 const STRIPS: usize = 8;
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+const SHARED: usize = 5;
+const SHARED_WITH: usize = 2;
+const UNDECODED: usize = 6;
 
 /// `STRIPS` vertical strips across the screen in clip space, strip `i` drawn as its own
-/// draw call from texture slot `i`, a 1x1 of its own colour.
+/// draw call from texture slot `i`, a 1x1 of its own colour, except that slot [`SHARED`]
+/// names slot [`SHARED_WITH`]'s texture (the arrays hold it once) and slot [`UNDECODED`]
+/// has none (the white fallback every such slot shares).
 fn strips() -> Model {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -41,7 +46,7 @@ fn strips() -> Model {
             alpha_test_ref: None,
         });
     }
-    let textures = (0..STRIPS)
+    let mut textures: Vec<_> = (0..STRIPS)
         .map(|strip| {
             let rgba = vec![
                 (strip * 31 % 256) as u8,
@@ -58,6 +63,8 @@ fn strips() -> Model {
             )))
         })
         .collect();
+    textures[SHARED] = textures[SHARED_WITH].clone();
+    textures[UNDECODED] = None;
     Model {
         vertices,
         indices,
@@ -193,11 +200,12 @@ fn centres(pixels: &[u8]) -> Vec<[u8; 4]> {
         .collect()
 }
 
-/// **A draw on the arrays reads its own slot.** Eight draws, eight slots of eight colours,
-/// drawn once through the arrays and once through the per-slot groups: every pixel equal,
-/// and the eight strips distinct, so a draw reading a neighbour's slot (the instance off by
-/// one, the white fallback at 0 forgotten, two arrays swapped) changes a strip. Fails, too,
-/// if a device that has the features stops taking the arrays path.
+/// **A draw on the arrays reads its own slot.** Eight draws of eight slots, drawn once
+/// through the arrays and once through the per-slot groups: every pixel equal, and the
+/// strips distinct but for the one pair that shares a texture, so a draw reading another
+/// slot (the instance off by one, the white fallback at 0 forgotten, a table row or a role
+/// in it shifted) changes a strip. Fails, too, if a device that has the features stops
+/// taking the arrays path.
 #[test]
 fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     let Some((device, queue)) = test_gpu() else {
@@ -214,7 +222,11 @@ fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     assert!(!per_slot.binds_arrays());
     let expected = pixels(&device, &queue, &per_slot);
     let strips = centres(&expected);
+    assert_eq!(strips[SHARED], strips[SHARED_WITH], "one texture, one colour");
     for (index, strip) in strips.iter().enumerate() {
+        if index == SHARED {
+            continue;
+        }
         assert!(
             !strips[..index].contains(strip),
             "strip {index} draws {strip:?} like an earlier one: {strips:?}"

@@ -305,18 +305,7 @@ pub fn build_with(
     // it did; every caller draws [`Built::texture_binds`] otherwise.
     bindless: bool,
 ) -> Result<Built> {
-    let bindless = bindless && bindless::supported(device) && {
-        let slots = model.textures.len() + 1;
-        let fits = slots <= bindless::CAPACITY as usize;
-        if !fits {
-            log::info!(
-                "{}: {slots} material slots, over the bindless arrays' {}: per-slot groups",
-                model.label,
-                bindless::CAPACITY
-            );
-        }
-        fits
-    };
+    let bindless = bindless && bindless::supported(device) && bindless::fits(model);
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
     let (depth_write, depth_compare) = match depth {
@@ -905,6 +894,9 @@ pub fn build_with(
     // track material". Full gloss is the honest default there: the specular
     // block that *was* read (#7) masks by the lightmap's own alpha, and a
     // surface with no lightmap has no mask to apply.
+    //
+    // One of each, shared by every slot that lacks the texture: the same texels as a 1x1
+    // per slot, and one element of the bindless texture array rather than one per slot.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
     let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
     // A material with no pad mask binds a flat tangent-space normal
@@ -940,7 +932,7 @@ pub fn build_with(
 
     let mut materials = vec![material(
         white.clone(),
-        no_lightmap,
+        no_lightmap.clone(),
         no_pad_mask.clone(),
         white.clone(),
     )];
@@ -949,13 +941,13 @@ pub fn build_with(
         let albedo = slot
             .as_ref()
             .and_then(&mut view_of)
-            .unwrap_or_else(|| make(1, 1, &[255, 255, 255, 255], "undecoded"));
+            .unwrap_or_else(|| white.clone());
         let lightmap = model
             .lightmaps
             .get(index)
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
-            .unwrap_or_else(|| make(1, 1, &[0, 0, 0, 255], "no lightmap"));
+            .unwrap_or_else(|| no_lightmap.clone());
         let pad_mask = model
             .pad_masks
             .get(index)
@@ -978,12 +970,14 @@ pub fn build_with(
         .collect();
     let bindless = if bindless {
         log::info!(
-            "{}: group 1 as binding arrays, {} material slots of {}",
+            "{}: group 1 as binding arrays, {} material slots",
             model.label,
-            materials.len(),
-            bindless::CAPACITY
+            materials.len()
         );
-        bindless::Bindless::new(device, materials)
+        Some(
+            bindless::Bindless::new(device, materials)
+                .expect("`bindless::fits` bounds the textures, and every slot shares the sampler"),
+        )
     } else {
         None
     };

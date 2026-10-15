@@ -1,35 +1,51 @@
 // The mesh shader's bind groups 0-3: per-draw, per-material, scene and animation resources.
 
-// The `bindless` variant (`mesh_render::Bindless`): group 1's five bindings are
-// arrays with one element per material slot, bound once per drawable, and a draw
-// names its slot by its instance index. Native only; WebGPU has no binding arrays.
-// Its `enable` directive is `mesh.wesl`'s, the root module's.
-
 import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
 @if(!bindless) @group(1) @binding(0) var albedo: texture_2d<f32>;
-@if(bindless) @group(1) @binding(0) var albedo: binding_array<texture_2d<f32>>;
 
 @if(!bindless) @group(1) @binding(1) var albedo_sampler: sampler;
-@if(bindless) @group(1) @binding(1) var albedo_sampler: binding_array<sampler>;
 
 // The circuit's baked lighting atlas, on the surfaces whose material names one.
 // Every other draw binds a white 1x1, so the multiply below is the identity and
 // no branch is needed - the same arrangement `albedo` already uses.
 @if(!bindless) @group(1) @binding(2) var lightmap: texture_2d<f32>;
-@if(bindless) @group(1) @binding(2) var lightmap: binding_array<texture_2d<f32>>;
 
 // HD's pad mask (`_ne`): RGB a tangent-space normal, alpha the light-bar mask.
 // Bound third, beside the lightmap, and read only where `slots::PAD_NE` (bit
 // 14) is set - see `mesh::rcs::pad_ne`. A flat 1x1 everywhere else.
 @if(!bindless) @group(1) @binding(3) var pad_mask: texture_2d<f32>;
-@if(bindless) @group(1) @binding(3) var pad_mask: binding_array<texture_2d<f32>>;
 
 // HD's magstrip wave, read only where `slots::MAG_WAVE` is set. `mesh::rcs::mag_wave`.
 @if(!bindless) @group(1) @binding(4) var wave_map: texture_2d<f32>;
-@if(bindless) @group(1) @binding(4) var wave_map: binding_array<texture_2d<f32>>;
+
+// The `bindless` variant (`mesh_render::bindless`): group 1 is a drawable's distinct
+// textures and samplers in two arrays and a row per material slot naming which of them
+// the slot's five bindings were, bound once per drawable; a draw names its slot by its
+// instance index (`VertexOutput::material`). Every function that reads the five names
+// below declares them from that row first, so the rest of the shader is one source.
+// Native only; WebGPU has no binding arrays. The `enable` directive is `mesh.wesl`'s,
+// the root module's.
+@if(bindless) @group(1) @binding(0) var textures: binding_array<texture_2d<f32>>;
+
+@if(bindless) @group(1) @binding(1) var samplers: binding_array<sampler>;
+
+// One material slot's indices into `textures` and `samplers`, written by
+// `mesh_render::bindless`'s `group`.
+@if(bindless) struct MaterialSlot {
+    albedo: u32,
+    lightmap: u32,
+    pad_mask: u32,
+    wave_map: u32,
+    albedo_sampler: u32,
+    pad0: u32,
+    pad1: u32,
+    pad2: u32,
+}
+
+@if(bindless) @group(1) @binding(2) var<storage, read> material_slots: array<MaterialSlot>;
 
 @group(2) @binding(0) var<uniform> scene: Scene;
 
@@ -118,6 +134,5 @@ var<private> sun_delta: vec3<f32>;
 var<private> sun_known: f32;
 
 // The `bindless` variant's material slot, `VertexOutput::material`: set by
-// `lit_texel` before anything reads group 1, and read by every function that
-// does, each of which shadows the arrays above with its own slot's element.
+// `lit_texel` before anything reads group 1, and read by every function that does.
 @if(bindless) var<private> material: u32;

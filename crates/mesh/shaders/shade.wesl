@@ -1,8 +1,9 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, sun_delta, sun_known, uniforms, wave_map};
-@if(bindless) import package::bindings::{material};
+import package::bindings::{emissives, scene, sun_delta, sun_known, uniforms};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
+@if(bindless) import package::bindings::{material, material_slots, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::holo::{holo_billboard};
 import package::pad::{pad_normal};
@@ -25,11 +26,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // names the per-draw variant binds them by - see `bindings.wesl`.
     @if(bindless) {
         material = in.material;
-        let albedo = albedo[material];
-        let albedo_sampler = albedo_sampler[material];
-        let lightmap = lightmap[material];
-        let pad_mask = pad_mask[material];
-        let wave_map = wave_map[material];
+        let slot = material_slots[material];
+        let albedo = textures[slot.albedo];
+        let albedo_sampler = samplers[slot.albedo_sampler];
+        let lightmap = textures[slot.lightmap];
+        let pad_mask = textures[slot.pad_mask];
+        let wave_map = textures[slot.wave_map];
     }
     if (in.slots & 8388608u) != 0u {
         return holo_billboard(in);
