@@ -165,7 +165,7 @@ impl super::Scene {
         &self,
         race: &Race,
         prev: &Snapshot,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         prev_vp: Mat4,
         seconds: f32,
@@ -254,10 +254,11 @@ impl super::Scene {
         &self,
         live: usize,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         for drawable in self.plasma_blast.shuriken.iter().take(live) {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
     }
 
@@ -287,7 +288,7 @@ impl super::Scene {
     pub(super) fn write_plasma_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
@@ -343,6 +344,7 @@ impl super::Scene {
         &self,
         active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         let pools = [
@@ -353,7 +355,7 @@ impl super::Scene {
         for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
             for pool in pools {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, None, None, None, None));
+                    stats.add(drawable.draw(pass, block, None, None, None, None));
                 }
             }
         }
@@ -384,7 +386,7 @@ impl super::Scene {
     pub(super) fn write_bomb_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         seconds: f32,
         weapon_scene: &mesh_render::Scene,
@@ -454,11 +456,12 @@ impl super::Scene {
         &self,
         active: &BlastsActive,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
-        self.draw_hd_bomb_blasts(&active.hd, pass, stats);
+        self.draw_hd_bomb_blasts(&active.hd, pass, block, stats);
         for drawable in self.bomb_blast.hd.halo.iter().take(active.halos) {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
         for (drawable, _) in self
             .bomb_blast
@@ -468,12 +471,12 @@ impl super::Scene {
             .zip(&active.missiles)
             .filter(|(_, live)| **live)
         {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
             for pool in &self.bomb_blast.mag_floor {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, None, None, None, None));
+                    stats.add(drawable.draw(pass, block, None, None, None, None));
                 }
             }
         }
@@ -484,7 +487,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.repulser_field.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
         for (slot, _) in active
@@ -494,7 +497,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.hemisphere.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
         for (slot, _) in active
@@ -504,7 +507,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.shockwave.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
     }
@@ -540,7 +543,7 @@ impl super::Scene {
     fn write_hd_bomb_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS] {
@@ -584,7 +587,7 @@ impl super::Scene {
     fn write_hd_bomb_halos(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> usize {
@@ -612,7 +615,7 @@ impl super::Scene {
     fn write_hd_missile_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; crate::missile_blast::SLOTS] {
@@ -644,12 +647,13 @@ impl super::Scene {
         &self,
         shown: &[Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         let pools = &self.bomb_blast.hd;
         let mut draw = |drawable: Option<&Drawable>, shown: bool| {
             if let (Some(drawable), true) = (drawable, shown) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         };
         for (slot, pieces) in shown.iter().enumerate() {
@@ -679,7 +683,7 @@ impl super::Scene {
     fn write_mag_floor_fx(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         seconds: f32,
     ) -> [bool; oag_weapons::MAX_SHIPS] {
@@ -715,7 +719,7 @@ fn write_one_kind(
     weapon_scene: &mesh_render::Scene,
     matrices: &[Mat4],
     previous: &[Mat4],
-    queue: &wgpu::Queue,
+    queue: &Uploads<'_>,
     view_projection: Mat4,
     prev_vp: Mat4,
     anim_seconds: Option<f32>,
@@ -734,7 +738,7 @@ fn write_one_kind(
 /// Puts the circuit's scene block on a weapon drawable a PS3 program shades.
 pub(super) fn write_fog(drawable: &Drawable, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
     if drawable.is_ps3_shaded() {
-        queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
+        drawable.write_scene(queue, scene);
     }
 }
 

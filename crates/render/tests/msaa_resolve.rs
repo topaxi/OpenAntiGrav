@@ -278,11 +278,11 @@ fn render_and_resolve(
             multiview_mask: None,
         });
         pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, &bind_group, &[0]);
         // Group 2 is fog, left at `Fog::off`. The pipeline layout requires it
         // bound even when it does nothing, which is what this line is for - and
         // the first run of this test after fog landed is what caught that.
-        pass.set_bind_group(2, &fog_bind, &[]);
+        pass.set_bind_group(2, &fog_bind, &[0]);
         // Group 3 is the texture-transform table. Left at the all-identity
         // buffer `build` initialises: this test is about MSAA resolve, not
         // animation, and an identity transform draws the authored UVs.

@@ -423,8 +423,8 @@ impl Countdown {
         // across the whole surface.
         pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
 
-        pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.set_bind_group(2, &self.built.fog_bind, &[]);
+        pass.set_bind_group(0, &self.bind_group, &[0]);
+        pass.set_bind_group(2, &self.built.fog_bind, &[0]);
         pass.set_bind_group(3, &self.built.anim_bind, &[]);
         pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

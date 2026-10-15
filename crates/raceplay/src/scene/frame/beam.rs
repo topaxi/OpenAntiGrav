@@ -7,7 +7,7 @@
 use oag_core::math::Mat4;
 use oag_mesh::mesh_render;
 
-use crate::{Race, SceneStats};
+use crate::{Race, SceneStats, Uploads, ViewBlock};
 
 impl super::super::Scene {
     /// Uploads this frame's ribbon geometry, or nothing when
@@ -61,7 +61,7 @@ impl super::super::Scene {
     pub(super) fn write_leach_ball(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> bool {
@@ -81,10 +81,11 @@ impl super::super::Scene {
         &self,
         active: bool,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         if active && let Some(drawable) = &self.leach_ball {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
     }
 }

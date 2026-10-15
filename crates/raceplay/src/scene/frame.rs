@@ -64,6 +64,18 @@ impl Scene {
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
+        // The scene blocks of the view being drawn: the craft it follows names them, so two
+        // views of a frame never read or write the same one (`SceneBlocks`).
+        let block = SceneBlocks::view(race.viewed_slot());
+        // Every drawable's matrices of this view are staged here and written once, in runs,
+        // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
+        let uploads = Uploads::begin(
+            queue,
+            &self.uniform_blocks,
+            block,
+            std::mem::take(&mut *self.upload_staging.borrow_mut()),
+        );
+        let queue = &uploads;
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let projection = race.projection(aspect, self.far, fov);
         let view_projection = projection * race.view();
@@ -253,7 +265,6 @@ impl Scene {
         .into_iter()
         .flatten()
         {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
             // Written for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
@@ -281,7 +292,6 @@ impl Scene {
             light,
             ..scene
         };
-        self.write_ship_scenes(queue, &ship_scene);
         let weapon_scene = Self::weapon_scene(&scene);
         // The scenery's clocks and the advert cards are functions of the race
         // clock and nothing the camera decides: a split screen runs them with its
@@ -299,7 +309,6 @@ impl Scene {
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
-            queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
@@ -312,13 +321,29 @@ impl Scene {
         }
         let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
         let glass = (section_view, eye, seconds);
-        let behind_glass =
-            self.render_behind_glass(queue, encoder, &scene, glass, set, chunks, frustum.as_ref());
+        let behind_glass = self.render_behind_glass(
+            queue,
+            encoder,
+            block,
+            &scene,
+            glass,
+            set,
+            chunks,
+            frustum.as_ref(),
+        );
         oag_gpu::perfprobe::mark("scenery-anims");
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
         // original, so there is nothing about them for that switch to test.
-        for drawable in &self.ships {
+        // **A function of the race clock alone, so the first view of a frame writes it**: a
+        // later view of a split reads the tables that view left (`Scene::does_frame_work`).
+        if first_view {
+            self.frame_work.update(|w| super::FrameWork {
+                craft_anims: w.craft_anims + 1,
+                ..w
+            });
+        }
+        for drawable in self.ships.iter().filter(|_| first_view) {
             drawable.write_anims(queue, seconds);
             // A hull whose hinges are `Anim Transform` nodes (HD's, 2048's
             // `Airbrake_L`/`Airbrake_R`) bakes the flap's vertices in the
@@ -349,9 +374,7 @@ impl Scene {
             time: [seconds; 4],
             ..mesh_render::Scene::off()
         };
-        for drawable in self.flares.iter().chain(&self.boost).flatten() {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&flame_scene));
-        }
+        self.write_scene_blocks(queue, block, &scene, &ship_scene, &flame_scene);
 
         // The sky rides with the eye. Translating it to the camera is what makes
         // an authored cube tens of units across stand in for a horizon: the
@@ -723,6 +746,7 @@ impl Scene {
             None => (target, None),
         };
         let velocity_view = &self.attachment_views.velocity;
+        uploads.flush();
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
             color_attachments: &[
@@ -816,6 +840,7 @@ impl Scene {
         let mut stats = behind_glass;
         stats.add(self.draw_track(
             &mut pass,
+            block,
             viewport,
             self.visibility.as_ref().map(|v| &v.sections),
             visible_set.as_ref(),
@@ -829,14 +854,14 @@ impl Scene {
         // different reason.
         oag_gpu::perfprobe::marks::mark(&mut pass, "pads, gantry, shadow");
         if let Some(pads) = &self.pads {
-            stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
+            stats.add(pads.draw(&mut pass, block, None, None, None, frustum.as_ref()));
         }
         if let Some(pads) = &self.weapon_pads {
-            stats.add(pads.draw(&mut pass, None, None, None, frustum.as_ref()));
+            stats.add(pads.draw(&mut pass, block, None, None, None, frustum.as_ref()));
         }
         // With the track and before the hulls: scenery a craft passes under.
         if let Some(gantry) = &self.gantry {
-            stats.add(gantry.draw(&mut pass, frustum.as_ref()));
+            stats.add(gantry.draw(&mut pass, block, frustum.as_ref()));
         }
         // After the track and the pads, before the hulls: the road's depth has
         // to be in the buffer for the quad to be occluded by the geometry in
@@ -867,31 +892,36 @@ impl Scene {
             ) {
                 continue;
             }
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
         oag_gpu::perfprobe::marks::mark(&mut pass, "wrecks, weapon bodies");
-        self.draw_wrecks(race, &mut pass, &mut stats);
+        self.draw_wrecks(race, &mut pass, block, &mut stats);
         // Every weapon's own body: opaque painted models, bounded by how many
         // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
         for drawable in self.mines.iter().take(mine_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
         for drawable in self.bombs.iter().take(bomb_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
         for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, None, None, None, None));
+            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
-        self.draw_shurikens(race.shuriken_model_matrices().len(), &mut pass, &mut stats);
-        self.draw_plasma_blasts(&plasma_blast_active, &mut pass, &mut stats);
-        self.draw_bomb_blasts(&blasts_active, &mut pass, &mut stats);
-        self.draw_leach_ball(leach_ball_active, &mut pass, &mut stats);
+        self.draw_shurikens(
+            race.shuriken_model_matrices().len(),
+            &mut pass,
+            block,
+            &mut stats,
+        );
+        self.draw_plasma_blasts(&plasma_blast_active, &mut pass, block, &mut stats);
+        self.draw_bomb_blasts(&blasts_active, &mut pass, block, &mut stats);
+        self.draw_leach_ball(leach_ball_active, &mut pass, block, &mut stats);
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same
@@ -920,7 +950,7 @@ impl Scene {
             // carries its material's own factor pair, so the ordinary path
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
-            stats.add(flare.draw(&mut pass, None, None, None, None));
+            stats.add(flare.draw(&mut pass, block, None, None, None, None));
         }
         oag_gpu::perfprobe::marks::mark(&mut pass, "boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
@@ -936,7 +966,7 @@ impl Scene {
             // Additive for every list, not just the transparent one - see
             // `Drawable::draw_additive`, which carries the reference frame
             // that settled it and the PS2 dispatch that has not been followed.
-            stats.add(boost.draw_additive(&mut pass));
+            stats.add(boost.draw_additive(&mut pass, block));
         }
         // With the plumes, and after the hulls for the same reason: the shell
         // wraps a craft whose depth has to already be in the buffer, or the far
@@ -954,17 +984,17 @@ impl Scene {
             if !race.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
-            stats.add(shell.draw(&mut pass, None, None, None, None));
+            stats.add(shell.draw(&mut pass, block, None, None, None, None));
         }
         if let Some(sphere) = &self.shield_cockpit
             && cockpit_shield_visible(race)
         {
-            stats.add(sphere.draw(&mut pass, None, None, None, None));
+            stats.add(sphere.draw(&mut pass, block, None, None, None, None));
         }
-        self.draw_absorb_overlays(race, &mut pass, &mut stats);
-        self.draw_absorb_shells(race, &mut pass, &mut stats);
+        self.draw_absorb_overlays(race, &mut pass, block, &mut stats);
+        self.draw_absorb_shells(race, &mut pass, block, &mut stats);
         if let Some(collision) = &self.collision {
-            stats.add(collision.draw(&mut pass, None, None, None, None));
+            stats.add(collision.draw(&mut pass, block, None, None, None, None));
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
@@ -982,10 +1012,10 @@ impl Scene {
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
         //
-        // A split-screen view runs neither chain: both encode into `view` with a
-        // clearing pass and sample the linear scene from its top-left, so one run
-        // per view would wipe every earlier view. `Scene::render_viewports` runs
-        // the chain once over the whole area after the last view instead.
+        // A split-screen view runs neither chain as it is drawn: HD's encode clears
+        // `view`, so one run per view would wipe every earlier view.
+        // `Scene::render_viewports` runs each chain once per view over its own
+        // rectangle after the last view instead (`split_exposure`).
         //
         // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
         // target's origin and fills it, which is what the chains sample from, so it
@@ -1062,6 +1092,7 @@ impl Scene {
             blur_timestamps,
         );
         oag_gpu::perfprobe::mark("post-chain");
+        *self.upload_staging.borrow_mut() = uploads.into_staging();
         stats
     }
 }

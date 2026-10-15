@@ -191,35 +191,96 @@ things make that more than a loop:
    and the race clock, so every picture is byte-identical to doing them per view, and
    they were more than half of a view's CPU on Pulse. See "Cost".
 
-6. **HD's and Omega's post chains run once, after the last view, glow included.** Both draw the
-   scene into a linear float target and then *encode* it into the frame with a pass
-   that clears the whole frame, sampling the linear target from its top-left whatever
-   the view's origin is. Run once per view (as `Scene::render` first did), each
-   encode wiped every earlier view and every later view was graded from the first
-   view's pixels: a two-player HD race drew a black top view and the bottom view
-   showed the first view's (slot 0's) picture. 2048 draws through HD's chain and had the same black
-   view; Omega's tone map does not clear, so its bottom view showed the top view's
-   picture twice. The views now only fill the linear target, and
-   `Scene::encode_split_post` (`crates/raceplay/src/scene/viewports.rs`) runs the
-   chain once over the whole area, which is exactly what one view passes.
-   **HD's bloom is not skipped** (the thread that opened `split-bloom` believed it was; the
-   chain's glow is drawn with `Glow::Drawn` over the whole area, and every HD split still in
-   this lane's capture set shows it). **Chosen, not measured**: one exposure and one glow for
-   the whole picture (glow bleeds a few pixels across the 2 pixel gap), and **a reach scaled
-   to the views** (2026-10-15): the blur's tap spacing is authored against the whole frame, so
-   a view showing half the pixels glowed twice as far across a craft half the size;
-   `Chain::set_reach` scales the spacing by the mean over the views of their pixels per
-   texel against a whole picture's (`scene::bloom::mean_reach`, 0.5 on both axes for every
-   two- and four-way cut) for a split frame and puts it back, so a one-view frame is
-   byte-identical (`cmp`, Talon's Junction). **2048: ported** (it draws through HD's `hd_bloom::Chain`, so
-   the reach applies; one 2h still looked at, glow on the craft and no black view, and
-   `split_screen_ground_truth` passed). **Omega: checked, differs** (its own tone map, no
-   `hd_bloom` glow, so there is nothing for the reach to scale). HD's boost zoom streak is not drawn
-   (it holds the primary craft's pulse) and Omega's distortion offsets are not drawn
-   (the pass reads a depth attachment only the last view still has). Both open.
-   `crates/game/tests/split_screen_ground_truth.rs` pins HD two and four views,
-   Omega and 2048 two views: every rectangle drawn, no two the same. 2048 and Omega
-   share the path: **ported**, each with its own test.
+6. **HD's and Omega's post chains run once per view, after the last view is drawn, each
+   seat adapting to its own pixels** (2026-10-15, `hd-exposure`). Both draw the scene into a
+   linear float target and then *encode* it into the frame with a pass; HD's also reads the
+   scene's mean luminance and adapts an exposure and a glow fade from it, Omega's steps a
+   luminance history into an exposure and a cubic. Run per view as the views were drawn,
+   each encode wiped every earlier view and every later view was graded from the first
+   view's pixels (a two-player HD race drew a black top view, `hd-split-black-view`), so the
+   views only fill the linear target and `Scene::run_split_post`
+   (`crates/raceplay/src/scene/split_exposure.rs`) then runs the chain **once per view over
+   that view's rectangle of the finished scene**, one encoder and one submit each, for rule
+   3's reason (the chain's constants are written with the queue). The chain's own pieces,
+   in `oag_post::hd_bloom::Chain::run_view` and `oag_post::omega_tonemap::Chain::run_view`:
+   - *Each view's own ladder and exposure.* The luminance reduction ladder is cut over the
+     view's rectangle, and the adapted luminance it feeds is a **lane per seat**
+     (`hd_bloom::lanes`; Omega keeps a history ring and curve per seat): a 1x1 ping-pong,
+     which half the next frame writes, and whether the very first frame's rate-1 jump is
+     still owed, so a seat's first split frame settles on its own picture rather than
+     lerping from black or from another seat's state. A view in a dark tunnel next to a view
+     in daylight is graded with its own exposure, and HD's gate fade (`1 - min(adapted *
+     boost * 0.25, 1)`) is its own. **The law is the single-view one in every lane**: the
+     rate, the `Tone` clamps and the exposure formula are read off the `.envsettings` and the
+     executable as ever, only the pixels that feed them are the view's. **The per-seat lane is
+     this project's, chosen, not measured**: the original has no split screen. Lanes are
+     forgotten on the first single-view frame after a split (`Scene::retire_split_histories`,
+     as the camera histories are), so a seat that comes back settles from its own first frame.
+   - *Only two taps read the scene target, and they read it at the view's offset.* The first
+     downsample and the resolve sample the scene at `(rect.x, rect.y)` of the scene target
+     (`drawn_scene` in `hd_bloom.wesl`, an offset in Omega's one `drawn()`); every other pass
+     reads a scratch texture whose rectangle starts at its own corner. `x + 0.0` is `x`, so a
+     rectangle at the corner reads the bits it always did: **a one-view frame is
+     byte-identical** (`cmp`: HD on three circuits, 2048, Omega, Pulse and Pure).
+   - *The glow stops at the view's edge.* The two blurs' taps clamp to the view's drawn
+     rectangle (the same `uv_max` clamp a short render extent uses), so no view's light
+     reaches the other's pixels across the 2 pixel gap. The blur's tap spacing is authored
+     against a whole frame's quarter buffer, so it is measured against the area's and not the
+     view's, scaled by **a reach per view** (`scene::bloom::mean_reach(area, &[rect])`,
+     0.5 on both axes for every two- and four-way cut, which is what the old whole-frame
+     chain's mean gave for equal views and is now each view's own for unequal ones; chosen,
+     not measured). `Chain::set_reach` is gone: the reach is a field of `View`.
+   - *The first view clears the whole frame to opaque black, later views load.* HD's resolve
+     pass cleared the whole target (to transparent: the gap is opaque black now, which is what
+     the old whole-area resolve wrote there); Omega's apply pass only loads, so its first view
+     runs a clear pass before it (without one the gap kept whatever the frame held before, a
+     stale menu or single-view frame: `tests::split_exposure::the_gap_between_views_is_cleared_every_frame`
+     fills the target white first and fails for either chain if the clear goes).
+   - A letterboxed split (a capture whose size is not the window's aspect, so the area starts
+     below the bar) used to resolve the scene from its top-left while the views had been
+     drawn below the bar: the old picture was shifted by the bar and its second view cut off.
+     Each view reads its rectangle where it was drawn now.
+   2048 draws through HD's `hd_bloom::Chain` and so **ported**, with its own still looked at
+   (2h and 2v, one view `cmp`-identical); **Omega ported** (`omega_tonemap::Chain::run_view`,
+   a `split_tests` case, one view `cmp`-identical, 2h and 2v looked at). HD's boost zoom
+   streak is not drawn (it holds the primary craft's pulse) and Omega's distortion offsets are
+   not drawn (the pass reads a depth attachment only the last view still has). Both open.
+   Checked by `oag_post`'s `hd_bloom::split_tests` and `omega_tonemap::split_tests` (a dark
+   and a bright view of one size in one scene target each resolve as the same brightness
+   would as a picture of its own: a shared exposure, a scene tap that ignores the offset, a
+   uniform cache keyed on the rectangle's size alone and a glow that crosses the cut each fail
+   one of them), `tests::split_exposure` (a lane per seat, each view resolved into its own rows,
+   the lanes forgotten by a single-view frame; dropping `run_split_post` fails both) and
+   `crates/game/tests/split_screen_ground_truth.rs` (HD two and four views, Omega and 2048 two
+   views: every rectangle drawn, no two the same).
+
+   **What it looks like** (`hd-exposure`, HD, 1280x720, `--autopilot`, seed 1, before/after of the same
+   tick, same binary except this change). Two terms read the adapted luminance: the resolve's exposure
+   `Tone maximum brightness - min(Tone adaption boost * adapted, Tone darkening clamp)` and the glow
+   gate's fade `1 - min(adapted * Bloom adaption boost * 0.25, 1)`. **On Talon's Junction** (boost 20,
+   clamp 3, max 4; `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The exposure is unity") the
+   exposure is exactly 1.0 for any view with an adapted luma over 0.15, so it only moves a view darker
+   than that; the other circuits' `Tone` values were not read for this. The glow fade is the term that
+   moves with an ordinary difference between views.
+   - **Zone mode, Zone 4, tick 2400** (`--mode zone --track /data/environments/zone_4/track.vex
+     --players 2`, both cuts): one view is in the dark, one in bright orange. Shared, the dark view's
+     glow was faded by the bright view's luminance; per view it blooms as it would alone. The dark
+     view's share of pixels over 0.9 luma went from **0.4 % to 5.2 %** (2h top view; 2v left view
+     0.35 % to 5.1 %), its mean luma from 0.592 to 0.604 (2v 0.598 to 0.611); **the bright view did
+     not move** (mean 0.7586 and 0.7587; 2v 0.7632 and 0.7625). A one-view frame of the same circuit
+     is `cmp`-identical to `main`'s.
+   - Everywhere else it is small: across **all 16 circuits with a `track.vex`**, in `single_race`
+     (12 circuits, 275 two-view frames at ticks 400 to 10000, and 72 eight-view ones) and Zone 1 to 4
+     in both `single_race` and `zone` mode (73 two-view frames), the darkest view's mean luma (after
+     the exposure) was 0.53 to 0.56, and two views of a frame differed by at most 0.12 outside
+     Zone 4 (0.17 there, the pair above). On nine before/after pairs of the ordinary circuits (three
+     circuits in 2h and 2v, six more in 2h) the per-view mean luma moved by at most 0.0045 (0.7 %).
+   - **The mechanism is also proved on a unit** (`split_tests`: with a deliberately strong `Tone`
+     block the dark view resolves to byte 96 and the bright one to 86, each equal to its own picture
+     alone; with one shared lane the dark view reads 85 and the Omega pair fails the same way).
+   Not produced: a crop of seat 1's camera drawn as a one-view picture of its own. `--players 1`
+   follows slot 0 and its race state differs, so a still of the same camera cannot be made; the unit
+   comparison (a view against the same content as a whole picture) is that check.
 
 ## HUD
 
@@ -550,6 +611,35 @@ byte-identical. The numbers, the iGPU's, and why an unpinned bench on a hybrid C
 are in [render bench](../tools/render-bench.md#split-cpu-on-the-notebook-2026-10-15-split-cpu).
 What is left is `encoder.finish`, the driver-side validation of the recorded commands, 40% of a
 Pulse view and half of HD's, which only fewer commands reduce.
+
+**`encoder.finish` and the uploads, measured (2026-10-15, `encoder-finish`).** One shared buffer of
+scene blocks now holds the fog-and-light block every drawable of a kind binds (a block per view and
+per kind, a dynamic offset; `oag_raceplay::drawable::SceneBlocks`), so a view writes five instead of
+one per drawable (Pulse 89 to 56 `queue.write_buffer` calls a view), and every drawable's matrices (bind group 0) share
+one buffer with a region per view, written in runs before the scene pass (Pulse 56 to 36 in one view,
+93 to 45 in two; HD 55 to 37 and 93 to 41; Pure 19 to 8 and 33 to 11), and the craft's animation
+tables are written by the first view only. Pulse's CPU fell about 4 to 5% from the first, a few
+percent more from the rest, HD's two-view CPU about 6%, the pictures are byte-identical. Merging a drawable's contiguous
+same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) was tried and reverted:
+`finish` fell 19 us on HD and nothing elsewhere, recording it cost 3 to 8. **What `finish` is made of:** the per-draw texture
+bind-group switches, 55 to 65% of it (Pulse 216 to 96 us a view, HD 273 to 98, Pure 133 to 39 with a
+hack that never re-binds group 1), 20 to 25% of a view's CPU. Taking them out needs a texture array or
+bindless scheme: sorting by texture moves pixels, an atlas breaks wrapping, and `binding_array` is
+native only. Numbers, the iGPU and the Deck commands are in
+[render bench](../tools/render-bench.md#encoder-finish-and-the-uniform-uploads-2026-10-15-encoder-finish).
+
+**The per-view scene blocks are not yet a threaded view.** The block region is the one piece of
+per-view state that can be written and bound without touching another view's: the offset travels as a
+`ViewBlock` handed to the draw calls and is not stored in a drawable. What a view still shares at
+record time, which a concurrent-encoder lane has to split first: `Scene::upload_staging` (the staging
+memory, taken and put back around a view), the craft's `anims`/`node_anims` tables (written by the
+first view, read by the rest), and `Drawable`'s `shown`,
+`ripple`, `pad_glow` and `hidden` `RefCell`s; `Scene`'s `layer`, `history`, `reuse_frame_work`,
+`scratch`, `opaque_order` and `anim_clock` cells and the effect pipelines' own uniform and vertex
+buffers (exhaust, sparks, clouds, shadow geometry, beams, which a view rewrites); and the race's
+viewpoint cell (`Race::set_viewpoint`). The scene blocks and the matrices are keyed by
+`Race::viewed_slot` (unique to a view within a frame, because a craft is followed by one seat) and a
+view's matrices are staged in `Uploads`, a value of the view, so those two no longer count.
 
 The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
 reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
@@ -1115,6 +1205,62 @@ cost on the Deck), and the whole race: `just bench-render pulse --views 1,2h,2v 
 (`just bench-compare`). The blur row of the overlay (`BLUR`) now reads the sum over the views in a
 split.
 
+### Per-view exposure (2026-10-15, `hd-exposure`)
+
+What HD's chain per view (rule 6) costs, on the Intel Core Ultra 7 265H notebook, Wipeout HD
+(Talon's Junction, `racing on` line read) at 1280x800, release `perf-probe` builds, `taskset -c
+0-5`, the gate lock held. **Before** is `main` at the merge of `hd-shadow` (606b25895; the
+chain ran once over the whole area), **after** is the commit of this change; the one-view rows
+are an A/A pair (the one-view path draws the same bits). The single-frame bench of "Per-view
+glow", `--ticks 1800 --hold cross`, five rounds, before and after interleaved with the order
+alternating, **median of the five medians**, load average 1.6 to 9.6 at the start of a run
+(other members' builds), us:
+
+| Case | NVIDIA RTX PRO 2000 Blackwell CPU before / after | pipelined before / after | Arrow Lake iGPU CPU before / after | pipelined before / after |
+| --- | --- | --- | --- | --- |
+| 1 view (A/A) | 1,421 / 1,664 (+243) | 2,034 / 1,990 (-44) | 4,597 / 4,479 (-117) | 4,039 / 3,995 (-44) |
+| 2h | 2,020 / 2,350 (+330) | 2,788 / 2,832 (+44) | 4,211 / 4,371 (+160) | 5,582 / 5,876 (+293) |
+| 2v | 1,967 / 2,056 (+88) | 2,806 / 2,842 (+36) | 4,188 / 4,401 (+213) | 5,596 / 5,875 (+279) |
+
+- **About 0.1 to 0.3 ms of CPU and 0.04 to 0.3 ms of pipelined frame for two views.** The extra is
+  one encoder, one submit and about fifteen passes and four constant writes per view, where the
+  whole-area chain was one of each (the same pixels: the views tile the area, so the ladder, the
+  blurs and the resolve fill no more than before). The NVIDIA card is CPU-bound in a split and its
+  pipelined frame does not move past the 0.2 ms the one-view A/A pair spreads; the iGPU, which is
+  GPU-bound at these sizes, reads +0.28 ms (5 %) in four of five rounds in both cuts. The scene
+  passes' GPU time is outside this chain and does not move.
+- **The whole race**, `just bench-render hd --views 1,2h,2v --size 1280x800`, `--binary` before and
+  after, three rounds interleaved, frame p50 in us. NVIDIA: 2h 5,116 / 5,561 / 5,248 before and
+  5,698 / 5,889 / 5,882 after (+0.5 ms), 2v 3,197 (a load spike) / 5,451 / 5,217 before and 5,608 /
+  5,889 / 6,109 after (+0.5 ms), one view 2,606 / 4,074 / 3,839 against 3,878 / 5,066 / 3,960 (an A/A
+  pair that spreads by 1.2 ms, so this reads +0.5 ms with a floor of the same size). **The iGPU is
+  unreadable**: the same binary alternates between two clock states, a one-view race reading 5.2, 14.6
+  and 25.8 ms of frame in three rounds before and 13.9, 5.3 and 19.5 after. The single-frame bench
+  above is the headline for that reason.
+- **Not measured on the Deck**: it was not reachable on 2026-10-15. Every number above is
+  this notebook's. A way to make it cheaper: the constants are rewritten and a submit made per view
+  because one set of uniform buffers serves every view; per-view slices of one buffer (dynamic
+  offsets), as `split-cpu`'s third lever, would record every view's chain into one encoder.
+
+**Steam Deck, for the maintainer** (not measured). Build as in "Cost" above (`cargo build
+--release -p oag-game --features perf-probe`) and run, from the repo root, with the HD image
+named as on this machine:
+
+```sh
+for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical"; do
+  XDG_CONFIG_HOME=/tmp/oag-exposure/config XDG_DATA_HOME=/tmp/oag-exposure/data XDG_STATE_HOME=/tmp/oag-exposure/state \
+    OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 ./target/release/oag-game data/images/hdfury-ps3-eu-dec.iso \
+    --race --no-audio --mode single_race --players $c --ticks 1800 --hold cross --size 1280x800 \
+    --screenshot /tmp/oag-exposure/$(echo $c | tr -d ' -').png \
+    2>&1 | grep -E '^bench (split|render_viewports CPU|pipelined)'
+done
+just bench-render hd --views 1,2h,2v --size 1280x800 --tag deck-exposure
+```
+
+Send the pipelined and CPU medians of one view, 2h and 2v (the cost is the pair against a build of
+`606b25895`), and look at the stills for a view that is graded differently from its neighbour.
+A one-view still is byte-identical to `main`'s (`cmp`).
+
 ### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
 
 **The maintainer saw about 30 ms attributed to motion blur on the Deck in a split with no blur
@@ -1648,11 +1794,16 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - ~~**Motion blur is not drawn per view**~~ **Done, 2026-10-15** (rule 3). **The temporal
   upscaler and camera jitter still are not**: they need a frame record, a jitter phase and a
   resolve per view (see rule 3). Open.
-- **HD's exposure is one for the whole picture**, so a dark view next to a bright one reads
-  dimmer than it would alone; a lane per view of the chain's adaptation is the fix and the
-  chain's scratch targets are sized for the whole frame. Open.
-- **CPU per view is mostly the driver now**: `encoder.finish` is about 230 us of a Pulse view's
-  590 and about 500 us of an HD view's (see "Cost", 2026-10-15). Open in the `split-cpu` thread.
+- ~~**HD's exposure is one for the whole picture**~~ **Done, 2026-10-15, `hd-exposure`** (rule 6,
+  "Per-view exposure" under "Cost"): HD's and Omega's chains run per view with an adaptation per
+  seat, and the glow stops at the cut. Open from it: the exposure itself only moves a view darker
+  than an adapted luma of 0.15 on Talon's Junction (rule 6: the glow fade is what a Zone 4 split
+  shows), the multi-window single-seat window re-seeds the lanes every frame, and the Deck reading.
+- **CPU per view is mostly the driver now**: `encoder.finish` is about 220 us of a Pulse view's
+  590 and about 280 us of an HD view's (see "Cost", 2026-10-15), more than half of it the texture
+  bind-group switches. The scene uniform is one block per kind and view now; open: a texture array
+  or bindless path (native only), group-0 matrices packed into one write a view, and the per-view
+  state list above. Open in the `split-screen-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
   view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
   and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole

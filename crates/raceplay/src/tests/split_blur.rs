@@ -2,16 +2,28 @@
 //! the velocity and depth attachments keep every view's, and the blur runs over each view's
 //! own rectangle ([`Scene::blur_split_views`]).
 
-use super::scene_build::{livery, scene_over_msaa, test_gpu, triangle, vertex};
+use super::scene_build::{livery, scene_over_post, test_gpu, triangle, vertex};
 use super::*;
 use crate::mesh_render;
 use oag_display::display::Msaa;
 use oag_display::display::{Fov, MotionBlur, Shadows};
 
-const SIZE: u32 = 64;
-const AREA: (f32, f32, f32, f32) = (0.0, 0.0, SIZE as f32, SIZE as f32);
+pub(super) const SIZE: u32 = 64;
+pub(super) const AREA: (f32, f32, f32, f32) = (0.0, 0.0, SIZE as f32, SIZE as f32);
 
 fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, msaa: Msaa) -> Scene {
+    hull_scene(device, queue, race, msaa, None, None)
+}
+
+/// [`scene`] under Wipeout HD's post chain or Omega's tone map when given.
+pub(super) fn hull_scene(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    race: &Race,
+    msaa: Msaa,
+    hd_bloom: Option<oag_post::hd_bloom::Params>,
+    omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+) -> Scene {
     // The craft is the one thing here that draws bright (the track draws black in this
     // fixture), so each hull is a few big triangles ahead of the craft along its model's
     // forward (-z), at several sizes: whichever the chase camera frames shows in the view.
@@ -35,10 +47,18 @@ fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, msaa: Msaa) ->
         livery
     };
     let liveries: Vec<_> = (0..race.ship_count()).map(|_| hull()).collect();
-    scene_over_msaa(device, queue, triangle(), &liveries, msaa)
+    scene_over_post(
+        device,
+        queue,
+        triangle(),
+        &liveries,
+        msaa,
+        hd_bloom,
+        omega_tonemap,
+    )
 }
 
-fn target(device: &wgpu::Device) -> wgpu::Texture {
+pub(super) fn target(device: &wgpu::Device) -> wgpu::Texture {
     device.create_texture(&wgpu::TextureDescriptor {
         label: Some("split blur test target"),
         size: wgpu::Extent3d {
@@ -58,7 +78,11 @@ fn target(device: &wgpu::Device) -> wgpu::Texture {
 }
 
 /// The texture's texels, `SIZE * SIZE * 4` bytes (every texture read here is 4 bytes a texel).
-fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -> Vec<u8> {
+pub(super) fn pixels(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+) -> Vec<u8> {
     let aspect = if texture.format() == mesh_render::DEPTH_FORMAT {
         wgpu::TextureAspect::DepthOnly
     } else {
@@ -104,7 +128,7 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -
 }
 
 /// The rows `rect` covers, as a slice of `pixels`' bytes.
-fn rows(pixels: &[u8], rect: (f32, f32, f32, f32)) -> &[u8] {
+pub(super) fn rows(pixels: &[u8], rect: (f32, f32, f32, f32)) -> &[u8] {
     let row = (SIZE * 4) as usize;
     &pixels[rect.1 as usize * row..(rect.1 + rect.3) as usize * row]
 }
@@ -138,7 +162,7 @@ fn draw(
 }
 
 /// Whether anything was drawn in `rows` (a black view would make every comparison vacuous).
-fn drawn(rows: &[u8]) -> bool {
+pub(super) fn drawn(rows: &[u8]) -> bool {
     rows.iter().any(|&byte| byte != 0)
 }
 

@@ -30,7 +30,9 @@ struct Params {
     // `0.0100021 * (16/9, 1)`: the composite's offset per unit of the
     // distortion texture, heat-haze.md.
     distortion: vec2<f32>,
-    _pad: vec2<f32>,
+    // Where the drawn rectangle starts in the scene target: a split view's rectangle
+    // need not be at the corner. Zero for a whole picture.
+    uv_offset: vec2<f32>,
 }
 
 struct State {
@@ -57,7 +59,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 // A coordinate inside the drawn rectangle of the scene - see
 // `post::sub_rectangle`.
 fn drawn(uv: vec2<f32>) -> vec2<f32> {
-    return min(uv * params.uv_scale, params.uv_max);
+    return min(uv * params.uv_scale + params.uv_offset, params.uv_max);
 }
 
 // pal_LuminanceFilter_fp: one sample, Rec.601 luma, no log.

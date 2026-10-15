@@ -38,6 +38,11 @@ struct Constants {
     // moves the render extent - see `post::sub_rectangle`.
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
+    // The same rectangle as it sits in the SCENE target, for the two taps that read it
+    // (`drawn_scene`): a split view's rectangle starts away from the corner. Zero and
+    // `uv_max` everywhere else, and for every whole picture.
+    uv_offset: vec2<f32>,
+    scene_max: vec2<f32>,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -59,6 +64,14 @@ struct Constants {
 // would otherwise pull that inward, level by level, as a darkening edge.
 fn drawn(uv: vec2<f32>) -> vec2<f32> {
     return min(uv * constants.uv_scale, constants.uv_max);
+}
+
+// The same, for a tap of the scene target itself: the rectangle may start away from the
+// corner there (a view of a split). Every other level is a scratch texture whose
+// rectangle starts at its own corner, so they read `drawn`. `x + 0.0` is `x`, so a
+// rectangle at the corner reads the bits it always did.
+fn drawn_scene(uv: vec2<f32>) -> vec2<f32> {
+    return min(uv * constants.uv_scale + constants.uv_offset, constants.scene_max);
 }
 
 @vertex
@@ -111,7 +124,9 @@ fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
 // sounds like.
 @fragment
 fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
-    return surface(textureSample(source_tex, source_sampler, drawn(in.uv)));
+    // The offset is zero on every pass but the first downsample's, the only one that
+    // reads the scene target.
+    return surface(textureSample(source_tex, source_sampler, drawn_scene(in.uv)));
 }
 
 // **What an 8-bit render target does to a value, done where this chain reads
@@ -273,7 +288,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = surface(textureSample(source_tex, source_sampler, drawn(in.uv))).rgb;
+    let scene = surface(textureSample(source_tex, source_sampler, drawn_scene(in.uv))).rgb;
     let bloom = textureSample(bloom_tex, source_sampler, drawn(in.uv)).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness
