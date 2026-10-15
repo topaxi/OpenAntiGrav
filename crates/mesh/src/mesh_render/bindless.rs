@@ -31,8 +31,10 @@ pub const FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY.union
 /// the elements past a drawable's own slots repeat slot 0. A drawable with more slots
 /// than this keeps the per-slot groups (and says so in the log).
 ///
-/// The largest a title ships is in `docs/rendering/bindless.md`; chosen, not measured,
-/// with room over it.
+/// Chosen, not measured, with room over the circuits counted (slots, the white fallback
+/// included) on each title's default: 2048's Altima 524, Omega's Tech de Ra 462, HD's
+/// Talon's Junction 443 and Zone 18, Pure's Vineta K 189, Pulse's `16_Track` 136. A
+/// drawable past it draws exactly as before.
 pub const CAPACITY: u32 = 1024;
 
 /// Array elements of the five bindings together, which wgpu counts against
