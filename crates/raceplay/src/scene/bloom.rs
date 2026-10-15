@@ -52,6 +52,24 @@ fn field_scale(area: (f32, f32, f32, f32), rect: (f32, f32, f32, f32)) -> (f32, 
     )
 }
 
+/// How far a glow reaches across and down in a split's views against a whole picture's,
+/// as the mean over the views of the view's pixels per texel of a lane
+/// ([`field_scale`]) against the whole area's: `(0.5, 0.5)` for the quadrants and the
+/// halves of a two-way cut. The one number HD's whole-frame chain takes in place of a
+/// lane per view (`oag_post::hd_bloom::Chain::set_reach`).
+pub(super) fn mean_reach(area: (f32, f32, f32, f32), rects: &[(f32, f32, f32, f32)]) -> (f32, f32) {
+    if rects.is_empty() || area.2 <= 0.0 || area.3 <= 0.0 {
+        return (1.0, 1.0);
+    }
+    let (mut x, mut y) = (0.0, 0.0);
+    for &rect in rects {
+        let (scale_x, scale_y) = field_scale(area, rect);
+        x += rect.2 / area.2 / scale_x;
+        y += rect.3 / area.3 / scale_y;
+    }
+    (x / rects.len() as f32, y / rects.len() as f32)
+}
+
 impl Scene {
     /// Adds the glow [`Scene::render`] prepared onto `target`, over the rectangle
     /// `rect` (`x, y, width, height`) the frame was drawn into - or, for a split screen,
@@ -201,5 +219,25 @@ mod tests {
             "the column keeps the horizontal field: {cx}"
         );
         assert!(cy > 1.9 && cy < 2.1, "and opens the vertical one: {cy}");
+    }
+
+    /// A two-way cut's views and four quadrants each take half the pixels per texel of
+    /// the whole picture, across and down, so HD's chain reaches half as far.
+    #[test]
+    fn every_cut_of_a_split_reaches_half_as_far() {
+        let area = (0.0, 0.0, 1280.0, 725.0);
+        for rects in [
+            vec![(0.0, 0.0, 1280.0, 362.0), (0.0, 363.0, 1280.0, 362.0)],
+            vec![(0.0, 0.0, 639.0, 725.0), (641.0, 0.0, 639.0, 725.0)],
+            vec![
+                (0.0, 0.0, 639.0, 362.0),
+                (641.0, 0.0, 639.0, 362.0),
+                (0.0, 363.0, 639.0, 362.0),
+                (641.0, 363.0, 639.0, 362.0),
+            ],
+        ] {
+            let (x, y) = mean_reach(area, &rects);
+            assert!((x - 0.5).abs() < 0.02 && (y - 0.5).abs() < 0.02, "{x} {y}");
+        }
     }
 }

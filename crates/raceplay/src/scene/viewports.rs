@@ -443,7 +443,7 @@ impl Scene {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),
         });
-        let split_post = self.encode_split_post(device, queue, &mut encoder, view, area);
+        let split_post = self.encode_split_post(device, queue, &mut encoder, view, rects, area);
         // Pulse's glow, one lane per view, read from the finished picture: every view is in
         // `view` now, and the composite waits for the HUD as a single view's does.
         let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
@@ -463,10 +463,16 @@ impl Scene {
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
+        rects: &[(f32, f32, f32, f32)],
         area: (f32, f32, f32, f32),
     ) -> bool {
-        if self.hd.is_some() {
+        if let Some(hd) = &self.hd {
+            // The glow's reach is authored as a fraction of the whole frame, and a view
+            // of a split shows a fraction of it: scale it by the views' own pixel scale
+            // so the glow keeps its size against what it surrounds. Chosen, not measured.
+            hd.set_reach(super::bloom::mean_reach(area, rects));
             self.run_hd(queue, encoder, view, area, None, None);
+            hd.set_reach((1.0, 1.0));
             true
         } else if let Some(omega) = &self.omega {
             self.run_omega(omega, device, queue, encoder, view, area, false);

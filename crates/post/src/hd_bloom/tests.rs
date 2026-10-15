@@ -521,3 +521,133 @@ fn the_adaptation_is_the_encoded_linear_mean() {
         "the right half resolved to byte {got}, the encoded linear mean predicts {want:.1}"
     );
 }
+
+/// The mean red byte of the dark right half of a frame whose left half is white, after
+/// the chain with the glow drawn and its reach set to `reach`: what the glow spills over
+/// the edge.
+fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, f32)) -> f64 {
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let size = (64u32, 64u32);
+    let chain_params = Params {
+        horizontal_size: 4.0,
+        vertical_size: 4.0,
+        ..params()
+    };
+    let chain =
+        Chain::new(device, format, size, chain_params, Glow::Drawn).expect("the pipelines build");
+    chain.set_reach(reach);
+    let half = |linear: bool| (if linear { 0x3c00u16 } else { 0 }).to_le_bytes();
+    let mut texels = Vec::new();
+    for _row in 0..size.1 {
+        for column in 0..size.0 {
+            for channel in [
+                column < size.0 / 2,
+                column < size.0 / 2,
+                column < size.0 / 2,
+                false,
+            ] {
+                texels.extend_from_slice(&half(channel));
+            }
+        }
+    }
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: chain.scene_texture(),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &texels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(size.0 * 8),
+            rows_per_image: Some(size.1),
+        },
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let output = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hd bloom reach test output"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = output.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hd bloom reach test readback"),
+        size: u64::from(size.0 * size.1 * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    chain.run(queue, &mut encoder, &view, (0.0, 0.0), size, None);
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &output,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.0 * 4),
+                rows_per_image: Some(size.1),
+            },
+        },
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |r| r.expect("the readback maps"));
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let data = readback.slice(..).get_mapped_range().expect("mapped");
+    let mut sum = 0.0;
+    for row in 0..size.1 {
+        for column in size.0 / 2..size.0 {
+            sum += f64::from(data[((row * size.0 + column) * 4) as usize]);
+        }
+    }
+    sum / f64::from(size.0 / 2 * size.1)
+}
+
+/// **A shorter reach spills less glow over an edge.** A split screen sets it to the
+/// views' own scale for the frame, so a view's glow keeps its size against what it
+/// surrounds; whole pictures leave it at `(1, 1)`. Drop `set_reach`'s effect on the
+/// blur's tap spacing and the two readings are equal.
+#[test]
+fn a_shorter_reach_spills_less_glow_over_an_edge() {
+    let instance = wgpu::Instance::default();
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    if adapters.is_empty() {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    }
+    let (device, queue) = pollster::block_on(adapters[0].request_device(&Default::default()))
+        .expect("a device with no extra features");
+    let whole = spill_over_the_edge(&device, &queue, (1.0, 1.0));
+    let short = spill_over_the_edge(&device, &queue, (0.25, 0.25));
+    assert!(
+        short < whole,
+        "a reach of a quarter spilled {short} against the authored reach's {whole}"
+    );
+}
