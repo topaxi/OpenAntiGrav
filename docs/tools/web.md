@@ -428,7 +428,13 @@ is read), plus the five built-in screen filters, which `oag-post` joins at run
 time (`crates/post/examples/screen_filters_wgsl.rs`): 44 modules. The wasm
 build's `mesh.wgsl` is byte-identical to the native one (`cmp`, 2026-10-15), so
 this is the text the page is handed. `oag-view`'s shader is not in the web
-build and is left out.
+build and is left out. **No disc image or game file is read**, so CI, which has
+none, runs it: every `ShaderSource::Wgsl` site in the workspace is an
+`include_str!` of one of those artifacts or `Preset::wgsl()` over the five
+files in `assets/shaders/screen/` (checked by `rg`, 2026-10-15), and no module
+is keyed off disc data. A player's own screen-filter file under their config
+directory is the one module the check cannot see. Pipeline `override`
+constants are not module text and are not varied.
 
 - **Chromium and Chrome** run on `--enable-unsafe-webgpu
   --use-webgpu-adapter=swiftshader`: Chromium's own CPU adapter, so no GPU is
