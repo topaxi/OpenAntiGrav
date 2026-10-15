@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas check-web-shaders
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -168,7 +168,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
+gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas check-web-shaders
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1202,6 +1202,15 @@ check-status:
 # stage to the path the Pages site serves them at. docs/formats/toml-schema.md
 check-schemas:
     scripts/check-schemas.sh
+
+# Every WGSL module the web build emits, created by a real browser's compiler
+# (Chromium on a CPU adapter, no GPU needed). naga passes shaders Chrome's Tint
+# rejects, and a rejected module draws nothing in the browser. Skips loudly,
+# naming what it looked for, when no Chromium or Chrome is installed; CI sets
+# OAG_REQUIRE_WEB_SHADERS=1 so a skip there fails. `--browser all` adds
+# Firefox, which needs a GPU. See docs/tools/web.md, "Shaders".
+check-web-shaders *ARGS:
+    python3 scripts/check-web-shaders.py "$@"
 
 # Rebuild the Blender add-on's committed fixtures with a headless Blender and fail on a
 # diff (`--update` rewrites them). Needs Blender 4.2+, so it is not in the gate.
