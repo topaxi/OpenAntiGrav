@@ -977,6 +977,12 @@ pub fn build_with(
         .map(|(material, label)| material.bind_group(device, &texture_layout, label))
         .collect();
     let bindless = if bindless {
+        log::info!(
+            "{}: group 1 as binding arrays, {} material slots of {}",
+            model.label,
+            materials.len(),
+            bindless::CAPACITY
+        );
         bindless::Bindless::new(device, materials)
     } else {
         None
