@@ -105,7 +105,8 @@ things make that more than a loop:
    what is loaded, and `crates/render/tests/msaa_load_keeps_view.rs` pins that a
    loading pass keeps an earlier view.
 3. **Motion blur runs once per view, after the last view is drawn** (2026-10-15,
-   `split-blur`); **no camera jitter and no temporal upscaler input**. Three things
+   `split-blur`); **camera jitter and the temporal upscaler per view too** (2026-10-16,
+   `split-followups`, "Per-view FSR 3" below). Three things
    make it more than calling the blur per view, and each is a way to get a picture that
    is wrong:
    - *Each view measures against its own camera.* `Scene::histories` holds one history
@@ -122,9 +123,8 @@ things make that more than a loop:
      forgotten before it draws (`Scene::keep_split_seat`). Until then a one-seat window's frame
      forgot every split seat, so a split window beside it (either order) measured each frame
      against itself: no motion, no blur, and HD's and Omega's lanes rebuilt every frame. The
-     window's upscaler record is kept cleared, as a split always left it (jitter off), so
-     `Scene::temporal` still answers `None` for a split and the upscaler falls to its
-     spatial rung.
+     window's upscaler record is kept cleared; each view's record is its seat's
+     (`Scene::temporal` answers one frame per view).
    - *The velocity and depth attachments hold every view.* The scene pass used to clear
      both whole in every view, so only the last view's survived to the end. A later view
      loads them now, exactly as it loads the colour: the first view cleared the whole
@@ -156,9 +156,7 @@ things make that more than a loop:
    view keeps the velocity and depth of the ones before it; each seat keeps its own camera's
    history; a single view forgets them): reverting the velocity load, the depth load, or
    making every chain use the last view's rectangle each fails one of them. Two more pin what the load relies on: `a_frame_reads_nothing_of_the_frame_before_it` (the same state drawn twice leaves the same depth, velocity and picture; with no whole-attachment clear by the first view the second draw fails the depth test and draws nothing) and the blur test again under 4x MSAA (velocity and depth are multisampled and not resolved, so a later view's colour resolve does not touch an earlier view's; they cannot be copied out at 4 samples, so that one reads the pictures). Camera jitter
-   and the temporal upscaler need a frame record and a history per view, and a resolve pass
-   per view over that view's rectangle (FSR 3's `resolve_scene` encodes one chain over the
-   whole picture): not started, and not free.
+   and the temporal upscaler: "Per-view FSR 3" under "Cost".
 4. **Pulse's bloom runs once per view, after the last view is drawn** (2026-10-15,
    `split-bloom`; PSP and PS2 alike). A view's glow cannot be composited as the view is
    drawn: the next view's multisample resolve rewrites the whole resolved target from the
@@ -1099,7 +1097,8 @@ evidence here.
    see "Prepare and record" under "Cost". The Steam Deck reading decides any other default.
 5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
    "Per-view glow". ~~Motion blur~~ **Done, 2026-10-15** (rule 3), measured under "Per-view
-   blur". The temporal upscaler stays omitted.
+   blur". ~~The temporal upscaler stays omitted~~ **Done, 2026-10-16** (rule 3, "Per-view
+   FSR 3").
 
 **Limits of these numbers.** The bench re-renders one static frame (the race held at tick 300
 or 1800), so it does not see tick-to-tick variation; every view carries an unexplained 0.5 to
@@ -1312,6 +1311,80 @@ just bench-render hd --views 1,2h,2v --size 1280x800 --tag deck-exposure
 Send the pipelined and CPU medians of one view, 2h and 2v (the cost is the pair against a build of
 `606b25895`), and look at the stills for a view that is graded differently from its neighbour.
 A one-view still is byte-identical to `main`'s (`cmp`).
+
+### Per-view FSR 3 (2026-10-16, `split-followups`)
+
+A split screen with FSR 3.1 chosen used to fall a rung to FSR 1 over the whole picture (no view had
+a frame record: one camera's jitter and history cannot describe N cameras). Now **each view is
+reconstructed on its own**, where the blur, the glow and HD's exposure already ran per view:
+
+- *Jitter and record per seat.* `render_slots` hands every view the frame's jitter sequence; each
+  view's phase is its seat's history's own frame count (`motion::split_history`, the pattern the
+  blur's camera history set), and its `TemporalFrame` lands in that history. `Scene::temporal`
+  answers one `oag_present::upscale::ViewFrame` per view with the seat and its rectangle of the
+  scene target (`None` if any view has no record); a whole picture is one frame with no view. A
+  seat forgotten (rule 3's stamp rule, or a frame with no split) restarts its sequence, so its
+  record says reset.
+- *A chain per seat.* `Framebuffer::resolve_scene` (`crates/present/src/upscale/views.rs`) keeps an
+  `fsr3::Fsr3::sibling` per seat: every compiled pass shared, the constants, history and
+  intermediates its own, sized to the view's share of the allocation. Each chain reads its inputs at
+  the view's corner: `Dispatch::input_offset`, carried in the constants block's last 8 bytes of
+  padding (still 160 bytes; zero for a whole picture, so a one-view frame writes the bytes it
+  always did) and added to every input load (`prepare_inputs`, `accumulate`). Its output is the
+  view's rectangle mapped from the scene's extent onto the presentation rectangle, edges rounded,
+  the same place the blit puts the view; the first view's blit clears the gap. The chains are
+  dropped by the first frame that resolves a whole picture.
+- *Order*: after the last view and every per-view chain of rules 3, 4 and 6, in the presentation
+  resolve, as one view's upscaler is.
+- *Not timed*: the chains carry no timestamp pair, so the overlay's FSR 3 rows idle in a split
+  (`ChainCost`), as they did when a split fell to FSR 1.
+
+**Checked.** `oag-raceplay` `tests::split_temporal` (each view's frame names its seat and
+rectangle and jitters at its own seat's count; a single view answers one whole picture),
+`oag-present` `a_split_resolves_each_view_with_a_chain_of_its_own` (a chain per seat, kept the next
+frame, dropped by a whole picture) and `a_view_lands_where_the_blit_would_put_it`, and
+`split_screen_ground_truth::fsr3_resolves_each_view_from_its_own_rectangle` (Pulse 2h, half scale,
+presented: two distinct views, the gap clear; with the input offset forced to zero the views differ
+in 6 % of their pixels and it fails). **One-view frames are byte-identical** to `main` (`cmp`: Pulse
+and HD one view with FSR 3 presented at half scale, Pulse one view and 2h plain, Pulse 2h FSR 1).
+**Looked at** (1280x720, half scale, `--autopilot`): Pulse 2h at ticks 900 and 1500, 2v at 900 and
+1500, four views at 1500, HD 2h at 1500: each view its own camera, in its own place, no seam or
+neighbour's pixels at the gap; at full size the craft and track edges are the FSR 3 resolve's,
+crisper than the FSR 1 picture the same frame drew before. A capture shows a primer frame and the
+final one, so how the history settles over many frames was not looked at; the Deck run below is
+the place.
+
+**Cost** (`OAG_RESOLVE_BENCH=200` on a `--presented` capture: the resolve run 200 times over the
+frame, each submitted and waited for, CPU and GPU serialised; release `perf-probe`, 1280x800, render
+scale 50, `--ticks 300`, `taskset -c 0-5`, gate lock, three rounds, minimum of the medians, load 1.2
+to 2.0), us:
+
+| Case | NVIDIA RTX PRO 2000 | Arrow Lake iGPU |
+| --- | ---: | ---: |
+| Pulse 1 view, FSR 3 | 571 | 1,944 |
+| Pulse 2h, FSR 3 per view | 1,184 | 2,954 |
+| Pulse 2v, FSR 3 per view | 1,135 | 2,939 |
+| Pulse 4, FSR 3 per view | 1,420 | 2,692 (spread 2.7 to 4.2 ms) |
+| Pulse 2h, FSR 1 (what a split drew before) | 417 | 1,259 |
+| HD 1 view, FSR 3 | 583 | 1,299 |
+| HD 2h, FSR 3 per view | 1,081 | 1,885 |
+
+Two views cost about 0.5 to 0.6 ms more than one on NVIDIA and 0.6 to 1.0 ms on the iGPU: the same
+pixels, twice the fixed passes (each chain is eight dispatches, a pyramid and a clear). Against the
+FSR 1 a split drew before, a split pays 0.8 ms (NVIDIA) and 1.7 ms (iGPU) more for reconstruction.
+
+**Steam Deck, for the maintainer** (not measured):
+
+```sh
+for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
+  XDG_CONFIG_HOME=/tmp/oag-fsr3/config XDG_DATA_HOME=/tmp/oag-fsr3/data XDG_STATE_HOME=/tmp/oag-fsr3/state \
+    OAG_RESOLVE_BENCH=200 ./target/release/oag-game data/images/pulse-psp-eu.chd --race --no-audio \
+    --mode single_race --players $c --ticks 300 --size 1280x800 --presented --render-scale 50 \
+    --reconstruction fsr3 --screenshot /tmp/oag-fsr3/$(echo $c | tr -d ' -').png 2>&1 | grep '^bench presentation'
+done
+```
+
+and a windowed split with FSR 3 on, to look at how each view's history settles in motion.
 
 ### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
 
@@ -1832,7 +1905,7 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - Two real pads: the assignment is unit-tested over stand-in ids and the keyboard
   path runs end to end, but no second pad has been plugged in.
 - Per-team camera rigs, ~~per-view bloom (an origin in `oag_post::bloom`)~~ **done, rule 4**, motion blur
-  ~~under a split~~ **done, rule 3**, the temporal upscaler under a split, and a check of HD's and
+  ~~under a split~~ **done, rule 3**, ~~the temporal upscaler under a split~~ **done, "Per-view FSR 3"**, and a check of HD's and
   Omega's chains.
 - ~~The results scoreboard and the end-race flow still key on slot 0 and end every
   view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race", with

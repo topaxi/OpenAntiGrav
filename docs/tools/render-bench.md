@@ -781,6 +781,14 @@ four views with a Rocket) and fails if a later view's log is dropped (Pulse's fo
 
 **Steam Deck**: the "Threaded views" loop with `for rec in interleaved threaded overlapped`.
 
+## The presentation resolve (2026-10-16, `split-followups`)
+
+`OAG_RESOLVE_BENCH=N` on a `--presented` capture of a `perf-probe` build runs the presentation
+resolve (the upscaler and the blit) `N` times over the captured frame, each submitted and waited
+for, and prints `bench presentation resolve (serialised: CPU + GPU)`. The single-frame bench above
+leaves the resolve out. First use: FSR 3 per split view, numbers in
+[split-screen.md](../rendering/split-screen.md), "Per-view FSR 3".
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

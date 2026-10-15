@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Split screen draws Pulse's glow, the motion blur and HD's and Omega's exposure per view; the temporal upscaler is open
+# Split screen draws Pulse's glow, the motion blur, HD's and Omega's exposure and FSR 3 per view; the Deck numbers are open
 
 2026-10-15, `split-bloom`. Evidence and numbers: `docs/rendering/split-screen.md` rules 3, 4 and 6
 and "Per-view glow"; `docs/tools/render-bench.md`.
@@ -22,10 +22,11 @@ a frame for two views on the NVIDIA card; one view byte-identical.
   the blur once per view after the last (one submit each), `hd-gpu`'s velocity-gate rule moot (the
   buffer is always written on `main`; if the gate ever lands, a split's views count as read when the
   blur is on). Open from it: the Deck reading (below).
-- **The temporal upscaler and camera jitter** hold one camera's frame record; not touched. A way in:
-  the history slots exist now (`motion::split_history`), so a record and a jitter phase per seat
-  are the bookkeeping; the resolve (`resolve_scene` encodes one FSR 3 chain over the whole picture)
-  would run per view over its rectangle. Not free, not started.
+- ~~**The temporal upscaler and camera jitter**~~ **Done, 2026-10-16, `split-followups`**
+  (`split-screen.md`, "Per-view FSR 3"): a jitter sequence and record per seat, a chain per seat
+  reading at the view's corner. Open: the overlay's FSR 3 rows idle in a split (no timestamps on
+  the per-view chains); how the history settles in motion was not looked at (captures show two
+  frames); the Deck numbers.
 - ~~**HD's exposure is one for the whole picture**~~ **Done, 2026-10-15, `hd-exposure`**
   (`docs/rendering/split-screen.md` rule 6 and "Per-view exposure"): HD's chain (and 2048's, which
   draws through it) and Omega's tone map run once per view over the view's rectangle with an
