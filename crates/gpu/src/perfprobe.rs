@@ -34,6 +34,8 @@ pub static TEXTURE_BINDS_REDUNDANT: AtomicU64 = AtomicU64::new(0);
 pub static PIPELINE_SETS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFERS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFER_BYTES: AtomicU64 = AtomicU64::new(0);
+pub static DRAWS_QUEUED: AtomicU64 = AtomicU64::new(0);
+pub static DRAW_CALLS: AtomicU64 = AtomicU64::new(0);
 
 /// A `System` that counts every allocation that reaches it.
 #[derive(Debug)]
@@ -104,6 +106,8 @@ pub fn reset() {
         &PIPELINE_SETS,
         &WRITE_BUFFERS,
         &WRITE_BUFFER_BYTES,
+        &DRAWS_QUEUED,
+        &DRAW_CALLS,
     ] {
         counter.store(0, Relaxed);
     }
@@ -116,7 +120,8 @@ pub fn report_frame(frame: u64) {
     }
     println!(
         "perf frame {frame}: allocs {} ({} KiB)  bind_groups {}  texture_views {}  \
-         tex_binds {} (redundant {})  pipeline_sets {}  write_buffer {} ({} KiB)",
+         tex_binds {} (redundant {})  pipeline_sets {}  write_buffer {} ({} KiB)  \
+         draws {} -> draw_indexed {}",
         ALLOCS.load(Relaxed),
         ALLOC_BYTES.load(Relaxed) / 1024,
         BIND_GROUPS.load(Relaxed),
@@ -126,6 +131,8 @@ pub fn report_frame(frame: u64) {
         PIPELINE_SETS.load(Relaxed),
         WRITE_BUFFERS.load(Relaxed),
         WRITE_BUFFER_BYTES.load(Relaxed) / 1024,
+        DRAWS_QUEUED.load(Relaxed),
+        DRAW_CALLS.load(Relaxed),
     );
 }
 
@@ -209,6 +216,22 @@ impl Binds {
             TEXTURE_BINDS_REDUNDANT.fetch_add(1, Relaxed);
         }
         self.last = Some(slot);
+    }
+}
+
+/// Records one batch queued for drawing, before any are merged.
+#[inline]
+pub fn draw_queued() {
+    if counting() {
+        DRAWS_QUEUED.fetch_add(1, Relaxed);
+    }
+}
+
+/// Records one `draw_indexed` actually issued.
+#[inline]
+pub fn draw_call() {
+    if counting() {
+        DRAW_CALLS.fetch_add(1, Relaxed);
     }
 }
 
