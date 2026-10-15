@@ -177,6 +177,10 @@ Two things worth carrying forward from doing it:
   `HULL_DARKNESS`. Every judgement so far is from a headless capture.
 - Read Pulse's compositing pass and replace `HULL_DARKNESS` with a measurement.
   HD's is read (`shadow-track-redraw.md`) and its darkness constant is gone.
+- Read the `ShadowToAlpha` variants of the special-combine track materials (the
+  glass floor's facing ramp, the magstrip floor, light cones); on those chunks
+  `shadowed` keeps the chosen `MAP_STRENGTH` multiply because the generic
+  sun-removal does not describe their colour (`sun_known` in `shade.wesl`).
 - One shadow map per craft on HD, sized by distance rank (512/512/256/128/64/32),
   each receiver combining `1 - prod(1 - coverage_i)` the way the original's
   successive blends do; the shared 2048 map is the chosen stand-in.

@@ -27,14 +27,14 @@ resolve` against the function's own TOC, which for `0x004053e0` is
 | `0x006d1a98` | function | `Ship_CompareDistanceSqLess` | 78 |
 | `0x00d1c838` | data | `g_ShipMapSlotInUse` | 78 |
 | `0x00d1c8e0` | data | `g_ShipMapRankList` | 78 |
-| `0x00c8b218` | data | `g_ShipDistanceSq` | 78 |
+| `0x00d1b218` | data | `g_ShipDistanceSq` | 78 |
 
 `Shadow_CompileShadowedTrackRedraw` was 75 on `shadow-model-maps.md` (the
 parameter slots, the blend state and the chunk cull were read; what it *draws
 with* was not). It is 82 here: the permutation word it asks for is read to the
 last bit and the program that word selects is decoded. The three data names are
 the ship record array's neighbours at `0x00c86880 + 0x95fb8`, `+ 0x96060` and
-`+ 0x4998` (the base is `TOC[-0x5624]` = `0x008b7da0` -> `0x00c86880`, the same
+`+ 0x94998` (the base is `TOC[-0x5624]` = `0x008b7da0` -> `0x00c86880`, the same
 array `shadow-model-maps.md` walks). The slot allocator itself lives inside
 `ModelRecord_Load` (`0x003eeb08`, 65 on `renderer.md`).
 
@@ -197,7 +197,7 @@ pool passes). Which ship gets which slot, read here:
    called through a job trampoline at `0x006cdde4` with `job+0x40` and a vec4 at
    `job+0xa0`): for every ship with `+0x140` set and `+0xe4 & 3` non-zero it
    computes the squared distance from the ship record's `+0xd0` position to that
-   vec4 (`0x003e9b5c..0x003e9b90`), stores it at `0x00c86880 + 0x4998 + 4*i`
+   vec4 (`0x003e9b5c..0x003e9b90`), stores it at `0x00c86880 + 0x94998 + 4*i`
    (`g_ShipDistanceSq`) and the ship index in a list at `+ 0x96060`
    (`g_ShipMapRankList`), sorts the list with `0x006d1fc8` and the comparator
    `Ship_CompareDistanceSqLess` (`0x006d1a98`: `1` when `dist[a] < dist[b]`, so
@@ -234,6 +234,16 @@ made the 1024 map **2.2 texels per world unit**. Wiring: see below.
   encoded). No darkness constant remains for an HD race. `MAP_STRENGTH` (0.5)
   survives only for a scene with no authored light rig and for the `mapped`
   tier, which is this project's own, and says so.
+- **Where the law does not reach, and what happens there.** `shade.wesl` records
+  the sun's share only where the colour it returns is still the generic combine's
+  (`sun_known`). The glass floor's facing-ramp sheen, the magstrip floor, the
+  light cone, the flame and the absorb shell each return their own program's
+  colour, and subtracting the generic sun term from one of them would take out
+  light it never contained, so on those track chunks `shadowed` keeps the old
+  `1 - coverage * MAP_STRENGTH` multiply. **That multiply is chosen, not
+  measured**: those materials' own `ShadowToAlpha` variants are decoded for the
+  two generic blocks above only, and what each computes is unread. Talon's glass
+  floor is one of these chunks.
 - **Map size.** `shadow::map::SIZE` 1024 -> **2048**, and the grid fit's per-craft
   term from the drawable's radius to `6 * sqrt(3)`, the bounding sphere of the
   original's own fallback box. At the grid (casters' spread 70 + 10.4 + the 6

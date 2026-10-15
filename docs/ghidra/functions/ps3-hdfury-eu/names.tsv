@@ -280,7 +280,7 @@
 0x006d1a98	function	Ship_CompareDistanceSqLess	78	shadow-track-redraw.md
 0x00d1c838	data	g_ShipMapSlotInUse	78	shadow-track-redraw.md
 0x00d1c8e0	data	g_ShipMapRankList	78	shadow-track-redraw.md
-0x00c8b218	data	g_ShipDistanceSq	78	shadow-track-redraw.md
+0x00d1b218	data	g_ShipDistanceSq	78	shadow-track-redraw.md
 0x0018b818	function	Block_Construct	85	menu-blocks.md
 0x0018b050	function	Block_Render	82	menu-blocks.md
 0x0018acb8	function	Block_DrawFill	80	menu-blocks.md
