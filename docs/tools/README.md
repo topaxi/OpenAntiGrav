@@ -35,6 +35,8 @@ slice at a time, the race load on a Web Worker over shared memory, the
 workflow that deploys it to Cloudflare Pages, and what is not there yet (sound,
 movies).
 
+[The GL backend](gl-backend.md) is a trial of wgpu's GL tier, desktop and WebGL2: what draws, what fails, and what stands between it and a RENDERER row.
+
 [Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
 
 [Releases and CI](releases.md) covers the two GitHub workflows: what `ci.yml` gates, and

@@ -38,13 +38,13 @@ use oag_display::display::Renderer;
 /// The backends an adapter may be offered from.
 ///
 /// `PRIMARY` - Vulkan, Metal, Dx12 - and deliberately not `GL`, which is wgpu's
-/// own second tier and which this renderer has never been run on: the device is
-/// requested with `Limits::default()` (its texture-dimension limits raised to
-/// the adapter's own, see `oag_mesh::mesh_render::required_limits`), which is
-/// exactly what GLES routinely cannot meet, and pipeline creation is a second
-/// place it could diverge. Listing a `gl:` row would be offering a player
-/// something untested, and the CPU path loses nothing by it - lavapipe is a
-/// *Vulkan* ICD.
+/// own second tier. A trial on 2026-10-15 (`docs/tools/gl-backend.md`) found
+/// that desktop GL on Mesa races every title with three named reductions, and
+/// that WebGL2 and NVIDIA's GL cannot draw a race at all (no independent
+/// blend). Listing a `gl:` row would still offer a player a worse choice than
+/// the Vulkan beside it on most machines, so GL is a dev switch
+/// ([`GL_ENV`]) and a browser build feature (`webgl`), and the CPU path loses
+/// nothing - lavapipe is a *Vulkan* ICD.
 ///
 /// Used for the instance as well as for enumeration, so `default` cannot resolve
 /// to an adapter the RENDERER row does not offer - and **that is a behaviour
@@ -136,9 +136,11 @@ pub fn instance_for_window(event_loop: &winit::event_loop::ActiveEventLoop) -> w
     if !backends().contains(wgpu::Backends::GL) {
         return instance();
     }
-    wgpu::Instance::new(descriptor(wgpu::InstanceDescriptor::new_with_display_handle(
-        Box::new(event_loop.owned_display_handle()),
-    )))
+    wgpu::Instance::new(descriptor(
+        wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
+            event_loop.owned_display_handle(),
+        )),
+    ))
 }
 
 /// What one adapter is called, on the menu and in the settings file.
@@ -247,7 +249,7 @@ pub struct Chosen {
 ///
 /// Every effect `oag_gpu::backend::GAPS` turns off is a line a player reads
 /// rather than a picture that is quietly worse.
-fn report_gaps(adapter: &wgpu::Adapter) {
+pub fn report_gaps(adapter: &wgpu::Adapter) {
     if adapter.get_info().backend != wgpu::Backend::Gl {
         return;
     }

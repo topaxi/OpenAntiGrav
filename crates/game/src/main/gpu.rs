@@ -684,6 +684,7 @@ pub(crate) mod web {
             .await
             .context("requesting the device")?;
         oag_gpu::init_buffer::set_web_queue(queue.clone());
+        adapter::report_gaps(&adapter);
         let info = adapter.get_info();
         log::info!("web: adapter {:?} ({:?})", info.name, info.device_type);
         SOFTWARE.with(|cell| cell.set(info.device_type == wgpu::DeviceType::Cpu));

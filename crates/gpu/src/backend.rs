@@ -16,37 +16,35 @@ pub fn is_gl(device: &wgpu::Device) -> bool {
     device.adapter_info().backend == wgpu::Backend::Gl
 }
 
-/// `(effect, what happens instead)` for everything that is off on GL.
+/// `(effect, what happens instead, why)` for everything that is off on GL.
 ///
 /// **Chosen, not measured**: each row is a limit of wgpu 30's GL backend found
 /// by running the renderer on it (`docs/tools/gl-backend.md`), not a property
 /// of any title.
-pub const GAPS: &[(&str, &str)] = &[
+pub const GAPS: &[(&str, &str, &str)] = &[
     (
         "msaa",
-        "off: wgpu-hal creates a sampled multisample texture with the wrong GL target",
+        "off",
+        "wgpu-hal gives a sampled multisample texture the wrong GL target, and WebGL2 has no multisample sampler",
     ),
     (
         "mapped shadows",
-        "no shadow: a depth texture cannot be read with a filtering or fetch call on GL, only compared",
+        "no shadow",
+        "a depth texture cannot be read by sample or fetch on GL, only compared",
     ),
     (
         "HD hull self-shadow",
-        "the hull is lit without its own shadow term, for the same depth-texture reason",
+        "the hull is lit without its own shadow term",
+        "the same depth-texture limit",
     ),
 ];
 
 /// One line for the loader report naming every effect [`GAPS`] turns off.
 #[must_use]
 pub fn gaps_report() -> String {
-    let mut line = String::from("GL backend: ");
-    for (index, (effect, instead)) in GAPS.iter().enumerate() {
-        if index > 0 {
-            line.push_str("; ");
-        }
-        line.push_str(effect);
-        line.push_str(" is ");
-        line.push_str(instead);
-    }
-    line
+    let rows: Vec<String> = GAPS
+        .iter()
+        .map(|(effect, instead, why)| format!("{effect}: {instead} ({why})"))
+        .collect();
+    format!("GL backend, reduced: {}", rows.join("; "))
 }

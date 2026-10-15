@@ -4,6 +4,8 @@
 #
 #   scripts/build-web.sh            # the `dist` profile (fat LTO) + wasm-opt -O
 #   scripts/build-web.sh --dev      # a debug build, no wasm-opt: quick to iterate
+#   OAG_WEB_FEATURES=web,webgl scripts/build-web.sh   # WebGL2 beside WebGPU (a trial,
+#                                   # docs/tools/gl-backend.md)
 #   scripts/build-web.sh --serve    # ... then serve dist on 127.0.0.1:8000
 #                                   # with the COOP/COEP headers threads need
 #

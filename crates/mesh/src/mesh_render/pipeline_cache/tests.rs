@@ -307,3 +307,53 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         "closed with its scope"
     );
 }
+
+/// A device on wgpu's GL backend that can draw this renderer at all: one with
+/// independent blend (which `mesh blend` and every velocity-writing pipeline
+/// need), as desktop Mesa has and WebGL2 and NVIDIA's 3.3 context do not.
+/// `None` where this machine has no such GL adapter, which is most of them: GL
+/// is not enumerated by default (`oag_game::adapter::BACKENDS`), and an EGL
+/// vendor that is not Mesa hands out a 3.3 context. Force Mesa with
+/// `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json`.
+fn gl_device() -> Option<(wgpu::Device, wgpu::Queue)> {
+    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    descriptor.backends = wgpu::Backends::GL;
+    descriptor
+        .flags
+        .remove(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL);
+    let instance = wgpu::Instance::new(descriptor);
+    pollster::block_on(instance.enumerate_adapters(wgpu::Backends::GL))
+        .into_iter()
+        .filter(|adapter| {
+            adapter
+                .get_downlevel_capabilities()
+                .flags
+                .contains(wgpu::DownlevelFlags::INDEPENDENT_BLEND)
+        })
+        .find_map(|adapter| {
+            pollster::block_on(
+                adapter.request_device(&mesh_render::device_descriptor("gl test", &adapter)),
+            )
+            .ok()
+        })
+}
+
+/// The mesh shader's GL variant compiles to GLSL, pipelines and all.
+///
+/// The WGSL is valid, so `build.rs`' naga check passes either way: what GL
+/// refuses is a texture read through two samplers and a depth texture read by
+/// sample or fetch, and it refuses at pipeline creation with a panic. This
+/// builds the real pipelines on a real GL device, so it fails if `mesh_gl.wgsl`
+/// stops being chosen for one (`oag_gpu::backend::is_gl`) or stops being
+/// GL-safe (`zone.wesl`, `shadow.wesl`).
+#[test]
+fn the_mesh_pipelines_build_on_gl() {
+    let Some((device, queue)) = gl_device() else {
+        eprintln!("no GL adapter with independent blend: skipping");
+        return;
+    };
+    assert!(oag_gpu::backend::is_gl(&device));
+    let scope = Scope::open();
+    build_once(&device, &queue, &triangle_model());
+    drop(scope);
+}

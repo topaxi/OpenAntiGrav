@@ -41,6 +41,7 @@ Then, depending on what you are here to do:
 | Build or sideload the Android APK | [Android](tools/android.md) |
 | Build the macOS app | [macOS](tools/macos.md) |
 | Build the browser version, or deploy it to Cloudflare Pages | [Web build](tools/web.md) |
+| See whether OpenGL or WebGL2 can draw a race | [The GL backend](tools/gl-backend.md) |
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Know where a load spends its time | [Load time](architecture/load-time.md) |

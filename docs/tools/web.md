@@ -335,8 +335,11 @@ panic either way (0.3 s and 0.6 s after the pick, Firefox).
 ## Browser support
 
 WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is
-`PRIMARY`, which includes the browser's WebGPU and excludes GL, for the reason
-that constant's own documentation gives). The picker page lists every disc it knows, with the formats it accepts and how
+`PRIMARY`, which includes the browser's WebGPU and excludes GL). A trial build
+(`OAG_WEB_FEATURES=web,webgl just web`) does fall to WebGL2, and on 2026-10-15
+it booted Pulse to its menus in headless Chromium and then refused a race load
+(WebGL2 has no independent blend, so 77 pipelines fail); see
+[the GL backend](gl-backend.md) for the failure table and what is left. The picker page lists every disc it knows, with the formats it accepts and how
 far each gets; that table is checked against `docs/overview/status.md`,
 section 9, by `crates/raceplay/tests/web_picker_table.rs`. WebGPU ships in Chrome and Edge 113+
 (Windows, macOS, ChromeOS; Android 121+), Safari 26, and Firefox 141+ on Windows.
