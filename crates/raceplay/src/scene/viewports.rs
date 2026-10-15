@@ -151,6 +151,7 @@ impl Scene {
         race.set_viewpoint(slot);
         self.layer.set(Layer::Window);
         self.reuse_frame_work.set(shared);
+        self.begin_split_frame(shared);
         self.history.set(window);
         let stats = self.render(
             device,
@@ -408,6 +409,10 @@ impl Scene {
             .last_frame
             .set(None);
         self.split_live.set(true);
+        self.begin_split_frame(shared);
+        for &slot in slots {
+            self.keep_split_seat(slot);
+        }
         let recording = self.split_recording();
         if recording == super::Recording::Interleaved {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {

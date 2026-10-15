@@ -413,6 +413,13 @@ pub struct Scene {
     /// Whether the split-screen seats' histories hold a frame the last split drew, so the
     /// first single-view frame after it forgets them ([`Scene::retire_split_histories`]).
     split_live: std::cell::Cell<bool>,
+    /// The frame count a seat's split state is stamped with: one more for every draw that
+    /// starts a frame (one that does the frame's shared work, [`Scene::begin_split_frame`]).
+    split_frame: std::cell::Cell<u32>,
+    /// The frame each split seat was last drawn as a view in, so a seat missing for a frame
+    /// is forgotten alone, whatever the other windows of the frame draw
+    /// ([`Scene::keep_split_seat`]).
+    seat_drawn: [std::cell::Cell<Option<u32>>; motion::MAX_HISTORIES],
     /// How a split records its views ([`Scene::set_split_recording`]).
     split_recording: std::cell::Cell<Recording>,
     /// The later views' write logs, kept between frames for their memory (`split_record`).
@@ -1005,6 +1012,8 @@ impl Scene {
                 .collect(),
             history: std::cell::Cell::new(0),
             split_live: std::cell::Cell::new(false),
+            split_frame: std::cell::Cell::new(0),
+            seat_drawn: Default::default(),
             split_recording: std::cell::Cell::new(Recording::default_for_target()),
             split_logs: std::cell::RefCell::default(),
             track,

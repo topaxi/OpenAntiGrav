@@ -115,7 +115,13 @@ things make that more than a loop:
      only its own, so two cameras in one frame never read each other's previous pose, and
      no window's history is written by a split. A frame that draws a single view forgets
      the seats' histories (`Scene::retire_split_histories`), so a seat that comes back
-     measures its first frame against itself instead of a pose from before the gap. The
+     measures its first frame against itself instead of a pose from before the gap. **In a
+     multi-window race a seat is forgotten alone** (2026-10-16, `split-followups`): every draw
+     that starts a frame (a split or a window drawn with `shared` false) counts a frame, each
+     split view stamps its seat, and a seat whose stamp is older than the frame before is
+     forgotten before it draws (`Scene::keep_split_seat`). Until then a one-seat window's frame
+     forgot every split seat, so a split window beside it (either order) measured each frame
+     against itself: no motion, no blur, and HD's and Omega's lanes rebuilt every frame. The
      window's upscaler record is kept cleared, as a split always left it (jitter off), so
      `Scene::temporal` still answers `None` for a split and the upscaler falls to its
      spatial rung.
@@ -215,7 +221,15 @@ things make that more than a loop:
      executable as ever, only the pixels that feed them are the view's. **The per-seat lane is
      this project's, chosen, not measured**: the original has no split screen. Lanes are
      forgotten on the first single-view frame after a split (`Scene::retire_split_histories`,
-     as the camera histories are), so a seat that comes back settles from its own first frame.
+     as the camera histories are), so a seat that comes back settles from its own first frame;
+     in a multi-window race, per seat, by the stamp rule of rule 3 (`Scene::keep_split_seat`),
+     so a split window keeps its seats' lanes beside a one-seat window. Checked by
+     `tests::split_windows` (both window orders, HD and Omega: each seat's previous camera is
+     its own last one and a lane is built once in four frames; a seat drawn alone for a frame
+     comes back forgotten while the other keeps its lane), which fails under the old rule. A
+     one-view, 2h (HD, Omega) and 2v (Pulse, blur `high`) still is `cmp`-identical to `main`;
+     `--window-seats 1,2` on HD with the blur on: window 1 identical, window 2's two views
+     blur along their travel where they did not before (0.74 % of pixels differ).
    - *Only two taps read the scene target, and they read it at the view's offset.* The first
      downsample and the resolve sample the scene at `(rect.x, rect.y)` of the scene target
      (`drawn_scene` in `hd_bloom.wesl`, an offset in Omega's one `drawn()`); every other pass

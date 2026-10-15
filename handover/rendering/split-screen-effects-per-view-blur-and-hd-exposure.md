@@ -36,11 +36,10 @@ a frame for two views on the NVIDIA card; one view byte-identical.
   an ordinary difference between views moves is the glow fade (Zone 4 in Zone mode, 2h and 2v: the
   dark view's bright-pixel share 0.4 % to 5.2 %, the bright view unchanged); the other circuits'
   `Tone` values were not read. The zoom streak and Omega's distortion are still not drawn in a
-  split. **A multi-window session where one window holds a single seat and another a split**:
-  the single-seat window's `Layer::Window` frame calls `retire_split_histories` every frame
-  (split-blur's rule), which now also drops the split seats' adaptation lanes, so they are rebuilt
-  and re-seeded every frame there (two textures and six bind groups each); "kept frame to frame"
-  does not hold in that arrangement. Not looked at.
+  split. ~~**A multi-window session where one window holds a single seat and another a split**~~
+  **Done, 2026-10-16, `split-followups`** (`split-screen.md` rules 3 and 6): a seat is forgotten
+  alone when it missed a frame (`Scene::keep_split_seat`); a one-seat window no longer wipes the
+  split window's histories (which had also cost that window its blur) and lanes.
 - **The Steam Deck**: run the commands in "Per-view blur", "Per-view glow" and "Per-view exposure"
   (`split-screen.md`) and send the pipelined and CPU medians of one view, 2h and 2v, and look at
   the stills; the Arrow Lake iGPU reading on the notebook was too noisy to quote.

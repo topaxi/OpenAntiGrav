@@ -260,6 +260,8 @@ pub struct Chain {
     window: Seat,
     /// Each split seat's, built when a split first draws it ([`Chain::run_view`]).
     seats: std::cell::RefCell<Vec<Option<Seat>>>,
+    /// How many seats' lanes have been built, for [`Chain::seat_lane_builds`].
+    seat_builds: std::cell::Cell<u64>,
     state_rw: wgpu::BindGroupLayout,
     state_ro: wgpu::BindGroupLayout,
     /// The composite's `DistortionTexture` slot, and the zero texture that
@@ -485,6 +487,7 @@ impl Chain {
             coefficients_in,
             window,
             seats: std::cell::RefCell::new(Vec::new()),
+            seat_builds: std::cell::Cell::new(0),
             state_rw,
             state_ro,
             distortion_layout,
@@ -700,6 +703,7 @@ impl Chain {
             }
             if seats[seat].is_none() {
                 seats[seat] = Some(Seat::new(device, &self.state_rw, &self.state_ro));
+                self.seat_builds.set(self.seat_builds.get() + 1);
             }
         }
         let seats = self.seats.borrow();
@@ -744,6 +748,20 @@ impl Chain {
     /// Forgets every seat's adaptation, for the first whole-picture frame after a split.
     pub fn retire_seats(&self) {
         self.seats.borrow_mut().clear();
+    }
+
+    /// Forgets one seat's adaptation, for a seat that was not drawn as a split view last frame.
+    pub fn retire_seat(&self, seat: usize) {
+        if let Some(lane) = self.seats.borrow_mut().get_mut(seat.min(MAX_SEATS - 1)) {
+            lane.take();
+        }
+    }
+
+    /// How many seat lanes have been built so far, a lane forgotten and built again counting
+    /// twice (`hd_bloom::Chain::seat_lane_builds`).
+    #[must_use]
+    pub fn seat_lane_builds(&self) -> u64 {
+        self.seat_builds.get()
     }
 }
 

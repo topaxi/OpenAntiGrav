@@ -41,12 +41,17 @@ fn omega_params() -> oag_post::omega_tonemap::Params {
 
 /// Which post chain the scene is built with.
 #[derive(Clone, Copy, Debug)]
-enum Chain {
+pub(super) enum Chain {
     Hd,
     Omega,
 }
 
-fn scene_of(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, chain: Chain) -> Scene {
+pub(super) fn scene_of(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    race: &Race,
+    chain: Chain,
+) -> Scene {
     let (hd, omega) = match chain {
         Chain::Hd => (Some(params()), None),
         Chain::Omega => (None, Some(omega_params())),
@@ -54,7 +59,7 @@ fn scene_of(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, chain: Chai
     hull_scene(device, queue, race, Msaa::Off, hd, omega)
 }
 
-const CHAINS: [Chain; 2] = [Chain::Hd, Chain::Omega];
+pub(super) const CHAINS: [Chain; 2] = [Chain::Hd, Chain::Omega];
 
 fn draw_split(
     (device, queue): (&wgpu::Device, &wgpu::Queue),

@@ -269,7 +269,7 @@ impl Scene {
         //
         // Shaken views, so the buffer stays true screen motion for the temporal
         // upscaler; the blur subtracts the shake itself, `blur_shake` below.
-        if matches!(self.layer.get(), Layer::Whole | Layer::Window) {
+        if self.layer.get() == Layer::Whole {
             self.retire_split_histories();
         }
         let prev = MotionState::advance(
