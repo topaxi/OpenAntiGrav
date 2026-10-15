@@ -174,6 +174,102 @@ fn snapping_does_not_move_the_centre_along_the_light() {
     assert!((along_before - along_after).abs() < 1e-4);
 }
 
+/// The eight squares of the atlas are the original's eight map sides, sit
+/// inside it, and overlap nowhere: a pair that overlapped would have one
+/// craft's shadow drawn over another's.
+#[test]
+fn the_ranks_squares_are_the_original_sides_and_tile_the_atlas_without_overlap() {
+    for (rank, (x, y, side)) in RANK_SQUARES.into_iter().enumerate() {
+        assert_eq!(side, RANK_SIDES[rank], "rank {rank}'s side");
+        assert!(
+            x + side <= ATLAS_WIDTH && y + side <= ATLAS_HEIGHT,
+            "rank {rank} fits"
+        );
+    }
+    for (a, first) in RANK_SQUARES.into_iter().enumerate() {
+        for (b, second) in RANK_SQUARES.into_iter().enumerate().skip(a + 1) {
+            let apart = first.0 + first.2 <= second.0
+                || second.0 + second.2 <= first.0
+                || first.1 + first.2 <= second.1
+                || second.1 + second.2 <= first.1;
+            assert!(apart, "ranks {a} and {b} overlap");
+        }
+    }
+    // The pool the original allocates: 512, 512, 256, 128, 64, 32, 32, 32.
+    let texels: u32 = RANK_SIDES.iter().map(|side| side * side).sum();
+    assert_eq!(texels, 613_376);
+}
+
+/// A craft's record places its box on the craft, in its rank's square.
+#[test]
+fn a_craft_record_holds_its_ranks_square_and_centres_the_craft_in_it() {
+    let sun = Vec3::new(-0.78, 0.58, -0.24).normalize();
+    let craft = Vec3::new(40.0, 3.0, -25.0);
+    for (rank, (x, y, side)) in RANK_SQUARES.into_iter().enumerate() {
+        let record = craft_shadow(&Fit::craft(craft, sun), rank);
+        assert_eq!(
+            record.rect,
+            [
+                x as f32 / ATLAS_WIDTH as f32,
+                y as f32 / ATLAS_HEIGHT as f32,
+                side as f32 / ATLAS_WIDTH as f32,
+                side as f32 / ATLAS_HEIGHT as f32,
+            ]
+        );
+        let clip = Mat4::from_cols_array_2d(&record.matrix) * craft.extend(1.0);
+        // Within the snap's own texel of the middle, and half way down the
+        // box (70 up the sun of 140).
+        let texel = 2.0 / side as f32;
+        assert!(
+            clip.x.abs() <= texel && clip.y.abs() <= texel,
+            "rank {rank}: {clip:?}"
+        );
+        assert!((clip.z - 0.5).abs() < 1e-4, "rank {rank}: depth {}", clip.z);
+        assert!((clip.w - 1.0).abs() < 1e-5, "orthographic");
+    }
+}
+
+/// Two craft 500 units apart: each one's box holds itself and not the other,
+/// which is the whole difference from one map fitted to both.
+#[test]
+fn a_craft_far_from_the_pack_is_in_its_own_box_alone() {
+    let sun = Vec3::new(-0.78, 0.58, -0.24).normalize();
+    let pack = Vec3::new(0.0, 0.0, 0.0);
+    let straggler = Vec3::new(500.0, 20.0, -300.0);
+    let in_box = |record: &CraftShadow, point: Vec3| {
+        let clip = Mat4::from_cols_array_2d(&record.matrix) * point.extend(1.0);
+        clip.x.abs() < 1.0 && clip.y.abs() < 1.0 && (0.0..=1.0).contains(&clip.z)
+    };
+    let pack_record = craft_shadow(&Fit::craft(pack, sun), 0);
+    let straggler_record = craft_shadow(&Fit::craft(straggler, sun), 1);
+    assert!(in_box(&pack_record, pack) && !in_box(&pack_record, straggler));
+    assert!(in_box(&straggler_record, straggler) && !in_box(&straggler_record, pack));
+}
+
+/// A craft that drifts by less than half a texel of its rank's side keeps the
+/// same record, so its shadow does not swim across its own texels; the record
+/// changes when the rank, and with it the side, does.
+#[test]
+fn a_craft_record_is_stable_under_a_sub_texel_drift() {
+    let sun = Vec3::new(-0.78, 0.58, -0.24).normalize();
+    let craft = Vec3::new(40.0, 3.0, -25.0);
+    let base = craft_shadow(&Fit::craft(craft, sun), 0);
+    let texel = CRAFT_HALF_EXTENT * 2.0 / RANK_SIDES[0] as f32;
+    let across = sun.cross(Vec3::Y).normalize();
+    let drifted = craft_shadow(&Fit::craft(craft + across * texel * 0.1, sun), 0);
+    for (got, want) in drifted
+        .matrix
+        .iter()
+        .flatten()
+        .zip(base.matrix.iter().flatten())
+    {
+        assert!((got - want).abs() < 1e-5, "{got} against {want}");
+    }
+    // The rank 5 square is 32 texels, so its own record differs.
+    let coarse = craft_shadow(&Fit::craft(craft, sun), 5);
+    assert_ne!(coarse.rect, base.rect);
+}
+
 /// A degenerate light direction still snaps to a finite centre - the same
 /// fallback [`Fit::matrix`] uses, read the same way, so the two never
 /// disagree on what "no usable direction" means.

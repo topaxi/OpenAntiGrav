@@ -30,8 +30,8 @@ mod velocity;
 mod vertex_layout;
 pub use prepass::Prepass;
 pub use uniforms::{
-    DEPTH_FORMAT, Fog, Light, QuakeWave, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
-    UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
+    CraftShadow, DEPTH_FORMAT, Fog, Light, QuakeWave, SCENE_SIZE, Scene, ShadowMap, ShadowMaps,
+    ShadowReceiver, UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
 };
 pub use velocity::Velocity;
 pub(crate) use velocity::velocity_targets;

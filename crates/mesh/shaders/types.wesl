@@ -180,6 +180,9 @@ struct Scene {
     // `sun_occlusion_tex` - the `directionalLight0Proj` a Wipeout HD hull is
     // bound. Read only by the layer `uniforms.sun_occlusion_layer` names.
     sun_occlusion: array<mat4x4<f32>, 8>,
+    // Each craft's shadow map on the road - `mesh_render::CraftShadow`. Read by
+    // `craft_shadow_coverage` in the coverage mode only.
+    craft_shadow: array<CraftShadow, 8>,
     // World to the behind-the-glass target's clip space, the original's
     // `refractProject`; read by the tunnel glass alone. See
     // `mesh_render::Scene::refraction`.
@@ -187,6 +190,13 @@ struct Scene {
     // The Quake's travelling displacement - `oag_mesh::mesh_render::QuakeWave`,
     // read by `quake.wesl` for the surfaces whose vertex carries `quake`.
     quake: QuakeWave,
+};
+
+// One craft's map on the road: world to its orthographic sun view, and where
+// its map sits in `shadow_tex` (x, y, width, height in 0..1; width 0 for none).
+struct CraftShadow {
+    matrix: mat4x4<f32>,
+    rect: vec4<f32>,
 };
 
 // Wipeout HD's four `StaticQuake` registers. `point_b.w` is the amplitude

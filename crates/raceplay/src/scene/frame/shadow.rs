@@ -54,27 +54,6 @@ const MAPPED_DEPTH_BIAS: f32 = 0.0004;
 const MAPPED_AHEAD: f32 = 40.0;
 const MAPPED_RADIUS: f32 = 70.0;
 
-/// How far past the grid's own bounds the light's view is fitted.
-///
-/// **Ours.** The map covers the casters and nothing else - a track-sized
-/// orthographic box at `shadow::map::SIZE` is metres per texel - and a small
-/// margin keeps a craft that is banking or airborne inside it rather than
-/// clipping its own shadow at the border.
-const FIT_MARGIN: f32 = 6.0;
-
-/// The radius a craft adds to the grid's fit: the bounding sphere of the
-/// original's own per-ship box, the `(-6, -6, -6)..(6, 6, 6)` cube
-/// `Shadow_BuildShipShadowMatrices` falls back to (`6 * sqrt(3)`).
-///
-/// The drawable's own radius is not that: an HD `Ship.vex` measures 50 to 200
-/// units across by it, its authored geometry reaching far past the hull, and
-/// fitting the one map to that spent every texel on a 467-unit box
-/// (measured: radius 233.6 on Talon's Junction's grid, 2.2 texels per world
-/// unit, where the grid itself spans 70). A caster past the box is clipped by
-/// the orthographic volume, which is where geometry that far from the hull
-/// belongs.
-const HULL_FIT_RADIUS: f32 = 6.0 * 1.732_050_8;
-
 impl super::super::Scene {
     /// Both shadow maps, once for a frame, ahead of its first view.
     ///
@@ -211,7 +190,9 @@ impl super::super::Scene {
         match shadows {
             oag_display::display::Shadows::Original if map.casters() > 0 => {
                 oag_mesh::mesh_render::ShadowMap {
-                    matrix: map.matrix().to_cols_array_2d(),
+                    // Each craft's own matrix is in `craft_shadow`; this
+                    // block's is the `mapped` tier's alone.
+                    matrix: Mat4::IDENTITY.to_cols_array_2d(),
                     strength: MAP_STRENGTH,
                     mode: oag_mesh::mesh_render::ShadowMap::COVERAGE,
                     depth_bias: 0.0,
@@ -259,61 +240,96 @@ impl super::super::Scene {
         // this title shadows that way and not this one.
         let hulls = self.shadow_hulls.iter().any(Option::is_some);
         if shadows != oag_display::display::Shadows::Original || hulls {
-            map.render(queue, encoder, &default_fit(), &[]);
+            map.render(queue, encoder, &[]);
             map.render_depth(queue, encoder, &default_fit(), &[]);
             return 0;
         }
         let drawn = usize::from(race.ship_count());
-        let mut casters = Vec::with_capacity(drawn);
-        let mut centre = Vec3::ZERO;
-        let mut count = 0.0;
-        for slot in 0..drawn.min(self.ships.len()) {
-            if !race.ship_active(slot) {
-                continue;
-            }
-            let model = race.ship_model_matrix_of(slot);
-            casters.push(self.ships[slot].caster(model));
-            centre += model.transform_point3(Vec3::ZERO);
-            count += 1.0;
-        }
-        if casters.is_empty() {
-            map.render(queue, encoder, &default_fit(), &[]);
-            return 0;
-        }
-        centre /= count;
-        // Fitted to the grid's own spread **plus each craft's own box**, and
-        // not to the track - see `shadow::map::Fit`. Leaving the hull out is not
-        // a small error: with one craft it makes the box smaller than the
-        // caster, and the shadow comes out the size of the overlap.
-        let radius = grid_fit_radius(
-            (0..drawn.min(self.ships.len()))
-                .filter(|&slot| race.ship_active(slot))
-                .map(|slot| {
-                    (race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO) - centre).length()
-                }),
+        let references = self.rank_references(race);
+        let models: Vec<(usize, Mat4)> = (0..drawn.min(self.ships.len()))
+            .filter(|&slot| race.ship_active(slot))
+            .map(|slot| (slot, race.ship_model_matrix_of(slot)))
+            .collect();
+        let ranked = rank_by_distance(
+            models
+                .iter()
+                .map(|&(slot, model)| (slot, model.transform_point3(Vec3::ZERO))),
+            &references,
         );
+        let crafts: Vec<_> = ranked
+            .iter()
+            .enumerate()
+            .filter_map(|(rank, slot)| {
+                let model = models.iter().find(|(held, _)| held == slot)?.1;
+                Some(oag_render::shadow::map::CraftCaster {
+                    slot: *slot,
+                    rank,
+                    // The box the sun-occlusion map uses, which the original
+                    // shares between a ship's maps, around the craft alone.
+                    fit: craft_fit(model, &self.light),
+                    caster: self.ships[*slot].caster(model),
+                })
+            })
+            .collect();
+        map.render(queue, encoder, &crafts);
+        crafts.len()
+    }
 
-        let fit = oag_render::shadow::map::Fit {
-            centre,
-            radius,
-            // The circuit's own sun, which HD authors in its `.envsettings`
-            // and this renderer already lights through. Not a direction of
-            // this module's own.
-            towards_light: Vec3::from_array(self.light.direction),
-        };
-        map.render(queue, encoder, &fit, &casters);
-        casters.len()
+    /// The points each craft's map rank is measured from, this frame.
+    ///
+    /// **The camera's eye, in the original** (`Ship_RankAndAssignMapSlots` ranks
+    /// by squared distance to a vec4 its job carries, which is the eye at
+    /// confidence 62 and only that). The ranking is one per frame, not one per
+    /// view, so a split's later views keep reading what the first drew
+    /// ([`Self::render_shadow_passes`]); in a race with more than one person it
+    /// is therefore the nearest of this view's eye and every person's craft, so
+    /// that each seat's own craft takes one of the two 512 squares. **Chosen,
+    /// not measured**: the original has one camera.
+    fn rank_references(&self, race: &Race) -> Vec<Vec3> {
+        let mut points = vec![race.camera_position()];
+        if race.people() > 1 {
+            points.extend(
+                race.sim
+                    .world
+                    .human_slots()
+                    .map(|slot| race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO)),
+            );
+        }
+        points
     }
 }
 
-/// The radius the one coverage map's light view is fitted to, from each
-/// craft's distance to the grid's centre: the farthest craft plus the original's
-/// own per-ship box ([`HULL_FIT_RADIUS`]) and the margin. Never less than the
-/// margin, so an empty grid still fits something.
-fn grid_fit_radius(spreads: impl IntoIterator<Item = f32>) -> f32 {
-    spreads.into_iter().fold(FIT_MARGIN, |radius, spread| {
-        radius.max(spread + HULL_FIT_RADIUS + FIT_MARGIN)
-    })
+/// The slots of `craft`, nearest first by squared distance to the nearest of
+/// `references`, as `Ship_RankAndAssignMapSlots` sorts them; the slot breaks a
+/// tie, so two equidistant craft keep their order frame to frame instead of
+/// trading squares.
+fn rank_by_distance(
+    craft: impl IntoIterator<Item = (usize, Vec3)>,
+    references: &[Vec3],
+) -> Vec<usize> {
+    let mut ranked: Vec<(usize, f32)> = craft
+        .into_iter()
+        .map(|(slot, at)| {
+            let nearest = references
+                .iter()
+                .map(|point| (at - *point).length_squared())
+                .fold(f32::INFINITY, f32::min);
+            (slot, nearest)
+        })
+        .collect();
+    ranked.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+    ranked.into_iter().map(|(slot, _)| slot).collect()
+}
+
+/// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
+/// around the craft, along the circuit's own sun - which HD authors in its
+/// `.envsettings` and this renderer already lights through, not a direction of
+/// this module's own.
+fn craft_fit(model: Mat4, light: &oag_mesh::mesh_render::Light) -> oag_render::shadow::map::Fit {
+    oag_render::shadow::map::Fit::craft(
+        model.transform_point3(Vec3::ZERO),
+        Vec3::from_array(light.direction),
+    )
 }
 
 /// The environment variable that, naming a file, writes the player's
@@ -321,13 +337,13 @@ fn grid_fit_radius(spreads: impl IntoIterator<Item = f32>) -> f32 {
 /// `Scene::dump_offscreen_if_asked`.
 const DUMP_VAR: &str = "OAG_DUMP_SUN_OCCLUSION";
 
-/// The same for the player's self-shadow depth map - see
-/// `Scene::dump_offscreen_if_asked`, which writes both.
-const DUMP_SELF_SHADOW_VAR: &str = "OAG_DUMP_SELF_SHADOW";
+/// The same for the craft shadow atlas, every craft's map in its rank's square -
+/// see `Scene::dump_offscreen_if_asked`, which writes all three.
+const DUMP_SHADOW_MAP_VAR: &str = "OAG_DUMP_SHADOW_MAP";
 
-/// Half the side of the cube a craft's sun-occlusion map is fitted to, in
-/// world units: the original's own fallback bbox for a ship model without one.
-const SUN_OCCLUSION_HALF_EXTENT: f32 = 6.0;
+/// The same for the player's self-shadow depth map - see
+/// `Scene::dump_offscreen_if_asked`, which writes all three.
+const DUMP_SELF_SHADOW_VAR: &str = "OAG_DUMP_SELF_SHADOW";
 
 impl super::super::Scene {
     /// Renders each active craft's sun-occlusion map - the track within
@@ -372,20 +388,13 @@ impl super::super::Scene {
                 continue;
             }
             let model = race.ship_model_matrix_of(slot);
-            // Fitted to the craft alone. The original fits the box to the
-            // ship's own bbox, or to a fixed `(-6, -6, -6)..(6, 6, 6)` cube
-            // when the model carries none (`Shadow_BuildShipShadowMatrices`);
-            // this side takes that cube plus the coverage map's own margin,
-            // so the hull's silhouette never clips its own map's edge - the
-            // edge reads as no sun. **Not the drawable's bounding radius**:
-            // an HD `Ship.vex` measures over 200 units across by that, its
-            // authored geometry reaching far past the hull, and a box that
-            // size is a map of the neighbourhood rather than of the craft.
-            let fit = oag_render::shadow::map::Fit {
-                centre: model.transform_point3(Vec3::ZERO),
-                radius: SUN_OCCLUSION_HALF_EXTENT + FIT_MARGIN,
-                towards_light: Vec3::from_array(self.light.direction),
-            };
+            // Fitted to the craft alone, in the box the coverage maps use
+            // ([`oag_render::shadow::map::Fit::craft`]). **Not the drawable's
+            // bounding radius**: an HD `Ship.vex` measures over 200 units
+            // across by that, its authored geometry reaching far past the
+            // hull, and a box that size is a map of the neighbourhood rather
+            // than of the craft.
+            let fit = craft_fit(model, &self.light);
             maps.render(queue, encoder, slot, &fit, &track);
             // The craft's own depth map from the same box: its opaque ranges
             // and nothing else, so a wing shadows the fuselage and no other
@@ -470,6 +479,17 @@ impl super::super::Scene {
             let texels = self.sun_occlusion.borrow().read_back(device, queue, 0);
             let size = oag_render::shadow::occlusion::SIZE;
             write(&dump, &texels, size, "sun occlusion")?;
+        }
+        if let Ok(dump) = std::env::var(DUMP_SHADOW_MAP_VAR) {
+            let texels = self.shadow_map.borrow().read_back(device, queue);
+            let rgba: Vec<u8> = texels.iter().flat_map(|t| [*t, *t, *t, 255]).collect();
+            let (width, height) = (
+                oag_render::shadow::map::ATLAS_WIDTH,
+                oag_render::shadow::map::ATLAS_HEIGHT,
+            );
+            std::fs::write(&dump, oag_texture::png::encode_rgba(width, height, &rgba))
+                .map_err(|error| anyhow::anyhow!("writing {dump}: {error}"))?;
+            println!("wrote {dump} (shadow atlas, {width}x{height})");
         }
         if let Ok(dump) = std::env::var(DUMP_SELF_SHADOW_VAR) {
             let maps = self.sun_occlusion.borrow();
@@ -570,7 +590,7 @@ impl super::super::Scene {
         // switch between tiers would show the other's leftovers.
         // A later view of a split finds it already cleared by the first view's.
         if self.does_frame_work() {
-            map.render(queue, encoder, &default_fit(), &[]);
+            map.render(queue, encoder, &[]);
         }
         map.render_depth(queue, encoder, &fit, &casters);
         casters.len()
@@ -672,39 +692,34 @@ fn default_fit() -> oag_render::shadow::map::Fit {
 mod tests {
     use oag_core::math::Mat4;
 
-    use super::{
-        FIT_MARGIN, HULL_FIT_RADIUS, MAPPED_AHEAD, grid_fit_radius, mapped_centre, mapped_fit,
-    };
+    use super::{MAPPED_AHEAD, mapped_centre, mapped_fit, rank_by_distance};
     use oag_core::math::Vec3;
 
-    /// A lone craft is fitted to the original's own 12-unit box plus the
-    /// margin, and a grid to its farthest craft plus the same: neither depends
-    /// on the drawable's own radius, which was 50 to 200 units for an HD
-    /// `Ship.vex` and put Talon's Junction's grid (spread 70) at a radius of
-    /// 233.6 - 2.2 texels per world unit where this gives about 12 at
-    /// `shadow::map::SIZE`.
+    /// The rank is by squared distance to the nearest reference point, nearest
+    /// first, and a tie goes to the lower slot.
     #[test]
-    fn the_grid_fit_is_the_spread_plus_the_originals_per_ship_box() {
-        let lone = grid_fit_radius([0.0]);
-        assert!(
-            (lone - (HULL_FIT_RADIUS + FIT_MARGIN)).abs() < 1e-4,
-            "{lone}"
-        );
-        assert!(
-            lone < 20.0,
-            "a lone craft fits a box about its own size: {lone}"
-        );
-        let grid = grid_fit_radius([69.6, 13.6, 31.4]);
-        assert!(
-            (grid - (69.6 + HULL_FIT_RADIUS + FIT_MARGIN)).abs() < 1e-3,
-            "{grid}"
-        );
-        let texels_per_unit = oag_render::shadow::map::SIZE as f32 / (2.0 * grid);
-        assert!(
-            texels_per_unit > 10.0,
-            "the grid's map should hold the original's third ship's density: {texels_per_unit}"
-        );
-        assert_eq!(grid_fit_radius([]), FIT_MARGIN);
+    fn craft_rank_by_distance_to_the_nearest_reference() {
+        let eye = Vec3::new(0.0, 0.0, 0.0);
+        let craft = [
+            (0, Vec3::new(30.0, 0.0, 0.0)),
+            (1, Vec3::new(5.0, 0.0, 0.0)),
+            (2, Vec3::new(-5.0, 0.0, 0.0)),
+            (3, Vec3::new(500.0, 0.0, 0.0)),
+        ];
+        // Slots 1 and 2 are equidistant, so the lower slot ranks first.
+        assert_eq!(rank_by_distance(craft, &[eye]), vec![1, 2, 0, 3]);
+    }
+
+    /// Two seats in a split each pull their own craft forward: the rank is
+    /// from the nearest of the references, so the far seat's craft is not left
+    /// at the back of a rank taken from the near seat's eye alone.
+    #[test]
+    fn a_second_seat_ranks_its_own_craft_among_the_nearest() {
+        let first = Vec3::new(0.0, 0.0, 0.0);
+        let second = Vec3::new(1000.0, 0.0, 0.0);
+        let craft = [(0, first + Vec3::X * 10.0), (1, second + Vec3::X * 5.0)];
+        assert_eq!(rank_by_distance(craft, &[first]), vec![0, 1]);
+        assert_eq!(rank_by_distance(craft, &[first, second]), vec![1, 0]);
     }
 
     /// The report under investigation was "the box follows the camera". This
