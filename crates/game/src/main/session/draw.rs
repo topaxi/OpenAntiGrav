@@ -503,9 +503,10 @@ impl Session {
         {
             timer.abandon();
         }
-        // **And what it last cost stops being reported**: a split draws no blur, so no reading
-        // ever replaces the last single view's, and the overlay went on naming it. Only on a
-        // frame that had a scene - a menu frame says nothing about the chain.
+        // **And what it last cost stops being reported**: a frame whose scene drew no blur (the
+        // setting is off, or the pass failed to build) has no reading to replace the last
+        // one, and the overlay went on naming it (it did for a split, before the split drew
+        // its own). Only on a frame that had a scene - a menu frame says nothing about the chain.
         if  has_scene
             && !scene_stats.is_some_and(|stats| stats.blur_encoded)
             && self.blur_cost.after_frame(

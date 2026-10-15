@@ -98,17 +98,61 @@ things make that more than a loop:
    *submission's* commands. Two views in one encoder would both draw with the last
    view's matrices.
 2. **Only the first view clears.** The scene pass clears the whole attachment
-   whatever the viewport is. Later views load the colour; depth is cleared each
-   time. Under MSAA the resolve rewrites the whole target
+   whatever the viewport is. Later views load the colour, the velocity and the
+   depth (2026-10-15, rule 3; the depth was cleared each time before, which is
+   what kept a later view's blur from seeing an earlier view). Under MSAA the resolve rewrites the whole target
    (`crates/render/tests/msaa_resolve_viewport.rs`), so the multisampled colour is
    what is loaded, and `crates/render/tests/msaa_load_keeps_view.rs` pins that a
    loading pass keeps an earlier view.
-3. **No motion blur, no camera jitter, no temporal upscaler input.** The motion
-   state and the upscaler's frame record hold one camera's history. Per-view blur is more
-   than a history per slot (`Scene::history` already indexes a window's history and would
-   extend to a slot): the blur reads the velocity and depth attachments, which every view's
-   scene pass clears whole (so only the last view's survive to the end), and its output
-   cannot be written as each view is drawn for the reason rule 4 gives. See "Open".
+3. **Motion blur runs once per view, after the last view is drawn** (2026-10-15,
+   `split-blur`); **no camera jitter and no temporal upscaler input**. Three things
+   make it more than calling the blur per view, and each is a way to get a picture that
+   is wrong:
+   - *Each view measures against its own camera.* `Scene::histories` holds one history
+     per window and now one per seat after them (`motion::split_history`, 16 in all):
+     the previous view-projection every drawable's `prev_mvp` is measured against, the
+     impact shake the blur takes out, the cut watch. A seat's view reads and writes
+     only its own, so two cameras in one frame never read each other's previous pose, and
+     no window's history is written by a split. A frame that draws a single view forgets
+     the seats' histories (`Scene::retire_split_histories`), so a seat that comes back
+     measures its first frame against itself instead of a pose from before the gap. The
+     window's upscaler record is kept cleared, as a split always left it (jitter off), so
+     `Scene::temporal` still answers `None` for a split and the upscaler falls to its
+     spatial rung.
+   - *The velocity and depth attachments hold every view.* The scene pass used to clear
+     both whole in every view, so only the last view's survived to the end. A later view
+     loads them now, exactly as it loads the colour: the first view cleared the whole
+     attachment to no motion and depth 1.0, each view draws only inside its own rectangle
+     (the viewport clips it), so a later view's rectangle is still at the clear value
+     when it draws. No view has a target of its own and nothing is copied; the extra cost
+     is the load, which "Per-view blur" measures. The velocity buffer is still always
+     written, setting or no setting (`hd-gpu`'s experiment to gate it is on its own branch
+     and is not on `main`).
+   - *The blur runs per view, after the last, and one submission each.* A view's blur
+     cannot run as the view is drawn for rule 4's reason (the next view's multisample
+     resolve rewrites the whole resolved target). So `Scene::blur_split_views` runs the
+     ordinary chain once per view over that view's rectangle: its taps clamp to the
+     rectangle (the shader's own `rect_offset`/`rect_size` clamp, written for the aspect
+     bars of a capture), and every intermediate target is cleared whole and drawn only
+     inside the rectangle, so no view's velocity reaches another's pixels across the 2
+     pixel gap. **One encoder and one submit per view's chain**, for rule 1's reason:
+     `MotionBlur::render` writes one uniform buffer with `queue.write_buffer`, which lands
+     before the submission's commands, so two chains in one encoder would both run with the
+     last view's rectangle, tile and shake (lanes of a uniform buffer and bind groups per
+     view, as the bloom's, were the other way; submits are less code, **chosen, not
+     measured**). The order is a single view's: HD's and Omega's chain, then Pulse's bright
+     pass (`prepare_split_bloom`), then the blur, then the HUD, then the glow's composite.
+     One `ChainTimestamps` pair brackets all the chains (its opening half rides the first
+     view's first pass, its closing half the last view's last), so the overlay's BLUR row
+     reads the whole.
+   Checked by `tests::split_blur` (a moving view blurs and a still one is byte for byte
+   what it was with the blur off, with the moving view drawn first and drawn last; a later
+   view keeps the velocity and depth of the ones before it; each seat keeps its own camera's
+   history; a single view forgets them): reverting the velocity load, the depth load, or
+   making every chain use the last view's rectangle each fails one of them. Camera jitter
+   and the temporal upscaler need a frame record and a history per view, and a resolve pass
+   per view over that view's rectangle (FSR 3's `resolve_scene` encodes one chain over the
+   whole picture): not started, and not free.
 4. **Pulse's bloom runs once per view, after the last view is drawn** (2026-10-15,
    `split-bloom`; PSP and PS2 alike). A view's glow cannot be composited as the view is
    drawn: the next view's multisample resolve rewrites the whole resolved target from the
@@ -912,7 +956,8 @@ evidence here.
    this divides the per-view CPU by the cores used. The largest change and the largest
    possible gain; do it only if items 1 and 2 leave the Deck short.
 5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
-   "Per-view glow". Motion blur and the temporal upscaler stay omitted.
+   "Per-view glow". ~~Motion blur~~ **Done, 2026-10-15** (rule 3), measured under "Per-view
+   blur". The temporal upscaler stays omitted.
 
 **Limits of these numbers.** The bench re-renders one static frame (the race held at tick 300
 or 1800), so it does not see tick-to-tick variation; every view carries an unexplained 0.5 to
@@ -974,6 +1019,83 @@ for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
 done
 ```
 
+### Per-view blur (2026-10-15, `split-blur`)
+
+What the blur per view (rule 3) costs, on the Intel Core Ultra 7 265H notebook, release `perf-probe`
+builds, `taskset -c 0-5`, the gate lock held, 1280x800, Pulse PSP 16_Track and Wipeout HD (Talon's
+Junction), tick 1800, `--motion-blur medium` (the profile's default gather resolution), the
+single-frame bench of "Per-view glow" (`OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60`). **Before**
+is `main` at the merge of `split-bloom` (a split drew no blur); **after** is this branch.
+Five rounds, before and after interleaved and the order alternating, **median of the five
+medians**, load average 1.7 to 7.9 (a loaded notebook: other members were building). Pipelined
+frame in us (CPU in the notes):
+
+| Case | NVIDIA RTX PRO 2000 Blackwell (default adapter) before / after | Arrow Lake iGPU before / after |
+| --- | --- | --- |
+| Pulse 2h, blur on | 1,679 / 1,741 (+62) | 2,983 / 3,633 (+650) |
+| Pulse 2v, blur on | 1,601 / 1,746 (+145) | 2,974 / 3,708 (+734) |
+| HD 2h, blur on | 2,457 / 2,755 (+298) | 5,389 / 6,050 (+661) |
+| HD 2v, blur on | 2,524 / 2,751 (+227) | 5,372 / 6,052 (+680) |
+| Pulse 2h, blur **off** | 1,618 / 1,724 (+106, inside the spread) | 2,995 / 2,992 (-3) |
+| Pulse 2v, blur **off** | 1,612 / 1,582 (-30) | 2,962 / 2,985 (+23) |
+
+- **Blur off costs nothing**: the change a split pays with the blur off is the velocity and depth
+  loads and a history slot per seat, and the pipelined frame does not move (the iGPU reads -3 and
+  +23 us; the NVIDIA card's 1.6 ms frames spread over 1.5 to 1.8 ms between rounds, so its +106
+  and -30 are one measurement of noise).
+- **Blur on costs one single view's blur, give or take**: a single view's blur chain at 1280x800
+  is 217 us (Pulse) and 254 us (HD) of GPU on the NVIDIA card and 530 us and 610 us on the iGPU
+  (the chain's own GPU timestamps, `Scene::render`). Two views of half the pixels each is the same
+  pixels, and the iGPU, which is GPU-bound at these sizes, reads +650 to +730 us: that chain plus
+  about 100 to 200 us of the second chain's fixed passes. The NVIDIA card is CPU-bound on a split
+  (1.6 to 2.5 ms against 0.3 to 0.8 ms of scene GPU), so the chains' 6 passes and bind groups per
+  view show as +60 to +300 us of CPU/pipelined frame, within the spread for Pulse.
+- **The scene passes' GPU time** moves 0 to 25 us (NVIDIA Pulse 2v 284 to 307 us; HD 836 to 846
+  us): that is the cost of loading velocity and depth in the later view, measured, not assumed.
+- **The Deck's budget**: the two-view blur adds about one single view's blur, which `split-blur-cost`
+  measured on the Deck at 2.4 ms (Pulse PSP EU, profile `medium`, half resolution, 2560x1440
+  windowed) and 4.7 ms (Pulse PS2 EU, render scale 150, full resolution): expect roughly that
+  again on top of a split frame on the Deck's panel, to be read on the Deck (below).
+- **Not measured on the Deck**: it was not reachable on 2026-10-15. Every number above is
+  this notebook's.
+
+**Looked at** (`--screenshot`, 1280x800, `--ticks 1200` to `1500`, `--hold cross` so the first
+seat flies and the others sit on the grid at 0 km/h; blur off against `high` of the same
+frame): Pulse PSP `2h`, `2v` and four views, HD `2h` and `2v`, Pure, Pulse PS2, 2048 and Omega `2h`.
+In every one the moving seats' views are streaked along their own motion (the track
+edges and the gantries) and the views at rest are not touched. The difference between the blur-off
+and blur-`high` pictures in a still view: **zero pixels** on Pure; **at most one level on one channel**
+(sum of channel differences 3, no pixel above 8) on HD, 2048 and Omega; and on Pulse PSP and PS2
+one advert sign of about 2,000 pixels whose content differs between the two pictures. **Cause
+not isolated for the last two**: the blur capture renders one extra primer frame before the
+final one, two blur-off captures of the same frame are byte-identical, and neither difference
+is a seam or a smear (a one-level step over the whole still view, a sign's own texture). Nothing
+crosses the 2 pixel gap. **A one-view frame is byte-identical to `main`'s** (`cmp`, Pulse PSP
+16_Track at 900 ticks and HD at 900 ticks, blur off and `high` each). **2048 and Omega: ported** (the
+same scene path; the stills above are with their own tone maps). **Pure, Pulse PS2: checked,
+applies** (same chain, stills above).
+
+**Steam Deck, for the maintainer** (not measured). Build as in "Cost" above (`cargo build
+--release -p oag-game --features perf-probe`) and the same loop as "Per-view glow", with
+`--motion-blur medium` and the picture saved so the stills can be looked at:
+
+```sh
+for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
+  XDG_CONFIG_HOME=/tmp/oag-blur/config XDG_DATA_HOME=/tmp/oag-blur/data XDG_STATE_HOME=/tmp/oag-blur/state \
+    OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 ./target/release/oag-game data/images/pulse-psp-eu.chd \
+    --race --no-audio --mode single_race --track 'Data\Environments\16_Track\track.vex' \
+    --players $c --ticks 1500 --hold cross --size 1280x800 --motion-blur medium \
+    --screenshot /tmp/oag-blur/$(echo $c | tr -d ' -').png \
+    2>&1 | grep -E '^bench (split|render_viewports CPU|pipelined|motion blur)'
+done
+```
+
+Run it again with `--motion-blur off` and compare `pipelined per frame` (the pair is the blur's
+cost on the Deck), and the whole race: `just bench-render pulse --views 1,2h,2v --size 1280x800
+--motion-blur medium --tag deck-blur` against the same with `--motion-blur off --tag deck-off`
+(`just bench-compare`). The blur row of the overlay (`BLUR`) now reads the sum over the views in a
+split.
+
 ### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
 
 **The maintainer saw about 30 ms attributed to motion blur on the Deck in a split with no blur
@@ -1001,10 +1123,9 @@ timestamps), so the row could not be a measurement of this frame. What was measu
   of frames already in flight; a stall does the same for blur and HD bloom. A single view
   records exactly as before (no picture changes). Tested by a fed sequence
   (`perf::chain::tests`); the frame loop logs the edge at debug level (`motion blur chain not drawn on frame N`).
-- **Open:** whether blur per view is worth drawing in a split. A view of half the pixels
-  would cost about half the single-view figure above (2.4 to 4.7 ms on the Deck at one
-  view, so roughly 1 to 2.5 ms a view), but the per-view history and velocity buffers are
-  what rule 3 keeps out; not built here.
+- ~~**Open:** whether blur per view is worth drawing in a split.~~ **Drawn since 2026-10-15**
+  (rule 3, cost under "Per-view blur"): a split with the blur on now encodes the chains, so
+  the BLUR row reads them (the sum over the views) and `blur_encoded` is true.
 - **The upscaler rows had the same flaw and were fixed the same way (2026-10-14,
   `split-bench`).** `Session::upscale_cost` and `Session::upscale_presented_cost` (the
   overlay's two FSR 3 rows, `FSR3 REN` and `FSR3 OUT`) were plain `Meter`s too: a split
@@ -1494,7 +1615,8 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - Two real pads: the assignment is unit-tested over stand-in ids and the keyboard
   path runs end to end, but no second pad has been plugged in.
 - Per-team camera rigs, ~~per-view bloom (an origin in `oag_post::bloom`)~~ **done, rule 4**, motion blur
-  and the temporal upscaler under a split, and a check of HD's and Omega's chains.
+  ~~under a split~~ **done, rule 3**, the temporal upscaler under a split, and a check of HD's and
+  Omega's chains.
 - ~~The results scoreboard and the end-race flow still key on slot 0 and end every
   view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race", with
   `EndRace Results Split` and per-person rewards for two people on Pulse. Open from it:
@@ -1504,11 +1626,9 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   The render bench does time every view (`Scene::render_viewports`' `view_timers`);
   it also shows resolution would not help a split here: the GPU is not the limit
   (see "Cost").
-- **Motion blur and the temporal upscaler are still not drawn per view** (see rule 3: the blur reads
-  velocity and depth attachments every view's scene pass clears, and its output would be erased
-  by the next view's resolve). A way in: give each view its own region of velocity and depth (load
-  them in later views after clearing only the view's rectangle), run the blur per view after the
-  last view as the glow does, and extend `Scene::history` from windows to view slots. Not started.
+- ~~**Motion blur is not drawn per view**~~ **Done, 2026-10-15** (rule 3). **The temporal
+  upscaler and camera jitter still are not**: they need a frame record, a jitter phase and a
+  resolve per view (see rule 3). Open.
 - **HD's exposure is one for the whole picture**, so a dark view next to a bright one reads
   dimmer than it would alone; a lane per view of the chain's adaptation is the fix and the
   chain's scratch targets are sized for the whole frame. Open.
