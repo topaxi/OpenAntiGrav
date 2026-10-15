@@ -246,21 +246,20 @@ fn a_craft_far_from_the_pack_is_in_its_own_box_alone() {
     assert!(in_box(&straggler_record, straggler) && !in_box(&straggler_record, pack));
 }
 
-/// The receiver's cull sphere holds the whole slab it would otherwise test, so
-/// skipping outside it changes nothing: the slab reaches 50 units past the
-/// craft along the sun and the box's half width across it, in both directions
-/// across the sun.
+/// The receiver's cull cylinder holds the whole box it would otherwise
+/// project into, so skipping outside it changes nothing: the box is 12 units to
+/// each side across the sun, 17 at its corner.
 #[test]
-fn the_cull_sphere_holds_the_receivers_slab() {
-    let corner = (2.0 * CRAFT_HALF_EXTENT * CRAFT_HALF_EXTENT + 50.0 * 50.0).sqrt();
+fn the_cull_cylinder_holds_the_maps_box() {
+    let corner = (2.0 * CRAFT_HALF_EXTENT * CRAFT_HALF_EXTENT).sqrt();
     assert!(
-        corner < CRAFT_CULL_RADIUS,
-        "{corner} against {CRAFT_CULL_RADIUS}"
+        corner < CRAFT_CULL_LATERAL,
+        "{corner} against {CRAFT_CULL_LATERAL}"
     );
     let record = craft_shadow(&Fit::craft(Vec3::new(1.0, 2.0, 3.0), Vec3::Y), 0);
     assert_eq!(
         record.centre,
-        [1.0, 2.0, 3.0, CRAFT_CULL_RADIUS * CRAFT_CULL_RADIUS]
+        [1.0, 2.0, 3.0, CRAFT_CULL_LATERAL * CRAFT_CULL_LATERAL]
     );
 }
 

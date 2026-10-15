@@ -183,6 +183,8 @@ struct Scene {
     // Each craft's shadow map on the road - `mesh_render::CraftShadow`. Read by
     // `craft_shadow_coverage` in the coverage mode only.
     craft_shadow: array<CraftShadow, 8>,
+    // The unit direction towards the sun the craft maps were fitted along.
+    craft_sun: vec4<f32>,
     // World to the behind-the-glass target's clip space, the original's
     // `refractProject`; read by the tunnel glass alone. See
     // `mesh_render::Scene::refraction`.
@@ -197,8 +199,8 @@ struct Scene {
 struct CraftShadow {
     matrix: mat4x4<f32>,
     rect: vec4<f32>,
-    // The craft's centre and, in `w`, the squared radius of the sphere its map
-    // can shadow within.
+    // The craft's centre and, in `w`, the squared radius of the cylinder along
+    // the sun its map can shadow within.
     centre: vec4<f32>,
 };
 

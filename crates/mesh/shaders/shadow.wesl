@@ -48,6 +48,11 @@ const CRAFT_SLAB_NEAR: f32 = 0.5 - 6.0 / 140.0;
 // ship, this cuts a slab, which is the nearest cut a per-pixel lookup has.
 const CRAFT_SLAB_FAR: f32 = 0.5 + 50.0 / 140.0;
 
+// The cull's bounds along the sun, in world units: the slab's 6 units on the
+// sun's side and 50 past the craft, each with a margin for a snap's shift.
+const CRAFT_CULL_NEAR: f32 = 8.0;
+const CRAFT_CULL_FAR: f32 = 52.0;
+
 // How much of this surface point the craft shadow maps cover, `0.0` to `1.0`.
 //
 // **Wipeout HD redraws the road once per ship, each through that ship's own
@@ -82,14 +87,16 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
         // A craft with no map has a zero radius (`CraftShadow::NONE`), so this
         // skips it too. Member by member rather than the whole record: a road
         // point near no craft reads only the centre.
-        // Most road is far from most craft: one subtract and one dot reject it
-        // before the projection's twelve multiplies. The sphere holds the whole
-        // slab (`CRAFT_CULL_RADIUS` in `shadow::map`), so this skips only what
-        // the slab would, and is the original's own "track chunks within 50
-        // units of the ship" in form.
+        // Most road is far from most craft's box: the offset's length along the
+        // sun and across it reject it before the projection's twelve
+        // multiplies. The cylinder holds the box and the slab
+        // (`CRAFT_CULL_LATERAL` in `shadow::map`, and the slab's own bounds
+        // widened a little), so this skips only what they would.
         let centre = scene.craft_shadow[i].centre;
         let offset = world - centre.xyz;
-        if dot(offset, offset) > centre.w {
+        let along = dot(offset, scene.craft_sun.xyz);
+        if along > CRAFT_CULL_NEAR || along < -CRAFT_CULL_FAR
+            || dot(offset, offset) - along * along > centre.w {
             continue;
         }
         let craft = scene.craft_shadow[i];
