@@ -619,6 +619,19 @@ impl Silhouette {
 /// One draw of [`Pipeline::draw`]: a silhouette's bind group and the vertices drawn with it.
 pub type Run = (usize, u32, u32);
 
+/// What [`Pipeline::draw`] binds: handles no upload replaces, cloned into a view's recording
+/// so a later view's upload can run beside it (a split's overlapped recording).
+#[derive(Clone, Debug)]
+pub struct Drawer {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    /// One per distinct silhouette, indexed by [`Placement::silhouette`], with
+    /// [`Silhouette::solid`] appended at the end for the hull path. Shared, so a clone is one
+    /// count.
+    silhouettes: std::sync::Arc<[wgpu::BindGroup]>,
+    vertices: wgpu::Buffer,
+}
+
 /// The blob pass: one pipeline, one vertex buffer, one bind group per
 /// silhouette.
 ///
@@ -627,15 +640,10 @@ pub type Run = (usize, u32, u32);
 /// depth write would let it occlude the very geometry it is meant to sit on.
 #[derive(Debug)]
 pub struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+    drawer: Drawer,
     uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    /// One per distinct silhouette, indexed by [`Placement::silhouette`], with
-    /// [`Silhouette::solid`] appended at the end for the hull path.
-    silhouettes: Vec<wgpu::BindGroup>,
-    /// Where that appended solid one sits.
+    /// Where the appended solid silhouette sits in [`Drawer`]'s list.
     solid: usize,
-    vertices: wgpu::Buffer,
     /// `(silhouette, first vertex, count)` per run, as the last
     /// [`Pipeline::upload`] grouped them.
     runs: Vec<Run>,
@@ -811,12 +819,14 @@ impl Pipeline {
             .collect();
 
         Self {
-            pipeline,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+                silhouettes,
+                vertices,
+            },
             uniforms,
-            bind_group,
-            silhouettes,
             solid,
-            vertices,
             runs: Vec::new(),
         }
     }
@@ -874,31 +884,19 @@ impl Pipeline {
             self.runs.push((self.solid, first, kept as u32));
         }
         if !vertices.is_empty() {
-            queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices));
+            queue.write_buffer(&self.drawer.vertices, 0, bytemuck::cast_slice(&vertices));
         }
     }
 
-    /// Draws into a pass the caller already opened.
-    ///
-    /// **After the track and before the hulls.** After, because the road's
-    /// depth has to be in the buffer for the quad's depth test to keep it off
-    /// the geometry behind; before, because the hulls are opaque and write
-    /// depth, so a craft drawn afterwards covers its own shadow where it
-    /// overlaps it rather than the shadow drawing over the craft.
-    ///
-    /// `runs` is what the upload of the view being drawn left ([`Self::runs`]), kept by the view:
-    /// a split screen records its views at once, while a later view's upload refills this.
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[Run]) {
-        if runs.is_empty() {
-            return;
-        }
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.set_vertex_buffer(0, self.vertices.slice(..));
-        for (silhouette, first, count) in runs {
-            pass.set_bind_group(1, &self.silhouettes[*silhouette], &[]);
-            pass.draw(*first..*first + *count, 0..1);
-        }
+        self.drawer.draw(pass, runs);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
     }
 
     /// What the last [`Pipeline::upload`] left to draw, for [`Self::draw`].
@@ -929,6 +927,31 @@ impl Pipeline {
             .filter(|(index, _, _)| *index == self.solid)
             .map(|(_, _, count)| *count as usize / 3)
             .sum()
+    }
+}
+
+impl Drawer {
+    /// Draws into a pass the caller already opened.
+    ///
+    /// **After the track and before the hulls.** After, because the road's
+    /// depth has to be in the buffer for the quad's depth test to keep it off
+    /// the geometry behind; before, because the hulls are opaque and write
+    /// depth, so a craft drawn afterwards covers its own shadow where it
+    /// overlaps it rather than the shadow drawing over the craft.
+    ///
+    /// `runs` is what the upload of the view being drawn left ([`Self::runs`]), kept by the view:
+    /// a split screen records its views at once, while a later view's upload refills this.
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[Run]) {
+        if runs.is_empty() {
+            return;
+        }
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_vertex_buffer(0, self.vertices.slice(..));
+        for (silhouette, first, count) in runs {
+            pass.set_bind_group(1, &self.silhouettes[*silhouette], &[]);
+            pass.draw(*first..*first + *count, 0..1);
+        }
     }
 }
 

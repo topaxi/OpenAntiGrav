@@ -72,14 +72,6 @@ impl Clouds {
         pipeline.upload(queue, view_projection, &vertices);
     }
 
-    /// What the last upload left to draw; nothing on a circuit with no cloud node.
-    pub(super) fn drawn(&self) -> oag_fx::cloud::Drawn {
-        self.state
-            .as_ref()
-            .map(|(_, pipeline)| pipeline.drawn())
-            .unwrap_or_default()
-    }
-
     /// The pipeline, drawn after the solid scene: depth-tested but not depth-writing, the
     /// same as `exhaust::Pipeline::draw` and for the same reason - see
     /// `oag_fx::cloud::Pipeline::draw`.

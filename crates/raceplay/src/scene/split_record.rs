@@ -143,9 +143,7 @@ impl Scene {
         }
         *self.upload_staging.borrow_mut() = staging;
         oag_gpu::perfprobe::mark("views-prepared");
-        let borrowed = self.borrow_for_recording();
-        let recorded = record_views(&borrowed.recorder(), prepared, recording);
-        drop(borrowed);
+        let recorded = record_views(&self.recorder(), prepared, recording);
         let mut stats = SceneStats::default();
         for (index, (((commands, drawn), log), (&slot, &rect))) in recorded
             .into_iter()

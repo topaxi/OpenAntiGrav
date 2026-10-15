@@ -1477,7 +1477,7 @@ use direction::{direction_for, signed_unit};
 use sample::{channel_sample, random_range};
 mod frame;
 mod pipeline;
-pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawn, MAX_VERTICES, Pipeline};
+pub use pipeline::{BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline};
 
 mod release;
 mod riding;

@@ -98,10 +98,7 @@ impl Scene {
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
-        let mut stats = self
-            .borrow_for_recording()
-            .recorder()
-            .record(&pass, encoder);
+        let mut stats = self.recorder().record(&pass, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_shake = pass.blur_shake;
         drop(pass);

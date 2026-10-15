@@ -203,13 +203,20 @@ pub struct Drawn {
     count: u32,
 }
 
-#[derive(Debug)]
-pub struct Pipeline {
+/// What [`Pipeline::draw`] binds: handles no upload replaces, cloned into a view's
+/// recording so a later view's upload can run beside it (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
     pipeline: wgpu::RenderPipeline,
-    uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     texture: wgpu::BindGroup,
     vertices: wgpu::Buffer,
+}
+
+#[derive(Debug)]
+pub struct Pipeline {
+    drawer: Drawer,
+    uniforms: wgpu::Buffer,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     count: u32,
     capacity: usize,
@@ -457,11 +464,13 @@ impl Pipeline {
         );
 
         Self {
-            pipeline,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+                texture,
+                vertices,
+            },
             uniforms,
-            bind_group,
-            texture,
-            vertices,
             count: 0,
             capacity: style.capacity,
         }
@@ -516,7 +525,11 @@ impl Pipeline {
 
         let n = vertices.len().min(self.capacity);
         if n > 0 {
-            queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
+            queue.write_buffer(
+                &self.drawer.vertices,
+                0,
+                bytemuck::cast_slice(&vertices[..n]),
+            );
         }
         self.count = n as u32;
     }
@@ -527,6 +540,19 @@ impl Pipeline {
         Drawn { count: self.count }
     }
 
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws into a pass the caller already opened, after the opaque
     /// geometry - depth write is off, so it relies on the scene's depth
     /// already being present to be occluded by it.

@@ -9,12 +9,18 @@ pub struct Drawn {
     visible: bool,
 }
 
+/// What [`Pipeline::draw`] binds, cloned into a view's recording (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+}
+
 /// The flash pipeline and its one-colour uniform.
 #[derive(Debug)]
 pub struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+    drawer: Drawer,
     uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
     /// Whether the last [`Pipeline::upload`] had anything to draw.
     visible: bool,
 }
@@ -109,9 +115,11 @@ impl Pipeline {
             }],
         });
         Self {
-            pipeline,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+            },
             uniforms,
-            bind_group,
             visible: false,
         }
     }
@@ -133,6 +141,19 @@ impl Pipeline {
         }
     }
 
+    /// Draws the quad: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws the quad into a pass the caller opened, after everything the
     /// flash should wash over.
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
