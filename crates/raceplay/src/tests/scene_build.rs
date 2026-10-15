@@ -94,10 +94,22 @@ pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 /// A scene over one triangle for a circuit and for every pool: enough to be
 /// drawn, nothing a picture could be judged by.
 pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
+    bare_scene_over(device, queue, triangle())
+}
+
+/// [`bare_scene`] whose circuit stamps the glow mask, as Pulse PSP's does: the scene
+/// then builds the recovered bloom.
+pub(super) fn glowing_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
+    let mut track = triangle();
+    track.stamps_glow = true;
+    bare_scene_over(device, queue, track)
+}
+
+fn bare_scene_over(device: &wgpu::Device, queue: &wgpu::Queue, track: Model) -> Scene {
     Scene::new(
         device,
         queue,
-        triangle(),
+        track,
         &[livery()],
         None,
         None,

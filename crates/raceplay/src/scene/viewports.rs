@@ -28,12 +28,16 @@
 //!   exception: the `mapped` tier's depth map is fitted on the craft its view
 //!   follows, so each later view redraws it** in its own encoder
 //!   (`Scene::render_shadow_passes`).
-//! - **No Pulse bloom under a split.** `oag_post::bloom` reads the glow mask from
-//!   the top-left of the target whatever the viewport's origin is (its `prepare`
-//!   takes the size and ignores the origin), so a view anywhere else would glow
-//!   from the first view's pixels; and its composite lands on the resolved
-//!   target, which the next view's multisample resolve rewrites whole. Skipped
-//!   rather than drawn wrong. **Chosen, not measured**; per-view bloom is open.
+//! - **Pulse's bloom runs once per view, after the last one.** A view's composite
+//!   cannot land on the resolved target as the view is drawn, because the next
+//!   view's multisample resolve rewrites the whole target from the multisampled
+//!   colour. So every view is drawn first, and then [`Scene::prepare_split_bloom`]
+//!   reads each view's own rectangle of the finished picture (`oag_post::bloom`
+//!   honours the frame's origin since 2026-10-15; it read from the target's
+//!   top-left before, so a view anywhere else glowed from the first view's pixels)
+//!   into a scratch lane of its own. [`Scene::composite_bloom`] adds each back after
+//!   the HUD, as a single view's is. **Chosen, not measured**: each lane's size
+//!   keeps the glow's reach in proportion to the view (`oag_post::bloom::lane_extent`).
 //! - **No motion blur and no jitter.** [`MotionState`] and the temporal
 //!   upscaler's frame record hold one camera's history, and `N` cameras a tick
 //!   would corrupt it. **Chosen, not measured.**
@@ -439,8 +443,12 @@ impl Scene {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),
         });
-        if self.encode_split_post(device, queue, &mut encoder, view, area) {
-            stats.hd_bloom_encoded = self.hd.is_some();
+        let split_post = self.encode_split_post(device, queue, &mut encoder, view, area);
+        // Pulse's glow, one lane per view, read from the finished picture: every view is in
+        // `view` now, and the composite waits for the HUD as a single view's does.
+        let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
+        if split_post || glow {
+            stats.hd_bloom_encoded = split_post && self.hd.is_some();
             queue.submit(Some(encoder.finish()));
         }
         stats
