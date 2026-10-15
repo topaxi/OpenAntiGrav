@@ -3,10 +3,12 @@
 The question was why HD is the title that runs out of GPU first (14.0 ms on the
 Raphael iGPU at 1280x800, 28 fps on the Steam Deck's worst stretch) and what can
 come off it without changing the picture. **One cut landed (craft outside the
-frustum are not drawn, byte-identical, 1 to 4 % of the GPU on the iGPU); the largest one found
-is a design decision left open (the velocity attachment, about 10 % of the race
-pass); and three suspects were measured and cleared.** Everything is `chosen`
-workload, not measured against the original.
+frustum are not drawn, byte-identical, 1 to 4 % of the GPU on the iGPU); the velocity
+attachment, first thought to be about 10 % of the race pass, measured as nothing
+once repeated; and three more suspects were measured and cleared.** Everything is
+`chosen` workload, not measured against the original. The per-piece costs below are
+**shares of this frame on this machine, not a Deck forecast**: the Arc 140T is not
+the Deck's 8-CU RDNA2 APU and favours different things.
 
 ## The machine
 
@@ -41,6 +43,12 @@ shadows `original`, anisotropy 16x), median microseconds, one machine:
 | HD bloom chain | 661 | fixed floor about 210 at 320x200: the downsample ladder, adaptation, gate, two blurs and the encode are separate passes |
 | shadow passes (`--shadows off` removes them) | about 1,370 | `Scene::render` 8,024 against 6,654 |
 | the rest of `Scene::render` | about 1,000 | not attributed |
+
+On the NVIDIA card (same frame, 1080p, MSAA off) the shares are similar: race pass
+about 1.2 ms of which track solid 0.72 ms (60 %), HD bloom 0.15 ms; with MSAA 4x
+race pass 1.72 ms, track solid 0.99 ms (58 %). The track's shading is the biggest
+single piece on both adapters, and what the original authors there is held to
+byte-exactness.
 
 How the cost scales (race pass, tick 600): 1,015 us at 320x200, 2,520 at 1280x800,
 3,550 at 1920x1080, 5,105 at 2560x1440 - about 1 ms per megapixel on top of a
@@ -95,22 +103,45 @@ camera jitter (**chosen, not measured**).
   3,304 to 3,257 us, 2h 3,793 to 3,678; NVIDIA 1280x800 1,037 to 1,054 (CPU-bound,
   no change). **1 to 4 % of the GPU on the iGPU, inside run-to-run noise for the
   whole race**; the per-tick spans are the firmer evidence.
+- **Side effects checked** (a hull's draw is the only thing skipped): the craft's blob
+  shadow, the shadow-map casters, the engine flare, the boost plume, the trail ribbons,
+  the exhaust and spark particles, the shield shell and the engine light are separate
+  draws or uniforms and are not tested against the hull's sphere, so an off-screen craft
+  still shadows and lights the track as before. The behind-the-glass target draws
+  circuit chunks, not craft. In a split every view runs `Scene::render` with its own
+  view-projection, so the test is per view. Byte-identical against the binary with no
+  cull on the start grid (ticks 60 and 150, craft beside and behind the chase camera),
+  mid-race (tick 2,700), with `--msaa 4x --motion-blur high` and with `--presented
+  --reconstruction fsr3 --camera-jitter`, on HD and Pulse (18 frames), and on a
+  two-player split cut both ways at ticks 150 and 1,800.
 - **Pinned by** `tests::craft_cull::a_hull_out_of_view_is_not_drawn_and_one_in_view_is`
   (a real `Scene::render` over a grid: the craft behind the camera adds no triangle,
   the one in view adds one, frustum culling off draws both) and the unit tests in
   `scene::craft_cull`.
 
-## What is open: the velocity attachment
+## Measured and retracted: the velocity attachment
 
 Every opaque pipeline writes the velocity attachment (`Rg16Float`, the motion blur's
-and FSR 3's input) whether or not anything reads it; `Scene::velocity`'s own doc says
-that is by design. Masking its write for the opaque pipelines (an experiment, not
-kept): race pass 3,484 to 2,973 us with MSAA off and 4,529 to 4,221 us with 4x,
-1080p, tick 2,500, **0.3 to 0.5 ms, about 10 %**, and on a shared-memory APU the
-bandwidth should weigh at least as much. Doing it for real means a second pipeline
-variant for the opaque, prepass-shade and cutout pipelines, chosen per frame by
-"blur is on or camera jitter is on". That reverses a stated design, so it is the
-maintainer's call.
+and FSR 3's input) whether or not anything reads it. A single pair of runs with the
+write masked on every pipeline read 3,484 to 2,973 us (MSAA off) and 4,529 to 4,221 us
+(4x): "about 10 %". **That did not survive repetition.** Three interleaved rounds at
+1080p, tick 2,500, MSAA off, Intel iGPU, race pass median us: no masking 3,176 / 3,423 /
+3,168; track and hulls masked 2,959 / 3,325 / 3,394; every pipeline masked 3,324 / 3,185 /
+3,651 - all inside this host's 9 % drift between runs of one binary. The 4x pair on the
+iGPU is no different (4,340 / 4,770 ungated against 4,452 / 4,819 gated). On the NVIDIA
+card the gated track and hulls read 2 to 8 % lower in four of four pairs (MSAA off
+1,210 / 1,182 to 1,116 / 1,154; 4x 1,716 / 1,738 to 1,600 / 1,648), about 0.03 to 0.12
+ms.
+
+The gating itself was built and tested (`Velocity::Gated` building the opaque, prepass
+and cutout pipelines a second time with the velocity target's write masked; one list of
+the buffer's readers, the motion blur and a temporal upscaler; masked pipelines proven
+colour-identical to the written ones by a render test) and **left out of the branch**:
+it buys nothing measurable on the Intel iGPU and a few percent on the NVIDIA card for a
+second set of pipelines and a reversal of the documented "always written" rule. It is
+kept as the branch `hd-gpu-velocity-gate` (commit `e58a38d0e`) for the maintainer to try
+on the Deck, where a shared-memory APU is the most likely place for a bandwidth saving
+to show.
 
 ## Measure on the Deck (the maintainer runs this)
 
