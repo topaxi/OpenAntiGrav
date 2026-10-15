@@ -10,6 +10,17 @@
 
 use super::*;
 
+/// Moves each of `drawables` onto the shared uniform buffer.
+fn share_all<'a>(
+    device: &wgpu::Device,
+    blocks: &mut UniformBlocks,
+    drawables: impl IntoIterator<Item = &'a mut Drawable>,
+) {
+    for drawable in drawables {
+        drawable.share_uniforms(device, blocks);
+    }
+}
+
 impl Scene {
     /// Points every drawable the frame writes a scene block into at the shared buffer, by kind.
     pub(super) fn share_scene_blocks(&mut self, device: &wgpu::Device) {
@@ -51,39 +62,36 @@ impl Scene {
     /// neighbouring slots. One a pool or a pass nobody walks here keeps its own buffer.
     pub(super) fn share_uniform_blocks(&mut self, device: &wgpu::Device) {
         let blocks = &mut self.uniform_blocks;
-        let mut share = |drawable: &mut Drawable| drawable.share_uniforms(device, blocks);
-        for drawable in &mut self.ships {
-            share(drawable);
-        }
-        for drawable in self.shine.iter_mut().flatten() {
-            share(drawable);
-        }
-        for drawable in [Some(&mut self.track), self.sky.as_mut()]
-            .into_iter()
-            .chain([
+        share_all(device, blocks, &mut self.ships);
+        share_all(device, blocks, self.shine.iter_mut().flatten());
+        share_all(
+            device,
+            blocks,
+            [
+                Some(&mut self.track),
+                self.sky.as_mut(),
                 self.collision.as_mut(),
                 self.pads.as_mut(),
                 self.weapon_pads.as_mut(),
-            ])
-            .flatten()
-        {
-            share(drawable);
-        }
-        for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
-            share(drawable);
-        }
-        for drawable in self
-            .shield
-            .iter_mut()
-            .chain(&mut self.absorb_shell)
-            .chain(self.absorb_overlay.iter_mut().flatten())
-            .flatten()
-        {
-            share(drawable);
-        }
-        if let Some(drawable) = &mut self.shield_cockpit {
-            share(drawable);
-        }
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        share_all(
+            device,
+            blocks,
+            self.flares.iter_mut().chain(&mut self.boost).flatten(),
+        );
+        share_all(
+            device,
+            blocks,
+            self.shield
+                .iter_mut()
+                .chain(&mut self.absorb_shell)
+                .chain(self.absorb_overlay.iter_mut().flatten())
+                .flatten()
+                .chain(self.shield_cockpit.as_mut()),
+        );
         self.wrecks.share_uniforms(device, blocks);
         if let Some(shine) = &mut self.track_shine {
             shine.share_uniforms(device, blocks);
@@ -94,6 +102,35 @@ impl Scene {
         if let Some(target) = &mut self.behind_glass {
             target.share_uniforms(device, blocks);
         }
+        // The weapon pools last: a slot is written only while its projectile is live, and a
+        // pool past the slots keeps its own buffers.
+        let [mag_floor_near, mag_floor_far] = &mut self.bomb_blast.mag_floor;
+        let hd = &mut self.bomb_blast.hd;
+        for pool in [
+            &mut self.rockets,
+            &mut self.mines,
+            &mut self.bombs,
+            &mut self.cannon_rounds,
+            &mut self.plasma_blast.halo,
+            &mut self.plasma_blast.hemisphere2,
+            &mut self.plasma_blast.hemisphere1,
+            &mut self.plasma_blast.ball,
+            &mut self.plasma_blast.shuriken,
+            &mut self.bomb_blast.hemisphere,
+            &mut self.bomb_blast.shockwave,
+            &mut self.bomb_blast.repulser_field,
+            mag_floor_near,
+            mag_floor_far,
+            &mut hd.fireball,
+            &mut hd.core,
+            &mut hd.bloom,
+            &mut hd.rings,
+            &mut hd.halo,
+            &mut hd.missile,
+        ] {
+            share_all(device, blocks, pool);
+        }
+        share_all(device, blocks, self.leach_ball.as_mut());
     }
 
     /// The blocks of the view following the craft `race` is drawing, one kind each.
