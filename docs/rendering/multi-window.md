@@ -201,8 +201,9 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   `render_slots`, so a one-window split is byte-identical to what it was). The HUD is the split HUD
   (`overlay.draw_views`) with the rules picked by **this window's** view count and cut
   (`split_hud::source`: the title's authored two-player layout for a window of two seats, this
-  project's split-HUD files, or the whole-screen layout scaled into each view). As in a split, no
-  Pulse bloom and HD's and Omega's chains run once over the window after its last view.
+  project's split-HUD files, or the whole-screen layout scaled into each view). As in a split,
+  Pulse's bloom runs once per view after the last and HD's and Omega's chains once over the window
+  after its last view (see [split screen](split-screen.md), rules 4 and 6).
 - **Nothing**: a window with no seat to show draws the holding frame.
 
 - **One encoder, one submission per window, for the whole chain.** A queue write lands before the

@@ -104,10 +104,41 @@ things make that more than a loop:
    what is loaded, and `crates/render/tests/msaa_load_keeps_view.rs` pins that a
    loading pass keeps an earlier view.
 3. **No motion blur, no camera jitter, no temporal upscaler input.** The motion
-   state and the upscaler's frame record hold one camera's history.
-4. **No Pulse bloom.** `oag_post::bloom`'s `prepare` reads the glow mask from the
-   top-left of the target whatever the viewport's origin is, so a view elsewhere
-   would glow from the first view's pixels. Skipped rather than drawn wrong.
+   state and the upscaler's frame record hold one camera's history. Per-view blur is more
+   than a history per slot (`Scene::history` already indexes a window's history and would
+   extend to a slot): the blur reads the velocity and depth attachments, which every view's
+   scene pass clears whole (so only the last view's survive to the end), and its output
+   cannot be written as each view is drawn for the reason rule 4 gives. See "Open".
+4. **Pulse's bloom runs once per view, after the last view is drawn** (2026-10-15,
+   `split-bloom`; PSP and PS2 alike). A view's glow cannot be composited as the view is
+   drawn: the next view's multisample resolve rewrites the whole resolved target from the
+   multisampled colour, so the glow would be gone. So every view is drawn and resolved
+   first, and `Scene::prepare_split_bloom` then runs the bright pass and the two blurs over
+   **each view's own rectangle** of the finished picture (`oag_post::bloom` reads from
+   `Frame::origin` now; it read from the target's top-left whatever the origin said, which is
+   why a view anywhere but the first glowed from the first view's pixels), each into a
+   **scratch lane of its own** (`Bloom::prepare_view`) so view 2's bright pass does not
+   overwrite what view 1's composite still owes. `Scene::composite_bloom` adds every lane back
+   after the HUD, as a single view's is, each over its view's share of the HUD target's
+   rectangle (the area the views were cut from is mapped onto it, so a HUD target of another
+   size lines up). Checked by `tests::split_bloom` (every view prepares and composites its own
+   glow once; one view uses no lane) and `oag_post`'s `a_rectangle_glows_from_its_own_pixels`
+   (a mask in the right half only: read from the corner it is dark, read from its own origin
+   it glows).
+
+   **Chosen, not measured: a lane's size** (`oag_post::bloom::lane_extent`). The original
+   has one picture and one 240 x 136 buffer. A view that shows a different field of view
+   would stretch the same buffer over more or less of the world, and the glow around a craft
+   would swell or shrink with the cut (a 2h strip shows twice the horizontal field at half
+   the pixels per degree, so a full-size buffer reached twice as far across a craft half the
+   size). Each lane's texels instead cover the angle a whole picture's do: its size is
+   240 x 136 (320 x 224 on the PS2) scaled per axis by the view's field of view against the
+   whole area's, in half-angle tangents, from the one rule the cameras use
+   (`fit_vertical_fov`: the authored vertical field at or above the authored aspect, the
+   authored horizontal one below it). A one-view frame is the original's buffer exactly. Measured on Pulse
+   PSP 16_Track, the player's craft: the glow's 25 % reach around the exhaust is 68 to 72 px
+   each way across in the one view and 31 to 33 px in the 2h top view, whose picture is half the
+   size (ratio 0.46).
 
 5. **What does not depend on the camera is done once, by the first view**
    (`Layer::Next` skips it, 2026-10-13, `split-render-cost`): the two shadow maps, the
@@ -116,7 +147,7 @@ things make that more than a loop:
    and the race clock, so every picture is byte-identical to doing them per view, and
    they were more than half of a view's CPU on Pulse. See "Cost".
 
-6. **HD's and Omega's post chains run once, after the last view.** Both draw the
+6. **HD's and Omega's post chains run once, after the last view, glow included.** Both draw the
    scene into a linear float target and then *encode* it into the frame with a pass
    that clears the whole frame, sampling the linear target from its top-left whatever
    the view's origin is. Run once per view (as `Scene::render` first did), each
@@ -127,8 +158,16 @@ things make that more than a loop:
    picture twice. The views now only fill the linear target, and
    `Scene::encode_split_post` (`crates/raceplay/src/scene/viewports.rs`) runs the
    chain once over the whole area, which is exactly what one view passes.
-   **Chosen, not measured**: one exposure and one glow for the whole picture (glow
-   bleeds a few pixels across the 2 pixel gap); HD's boost zoom streak is not drawn
+   **HD's bloom is not skipped** (the thread that opened `split-bloom` believed it was; the
+   chain's glow is drawn with `Glow::Drawn` over the whole area, and every HD split still in
+   this lane's capture set shows it). **Chosen, not measured**: one exposure and one glow for
+   the whole picture (glow bleeds a few pixels across the 2 pixel gap), and **a reach scaled
+   to the views** (2026-10-15): the blur's tap spacing is authored against the whole frame, so
+   a view showing half the pixels glowed twice as far across a craft half the size;
+   `Chain::set_reach` scales the spacing by the mean over the views of their pixels per
+   texel against a whole picture's (`scene::bloom::mean_reach`, 0.5 on both axes for every
+   two- and four-way cut) for a split frame and puts it back, so a one-view frame is
+   byte-identical (`cmp`, Talon's Junction). HD's boost zoom streak is not drawn
    (it holds the primary craft's pulse) and Omega's distortion offsets are not drawn
    (the pass reads a depth attachment only the last view still has). Both open.
    `crates/game/tests/split_screen_ground_truth.rs` pins HD two and four views,
@@ -869,14 +908,66 @@ evidence here.
    The views are independent once they stop sharing uniform buffers; on a CPU-bound split
    this divides the per-view CPU by the cores used. The largest change and the largest
    possible gain; do it only if items 1 and 2 leave the Deck short.
-5. Per-view bloom and the other effects the split omits are a picture question, not a cost
-   one, and cost the GPU little on the workstation.
+5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
+   "Per-view glow". Motion blur and the temporal upscaler stay omitted.
 
 **Limits of these numbers.** The bench re-renders one static frame (the race held at tick 300
 or 1800), so it does not see tick-to-tick variation; every view carries an unexplained 0.5 to
 1.3 ms of extra CPU on its first spans after the GPU is idled, in both binaries, which was
 not chased (the pipelined numbers, with no idle in between, agree with the CPU ones); a
 `perf-probe` build adds marks inside the pass that can shift small spans.
+
+### Per-view glow (2026-10-15, `split-bloom`)
+
+What Pulse's per-view bloom (rule 4) costs, measured on the Intel Core Ultra 7 265H notebook,
+**NVIDIA RTX PRO 2000 Blackwell Laptop GPU** (the default adapter), release `perf-probe` build,
+`taskset -c 0-5`, the gate lock held, 1280x800, Pulse PSP 16_Track at tick 300, the single-frame
+bench (`OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 ... --players N --split-cut ...`). **Off** is
+the same binary with the bloom not built (what a split drew before, per the same code paths);
+**on** is the new default. Three rounds, off and on interleaved, load average 2.3 to 3.7.
+Medians per round, us:
+
+| Case | CPU off | CPU on | pipelined off | pipelined on | GPU scene passes off / on |
+| --- | --- | --- | --- | --- | --- |
+| 1 view | 1,181 / 1,088 / 1,030 | 1,183 / 1,140 / 1,131 | 1,217 / 1,109 / 1,261 | 1,143 / 1,114 / 1,104 | 287 / 304 / 302 and 286 / 300 / 282 |
+| 2h | 1,631 / 1,648 / 1,664 | 1,739 / 1,717 / 1,733 | 1,935 / 1,807 / 1,671 | 1,970 / 1,922 / 1,923 | 351 / 353 / 356 and 355 / 358 / 357 |
+| 2v | 1,641 / 1,604 / 1,633 | 1,731 / 1,725 / 1,709 | 1,861 / 1,649 / 1,658 | 1,875 / 1,732 / 1,871 | 332 / 328 / 331 and 328 / 332 / 334 |
+
+- **About 90 to 100 us of CPU a frame for two views** (6 %), which is the glow's four passes and
+  a bind group per view recorded into the post encoder (nothing else changed: one view is
+  byte-identical and reads the same). The pipelined frame moves 0 to 250 us, inside the run to
+  run spread. **The scene passes' GPU time does not move**: the glow is outside every view's
+  timer, so its GPU cost is in the pipelined column only, and a pipelined frame of 1.7 to 1.9 ms
+  on this card is CPU-bound with the GPU far from the limit.
+- **The Arrow Lake iGPU** (`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`, the same
+  protocol) **was not readable**: the same configuration read 2.3 to 4.4 ms CPU and 2.5 to 8.6 ms
+  pipelined from round to round with other members' work on the machine (the off case of 2h
+  read 3.9 ms CPU, the on case 2.3 ms). Not quoted as a result.
+- **HD's reach change adds no pass and no per-frame write**: the chain's three uniform
+  buffers are rewritten when the rectangle or the reach moves, and a split holds both. Its two
+  columns here are an A/A (the off switch is Pulse's only), 4.4 to 4.9 ms CPU in both for the
+  cuts at this load, which says only that nothing separates them.
+- **Default**: what one view draws. There is no setting; at about 100 us a frame the effect does
+  not need one. The Steam Deck is the machine to check (below).
+
+**Steam Deck, for the maintainer** (not measured: the Deck was not available on 2026-10-15).
+Build as in "Cost" above (`cargo build --release -p oag-game --features perf-probe`), then
+for each of `1`, `2 --split-cut horizontal`, `2 --split-cut vertical`, three runs, and read
+`pipelined per frame` and `render_viewports CPU` of each. To compare with the glow off, check out
+the commit before `Split screen: Pulse's bloom draws per view` and build that beside it; the
+pair of numbers is the cost on the Deck. Look at the stills too:
+
+```sh
+for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
+  XDG_CONFIG_HOME=/tmp/oag-bloom/config XDG_DATA_HOME=/tmp/oag-bloom/data XDG_STATE_HOME=/tmp/oag-bloom/state \
+    OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 ./target/release/oag-game data/images/pulse-psp-eu.chd \
+    --race --no-audio --mode single_race --track 'Data\Environments\16_Track\track.vex' \
+    --players $c --ticks 900 --hold cross --size 1280x800 --screenshot /tmp/oag-bloom/$(echo $c | tr -d ' -').png \
+    2>&1 | grep -E '^bench (split|render_viewports CPU|pipelined)'
+done
+```
+
+(`--players 1` takes no `--split-cut`; drop it for the first case.)
 
 ### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
 
@@ -1397,7 +1488,7 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   cannot move a pick.
 - Two real pads: the assignment is unit-tested over stand-in ids and the keyboard
   path runs end to end, but no second pad has been plugged in.
-- Per-team camera rigs, per-view bloom (an origin in `oag_post::bloom`), motion blur
+- Per-team camera rigs, ~~per-view bloom (an origin in `oag_post::bloom`)~~ **done, rule 4**, motion blur
   and the temporal upscaler under a split, and a check of HD's and Omega's chains.
 - ~~The results scoreboard and the end-race flow still key on slot 0 and end every
   view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race", with
@@ -1408,6 +1499,14 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   The render bench does time every view (`Scene::render_viewports`' `view_timers`);
   it also shows resolution would not help a split here: the GPU is not the limit
   (see "Cost").
+- **Motion blur and the temporal upscaler are still not drawn per view** (see rule 3: the blur reads
+  velocity and depth attachments every view's scene pass clears, and its output would be erased
+  by the next view's resolve). A way in: give each view its own region of velocity and depth (load
+  them in later views after clearing only the view's rectangle), run the blur per view after the
+  last view as the glow does, and extend `Scene::history` from windows to view slots. Not started.
+- **HD's exposure is one for the whole picture**, so a dark view next to a bright one reads
+  dimmer than it would alone; a lane per view of the chain's adaptation is the fix and the
+  chain's scratch targets are sized for the whole frame. Open.
 - **CPU per view is mostly the driver now**: `encoder.finish` is about 230 us of a Pulse view's
   590 and about 500 us of an HD view's (see "Cost", 2026-10-15). Open in the `split-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later

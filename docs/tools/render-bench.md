@@ -64,9 +64,11 @@ What a split frame records differs from one view in four ways, all in
   (after `triangles`) and as `metrics.gpu_view<N>_us` in the summary. `gpu_scene_us` and
   `gpu_us` are their **sum**. Views overlap on the GPU, so the sum is work, not elapsed time;
   `frame_us` is the number a frame budget is read against.
-- A split draws no motion blur and no HD bloom chain (rule 3 in
-  [split screen](../rendering/split-screen.md)), so `gpu_blur_us` and `gpu_bloom_us` stay
-  empty.
+- A split draws no motion blur (rule 3 in [split screen](../rendering/split-screen.md)), so
+  `gpu_blur_us` stays empty. HD's bloom chain *does* run, once over the whole area after the
+  last view, but outside every view's timed scene pass and untimed itself, so `gpu_bloom_us`
+  stays empty too; Pulse's per-view glow (rule 4) is likewise in no GPU column. Both are in
+  `frame_us`, which is where their cost is read (see "Per-view glow" in the split-screen page).
 - `settings` gains `views` and `split_cut`, so a split result never compares clean against a
   one-view one.
 
