@@ -11,8 +11,21 @@
 //! What lands before each submission is what landed when the views were drawn one after
 //! another, so the picture is the same; `tests::split_recording` compares them.
 //!
-//! **On the web the views are recorded one after another** ([`Recording::Interleaved`]):
-//! wgpu's browser objects belong to the page's thread, and the page may not block on a worker.
+//! **The default is [`Recording::Interleaved`], one view after another, on every target.**
+//! Measured on an Intel Core Ultra 7 265H notebook (NVIDIA RTX PRO 2000, `powersave` governor,
+//! pinned to the P-cores, 2026-10-15), threaded recording cost 15 to 20% *more* CPU a frame than
+//! serial: Pulse two views 1,630 against 2,045 us (median), HD two views 2,218 against 2,612,
+//! Pulse four views 2,536 against 2,966. Serial batching itself costs nothing (Pulse two views
+//! 1,630 against interleaved 1,655). The loss is the second core, not contention: one view at a
+//! time on a second thread is as slow as both at once, threads pinned to one core match serial,
+//! and an empty scoped spawn and join between frames costs about 200 us there (a parked worker
+//! gains nothing on a 2 x 250 us split, a spinning one halves it). Each view's recording is a
+//! burst of 0.2 to 0.4 ms once a frame, which a sleeping core does not wake and clock up for.
+//! **[`Recording::Threaded`] stays selectable** (`OAG_SPLIT_RECORDING=threaded`,
+//! [`Scene::set_split_recording`]) for a machine where it measures faster, the Steam Deck first.
+//!
+//! **On the web the views are always recorded on the page's thread**: wgpu's browser objects
+//! belong to it, and the page may not block on a worker, so `threaded` records serially there.
 
 use oag_gpu::writes::Log;
 
@@ -33,12 +46,13 @@ pub enum Recording {
     /// [`Recording::Interleaved`] shows.
     Reversed,
     /// Every view prepared, then recorded at once, a thread each (the first on the calling
-    /// thread).
+    /// thread). Slower on the notebook it was measured on: see the module doc.
     Threaded,
 }
 
 impl Recording {
-    /// What a split records with when nothing chose: threads where there are threads.
+    /// What a split records with when nothing chose: one view after another (see the module doc
+    /// for why not threads).
     /// `OAG_SPLIT_RECORDING` (`interleaved`, `serial`, `reversed`, `threaded`) overrides it, for
     /// a comparison or a bench.
     pub fn default_for_target() -> Self {
@@ -48,8 +62,7 @@ impl Recording {
             Ok("serial") => Self::Serial,
             Ok("reversed") => Self::Reversed,
             Ok("threaded") => Self::Threaded,
-            _ if cfg!(target_arch = "wasm32") => Self::Interleaved,
-            _ => Self::Threaded,
+            _ => Self::Interleaved,
         })
     }
 }

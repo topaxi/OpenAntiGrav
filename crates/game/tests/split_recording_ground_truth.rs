@@ -1,13 +1,13 @@
 //! A split screen's views draw the same picture however they are recorded: one after another
 //! (`OAG_SPLIT_RECORDING=interleaved`, prepare, record and submit per view), every view prepared
 //! and then recorded last view first on one thread (`reversed`), and recorded at once on threads
-//! of their own (`threaded`, the default). See `oag_raceplay::Recording`.
+//! of their own (`threaded`). The default is `interleaved`. See `oag_raceplay::Recording`.
 //!
 //! **What fails it**: anything a view's recording reads that a later view's prepare changes, and
 //! any write a later view's prepare makes that is not kept for its own submission. The first
 //! shape of the second was a drawable with no slot on the shared matrix buffer writing its own
 //! uniforms straight to the queue: Pure's magstrip effect drew view 0 from view 1's camera at
-//! tick 1500 of an autopilot race, and only there of 34 stills and 52 weapon stills.
+//! tick 1500 of an autopilot race, and only there of 34 stills and 51 weapon stills.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game split_recording_ground_truth:: --run-ignored all
