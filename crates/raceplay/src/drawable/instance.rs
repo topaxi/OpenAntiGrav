@@ -83,6 +83,7 @@ impl Drawable {
             opaque_ranges: self.opaque_ranges.clone(),
             opaque_reach: self.opaque_reach.clone(),
             lod: oag_mesh::mesh::LodSwitch::new(&self.model.lod_groups),
+            bound: self.bound.clone(),
             ripple: std::cell::RefCell::new(None),
             pad_glow: std::cell::RefCell::default(),
         }

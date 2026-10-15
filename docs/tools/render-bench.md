@@ -344,6 +344,40 @@ recorded commands there and it scales with their count, so only fewer commands (
 or atlas per drawable, render bundles for the view-independent draws, merging a craft's draws)
 cut it, each a change to how the scene is built.
 
+
+## HD on a notebook, before and after the craft cull (2026-10-15, `hd-gpu`)
+
+Release build, 1280x800 and 1920x1080 scene only, Talon's Junction, seed 1, autopilot, the
+gate lock held, **load 1 to 2.3 at each run's start**. Microseconds, p50 over the frames after
+the first 60. Two adapters on one notebook: `Intel(R) Graphics (ARL)` (Arrow Lake iGPU, Mesa
+anv, chosen with `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` because
+`MESA_VK_DEVICE_SELECT` does not filter NVIDIA's own ICD) and `NVIDIA RTX PRO 2000 Blackwell
+Generation Laptop GPU` (the default adapter). "Before" is `f82807832`'s `oag-raceplay`,
+"after" the commit that stops drawing craft outside the frustum, same everything else.
+
+| Adapter, size, case | CPU | GPU | Pipelined frame |
+| --- | ---: | ---: | ---: |
+| Intel, 1280x800, 1, before | 2,472 | 2,244 | 4,352 |
+| Intel, 1280x800, 1, after | 2,474 | 2,182 | 4,249 |
+| Intel, 1280x800, 2h, before | 3,959 | 2,865 | 5,942 |
+| Intel, 1280x800, 2h, after | 3,863 | 2,735 | 5,739 |
+| Intel, 1920x1080, 1, before | 2,587 | 3,304 | 5,417 |
+| Intel, 1920x1080, 1, after | 2,550 | 3,257 | 5,373 |
+| Intel, 1920x1080, 2h, before | 4,040 | 3,793 | 7,075 |
+| Intel, 1920x1080, 2h, after | 3,955 | 3,678 | 6,949 |
+| NVIDIA, 1280x800, 1, before | 2,085 | 1,037 | 2,492 |
+| NVIDIA, 1280x800, 1, after | 2,131 | 1,054 | 2,489 |
+| NVIDIA, 1280x800, 2h, before | 2,952 | 1,488 | 3,272 |
+| NVIDIA, 1280x800, 2h, after | 3,216 | 1,303 | 3,561 |
+
+**Read it as no change beyond noise**: one run each, and no run-to-run spread was measured on
+this host (the NVIDIA 2h CPU reads 9 % worse, which the same code could do on another run); the
+iGPU's GPU time falls 1 to 4 %, the NVIDIA card is CPU-bound and does not move. Two traps recorded by this lane: **the first bench after a
+rebuild read 2x the CPU** (4,805 against 2,472 us for the same code), so a "before" taken
+first is wrong; and **this iGPU is CPU-bound at 1280x800** (frame 4.3 ms, GPU 2.2 ms), so
+`frame_us` hides a GPU saving there. The per-piece GPU spans, the settings matrix and the
+Deck commands are in [`hd-gpu-cost.md`](../rendering/hd-gpu-cost.md).
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

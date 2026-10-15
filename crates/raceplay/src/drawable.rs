@@ -101,6 +101,8 @@ pub(super) struct Drawable {
     /// Starts on every group's finest child, which a drawable nobody
     /// switches keeps.
     lod: oag_mesh::mesh::LodSwitch,
+    /// [`Self::bound`], found on first use.
+    bound: std::cell::OnceCell<(Vec3, f32)>,
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
@@ -317,6 +319,7 @@ impl Drawable {
             opaque_ranges,
             opaque_reach,
             lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
+            bound: std::cell::OnceCell::new(),
             model,
             pipeline,
             alpha_test_pipeline,
@@ -408,6 +411,36 @@ impl Drawable {
     /// shadow the size of the overlap rather than of the hull.
     pub(super) fn radius(&self) -> f32 {
         self.model.radius
+    }
+
+    /// A sphere, in model space, that holds every vertex: the centre of the
+    /// vertices' own box and the distance to the farthest one.
+    ///
+    /// **Computed here rather than read from [`Model::radius`]**, which is a
+    /// sphere for a model built from `rcs` but only the largest half-extent of its
+    /// box when `merge` built it (the PSP and PS2 hulls), up to 1.7 times too small
+    /// to cull by. Found on first use, so only the drawables asked - the craft -
+    /// pay the pass over their vertices.
+    pub(super) fn bound(&self) -> (Vec3, f32) {
+        *self.bound.get_or_init(|| {
+            let positions = || {
+                self.model
+                    .vertices
+                    .iter()
+                    .map(|v| Vec3::from_array(v.position))
+            };
+            let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+            for p in positions() {
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+            if lo.x > hi.x {
+                return (Vec3::ZERO, 0.0);
+            }
+            let centre = (lo + hi) * 0.5;
+            let radius = positions().map(|p| p.distance(centre)).fold(0.0, f32::max);
+            (centre, radius)
+        })
     }
 
     /// This drawable as a shadow caster: its own buffers, its opaque ranges

@@ -144,6 +144,14 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   `test-data` once per merge batch. Run the full pair yourself only when your
   brief says so.
 
+  **On the notebook (Intel iGPU + 8 GB NVIDIA dGPU) run `test-data` on the
+  iGPU**: add `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` to the
+  `env` of the test-data line. On the NVIDIA card at the default thread count
+  HD weapon-scene tests fail with `wgpu error: Out of Memory`, a different
+  test each run; on the iGPU (system RAM) the full suite ran 8,690 of 8,690
+  green in 407 s (2026-10-15). The time ceilings are the desktop's: on the
+  notebook a red that is only `check-test-budget` time is green.
+
   **A render bench takes the same lock.** `just bench-render` (whole-race
   rendering benchmark, `docs/tools/render-bench.md`) holds
   `$HOME/.cache/oag/gate.lock` itself for the runs, so it measures on a quiet

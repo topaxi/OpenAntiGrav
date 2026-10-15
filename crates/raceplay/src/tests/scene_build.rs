@@ -51,7 +51,7 @@ fn triangle() -> Model {
     }
 }
 
-fn livery() -> Livery {
+pub(super) fn livery() -> Livery {
     Livery {
         team: "Test".to_string(),
         hull: triangle(),
@@ -94,7 +94,7 @@ pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 /// A scene over one triangle for a circuit and for every pool: enough to be
 /// drawn, nothing a picture could be judged by.
 pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
-    bare_scene_over(device, queue, triangle())
+    bare_scene_of(device, queue, &[livery()])
 }
 
 /// [`bare_scene`] whose circuit stamps the glow mask, as Pulse PSP's does: the scene
@@ -102,15 +102,31 @@ pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
 pub(super) fn glowing_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
     let mut track = triangle();
     track.stamps_glow = true;
-    bare_scene_over(device, queue, track)
+    scene_over(device, queue, track, &[livery()])
 }
 
-fn bare_scene_over(device: &wgpu::Device, queue: &wgpu::Queue, track: Model) -> Scene {
+/// [`bare_scene`] with one hull per entry of `liveries`, slot by slot.
+pub(super) fn bare_scene_of(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    liveries: &[Livery],
+) -> Scene {
+    scene_over(device, queue, triangle(), liveries)
+}
+
+/// The one constructor under the rest: a bare scene over `track`, with one hull per entry
+/// of `liveries`.
+fn scene_over(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+) -> Scene {
     Scene::new(
         device,
         queue,
         track,
-        &[livery()],
+        liveries,
         None,
         None,
         None,
