@@ -906,6 +906,21 @@ project does not draw, and says so below.
 | where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by `RenderModelShadowsOnTrack`'s accumulate half: the track chunks within 50 units of the ship redrawn inside the stencil volume under `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` - found 2026-09-11 | the same blend, expressed on colour: `colour - coverage * sun`, because this renderer's alpha is the bloom's glow mask |
 | how dark | **no constant**: the redraw's permutation word is `ShadowToAlpha` + the chunk's ambient source + `Spot0` and **never `Sun`** (16,554 shipped variants, none with `Sun`), so the colour it blends in is the road lit by ambient/lightmap alone, no sun and no specular, fogged - read 2026-10-15, confidence 82, [`shadow-track-redraw.md`](../ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md) | the same: `mesh`'s `shadowed` removes the sun's share of the lit colour in proportion to coverage. `MAP_STRENGTH` (0.5, ours) remains only for a scene with no authored light rig |
 
+**The coverage map's size, measured 2026-10-15 (`SIZE` 2048 against 1024, same branch, same new fit).**
+`scripts/bench-render.py run hd`, release builds, Intel Arrow Lake iGPU
+(`VK_ICD_FILENAMES` intel), `taskset -c 0-5`, three interleaved rounds, one view at 1920x1080 and `2h` at
+1280x800, 7,787 and 7,989 frames a run. The GPU scene pass, which samples the map on every track pixel,
+is the stable column: **1080p `gpu_us` p50 3,600 / 3,647 / 3,531 us at 1024 against 3,590 / 3,525 / 3,695
+at 2048** (means 3,593 and 3,603, +10 us); `2h` 2,946 / 3,775 / 3,181 against 2,908 / 2,941 / 2,924 (the
+1024 outliers were runs at load 15-19 from other lanes). `frame_us` p50 moves by more between two runs of
+one variant than between variants (1080p: 5,846 / 6,205 / 5,676 at 1024, 6,295 / 5,732 / 6,567 at 2048;
+the lowest-load pair, rounds 1 and 2, read +0.45 ms and -0.11 ms), so **the cost of 2048 is not
+distinguishable from noise**. The map pass itself is in no GPU column (the scene timer brackets the race
+pass only); its work is a 4 MiB `R8Unorm` clear and eight craft drawn into it. A still at the grid
+camera (`talons-grid-recheck/00`, 1920x1080) puts the two side by side: the player's shadow edge is
+visibly stair-stepped at 1024 (about 6 texels per world unit) and clean at 2048 (about 12), the latter
+the original's third ship, so **2048 stays**; a player would see 1024's edge on the nearest craft.
+
 **Proved inert where it should be**: every pipeline binds the map and samples
 it, so a Pulse capture is the guard - `original` on Pulse before and after this
 landed is byte-identical, 0 pixels differing at threshold 0. On HD the same
