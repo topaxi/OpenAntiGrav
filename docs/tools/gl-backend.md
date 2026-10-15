@@ -39,7 +39,7 @@ the mean absolute per-channel difference out of 255.
 | | Mesa GL 4.6 core (iGPU, window on llvmpipe) | NVIDIA GL (EGL, 3.3) | WebGL2 (Chromium, swiftshader) |
 | --- | --- | --- | --- |
 | Device | yes | yes once indirect validation is off (`adapter::descriptor`); not before | yes once the limits are lowered (`required_limits`); needs a canvas surface to enumerate |
-| Front end, Pulse, Pure, HD | pixel-identical (max diff 0), HD mean 0.002 | not reached | Pulse: the intro movie, the menus, the backdrop and the ticker draw |
+| Front end, all five titles (`--menu-page main`, read as images) | Pulse, Pure, 2048 pixel-identical (max diff 0); HD max diff 4 and Omega 98, mean 0.001 or less (the HD and Omega backdrops, which `crates/game/shaders` draws, are among them) | not reached | Pulse: the intro movie, the menus, the backdrop and the ticker draw |
 | Race, Pulse, Pure, HD, 2048, Omega | draws; mean diff 0.000 to 0.004 | the first race pipeline fails (`INDEPENDENT_BLEND`) | load fails: 77 pipelines refused (`INDEPENDENT_BLEND`), then `sampler2DMS` |
 | HD Zone, Omega Zone (`--mode zone --zone-stage 3`) | mean 0.019 and 0.005 (0.05% and 0.01% of pixels differ by more than 8) | no | no |
 | Bloom, FXAA, SMAA, FSR 1 | yes, mean 0.001 to 0.008 | no | not reached |
@@ -68,6 +68,21 @@ we switch off on GL and name; (b) is a limit we lower; (c) is a blocker.
 | 6 | `Limit 'max_compute_workgroups_per_dimension' value 65535 is better than allowed 0` | WebGL2 device creation | (b) | **Wired**: `required_limits` is the worse of wgpu's default and the adapter's. Vulkan, Metal and Dx12 exceed the default, so for them it is the default exactly |
 | 7 | `indirect-validation error: ComputePipeline ... doesn't support Features(BUFFER_STORAGE | COMPUTE_SHADER ...)` then a lost device | NVIDIA GL: wgpu-hal asks EGL for exactly a 3.3 context (`gl_context_attributes`), NVIDIA returns exactly that, and wgpu builds a compute pipeline for indirect-call validation with the device. Mesa returns 4.6 for the same request | (b) | **Wired**: the GL instance drops `VALIDATION_INDIRECT_CALL`; this engine issues no indirect draw or dispatch. The device then creates, and #1 is the next wall |
 | 8 | WebGL2 has no adapter without a canvas | Browser fallback | (b) | **Wired** for the trial: `web::prepare` makes a surface on the page's canvas first when WebGPU is absent |
+
+**2048 and Omega check (the Omega and 2048 rule): `ported`.** Both race on GL
+through the one shared mesh shader and race path, and their stills are in the
+table; nothing here is title-specific, so there is no second wiring to do.
+
+**Found on the way, not in this lane:** the local `/usr/bin/chromium` (154)
+refuses the mesh shader on WebGPU too, on `main`'s shader and on this branch's:
+`textureSample must only be called from uniform control flow` at the four
+`zone_nearest_sampler` reads in `zone_glow`, called from `lit_texel`'s
+`slots` branch (the `@diagnostic(off, derivative_uniformity)` on `lit_texel`
+does not reach the callee in that Tint). So a WebGPU race walk could not be
+re-run here to compare. The default web build was compiled and its
+front end ran to the same point as `main`'s; this branch's `zone.wesl` keeps
+those four calls inline in the default variant so that it is the same text
+as before.
 
 Not hit, and worth knowing: compute passes (FSR 3, Omega's tonemap) work on
 Mesa GL 4.6, and FSR 3 on WebGL2 already degrades to FSR 1 through the existing
@@ -119,6 +134,11 @@ compute no, independent blend no.
   with the Mesa EGL variable above).
 
 ## Reproducing
+
+Setup used for the web half: `rustup toolchain install nightly-2026-10-08
+--profile minimal --component rust-src --target wasm32-unknown-unknown`
+(added to the machine's `~/.rustup`) and `cargo install wasm-bindgen-cli
+--version 0.2.129 --root <a scratch dir>` (never in `~/.cargo/bin`).
 
 ```sh
 # Vulkan and GL stills, same machine

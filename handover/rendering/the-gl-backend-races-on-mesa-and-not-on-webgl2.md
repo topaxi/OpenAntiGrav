@@ -36,6 +36,11 @@ of the web build, and `the_mesh_pipelines_build_on_gl`.
 - 2048 and Omega check: both raced on GL over the one shared
   shader and path (`ported`); nothing title-specific is wired.
 
+- **Unrelated, found here: the web build's mesh shader is refused by Chromium 154's
+  Tint** (`textureSample must only be called from uniform control flow`, in
+  `zone_glow`, on `main` too). The web race walk cannot run on this machine's
+  Chromium until that is fixed; check whether CI's browser is older.
+
 ## Next Steps
 
 1. Build the scene without a velocity target when the device lacks independent

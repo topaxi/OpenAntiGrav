@@ -114,7 +114,7 @@ fn descriptor(mut descriptor: wgpu::InstanceDescriptor) -> wgpu::InstanceDescrip
 /// and hand out no adapter), so wgpu asks the browser first and drops
 /// `BROWSER_WEBGPU` from the instance if it has none. Only a build with the
 /// `webgl` feature has a GL to fall to.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "webgl"))]
 pub async fn instance_with_webgpu_detection() -> wgpu::Instance {
     wgpu::util::new_instance_with_webgpu_detection(descriptor(
         wgpu::InstanceDescriptor::new_without_display_handle(),

@@ -648,12 +648,19 @@ pub(crate) mod web {
     /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
     /// on native with the same descriptor.
     pub(crate) async fn prepare() -> Result<()> {
+        // The WebGPU build is the old path exactly: one instance, one request. Only a
+        // build with the `webgl` feature asks the browser whether it has WebGPU first,
+        // and falls to GL when it has none.
+        #[cfg(not(feature = "webgl"))]
+        let instance = adapter::instance();
+        #[cfg(feature = "webgl")]
         let instance = adapter::instance_with_webgpu_detection().await;
         // **WebGL2 has no adapter without a canvas.** The browser's WebGPU hands one
         // out on request; a GL context is made *from* a canvas, so wgpu enumerates
         // it only against a surface on the page's own. A page with WebGPU skips
         // this, and the surface is made again, as it always was, once the window
         // exists.
+        #[cfg(feature = "webgl")]
         let probe = if wgpu::util::is_browser_webgpu_supported().await {
             None
         } else {
@@ -668,6 +675,8 @@ pub(crate) mod web {
                         .ok()
                 })
         };
+        #[cfg(not(feature = "webgl"))]
+        let probe: Option<wgpu::Surface<'static>> = None;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
