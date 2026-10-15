@@ -11,6 +11,11 @@ all five titles within noise of Vulkan (three named reductions); WebGL2 boots to
 the menus and refuses a race load; NVIDIA's EGL gives a 3.3 context and refuses
 the first race pipeline.
 
+**Maintainer's rule: GL is best effort.** It never blocks progress on Vulkan, Metal,
+Dx12 or WebGPU; what GL cannot do is switched off there and named in the loader
+report, never reshaped for the default backends, and no default-path change
+waits on a GL run. Every Next Step below is subject to it.
+
 Landed: `OAG_GL=1` (a dev switch, no menu row), the window's display handle for
 GL, a `gl` variant of the mesh shader chosen by `oag_gpu::backend::is_gl`, MSAA
 clamped off on GL, the GL gaps and the adapter's capabilities in the loader

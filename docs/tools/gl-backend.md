@@ -12,6 +12,17 @@ races, and the stills match Vulkan's (table below). On WebGL2 the front end and
 the menus draw and a race does not load. NVIDIA's proprietary GL cannot draw
 one either. The recommendation is at the end.
 
+**Best effort.** The GL backend (desktop GL and WebGL2) never blocks progress on
+the default backends (Vulkan, Metal, Dx12, WebGPU). A feature GL cannot do is
+switched off on GL and named in the loader report; it is never held back,
+simplified or reshaped for the default backends because of GL, and no change on
+the default backends waits on a GL run. If keeping GL working would cost the
+default path anything (a copy of a shader they use, a lower limit, a slower
+path), GL loses. What this trial costs the default path today: a second compiled
+mesh shader artifact (`mesh_gl.wgsl`) embedded in each binary, and two shader
+helper functions where there were inline loops (same results; the Vulkan stills
+are byte-identical).
+
 ## Turning it on
 
 | Where | How |

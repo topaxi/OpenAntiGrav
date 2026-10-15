@@ -46,6 +46,10 @@ use oag_display::display::Renderer;
 /// ([`GL_ENV`]) and a browser build feature (`webgl`), and the CPU path loses
 /// nothing - lavapipe is a *Vulkan* ICD.
 ///
+/// GL is **best effort** and never blocks the default backends: what it cannot
+/// do is switched off on GL and named in the loader report, and nothing on the
+/// default path is held back or reshaped for it.
+///
 /// Used for the instance as well as for enumeration, so `default` cannot resolve
 /// to an adapter the RENDERER row does not offer - and **that is a behaviour
 /// change worth saying out loud**: `Instance::default()` is `Backends::all()`, so
