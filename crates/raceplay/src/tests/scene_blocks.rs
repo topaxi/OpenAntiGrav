@@ -79,7 +79,7 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
 #[test]
 fn blocks_are_aligned_and_do_not_overlap() {
     assert_eq!(mesh_render::SCENE_STRIDE % 256, 0);
-    assert!(mesh_render::SCENE_STRIDE >= mesh_render::SCENE_SIZE);
+    const { assert!(mesh_render::SCENE_STRIDE >= mesh_render::SCENE_SIZE) };
     assert_eq!(
         crate::drawable::SceneBlocks::view(0),
         crate::drawable::ViewBlock::NONE
