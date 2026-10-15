@@ -404,15 +404,6 @@ impl Drawable {
             mesh_render::zone::rebind(device, queue, &self.fog, &self.zone_rebind, stage);
     }
 
-    /// This model's own bounding radius, in model space.
-    ///
-    /// What the shadow map's light view is fitted to - a box sized to the
-    /// craft's *centres* alone clips the craft themselves, which draws a
-    /// shadow the size of the overlap rather than of the hull.
-    pub(super) fn radius(&self) -> f32 {
-        self.model.radius
-    }
-
     /// A sphere, in model space, that holds every vertex: the centre of the
     /// vertices' own box and the distance to the farthest one.
     ///

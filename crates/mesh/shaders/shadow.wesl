@@ -1,6 +1,6 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
-import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_occlusion_tex, uniforms};
+import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
 // whose material declares the whole parameter set it reads - see
@@ -86,7 +86,7 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
         // Level 0 named rather than derived: the map has one mip, so the two
         // read the same texel, and Chrome's WGSL compiler refuses an implicit
         // derivative here because this branch is not uniform (naga allows it).
-        return textureSampleLevel(shadow_tex, shadow_sampler, uv, 0.0).r * scene.shadow.strength;
+        return textureSampleLevel(shadow_tex, shadow_sampler, uv, 0.0).r;
     }
     // The depth mode: four taps a texel apart, each compared, and their mean.
     // **The softening is in the comparison, not in the sample** - filtering
@@ -111,7 +111,7 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
         );
         lit = lit + select(0.0, 1.0, ndc.z - scene.shadow.depth_bias <= nearest);
     }
-    return (1.0 - lit * 0.25) * scene.shadow.strength;
+    return 1.0 - lit * 0.25;
 }
 
 // How far a Wipeout HD hull is pushed towards the sun before its depth is
@@ -183,18 +183,34 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
     return occlusion * lit * 0.25;
 }
 
-// The shadow term, applied to colour.
+// The shadow term.
 //
-// **On colour rather than alpha, and that is a deviation.** Wipeout HD puts
-// `1 - shadow` in the fragment's *alpha* - which is what its `ShadowToAlpha`
-// material flag names - and a later compositing pass consumes it; that pass is
-// unread. This renderer's alpha is the bloom's glow mask, so writing there
-// would bloom the shadow. See `docs/rendering/shadows.md`.
+// **The `original` tier is the original's own composite.** Wipeout HD redraws the
+// track chunks near a craft through their `ShadowToAlpha` permutation, which is
+// the same surface lit without the sun (no `Sun` bit in its word, and no
+// shipped variant sets both) with `1 - shadowMapTex` as the fragment's alpha,
+// blended `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` over the frame
+// (`Shadow_CompileShadowedTrackRedraw`, `0x004053e0`). So the result is the
+// sunlit colour with the sun taken back out in proportion to the map's
+// coverage: `colour - coverage * sun`, and there is no darkness number in it -
+// a covered texel shows exactly the ambient the road would have had at night.
+//
+// **Everywhere else the coverage multiplies the colour by `1 - coverage *
+// strength`**, and `strength` is chosen, not measured: a scene with no authored
+// rig (no sun exists to take out), the `mapped` tier (this project's, not the
+// original's), and a track chunk whose colour is a special combine rather than
+// the generic one - the glass floor's facing ramp, the magstrip floor, a light
+// cone - because `sun_known` is clear there. Those materials' own `ShadowToAlpha`
+// programs are unread.
 //
 // **Called from every entry point that draws a lit surface**, which is five of
 // them and not one: a race draws through the `_velocity` pair, so a version of
 // this that only reached `fs_main` shadowed the scenery a blended material drew
 // and left the road untouched. That is exactly what the first cut did.
 fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
-    return colour * (1.0 - shadow_coverage(world));
+    let coverage = shadow_coverage(world);
+    if scene.shadow.mode < 1.5 && sun_known > 0.5 {
+        return max(colour - coverage * sun_delta, vec3<f32>(0.0));
+    }
+    return colour * (1.0 - coverage * scene.shadow.strength);
 }
