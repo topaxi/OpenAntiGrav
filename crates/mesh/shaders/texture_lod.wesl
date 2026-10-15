@@ -27,6 +27,11 @@ override aniso_max: f32 = 1.0;
 // or anisotropy off) that is one probe, and the plain explicit level. The
 // level is the slope law's either way; anisotropy only antialiases along the
 // long axis, and never picks a finer level.
+//
+// Its derivative-uniformity diagnostic is off for the reason `zone_glow`'s is:
+// `lit_texel` calls it after an early return on a flat varying, which Chrome's
+// Tint judges against this function's own `dpdx`, `dpdy` and gradient fetch.
+@diagnostic(off, derivative_uniformity)
 fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
     let size = vec2<f32>(textureDimensions(albedo, 0));
     let tx = dpdx(uv) * size;
