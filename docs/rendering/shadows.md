@@ -948,20 +948,34 @@ shape and place unchanged).
   the nearest of this view's eye and, in a race with more than one person, every person's craft - so each seat's
   craft takes one of the two 512 squares. Ties go to the lower slot. `rank_by_distance` in
   `crates/raceplay/src/scene/frame/shadow.rs`.
-- **Cost, measured 2026-10-15** (`scripts/bench-render.py run hd`, release, pinned `taskset -c 0-5`, two interleaved
-  rounds per variant, before = `main` at 68832e178, after = this branch; both builds carry a non-blocking GPU
-  timestamp probe around the atlas pass that is **not committed**, so the scene pass and the frame are the bench's
-  own columns and the shadow pass is the probe's; the shared machine's load average at each run is in the result
-  files and the runs that started above 5 are dropped). The atlas pass is geometry-bound, not texel-bound, so
-  cutting 4.2 M texels to 0.6 M barely moves it: **Intel Arrow Lake iGPU** 171 / 172 us p50 before and after at 1080p
-  and at 2h 1280x800 (the probe reads the same figure in every quiet run); **RTX PRO 2000 Blackwell** 64 -> 58 us
-  (1080p) and 55 -> 49 us (2h). What the change adds is the road's loop over the eight craft records in the scene
-  pass: **iGPU** `gpu_us` p50 3,484 -> 3,720 us at 1080p (+236 us, +6.8 %) and 2,852 -> 2,994 us at 2h (+142 us,
-  +5.0 %), frame p50 5,657 -> 5,893 and 5,937 -> 6,092 us; **NVIDIA** 2,109 -> 2,358 us (+249 us, +11.8 %) and
-  1,421 -> 1,560 us (+139 us, +9.8 %), frame p50 3,359 -> 3,647 us and 3,210 -> 3,272 us. A sphere test ahead of the
-  projection (below) took the iGPU's +319 us at 1080p to +236 us; further cuts would come from sending the shader
-  only the craft near the view. Run-to-run spread on the quiet runs is under 1 %, but the other lanes' load moves a
-  run by 4x when it lands, so read it as a measured order of magnitude, not a benchmark.
+- **Cost, measured 2026-10-15** (`scripts/bench-render.py run hd`, release, pinned `taskset -c 0-5`, interleaved,
+  before = `main` at 68832e178, after = this branch's final shader; both builds carry a non-blocking GPU timestamp
+  probe around the atlas pass that is **not committed**, so the scene pass and the frame are the bench's own columns
+  and the shadow pass is the probe's). **Only runs that started at a load average of 5 or under are used**, pooled
+  over every run of the same binary (the before binary is one build; two further `after` runs on the shader before
+  its last two edits are listed apart, not pooled); `n` is the quiet runs of each. The other lanes' load moved a run
+  by 4x when it landed, and the iGPU numbers spread by up to 17 % between quiet runs of one binary, so read the
+  ranges, not the medians alone.
+
+  | | scene pass `gpu_us` p50, median (range) | frame p50, median (range) | atlas pass, probe p50 |
+  | --- | --- | --- | --- |
+  | iGPU 1080p before (n=3) | 3,536 (3,484-3,634) | 6,124 (5,657-6,214) | 172 us |
+  | iGPU 1080p after (n=1) | 3,722 | 5,896 | 171 us |
+  | iGPU 1080p, after on the earlier shader (n=2) | 3,897 (3,841-3,953) | 6,564 (6,468-6,660) | |
+  | iGPU 2h 1280x800 before (n=4) | 3,222 (2,852-3,335) | 6,690 (5,937-6,986) | 172 us |
+  | iGPU 2h after (n=2) | 2,994 (2,992-2,996) | 6,092 (6,090-6,093) | 172 us |
+  | NVIDIA 1080p before / after (n=2 / 2) | 2,109 (2,096-2,122) / 2,358 (2,356-2,360) | 3,359 (3,284-3,434) / 3,647 (3,637-3,658) | 64 / 58 us |
+  | NVIDIA 2h before / after (n=2 / 2) | 1,421 (1,407-1,436) / 1,560 (1,510-1,611) | 3,210 (3,146-3,273) / 3,272 (3,248-3,297) | 55 / 49 us |
+
+  Read: on the NVIDIA card the scene pass is **+250 us (about 12 %) at 1080p and +140 us (about 10 %) at 2h**, the
+  ranges not overlapping; on the iGPU the 1080p scene pass is **+190 us** on the medians (the earlier shader +360) and
+  the 2h figures are not resolved (the before runs span 2,852-3,335 and the after runs sit inside them). The atlas
+  pass reads 171-172 us on the iGPU in every quiet run of both builds, **equal within the probe; the cause is not
+  verified** (a fast clear with the same vertex work would give it, and so would a probe that does not resolve this
+  pass), and 64 -> 58 and 55 -> 49 us on the NVIDIA card. The texel saving (4.2 M to 0.6 M) is therefore not what
+  shows in the frame; what the change adds is the road's loop over the eight craft records. A sphere test ahead of the
+  projection (below) took the iGPU's 1080p scene-pass delta from about +320 to about +190 us; sending the shader only
+  the craft near the view is the further cut.
 - **A cull sphere ahead of the projection** (`CRAFT_CULL_RADIUS` 56): a road point farther than that from a craft is
   skipped with one subtract and one dot. It holds the slab (52.8 at its corner), so no pixel changes (a still at the
   grid is byte-identical with and without it).
