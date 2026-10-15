@@ -35,6 +35,31 @@ texture slot. A Pulse view's extra CPU fell from about 774 to 595 us, HD's two-v
   `scripts/bench-render.py` does neither itself.
 - Not measured: the Steam Deck (the maintainer runs it).
 
+## Concurrency share of a two-view frame's CPU (2026-10-15)
+
+NVIDIA RTX PRO 2000 Blackwell Laptop GPU, pinned P-cores, `perf-probe` spans of the **second
+view** of a 2h frame (it leaves out the first view's once-per-frame work, which stays serial;
+the first view was not re-profiled after the fixes, and HD's `finish` is from before the
+prepass fix). Probe spans, not a flame graph (`samply` could not sample).
+
+| Per view | Pulse (~590 us) | HD (~1,000 us) | Pure (~310 us) |
+| --- | --- | --- | --- |
+| `encoder.finish` | 234 (40%) | ~500 (50%) | 142 (46%) |
+| scene-pass recording | 40 (7%) | ~96 (10%) | 22 (7%) |
+| culling and gathers | 20-25 (4%) | ~100 (10%) | small |
+| `queue.write_buffer` uploads | ~250 (42%) | ~230 (23%) | ~120 (38%) |
+| submit | 44 (7%) | 31-47 (4%) | 23-30 (9%) |
+
+- **Could run on its own thread now** (finish, recording, gathers): about 50% of Pulse's view,
+  70% of HD's, 55% of Pure's. That is the ceiling for a concurrent-encoder lane.
+- **Parallel only after a redesign** (the uploads, 25-40%): `queue.write_buffer` lands before the
+  next submission's commands, not at its place in the encoder, so views recorded concurrently
+  into separate encoders still need per-view uniform buffers, or one shared per-view scene
+  buffer with dynamic offsets (the "scene uniform is written once per drawable per view" item).
+- **Serial regardless:** submit (4-9%), any device or queue locking wgpu takes inside `finish`
+  and `write_buffer` (not measured), and the first view's shared work (shadow maps, gather,
+  scenery clocks, adverts). The real ceiling is lower than the shares above.
+
 ## Next Steps
 
 1. Run `samply` on `oag-game --race --players 2` once the paranoid level allows it, on both
