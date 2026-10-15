@@ -152,6 +152,12 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   green in 407 s (2026-10-15). The time ceilings are the desktop's: on the
   notebook a red that is only `check-test-budget` time is green.
 
+  **wgpu's GL backend (desktop GL and WebGL2) is best effort** (maintainer,
+  2026-10-15). It must never block progress on the default backends (Vulkan,
+  Metal, Dx12, WebGPU): a feature that GL cannot do is switched off on GL and
+  named in the loader report, not held back or reshaped for everyone. Do not
+  gate a change on a GL run; if GL breaks, say so in your report and move on.
+
   **A render bench takes the same lock.** `just bench-render` (whole-race
   rendering benchmark, `docs/tools/render-bench.md`) holds
   `$HOME/.cache/oag/gate.lock` itself for the runs, so it measures on a quiet
