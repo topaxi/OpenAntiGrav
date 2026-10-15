@@ -557,7 +557,7 @@ prepares every view and then records them in order; `threaded` records them on s
 
 The prepare and record split costs nothing measurable (main against new, interleaved; Pulse's one
 view re-measured over five interleaved rounds: 1,040 against 1,032). **Threads lose everywhere on
-this machine**, by 15 to 100% (Pure's views are the smallest bursts). Serial batching is free on
+this machine**, by 10 to 100% (Pure's views are the smallest bursts). Serial batching is free on
 Pulse and 8 to 11% dearer on HD and Pure: the GPU starts on the first view only once every view is
 prepared.
 
@@ -586,13 +586,16 @@ build only, CPU / pipelined):
 | Pure, 4 | 2,400 / 2,607 | 4,102 / 2,780 | 3,309 / 2,557 |
 
 Here, where ANV's per-view CPU is about four times NVIDIA's, threads do beat serial batching (HD
-four views 12,423 to 9,743 us, Pure four 4,102 to 3,309), but batching itself loses more than that
-to the interleaved order, whose first view is on the GPU while the next is prepared; the pipelined
-frame barely moves (the iGPU is GPU-bound). **The lever this points at, not built**: record a view
-on a worker *while the next view is prepared*, and submit each as soon as it is recorded, which
-keeps the GPU starting early and overlaps the two halves. It needs the effect pipelines' uploads
-to stop holding `&mut` state the recording reads (today `Recorder` holds their `RefCell` guards,
-so a prepare cannot run beside a recording).
+four views 12,423 to 9,743 us, Pure four 4,102 to 3,309), but both batched recordings lose to the
+interleaved order at four views and on HD and Pure two views; Pulse two views is the exception
+(serial 2,971 and threaded 3,426 against interleaved 3,497, two rounds only). The pipelined frame
+barely moves (the iGPU is GPU-bound). **Why batching costs here is not measured**: the hypothesis is
+that ANV's submit or finish waits on GPU work the interleaved order has already started, but the
+CPU line idles the GPU before each run, so that is a lead, not a finding. **The lever it points at,
+not built**: record a view on a worker *while the next view is prepared*, and submit each as soon
+as it is recorded. It needs the effect pipelines' uploads to stop holding `&mut` state the
+recording reads (today `Recorder` holds their `RefCell` guards, so a prepare cannot run beside a
+recording).
 
 **Pictures and state.** 34 stills (Pulse, HD and Pure at 1, 2h, 2v and 4 views with the blur off
 and on, Pulse/HD/Pure 2h and 4 at tick 1500, 2048 and Omega 2h) and 51 weapon stills (thirteen
