@@ -844,9 +844,9 @@ impl Gantry {
         race_clock(&self.clock, &self.tracker, race)
     }
 
-    /// The fog block this frame, shared with the rest of the scenery.
-    pub(super) fn fog(&self) -> &wgpu::Buffer {
-        &self.drawable.fog
+    /// Writes the frame's scene block into the gantry's drawable.
+    pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        self.drawable.write_scene(queue, scene);
     }
 
     /// Writes the frame's matrices and both animation tables.

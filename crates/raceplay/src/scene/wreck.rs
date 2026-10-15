@@ -125,7 +125,7 @@ impl Scene {
     /// hulls get.
     pub(super) fn write_wreck_scenes(&self, queue: &wgpu::Queue, ship_scene: &mesh_render::Scene) {
         for wreck in self.wrecks.hull.iter().flatten() {
-            queue.write_buffer(&wreck.fog, 0, bytemuck::bytes_of(ship_scene));
+            wreck.write_scene(queue, ship_scene);
         }
     }
 

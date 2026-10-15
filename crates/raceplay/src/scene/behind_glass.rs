@@ -264,7 +264,7 @@ impl Target {
             drawable.write(queue, matrix, Mat4::IDENTITY, matrix);
             drawable.write_anims(queue, seconds);
             drawable.write_node_anims(queue, seconds);
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
+            drawable.write_scene(queue, scene);
         }
     }
 

@@ -248,7 +248,7 @@ impl Scene {
         .into_iter()
         .flatten()
         {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&scene));
+            drawable.write_scene(queue, &scene);
             // Written for every drawable on this list regardless of whether a
             // Zone race is running: it blanks the lookup with no spectrum or
             // no tint, and `scene.zone.enabled` already gates the glow off
@@ -294,7 +294,7 @@ impl Scene {
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
-            queue.write_buffer(gantry.fog(), 0, bytemuck::bytes_of(&scene));
+            gantry.write_scene(queue, &scene);
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
@@ -345,7 +345,7 @@ impl Scene {
             ..mesh_render::Scene::off()
         };
         for drawable in self.flares.iter().chain(&self.boost).flatten() {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(&flame_scene));
+            drawable.write_scene(queue, &flame_scene);
         }
 
         // The sky rides with the eye. Translating it to the camera is what makes

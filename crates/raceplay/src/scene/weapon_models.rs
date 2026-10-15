@@ -734,7 +734,7 @@ fn write_one_kind(
 /// Puts the circuit's scene block on a weapon drawable a PS3 program shades.
 pub(super) fn write_fog(drawable: &Drawable, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
     if drawable.is_ps3_shaded() {
-        queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(scene));
+        drawable.write_scene(queue, scene);
     }
 }
 

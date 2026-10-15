@@ -198,12 +198,12 @@ impl Scene {
     /// near distance, where the chase camera sits, it changes nothing.
     pub(super) fn write_ship_scenes(&self, queue: &wgpu::Queue, ship_scene: &mesh_render::Scene) {
         for drawable in self.ships.iter() {
-            queue.write_buffer(&drawable.fog, 0, bytemuck::bytes_of(ship_scene));
+            drawable.write_scene(queue, ship_scene);
         }
         let shine = shine_scene(ship_scene);
         let track_shine = self.track_shine.iter().map(|t| &t.drawable);
         for pass in self.shine.iter().flatten().chain(track_shine) {
-            queue.write_buffer(&pass.fog, 0, bytemuck::bytes_of(&shine));
+            pass.write_scene(queue, &shine);
         }
         self.write_wreck_scenes(queue, ship_scene);
     }

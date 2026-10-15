@@ -583,6 +583,11 @@ impl Drawable {
         oag_gpu::perfprobe::write_buffer(queue, &self.uniforms, 0, bytemuck::bytes_of(&uniforms));
     }
 
+    /// Puts `scene` - the fog, the light rig, the clock and the shadow map - in bind group 2.
+    pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        oag_gpu::perfprobe::write_buffer(queue, &self.fog, 0, bytemuck::bytes_of(scene));
+    }
+
     /// Samples every authored texture-transform track this model carries at
     /// `seconds` and uploads the table the vertex shader indexes.
     ///
