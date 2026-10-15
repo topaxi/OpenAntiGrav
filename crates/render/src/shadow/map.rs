@@ -16,39 +16,81 @@
 //! direction the projection is built around
 //! ([`envsettings.md`](../../../docs/formats/envsettings.md)).
 //!
-//! **Ours**: the map's size and the extent the light's view is fitted to.
-//! `shadowMapTexSize` is the reciprocal of each ship's own map side, 512 down
-//! to 32 by distance rank, and no shipped material reads it; one shared map
-//! has no counterpart for that, so [`SIZE`] is a choice with a measurement
-//! behind it, and so is the fit (see [`Fit`]). How dark a covered texel draws
-//! is no longer a choice: the original's redraw is the road lit without its
-//! sun, which `mesh`'s `shadowed` reproduces.
+//! **One map per craft**, as the original keeps (`Shadow_RenderModelShadowMaps`
+//! draws each ship into a map of its own, fitted to that ship alone), at the
+//! sides it allocates by the ship's distance rank ([`RANK_SIDES`]), and each
+//! craft's map is read by the road through its own matrix, the maps' coverage
+//! combined the way the original's one redraw per ship blends. See
+//! [`Map::render`].
+//!
+//! **Ours**: where the maps live (one atlas, [`ATLAS_WIDTH`] by
+//! [`ATLAS_HEIGHT`], one render pass, instead of eight textures bound at
+//! eight slots), the box's depth bounds on the receiving side, and what the
+//! rank is measured from (the caller's choice). The box is the one the
+//! sun-occlusion map already uses ([`Fit::craft`]), which the original shares
+//! between a ship's maps. How dark a covered texel draws is the original's:
+//! the road lit without its sun, which `mesh`'s `shadowed` reproduces.
 
 use oag_core::math::{Mat4, Vec3, camera};
 
 use oag_mesh::mesh::GpuVertex;
-use oag_mesh::mesh_render::{COVERAGE_FORMAT, SHADOW_DEPTH_FORMAT};
+use oag_mesh::mesh_render::{COVERAGE_FORMAT, CraftShadow, SHADOW_DEPTH_FORMAT};
 
-/// The map's resolution, square.
+/// The side of each craft's map, in texels, by the craft's rank in distance
+/// from the reference point, nearest first.
 ///
-/// **Chosen, from a measured comparison.** The original's per-ship maps are
-/// not one size: each ship's depth map is allocated from a pool of eight whose
-/// sides run 512, 512, 256, 128, 64, 32, 32, 32 (`g_ShipMapSizes`,
-/// [`ship-sun-occlusion.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)),
-/// handed out in order of distance from the job's eye point
-/// ([`shadow-track-redraw.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md)),
-/// and each is fitted to that ship's own box, 12 to 21 units across: 24 to 43
-/// texels per world unit for the two nearest ships, 12 to 21 for the third.
-/// This renderer fits **one** map to the whole grid, so the same density
-/// takes a larger map: at Talon's Junction's grid (the casters' spread plus
-/// [`Fit`]'s margin, about 170 units across) 2048 texels is about 12 per unit,
-/// the original's third ship; the 1024 this replaces was 2.2 per unit, because
-/// the fit then used the drawable's radius and spanned 467 units. 4096 would
-/// reach the nearest ships' density at 16 MiB and was left out; one map per
-/// craft would match it at any size and is the open alternative. **Chosen,
-/// not measured**: the original's number is per ship and has no equivalent
-/// for a shared map.
-pub const SIZE: u32 = 2048;
+/// **The original's**: `Shadow_AllocShipMapPool` allocates eight depth maps of
+/// these sides (`g_ShipMapSizes`,
+/// [`ship-sun-occlusion.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md))
+/// and `Ship_RankAndAssignMapSlots` hands them out nearest first by squared
+/// distance
+/// ([`shadow-track-redraw.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md)).
+pub const RANK_SIDES: [u32; MAX_CASTERS] = [512, 512, 256, 128, 64, 32, 32, 32];
+
+/// The coverage atlas's width, in texels.
+pub const ATLAS_WIDTH: u32 = 1024;
+
+/// The coverage atlas's height, in texels.
+pub const ATLAS_HEIGHT: u32 = 768;
+
+/// Where each rank's square sits in the atlas: `(x, y, side)` in texels.
+///
+/// **Ours.** The two 512 squares side by side on top, the rest in a row below.
+/// The squares tile no more than 613,376 of the atlas's 786,432 texels (the
+/// rank sum) and overlap nowhere; a test pins that.
+pub const RANK_SQUARES: [(u32, u32, u32); MAX_CASTERS] = [
+    (0, 0, 512),
+    (512, 0, 512),
+    (0, 512, 256),
+    (256, 512, 128),
+    (384, 512, 64),
+    (448, 512, 32),
+    (480, 512, 32),
+    (512, 512, 32),
+];
+
+/// Half the side of the box each craft's maps are fitted to, in world units:
+/// 12, the original's fallback box (`(-6, -6, -6)..(6, 6, 6)`,
+/// `Shadow_BuildShipShadowMatrices`) plus a margin of 6 so a hull's silhouette
+/// never clips its own map's edge. **The margin is ours**; the original fits
+/// the box to the ship's own bbox with none.
+pub const CRAFT_HALF_EXTENT: f32 = 12.0;
+
+/// The radius of the sphere around a craft outside which the receiver skips its
+/// map without projecting, in world units. **Not a new bound**: it encloses the
+/// receiver's slab (50 units past the craft along the sun, the box's 12-unit
+/// half width across it, so 52.8 at the corner) with room to spare, and the
+/// original redraws the track chunks within 50 units of each ship too.
+pub const CRAFT_CULL_RADIUS: f32 = 56.0;
+
+/// How far each craft's box reaches along the sun either side of the craft,
+/// in world units.
+///
+/// **The original's**: `Shadow_BuildShipShadowMatrices` looks from 70 units up
+/// the sun with near 1 and far 140
+/// ([`shadow-model-maps.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md)),
+/// and every map a ship carries is projected through that one matrix.
+pub const CRAFT_REACH: f32 = 70.0;
 
 /// How far behind the casters the light's own near plane sits, in world units.
 ///
@@ -75,6 +117,27 @@ pub struct Fit {
 }
 
 impl Fit {
+    /// The box every map a craft carries is fitted to: centred on the craft,
+    /// [`CRAFT_HALF_EXTENT`] each way across the sun, looking down it from
+    /// [`CRAFT_REACH`] units up. The coverage maps, the sun-occlusion map and
+    /// the self-shadow map all take it, because the original projects a ship's
+    /// maps through one matrix.
+    #[must_use]
+    pub fn craft(centre: Vec3, towards_light: Vec3) -> Self {
+        Self {
+            centre,
+            radius: CRAFT_HALF_EXTENT,
+            towards_light,
+        }
+    }
+
+    /// World to a craft map's clip space: [`Self::matrix_reaching`] at
+    /// [`CRAFT_REACH`], the original's depth for a ship's box.
+    #[must_use]
+    pub fn craft_matrix(&self) -> Mat4 {
+        self.matrix_reaching(CRAFT_REACH)
+    }
+
     /// The light direction actually used for the view: [`Self::towards_light`],
     /// or a fallback that keeps the view non-degenerate.
     ///
@@ -101,9 +164,8 @@ impl Fit {
     /// build a perspective frustum around.
     ///
     /// **Fitted to the casters, not to the track**, which is the whole reason
-    /// this type exists: a track-sized box at [`SIZE`] is metres per texel and
-    /// a craft's shadow becomes a smear. Eight craft on a grid fit inside tens
-    /// of units.
+    /// this type exists: a track-sized box is metres per texel and a craft's
+    /// shadow becomes a smear.
     ///
     /// **The box's own axes come from [`Self::towards_light`] alone - never
     /// from a caster.** Whatever moves [`Self::centre`] between calls (a
@@ -167,11 +229,10 @@ impl Fit {
     /// along it is untouched; because it is depth *into* the light and never
     /// decides which texel a receiver samples.
     ///
-    /// The caller supplies `map_size` rather than this reaching for [`SIZE`]
-    /// itself: [`Self`] is also used to fit the coverage map, whose radius
-    /// breathes with the caster grid every frame and whose texel size is
-    /// therefore not even constant - snapping only makes sense where the size
-    /// fed in is the one the fit is about to render into.
+    /// The caller supplies `map_size` because the size is the map's own: a
+    /// craft's coverage map changes side with its distance rank
+    /// ([`RANK_SIDES`]) - snapping only makes sense where the size fed in is
+    /// the one the fit is about to render into.
     ///
     /// **Testable without a GPU**: nudging [`Self::centre`] by a fraction of a
     /// texel must leave the snapped centre - and therefore
@@ -226,13 +287,57 @@ pub struct Caster<'a> {
 
 /// The depth map's resolution, square.
 ///
-/// **Ours, and larger than [`SIZE`] on purpose**: the coverage map is fitted
-/// to a grid of craft, where this one covers everything in front of the
-/// camera - a far larger box, so it needs more texels to keep a comparable
-/// world size per texel.
+/// **Ours.** The coverage maps are fitted to one craft each, where this one
+/// covers everything in front of the camera - a far larger box, so it needs
+/// more texels to keep a usable world size per texel.
 pub const DEPTH_SIZE: u32 = 2048;
 
-/// The map, its caster pipeline, and the per-caster uniforms.
+/// The record the receiver reads for a craft whose map is rendered at `rank`:
+/// its box snapped to the texels of that rank's side, projected, and the
+/// square it occupies in the atlas as a `0..1` rectangle.
+///
+/// Separate from [`Map::render`] because it is arithmetic, so the same record
+/// the pass projects with is checked without a GPU.
+#[must_use]
+pub fn craft_shadow(fit: &Fit, rank: usize) -> CraftShadow {
+    let (x, y, side) = RANK_SQUARES[rank.min(MAX_CASTERS - 1)];
+    let matrix = fit.snapped(side).craft_matrix();
+    let (width, height) = (ATLAS_WIDTH as f32, ATLAS_HEIGHT as f32);
+    CraftShadow {
+        matrix: matrix.to_cols_array_2d(),
+        rect: [
+            x as f32 / width,
+            y as f32 / height,
+            side as f32 / width,
+            side as f32 / height,
+        ],
+        centre: [
+            fit.centre.x,
+            fit.centre.y,
+            fit.centre.z,
+            CRAFT_CULL_RADIUS * CRAFT_CULL_RADIUS,
+        ],
+    }
+}
+
+/// One craft's map to render: which craft, how near it ranks, the box to fit
+/// and what to draw.
+#[derive(Debug, Clone, Copy)]
+pub struct CraftCaster<'a> {
+    /// The craft's slot, `0..MAX_CASTERS`: the index its record takes in
+    /// [`Map::craft_shadows`], and so in the receiver's array.
+    pub slot: usize,
+    /// The craft's rank by distance from the reference point, `0` nearest:
+    /// the index into [`RANK_SIDES`] and [`RANK_SQUARES`].
+    pub rank: usize,
+    /// The box to fit, [`Fit::craft`] around the craft.
+    pub fit: Fit,
+    /// The craft's own geometry.
+    pub caster: Caster<'a>,
+}
+
+/// The coverage atlas, the `mapped` tier's depth map, their caster pipelines
+/// and the per-caster uniforms.
 #[derive(Debug)]
 pub struct Map {
     texture: wgpu::Texture,
@@ -242,8 +347,10 @@ pub struct Map {
     /// `light view-projection * model`.
     uniforms: wgpu::Buffer,
     binds: Vec<wgpu::BindGroup>,
-    /// The matrix the last [`Map::render`] projected with, for the receiver.
-    matrix: Mat4,
+    /// Each craft's projection and atlas square as the last [`Map::render`]
+    /// left them, for the receiver; [`CraftShadow::NONE`] for a craft that
+    /// drew nothing.
+    crafts: [CraftShadow; MAX_CASTERS],
     /// How many casters it actually drew.
     drawn: usize,
     /// The `mapped` tier's depth target, its view and the pipeline that fills
@@ -273,10 +380,10 @@ impl Map {
     #[must_use]
     pub fn new(device: &wgpu::Device) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("shadow map"),
+            label: Some("shadow map atlas"),
             size: wgpu::Extent3d {
-                width: SIZE,
-                height: SIZE,
+                width: ATLAS_WIDTH,
+                height: ATLAS_HEIGHT,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -467,7 +574,7 @@ impl Map {
             pipeline,
             uniforms,
             binds,
-            matrix: Mat4::IDENTITY,
+            crafts: [CraftShadow::NONE; MAX_CASTERS],
             drawn: 0,
             depth,
             depth_view,
@@ -562,11 +669,12 @@ impl Map {
         &self.view
     }
 
-    /// The projection the last [`Self::render`] used, for the receiver's own
-    /// uniform.
+    /// Each craft's projection and atlas square as the last [`Self::render`]
+    /// left them, indexed by [`CraftCaster::slot`], for the receiver's own
+    /// uniform. [`CraftShadow::NONE`] for a craft that drew nothing.
     #[must_use]
-    pub fn matrix(&self) -> Mat4 {
-        self.matrix
+    pub fn craft_shadows(&self) -> [CraftShadow; MAX_CASTERS] {
+        self.crafts
     }
 
     /// How many casters the last pass drew - an observable, since a map that
@@ -576,30 +684,42 @@ impl Map {
         self.drawn
     }
 
-    /// Clears the map and draws `casters` into it from `fit`'s light.
+    /// Clears the atlas and draws each craft into its own square of it, from
+    /// its own box: **one map per craft**, as the original keeps.
+    ///
+    /// The square is the craft's rank's ([`RANK_SQUARES`]), so the sides run
+    /// 512, 512, 256, 128, 64, 32, 32, 32 by distance whichever craft holds
+    /// the rank this frame. Each craft's fit is snapped to whole texels of the
+    /// side it is about to render at ([`Fit::snapped`]), so the shadow of a
+    /// moving craft does not swim across its own texels; the original fits the
+    /// box to the bbox every frame and does not snap, which is **ours**.
     ///
     /// Cleared to zero every frame: an unwritten texel is unshadowed ground,
     /// and leaving the previous frame's coverage would drag a shadow behind
-    /// every craft.
+    /// every craft. An empty `crafts` is a clear and nothing else.
     pub fn render(
         &mut self,
         queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
-        fit: &Fit,
-        casters: &[Caster<'_>],
+        crafts: &[CraftCaster<'_>],
     ) {
-        self.matrix = fit.matrix();
-        self.drawn = casters.len().min(MAX_CASTERS);
-        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
-            let mvp = self.matrix * caster.model;
+        let crafts = &crafts[..crafts.len().min(MAX_CASTERS)];
+        self.crafts = [CraftShadow::NONE; MAX_CASTERS];
+        self.drawn = crafts.len();
+        for (index, craft) in crafts.iter().enumerate() {
+            let record = craft_shadow(&craft.fit, craft.rank);
+            if let Some(slot) = self.crafts.get_mut(craft.slot) {
+                *slot = record;
+            }
+            let mvp = Mat4::from_cols_array_2d(&record.matrix) * craft.caster.model;
             queue.write_buffer(
                 &self.uniforms,
-                UNIFORM_STRIDE * slot as u64,
+                UNIFORM_STRIDE * index as u64,
                 bytemuck::cast_slice(&mvp.to_cols_array()),
             );
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("shadow map"),
+            label: Some("shadow map atlas"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &self.view,
                 depth_slice: None,
@@ -615,21 +735,73 @@ impl Map {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
-        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
-            pass.set_bind_group(0, &self.binds[slot], &[]);
-            pass.set_vertex_buffer(0, caster.vertices.slice(..));
-            pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
-            for range in caster.ranges {
+        for (index, craft) in crafts.iter().enumerate() {
+            let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
+            // The viewport maps the craft's clip box onto its own square and
+            // the scissor keeps what the box does not clip (the guard band)
+            // out of the neighbouring squares.
+            pass.set_viewport(x as f32, y as f32, side as f32, side as f32, 0.0, 1.0);
+            pass.set_scissor_rect(x, y, side, side);
+            pass.set_bind_group(0, &self.binds[index], &[]);
+            pass.set_vertex_buffer(0, craft.caster.vertices.slice(..));
+            pass.set_index_buffer(craft.caster.indices.slice(..), wgpu::IndexFormat::Uint32);
+            for range in craft.caster.ranges {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
     }
 
-    /// The texture behind [`Self::view`], for a caller that wants to read it
-    /// back - the headless checks do.
+    /// The texture behind [`Self::view`].
     #[must_use]
     pub fn texture(&self) -> &wgpu::Texture {
         &self.texture
+    }
+
+    /// Reads the atlas back as one byte per texel, row-major from the top -
+    /// [`ATLAS_WIDTH`] by [`ATLAS_HEIGHT`] of them - blocking on the GPU. For a
+    /// headless check or a dump; the frame never calls this.
+    #[must_use]
+    pub fn read_back(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<u8> {
+        let (width, height) = (ATLAS_WIDTH as usize, ATLAS_HEIGHT as usize);
+        let row = ATLAS_WIDTH.div_ceil(256) * 256;
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("shadow map readback"),
+            size: u64::from(row * ATLAS_HEIGHT),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        encoder.copy_texture_to_buffer(
+            self.texture.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(row),
+                    rows_per_image: Some(ATLAS_HEIGHT),
+                },
+            },
+            wgpu::Extent3d {
+                width: ATLAS_WIDTH,
+                height: ATLAS_HEIGHT,
+                depth_or_array_layers: 1,
+            },
+        );
+        queue.submit([encoder.finish()]);
+        let slice = buffer.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("draining the queue");
+        let view = slice.get_mapped_range().expect("mapping the readback");
+        let mut out = vec![0u8; width * height];
+        for y in 0..height {
+            let start = y * row as usize;
+            out[y * width..(y + 1) * width].copy_from_slice(&view[start..start + width]);
+        }
+        drop(view);
+        buffer.unmap();
+        out
     }
 }
 

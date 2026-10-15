@@ -22,6 +22,7 @@ mod correction;
 mod countdown;
 mod craft_cull;
 mod craft_flash;
+mod craft_shadows;
 mod cue_endings;
 mod cues;
 mod damage_fx;

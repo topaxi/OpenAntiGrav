@@ -18,9 +18,11 @@
 
 use std::sync::Arc;
 
+use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, Texels, slots};
 use oag_mesh::mesh_render::{
-    self, Anisotropy, Light, Scene, ShadowMap, ShadowMaps, ShadowReceiver, UNIFORMS_SIZE,
+    self, Anisotropy, CraftShadow, Light, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
+    UNIFORMS_SIZE,
 };
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
@@ -127,13 +129,18 @@ fn rig(sun: [f32; 3]) -> Scene {
     scene
 }
 
-/// The shadow block: an identity projection, so the triangle's own `x`/`y` pick
-/// the texel and its `z = 0.5` sits inside the map's depth range.
-fn shadow(strength: f32) -> ShadowMap {
-    let mut block = ShadowMap::off();
-    block.strength = strength;
-    block.mode = ShadowMap::COVERAGE;
-    block
+/// The shadow block and one craft's map record: an identity projection over the
+/// whole map, so the triangle's own `x`/`y` pick the texel and its `z = 0.5`
+/// sits at the craft map's own centre depth, inside the receiver's slab.
+fn shadowed(mut scene: Scene, strength: f32) -> Scene {
+    scene.shadow.strength = strength;
+    scene.shadow.mode = ShadowMap::COVERAGE;
+    scene.craft_shadow[0] = CraftShadow {
+        matrix: Mat4::IDENTITY.to_cols_array_2d(),
+        rect: [0.0, 0.0, 1.0, 1.0],
+        centre: [0.0, 0.0, 0.0, 1.0e6],
+    };
+    scene
 }
 
 #[test]
@@ -161,11 +168,7 @@ fn a_covered_texel_shows_the_road_lit_without_its_sun() {
             &device,
             &queue,
             &model,
-            {
-                let mut scene = rig(SUN);
-                scene.shadow = shadow(strength);
-                scene
-            },
+            shadowed(rig(SUN), strength),
             Some(255),
         );
         for channel in 0..3 {
@@ -185,7 +188,7 @@ fn a_covered_texel_shows_the_road_lit_without_its_sun() {
 
     // No coverage: untouched.
     let mut scene = rig(SUN);
-    scene.shadow = shadow(0.5);
+    scene = shadowed(scene, 0.5);
     let clear = draw(&device, &queue, &model, scene, Some(0));
     for channel in 0..3 {
         assert!(
@@ -196,7 +199,7 @@ fn a_covered_texel_shows_the_road_lit_without_its_sun() {
 
     // Half coverage lands midway between them: the blend is by alpha.
     let mut scene = rig(SUN);
-    scene.shadow = shadow(0.5);
+    scene = shadowed(scene, 0.5);
     let half = draw(&device, &queue, &model, scene, Some(128));
     for channel in 0..3 {
         let mid = (u16::from(sunlit[channel]) + u16::from(ambient_only[channel])) / 2;
@@ -206,6 +209,98 @@ fn a_covered_texel_shows_the_road_lit_without_its_sun() {
              got {half:?}"
         );
     }
+}
+
+/// The scene with each of `matrices` bound as one craft's whole-map record, the
+/// first in slot 0.
+fn with_crafts(mut scene: Scene, matrices: &[Mat4]) -> Scene {
+    scene = shadowed(scene, 0.5);
+    for (slot, matrix) in matrices.iter().enumerate() {
+        scene.craft_shadow[slot] = CraftShadow {
+            matrix: matrix.to_cols_array_2d(),
+            rect: [0.0, 0.0, 1.0, 1.0],
+            centre: [0.0, 0.0, 0.0, 1.0e6],
+        };
+    }
+    scene
+}
+
+/// How far from the sunlit colour towards the ambient-only one `got` is, `0.0`
+/// to `1.0`, on the red channel.
+fn covered_fraction(got: [u8; 4], sunlit: [u8; 4], ambient_only: [u8; 4]) -> f32 {
+    (f32::from(sunlit[0]) - f32::from(got[0])) / (f32::from(sunlit[0]) - f32::from(ambient_only[0]))
+}
+
+/// Each craft's map is its own redraw: the original blends the shadowed road in
+/// once per ship, so two craft covering the same texel at half coverage leave
+/// `1 - (1 - 0.5) * (1 - 0.5)` of the way to the shadowed colour - not the
+/// maximum (half) and not the sum (all of it). And a craft's box is a slab: a
+/// road on the sun's side of the craft, past the 50 units the original redraws
+/// within, or outside its square is not its shadow's to take.
+#[test]
+fn craft_maps_combine_as_the_originals_redraws_do_and_keep_to_their_box() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let model = model(slots::DEFAULT);
+    let sunlit = draw(&device, &queue, &model, rig(SUN), None);
+    let ambient_only = draw(&device, &queue, &model, rig([0.0; 3]), None);
+    let fraction = |matrices: &[Mat4]| {
+        let got = draw(
+            &device,
+            &queue,
+            &model,
+            with_crafts(rig(SUN), matrices),
+            Some(128),
+        );
+        covered_fraction(got, sunlit, ambient_only)
+    };
+
+    let one = fraction(&[Mat4::IDENTITY]);
+    assert!(
+        (one - 0.5).abs() < 0.04,
+        "one craft at half coverage: {one}"
+    );
+    let two = fraction(&[Mat4::IDENTITY, Mat4::IDENTITY]);
+    assert!(
+        (two - 0.75).abs() < 0.04,
+        "two craft at half coverage each leave a quarter of the sunlit colour: {two}"
+    );
+
+    // The triangle sits at depth 0.5 of the identity box. Moving the box along
+    // the sun puts the road on either side of the craft: `0.3` is on the sun's
+    // side of it, `0.6` just past it, `0.9` past the 50 units (`0.857`).
+    let shifted = |depth: f32| Mat4::from_translation(Vec3::new(0.0, 0.0, depth - 0.5));
+    assert!(
+        fraction(&[shifted(0.6)]) > 0.45,
+        "just past the craft is shadowed"
+    );
+    assert!(
+        fraction(&[shifted(0.3)]).abs() < 0.04,
+        "a road nearer the sun than the craft is lit"
+    );
+    assert!(
+        fraction(&[shifted(0.9)]).abs() < 0.04,
+        "a road past the 50-unit redraw radius is lit"
+    );
+    // And outside the craft's square on the map.
+    assert!(
+        fraction(&[Mat4::from_translation(Vec3::new(1.5, 0.0, 0.0))]).abs() < 0.04,
+        "outside the box is lit"
+    );
+    // And outside the craft's cull sphere, which is checked before the box.
+    let mut far = with_crafts(rig(SUN), &[Mat4::IDENTITY]);
+    far.craft_shadow[0].centre = [100.0, 0.0, 0.0, 50.0 * 50.0];
+    let got = draw(&device, &queue, &model, far, Some(255));
+    assert!(
+        covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
+        "a point outside the cull sphere is lit"
+    );
 }
 
 /// Identity camera and model, so clip space is model space.
@@ -417,7 +512,7 @@ fn a_special_combine_keeps_the_multiply_and_is_not_charged_a_sun_it_never_had() 
 
     let plain = draw(&device, &queue, &model, rig(SUN), None);
     let mut scene = rig(SUN);
-    scene.shadow = shadow(0.25);
+    scene = shadowed(scene, 0.25);
     let covered = draw(&device, &queue, &model, scene, Some(255));
     assert!(
         plain[0] > 100,

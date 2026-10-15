@@ -66,21 +66,12 @@ pub const SIZE: u32 = 256;
 /// `chunk_radius^2 + 100`. A cylinder along the sun, not a sphere around the
 /// craft: what lands near the craft's texels from the sun's view is drawn,
 /// however far along the ray it sits, and the box's own depth
-/// ([`REACH`]) is the only bound that way.
+/// ([`super::map::CRAFT_REACH`], 70 units either side) is the only bound that
+/// way. Deep enough that an overhead deck is in the box - and, with no depth
+/// test, whichever of the deck and the road under it draws later is what the
+/// hull reads. The original's chunk order there is unread; this pass draws in
+/// the model's own draw order.
 pub const RADIUS: f32 = 10.0;
-
-/// How far the map's box reaches along the sun either side of the craft, in
-/// world units.
-///
-/// **The original's**: `Shadow_BuildShipShadowMatrices` looks from 70 units
-/// up the sun with near 1 and far 140
-/// ([`shadow-model-maps.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md)),
-/// and this map is projected through that same matrix. Deep enough that an
-/// overhead deck is in the box - and, with no depth test, whichever of the
-/// deck and the road under it draws later is what the hull reads. The
-/// original's chunk order there is unread; this pass draws in the model's
-/// own draw order.
-pub const REACH: f32 = 70.0;
 
 /// Bytes per layer uniform: one `mat4x4`, padded to the dynamic-offset
 /// alignment every backend accepts.
@@ -306,7 +297,7 @@ impl Maps {
         let Some(view) = self.layer_views.get(layer) else {
             return 0;
         };
-        let matrix = fit.matrix_reaching(REACH);
+        let matrix = fit.craft_matrix();
         self.matrices[layer] = matrix;
         let mvp = matrix * track.model;
         queue.write_buffer(

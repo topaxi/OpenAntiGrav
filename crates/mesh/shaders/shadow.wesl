@@ -32,14 +32,91 @@ override receives_shadow: f32 = 0.0;
 // 15 % at the corners of Pulse's authored field of view. Reproducing view-space
 // z needs the view matrix separately, which this uniform block does not carry;
 // recorded as a known divergence rather than silently accepted.
-// How much of this surface point the shadow map covers, `0.0` to `1.0`.
+// How far, in the craft map's `0..1` depth, a receiver may sit towards the sun
+// of the craft's centre and still be shadowed by it: the fallback box's half
+// thickness, 6 of the box's 140 units (`Shadow_BuildShipShadowMatrices`).
+// **Chosen, not measured.** The original stores depth and compares it, so a
+// road that is nearer the sun than the hull is lit; the coverage map stores no
+// depth, and without this a deck or a tunnel roof *above* the craft along the
+// sun would be darkened by a craft passing under it.
+const CRAFT_SLAB_NEAR: f32 = 0.5 - 6.0 / 140.0;
+
+// How far past the craft's centre, along the sun, a receiver may sit and still
+// be shadowed by it: 50 of the box's 140 units, the radius the original redraws
+// track chunks within (`0x008b7e24` = 50.0, `Shadow_CompileShadowedTrackRedraw`).
+// **Chosen, not measured**: the original culls chunks by a sphere around the
+// ship, this cuts a slab, which is the nearest cut a per-pixel lookup has.
+const CRAFT_SLAB_FAR: f32 = 0.5 + 50.0 / 140.0;
+
+// How much of this surface point the craft shadow maps cover, `0.0` to `1.0`.
+//
+// **Wipeout HD redraws the road once per ship, each through that ship's own
+// map**, blending `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` over the frame
+// (`Shadow_CompileShadowedTrackRedraw`). Two redraws leave the road
+// `(1 - a1) * (1 - a2)` of the way back to the sunlit colour, so the coverage
+// of several craft is `1 - product(1 - coverage_i)`, which is what this loop
+// computes in one pass. A craft with no map (an empty rect), a point outside
+// its box and a point on the sun side of it all contribute nothing.
+//
+// **`ndc.y` is up, and a map's row 0 is its top.** `oag_core::math::
+// camera`'s projections are glam's `rh::proj::directx` pair, which is
+// Y-up NDC with a `0..1` depth (glam's own `camera/rh/proj.rs` says so),
+// and the caster pass rasterises `ndc.y = +1` into texel row 0 like any
+// wgpu render target. So the lookup is `0.5 - ndc.y * 0.5`. The other
+// sign mirrors the map about its own horizontal axis, and that is a bug
+// that hides itself: a caster near the middle still lands near the
+// middle, and only the *side* the shadow falls on is wrong - which, for
+// a low sun, reads as the shadow sitting on the wrong side of the craft
+// and its silhouette turning the wrong way as the craft turns. Pinned by
+// `tests/shadow_map_coverage.rs`, which reads a caster's texel back
+// through this same formula.
 //
 // **A projective sample of a coverage map, not a depth compare** - which is
 // what Wipeout HD's own track material does: `TXP R1.x, f[TC0] unit2`, then
 // `1 - R1.x`, with nothing compared against anything. See
 // `mesh_render::ShadowMap`.
+fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
+    let atlas = vec2<f32>(textureDimensions(shadow_tex));
+    var open = 1.0;
+    for (var i = 0; i < 8; i = i + 1) {
+        // A craft with no map has a zero radius (`CraftShadow::NONE`), so this
+        // skips it too. Member by member rather than the whole record: a road
+        // point near no craft reads only the centre.
+        // Most road is far from most craft: one subtract and one dot reject it
+        // before the projection's twelve multiplies. The sphere holds the whole
+        // slab (`CRAFT_CULL_RADIUS` in `shadow::map`), so this skips only what
+        // the slab would, and is the original's own "track chunks within 50
+        // units of the ship" in form.
+        let centre = scene.craft_shadow[i].centre;
+        let offset = world - centre.xyz;
+        if dot(offset, offset) > centre.w {
+            continue;
+        }
+        let craft = scene.craft_shadow[i];
+        // Orthographic, so `w` is 1 and the divide is the identity.
+        let ndc = (craft.matrix * vec4<f32>(world, 1.0)).xyz;
+        if ndc.z < CRAFT_SLAB_NEAR || ndc.z > CRAFT_SLAB_FAR
+            || abs(ndc.x) >= 1.0 || abs(ndc.y) >= 1.0 {
+            continue;
+        }
+        let local = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+        // Kept half a texel inside the craft's own square, so the filtered
+        // read never takes a neighbouring craft's texels from the atlas.
+        let half_texel = 0.5 / (craft.rect.zw * atlas);
+        let uv = craft.rect.xy + clamp(local, half_texel, vec2<f32>(1.0) - half_texel) * craft.rect.zw;
+        // Level 0 named rather than derived: the map has one mip, so the two
+        // read the same texel, and Chrome's WGSL compiler refuses an implicit
+        // derivative here because this loop is not uniform (naga allows it).
+        open = open * (1.0 - textureSampleLevel(shadow_tex, shadow_sampler, uv, 0.0).r);
+    }
+    return 1.0 - open;
+}
+
+// How much of this surface point the shadow map covers, `0.0` to `1.0`: the
+// craft maps' union in the coverage mode, the `mapped` tier's single compared
+// depth map in the depth mode.
 //
-// Outside the map's own frustum the sample is clamped to its border, which the
+// Outside a map's own frustum the sample is clamped to its border, which the
 // caster pass leaves at zero, so a surface the map does not cover is lit.
 fn shadow_coverage(world: vec3<f32>) -> f32 {
     if scene.shadow.strength <= 0.0 {
@@ -54,6 +131,9 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     if receives_shadow < allowed {
         return 0.0;
     }
+    if coverage_mode {
+        return craft_shadow_coverage(world);
+    }
     let clip = scene.shadow.matrix * vec4<f32>(world, 1.0);
     if clip.w <= 0.0 {
         return 0.0;
@@ -63,30 +143,13 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     if ndc.z < 0.0 || ndc.z > 1.0 {
         return 0.0;
     }
-    // **`ndc.y` is up, and the map's row 0 is its top.** `oag_core::math::
-    // camera`'s projections are glam's `rh::proj::directx` pair, which is
-    // Y-up NDC with a `0..1` depth (glam's own `camera/rh/proj.rs` says so),
-    // and the caster pass rasterises `ndc.y = +1` into texel row 0 like any
-    // wgpu render target. So the lookup is `0.5 - ndc.y * 0.5`. The other
-    // sign mirrors the map about its own horizontal axis, and that is a bug
-    // that hides itself: a caster near the middle still lands near the
-    // middle, and only the *side* the shadow falls on is wrong - which, for
-    // a low sun, reads as the shadow sitting on the wrong side of the craft
-    // and its silhouette turning the wrong way as the craft turns. Pinned by
-    // `tests/shadow_map_coverage.rs`, which reads a caster's texel back
-    // through this same formula.
+    // The same `0.5 - ndc.y * 0.5` flip `craft_shadow_coverage` documents.
     let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
     // Outside the map's own rectangle the clamped sampler would smear its
     // border across the whole circuit, so a receiver the map does not cover is
     // lit rather than edge-coloured.
     if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 {
         return 0.0;
-    }
-    if coverage_mode {
-        // Level 0 named rather than derived: the map has one mip, so the two
-        // read the same texel, and Chrome's WGSL compiler refuses an implicit
-        // derivative here because this branch is not uniform (naga allows it).
-        return textureSampleLevel(shadow_tex, shadow_sampler, uv, 0.0).r;
     }
     // The depth mode: four taps a texel apart, each compared, and their mean.
     // **The softening is in the comparison, not in the sample** - filtering

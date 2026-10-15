@@ -690,6 +690,40 @@ impl ShadowMap {
     }
 }
 
+/// One craft's shadow map on the road: Wipeout HD's `shadowMatrix` for a ship
+/// and the part of the coverage atlas that ship's map was rendered into.
+///
+/// The original keeps one orthographic map per ship, sized by the ship's
+/// distance rank (`docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md`),
+/// and redraws the track chunks near each ship through its own map. This
+/// renderer's equivalent is one atlas holding every craft's map and a loop in
+/// the receiver over these records; see `oag_render::shadow::map`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CraftShadow {
+    /// World to the craft's map clip space (orthographic, looking along the
+    /// sun at the craft).
+    pub matrix: [[f32; 4]; 4],
+    /// The craft's map within the atlas, in the atlas's `0..1` coordinates:
+    /// `x`, `y` the top-left corner and `z`, `w` the width and height. A
+    /// zero width is "this craft has no map".
+    pub rect: [f32; 4],
+    /// The craft's centre in `xyz` and the squared radius of the sphere around
+    /// it that holds everything its map can shadow in `w`: a point outside it
+    /// is skipped before the projection, which is where the receiver's cost
+    /// goes (a road pixel is far from almost every craft).
+    pub centre: [f32; 4],
+}
+
+impl CraftShadow {
+    /// A craft with no map: the receiver skips it.
+    pub const NONE: Self = Self {
+        matrix: [[0.0; 4]; 4],
+        rect: [0.0; 4],
+        centre: [0.0; 4],
+    };
+}
+
 /// The frame's shadow maps, and the one other per-frame picture a surface
 /// reads, bound together in the scene group - see `shadow_map::resources` for
 /// what stands in where one is `None`.
@@ -798,6 +832,11 @@ pub struct Scene {
     /// a Wipeout HD hull is bound. Only the layer a drawable's own uniform
     /// names is read; the identity everywhere else.
     pub sun_occlusion: [[[f32; 4]; 4]; super::shadow_map::OCCLUSION_LAYERS as usize],
+    /// Each craft's own shadow map on the road: its sun-view projection and
+    /// where its map sits in the coverage atlas. [`CraftShadow::NONE`] for a
+    /// craft with no map, which the receiver skips. Read in
+    /// [`ShadowMap::COVERAGE`] mode only.
+    pub craft_shadow: [CraftShadow; super::shadow_map::OCCLUSION_LAYERS as usize],
     /// World to the behind-the-glass target's clip space - the original's
     /// `refractProject`, which the tunnel glass projects a point through to
     /// find where it reads that target (`mesh::rcs::refraction`). The
@@ -862,6 +901,7 @@ impl Scene {
             spu_lights: super::SpuLights::none(),
             sun_occlusion: [Mat4::IDENTITY.to_cols_array_2d();
                 super::shadow_map::OCCLUSION_LAYERS as usize],
+            craft_shadow: [CraftShadow::NONE; super::shadow_map::OCCLUSION_LAYERS as usize],
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
             quake: QuakeWave::off(),
         }
@@ -891,6 +931,14 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::offset_of!(Scene, sun_occlusion).is_multiple_of(16),
     "and Scene.sun_occlusion, an array of mat4x4"
+);
+const _: () = assert!(
+    std::mem::size_of::<CraftShadow>() == 96,
+    "shaders/types.wesl's CraftShadow is a mat4x4 and two vec4s"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, craft_shadow).is_multiple_of(16),
+    "and Scene.craft_shadow, an array of those"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, refraction).is_multiple_of(16),

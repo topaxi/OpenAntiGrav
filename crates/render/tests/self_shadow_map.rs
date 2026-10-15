@@ -17,7 +17,7 @@ use oag_mesh::mesh::GpuVertex;
 use oag_mesh::mesh_render::OCCLUSION_LAYERS;
 use oag_mesh::mesh_render::material_bind_group_layout;
 use oag_render::shadow::map::{Caster, Fit};
-use oag_render::shadow::occlusion::{Maps, REACH, Track};
+use oag_render::shadow::occlusion::{Maps, Track};
 use oag_render::shadow::self_shadow::SIZE;
 
 fn vertex(position: Vec3) -> GpuVertex {
@@ -162,11 +162,7 @@ fn a_wing_shadows_the_fuselage_under_it_and_the_rest_of_the_hull_is_lit() {
     assert_eq!(drawn, 1);
     assert_eq!(maps.self_shadow().drawn(2), 1);
     let matrix = maps.matrix(2);
-    assert_eq!(
-        matrix,
-        fit.matrix_reaching(REACH),
-        "the two maps share a matrix"
-    );
+    assert_eq!(matrix, fit.craft_matrix(), "the two maps share a matrix");
 
     let depth = maps.self_shadow().read_back(&device, &queue, 2);
     assert!(
