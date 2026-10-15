@@ -1023,7 +1023,7 @@ done
 
 What the blur per view (rule 3) costs, on the Intel Core Ultra 7 265H notebook, release `perf-probe`
 builds, `taskset -c 0-5`, the gate lock held, 1280x800, Pulse PSP 16_Track and Wipeout HD (Talon's
-Junction), tick 1800, `--motion-blur medium` (the profile's default gather resolution), the
+Junction, `racing on` line read), tick 1800, `--motion-blur medium` (the profile's default gather resolution), the
 single-frame bench of "Per-view glow" (`OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60`). **Before**
 is `main` at the merge of `split-bloom` (a split drew no blur); **after** is this branch.
 Five rounds, before and after interleaved and the order alternating, **median of the five
@@ -1056,13 +1056,32 @@ frame in us (CPU in the notes):
   measured on the Deck at 2.4 ms (Pulse PSP EU, profile `medium`, half resolution, 2560x1440
   windowed) and 4.7 ms (Pulse PS2 EU, render scale 150, full resolution): expect roughly that
   again on top of a split frame on the Deck's panel, to be read on the Deck (below).
+- **The whole race, `just bench-render` (`--views 1,2h,2v --size 1280x800 --motion-blur medium`,
+  `--binary` before and after, iGPU, three rounds interleaved, load average 1.3 to 15.6 at the
+  start of a run, which other members' builds caused)**, frame p50 in us, per round: Pulse 2h
+  5,076 / 4,895 / 5,093 before and 6,132 / 5,554 / 5,814 after (+737 at the median, after slower
+  in all three rounds); Pulse 2v **unreadable** (5,189 / 3,423 / 5,035 before, 4,122 / 5,871 /
+  4,072 after: the same binary reads two different machines); HD 2h 6,694 against 6,758 (+64) and
+  HD 2v 6,703 against 7,132 (+429). The one-view rows are an A/A pair (byte-identical frames):
+  Pulse 3,246 against 2,686 and HD 5,572 against 5,701, so the run-to-run spread on this hybrid
+  CPU is 0.1 to 0.6 ms, the size of the cost being measured. **The single-frame bench is the
+  headline for that reason**: 60-frame medians, five interleaved rounds, and the iGPU's
+  pipelined figure repeats to a few tens of us there. The whole-race Pulse 2h agrees with it
+  (+0.7 ms).
 - **Not measured on the Deck**: it was not reachable on 2026-10-15. Every number above is
   this notebook's.
 
-**Looked at** (`--screenshot`, 1280x800, `--ticks 1200` to `1500`, `--hold cross` so the first
-seat flies and the others sit on the grid at 0 km/h; blur off against `high` of the same
-frame): Pulse PSP `2h`, `2v` and four views, HD `2h` and `2v`, Pure, Pulse PS2, 2048 and Omega `2h`.
-In every one the moving seats' views are streaked along their own motion (the track
+**Looked at** (`--screenshot`, 1280x800, blur off against `high` of the same frame). Two sets.
+*Racing speed*, `--autopilot` (every seat flies) at tick 2,600: Pulse PSP 2h at 425 and 449
+km/h, Pulse PSP 2v, HD 2h and 2v: both views streak along their own travel, and **at the cut**
+(crops at 2x to 3x of the 2 pixel gap) a heavy smear stops at the black seam: nothing of one view's
+colour crosses it (the crops looked at: Pulse 2h, both sides of the seam, and HD 2v). Pulse PSP and HD again with `--msaa 4x`
+(the multisampled velocity and depth, read through the sample-0 prepare): the same picture.
+*One seat moving*, `--hold cross` at tick 900 to 1,500 (the first seat is driven, the rest sit on the
+grid at 0 km/h), which is the proof that a view at rest is untouched: Pulse PSP `2h`, `2v` and
+four views (two seats move there, 65 and 25 km/h, and the two at 0 km/h are untouched; the
+readouts say which), HD `2h` and `2v`, Pure, Pulse PS2, 2048 and Omega `2h`.
+In the second set the moving seats' views are streaked along their own motion (the track
 edges and the gantries) and the views at rest are not touched. The difference between the blur-off
 and blur-`high` pictures in a still view: **zero pixels** on Pure; **at most one level on one channel**
 (sum of channel differences 3, no pixel above 8) on HD, 2048 and Omega; and on Pulse PSP and PS2
