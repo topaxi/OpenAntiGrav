@@ -325,3 +325,29 @@ pub(super) fn run_split(
         );
     }
 }
+
+/// `OAG_RESOLVE_BENCH=N` on a `--presented` capture: the presentation resolve (`resolve`
+/// encodes the upscaler and the blit) run `N` times over the captured frame, each submitted and
+/// waited for, so a reading is its CPU and GPU serialised. What the single-frame bench above
+/// leaves out, and what FSR 3 per split view costs (`docs/tools/render-bench.md`).
+pub(super) fn run_resolve(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    mut resolve: impl FnMut(&mut wgpu::CommandEncoder),
+) {
+    let Some(count) = runs("OAG_RESOLVE_BENCH") else {
+        return;
+    };
+    let mut samples = Vec::with_capacity(count);
+    for _ in 0..count {
+        let start = std::time::Instant::now();
+        let mut encoder = encoder(device);
+        resolve(&mut encoder);
+        queue.submit(Some(encoder.finish()));
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the GPU");
+        samples.push(start.elapsed().as_secs_f64() * 1e6);
+    }
+    report("presentation resolve (serialised: CPU + GPU)", &mut samples);
+}

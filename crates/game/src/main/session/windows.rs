@@ -629,8 +629,9 @@ impl Session {
     /// resolve, HUD, bloom, grade. **A window of one seat has its own camera history**
     /// (`Scene::render_window`), so motion blur, camera jitter and the temporal upscaler (FSR
     /// 3.1, which keeps its history in this window's framebuffer) run per window; **a window of
-    /// several seats is a split**, whose views are N cameras in one frame, and draws none of
-    /// them (FSR 3.1 takes the rung down there, as it does on a menu frame). Chosen, not measured.
+    /// several seats is a split**, whose views are N cameras in one frame: each view blurs,
+    /// jitters and is resolved by FSR 3.1 on its own seat's history (a chain per seat in this
+    /// window's framebuffer). Chosen, not measured.
     fn encode_screen_race(
         &mut self,
         window: usize,

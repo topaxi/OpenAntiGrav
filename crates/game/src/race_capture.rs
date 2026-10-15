@@ -789,6 +789,7 @@ pub fn capture(
                     &spectrum,
                     oag_raceplay::WindowEffects {
                         motion_blur: options.motion_blur,
+                        camera_jitter,
                         ..Default::default()
                     },
                     &mut [],
@@ -956,6 +957,7 @@ pub fn capture(
                         &spectrum,
                         oag_raceplay::WindowEffects {
                             motion_blur: options.motion_blur,
+                            camera_jitter,
                             ..Default::default()
                         },
                         timers,
@@ -1061,6 +1063,7 @@ pub fn capture(
                 // The blur per view, as the primer above set it up.
                 oag_raceplay::WindowEffects {
                     motion_blur: options.motion_blur,
+                    camera_jitter,
                     ..Default::default()
                 },
                 &mut [],
@@ -1136,21 +1139,25 @@ pub fn capture(
             // path has to be reachable here too, not just from the window.
             let temporal = temporal_supported
                 .then(|| scene.temporal(window.unwrap_or(0)))
-                .flatten()
-                .map(|(depth, velocity, frame)| oag_present::upscale::Temporal {
-                    depth,
-                    velocity,
-                    sample_count: scene.sample_count(),
-                    camera: frame.camera,
-                    jitter: frame.jitter,
-                    phase_count: frame.phase_count,
-                    reset: frame.reset,
-                });
+                .flatten();
             // No timer to abandon a claim on: a capture has no frame loop to pace
             // and no `PassTimer` to pace it with - that is per-window state the
             // session owns. The `false` this can return on a build failure is
             // exactly the picture already carrying on down the ladder; nothing
             // here claimed a slot for it to give back.
+            if cfg!(feature = "perf-probe") {
+                bench::run_resolve(&device, &queue, |encoder| {
+                    let _ = framebuffer.resolve_scene(
+                        &device,
+                        &queue,
+                        encoder,
+                        rect,
+                        &state.presentation,
+                        temporal.clone(),
+                        None,
+                    );
+                });
+            }
             let _ = framebuffer.resolve_scene(
                 &device,
                 &queue,

@@ -268,6 +268,7 @@ impl Scene {
         // upscaler; the blur subtracts the shake itself, `blur_shake` below.
         if self.layer.get() == Layer::Whole {
             self.retire_split_histories();
+            self.note_split_views(0, &[]);
         }
         let prev = MotionState::advance(
             &self.history().motion,

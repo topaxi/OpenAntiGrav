@@ -256,6 +256,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
                 &spectrum,
                 oag_raceplay::WindowEffects {
                     motion_blur: options.motion_blur,
+                    camera_jitter,
                     ..Default::default()
                 },
                 &mut timers,

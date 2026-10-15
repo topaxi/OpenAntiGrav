@@ -72,6 +72,26 @@ fn frame(
     players: Option<u8>,
     msaa: &str,
 ) -> Vec<[u8; 4]> {
+    frame_with(
+        image,
+        scratch,
+        name,
+        players,
+        msaa,
+        &["--render-scale", "100"],
+    )
+}
+
+/// [`frame`] with `scale` in place of a full-size render: the render scale and what resolves
+/// the frame.
+fn frame_with(
+    image: &Path,
+    scratch: &Path,
+    name: &str,
+    players: Option<u8>,
+    msaa: &str,
+    scale: &[&str],
+) -> Vec<[u8; 4]> {
     let out = scratch.join(format!("{name}.png"));
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
@@ -84,7 +104,8 @@ fn frame(
             "--autopilot",
         ])
         .args(["--size", &format!("{}x{}", SIZE.0, SIZE.1)])
-        .args(["--render-scale", "100", "--msaa", msaa])
+        .args(scale)
+        .args(["--msaa", msaa])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "600"])
         .arg("--screenshot")
@@ -217,6 +238,42 @@ fn four_views_survive_a_multisample_resolve() {
         (w - col, h - half, col, half),
     ];
     distinct_views("four, msaa", &four, &quads);
+}
+
+/// FSR 3.1 over a split resolves each view from its own rectangle of the scene: two views at
+/// half scale, presented, each a picture of its own and the gap between them cleared. A chain
+/// that read its view from the target's corner instead (no input offset) would draw the top
+/// view twice. The rectangles are the scene's (480 x 272, the layout's 2 pixel gap) mapped onto
+/// the presented frame, the gap with them.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn fsr3_resolves_each_view_from_its_own_rectangle() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-split-fsr3-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let two = frame_with(
+        &image,
+        &scratch,
+        "two",
+        Some(2),
+        "off",
+        &[
+            "--render-scale",
+            "50",
+            "--reconstruction",
+            "fsr3",
+            "--presented",
+        ],
+    );
+    std::fs::remove_dir_all(&scratch).ok();
+    let w = SIZE.0;
+    distinct_views("fsr3 two", &two, &[(0, 0, w, 270), (0, 274, w, 270)]);
+    assert!(
+        drawn(&pixels(&two, (0, 271, w, 2))) < 0.01,
+        "the gap between two views is clear colour"
+    );
 }
 
 /// Two views, top and bottom, each holding a picture of its own.

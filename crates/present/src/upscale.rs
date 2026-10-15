@@ -101,7 +101,8 @@ mod targets;
 mod temporal;
 
 pub use screen::{Composite, ScreenFrame};
-pub use temporal::{Temporal, jitter_phases};
+pub use temporal::{Temporal, ViewFrame, jitter_phases};
+mod views;
 
 use blit::{Grade, Source, bind, grade_buffer, resolved_source};
 // `pub` rather than `pub(crate)`, and re-exported rather than merely used:
@@ -154,6 +155,10 @@ pub struct Framebuffer {
     /// same reason `fsr1` is, and more so: this one is eight shader
     /// compilations and a dozen textures.
     fsr3: Option<Result<fsr3::Fsr3>>,
+    /// A chain per split-screen seat, each a [`fsr3::Fsr3::sibling`] of [`Self::fsr3`] with a
+    /// history and intermediates of its own; built the first frame a split resolves that seat,
+    /// dropped by the first frame that resolves a whole picture (`views.rs`).
+    fsr3_views: Vec<Option<fsr3::Fsr3>>,
     /// What FSR 3.1's intermediates cost, last time it was reported.
     ///
     /// **Held only so the line is printed once per allocation** rather than
@@ -307,6 +312,7 @@ impl Framebuffer {
             fxaa: None,
             smaa: None,
             fsr3: None,
+            fsr3_views: Vec::new(),
             fsr3_sizes: None,
             allocation: size,
             // The whole target to begin with, which is what keeps every caller
@@ -445,6 +451,32 @@ impl Framebuffer {
         //
         // [ADR-0012]: ../../../docs/architecture/adr/0012-wgsl-upscalers-not-native-fidelityfx.md
         let temporal = temporal.filter(|_| presentation.reconstruction == Reconstruction::Fsr3);
+
+        // **A split screen resolves each view with a chain of its own**, into the view's
+        // rectangle of the presentation target (`views.rs`). Should its chains not build, the
+        // frame falls down the ladder as a whole picture with no temporal input: one view's
+        // camera and offset do not describe the others'.
+        let split = temporal
+            .as_ref()
+            .is_some_and(|temporal| temporal.frames.iter().any(|frame| frame.view.is_some()));
+        if split {
+            if let Some(temporal) = &temporal
+                && self.resolve_views(device, queue, encoder, rect, presentation, temporal)
+            {
+                return false;
+            }
+        } else {
+            self.fsr3_views.clear();
+        }
+        let temporal = temporal.filter(|_| !split).and_then(|temporal| {
+            let frame = *temporal.frames.first()?;
+            Some((
+                temporal.depth,
+                temporal.velocity,
+                temporal.sample_count,
+                frame,
+            ))
+        });
         let effective = match (presentation.reconstruction, temporal.is_some()) {
             (Reconstruction::Fsr3, true) => Reconstruction::Fsr3,
             // Every other reading of `fsr3` falls one rung: a menu frame with
@@ -461,7 +493,7 @@ impl Framebuffer {
         // return of its own for a missing allocation, and a flag set on the
         // way in would have claimed that frame as measured.
         let mut upscale_encoded = false;
-        let temporally_resolved = temporal.and_then(|temporal| {
+        let temporally_resolved = temporal.and_then(|(depth, velocity, sample_count, frame)| {
             let fsr = self.fsr3.get_or_insert_with(|| fsr3::Fsr3::new(device));
             let fsr = match fsr {
                 Ok(fsr) => fsr,
@@ -486,20 +518,21 @@ impl Framebuffer {
                     // linearises, so there is no linear light here to hand it -
                     // see `docs/rendering/fsr3.md`.
                     colour: &self.perceptual,
-                    depth: temporal.depth,
-                    velocity: temporal.velocity,
+                    depth,
+                    velocity,
                     dispatch: fsr3::Dispatch {
                         render: extent,
+                        input_offset: (0, 0),
                         max_render: allocation,
                         upscale: output_size,
-                        jitter: temporal.jitter,
-                        phase_count: temporal.phase_count,
-                        camera: temporal.camera,
+                        jitter: frame.jitter,
+                        phase_count: frame.phase_count,
+                        camera: frame.camera,
                         // Inert: the only upstream reader of it is the
                         // auto-exposure smoothing this port does not have.
                         delta_time: 1.0 / 60.0,
-                        reset: temporal.reset,
-                        sample_count: temporal.sample_count,
+                        reset: frame.reset,
+                        sample_count,
                         sharpness: fsr1::Sharpness::stops(presentation.sharpness),
                     },
                 },
@@ -939,6 +972,19 @@ impl Framebuffer {
         rect: (f32, f32, f32, f32),
         source: Option<&wgpu::BindGroup>,
     ) {
+        self.present_view(encoder, surface, rect, source, true);
+    }
+
+    /// [`Self::present`] into one rectangle of `surface`, clearing the rest of it first when
+    /// `clear` and keeping what is there otherwise: a split screen's views, the first clearing.
+    fn present_view(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        surface: &wgpu::TextureView,
+        rect: (f32, f32, f32, f32),
+        source: Option<&wgpu::BindGroup>,
+        clear: bool,
+    ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("upscale"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -946,7 +992,11 @@ impl Framebuffer {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load: if clear {
+                        wgpu::LoadOp::Clear(wgpu::Color::BLACK)
+                    } else {
+                        wgpu::LoadOp::Load
+                    },
                     store: wgpu::StoreOp::Store,
                 },
             })],

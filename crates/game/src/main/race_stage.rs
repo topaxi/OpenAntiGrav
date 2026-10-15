@@ -252,8 +252,8 @@ impl RaceStage {
         // A split screen draws one scene per view, each submitted on its own, so
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. The blur runs once per view after the last, its
-        // timestamp pair bracketing every chain; no scene timer and no jitter (one
-        // camera's).
+        // timestamp pair bracketing every chain; no scene timer. Each view jitters on its
+        // seat's own sequence, and the upscaler resolves each view with a chain of its own.
         if self.race.viewport_count() > 1 {
             return self.scene.render_viewports(
                 gpu.device(),
@@ -269,6 +269,7 @@ impl RaceStage {
                 zone_spectrum,
                 race::WindowEffects {
                     motion_blur,
+                    camera_jitter,
                     blur_timestamps,
                     ..Default::default()
                 },
@@ -366,17 +367,7 @@ impl RaceStage {
     ///
     /// `window` is whose frame: 0 for a race that is not dealt across windows, and for window 1.
     pub(crate) fn temporal(&self, window: usize) -> Option<upscale::Temporal<'_>> {
-        self.scene
-            .temporal(window)
-            .map(|(depth, velocity, frame)| upscale::Temporal {
-                depth,
-                velocity,
-                sample_count: self.scene.sample_count(),
-                camera: frame.camera,
-                jitter: frame.jitter,
-                phase_count: frame.phase_count,
-                reset: frame.reset,
-            })
+        self.scene.temporal(window)
     }
 
     /// Reads the player's own outcome so far, straight off [`race::Race`]'s

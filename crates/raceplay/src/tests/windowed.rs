@@ -367,7 +367,7 @@ fn each_window_keeps_the_history_of_its_own_camera() {
                     ..Default::default()
                 },
             );
-            let (_, _, record) = scene.temporal(window).expect("a frame was recorded");
+            let record = scene.temporal(window).expect("a frame was recorded").frames[0];
             assert_eq!(
                 record.jitter,
                 oag_post::jitter::offset_pixels(frame, phases),

@@ -175,6 +175,7 @@ impl Scene {
                     velocity: &velocity,
                     dispatch: Dispatch {
                         render,
+                        input_offset: (0, 0),
                         max_render: render,
                         upscale,
                         // Zero unless asked for, so that nothing in a fixture

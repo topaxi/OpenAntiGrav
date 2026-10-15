@@ -30,7 +30,11 @@ use oag_post::fsr3;
 /// question - "is this frame part of a moving scene, and what were its
 /// camera and offset" - and because a caller that can answer part of it can
 /// answer all of it.
-#[derive(Debug, Clone, Copy)]
+///
+/// **One [`ViewFrame`] per picture the frame holds**: one for a whole picture, one per view of
+/// a split screen, each with the seat whose history it is and its rectangle of the scene target.
+/// A split resolves each view with a chain of its own (`Framebuffer::resolve_scene`).
+#[derive(Debug, Clone)]
 pub struct Temporal<'a> {
     /// The scene's depth attachment.
     pub depth: &'a wgpu::TextureView,
@@ -44,7 +48,17 @@ pub struct Temporal<'a> {
     /// built with, and the two differ for a whole race after the row moves -
     /// which is exactly what its `restart_required` note is about.
     pub sample_count: u32,
-    /// The camera this frame was drawn with.
+    /// What each picture was drawn with.
+    pub frames: Vec<ViewFrame>,
+}
+
+/// What one picture of a frame was drawn with: the whole frame, or one view of a split.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewFrame {
+    /// The seat the view follows and its rectangle of the scene target, `x, y, width, height`
+    /// in pixels; `None` for a whole picture.
+    pub view: Option<(usize, (u32, u32, u32, u32))>,
+    /// The camera this picture was drawn with.
     pub camera: fsr3::Camera,
     /// The sub-pixel offset this frame was drawn with, in pixels.
     pub jitter: (f32, f32),

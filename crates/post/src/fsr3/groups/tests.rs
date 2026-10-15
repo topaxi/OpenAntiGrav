@@ -16,6 +16,7 @@ use super::*;
 fn dispatch(render: (u32, u32), upscale: (u32, u32)) -> Dispatch {
     Dispatch {
         render,
+        input_offset: (0, 0),
         max_render: render,
         upscale,
         jitter: (0.25, -0.125),

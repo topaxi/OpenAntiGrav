@@ -68,6 +68,7 @@ mod split_bloom;
 mod split_blur;
 mod split_exposure;
 mod split_shadows;
+mod split_temporal;
 mod split_windows;
 mod thrust_chase;
 mod title_effects;

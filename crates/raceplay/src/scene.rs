@@ -413,6 +413,10 @@ pub struct Scene {
     /// Whether the split-screen seats' histories hold a frame the last split drew, so the
     /// first single-view frame after it forgets them ([`Scene::retire_split_histories`]).
     split_live: std::cell::Cell<bool>,
+    /// The views each window's last split drew, `(seat, rectangle of the scene target)`, and
+    /// nothing for a window whose last frame was a picture of its own: what [`Scene::temporal`]
+    /// answers per view.
+    split_views: std::cell::RefCell<Vec<Vec<motion::SplitView>>>,
     /// The frame count a seat's split state is stamped with: one more for every draw that
     /// starts a frame (one that does the frame's shared work, [`Scene::begin_split_frame`]).
     split_frame: std::cell::Cell<u32>,
@@ -1012,6 +1016,7 @@ impl Scene {
                 .collect(),
             history: std::cell::Cell::new(0),
             split_live: std::cell::Cell::new(false),
+            split_views: std::cell::RefCell::default(),
             split_frame: std::cell::Cell::new(0),
             seat_drawn: Default::default(),
             split_recording: std::cell::Cell::new(Recording::default_for_target()),

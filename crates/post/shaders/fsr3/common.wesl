@@ -53,8 +53,9 @@ struct Fsr3Constants {
     min_disocclusion_accumulation: f32,
     // Ours, in upstream's padding - see `constants::Constants::rcas_sharpness`.
     rcas_sharpness: f32,
-    _pad0: f32,
-    _pad1: f32,
+    // Ours too, in the rest of the padding: where the render rectangle starts in the input
+    // textures - see `constants::Constants::input_offset`.
+    input_offset: vec2<i32>,
 }
 
 @group(0) @binding(0) var<uniform> constants: Fsr3Constants;
@@ -119,6 +120,7 @@ fn shading_change_scale() -> f32 { return constants.shading_change_scale; }
 fn accumulation_added_per_frame() -> f32 { return constants.accumulation_added_per_frame; }
 fn min_disocclusion_accumulation() -> f32 { return constants.min_disocclusion_accumulation; }
 fn rcas_sharpness() -> f32 { return constants.rcas_sharpness; }
+fn input_offset() -> vec2<i32> { return constants.input_offset; }
 
 // `Exposure()`, and **a constant one rather than a resource**.
 //

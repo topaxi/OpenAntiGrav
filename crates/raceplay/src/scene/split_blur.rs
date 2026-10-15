@@ -86,7 +86,7 @@ impl Scene {
                 omega.retire_seats();
             }
             for history in &self.histories[motion::MAX_HISTORIES..] {
-                history.motion.borrow_mut().take();
+                history.forget();
             }
             for drawn in &self.seat_drawn {
                 drawn.set(None);
@@ -118,10 +118,7 @@ impl Scene {
             if let Some(omega) = &self.omega {
                 omega.retire_seat(seat);
             }
-            self.histories[motion::split_history(seat)]
-                .motion
-                .borrow_mut()
-                .take();
+            self.histories[motion::split_history(seat)].forget();
         }
     }
 }
