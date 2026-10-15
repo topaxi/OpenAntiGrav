@@ -33,6 +33,9 @@ fn main() -> Result<()> {
         std::fs::write(out.join(format!("{id}.wgsl")), preset.wgsl())?;
         written += 1;
     }
-    println!("screen_filters_wgsl: wrote {written} presets to {}", out.display());
+    println!(
+        "screen_filters_wgsl: wrote {written} presets to {}",
+        out.display()
+    );
     Ok(())
 }
