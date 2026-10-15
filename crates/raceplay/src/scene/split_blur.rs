@@ -71,6 +71,10 @@ impl Scene {
     /// pose from before the gap and smear it (capped at the blur's reach, but a visible streak).
     pub(super) fn retire_split_histories(&self) {
         if self.split_live.replace(false) {
+            // HD's per-seat adaptation goes with them (`split_exposure`).
+            if let Some(hd) = &self.hd {
+                hd.retire_seats();
+            }
             for history in &self.histories[motion::MAX_HISTORIES..] {
                 history.motion.borrow_mut().take();
             }

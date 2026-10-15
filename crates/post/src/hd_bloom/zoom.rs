@@ -22,17 +22,6 @@ impl Chain {
             .transpose()
     }
 
-    /// How far the glow reaches across and down, as a share of what the circuit
-    /// authors: the blurs' tap spacing is scaled by it. **`(1.0, 1.0)` for every whole
-    /// picture, which leaves the bits as they were** (`x * 1.0` is `x`). A split screen draws views of a fraction
-    /// of the frame through one chain, and the authored reach is a fraction of the
-    /// frame, so left alone a view's glow reaches twice as far across a craft half the
-    /// size; the caller sets the views' own scale for the frame, then puts `(1.0, 1.0)` back.
-    /// **Chosen, not measured.** Takes effect on the next [`Chain::run`].
-    pub fn set_reach(&self, reach: (f32, f32)) {
-        self.reach.set(reach);
-    }
-
     /// This frame's pulses, read from the race. `None`, or a chain built with no
     /// ring, draws nothing of it. Set before [`Chain::run`], every frame: a frame
     /// that does not set it keeps the last one's, which is why the caller clears

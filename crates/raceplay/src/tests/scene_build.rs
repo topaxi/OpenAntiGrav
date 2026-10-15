@@ -139,6 +139,19 @@ pub(super) fn scene_over_msaa(
     liveries: &[Livery],
     msaa: oag_display::display::Msaa,
 ) -> Scene {
+    scene_over_post(device, queue, track, liveries, msaa, None)
+}
+
+/// [`scene_over_msaa`] with Wipeout HD's post chain, as a circuit that authors an `HDR and
+/// Bloom` block builds it.
+pub(super) fn scene_over_post(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+    msaa: oag_display::display::Msaa,
+    hd_bloom: Option<oag_post::hd_bloom::Params>,
+) -> Scene {
     Scene::new(
         device,
         queue,
@@ -174,7 +187,7 @@ pub(super) fn scene_over_msaa(
         Vec::new(),
         mesh_render::Light::stand_in(),
         None,
-        None,
+        hd_bloom,
         None,
         None,
         Vec::new(),

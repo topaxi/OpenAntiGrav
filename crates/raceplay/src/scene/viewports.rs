@@ -458,17 +458,19 @@ impl Scene {
         self.reuse_frame_work.set(false);
         self.history.set(0);
         race.reset_viewpoint();
+        // HD's chain, one run per view with its own adaptation (`split_exposure`).
+        let hd_ran = self.run_split_hd(device, queue, view, slots, rects, area);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),
         });
-        let split_post = self.encode_split_post(device, queue, &mut encoder, view, rects, area);
+        let split_post = self.encode_split_post(device, queue, &mut encoder, view, area);
         // Pulse's glow, one lane per view, read from the finished picture: every view is in
         // `view` now, and the composite waits for the HUD as a single view's does.
         let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
         if split_post || glow {
-            stats.hd_bloom_encoded = split_post && self.hd.is_some();
             queue.submit(Some(encoder.finish()));
         }
+        stats.hd_bloom_encoded = hd_ran;
         // Motion blur, last, as a single view's is: after the glow's bright pass (which the
         // composite adds back over the blurred frame after the HUD) and after HD's and
         // Omega's chain, before the HUD. See `split_blur`.
@@ -484,27 +486,21 @@ impl Scene {
         stats
     }
 
-    /// HD's or Omega's chain, once, over the whole `area` the views were drawn
-    /// into. Returns whether a chain ran: Pulse, Pure and 2048 draw straight into
-    /// the caller's view and have nothing to do here.
+    /// Omega's tone map, once, over the whole `area` the views were drawn into. Returns
+    /// whether it ran: Pulse, Pure and 2048 draw straight into the caller's view, and HD's
+    /// chain runs per view ([`Scene::run_split_hd`]).
     fn encode_split_post(
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        rects: &[(f32, f32, f32, f32)],
         area: (f32, f32, f32, f32),
     ) -> bool {
-        if let Some(hd) = &self.hd {
-            // The glow's reach is authored as a fraction of the whole frame, and a view
-            // of a split shows a fraction of it: scale it by the views' own pixel scale
-            // so the glow keeps its size against what it surrounds. Chosen, not measured.
-            hd.set_reach(super::bloom::mean_reach(area, rects));
-            self.run_hd(queue, encoder, view, area, None, None);
-            hd.set_reach((1.0, 1.0));
-            true
-        } else if let Some(omega) = &self.omega {
+        if self.hd.is_some() {
+            return false;
+        }
+        if let Some(omega) = &self.omega {
             self.run_omega(omega, device, queue, encoder, view, area, false);
             true
         } else {

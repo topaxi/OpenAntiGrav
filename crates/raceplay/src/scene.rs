@@ -29,6 +29,7 @@ mod ribbons;
 mod scratch;
 mod shine;
 mod split_blur;
+mod split_exposure;
 mod viewports;
 mod weapon_models;
 mod weapon_quads;
