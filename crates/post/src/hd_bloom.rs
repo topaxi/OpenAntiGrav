@@ -341,6 +341,10 @@ pub struct Chain {
     /// The drawn rectangle last written into the three uniform buffers, so a
     /// frame that moved nothing writes nothing.
     written: std::cell::Cell<Option<(u32, u32)>>,
+    /// How far the glow reaches, as a share of what [`Params`] authors, and the share
+    /// last written. See [`Chain::set_reach`].
+    reach: std::cell::Cell<(f32, f32)>,
+    written_reach: std::cell::Cell<(f32, f32)>,
     /// The zoom-streak ring, when the title has one, and the pulses it draws
     /// this frame. See `zoom.rs`.
     zoom: Option<super::hd_zoom::Zoom>,
@@ -483,6 +487,8 @@ impl Chain {
             current: std::cell::Cell::new(0),
             fresh: std::cell::Cell::new(true),
             written: std::cell::Cell::new(None),
+            reach: std::cell::Cell::new((1.0, 1.0)),
+            written_reach: std::cell::Cell::new((1.0, 1.0)),
             zoom,
             zoom_frame: std::cell::Cell::new(None),
         })
@@ -780,7 +786,8 @@ impl Chain {
     ) {
         let scene = self.sized.scene_size;
         let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
-        if self.written.get() != Some(viewport) {
+        let reach = self.reach.get();
+        if self.written.get() != Some(viewport) || self.written_reach.get() != reach {
             let rect = super::sub_rectangle(viewport, scene);
             let quarter = level_viewport(self.sized.quarter, viewport, scene);
             let write = |buffer: &wgpu::Buffer, step: [f32; 2]| {
@@ -793,13 +800,17 @@ impl Chain {
             write(&self.sized.buffers[0], [0.0, 0.0]);
             write(
                 &self.sized.buffers[1],
-                [0.0, self.params.vertical_size / quarter.1 as f32],
+                [0.0, self.params.vertical_size / quarter.1 as f32 * reach.1],
             );
             write(
                 &self.sized.buffers[2],
-                [self.params.horizontal_size / quarter.0 as f32, 0.0],
+                [
+                    self.params.horizontal_size / quarter.0 as f32 * reach.0,
+                    0.0,
+                ],
             );
             self.written.set(Some(viewport));
+            self.written_reach.set(reach);
         }
 
         // **The two halves, taken apart here rather than carried into the

@@ -58,7 +58,7 @@ pub const COMPOSITE_FIX: u8 = 0x40;
 /// The composite quad's vertex colour, which `MODULATE` multiplies the texel by.
 pub const COMPOSITE_COLOUR: u8 = 127;
 
-/// The uniform block `ps2_bloom.wesl` reads: 32 bytes, three rows of `vec2`.
+/// The uniform block `ps2_bloom.wesl` reads: 40 bytes, five `vec2`s.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Constants {
@@ -66,16 +66,21 @@ struct Constants {
     uv_max: [f32; 2],
     direction: [f32; 2],
     shift: [f32; 2],
+    /// Where the drawn rectangle's corner sits in the scene target, as a UV
+    /// offset; `(0, 0)` for a rectangle that starts at the target's own corner.
+    /// Only `fs_down` reads it.
+    uv_offset: [f32; 2],
 }
 
-/// The three passes and their two buffers.
+/// One set of buffers and the bind groups over them: a race has one, at the
+/// original's size, and a split screen one more per view, so every view can be
+/// blurred and added back before the next view's downsample overwrites the
+/// buffer ([`Ps2Bloom::prepare_view`]).
 #[derive(Debug)]
-pub struct Ps2Bloom {
-    down: wgpu::RenderPipeline,
-    blur: wgpu::RenderPipeline,
-    composite: wgpu::RenderPipeline,
-    layout: wgpu::BindGroupLayout,
-    sampler: wgpu::Sampler,
+struct Lane {
+    /// The buffers' own size: the original's for a whole picture, a view's share
+    /// of it under a split (`super::bloom::lane_extent`).
+    extent: (u32, u32),
     a: Target,
     b: Target,
     blur_x: wgpu::BindGroup,
@@ -85,6 +90,108 @@ pub struct Ps2Bloom {
     #[expect(dead_code, reason = "held so the groups' bindings stay valid")]
     fixed: [wgpu::Buffer; 3],
     written: std::cell::Cell<Option<Constants>>,
+}
+
+/// The three passes and their lanes of two buffers.
+#[derive(Debug)]
+pub struct Ps2Bloom {
+    down: wgpu::RenderPipeline,
+    blur: wgpu::RenderPipeline,
+    composite: wgpu::RenderPipeline,
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    format: wgpu::TextureFormat,
+    /// The whole picture's.
+    base: Lane,
+    /// A split screen's, one per view.
+    views: std::cell::RefCell<Vec<Lane>>,
+}
+
+impl Lane {
+    fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        layout: &wgpu::BindGroupLayout,
+        sampler: &wgpu::Sampler,
+        extent: (u32, u32),
+    ) -> Result<Self> {
+        let a = Target::new(device, "ps2 bloom a", format, extent)?;
+        let b = Target::new(device, "ps2 bloom b", format, extent)?;
+
+        let whole = Constants {
+            uv_scale: [1.0, 1.0],
+            uv_max: [1.0, 1.0],
+            direction: [0.0, 0.0],
+            shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
+            uv_offset: [0.0, 0.0],
+        };
+        let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
+            oag_gpu::init_buffer::init(device, label, usage, bytemuck::bytes_of(&c))
+        };
+        let constants_down = buffer(
+            "ps2 bloom down constants",
+            whole,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        );
+        let constants_x = buffer(
+            "ps2 bloom blur-x constants",
+            Constants {
+                direction: [1.0, 0.0],
+                ..whole
+            },
+            wgpu::BufferUsages::UNIFORM,
+        );
+        let constants_y = buffer(
+            "ps2 bloom blur-y constants",
+            Constants {
+                direction: [0.0, 1.0],
+                ..whole
+            },
+            wgpu::BufferUsages::UNIFORM,
+        );
+        let constants_composite = buffer(
+            "ps2 bloom composite constants",
+            whole,
+            wgpu::BufferUsages::UNIFORM,
+        );
+        let group = |label: &str, view: &wgpu::TextureView, constants: &wgpu::Buffer| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(label),
+                layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: constants.as_entire_binding(),
+                    },
+                ],
+            })
+        };
+        // Down writes A, the horizontal blur reads A and writes B, the
+        // vertical reads B and writes A, the composite reads A.
+        let blur_x = group("ps2 bloom blur-x", &a.view, &constants_x);
+        let blur_y = group("ps2 bloom blur-y", &b.view, &constants_y);
+        let composite_group = group("ps2 bloom composite", &a.view, &constants_composite);
+
+        Ok(Self {
+            extent,
+            a,
+            b,
+            blur_x,
+            blur_y,
+            composite_group,
+            constants_down,
+            fixed: [constants_x, constants_y, constants_composite],
+            written: std::cell::Cell::new(Some(whole)),
+        })
+    }
 }
 
 impl Ps2Bloom {
@@ -187,84 +294,22 @@ impl Ps2Bloom {
             ],
         );
 
-        let a = Target::new(device, "ps2 bloom a", format, (BLOOM_WIDTH, BLOOM_HEIGHT))?;
-        let b = Target::new(device, "ps2 bloom b", format, (BLOOM_WIDTH, BLOOM_HEIGHT))?;
-
-        let whole = Constants {
-            uv_scale: [1.0, 1.0],
-            uv_max: [1.0, 1.0],
-            direction: [0.0, 0.0],
-            shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
-        };
-        let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
-            oag_gpu::init_buffer::init(device, label, usage, bytemuck::bytes_of(&c))
-        };
-        let constants_down = buffer(
-            "ps2 bloom down constants",
-            whole,
-            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        );
-        let constants_x = buffer(
-            "ps2 bloom blur-x constants",
-            Constants {
-                direction: [1.0, 0.0],
-                ..whole
-            },
-            wgpu::BufferUsages::UNIFORM,
-        );
-        let constants_y = buffer(
-            "ps2 bloom blur-y constants",
-            Constants {
-                direction: [0.0, 1.0],
-                ..whole
-            },
-            wgpu::BufferUsages::UNIFORM,
-        );
-        let constants_composite = buffer(
-            "ps2 bloom composite constants",
-            whole,
-            wgpu::BufferUsages::UNIFORM,
-        );
-        let group = |label: &str, view: &wgpu::TextureView, constants: &wgpu::Buffer| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(label),
-                layout: &layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: constants.as_entire_binding(),
-                    },
-                ],
-            })
-        };
-        // Down writes A, the horizontal blur reads A and writes B, the
-        // vertical reads B and writes A, the composite reads A.
-        let blur_x = group("ps2 bloom blur-x", &a.view, &constants_x);
-        let blur_y = group("ps2 bloom blur-y", &b.view, &constants_y);
-        let composite_group = group("ps2 bloom composite", &a.view, &constants_composite);
-
+        let base = Lane::new(
+            device,
+            format,
+            &layout,
+            &sampler,
+            (BLOOM_WIDTH, BLOOM_HEIGHT),
+        )?;
         Ok(Self {
             down,
             blur,
             composite,
             layout,
             sampler,
-            a,
-            b,
-            blur_x,
-            blur_y,
-            composite_group,
-            constants_down,
-            fixed: [constants_x, constants_y, constants_composite],
-            written: std::cell::Cell::new(Some(whole)),
+            format,
+            base,
+            views: std::cell::RefCell::new(Vec::new()),
         })
     }
 
@@ -300,22 +345,71 @@ impl Ps2Bloom {
         encoder: &mut wgpu::CommandEncoder,
         frame: Frame<'_>,
     ) {
+        self.prepare_in(&self.base, device, queue, encoder, frame);
+    }
+
+    /// [`Ps2Bloom::prepare`] for split-screen view `view`, into buffers of its own
+    /// (built here, rebuilt when `extent` changes - see
+    /// [`super::bloom::lane_extent`]), so the next view's downsample does not
+    /// overwrite what this one's composite owes. The scene is read from the view's
+    /// own rectangle (`frame.origin`, `frame.viewport`).
+    ///
+    /// # Errors
+    ///
+    /// Propagates a buffer that will not allocate; the view then draws no glow.
+    pub fn prepare_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: usize,
+        extent: (u32, u32),
+        frame: Frame<'_>,
+    ) -> Result<()> {
+        let mut views = self.views.borrow_mut();
+        let build = || Lane::new(device, self.format, &self.layout, &self.sampler, extent);
+        while views.len() <= view {
+            views.push(build()?);
+        }
+        if views[view].extent != extent {
+            views[view] = build()?;
+        }
+        self.prepare_in(&views[view], device, queue, encoder, frame);
+        Ok(())
+    }
+
+    fn prepare_in(
+        &self,
+        lane: &Lane,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: Frame<'_>,
+    ) {
         let Frame {
             scene,
             size,
+            origin,
             viewport,
-            ..
         } = frame;
-        let (uv_scale, uv_max) = super::sub_rectangle(viewport, size);
+        let (uv_offset, uv_scale, uv_max) = super::sub_rectangle_at(
+            (
+                origin.0.round().max(0.0) as u32,
+                origin.1.round().max(0.0) as u32,
+            ),
+            viewport,
+            size,
+        );
         let wanted = Constants {
             uv_scale,
             uv_max,
             direction: [0.0, 0.0],
             shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
+            uv_offset,
         };
-        if self.written.get() != Some(wanted) {
-            queue.write_buffer(&self.constants_down, 0, bytemuck::bytes_of(&wanted));
-            self.written.set(Some(wanted));
+        if lane.written.get() != Some(wanted) {
+            queue.write_buffer(&lane.constants_down, 0, bytemuck::bytes_of(&wanted));
+            lane.written.set(Some(wanted));
         }
         let down_group = oag_gpu::perfprobe::bind_group(
             device,
@@ -333,7 +427,7 @@ impl Ps2Bloom {
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: self.constants_down.as_entire_binding(),
+                        resource: lane.constants_down.as_entire_binding(),
                     },
                 ],
             },
@@ -374,12 +468,12 @@ impl Ps2Bloom {
             pass.draw(0..3, 0..1);
         };
         let clear = wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT);
-        let buffer = (BLOOM_WIDTH, BLOOM_HEIGHT);
+        let buffer = lane.extent;
         pass(
             "ps2 bloom down",
             &self.down,
             &down_group,
-            &self.a.view,
+            &lane.a.view,
             clear,
             (0.0, 0.0),
             buffer,
@@ -387,8 +481,8 @@ impl Ps2Bloom {
         pass(
             "ps2 bloom blur x",
             &self.blur,
-            &self.blur_x,
-            &self.b.view,
+            &lane.blur_x,
+            &lane.b.view,
             clear,
             (0.0, 0.0),
             buffer,
@@ -396,8 +490,8 @@ impl Ps2Bloom {
         pass(
             "ps2 bloom blur y",
             &self.blur,
-            &self.blur_y,
-            &self.a.view,
+            &lane.blur_y,
+            &lane.a.view,
             clear,
             (0.0, 0.0),
             buffer,
@@ -410,6 +504,32 @@ impl Ps2Bloom {
     /// since the stretch is from the fixed bloom buffer.
     pub fn composite(
         &self,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        origin: (f32, f32),
+        viewport: (u32, u32),
+    ) {
+        self.composite_in(&self.base, encoder, target, origin, viewport);
+    }
+
+    /// [`Ps2Bloom::composite`] of what [`Ps2Bloom::prepare_view`] left for view
+    /// `view`. Nothing is drawn for a view that was never prepared.
+    pub fn composite_view(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: usize,
+        target: &wgpu::TextureView,
+        origin: (f32, f32),
+        viewport: (u32, u32),
+    ) {
+        if let Some(lane) = self.views.borrow().get(view) {
+            self.composite_in(lane, encoder, target, origin, viewport);
+        }
+    }
+
+    fn composite_in(
+        &self,
+        lane: &Lane,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
         origin: (f32, f32),
@@ -440,7 +560,7 @@ impl Ps2Bloom {
             0.0,
             1.0,
         );
-        pass.set_bind_group(0, &self.composite_group, &[]);
+        pass.set_bind_group(0, &lane.composite_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

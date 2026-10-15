@@ -48,6 +48,10 @@ pub(crate) struct FrameWork {
     pub(crate) advert_cards: u32,
     /// The craft shine passes' environment-mapped coordinates (`Scene::write_shine`).
     pub(crate) shine_maps: u32,
+    /// Split-screen views whose glow was prepared ([`Scene::prepare_split_bloom`]), and
+    /// the composites [`Scene::composite_bloom`] added for them.
+    pub(crate) bloom_views_prepared: u32,
+    pub(crate) bloom_views_composited: u32,
     /// How many of the track's opaque draws the latest `mapped` depth map recorded:
     /// those whose bounds touch that map's box, not the whole circuit.
     #[cfg(test)]
@@ -338,6 +342,11 @@ pub struct Scene {
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
+    /// A split screen's glow, prepared once per view after the last view was drawn
+    /// ([`Scene::prepare_split_bloom`]) and still owing its composites to
+    /// [`Scene::composite_bloom`]. Empty for a frame of one view, which owes
+    /// [`Self::bloom_pending`] instead.
+    bloom_views: std::cell::RefCell<Vec<bloom::ViewBloom>>,
     /// Which split-screen view the next [`Scene::render`] draws. See
     /// [`Scene::render_viewports`].
     layer: std::cell::Cell<viewports::Layer>,
@@ -962,6 +971,7 @@ impl Scene {
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
+            bloom_views: std::cell::RefCell::new(Vec::new()),
             layer: std::cell::Cell::new(viewports::Layer::Whole),
             boost_zoom: hd_chain::BoostZoom::new(caller_format),
             hd,

@@ -15,6 +15,9 @@ struct Constants {
     direction: vec2<f32>,
     // The composite's destination offset in UV, 5 px of the 512 x 512 frame.
     shift: vec2<f32>,
+    // The drawn rectangle's corner in the scene target as a UV offset; zero for a
+    // rectangle that starts at the target's own corner. Only `fs_down` reads it.
+    uv_offset: vec2<f32>,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -36,7 +39,7 @@ const WEIGHTS = array<u32, 7>(16u, 32u, 32u, 64u, 32u, 32u, 16u);
 // is `a * 128`.
 @fragment
 fn fs_down(in: VertexOutput) -> @location(0) vec4<f32> {
-    let at = min(in.uv * constants.uv_scale, constants.uv_max);
+    let at = min(constants.uv_offset + in.uv * constants.uv_scale, constants.uv_max);
     let texel = textureSample(source_tex, source_sampler, at);
     let alpha = u32(floor(min(texel.a, 1.0) * 128.0 + 0.5));
     return vec4<f32>(vec3<f32>((bytes(texel.rgb) * alpha) >> vec3<u32>(7u)) / 255.0, 1.0);

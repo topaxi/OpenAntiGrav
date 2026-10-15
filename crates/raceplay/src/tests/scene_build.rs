@@ -97,16 +97,35 @@ pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
     bare_scene_of(device, queue, &[livery()])
 }
 
+/// [`bare_scene`] whose circuit stamps the glow mask, as Pulse PSP's does: the scene
+/// then builds the recovered bloom.
+pub(super) fn glowing_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
+    let mut track = triangle();
+    track.stamps_glow = true;
+    scene_over(device, queue, track, &[livery()])
+}
+
 /// [`bare_scene`] with one hull per entry of `liveries`, slot by slot.
 pub(super) fn bare_scene_of(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     liveries: &[Livery],
 ) -> Scene {
+    scene_over(device, queue, triangle(), liveries)
+}
+
+/// The one constructor under the rest: a bare scene over `track`, with one hull per entry
+/// of `liveries`.
+fn scene_over(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+) -> Scene {
     Scene::new(
         device,
         queue,
-        triangle(),
+        track,
         liveries,
         None,
         None,

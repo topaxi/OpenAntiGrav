@@ -130,18 +130,40 @@ pub fn fullscreen_layout(device: &wgpu::Device, label: &str) -> wgpu::BindGroupL
 /// final blit and is where this shape was first written.
 #[must_use]
 pub fn sub_rectangle(viewport: (u32, u32), size: (u32, u32)) -> ([f32; 2], [f32; 2]) {
+    let (_, scale, max) = sub_rectangle_at((0, 0), viewport, size);
+    (scale, max)
+}
+
+/// [`sub_rectangle`] for a rectangle that does not start at the target's
+/// top-left: the UV offset of its corner, the scale and the clamp, in that order.
+///
+/// A split-screen view is such a rectangle, and so is a letterboxed capture. The
+/// clamp stays half a texel inside the rectangle's own far edge. **The offset is
+/// exactly `0.0` at the origin, so a rectangle that starts there reads the same
+/// bits [`sub_rectangle`] always gave**: a pass adds the offset to a UV, and
+/// `x + 0.0` is `x`.
+#[must_use]
+pub fn sub_rectangle_at(
+    origin: (u32, u32),
+    viewport: (u32, u32),
+    size: (u32, u32),
+) -> ([f32; 2], [f32; 2], [f32; 2]) {
     // Per axis, because only one of the two may be short: the allocation is
     // clamped against the device's maximum texture dimension independently on
     // each, so a wide window at a high scale can hit the ceiling on one and
     // not the other.
-    let axis = |drawn: u32, allocated: u32| {
-        if drawn >= allocated || allocated == 0 {
-            return (1.0, 1.0);
+    let axis = |start: u32, drawn: u32, allocated: u32| {
+        if (start == 0 && drawn >= allocated) || allocated == 0 {
+            return (0.0, 1.0, 1.0);
         }
         let allocated = allocated as f32;
-        (drawn as f32 / allocated, (drawn as f32 - 0.5) / allocated)
+        (
+            start as f32 / allocated,
+            drawn as f32 / allocated,
+            ((start + drawn) as f32 - 0.5) / allocated,
+        )
     };
-    let (scale_x, max_x) = axis(viewport.0, size.0);
-    let (scale_y, max_y) = axis(viewport.1, size.1);
-    ([scale_x, scale_y], [max_x, max_y])
+    let (offset_x, scale_x, max_x) = axis(origin.0, viewport.0, size.0);
+    let (offset_y, scale_y, max_y) = axis(origin.1, viewport.1, size.1);
+    ([offset_x, offset_y], [scale_x, scale_y], [max_x, max_y])
 }
