@@ -648,10 +648,30 @@ pub(crate) mod web {
     /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
     /// on native with the same descriptor.
     pub(crate) async fn prepare() -> Result<()> {
-        let instance = adapter::instance();
+        let instance = adapter::instance_with_webgpu_detection().await;
+        // **WebGL2 has no adapter without a canvas.** The browser's WebGPU hands one
+        // out on request; a GL context is made *from* a canvas, so wgpu enumerates
+        // it only against a surface on the page's own. A page with WebGPU skips
+        // this, and the surface is made again, as it always was, once the window
+        // exists.
+        let probe = if wgpu::util::is_browser_webgpu_supported().await {
+            None
+        } else {
+            use wasm_bindgen::JsCast;
+            web_sys::window()
+                .and_then(|window| window.document())
+                .and_then(|document| document.get_element_by_id(CANVAS_ID))
+                .and_then(|element| element.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+                .and_then(|canvas| {
+                    instance
+                        .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
+                        .ok()
+                })
+        };
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: probe.as_ref(),
                 ..Default::default()
             })
             .await

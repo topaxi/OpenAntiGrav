@@ -143,6 +143,10 @@ web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "E
 # Only the web build turns this on (`just web`): the `oag_web` example below,
 # the same arrangement as `android`.
 web = []
+# WebGL2 beside WebGPU in the browser build (`OAG_WEB_FEATURES=web,webgl just web`):
+# a trial, see docs/tools/gl-backend.md. wgpu then falls back to GL on a page with no
+# `navigator.gpu`, so it changes nothing on a browser that has WebGPU.
+webgl = ["wgpu/webgl"]
 # Only the Android build turns this on (`just apk`): it is what makes the
 # `oag_android` example below exist, so a desktop `--all-targets` neither builds
 # nor links a second copy of the binary.

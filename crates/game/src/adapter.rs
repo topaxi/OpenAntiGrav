@@ -31,7 +31,7 @@
 //! `graphics.render_scale` at 50 to be watchable at all.
 
 use anyhow::{Context, Result};
-use log::warn;
+use log::{info, warn};
 
 use oag_display::display::Renderer;
 
@@ -63,10 +63,13 @@ pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 /// backends; name the adapter in `graphics.renderer` to draw with it.
 pub const GL_ENV: &str = "OAG_GL";
 
-/// The backends this run offers: [`BACKENDS`], plus GL when [`GL_ENV`] asks.
+/// The backends this run offers: [`BACKENDS`], plus GL when [`GL_ENV`] asks, or
+/// in a browser build made with the `webgl` feature (WebGL2, which wgpu only
+/// reaches on a page with no WebGPU).
 #[must_use]
 pub fn backends() -> wgpu::Backends {
-    let gl = std::env::var_os(GL_ENV).is_some_and(|value| !value.is_empty() && value != "0");
+    let gl = std::env::var_os(GL_ENV).is_some_and(|value| !value.is_empty() && value != "0")
+        || cfg!(all(target_arch = "wasm32", feature = "webgl"));
     if gl {
         BACKENDS | wgpu::Backends::GL
     } else {
@@ -82,9 +85,41 @@ pub fn backends() -> wgpu::Backends {
 /// the row would be describing a different pool than the game draws from.
 #[must_use]
 pub fn instance() -> wgpu::Instance {
-    let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+    wgpu::Instance::new(descriptor(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    ))
+}
+
+/// `descriptor` restricted to [`backends`], and without wgpu's validation of
+/// indirect calls when GL is among them.
+///
+/// **That validation is a compute pipeline wgpu builds with the device**, and a
+/// GL context below 4.3 (NVIDIA's EGL hands out exactly the 3.3 core wgpu-hal
+/// asks for) cannot compile it, which loses the device before the game has
+/// asked for anything. Nothing in this engine issues an indirect draw or
+/// dispatch, so the check has nothing to guard.
+fn descriptor(mut descriptor: wgpu::InstanceDescriptor) -> wgpu::InstanceDescriptor {
     descriptor.backends = backends();
-    wgpu::Instance::new(descriptor)
+    if descriptor.backends.contains(wgpu::Backends::GL) {
+        descriptor
+            .flags
+            .remove(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL);
+    }
+    descriptor
+}
+
+/// [`instance`] for a browser page: without WebGPU it falls to GL.
+///
+/// `navigator.gpu` being defined is not "the page has WebGPU" (it can be there
+/// and hand out no adapter), so wgpu asks the browser first and drops
+/// `BROWSER_WEBGPU` from the instance if it has none. Only a build with the
+/// `webgl` feature has a GL to fall to.
+#[cfg(target_arch = "wasm32")]
+pub async fn instance_with_webgpu_detection() -> wgpu::Instance {
+    wgpu::util::new_instance_with_webgpu_detection(descriptor(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    ))
+    .await
 }
 
 /// [`instance`] for a window: the same backends, and when GL is on, the
@@ -101,11 +136,9 @@ pub fn instance_for_window(event_loop: &winit::event_loop::ActiveEventLoop) -> w
     if !backends().contains(wgpu::Backends::GL) {
         return instance();
     }
-    let mut descriptor = wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
-        event_loop.owned_display_handle(),
-    ));
-    descriptor.backends = backends();
-    wgpu::Instance::new(descriptor)
+    wgpu::Instance::new(descriptor(wgpu::InstanceDescriptor::new_with_display_handle(
+        Box::new(event_loop.owned_display_handle()),
+    )))
 }
 
 /// What one adapter is called, on the menu and in the settings file.
@@ -215,9 +248,20 @@ pub struct Chosen {
 /// Every effect `oag_gpu::backend::GAPS` turns off is a line a player reads
 /// rather than a picture that is quietly worse.
 fn report_gaps(adapter: &wgpu::Adapter) {
-    if adapter.get_info().backend == wgpu::Backend::Gl {
-        warn!("{}", oag_gpu::backend::gaps_report());
+    if adapter.get_info().backend != wgpu::Backend::Gl {
+        return;
     }
+    warn!("{}", oag_gpu::backend::gaps_report());
+    let yes = |has: bool| if has { "yes" } else { "no" };
+    let flags = adapter.get_downlevel_capabilities().flags;
+    let features = adapter.features();
+    info!(
+        "GL backend: block-compressed textures {}, timestamp queries {}, compute {}, independent blend {}",
+        yes(features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC)),
+        yes(features.contains(wgpu::Features::TIMESTAMP_QUERY)),
+        yes(flags.contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)),
+        yes(flags.contains(wgpu::DownlevelFlags::INDEPENDENT_BLEND)),
+    );
 }
 
 /// The adapter `setting` names, or the one wgpu would have picked.

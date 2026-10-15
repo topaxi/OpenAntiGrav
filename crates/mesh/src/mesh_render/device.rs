@@ -64,8 +64,8 @@ pub fn device_descriptor<'a>(
     }
 }
 
-/// wgpu's default limits with the **texture-dimension limits raised to the
-/// adapter's own**.
+/// wgpu's default limits, lowered to the adapter's where it has less, with the
+/// **texture-dimension limits raised to the adapter's own**.
 ///
 /// The default `max_texture_dimension_2d` is 8,192, and Wipeout Omega's Talon's
 /// Junction ships `ds_floor_cs.gnf` 16,384 texels wide: `create_texture` on it
@@ -83,5 +83,12 @@ pub fn device_descriptor<'a>(
 /// adapter allows.
 #[must_use]
 pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
-    wgpu::Limits::default().using_resolution(adapter.limits())
+    // **Never more than the adapter has.** `Limits::default()` is what every
+    // Vulkan, Metal and Dx12 adapter exceeds, so for them this is the default
+    // exactly. A WebGL2 context is below it (no compute workgroups, no storage
+    // buffers), and a request for the default fails the device outright; the
+    // worse of the two is what its pipelines are then built against.
+    wgpu::Limits::default()
+        .or_worse_values_from(&adapter.limits())
+        .using_resolution(adapter.limits())
 }

@@ -71,6 +71,16 @@ SOFTWARE_FLAGS = {
     # drives an AudioWorklet, so nothing reaches the host's sound server.
     "--disable-audio-output",
     ],
+    # No WebGPU at all (`navigator.gpu` is absent on Linux without the flags
+    # above), so a build made with the `webgl` feature falls to WebGL2, which
+    # headless Chromium serves from swiftshader. docs/tools/gl-backend.md.
+    "webgl": [
+        "--use-angle=swiftshader",
+        "--enable-unsafe-swiftshader",
+        "--ignore-gpu-blocklist",
+        "--mute-audio",
+        "--disable-audio-output",
+    ],
     "bare": [
         "--enable-unsafe-webgpu",
         "--use-webgpu-adapter=swiftshader",
