@@ -62,11 +62,11 @@ fn each_view_resolves_as_it_would_alone() {
             View {
                 seat,
                 rect: (0, y, SIZE.0, half),
+                first: seat == 0,
             },
         );
         queue.submit(Some(encoder.finish()));
     }
-    assert_eq!(chain.seat_lanes(), 2);
     let red = read_red(&device, &queue, &output);
     let top = mean(&red, 2..half - 2);
     let bottom = mean(&red, half + 2..SIZE.1 - 2);
@@ -80,6 +80,7 @@ fn each_view_resolves_as_it_would_alone() {
         (bottom - bright).abs() < 2.0,
         "the bright view resolved to {bottom}, the same picture alone to {bright}"
     );
+    assert_eq!(chain.seat_lanes(), 2);
     chain.retire_seats();
     assert_eq!(chain.seat_lanes(), 0);
 }

@@ -154,3 +154,47 @@ fn a_single_view_frame_forgets_the_seats_adaptation() {
         assert_eq!(scene.split_exposure_seats(), 0, "{chain:?}");
     }
 }
+
+/// The gap between the views is written every frame, not left to whatever the frame held: with
+/// the target filled white before the split is drawn, the rows between the views come out opaque
+/// black. Fails when no view clears the frame (Omega's apply pass only loads; HD's resolve is
+/// the one that clears) and when the clear is transparent (alpha 0 in the gap).
+#[test]
+fn the_gap_between_views_is_cleared_every_frame() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    for chain in CHAINS {
+        let mut race = race_with_a_grid();
+        assert_eq!(race.set_viewport_count(2), 2);
+        let scene = scene_of(&device, &queue, &race, chain);
+        let target = target(&device);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("split exposure test: stale frame"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &target.create_view(&Default::default()),
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        queue.submit(Some(encoder.finish()));
+        draw_split((&device, &queue), &scene, &race, &target);
+        let picture = pixels(&device, &queue, &target);
+        let rects = race.view_rects(AREA);
+        let (top, bottom) = ((rects[0].1 + rects[0].3) as usize, rects[1].1 as usize);
+        assert!(bottom > top, "the views leave a gap to look at");
+        let row = (super::split_blur::SIZE * 4) as usize;
+        for texel in picture[top * row..bottom * row].as_chunks::<4>().0 {
+            assert_eq!(*texel, [0, 0, 0, 255], "{chain:?}: the gap is opaque black");
+        }
+    }
+}

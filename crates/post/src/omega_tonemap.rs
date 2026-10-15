@@ -82,6 +82,11 @@ pub struct View {
     /// The view's rectangle, `x, y, width, height`: where it was drawn in the scene target
     /// and where its picture goes in the frame (the same place).
     pub rect: (u32, u32, u32, u32),
+    /// Whether this is the first view of the frame, which clears the whole frame to opaque
+    /// black first (the gap between views, and any stale frame under it); every later view
+    /// loads what the ones before it wrote. The whole-picture [`Chain::run`] draws every
+    /// pixel of its rectangle and clears nothing.
+    pub first: bool,
 }
 
 /// The luma ladder's format.
@@ -699,6 +704,25 @@ impl Chain {
         }
         let seats = self.seats.borrow();
         let (x, y, w, h) = run.rect;
+        if run.first {
+            // A pass that clears and draws nothing: the apply pass loads.
+            encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("omega tonemap clear"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+        }
         self.run_placed(
             device,
             queue,

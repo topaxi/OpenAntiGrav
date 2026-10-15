@@ -230,9 +230,12 @@ things make that more than a loop:
      0.5 on both axes for every two- and four-way cut, which is what the old whole-frame
      chain's mean gave for equal views and is now each view's own for unequal ones; chosen,
      not measured). `Chain::set_reach` is gone: the reach is a field of `View`.
-   - *The first view clears the whole frame, later views load.* The resolve pass cleared
-     the whole target; the first view still does (so the 2 pixel gap is what it always was)
-     and the rest load. Omega's apply pass never cleared.
+   - *The first view clears the whole frame to opaque black, later views load.* HD's resolve
+     pass cleared the whole target (to transparent: the gap is opaque black now, which is what
+     the old whole-area resolve wrote there); Omega's apply pass only loads, so its first view
+     runs a clear pass before it (without one the gap kept whatever the frame held before, a
+     stale menu or single-view frame: `tests::split_exposure::the_gap_between_views_is_cleared_every_frame`
+     fills the target white first and fails for either chain if the clear goes).
    - A letterboxed split (a capture whose size is not the window's aspect, so the area starts
      below the bar) used to resolve the scene from its top-left while the views had been
      drawn below the bar: the old picture was shifted by the bar and its second view cut off.
@@ -251,24 +254,33 @@ things make that more than a loop:
    `crates/game/tests/split_screen_ground_truth.rs` (HD two and four views, Omega and 2048 two
    views: every rectangle drawn, no two the same).
 
-   **What it looks like, and why it is small** (`hd-exposure`, HD, 1280x720 2h and 2v, the
-   autopilot, seed 1, before/after of the same tick, same binary except this change): HD's
-   authored exposure is `Tone maximum brightness - min(Tone adaption boost * adapted, Tone
-   darkening clamp)`, and on Talon's Junction (boost 20, clamp 3, max 4) any view whose adapted
-   luminance is over 0.15 rides at exactly 1.0 (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`,
-   "The exposure is unity"). So the per-seat exposure only moves a view that is *dark*, under
-   0.15 of encoded luminance, and no view reached that: across the 12 circuits with a
-   `track.vex`, 275 two-view frames (ticks 400 to 10000) and 72 eight-view ones, the darkest
-   view's mean luma (after the exposure) was 0.53, and two views of one frame differed by at
-   most 0.12 (two views) and 0.15 (eight).
-   On the nine before/after pairs looked at (three circuits, 2h and 2v, and six more 2h) the
-   per-view mean luma moved by at most 0.0045 (0.7 %), the gate's fade being the only other
-   term. **The mechanism is proved on a unit that makes a view dark** (`split_tests`: with a
-   deliberately strong `Tone` block the dark view resolves to byte 96 and the bright one to
-   86, each equal to its own picture alone; with one shared lane the dark view reads 85). A
-   tunnel dark enough to see the difference in a real race was not found on any circuit at the
-   ticks sampled. Open: a tick where a seat is in HD's darkest geometry (a place a seat of a
-   split can be put by a debug pose; none exists for a split).
+   **What it looks like** (`hd-exposure`, HD, 1280x720, `--autopilot`, seed 1, before/after of the same
+   tick, same binary except this change). Two terms read the adapted luminance: the resolve's exposure
+   `Tone maximum brightness - min(Tone adaption boost * adapted, Tone darkening clamp)` and the glow
+   gate's fade `1 - min(adapted * Bloom adaption boost * 0.25, 1)`. **On Talon's Junction** (boost 20,
+   clamp 3, max 4; `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "The exposure is unity") the
+   exposure is exactly 1.0 for any view with an adapted luma over 0.15, so it only moves a view darker
+   than that; the other circuits' `Tone` values were not read for this. The glow fade is the term that
+   moves with an ordinary difference between views.
+   - **Zone mode, Zone 4, tick 2400** (`--mode zone --track /data/environments/zone_4/track.vex
+     --players 2`, both cuts): one view is in the dark, one in bright orange. Shared, the dark view's
+     glow was faded by the bright view's luminance; per view it blooms as it would alone. The dark
+     view's share of pixels over 0.9 luma went from **0.4 % to 5.2 %** (2h top view; 2v left view
+     0.35 % to 5.1 %), its mean luma from 0.592 to 0.604 (2v 0.598 to 0.611); **the bright view did
+     not move** (mean 0.7586 and 0.7587; 2v 0.7632 and 0.7625). A one-view frame of the same circuit
+     is `cmp`-identical to `main`'s.
+   - Everywhere else it is small: across **all 16 circuits with a `track.vex`**, in `single_race`
+     (12 circuits, 275 two-view frames at ticks 400 to 10000, and 72 eight-view ones) and Zone 1 to 4
+     in both `single_race` and `zone` mode (73 two-view frames), the darkest view's mean luma (after
+     the exposure) was 0.53 to 0.56, and two views of a frame differed by at most 0.12 outside
+     Zone 4 (0.17 there, the pair above). On nine before/after pairs of the ordinary circuits (three
+     circuits in 2h and 2v, six more in 2h) the per-view mean luma moved by at most 0.0045 (0.7 %).
+   - **The mechanism is also proved on a unit** (`split_tests`: with a deliberately strong `Tone`
+     block the dark view resolves to byte 96 and the bright one to 86, each equal to its own picture
+     alone; with one shared lane the dark view reads 85 and the Omega pair fails the same way).
+   Not produced: a crop of seat 1's camera drawn as a one-view picture of its own. `--players 1`
+   follows slot 0 and its race state differs, so a still of the same camera cannot be made; the unit
+   comparison (a view against the same content as a whole picture) is that check.
 
 ## HUD
 
@@ -1755,8 +1767,9 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   resolve per view (see rule 3). Open.
 - ~~**HD's exposure is one for the whole picture**~~ **Done, 2026-10-15, `hd-exposure`** (rule 6,
   "Per-view exposure" under "Cost"): HD's and Omega's chains run per view with an adaptation per
-  seat, and the glow stops at the cut. Open from it: no real race put a seat in a view dark enough
-  to move the exposure (rule 6), and the Deck reading.
+  seat, and the glow stops at the cut. Open from it: the exposure itself only moves a view darker
+  than an adapted luma of 0.15 on Talon's Junction (rule 6: the glow fade is what a Zone 4 split
+  shows), the multi-window single-seat window re-seeds the lanes every frame, and the Deck reading.
 - **CPU per view is mostly the driver now**: `encoder.finish` is about 230 us of a Pulse view's
   590 and about 500 us of an HD view's (see "Cost", 2026-10-15). Open in the `split-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later

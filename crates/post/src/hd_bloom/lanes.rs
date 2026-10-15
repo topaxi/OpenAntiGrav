@@ -204,8 +204,9 @@ pub struct View {
     /// How far the glow reaches across and down against what [`Params`](super::Params)
     /// authors. **Chosen, not measured.** `(1.0, 1.0)` for a whole picture.
     pub reach: (f32, f32),
-    /// Whether this is the first view of the frame, which clears the whole frame before it
-    /// resolves; every later view loads what the ones before it resolved.
+    /// Whether this is the first view of the frame, which clears the whole frame to opaque
+    /// black before it resolves (the gap between views, and any stale frame under it); every
+    /// later view loads what the ones before it resolved.
     pub first: bool,
 }
 
@@ -242,7 +243,7 @@ impl Chain {
                 reference: run.area,
                 reach: run.reach,
                 load: if run.first {
-                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                    wgpu::LoadOp::Clear(wgpu::Color::BLACK)
                 } else {
                     wgpu::LoadOp::Load
                 },

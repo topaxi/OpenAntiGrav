@@ -62,7 +62,7 @@ impl Scene {
             }
             true
         } else if let Some(omega) = &self.omega {
-            for (&slot, &rect) in slots.iter().zip(rects) {
+            for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("race viewport omega post"),
                 });
@@ -74,6 +74,7 @@ impl Scene {
                     oag_post::omega_tonemap::View {
                         seat: slot,
                         rect: pixels(rect),
+                        first: index == 0,
                     },
                 );
                 queue.submit(Some(encoder.finish()));
