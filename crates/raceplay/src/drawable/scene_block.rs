@@ -201,6 +201,10 @@ pub(crate) struct UniformBlocks {
     next: u32,
 }
 
+/// A drawable's view-projection and model matrices as the shader reads them.
+#[cfg(test)]
+pub(crate) type Matrices = ([[f32; 4]; 4], [[f32; 4]; 4]);
+
 #[cfg(test)]
 impl UniformBlocks {
     /// The view-projection and model matrices in `slot` of the view following craft `view`,
@@ -211,7 +215,7 @@ impl UniformBlocks {
         queue: &wgpu::Queue,
         view: usize,
         slot: u32,
-    ) -> ([[f32; 4]; 4], [[f32; 4]; 4]) {
+    ) -> Matrices {
         let at = u64::from(SceneBlocks::view(view).uniforms)
             + u64::from(slot) * mesh_render::UNIFORMS_STRIDE;
         let readback = device.create_buffer(&wgpu::BufferDescriptor {

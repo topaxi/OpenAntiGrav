@@ -159,7 +159,7 @@ impl Scene {
         queue: &wgpu::Queue,
         view: usize,
         ship: usize,
-    ) -> Option<([[f32; 4]; 4], [[f32; 4]; 4])> {
+    ) -> Option<crate::drawable::Matrices> {
         let slot = self.ships[ship].uniform_slot()?;
         Some(self.uniform_blocks.read(device, queue, view, slot))
     }

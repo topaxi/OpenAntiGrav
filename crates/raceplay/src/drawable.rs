@@ -8,6 +8,8 @@ use super::*;
 mod instance;
 mod pad_glow;
 mod scene_block;
+#[cfg(test)]
+pub(crate) use scene_block::Matrices;
 pub(crate) use scene_block::{SceneBlocks, SceneKind, Staging, UniformBlocks, Uploads, ViewBlock};
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
