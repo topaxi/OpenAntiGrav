@@ -840,8 +840,18 @@ impl Scene {
             if self.hull_skipped(race, index) {
                 continue;
             }
+            let (centre, radius) = drawable.bound();
+            if !super::craft_cull::hull_in_view(
+                frustum.as_ref(),
+                race.ship_model_matrix_of(index),
+                centre,
+                radius,
+            ) {
+                continue;
+            }
             stats.add(drawable.draw(&mut pass, None, None, None, None));
         }
+        oag_gpu::perfprobe::marks::mark(&mut pass, "wrecks, weapon bodies");
         self.draw_wrecks(race, &mut pass, &mut stats);
         // Every weapon's own body: opaque painted models, bounded by how many
         // matrices were written this frame, same as the plumes below.
@@ -880,6 +890,7 @@ impl Scene {
         // rather than the asset's. What the original *does* animate on it is
         // unread: `EF_Main` carries one attribute, `AnimEnd = 1.0`, and
         // nothing here plays it. See docs/rendering/trail-ribbon.md.
+        oag_gpu::perfprobe::marks::mark(&mut pass, "engine flares");
         for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
             let Some(flare) = flare else {
                 continue;
@@ -893,6 +904,7 @@ impl Scene {
             // needs is for a model that authors none.
             stats.add(flare.draw(&mut pass, None, None, None, None));
         }
+        oag_gpu::perfprobe::marks::mark(&mut pass, "boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             let Some(boost) = boost else {
                 continue;
@@ -916,6 +928,7 @@ impl Scene {
         // plume's loop gives - a shell drawn from a uniform buffer that was not
         // written this frame would sit at last frame's pose *and* at last
         // frame's swell.
+        oag_gpu::perfprobe::marks::mark(&mut pass, "shield shells");
         for (slot, shell) in self.shield.iter().enumerate().take(drawn) {
             let Some(shell) = shell else {
                 continue;

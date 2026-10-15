@@ -15,6 +15,7 @@ pub(crate) mod behind_glass;
 mod bloom;
 mod boost_flare;
 mod clouds;
+mod craft_cull;
 mod effects;
 mod frame;
 mod ghost;

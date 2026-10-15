@@ -20,6 +20,7 @@ mod camera;
 mod cannon_draw;
 mod correction;
 mod countdown;
+mod craft_cull;
 mod craft_flash;
 mod cue_endings;
 mod cues;
