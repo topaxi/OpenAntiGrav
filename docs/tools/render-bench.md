@@ -72,8 +72,8 @@ What a split frame records differs from one view in four ways, all in
   `gpu_blur_us` stays empty and the blur's cost is in `cpu_us` and `frame_us`. The blur is off
   unless `--motion-blur low|medium|high` asks (the bench's settings are the defaults, and the
   default is off); the setting is recorded in the result's `settings` and the command, so a
-  blur-on result never compares clean against a blur-off one. HD's bloom chain *does* run, once over the whole area after the
-  last view, but outside every view's timed scene pass and untimed itself, so `gpu_bloom_us`
+  blur-on result never compares clean against a blur-off one. HD's bloom chain *does* run, once per view after the
+  last view (`split_exposure`), but outside every view's timed scene pass and untimed itself, so `gpu_bloom_us`
   stays empty too; Pulse's per-view glow (rule 4) is likewise in no GPU column. Both are in
   `frame_us`, which is where their cost is read (see "Per-view glow" in the split-screen page).
 - `settings` gains `views` and `split_cut`, so a split result never compares clean against a

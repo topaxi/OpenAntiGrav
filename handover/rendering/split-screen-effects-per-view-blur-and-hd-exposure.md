@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Split screen draws Pulse's glow and the motion blur per view; the temporal upscaler and HD's exposure are open
+# Split screen draws Pulse's glow, the motion blur and HD's and Omega's exposure per view; the temporal upscaler is open
 
 2026-10-15, `split-bloom`. Evidence and numbers: `docs/rendering/split-screen.md` rules 3, 4 and 6
 and "Per-view glow"; `docs/tools/render-bench.md`.
@@ -26,13 +26,21 @@ a frame for two views on the NVIDIA card; one view byte-identical.
   the history slots exist now (`motion::split_history`), so a record and a jitter phase per seat
   are the bookkeeping; the resolve (`resolve_scene` encodes one FSR 3 chain over the whole picture)
   would run per view over its rectangle. Not free, not started.
-- **HD's exposure is one for the whole picture** and the glow bleeds a few pixels across the gap.
-  A per-view adaptation needs the chain's scratch targets sized per view.
-- **The Steam Deck**: run the commands in "Per-view blur" and "Per-view glow" (`split-screen.md`) and send the
-  pipelined and CPU medians of one view, 2h and 2v, and look at the stills; the Arrow Lake iGPU
-  reading on the notebook was too noisy to quote.
+- ~~**HD's exposure is one for the whole picture**~~ **Done, 2026-10-15, `hd-exposure`**
+  (`docs/rendering/split-screen.md` rule 6 and "Per-view exposure"): HD's chain (and 2048's, which
+  draws through it) and Omega's tone map run once per view over the view's rectangle with an
+  adaptation lane per seat (forgotten by the first single-view frame), one submit each; the glow stops
+  at the view's edge. The scratch levels did not need to be sized per view: the views run one after
+  another in their own submissions, each over its fraction of the same levels. Open from it: no
+  circuit sampled puts a seat in a view dark enough to move HD's exposure (it is unity above an
+  adapted luma of 0.15 on Talon's Junction), so the stills move by under 1 % and the proof of the
+  mechanism is the unit tests; the zoom streak and Omega's distortion are still not drawn in a split.
+- **The Steam Deck**: run the commands in "Per-view blur", "Per-view glow" and "Per-view exposure"
+  (`split-screen.md`) and send the pipelined and CPU medians of one view, 2h and 2v, and look at
+  the stills; the Arrow Lake iGPU reading on the notebook was too noisy to quote.
 - **PS2 and Pulse stills were judged by eye on two circuits**; Pure has no glow mask, 2048 and
-  Omega draw through other chains and were not looked at under the new reach.
+  Omega draw through other chains and were not looked at under the new reach (2048 and Omega were
+  looked at, 2h and 2v, under the per-view chains in `hd-exposure`).
 
 ## Next Steps
 

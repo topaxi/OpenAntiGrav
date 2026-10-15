@@ -45,16 +45,15 @@
 //!   blur over each rectangle, one submission each. **No camera jitter and no temporal
 //!   upscaler input**: the upscaler's frame record holds one camera, and the window's is
 //!   kept cleared. **Chosen, not measured.**
-//! - **HD's and Omega's post chains run once, after the last view.** Both draw
-//!   the scene into a linear float target and then encode it into `view` with a
-//!   pass that *clears* `view`, sampling the linear target from its top-left
-//!   whatever the view's origin is. Run per view, each encode wiped every earlier
-//!   view (a black top view in a two-player HD race) and every later view was
-//!   graded from the first view's pixels. The views now only fill the linear
-//!   target, and [`Scene::encode_split_post`] runs the chain once over `area`,
-//!   which is what a single view passes: one exposure and one glow for the whole
-//!   picture. **Chosen, not measured**; glow bleeds a few pixels across the gap
-//!   between views. The boost zoom streak (HD's own ring) is not drawn under a
+//! - **HD's and Omega's post chains run once per view, after the last one**
+//!   ([`Scene::run_split_post`], `split_exposure`). Both draw the scene into a linear
+//!   float target and then encode it into `view` with a pass that *clears* `view`
+//!   (HD's). Run as each view drew, each encode wiped every earlier view (a black
+//!   top view in a two-player HD race) and every later view was graded from the first
+//!   view's pixels. The views now only fill the linear target, and the chain then
+//!   runs over each view's own rectangle of it, with an adaptation per seat: a view in
+//!   a dark tunnel and one in daylight each have their own exposure, and HD's glow
+//!   stops at the view's edge. **Chosen, not measured.** The boost zoom streak (HD's own ring) is not drawn under a
 //!   split and Omega's distortion offsets are not drawn: the first holds the
 //!   primary craft's pulse; the second reads the depth attachment, which since the blur
 //!   (a later view loads it) holds every view's and could be wired. Both open.
@@ -376,8 +375,7 @@ impl Scene {
         )
     }
 
-    /// `slots[i]`'s view drawn into `rects[i]` of `area`, then the post chain once over
-    /// `area`: what [`Scene::render_viewports`] and [`Scene::render_window_views`] are.
+    /// `slots[i]`'s view drawn into `rects[i]` of `area`, then the post chains once per view: what [`Scene::render_viewports`] and [`Scene::render_window_views`] are.
     #[allow(clippy::too_many_arguments)]
     fn render_slots(
         &self,
