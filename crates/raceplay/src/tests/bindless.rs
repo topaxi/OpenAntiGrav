@@ -1,28 +1,31 @@
-//! Group 1 as binding arrays draws every material slot's own texture: the same pixels as
-//! the per-slot groups, slot for slot (`oag_mesh::mesh_render::bindless`).
+//! Group 1 as binding arrays draws every material slot's own texture, from its own
+//! drawable's arrays: the same pixels as the per-slot groups, slot for slot
+//! (`oag_mesh::mesh_render::bindless`).
 
 use super::scene_build::{test_gpu, vertex};
 use super::*;
 use oag_mesh::mesh::{Bounds, DrawCall};
 
 const SIZE: u32 = 64;
+/// Strips per drawable; two drawables share the target, one a half each.
 const STRIPS: usize = 8;
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SHARED: usize = 5;
 const SHARED_WITH: usize = 2;
 const UNDECODED: usize = 6;
 
-/// `STRIPS` vertical strips across the screen in clip space, strip `i` drawn as its own
-/// draw call from texture slot `i`, a 1x1 of its own colour, except that slot [`SHARED`]
-/// names slot [`SHARED_WITH`]'s texture (the arrays hold it once) and slot [`UNDECODED`]
-/// has none (the white fallback every such slot shares).
-fn strips() -> Model {
+/// `STRIPS` vertical strips across half `half` (0 left, 1 right) of the screen in clip
+/// space, strip `i` drawn as its own draw call from texture slot `i`, a 1x1 of a colour no
+/// other strip of either half has, except that slot [`SHARED`] names slot [`SHARED_WITH`]'s
+/// texture (the arrays hold it once) and slot [`UNDECODED`] has none (the white fallback
+/// every such slot shares).
+fn strips(half: usize) -> Model {
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
     let mut draws = Vec::new();
-    let width = 2.0 / STRIPS as f32;
+    let width = 1.0 / STRIPS as f32;
     for strip in 0..STRIPS {
-        let left = -1.0 + width * strip as f32;
+        let left = -1.0 + half as f32 + width * strip as f32;
         let base = vertices.len() as u32;
         for (x, y) in [
             (left, -1.0),
@@ -53,9 +56,10 @@ fn strips() -> Model {
     }
     let mut textures: Vec<_> = (0..STRIPS)
         .map(|strip| {
+            let strip = strip + half * STRIPS;
             let rgba = vec![
                 (strip * 31 % 256) as u8,
-                (255 - strip * 29) as u8,
+                (255 - strip * 13) as u8,
                 (strip * 67 % 256) as u8,
                 255,
             ];
@@ -79,11 +83,11 @@ fn strips() -> Model {
     }
 }
 
-fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, bindless: bool) -> Drawable {
+fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, half: usize, bindless: bool) -> Drawable {
     Drawable::new_with(
         device,
         queue,
-        strips(),
+        strips(half),
         FORMAT,
         Anisotropy::Off,
         1,
@@ -102,8 +106,9 @@ fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, bindless: bool) -> Drawa
     .expect("the strips build")
 }
 
-/// `drawable` drawn over the whole target with identity matrices, read back row by row.
-fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawable: &Drawable) -> Vec<u8> {
+/// `drawables` drawn one after another in one pass with identity matrices, read back row
+/// by row.
+fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawables: &[Drawable]) -> Vec<u8> {
     let target = |format, usage| {
         device.create_texture(&wgpu::TextureDescriptor {
             label: Some("bindless test"),
@@ -128,12 +133,14 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawable: &Drawable) -> Ve
         mesh_render::DEPTH_FORMAT,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
     );
-    drawable.write(
-        &drawable::Uploads::immediate(queue),
-        Mat4::IDENTITY,
-        Mat4::IDENTITY,
-        Mat4::IDENTITY,
-    );
+    for drawable in drawables {
+        drawable.write(
+            &drawable::Uploads::immediate(queue),
+            Mat4::IDENTITY,
+            Mat4::IDENTITY,
+            Mat4::IDENTITY,
+        );
+    }
     let mut encoder = device.create_command_encoder(&Default::default());
     {
         let colour_view = colour.create_view(&Default::default());
@@ -159,7 +166,9 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawable: &Drawable) -> Ve
             }),
             ..Default::default()
         });
-        drawable.draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+        for drawable in drawables {
+            drawable.draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+        }
     }
     let row = SIZE * 4;
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -196,46 +205,54 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawable: &Drawable) -> Ve
         .to_vec()
 }
 
-/// Each strip's centre pixel, left to right.
+/// Each strip's centre pixel, left to right across both halves.
 fn centres(pixels: &[u8]) -> Vec<[u8; 4]> {
     let y = SIZE as usize / 2;
-    (0..STRIPS)
+    (0..2 * STRIPS)
         .map(|strip| {
-            let x = (2 * strip + 1) * SIZE as usize / (2 * STRIPS);
+            let x = (2 * strip + 1) * SIZE as usize / (4 * STRIPS);
             let at = (y * SIZE as usize + x) * 4;
             [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]]
         })
         .collect()
 }
 
-/// **A draw on the arrays reads its own slot.** Eight draws of eight slots, drawn once
-/// through the arrays and once through the per-slot groups: every pixel equal, and the
-/// strips distinct but for the one pair that shares a texture, so a draw reading another
-/// slot (a row pushed for the wrong slot or not pushed at a change, the white fallback at 0
-/// forgotten, a role in the row shifted) changes a strip. Fails, too, if a device that has the features stops
-/// taking the arrays path.
+/// **A draw on the arrays reads its own slot of its own drawable.** Two drawables of eight
+/// slots each, drawn in one pass once through the arrays and once through the per-slot
+/// groups: every pixel equal, and the strips distinct but for the pairs that share a
+/// texture, so a draw reading another slot (a row pushed for the wrong slot or not pushed at
+/// a change, the white fallback at 0 forgotten, a role in the row shifted) or another
+/// drawable's arrays (a group left bound from the drawable before) changes a strip. Fails,
+/// too, if a device that has the features stops taking the arrays path.
 #[test]
 fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     let Some((device, queue)) = test_gpu() else {
         return;
     };
-    let arrays = drawable(&device, &queue, true);
+    let arrays = [0, 1].map(|half| drawable(&device, &queue, half, true));
     if !mesh_render::bindless::supported(&device) {
-        assert!(!arrays.binds_arrays(), "no features, no arrays");
+        assert!(!arrays[0].binds_arrays(), "no features, no arrays");
         eprintln!("no binding arrays on this adapter: the per-slot path only");
         return;
     }
-    assert!(arrays.binds_arrays(), "the device has the features");
-    let per_slot = drawable(&device, &queue, false);
-    assert!(!per_slot.binds_arrays());
+    assert!(
+        arrays.iter().all(Drawable::binds_arrays),
+        "the device has the features"
+    );
+    let per_slot = [0, 1].map(|half| drawable(&device, &queue, half, false));
+    assert!(!per_slot.iter().any(Drawable::binds_arrays));
     let expected = pixels(&device, &queue, &per_slot);
     let strips = centres(&expected);
-    assert_eq!(
-        strips[SHARED], strips[SHARED_WITH],
-        "one texture, one colour"
-    );
+    for half in [0, STRIPS] {
+        assert_eq!(
+            strips[half + SHARED],
+            strips[half + SHARED_WITH],
+            "one texture, one colour"
+        );
+    }
+    assert_eq!(strips[UNDECODED], strips[STRIPS + UNDECODED], "both white");
     for (index, strip) in strips.iter().enumerate() {
-        if index == SHARED {
+        if index % STRIPS == SHARED || index == STRIPS + UNDECODED {
             continue;
         }
         assert!(

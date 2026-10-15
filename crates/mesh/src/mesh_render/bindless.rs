@@ -237,9 +237,9 @@ impl Bindless {
         &self.group
     }
 
-    /// Slot `slot`'s row as the immediates a draw of it pushes, at offset 0. A slot
-    /// past the drawable's own reads slot 0, the white fallback, as the per-slot
-    /// path's clamp does.
+    /// Slot `slot`'s row as the immediates a draw of it pushes, at offset 0. Callers
+    /// clamp the slot to the drawable's own first, as for the per-slot groups; one past
+    /// them anyway reads slot 0, the white fallback.
     #[must_use]
     pub fn row(&self, slot: usize) -> &[u8] {
         bytemuck::cast_slice(self.rows.get(slot).unwrap_or(&self.rows[0]))
