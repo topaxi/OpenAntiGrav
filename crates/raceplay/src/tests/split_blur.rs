@@ -103,7 +103,7 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -
 }
 
 /// The rows `rect` covers, as a slice of `pixels`' bytes.
-fn rows<'a>(pixels: &'a [u8], rect: (f32, f32, f32, f32)) -> &'a [u8] {
+fn rows(pixels: &[u8], rect: (f32, f32, f32, f32)) -> &[u8] {
     let row = (SIZE * 4) as usize;
     &pixels[rect.1 as usize * row..(rect.1 + rect.3) as usize * row]
 }
@@ -285,8 +285,10 @@ fn a_later_view_keeps_the_velocity_and_depth_of_the_views_before_it() {
     let rects = frames.race.view_rects(AREA);
     let near = |rect| {
         rows(&depth, rect)
-            .chunks_exact(4)
-            .any(|texel| f32::from_le_bytes([texel[0], texel[1], texel[2], texel[3]]) < 1.0)
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|texel| f32::from_le_bytes(*texel) < 1.0)
     };
     assert!(
         near(rects[0]),
@@ -298,8 +300,10 @@ fn a_later_view_keeps_the_velocity_and_depth_of_the_views_before_it() {
     );
     let motion = |rect| {
         rows(&velocity, rect)
-            .chunks_exact(2)
-            .map(|half| half_to_f32(u16::from_le_bytes([half[0], half[1]])).abs())
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|half| half_to_f32(u16::from_le_bytes(*half)).abs())
             .fold(0.0_f32, f32::max)
     };
     assert!(

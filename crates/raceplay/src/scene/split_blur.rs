@@ -20,6 +20,7 @@ impl Scene {
     /// in `view`. Returns whether a chain ran. `timestamps` brackets all the chains with one
     /// pair: its opening half rides the first view's first pass and its closing half the last
     /// view's last, so the overlay's BLUR row reads the whole.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn blur_split_views(
         &self,
         device: &wgpu::Device,
