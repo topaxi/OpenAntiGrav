@@ -79,19 +79,21 @@ Two things worth carrying forward from doing it:
   it is not. The guard is now a shape comparison: the hull's plan-view
   footprint covers 93 % of the craft mesh's and spills 4 % beyond it.
 - **`HULL_DARKNESS` is ours and unevidenced.** What a stencil volume is
-  darkened by is decided by the pass that fills it, and that pass is unread; at
-  full alpha the tier drew a black hole in the road, so `0.35` is a number
-  picked to read as a shadow and derived from nothing. **HD's own
-  `MAP_STRENGTH` is the same kind of number** and for the same reason - its
-  compositing pass is unread too. Reading either would replace a choice with a
-  measurement.
-- **Two numbers with no evidence behind them, one per title**: Pulse's
-  `HULL_DARKNESS` and HD's `MAP_STRENGTH`. Both exist because the pass that
-  turns the original's shadow term into pixels is unread on both titles - HD
-  puts `1 - shadow` in the fragment's alpha (`ShadowToAlpha`) and composites it
-  later, and that compositing pass has never been traced.
-- **HD's map size is ours too.** `shadowMapTexSize` is a real engine parameter
-  and its value is unread; 1024 is a choice.
+  darkened by is decided by the pass that fills it, and that pass is unread on
+  Pulse; at full alpha the tier drew a black hole in the road, so `0.35` is a
+  number picked to read as a shadow and derived from nothing. **HD's side is
+  read, 2026-10-15** ([`shadow-track-redraw.md`](../../docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md)):
+  the redraw is the road lit without its sun blended in by the map's coverage,
+  so HD's `MAP_STRENGTH` is gone from an HD race (the multiply survives for a
+  scene with no authored rig and for `mapped`). Pulse's pass is the one still
+  unread.
+- **HD's map size is read, and ours is a chosen equivalent.** `shadowMapTexSize`
+  is `(2/w, 2/h)` of each ship's own map, 512/512/256/128/64/32/32/32 by distance
+  rank. The one grid-fitted map is 2048 (about 12 texels per unit, the original's
+  third ship; chosen, not measured); one map per craft, sized by rank, is the
+  faithful version and is open. A matched-camera pair on the grid
+  (`talons-grid-recheck/00`) now shows the player's craft-shaped blue shadow the
+  original shows; before, the fit spent the map on a 467-unit box.
 - **HD's hull is a receiver now, and half of it is still open - 2026-09-21.**
   [`ship-sun-occlusion.md`](../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md):
   `Job RenderShips` renders the track within ten units of the sun line
@@ -173,9 +175,11 @@ Two things worth carrying forward from doing it:
 - Look at both drawn tiers in a window on one title and judge the four numbers
   that are ours: the fade, the falloff's darkness, the lift, and
   `HULL_DARKNESS`. Every judgement so far is from a headless capture.
-- Read the compositing pass on either title - `RenderModelShadowsOnTrack` on
-  HD is the nearer one, since its material flag `ShadowToAlpha` is already
-  bound at `0x405d48` - and replace both darkness constants with measurements.
+- Read Pulse's compositing pass and replace `HULL_DARKNESS` with a measurement.
+  HD's is read (`shadow-track-redraw.md`) and its darkness constant is gone.
+- One shadow map per craft on HD, sized by distance rank (512/512/256/128/64/32),
+  each receiver combining `1 - prod(1 - coverage_i)` the way the original's
+  successive blends do; the shared 2048 map is the chosen stand-in.
 - Bind the node matrices in the caster pass, which is the named gap above and
   the likeliest reason a craft casts nothing onto the road.
 - A real cascade ladder: `mapped` is one cascade fitted ahead of the camera,
