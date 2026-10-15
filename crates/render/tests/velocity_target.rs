@@ -301,7 +301,7 @@ fn draw(
             multiview_mask: None,
         });
         pass.set_pipeline(&pipeline);
-        pass.set_bind_group(0, &bind_group, &[]);
+        pass.set_bind_group(0, &bind_group, &[0]);
         pass.set_bind_group(1, &texture_binds[0], &[]);
         pass.set_bind_group(2, &fog_bind, &[0]);
         pass.set_bind_group(3, &anim_bind, &[]);

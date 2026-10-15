@@ -79,7 +79,7 @@ impl Drawable {
         if self.model.indices.is_empty() {
             return stats;
         }
-        pass.set_bind_group(0, &self.uniform_bind, &[]);
+        pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_vertices(pass);
@@ -206,7 +206,7 @@ impl Drawable {
             return stats;
         }
         let opaque: &[u64] = sections.map_or(&[], |s| &s.opaque[..]);
-        pass.set_bind_group(0, &self.uniform_bind, &[]);
+        pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_vertices(pass);

@@ -844,6 +844,11 @@ impl Gantry {
         race_clock(&self.clock, &self.tracker, race)
     }
 
+    /// Moves the gantry's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        self.drawable.share_uniforms(device, blocks);
+    }
+
     /// Moves the gantry onto the circuit's scene block, written with the rest of the scenery's.
     pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
         self.drawable
@@ -859,7 +864,7 @@ impl Gantry {
     /// panel at `seconds` ([`PanelCull`]).
     pub(super) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         previous_view_projection: Mat4,
         seconds: f32,

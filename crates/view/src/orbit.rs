@@ -554,7 +554,7 @@ impl Session {
             // colour alone. Matches the guard in `mesh_render::capture_from`.
             if !self.model.vertices.is_empty() && !self.model.indices.is_empty() {
                 pass.set_pipeline(&self.pipeline);
-                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_bind_group(0, &self.bind_group, &[0]);
                 // The asset viewer never fogs: it shows what is on the disc, and fog
                 // is a property of the race the asset sits in, not of the asset.
                 pass.set_bind_group(2, &self.fog_bind, &[0]);

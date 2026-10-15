@@ -229,6 +229,20 @@ impl Target {
         })
     }
 
+    /// Moves every drawable's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        for drawable in [
+            self.alternate.as_mut(),
+            self.primary.as_mut(),
+            self.sky.as_mut(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            drawable.share_uniforms(device, blocks);
+        }
+    }
+
     /// Moves the two groups onto the race's scene blocks: the primary reads the circuit's own
     /// block, the alternate its own, which [`Self::write`] fills.
     pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
@@ -247,7 +261,7 @@ impl Target {
     /// block, which the caller wrote.
     pub(super) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         (blocks, block): (&SceneBlocks, ViewBlock),
         matrix: Mat4,
         eye: Vec3,
@@ -359,7 +373,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_behind_glass(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         encoder: &mut wgpu::CommandEncoder,
         block: ViewBlock,
         scene: &mesh_render::Scene,

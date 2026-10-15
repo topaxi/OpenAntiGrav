@@ -126,7 +126,7 @@ impl Drawable {
         }
         oag_gpu::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.uniform_bind, &[]);
+        pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
         // and group 2 survives the `set_pipeline` calls below.
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));

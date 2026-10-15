@@ -30,7 +30,7 @@ impl Scene {
     /// a pad the bump is crossing for one frame in every frame.
     pub(super) fn write_road(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         race: &Race,
         seconds: f32,
         (view_projection, prev_vp): (Mat4, Mat4),

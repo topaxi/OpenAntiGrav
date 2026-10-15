@@ -8,7 +8,7 @@ use super::*;
 mod instance;
 mod pad_glow;
 mod scene_block;
-pub(crate) use scene_block::{SceneBlocks, SceneKind, ViewBlock};
+pub(crate) use scene_block::{SceneBlocks, SceneKind, Staging, UniformBlocks, Uploads, ViewBlock};
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -54,6 +54,9 @@ pub(super) struct Drawable {
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
+    /// Which slot of the race's [`UniformBlocks`] [`Self::uniform_bind`] reads, once
+    /// [`Self::share_uniforms`] moved it there; `None` while it reads [`Self::uniforms`].
+    uniform_slot: Option<u32>,
     textures: Vec<wgpu::BindGroup>,
     /// Bind group 2: the fog this drawable is rendered with.
     fog_bind: wgpu::BindGroup,
@@ -343,6 +346,7 @@ impl Drawable {
             indices,
             uniforms,
             uniform_bind,
+            uniform_slot: None,
             textures,
             fog_bind,
             fog: fog_buffer,
@@ -503,7 +507,7 @@ impl Drawable {
     #[track_caller]
     pub(super) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -518,7 +522,7 @@ impl Drawable {
     #[track_caller]
     pub(super) fn write_hull(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -540,7 +544,7 @@ impl Drawable {
     #[track_caller]
     pub(super) fn write_clocked(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -555,7 +559,7 @@ impl Drawable {
     #[track_caller]
     pub(super) fn write_blast(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -575,7 +579,7 @@ impl Drawable {
     #[track_caller]
     fn write_uniforms(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -591,7 +595,7 @@ impl Drawable {
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
-        oag_gpu::perfprobe::write_buffer(queue, &self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+        self.put_uniforms(queue, uniforms);
     }
 
     /// Puts `scene` - the fog, the light rig, the clock and the shadow map - in bind group 2.

@@ -41,7 +41,7 @@ impl Scene {
     pub(super) fn write_absorb_shells(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &motion::Snapshot,

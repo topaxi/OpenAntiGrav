@@ -31,7 +31,8 @@ mod vertex_layout;
 pub use prepass::Prepass;
 pub use uniforms::{
     DEPTH_FORMAT, Fog, Light, QuakeWave, SCENE_SIZE, SCENE_STRIDE, Scene, ShadowMap, ShadowMaps,
-    ShadowReceiver, UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
+    ShadowReceiver, UNIFORMS_SIZE, UNIFORMS_STRIDE, Zone, ZoneSet, write_uniforms,
+    write_uniforms_raw,
 };
 pub use velocity::Velocity;
 pub(crate) use velocity::velocity_targets;
@@ -382,10 +383,13 @@ pub fn build_with(
             // Both stages: the fragment stage reads `sun_occlusion_layer`,
             // which picks a hull's layer of the occlusion array.
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            // **A dynamic offset**, so a race keeps every drawable's matrices in one buffer
+            // with a region per view ([`UNIFORMS_STRIDE`]); a caller with one block binds
+            // offset `0`.
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
+                has_dynamic_offset: true,
+                min_binding_size: std::num::NonZeroU64::new(UNIFORMS_SIZE),
             },
             count: None,
         }],

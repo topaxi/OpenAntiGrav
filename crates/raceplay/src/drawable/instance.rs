@@ -71,6 +71,7 @@ impl Drawable {
             indices: self.indices.clone(),
             uniforms,
             uniform_bind,
+            uniform_slot: None,
             textures: self.textures.clone(),
             fog_bind: self.fog_bind.clone(),
             fog: self.fog.clone(),

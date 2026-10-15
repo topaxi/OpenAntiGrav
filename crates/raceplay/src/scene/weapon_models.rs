@@ -165,7 +165,7 @@ impl super::Scene {
         &self,
         race: &Race,
         prev: &Snapshot,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         prev_vp: Mat4,
         seconds: f32,
@@ -288,7 +288,7 @@ impl super::Scene {
     pub(super) fn write_plasma_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
@@ -386,7 +386,7 @@ impl super::Scene {
     pub(super) fn write_bomb_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         seconds: f32,
         weapon_scene: &mesh_render::Scene,
@@ -543,7 +543,7 @@ impl super::Scene {
     fn write_hd_bomb_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS] {
@@ -587,7 +587,7 @@ impl super::Scene {
     fn write_hd_bomb_halos(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> usize {
@@ -615,7 +615,7 @@ impl super::Scene {
     fn write_hd_missile_blasts(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; crate::missile_blast::SLOTS] {
@@ -683,7 +683,7 @@ impl super::Scene {
     fn write_mag_floor_fx(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         seconds: f32,
     ) -> [bool; oag_weapons::MAX_SHIPS] {
@@ -719,7 +719,7 @@ fn write_one_kind(
     weapon_scene: &mesh_render::Scene,
     matrices: &[Mat4],
     previous: &[Mat4],
-    queue: &wgpu::Queue,
+    queue: &Uploads<'_>,
     view_projection: Mat4,
     prev_vp: Mat4,
     anim_seconds: Option<f32>,

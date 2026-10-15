@@ -66,6 +66,24 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
         assert_eq!(first.fog.camera, eye0, "{kind:?} block of view 0");
         assert_eq!(second.fog.camera, eye1, "{kind:?} block of view 1");
     }
+    // The craft's matrices: one staged block a view, written in the view's own region.
+    // Drop `share_uniform_blocks` and the slot is `None`; drop the flush and both read zero.
+    let hull_in_view = |view: usize, ship: usize| {
+        scene
+            .ship_matrices(&device, &queue, view, ship)
+            .expect("the hulls are on the uniform blocks")
+    };
+    for view in 0..2 {
+        let (view_projection, model) = hull_in_view(view, 0);
+        let expected = race.ship_model_matrix_of(0).to_cols_array_2d();
+        assert_eq!(model, expected, "craft 0's model matrix in view {view}");
+        assert_ne!(view_projection, [[0.0; 4]; 4], "view {view}'s camera");
+    }
+    assert_ne!(
+        hull_in_view(0, 0).0,
+        hull_in_view(1, 0).0,
+        "two views, two cameras, two regions"
+    );
     let untouched = scene.scene_block(&device, &queue, 2, SceneKind::Circuit);
     assert_eq!(
         untouched.fog.camera,

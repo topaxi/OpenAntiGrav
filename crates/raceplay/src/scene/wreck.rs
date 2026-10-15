@@ -42,6 +42,13 @@ pub(super) struct Wrecks {
 }
 
 impl Wrecks {
+    /// Moves every wreck's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        for wreck in self.hull.iter_mut().flatten() {
+            wreck.share_uniforms(device, blocks);
+        }
+    }
+
     /// Moves every wreck onto the craft's scene block: it is written with the hulls'.
     pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
         for wreck in self.hull.iter_mut().flatten() {
@@ -106,7 +113,7 @@ impl Scene {
     /// Writes every live wreck's pose, as the hull's own is written.
     pub(super) fn write_wrecks(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         race: &Race,
         view_projection: Mat4,
         prev_vp: Mat4,

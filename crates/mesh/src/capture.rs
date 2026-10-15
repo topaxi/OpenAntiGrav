@@ -304,7 +304,7 @@ pub fn capture_pixels_from(
         // the caller, not here.
         if !model.vertices.is_empty() && !model.indices.is_empty() {
             pass.set_pipeline(&pipeline);
-            pass.set_bind_group(0, &bind_group, &[]);
+            pass.set_bind_group(0, &bind_group, &[0]);
             // Group 2 never changes within a pass and survives `set_pipeline`, so it
             // is bound once here rather than per draw call. The capture path leaves
             // it at `Fog::off`.

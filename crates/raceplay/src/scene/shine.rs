@@ -25,6 +25,11 @@ pub(super) struct TrackShine {
 }
 
 impl TrackShine {
+    /// Moves the pass's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        self.drawable.share_uniforms(device, blocks);
+    }
+
     /// Moves the pass onto the shine block, written with the hulls' shine passes'.
     pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
         self.drawable.share_scene(device, blocks, SceneKind::Shine);
@@ -214,7 +219,7 @@ impl Scene {
     pub(super) fn write_shine(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &motion::Snapshot,

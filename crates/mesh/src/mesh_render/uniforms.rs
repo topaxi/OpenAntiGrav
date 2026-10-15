@@ -158,6 +158,11 @@ pub fn write_uniforms_raw(
 /// Size, in bytes, of the uniform buffer `write_uniforms` expects.
 pub const UNIFORMS_SIZE: u64 = std::mem::size_of::<Uniforms>() as u64;
 
+/// The distance between two [`Uniforms`] blocks in a buffer that holds several, bound with a
+/// dynamic offset: [`UNIFORMS_SIZE`] rounded up to 256, the largest
+/// `min_uniform_buffer_offset_alignment` WebGPU allows any device to ask for.
+pub const UNIFORMS_STRIDE: u64 = UNIFORMS_SIZE.div_ceil(256) * 256;
+
 #[cfg(test)]
 mod tests {
     use super::*;

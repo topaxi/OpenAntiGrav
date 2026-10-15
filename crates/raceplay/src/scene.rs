@@ -68,6 +68,9 @@ pub struct Scene {
     /// The buffer every drawable the frame writes a scene block into reads it from, a block
     /// per view and per kind - see [`SceneBlocks`] and `scene_blocks.rs`.
     scene_blocks: SceneBlocks,
+    /// The buffer behind every shared drawable's matrices, and the memory a view stages them in.
+    uniform_blocks: UniformBlocks,
+    upload_staging: std::cell::RefCell<Staging>,
     /// The circuit's own light rig, where it authors one.
     ///
     /// [`mesh_render::Light::stand_in`] for every title whose rig has not been
@@ -974,6 +977,8 @@ impl Scene {
         );
         let mut scene = Self {
             scene_blocks: SceneBlocks::new(device, queue),
+            uniform_blocks: UniformBlocks::new(device),
+            upload_staging: std::cell::RefCell::default(),
             build_cache,
             bloom,
             ps2_bloom,
@@ -1050,6 +1055,7 @@ impl Scene {
             ghost: ghost::Ghosts::default(),
         };
         scene.share_scene_blocks(device);
+        scene.share_uniform_blocks(device);
         Ok(scene)
     }
 }

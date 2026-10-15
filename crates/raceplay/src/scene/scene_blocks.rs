@@ -46,6 +46,56 @@ impl Scene {
         }
     }
 
+    /// Moves every drawable the frame writes matrices for onto the shared uniform buffer
+    /// ([`UniformBlocks`]), the ones written on every view first so a view's writes are runs of
+    /// neighbouring slots. One a pool or a pass nobody walks here keeps its own buffer.
+    pub(super) fn share_uniform_blocks(&mut self, device: &wgpu::Device) {
+        let blocks = &mut self.uniform_blocks;
+        let mut share = |drawable: &mut Drawable| drawable.share_uniforms(device, blocks);
+        for drawable in &mut self.ships {
+            share(drawable);
+        }
+        for drawable in self.shine.iter_mut().flatten() {
+            share(drawable);
+        }
+        for drawable in [Some(&mut self.track), self.sky.as_mut()]
+            .into_iter()
+            .chain([
+                self.collision.as_mut(),
+                self.pads.as_mut(),
+                self.weapon_pads.as_mut(),
+            ])
+            .flatten()
+        {
+            share(drawable);
+        }
+        for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
+            share(drawable);
+        }
+        for drawable in self
+            .shield
+            .iter_mut()
+            .chain(&mut self.absorb_shell)
+            .chain(self.absorb_overlay.iter_mut().flatten())
+            .flatten()
+        {
+            share(drawable);
+        }
+        if let Some(drawable) = &mut self.shield_cockpit {
+            share(drawable);
+        }
+        self.wrecks.share_uniforms(device, blocks);
+        if let Some(shine) = &mut self.track_shine {
+            shine.share_uniforms(device, blocks);
+        }
+        if let Some(gantry) = &mut self.gantry {
+            gantry.share_uniforms(device, blocks);
+        }
+        if let Some(target) = &mut self.behind_glass {
+            target.share_uniforms(device, blocks);
+        }
+    }
+
     /// The blocks of the view following the craft `race` is drawing, one kind each.
     pub(super) fn write_scene_blocks(
         &self,
@@ -65,6 +115,18 @@ impl Scene {
 
 #[cfg(test)]
 impl Scene {
+    /// Craft `ship`'s matrices as the view following craft `view` wrote them, read back.
+    pub(crate) fn ship_matrices(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        view: usize,
+        ship: usize,
+    ) -> Option<([[f32; 4]; 4], [[f32; 4]; 4])> {
+        let slot = self.ships[ship].uniform_slot()?;
+        Some(self.uniform_blocks.read(device, queue, view, slot))
+    }
+
     /// `kind`'s block of the view following craft `slot`, read back off the GPU.
     pub(crate) fn scene_block(
         &self,

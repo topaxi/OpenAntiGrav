@@ -67,6 +67,15 @@ impl Scene {
         // The scene blocks of the view being drawn: the craft it follows names them, so two
         // views of a frame never read or write the same one (`SceneBlocks`).
         let block = SceneBlocks::view(race.viewed_slot());
+        // Every drawable's matrices of this view are staged here and written once, in runs,
+        // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
+        let uploads = Uploads::begin(
+            queue,
+            &self.uniform_blocks,
+            block,
+            std::mem::take(&mut *self.upload_staging.borrow_mut()),
+        );
+        let queue = &uploads;
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let projection = race.projection(aspect, self.far, fov);
         let view_projection = projection * race.view();
@@ -732,6 +741,7 @@ impl Scene {
             None => (target, None),
         };
         let velocity_view = &self.attachment_views.velocity;
+        uploads.flush();
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("race"),
             color_attachments: &[
@@ -1064,6 +1074,7 @@ impl Scene {
             blur_timestamps,
         );
         oag_gpu::perfprobe::mark("post-chain");
+        *self.upload_staging.borrow_mut() = uploads.into_staging();
         stats
     }
 }
