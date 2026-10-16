@@ -186,6 +186,51 @@ pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &oag_title:
     unlocked
 }
 
+/// Whether the `HUD Style` skin passes its `PI_HUD` row, `<Unlock team="any" loyalty="N">`.
+///
+/// **The rule is the best single team of the title's roster reaching `N`**
+/// ([`Store::loyalty_best`]), the `any` the row's own `team="any"` attribute names, evaluated
+/// as Pulse's traced `Unlock_LoyaltyMet` does. The `team="any"` and the thresholds (`6000`,
+/// `10000`) are measured off the disc's data; that HD's own executable evaluates `any` as the
+/// best team rather than a sum is **inherited from Pulse, not measured on HD** (its `PI_HUD`
+/// evaluator was not traced).
+#[must_use]
+pub fn hud_skin_unlocked(
+    skin: &oag_title::HudSkin,
+    records: &Store,
+    title: &oag_title::Title,
+) -> bool {
+    let row = LoyaltyRow {
+        team: "any".to_string(),
+        loyalty: skin.loyalty,
+        exclusive: false,
+    };
+    loyalty_unlocked(&[row], records, title)
+}
+
+/// The saved `HUD Style`, or `None` (the default skin) while it names a skin still locked.
+/// The saved value is left alone, so the skin applies once it unlocks. A name the title does not
+/// list passes through for the loader to report.
+#[must_use]
+pub fn available_hud_style(
+    saved: Option<String>,
+    records: &Store,
+    title: &oag_title::Title,
+) -> Option<String> {
+    let name = saved?;
+    match title.hud.skin(Some(&name)) {
+        Some(skin) if !hud_skin_unlocked(skin, records, title) => {
+            log::info!(
+                "HUD Style {} is still locked ({} loyalty); the default skin is drawn",
+                skin.name,
+                skin.loyalty
+            );
+            None
+        }
+        _ => Some(name),
+    }
+}
+
 /// Whether `title` gates its craft variants at all: Pulse authors the
 /// loyalty rows, and no other title's definition here carries them
 /// ([`oag_title::Campaign::loyalty_unlocks`]).
@@ -255,6 +300,40 @@ mod tests {
         assert!(!loyalty_unlocked(&rows, &store, T));
         store.record_loyalty(T, "Qirex", 5);
         assert!(loyalty_unlocked(&rows, &store, T));
+    }
+
+    #[test]
+    fn hud_styles_gate_on_the_best_team_and_a_locked_saved_one_falls_back() {
+        let hd = oag_hd::TITLE;
+        let mut store = Store::default();
+        assert_eq!(available_hud_style(Some("2097".into()), &store, hd), None);
+        assert_eq!(
+            available_hud_style(Some("HD".into()), &store, hd).as_deref(),
+            Some("HD")
+        );
+        let locked = |s: &Store| {
+            oag_ui::menu::hud_style_choices(hd, |skin| hud_skin_unlocked(skin, s, hd))
+                .iter()
+                .map(|c| c.value.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(locked(&store), ["HD"]);
+        store.record_loyalty(hd, "Feisar", 6000);
+        assert_eq!(locked(&store), ["HD", "2097"]);
+        assert_eq!(
+            available_hud_style(Some("2097".into()), &store, hd).as_deref(),
+            Some("2097")
+        );
+        assert_eq!(
+            available_hud_style(Some("WIP3OUT".into()), &store, hd),
+            None
+        );
+        store.record_loyalty(oag_pulse::TITLE, "Qirex", 10_000);
+        assert_eq!(
+            locked(&store),
+            ["HD", "2097", "WIP3OUT"],
+            "Qirex's loyalty earned in Pulse opens HD's last skin"
+        );
     }
 
     #[test]

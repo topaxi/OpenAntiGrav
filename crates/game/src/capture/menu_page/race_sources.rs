@@ -52,7 +52,10 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::HudStyles,
-        &oag_ui::menu::hud_style_choices(title),
+        &oag_ui::menu::hud_style_choices(title, |skin| {
+            let records = crate::records::load();
+            crate::unlock::hud_skin_unlocked(skin, &records, title)
+        }),
     );
 }
 

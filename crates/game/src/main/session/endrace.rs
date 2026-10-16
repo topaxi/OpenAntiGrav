@@ -60,7 +60,6 @@ impl Session {
         let dlc = race_options.dlc.clone();
         let team = race_options.team.clone();
         let campaign = stage.campaign_cell.is_some();
-        let title = stage.result_key.title.clone();
         // The actual title package, not the display name above - what
         // `oag_game::endrace::load`'s own title dispatch needs, and what
         // this function's own dispatch (Pulse's per-lap `Results` versus

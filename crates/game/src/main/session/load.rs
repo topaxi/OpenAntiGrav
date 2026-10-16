@@ -429,6 +429,15 @@ impl Session {
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
         options.hud_style = self.settings.display.hud_style_choice();
+        // A saved skin still locked draws the default. The menu launch only: `--race` and
+        // `--hud-style` name a skin outright and pass, as `--unlock-all` does.
+        if let Some(shell) = self.shell.as_ref() {
+            options.hud_style = oag_game::unlock::available_hud_style(
+                options.hud_style.take(),
+                &self.records,
+                shell.title,
+            );
+        }
         // The same refresh, for the BOOST ZOOM row: a race reads it when it loads.
         options.boost_zoom = self
             .settings

@@ -53,7 +53,7 @@ impl Session {
         let gate = self.unlock_gate();
         let offered: Vec<_> = offered
             .into_iter()
-            .filter(|(track, _)| gate.offers(track, &self.records, title))
+            .filter(|(track, _)| gate.offers(track, &self.records, title.name))
             .collect();
         let (listed, columns) = if hd {
             catalogue::direction_rows(title, mode, &offered)
