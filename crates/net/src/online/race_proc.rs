@@ -256,6 +256,8 @@ struct ChildHandle {
     /// of file as "the lobby is gone" and stops, so a lobby that dies for any reason
     /// (SIGKILL included, when the kernel closes the pipe) does not orphan its race.
     _stdin: Option<std::process::ChildStdin>,
+    /// The threads draining the child's two pipes; each ends at the pipe's end of file.
+    readers: Vec<std::thread::JoinHandle<()>>,
     lines: mpsc::Receiver<String>,
     port: Option<u16>,
     hash: Option<[u8; 32]>,
@@ -297,9 +299,15 @@ impl Handle for ChildHandle {
         }
         match self.child.try_wait() {
             Ok(Some(status)) => {
-                // Lines still in the pipe when it exited are in the reader's hands; give it
-                // a moment so the reason is the child's own.
-                std::thread::sleep(Duration::from_millis(50));
+                // Lines still in the pipe when it exited are in the readers' hands: wait for
+                // their end of file (bounded, a grandchild may hold a pipe) so the reason is
+                // the child's own, whatever the machine's load.
+                let waited = Instant::now();
+                while self.readers.iter().any(|r| !r.is_finished())
+                    && waited.elapsed() < Duration::from_secs(2)
+                {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
                 let why = self.reason(&status);
                 self.over = Some(why.clone());
                 return Status::Over(why);
@@ -365,6 +373,7 @@ impl Runner for ChildRunner {
         // and look like a frozen race.
         let (tx, lines) = mpsc::channel();
         let tail = Arc::new(Mutex::new(Vec::new()));
+        let mut readers = Vec::new();
         for pipe in [
             child
                 .stdout
@@ -379,7 +388,7 @@ impl Runner for ChildRunner {
         .flatten()
         {
             let (tx, tail) = (tx.clone(), tail.clone());
-            std::thread::spawn(move || {
+            readers.push(std::thread::spawn(move || {
                 for line in std::io::BufReader::new(pipe).lines().map_while(Result::ok) {
                     log::debug!("race process: {line}");
                     if let Ok(mut tail) = tail.lock() {
@@ -391,11 +400,12 @@ impl Runner for ChildRunner {
                         break;
                     }
                 }
-            });
+            }));
         }
         Ok(Box::new(ChildHandle {
             child,
             _stdin: stdin,
+            readers,
             lines,
             port: None,
             hash: None,
