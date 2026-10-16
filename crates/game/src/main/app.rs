@@ -576,6 +576,7 @@ impl App {
             split_cut: self.split_cut,
             screens: Vec::new(),
             screens_opened: false,
+            windowed_sizes: Vec::new(),
             windows_wanted,
             window_layout: self.window_layout.clone(),
             windows_fullscreen: self.windows_fullscreen,
@@ -871,6 +872,17 @@ impl ApplicationHandler for App {
                         crate::rebind::Capture::Cancel => session.cancel_binding(),
                         crate::rebind::Capture::Ignore => {}
                     }
+                    return;
+                }
+                // F11: this window goes borderless on its own monitor, or back. Never a game
+                // input, so it returns before any menu, race or seat routing sees it.
+                #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+                if crate::window::is_fullscreen_key(
+                    &event.logical_key,
+                    event.state == ElementState::Pressed,
+                    event.repeat,
+                ) {
+                    session.toggle_window_fullscreen(id);
                     return;
                 }
                 // **`repeat` matters now that escape navigates.** winit resends

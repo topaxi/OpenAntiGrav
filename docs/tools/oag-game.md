@@ -39,6 +39,8 @@ presses a button to take a seat, START begins with the seated count, and
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
 and right airbrakes, C and V are square and triangle.
 
+**F11** toggles the window you press it in between borderless fullscreen (on the monitor that window is on) and windowed; it is per window and not saved. See [multi-window](../rendering/multi-window.md).
+
 **Escape goes back one level**, and only quits when there is nothing behind:
 from a race it returns to the menus, from a menu page it pops one page, and from
 the root page or a `--race` run - which never had menus - it quits. Backing out
