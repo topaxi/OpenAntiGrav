@@ -151,10 +151,11 @@ impl Race {
     /// race runs; **just the player's own while the intro flyby plays, in every window that
     /// holds a seat** (the flyby is the player's camera and the other seats have none, so each
     /// window plays it full window at its own size and aspect, and each switches to its own
-    /// seats when it ends - **chosen, not measured**); **and once the race is over, in the
-    /// window that holds the player** (the end screens sit over the spectator camera, as in a
-    /// split: [`Self::views_drawn`]; the other windows keep their chase cameras). A window
-    /// past the layout, or with no seats, draws none.
+    /// seats when it ends - **chosen, not measured**); **and once the race is over, in every
+    /// window that holds a seat, just as the flyby is** (the end screens sit over the spectator
+    /// camera, as in a split: [`Self::views_drawn`], each window at its own size and aspect -
+    /// **chosen, not measured**, the maintainer's request of 2026-10-16). A window past the
+    /// layout, or with no seats, draws none.
     #[must_use]
     pub fn window_drawn(&self, window: usize) -> Vec<usize> {
         let Some(views) = self.view.viewpoints.windows.get(window) else {
@@ -168,7 +169,7 @@ impl Race {
             .filter(|&slot| slot < self.viewport_count())
             .collect();
         let flyby = self.in_intro() && !seats.is_empty();
-        if flyby || (seats.contains(&player) && self.finished()) {
+        if flyby || (!seats.is_empty() && self.finished()) {
             vec![player]
         } else {
             seats

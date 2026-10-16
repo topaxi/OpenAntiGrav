@@ -75,6 +75,50 @@ fn a_one_seat_window_is_whole_and_a_seat_without_a_camera_is_skipped() {
     assert_eq!(race.window_drawn(1), vec![1, 2], "slot 3 has no camera");
 }
 
+/// Once every person has finished, each window that holds a seat draws the spectator view of the
+/// player alone (the end screens sit over it, at the window's own size), and a window with no
+/// seat still draws nothing. Fails on the build where only the window holding the player
+/// collapsed and the others kept their chase cameras.
+#[test]
+fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
+    let mut race = race_with_a_grid();
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.sim.world.controllers[2] = oag_gameplay::Controller::Local;
+    assert_eq!(race.set_viewport_count(3), 3);
+    race.set_windows(vec![
+        WindowViews {
+            seats: vec![0],
+            cut: Default::default(),
+        },
+        WindowViews {
+            seats: vec![1, 2],
+            cut: oag_render::viewport::Cut::Vertical,
+        },
+        WindowViews {
+            seats: Vec::new(),
+            cut: Default::default(),
+        },
+    ]);
+    assert_eq!(race.window_drawn(1), vec![1, 2], "racing: its own seats");
+    for slot in 0..3 {
+        race.sim.world.race[slot].finished = true;
+    }
+    assert!(race.finished());
+    let player = race.player_slot();
+    assert_eq!(race.window_drawn(0), vec![player]);
+    assert_eq!(
+        race.window_drawn(1),
+        vec![player],
+        "window 2 shows the end too"
+    );
+    assert_eq!(
+        race.window_cut(1),
+        Default::default(),
+        "one view is not cut"
+    );
+    assert!(race.window_drawn(2).is_empty(), "a window with no seat");
+}
+
 /// Closing a window takes it out of the layout and the windows after it keep their place.
 #[test]
 fn removing_a_window_keeps_the_others_and_never_removes_window_one() {

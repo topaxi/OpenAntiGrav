@@ -583,11 +583,35 @@ impl RaceStage {
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
-        // The disc's own three EndRace screens, when this title carries
-        // `EndRace_Definition.xml` and it read - see `RaceStage::endrace`'s
-        // own doc. `scoreboard` stays this stage's fallback: a title with no
-        // such screen, or whose read failed, draws exactly what it always
-        // did.
+        if self.draw_end_screens(gpu, encoder, view, viewport, target_size) {
+            return;
+        }
+        self.draw_track_panel(
+            gpu,
+            encoder,
+            view,
+            viewport,
+            self.race.views_drawn(),
+            self.race.cut(),
+        );
+        self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+    }
+
+    /// What the race shows once it is over, over `view`, and whether it drew anything: the
+    /// disc's own EndRace screens when this title carries `EndRace_Definition.xml` and it read
+    /// (see `RaceStage::endrace`'s own doc), else the built-in results table. `false` while the
+    /// race runs, where the caller draws the panel and the HUD instead. **Every window of a
+    /// multi-window race calls this** and draws the one shared flow at its own size and aspect
+    /// (`viewport` is the window's aspect rectangle); the flow is one state, so a press in any
+    /// window moves the one menu. **Chosen, not measured.**
+    pub(crate) fn draw_end_screens(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+    ) -> bool {
         if let Some(endrace) = &mut self.endrace {
             endrace.draw(
                 gpu.device(),
@@ -597,30 +621,21 @@ impl RaceStage {
                 viewport,
                 target_size,
             );
-            return;
+            return true;
         }
-        match self.race.results() {
-            Some(board) => self.scoreboard.draw(
-                gpu.device(),
-                gpu.queue(),
-                encoder,
-                view,
-                board,
-                self.personal_best.as_ref(),
-                viewport,
-            ),
-            None => {
-                self.draw_track_panel(
-                    gpu,
-                    encoder,
-                    view,
-                    viewport,
-                    self.race.views_drawn(),
-                    self.race.cut(),
-                );
-                self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
-            }
-        }
+        let Some(board) = self.race.results() else {
+            return false;
+        };
+        self.scoreboard.draw(
+            gpu.device(),
+            gpu.queue(),
+            encoder,
+            view,
+            board,
+            self.personal_best.as_ref(),
+            viewport,
+        );
+        true
     }
 
     /// The track panel over `view`, laid out against the first of `count` views cut `cut` in
@@ -670,9 +685,9 @@ impl RaceStage {
 
     /// The race HUD of window `window` over `view`, and the start-line countdown: everything
     /// [`Self::draw_hud`] draws while the race runs, for the seats a window shows. A multi-window
-    /// race's further windows call this beside [`Self::draw_window_track_panel`], because the
-    /// results and the end screens belong to window 1. `window` is not read when the race is not
-    /// windowed.
+    /// race's further windows call this beside [`Self::draw_window_track_panel`], after
+    /// [`Self::draw_end_screens`] has said the race is still running. `window` is not read when
+    /// the race is not windowed.
     pub(crate) fn draw_window_hud(
         &mut self,
         gpu: &impl GpuContext,

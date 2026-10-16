@@ -53,6 +53,26 @@ pub(super) fn in_grid(pointer: Pointer, space: Space, rect: (f32, f32, f32, f32)
     }
 }
 
+/// The one pointer the end screens of a multi-window race read this tick, in `space`'s grid:
+/// window 1's (`first`, already in the grid) unless it did nothing, else the first further
+/// window's that did something. The screens are one menu with one cursor, so one window's
+/// pointer drives it per tick; a still mouse in one window cannot hold the others back.
+/// **Chosen, not measured.**
+pub(super) fn end_screen_pointer(
+    first: Pointer,
+    space: Space,
+    seats: &[super::windows::SeatPointer],
+) -> Pointer {
+    if !first.is_idle() {
+        return first;
+    }
+    seats
+        .iter()
+        .map(|&(pointer, rect)| in_grid(pointer, space, rect))
+        .find(|pointer| !pointer.is_idle())
+        .unwrap_or(first)
+}
+
 /// A click on a screen that only waits for a button: press start and cross
 /// for it, which between them is what every such screen reads.
 pub(super) fn press_for_click(controls: &mut Controls, pointer: &Pointer) {
@@ -222,5 +242,40 @@ pub(super) fn campaign_pointer(
         crate::campaign_stage::Screen::Selection(_) => Vec::new(),
         crate::campaign_stage::Screen::Grid(model) => model.pointer(pointer, &targets),
         crate::campaign_stage::Screen::Cell { model, .. } => model.pointer(pointer, &targets),
+    }
+}
+
+#[cfg(test)]
+mod end_screen_tests {
+    use super::*;
+
+    const RECT: (f32, f32, f32, f32) = (0.0, 0.0, 480.0, 272.0);
+
+    fn click_at(x: f32, y: f32) -> Pointer {
+        Pointer {
+            at: Some((x, y)),
+            moved: true,
+            clicked: true,
+            ..Pointer::default()
+        }
+    }
+
+    /// A click in a further window drives the end screens, in that window's own layout (a window
+    /// twice the grid's size halves the pixel), unless window 1 did something this tick. Fails
+    /// if the further windows' pointers are dropped, or taken in window 1's pixels.
+    #[test]
+    fn a_click_in_a_further_window_is_read_in_that_windows_own_layout() {
+        let big = (0.0, 0.0, 960.0, 544.0);
+        let seats = [(Pointer::default(), RECT), (click_at(480.0, 272.0), big)];
+        let read = end_screen_pointer(Pointer::default(), Space::PSP, &seats);
+        assert!(read.clicked);
+        assert_eq!(read.at, Some((240.0, 136.0)));
+
+        let first = click_at(10.0, 20.0);
+        let read = end_screen_pointer(first, Space::PSP, &seats);
+        assert_eq!(read.at, Some((10.0, 20.0)), "window 1 did something: it wins");
+
+        let read = end_screen_pointer(Pointer::default(), Space::PSP, &[]);
+        assert!(read.is_idle());
     }
 }

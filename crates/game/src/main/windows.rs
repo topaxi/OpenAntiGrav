@@ -39,6 +39,10 @@ pub(crate) struct Screen {
     /// This window's own GPU timing rings: dynamic resolution is fed the cost summed over the
     /// windows of a frame (`Session::feed_windows`).
     pub(crate) rings: crate::session::timing::Rings,
+    /// This window's own mouse and touch, latched between ticks. Only the end screens read it
+    /// (`Session::seat_pointers`): a click is also a seat's Start for the pause
+    /// (`Session::seat_clicked`).
+    pub(crate) pointer: crate::pointer::Window,
 }
 
 /// How often a multi-window run says what each window's acquire and present cost.

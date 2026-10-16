@@ -65,6 +65,18 @@ count) is in the executable and was **not read**.
    `RACE AGAIN` rebuilds the race with the same seats (`split_screen::seat_for_launch`
    reads `Controls::assignment().humans()`); leaving unseats (`unseat_after_split_race`).
 
+## In a multi-window race (2026-10-16)
+
+With the views dealt across OS windows (`--windows`, `--window-seats`, the layout screen) **every
+window that holds a seat draws these screens**, each at its own size and aspect over the spectator camera,
+and a press or a click in any of them drives the one menu: see
+[multi-window.md](../rendering/multi-window.md), "The flyby and the end". Chosen, not measured, no
+confidence score. The decision of what each window draws is `Race::window_drawn`
+(`window_drawn` tests in `crates/raceplay/src/tests/windowed.rs`); `Controls::fold_presses` is the
+pad and keyboard routing. A window with no seat keeps its holding frame, and leaving the screens
+(RETURN TO MENU, RACE AGAIN) is the same stage change as in one window. The disc's own screens in a
+second window were not walked live (the built-in table was).
+
 ## What is chosen, not measured
 
 - That the Pulse multiplayer table answers a split race, and the names `PLAYER n`

@@ -1199,10 +1199,9 @@ pub fn capture(
             );
         }
         let scale = options.hud_scale;
-        match race
-            .results()
-            .filter(|_| window.is_none_or(|index| index == 0))
-        {
+        // Every window that holds a seat shows the board, as the window frame loop does
+        // (`RaceStage::draw_end_screens`).
+        match race.results() {
             Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
                 Ok(mut overlay) => {
                     let observation = describe::observation(&race);

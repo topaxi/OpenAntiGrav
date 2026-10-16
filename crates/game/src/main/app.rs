@@ -759,6 +759,21 @@ impl ApplicationHandler for App {
                 } if is_seat => {
                     if let windows::Which::Screen(index) = which {
                         session.seat_clicked(index + 1);
+                        session.seat_pointer(index, &event);
+                    }
+                    return;
+                }
+                // The rest of a seat window's mouse and touch is its own pointer's, which the
+                // end screens read (`Session::seat_pointers`).
+                WindowEvent::CursorMoved { .. }
+                | WindowEvent::CursorLeft { .. }
+                | WindowEvent::MouseInput { .. }
+                | WindowEvent::MouseWheel { .. }
+                | WindowEvent::Touch(_)
+                    if is_seat =>
+                {
+                    if let windows::Which::Screen(index) = which {
+                        session.seat_pointer(index, &event);
                     }
                     return;
                 }

@@ -932,6 +932,34 @@ impl Controls {
         slots
     }
 
+    /// Hands every other slot's press of each of `buttons` to the keyboard's slot, which is the
+    /// one the menus read ([`Self::buttons`]). The press is consumed where it was made and
+    /// arrives on the keyboard's slot one tick later through its latch, as a click's does
+    /// ([`Self::tap`]). What the end-of-race screens of a multi-window race read: they are one
+    /// menu for every person who raced, and a person seated at another window or on a pad of
+    /// their own presses on their own slot. Not called while a race runs, where those presses
+    /// are thrust and weapons.
+    pub fn fold_presses(&mut self, buttons: &[Button]) {
+        let own = self.keyboard_slot();
+        let mut folded = Vec::new();
+        for (_, input) in self
+            .buttons
+            .iter_mut()
+            .enumerate()
+            .filter(|(slot, _)| *slot != own)
+        {
+            for &button in buttons {
+                if input.is_pressed(button) {
+                    input.consume_press(button);
+                    folded.push(button);
+                }
+            }
+        }
+        for button in folded {
+            self.tap(button);
+        }
+    }
+
     /// Whether the pad contributed anything to the last [`Self::snapshot`].
     ///
     /// What the composition root reads to decide that the pad, rather than

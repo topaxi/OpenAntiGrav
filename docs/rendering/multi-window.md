@@ -196,7 +196,7 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
 
 - **One seat**: a full screen, not a split view. The title's whole-screen HUD for that slot
   (`hud_views::draw` with the window), the countdown, the track panel while the flyby plays and fades
-  (every window, see "The flyby and the end") and - on window 1 only - the results and the end screens. The scene is `oag_raceplay::Scene::render_view`, next to
+  (every window, see "The flyby and the end") and, once the race is over, the results and the end screens (every window, same section). The scene is `oag_raceplay::Scene::render_view`, next to
   `render_viewports`: a view of slot `s` through `Layer::Window`, which clears its target and does all
   the camera-independent work itself like a split's first view, and runs the post chains (Pulse's
   bloom, HD's, Omega's tone map) like an unsplit race, because a window starts at the origin and fills
@@ -256,8 +256,8 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   and each goes back to its own seats, cut by its own cut, on the tick the flyby ends. A window
   with no seat keeps its holding frame. **Chosen, not measured**; it is view-side only, nothing the
   tick reads or the hash holds (`World::tick` stays 0 under the flyby). The flyby and its skip are
-  one race state, so a skip (any flown person's held Cross, or a click on window 1; the seat windows' pointer is
-  ignored, as everywhere) ends it on every window at once, and the HUD, which `Race::hud_shown`
+  one race state, so a skip (any flown person's held Cross, or a click on window 1; a seat window's pointer is read
+  only by the end screens, below) ends it on every window at once, and the HUD, which `Race::hud_shown`
   already hid race-wide through it, is off on every window. The track panel (circuit name and
   blurb) is drawn **on every window that plays the flyby**, in the title's own panel art
   (`oag_game::track_panel::Overlay`, one per race), laid out against that window's own first view
@@ -266,12 +266,48 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   runs on the one clock (`Race::track_panel_progress`, the flyby's ticks, then the world's while it
   fades), so every window fades it together behind its own seats. Window 1 and single-window frames
   are unchanged. Skipping is any flown person's, above.
-  Once every person has finished, the window that holds the player shows the end screens over the
-  spectator camera (`Race::window_drawn` is the player alone, as `views_drawn` is one in a split)
-  and the other windows keep their chase cameras and HUD. **Not exercised live:** a finish with
-  several windows (a headless run seats people nobody drives, so no one finishes, and a windowed run
-  under software Vulkan would need a four-minute race at 8 fps); read from `Race::finished` (every
-  *flown* person), `window_drawn` and `RaceStage::draw_hud`/`draw_window_hud` only.
+  **The end screens are on every window that holds a seat** (2026-10-16, maintainer's request:
+  "show the end race screen on all windows on multi window"; **chosen, not measured**, view-side only).
+  Once every flown person has finished, `Race::window_drawn` answers the player's slot alone for every
+  window with a seat, exactly as for the flyby (the spectator camera the end screens sit over), and each
+  window draws `RaceStage::draw_end_screens` over it at its own size and aspect: `EndRace Results`,
+  `Rewards`, `Menu` and `Race End Photo` for a title with the screens, the built-in results table
+  for one without (Pure, a multi-person 2048 race, a source that did not read). A window with no seat keeps
+  its holding frame. **One shared menu**: the flow is the one `RaceStage::endrace`, drawn into each window
+  in turn (one submission per window, as ever), so there is one cursor and one set of rows.
+  - **Pad and keyboard**: a press made on any seat's slot drives the menu. `Controls::fold_presses`
+    hands every other slot's Up, Down, Left, Right, Cross, Start and Circle to the keyboard's slot (the one
+    the menus read) in the finished arm of `Session::frame`, a tick later through the keyboard's latch,
+    as a click's press is. Only there: in a running race those presses are thrust and weapons.
+  - **Pointer**: each further window now has its own pointer latch (`Screen::pointer`, fed by that
+    window's cursor, button, wheel and touch events; a left click is still also that seat's Start for the
+    pause). The end screens read **one pointer per tick**: window 1's if it did anything, else the first
+    further window's that did (`session::pointer::end_screen_pointer`), mapped through that window's own
+    aspect rectangle into the screens' grid, so hit-testing is in the layout the window draws. A click in
+    any window confirms Results and Rewards, and picks a menu row. The further windows' latches are
+    taken every tick, so a click made mid-race is spent and cannot confirm the results. **No cursor is
+    drawn on a further window** (window 1 draws its own arrow, `draw.rs`); the OS cursor is the player's
+    there, and a hovered row highlights.
+  - **Leaving**: RETURN TO MENU is `leave_finished_race` (the stage becomes the menus, nothing is parked),
+    so every further window goes back to its holding frame the next frame; RACE AGAIN is `finish_launch`
+    and the windows take their seats at the load as at any launch. Nothing stays on the end screen
+    because there is no per-window state: a window shows the end screens only while the race on
+    screen is finished.
+  **Looked at (2026-10-16)**: headless `--race --players 2 --windows 2 --mode single_race --autopilot
+  --screenshot s.png --ticks 12000` (Pulse PSP EU, a 3-lap finish at tick about 7,700, 1440x816 each): `s-window1.png`
+  and `s-window2.png` both show the built-in results table over the spectator camera (before the change
+  window 2 kept its chase camera and HUD). **Live under Xvfb on lavapipe** (`--race --players 2
+  --windows 2 --autopilot`, resumed by a click, the race took about 8 minutes at about 0.3x speed): the
+  race finished, window 1 and window 2 each drew the table at their own 1440x816 over their own spectator
+  camera, and **a click in window 2 left the race** (the `--race` run quits, as the table says), which is
+  the window 2 pointer reaching the screen. **Not walked: the disc's own EndRace screens (`Results`,
+  `Menu`) in a second window.** That needs the front end (no `--race`) walked to a multi-window race
+  and flown to its end, which this lane did not manage on lavapipe; the screens are drawn by the same
+  `EndRaceRuntime::draw` with the window's own rectangle, which `--menu-page endrace-*` shows for window 1
+  alone. RETURN TO MENU and RACE AGAIN with several windows are read from the code only.
+  Checked against the title lineage: nothing here is title-specific (the end screens are the title's, the
+  routing is generic), so 2048 and Omega take the same path (2048's touch pages are skipped in a multi-person
+  race, so it draws the built-in table in every window).
 - **Pause and the resume countdown** (`oag_game::pause`, a multiplayer race only). The race is held
   for the whole `pause::State::frozen` - `Paused` and `Resuming` alike, the gate `Session::draw` reads
   for window 1 - so every window draws the tick exactly (no between-ticks blend) while held and blends
@@ -478,7 +514,7 @@ which `handle_menu`/Track Select BACK reach only while `multiplayer` is false). 
 fields a RETURN TO MENU keeps (`pane_people`, `window_layout`, `split_cut`) have no writer on the path: `open_menus` writes
 none (the `window_layout.remove` in `windows.rs` is the failed-window-open path), `sync_multiplayer` is the one clearing `pane_people` and it ends the flow only off the RACE page. There is no
 `Session` without a window and a GPU, so those two are pinned at the functions the path calls, not as one run. No race
-finished on lavapipe, so neither end-screen path was walked.
+finished on lavapipe, so neither end-screen path was walked (the 2026-10-16 lane's live walk finished a race, see "The flyby and the end").
 **Not walked**: a race again and a RETURN TO MENU race (see above), **the keyboard player flying a pane in a race on Xvfb**
 (a held `x` moved nothing, with the keyboard in window 1 under the join-order assignment as well as in window 2
 under the chosen one, so it is the Xvfb/XTEST keyboard and not this screen; the routing is
@@ -949,7 +985,7 @@ Omega capture (below) ran.
   no keyboard: the windows open only after the layout screen, so a second keyboard there can only claim a seat by a press
   in its own window (this page, "Who sits where"), never as a join row. A single-window race with two keyboards on
   X11 is covered by unit tests only (a plain Xvfb has one XTEST keyboard).
-- **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
+- ~~The end screens on a seat's own window~~ (2026-10-16, see "The flyby and the end"); open from it: the disc's own EndRace screens in a second window were not walked live, a drawn cursor on the seat windows, and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - ~~Per-window motion blur, FSR 3.1 and dynamic resolution; the camera-independent work once per frame~~
   (2026-10-14, `window-render-cost`, see "What a window draws"). Open from it: **per-view history for a
