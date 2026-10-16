@@ -16,6 +16,17 @@
 
 use wgpu::TextureFormat;
 
+/// A shader that stores to each of upstream's three storage formats.
+const PROBE: &str = "
+@group(0) @binding(0) var a: texture_storage_2d<r16float, write>;
+@group(0) @binding(1) var b: texture_storage_2d<rg16float, write>;
+@group(0) @binding(2) var c: texture_storage_2d<r8unorm, write>;
+@compute @workgroup_size(1) fn main() {
+    textureStore(a, vec2<i32>(0, 0), vec4<f32>(1.0));
+    textureStore(b, vec2<i32>(0, 0), vec4<f32>(1.0));
+    textureStore(c, vec2<i32>(0, 0), vec4<f32>(1.0));
+}";
+
 /// The format set a chain was built with. Plain data; `Copy`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Formats {
@@ -73,6 +84,7 @@ impl Formats {
         {
             return Self::BASELINE;
         }
+        let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
         let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
         for format in Self::NEEDED {
             let _ = device.create_texture(&wgpu::TextureDescriptor {
@@ -92,9 +104,27 @@ impl Formats {
                 view_formats: &[],
             });
         }
-        match pollster::block_on(scope.pop()) {
-            None => Self::NARROW,
-            Some(_) => Self::BASELINE,
+        // And the driver compiling a shader that stores to all three: a texture that can be
+        // created says nothing about the shader capability the SPIR-V path declares for them,
+        // and a phone is where that would differ from the desktop.
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("fsr3 format probe"),
+            source: wgpu::ShaderSource::Wgsl(PROBE.into()),
+        });
+        let _ = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("fsr3 format probe"),
+            layout: None,
+            module: &module,
+            entry_point: Some("main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+        let invalid = pollster::block_on(scope.pop());
+        let failed = pollster::block_on(internal.pop());
+        if invalid.is_none() && failed.is_none() {
+            Self::NARROW
+        } else {
+            Self::BASELINE
         }
     }
 
