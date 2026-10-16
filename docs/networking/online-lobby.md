@@ -579,30 +579,35 @@ the Zone variant of a circuit that has none).
 
 **Sizes** (the 6 EU sources on this machine, 2026-10-16; what is kept of what the source holds):
 
-| Source | Kept | Of | Races checked from the extraction | Time (debug build, loaded machine) |
+| Source | Kept | Of | Races loaded from the extraction | Time |
 | --- | --- | --- | --- | --- |
-| Pulse PSP (`pulse-psp-eu.chd`) | 190 MiB | 307 MiB | 109 loaded, 0 gaps | 1.5 min |
-| Pulse PS2 (`pulse-ps2-eu.chd`) | 204 MiB | 361 MiB | 183 loaded, 0 gaps | 3.4 min |
-| Pure PSP (`pure-psp-eu.chd`) | 62 MiB | 235 MiB | 102 loaded, 0 gaps | 1 min |
-| HD (`hdfury-ps3-eu.iso`) | 1,072 MiB | 1,879 MiB | 189 loaded, 0 gaps | 13 min |
-| 2048 (`data/extracted/vita`) | 288 MiB | 2,303 MiB | 109 loaded, 0 gaps | 6.4 min |
-| Omega (`data/extracted/ps4`) | not measured at full breadth | 47,091 MiB | the full check did not finish (below) | |
+| Pulse PSP (`pulse-psp-eu.chd`) | 182 MiB | 307 MiB | 109, 0 gaps | 69 s |
+| Pulse PS2 (`pulse-ps2-eu.chd`) | 109 MiB | 361 MiB | 183, 0 gaps | 81 s |
+| Pure PSP (`pure-psp-eu.chd`) | 56 MiB | 235 MiB | 102, 0 gaps | 53 s |
+| HD (`hdfury-ps3-eu.iso`) | 41 MiB | 1,879 MiB | 189, 0 gaps | 30 s |
+| 2048 (`data/extracted/vita`) | 5 MiB | 2,303 MiB | 109, 0 gaps | 19 s |
+| Omega (`data/extracted/ps4`) | 40 MiB | 47,091 MiB | 237, 0 gaps (40 more are races the source refuses too) | 45 s |
 
 The AI's teams are drawn from the title's whole declared pool by the race's seed, and the
 lobby's seed is arbitrary, so the plan includes seeds that put every pool team on a grid slot
-(`covering_seeds`). That is what grew HD from 41 MiB and 2048 from 5 MiB: without it a race with
-another seed read an AI team's hull, handling and engine sound the extraction lacked (found by the
-ground truth, which loud-fails on any such read: `record::take_misses`).
+(`covering_seeds`); without them a race with another seed read an AI team's handling and engine
+sound the extraction lacked (found by the ground truth, which loud-fails on any such read:
+`record::take_misses`).
 
-**Open:** Omega's full-offer check was not completed: each Omega race load costs 1.3 to 2.6 s and
-about 1.7 GB, the plan is 277 races twice, and the second (from the extraction) pass grew to 19 GB
-resident over 55 minutes in one run, cause not found (the single-race and ground-truth loads from
-an Omega extraction behave: 1.7 s, 1.7 GB, hashes equal). The ground truth passes for Omega on two
-named races.
+**Build it lean, or the extraction is not.** These numbers are from `cargo build -p oag-net --bin
+oag-server` alone. Built in one cargo invocation with the crate's tests or the game, the
+workspace's unified features turn `oag-raceplay`'s `view` on in the same binary, the load then
+reads textures, meshes, animation clips and sound banks, and the extraction grows: HD to 1,072 MiB
+(540 MiB `.gtf` lightmaps and crowd textures, 392 MiB `.rcsmodel` track meshes, 105 MiB `.vex`,
+28 MiB sound banks) and 2048 to 288 MiB (100 MiB `.gxt`, 79 MiB `.rcsanimclip`, 48 MiB sound
+banks, 30 MiB materials, 20 MiB `.pvs`); an Omega race load then decodes `.gnf` textures (1.3 to
+2.6 s and 1.7 GB a race). `scripts/build-server-portable.sh` builds the binary alone. The
+ground-truth tests run with `view` on, so their extractions are supersets of a lean server's.
 
 A race reads whole entries (a circuit's `.vex` carries its geometry, collision and textures in one
-compressed blob), so the PSP titles keep most of their circuits and ships. Each extraction took 7 to 45 s
-(debug build, opt-level 2).
+compressed blob that the lean load reads whole), so the two PSP titles and the PS2 keep most of
+their circuits and ships. Reading only the collision, spline and pad sections of a `.vex` is a
+change to the load path, a follow-up, not to the extractor.
 
 ### The build string
 
