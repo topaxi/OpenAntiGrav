@@ -341,3 +341,11 @@ fn the_laps_row_follows_the_mode_and_the_owner() {
         "Zone does not end on laps"
     );
 }
+
+#[test]
+fn the_room_line_says_the_laps_only_when_the_owner_set_some() {
+    let mut r = room(1, "ada", 1, true);
+    assert!(!room_line(&r, &strings(), &|_| None).contains("LAPS"));
+    r.settings.laps = 5;
+    assert!(room_line(&r, &strings(), &|_| None).ends_with("SINGLE RACE / 5 LAPS"));
+}
