@@ -918,16 +918,19 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
     println!("checked {checked:?}");
 }
 
-/// The widget set HD's authored split HUD carries for Head to Head, read for the port to HD,
-/// Omega and 2048: `Position`, `Position Outof` and `HeadToHeadBar` (a zero-height fill) are
-/// there, `PositionOf` - the gap label Pulse's readout is built on - is not, and `Position` is
-/// a centred number in a hex panel rather than a right-aligned row. So Pulse's rows-and-gap
-/// readout (`oag_hud::HeadToHead`) has nothing to draw into on HD and draws nothing; the
-/// place stands. Fails if a layout starts authoring the gap label, which is when the readout
-/// can be wired to it.
+/// The widget set HD's authored split HUD carries for Head to Head: `Position`, `Position
+/// Outof`, `HeadToHeadBar` (a zero-height fill) and `DistanceApart`, the gap label - HD's
+/// name for what Pulse calls `PositionOf`, bound beside the bar by `Hud_BindWidgets` and
+/// written `%s%3.0fm` by `Hud_UpdatePositionCounter` (`docs/ghidra/functions/ps3-hdfury-eu/
+/// head2head.md`). Pulse's own name is absent, so Pulse's rows-and-gap readout
+/// (`oag_hud::HeadToHead`) still has nothing to draw into by that name and the place stands
+/// with the borrowed gap under it. An earlier version of this test read the absent
+/// `PositionOf` as "no gap label is authored", which was a name miss. Fails if a layout
+/// stops authoring the gap label, or starts authoring Pulse's name, which is when the readout
+/// can be wired.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_authors_the_bar_and_both_places_but_no_gap_label() {
+fn hd_authors_the_bar_both_places_and_the_gap_label_by_its_own_name() {
     let Some(two) = hd_loaded(2) else { return };
     let split = two.hud.split.as_ref().expect("HD ships the split layouts");
     for layout in &split.layouts {
@@ -935,8 +938,12 @@ fn hd_authors_the_bar_and_both_places_but_no_gap_label() {
         assert!(layout.label("Position").is_some());
         assert!(layout.label("Position Outof").is_some());
         assert!(
+            layout.label("DistanceApart").is_some(),
+            "HD authors its gap label as DistanceApart"
+        );
+        assert!(
             layout.label("PositionOf").is_none(),
-            "no gap label is authored"
+            "Pulse's name for the gap label is not HD's"
         );
     }
 }

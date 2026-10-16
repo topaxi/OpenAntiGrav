@@ -160,7 +160,11 @@ pub(super) fn arc_sprites(cx: &Context<'_>, readout: &Readout) -> Vec<Draw> {
         return Vec::new();
     };
     let mut draws = Vec::new();
+    let hide_place = super::head_to_head::hides_place_panel(cx, readout);
     for k in lit_segments(runtime, readout) {
+        if hide_place && k.starts_with(runtime.place_arc.prefix) {
+            continue;
+        }
         if let Some(sprite) = cx.layout.sprite(&k) {
             draws.extend(sprite_draw(sprite, cx.sheet));
         }

@@ -68,3 +68,102 @@ and their grid files carry the same cell-mode census. Omega's executable
 **A correction to `docs/overview/status.md`:** its Omega cell said `Head2Head` cells
 launch with one opponent. No Omega grid file has a `Head2Head` cell; the test it cited
 holds a rule over every cell and is true of zero `Head2Head` cells.
+
+## The mode 9 writer: `Hud_UpdatePositionCounter` (2026-10-16, `hd-h2h-bar`)
+
+**Binary:** `/hdfury/EBOOT-ps3-hdfury-eu.elf`. No new names (both functions are already
+named). Static only: **no live RPCS3 check**, and no menu reaches mode 9 (above), so a live
+check would need the mode forced.
+
+### Correction: HD does author a gap label
+
+The 2026-10-16 `h2h-readout-titles` pin read "no gap label" because `PositionOf`, Pulse's
+name, is absent. HD's name is **`DistanceApart`**: `splitscreen_positions_screen.xml` and
+`hud_positions.xml` (and the `2097_hud` / `wo3_hud` twins, `DATA00`-`DATA03`) author
+`<Text name="DistanceApart"><Values string="" scale="0.6" font="HUD" align="right"
+vertalign="bottom" x="180" y="104" color="FEConst->HudColour2" .../>` beside `Position`
+(centred, `x=182 y=92`), `Position Outof` (`x=255 y=80`, scale 0.6) and `HeadToHeadBar`
+(`x=200 y=120 width=20 height=0 color=0xB40048FF`). The test pin now asserts
+`DistanceApart` present and `PositionOf` absent.
+
+### What binds it
+
+`Hud_BindWidgets` (`0x0009e0ec`), HUD flag `0x40`, TOC base `0x008ad4d8` (slots
+`0x008a7b40..` hold the strings at `0x0077fac0..`: `Cockpit321Go`, `Position`,
+`Position Outof`, `PositionTxt`, `HeadToHeadBar` (`0x0077fb00`), `DistanceApart`
+(`0x0077fb10`), `PositionPanel`):
+
+| Field | Widget | Evidence |
+| --- | --- | --- |
+| `hud+0x29c` | `Position` | bound `required=1` |
+| `hud+0x2a0` | `Position Outof` | same |
+| `hud+0x288` | `HeadToHeadBar` | slot `0x008a7b50` |
+| `hud+0x284` | `DistanceApart` | slot `0x008a7b54` |
+
+In mode 9 or 0x12 the bind hides `PositionTxt` and `PositionPanel` (`flags &= ~6`), so the
+original does **not** keep the authored place: `Position` and `Position Outof` carry the two
+rows. It sets both rows' scale (`+0xb8/+0xbc`: `Position` the TOC constant, `Position Outof`
+`1.0`), and gives `DistanceApart` `+0xd4 = Position's +0xd4`, `+0xd8 = 1`.
+
+### The per-frame law (`Hud_UpdatePositionCounter`, `0x00096088`, mode 9 / 0x12 tail)
+
+Read from the decompile; constants read from memory.
+
+- `gap = |craft0[+0x7818] - craft1[+0x7818]|` (the two ranked racers' progress floats).
+- `D = clamp(2 * gap, 240.0, 720.0)` (`0x008a7934` = `0x43700000`, `0x008a7938` =
+  `0x44340000`). One clamp: **no stacked variant** in HD. Against Pulse's live-measured
+  `clamp(gap/2, 60, 180)` on a 480-wide HUD this is exactly 4x on a 1920-wide one.
+- `Position Outof` `+0xb4 = D`. (Text `+0xb0/+0xb4` are x/y: the PosTag branch shifts `+0xb0`
+  by 150, and the 0xad tail derives `Position`'s `+0xb0` from `Outof`'s.)
+- Label text `"%s%3.0fm"` (`0x0077f100`), sign `"-"` (`0x0077f0f0`, player leads) or `"+"`
+  (`0x0077f0f8`), written to `DistanceApart`. Green `0xff30ff30` when the player leads, red
+  `0xffff3030` otherwise; the `Position`/`Outof` rows take the same colours with `0x200` toggled on
+  the player's own row (Pulse's throb flag).
+- Rows: `IG_HUD_1ST` / `IG_HUD_2ND` with `"%s %s"` (`0x0077f0e8`) below game mode `0x10`;
+  `"PLAYER %d"` / the net name from `0x10` up. The tail below is shared.
+- Bar: `bar+0xb0 = D - bar.vt[0x74]()`; label: `DistanceApart+0xb4 = (D + bar.vt[0x74]()) * 0.5`
+  (TOC `0x008a764c` = 0.5). This is Pulse's relation exactly: bar height `y_second - GetY`, label at
+  the midpoint.
+
+### Confidence
+
+| Claim | Conf | Why |
+| --- | --- | --- |
+| `D = clamp(2 * gap, 240, 720)` places `Position Outof`; gap = progress difference | 75 | decompile and constants, 4x agreement with Pulse's measured law; no live run |
+| Label `"%s%3.0fm"`, `-`/`+`, `0xff30ff30`/`0xffff3030` | 80 | strings and colours read; identical to Pulse's live-measured set |
+| `DistanceApart` is HD's gap label, midpoint of bar top and second row | 70 | name binding certain (85); midpoint formula reads as Pulse's but depends on the next row |
+| **The runtime sets the bar's height** | **50** | **not settled**: it rests on `vt[0x74]` being GetY and `+0xb0` being Height on HD's Image. The Image field map was not recovered (the attribute loader was not found; Pulse's Image has x,y,w,h at `+0x94..+0xa0`, and by that shift `+0xb0` could be Width). Hypothesis only: no rename, no wiring |
+| Mode 9 is reachable by a player | 85 | no (above) |
+
+### Next address to try
+
+The `<Values>` loader of HD's HUD `Image` (the attribute strings `width`/`height` at `0x00789650`
+and `0x00789420` are read by `FUN_004ef30c` and `FUN_004d539c`; the `Height`/`TxtrHeight` run at
+`0x0078b6a0` is TOC slot `0x008ad664`, read by `FUN_0052d6c8`, which is not it). Or force mode 9 on
+RPCS3 and read the bar's drawn height: `D - 120` if it is a height.
+
+### 2048 / Omega
+
+Omega **ported**: it reads HD's layouts (the same split layouts, pinned by
+`hd_2048_and_omega_ship_the_same_split_layouts_540_apart`), so `DistanceApart` is there too, and the wiring
+below runs on it (`omega_draws_hds_rows_and_gap_label`, looked at both cuts).
+2048 authors no Head to Head widget (merged 2026-10-16): **checked, differs**.
+
+### Wired (same day)
+
+`oag_hud::head_to_head` takes HD's shape when a layout authors `DistanceApart` and no `PositionOf`
+(layout data, no `title.name` branch): `PositionTxt`, `PositionPanel` and the place arc are hidden;
+`Position` carries `1ST`, `Position Outof` carries `2ND` bottom-aligned at `clamp(2*gap, 240, 720)` (layout-local,
+so the second seat's layout, 540 lower, follows); `DistanceApart` carries `-`/`+` and the gap in green/red at the
+midpoint of the bar's authored top and the second row. Rows are in the layout's authored font and anchors.
+
+- **Bar: undrawn** (sizing unsettled, confidence 50).
+- **Chosen, not measured:** the rows are the ordinal alone. The original's `"%s %s"` adds the team name, and at
+  `Position`'s authored size (scale 1.0, HUD font) `1ST FEISAR` ran out of its view in a first picture.
+- **Top-and-bottom cut:** the clamp has no stacked variant, so the second row sits at layout y 240..720 in a view
+  540 high: it fits up to a gap of 270 and is cut off by the view's scissor beyond that. The side-by-side cut
+  (1080 high) fits the whole range. Evidence the original's split mode was never tuned for this mode.
+- Pure and 2048 keep the borrowed gap-under-the-place readout.
+- Pins: `hd_second_row_follows_the_4x_clamp_and_the_gap_uses_distance_apart`,
+  `hd_colours_the_leader_green_and_the_trailer_red` (`oag-hud`); `hd_draws_its_rows_and_its_own_gap_label`,
+  `omega_draws_hds_rows_and_gap_label` (`oag-game`).
