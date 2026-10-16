@@ -29,6 +29,10 @@ use super::Session;
 const HOLD_TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
 const HOLD_SCALE: f32 = 3.0;
 
+/// A further window's pointer for one tick, in that window's pixels, with the aspect rectangle
+/// its frame is drawn into.
+pub(super) type SeatPointer = (oag_ui::pointer::Pointer, (f32, f32, f32, f32));
+
 impl Session {
     /// How many windows to open now, or `None`: `--windows` or `--window-seats` asked for them, none are open
     /// yet, and the title is known.
@@ -543,7 +547,7 @@ impl Session {
     /// rectangle its frame is drawn into: taken every tick so a click made mid-race is spent
     /// rather than waiting for the end screens. What the end screens read
     /// ([`Self::end_screen_pointer`]).
-    pub(crate) fn seat_pointers(&mut self) -> Vec<(oag_ui::pointer::Pointer, (f32, f32, f32, f32))> {
+    pub(crate) fn seat_pointers(&mut self) -> Vec<SeatPointer> {
         let aspect = self.settings.display.aspect;
         self.screens
             .iter_mut()

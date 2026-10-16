@@ -61,7 +61,7 @@ pub(super) fn in_grid(pointer: Pointer, space: Space, rect: (f32, f32, f32, f32)
 pub(super) fn end_screen_pointer(
     first: Pointer,
     space: Space,
-    seats: &[(Pointer, (f32, f32, f32, f32))],
+    seats: &[super::windows::SeatPointer],
 ) -> Pointer {
     if !first.is_idle() {
         return first;
