@@ -43,6 +43,24 @@ read. The cheap check that would have caught it - grep the archive listing for
 | `HUDSmall` font | `Data\FE\Fonts\small.fnt` | 10 px line height |
 | `Default` font | `Data\FE\Fonts\pulse_text.fnt` | 13 px; used only by the eight opponent name tags |
 
+### The PS2's `<Mode3D>` models take their picture from the entry before them
+
+A PS2 `.vex` embeds an empty texture block, so the HUD's models (the lock-on
+reticle's `missile_sight_outer`, `missile_sight_inner` and `leachbeam_sight`,
+and the cockpit view's `Cockpit_321GO`) decoded with no texture and drew
+nothing on the PS2 pressing. `oag_raceplay::hud::build_model` now reads the
+texture set from the archive entry before the model, the same
+directory-position rule the hull, gantry and shield use, and only when every
+slot is empty. `crates/raceplay/tests/ps2_hud_sights_ground_truth.rs` fails
+without it (2026-10-16, confidence 90: the files are on the disc and decode,
+the rule is the shared one). Checked against the PSP: the three sight models
+there are 32x32 additive too. **Checked, differs**: the PS2's
+`missile_sight_inner` quad measures 12 units where the PSP's measures 8, and the
+sight draw still uses one constant of 8 for every piece. **Open**: a frame of
+the PS2 reticle with a lock on it, to settle that size and the orthographic
+span of the PS2's `<Mode3D>` block (the placeholders keep the PSP's
+`x="-240" y="136"`).
+
 ### The PS2 ships the same HUD and hides both halves of it
 
 Same five layouts under the same names, the same widget counts, and - the part
