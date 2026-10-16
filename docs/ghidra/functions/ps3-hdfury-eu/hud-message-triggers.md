@@ -84,8 +84,13 @@ red `0xff3030` for a bad one. The differences:
 3. **Voice cues.** A line is accompanied by an announcer cue through
    `Sound_QueueAnnouncerCue`: `PERFECT_LAP` for `0x1`, `NEW_LAP_REC` for `0x2`,
    `cont_elim` for `0x8` only. All are gated on a global byte (`0x00938560`,
-   `g_PhysicsHalfStep`) being clear. **Not wired**: no `Cue` exists for the first
-   two (`oag_gameplay::cue::Cue::ContElim` is raised for a wrecked opponent).
+   `g_PhysicsHalfStep`) being clear. **Wired 2026-10-16** (`hud-lap-cues`):
+   `Cue::PerfectLap` and `Cue::NewLapRecord`, names in
+   `oag_title::lap_hud::LapVoices`, both in HD's own `speech.bnk` (`PERFECT_LAP`
+   0.87 s, `NEW_LAP_REC` 1.24 s, no authored lead-in), raised on the crossing tick
+   with the line (so no record voice in Time Trial, where the line is off). The
+   gate byte is not modelled (its meaning is unread). `cont_elim` stays unwired
+   (Elimination, the attacker byte).
 4. **A voice-only branch.** `hud+0x44 & 0x20` turns the whole drain into
    "`0x1` plays `PERFECT_LAP` and nothing is drawn". What sets that bit is not read
    (a second local player is the obvious reading; 40).
@@ -149,12 +154,18 @@ rung picks the row; exactly [race-campaign.md](race-campaign.md)'s
 - and plays `gold_med_shrt`/`silver_med_shrt`/`bronze_med_shrt`.
 
 So the original raises the medal line **every time a lap is a new race-best and
-inside a tier**, not only when the tier improves. `oag_game::medal_watch` raises
-the line on a tier improvement (chosen, not measured) and a standing line besides;
-on HD Speed Lap the two differ only when a new best stays in its tier. **Not
-done**: the measured per-lap trigger, the trophy model (the HUD crate has no
-`<ImageModel>` and the end-of-race screen's trophy draw is a different path), and
-the voice. Confidence 75: the targets and the tier test are in the disassembly
+inside a tier**, not only when the tier improves. **Wired 2026-10-16**
+(`hud-lap-cues`): `oag_title::lap_hud::LapHud::speed_lap_medal` (HD only) selects
+the measured rule in `oag_game::medal_watch`; every new race-best lap inside a
+tier raises the tier's `ER_*MA` line and `Cue::SpeedLapGold`/`Silver`/`Bronze`
+(`gold_med_shrt` etc., authored in `speech_results.bnk`, the boot bank the front
+end loads; the voice starts 0.83 s after the trigger, the lead-in the bank
+authors). The standing line (the build's own) still follows the best tier. Every
+other title keeps the tier-improvement watch (chosen, not measured). Disc-backed:
+`medal_message_ground_truth::hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap`
+(two bronze laps, two raises, two voices, WAV compared with and without). **Not
+done**: the trophy model (the HUD crate has no `<ImageModel>` and the end-of-race
+screen's trophy draw is a different path). Confidence 75: the targets and the tier test are in the disassembly
 (`cmplw r22,r0` at `0x000e58a8`), the trophy widgets are named by TOC strings.
 
 A neighbouring branch (`0x000e5c64`-`0x000e5cfc`) compares the lap with a target
@@ -245,8 +256,7 @@ unevenly parameterised). Disc-backed:
 
 ## Open
 
-- The trophy `<ImageModel>` and the per-lap medal trigger (above).
-- The announcer cues `PERFECT_LAP`/`NEW_LAP_REC`.
+- The trophy `<ImageModel>` (above).
 - What sets `hud+0x44 & 0x20` and what `0x009384e1` is.
 - The writers of `0x1000`, `0x2000` and `0x4000`.
 - HD's cap widening for a long line, and the retro skin's halved alpha.

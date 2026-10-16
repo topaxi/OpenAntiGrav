@@ -41,6 +41,16 @@ offsets moved**, not Pulse's:
   `NEW_LAP_REC` and `cont_elim`, chosen by the same global; a voice-only branch on
   `hud+0x40 & 0x20`.
 
+## Announcer voices (2026-10-16): checked, applies, not wired
+
+2048's `speech.bnk` (`SBlk` version 5, hashed names) carries `PERFECT_LAP` (six
+waveforms) and `NEW_LAP_REC` (two) under `cue_named_or_hashed`, and **not**
+`RACE_Perfect_lap`/`RACE_New_lap_record`. Which of the two spellings a race plays
+is chosen by the unread global above, so `LapVoices::NONE` stays: the race's cue
+lookup (`load_named_cue`) is not hashed, and turning the hashed lookup on for the
+lap voices alone would play a perfect-lap announcement from a bank whose gate
+nobody has read. Open: the global, then a hashed `load_lap_voices`.
+
 ## What 2048's layouts author
 
 A census with `oag_raceplay::load` on `data/extracted/vita/PCSF00007` (the composed

@@ -134,3 +134,10 @@ SECS BEHIND", red, no icon).
   PPSSPP frame would tell).
 - The setters of the five unraised bits, if any exist outside the race path
   (Zone, Eliminator).
+
+## Announcer voices (2026-10-16)
+
+Pure's `speech.bnk` names `bronze_med`, `gold_med`, `silver_med`, `no_med` and
+`cont_elim` and **neither `PERFECT_LAP` nor `NEW_LAP_REC`** (a name census of its
+18 cues), so `LapVoices::NONE`: nothing plays and the loader reports "PERFECT_LAP
+not played: this title names no such voice". Checked against Pulse, differs.

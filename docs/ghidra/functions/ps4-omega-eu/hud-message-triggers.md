@@ -77,3 +77,10 @@ size, **chosen, not measured, from HD**.
 with `splits_per_lap: 1` and, chosen from HD, `stamps_need_two_live`. Racing is still out of scope for Omega, so nothing
 disc-backed drives it; HD's tests carry the machine and the data is the only
 Omega-specific part.
+
+## Announcer voices (2026-10-16): checked, differs, not wired
+
+`RACE_Perfect_lap` is a Wwise event name, not a cue of an `SBlk` bank: Omega's
+`speech.bnk` is `BKHD`, which `oag_formats::sblk::Bank` refuses (`unsupported bank
+version 1145588546`). The race's cue path reads `SBlk` only, so
+`LapVoices::NONE` and nothing plays. Needs a Wwise event path, a separate lane.
