@@ -51,6 +51,12 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   under your scratch dir. Progress, records, ghosts and settings persist
   automatically, so a run on the default `~/.config/oag` writes into the
   maintainer's own saves; a member's windowed walk once shared it.
+- **Unlockables.** A debug/dev build unlocks everything by default
+  (`[dev] unlock_everything`, absent means on; release builds ignore it).
+  When you build or debug anything locked - loyalty, craft variants, HUD
+  Style skins, circuits, campaign cells - put `[dev]` /
+  `unlock_everything = false` in your own profile's `settings.toml` first,
+  or every lock reads open and the check proves nothing.
 - **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
   sound by writing WAV and inspecting it, never through the speakers. The
   maintainer works on this host by default, so nothing a member starts may
