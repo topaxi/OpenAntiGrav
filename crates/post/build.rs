@@ -44,6 +44,8 @@ const ARTIFACTS: &[(&str, &str, &[&str])] = &[
     ),
     ("fsr3_accumulate", "package::fsr3::accumulate", &[]),
     ("fsr3_rcas", "package::fsr3::rcas", &[]),
+    // The passes upstream computes in halves, for a device with `SHADER_F16` (`Formats::half`).
+    ("fsr3_accumulate_f16", "package::fsr3::accumulate", &["f16"]),
     // The passes that write a narrowed intermediate, built again with the formats upstream holds
     // them in (`Formats::narrow`). `clear`, `accumulate` and `rcas` write nothing that narrows.
     (

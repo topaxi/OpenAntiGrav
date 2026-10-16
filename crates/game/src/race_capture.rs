@@ -1146,14 +1146,26 @@ pub fn capture(
             // exactly the picture already carrying on down the ladder; nothing
             // here claimed a slot for it to give back.
             if cfg!(feature = "perf-probe") {
-                bench::run_resolve(&device, &queue, |encoder, stamps| {
+                bench::run_resolve(&device, &queue, |encoder, stamps, run| {
+                    // **A steady-state frame, not the capture's own**: the captured frame is
+                    // a reset (`reset: phase == 0`), whose `accumulate` takes the
+                    // initial-sample path and never reprojects the history. Every run after
+                    // the first keeps its history and walks the jitter sequence.
+                    let mut temporal = temporal.clone();
+                    if let Some(temporal) = temporal.as_mut() {
+                        for frame in &mut temporal.frames {
+                            frame.reset = run == 0;
+                            frame.jitter =
+                                oag_post::jitter::offset_pixels(run as u32, frame.phase_count);
+                        }
+                    }
                     framebuffer.resolve_scene(
                         &device,
                         &queue,
                         encoder,
                         rect,
                         &state.presentation,
-                        temporal.clone(),
+                        temporal,
                         stamps,
                     )
                 });

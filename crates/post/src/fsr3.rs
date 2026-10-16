@@ -592,7 +592,11 @@ impl Fsr3 {
         );
         let accumulate = pipeline(
             "fsr3 accumulate",
-            pass_wgsl!("accumulate"),
+            if formats.is_half() {
+                pass_wgsl!("accumulate_f16")
+            } else {
+                pass_wgsl!("accumulate")
+            },
             "cs_accumulate",
             &accumulate_layout,
         );

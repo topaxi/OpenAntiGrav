@@ -8,9 +8,9 @@
 
 use super::*;
 
-/// Runs each named `fn(Formats)` test once on the baseline formats and once on upstream's own,
-/// as `baseline::<name>` and `narrow::<name>`. The narrow run skips itself on a device that
-/// cannot store them.
+/// Runs each named `fn(Formats)` test on the baseline formats, on upstream's own, and on
+/// upstream's with half arithmetic, as `baseline::<name>`, `narrow::<name>` and `half::<name>`.
+/// The latter two skip themselves on a device that cannot do what they ask.
 macro_rules! on_both_formats {
     ($($name:ident),* $(,)?) => {
         mod baseline {
@@ -18,6 +18,9 @@ macro_rules! on_both_formats {
         }
         mod narrow {
             $(#[test] fn $name() { super::$name(crate::fsr3::Formats::NARROW) })*
+        }
+        mod half {
+            $(#[test] fn $name() { super::$name(crate::fsr3::Formats::NARROW.with_half()) })*
         }
     };
 }
@@ -115,6 +118,20 @@ impl Scene {
         jittered: bool,
         reset: impl Fn(usize) -> bool,
     ) -> Option<Self> {
+        Self::run_moving(formats, render, frames, jittered, [0.0, 0.0], reset)
+    }
+
+    /// [`Scene::run_resetting`] with every texel of the velocity attachment set to `velocity`
+    /// (this renderer's own units: a UV delta). Zero leaves it as allocated; a sub-pixel value
+    /// is what makes the history's bicubic reproject between texels rather than onto one.
+    pub(super) fn run_moving(
+        formats: Formats,
+        render: (u32, u32),
+        frames: &[Input<'_>],
+        jittered: bool,
+        velocity: [f32; 2],
+        reset: impl Fn(usize) -> bool,
+    ) -> Option<Self> {
         let texels = (render.0 * render.1) as usize;
         let upscale = (render.0 * 2, render.1 * 2);
 
@@ -123,13 +140,16 @@ impl Scene {
         // What the game's own device asks for, so the narrow set has somewhere to run.
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_features: adapter.features()
-                & wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                & (wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | wgpu::Features::SHADER_F16),
             ..Default::default()
         }))
         .ok()?;
         // A narrow run on a device that cannot store the narrow formats is not a run.
-        if formats.is_narrow() && !Formats::probe(&device).is_narrow() {
-            eprintln!("no narrow storage formats on this device; skipping");
+        let probed = Formats::probe(&device);
+        if (formats.is_narrow() && !probed.is_narrow()) || (formats.is_half() && !probed.is_half())
+        {
+            eprintln!("this device cannot run {}; skipping", formats.name());
             return None;
         }
 
@@ -161,12 +181,38 @@ impl Scene {
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         );
         let colour = colour_texture.create_view(&Default::default());
-        let velocity = make(
+        let velocity_view = make(
             "fsr3 test velocity",
             oag_gpu::formats::VELOCITY_FORMAT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         )
         .create_view(&Default::default());
+        if velocity != [0.0, 0.0] {
+            let mut encoder = device.create_command_encoder(&Default::default());
+            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("fsr3 test velocity fill"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &velocity_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: f64::from(velocity[0]),
+                            g: f64::from(velocity[1]),
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            }));
+            queue.submit([encoder.finish()]);
+        }
+        let velocity = velocity_view;
 
         let mut fsr3 =
             Fsr3::with_formats(&device, formats).expect("the FSR 3.1 shaders must compile");

@@ -329,13 +329,15 @@ pub(super) fn run_split(
 /// `OAG_RESOLVE_BENCH=N` on a `--presented` capture: the presentation resolve (`resolve`
 /// encodes the upscaler and the blit) run `N` times over the captured frame, each submitted and
 /// waited for, so a reading is its CPU and GPU serialised. What the single-frame bench above
-/// leaves out, and what FSR 3 per split view costs (`docs/tools/render-bench.md`).
+/// leaves out, and what FSR 3 per split view costs (`docs/tools/render-bench.md`). `resolve` is
+/// told the run's index, so a caller can resolve a steady-state frame rather than the capture's.
 pub(super) fn run_resolve(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     mut resolve: impl FnMut(
         &mut wgpu::CommandEncoder,
         Option<oag_post::fsr3::ChainTimestamps<'_>>,
+        usize,
     ) -> bool,
 ) {
     let Some(count) = runs("OAG_RESOLVE_BENCH") else {
@@ -356,7 +358,7 @@ pub(super) fn run_resolve(
                 .compute_writes()
                 .zip(presented.compute_writes())
                 .map(|(scaled, presented)| oag_post::fsr3::ChainTimestamps { scaled, presented });
-            let written = resolve(&mut encoder, stamps);
+            let written = resolve(&mut encoder, stamps, run);
             if written {
                 scaled.resolve(&mut encoder);
                 presented.resolve(&mut encoder);
@@ -366,7 +368,7 @@ pub(super) fn run_resolve(
             }
             written
         } else {
-            resolve(&mut encoder, None);
+            resolve(&mut encoder, None, run);
             false
         };
         queue.submit(Some(encoder.finish()));

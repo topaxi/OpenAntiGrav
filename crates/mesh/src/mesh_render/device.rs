@@ -31,6 +31,9 @@
 /// `sample_count: 2` valid on adapters that report it, which `display::Msaa` still does not
 /// offer (ADR-0013). Native only: WebGPU has no such feature, and the intersection drops it.
 ///
+/// `SHADER_F16` likewise, for the passes FSR 3.1 computes in halves where upstream does
+/// (`Formats::probe`); the shaders that use it say `enable f16;`.
+///
 /// This reaches **every** `request_device` in the workspace, the captures and
 /// the viewer included, which is why it is one line here rather than a
 /// per-site decision: a device descriptor that differs between the window and
@@ -57,6 +60,7 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
         & (wgpu::Features::TEXTURE_COMPRESSION_BC
             | wgpu::Features::TIMESTAMP_QUERY
             | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::SHADER_F16
             | probe)
         | arrays
 }

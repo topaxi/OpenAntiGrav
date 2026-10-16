@@ -1,4 +1,5 @@
-//! Which storage formats the chain's intermediates are held in on this device.
+//! Which storage formats the chain's intermediates are held in on this device, and whether its
+//! arithmetic runs in halves where upstream's does.
 //!
 //! Upstream holds its scalars in `R16_FLOAT` / `R8_UNORM` and its pairs in `RG16_FLOAT`. WebGPU
 //! guarantees none of the three a storage binding, so [`Formats::BASELINE`] widens them
@@ -19,14 +20,27 @@ use wgpu::TextureFormat;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Formats {
     narrow: bool,
+    half: bool,
 }
 
 impl Formats {
     /// Widened to what every WebGPU device can store: see `resources.rs`.
-    pub const BASELINE: Self = Self { narrow: false };
+    pub const BASELINE: Self = Self {
+        narrow: false,
+        half: false,
+    };
 
     /// Upstream's own formats: `R16Float`, `Rg16Float`, `R8Unorm`.
-    pub const NARROW: Self = Self { narrow: true };
+    pub const NARROW: Self = Self {
+        narrow: true,
+        half: false,
+    };
+
+    /// This set with the passes upstream computes in `FFX_MIN16` run in `f16`.
+    #[must_use]
+    pub const fn with_half(self) -> Self {
+        Self { half: true, ..self }
+    }
 
     /// The formats a texture needs storage support in to be narrowed.
     pub(super) const NEEDED: [TextureFormat; 3] = [
@@ -38,9 +52,18 @@ impl Formats {
     /// What `device` can do, asked of the device: [`Self::NARROW`] when a storage texture can be
     /// created in all three of upstream's formats, [`Self::BASELINE`] otherwise.
     ///
-    /// `OAG_FSR3_FORMATS=baseline` forces the baseline, for an A/B on one machine.
+    /// `OAG_FSR3_FORMATS=baseline` forces the baseline formats and `OAG_FSR3_HALF=off` the `f32`
+    /// arithmetic, for an A/B on one machine. Half arithmetic needs `SHADER_F16` on the device
+    /// (`optional_features` asks for it where the adapter has it).
     #[must_use]
     pub fn probe(device: &wgpu::Device) -> Self {
+        let mut formats = Self::probe_narrow(device);
+        formats.half = device.features().contains(wgpu::Features::SHADER_F16)
+            && std::env::var("OAG_FSR3_HALF").map_or(true, |v| v != "off");
+        formats
+    }
+
+    fn probe_narrow(device: &wgpu::Device) -> Self {
         if std::env::var("OAG_FSR3_FORMATS").is_ok_and(|v| v == "baseline") {
             return Self::BASELINE;
         }
@@ -81,10 +104,21 @@ impl Formats {
         self.narrow
     }
 
+    /// Whether the passes upstream computes in halves run in `f16` here.
+    #[must_use]
+    pub fn is_half(self) -> bool {
+        self.half
+    }
+
     /// A short name for the log line.
     #[must_use]
     pub fn name(self) -> &'static str {
-        if self.narrow { "narrow" } else { "baseline" }
+        match (self.narrow, self.half) {
+            (false, false) => "baseline",
+            (true, false) => "narrow",
+            (false, true) => "baseline, f16",
+            (true, true) => "narrow, f16",
+        }
     }
 
     /// `RG16_FLOAT` upstream: the dilated motion vectors and the shading-change pyramid.

@@ -998,3 +998,56 @@ fn a_device_that_can_store_upstream_s_formats_is_given_them_and_holds_less() {
     assert!(narrow.upscale < wide.upscale);
     eprintln!("baseline {wide:?}, narrow {narrow:?}");
 }
+
+#[test]
+fn the_half_path_resolves_what_the_full_path_does_to_within_half_precision() {
+    // The same still, jittered scene through a full sequence on each arithmetic. `accumulate`
+    // runs the history's bicubic in `f16` on one and `f32` on the other, so the two must differ
+    // (a half path that silently ran the full shader would read zero) and by no more than
+    // the half float's rounding amplified by the feedback.
+    let depth = depth_pattern();
+    let colour: Vec<[f32; 3]> = (0..FIXTURE.0 * FIXTURE.1)
+        .map(|i| {
+            let t = 0.40 + 0.002 * i as f32;
+            [t, t * 0.8, t * 0.6]
+        })
+        .collect();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let run = |formats: Formats| {
+        // A sub-pixel velocity, so the reprojection lands between history texels: on a texel
+        // centre the bicubic's weights are exactly (0, 1, 0, 0) in either precision.
+        let frames = vec![still; 32];
+        Scene::run_moving(formats, FIXTURE, &frames, true, [0.013, -0.007], |i| i == 0).map(
+            |scene| {
+                assert_eq!(
+                    scene.fsr3.formats(),
+                    formats,
+                    "the chain was built with another set"
+                );
+                let output = scene.fsr3.output_texture().expect("an output");
+                scene.read_rgba16(output)
+            },
+        )
+    };
+    let (Some(full), Some(half)) = (run(Formats::NARROW), run(Formats::NARROW.with_half())) else {
+        eprintln!("no device with half arithmetic; skipping");
+        return;
+    };
+    let worst = full
+        .iter()
+        .zip(&half)
+        .flat_map(|(a, b)| (0..3).map(move |c| (a[c] - b[c]).abs()))
+        .fold(0.0f32, f32::max);
+    eprintln!("worst difference, f16 against f32 accumulate: {worst}");
+    assert!(
+        worst > 0.0,
+        "the half path produced the full path's bytes: it did not run"
+    );
+    // Measured 0.0156 on this 16x8 fixture, the order of the settle residual the convergence test
+    // records (0.0176): the history is a feedback loop whose rectification box snaps a 1-ulp
+    // difference to the box's surface, so half rounding is not bounded by half's own ulp.
+    assert!(worst < 0.03, "half arithmetic moved the resolve by {worst}");
+}
