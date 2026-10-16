@@ -499,6 +499,31 @@ The host needs the binary and one extraction per title, no disc image (part 6).
 5. Give the players the host name, `60000` and the contents of `lobby.hash`. The lobby's hash
    changes on every restart; the race child mints its own and the lobby passes it on.
 
+### Measured over the internet (2026-10-16)
+
+The deploy steps above, run for real on a remote host (x86-64 Linux, glibc 2.35, **IPv6 only**, 1 core,
+957 MB RAM, no swap), with the musl build and a lean Pulse (PSP, EU) extraction (257 MB on disk, copied in 4 s).
+From here the round trip is about 10 ms.
+
+- **Ports.** Echo listeners run as an ordinary user on `[::]`: inbound UDP **60000, 60001, 60002 and 60010
+  arrive; 4433, 8443, 40000 and 50000 do not**. The lobby on 60000 and the race child on 60001 need nothing
+  opened. The filter is upstream of the host (an unprivileged user cannot read its rules), and a 60000-range
+  allow is the likely shape.
+- **Race.** Two `oag-game --online --net-bot` clients from here, an IPv6 literal as the host: welcomed, room
+  made and joined, 3 s countdown, child forked, both seated by token on 60001, **0 bad hashes** over 600
+  ticks and over a 1,800-tick run to the lobby's `--max-ticks`, after which both printed "back in the room:
+  --max-ticks reached" and the lobby freed the slot. QUIC rtt 9.3 to 16.8 ms (mostly 10-11), loss 0.0%,
+  jitter 1-6 ms, rx 49 KB/s and tx 10 KB/s per client at steady state, 0 to 2 corrections a minute. The first
+  second stalls (confirm latency 2 s at tick 30, 70-100 ms by tick 335) while the debug-profile clients
+  finish loading.
+- **Server cost** (2 people, no opponents, no weapons): the race child 9.5 MB resident and 15-20 % of the one
+  core, the lobby 6 MB and 1-4 %. One race at a time fits easily on this host.
+- **Build string.** A client built with another `OAG_GIT_HASH` is refused with the named text. This found a
+  bug: the lobby hangs up right after a refusal, `LobbyClient::poll` returned the close before the caller read
+  `refused`, and the client printed "the lobby closed: ... bye" with no reason. `poll` now hands the refusal
+  over first (`a_refusal_that_arrives_with_the_close_is_still_read`).
+- Everything was removed from the host afterwards (processes killed by pid, files deleted, listing checked).
+
 ### Tests
 
 - `wire::online` and `online::rooms` unit tests (round trips, every rule above).

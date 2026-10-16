@@ -7,9 +7,7 @@ tested locally; nothing has been deployed or tried over a real network.
 
 ## Open
 
-1. **The maintainer's remote test.** Build with `scripts/build-server-portable.sh`, open UDP
-   60000 (lobby) and UDP 60001 (race child), `oag-server extract` locally and copy the extraction (no disc image goes to the host), run `oag-server lobby` (steps in the doc), connect
-   two `oag-game --online` clients from another machine. Not done: no remote host was touched.
+1. ~~The remote test~~ (done 2026-10-16, "Measured over the internet" in the doc): UDP 60000-60010 reach the host with nothing to open, two clients raced a lean Pulse over the internet with 0 bad hashes and returned to the room. Open still: only Pulse and only `--max-ticks` endings were run remotely (a finish line, HD/Omega/2048 and their memory on a 1 GB host are not), and the host was IPv6-only, so a v4-only player path is untested.
 2. **The menu screens.** `--online` is a flag path. Omega's order is ONLINE, CREATE or JOIN,
    settings (`MP Select`) or the game list, team, the lobby; each needs `menu.toml` rows with
    `string_id`s and English text, and pointer support. `oag_game::online::run` is the flow to
@@ -25,6 +23,5 @@ tested locally; nothing has been deployed or tried over a real network.
 
 ## Next Steps
 
-1. Maintainer: run the remote test above and report what the host's firewall and IPv6 did.
-2. A lane for the ONLINE screens in `oag-ui-screens` over `oag_net::online::client::LobbyClient`.
-3. The extraction omits Omega's guest roster (2048-era craft need a hull variant in `RaceParams`) and anything DLC; if the server grows either, the extractor's plan grows with it (`oag_net::extract::plan`).
+1. A lane for the ONLINE screens in `oag-ui-screens` over `oag_net::online::client::LobbyClient`.
+2. The extraction omits Omega's guest roster (2048-era craft need a hull variant in `RaceParams`) and anything DLC; if the server grows either, the extractor's plan grows with it (`oag_net::extract::plan`).

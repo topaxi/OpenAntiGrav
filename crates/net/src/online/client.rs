@@ -63,7 +63,7 @@ impl LobbyClient {
     ///
     /// # Errors
     ///
-    /// The link closed, and why.
+    /// The link closed, and why. A refusal read in the same poll is held back one call, in `refused`.
     pub fn poll(&mut self) -> Result<(), String> {
         while let Some(message) = self.link.recv_lobby() {
             match message {
@@ -104,6 +104,9 @@ impl LobbyClient {
             }
         }
         match self.link.closed() {
+            // A refused hello is followed by a hang-up that can be read in this same poll: hand
+            // the refusal over first, and report the close on the next.
+            Some(_) if self.refused.is_some() => Ok(()),
             Some(why) => Err(why),
             None => Ok(()),
         }
