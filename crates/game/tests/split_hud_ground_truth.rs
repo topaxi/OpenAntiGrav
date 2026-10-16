@@ -236,7 +236,9 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
             .fold(0.0_f32, f32::max)
     };
     let [top, bottom] = &split.layouts;
-    assert_eq!((top.sprites.len(), bottom.sprites.len()), (109, 109));
+    // 111: the 109 `<Image>`s and the speed and thrust `<CurveBar>`s, which the
+    // parser dropped until 2026-10-16.
+    assert_eq!((top.sprites.len(), bottom.sprites.len()), (111, 111));
     assert!(top.skipped.is_empty() && bottom.skipped.is_empty());
     assert_eq!(
         extent(bottom) - extent(top),

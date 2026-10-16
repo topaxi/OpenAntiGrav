@@ -361,3 +361,34 @@ fn the_played_skins_layouts_author_no_hudsmall_widget_at_all() {
          correcting, and hud_font's None fallback may now be visibly wrong"
     );
 }
+
+/// **2048's played skin authors no `<CurveBar>`; its bare root authors HD's.**
+///
+/// HD's speed-bar finding (`SpeedBar`/`ThrustBar` are `<CurveBar>`s with a
+/// yellow-to-orange and a light-to-dark-blue grade) is *checked, differs* for
+/// the skin 2048 plays: `2048_hud` draws a dim `ThrustBarBG` with `ThrustBar`
+/// and `SpeedBar0`-`4` as plain `<Image>`s. The bare root set, which
+/// `oag_2048::hud::skins` keeps for the demo, is HD's `HUD_speed_bars.xml`
+/// verbatim and carries the two `<CurveBar>`s, but nothing plays it.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn only_the_unplayed_bare_root_authors_curve_bars() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    for &root in oag_2048::hud::ROOTS {
+        let graded: Vec<String> = composed(&mut archives, root)
+            .layout
+            .sprites
+            .into_iter()
+            .filter(|s| s.gradient.is_some())
+            .map(|s| s.name)
+            .collect();
+        let played = root.to_ascii_lowercase().contains("2048_hud");
+        if played {
+            assert!(graded.is_empty(), "{root}: {graded:?}");
+        } else if !graded.is_empty() {
+            assert_eq!(graded, ["SpeedBar", "ThrustBar"], "{root}");
+        }
+    }
+}

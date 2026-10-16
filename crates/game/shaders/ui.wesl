@@ -77,7 +77,8 @@ struct Instance {
     // on the left to `border` on the right - which the vertex stage resolves
     // into a plain mode-0 fill - 4 the **face** atlas, a second glyph
     // texture for `Draw::FacedText`, and 5 the **buttons** atlas, a third,
-    // for `Draw::FacedText { role: "Buttons" }`. Every mode is tested by
+    // for `Draw::FacedText { role: "Buttons" }`, and 6 a sprite-sheet quad graded
+    // like mode 3 (`Draw::GradientSprite`). Every mode is tested by
     // range rather than by an open-ended `>`, because a higher mode sorts
     // above every earlier one and an open-ended test would silently catch
     // it too - the trap `is_face` used to have before `MODE_BUTTONS_ATLAS`
@@ -172,8 +173,11 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     // what reaches the fragment stage is an ordinary atlas fill of that colour
     // - both `color` and `border` carry it, so the solid texel's own mask mixes
     // to the same value whichever way it reads.
-    let is_gradient = instance.mode > 2.5 && instance.mode < 3.5;
-    let is_sheet = instance.mode > 0.5 && instance.mode < 2.5;
+    // Mode 6 is the same grade over a **sheet** quad: the sprite's own texels
+    // modulated by the mix, collapsed to a plain mode-1 sprite below.
+    let is_sheet_gradient = instance.mode > 5.5 && instance.mode < 6.5;
+    let is_gradient = (instance.mode > 2.5 && instance.mode < 3.5) || is_sheet_gradient;
+    let is_sheet = (instance.mode > 0.5 && instance.mode < 2.5) || is_sheet_gradient;
     // Both range-tested, not open-ended - see `Instance::mode`'s own doc:
     // an untested `is_face = mode > 3.5` would also be true for a mode-5
     // (buttons-atlas) quad.
@@ -191,7 +195,8 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     let graded = mix(instance.color, instance.border, corner.x);
     out.color = select(instance.color, graded, is_gradient);
     out.border = select(instance.border, graded, is_gradient);
-    out.mode = select(instance.mode, 0.0, is_gradient);
+    let flat_mode = select(0.0, 1.0, is_sheet_gradient);
+    out.mode = select(instance.mode, flat_mode, is_gradient);
     return out;
 }
 

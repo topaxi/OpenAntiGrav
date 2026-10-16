@@ -36,10 +36,10 @@ fn open() -> Option<oag_assets::Archives> {
 /// shape; the sprite counts differ because Omega's XML is its own (Arcade 148
 /// against HD's 138).
 const EXPECTED: &[(&str, usize, usize)] = &[
-    (r"Data\XML\Arcade_HUD.xml", 148, 17),
+    (r"Data\XML\Arcade_HUD.xml", 150, 17),
     (r"Data\XML\Elimination_HUD.xml", 132, 15),
-    (r"Data\XML\TimeTrial_HUD.xml", 52, 14),
-    (r"Data\XML\SpeedLap_HUD.xml", 51, 15),
+    (r"Data\XML\TimeTrial_HUD.xml", 54, 14),
+    (r"Data\XML\SpeedLap_HUD.xml", 53, 15),
     (r"Data\XML\Zone_HUD.xml", 36, 5),
 ];
 
@@ -255,6 +255,31 @@ fn the_widget_names_title_data_inherits_are_authored_by_omegas_layouts() {
         absent.is_empty(),
         "always_on names Omega's layouts never author: {absent:?}"
     );
+}
+
+/// **Omega's speed bar has HD's fill**: the same `HUD_speed_bars.xml`
+/// `<CurveBar>`, yellow to orange, in the three race layouts that carry the
+/// frame, and `SpeedBar` on the title's `always_on`. Dropping the parser's
+/// `CurveBar` arm fails this, and so does leaving the name off the list.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_speed_bar_fill_is_authored_in_the_three_race_layouts() {
+    let Some(mut archives) = open() else { return };
+    assert!(oag_omega::TITLE.hud_art.always_on.contains(&"SpeedBar"));
+    let [arcade, _, time_trial, speed_lap, _] = modes();
+    for root in [arcade, time_trial, speed_lap] {
+        let layout = composed(&mut archives, root).layout;
+        let background = layout.sprite("SpeedBarBG").expect("SpeedBarBG");
+        let fill = layout.sprite("SpeedBar").expect("SpeedBar is dropped");
+        assert_eq!(fill.rect, background.rect, "{root}");
+        let [left, right] = fill.gradient.expect("color1..color4");
+        assert_eq!(left, [1.0, 1.0, 12.0 / 255.0, 1.0], "{root}: yellow");
+        assert_eq!(
+            right,
+            [1.0, 127.0 / 255.0, 12.0 / 255.0, 1.0],
+            "{root}: orange"
+        );
+    }
 }
 
 /// Omega's HUD faces are HD's at twice the pixel size, which is what the

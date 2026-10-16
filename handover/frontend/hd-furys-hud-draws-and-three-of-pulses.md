@@ -129,6 +129,8 @@ other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
   captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
   section.
 
+- **HD/Omega `ThrustBar` (2026-10-16).** `SpeedBar` and `ThrustBar` are `<CurveBar>`s (see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws)); the speed fill draws, `ThrustBar` parses and is not on `ALWAYS_ON`. The original draws it light to dark blue above the speed strip with a `ThrustBarText` percentage (`91%` at 529 km/h, `98%` on the grid), which is the HUD's chase toward the ship's thrust level, not speed. Wiring it wants 2048's `thrust_chase_percent` mechanism (target also unmeasured) plus the `NN%` text. The speed fill's full scale (600 km/h) and the crop-versus-path-length shape past `CurveStartPos` are **chosen, not measured**; a frame series at known speeds would settle both.
+
 ## Next Steps
 
 - Get a capture with two or more laps completed on a mode that shows

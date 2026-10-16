@@ -134,6 +134,15 @@ pub struct Sprite {
     /// art. Confidence 60 on the sign, 90 on the attribute being a rotation at
     /// all.
     pub rotation: f32,
+    /// The colour at the left and at the right edge, when the widget authors a
+    /// gradient: a `<CurveBar>`'s `color1`/`color2` (left) and `color3`/`color4`
+    /// (right). `None` for every `<Image>`, which modulates by [`Self::color`].
+    ///
+    /// HD's speed bar is yellow to orange and its thrust bar light to dark
+    /// blue. A crop keeps the gradient of the whole bar, so a bar part-full
+    /// shows only the part of the grade up to its value: see
+    /// `draw::crop_horizontally`.
+    pub gradient: Option<[[f32; 4]; 2]>,
 }
 
 /// One `<Text>`: a string, a font, and where it goes.

@@ -96,6 +96,25 @@ pub enum Draw {
         /// Colour at the right edge.
         right: [f32; 4],
     },
+    /// A sprite whose modulating colour runs from `left` at its left edge to
+    /// `right` at its right, interpolated across - [`Self::GradientFill`]'s
+    /// textured counterpart.
+    ///
+    /// What a HUD `<CurveBar>` authors with `color1`..`color4`: HD's speed bar
+    /// is yellow to orange along its length and its thrust bar light to dark
+    /// blue, both over the bar's own art. A separate variant for the reason
+    /// [`Self::GradientFill`] is one: a second colour on [`Self::Sprite`]
+    /// would sit unused at every other site that builds one.
+    GradientSprite {
+        /// Where it goes: `[x, y, width, height]`.
+        rect: [f32; 4],
+        /// Where it is in the sheet, in sheet pixels.
+        uv: [f32; 4],
+        /// Modulating colour at the left edge.
+        left: [f32; 4],
+        /// Modulating colour at the right edge.
+        right: [f32; 4],
+    },
     /// A movie's current frame, stretched to `rect`.
     Video {
         /// Rectangle.

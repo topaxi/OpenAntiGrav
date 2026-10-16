@@ -61,6 +61,14 @@ pub(super) fn crop_horizontally(sprite: &Sprite, fraction: f32) -> Sprite {
     let mut out = sprite.clone();
     out.rect[2] = sprite.rect[2] * fraction;
     out.uv[2] = sprite.uv[2] * fraction;
+    // The grade belongs to the whole bar, so a part-full bar shows the part of
+    // it up to its value: its right edge takes the colour `fraction` of the way
+    // along. The thrust bar at 98% in a frame of the original is dark blue
+    // toward its tip, which a grade squeezed into the cropped width would not be.
+    if let Some([left, right]) = &mut out.gradient {
+        let end = std::array::from_fn(|i| left[i] + (right[i] - left[i]) * fraction);
+        *right = end;
+    }
     out
 }
 
@@ -931,6 +939,14 @@ pub fn sprite_draw(sprite: &Sprite, sheet: &crate::sprite::Sheet) -> Option<Draw
         sprite.uv[2],
         sprite.uv[3],
     ];
+    if let Some([left, right]) = sprite.gradient {
+        return Some(Draw::GradientSprite {
+            rect: sprite.rect,
+            uv,
+            left,
+            right,
+        });
+    }
     if sprite.rotation == 0.0 {
         return Some(Draw::Sprite {
             rect: sprite.rect,

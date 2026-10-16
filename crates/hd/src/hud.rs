@@ -293,6 +293,7 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// | `LapPanel`, `PositionPanel` | the hexagonal panel top left |
 /// | `TimeIcon`, `TimeIconVertBar`, `ClockIcon`, `BestLapImage` | the lap-time cluster bottom left |
 /// | `SpeedBarBG`, `ThrustBarBG`, `SpeedBarOverlay` | the speed bar bottom right |
+/// | `SpeedBar` | the yellow fill under it, a `<CurveBar>` - see below |
 /// | `PickupFarBackground`, `PickupAbsorbBG`, `PickupDamageBG`, `PickupBackground` | the pickup bar and its hexagon, top centre |
 /// | `DamageBarBg` | the striped hexagon around it |
 /// | `TotalTimeBG` | the panel at the right edge |
@@ -303,6 +304,17 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// corner. Confidence 70 against 90 for the rest, and it is here rather than
 /// left out because the alternative is an arcade HUD whose position readout
 /// floats on nothing.
+///
+/// # `SpeedBar` is on the list, `ThrustBar` is not
+///
+/// **2026-10-16.** HD authors both bars as `<CurveBar>` in
+/// `HUD_speed_bars.xml`, which the parser dropped without a word until then, so
+/// the speed bar drew its frame and label and no fill. `SpeedBar` is up in
+/// every race frame at a value (`talons-matched/01.png`, 529 km/h: a yellow
+/// strip along the bar's lower edge to about 88%) and is cropped to
+/// `speed_kmh / speed_full_kmh` by `oag_hud::draw`. `ThrustBar`, its sibling
+/// beside `ThrustBarText`'s percentage, is **not** here: it is a fill with no
+/// value source wired for HD, and an allow-listed fill draws full.
 ///
 /// # What is deliberately left out
 ///
@@ -360,6 +372,7 @@ pub const ALWAYS_ON: &[&str] = &[
     "BestLapImage",
     "SpeedBarBG",
     "ThrustBarBG",
+    "SpeedBar",
     "SpeedBarOverlay",
     // Zone's ladder. Authored by the Zone roots alone; see the section above.
     "ZoneBG",

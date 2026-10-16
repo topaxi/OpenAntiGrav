@@ -64,23 +64,23 @@ fn open() -> Option<oag_assets::Archives> {
 /// order moves these numbers legitimately, and this table is where that shows up
 /// rather than in a screenshot.
 const EXPECTED: &[(&str, usize, usize, usize, usize)] = &[
-    ("/data/xml/arcade_hud.xml", 138, 4, 70, 17),
+    ("/data/xml/arcade_hud.xml", 140, 4, 70, 17),
     ("/data/xml/elimination_hud.xml", 132, 2, 70, 15),
-    ("/data/xml/timetrial_hud.xml", 51, 1, 43, 14),
-    ("/data/xml/speedlap_hud.xml", 50, 1, 40, 15),
+    ("/data/xml/timetrial_hud.xml", 53, 1, 43, 14),
+    ("/data/xml/speedlap_hud.xml", 52, 1, 40, 15),
     ("/data/xml/zone_hud.xml", 36, 1, 32, 5),
     ("/data/xml/detonator_hud.xml", 71, 2, 40, 8),
     ("/data/xml/mptag_hud.xml", 0, 0, 8, 1),
     ("/data/xml/duel_hud/duel_hud.xml", 62, 1, 52, 9),
-    ("/data/xml/wo3_hud/arcade_hud.xml", 93, 55, 77, 17),
+    ("/data/xml/wo3_hud/arcade_hud.xml", 95, 55, 77, 17),
     ("/data/xml/wo3_hud/elimination_hud.xml", 91, 53, 63, 16),
-    ("/data/xml/wo3_hud/timetrial_hud.xml", 26, 27, 43, 13),
-    ("/data/xml/wo3_hud/speedlap_hud.xml", 23, 27, 37, 13),
+    ("/data/xml/wo3_hud/timetrial_hud.xml", 28, 27, 43, 13),
+    ("/data/xml/wo3_hud/speedlap_hud.xml", 25, 27, 37, 13),
     ("/data/xml/wo3_hud/zone_hud.xml", 37, 20, 33, 5),
-    ("/data/xml/2097_hud/arcade_hud.xml", 71, 74, 79, 17),
+    ("/data/xml/2097_hud/arcade_hud.xml", 73, 74, 79, 17),
     ("/data/xml/2097_hud/elimination_hud.xml", 78, 67, 64, 16),
-    ("/data/xml/2097_hud/timetrial_hud.xml", 17, 33, 45, 13),
-    ("/data/xml/2097_hud/speedlap_hud.xml", 17, 31, 39, 13),
+    ("/data/xml/2097_hud/timetrial_hud.xml", 19, 33, 45, 13),
+    ("/data/xml/2097_hud/speedlap_hud.xml", 19, 31, 39, 13),
     ("/data/xml/2097_hud/zone_hud.xml", 36, 23, 34, 5),
 ];
 
@@ -215,7 +215,7 @@ fn the_second_walker_agrees_on_how_many_widgets_there_are() {
         assert_eq!(mine, theirs, "{root}: two walkers, two answers");
         total += mine;
     }
-    assert_eq!(total, 2320, "the whole HUD, both ways");
+    assert_eq!(total, 2338, "the whole HUD, both ways");
 }
 
 #[test]
@@ -393,7 +393,7 @@ fn every_sprite_s_source_rectangle_fits_inside_the_texture_it_names() {
     }
 
     assert_eq!(sizes.len(), 12, "textures named: {:?}", sizes.keys());
-    assert_eq!(checked, 1029);
+    assert_eq!(checked, 1047);
 
     // **One widget in the disc's own data samples off the edge of its texture**,
     // and it is authored that way rather than misread: `VoiceCom0`-`VoiceCom7`
@@ -477,7 +477,8 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
             // composition either way, which is what this checks.
             let uv = match hud::sprite_draw(sprite, &sheet) {
                 Some(oag_ui::frontend::Draw::Sprite { uv, .. })
-                | Some(oag_ui::frontend::Draw::RotatedSprite { uv, .. }) => uv,
+                | Some(oag_ui::frontend::Draw::RotatedSprite { uv, .. })
+                | Some(oag_ui::frontend::Draw::GradientSprite { uv, .. }) => uv,
                 _ => panic!("{root}: {} draws nothing", sprite.name),
             };
             let placed = sheet.get(&sprite.src).expect("just built");
@@ -503,7 +504,7 @@ fn a_drawn_sprite_lands_inside_the_texture_its_own_layout_names() {
     }
 
     println!("{checked} composed sprite uv(s) checked");
-    assert_eq!(checked, 1029);
+    assert_eq!(checked, 1047);
 }
 
 fn order(a: f32, b: f32) -> (f32, f32) {
@@ -584,7 +585,9 @@ fn count_widgets(archives: &mut oag_assets::Archives, root: &str) -> usize {
             .iter()
             .map(|c| {
                 usize::from(
-                    c.name.eq_ignore_ascii_case("Image") || c.name.eq_ignore_ascii_case("Text"),
+                    c.name.eq_ignore_ascii_case("Image")
+                        || c.name.eq_ignore_ascii_case("CurveBar")
+                        || c.name.eq_ignore_ascii_case("Text"),
                 ) + tally(c)
             })
             .sum()
@@ -972,4 +975,59 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         None,
         "ZonePlus0 authors no placeholder"
     );
+}
+
+/// **The speed bar's fill is a `<CurveBar>`, and the three race layouts that
+/// carry the bar's frame carry it.**
+///
+/// `HUD_speed_bars.xml` authors `SpeedBar` and `ThrustBar` as `<CurveBar>`, which
+/// the parser dropped until 2026-10-16: HD drew `SpeedBarBG`, `SpeedBarOverlay`
+/// and the km/h label and no fill. A fill shares its background's rectangle and
+/// source (as Pulse's does) and carries its own `color1`..`color4`, here yellow
+/// at the left edge to orange at the right, and `SpeedBar` is on
+/// [`oag_hd::hud::ALWAYS_ON`] so the draw list reaches it. Dropping the
+/// `CurveBar` arm in `Layout::collect` fails this.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_speed_bar_fill_is_authored_beside_its_background_in_the_three_race_layouts() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    assert!(oag_hd::hud::ALWAYS_ON.contains(&"SpeedBar"));
+    assert!(
+        !oag_hd::hud::ALWAYS_ON.contains(&"ThrustBar"),
+        "ThrustBar has no value source for HD yet; allow-listed it would draw full"
+    );
+    for root in [
+        "/data/xml/arcade_hud.xml",
+        "/data/xml/timetrial_hud.xml",
+        "/data/xml/speedlap_hud.xml",
+    ] {
+        let layout = composed(&mut archives, root).layout;
+        let background = layout.sprite("SpeedBarBG").expect("SpeedBarBG");
+        let fill = layout.sprite("SpeedBar").expect("SpeedBar is dropped");
+        assert_eq!(fill.rect, background.rect, "{root}");
+        assert_eq!(fill.uv, background.uv, "{root}");
+        let [left, right] = fill.gradient.expect("color1..color4");
+        assert_eq!(left, [1.0, 1.0, 12.0 / 255.0, 1.0], "{root}: yellow");
+        assert_eq!(
+            right,
+            [1.0, 127.0 / 255.0, 12.0 / 255.0, 1.0],
+            "{root}: orange"
+        );
+        assert!(
+            layout
+                .sprite("ThrustBar")
+                .is_some_and(|b| b.gradient.is_some())
+        );
+    }
+    for root in [
+        "/data/xml/elimination_hud.xml",
+        "/data/xml/zone_hud.xml",
+        "/data/xml/detonator_hud.xml",
+        "/data/xml/duel_hud/duel_hud.xml",
+    ] {
+        let layout = composed(&mut archives, root).layout;
+        assert!(layout.sprite("SpeedBar").is_none(), "{root}");
+    }
 }

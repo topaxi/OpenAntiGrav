@@ -35,8 +35,8 @@ use resources::{
 
 use hud_scale::HudStretch;
 use quad::{
-    MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE, Quad,
-    Uniforms,
+    MODE_ATLAS, MODE_BUTTONS_ATLAS, MODE_FACE_ATLAS, MODE_SPRITE, MODE_SPRITE_ADDITIVE,
+    MODE_SPRITE_GRADIENT, Quad, Uniforms,
 };
 use text::GlyphSlot;
 use video::Video;
@@ -669,6 +669,21 @@ impl Renderer {
                 Draw::GradientFill { rect, left, right } => {
                     self.push_gradient(*rect, *left, *right)
                 }
+                Draw::GradientSprite {
+                    rect,
+                    uv,
+                    left,
+                    right,
+                } => self.quads.push(Quad {
+                    rect: *rect,
+                    uv: *uv,
+                    color: *left,
+                    border: *right,
+                    mode: MODE_SPRITE_GRADIENT,
+                    rotation: 0.0,
+                    chamfer: [0.0, 0.0],
+                    tile: [0.0, 0.0],
+                }),
                 Draw::Video { rect, .. } => {
                     video_at = Some(self.quads.len() as u32);
                     video_rect = *rect;

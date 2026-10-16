@@ -245,6 +245,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 1.0],
             src: "Data\\XML\\2048_hud\\Texture\\hud_2048.gxt".to_string(),
             rotation: 0.0,
+            gradient: None,
         }
     }
 
