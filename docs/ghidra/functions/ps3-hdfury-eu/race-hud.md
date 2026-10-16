@@ -119,3 +119,10 @@ arithmetic, just a diff of two tables.
   constructor and the `ModeManager` new-site. Clearly a shared init, unread.
 - **`0x00048ac8`**, the helper `MPArcade`'s constructor calls that itself calls
   `Hud_LoadDefinition` four times.
+
+## Split-screen HUD paths (2026-10-16)
+
+The executable names `SplitScreen_HUD_{0,1}`, `Vert_SplitScreen_HUD_{0,1}`, the Elimination
+pair, and `Duel_HUD1/2` plus `Duel_HUD_1vert/2vert` as literals, and no `splitscreenzone`
+path; there is no `MPZone_RaceManager` (MPNitro, the Zone Battle manager, loads
+`MPTag_HUD.xml`). Details and confidence in [hd-hud.md](../../../formats/hd-hud.md).

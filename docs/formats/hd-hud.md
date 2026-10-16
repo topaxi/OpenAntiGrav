@@ -88,7 +88,23 @@ of most of it, inside the 312 archive entries with `hud` in their path - and is
 deliberately not in `ROOTS`, which is the single-screen set. A two-view race reads
 `splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml` as
 `oag_hd::hud::SPLIT`: whole-screen 1920x1080 layouts, the second the first moved
-down 540, see [split-screen.md](../rendering/split-screen.md#hud). The one to know
+down 540, see [split-screen.md](../rendering/split-screen.md#hud). **`splitscreenzone_hud/` is not wired, and is probably dead art (2026-10-16, confidence
+75).** The HD EU executable (`/hdfury/EBOOT-ps3-hdfury-eu.elf`) names every other split path
+as a literal (`Data\XML\SplitScreen_hud\...` and its `Vert_` twins, three skins, the four
+`Duel_HUD\Duel_SplitScreen_HUD\*` files at `0x0077dc20`-`0x0077dcd8`) and has **no string
+containing `splitscreenzone`** (case-insensitive search, and no `Zone`/`Split` pair at all);
+the only Zone HUD paths are the three `Zone_HUD.xml` skins, loaded by `SPZone_RaceManager`
+(`0x008a724c`). The race managers it names are MPArcade, MPElimination, MPNitro,
+MPTimeTrial, MPTournament and the SP set: **there is no MPZone**, so split-screen plain
+Zone is not a mode HD has. The files themselves are a Zone HUD (`Zone Txt`, `ZoneDamage.gtf`,
+`zone_hud.xml` + `zone_hud1.xml` = player 0 and 1, plus 2097/wo3 skins) with nothing
+Zone-Battle-specific; Zone Battle is the Nitro manager, whose HUD literals are
+`Data\XML\MPTag_HUD.xml` (4 sites near `0x0077b408`). 75 not higher: a path assembled at run
+time is not excluded (the only format strings are `%s\screen_zone.xml` and
+`InGame->Redirect SplitScreen %i`). Unwired; the port has no Zone Battle `Mode` either.
+Omega and 2048 ship the same directory (16 files each): **checked, not checkable** without
+their executables' path tables here.
+The one to know
 about is `/data/xml/splitscreenzone_hud/zone_hud.xml`: same basename as the Zone
 root, one directory across, and a looser rule picks it up. The ground-truth test
 asserts it exists *and* is excluded, so the exclusion is a decision on the record

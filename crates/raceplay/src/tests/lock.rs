@@ -276,6 +276,7 @@ fn a_race_starts_with_the_loads_reticle_and_the_locks_ignore_the_split_view() {
     let race = race_with_a_grid_sighted(Sighting {
         lock_screen: [1920.0, 1080.0],
         view_screen: [1920.0, 540.0],
+        columns_screen: None,
         leach_law: true,
     });
     assert_eq!(race.sight().screen(), [1920.0, 540.0]);
@@ -293,4 +294,54 @@ fn a_race_starts_with_the_loads_reticle_and_the_locks_ignore_the_split_view() {
     );
     let unset = race_with_a_grid();
     assert_eq!(unset.sim.locks[0].screen(), oag_race::sight::SCREEN);
+}
+
+/// A `2h,2v` race has a window of each cut: the slots of the side-by-side window project
+/// their reticle into the left-and-right family's view and the others into the rows one, and
+/// the locks stay in the title's whole grid.
+#[test]
+fn each_windows_slots_sight_in_their_own_views_grid() {
+    use crate::viewpoint::WindowViews;
+    use oag_render::viewport::Cut;
+    let mut race = race_with_a_grid_sighted(Sighting {
+        lock_screen: [1920.0, 1080.0],
+        view_screen: [1920.0, 540.0],
+        columns_screen: Some([960.0, 1080.0]),
+        leach_law: false,
+    });
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.set_windows(vec![
+        WindowViews {
+            seats: vec![0, 1],
+            cut: Cut::Horizontal,
+        },
+        WindowViews {
+            seats: vec![2, 3],
+            cut: Cut::Vertical,
+        },
+    ]);
+    for (slot, grid) in [
+        (0, [1920.0, 540.0]),
+        (1, [1920.0, 540.0]),
+        (2, [960.0, 1080.0]),
+        (3, [960.0, 1080.0]),
+    ] {
+        assert_eq!(race.sight_screen_of(slot), grid, "slot {slot}");
+    }
+    race.set_windows(Vec::new());
+    assert_eq!(race.set_viewport_count(2), 2);
+    race.set_cut(Cut::Vertical);
+    assert_eq!(
+        race.sight_screen_of(1),
+        [960.0, 1080.0],
+        "no window: the race's own cut"
+    );
+    race.set_cut(Cut::Horizontal);
+    assert_eq!(race.sight_screen_of(1), [1920.0, 540.0]);
+    assert!(
+        race.sim
+            .locks
+            .iter()
+            .all(|lock| lock.screen() == [1920.0, 1080.0])
+    );
 }
