@@ -106,6 +106,7 @@ OAG_ONLINE_PICKING = { text = "PICKING", human = false }
 OAG_ONLINE_QUEUED = { text = "ANOTHER GAME IS RACING: YOU ARE NUMBER %d IN LINE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "THE RACE STARTS IN %d", human = false }
 OAG_ONLINE_RACING = { text = "THE RACE IS STARTING", human = false }
+OAG_ONLINE_MODE_NO_WEAPONS = { text = "Weapons are off in an online race", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Host a race on your network, or join one", human = false }
 OAG_LAN_HOST = { text = "HOST GAME", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choose the race, then wait for the others to join", human = false }

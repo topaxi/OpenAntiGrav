@@ -54,7 +54,6 @@ pub use oag_gameplay::input;
 /// its owner.
 pub use oag_input::keys;
 pub mod lan_list;
-pub mod online_screen;
 pub mod launcher;
 pub mod loading;
 pub mod logfile;
@@ -65,6 +64,7 @@ pub mod music_state;
 pub mod net_play;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod online;
+pub mod online_screen;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

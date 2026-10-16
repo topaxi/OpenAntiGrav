@@ -720,6 +720,14 @@ impl Session {
                 prompt.set_note(note);
             }
         }
+        // A certificate is 64 digits and the line shows fewer: say how many are typed and
+        // what the last ones are, so a player can check the end against the server's.
+        if prompt.purpose == Purpose::Online(crate::overlay::OnlineField::Hash)
+            && let Some(text) = prompt.typed_text()
+        {
+            let tail: String = text.chars().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect();
+            prompt.set_note(Some(format!("{}/64 ...{}", text.chars().count(), tail.to_uppercase())));
+        }
         // The pad first, then the pointer, and the first to finish wins:
         // both are edges, so the other cannot fire again next tick.
         let outcome = match prompt.update(input) {

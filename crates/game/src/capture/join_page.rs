@@ -92,10 +92,7 @@ pub(super) fn capture_online(
         opponents: false,
     };
     let screen = if room {
-        let mut screen = Join::new(
-            Labels::read_online_room(strings),
-            oag_gameplay::MAX_PLAYERS,
-        );
+        let mut screen = Join::new(Labels::read_online_room(strings), oag_gameplay::MAX_PLAYERS);
         let snapshot = Snapshot {
             id: 1,
             settings,

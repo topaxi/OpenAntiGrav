@@ -10,10 +10,7 @@ tested locally; nothing has been deployed or tried over a real network.
 1. **The maintainer's remote test.** Build with `scripts/build-server-portable.sh`, open UDP
    60000 (lobby) and UDP 60001 (race child), `oag-server extract` locally and copy the extraction (no disc image goes to the host), run `oag-server lobby` (steps in the doc), connect
    two `oag-game --online` clients from another machine. Not done: no remote host was touched.
-2. **The menu screens.** `--online` is a flag path. Omega's order is ONLINE, CREATE or JOIN,
-   settings (`MP Select`) or the game list, team, the lobby; each needs `menu.toml` rows with
-   `string_id`s and English text, and pointer support. `oag_game::online::run` is the flow to
-   split into a per-frame state like `session::lan`'s.
+2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 7). Open: owner-side room settings editing and a max-players choice (a room is 8 with the RACE page's AI), kick, the Omega sub-pages, a live walk on HD, 2048 and Omega (stills only there), a lobby on a port other than 60000 typed on the pad.
 3. ~~The build at join~~ (landed 2026-10-16, part 6 of the doc): a hello of another build is refused by name. Open still: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
 4. **Settings Omega has and `RaceParams` lacks**: laps, eliminations target, zone target,
    barrel rolls, pilot assist allowed. Weapons stay off (ADR-0069, condition 2).
@@ -26,5 +23,5 @@ tested locally; nothing has been deployed or tried over a real network.
 ## Next Steps
 
 1. Maintainer: run the remote test above and report what the host's firewall and IPv6 did.
-2. A lane for the ONLINE screens in `oag-ui-screens` over `oag_net::online::client::LobbyClient`.
+2. ~~The ONLINE screens~~ landed; follow-ups are in item 2 above.
 3. The extraction omits Omega's guest roster (2048-era craft need a hull variant in `RaceParams`) and anything DLC; if the server grows either, the extractor's plan grows with it (`oag_net::extract::plan`).

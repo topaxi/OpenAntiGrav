@@ -45,7 +45,11 @@ fn every_room_is_a_row_and_a_closed_one_cannot_be_chosen() {
     assert_eq!(screen.confirm(), Some(Event::Leave(0)));
     // The closed room answers nothing.
     screen.step(1);
-    assert_eq!(screen.confirm(), None, "a room that cannot be joined is dimmed");
+    assert_eq!(
+        screen.confirm(),
+        None,
+        "a room that cannot be joined is dimmed"
+    );
 }
 
 #[test]
@@ -100,11 +104,19 @@ fn the_room_says_who_is_ready_and_where_the_room_is() {
         "THE HOST STARTS THE RACE"
     );
     assert_eq!(
-        room_hint(&snapshot(Phase::Queued { position: 2 }, ""), false, &strings()),
+        room_hint(
+            &snapshot(Phase::Queued { position: 2 }, ""),
+            false,
+            &strings()
+        ),
         "ANOTHER GAME IS RACING: YOU ARE NUMBER 2 IN LINE"
     );
     assert_eq!(
-        room_hint(&snapshot(Phase::Countdown { millis: 1200 }, ""), true, &strings()),
+        room_hint(
+            &snapshot(Phase::Countdown { millis: 1200 }, ""),
+            true,
+            &strings()
+        ),
         "THE RACE STARTS IN 2"
     );
     assert_eq!(
@@ -112,4 +124,31 @@ fn the_room_says_who_is_ready_and_where_the_room_is() {
         "BOB LEFT - PRESS START WHEN EVERYONE IS READY",
         "the room's own note leads"
     );
+}
+
+#[test]
+fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
+    let members: Vec<Member> = ["ada", "bob", "cyd"]
+        .iter()
+        .enumerate()
+        .map(|(n, name)| Member {
+            name: (*name).into(),
+            team: String::new(),
+            ready: true,
+            owner: n == 0,
+        })
+        .collect();
+    let snapshot = Snapshot {
+        id: 1,
+        settings: room(1, "ada", 3, true).settings,
+        members,
+        phase: Phase::Open,
+        note: String::new(),
+    };
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(&mut screen, &snapshot, false, &strings());
+    assert_eq!(screen.count(), 3);
+    assert_eq!(screen.labels().hint, "THE HOST STARTS THE RACE");
+    fill_room(&mut screen, &snapshot, true, &strings());
+    assert_eq!(screen.labels().hint, "PRESS START WHEN EVERYONE IS READY");
 }

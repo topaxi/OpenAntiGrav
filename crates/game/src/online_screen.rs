@@ -151,7 +151,12 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
 /// Fills `screen` (the room form) from `room`: one seat per person, and the line under the
 /// title. Whether `owner` (this person) may press START is the screen's `requiring`.
 pub fn fill_room(screen: &mut Join, room: &Snapshot, owner: bool, strings: &StringTable) {
-    screen.set_seats(room.members.iter().map(|m| member_line(m, strings)).collect());
+    screen.set_seats(
+        room.members
+            .iter()
+            .map(|m| member_line(m, strings))
+            .collect(),
+    );
     screen.set_hint(room_hint(room, owner, strings));
 }
 

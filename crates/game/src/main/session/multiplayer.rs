@@ -111,6 +111,29 @@ impl Session {
                     }
                 })
                 .collect()
+        } else if self.online_creating() {
+            // A network race holds weapons off (ADR-0069): a mode that is about them has
+            // nothing to play, and Head to Head seats exactly two in a room of up to eight.
+            let off = self
+                .shell
+                .as_ref()
+                .and_then(|shell| shell.strings.get("OAG_ONLINE_MODE_NO_WEAPONS"))
+                .unwrap_or("Weapons are off in an online race")
+                .to_string();
+            shell
+                .modes
+                .iter()
+                .map(|choice| {
+                    let weaponless = [oag_race::Mode::Eliminator, oag_race::Mode::Head2Head]
+                        .iter()
+                        .any(|mode| mode.name() == choice.value);
+                    if weaponless {
+                        choice.clone().unusable(off.clone())
+                    } else {
+                        choice.clone()
+                    }
+                })
+                .collect()
         } else {
             oag_ui::menu::cap_modes(&shell.modes, people, |most| {
                 reason.replace("%d", &most.to_string())

@@ -364,7 +364,13 @@ impl Session {
             title: shell.title.name.to_string(),
             track: options.track.clone().unwrap_or_default(),
             class: options.class.clone(),
-            mode: options.mode.name().to_string(),
+            // A stored Eliminator or Head to Head (weapons, two people) is a Single Race here.
+            mode: match options.mode {
+                oag_race::Mode::Eliminator | oag_race::Mode::Head2Head => {
+                    oag_race::Mode::SingleRace.name().to_string()
+                }
+                other => other.name().to_string(),
+            },
             max_players: oag_net::wire::online::MAX_PLAYERS,
             opponents: options.opponents,
         };
