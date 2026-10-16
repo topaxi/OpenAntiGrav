@@ -252,7 +252,37 @@ const TEXT_TOP_PAD: f32 = 1.9;
 /// widest face (Pulse's) fits `NAME  OTHER VERSION` beside `WIPEOUT PULSE (8/8)` at this size.
 const LIST_ROW_SCALE: f32 = 0.7;
 
+/// Where the last row may end, as a fraction of the grid's height: the footer's chrome (the
+/// legend, and the ticker on Pulse) starts under it. **Chosen, not measured**, the same limit
+/// the layout screen keeps its rows above ([`crate::window_layout`]).
+const ROWS_BOTTOM: f32 = 0.84;
+/// The smallest a crowded screen's rows are drawn, as a share of their usual size.
+const MIN_FIT: f32 = 0.4;
+
 impl Layout {
+    /// These rows closed up so `rows` of them end above the footer: the pitch, the text and a
+    /// block's height shrink together, and a screen whose rows already fit is left as it is.
+    /// The owner of a full room has twelve (eight seats, ROOM SETTINGS, MAX PLAYERS, START,
+    /// BACK), which at the usual pitch ran START and BACK off the bottom of the picture.
+    pub(crate) fn fitted(mut self, rows: usize, height: f32) -> Self {
+        // The hint goes under the rows on a title that draws blocks.
+        let below = if self.hint_below { 0.7 } else { 0.0 };
+        let need = (rows as f32 + below) * self.line;
+        let room = height * ROWS_BOTTOM - self.top;
+        if need <= room {
+            return self;
+        }
+        let by = (room / need).max(MIN_FIT);
+        self.line *= by;
+        self.scale *= by;
+        self.text_pad *= by;
+        if let Some(blocks) = self.blocks.as_mut() {
+            blocks.height *= by;
+            blocks.scale.1 *= by;
+        }
+        self
+    }
+
     pub(crate) fn new(skin: &Skin) -> Self {
         let (width, grid_height) = skin.space().size;
         if let (Some(list), Some(numbers)) = (skin.list(), skin.blocks()) {
@@ -468,6 +498,13 @@ impl Join {
         self.seats.len()
     }
 
+    /// Where this screen's rows sit: the skin's, closed up when there are too many for the
+    /// picture. The drawing and the pointer's hit-test both read it, so a click lands on the
+    /// row that was drawn there.
+    pub(crate) fn layout(&self, skin: &Skin) -> Layout {
+        Layout::new(skin).fitted(self.rows().len(), skin.space().size.1)
+    }
+
     /// The row the pointer is over, if it has moved onto one.
     #[must_use]
     pub fn hover(&self) -> Option<Row> {
@@ -486,7 +523,7 @@ impl Join {
         let Some(at) = pointer.at else {
             return out;
         };
-        let layout = Layout::new(skin);
+        let layout = self.layout(skin);
         let rows = self.rows();
         let Some(row) = row_at(at, 0.0, layout.width, layout.top, layout.line, rows.len())
             .map(|index| rows[index])
@@ -520,14 +557,14 @@ impl Join {
                 )
             })
             .collect();
-        row_blocks(skin, frame, &shape)
+        row_blocks_in(&self.layout(skin), frame, &shape)
     }
 
     /// The hint and the rows, drawn on the skin's grid. `frame` is the title's own, for the
     /// hint's ink on a title that draws blocks.
     #[must_use]
     pub fn body(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
-        let layout = Layout::new(skin);
+        let layout = self.layout(skin);
         let text =
             |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
                 x,
@@ -647,7 +684,11 @@ impl Join {
 /// titles, whose rows are bare text). Shared by every screen drawn in the join screen's
 /// rows ([`crate::window_layout`]).
 pub(crate) fn row_blocks(skin: &Skin, frame: &Frame, rows: &[(bool, bool)]) -> Vec<Draw> {
-    let layout = Layout::new(skin);
+    row_blocks_in(&Layout::new(skin), frame, rows)
+}
+
+/// [`row_blocks`] on a layout already worked out, for a screen that closes its rows up.
+pub(crate) fn row_blocks_in(layout: &Layout, frame: &Frame, rows: &[(bool, bool)]) -> Vec<Draw> {
     let (Some(shape), Some(art), Some(ink)) = (layout.blocks.as_ref(), frame.blocks, frame.ink)
     else {
         return Vec::new();

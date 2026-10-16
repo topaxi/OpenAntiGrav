@@ -542,8 +542,9 @@ From here the round trip is about 10 ms.
 
 ### Open
 
-- **Menu screens: landed** (part 7), walked live on all five titles, with the owner's room
-  settings and size. Open there: kick, laps (`RoomSettings` has no field for it) and the other
+- **Menu screens: landed** (part 7), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
+  lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
+  and size. Open there: kick, laps (`RoomSettings` has no field for it) and the other
   sub-pages Omega has beyond the list.
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
@@ -688,7 +689,7 @@ A 64-digit certificate is drawn on two lines, readable on every face, where it r
 on every title. `--online` stays the headless command-line flow of part 5 (it does not open the
 screens).
 
-**Walked live on every title, 2026-10-16** (`online-menus-titles`): Pure, HD, 2048 and Omega
+**Walked live, 2026-10-16** (`online-menus-titles`): Pure, HD, 2048 and Omega
 each from a fresh profile's front end through the three keyboards, CREATE, JOIN, ready, START, the
 hand-off, the race to `--max-ticks 600` and both clients back in the room (Omega's clients crawl
 on software Vulkan and took minutes to reach the end; they did). Found and fixed on the way: the
@@ -701,7 +702,13 @@ Time Trial (`oag_race::Mode::is_multiplayer_time_trial`), so it is a legitimate 
 on 2048 (`square`) and Omega (`16_Track`) are the raw ids because the RACE and Track Select pages
 of those titles show the same ids (the room line and the race loaded the same circuit); 2048's
 TEAM row shows a clipped raw craft id, a general front-end matter. The pointer was walked on Pure and
-HD: the list, the room, MAX PLAYERS, ROOM SETTINGS and BACK.
+HD: the list, the room, MAX PLAYERS, ROOM SETTINGS and BACK. **A full room is twelve rows for its
+owner** (eight seats, ROOM SETTINGS, MAX PLAYERS, START, BACK), which ran START and BACK off the
+picture on both PSP titles: the join screen now closes its rows up to fit above the footer
+(`Join::layout`, shared by the drawing and the pointer's hit-test, down to 0.4 of the usual
+size), checked in stills of an eight-person room on Pulse, Pure, HD and 2048 and in a test
+that clicks BACK. The room's note wins over the START line when the two do not fit one line,
+because the note is where a failed race says why.
 
 **Earlier, 2026-10-16** (Pulse PSP EU, a debug build, `oag-server lobby` on localhost, two
 windowed `oag-game` clients each in its own Xvfb on lavapipe, driven by xdotool, mouse for the

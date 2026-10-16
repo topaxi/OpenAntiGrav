@@ -160,9 +160,13 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
     };
     let with_note = format!("{} - {}", room.note.to_uppercase(), phase);
     // **Chosen, not measured:** the line is one row of small text; past this many glyphs it
-    // ran off the right edge of Pure's face, so the standing instruction wins over the note.
-    if room.note.is_empty() || with_note.chars().count() > HINT_GLYPHS {
+    // ran off the right edge of Pure's face. The note wins then, because it can be the only
+    // place a player is told why a race did not start, where the instruction to press START
+    // is also the row below it.
+    if room.note.is_empty() {
         phase
+    } else if with_note.chars().count() > HINT_GLYPHS {
+        room.note.to_uppercase()
     } else {
         with_note
     }

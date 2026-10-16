@@ -491,15 +491,22 @@ fn the_owners_rows_answer_the_pad_and_the_pointer_alike() {
     assert_eq!(join.hover(), Some(Row::MaxPlayers));
     assert_eq!(join.confirm(), Some(Event::MaxPlayers(1)));
     assert_eq!(join.adjust(-1), Some(Event::MaxPlayers(-1)));
-    // Pointer: the same rows by a click.
+    // Pointer: the same rows by a click, on the rows as this screen draws them.
     let mut join = screen(2);
     join.set_owner(Some(6));
+    let layout = join.layout(&skin);
+    let row = |index: usize| {
+        (
+            layout.width / 2.0,
+            layout.top + (index as f32 + 0.5) * layout.line,
+        )
+    };
     assert_eq!(
-        join.pointer(&click(centre(&skin, 3)), &skin),
+        join.pointer(&click(row(3)), &skin),
         [Event::Moved, Event::Settings]
     );
     assert_eq!(
-        join.pointer(&click(centre(&skin, 4)), &skin),
+        join.pointer(&click(row(4)), &skin),
         [Event::Moved, Event::MaxPlayers(1)]
     );
 }
@@ -515,4 +522,31 @@ fn a_rooms_size_is_how_many_seats_the_grid_has() {
     );
     join.set_capacity(4);
     assert!(join.rows().contains(&Row::Empty));
+}
+
+#[test]
+fn the_owner_of_a_full_room_still_sees_and_can_click_start_and_back() {
+    // Twelve rows (eight seats, ROOM SETTINGS, MAX PLAYERS, START, BACK) ran off the picture
+    // at the usual pitch on both PSP titles.
+    for menu in [
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_pure::FRONT_END.menu.unwrap(),
+    ] {
+        let skin = Skin::new(menu, oag_display::space::Space::PSP, 22.0);
+        let mut join = Join::new(labels(), 8);
+        join.set_seats((0..8).map(|n| format!("P{n}")).collect());
+        join.set_owner(Some(8));
+        assert_eq!(join.rows().len(), 12);
+        let layout = join.layout(&skin);
+        let (_, height) = skin.space().size;
+        let last = layout.top + 12.0 * layout.line;
+        assert!(last <= height * 0.85, "the rows end at {last} of {height}");
+        // The same layout answers the pointer: a click on the drawn BACK row is BACK.
+        let at = (layout.width / 2.0, layout.top + 11.5 * layout.line);
+        let events = join.pointer(&click(at), &skin);
+        assert!(events.contains(&Event::Back), "{events:?}");
+        // A screen with few rows keeps the skin's own pitch.
+        let few = screen(2);
+        assert_eq!(few.layout(&skin).line, Layout::new(&skin).line);
+    }
 }

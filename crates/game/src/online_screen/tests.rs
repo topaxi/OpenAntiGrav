@@ -306,3 +306,19 @@ fn max_players_steps_by_one_and_wraps_between_the_fewest_and_the_most() {
         "a full two-seat room has one size"
     );
 }
+
+#[test]
+fn a_long_note_is_never_dropped_for_the_start_instruction() {
+    // What a race child that came up and then died leaves as the room's note (its exit and
+    // the last line it said), longer than the line has room for with the hint after it.
+    let note = "the race process exited with status 3: error: the circuit would not load";
+    let mut snapshot = snapshot_of(2, 8, Phase::Open);
+    snapshot.note = note.into();
+    assert_eq!(room_hint(&snapshot, true, &strings()), note.to_uppercase());
+    // A short note still shares the line with the instruction.
+    snapshot.note = "bob joined".into();
+    assert_eq!(
+        room_hint(&snapshot, true, &strings()),
+        "BOB JOINED - PRESS START WHEN EVERYONE IS READY"
+    );
+}
