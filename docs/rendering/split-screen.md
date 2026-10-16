@@ -1625,11 +1625,9 @@ with the rows gone it matters nowhere here.
 
 **The flow** (`oag_game::main::session::multiplayer`):
 
-1. **MULTIPLAYER page** (`assets/ui/menu.toml`): `LOCAL MULTIPLAYER`; `LAN` and `ONLINE` are
-   `Action::ComingLater` rows: dimmed, **focusable** (the menus' convention: a disabled row is
-   selectable and inert, `menu/pointer.rs`) so the line under them reads `Coming later`, and
-   refusing the confirm and the click with the decline cue. "Greyed, not selectable" is
-   therefore read as *not activatable*: a row the cursor skips could never show its line.
+1. **MULTIPLAYER page** (`assets/ui/menu.toml`): `LOCAL MULTIPLAYER`, `LAN` (its own page) and
+   `ONLINE` (connects to a lobby and opens the ONLINE page, `session::online`; it was an inert
+   `Coming later` row until 2026-10-16).
 2. **Join** (`session::join`): each device presses to take a seat, **confirm or START** (HD's
    `FE_GUEST_JOIN`, "PLAYER 2 PRESS START TO JOIN", asks for START; on Omega the same id says
    OPTIONS, which is a pad's Start). A seated device's START begins, and **START needs two

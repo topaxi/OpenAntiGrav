@@ -12,7 +12,7 @@
 #   - every `target` names a page in this file;
 #   - every `action` is one the game handles: launch_race, launch_remix, quit,
 #     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, multiplayer_local,
-#     coming_later;
+#     lan_host, lan_join, online_open, online_create, online_join;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #
@@ -140,8 +140,8 @@ title_string_id = "OAG_MP_PAGE_TITLE"
 
 # LOCAL MULTIPLAYER starts the flow `oag_game::main::session::multiplayer` runs: join, the
 # window layout, the RACE page, Track Select and Ship Select per seat. LAN opens the `lan`
-# page below. ONLINE is a row for what comes later: dimmed, focusable so the line under it
-# can say so, and refusing the confirm (`Action::ComingLater`).
+# page below. ONLINE asks for a lobby (address, certificate hash, name), connects and opens
+# the `online` page below (`oag_game::main::session::online`).
 [[page.entry]]
 id = "multiplayer_local"
 kind = "action"
@@ -165,9 +165,9 @@ id = "multiplayer_online"
 kind = "action"
 label = "ONLINE"
 string_id = "OAG_MP_ONLINE"
-action = "coming_later"
-subtitle = "Coming later"
-subtitle_string_id = "OAG_MP_COMING_LATER"
+action = "online_open"
+subtitle = "Race people over the internet on an online lobby"
+subtitle_string_id = "OAG_MP_ONLINE_SUBTITLE"
 
 [[page.entry]]
 kind = "back"
@@ -200,6 +200,38 @@ string_id = "OAG_LAN_JOIN"
 action = "lan_join"
 subtitle = "Find a game on your network"
 subtitle_string_id = "OAG_LAN_JOIN_SUBTITLE"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+# **Online play (2026-10-16, chosen, not measured; the flow is Omega's, the login is ours).**
+# Reached once the lobby has welcomed this machine. CREATE GAME walks the RACE page, Track
+# Select and Ship Select and opens a room; JOIN GAME is Ship Select and the lobby's room
+# list. Both are `oag_game::main::session::online`; the web declines the ONLINE row.
+[[page]]
+id = "online"
+title = "ONLINE"
+title_string_id = "OAG_ONLINE_PAGE_TITLE"
+
+[[page.entry]]
+id = "online_create"
+kind = "action"
+label = "CREATE GAME"
+string_id = "OAG_ONLINE_CREATE"
+action = "online_create"
+subtitle = "Choose the race, then wait for the others to join"
+subtitle_string_id = "OAG_ONLINE_CREATE_SUBTITLE"
+
+[[page.entry]]
+id = "online_join"
+kind = "action"
+label = "JOIN GAME"
+string_id = "OAG_ONLINE_JOIN"
+action = "online_join"
+subtitle = "Pick a room on the lobby"
+subtitle_string_id = "OAG_ONLINE_JOIN_SUBTITLE"
 
 [[page.entry]]
 kind = "back"

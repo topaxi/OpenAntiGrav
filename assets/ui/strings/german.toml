@@ -35,7 +35,35 @@ OAG_MP_LOCAL = { text = "LOKALER MEHRSPIELER", human = false }
 OAG_MP_LOCAL_SUBTITLE = { text = "Bis zu acht Spieler an diesem Gerät, auf einem Bildschirm oder in mehreren Fenstern", human = false }
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
-OAG_MP_COMING_LATER = { text = "Kommt später", human = false }
+OAG_MP_ONLINE_SUBTITLE = { text = "Online-Rennen über eine Lobby im Internet", human = false }
+OAG_ONLINE_PAGE_TITLE = { text = "ONLINE", human = false }
+OAG_ONLINE_CREATE = { text = "SPIEL ERSTELLEN", human = false }
+OAG_ONLINE_CREATE_SUBTITLE = { text = "Das Rennen wählen und auf die anderen warten", human = false }
+OAG_ONLINE_JOIN = { text = "SPIEL BEITRETEN", human = false }
+OAG_ONLINE_JOIN_SUBTITLE = { text = "Einen Raum der Lobby wählen", human = false }
+OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY-ADRESSE", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "HOST:PORT DES SERVERS, z. B. race.example.org:60000", human = false }
+OAG_ONLINE_HASH_TITLE = { text = "LOBBY-ZERTIFIKAT", human = false }
+OAG_ONLINE_HASH_HINT = { text = "DIE 64 ZIFFERN VOM BETREIBER DES SERVERS", human = false }
+OAG_ONLINE_NAME_TITLE = { text = "DEIN NAME", human = false }
+OAG_ONLINE_NAME_HINT = { text = "SO SEHEN DICH DIE ANDEREN", human = false }
+OAG_ONLINE_CONNECTING = { text = "VERBINDE...", human = false }
+OAG_ONLINE_FAILED = { text = "VERBINDUNG FEHLGESCHLAGEN", human = false }
+OAG_ONLINE_LOST = { text = "DIE LOBBY WURDE GESCHLOSSEN", human = false }
+OAG_ONLINE_LIST_TITLE = { text = "ONLINE-SPIELE", human = false }
+OAG_ONLINE_LIST_HINT = { text = "SPIEL WÄHLEN ODER EINES ERSTELLEN", human = false }
+OAG_ONLINE_CREATE_ROW = { text = "SPIEL ERSTELLEN", human = false }
+OAG_ONLINE_DEFAULT_TRACK = { text = "STANDARDSTRECKE", human = false }
+OAG_ONLINE_ROW_CLOSED = { text = "NICHT BEITRETBAR: VOLL, GESTARTET ODER ANDERER TITEL, ANDERE VERSION ODER MODS", human = false }
+OAG_ONLINE_ROOM_TITLE = { text = "SPIEL-LOBBY", human = false }
+OAG_ONLINE_ROOM_HINT = { text = "DER HOST STARTET DAS RENNEN", human = false }
+OAG_ONLINE_ROOM_HINT_OWNER = { text = "START DRÜCKEN, WENN ALLE BEREIT SIND", human = false }
+OAG_ONLINE_HOST = { text = "HOST", human = false }
+OAG_ONLINE_READY = { text = "BEREIT", human = false }
+OAG_ONLINE_PICKING = { text = "WÄHLT", human = false }
+OAG_ONLINE_QUEUED = { text = "EIN ANDERES SPIEL LÄUFT: DU BIST NUMMER %d IN DER WARTESCHLANGE", human = false }
+OAG_ONLINE_COUNTDOWN = { text = "DAS RENNEN STARTET IN %d", human = false }
+OAG_ONLINE_RACING = { text = "DAS RENNEN WIRD GESTARTET", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Ein Rennen im Netzwerk ausrichten oder beitreten", human = false }
 OAG_LAN_HOST = { text = "SPIEL AUSRICHTEN", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Das Rennen wählen und auf die anderen warten", human = false }

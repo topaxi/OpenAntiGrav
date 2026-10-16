@@ -2,7 +2,7 @@
 //! (2026-10-14, the maintainer's plan; **ours, chosen, not measured**).
 //!
 //! 1. The **MULTIPLAYER** main-menu row opens the page whose LOCAL MULTIPLAYER row starts the
-//!    flow; LAN opens its own page (`session::lan`); ONLINE is a row for what comes later ([`oag_ui::menu::Action::ComingLater`]).
+//!    flow; LAN opens its own page (`session::lan`); ONLINE connects to a lobby and opens its own page (`session::online`).
 //! 2. **Join** (`session::join`): each person takes a seat with their device; the devices
 //!    seated earlier this session are seated again where they are still connected.
 //! 3. **Layout** (`session::window_layout`): windows, monitors, the cut, fullscreen.

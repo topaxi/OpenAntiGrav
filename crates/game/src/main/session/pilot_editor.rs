@@ -534,6 +534,10 @@ impl Session {
             self.lan_address_entered(&finished.text);
             return;
         }
+        if let Purpose::Online(field) = finished.purpose {
+            self.online_field_entered(field, &finished.text);
+            return;
+        }
         let Some(dir) = pilots::directory() else {
             error!("no config directory on this platform, so nothing can be written");
             return;
@@ -578,7 +582,7 @@ impl Session {
                 // better to land on than the top.
                 self.reload_pilot_roster(None);
             }
-            Purpose::LanAddress => {}
+            Purpose::LanAddress | Purpose::Online(_) => {}
         }
     }
 

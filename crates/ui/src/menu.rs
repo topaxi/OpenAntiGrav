@@ -925,13 +925,7 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        matches!(
-            entry,
-            Entry::Run {
-                action: Action::ComingLater,
-                ..
-            }
-        ) || self.pin(entry).is_some()
+        self.pin(entry).is_some()
             || entry
                 .disabled_by()
                 .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))

@@ -103,7 +103,7 @@ fn hovering_sounds_once_per_row_and_a_click_on_a_submenu_accepts() {
 /// focusable so the line under them can say "Coming later", and refusing the confirm with the
 /// decline cue (a pointer click goes through the same gate, `pointer`'s own test).
 #[test]
-fn the_multiplayer_page_has_local_and_two_rows_for_later() {
+fn the_multiplayer_page_has_local_lan_and_online_rows() {
     let mut menu = Menu::new(built_in());
     menu.open("multiplayer");
     let actions: Vec<Option<Action>> = menu
@@ -120,7 +120,7 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
         [
             Some(Action::OpenMultiplayerLocal),
             None,
-            Some(Action::ComingLater),
+            Some(Action::OpenOnline),
             None
         ]
     );
@@ -158,17 +158,33 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
     );
     press(&mut menu, &[Button::Circle]);
     assert_eq!(menu.page().id, "multiplayer");
-    // ONLINE is still for later: dimmed, focusable so the line can say so, refusing the confirm.
+    // ONLINE is real: it fires its action, which opens the lobby connection.
     press(&mut menu, &[Button::Down]);
     assert_eq!(menu.selected(), 2);
     let entry = &menu.page().entries[2];
     assert_eq!(entry.label(), "ONLINE");
-    assert!(menu.is_disabled(entry), "ONLINE is dimmed");
-    assert_eq!(menu.page().subtitles[2].as_deref(), Some("Coming later"));
-    let _ = menu.take_nav();
-    assert!(
-        press(&mut menu, &[Button::Cross]).is_empty(),
-        "ONLINE fires nothing"
+    assert!(!menu.is_disabled(entry), "ONLINE is not dimmed");
+    assert_eq!(
+        press(&mut menu, &[Button::Cross]),
+        [MenuEvent::Fired(Action::OpenOnline)]
     );
-    assert_eq!(menu.take_nav(), [Nav::Decline]);
+}
+
+#[test]
+fn the_online_page_has_create_and_join() {
+    let mut menu = Menu::new(built_in());
+    menu.open("online");
+    let actions: Vec<Option<Action>> = menu
+        .page()
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Run { action, .. } => Some(*action),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        actions,
+        [Some(Action::OnlineCreate), Some(Action::OnlineJoin), None]
+    );
 }
