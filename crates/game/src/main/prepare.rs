@@ -245,7 +245,6 @@ impl Pending {
             },
             // Every seat of every window, which `views` is not (see `Options::people`).
             people: self.cli.driver.people(),
-            cut: self.cli.driver.cut(),
             trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,

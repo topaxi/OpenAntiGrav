@@ -822,6 +822,7 @@ impl Race {
                 }),
                 pair_spoil: [false; MAX_SHIPS],
                 split_gap: None,
+                sight_screens: (sight.view_screen, sight.columns_screen),
                 sight: sight.view_sight(),
                 sight_state: sight::State::Absent,
                 sight_fov: oag_display::display::Fov::AUTHORED,

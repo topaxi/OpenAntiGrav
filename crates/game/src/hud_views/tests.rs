@@ -227,6 +227,7 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
     let views = view_draws(
         cx,
         None,
+        None,
         Some(&assets),
         one_view_each(4),
         Cut::Horizontal,

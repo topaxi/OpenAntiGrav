@@ -134,6 +134,7 @@ impl Race {
     /// fielded; a slot past them has no camera and is skipped when drawn.
     pub fn set_windows(&mut self, windows: Vec<WindowViews>) {
         self.view.viewpoints.windows = windows;
+        self.fit_sights();
     }
 
     /// Takes window `index` out of the layout (it was closed), so the windows after it
@@ -142,6 +143,7 @@ impl Race {
     pub fn remove_window(&mut self, index: usize) {
         if index > 0 && index < self.view.viewpoints.windows.len() {
             self.view.viewpoints.windows.remove(index);
+            self.fit_sights();
         }
     }
 
@@ -203,6 +205,40 @@ impl Race {
     /// reads it and the state hash does not hold it.
     pub fn set_cut(&mut self, cut: oag_render::viewport::Cut) {
         self.view.viewpoints.cut = cut;
+        self.fit_sights();
+    }
+
+    /// Puts every slot's reticle in the grid of the view it is drawn in: a view cut left and
+    /// right projects into the `vert_` family's view where the title authors one
+    /// ([`crate::Sighting::columns_screen`]), every other view into the one-view grid. Which
+    /// view a slot is in is its window's cut (`--window-seats 2h,2v` has both), or the race's
+    /// own with no windows. View side only: the locks are the simulation's, in their own grid.
+    fn fit_sights(&mut self) {
+        let (rows, columns) = self.view.sight_screens;
+        let Some(columns) = columns else {
+            return;
+        };
+        let vertical = |race: &Self, slot: usize| {
+            let (seats, cut) = match race
+                .view
+                .viewpoints
+                .windows
+                .iter()
+                .find(|w| w.seats.contains(&slot))
+            {
+                Some(window) => (window.seats.len(), window.cut),
+                None => (race.viewport_count(), race.view.viewpoints.cut),
+            };
+            cut.for_views(seats) == oag_render::viewport::Cut::Vertical
+        };
+        let primary = self.sim.world.primary_slot();
+        let pick = |vertical: bool| if vertical { columns } else { rows };
+        let screen = pick(vertical(self, primary));
+        self.view.sight.set_screen(screen);
+        for slot in 0..self.viewport_count() {
+            let screen = pick(vertical(self, slot));
+            self.view.huds[slot].sight.set_screen(screen);
+        }
     }
 
     /// The rectangles of the views drawn right now ([`Self::views_drawn`]) in `area`,

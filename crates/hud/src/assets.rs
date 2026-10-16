@@ -66,6 +66,12 @@ pub struct Assets {
     /// [`Self::sheet`]. `None` for everything else, which draws the whole-screen
     /// [`Self::layout`] scaled into each view instead.
     pub split: Option<SplitAssets>,
+    /// The same title's left-and-right family (HD's `vert_splitscreen_hud_*`,
+    /// [`oag_title::hud::VerticalLayouts`]), read whenever [`Self::split`] is and the
+    /// title ships one. Both are loaded because **the cut belongs to the window that draws,
+    /// not to the load**: a `2h,2v` layout has a top-and-bottom window and a side-by-side
+    /// one in the same race. [`Self::split_family`] picks.
+    pub split_columns: Option<SplitAssets>,
     /// This race's split-HUD file, cut for its mode and view count, read only for
     /// a race of two or more views on a title that names one
     /// ([`oag_title::HudLayouts::split_layout`]). `None` for one view and for a
@@ -99,13 +105,28 @@ impl SplitAssets {
 }
 
 impl Assets {
+    /// The authored pair a two-view window of this cut draws: the left-and-right family for
+    /// a vertical one, the top-and-bottom family otherwise. A title that ships no
+    /// left-and-right family (Pulse has no authored split at all, Pure borrows Pulse's) draws
+    /// its top-and-bottom one in a vertical window too, as it always did.
+    #[must_use]
+    pub fn split_family(&self, vertical: bool) -> Option<&SplitAssets> {
+        split_family(self.split.as_ref(), self.split_columns.as_ref(), vertical)
+    }
+
     /// The screen the lock-on reticle projects into: the title's own grid, or one
     /// view of it when the race was loaded with an authored two-player split
-    /// layout, whose reticle is view-relative.
+    /// layout, whose reticle is view-relative. The top-and-bottom family's view; a
+    /// side-by-side window's is [`Self::sight_screen_for`].
     #[must_use]
     pub fn sight_screen(&self) -> (f32, f32) {
-        self.split
-            .as_ref()
+        self.sight_screen_for(false)
+    }
+
+    /// [`Self::sight_screen`] for a window cut left and right when `vertical`.
+    #[must_use]
+    pub fn sight_screen_for(&self, vertical: bool) -> (f32, f32) {
+        self.split_family(vertical)
             .map_or(self.space.size, |split| split.view)
     }
 
@@ -191,4 +212,15 @@ impl Layout {
         }
         out
     }
+}
+
+/// [`Assets::split_family`] over the two families themselves, for a holder that keeps them
+/// apart from an [`Assets`].
+#[must_use]
+pub fn split_family<'a>(
+    rows: Option<&'a SplitAssets>,
+    columns: Option<&'a SplitAssets>,
+    vertical: bool,
+) -> Option<&'a SplitAssets> {
+    if vertical { columns.or(rows) } else { rows }
 }

@@ -461,9 +461,6 @@ impl Session {
             })
             .unwrap_or(u8::MAX);
         }
-        // Which way two views are cut: the load reads the left-and-right HUD for a vertical
-        // cut, and `split_screen::seat_for_launch` cuts the screen the same way.
-        options.cut = self.split_cut;
         // A LAN race is the host's: its circuit, ship, mode and head count replace the
         // pages', one local view (`NetPlay::race_options`).
         if let Some(net) = &self.net {

@@ -98,6 +98,19 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// The grid slot `slot`'s reticle projects into: its view's, so a slot in a window cut
+    /// left and right reads the `vert_` family's view and every other slot the one-view
+    /// grid (`fit_sights`).
+    #[must_use]
+    pub fn sight_screen_of(&self, slot: usize) -> [f32; 2] {
+        if slot == self.sim.world.primary_slot() {
+            self.view.sight.screen()
+        } else {
+            self.view.huds[slot].sight.screen()
+        }
+    }
+
+    #[cfg(feature = "view")]
     /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
     #[must_use]
     pub fn sight_state(&self) -> oag_race::sight::State {

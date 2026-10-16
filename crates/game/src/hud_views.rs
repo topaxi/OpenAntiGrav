@@ -189,14 +189,16 @@ pub fn placements(
 ///
 /// Which layout a view draws is `oag_hud::split_hud::source`'s answer for its
 /// shape: a player's override file, the title's authored layout (two views, one per
-/// player, whole-screen and sitting in its half, its reticle view-relative), this
+/// player, the family of `cut`: `split` for rows, `split_columns` for a vertical cut, whole-screen and sitting in its half, its reticle view-relative), this
 /// project's split-HUD file, or the whole-screen layout `cx` carries scaled into
 /// the view. A file places each of its groups of widgets on its own, so it yields
 /// one draw per group and one more for the reticle.
 #[must_use]
+#[allow(clippy::too_many_arguments)]
 pub fn view_draws<'a>(
     cx: Context<'a>,
     split: Option<&'a oag_hud::SplitAssets>,
+    split_columns: Option<&'a oag_hud::SplitAssets>,
     split_hud: Option<&'a oag_hud::split_hud::SplitHudAssets>,
     readouts: Vec<Readout>,
     cut: oag_render::viewport::Cut,
@@ -206,6 +208,13 @@ pub fn view_draws<'a>(
     let count = readouts.len();
     let views = oag_render::viewport::layout(count, viewport, cut);
     let whole = [0.0, 0.0, space.size.0, space.size.1];
+    // **The window's cut picks the family**, not the load's: a `2h,2v` race draws the rows
+    // family in one window and the `vert_` columns in the other.
+    let split = oag_hud::split_family(
+        split,
+        split_columns,
+        cut == oag_render::viewport::Cut::Vertical,
+    );
     let mut out = Vec::new();
     for (slot, (mut readout, view)) in readouts.into_iter().zip(views).enumerate() {
         let aspect = view.2 / view.3;

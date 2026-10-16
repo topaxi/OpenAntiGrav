@@ -500,8 +500,16 @@ the next player (`step`, `region(slot)`): down one view's height for the rows, r
 view's width for the columns, and the reticle's view is 960x1080. The arcade vertical
 file's own comment asks for "separate sights" and includes the whole-screen sights, so a
 vertical view's reticle is the arcade one placed into the column. Single Race, Tournament,
-Head2Head and the Eliminator read these on a vertical cut; Time Trial, Speed Lap and Zone
+Head2Head and the Eliminator read these on a vertical cut (a window's, see below); Time Trial, Speed Lap and Zone
 (no authored pair) draw this project's `SplitHud_HD.toml` by view shape, as they do in rows.
+**The window's cut picks the family, not the load's (2026-10-16).** The load composes both
+families (`Assets::split` rows, `Assets::split_columns` the `vert_` pair) and `view_draws`
+picks by the cut of the window being drawn, so `--window-seats 2h,2v` draws the rows family
+in window 1 and HD's columns in window 2 (it used to read one session-wide cut, window 1's,
+and drew rows into the side-by-side window); each slot's reticle grid follows its view
+(`Race::fit_sights`, 1920x540 or 960x1080; the simulation's lock grid is untouched). Looked at
+on HD and Omega, both windows, headless. A title with no `vert_` family (Pulse, Pure) draws
+its rows family in a vertical window as before.
 The family covers two players, so any other count never reads it. The reticle is authored view-relative
 (`splitscreen_sights.xml` places its models off screen and the runtime places
 them), so the race projects it into a 1920x540 view and the draw moves it down by

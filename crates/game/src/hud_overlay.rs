@@ -121,6 +121,7 @@ pub struct Overlay {
     rows: crate::render::Renderer,
     /// The authored split layouts, [`Assets::split`].
     split: Option<oag_hud::SplitAssets>,
+    split_columns: Option<oag_hud::SplitAssets>,
     split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
 }
 
@@ -207,6 +208,7 @@ impl Overlay {
             captions,
             rows,
             split: assets.split.clone(),
+            split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
         }))
     }
@@ -306,6 +308,7 @@ impl Overlay {
         let mut frame = views_frame(&crate::hud_views::view_draws(
             self.context(),
             self.split.as_ref(),
+            self.split_columns.as_ref(),
             self.split_hud.as_ref(),
             readouts,
             cut,

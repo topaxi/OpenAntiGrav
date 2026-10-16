@@ -1547,3 +1547,12 @@ and build times are in `docs/architecture/workspace-layout.md`, "The lean race".
 Left open: the lean configuration is compiled by `just lint` only, so a view use
 added without a `cfg` fails there rather than in `cargo build`; and the `client`
 feature makes `oag-net`'s own tests link the view (they exercise the client).
+
+2026-10-16, `hd-split-vert-hud`: a `--window-seats 2h,2v` race drew window 2 with HD's rows HUD
+because the load read one session-wide cut (window 1's). Both authored families now load and
+the drawing window's cut picks (`Assets::split_family`, `view_draws`), reticle grids per view
+(`Race::fit_sights`). `splitscreenzone_hud` is not named by HD's executable and HD has no
+MPZone manager (confidence 75, `docs/formats/hd-hud.md`): left unwired. Speed Lap and Zone
+two-view draw `SplitHud_HD.toml` in both cuts and read sensibly in screenshots; nothing
+changed there. Open: a live window-seats `2h,2v` play on a real display (looked at headless
+only); Omega's per-window run was headless too.
