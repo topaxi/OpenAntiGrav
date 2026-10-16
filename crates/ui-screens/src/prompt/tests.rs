@@ -12,7 +12,7 @@ fn tick(buttons: &[Button]) -> Input {
 
 /// Pulse's own menu table against the 22-pixel face its menus name, the same
 /// skin `menu/tests.rs` draws with.
-fn skin() -> Skin {
+pub(super) fn skin() -> Skin {
     Skin::new(
         oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,

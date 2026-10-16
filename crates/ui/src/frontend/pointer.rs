@@ -20,6 +20,7 @@
 //! would otherwise race the whole game in the wrong language. The same rule
 //! the selection screens use, for the same reason.
 
+use crate::menu::nav::Nav;
 use crate::pointer::{Pointer, row_at};
 
 use super::{Frontend, states};
@@ -52,11 +53,15 @@ impl Frontend {
         let count = self.languages.len();
         if pointer.scroll != 0 {
             let last = count - 1;
+            let before = self.selected;
             self.selected = usize::try_from(
                 i64::try_from(self.selected).unwrap_or(0) + i64::from(pointer.scroll),
             )
             .unwrap_or(0)
             .min(last);
+            if self.selected != before {
+                self.navs.push(Nav::Moved(None));
+            }
         }
         let Some(at) = pointer.at else {
             return true;
@@ -66,18 +71,27 @@ impl Frontend {
         if pointer.moved
             && let Some(row) = row
         {
-            self.selected = row;
+            self.land_on_language(row);
         }
         if pointer.clicked
             && let Some(row) = row
         {
             if row == was {
                 self.confirm_language();
+                self.navs.push(Nav::Accept);
             } else {
-                self.selected = row;
+                self.land_on_language(row);
             }
         }
         true
+    }
+
+    /// Moves the highlight to `row`, logging the step only when it moved.
+    fn land_on_language(&mut self, row: usize) {
+        if row != self.selected {
+            self.navs.push(Nav::Moved(None));
+        }
+        self.selected = row;
     }
 
     /// Which language row `at` is over, off the same layout the rows are

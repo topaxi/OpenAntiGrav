@@ -116,6 +116,112 @@ No code reference. A byte search of `BOOT.BIN` for `PAUSE\0` has no hit, so the 
 pause menu (`InGame Pause`, `0x08a795ec`) is driven by the same `ConfirmButton_Update` cues as any other. Whether a
 formatted name could reach it was not ruled out (confidence 60 that nothing plays it).
 
+## Text entry, dialogs and the boot (2026-10-16, lane `pulse-frontend-sfx`)
+
+**Method.** PPSSPP v1.20.4 (software renderer, USA), a breakpoint on `Sound_PlayNamedInSlot` (`0x0893a768`), and at each
+hit the front end's state name, the cue name (`a2`) and `ra`, with scripted presses in between
+(`scripts/psp-menu-cues.py`). Every cue below is a hit, not a reading. Only the most recent breakpoint fires on this
+build, so the probe arms exactly one.
+
+### `TagInput`, the text-entry widget: `TagInput_Update` (`0x088cae88`), confidence 88
+
+The widget class is registered by `FUN_088cbcbc` (it passes the string `TagInput`, `0x08a81b88`, and installs vtable
+`0x08acf2d4`); the vtable's fourth slot is `0x088cae88`, which holds the cell cursor (`+0xe8`), the cell count
+(`+0x110`) and the per-cell glyphs. The button numbers are the abstract layer's (`input.md`: 0 up, 1 down, 2 left,
+3 right, 4 circle, 5 cross). The decompile and the live walk agree on every row:
+
+| Press | Condition | Cue | Live (`ra`) |
+| --- | --- | --- | --- |
+| Up or Down | cursor on a cell (not the confirm slot) | `UPDOWN`, glyph steps | `0x088cb0b4`, `0x088cb144` |
+| Up or Down | cursor on the confirm slot | silent | none in 1.5 s |
+| Left | cursor above cell 0 | `LEFTRIGHT`, cursor steps | `0x088cb1a4` |
+| Left | cursor on cell 0 | `DECLINE` | `0x088cb1dc` |
+| Right or Cross | the cursor can advance (cell to cell, last cell to the confirm slot) | `LEFTRIGHT` | `0x088cb2d0` |
+| Right or Cross | cursor already on the confirm slot | `DECLINE` | `0x088cb2fc` |
+| Circle | cursor above cell 0 | `LEFTRIGHT`, cursor steps back | `0x088cb348` |
+| Circle | cursor on cell 0 | silent (no back) | none |
+| Square | any | silent | none |
+
+Holding **Up or Down** repeats, each repeat with `UPDOWN` (the decompile reads `Input_IsHeld` for those two only: first
+repeat after 10 frames, then every 2); Left, Right, Cross and Circle are presses only. **Cross on the confirm slot plays
+two cues on the same press, within a frame or two of each other** (the debugger's clock cannot say which): the widget's own advance has nowhere to go (`DECLINE`) and the sibling
+`ConfirmButton_Update` then accepts (`ACCEPT`), measured on `NameSetup2FromBoot` and `TagSetup2FromBoot` (a 10 cell
+name and a 3 cell tag). A blank name did not stop the cursor reaching the slot. The decompile also reads a flag
+(`+0x129`) and a count (`FUN_088ca80c`) that cap the advance one short of the slot; which field sets them (the
+`AllowBlank` attribute is the candidate) was not measured, so a field that refuses a blank advance is open.
+
+**What the port does with it** (`oag_ui_screens::tag_entry::TagEntry`, pad and pointer): the cues are the original's,
+on the port's own bindings, which are not the original's. The port scrolls on Up/Down and steps on Left/Right as the
+original does; but its Cross on a cell does nothing (the original advances), its Circle cancels the prompt (the
+original steps back and has no cancel on the widget), and its Square deletes (the original ignores it). Those are
+**chosen, not measured** and unchanged by this lane; their cues are `LEFTRIGHT` for a delete or a typed character and
+`DECLINE` for a cancel. The pointer plays the pad's cues for the same move: hovering onto a cell steps the cursor
+(`LEFTRIGHT`), the wheel scrolls the glyph (`UPDOWN`), a click on the confirm slot is Cross on it (`DECLINE` then
+`ACCEPT`), the secondary button is a cancel (`DECLINE`). Walked live on the PPSSPP-independent port run (xdotool, Xvfb,
+Pulse USA, `--no-audio`): hover onto cell 3 logged `MenuStepRight`, wheel up and down `MenuDown` and `MenuUp`, the
+secondary button `MenuDecline`.
+
+### `ConfirmButton_Update` plays `ACCEPT` on every screen it sits on (`0x088c9174` for the back button's `DECLINE`)
+
+Every `ACCEPT` below has `ra = 0x088c90bc`, inside `ConfirmButton_Update` (`0x088c8e88`); the back button's
+`DECLINE` has `ra = 0x088c9174`.
+
+| Screen (state name) | Press | Cue |
+| --- | --- | --- |
+| `LogoFMV` (the intro movie) | Start or Cross, the skip | `ACCEPT` |
+| `Show Logo` (PRESS START) | **Cross or Start** (`frontend-boot.md` says Start only; Cross works) | `ACCEPT` |
+| `RemoveMemoryStickWarning`, `MemoryStickWarning` | Cross | `ACCEPT` |
+| `NameSetup2FromBoot`, `TagSetup2FromBoot` | Cross on the confirm slot | `DECLINE`, `ACCEPT` (above) |
+| Main menu, a row | Cross | `ACCEPT` |
+| In race | **Start** (pause) | `ACCEPT` (state `InGame Pause Redirect`) |
+| `InGame Pause SP Time Trial` rows | Up or Down | `UPDOWN` (`ra = 0x088b5340`, the `Menu` class step) |
+| the pause menu | Circle | silent, the root has no back |
+| the pause menu | Start | `ACCEPT` (resumes) |
+| `CONTINUE`, `GAME OPTIONS`, `RESTART RACE`, `QUIT RACE` | Cross | `ACCEPT` |
+| `InGame Settings TT` (a pause sub-page) | Circle | `DECLINE` (`ra = 0x088c9174`) |
+
+**There is no confirm dialog on the pause menu.** `QUIT RACE` goes straight to `Kill Game Transition` and the main menu
+with one `ACCEPT`; `RESTART RACE` goes to `InGame Restart` and the track description screen with one `ACCEPT`. The
+pause menu is `CONTINUE`, `GAME OPTIONS`, `PHOTO MODE`, `GAME MANUAL`, `RESTART RACE`, `QUIT RACE` over the race.
+
+**`Language Selection` was not seen.** On the USA disc a first boot with no profile goes `LogoFMV`,
+`LogoFMVRedirectScreen`, `Show Logo`; the disc's `LanguageAutoRedirect` is taken, so the picker is never shown (the EU
+disc's picker was not walked: this probe's address is the USA binary's, and a second image needs its own). The screen's
+widgets are the `Menu` (name `Language`) and `ControlTextConfirmButton` classes whose cues are above, so the port's
+picker plays `UPDOWN` for a step and `ACCEPT` for a confirm **by widget class, chosen, not measured**.
+
+`FUN_088e4fd0` (a caller of `Sound_PlayNamedInSlot` with `LEFTRIGHT` and `DECLINE`) is the medal gallery's update
+(`GalleryScreen`, `Medal %d`), not a text widget. Unnamed (confidence below 50 that its name is useful).
+
+**What the port does with the boot and the pause** (pad and pointer, `Frontend::take_nav`, `press_cue`): the movie
+skip, `Show Logo`'s press, the picker's step and confirm, and START pausing or resuming a race each play the cue above.
+The port's pause has no rows and no sub-pages, so the pause menu's `UPDOWN` and `DECLINE` have no counterpart; the
+port's Circle while paused leaves the race and plays nothing, as the original's root Circle does. The memory-stick and
+profile-setup screens, the `Create Profile` flow and the in-race options pages are not in the port.
+
+**Dialogs and the grid keyboard have no counterpart on the disc.** The port's yes/no `Confirm` (DELETE PILOT) and its
+key grid `Keyboard` (a name `TagEntry` cannot spell, a LAN address) borrow the cues above and are **chosen, not
+measured**: a step between answers or keys, `LEFTRIGHT` for a yes/no flip and a typed or deleted character, `UPDOWN`
+for a grid cursor move, `ACCEPT` for yes and accept, `DECLINE` for no, back and a refused character (a full or empty
+buffer, as the widget's cannot-advance step). Whether the original's "no" on a yes/no page would be a resolving button
+(and so `ACCEPT`) was not settled, no such dialog being on a path walked.
+
+**The campaign's refused launch.** `Session::campaign_nav` already turned a locked tier or cell into `DECLINE`; it now
+also asks `plan_cell` (the same pure plan `launch_campaign_cell` runs) so a cell the build cannot race (a mode it does
+not run, a circuit the disc lacks) plays `DECLINE` instead of `ACCEPT` followed by the notice. **Chosen, not
+measured**: the original has no such refusal.
+
+**Which titles hear this.** Everything above goes through the title's own front-end bank (`play_navs`), so Pulse hears
+measured cues; **Pure and HD inherit them unmeasured** (the cue names resolve from each title's `Title` data: HD's
+`accept`, `navUp` and so on), which means pausing an HD race with START, HD's rename and delete prompts and its boot
+screens now play HD's cues too, with nothing measured on HD for any of them; Omega and 2048 have no front-end bank in
+this build and stay silent. Scoping HD or Pure out is a one-line gate at the callers and was left to the lead.
+
+**Pure and the PS2 pressing.** Pure is **not checkable here**: `/pure/BOOT-psp-pure-usa.BIN` is not open in the shared
+Ghidra bridge and opening it would change the maintainer's session; the four cues play on its menus already and
+`TagInput` is in its `Skin.xml`, so the port's mapping applies unchanged and is unmeasured on Pure. Pulse PS2 shares
+one definition with the PSP in the port; its executable was not read for `TagInput_Update` (**not checked**).
+
 ## The voice banks
 
 | Slot | Cue | Caller | Selector |

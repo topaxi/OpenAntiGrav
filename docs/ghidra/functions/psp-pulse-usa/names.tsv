@@ -1373,3 +1373,5 @@
 # 2026-10-14 (mp-collision-re): the multiplayer end-board builder. See mp-time-trial.md.
 0x0882ad3c	function	Race_BuildMultiplayerResults	76	mp-time-trial.md
 0x0884dc60	function	Body_RecordPairContact	82	contact-response.md
+# 2026-10-16 pulse-frontend-sfx: the TagInput text-entry widget's update and its live cue walk (menu-sounds.md)
+0x088cae88	function	TagInput_Update	88	menu-sounds.md

@@ -65,7 +65,32 @@
 
 use oag_gameplay::input::{Button, Input};
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::menu::nav::{Dir, Nav};
 use oag_ui::menu::{Menu, Skin};
+
+/// The navigation sounds a prompt called for since they were last taken, the
+/// way [`Menu::take_nav`] is for a menu: the model logs, the composition root
+/// plays whichever cue the title's front-end bank carries.
+///
+/// What each prompt logs is on the prompt: `TagEntry` is Pulse's own widget and
+/// its cues are measured (`docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`,
+/// "Text entry and dialogs"); [`Keyboard`] and [`Confirm`] have no counterpart
+/// on the disc, so theirs mirror it and are chosen, not measured.
+#[derive(Debug, Clone, Default)]
+pub struct NavLog(Vec<Nav>);
+
+impl NavLog {
+    /// Logs one cue.
+    pub(crate) fn push(&mut self, nav: Nav) {
+        self.0.push(nav);
+    }
+
+    /// The cues logged since the last call, oldest first.
+    #[must_use]
+    pub fn take(&mut self) -> Vec<Nav> {
+        std::mem::take(&mut self.0)
+    }
+}
 
 /// What a prompt did on a tick.
 ///
@@ -182,6 +207,7 @@ pub struct Keyboard {
     cell: usize,
     /// The characters the grid offers, in order; [`KEYS`] unless set by [`Self::with_keys`].
     keys: &'static str,
+    navs: NavLog,
 }
 
 impl Keyboard {
@@ -208,7 +234,18 @@ impl Keyboard {
             limit: limit.max(1),
             cell: 0,
             keys,
+            navs: NavLog::default(),
         }
+    }
+
+    /// The sounds the grid called for since the last call. **Chosen, not
+    /// measured**: Pulse has no keyboard, so the grid borrows its `TagInput`'s
+    /// cues - a cursor step plays `UPDOWN`, a character typed or deleted
+    /// `LEFTRIGHT` (that widget's advance and step back), a refused one (the
+    /// buffer full or empty) `DECLINE`, accept `ACCEPT`, cancel `DECLINE`.
+    #[must_use]
+    pub fn take_nav(&mut self) -> Vec<Nav> {
+        self.navs.take()
     }
 
     /// Whether `c` is a character this grid offers: what a desk key may type into it.
@@ -267,10 +304,17 @@ impl Keyboard {
             Edit::Type(c) => {
                 if self.text.chars().count() < self.limit {
                     self.text.push(c);
+                    self.navs.push(Nav::Stepped(Some(Dir::Right)));
+                } else {
+                    self.navs.push(Nav::Decline);
                 }
             }
             Edit::Delete => {
-                self.text.pop();
+                if self.text.pop().is_some() {
+                    self.navs.push(Nav::Stepped(Some(Dir::Left)));
+                } else {
+                    self.navs.push(Nav::Decline);
+                }
             }
         }
     }
@@ -286,15 +330,19 @@ impl Keyboard {
         let (mut row, mut column) = (self.cell / COLUMNS, self.cell % COLUMNS);
         if input.take(Button::Right) {
             column = (column + 1) % COLUMNS;
+            self.navs.push(Nav::Moved(Some(Dir::Right)));
         }
         if input.take(Button::Left) {
             column = (column + COLUMNS - 1) % COLUMNS;
+            self.navs.push(Nav::Moved(Some(Dir::Left)));
         }
         if input.take(Button::Down) {
             row = (row + 1) % self.grid_rows();
+            self.navs.push(Nav::Moved(Some(Dir::Down)));
         }
         if input.take(Button::Up) {
             row = (row + self.grid_rows() - 1) % self.grid_rows();
+            self.navs.push(Nav::Moved(Some(Dir::Up)));
         }
         // A grid whose last row is short would otherwise let the cursor land
         // on a cell that is not there. `CELLS` is a whole number of rows
@@ -310,18 +358,18 @@ impl Keyboard {
             self.edit(Edit::Delete);
         }
         if input.take(Button::Circle) {
-            return Outcome::Cancelled;
+            return self.cancel();
         }
         // Start accepts wherever the cursor is, the same shorthand
         // `Menu::update` gives it for activating a row.
         if input.take(Button::Start) {
-            return Outcome::Accepted;
+            return self.accept();
         }
         if input.take(Button::Cross) {
             match self.selected() {
                 Key::Char(c) => self.edit(Edit::Type(c)),
                 Key::Delete => self.edit(Edit::Delete),
-                Key::Accept => return Outcome::Accepted,
+                Key::Accept => return self.accept(),
             }
         }
         Outcome::Pending
@@ -346,7 +394,7 @@ impl Keyboard {
             return Outcome::Pending;
         }
         if pointer.back {
-            return Outcome::Cancelled;
+            return self.cancel();
         }
         let Some(at) = pointer.at else {
             return Outcome::Pending;
@@ -355,19 +403,38 @@ impl Keyboard {
         if pointer.moved
             && let Some(cell) = cell
         {
-            self.cell = cell;
+            self.land_on(cell);
         }
         if pointer.clicked
             && let Some(cell) = cell
         {
-            self.cell = cell;
+            self.land_on(cell);
             match self.selected() {
                 Key::Char(c) => self.edit(Edit::Type(c)),
                 Key::Delete => self.edit(Edit::Delete),
-                Key::Accept => return Outcome::Accepted,
+                Key::Accept => return self.accept(),
             }
         }
         Outcome::Pending
+    }
+
+    /// Puts the cursor on `cell`, logging the step only when it moved, so a
+    /// pointer resting on a key is not a cue per event.
+    fn land_on(&mut self, cell: usize) {
+        if cell != self.cell {
+            self.navs.push(Nav::Moved(None));
+        }
+        self.cell = cell;
+    }
+
+    fn accept(&mut self) -> Outcome {
+        self.navs.push(Nav::Accept);
+        Outcome::Accepted
+    }
+
+    fn cancel(&mut self) -> Outcome {
+        self.navs.push(Nav::Decline);
+        Outcome::Cancelled
     }
 
     /// The grid as [`Self::draw`] lays it out on `skin`.
@@ -579,6 +646,7 @@ pub struct Confirm {
     labels: ConfirmLabels,
     /// Which answer the cursor is on.
     yes: bool,
+    navs: NavLog,
 }
 
 impl Confirm {
@@ -590,7 +658,22 @@ impl Confirm {
     /// can say so, and none does.
     #[must_use]
     pub fn new(labels: ConfirmLabels) -> Self {
-        Self { labels, yes: false }
+        Self {
+            labels,
+            yes: false,
+            navs: NavLog::default(),
+        }
+    }
+
+    /// The sounds the dialog called for since the last call. **Chosen, not
+    /// measured**: moving the cursor between the answers plays `LEFTRIGHT`
+    /// (`UPDOWN` for up and down), yes plays `ACCEPT` and no or back `DECLINE`,
+    /// the pair `ConfirmButton_Update` plays for a confirm and for the back
+    /// button. Whether the original's "no" is a button that resolves (and so
+    /// plays `ACCEPT`) was not settled; see `menu-sounds.md`.
+    #[must_use]
+    pub fn take_nav(&mut self) -> Vec<Nav> {
+        self.navs.take()
     }
 
     /// Which answer the cursor is on, for a test and for the draw list.
@@ -605,20 +688,25 @@ impl Confirm {
         // right, and a player whose thumb goes down on a menu has not asked
         // for nothing to happen - the same argument `Menu::update` makes for
         // up and down on a horizontal strip.
-        for button in [Button::Left, Button::Right, Button::Up, Button::Down] {
+        for (button, dir) in [
+            (Button::Left, Dir::Left),
+            (Button::Right, Dir::Right),
+            (Button::Up, Dir::Up),
+            (Button::Down, Dir::Down),
+        ] {
             if input.take(button) {
                 self.yes = !self.yes;
+                self.navs.push(match dir {
+                    Dir::Left | Dir::Right => Nav::Stepped(Some(dir)),
+                    Dir::Up | Dir::Down => Nav::Moved(Some(dir)),
+                });
             }
         }
         if input.take(Button::Circle) {
-            return Outcome::Cancelled;
+            return self.answer(false);
         }
         if input.take(Button::Cross) || input.take(Button::Start) {
-            return if self.yes {
-                Outcome::Accepted
-            } else {
-                Outcome::Cancelled
-            };
+            return self.answer(self.yes);
         }
         Outcome::Pending
     }
@@ -638,7 +726,7 @@ impl Confirm {
             return Outcome::Pending;
         }
         if pointer.back {
-            return Outcome::Cancelled;
+            return self.answer(false);
         }
         let Some(at) = pointer.at else {
             return Outcome::Pending;
@@ -654,17 +742,24 @@ impl Confirm {
         let Some(is_yes) = over else {
             return Outcome::Pending;
         };
-        if pointer.moved || pointer.clicked {
+        if (pointer.moved || pointer.clicked) && self.yes != is_yes {
             self.yes = is_yes;
+            self.navs.push(Nav::Stepped(None));
         }
         if pointer.clicked {
-            return if is_yes {
-                Outcome::Accepted
-            } else {
-                Outcome::Cancelled
-            };
+            return self.answer(is_yes);
         }
         Outcome::Pending
+    }
+
+    fn answer(&mut self, yes: bool) -> Outcome {
+        if yes {
+            self.navs.push(Nav::Accept);
+            Outcome::Accepted
+        } else {
+            self.navs.push(Nav::Decline);
+            Outcome::Cancelled
+        }
     }
 
     /// The two answers' targets, no first, as [`Self::draw`] places the
@@ -1018,3 +1113,6 @@ impl Panel {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod navs;

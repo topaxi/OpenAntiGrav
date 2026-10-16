@@ -703,6 +703,7 @@ impl Session {
         pointer: &oag_ui::pointer::Pointer,
         roster: &pilots::Roster,
         strings: Option<&StringTable>,
+        navs: &mut Vec<oag_ui::menu::nav::Nav>,
     ) -> Option<Finished> {
         let prompt = stage.prompt.as_mut()?;
         // The note is set from out here every tick because whether there is
@@ -721,6 +722,7 @@ impl Session {
             Outcome::Pending => prompt.pointer(pointer, &stage.skin),
             finished => finished,
         };
+        navs.extend(prompt.take_nav());
         match outcome {
             Outcome::Pending => None,
             Outcome::Cancelled => {

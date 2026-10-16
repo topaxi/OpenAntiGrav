@@ -287,6 +287,41 @@ impl Session {
         }
     }
 
+    /// What launching `cell` would race, or why it cannot; [`None`] before
+    /// anything has booted. Pure over the shell and the settings, so
+    /// [`Self::campaign_nav`] asks it ahead of the launch to pick the cue.
+    pub(super) fn plan_cell(
+        &self,
+        cell: &oag_tables::race_campaign::Cell,
+    ) -> Option<Result<oag_game::campaign::launch::CellPlan, Refusal>> {
+        let shell = self.shell.as_ref()?;
+        // The pure half - mode, circuits, class, laps, kill target - is
+        // `oag_game::campaign::launch::plan_cell`, so a disc-backed test holds
+        // it to every cell a title ships. A `Zone` cell's own `class` is the
+        // literal string `"Zone"`, not a speed class, and nothing in this
+        // engine resolves a Zone handling block of its own yet, so it races at
+        // whatever the RACE page last had selected - chosen, not measured,
+        // and logged by the launch so the substitution is never silent.
+        let ladder = shell
+            .title
+            .race
+            .speed_classes
+            .map_or(&[][..], |classes| classes.names);
+        Some(oag_game::campaign::launch::plan_cell_for(
+            cell,
+            &self.settings.race.class,
+            ladder,
+            |mode, id| {
+                shell
+                    .track(mode, id)
+                    .map(oag_raceplay::catalogue::Track::entry_name)
+                    // A Pure campaign's Classic circuits are not in the
+                    // shell's catalogue, which lists the ordinary ones.
+                    .or_else(|| self.pure_classic_entries.get(id).cloned())
+            },
+        ))
+    }
+
     /// Launches the race `cell` describes, the same way `LAUNCH RACE`
     /// launches the RACE page's own settings - see
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
@@ -316,34 +351,10 @@ impl Session {
         cell: oag_tables::race_campaign::Cell,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
     ) {
-        let Some(shell) = self.shell.as_ref() else {
+        let Some(plan) = self.plan_cell(&cell) else {
             return;
         };
-        // The pure half - mode, circuits, class, laps, kill target - is
-        // `oag_game::campaign::launch::plan_cell`, so a disc-backed test holds
-        // it to every cell a title ships. A `Zone` cell's own `class` is the
-        // literal string `"Zone"`, not a speed class, and nothing in this
-        // engine resolves a Zone handling block of its own yet, so it races at
-        // whatever the RACE page last had selected - chosen, not measured,
-        // and logged below so the substitution is never silent.
-        let ladder = shell
-            .title
-            .race
-            .speed_classes
-            .map_or(&[][..], |classes| classes.names);
-        let plan = match oag_game::campaign::launch::plan_cell_for(
-            &cell,
-            &self.settings.race.class,
-            ladder,
-            |mode, id| {
-                shell
-                    .track(mode, id)
-                    .map(oag_raceplay::catalogue::Track::entry_name)
-                    // A Pure campaign's Classic circuits are not in the
-                    // shell's catalogue, which lists the ordinary ones.
-                    .or_else(|| self.pure_classic_entries.get(id).cloned())
-            },
-        ) {
+        let plan = match plan {
             Ok(plan) => plan,
             Err(refusal) => {
                 warn!("{}: {refusal}", cell.name);
@@ -364,6 +375,9 @@ impl Session {
                 }
                 return;
             }
+        };
+        let Some(shell) = self.shell.as_ref() else {
+            return;
         };
         if plan.class_is_fallback {
             warn!(

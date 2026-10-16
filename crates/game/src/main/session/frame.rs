@@ -498,6 +498,7 @@ impl Session {
                     }
                     report(&events, stage.trace);
                     oag_raceplay::loader_log::lines(stage.frontend.take_notes());
+                    let boot_navs = stage.frontend.take_nav();
                     // The movie's sound outlives neither leg, and a skip leaves
                     // the state without finishing the player - see
                     // `Frontend::is_playing_movie`.
@@ -524,6 +525,7 @@ impl Session {
                             &oag_source::cache::default_audio_cache_dir(),
                         );
                     }
+                    self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
                     stage.tick(dt);
@@ -630,12 +632,14 @@ impl Session {
                     // right-click that cancelled a keyboard, must not also
                     // land on the row beneath it.
                     let prompt_was_open = stage.prompt.is_some();
+                    let mut prompt_navs = Vec::new();
                     let finished = Session::tick_prompt(
                         stage,
                         self.controls.buttons_mut(),
                         &grid,
                         &self.pilot_roster,
                         self.shell.as_ref().map(|shell| &shell.strings),
+                        &mut prompt_navs,
                     );
                     // Frozen while a capture is in flight: `app.rs` diverts
                     // every keyboard event away from `Controls::set_key` for
@@ -658,7 +662,8 @@ impl Session {
                     if stage.menu.page().id != before {
                         stage.begin_change(leaving);
                     }
-                    let navs = stage.menu.take_nav();
+                    let mut navs = prompt_navs;
+                    navs.extend(stage.menu.take_nav());
                     // After the stage borrow above is over, which is the whole
                     // reason `tick_prompt` hands the answer out rather than
                     // acting on it: renaming reloads the roster and re-supplies

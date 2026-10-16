@@ -27,12 +27,8 @@ fn load(image: &Path, fury: bool) -> (MenuSfx, &'static oag_title::Title) {
             .expect("opening the source");
     let title = opened.title;
     let mut archives = opened.archives;
-    let tick = title
-        .race
-        .zone_announcer
-        .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
     (
-        MenuSfx::load(&mut archives, title.race.sounds, tick, fury),
+        oag_game::sound::load_menu_sfx(&mut archives, title, fury),
         title,
     )
 }
@@ -237,12 +233,8 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
             input.begin_frame(pressed);
             menu.update(&mut input);
             for nav in menu.take_nav() {
-                let cue = oag_game::sound::menu_cue(nav, None);
-                assert!(
-                    sfx.play(&audio, cue),
-                    "{name}: {} did not start",
-                    cue.name()
-                );
+                let (cue, started) = oag_game::sound::play_nav(&mut sfx, &audio, nav, None);
+                assert!(started, "{name}: {} did not start", cue.name());
                 played.push((tick, cue));
             }
             audio.tick();

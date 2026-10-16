@@ -399,6 +399,8 @@ pub struct Frontend {
     acted: Vec<usize>,
     /// Lines worth telling the user about, in order.
     notes: Vec<String>,
+    /// The sounds the boot screens called for, drained with [`Self::take_nav`].
+    navs: Vec<crate::menu::nav::Nav>,
     finished: bool,
     /// The chain this boot walks, resolved from the title's own table. See
     /// [`Sequence::steps`].
@@ -566,6 +568,7 @@ impl Frontend {
             dev_pub_redirect: Some(states::DEV_PUB_REDIRECT.to_string()),
             acted: Vec::new(),
             notes: Vec::new(),
+            navs: Vec::new(),
             finished: false,
             steps,
             backdrop_parent,
@@ -802,6 +805,20 @@ impl Frontend {
     /// Notes accumulated since the last call, and clears them.
     pub fn take_notes(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notes)
+    }
+
+    /// The sounds the boot screens called for since the last call, oldest
+    /// first, the way [`crate::menu::Menu::take_nav`] drains a menu's.
+    ///
+    /// **Measured on Pulse (USA)**: skipping `LogoFMV` and pressing on
+    /// `Show Logo` each play `ACCEPT` (`ConfirmButton_Update`). The language
+    /// picker's cues are by widget class (`Menu` steps, `ConfirmButton`
+    /// confirms) and the screen was not walked: Pulse USA never shows it.
+    /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, "Text entry,
+    /// dialogs and the boot".
+    #[must_use]
+    pub fn take_nav(&mut self) -> Vec<crate::menu::nav::Nav> {
+        std::mem::take(&mut self.navs)
     }
 
     /// The movie player, for tests.

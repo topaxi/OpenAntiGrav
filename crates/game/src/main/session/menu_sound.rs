@@ -79,8 +79,7 @@ impl Session {
             return;
         };
         for nav in navs {
-            let cue = oag_game::sound::menu_cue(nav, self.pad_dir);
-            let started = sfx.play(&self.audio, cue);
+            let (cue, started) = oag_game::sound::play_nav(sfx, &self.audio, nav, self.pad_dir);
             let live = self.audio.output().with_mixer(|mixer| mixer.active_voices());
             debug!(
                 "menu sound: {cue:?} (started: {started}, {live} voice(s) live, dump frame {:?})",
@@ -146,6 +145,21 @@ impl Session {
                     Screen::Selection(_) => false,
                 }
             ));
-        if refused { Some(Nav::Decline) } else { event.nav() }
+        // A launch the plan refuses (a mode this build cannot race, a circuit
+        // the disc lacks) is `launch_campaign_cell`'s notice: the same refused
+        // confirm, so it is `DECLINE` here rather than an `ACCEPT` followed by
+        // silence. Chosen, not measured - the original has no such refusal.
+        let unlaunchable = event == Event::Confirmed
+            && !refused
+            && matches!(&self.stage, Stage::Menu(stage) if stage.campaign.as_ref().is_some_and(
+                |campaign| match &campaign.screen {
+                    Screen::Cell { model, .. } => model
+                        .selected()
+                        .and_then(|cell| self.plan_cell(cell))
+                        .is_some_and(|plan| plan.is_err()),
+                    _ => false,
+                }
+            ));
+        if refused || unlaunchable { Some(Nav::Decline) } else { event.nav() }
     }
 }

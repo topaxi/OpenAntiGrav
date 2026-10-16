@@ -124,7 +124,7 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
             None
         ]
     );
-    menu.take_nav();
+    let _ = menu.take_nav();
     assert_eq!(
         press(&mut menu, &[Button::Cross]),
         [MenuEvent::Fired(Action::OpenMultiplayerLocal)]
@@ -165,7 +165,7 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
     assert_eq!(entry.label(), "ONLINE");
     assert!(menu.is_disabled(entry), "ONLINE is dimmed");
     assert_eq!(menu.page().subtitles[2].as_deref(), Some("Coming later"));
-    menu.take_nav();
+    let _ = menu.take_nav();
     assert!(
         press(&mut menu, &[Button::Cross]).is_empty(),
         "ONLINE fires nothing"

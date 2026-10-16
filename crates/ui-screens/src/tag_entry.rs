@@ -31,8 +31,9 @@ use std::collections::HashMap;
 use oag_gameplay::input::{Button, Input};
 use oag_tables::fexml;
 
-use crate::prompt::Outcome;
+use crate::prompt::{NavLog, Outcome};
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::menu::nav::{Dir, Nav};
 use oag_ui::screen::{self, Fill, Node, Screens, Text, argb_to_rgba};
 
 /// The disc's own widget positions for one `<TagInput>` screen: the cell
@@ -207,6 +208,7 @@ pub struct TagEntry {
     cells: Vec<Option<char>>,
     cursor: usize,
     note: Option<String>,
+    navs: NavLog,
 }
 
 impl TagEntry {
@@ -235,7 +237,40 @@ impl TagEntry {
             cells,
             cursor: 0,
             note: None,
+            navs: NavLog::default(),
         }
+    }
+
+    /// The sounds the row called for since the last call, **measured**
+    /// (`TagInput_Update`, `0x088cae88`, `menu-sounds.md`): scrolling a glyph
+    /// plays `UPDOWN` (and only on a cell, not on the confirm slot), a step
+    /// along the row `LEFTRIGHT`, a step the row cannot take (left of cell 0,
+    /// right of the confirm slot) `DECLINE`. Accept and cancel play `ACCEPT`
+    /// and `DECLINE` as the confirm and back buttons do. Which port buttons
+    /// make those moves is ours; see [`Self::update`].
+    #[must_use]
+    pub fn take_nav(&mut self) -> Vec<Nav> {
+        self.navs.take()
+    }
+
+    /// Cross on the confirm slot. **Measured**: the original plays `DECLINE`
+    /// (`TagInput_Update`'s advance, which has nowhere to go) and then `ACCEPT`
+    /// (the confirm button), on the same press and within a frame or two.
+    fn accept_on_slot(&mut self) {
+        self.navs.push(Nav::Decline);
+        self.navs.push(Nav::Accept);
+    }
+
+    fn step_to(&mut self, cursor: usize) {
+        let dir = if cursor < self.cursor {
+            Dir::Left
+        } else {
+            Dir::Right
+        };
+        if cursor != self.cursor {
+            self.navs.push(Nav::Stepped(Some(dir)));
+        }
+        self.cursor = cursor;
     }
 
     /// What the cells currently spell - every blank cell skipped, wherever
@@ -264,6 +299,8 @@ impl TagEntry {
         let Some(index) = self.selected_cell() else {
             return;
         };
+        self.navs
+            .push(Nav::Moved(Some(if forward { Dir::Up } else { Dir::Down })));
         let positions = self.alphabet.len() + 1; // +1 for blank
         let at = self.cells[index].map_or(self.alphabet.len(), |c| {
             self.alphabet
@@ -296,10 +333,13 @@ impl TagEntry {
                     && self.alphabet.contains(&c)
                 {
                     self.cells[index] = Some(c);
-                    self.cursor = (self.cursor + 1).min(self.cells.len());
+                    self.step_to((self.cursor + 1).min(self.cells.len()));
+                } else {
+                    self.navs.push(Nav::Decline);
                 }
             }
             crate::prompt::Edit::Delete => {
+                self.navs.push(Nav::Stepped(Some(Dir::Left)));
                 if self.cursor >= self.cells.len() {
                     self.cursor = self.cells.len().saturating_sub(1);
                 }
@@ -313,19 +353,26 @@ impl TagEntry {
     /// Consumes a tick of input. See [`crate::prompt::Keyboard::update`] on
     /// why every button is taken as an edge.
     ///
-    /// **Not measured** - see this module's own doc and
-    /// `docs/formats/fexml.md`'s `TagInput` section: up/down cycles the
-    /// glyph under the cursor, left/right moves along the row and onto the
-    /// confirm slot, the reading the cell strip and the executable's own
-    /// sign-extending selector arithmetic both support but that nothing has
-    /// captured yet.
+    /// Up/down cycles the glyph under the cursor and left/right moves along
+    /// the row and onto the confirm slot: **measured** (`TagInput_Update`,
+    /// `docs/formats/fexml.md`'s `TagInput` section). Cross on a cell, circle
+    /// as a step back and the widget's autorepeat are the original's and are
+    /// not modelled here; Circle cancelling and Square deleting are ours.
     pub fn update(&mut self, input: &mut Input) -> Outcome {
         let length = self.cells.len();
         if input.take(Button::Right) {
-            self.cursor = (self.cursor + 1).min(length);
+            if self.cursor < length {
+                self.step_to(self.cursor + 1);
+            } else {
+                self.navs.push(Nav::Decline);
+            }
         }
         if input.take(Button::Left) {
-            self.cursor = self.cursor.saturating_sub(1);
+            if self.cursor > 0 {
+                self.step_to(self.cursor - 1);
+            } else {
+                self.navs.push(Nav::Decline);
+            }
         }
         if input.take(Button::Up) {
             self.cycle(true);
@@ -337,12 +384,15 @@ impl TagEntry {
             self.edit(crate::prompt::Edit::Delete);
         }
         if input.take(Button::Circle) {
+            self.navs.push(Nav::Decline);
             return Outcome::Cancelled;
         }
         if input.take(Button::Start) {
+            self.navs.push(Nav::Accept);
             return Outcome::Accepted;
         }
         if input.take(Button::Cross) && self.selected_cell().is_none() {
+            self.accept_on_slot();
             return Outcome::Accepted;
         }
         Outcome::Pending
@@ -375,6 +425,7 @@ impl TagEntry {
             return Outcome::Pending;
         }
         if pointer.back {
+            self.navs.push(Nav::Decline);
             return Outcome::Cancelled;
         }
         let Some(at) = pointer.at else {
@@ -382,10 +433,10 @@ impl TagEntry {
         };
         if let Some(index) = self.cell_at(at) {
             if pointer.moved || pointer.clicked {
-                self.cursor = index;
+                self.step_to(index);
             }
             if pointer.scroll != 0 {
-                self.cursor = index;
+                self.step_to(index);
                 self.cycle(pointer.scroll > 0);
             }
             return Outcome::Pending;
@@ -395,9 +446,10 @@ impl TagEntry {
             .is_some_and(|rect| oag_ui::pointer::contains(rect, at))
         {
             if pointer.moved {
-                self.cursor = self.cells.len();
+                self.step_to(self.cells.len());
             }
             if pointer.clicked {
+                self.accept_on_slot();
                 return Outcome::Accepted;
             }
         }
