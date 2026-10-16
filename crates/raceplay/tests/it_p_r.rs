@@ -21,6 +21,7 @@ mod portuguese_br_ground_truth;
 mod post_finish_ground_truth;
 mod projectile_tilt_ground_truth;
 mod prompt_pilots;
+mod ps2_hud_sights_ground_truth;
 mod ps2_shield_ground_truth;
 mod psp2_sky_fog_ground_truth;
 mod psys_inventory_ground_truth;
