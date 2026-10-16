@@ -48,6 +48,9 @@ pub struct Connect {
     pub bot: bool,
     /// How this client names itself in the server's log.
     pub name: String,
+    /// The seat token an online lobby handed this person for this race ([`crate::online`]),
+    /// empty for a plain `--connect`.
+    pub token: String,
 }
 
 /// A connection to a server and the client half of the protocol.
@@ -78,17 +81,19 @@ pub struct Pending {
 }
 
 impl Pending {
-    /// Says hello over `link`, named `name`. `bot` is `--net-bot`.
+    /// Says hello over `link`, named `name`, with the seat `token` a lobby issued (empty
+    /// otherwise). `bot` is `--net-bot`.
     #[must_use]
     pub fn new(
         link: Box<dyn oag_net::link::Link>,
         name: &str,
         team: &str,
+        token: &str,
         bot: bool,
         label: &str,
     ) -> Self {
         Self {
-            client: Some(Client::connect_as(link, name, team)),
+            client: Some(Client::connect_seat(link, name, team, token)),
             bot,
             label: label.to_string(),
         }
@@ -172,7 +177,7 @@ impl NetPlay {
             Some(conditions) => Box::new(oag_net::link::Shim::new(link, conditions)),
             None => Box::new(link),
         };
-        let mut pending = Pending::new(link, &args.name, "", args.bot, &args.addr);
+        let mut pending = Pending::new(link, &args.name, "", &args.token, args.bot, &args.addr);
         let asked = Instant::now();
         loop {
             if let Some(net) = pending.poll()? {

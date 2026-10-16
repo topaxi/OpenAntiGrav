@@ -239,6 +239,7 @@ impl Session {
             Box::new(own_link),
             &name,
             &self.lan_team,
+            "",
             self.net_bot,
             "this machine",
         );
@@ -608,6 +609,7 @@ impl Session {
                                 Box::new(link),
                                 &player_name(),
                                 &self.lan_team,
+                                "",
                                 self.net_bot,
                                 &to.addr.to_string(),
                             ));
