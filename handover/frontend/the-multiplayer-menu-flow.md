@@ -75,7 +75,7 @@ keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One
 The ONLINE row asks for the lobby's address, certificate hash and a name (remembered), connects, and opens
 an ONLINE page: CREATE GAME (RACE page, Track Select, Ship Select, the room) and JOIN GAME (Ship Select,
 the room list, the room), the race, and back to the room. Walk-through, notices and what is open:
-`docs/networking/online-lobby.md`, part 7 (`Action::ComingLater` is gone, ONLINE was its last row).
+`docs/networking/online-lobby.md`, part 7 (`Action::ComingLater` is gone, ONLINE was its last row). Walked live on every title and given the owner's room settings and size, a typed port and an IPv6 literal by `online-menus-titles` (same page).
 
 ## Lanes
 
@@ -88,7 +88,7 @@ the room list, the room), the race, and back to the room. Walk-through, notices 
 ## Open
 
 - **LAN, open** (`lan-menu`): two physical
-  machines on a real network (broadcast, a firewall, UDP 4434 and 4435); IPv6 and a typed port; split screen on a LAN client;
+  machines on a real network (broadcast, a firewall, UDP 4434 and 4435); split screen on a LAN client (the address keyboard now has the colon and brackets, untried against a real LAN host);
   the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen (it returns to the
   menus today); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
 
