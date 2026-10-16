@@ -106,12 +106,6 @@ impl Sparse {
         self.ranges.iter().map(|range| range.1).sum()
     }
 
-    /// The recorded ranges as `(offset, len)`, ascending.
-    #[must_use]
-    pub fn ranges(&self) -> Vec<(u64, u64)> {
-        self.ranges.iter().map(|r| (r.0, r.1)).collect()
-    }
-
     /// `len` bytes at `offset`, when one recorded range holds them all.
     #[must_use]
     pub fn read(&self, offset: u64, len: u64) -> Option<&[u8]> {
