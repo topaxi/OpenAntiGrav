@@ -467,3 +467,29 @@ fn an_address_keyboard_offers_the_dot_and_a_pilot_one_does_not() {
     address.update(&mut tick(&[Button::Cross]));
     assert_eq!(address.text(), ".");
 }
+
+/// The buffer's own line: the first text the keyboard draws, at the size it was drawn.
+fn buffer_scale(keyboard: &Keyboard) -> f32 {
+    let draws = keyboard.draw(&skin());
+    draws
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text { text, scale, .. } if text.ends_with('_') => Some(*scale),
+            _ => None,
+        })
+        .expect("the buffer is drawn with its caret")
+}
+
+#[test]
+fn a_sixty_four_digit_certificate_is_drawn_smaller_than_a_name_so_it_fits_the_panel() {
+    let name = Keyboard::new(Labels::default(), "ADA", 24);
+    let hash = Keyboard::with_keys(Labels::default(), &"0".repeat(64), 64, ADDRESS_KEYS);
+    let (name, hash) = (buffer_scale(&name), buffer_scale(&hash));
+    assert!(
+        hash < name * 0.35,
+        "{hash} against {name}: 65 glyphs at a name's size run off the panel"
+    );
+    // Past a name's length and not before it: an address stays at full size.
+    let address = Keyboard::with_keys(Labels::default(), "race.example.org", 40, ADDRESS_KEYS);
+    assert_eq!(buffer_scale(&address), name);
+}

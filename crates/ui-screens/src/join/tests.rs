@@ -420,3 +420,18 @@ fn a_row_with_a_note_is_dimmed_unselectable_and_says_why() {
         "on BACK the hint comes back"
     );
 }
+
+#[test]
+fn a_room_on_the_network_never_asks_the_second_seat_to_press_start() {
+    // HD and Omega author "PLAYER 2 PRESS START TO JOIN" for local split screen; a room's
+    // empty seat is somebody still to arrive over the network.
+    let strings = oag_ui::language::StringTable::from_xml(
+        r#"<Strings><Entry ID="FE_GUEST_JOIN" String="Player 2 press start to join"></Entry></Strings>"#,
+    );
+    assert!(
+        Labels::read(&strings).guest.is_some(),
+        "the premise: the disc authors one"
+    );
+    assert_eq!(Labels::read_online_room(&strings).guest, None);
+    assert_eq!(Labels::read_lan_lobby(&strings).guest, None);
+}

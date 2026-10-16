@@ -79,6 +79,9 @@ impl Labels {
                 "THE OTHERS JOIN FROM JOIN GAME, THEN YOU START",
             ),
             empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            // The disc's "PLAYER 2 PRESS START TO JOIN" is local split screen's line; here the
+            // others arrive over the network and nobody presses anything to join.
+            guest: None,
             start: say("OAG_LAN_START", "START RACE"),
             ..Self::read(strings)
         }
@@ -119,6 +122,9 @@ impl Labels {
             title: say("OAG_ONLINE_ROOM_TITLE", "GAME LOBBY"),
             hint: say("OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
             empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            // The disc's "PLAYER 2 PRESS START TO JOIN" is local split screen's line; here the
+            // others arrive over the network and nobody presses anything to join.
+            guest: None,
             start: say("OAG_LAN_START", "START RACE"),
             ..Self::read(strings)
         }

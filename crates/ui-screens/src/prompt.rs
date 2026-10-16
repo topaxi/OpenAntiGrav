@@ -462,16 +462,17 @@ impl Keyboard {
         // The buffer, drawn larger than a row because it is the one thing on
         // this screen the player is actually building.
         let mut y = panel.body_y;
+        // A caret, so an empty buffer is visibly empty rather than
+        // indistinguishable from a missing one.
+        let buffer = format!("{}_", self.text);
         out.push(Draw::Text {
             x: panel.text_x,
             y,
-            scale: panel.scale * 1.4,
+            scale: panel.scale * 1.4 * buffer_fit(buffer.chars().count()),
             color: skin.selected(),
             border: None,
             align: Align::Left,
-            // A caret, so an empty buffer is visibly empty rather than
-            // indistinguishable from a missing one.
-            text: format!("{}_", self.text),
+            text: buffer,
             wrap_width: None,
         });
         y += line * 1.3;
@@ -559,6 +560,17 @@ impl Keyboard {
         }
         out
     }
+}
+
+/// How much of the buffer's full size a line of `chars` glyphs is drawn at.
+///
+/// **Chosen, not measured.** A name or an address fits the panel at full size; the 64 digits of
+/// a lobby certificate ran off its right edge on every title (2048's face fits 27 glyphs, Pure's
+/// 22). Past 20 glyphs the line shrinks in proportion, so 65 of them fit the narrowest face and
+/// the grid below, which the pointer hit-tests, stays where it was.
+fn buffer_fit(chars: usize) -> f32 {
+    const FULL_SIZE_GLYPHS: f32 = 20.0;
+    (FULL_SIZE_GLYPHS / chars.max(1) as f32).min(1.0)
 }
 
 /// One change to a [`Keyboard`]'s buffer, whichever device asked for it.
