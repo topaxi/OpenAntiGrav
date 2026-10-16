@@ -158,6 +158,8 @@ pub struct Client {
     last_adjust: u32,
     resend_asked: Option<u32>,
     bot: Option<oag_ai::Driver>,
+    /// Whether the end state has been set from the confirmed one ([`Self::step`]).
+    settled: bool,
     /// The newest confirmed tick's retired seats, applied to the present too: the game asks
     /// the present whether the race is finished, and a leaver's craft must not hold that open.
     retired: u8,
@@ -219,6 +221,7 @@ impl Client {
             bot: None,
             board_confirmed: false,
             retired: 0,
+            settled: false,
             stats: Stats::default(),
             sent_at: VecDeque::new(),
             last_confirm_ms: None,
@@ -368,8 +371,17 @@ impl Client {
     pub fn step(&mut self, race: &mut Race, own: &InputSnapshot) -> u32 {
         self.poll();
         if matches!(self.phase, Phase::Over(_)) {
-            // What the server confirmed before it ended still lands.
+            // What the server confirmed before it ended still lands, and the end state is the
+            // confirmed one: a prediction that lagged or guessed another person's last
+            // moments wrong must not leave the race short of the finish the server saw.
             self.advance_confirmed(race);
+            if self.pending.is_empty()
+                && let Some(confirmed) = &self.confirmed
+                && (!self.settled || race.sim.world.tick != u64::from(self.confirmed_tick))
+            {
+                race.restore_sim(confirmed);
+                self.settled = true;
+            }
             return 0;
         }
         if self.phase != Phase::Racing {
