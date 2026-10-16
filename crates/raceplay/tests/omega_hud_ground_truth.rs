@@ -224,7 +224,13 @@ fn hud_atlases_are_hds_picture_in_the_row_order_the_sheet_draws() {
 fn the_widget_names_title_data_inherits_are_authored_by_omegas_layouts() {
     let Some(mut archives) = open() else { return };
     let mut names = BTreeSet::new();
-    for root in modes() {
+    // Every skin's roots, not only the default's: the retro bars (`SpeedBarWo3`...) on the
+    // allow-list are authored by the `HUD Style` skins alone.
+    let skinned = oag_omega::TITLE.hud.skins.iter().flat_map(|skin| {
+        let h = skin.layouts;
+        [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone]
+    });
+    for root in modes().into_iter().chain(skinned) {
         let c = composed(&mut archives, root);
         names.extend(c.layout.sprites.iter().map(|s| s.name.clone()));
         names.extend(c.layout.labels.iter().map(|l| l.name.clone()));
