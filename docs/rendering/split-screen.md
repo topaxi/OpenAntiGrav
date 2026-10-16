@@ -427,6 +427,25 @@ over `portrait`:
   HD, 2048 and Omega have no Head to Head to port (switched-off `<aEntry>` lists, no cells) and
   Pure has none at all ([hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md)): the
   "checked, differs" above stands, and a Head to Head there is this project's own extension.
+- **Head to Head on Pure, HD, Omega and 2048 (2026-10-16, `h2h-readout-titles`): the place
+  stands and the gap sits one line under it.** Pulse's rows (`1st <team>` / `2nd <team>`) need
+  ordinals and a bar only Pulse has; Pure authors no Head to Head widget, HD and Omega a bar of
+  no height and no `PositionOf`, and 2048's `HUD_positions.xml` (read: `Position`, `PositionTxt`,
+  the `PosTag`/`PlaceString` list, `VoiceCom`; no bar, no `Outof`, no `PositionOf`) a bare `Position`.
+  So `oag_hud::head_to_head` draws, where a layout lacks Pulse's four widgets, the gap label
+  (`-19m` green leading, `+19m` red trailing, Pulse's colours and `m` format) under the layout's
+  own `Position` in its font, alignment and border, at scale 0.8; a place in a panel
+  (`vertalign="middle"`, HD's hex) clears the panel by half a line more. Both cuts, single and
+  multi-window, every title. **Borrowed from Pulse's gap label and chosen, not measured; no
+  confidence score.** Pure was tried with Pulse's rows and a bar built from Pulse's relation to
+  `Position`: Pure's string table has no `IG_HUD_1ST`/`IG_HUD_2ND` and its `Default` font is
+  HUD-size, so the rows drew as raw ids at a size that covered the view; dropped.
+  Cross-check: 2048 and Omega, **checked, applies**: 2048's `HUD_positions.xml` authors the same
+  bare `Position` HD-lineage layouts do, Omega reads HD's files; both **ported** (tests
+  `*_keeps_*_place_and_gains_the_gap`). HD's `Hud_BindWidgets` (`0x0009e0ec`, `HeadToHeadBar` at
+  `0x0077fb00`) does branch on modes 9 and 0x12 under HUD flag `0x40`, setting widgets
+  `+0x29c`/`+0x2a0` up; the per-frame writer of the bar's height was not read, so whether HD
+  sizes its authored bar at runtime stays **open**.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule

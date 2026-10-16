@@ -35,7 +35,19 @@ fn texts(frame: &oag_hud::Frame) -> Vec<Word> {
 /// A two-person Head to Head split in `cut`, the first person flown by the autopilot and
 /// the second sat still (a network seat with no input), for `ticks`.
 fn two_people(cut: Cut, ticks: usize) -> Option<(race::Race, oag_hud::Assets)> {
-    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    two_people_on(
+        &oag_testdata::image("data/images/pulse-psp-usa.chd")?,
+        cut,
+        ticks,
+    )
+}
+
+/// [`two_people`] on any source.
+fn two_people_on(
+    image: &std::path::Path,
+    cut: Cut,
+    ticks: usize,
+) -> Option<(race::Race, oag_hud::Assets)> {
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
@@ -208,4 +220,79 @@ fn head_to_head_refuses_three_people_by_name() {
             "{seats:?}: {stderr}"
         );
     }
+}
+
+/// Pure, HD, Omega and 2048 author no Head to Head rows, so each person's view keeps the
+/// title's own place and gains the gap to the other person under it: a place digit and a
+/// signed gap, no `1st`/`2nd` rows, both cuts, one gap seen from both seats with opposite
+/// signs, every word inside its own view. **Chosen, not measured.** Fails if the gap-only
+/// variant is dropped (the place then stands alone, as it did before 2026-10-16).
+fn gap_under_the_place(source: Option<std::path::PathBuf>) {
+    let Some(source) = source else { return };
+    for cut in [Cut::Vertical, Cut::Horizontal] {
+        let Some((race, hud)) = two_people_on(&source, cut, 300) else {
+            return;
+        };
+        let mut gaps = Vec::new();
+        for (view, (clip, words)) in per_view(&race, &hud).iter().enumerate() {
+            let label = format!("{cut:?} view {view}");
+            let names: Vec<&str> = words.iter().map(|w| w.2.as_str()).collect();
+            assert!(
+                names
+                    .iter()
+                    .any(|n| matches!(n.split('/').next(), Some("1" | "2"))),
+                "{label}: the place stands: {names:?}"
+            );
+            assert!(
+                names
+                    .iter()
+                    .all(|n| !n.starts_with("1st") && !n.starts_with("2nd")),
+                "{label}: Pulse's rows are not borrowed: {names:?}"
+            );
+            let gap = words
+                .iter()
+                .find(|w| w.2.ends_with('m') && (w.2.starts_with('+') || w.2.starts_with('-')))
+                .unwrap_or_else(|| panic!("{label}: no gap label in {names:?}"));
+            for (x, y, text) in words {
+                assert!(
+                    *x >= clip[0]
+                        && *x < clip[0] + clip[2]
+                        && *y >= clip[1]
+                        && *y < clip[1] + clip[3],
+                    "{label}: {text:?} at ({x}, {y}) is outside its view {clip:?}"
+                );
+            }
+            gaps.push(gap.2.clone());
+        }
+        assert_eq!(gaps[0][1..], gaps[1][1..], "{cut:?}: one gap, two seats");
+        assert_ne!(
+            gaps[0].as_bytes()[0],
+            gaps[1].as_bytes()[0],
+            "{cut:?}: one leads, one trails"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn pure_keeps_its_place_and_gains_the_gap() {
+    gap_under_the_place(oag_testdata::image("data/images/pure-psp-usa.chd"));
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_keeps_its_hex_place_and_gains_the_gap() {
+    gap_under_the_place(oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso"));
+}
+
+#[test]
+#[ignore = "needs the extracted Omega packages in data/extracted/ps4/"]
+fn omega_keeps_hds_place_and_gains_the_gap() {
+    gap_under_the_place(oag_testdata::exact("data/extracted/ps4"));
+}
+
+#[test]
+#[ignore = "needs the extracted 2048 packages in data/extracted/vita/PCSF00007"]
+fn y2048_keeps_its_place_and_gains_the_gap() {
+    gap_under_the_place(oag_testdata::exact("data/extracted/vita/PCSF00007"));
 }
