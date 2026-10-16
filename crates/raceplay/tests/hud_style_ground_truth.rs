@@ -213,5 +213,172 @@ fn the_list_the_title_names_is_the_discs_own_hud_style_list() {
         .filter_map(|entry| entry.split('"').next())
         .collect();
     assert_eq!(entries, names(&HD));
+
+    // The `PI_HUD` rows gate each retro skin by loyalty (`HudSkin::loyalty`, offered unlocked
+    // here until loyalty is shared across titles) and name its directory.
+    let definition = archives
+        .read_every_name("/data/plugins/frontend/definition.xml")
+        .into_iter()
+        .filter_map(|(_, blob)| oag_ui::xml::expand(&blob).ok())
+        .find(|xml| xml.contains("<PI_HUD name="))
+        .expect("a definition that authors the PI_HUD rows");
+    for skin in HD.title.hud.skins.iter().filter(|skin| skin.loyalty != 0) {
+        let at = definition
+            .find(&format!("<PI_HUD name=\"{}\"", skin.name))
+            .unwrap_or_else(|| panic!("a PI_HUD row for {}", skin.name));
+        let row = &definition[at..at + definition[at..].find("</PI_HUD>").expect("closed")];
+        assert!(
+            row.contains(&format!("loyalty=\"{}\"", skin.loyalty)),
+            "{}: {row}",
+            skin.name
+        );
+        let root = skin.layouts.arcade.to_ascii_lowercase();
+        let location = row.to_ascii_lowercase();
+        let dir = root.split('/').nth(3).expect("a skin directory");
+        assert!(
+            location.contains(dir),
+            "{}: {location} names {dir}",
+            skin.name
+        );
+    }
     assert_eq!(names(&omega()), names(&HD), "Omega authors the same list");
+}
+
+/// Every root a skin names, single screen and both split cuts, composes whole on the source
+/// (nothing missing or skipped) and the skin's font slot is declared by some copy of a language
+/// definition. Run on all three sources that author the list, the plain PSN download
+/// (`2097_hud` ships 23 files there against the disc's 27) included: a root missing there is no
+/// HUD at all for that mode.
+fn check_every_root(
+    name: &str,
+    mut archives: oag_assets::Archives,
+    title: &Title,
+    absent: &[&str],
+) {
+    let mut failed = Vec::new();
+    for skin in title.title.hud.skins {
+        let h = skin.layouts;
+        let split = h.split.expect("a split row");
+        let vertical = split.vertical.expect("a vertical row");
+        let roots = [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone]
+            .into_iter()
+            .chain(split.arcade)
+            .chain(split.elimination)
+            .chain(vertical.arcade)
+            .chain(vertical.elimination);
+        for root in roots {
+            let whole = oag_hud::compose(root, |path| archives.read_name(path).ok())
+                .is_some_and(|c| c.missing.is_empty() && c.layout.skipped.is_empty());
+            if !whole && !failed.contains(&root) {
+                failed.push(root);
+            }
+        }
+        if let Some(role) = skin.font_role {
+            let copies = oag_ui::language::load::definition_copies_with_font(
+                &mut archives,
+                title.title.front_end.expect("a front end").language_plugins,
+                role,
+            );
+            assert!(
+                !copies.is_empty(),
+                "{name} {}: no definition declares {role}",
+                skin.name
+            );
+        }
+    }
+    failed.sort_unstable();
+    let mut absent = absent.to_vec();
+    absent.sort_unstable();
+    assert_eq!(failed, absent, "{name}: the roots that do not compose");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_root_of_every_skin_composes_on_the_hd_disc() {
+    let Some(image) = oag_testdata::image(HD.source) else {
+        return;
+    };
+    let archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    check_every_root("HD disc", archives, &HD, &[]);
+}
+
+#[test]
+#[ignore = "needs the extracted HD PSN download in data/extracted/ps3/hd-psn-eu/"]
+fn every_root_of_every_skin_composes_on_the_plain_psn_download() {
+    let Some(install) = oag_testdata::exact("data/extracted/ps3/hd-psn-eu") else {
+        return;
+    };
+    let archives = oag_hd::open(&install.display().to_string()).expect("the install opens as HD");
+    // The plain download ships neither Eliminator split pair of the default skin (the census
+    // records it, `docs/ui/hud-assets.md`); a two-view Eliminator there scales the whole-screen
+    // layout into each view. Every retro root is present.
+    check_every_root(
+        "HD PSN",
+        archives,
+        &HD,
+        &[
+            "/data/xml/splitscreen_hud/splitscreen_elimination_hud_0.xml",
+            "/data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
+            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_0.xml",
+            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_1.xml",
+        ],
+    );
+}
+
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn every_root_of_every_skin_composes_on_omega() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let archives = oag_omega::open(&source.display().to_string()).expect("Omega opens");
+    check_every_root("Omega", archives, &omega(), &[]);
+}
+
+/// The speed unit reads `RC_KMH` as a sibling label only where a layout authors one (HD,
+/// Omega and their retro skins). `oag_hud::draw` keeps the unit out of the value when it does,
+/// so a title whose layouts also carried such a label would lose its unit: none of the
+/// others does.
+#[test]
+#[ignore = "needs the Pulse, Pure and 2048 images"]
+fn no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label() {
+    let mut checked = 0;
+    let sources: [(&oag_title::Title, Option<oag_assets::Archives>); 3] = [
+        (
+            oag_pulse::TITLE,
+            oag_testdata::image("data/images/pulse-psp-usa.chd")
+                .map(|image| oag_pulse::open(&image.display().to_string()).expect("Pulse opens")),
+        ),
+        (
+            oag_pure::TITLE,
+            oag_testdata::image("data/images/pure-psp-usa.chd")
+                .map(|image| oag_pure::open(&image.display().to_string()).expect("Pure opens")),
+        ),
+        (
+            oag_2048::TITLE,
+            oag_testdata::exact("data/extracted/vita/PCSF00007/base")
+                .map(|path| oag_2048::open(&path.display().to_string()).expect("2048 opens")),
+        ),
+    ];
+    for (title, archives) in sources {
+        let Some(mut archives) = archives else {
+            continue;
+        };
+        let h = title.hud;
+        for root in [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone] {
+            let composed = oag_hud::compose(root, |path| archives.read_name(path).ok())
+                .unwrap_or_else(|| panic!("{} {root} composes", title.name));
+            assert!(
+                !composed
+                    .layout
+                    .labels
+                    .iter()
+                    .any(|label| label.idstring.as_deref() == Some("RC_KMH")),
+                "{} {root} authors an RC_KMH label",
+                title.name
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked == 0 || checked % 5 == 0);
 }

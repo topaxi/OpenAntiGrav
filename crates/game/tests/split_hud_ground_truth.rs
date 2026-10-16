@@ -702,9 +702,15 @@ fn the_shipped_split_files_name_only_widgets_their_titles_author() {
             title.hud.zone,
             title.hud.elimination,
         ];
+        // Every `HUD Style` skin's roots too: the retro bars the file groups are authored
+        // by those layouts alone.
+        let skinned = title.hud.skins.iter().flat_map(|skin| {
+            let h = skin.layouts;
+            [h.arcade, h.time_trial, h.speed_lap, h.zone, h.elimination]
+        });
         let mut whole = oag_hud::Layout::default();
         let mut arcade = oag_hud::Layout::default();
-        for entry in layouts {
+        for entry in layouts.into_iter().chain(skinned) {
             let composed = composed(&mut archives, entry);
             let layout = &composed.layout;
             if entry == title.hud.arcade {

@@ -50,6 +50,10 @@ pub(super) fn supply(
         oag_ui::menu::ValueSource::Weapons,
         &race_setup.weapon_choices(strings),
     );
+    model.supply(
+        oag_ui::menu::ValueSource::HudStyles,
+        &oag_ui::menu::hud_style_choices(title),
+    );
 }
 
 #[cfg(test)]

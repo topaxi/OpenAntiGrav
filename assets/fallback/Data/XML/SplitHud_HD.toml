@@ -28,7 +28,7 @@ name = "strip"
 aspect = [2.4, 99.0]
 
 [[layout.group]]
-widgets = ["SpeedBar*", "ThrustBar*"]
+widgets = ["SpeedBar*", "ThrustBar*", "speedbarbg", "nrgbg", "nrgBarWo3", "topdots", "bottomdots"]
 anchor = "bottom-right"
 offset = [-0.012, -0.04]
 scale = 0.95
@@ -95,7 +95,7 @@ name = "landscape"
 aspect = [1.4, 2.4]
 
 [[layout.group]]
-widgets = ["SpeedBar*", "ThrustBar*"]
+widgets = ["SpeedBar*", "ThrustBar*", "speedbarbg", "nrgbg", "nrgBarWo3", "topdots", "bottomdots"]
 anchor = "bottom-right"
 offset = [-0.015, -0.04]
 scale = 1.0
@@ -161,7 +161,7 @@ name = "square"
 aspect = [1.0, 1.4]
 
 [[layout.group]]
-widgets = ["SpeedBar*", "ThrustBar*"]
+widgets = ["SpeedBar*", "ThrustBar*", "speedbarbg", "nrgbg", "nrgBarWo3", "topdots", "bottomdots"]
 anchor = "bottom-right"
 offset = [-0.02, -0.04]
 scale = 1.1
@@ -221,7 +221,7 @@ name = "portrait"
 aspect = [0.0, 1.0]
 
 [[layout.group]]
-widgets = ["SpeedBar*", "ThrustBar*"]
+widgets = ["SpeedBar*", "ThrustBar*", "speedbarbg", "nrgbg", "nrgBarWo3", "topdots", "bottomdots"]
 anchor = "bottom-right"
 offset = [-0.03, -0.04]
 scale = 1.3

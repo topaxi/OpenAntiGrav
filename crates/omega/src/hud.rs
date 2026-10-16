@@ -322,6 +322,8 @@ const ALWAYS_ON: &[&str] = &[
     // The retro `HUD Style` skins' bars and their frames (`2097_hud`, `wo3_hud`); a name a
     // layout does not author is simply not found, so the default skin is unchanged.
     "speedbarbg",
+    "topdots",
+    "bottomdots",
     "nrgbg",
     "SpeedBarWo3",
     "ThrustBarWo3",

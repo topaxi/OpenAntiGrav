@@ -449,6 +449,16 @@ as `SpeedBar`/`ThrustBar`/`ShieldBar` are (`speed_full_kmh` unchanged), with the
 frame of the original in a retro skin has been compared. The speed unit: the retro skins
 author the unit as an unnamed `RC_KMH` label, so the value no longer prints `kmh` twice.
 
+**Sources checked.** HD disc, the plain HD PSN download and Omega: every root a skin names, both
+split cuts included, composes whole on all three and the skin's font slot is declared by a copy
+of a language definition (`hud_style_ground_truth`). The PSN download lacks the default skin's
+Eliminator split pairs, as before (`hud-assets.md`), which is no change for the skins: they name
+none. Three or more views take `SplitHud_HD.toml`, whose groups now also place the retro bars
+and their frames (`speedbarbg`, `nrgbg`, `nrgBarWo3`, `topdots`, `bottomdots`; chosen, not
+measured). That route has no unnamed `RC_KMH` label to place, so a split view prints the value
+with its own `kmh`. No Pulse, Pure or 2048 layout authors an `RC_KMH` label, so the unit rule
+moves nothing there (`no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label`).
+
 **Not done, recorded open.**
 
 - **Unlock.** The disc's `PI_HUD` rows gate `2097` at loyalty 6000 and `WIP3OUT` at 10000

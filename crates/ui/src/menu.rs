@@ -100,6 +100,18 @@ pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
         .collect()
 }
 
+/// The `HUD Style` skins `title`'s disc lists, valued and shown by the disc's own entry strings.
+/// Empty where it lists none, which is where the row is dropped.
+#[must_use]
+pub fn hud_style_choices(title: &oag_title::Title) -> Vec<Choice> {
+    title
+        .hud
+        .skins
+        .iter()
+        .map(|skin| Choice::plain(skin.name))
+        .collect()
+}
+
 /// `modes` with every mode that takes fewer than `people` people marked unusable, `reason`
 /// saying why from the cap. A mode is still offered and the row can step onto it: it draws
 /// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable remix option
