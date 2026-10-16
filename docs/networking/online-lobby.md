@@ -579,14 +579,26 @@ the Zone variant of a circuit that has none).
 
 **Sizes** (the 6 EU sources on this machine, 2026-10-16; what is kept of what the source holds):
 
-| Source | Kept | Of |
-| --- | --- | --- |
-| Pulse PSP (`pulse-psp-eu.chd`) | 182.7 MiB | 308 MiB |
-| Pulse PS2 (`pulse-ps2-eu.chd`) | 109.0 MiB | 361 MiB |
-| Pure PSP (`pure-psp-eu.chd`) | 56.6 MiB | 235 MiB |
-| HD (`hdfury-ps3-eu.iso`) | 41.6 MiB | 1,880 MiB |
-| 2048 (`data/extracted/vita`) | 5.4 MiB | 2,303 MiB |
-| Omega (`data/extracted/ps4`) | 40.3 MiB | 47,091 MiB |
+| Source | Kept | Of | Races checked from the extraction | Time (debug build, loaded machine) |
+| --- | --- | --- | --- | --- |
+| Pulse PSP (`pulse-psp-eu.chd`) | 190 MiB | 307 MiB | 109 loaded, 0 gaps | 1.5 min |
+| Pulse PS2 (`pulse-ps2-eu.chd`) | 204 MiB | 361 MiB | 183 loaded, 0 gaps | 3.4 min |
+| Pure PSP (`pure-psp-eu.chd`) | 62 MiB | 235 MiB | 102 loaded, 0 gaps | 1 min |
+| HD (`hdfury-ps3-eu.iso`) | 1,072 MiB | 1,879 MiB | 189 loaded, 0 gaps | 13 min |
+| 2048 (`data/extracted/vita`) | 288 MiB | 2,303 MiB | 109 loaded, 0 gaps | 6.4 min |
+| Omega (`data/extracted/ps4`) | not measured at full breadth | 47,091 MiB | the full check did not finish (below) | |
+
+The AI's teams are drawn from the title's whole declared pool by the race's seed, and the
+lobby's seed is arbitrary, so the plan includes seeds that put every pool team on a grid slot
+(`covering_seeds`). That is what grew HD from 41 MiB and 2048 from 5 MiB: without it a race with
+another seed read an AI team's hull, handling and engine sound the extraction lacked (found by the
+ground truth, which loud-fails on any such read: `record::take_misses`).
+
+**Open:** Omega's full-offer check was not completed: each Omega race load costs 1.3 to 2.6 s and
+about 1.7 GB, the plan is 277 races twice, and the second (from the extraction) pass grew to 19 GB
+resident over 55 minutes in one run, cause not found (the single-race and ground-truth loads from
+an Omega extraction behave: 1.7 s, 1.7 GB, hashes equal). The ground truth passes for Omega on two
+named races.
 
 A race reads whole entries (a circuit's `.vex` carries its geometry, collision and textures in one
 compressed blob), so the PSP titles keep most of their circuits and ships. Each extraction took 7 to 45 s
