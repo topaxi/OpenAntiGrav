@@ -492,7 +492,8 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
    - A reset-and-wait loop returns a finished race to waiting instead of exiting. This
      gives pooling without a fleet manager.
    - A separate small lobby or matchmaker starts or reuses servers and gives each client
-     the address and the certificate hash. No lobby exists yet.
+     the address and the certificate hash. No lobby exists yet; the flow Omega
+     used, what a lobby needs and the v1 plan are in [online-lobby.md](online-lobby.md).
    - LAN stays a listen server inside the client (decision 3 above).
 
 ## Running a local server

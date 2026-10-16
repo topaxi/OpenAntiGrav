@@ -1,4 +1,4 @@
-# Closing oag-trace to a second emulator: PCSX2 is done, RPCS3 has no transport, Vita3K/ShadPS4 have no tooling and ShadPS4's install is broken
+# Closing oag-trace to a second emulator: PCSX2 is done, RPCS3 has no transport, Vita3K/ShadPS4 have no tooling (ShadPS4 itself runs, since 2026-10-16)
 
 Investigated 2026-09-16, priority order PCSX2 -> RPCS3 -> Vita3K -> ShadPS4 as asked.
 `oag-trace`'s reading half (`crates/trace/`, `docs/tools/oag-trace.md`) is already
@@ -213,25 +213,14 @@ like the other three rather than deferring on scope grounds.
 - **(a)/(b)/(c)** genuinely not started, and the environment check below is
   more discouraging than the other two "not started" platforms.
 
-**The installed `shadps4` binary is broken, not merely unconfigured** -
-correcting what I reported earlier this session. `/usr/bin/shadps4` is a
-**0-byte file** (`file` reports "empty", dated 2025-09-19), so `shadps4 --help`
-exiting 0 with no output was the shell executing an empty file successfully,
-not the emulator responding. Desktop entry, icons and a populated
-`~/.local/share/shadPS4/` config (from a prior working install, `config.toml`
-dated 2025-02-18) all exist, so this machine had a real install at some point
-and the binary itself has since gone missing or been left empty by a broken
-package update. **Reinstalling `shadps4` is a prerequisite for step 1 below**,
-separate from and before any RE or scripting work.
-
-The existing `config.toml`'s `[Debug]` section has only `DebugDump` and
-`CollectShader` - no GDB-stub or remote-debug option is exposed anywhere in
-this version's config, unlike PCSX2's built-in PINE or RPCS3's GDB stub. That
-doesn't mean no such transport exists (ShadPS4 upstream has added a GDB debug
-stub as a build option in some versions - not confirmed against whatever
-version was installed here, and unconfirmable against a 0-byte binary), only
-that it isn't on by default and needs checking fresh once a working build is
-in hand.
+**shadPS4 works (2026-10-16, corrects the 0-byte-binary claim of 2026-09-16).**
+`/usr/bin/shadps4` is `shadps4-bin` 0.20.0 and runs. It boots Omega (v1.07 data) to the
+title screen and through the menus with **no firmware modules** (HLE only) on the AMD
+RX 7800 XT, in a headless wlroots compositor on the render node (Xvfb has no DRI3 and
+lavapipe runs out of device memory). The recipe, what failed and the firmware question are
+in [`docs/networking/online-lobby.md`](../../docs/networking/online-lobby.md#3-shadps4-on-omega-2026-10-16).
+Still unchecked here: whether it exposes a GDB stub or other debug transport (the
+`config.toml` of 2025 had none; 0.20.0 writes `config.json`, not read for a debug section).
 
 The Omega Collection PKG itself **is** fully present and verified
 (`data/images/omega-ps4-eu.pkg`, 23.9 GB, `.sha256` written 2026-09-15), so the
@@ -239,10 +228,7 @@ disc-image side of this is ready.
 
 **Plan, in order:**
 
-1. Reinstall/rebuild `shadps4` (or fetch a fresh AppImage/binary - whatever
-   this machine's prior install used) and confirm it actually boots the Omega
-   PKG at all, headless or otherwise. Nothing below can be checked against a
-   0-byte file.
+1. ~~Reinstall shadps4 and confirm it boots Omega~~ done 2026-10-16 (see above).
 2. Check the working build for a GDB stub or any other scriptable debug
    transport - a compile-time flag, a settings toggle not in the current
    `config.toml`, or a network port opened at boot (`ss -ltnp` while it runs).
@@ -268,9 +254,8 @@ disc-image side of this is ready.
   scope decision to accept a non-per-tick verification story on this platform.
 - Vita3K: unknown whether it exposes any scriptable interface at all - the
   first question, unanswered, that everything else depends on.
-- ShadPS4: the installed binary is a 0-byte file, not a working emulator -
-  reinstall is a prerequisite before anything else on this platform can be
-  checked, independent of M8's exit criterion blocking step (d).
+- ShadPS4: works (0.20.0); the open question is its debug transport, then the
+  same M8-gated step (d).
 
 ## Next Steps
 
@@ -285,11 +270,10 @@ disc-image side of this is ready.
   per-tick trace is possible on this platform at all.
 - For Vita3K, the first and only question worth spending time on before
   anything else: does it expose any scriptable/debug interface, at all.
-- For ShadPS4, reinstall the emulator first, then run the same "does it expose
-  a debug transport" check Vita3K needs - it can happen in parallel with the
+- For ShadPS4, run the same "does it expose a debug transport" check Vita3K needs - it can happen in parallel with the
   other three and does not need to wait on M8. The disc image
   (`data/images/omega-ps4-eu.pkg`) is already present and verified.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-**PCSX2 is closed: a real capture works.** A live session found the player craft pointer by diffing EE RAM between a thrust-held and a nothing-held run from the same savestate - PCSX2's deterministic frame-advance cancels everything but player input, cutting 2.1M candidate words to 1,743 - then confirmed `steer` (`craft+0x2f0`) and `brake` (`craft+0x2ec`) live, both confidence 90, by watching them ramp and decay exactly as `Ship_UpdateSteering`/`Ship_UpdateBrakes`'s pseudocode says. It also found a real bug along the way: one PCSX2-verified frame is one PAL video *field* (50 Hz), not one game tick (25 Hz), so the original one-step-per-row design silently wrote a duplicate row every other tick - fixed by stepping two verified frames per recorded tick. First capture: `data/traces/ps2-moa-therma-white-thrust-smoketest.csv`, `oag-trace show` reports 15/15 clean ticks at a uniform 25.00 Hz. Also now mutes PCSX2's audio for every automated run. Remaining, lower priority: name the frame counter, run an input-script capture (only `--hold` has been tested), and `dt` is still an assumption (`2/50`, corroborated by five fields at once but never read off a register - PINE has none). **RPCS3 is blocked at the transport level, not the RE level**: its own debugger doc says outright there is no capture channel on the GDB-stub transport at 60 Hz (silent while running, 41 ms/packet while paused, ~24 ops/sec ceiling); closing it needs either an unevaluated alternate debug interface or a deliberate scope decision to accept a non-per-tick verification story. **Vita3K has zero driving tooling** - it's only ever been used as a read-only source reference (its USSE decoder, its PKG-decrypt code), never run, and whether it exposes any scriptable interface at all is the first unanswered question everything else depends on. **ShadPS4's installed binary turned out to be a 0-byte file** (correcting an in-session claim that it was installed and working) - a prerequisite reinstall blocks even checking whether it has a debug transport, separate from the roadmap's own M8 gate on Omega gameplay work existing at all to trace against.
+**PCSX2 is closed: a real capture works.** A live session found the player craft pointer by diffing EE RAM between a thrust-held and a nothing-held run from the same savestate - PCSX2's deterministic frame-advance cancels everything but player input, cutting 2.1M candidate words to 1,743 - then confirmed `steer` (`craft+0x2f0`) and `brake` (`craft+0x2ec`) live, both confidence 90, by watching them ramp and decay exactly as `Ship_UpdateSteering`/`Ship_UpdateBrakes`'s pseudocode says. It also found a real bug along the way: one PCSX2-verified frame is one PAL video *field* (50 Hz), not one game tick (25 Hz), so the original one-step-per-row design silently wrote a duplicate row every other tick - fixed by stepping two verified frames per recorded tick. First capture: `data/traces/ps2-moa-therma-white-thrust-smoketest.csv`, `oag-trace show` reports 15/15 clean ticks at a uniform 25.00 Hz. Also now mutes PCSX2's audio for every automated run. Remaining, lower priority: name the frame counter, run an input-script capture (only `--hold` has been tested), and `dt` is still an assumption (`2/50`, corroborated by five fields at once but never read off a register - PINE has none). **RPCS3 is blocked at the transport level, not the RE level**: its own debugger doc says outright there is no capture channel on the GDB-stub transport at 60 Hz (silent while running, 41 ms/packet while paused, ~24 ops/sec ceiling); closing it needs either an unevaluated alternate debug interface or a deliberate scope decision to accept a non-per-tick verification story. **Vita3K has zero driving tooling** - it's only ever been used as a read-only source reference (its USSE decoder, its PKG-decrypt code), never run, and whether it exposes any scriptable interface at all is the first unanswered question everything else depends on. **ShadPS4**: the 0-byte binary of 2026-09-16 was reinstalled (0.20.0) and boots Omega through its menus (2026-10-16, `docs/networking/online-lobby.md`); its debug transport is unchecked, and the roadmap's M8 gate on Omega gameplay work still applies to anything to trace against.
