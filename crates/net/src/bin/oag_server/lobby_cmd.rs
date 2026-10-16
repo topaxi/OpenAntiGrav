@@ -69,8 +69,8 @@ pub fn run(args: &Args) -> Result<()> {
         args.images.clone()
     };
     for source in sources {
-        let opened =
-            oag_source::title::open_source(&source, Vec::new(), Vec::new()).with_context(|| {
+        let opened = oag_source::title::open_server_source(&source, Vec::new(), Vec::new())
+            .with_context(|| {
                 format!("{source} is not a disc or folder of a title this build knows")
             })?;
         let platform = opened.archives.layout.platform.to_string();

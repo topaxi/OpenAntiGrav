@@ -31,6 +31,15 @@ pub struct Args {
 
 pub fn run(args: &Args) -> Result<()> {
     oag_log::tool::start("oag-server-extract", "warn,oag=info", &args.log);
+    if oag_raceplay::VIEW {
+        return Err(anyhow!(
+            "this oag-server was built with oag-raceplay's `view` feature on (cargo unified it \
+             with a build of the tests or the game), so a race load reads textures, meshes and \
+             sound the server never uses, and the extraction would keep them (HD 1,072 MiB \
+             instead of 41). Build the server alone: `cargo build --release -p oag-net --bin \
+             oag-server`"
+        ));
+    }
     let mut failed = false;
     for source in &args.images {
         let stem = std::path::Path::new(source)

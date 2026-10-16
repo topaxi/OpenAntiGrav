@@ -180,6 +180,11 @@ mod bomb_blast;
 mod breadcrumbs;
 mod camera;
 pub mod catalogue;
+
+/// Whether this build draws (the `view` feature): the load then reads textures, meshes,
+/// animation clips and sound banks the simulation never uses. The server extractor refuses to
+/// run in such a build, because it would keep all of that.
+pub const VIEW: bool = cfg!(feature = "view");
 #[cfg(feature = "view")]
 pub mod correction;
 pub mod countdown;

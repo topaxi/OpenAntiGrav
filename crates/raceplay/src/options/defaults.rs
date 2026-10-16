@@ -43,6 +43,7 @@ impl Default for Options {
             laps_override: None,
             weapons_override: None,
             no_driver_for_class: false,
+            server_source: false,
             zone_stage: None,
             ribbon: false,
             collision: false,
