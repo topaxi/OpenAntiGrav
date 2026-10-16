@@ -100,6 +100,17 @@ impl Action {
         }
     }
 
+    /// The page the game pushes itself once this action has done its work, which the
+    /// definition's reachability check counts as linked from the row: the ONLINE page opens
+    /// when the lobby has welcomed this machine.
+    #[must_use]
+    pub fn opens_page(self) -> Option<&'static str> {
+        match self {
+            Self::OpenOnline => Some("online"),
+            _ => None,
+        }
+    }
+
     /// Parses a definition file's spelling.
     #[must_use]
     pub fn parse(name: &str) -> Option<Self> {

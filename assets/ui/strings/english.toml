@@ -84,7 +84,7 @@ OAG_ONLINE_CREATE_SUBTITLE = { text = "Choose the race, then wait for the others
 OAG_ONLINE_JOIN = { text = "JOIN GAME", human = false }
 OAG_ONLINE_JOIN_SUBTITLE = { text = "Pick a room on the lobby", human = false }
 OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY ADDRESS", human = false }
-OAG_ONLINE_ADDRESS_HINT = { text = "HOST:PORT OF THE SERVER, e.g. race.example.org:60000", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "THE SERVER'S ADDRESS, e.g. race.example.org", human = false }
 OAG_ONLINE_HASH_TITLE = { text = "LOBBY CERTIFICATE", human = false }
 OAG_ONLINE_HASH_HINT = { text = "THE 64 DIGITS THE SERVER'S OWNER GIVES YOU", human = false }
 OAG_ONLINE_NAME_TITLE = { text = "YOUR NAME", human = false }

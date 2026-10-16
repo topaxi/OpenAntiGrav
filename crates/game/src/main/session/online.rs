@@ -258,10 +258,10 @@ impl Session {
                 "OAG_ONLINE_ADDRESS_TITLE",
                 "LOBBY ADDRESS",
                 "OAG_ONLINE_ADDRESS_HINT",
-                "HOST:PORT OF THE SERVER, e.g. race.example.org:60000",
+                "THE SERVER'S ADDRESS, e.g. race.example.org",
                 online.address.clone(),
                 60,
-                prompt::HOST_PORT_KEYS,
+                prompt::ADDRESS_KEYS,
             ),
             Field::Hash => (
                 "OAG_ONLINE_HASH_TITLE",
@@ -684,7 +684,7 @@ impl Session {
                 }
             }
         }
-        if let Some(why) = lost.or(refused) {
+        if let Some(why) = refused.or(lost) {
             let before_welcome = matches!(online.step, Step::Typing | Step::Connecting(_) | Step::Hello);
             self.online = Some(online);
             if before_welcome {

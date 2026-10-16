@@ -40,7 +40,7 @@ OAG_ONLINE_CREATE_SUBTITLE = { text = "Escolha a corrida e espere os outros entr
 OAG_ONLINE_JOIN = { text = "ENTRAR EM JOGO", human = false }
 OAG_ONLINE_JOIN_SUBTITLE = { text = "Escolha uma sala do lobby", human = false }
 OAG_ONLINE_ADDRESS_TITLE = { text = "ENDEREÇO DO LOBBY", human = false }
-OAG_ONLINE_ADDRESS_HINT = { text = "HOST:PORTA DO SERVIDOR, ex.: race.example.org:60000", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "O ENDEREÇO DO SERVIDOR, ex.: race.example.org", human = false }
 OAG_ONLINE_HASH_TITLE = { text = "CERTIFICADO DO LOBBY", human = false }
 OAG_ONLINE_HASH_HINT = { text = "OS 64 DÍGITOS DADOS PELO DONO DO SERVIDOR", human = false }
 OAG_ONLINE_NAME_TITLE = { text = "SEU NOME", human = false }

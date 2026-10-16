@@ -80,7 +80,7 @@ OAG_ONLINE_CREATE_SUBTITLE = { text = "Choisir la course, puis attendre les autr
 OAG_ONLINE_JOIN = { text = "REJOINDRE UNE PARTIE", human = false }
 OAG_ONLINE_JOIN_SUBTITLE = { text = "Choisir une salle du salon", human = false }
 OAG_ONLINE_ADDRESS_TITLE = { text = "ADRESSE DU SALON", human = false }
-OAG_ONLINE_ADDRESS_HINT = { text = "HÔTE:PORT DU SERVEUR, p. ex. race.example.org:60000", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "L'ADRESSE DU SERVEUR, p. ex. race.example.org", human = false }
 OAG_ONLINE_HASH_TITLE = { text = "CERTIFICAT DU SALON", human = false }
 OAG_ONLINE_HASH_HINT = { text = "LES 64 CHIFFRES DONNÉS PAR LE PROPRIÉTAIRE DU SERVEUR", human = false }
 OAG_ONLINE_NAME_TITLE = { text = "VOTRE NOM", human = false }

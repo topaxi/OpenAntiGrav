@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 /// with `--hash-out`, and which changes on every restart of the server) and a name.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Online {
-    /// `host:port` of the lobby; the default port is added when none is typed.
+    /// `host` or `host:port` of the lobby; port 60000 is added when none is given. The on-screen
+    /// keyboard has no colon (its grid is four rows), so another port is written here.
     #[serde(default)]
     pub address: String,
     /// The lobby certificate's SHA-256 as 64 hex digits.

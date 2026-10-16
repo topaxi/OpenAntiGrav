@@ -135,10 +135,6 @@ const KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-_";
 /// ([`Keyboard::with_keys`]); an IPv6 literal cannot be typed on it.
 pub const ADDRESS_KEYS: &str = "0123456789.-abcdefghijklmnopqrstuvwxyz";
 
-/// [`ADDRESS_KEYS`] and the colon, for an online lobby's `host:port`. 39 characters, so the
-/// grid's last row is one cell short of ten. **Ours, chosen.**
-pub const HOST_PORT_KEYS: &str = "0123456789.-:abcdefghijklmnopqrstuvwxyz";
-
 /// How many cells a row of the grid holds.
 ///
 /// **Chosen, not measured.** Ten by ten-times-four arithmetic: [`KEYS`] is 38

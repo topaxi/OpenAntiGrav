@@ -42,7 +42,7 @@ OAG_ONLINE_CREATE_SUBTITLE = { text = "Das Rennen wählen und auf die anderen wa
 OAG_ONLINE_JOIN = { text = "SPIEL BEITRETEN", human = false }
 OAG_ONLINE_JOIN_SUBTITLE = { text = "Einen Raum der Lobby wählen", human = false }
 OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY-ADRESSE", human = false }
-OAG_ONLINE_ADDRESS_HINT = { text = "HOST:PORT DES SERVERS, z. B. race.example.org:60000", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "DIE ADRESSE DES SERVERS, z. B. race.example.org", human = false }
 OAG_ONLINE_HASH_TITLE = { text = "LOBBY-ZERTIFIKAT", human = false }
 OAG_ONLINE_HASH_HINT = { text = "DIE 64 ZIFFERN VOM BETREIBER DES SERVERS", human = false }
 OAG_ONLINE_NAME_TITLE = { text = "DEIN NAME", human = false }
