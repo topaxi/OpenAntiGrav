@@ -442,7 +442,7 @@ over `portrait`:
   HUD-size, so the rows drew as raw ids at a size that covered the view; dropped.
   Cross-check: 2048 and Omega, **checked, applies**: 2048's `HUD_positions.xml` authors the same
   bare `Position` HD-lineage layouts do, Omega reads HD's files; both **ported** (tests
-  `*_keeps_*_place_and_gains_the_gap`). HD's `Hud_BindWidgets` (`0x0009e0ec`, `HeadToHeadBar` at
+  `*_keeps_*_place_and_gains_the_gap`). HD's `Hud_BindWidgets` (`0x0009bb30`, the branch at `0x0009e0ec`; `HeadToHeadBar` at
   `0x0077fb00`) does branch on modes 9 and 0x12 under HUD flag `0x40`. **2026-10-16
   (`hd-h2h-bar`): the writer is `Hud_UpdatePositionCounter` (`0x00096088`) and HD does author a gap
   label, `DistanceApart`** (the earlier "no gap label" was a name miss for Pulse's `PositionOf`).

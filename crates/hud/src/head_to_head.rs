@@ -99,7 +99,7 @@ fn is_hd_shape(layout: &super::Layout) -> bool {
 }
 
 /// Whether the place panel and its arc are hidden: HD's bind clears the visible flags of
-/// `PositionTxt` and `PositionPanel` in mode 9 (`Hud_BindWidgets`, `0x0009e0ec`).
+/// `PositionTxt` and `PositionPanel` in mode 9 (`Hud_BindWidgets`, `0x0009bb30`, branch at `0x0009e0ec`).
 pub(super) fn hides_place_panel(cx: &Context<'_>, readout: &Readout) -> bool {
     readout.head_to_head.is_some() && is_hd_shape(cx.layout)
 }

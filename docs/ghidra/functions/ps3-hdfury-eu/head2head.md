@@ -88,7 +88,7 @@ vertalign="bottom" x="180" y="104" color="FEConst->HudColour2" .../>` beside `Po
 
 ### What binds it
 
-`Hud_BindWidgets` (`0x0009e0ec`), HUD flag `0x40`, TOC base `0x008ad4d8` (slots
+`Hud_BindWidgets` (`0x0009bb30`, the mode 9 / 0x12 branch near `0x0009e0ec` is inside it, not a function of its own), HUD flag `0x40`, TOC base `0x008ad4d8` (slots
 `0x008a7b40..` hold the strings at `0x0077fac0..`: `Cockpit321Go`, `Position`,
 `Position Outof`, `PositionTxt`, `HeadToHeadBar` (`0x0077fb00`), `DistanceApart`
 (`0x0077fb10`), `PositionPanel`):
@@ -141,7 +141,7 @@ The thread's two named addresses were the wrong ones: `FUN_004ef30c` is a syscal
 `FUN_004d539c` a TOC initialiser, neither reads XML. The map comes from two functions that
 already crop an `<Image>`:
 
-- **`Hud_BindWidgets` `0x0009bee0`-`0x0009bf28`** reads `DamageBar` (`hud+0x1b0`, an `<Image>` in every
+- **`Hud_BindWidgets` (`0x0009bb30`), the stretch `0x0009bee0`-`0x0009bf28`** reads `DamageBar` (`hud+0x1b0`, an `<Image>` in every
   shipped HUD file): `vt[0x60]()` -> `hud+0x1dc` (H), `+0xd0` -> `hud+0x1e0` (V0), `+0xd8` -> `hud+0x1e4` (TH),
   `vt[0x74]()` -> `hud+0x1d8` (y0).
 - **`Hud_UpdateShieldReadout` `0x00086750`-`0x000867ac`** writes it back: `+0xb0 = f * H`,
