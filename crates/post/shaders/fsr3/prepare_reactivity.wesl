@@ -71,8 +71,10 @@ import package::fsr3::common::{
 @group(1) @binding(4) var r_shading_change: texture_2d<f32>;
 @group(1) @binding(5) var r_accumulation: texture_2d<f32>;
 @group(1) @binding(6) var rw_dilated_reactive_masks: texture_storage_2d<rgba8unorm, write>;
-@group(1) @binding(7) var rw_accumulation: texture_storage_2d<rgba8unorm, write>;
-@group(1) @binding(8) var rw_new_locks: texture_storage_2d<rgba8unorm, write>;
+@if(!narrow) @group(1) @binding(7) var rw_accumulation: texture_storage_2d<rgba8unorm, write>;
+@if(narrow) @group(1) @binding(7) var rw_accumulation: texture_storage_2d<r8unorm, write>;
+@if(!narrow) @group(1) @binding(8) var rw_new_locks: texture_storage_2d<rgba8unorm, write>;
+@if(narrow) @group(1) @binding(8) var rw_new_locks: texture_storage_2d<r8unorm, write>;
 
 fn load_dilated_motion_vector(px_pos: vec2<i32>) -> vec2<f32> {
     return textureLoad(r_dilated_motion_vectors, px_pos, 0).xy;

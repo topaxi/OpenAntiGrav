@@ -1362,7 +1362,9 @@ crisper than the FSR 1 picture the same frame drew before. A capture shows a pri
 final one, so how the history settles over many frames was not looked at; the Deck run below is
 the place.
 
-**Cost** (`OAG_RESOLVE_BENCH=200` on a `--presented` capture: the resolve run 200 times over the
+**Cost** (taken before the bench resolved a steady-state frame: every run was a reset frame, which
+`accumulate` finishes in about a third of the time - see [fsr3.md](fsr3.md), "What the two deviations
+cost, measured". `OAG_RESOLVE_BENCH=200` on a `--presented` capture: the resolve run 200 times over the
 frame, each submitted and waited for, CPU and GPU serialised; release `perf-probe`, 1280x800, render
 scale 50, `--ticks 300`, `taskset -c 0-5`, gate lock, three rounds, minimum of the medians, load 1.2
 to 2.0), us:

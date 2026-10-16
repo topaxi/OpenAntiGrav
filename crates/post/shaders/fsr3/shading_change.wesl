@@ -32,7 +32,8 @@ import package::fsr3::common::{
 };
 
 @group(1) @binding(0) var r_spd_mips: texture_2d<f32>;
-@group(1) @binding(1) var rw_shading_change: texture_storage_2d<rgba8unorm, write>;
+@if(!narrow) @group(1) @binding(1) var rw_shading_change: texture_storage_2d<rgba8unorm, write>;
+@if(narrow) @group(1) @binding(1) var rw_shading_change: texture_storage_2d<r8unorm, write>;
 
 fn get_spd_mip_dimensions(mip_level: u32) -> vec2<i32> {
     return vec2<i32>(textureDimensions(r_spd_mips, mip_level));

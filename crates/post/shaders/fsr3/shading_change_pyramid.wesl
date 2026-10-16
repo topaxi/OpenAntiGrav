@@ -53,7 +53,8 @@ import package::fsr3::common::{
 // Bound as a sampled texture rather than read through the storage binding,
 // because a read-write storage texture carries no baseline guarantee.
 @group(1) @binding(3) var r_spd_source: texture_2d<f32>;
-@group(1) @binding(4) var rw_spd_target: texture_storage_2d<rgba16float, write>;
+@if(!narrow) @group(1) @binding(4) var rw_spd_target: texture_storage_2d<rgba16float, write>;
+@if(narrow) @group(1) @binding(4) var rw_spd_target: texture_storage_2d<rg16float, write>;
 // Which mip `rw_spd_target` is. A separate uniform rather than another field of
 // `Fsr3Constants` because it changes between dispatches *within* a frame, and
 // an index rather than an extent so that it stays constant as a resolution

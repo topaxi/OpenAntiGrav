@@ -5,11 +5,11 @@
 //! Its own file rather than more of `tests.rs`, which is already past 900
 //! lines against `just check-size`'s 1,000-line ratchet.
 
-use super::readback::{self, Scene};
+use super::Formats;
+use super::readback::{self, Scene, on_both_formats};
 use super::tests::{FIXTURE, colour_pattern, depth_pattern};
 
-#[test]
-fn a_reset_reads_no_history_even_when_the_targets_still_hold_one() {
+fn a_reset_reads_no_history_even_when_the_targets_still_hold_one(formats: Formats) {
     // Three still frames into one set of targets, the third a reset. After
     // two frames the accumulation texture the third frame reads holds two
     // thirds of a frame at every texel - `prepare_reactivity` stores one
@@ -28,7 +28,7 @@ fn a_reset_reads_no_history_even_when_the_targets_still_hold_one() {
         depth: &depth,
         colour: &colour,
     };
-    let Some(scene) = Scene::run_resetting(FIXTURE, &[still; 3], false, |index| {
+    let Some(scene) = Scene::run_resetting(formats, FIXTURE, &[still; 3], false, |index| {
         index == 0 || index == 2
     }) else {
         eprintln!("no adapter; skipping");
@@ -58,7 +58,7 @@ fn a_reset_reads_no_history_even_when_the_targets_still_hold_one() {
     // same three inputs run on a fresh allocation, read at *its* first frame.
     // Both are initial-sample frames of the same input, so `accumulate` takes
     // the same path in each and the two resolves must agree texel for texel.
-    let Some(fresh) = Scene::run(FIXTURE, &[still]) else {
+    let Some(fresh) = Scene::run(formats, FIXTURE, &[still]) else {
         return;
     };
     let read = |scene: &Scene| {
@@ -80,4 +80,8 @@ fn a_reset_reads_no_history_even_when_the_targets_still_hold_one() {
         "a reset frame differs from a fresh first frame by {worst} at worst - \
          a history that should have been thrown away is being blended in"
     );
+}
+
+on_both_formats! {
+    a_reset_reads_no_history_even_when_the_targets_still_hold_one,
 }

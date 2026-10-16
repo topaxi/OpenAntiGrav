@@ -212,14 +212,19 @@ pub fn validate(source: &str, path: &str) -> Result<(), Problem> {
 /// capabilities wgpu grants for those features and **not** non-uniform
 /// indexing: the variant indexes its arrays by immediates, which are uniform,
 /// so an index that is not (one read from a varying, which costs every
-/// fragment on some drivers) fails the build. Every other shader still fails
-/// on any capability at all.
+/// fragment on some drivers) fails the build. `enable f16;` grants
+/// `SHADER_FLOAT16`, for the half-precision builds of a pass a device with
+/// `wgpu::Features::SHADER_F16` selects. Every other shader still fails on any
+/// capability at all.
 fn capabilities(source: &str) -> Capabilities {
+    let mut capabilities = Capabilities::empty();
     if source.contains("enable wgpu_binding_array;") {
-        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY | Capabilities::IMMEDIATES
-    } else {
-        Capabilities::empty()
+        capabilities |= Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY | Capabilities::IMMEDIATES;
     }
+    if source.contains("enable f16;") {
+        capabilities |= Capabilities::SHADER_FLOAT16;
+    }
+    capabilities
 }
 
 /// The full failure text: naga's own, then where it lands.

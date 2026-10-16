@@ -71,6 +71,14 @@ import package::fsr3::common::{
     ycocg_to_rgb,
 };
 
+// **One source, two precisions.** `real` is `f16` in the build made for a device with
+// `SHADER_F16` (`@if(f16)`, `oag_post::fsr3::Formats`) and `f32` otherwise. It is used where
+// upstream's own source computes in `FFX_MIN16_F` under `FFX_HALF`: the history's bicubic
+// reprojection. What is stored in these textures is half precision either way.
+@if(f16) enable f16;
+@if(f16) alias real = f16;
+@if(!f16) alias real = f32;
+
 @group(1) @binding(0) var r_input_color_jittered: texture_2d<f32>;
 @group(1) @binding(1) var r_dilated_motion_vectors: texture_2d<f32>;
 @group(1) @binding(2) var r_dilated_reactive_masks: texture_2d<f32>;
@@ -107,8 +115,8 @@ fn sample_farthest_depth_mip1(uv: vec2<f32>) -> f32 {
     return textureSampleLevel(r_farthest_depth_mip1, linear_clamp, uv, 0.0).x;
 }
 
-fn load_history(px_history: vec2<i32>) -> vec4<f32> {
-    return textureLoad(r_internal_upscaled_color, px_history, 0);
+fn load_history(px_history: vec2<i32>) -> vec4<real> {
+    return vec4<real>(textureLoad(r_internal_upscaled_color, px_history, 0));
 }
 
 fn load_rw_new_locks(px_pos: vec2<i32>) -> f32 {
@@ -179,7 +187,7 @@ fn lanczos2_weights(t: f32) -> vec4<f32> {
 }
 
 // The four-tap Lanczos-2 interpolation the history reprojection is built from.
-fn lanczos2_row(c0: vec4<f32>, c1: vec4<f32>, c2: vec4<f32>, c3: vec4<f32>, w: vec4<f32>) -> vec4<f32> {
+fn lanczos2_row(c0: vec4<real>, c1: vec4<real>, c2: vec4<real>, c3: vec4<real>, w: vec4<real>) -> vec4<real> {
     return (w.x * c0 + w.y * c1 + w.z * c2 + w.w * c3) / (w.x + w.y + w.z + w.w);
 }
 
@@ -187,7 +195,7 @@ fn lanczos2_row(c0: vec4<f32>, c1: vec4<f32>, c2: vec4<f32>, c3: vec4<f32>, w: v
 // deringing clamp against the inner 2x2. `DeclareCustomTextureSample` and
 // `DeclareCustomFetchBicubicSamples` written out, because WGSL has no macros
 // and there is only one instantiation of either.
-fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
+fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<real> {
     var px_sample = (uv_sample * vec2<f32>(texture_size)) - vec2<f32>(0.5, 0.5);
     let px_frac = fract(px_sample);
     // Clamp base coords.
@@ -196,7 +204,7 @@ fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
 
     let base = vec2<i32>(floor(px_sample));
     // One weight set for all four rows - see `lanczos2_weights`.
-    let wx = lanczos2_weights(px_frac.x);
+    let wx = vec4<real>(lanczos2_weights(px_frac.x));
 
     // **Deringing, against the inner four taps only** - the ones the
     // interpolation is actually between. A Lanczos kernel has negative lobes
@@ -209,10 +217,10 @@ fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
     // which is four extra `textureLoad`s out of twenty from the largest texture
     // this pass reads. `min` and `max` are associative and exact, so folding
     // them in this order is the same four-way reduction.
-    var deringing_min = vec4<f32>(FSR3UPSCALER_FP32_MAX);
-    var deringing_max = vec4<f32>(-FSR3UPSCALER_FP32_MAX);
+    var deringing_min = vec4<real>(real(65504.0));
+    var deringing_max = vec4<real>(real(-65504.0));
 
-    var rows: array<vec4<f32>, 4>;
+    var rows: array<vec4<real>, 4>;
     for (var row = 0; row < 4; row++) {
         let dy = row - 1;
         let c0 = load_history(clamp_coord(base, vec2<i32>(-1, dy), texture_size));
@@ -225,7 +233,7 @@ fn history_sample(uv_sample: vec2<f32>, texture_size: vec2<i32>) -> vec4<f32> {
         }
         rows[row] = lanczos2_row(c0, c1, c2, c3, wx);
     }
-    var color = lanczos2_row(rows[0], rows[1], rows[2], rows[3], lanczos2_weights(px_frac.y));
+    var color = lanczos2_row(rows[0], rows[1], rows[2], rows[3], vec4<real>(lanczos2_weights(px_frac.y)));
 
     color = clamp(color, deringing_min, deringing_max);
 
@@ -419,7 +427,7 @@ fn compute_upsampled_color_and_weight(params: CommonParams, data_in: PassData) -
 fn reproject_history_color(params: CommonParams, data_in: PassData) -> PassData {
     var data = data_in;
     let reprojected_history =
-        history_sample(params.reprojected_hr_uv, previous_frame_upscale_size());
+        vec4<f32>(history_sample(params.reprojected_hr_uv, previous_frame_upscale_size()));
 
     data.history_color = reprojected_history.rgb;
     data.history_color *= delta_pre_exposure();

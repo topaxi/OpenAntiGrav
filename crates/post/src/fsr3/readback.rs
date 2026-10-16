@@ -8,6 +8,24 @@
 
 use super::*;
 
+/// Runs each named `fn(Formats)` test on the baseline formats, on upstream's own, and on
+/// upstream's with half arithmetic, as `baseline::<name>`, `narrow::<name>` and `half::<name>`.
+/// The latter two skip themselves on a device that cannot do what they ask.
+macro_rules! on_both_formats {
+    ($($name:ident),* $(,)?) => {
+        mod baseline {
+            $(#[test] fn $name() { super::$name(crate::fsr3::Formats::BASELINE) })*
+        }
+        mod narrow {
+            $(#[test] fn $name() { super::$name(crate::fsr3::Formats::NARROW) })*
+        }
+        mod half {
+            $(#[test] fn $name() { super::$name(crate::fsr3::Formats::NARROW.with_half()) })*
+        }
+    };
+}
+pub(super) use on_both_formats;
+
 /// A depth buffer, and everything the passes need alongside it.
 ///
 /// The device and queue are kept because a readback needs them after the
@@ -63,8 +81,8 @@ impl Scene {
     /// sRGB one. The binding is identical - every pass here `textureLoad`s it -
     /// and it means the fixture can write exact `f32`s rather than encode
     /// halves, so an expected value is a number rather than a rounding.
-    pub(super) fn run(render: (u32, u32), frames: &[Input<'_>]) -> Option<Self> {
-        Self::run_with(render, frames, false)
+    pub(super) fn run(formats: Formats, render: (u32, u32), frames: &[Input<'_>]) -> Option<Self> {
+        Self::run_with(formats, render, frames, false)
     }
 
     /// [`Scene::run`], with the real Halton offsets fed through
@@ -78,11 +96,12 @@ impl Scene {
     /// *from*, so a still fixture would report a temporal upscaler and a blit
     /// as identical.
     pub(super) fn run_with(
+        formats: Formats,
         render: (u32, u32),
         frames: &[Input<'_>],
         jittered: bool,
     ) -> Option<Self> {
-        Self::run_resetting(render, frames, jittered, |index| index == 0)
+        Self::run_resetting(formats, render, frames, jittered, |index| index == 0)
     }
 
     /// [`Scene::run_with`], with `reset` deciding which frames throw the
@@ -93,9 +112,24 @@ impl Scene {
     /// race-restart case, and a fresh allocation - zero-initialised by wgpu -
     /// cannot show what a reset fails to wipe.
     pub(super) fn run_resetting(
+        formats: Formats,
         render: (u32, u32),
         frames: &[Input<'_>],
         jittered: bool,
+        reset: impl Fn(usize) -> bool,
+    ) -> Option<Self> {
+        Self::run_moving(formats, render, frames, jittered, [0.0, 0.0], reset)
+    }
+
+    /// [`Scene::run_resetting`] with every texel of the velocity attachment set to `velocity`
+    /// (this renderer's own units: a UV delta). Zero leaves it as allocated; a sub-pixel value
+    /// is what makes the history's bicubic reproject between texels rather than onto one.
+    pub(super) fn run_moving(
+        formats: Formats,
+        render: (u32, u32),
+        frames: &[Input<'_>],
+        jittered: bool,
+        velocity: [f32; 2],
         reset: impl Fn(usize) -> bool,
     ) -> Option<Self> {
         let texels = (render.0 * render.1) as usize;
@@ -103,8 +137,21 @@ impl Scene {
 
         let instance = wgpu::Instance::default();
         let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(&Default::default())).ok()?;
+        // What the game's own device asks for, so the narrow set has somewhere to run.
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: adapter.features()
+                & (wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+                    | wgpu::Features::SHADER_F16),
+            ..Default::default()
+        }))
+        .ok()?;
+        // A narrow run on a device that cannot store the narrow formats is not a run.
+        let probed = Formats::probe(&device);
+        if (formats.is_narrow() && !probed.is_narrow()) || (formats.is_half() && !probed.is_half())
+        {
+            eprintln!("this device cannot run {}; skipping", formats.name());
+            return None;
+        }
 
         let make = |label, format, usage| {
             device.create_texture(&wgpu::TextureDescriptor {
@@ -134,14 +181,41 @@ impl Scene {
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         );
         let colour = colour_texture.create_view(&Default::default());
-        let velocity = make(
+        let velocity_view = make(
             "fsr3 test velocity",
             oag_gpu::formats::VELOCITY_FORMAT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         )
         .create_view(&Default::default());
+        if velocity != [0.0, 0.0] {
+            let mut encoder = device.create_command_encoder(&Default::default());
+            drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("fsr3 test velocity fill"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &velocity_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: f64::from(velocity[0]),
+                            g: f64::from(velocity[1]),
+                            b: 0.0,
+                            a: 0.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            }));
+            queue.submit([encoder.finish()]);
+        }
+        let velocity = velocity_view;
 
-        let mut fsr3 = Fsr3::new(&device).expect("the FSR 3.1 shaders must compile");
+        let mut fsr3 =
+            Fsr3::with_formats(&device, formats).expect("the FSR 3.1 shaders must compile");
 
         for (index, input) in frames.iter().enumerate() {
             assert_eq!(input.depth.len(), texels);
@@ -266,14 +340,22 @@ impl Scene {
         out
     }
 
-    /// One `R32Float` intermediate, read back as `f32`s row-major.
+    /// A scalar intermediate's first channel, read back as `f32`s row-major: `R32Float` or `R16Float`.
     pub(super) fn read_r32(&self, texture: &wgpu::Texture) -> Vec<f32> {
-        self.read_bytes(texture, 0, 4)
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|bytes| f32::from_le_bytes(*bytes))
-            .collect()
+        match texture.format() {
+            wgpu::TextureFormat::R32Float => self
+                .read_bytes(texture, 0, 4)
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|bytes| f32::from_le_bytes(*bytes))
+                .collect(),
+            _ => self
+                .read_halves(texture, 0)
+                .into_iter()
+                .map(|texel| texel[0])
+                .collect(),
+        }
     }
 
     /// All four channels of an `Rgba8Unorm` intermediate - which for
@@ -287,7 +369,7 @@ impl Scene {
             .collect()
     }
 
-    /// One `Rgba8Unorm` intermediate's red channel, back as `0..1` floats.
+    /// One unorm intermediate's red channel, back as `0..1` floats: `R8Unorm` or `Rgba8Unorm`.
     ///
     /// The three targets that live in this format - `accumulation`,
     /// `shading_change`, `new_locks` - are the ones upstream holds at
@@ -295,42 +377,54 @@ impl Scene {
     /// upstream's is, and an expectation has to be given a tolerance
     /// accordingly.
     pub(super) fn read_unorm(&self, texture: &wgpu::Texture) -> Vec<f32> {
-        self.read_bytes(texture, 0, 4)
+        let stride = if texture.format() == wgpu::TextureFormat::R8Unorm {
+            1
+        } else {
+            4
+        };
+        self.read_bytes(texture, 0, stride)
             .into_iter()
-            .step_by(4)
+            .step_by(stride)
             .map(|byte| f32::from(byte) / 255.0)
             .collect()
     }
 
-    /// All four channels of an `Rgba16Float` intermediate - which for
-    /// `luma_history` is four *frames*, N-1 through N-4, not a colour.
-    pub(super) fn read_rgba16(&self, texture: &wgpu::Texture) -> Vec<[f32; 4]> {
-        self.read_bytes(texture, 0, 8)
-            .as_chunks::<8>()
-            .0
-            .iter()
+    /// Every channel of a half-float intermediate (`R16Float`, `Rg16Float` or `Rgba16Float`) at
+    /// `mip`, row-major, with the channels the format lacks as zero. For `luma_history` the four
+    /// channels are four *frames*, N-1 through N-4, not a colour.
+    fn read_halves(&self, texture: &wgpu::Texture, mip: u32) -> Vec<[f32; 4]> {
+        let channels = match texture.format() {
+            wgpu::TextureFormat::R16Float => 1,
+            wgpu::TextureFormat::Rg16Float => 2,
+            wgpu::TextureFormat::Rgba16Float => 4,
+            other => panic!("not a half-float intermediate: {other:?}"),
+        };
+        self.read_bytes(texture, mip, channels * 2)
+            .chunks(channels * 2)
             .map(|texel| {
                 std::array::from_fn(|channel| {
-                    let at = channel * 2;
-                    f16_to_f32(u16::from_le_bytes(texel[at..at + 2].try_into().unwrap()))
+                    if channel < channels {
+                        let at = channel * 2;
+                        f16_to_f32(u16::from_le_bytes(texel[at..at + 2].try_into().unwrap()))
+                    } else {
+                        0.0
+                    }
                 })
             })
             .collect()
     }
 
-    /// One `Rgba16Float` intermediate's first two channels at `mip`, read back
-    /// as pairs row-major - which is what the pyramid holds.
+    /// [`Self::read_halves`] at mip 0.
+    pub(super) fn read_rgba16(&self, texture: &wgpu::Texture) -> Vec<[f32; 4]> {
+        self.read_halves(texture, 0)
+    }
+
+    /// A half-float intermediate's first two channels at `mip` as pairs, row-major - what the
+    /// pyramid holds.
     pub(super) fn read_rg16(&self, texture: &wgpu::Texture, mip: u32) -> Vec<(f32, f32)> {
-        self.read_bytes(texture, mip, 8)
-            .as_chunks::<8>()
-            .0
-            .iter()
-            .map(|texel| {
-                let half = |at: usize| {
-                    f16_to_f32(u16::from_le_bytes(texel[at..at + 2].try_into().unwrap()))
-                };
-                (half(0), half(2))
-            })
+        self.read_halves(texture, mip)
+            .into_iter()
+            .map(|texel| (texel[0], texel[1]))
             .collect()
     }
 
