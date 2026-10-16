@@ -385,6 +385,17 @@ impl Session {
         online.pick_sent = false;
         lobby.create(settings);
         online.step = Step::Room;
+        // The room stands over the ONLINE page, not over the RACE page it was made on, so
+        // BACK from the room lands on the page the player chose CREATE GAME from.
+        if let Stage::Menu(stage) = &mut self.stage {
+            for _ in 0..4 {
+                if stage.menu.page().id == "online" {
+                    break;
+                }
+                stage.menu.back();
+            }
+            let _ = stage.menu.take_nav();
+        }
         self.show_room_screen();
     }
 
@@ -792,6 +803,23 @@ impl Session {
         let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
             return;
         };
+        // A refused join leaves the room form on screen over the list: the form follows the step.
+        let wrong_form = stage.lan.as_ref().is_some_and(|screen| match &screen_rows {
+            Some(Rows::Rooms(_)) => !screen.is_list(),
+            Some(Rows::Room(..)) => screen.is_list(),
+            None => false,
+        });
+        if wrong_form {
+            stage.lan = Some(match &screen_rows {
+                Some(Rows::Rooms(_)) => {
+                    Join::new(Labels::read_online_list(&shell.strings), 16).as_list()
+                }
+                _ => Join::new(
+                    Labels::read_online_room(&shell.strings),
+                    usize::from(oag_net::wire::online::MAX_PLAYERS),
+                ),
+            });
+        }
         if let Some(screen) = stage.lan.as_mut() {
             match screen_rows {
                 Some(Rows::Rooms(rooms)) => {
