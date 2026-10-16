@@ -15,7 +15,9 @@
 > race in [split-end-race.md](split-end-race.md).
 
 Why the raster HUD text reads poorly, and which HUD skins the later titles
-ship, are in [hud-skins.md](hud-skins.md).
+ship, are in [hud-skins.md](hud-skins.md). Every HUD file on every disc, which
+layout reaches it, whether it draws and how a player gets to it (`HUD Style`,
+unlocks, modes), is the census in [hud-assets.md](hud-assets.md).
 
 Which controller's button glyphs a prompt draws, and how the device is told
 apart (including under Steam Input), are in
