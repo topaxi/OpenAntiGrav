@@ -1,23 +1,23 @@
-//! The server extractor against the six sources a lobby can host: each is extracted, every
-//! race the extractor plans is loaded from the extraction and must reproduce the source's
-//! tick-0 state hash (`extract` does that itself and reports a `gap`), and then one
-//! race is run tick by tick from both and its state hash compared at every tick.
+//! The server extractor against the six sources a lobby can host: for each, the races below are
+//! extracted, loaded again from the extraction (`extract` requires the same tick-0 state hash of
+//! every one and reports a `gap` otherwise), and then each is flown tick by tick from the source
+//! and from the extraction and its state hash compared at every tick.
 //!
-//! A race here is the AI field flying the grid (no person's input) for a minute and a half of
-//! ticks: the simulation the server runs, with nothing the extraction could be hiding behind.
+//! The AI field flies the grid and nobody gives input: the simulation the server runs, with
+//! nothing the extraction could be hiding behind. **Not a three-lap race**: that is 15,000 ticks
+//! and more, and a title's loaded race is a gigabyte, so the long case flies 1,800 ticks (thirty
+//! seconds, past the start and the first corners) and the eight-person grid 300. The whole offer
+//! of every title is proven by `oag-server extract`'s own check, which loads every race the
+//! server offers from the extraction (docs/networking/online-lobby.md, part 6).
 
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::PlayerInputs;
+use oag_net::extract::{Offer, Planned};
 use oag_net::wire::RaceParams;
 
-/// Ticks flown on the first circuit: a minute and a half at 60 Hz, past the start, the first
-/// corners and the AI field spreading out. A three-lap race is 15,000 and more, which at the
-/// simulation's debug-profile speed (about 250 ticks a second on a loaded machine) is five minutes
-/// a title, over the test ceiling.
-const LONG: usize = 5_400;
-/// The grid of eight people is only compared this far: every seat's craft is read at load.
-const SHORT: usize = 600;
+const LONG: usize = 1_800;
+const SHORT: usize = 300;
 
 fn work_dir(name: &str) -> PathBuf {
     let dir = oag_testdata::repo_root().join("target/oag-extract-ground-truth");
@@ -38,73 +38,101 @@ fn hashes(source: &str, params: &RaceParams, ticks: usize) -> Vec<u64> {
         .collect()
 }
 
-/// Extracts `source`, requires every planned race to load identically from the result, and
-/// compares a full race on the first circuit and an eight-person one on the middle circuit.
+/// The races compared: one person on the first circuit, and eight people with the title's first
+/// eight teams on the last .
+fn races(offer: &Offer) -> Vec<(Planned, usize)> {
+    let base = RaceParams {
+        title: offer.title.to_string(),
+        class: "VENOM".into(),
+        mode: "single_race".into(),
+        difficulty: "elite".into(),
+        scheme: "veteran".into(),
+        opponents: true,
+        weapons: false,
+        ..RaceParams::default()
+    };
+    let seats: Vec<String> = offer.teams.iter().take(8).cloned().collect();
+    vec![
+        (
+            Planned {
+                label: "one person, first circuit".into(),
+                params: RaceParams {
+                    track: offer.tracks[0].clone(),
+                    seed: 7,
+                    people: 1,
+                    ..base.clone()
+                },
+            },
+            LONG,
+        ),
+        (
+            Planned {
+                label: "a full grid of people, last circuit".into(),
+                params: RaceParams {
+                    track: offer.tracks[offer.tracks.len() - 1].clone(),
+                    seed: 11,
+                    people: u8::try_from(seats.len()).unwrap_or(8),
+                    team: seats[0].clone(),
+                    teams: seats,
+                    ..base
+                },
+            },
+            SHORT,
+        ),
+    ]
+}
+
+/// Extracts `source` for [`races`], requires them to load identically from the result, then
+/// flies each from both and compares every tick.
 fn check(source: &Path, name: &str) {
     let out = work_dir(name);
     let source = source.display().to_string();
-    let report =
-        oag_net::extract::extract(&source, &out, "ground truth", |_| {}).expect("extracts");
+    let report = oag_net::extract::extract(
+        &source,
+        &out,
+        "ground truth",
+        &|offer| {
+            races(offer)
+                .into_iter()
+                .map(|(planned, _)| planned)
+                .collect()
+        },
+        |_| {},
+    )
+    .expect("extracts");
     assert!(report.gaps.is_empty(), "{name}: {:#?}", report.gaps);
-    assert!(
-        report.loaded > 20,
-        "{name}: only {} races loaded",
-        report.loaded
-    );
+    assert_eq!(report.loaded, 2, "{name}: {:#?}", report.refused);
     let offer = oag_net::extract::offer(&source).expect("offers");
     let extraction = out.display().to_string();
-    for (circuit, people, seed, ticks) in
-        [(0, 1u8, 7, LONG), (offer.tracks.len() / 2, 8, 11, SHORT)]
-    {
-        let params = RaceParams {
-            title: offer.title.to_string(),
-            track: offer.tracks[circuit].clone(),
-            class: "VENOM".into(),
-            mode: "single_race".into(),
-            difficulty: "elite".into(),
-            scheme: "veteran".into(),
-            seed,
-            people,
-            opponents: true,
-            teams: offer
-                .teams
-                .iter()
-                .take(usize::from(people))
-                .cloned()
-                .collect(),
-            team: offer.teams.first().cloned().unwrap_or_default(),
-            weapons: false,
-        };
+    for (planned, ticks) in races(&offer) {
+        let params = planned.params;
+        // One after the other, each on a thread with room for the race: a title's loaded race
+        // is gigabytes resident, and six titles run at once.
         let fly = |at: &str| {
             let (at, params) = (at.to_string(), params.clone());
             std::thread::Builder::new()
                 .stack_size(64 << 20)
                 .spawn(move || hashes(&at, &params, ticks))
                 .expect("spawns")
+                .join()
+                .expect("the race flies")
         };
-        let (a, b) = (fly(&source), fly(&extraction));
-        let (from_source, from_extraction) = (
-            a.join().expect("source race"),
-            b.join().expect("extraction race"),
-        );
-        assert_eq!(
-            from_source.len(),
-            from_extraction.len(),
-            "{name}: ticks flown"
-        );
+        let (from_source, from_extraction) = (fly(&source), fly(&extraction));
         let missed = oag_assets::record::take_misses();
         assert!(
             missed.is_empty(),
-            "{name}: reads the extraction could not answer: {missed:#?}"
+            "{name}: {}: reads the extraction could not answer: {missed:#?}",
+            planned.label
         );
         let first_difference = from_source
             .iter()
             .zip(&from_extraction)
             .position(|(a, b)| a != b);
-        assert_eq!(first_difference, None, "{name}: {}", params.track);
+        assert_eq!(first_difference, None, "{name}: {}", planned.label);
         assert!(
             from_source.windows(2).any(|pair| pair[0] != pair[1]),
-            "{name}: the race never moved, so the comparison proves nothing"
+            "{name}: {}: the race never moved, so the comparison proves nothing",
+            planned.label
         );
     }
     let _ = std::fs::remove_dir_all(&out);

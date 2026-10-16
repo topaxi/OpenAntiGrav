@@ -87,6 +87,24 @@ pub fn stop() -> Option<Recording> {
     Some(Recording { files, loose })
 }
 
+/// The largest single range recorded so far, with its archive: a load that reads most of an
+/// archive cannot be extracted usefully, and the extractor says which race did it.
+#[must_use]
+pub fn largest_range() -> Option<(String, u64)> {
+    let guard = RECORDER.lock().expect("recorder lock");
+    let recorder = guard.as_ref()?;
+    recorder
+        .files
+        .iter()
+        .flat_map(|(path, recorded)| {
+            recorded
+                .ranges
+                .iter()
+                .map(move |(start, end)| (path.clone(), end - start))
+        })
+        .max_by_key(|(_, len)| *len)
+}
+
 /// Whether a recording is running.
 #[must_use]
 pub fn active() -> bool {
@@ -184,5 +202,40 @@ mod tests {
         );
         assert_eq!(recording.loose, ["UMD_DATA.BIN"]);
         assert!(!active());
+    }
+
+    /// Reads in any order merge to exactly the bytes they cover: compared with a bitmap.
+    #[test]
+    fn merging_matches_a_bitmap_for_reads_in_any_order() {
+        let mut state = 0x2545_f491_4f6c_dd1d_u64;
+        let mut next = move |n: u64| {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state % n
+        };
+        start(Path::new("/src"));
+        let mut covered = vec![false; 600];
+        for _ in 0..400 {
+            let (offset, len) = (next(560), 1 + next(30));
+            note("/src/x.wad", 600, offset, len);
+            for at in offset..(offset + len).min(600) {
+                covered[at as usize] = true;
+            }
+        }
+        let recording = stop().expect("was recording");
+        let mut from_ranges = vec![false; 600];
+        let mut last_end = None;
+        for &(offset, len) in &recording.files[0].ranges {
+            assert!(
+                last_end.is_none_or(|end| offset > end),
+                "ranges touch or overlap"
+            );
+            last_end = Some(offset + len);
+            for at in offset..offset + len {
+                from_ranges[at as usize] = true;
+            }
+        }
+        assert_eq!(from_ranges, covered);
     }
 }

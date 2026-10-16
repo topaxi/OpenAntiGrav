@@ -102,6 +102,14 @@ pub fn offer(source: &str) -> Result<Offer> {
     let teams = catalogue::raceable_teams(archives, title.race, catalogue::all_teams(&documents))
         .into_iter()
         .map(|team| team.id)
+        // A guest roster's craft are flown with a hull variant (`oag_title::TeamVariants`) that
+        // `RaceParams` cannot carry yet, so a server cannot offer them.
+        .filter(|id| {
+            !title
+                .race
+                .guest_roster
+                .is_some_and(|guest| guest.offered && guest.variants.teams.contains(&id.as_str()))
+        })
         .collect();
     // A title that has not listed its ladder (`speed_classes: None`) is offered the ordinary
     // four, the rungs every title's `handlingstats.xml` carries.
@@ -310,8 +318,8 @@ pub struct Report {
     pub gaps: Vec<String>,
 }
 
-/// Extracts what the races `source` offers read, into `out`, and checks the result by loading
-/// the same races from it.
+/// Extracts what the races `races` names read of `source` (`oag-server extract` passes [`plan`]),
+/// into `out`, and checks the result by loading the same races from it.
 ///
 /// # Errors
 ///
@@ -321,6 +329,7 @@ pub fn extract(
     source: &str,
     out: &Path,
     build: &str,
+    races: &dyn Fn(&Offer) -> Vec<Planned>,
     mut progress: impl FnMut(&str),
 ) -> Result<Report> {
     if out.join(MANIFEST).exists() {
@@ -340,9 +349,20 @@ pub fn extract(
             offer.teams.len(),
             offer.classes
         ));
-        let plan = plan(&offer);
+        let plan = races(&offer);
         progress(&format!("loading {} races", plan.len()));
+        let mut widest = 0;
         let outcomes = run(source, &plan, |o| {
+            if let Some((archive, len)) = oag_assets::record::largest_range()
+                && len > widest.max(64 << 20)
+            {
+                widest = len;
+                progress(&format!(
+                    "  WIDE {o} read {} MiB of {archive} in one range",
+                    len >> 20,
+                    o = o.label
+                ));
+            }
             progress(&format!(
                 "  {} {}",
                 if o.result.is_ok() { "ok " } else { "ERR" },
@@ -391,7 +411,7 @@ pub fn extract(
     std::fs::write(out.join(MANIFEST), manifest.to_text())?;
 
     let extraction = out.to_string_lossy().into_owned();
-    let planned = plan(&offered);
+    let planned = races(&offered);
     progress("checking the extraction");
     let again = run(&extraction, &planned, |_| {});
     let mut gaps: Vec<String> = oag_assets::record::take_misses()

@@ -42,11 +42,17 @@ pub fn run(args: &Args) -> Result<()> {
             );
         let out = args.out.join(&stem);
         println!("extracting {source} to {}", out.display());
-        let report = oag_net::extract::extract(source, &out, oag_net::BUILD_VERSION, |line| {
-            if args.verbose || !line.starts_with("  ") {
-                println!("{line}");
-            }
-        })?;
+        let report = oag_net::extract::extract(
+            source,
+            &out,
+            oag_net::BUILD_VERSION,
+            &oag_net::extract::plan,
+            |line| {
+                if args.verbose || !line.starts_with("  ") {
+                    println!("{line}");
+                }
+            },
+        )?;
         let kept: u64 = report.manifest.files.iter().map(|f| f.kept).sum();
         let whole: u64 = report.manifest.files.iter().map(|f| f.len).sum();
         let size: u64 = report
