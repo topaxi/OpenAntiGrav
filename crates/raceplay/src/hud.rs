@@ -291,7 +291,11 @@ pub(super) fn load_hud(
     // that will not resolve is reported by `hud_font` and draws in the 5x7 set.
     let skin_font = match skin.and_then(|skin| skin.font_role) {
         Some(role) => {
-            let copies = slot_copies(archives, language_plugins, role);
+            let copies = oag_ui::language::load::definition_copies_with_font(
+                archives,
+                language_plugins,
+                role,
+            );
             let preferred = chosen.and_then(|c| copies.iter().find(|l| l.plugin == c.plugin));
             hud_font(archives, &copies, preferred, role, report)
         }
@@ -333,31 +337,6 @@ pub(super) fn load_hud(
         split_columns,
         split_hud,
     }
-}
-
-/// The language plugins' definition copies that fill the font slot `role`, every copy of every
-/// plugin rather than the first one `load_languages` reads.
-///
-/// HD ships each plugin's `definition.xml` in `DATA02` and again in `DATA03`, and only
-/// `DATA03`'s copy carries the retro skins' `2097HUD` and `wo3HUD` slots
-/// (`docs/formats/hd-frontend.md`); the first-copy read has no such slot, so the skin's face
-/// would be drawn in 5x7. Used for a skin's slot alone, so no other font or string moves.
-fn slot_copies(
-    archives: &mut oag_assets::Archives,
-    plugins: &[&str],
-    role: &str,
-) -> Vec<oag_ui::language::Language> {
-    let mut copies = Vec::new();
-    for plugin in plugins {
-        let name = oag_pulse::names::language_definition(plugin);
-        for (_, blob) in archives.read_every_name(&name) {
-            let language = oag_ui::xml::expand(&blob)
-                .ok()
-                .and_then(|xml| oag_ui::language::Language::from_definition(plugin, &xml));
-            copies.extend(language.filter(|language| language.font(role).is_some()));
-        }
-    }
-    copies
 }
 
 /// This project's split-screen layout file for a race of `views` views, cut for

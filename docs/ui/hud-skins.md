@@ -436,7 +436,7 @@ on Pulse, Pure and 2048 (`Definition::drop_unavailable_hud_style`).
 `oag_hud::Font::Skin`, `Frame::skin_text`, `Assets::skin_font` and a fourth overlay pass carry
 it. The face is the language definition's slot of that name: **HD ships each plugin's
 `definition.xml` twice and only `DATA03`'s copy has the `2097HUD`/`wo3HUD` slots**, so the skin's
-face is resolved over every copy (`slot_copies`); the first-copy read the rest of the HUD uses
+face is resolved over every copy (`oag_ui::language::load::definition_copies_with_font`); the first-copy read the rest of the HUD uses
 finds none and draws 5x7. Faces: HD 2097 1024x1024 line 70, WO3 line 68; Omega's are 2x (138 for
 WO3) and take the same `font_texel_scale` as its other HUD faces. `<Font>` declarations inside
 the split files are not read (the slot is the source).
