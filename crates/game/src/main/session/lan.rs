@@ -92,7 +92,7 @@ impl LanFacts {
 pub(crate) const HOSTS_SHOWN: usize = 16;
 
 /// Who this machine says it is: the login name, else "player". **Chosen.**
-fn player_name() -> String {
+pub(super) fn player_name() -> String {
     std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .ok()

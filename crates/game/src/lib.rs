@@ -64,6 +64,7 @@ pub mod music_state;
 pub mod net_play;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod online;
+pub mod online_screen;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

@@ -458,6 +458,7 @@ impl Session {
                 // screen now, and it has not been drawn once yet.
                 break;
             }
+            self.poll_online();
             match &mut self.stage {
                 // Stepped in the tick loop with everything else, so the wave's
                 // heartbeat runs at the simulation's fixed 60 Hz rather than at
@@ -547,6 +548,7 @@ impl Session {
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
                     self.sync_lan();
+                    self.sync_online();
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
@@ -593,7 +595,11 @@ impl Session {
                     // LAN's lobby and host list take the tick whole too, except while the typed
                     // address keyboard is over them: that goes through the prompt below.
                     if stage.lan.is_some() && stage.prompt.is_none() {
-                        self.tick_lan(&grid);
+                        if self.online.is_some() {
+                            self.tick_online(&grid);
+                        } else {
+                            self.tick_lan(&grid);
+                        }
                         if !matches!(self.stage, Stage::Menu(_)) {
                             break;
                         }

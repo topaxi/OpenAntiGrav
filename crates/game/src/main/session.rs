@@ -71,6 +71,12 @@ mod join;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "session/lan.rs"]
 mod lan;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "session/online.rs"]
+mod online;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/online_web.rs"]
+mod online;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/lan_web.rs"]
 mod lan;
@@ -684,6 +690,9 @@ pub(crate) struct Session {
     /// LAN play, from HOST GAME or JOIN GAME until the menus reopen after the race
     /// (`session::lan`). It owns the in-process host and the connection while they run.
     pub(crate) lan: Option<lan::Lan>,
+    /// Online play, from the ONLINE row until the player leaves the ONLINE page
+    /// (`session::online`). It owns the lobby connection through the race.
+    pub(crate) online: Option<online::Online>,
     /// The ship this machine flies in a LAN race: its own pick, sent in the hello.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code, reason = "LAN play is native only"))]
     pub(crate) lan_team: String,

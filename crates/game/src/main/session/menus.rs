@@ -559,6 +559,8 @@ impl Session {
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),
             )));
+        // An online race that ended lands back in its room.
+        self.online_menus_opened();
         Ok(())
     }
 
@@ -684,8 +686,10 @@ impl Session {
             // The LAN page's two rows (`session::lan`).
             menu::MenuEvent::Fired(menu::Action::HostLan) => self.open_lan_host(),
             menu::MenuEvent::Fired(menu::Action::JoinLan) => self.open_lan_join(),
-            // Never fired: the menu refuses the confirm (`Menu::is_disabled`).
-            menu::MenuEvent::Fired(menu::Action::ComingLater) => {}
+            // The MULTIPLAYER page's ONLINE row and the ONLINE page's two (`session::online`).
+            menu::MenuEvent::Fired(menu::Action::OpenOnline) => self.open_online(),
+            menu::MenuEvent::Fired(menu::Action::OnlineCreate) => self.open_online_create(),
+            menu::MenuEvent::Fired(menu::Action::OnlineJoin) => self.open_online_join(),
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for
             // `LaunchRace` above. `Self::launch_remix` builds `race::Options`
@@ -908,6 +912,16 @@ impl Session {
     /// alike. Neither builds `self.race_options` here: by the time either
     /// calls this, it is already exactly what should load.
     pub(crate) fn finish_launch(&mut self) {
+        // CREATE GAME's RACE page: the choices become a room on the online lobby.
+        if self.online_creating() {
+            self.open_online_room_from_settings();
+            return;
+        }
+        // JOIN GAME's Ship Select: the pick is made, the room list is next.
+        if self.online_picking_ship() {
+            self.open_online_list();
+            return;
+        }
         // HOST GAME's RACE page: the race is the lobby's to start.
         if self.lan_hosting_settings() {
             self.open_lan_lobby();

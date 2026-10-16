@@ -1615,7 +1615,7 @@ loads and ignores them).
 
 | Title | The row | Words | Authored by the original? |
 | --- | --- | --- | --- |
-| Pulse (both pressings) | between RACEBOX/REMIX and OPTIONS, where the PSP's `FE_MP` stands (`Title::main_menu`, `OriginalRow::builds`) | `MULTIPLAYER & SHARING`, line `Race online or over Ad Hoc, and share data`: the PSP disc's own `FE_MP` and `FE_HELP_MP` (`oag_title::MainMenu::multiplayer`; `the_multiplayer_rows_words_are_the_psp_discs_own`) | **PSP: yes**, an online and ad-hoc flow (`Multiplayer_Definition.xml`: `Create Single Race`, `Create Tournament`, `Create Time Trial`, `Join Game`) that this build does not have; the page behind our row has LAN (HOST GAME and JOIN GAME, `docs/networking/README.md`) and ONLINE (greyed) for it. **PS2: no such row**, it authors `FE_RACE_CAM_SS`/`_SSH` instead (`pulses_ps2_main_menu_has_split_rows_that_multiplayer_replaces`); the PSP's design serves both (the maintainer's rule: Pulse's invented parts are shared) |
+| Pulse (both pressings) | between RACEBOX/REMIX and OPTIONS, where the PSP's `FE_MP` stands (`Title::main_menu`, `OriginalRow::builds`) | `MULTIPLAYER & SHARING`, line `Race online or over Ad Hoc, and share data`: the PSP disc's own `FE_MP` and `FE_HELP_MP` (`oag_title::MainMenu::multiplayer`; `the_multiplayer_rows_words_are_the_psp_discs_own`) | **PSP: yes**, an online and ad-hoc flow (`Multiplayer_Definition.xml`: `Create Single Race`, `Create Tournament`, `Create Time Trial`, `Join Game`) that this build does not have; the page behind our row has LAN (HOST GAME and JOIN GAME, `docs/networking/README.md`) and ONLINE (the lobby flow of `docs/networking/online-lobby.md`) for it. **PS2: no such row**, it authors `FE_RACE_CAM_SS`/`_SSH` instead (`pulses_ps2_main_menu_has_split_rows_that_multiplayer_replaces`); the PSP's design serves both (the maintainer's rule: Pulse's invented parts are shared) |
 | Pure | right after `Single Player`, where its `Multiplayer` row stands | `MULTIPLAYER` (the disc's word is ours too) | **Yes**, a row (`docs/ui/menus-original.md`) |
 | HD, Omega | right after RACEBOX, from the built-in extras (`assets/mods/oag-extras/menu.toml`, `only_if_missing`); their `FE_ONLINE` tab builds nothing, so the strip keeps its five tabs | `MULTIPLAYER`, ours | `FE_ONLINE` is the online tab; local split was a race-box pair (`NumberOfPlayers`, `SplitScreen`, read from `racebox_definition.xml`, **checked, no longer used**: the head count is the join screen's and the cut the layout screen's) |
 | 2048 | a third tile under RACEBOX and REMIX on `GameModeChoice` (`Launch::Multiplayer`, `EXTRA_TILES[2]`, `(16, 342)`, **chosen**) | `MULTIPLAYER`, ours | Not authored; **checked against Omega**, which shares the extras row: **ported**, same page and flow |
@@ -1625,11 +1625,9 @@ with the rows gone it matters nowhere here.
 
 **The flow** (`oag_game::main::session::multiplayer`):
 
-1. **MULTIPLAYER page** (`assets/ui/menu.toml`): `LOCAL MULTIPLAYER`; `LAN` and `ONLINE` are
-   `Action::ComingLater` rows: dimmed, **focusable** (the menus' convention: a disabled row is
-   selectable and inert, `menu/pointer.rs`) so the line under them reads `Coming later`, and
-   refusing the confirm and the click with the decline cue. "Greyed, not selectable" is
-   therefore read as *not activatable*: a row the cursor skips could never show its line.
+1. **MULTIPLAYER page** (`assets/ui/menu.toml`): `LOCAL MULTIPLAYER`, `LAN` (its own page) and
+   `ONLINE` (connects to a lobby and opens the ONLINE page, `session::online`; it was an inert
+   `Coming later` row until 2026-10-16).
 2. **Join** (`session::join`): each device presses to take a seat, **confirm or START** (HD's
    `FE_GUEST_JOIN`, "PLAYER 2 PRESS START TO JOIN", asks for START; on Omega the same id says
    OPTIONS, which is a pad's Start). A seated device's START begins, and **START needs two
@@ -1699,7 +1697,7 @@ screen**, and **Pulse PSP EU, PS2 Pulse EU, Pure EU and Omega through the flow t
 Ship Select to walk).
 
 - **Pulse PSP EU, the whole flow**: main menu (`MULTIPLAYER & SHARING` between REMIX and OPTIONS, its authored help under
-  it), the page (LOCAL, LAN and ONLINE dimmed, `Coming later` under LAN), join (pad a and pad b, START of pad c joins
+  it), the page (LOCAL, LAN and ONLINE then still dimmed), join (pad a and pad b, START of pad c joins
   a third and its circle gives the seat up), layout, RACE page, MODE changed to Single Race, Track Select, the shared
   two-person Ship Select, a two-view race. The pause's circle left it for the menus, and **a second round
   came up with both pads already seated, the layout and the Single Race mode remembered**. A race flown by `--autopilot`

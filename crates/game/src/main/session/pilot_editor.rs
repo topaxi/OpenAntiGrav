@@ -534,6 +534,10 @@ impl Session {
             self.lan_address_entered(&finished.text);
             return;
         }
+        if let Purpose::Online(field) = finished.purpose {
+            self.online_field_entered(field, &finished.text);
+            return;
+        }
         let Some(dir) = pilots::directory() else {
             error!("no config directory on this platform, so nothing can be written");
             return;
@@ -578,7 +582,7 @@ impl Session {
                 // better to land on than the top.
                 self.reload_pilot_roster(None);
             }
-            Purpose::LanAddress => {}
+            Purpose::LanAddress | Purpose::Online(_) => {}
         }
     }
 
@@ -715,6 +719,14 @@ impl Session {
                 let note = rename_note(&text, &from, roster, strings);
                 prompt.set_note(note);
             }
+        }
+        // A certificate is 64 digits and the line shows fewer: say how many are typed and
+        // what the last ones are, so a player can check the end against the server's.
+        if prompt.purpose == Purpose::Online(crate::overlay::OnlineField::Hash)
+            && let Some(text) = prompt.typed_text()
+        {
+            let tail: String = text.chars().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect();
+            prompt.set_note(Some(format!("{}/64 ...{}", text.chars().count(), tail.to_uppercase())));
         }
         // The pad first, then the pointer, and the first to finish wins:
         // both are edges, so the other cannot fire again next tick.

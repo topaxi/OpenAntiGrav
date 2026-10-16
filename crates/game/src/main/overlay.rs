@@ -35,6 +35,19 @@ pub(crate) enum Purpose {
     /// Ask the LAN host list's browser to look at the address typed
     /// (`session::lan`).
     LanAddress,
+    /// One answer of the online connect step (`session::online`).
+    Online(OnlineField),
+}
+
+/// Which text the online connect step is asking for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OnlineField {
+    /// `host:port`.
+    Address,
+    /// The certificate's 64 hex digits.
+    Hash,
+    /// The name to go by.
+    Name,
 }
 
 /// Which text-entry or confirm model is on screen.

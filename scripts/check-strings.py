@@ -114,6 +114,7 @@ STRING_CONSUMERS = [
     "crates/game/src/mods.rs",
     "crates/game/src/pause.rs",
     "crates/game/src/main/session/multiplayer.rs",
+    "crates/game/src/main/session/online.rs",
 ]
 
 ID_LITERAL = re.compile(r'"(OAG_[A-Z0-9_]+)"')

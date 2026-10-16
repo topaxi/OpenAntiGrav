@@ -73,7 +73,36 @@ OAG_MP_LOCAL = { text = "MULTIJOUEUR LOCAL", human = false }
 OAG_MP_LOCAL_SUBTITLE = { text = "Jusqu'à huit joueurs sur cette machine, sur un écran ou dans plusieurs fenêtres", human = false }
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "EN LIGNE", human = false }
-OAG_MP_COMING_LATER = { text = "Bientôt disponible", human = false }
+OAG_MP_ONLINE_SUBTITLE = { text = "Courir sur Internet via un salon en ligne", human = false }
+OAG_ONLINE_PAGE_TITLE = { text = "EN LIGNE", human = false }
+OAG_ONLINE_CREATE = { text = "CRÉER UNE PARTIE", human = false }
+OAG_ONLINE_CREATE_SUBTITLE = { text = "Choisir la course, puis attendre les autres", human = false }
+OAG_ONLINE_JOIN = { text = "REJOINDRE UNE PARTIE", human = false }
+OAG_ONLINE_JOIN_SUBTITLE = { text = "Choisir une salle du salon", human = false }
+OAG_ONLINE_ADDRESS_TITLE = { text = "ADRESSE DU SALON", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "L'ADRESSE DU SERVEUR, p. ex. race.example.org", human = false }
+OAG_ONLINE_HASH_TITLE = { text = "CERTIFICAT DU SALON", human = false }
+OAG_ONLINE_HASH_HINT = { text = "LES 64 CHIFFRES DONNÉS PAR LE PROPRIÉTAIRE DU SERVEUR", human = false }
+OAG_ONLINE_NAME_TITLE = { text = "VOTRE NOM", human = false }
+OAG_ONLINE_NAME_HINT = { text = "COMMENT LES AUTRES VOUS VOIENT", human = false }
+OAG_ONLINE_CONNECTING = { text = "CONNEXION...", human = false }
+OAG_ONLINE_FAILED = { text = "CONNEXION IMPOSSIBLE", human = false }
+OAG_ONLINE_LOST = { text = "LE SALON S'EST FERMÉ", human = false }
+OAG_ONLINE_LIST_TITLE = { text = "PARTIES EN LIGNE", human = false }
+OAG_ONLINE_LIST_HINT = { text = "CHOISISSEZ UNE PARTIE OU CRÉEZ-EN UNE", human = false }
+OAG_ONLINE_CREATE_ROW = { text = "CRÉER UNE PARTIE", human = false }
+OAG_ONLINE_DEFAULT_TRACK = { text = "CIRCUIT PAR DÉFAUT", human = false }
+OAG_ONLINE_ROW_CLOSED = { text = "IMPOSSIBLE À REJOINDRE : PLEINE, COMMENCÉE, OU AUTRE TITRE, VERSION OU MODS", human = false }
+OAG_ONLINE_ROOM_TITLE = { text = "SALON DE LA PARTIE", human = false }
+OAG_ONLINE_ROOM_HINT = { text = "L'HÔTE LANCE LA COURSE", human = false }
+OAG_ONLINE_ROOM_HINT_OWNER = { text = "APPUYEZ SUR START QUAND TOUT LE MONDE EST PRÊT", human = false }
+OAG_ONLINE_HOST = { text = "HÔTE", human = false }
+OAG_ONLINE_READY = { text = "PRÊT", human = false }
+OAG_ONLINE_PICKING = { text = "CHOISIT", human = false }
+OAG_ONLINE_QUEUED = { text = "UNE AUTRE PARTIE COURT : VOUS ÊTES N° %d DANS LA FILE", human = false }
+OAG_ONLINE_COUNTDOWN = { text = "LA COURSE COMMENCE DANS %d", human = false }
+OAG_ONLINE_RACING = { text = "LA COURSE VA COMMENCER", human = false }
+OAG_ONLINE_MODE_NO_WEAPONS = { text = "Les armes sont désactivées en course en ligne", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Héberger une course sur votre réseau ou en rejoindre une", human = false }
 OAG_LAN_HOST = { text = "HÉBERGER", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choisir la course, puis attendre les autres", human = false }
