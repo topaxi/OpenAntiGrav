@@ -41,6 +41,98 @@ pub(super) fn lan(page: &str) -> Option<(bool, usize, usize)> {
     Some((lobby, people.min(oag_gameplay::MAX_PLAYERS), focus))
 }
 
+/// What `online-room[:N]` or `online-list[:N[:K]]` asks for, as [`lan`] does for LAN: whether
+/// it is the room, the people in it or the rooms listed, and the row the cursor is on.
+#[must_use]
+pub(super) fn online(page: &str) -> Option<(bool, usize, usize)> {
+    let (room, rest) = if let Some(rest) = page.strip_prefix("online-room") {
+        (true, rest)
+    } else {
+        (false, page.strip_prefix("online-list")?)
+    };
+    if rest.is_empty() {
+        return Some((room, 2, 0));
+    }
+    let mut parts = rest.strip_prefix(':')?.split(':');
+    let people = parts.next()?.parse::<usize>().ok()?;
+    let focus = parts.next().map_or(Some(0), |k| k.parse::<usize>().ok())?;
+    Some((room, people.min(oag_gameplay::MAX_PLAYERS), focus))
+}
+
+/// The online lobby's room (`people` in it, the first the host, the second still picking) or
+/// its list of `people` rooms (the second one closed), drawn from the same fillers as the live
+/// screens (`session::online`); the names are made up.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the facts a still needs, each a separate thing the live screen has in hand"
+)]
+pub(super) fn capture_online(
+    room: bool,
+    people: usize,
+    focus: usize,
+    title: &str,
+    strings: &oag_ui::language::StringTable,
+    backdrop: Option<oag_ui::menu::Picture>,
+    skin: &oag_ui::menu::Skin,
+    frame: &oag_ui::menu::Frame,
+    footer: (
+        Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
+        Option<&oag_ui_screens::campaign::footer::TickerLayout>,
+        &oag_ui::font::Atlas,
+    ),
+) -> (Vec<oag_ui::frontend::Draw>, TickerClip) {
+    use oag_net::wire::online::{Member, Phase, RoomInfo, RoomSettings, Snapshot};
+    const NAMES: [&str; 8] = ["ADA", "BOB", "CYD", "DEE", "EVE", "FAY", "GUS", "HAL"];
+    let settings = RoomSettings {
+        title: title.into(),
+        track: String::new(),
+        class: "venom".into(),
+        mode: "single_race".into(),
+        max_players: 8,
+        opponents: false,
+        laps: 0,
+    };
+    let screen = if room {
+        let mut screen = Join::new(Labels::read_online_room(strings), oag_gameplay::MAX_PLAYERS);
+        let snapshot = Snapshot {
+            id: 1,
+            settings,
+            members: (0..people)
+                .map(|n| Member {
+                    name: NAMES[n].into(),
+                    team: String::new(),
+                    ready: n != 1,
+                    owner: n == 0,
+                })
+                .collect(),
+            phase: Phase::Open,
+            note: String::new(),
+        };
+        crate::online_screen::fill_room(&mut screen, &snapshot, true, strings);
+        screen
+    } else {
+        let mut screen = Join::new(Labels::read_online_list(strings), 16).as_list();
+        let rooms: Vec<RoomInfo> = (0..people)
+            .map(|n| RoomInfo {
+                id: u32::try_from(n).unwrap_or(0) + 1,
+                owner: NAMES[n].into(),
+                settings: settings.clone(),
+                members: 1 + u8::try_from(n % 4).unwrap_or(0),
+                joinable: n != 1,
+            })
+            .collect();
+        crate::online_screen::fill_list(&mut screen, &rooms, strings, &|_| None);
+        for _ in 0..=focus {
+            screen.step(1);
+        }
+        screen
+    };
+    let mut list = oag_ui_screens::join::draw_list(&screen, skin, frame, backdrop, false).flatten();
+    let (legend, ticker, font) = footer;
+    let clip = menu_page::picker_footer(&mut list, legend, ticker, strings, font);
+    (list, clip)
+}
+
 /// LAN's lobby with `people` waiting (the host first) or its host list with `people` hosts,
 /// drawn like the live screens (`session::lan`); the names are made up, the rest is the
 /// live screen's own.

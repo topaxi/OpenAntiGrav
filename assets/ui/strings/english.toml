@@ -77,7 +77,36 @@ OAG_MP_LOCAL = { text = "LOCAL MULTIPLAYER", human = false }
 OAG_MP_LOCAL_SUBTITLE = { text = "Up to eight people on this machine, on one screen or in several windows", human = false }
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
-OAG_MP_COMING_LATER = { text = "Coming later", human = false }
+OAG_MP_ONLINE_SUBTITLE = { text = "Race people over the internet on an online lobby", human = false }
+OAG_ONLINE_PAGE_TITLE = { text = "ONLINE", human = false }
+OAG_ONLINE_CREATE = { text = "CREATE GAME", human = false }
+OAG_ONLINE_CREATE_SUBTITLE = { text = "Choose the race, then wait for the others to join", human = false }
+OAG_ONLINE_JOIN = { text = "JOIN GAME", human = false }
+OAG_ONLINE_JOIN_SUBTITLE = { text = "Pick a room on the lobby", human = false }
+OAG_ONLINE_ADDRESS_TITLE = { text = "LOBBY ADDRESS", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "THE SERVER'S ADDRESS, e.g. race.example.org", human = false }
+OAG_ONLINE_HASH_TITLE = { text = "LOBBY CERTIFICATE", human = false }
+OAG_ONLINE_HASH_HINT = { text = "THE 64 DIGITS THE SERVER'S OWNER GIVES YOU", human = false }
+OAG_ONLINE_NAME_TITLE = { text = "YOUR NAME", human = false }
+OAG_ONLINE_NAME_HINT = { text = "HOW THE OTHER PLAYERS SEE YOU", human = false }
+OAG_ONLINE_CONNECTING = { text = "CONNECTING...", human = false }
+OAG_ONLINE_FAILED = { text = "COULD NOT CONNECT", human = false }
+OAG_ONLINE_LOST = { text = "THE LOBBY CLOSED", human = false }
+OAG_ONLINE_LIST_TITLE = { text = "ONLINE GAMES", human = false }
+OAG_ONLINE_LIST_HINT = { text = "CHOOSE A GAME TO JOIN, OR MAKE ONE", human = false }
+OAG_ONLINE_CREATE_ROW = { text = "CREATE A GAME", human = false }
+OAG_ONLINE_DEFAULT_TRACK = { text = "DEFAULT CIRCUIT", human = false }
+OAG_ONLINE_ROW_CLOSED = { text = "NOT JOINABLE: FULL, STARTED, OR NOT YOUR TITLE, BUILD OR MODS", human = false }
+OAG_ONLINE_ROOM_TITLE = { text = "GAME LOBBY", human = false }
+OAG_ONLINE_ROOM_HINT = { text = "THE HOST STARTS THE RACE", human = false }
+OAG_ONLINE_ROOM_HINT_OWNER = { text = "PRESS START WHEN EVERYONE IS READY", human = false }
+OAG_ONLINE_HOST = { text = "HOST", human = false }
+OAG_ONLINE_READY = { text = "READY", human = false }
+OAG_ONLINE_PICKING = { text = "PICKING", human = false }
+OAG_ONLINE_QUEUED = { text = "ANOTHER GAME IS RACING: YOU ARE NUMBER %d IN LINE", human = false }
+OAG_ONLINE_COUNTDOWN = { text = "THE RACE STARTS IN %d", human = false }
+OAG_ONLINE_RACING = { text = "THE RACE IS STARTING", human = false }
+OAG_ONLINE_MODE_NO_WEAPONS = { text = "Weapons are off in an online race", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Host a race on your network, or join one", human = false }
 OAG_LAN_HOST = { text = "HOST GAME", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choose the race, then wait for the others to join", human = false }

@@ -62,11 +62,13 @@ use serde::{Deserialize, Serialize};
 use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
+mod online;
 mod race;
 mod render_profile;
 pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
+pub use online::Online;
 pub use race::{Race, Remix};
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
@@ -122,6 +124,9 @@ pub struct Settings {
     pub race: Race,
     #[serde(default)]
     pub remix: Remix,
+    /// The online lobby last connected to (`session::online`).
+    #[serde(default)]
+    pub online: Online,
     #[serde(default)]
     pub controls: Controls,
     #[serde(default)]

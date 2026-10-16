@@ -62,16 +62,20 @@ pub enum Action {
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
     /// `crate::main::session::multiplayer` in `oag-game`.
     OpenMultiplayerLocal,
-    /// A row for something this build does not have yet (the MULTIPLAYER page's LAN and
-    /// ONLINE). It is inert: drawn dimmed, focusable so its subtitle can say so, and refusing
-    /// the confirm with the decline cue ([`super::Menu::is_disabled`]).
-    ComingLater,
     /// The LAN page's HOST GAME row: the RACE page, Track Select and Ship Select, then a lobby
     /// that waits for the others - `crate::main::session::lan` in `oag-game`.
     HostLan,
     /// The LAN page's JOIN GAME row: the list of hosts discovery finds, and a typed address
     /// for the ones it does not.
     JoinLan,
+    /// The MULTIPLAYER page's ONLINE row: asks for the lobby's address, hash and a name,
+    /// connects, and opens the ONLINE page - `crate::main::session::online` in `oag-game`.
+    OpenOnline,
+    /// The ONLINE page's CREATE GAME row: the RACE page, Track Select and Ship Select, then
+    /// a room on the lobby.
+    OnlineCreate,
+    /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
+    OnlineJoin,
 }
 
 impl Action {
@@ -88,9 +92,22 @@ impl Action {
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
             Self::OpenMultiplayerLocal => "multiplayer_local",
-            Self::ComingLater => "coming_later",
             Self::HostLan => "lan_host",
             Self::JoinLan => "lan_join",
+            Self::OpenOnline => "online_open",
+            Self::OnlineCreate => "online_create",
+            Self::OnlineJoin => "online_join",
+        }
+    }
+
+    /// The page the game pushes itself once this action has done its work, which the
+    /// definition's reachability check counts as linked from the row: the ONLINE page opens
+    /// when the lobby has welcomed this machine.
+    #[must_use]
+    pub fn opens_page(self) -> Option<&'static str> {
+        match self {
+            Self::OpenOnline => Some("online"),
+            _ => None,
         }
     }
 
@@ -107,16 +124,18 @@ impl Action {
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
-            "coming_later" => Some(Self::ComingLater),
             "lan_host" => Some(Self::HostLan),
             "lan_join" => Some(Self::JoinLan),
+            "online_open" => Some(Self::OpenOnline),
+            "online_create" => Some(Self::OnlineCreate),
+            "online_join" => Some(Self::OnlineJoin),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 12] {
+    pub fn all() -> [Self; 14] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -127,9 +146,11 @@ impl Action {
             Self::DeletePilot,
             Self::OpenCampaign,
             Self::OpenMultiplayerLocal,
-            Self::ComingLater,
             Self::HostLan,
             Self::JoinLan,
+            Self::OpenOnline,
+            Self::OnlineCreate,
+            Self::OnlineJoin,
         ]
     }
 }

@@ -407,8 +407,17 @@ impl Definition {
                 continue;
             }
             for entry in &self.pages[page].entries {
-                if let Entry::Submenu { target, .. } = entry {
-                    stack.push(*target);
+                match entry {
+                    Entry::Submenu { target, .. } => stack.push(*target),
+                    // A page the game pushes itself once an action has done its work.
+                    Entry::Run { action, .. } => {
+                        if let Some(id) = action.opens_page()
+                            && let Some(at) = self.pages.iter().position(|page| page.id == id)
+                        {
+                            stack.push(at);
+                        }
+                    }
+                    _ => {}
                 }
             }
         }

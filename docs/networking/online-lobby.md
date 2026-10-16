@@ -544,8 +544,8 @@ From here the round trip is about 10 ms.
 
 ### Open
 
-- **No menu screens.** `--online` is a command-line path; Omega's order (ONLINE, CREATE or JOIN,
-  settings or list, team, lobby) is the plan for `oag-ui-screens`, with pointer support.
+- **Menu screens: landed** (part 8). Open there: owner-side editing of a room's settings, a
+  max-players choice, kick, and the sub-pages Omega has beyond the list.
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
@@ -771,6 +771,48 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
   ran on both (**ported**, with the table above as the ground truth); the track-stats fix concerns
   Pulse PSP's `FEData.wad` only (`track_stats::read` reads nothing on any other title,
   **checked, differs**).
+||||||| 9f3afc3b2
+
+
+## 8. The online menus (2026-10-16)
+
+**Ours, chosen, not measured** except where it says Omega's. Omega's order, with our login:
+MULTIPLAYER, ONLINE, a connect step, CREATE GAME or JOIN GAME, the settings (CREATE) or the room
+list (JOIN), team selection, the room. Code: `crates/game/src/main/session/online.rs` (the state
+machine, native only; `online_web.rs` is the browser's no-op), the rows in
+`crates/game/src/online_screen.rs` (shared with the stills), the screens
+`oag_ui_screens::join` in its list and lobby forms (the slot LAN uses, `stage.lan`, only one of
+the two is ever live), the pages in `assets/ui/menu.toml` (`online`).
+
+| Step | What the player sees | Notes |
+| --- | --- | --- |
+| ONLINE (MULTIPLAYER page) | three on-screen keyboards in turn: LOBBY ADDRESS, LOBBY CERTIFICATE, YOUR NAME | remembered in `settings.toml` `[online]` once the lobby welcomes, so the next visit is OK, OK, OK; the name starts as the login name |
+| connecting | CONNECTING... on the list screen with only BACK | the dial runs off the frame thread (`oag_thread::Task`) |
+| refused or unreachable | the address keyboard again, a line under the text | the server's own text, e.g. the refused build with both builds named; `Rejected` is read before the closing link so it is never lost to "the lobby closed" |
+| ONLINE page | CREATE GAME, JOIN GAME, BACK | pushed on the welcome; BACK drops the connection |
+| CREATE GAME | the RACE page, Track Select, Ship Select, then the room | Eliminator and Head to Head are dimmed (a network race holds weapons off, and Head to Head is two people in a room of up to eight); a stored one becomes a Single Race. Max players is 8, AI fill follows the RACE page |
+| JOIN GAME | Ship Select, then the list: owner left, title and head count right, the circuit, class and mode (the title's own circuit name) under the title while the cursor is on it | rows the server marks not joinable are dimmed with the reason; the empty row makes a room instead; the list is asked for again every second |
+| the room | one seat per person, `NAME (HOST)  READY` or `PICKING`, START RACE for the host, BACK leaves | the pick is the ready (sent once in the room, and again if an edit clears it); the line under the title is the room's note, then where the room is: the host's prompt, "number N in line" while another game races (`Phase::Queued`), the countdown |
+| the race | the ordinary network race (`Pending`, tick-0 check, `launch_race`) with the seat token | the lobby link is polled in every stage and kept open for the whole race |
+| after the race | the room again, with the room's note ("--max-ticks reached", a crashed child, ...) | `Session::online_menus_opened`, called as the menus reopen |
+
+**Notices** (all on screen, none only in the log): lobby unreachable or build refused (the
+connect keyboard, with the text), a join refused (room full, started, no such room: the line under
+the room list for five seconds), a refused START (not enough people, someone has not picked), the
+host kicked or the room gone (`Left { reason }`: a screen of its own with BACK), the lobby closing
+mid-flow (the same), the race child failing to come up (the room's note after the return).
+
+**Not in the menus:** the keyboard grid has no colon (it stays four rows), so a lobby on another
+port than 60000 is written into `[online] address` once; `--online` stays the headless
+command-line flow of part 5 (it does not open the screens).
+
+**Walked on 2026-10-16** (Pulse PSP EU, a debug build, `oag-server lobby` on localhost, two
+windowed `oag-game` clients each in its own Xvfb on lavapipe, driven by xdotool, mouse for the
+first screens and held keys after): connect (including the refused build, with both builds named),
+the hub, CREATE (RACE page, Track Select, Ship Select), JOIN (Ship Select, the list with the room
+and its circuit line, the room), the host's START, the hand-off, the race to `--max-ticks 300`,
+and both clients back in the room with "--max-ticks reached". Stills of the room and the list on
+Pulse and HD (`--menu-page online-room:3`, `online-list:3:0`): HD draws its own strip look.
 
 ## Sources
 

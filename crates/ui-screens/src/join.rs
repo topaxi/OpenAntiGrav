@@ -97,6 +97,34 @@ impl Labels {
     }
 }
 
+impl Labels {
+    /// The words of the online lobby's room list (the screen in its list form). The empty
+    /// row makes a room of one's own.
+    #[must_use]
+    pub fn read_online_list(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_ONLINE_LIST_TITLE", "ONLINE GAMES"),
+            hint: say("OAG_ONLINE_LIST_HINT", "CHOOSE A GAME TO JOIN, OR MAKE ONE"),
+            empty: say("OAG_ONLINE_CREATE_ROW", "CREATE A GAME"),
+            ..Self::read(strings)
+        }
+    }
+
+    /// The words of a room on the online lobby (the screen in its lobby form).
+    #[must_use]
+    pub fn read_online_room(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_ONLINE_ROOM_TITLE", "GAME LOBBY"),
+            hint: say("OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
+            empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            start: say("OAG_LAN_START", "START RACE"),
+            ..Self::read(strings)
+        }
+    }
+}
+
 /// One line of the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Row {

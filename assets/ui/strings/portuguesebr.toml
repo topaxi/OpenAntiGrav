@@ -33,7 +33,36 @@ OAG_MP_LOCAL = { text = "MULTIJOGADOR LOCAL", human = false }
 OAG_MP_LOCAL_SUBTITLE = { text = "Até oito pessoas neste computador, em uma tela ou em várias janelas", human = false }
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
-OAG_MP_COMING_LATER = { text = "Em breve", human = false }
+OAG_MP_ONLINE_SUBTITLE = { text = "Corra pela internet em um lobby online", human = false }
+OAG_ONLINE_PAGE_TITLE = { text = "ONLINE", human = false }
+OAG_ONLINE_CREATE = { text = "CRIAR JOGO", human = false }
+OAG_ONLINE_CREATE_SUBTITLE = { text = "Escolha a corrida e espere os outros entrarem", human = false }
+OAG_ONLINE_JOIN = { text = "ENTRAR EM JOGO", human = false }
+OAG_ONLINE_JOIN_SUBTITLE = { text = "Escolha uma sala do lobby", human = false }
+OAG_ONLINE_ADDRESS_TITLE = { text = "ENDEREÇO DO LOBBY", human = false }
+OAG_ONLINE_ADDRESS_HINT = { text = "O ENDEREÇO DO SERVIDOR, ex.: race.example.org", human = false }
+OAG_ONLINE_HASH_TITLE = { text = "CERTIFICADO DO LOBBY", human = false }
+OAG_ONLINE_HASH_HINT = { text = "OS 64 DÍGITOS DADOS PELO DONO DO SERVIDOR", human = false }
+OAG_ONLINE_NAME_TITLE = { text = "SEU NOME", human = false }
+OAG_ONLINE_NAME_HINT = { text = "COMO OS OUTROS JOGADORES VÃO VER VOCÊ", human = false }
+OAG_ONLINE_CONNECTING = { text = "CONECTANDO...", human = false }
+OAG_ONLINE_FAILED = { text = "NÃO FOI POSSÍVEL CONECTAR", human = false }
+OAG_ONLINE_LOST = { text = "O LOBBY FOI FECHADO", human = false }
+OAG_ONLINE_LIST_TITLE = { text = "JOGOS ONLINE", human = false }
+OAG_ONLINE_LIST_HINT = { text = "ESCOLHA UM JOGO OU CRIE UM", human = false }
+OAG_ONLINE_CREATE_ROW = { text = "CRIAR UM JOGO", human = false }
+OAG_ONLINE_DEFAULT_TRACK = { text = "CIRCUITO PADRÃO", human = false }
+OAG_ONLINE_ROW_CLOSED = { text = "NÃO É POSSÍVEL ENTRAR: CHEIA, INICIADA, OU OUTRO TÍTULO, VERSÃO OU MODS", human = false }
+OAG_ONLINE_ROOM_TITLE = { text = "LOBBY DO JOGO", human = false }
+OAG_ONLINE_ROOM_HINT = { text = "O ANFITRIÃO INICIA A CORRIDA", human = false }
+OAG_ONLINE_ROOM_HINT_OWNER = { text = "APERTE START QUANDO TODOS ESTIVEREM PRONTOS", human = false }
+OAG_ONLINE_HOST = { text = "ANFITRIÃO", human = false }
+OAG_ONLINE_READY = { text = "PRONTO", human = false }
+OAG_ONLINE_PICKING = { text = "ESCOLHENDO", human = false }
+OAG_ONLINE_QUEUED = { text = "OUTRO JOGO ESTÁ CORRENDO: VOCÊ É O Nº %d NA FILA", human = false }
+OAG_ONLINE_COUNTDOWN = { text = "A CORRIDA COMEÇA EM %d", human = false }
+OAG_ONLINE_RACING = { text = "A CORRIDA ESTÁ COMEÇANDO", human = false }
+OAG_ONLINE_MODE_NO_WEAPONS = { text = "As armas ficam desligadas em corridas online", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Hospede uma corrida na sua rede ou entre em uma", human = false }
 OAG_LAN_HOST = { text = "CRIAR JOGO", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Escolha a corrida e espere os outros entrarem", human = false }

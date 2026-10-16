@@ -2,7 +2,7 @@
 categories: [gameplay]
 ---
 
-# The multiplayer menu flow: one MULTIPLAYER entry, local and LAN now, online greyed
+# The multiplayer menu flow: one MULTIPLAYER entry, local, LAN and online
 
 2026-10-14, planned with the maintainer. **Landed the same day (`mp-menu-flow`): steps 1 to 4 and 6 to 8**; step 5, seat
 assignment, **landed 2026-10-14 as `mp-seat-assign`** (`session::seat_assign`, between layout and settings). Replaces the per-title split
@@ -31,8 +31,7 @@ and SPLIT SCREEN rows) with one flow on every title.
 1. **MULTIPLAYER** on the main menu of all five titles, with the title's own row text where it
    authors one (Pulse `FE_MP`, Pure `MULTIPLAYER`), ours elsewhere. It replaces the split rows
    above.
-2. **Multiplayer page**: LOCAL MULTIPLAYER; LAN and ONLINE greyed, not selectable, help line
-   "Coming later" in every shipped language (`human = false`).
+2. **Multiplayer page**: LOCAL MULTIPLAYER; LAN and ONLINE (greyed with the help line "Coming later" until each landed: LAN 2026-10-14, ONLINE 2026-10-16).
 3. **Join**: each player presses on their device to take a seat, worded with the title's own
    join text where authored (`FE_GUEST_JOIN` on HD/Omega). Devices seated earlier **this
    session** are pre-seated if still connected; held in memory only, so a restart joins again.
@@ -69,7 +68,14 @@ The LAN row is a page with HOST GAME and JOIN GAME (`session::lan`, `docs/networ
 (the MODE row shows a network race is a Single Race), Track Select, Ship Select, then the LAN LOBBY (the join screen in its
 lobby form, the people waiting, START RACE); join: the host list (the same screen in its list form, one row per host
 discovery found, TYPE AN ADDRESS under them, a host on another title refused by name), then a waiting screen. The address
-keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One local person per machine, each person flies their own pick (Ship Select before the list; wire v1 changed in place), a hosted race is a Single Race, no race again**, and the list says per host whether it can be joined (chosen). ONLINE stays greyed.
+keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One local person per machine, each person flies their own pick (Ship Select before the list; wire v1 changed in place), a hosted race is a Single Race, no race again**, and the list says per host whether it can be joined (chosen). ONLINE landed 2026-10-16 (`online-lobby-menus`, below).
+
+## Online, landed (`online-lobby-menus`, 2026-10-16)
+
+The ONLINE row asks for the lobby's address, certificate hash and a name (remembered), connects, and opens
+an ONLINE page: CREATE GAME (RACE page, Track Select, Ship Select, the room) and JOIN GAME (Ship Select,
+the room list, the room), the race, and back to the room. Walk-through, notices and what is open:
+`docs/networking/online-lobby.md`, part 7 (`Action::ComingLater` is gone, ONLINE was its last row).
 
 ## Lanes
 

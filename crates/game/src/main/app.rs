@@ -586,6 +586,7 @@ impl App {
             seat_clicks: 0,
             multiplayer: false,
             lan: None,
+            online: None,
             lan_team: String::new(),
             lan_facts: None,
             pane_people: Vec::new(),

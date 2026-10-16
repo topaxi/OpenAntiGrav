@@ -555,7 +555,7 @@ driver flies the opponents (the original driver with several people is unread),
 pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot
 is `Controller::Remote` on every peer, the client's own included, because the
 controllers are hashed; which craft is this machine's is view-side
-(`Race::set_seat`). The menus' ONLINE row stays greyed (LAN is real, see [LAN play](#lan-play-2026-10-14) below). Start and focus loss
+(`Race::set_seat`). The menus' ONLINE row opens the online lobby flow ([online lobby](online-lobby.md#8-the-online-menus-2026-10-16); LAN is [LAN play](#lan-play-2026-10-14) below). Start and focus loss
 do not pause a network race, and it writes no record and no ghost (its inputs are
 predictions corrected by a server, under the server's settings).
 
