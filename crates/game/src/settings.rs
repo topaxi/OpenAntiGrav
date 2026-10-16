@@ -129,6 +129,9 @@ pub struct Settings {
     pub ai: Ai,
     #[serde(default)]
     pub log: Log,
+    /// Developer switches, read in debug builds only (see [`Dev`]).
+    #[serde(default, skip_serializing_if = "Dev::is_empty")]
+    pub dev: Dev,
     /// The language picked last time, by the XML's own English name
     /// (`English`, `French`).
     ///
@@ -147,6 +150,30 @@ pub struct Settings {
 /// Both keys are **absent until a player writes them**, and the rewrite
 /// [`load`] does leaves them absent: writing the resolved default path back
 /// would freeze it, and a later `$XDG_STATE_HOME` would stop applying.
+/// The `[dev]` table. **Ours, not the original's**, and read only when the build has
+/// `debug_assertions` on; a release build ignores every key but keeps the table in the file
+/// when it rewrites it, so moving between a dev and a release build loses nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dev {
+    /// Open every gate (circuits, craft variants, HUD Style skins) like `--unlock-all`.
+    /// **Absent means on in a debug build** and the game as shipped is untouched; write
+    /// `false` to test locked behaviour in a dev build.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unlock_everything: Option<bool>,
+}
+
+impl Dev {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Whether every gate is open: a debug build and `unlock_everything` not set to `false`.
+    #[must_use]
+    pub fn unlocks_everything(&self) -> bool {
+        cfg!(debug_assertions) && self.unlock_everything.unwrap_or(true)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Log {
     /// Absent: `$XDG_STATE_HOME/oag/logs/oag-game.log` (see `oag_log::path`).
