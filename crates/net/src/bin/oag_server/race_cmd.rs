@@ -65,6 +65,7 @@ fn race(args: &Args) -> Result<()> {
         join_timeout: Duration::from_secs(args.join_timeout),
         max_ticks: args.max_ticks.unwrap_or(Limits::default().max_ticks),
     };
+    watch_misses();
     let lobby_gone = lobby_watch();
     let ended = run_race(
         &mut host,
@@ -92,4 +93,20 @@ fn lobby_watch() -> Arc<AtomicBool> {
         flag.store(true, Ordering::Relaxed);
     });
     gone
+}
+
+/// A server running from an extraction answers a read it lacks with an error a reader may turn
+/// into an absent asset, which would make its race differ from the clients' silently. Say so,
+/// as it happens, on the log and on standard error (the lobby shows the room the child's last
+/// lines).
+fn watch_misses() {
+    std::thread::spawn(|| {
+        loop {
+            for miss in oag_assets::record::take_misses() {
+                eprintln!("warning: the extraction lacks a read the race made: {miss}");
+                log::warn!("the extraction lacks a read the race made: {miss}");
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    });
 }

@@ -24,6 +24,8 @@ use oag_net::wire::RaceParams;
 
 const LONG: usize = 1_800;
 const SHORT: usize = 300;
+/// The most ticks a one-lap race is flown to find its finish line (the longest lap is 4,000).
+const FINISH: usize = 6_000;
 
 fn work_dir(name: &str) -> PathBuf {
     let dir = oag_testdata::repo_root().join("target/oag-extract-ground-truth");
@@ -33,20 +35,33 @@ fn work_dir(name: &str) -> PathBuf {
     out
 }
 
-fn hashes(source: &str, params: &RaceParams, ticks: usize) -> Vec<u64> {
+/// The state hash after each tick of `params` flown from `source`: `ticks` of them, or, when
+/// `to_the_finish`, until every person has finished (their craft flown by the autopilot, which
+/// stands in for the clients) and a second more, at most `ticks`.
+fn hashes(source: &str, params: &RaceParams, ticks: usize, to_the_finish: bool) -> Vec<u64> {
     let (mut race, _) = oag_net::race::load(params, source).expect("the race loads");
+    if to_the_finish {
+        for slot in 0..usize::from(params.people) {
+            race.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
+        }
+        race.set_autopilot(true);
+    }
     let none = PlayerInputs::none();
-    (0..ticks)
-        .map(|_| {
-            race.tick_sim_only(&none);
-            race.sim.state_hash()
-        })
-        .collect()
+    let mut out = Vec::new();
+    let mut after = 0;
+    while out.len() < ticks && after < 60 {
+        race.tick_sim_only(&none);
+        out.push(race.sim.state_hash());
+        if to_the_finish && race.finished() {
+            after += 1;
+        }
+    }
+    out
 }
 
 /// The races compared: one person on the first circuit, and eight people with the title's first
 /// eight teams on the last .
-fn races(offer: &Offer) -> Vec<(Planned, usize)> {
+fn races(offer: &Offer) -> Vec<(Planned, usize, bool)> {
     let base = RaceParams {
         title: offer.title.to_string(),
         class: "VENOM".into(),
@@ -70,6 +85,21 @@ fn races(offer: &Offer) -> Vec<(Planned, usize)> {
                 },
             },
             LONG,
+            false,
+        ),
+        (
+            Planned {
+                label: "one person, one lap to the finish line".into(),
+                params: RaceParams {
+                    track: offer.tracks[0].clone(),
+                    seed: 13,
+                    people: 1,
+                    laps: 1,
+                    ..base.clone()
+                },
+            },
+            FINISH,
+            true,
         ),
         (
             Planned {
@@ -84,6 +114,7 @@ fn races(offer: &Offer) -> Vec<(Planned, usize)> {
                 },
             },
             SHORT,
+            false,
         ),
     ]
 }
@@ -100,17 +131,17 @@ fn check(source: &Path, name: &str) {
         &|offer| {
             races(offer)
                 .into_iter()
-                .map(|(planned, _)| planned)
+                .map(|(planned, _, _)| planned)
                 .collect()
         },
         |_| {},
     )
     .expect("extracts");
     assert!(report.gaps.is_empty(), "{name}: {:#?}", report.gaps);
-    assert_eq!(report.loaded, 2, "{name}: {:#?}", report.refused);
+    assert_eq!(report.loaded, 3, "{name}: {:#?}", report.refused);
     let offer = oag_net::extract::offer(&source).expect("offers");
     let extraction = out.display().to_string();
-    for (planned, ticks) in races(&offer) {
+    for (planned, ticks, to_the_finish) in races(&offer) {
         let params = planned.params;
         // One after the other, each on a thread with room for the race: a title's loaded race
         // is gigabytes resident, and six titles run at once.
@@ -118,7 +149,7 @@ fn check(source: &Path, name: &str) {
             let (at, params) = (at.to_string(), params.clone());
             std::thread::Builder::new()
                 .stack_size(64 << 20)
-                .spawn(move || hashes(&at, &params, ticks))
+                .spawn(move || hashes(&at, &params, ticks, to_the_finish))
                 .expect("spawns")
                 .join()
                 .expect("the race flies")
@@ -128,6 +159,11 @@ fn check(source: &Path, name: &str) {
         assert!(
             missed.is_empty(),
             "{name}: {}: reads the extraction could not answer: {missed:#?}",
+            planned.label
+        );
+        assert!(
+            !to_the_finish || from_source.len() < ticks,
+            "{name}: {}: no finish line in {ticks} ticks",
             planned.label
         );
         let first_difference = from_source

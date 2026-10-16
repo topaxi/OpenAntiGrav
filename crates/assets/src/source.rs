@@ -945,9 +945,12 @@ fn names(path: &str, candidate: &str) -> bool {
 
 /// Builds the specifier for one archive inside `source`.
 ///
+/// What a reader that opens an archive on its own (not through [`Archives`]) uses, so it reads a
+/// folder or a server extraction as it reads an image.
+///
 /// A directory is joined with a separator; anything else is treated as a disc
 /// image and joined with a colon, which is the form [`Archive::open`] takes.
-fn archive_spec(source: &str, relative: &str) -> String {
+pub fn archive_spec(source: &str, relative: &str) -> String {
     if std::path::Path::new(source).is_dir() {
         let trimmed = source.trim_end_matches(['/', '\\']);
         format!("{trimmed}/{relative}")
