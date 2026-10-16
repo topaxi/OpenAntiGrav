@@ -640,6 +640,28 @@ fn load_atlases(
     sheet
 }
 
+/// A HUD `<Mode3D>` model as a [`oag_mesh::mesh::Model`], with its picture.
+///
+/// A PS2 model embeds an empty texture block by design; its picture is the
+/// texture set in the entry before it. Only tried when every slot is empty, so
+/// a PSP model never reaches the directory-position rule.
+pub(super) fn build_model(
+    archives: &mut oag_assets::Archives,
+    src: &str,
+    blob: &[u8],
+) -> anyhow::Result<oag_mesh::mesh::Model> {
+    let model = oag_mesh::mesh::build(src, blob)?;
+    if !model.textures.is_empty()
+        && model.textures.iter().all(Option::is_none)
+        && let Some(external) = oag_livery::entry::ps2_texture_set(archives, src)
+    {
+        let mut rebuilt = oag_mesh::mesh::build_with_textures(src, blob, Some(&external))?;
+        rebuilt.keep_nearest();
+        return Ok(rebuilt);
+    }
+    Ok(model)
+}
+
 /// The lock-on reticle's and Pure's weapon icons' art, decoded out of the
 /// `<Mode3D>` models that carry them.
 ///
@@ -709,25 +731,13 @@ fn vex_model_art(
                 continue;
             }
         };
-        let mut model = match oag_mesh::mesh::build(src, &blob) {
+        let model = match build_model(archives, src, &blob) {
             Ok(model) => model,
             Err(why) => {
                 report.push(format!("HUD model {src} did not build ({why})"));
                 continue;
             }
         };
-        // A PS2 model embeds an empty texture block by design; its picture is
-        // the texture set in the entry before it. Only tried when every slot is
-        // empty, so a PSP model never reaches the directory-position rule.
-        if !model.textures.is_empty()
-            && model.textures.iter().all(Option::is_none)
-            && let Some(external) = oag_livery::entry::ps2_texture_set(archives, src)
-            && let Ok(mut rebuilt) =
-                oag_mesh::mesh::build_with_textures(src, &blob, Some(&external))
-        {
-            rebuilt.keep_nearest();
-            model = rebuilt;
-        }
         // One texture apiece, and the widget is what it draws. A model that
         // embeds none is reported rather than drawn untextured, which for a
         // white-on-nothing bracket would be an invisible quad.

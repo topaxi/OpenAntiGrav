@@ -29,7 +29,7 @@ pub(super) fn model(
         })
         .filter(|widget| !widget.src.is_empty())
         .and_then(|widget| match archives.read_name(&widget.src) {
-            Ok(blob) => match mesh::build(&widget.src, &blob) {
+            Ok(blob) => match crate::hud::build_model(archives, &widget.src, &blob) {
                 Ok(model) => {
                     report.push(format!(
                         "{}: {} triangle(s), radius {:.2} - the countdown's own Mode3D \
