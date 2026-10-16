@@ -423,6 +423,11 @@ impl Drawable {
     /// pushed so a draw before any [`Self::bind_slot`] (the prepass's depth half) has
     /// its immediates set; or nothing, leaving [`Self::bind_slot`] to bind each slot's
     /// group.
+    ///
+    /// **A pipeline must already be set**: the immediates are checked against the
+    /// current pipeline's layout, and a pass with none (the first drawable of a view's
+    /// pass) has a range of zero. A caller that sets its pipeline later uses
+    /// [`Self::bind_arrays`] and lets [`Self::bind_slot`] push the row.
     pub(super) fn bind_materials(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
@@ -432,6 +437,15 @@ impl Drawable {
             pass.set_bind_group(1, bindless.group(), &[]);
             pass.set_immediates(0, bindless.row(0));
             *last_bound = Some(0);
+        }
+    }
+
+    /// Binds the arrays only, with no immediates and so no pipeline needed:
+    /// [`Self::bind_slot`] pushes each draw's row once its pipeline is set. Leaves
+    /// `last_bound` as it was, which for a fresh draw is `None`.
+    pub(super) fn bind_arrays(&self, pass: &mut wgpu::RenderPass<'_>) {
+        if let Some(bindless) = &self.bindless {
+            pass.set_bind_group(1, bindless.group(), &[]);
         }
     }
 
