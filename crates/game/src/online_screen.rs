@@ -162,3 +162,17 @@ pub fn fill_room(screen: &mut Join, room: &Snapshot, owner: bool, strings: &Stri
 
 #[cfg(test)]
 mod tests;
+
+/// The team a room pick names: `picked` when there is one, else the title's default team as the
+/// RACE page's roster spells it (case aside), else the roster's first, else none.
+pub fn room_team(picked: Option<&str>, default: &str, roster: &[oag_ui::menu::Choice]) -> String {
+    if let Some(team) = picked {
+        return team.to_string();
+    }
+    roster
+        .iter()
+        .find(|choice| choice.value.eq_ignore_ascii_case(default))
+        .or_else(|| roster.first())
+        .map(|choice| choice.value.clone())
+        .unwrap_or_default()
+}

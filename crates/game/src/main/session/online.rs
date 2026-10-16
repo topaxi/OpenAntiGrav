@@ -352,6 +352,16 @@ impl Session {
         }
     }
 
+    /// The team a person goes into a room with: the settings' own, or - when a title with no
+    /// Ship Select does not offer the stored one (2048 has no `Assegai`) - the title's own
+    /// default, so a joiner who never saw a picker still has a pick to send as the ready.
+    fn online_team(&self, options: &oag_raceplay::Options) -> String {
+        let Some(shell) = self.shell.as_ref() else {
+            return options.team.clone().unwrap_or_default();
+        };
+        oag_game::online_screen::room_team(options.team.as_deref(), shell.title.race.team, &shell.teams)
+    }
+
     /// The create step's launch: the RACE page's choices become a room.
     pub(crate) fn open_online_room_from_settings(&mut self) {
         let Some(options) = self.race_options.clone() else {
@@ -374,7 +384,7 @@ impl Session {
             max_players: oag_net::wire::online::MAX_PLAYERS,
             opponents: options.opponents,
         };
-        let team = options.team.clone().unwrap_or_default();
+        let team = self.online_team(&options);
         let Some(online) = &mut self.online else {
             return;
         };
@@ -404,7 +414,7 @@ impl Session {
         let team = self
             .race_options
             .as_ref()
-            .and_then(|options| options.team.clone())
+            .map(|options| self.online_team(options))
             .unwrap_or_default();
         let Some(online) = &mut self.online else {
             return;

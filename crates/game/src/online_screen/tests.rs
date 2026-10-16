@@ -152,3 +152,23 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
     fill_room(&mut screen, &snapshot, true, &strings());
     assert_eq!(screen.labels().hint, "PRESS START WHEN EVERYONE IS READY");
 }
+
+#[test]
+fn a_room_pick_without_a_ship_select_falls_back_to_the_titles_own_team_not_to_nothing() {
+    let roster: Vec<oag_ui::menu::Choice> = ["qirex2048\\3", "feisar2048\\3", "auricom2048\\3"]
+        .iter()
+        .map(|id| oag_ui::menu::Choice::labelled(*id, *id))
+        .collect();
+    // The settings' stored team is not in 2048's roster, so the page left none picked.
+    assert_eq!(room_team(None, "Feisar2048\\3", &roster), "feisar2048\\3");
+    assert_eq!(
+        room_team(None, "nobody", &roster),
+        "qirex2048\\3",
+        "the first, as a last resort"
+    );
+    assert_eq!(
+        room_team(Some("auricom2048\\3"), "feisar2048\\3", &roster),
+        "auricom2048\\3"
+    );
+    assert_eq!(room_team(None, "x", &[]), "");
+}
