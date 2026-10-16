@@ -33,7 +33,7 @@ pub(super) fn read(
         "stats.xml"
     };
     let entry = format!(r"{directory}\{name}");
-    let spec = format!("{source}:{}", oag_pulse::archives::FEDATA);
+    let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
     let blob = oag_assets::Archive::open(&spec)
         .and_then(|mut archive| archive.read_name(&entry))
         .map_err(|e| report.push(format!("track stats: {entry} did not read ({e})")))

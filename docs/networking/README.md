@@ -459,8 +459,8 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
   (20 bytes a tick; **chosen**). The server derives press and release from the held
   stream itself (decision 2).
 - Datagrams down: per tick, the input the server applied to every person and the
-  state hash after the tick, the newest sixteen ticks (**chosen**; 28 bytes a tick
-  for one person, 168 for eight), and the receiver's lead: how many ticks of its
+  state hash after the tick, the newest sixteen ticks (**chosen**; 29 bytes a tick
+  for one person, 169 for eight: the hash, the retired-seat mask, 20 bytes a person), and the receiver's lead: how many ticks of its
   input the server holds.
 - **No state.** A client re-runs the server's inputs on its own copy of the
   server's state and checks the hash every tick; a mismatch is a determinism bug or
@@ -555,7 +555,7 @@ driver flies the opponents (the original driver with several people is unread),
 pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot
 is `Controller::Remote` on every peer, the client's own included, because the
 controllers are hashed; which craft is this machine's is view-side
-(`Race::set_seat`). The menus' ONLINE row opens the online lobby flow ([online lobby](online-lobby.md#7-the-online-menus-2026-10-16); LAN is [LAN play](#lan-play-2026-10-14) below). Start and focus loss
+(`Race::set_seat`). The menus' ONLINE row opens the online lobby flow ([online lobby](online-lobby.md#8-the-online-menus-2026-10-16); LAN is [LAN play](#lan-play-2026-10-14) below). Start and focus loss
 do not pause a network race, and it writes no record and no ghost (its inputs are
 predictions corrected by a server, under the server's settings).
 

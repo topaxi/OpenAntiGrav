@@ -758,6 +758,9 @@ fn lan_params(
         people: 1,
         opponents: options.opponents,
         weapons: false,
+        laps: options
+            .laps_override
+            .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
     }
 }
 

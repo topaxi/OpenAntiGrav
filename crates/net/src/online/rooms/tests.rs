@@ -28,6 +28,7 @@ fn settings(title: &str) -> RoomSettings {
         mode: "single_race".into(),
         max_players: 3,
         opponents: true,
+        laps: 0,
     }
 }
 
@@ -541,4 +542,32 @@ fn a_build_that_differs_from_the_servers_is_refused_at_the_hello_naming_both() {
         .connect(2, "new", vec![elsewhere])
         .expect("no shared title");
     person(&mut rooms, 3, "same", &[PULSE]);
+}
+
+/// Laps are kept (and capped) in a mode that ends on them, and dropped in one that does not.
+#[test]
+fn laps_are_kept_only_for_a_mode_that_ends_on_laps() {
+    let mut rooms = lobby();
+    person(&mut rooms, 1, "ann", &[PULSE]);
+    rooms.handle(
+        1,
+        Message::CreateRoom(RoomSettings {
+            laps: 200,
+            ..settings(PULSE)
+        }),
+    );
+    assert_eq!(snapshot(last(&mut rooms, 1)).settings.laps, 20, "capped");
+    rooms.handle(
+        1,
+        Message::Edit(RoomSettings {
+            laps: 4,
+            mode: "speed_lap".into(),
+            ..settings(PULSE)
+        }),
+    );
+    assert_eq!(
+        snapshot(last(&mut rooms, 1)).settings.laps,
+        0,
+        "speed lap never ends on laps"
+    );
 }

@@ -373,6 +373,9 @@ impl Session {
             },
             max_players: oag_net::wire::online::MAX_PLAYERS,
             opponents: options.opponents,
+            laps: options
+                .laps_override
+                .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
         };
         let team = options.team.clone().unwrap_or_default();
         let Some(online) = &mut self.online else {

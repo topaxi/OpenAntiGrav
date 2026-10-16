@@ -494,7 +494,7 @@ impl Session {
         source: &str,
     ) -> Option<f32> {
         let entry = format!(r"{location}\stats.xml");
-        let spec = format!("{source}:{}", oag_pulse::archives::FEDATA);
+        let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
         let blob = match oag_assets::Archive::open(&spec) {
             Ok(mut archive) => archive.read_name(&entry).ok(),
             // HD keeps each circuit's `stats.xml` in its own archives

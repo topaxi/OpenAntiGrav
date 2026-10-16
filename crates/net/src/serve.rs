@@ -15,6 +15,11 @@ fn dt() -> Duration {
     Duration::from_secs_f64(f64::from(oag_core::tick::TickRate::DEFAULT.dt()))
 }
 
+/// How long a seat may send nothing during the race before its craft is handed to the AI.
+/// Chosen: every client sends its input every frame, so this is many frames of nothing, and it
+/// beats QUIC's 30 s idle timeout by a wide margin.
+pub const SILENCE: Duration = Duration::from_secs(8);
+
 /// How the race phase is paced and bounded.
 #[derive(Debug, Clone, Copy)]
 pub struct Pace {
@@ -57,6 +62,7 @@ pub fn run(
             host.join(link);
         }
         host.poll();
+        host.drop_silent(SILENCE);
         let over = if stop() {
             Some("the host stopped")
         } else {

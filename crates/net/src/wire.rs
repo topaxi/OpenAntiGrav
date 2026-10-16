@@ -130,6 +130,9 @@ pub struct RaceParams {
     /// Whether weapons are on. Version 1 servers always say no: weapons are not
     /// server events yet (ADR-0069, condition 2).
     pub weapons: bool,
+    /// Laps the race runs, or 0 for the mode's own (`Options::laps_override`). Chosen: only
+    /// the modes that end on laps read it.
+    pub laps: u8,
 }
 
 /// The reliable, ordered stream's messages.
@@ -206,6 +209,11 @@ pub struct TickRecord {
     pub hash: u64,
     /// The input the server applied to each person's slot, `0..people` in order.
     pub inputs: Vec<Held>,
+    /// The seats whose person has left, one bit a seat (bit 0 is seat 0), cumulative. From
+    /// the tick it first appears in, both ends hand that craft to the AI driver before the
+    /// tick runs ([`crate::race::retire`]), so a leaver cannot hold the race open. Chosen, not
+    /// measured.
+    pub retired: u8,
 }
 
 /// The unreliable datagrams' messages.
@@ -311,6 +319,7 @@ impl Confirmed {
         );
         for tick in &self.ticks {
             out.extend_from_slice(&tick.hash.to_le_bytes());
+            out.push(tick.retired);
             for held in tick.inputs.iter().take(people) {
                 held.put(out);
             }
@@ -324,10 +333,15 @@ impl Confirmed {
         let mut ticks = Vec::with_capacity(count);
         for _ in 0..count {
             let hash = reader.u64()?;
+            let retired = reader.u8()?;
             let inputs = (0..people)
                 .map(|_| Held::take(reader))
                 .collect::<Result<_, _>>()?;
-            ticks.push(TickRecord { hash, inputs });
+            ticks.push(TickRecord {
+                hash,
+                inputs,
+                retired,
+            });
         }
         Ok(Self { first, ticks })
     }
@@ -335,7 +349,7 @@ impl Confirmed {
     /// The bytes one tick record costs with `people` people.
     #[must_use]
     pub const fn record_bytes(people: usize) -> usize {
-        8 + people * Held::BYTES
+        9 + people * Held::BYTES
     }
 }
 
@@ -360,6 +374,7 @@ impl RaceParams {
         out.push(self.people);
         out.push(u8::from(self.opponents));
         out.push(u8::from(self.weapons));
+        out.push(self.laps);
     }
 
     fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
@@ -387,6 +402,7 @@ impl RaceParams {
             people: reader.u8()?,
             opponents: reader.u8()? != 0,
             weapons: reader.u8()? != 0,
+            laps: reader.u8()?,
         })
     }
 }

@@ -598,6 +598,10 @@ pub(crate) struct NetArgs {
     #[arg(long, requires = "online", default_value_t = 2)]
     pub(crate) online_max: u8,
 
+    /// Laps of a room made with `--online-create`; 0 is the mode's own count.
+    #[arg(long, requires = "online", default_value_t = 0)]
+    pub(crate) online_laps: u8,
+
     /// A room made with `--online-create` presses START when this many are ready.
     #[arg(long, requires = "online", default_value_t = 2)]
     pub(crate) online_start_at: usize,
@@ -677,6 +681,7 @@ impl NetArgs {
                 mode: self.online_mode.clone(),
                 max_players: self.online_max,
                 opponents: false,
+                laps: self.online_laps,
             })
         } else {
             Action::Join(self.online_room)
