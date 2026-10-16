@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod hd_hud_runtime_ground_truth;
+mod hud_asset_census_ground_truth;
 mod pulse_frame_ground_truth;
 mod split_hud_schema;
 mod vita_2048_hud_ground_truth;
