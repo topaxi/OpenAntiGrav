@@ -327,6 +327,11 @@ drawn `SrcAlpha`/`One` **chosen, not measured**. The flame's own Vita fragment
 program (rim and noise terms) is unread, so the flare is geometry plus
 `flame_01`. Opponent flares and trails draw the same way.
 
+**Omega check (2026-10-16): ported.** Omega ships the same `.vex` files byte for
+byte and the `.rcsmodel` in the PS4's pointer width, and names the same three
+literals with `.gnf`; `oag_omega::TITLE` carries the same axes. See
+[omega-status.md](omega-status.md#engine-trail-and-flare-2026-10-16-omega-exhaust).
+
 **The SPU engine light is off on 2048 - chosen, not measured.** Loading
 `EngineLightData.xml` on HD's law (`flare::Authored::engine_light`) washed the
 whole circuit blue-white: all 20 native craft author `Distance 3` /

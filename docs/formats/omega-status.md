@@ -1429,6 +1429,49 @@ Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
 (`crates/raceplay/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
 not wired: this project does not read Omega's 2048 campaign.
 
+## Engine trail and flare (2026-10-16, `omega-exhaust`)
+
+`oag_omega::TITLE` carries `exhaust: Authored` and `flare: PerTeam` on 2048's
+shape (they were `Unread`). An Omega race draws each craft's own `EngineFlare`
+model and the shared `bluered` ribbon; `MagstripWake` is the track's electric
+arc and is not the exhaust.
+
+**Census** (`crates/rcs/tests/psp2_engine_trail_ground_truth.rs::omega_census`,
+one walk over the nine `.psarc`s): 69 `EngineFlare` `.vex` + `.rcsmodel` pairs,
+68 of which decode with geometry through `oag_rcs::rcsmodel::psp2` (one has no
+geometry the reader finds, and draws nothing), and 9 ribbon templates.
+
+| Archive | Flare pairs | Ribbon templates |
+| --- | --- | --- |
+| `data00` | 20 (`ships/<team>2048/1-4`, five teams) | 8 (`data/ribboneffects/*_triangle`) |
+| `data01` | 27 (`hdships`) | 0 |
+| `data03` | 13 | 0 |
+| patch `data05` | 0 | 1 |
+| patch `data08` | 9 | 0 |
+| `data02`, `data04`, patch `data07`, `data09` | 0 | 0 |
+
+**What the executable names** (`strings` on the base and the patch `eboot.bin`
+alike): `data/RibbonEffects/enginetrail_bluered_triangle.vex`,
+`%s\engineflare.vex` and `data/Tex/EngineFlare/Engine_Flare_Rich.gnf` (the patch
+also names `Engine_Flare_Rich_red.gnf` and an `engineflare2048` program pair,
+unread). These are 2048's three literals with `.gnf` for `.gxt`, so the axes are
+2048's with the PS4 texture extension.
+
+**Against 2048** (checked 2026-10-16): the `.vex` files are byte-identical
+(`EngineTrail_BlueRed_triangle.vex`, `feisar2048/1`, `piranha2048/3`); the
+`.rcsmodel` files differ (`enginetrail_bluered_triangle` and
+`feisar2048/1/engineflare`, `qirex2048/1/engineflare`) - the PS4's 8-byte
+pointers - and decode through the same `psp2` reader. Verdict: **ported**, with
+`crates/omega/tests/omega_title_ground_truth.rs::exhaust_and_flare_axes_name_files_omega_ships`.
+
+**Measured and not**: as on 2048 ([2048-status.md](2048-status.md#engine-trail-and-flare---2026-10-05)),
+asset names, node groups and material names are read off the data; the ribbon
+geometry, sprite flare law and boost reveal are HD's, **inherited, not measured
+on Omega**, and the load report says so. The flare's `2048_engine_additive`
+blend is chosen, not measured. The SPU engine light is off, chosen, not
+measured. Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
+900): the nozzle glows and every rival's trail draws.
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's

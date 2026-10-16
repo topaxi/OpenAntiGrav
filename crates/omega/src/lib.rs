@@ -78,11 +78,25 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     race: race::DEFAULTS,
-    // Unread, on the same terms `oag_2048::TITLE` states: nothing here has
-    // looked for an engine exhaust or flare model beside the hull.
-    exhaust: &oag_title::exhaust::Exhaust::Unread,
+    // **`bluered`, because the shipped executable names it** - the literal
+    // `data/RibbonEffects/enginetrail_bluered_triangle.vex`, in the base
+    // and the patch `eboot.bin` alike - exactly as on HD and 2048. The
+    // `.rcsmodel` beside it is 2048's container (`data00.psarc`).
+    exhaust: &oag_title::exhaust::Exhaust::Authored(
+        "/data/ribboneffects/enginetrail_bluered_triangle.rcsmodel",
+    ),
     weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
-    flare: &oag_title::flare::Flare::Unread,
+    // **Per team, on 2048's shape**: an `EngineFlare.vex` + `.rcsmodel`
+    // beside each hull with `EF_Main`/`EF_Boost` groups. The sprite is the
+    // executable's own literal `data/Tex/EngineFlare/Engine_Flare_Rich.gnf`.
+    flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
+        stem: "engineflare",
+        always: "EF_Main",
+        boost: "EF_Boost",
+        sprite: "/data/tex/engineflare/engine_flare_rich.gnf",
+        // **Off, chosen, not measured**, as on 2048.
+        engine_light: false,
+    }),
     // **Split into three files, like 2048's, not combined like HD's or
     // Pulse's/Pure's.** `data09.psarc` carries `data/plugins/teams/
     // Definition.xml`, `data/plugins/tracks/Definition.xml` and

@@ -310,14 +310,14 @@ pub(super) fn trail_texture(
                 // code reads 2048, whose own executable was not measured for
                 // any of the laws `load` reports under the ribbon.
                 if let oag_title::flare::Flare::PerTeam(a) = title.flare
-                    && a.sprite.ends_with(".gxt")
+                    && (a.sprite.ends_with(".gxt") || a.sprite.ends_with(".gnf"))
                 {
-                    report.push(
-                        "2048 reads its ribbon, flare and boost reveal on HD's laws: \
-                         inherited, not measured on 2048 (only the asset names and the \
-                         node groups are)"
-                            .into(),
-                    );
+                    report.push(format!(
+                        "{} reads its ribbon, flare and boost reveal on HD's laws: \
+                         inherited, not measured on {} (only the asset names and the \
+                         node groups are)",
+                        title.name, title.name
+                    ));
                 }
                 (Some(texture), Some(blend), shape)
             }
@@ -410,10 +410,10 @@ fn authored_ribbon(
     let noise_texture = decode_texture(archives, noise)
         .map_err(|why| format!("{why} (named by {model}'s material)"))?;
     let (width, height) = (noise_texture.width, noise_texture.height);
-    let container = if noise.to_ascii_lowercase().ends_with(".gxt") {
-        ".gxt"
-    } else {
-        ".gtf"
+    let container = match noise.to_ascii_lowercase() {
+        n if n.ends_with(".gxt") => ".gxt",
+        n if n.ends_with(".gnf") => ".gnf",
+        _ => ".gtf",
     };
     let blend = mesh::rcs::blend_state(src, dst);
     let mut notes = vec![

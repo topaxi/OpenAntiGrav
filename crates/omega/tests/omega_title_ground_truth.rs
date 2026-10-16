@@ -157,3 +157,28 @@ fn omega_endrace_definition_authors_the_screens_hd_does() {
         );
     }
 }
+
+/// The exhaust and flare axes name files Omega really ships: the ribbon
+/// template, the sprite flare, and one `EngineFlare.vex` + `.rcsmodel` pair
+/// beside a craft's hull. Dropping the wiring (back to `Unread`) fails here.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn exhaust_and_flare_axes_name_files_omega_ships() {
+    let Some(source) = source() else { return };
+    let archives = oag_omega::open(&source).expect("open the omega source");
+    let title = &oag_omega::TITLE;
+    let oag_title::exhaust::Exhaust::Authored(ribbon) = title.exhaust else {
+        panic!("Omega's executable names the bluered ribbon template");
+    };
+    let oag_title::flare::Flare::PerTeam(flare) = title.flare else {
+        panic!("Omega ships a flare model beside every hull");
+    };
+    for path in [
+        ribbon.to_string(),
+        flare.sprite.to_string(),
+        format!("/data/art/published/hdships/feisar/{}.vex", flare.stem),
+        format!("/data/art/published/hdships/feisar/{}.rcsmodel", flare.stem),
+    ] {
+        assert!(archives.locate(&path).is_some(), "{path} not served");
+    }
+}
