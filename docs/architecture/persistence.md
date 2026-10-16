@@ -105,11 +105,8 @@ Ids that differ but are one team (maintainer ruling, 2026-10-16), merged in each
 | Omega `Tigron_x` = `Tigron` | `tigron` |
 | Pure `Medievil` | its own (no counterpart elsewhere) |
 
-**Migration.** A file from before the change holds `title` + `team` rows. `parse` folds them into
-the shared rows by **sum**, capped at 100,000 after: the shared total is what the team would hold
-had every title banked into one store, and taking the largest would drop a player's progress in
-every other title. A title name this build does not know folds under the team id and is named in
-the load notes. Folded rows carry no `title`, so a second load changes nothing.
+The store reads only this shared per-team format; nothing is released, so there is no
+migration path for rows an earlier build kept per title.
 
 ## `[dev]` in `settings.toml`
 
