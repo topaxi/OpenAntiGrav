@@ -438,6 +438,45 @@ fn a_race_child_stops_when_its_lobby_is_gone() {
     );
 }
 
+/// A retired person's craft is flown by the AI driver, not left to coast: a person who sends no
+/// input never launches (speed 0), and the same craft retired 300 ticks in drives off round the
+/// circuit.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_retired_person_s_craft_is_flown_by_the_ai() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let none = oag_gameplay::PlayerInputs::none();
+    let flown = |retire: bool| {
+        let (mut race, _) = oag_net::race::load(&params(), &source).expect("loads");
+        for tick in 0..900 {
+            if retire && tick == 300 {
+                oag_net::race::retire(&mut race, 0b10);
+            }
+            race.tick_sim_only(&none);
+        }
+        let ship = &race.sim.world.ships[1].physics.body;
+        (ship.linear_velocity.length(), ship.position)
+    };
+    let (idle_speed, idle_at) = flown(false);
+    let (speed, at) = flown(true);
+    eprintln!(
+        "idle {idle_speed:.1}, retired {speed:.1}, apart {:.0}",
+        (at - idle_at).length()
+    );
+    assert!(
+        idle_speed < 1.0,
+        "a person who sends nothing does not launch: {idle_speed}"
+    );
+    assert!(speed > 50.0, "the retired craft is flying at {speed}");
+    assert!(
+        (at - idle_at).length() > 300.0,
+        "and has left the grid behind"
+    );
+}
+
 /// Polls `done` until it holds, failing after three minutes (a load on a busy machine).
 fn wait(what: &str, mut done: impl FnMut() -> bool) {
     let started = std::time::Instant::now();

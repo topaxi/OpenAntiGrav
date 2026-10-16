@@ -459,8 +459,8 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
   (20 bytes a tick; **chosen**). The server derives press and release from the held
   stream itself (decision 2).
 - Datagrams down: per tick, the input the server applied to every person and the
-  state hash after the tick, the newest sixteen ticks (**chosen**; 28 bytes a tick
-  for one person, 168 for eight), and the receiver's lead: how many ticks of its
+  state hash after the tick, the newest sixteen ticks (**chosen**; 29 bytes a tick
+  for one person, 169 for eight: the hash, the retired-seat mask, 20 bytes a person), and the receiver's lead: how many ticks of its
   input the server holds.
 - **No state.** A client re-runs the server's inputs on its own copy of the
   server's state and checks the hash every tick; a mismatch is a determinism bug or

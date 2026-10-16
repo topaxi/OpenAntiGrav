@@ -439,7 +439,9 @@ token is refused by name.
 ### The race child
 
 `oag-server race --image I --listen ADDR --join-timeout S --max-ticks N` reads one hex line
-(`RaceJob`: the `RaceParams` plus `(name, token)` per seat) off **standard input**, not argv,
+(`RaceJob`: the `RaceParams` plus `(name, token)` per seat) off **standard input**, not argv (and
+keeps reading it: the lobby holds the pipe open and its end of file stops the race, part 7, so a
+hand-piped `echo LINE | oag-server race` stops at once),
 where any local user could read the tokens. It loads the race, binds, prints `listening on ADDR`
 and `cert-hash HEX`, seats the people by token, waits for them to load (**`--join-timeout`, 60
 s: a no-show ends the race with the names missing, it never holds the only slot**), runs the
@@ -534,8 +536,8 @@ From here the round trip is about 10 ms.
   is killed; a title with no image refuses; a game client on the lobby port is refused by name.
 - `net_ground_truth::the_lobby_forks_a_real_race_...` (`#[ignore]`, `just test-data`): the real
   `oag-server lobby` forks the real `oag-server race` on a real circuit, one room. **Coverage is
-  honest, not complete:** every race in these tests ends at its `--max-ticks` limit, not at a
-  finish line, and the second queued room races only through `ThreadRunner`; the real child is
+  honest, not complete:** this part's races ended at their `--max-ticks` limit, not at a
+  finish line (part 7 races one to the line), and the second queued room races only through `ThreadRunner`; the real child is
   covered by the one-room test.
 - `discovery` unit tests: `differs` and `content_fingerprint`; `online::rooms`: a PS2 pressing or
   other mods is hidden from the list and refused.
@@ -673,8 +675,12 @@ fixed.
    (`race::retire`) before the tick runs, so the controllers (which are hashed) agree and the end rule
    counts the remaining people only. The owner (seat 0) and a joiner both tested. A seat that sends
    nothing for 8 s while racing is dropped the same way (`Host::drop_silent`): a vanished player sends
-   no close frame, and QUIC's idle timeout alone is 30 s. Whether the retired craft then laps was not
-   isolated (it showed 0 laps on the board of a race that ended 20 s later).
+   no close frame, and QUIC's idle timeout alone is 30 s; the dropped seat is sent an `End` with the
+   reason (a player who only stalled is taken back to the menus). The retired craft **is flown by
+   the AI driver** (`net_ground_truth::a_retired_person_s_craft_is_flown_by_the_ai`: an unretired
+   person who sends nothing sits at speed 0, the same craft retired at tick 300 is at 137 u/s 600
+   ticks later). The client applies the newest mask to its present simulation too, because the game
+   asks the present whether the race is finished (`loopback::a_person_who_leaves_...`).
 3. **A server running from an extraction raced differently from the clients after the finish.** Pulse
    PSP's track stats were opened with `"<source>:<archive>"`, the image form, which a folder (an
    extraction) cannot answer: the read failed with an i/o error, the AI skill scale fell back from 3.10
@@ -695,8 +701,12 @@ The results the clients show are the **confirmed board**: each client builds it 
 confirmed state, which the tick hash proves equal to the server's, and `Client::advance_confirmed`
 recaptures it from the confirmed state the first time it is finished. Nothing is sent: the server's
 `End` carries only the reason. Both clients' boards were identical in every run below. What a client
-shows: a windowed one goes through the local race's own end-race screens, since its race is finished
-by the same rule (`Race::finished`); `--net-bot` prints the board. Returning to the room is the
+shows, **seen** in a windowed `--online --net-bot` client (Xvfb, software Vulkan, Pulse PSP, one
+lap): the in-race view to the line, then the built-in results table ("race complete", eight
+rows with the two people marked P1 and P2, laps, best lap, time, "x or escape leaves the race"),
+the one a `--race`-style launch shows (no EndRace screens are built on this path, which has no
+front end); `--net-bot` headless prints the board. The 1280x720 window clips the table's last
+column, which is the results table's own layout. Returning to the room is the
 menus lane's (the `--online` flag path prints `back in the room: REASON`). The lobby's room note
 carries only the reason ("every person has finished"), not the places; carrying the rows in `End` so
 the room screen can show them is open.
@@ -733,7 +743,7 @@ table had 49 bad hashes (item 3 above); the row is the rerun after the fix from 
 The AI field fills the grid whatever the room says (the `opponents` note in part 5): the boards list
 eight craft. 2048's circuit is slow (a lap is about 4,000 ticks).
 
-Leavers, Pulse PSP, same setup: the joiner killed (SIGKILL, no close frame) at tick 600 and, in
+Leavers, Pulse PSP, same setup (the leaver's seat is dropped by the server after the 8 s silence): the joiner killed (SIGKILL, no close frame) at tick 600 and, in
 another run, the owner killed: the race ended `every person has finished` when the remaining person
 crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft on the board unfinished.
 
@@ -741,6 +751,7 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 
 - `loopback::a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree` (no disc): the record
   carries the seat, both controllers flip, the survivor's hashes agree on every confirmed tick.
+- `loopback::a_silent_seat_is_dropped_and_told` (no disc): `drop_silent` drops, tells and retires.
 - `race::laps_are_set_only_for_a_mode_that_ends_on_laps`, `rooms::laps_are_kept_only_for_a_mode_that_ends_on_laps`.
 - `net_ground_truth::the_lobby_forks_a_real_race_...` now races **one lap to the finish line**:
   both clients' state is finished with a one-lap board, the phase is `Over("every person has
@@ -753,7 +764,8 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 
 - Session takeover still does not re-send a pending hand-off (part 5).
 - The room note carries the reason only; the places are not sent to the lobby.
-- A retired craft's lap progress was not isolated.
+- The windowed client's return from the results table to the room is the menus lane's: the table
+  says "x or escape leaves the race" and the `--online` flag path has no room screen to go back to.
 - Omega's laps slider is 3 to 20; a room here may ask for 1 (chosen, for a short race).
 - 2048 and Omega: this is not a format finding. The finish and retirement code is title-blind and
   ran on both (**ported**, with the table above as the ground truth); the track-stats fix concerns

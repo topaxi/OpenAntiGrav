@@ -260,4 +260,43 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
     );
     assert_eq!(host.race().sim.world.controllers[1], Controller::Ai);
     assert_eq!(host.race().sim.world.controllers[0], Controller::Remote);
+    // The survivor's own present simulation (what the game checks `finished()` on) has the
+    // leaver's craft retired too, not only its confirmed state.
+    let (survivor, race, _) = &mut clients[0];
+    for _ in 0..50 {
+        survivor.step(race, &oag_gameplay::InputSnapshot::EMPTY);
+    }
+    assert_eq!(
+        race.sim.world.controllers[1],
+        Controller::Ai,
+        "the survivor's present has the leaver retired"
+    );
+}
+
+/// A seat that has sent nothing for the allowed silence is dropped, told so, and retired.
+#[test]
+fn a_silent_seat_is_dropped_and_told() {
+    let params = params(2);
+    let mut host = Host::new(headless(&params), params);
+    let mut clients = seated(&mut host, 2, 0.0);
+    ready_all(&mut host, &mut clients);
+    host.start(0);
+    host.poll();
+    host.tick();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    assert_eq!(host.drop_silent(web_time::Duration::from_millis(1)), 2);
+    assert_eq!(
+        host.drop_silent(web_time::Duration::from_millis(1)),
+        0,
+        "once"
+    );
+    for (client, race, _) in &mut clients {
+        client.step(race, &oag_gameplay::InputSnapshot::EMPTY);
+        match client.phase() {
+            Phase::Over(why) => assert!(why.contains("dropped"), "{why}"),
+            other => panic!("not told: {other:?}"),
+        }
+    }
+    host.tick();
+    assert_eq!(host.history()[1].retired, 0b11);
 }

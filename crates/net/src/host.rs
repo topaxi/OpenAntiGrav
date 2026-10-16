@@ -464,6 +464,11 @@ impl Host {
             if seat.left.is_none() && seat.heard.elapsed() > after {
                 let why = format!("no input for {after:?}");
                 log::warn!("net: seat {slot} ({}) left: {why}", seat.name);
+                // Told, so a player who only stalled is taken back to the menus rather than left
+                // watching a race that no longer moves for them.
+                seat.link.send_control(&Control::End {
+                    reason: format!("you were dropped from the race: {why}"),
+                });
                 seat.left = Some(why);
                 dropped += 1;
             }

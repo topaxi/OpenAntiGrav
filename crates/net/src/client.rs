@@ -158,6 +158,9 @@ pub struct Client {
     last_adjust: u32,
     resend_asked: Option<u32>,
     bot: Option<oag_ai::Driver>,
+    /// The newest confirmed tick's retired seats, applied to the present too: the game asks
+    /// the present whether the race is finished, and a leaver's craft must not hold that open.
+    retired: u8,
     /// Whether the results board has been taken from the confirmed state.
     board_confirmed: bool,
     stats: Stats,
@@ -215,6 +218,7 @@ impl Client {
             resend_asked: None,
             bot: None,
             board_confirmed: false,
+            retired: 0,
             stats: Stats::default(),
             sent_at: VecDeque::new(),
             last_confirm_ms: None,
@@ -457,6 +461,7 @@ impl Client {
                 }
             }
             crate::race::retire(race, record.retired);
+            self.retired = record.retired;
             race.tick_sim_only(&inputs);
             if race.sim.state_hash() == record.hash {
                 self.stats.hash_matches += 1;
@@ -480,6 +485,7 @@ impl Client {
             self.board_confirmed = true;
         }
         let confirmed = std::mem::replace(&mut race.sim, present);
+        crate::race::retire(race, self.retired);
         let now = self.confirmed_tick;
         while self.own.front().is_some_and(|(t, _, _)| *t < now) {
             self.own.pop_front();
