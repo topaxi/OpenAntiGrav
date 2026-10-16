@@ -252,6 +252,10 @@ pub struct ChildRunner {
 
 struct ChildHandle {
     child: Child,
+    /// The child's standard input, held open for the whole race: the child treats its end
+    /// of file as "the lobby is gone" and stops, so a lobby that dies for any reason
+    /// (SIGKILL included, when the kernel closes the pipe) does not orphan its race.
+    _stdin: Option<std::process::ChildStdin>,
     lines: mpsc::Receiver<String>,
     port: Option<u16>,
     hash: Option<[u8; 32]>,
@@ -352,8 +356,10 @@ impl Runner for ChildRunner {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| format!("starting {}: {e}", self.program.display()))?;
-        if let Some(mut stdin) = child.stdin.take() {
+        let mut stdin = child.stdin.take();
+        if let Some(stdin) = stdin.as_mut() {
             let _ = writeln!(stdin, "{}", job.to_line());
+            let _ = stdin.flush();
         }
         // Both pipes are drained for the whole race: a full pipe would block the child
         // and look like a frozen race.
@@ -389,6 +395,7 @@ impl Runner for ChildRunner {
         }
         Ok(Box::new(ChildHandle {
             child,
+            _stdin: stdin,
             lines,
             port: None,
             hash: None,

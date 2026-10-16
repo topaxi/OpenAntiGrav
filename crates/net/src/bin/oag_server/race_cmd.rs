@@ -5,7 +5,10 @@
 //! names by their seat tokens, runs the race and prints `race-over REASON`. A failure prints
 //! `error: WHY` on standard error and exits 2, which is what the lobby shows the room.
 
+use std::io::Read;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result, anyhow};
 use oag_net::host::Host;
@@ -62,15 +65,31 @@ fn race(args: &Args) -> Result<()> {
         join_timeout: Duration::from_secs(args.join_timeout),
         max_ticks: args.max_ticks.unwrap_or(Limits::default().max_ticks),
     };
+    let lobby_gone = lobby_watch();
     let ended = run_race(
         &mut host,
         &mut listener,
         &job.seats,
         limits,
-        &|| false,
+        &|| lobby_gone.load(Ordering::Relaxed),
         &mut |line| println!("{line}"),
     )
     .map_err(|e| anyhow!("{e}"))?;
     println!("race-over {ended}");
     Ok(())
+}
+
+/// The lobby holds this process's standard input open for the whole race, so its end of file
+/// means the lobby is gone (it exited or was killed): the race stops rather than outliving it
+/// and holding the race port.
+fn lobby_watch() -> Arc<AtomicBool> {
+    let gone = Arc::new(AtomicBool::new(false));
+    let flag = gone.clone();
+    std::thread::spawn(move || {
+        let mut sink = [0u8; 256];
+        let mut stdin = std::io::stdin();
+        while matches!(stdin.read(&mut sink), Ok(n) if n > 0) {}
+        flag.store(true, Ordering::Relaxed);
+    });
+    gone
 }
