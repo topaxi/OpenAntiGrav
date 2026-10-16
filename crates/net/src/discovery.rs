@@ -161,22 +161,58 @@ pub enum Compat {
     Full,
 }
 
+/// A fingerprint of the player mods a machine runs, each as `id@version`: mods may change the
+/// simulation, so two machines must agree on it. FNV-1a over the sorted names, **chosen**. No
+/// mods is a value of its own, not 0 ([`NO_MODS`]), which is what a server that loads none says.
+#[must_use]
+pub fn content_fingerprint(mods: &[String]) -> u64 {
+    let mut named = mods.to_vec();
+    named.sort();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in named.join("\n").bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    hash
+}
+
+/// What a machine with no player mods fingerprints as: [`content_fingerprint`] of nothing.
+pub const NO_MODS: u64 = 0xcbf2_9ce4_8422_2325;
+
+/// What differs between this machine and a host, most fundamental first: title (or the
+/// platform's pressing of it), then wire protocol and build, then content. `None` when nothing
+/// does. The one decision every kind of host shares: a LAN advert ([`compat`]) and an online
+/// lobby's rooms (`crate::online::rooms`) both ask it.
+#[must_use]
+pub fn differs(local: &Local<'_>, host: &Local<'_>) -> Option<Compat> {
+    if host.title != local.title || host.platform != local.platform {
+        Some(Compat::OtherTitle)
+    } else if host.protocol != local.protocol || host.build != local.build {
+        Some(Compat::OtherVersion)
+    } else if host.content != local.content {
+        Some(Compat::OtherContent)
+    } else {
+        None
+    }
+}
+
 /// The decision, most fundamental difference first: title, then version, then content, then
 /// seats. **Chosen**; a different pressing of one platform's title (EU and USA) is not told
 /// apart here and is refused at the tick-0 hash.
 #[must_use]
 pub fn compat(local: &Local<'_>, host: &Advert) -> Compat {
-    if host.title != local.title || host.platform != local.platform {
-        Compat::OtherTitle
-    } else if host.protocol != local.protocol || host.build != local.build {
-        Compat::OtherVersion
-    } else if host.content != local.content {
-        Compat::OtherContent
-    } else if host.people >= host.max {
+    let facts = Local {
+        protocol: host.protocol,
+        build: &host.build,
+        title: &host.title,
+        platform: &host.platform,
+        content: host.content,
+    };
+    differs(local, &facts).unwrap_or(if host.people >= host.max {
         Compat::Full
     } else {
         Compat::Joinable
-    }
+    })
 }
 
 /// A host's side: answers queries with the advert it is given.
@@ -368,6 +404,17 @@ mod tests {
     }
 
     /// One case per state, and the order they win in.
+    #[test]
+    fn no_mods_is_the_fingerprint_of_nothing_and_order_does_not_matter() {
+        assert_eq!(content_fingerprint(&[]), NO_MODS);
+        let (a, b) = ("a@1".to_string(), "b@2".to_string());
+        assert_eq!(
+            content_fingerprint(&[a.clone(), b.clone()]),
+            content_fingerprint(&[b, a.clone()])
+        );
+        assert_ne!(content_fingerprint(&[a]), NO_MODS);
+    }
+
     #[test]
     fn the_compatibility_decision_has_one_answer_per_state() {
         let host = advert();

@@ -14,10 +14,12 @@
 
 use std::collections::{BTreeMap, VecDeque};
 
-use crate::wire::RaceParams;
+use crate::discovery::{Compat, Local, differs};
 use crate::wire::online::{
-    MAX_PLAYERS, MIN_PLAYERS, Member, Message, Phase, Refusal, RoomInfo, RoomSettings, Snapshot,
+    Edition, MAX_PLAYERS, MIN_PLAYERS, Member, Message, Phase, Refusal, RoomInfo, RoomSettings,
+    Snapshot,
 };
+use crate::wire::{PROTOCOL, RaceParams};
 
 /// One connected person, as the lobby knows them.
 pub type ClientId = u32;
@@ -32,8 +34,9 @@ pub struct Config {
     pub min_players: u8,
     /// Milliseconds between a room getting the slot and its race being brought up.
     pub countdown_ms: u32,
-    /// The titles this server has an image for: a room can only be made in one of these.
-    pub titles: Vec<String>,
+    /// What this server races, per title (its images' own title and platform, no mods): a room
+    /// can only be made in one of these, and a person sees it only if theirs matches.
+    pub titles: Vec<Edition>,
     /// Mixed with the room id and launch count into the race's seed.
     pub seed: u64,
 }
@@ -88,7 +91,7 @@ struct Room {
 #[derive(Debug, Clone)]
 struct Person {
     name: String,
-    titles: Vec<String>,
+    titles: Vec<Edition>,
     room: Option<u32>,
 }
 
@@ -136,8 +139,8 @@ impl Rooms {
 
     /// The titles this server races.
     #[must_use]
-    pub fn titles(&self) -> &[String] {
-        &self.config.titles
+    pub fn titles(&self) -> Vec<String> {
+        self.config.titles.iter().map(|e| e.title.clone()).collect()
     }
 
     /// A person connected, under `name`, able to race `titles`.
@@ -145,7 +148,7 @@ impl Rooms {
     /// # Errors
     ///
     /// [`Refusal::BadName`]: empty, too long, or another connected person has it.
-    pub fn connect(&mut self, id: ClientId, name: &str, titles: Vec<String>) -> Result<(), Fail> {
+    pub fn connect(&mut self, id: ClientId, name: &str, titles: Vec<Edition>) -> Result<(), Fail> {
         let name = name.trim();
         if name.is_empty() || name.chars().count() > NAME_MAX || name.chars().any(char::is_control)
         {
@@ -208,10 +211,49 @@ impl Rooms {
         self.rooms.iter().position(|r| r.id == id)
     }
 
-    fn can_race(&self, id: ClientId, title: &str) -> bool {
-        self.people
+    /// Why `id` cannot race `title` on this server, `None` when it can: the person's edition
+    /// of it against the server's, by the decision LAN discovery makes ([`differs`]).
+    fn mismatch(&self, id: ClientId, title: &str) -> Option<Compat> {
+        let server = self.config.titles.iter().find(|e| e.title == title)?;
+        let Some(theirs) = self
+            .people
             .get(&id)
-            .is_some_and(|p| p.titles.iter().any(|t| t == title))
+            .and_then(|p| p.titles.iter().find(|e| e.title == title))
+        else {
+            return Some(Compat::OtherTitle);
+        };
+        let local = Local {
+            protocol: PROTOCOL,
+            build: "",
+            title: &theirs.title,
+            platform: &theirs.platform,
+            content: theirs.content,
+        };
+        let host = Local {
+            protocol: PROTOCOL,
+            build: "",
+            title: &server.title,
+            platform: &server.platform,
+            content: server.content,
+        };
+        differs(&local, &host)
+    }
+
+    fn can_race(&self, id: ClientId, title: &str) -> bool {
+        self.mismatch(id, title).is_none()
+    }
+
+    fn content_refusal(&self, id: ClientId, title: &str) -> Fail {
+        match self.mismatch(id, title) {
+            Some(Compat::OtherContent) => refuse(
+                Refusal::Content,
+                "your mods differ from the server's, so the race would not match",
+            ),
+            _ => refuse(
+                Refusal::Content,
+                "you do not have this server's pressing of that title",
+            ),
+        }
     }
 
     fn snapshot(&self, index: usize) -> Snapshot {
@@ -271,14 +313,14 @@ impl Rooms {
     }
 
     fn validate(&self, id: ClientId, settings: &mut RoomSettings) -> Result<(), Fail> {
-        if !self.config.titles.contains(&settings.title) {
+        if !self.config.titles.iter().any(|e| e.title == settings.title) {
             return Err(refuse(
                 Refusal::BadSettings,
                 "this server does not race that title",
             ));
         }
         if !self.can_race(id, &settings.title) {
-            return Err(refuse(Refusal::Content, "you do not have that title"));
+            return Err(self.content_refusal(id, &settings.title));
         }
         if oag_race::Mode::from_name(&settings.mode).is_none() {
             return Err(refuse(Refusal::BadSettings, "unknown race mode"));
@@ -379,10 +421,7 @@ impl Rooms {
         };
         let title = self.rooms[index].settings.title.clone();
         if !self.can_race(id, &title) {
-            return Err(refuse(
-                Refusal::Content,
-                "you do not have that room's title",
-            ));
+            return Err(self.content_refusal(id, &title));
         }
         if self.rooms[index].stage != Stage::Open {
             return Err(refuse(Refusal::Started, "this game has already started"));

@@ -356,16 +356,22 @@ screens and for the rules, the bytes and the numbers are ours.
    the lobby issues in its welcome. No accounts. A hello carrying a connected session's token
    and name takes that session over (a reconnect after a dropped link).
 4. **All titles in one process**: `--image` is repeatable, each opened with
-   `oag_source::title::identify`. A room is in one title. A client says which titles it can
-   race in its hello, and the **room list shows only rooms it can join**; a join into a title it
-   lacks is refused `Content`.
+   `oag_source::title::open_source`. A room is in one title. A client's hello carries, per title
+   it can race, an `Edition` (title, the image's platform, a fingerprint of its mods), and the
+   **room list shows only rooms it can join**: its edition against the server's by
+   `oag_net::discovery::differs`, the one decision LAN discovery's `compat` also makes. A join or
+   a room into a title or platform it lacks, or with other mods, is refused `Content` and says
+   which. The server's own mods fingerprint is `discovery::NO_MODS` (it loads none);
+   `Mods::content_fingerprint` moved onto `discovery::content_fingerprint` so both ends hash alike.
+   **Not compared: the build** (see Open).
 5. **Exactly one game slot.** A room whose owner presses START queues FIFO and is told its
    place (`Queued { position }`, 1 is next). When the slot frees, the front room is
    re-validated (still at the minimum, still everyone ready) and counts down; a room that no
    longer qualifies is skipped with a note, not left blocking.
 
 **After a race the players return to their room** (chosen; the menus were the alternative). The
-client's lobby link stays open for the whole race, so the lobby can push the queue and the end
+client's lobby link stays open for the whole race (`oag-game --online` hands the link to a thread
+that polls it and prints "back in the room: REASON"), so the lobby can push the queue and the end
 of the race, and everyone is back in their room with picks cleared and the race's reason in
 the room's note ("every person has finished", "--max-ticks reached", "the race process exited
 with exit status: 2: error text", "timed out after 60s waiting for ...").
@@ -451,25 +457,28 @@ so one race port. Nothing else is needed; no TCP.
 ### Run it locally
 
 ```sh
-cargo build -p oag-net --bin oag-server -p oag-game
-target/debug/oag-server lobby --image data/images/pulse-psp-eu.chd \
-  --listen 127.0.0.1:0 --race-listen 127.0.0.1:0 --hash-out /tmp/lobby.hash
-# prints: lobby listening on 127.0.0.1:PORT, race port 0, lobby cert-hash <64 hex digits>
+cargo build --release -p oag-net --bin oag-server
+cargo build --release -p oag-game
+target/release/oag-server lobby --image data/images/pulse-psp-eu.chd \
+  --listen 127.0.0.1:60000 --race-listen 127.0.0.1:60001 --hash-out /tmp/lobby.hash
+# prints: hosting Wipeout Pulse (PSP) ..., lobby listening on 127.0.0.1:60000, race port 60001,
+#         lobby cert-hash <64 hex digits>
 
 # Ada makes a room and starts when two are ready; Bob joins the first joinable room.
-target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
-  --online 127.0.0.1:PORT --lobby-hash @/tmp/lobby.hash --online-name Ada --online-team Feisar \
+target/release/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:60000 --lobby-hash @/tmp/lobby.hash --online-name Ada --online-team Feisar \
   --online-create --online-track 'Data\Environments\01_Track\track.vex' \
   --screenshot /tmp/a.png --ticks 600
-target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
-  --online 127.0.0.1:PORT --lobby-hash @/tmp/lobby.hash --online-name Bob --online-team Qirex \
+target/release/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:60000 --lobby-hash @/tmp/lobby.hash --online-name Bob --online-team Qirex \
   --screenshot /tmp/b.png --ticks 600
 ```
 
-Measured on 2026-10-16 with that command on localhost: both clients welcomed, room made and
+(Drop `--no-audio --net-bot --screenshot --ticks` to play in a window.)
+
+Measured on 2026-10-16 with those commands (debug builds, the lobby run with `--max-ticks 300`) on localhost: both clients welcomed, room made and
 joined, countdown 500 ms, the child forked, both reconnected with their tokens as seats 0 and 1,
-0 bad state hashes on 600 ticks, the child exited on the clients leaving and the lobby freed the
-slot. `--online-room N` joins a named room; `--online-max`, `--online-class`, `--online-mode`,
+0 bad state hashes, the race stopped at 300 ticks, and both clients printed "back in the room: --max-ticks reached" while the lobby freed the slot. `--online-room N` joins a named room; `--online-max`, `--online-class`, `--online-mode`,
 `--online-start-at` set the room.
 
 ### Deploying to a remote host (not done by the spike)
@@ -493,15 +502,25 @@ slot. `--online-room N` joins a named room; `--online-max`, `--online-class`, `-
   returns open with the reason; a child that crashes after coming up; a child that never comes up
   is killed; a title with no image refuses; a game client on the lobby port is refused by name.
 - `net_ground_truth::the_lobby_forks_a_real_race_...` (`#[ignore]`, `just test-data`): the real
-  `oag-server lobby` forks the real `oag-server race` on a real circuit.
+  `oag-server lobby` forks the real `oag-server race` on a real circuit, one room. **Coverage is
+  honest, not complete:** every race in these tests ends at its `--max-ticks` limit, not at a
+  finish line, and the second queued room races only through `ThreadRunner`; the real child is
+  covered by the one-room test.
+- `discovery` unit tests: `differs` and `content_fingerprint`; `online::rooms`: a PS2 pressing or
+  other mods is hidden from the list and refused.
 
 ### Open
 
 - **No menu screens.** `--online` is a command-line path; Omega's order (ONLINE, CREATE or JOIN,
   settings or list, team, lobby) is the plan for `oag-ui-screens`, with pointer support.
-- **The content check is the title name plus the race child's tick-0 hash**, not a build or mod
-  fingerprint exchanged before the race loads (a different pressing or a mod is refused at the
-  child's ready, named, and the room returns). The protocol version is checked at the hello.
+- **The build is not compared at join.** LAN discovery compares it, but the standalone server has
+  no build string of its own (`BUILD_VERSION` is `oag-game`'s, from its build script), and
+  inventing one would hide every room on a server built any other way. The protocol version is
+  checked at the hello; a client of a different build that gets through is refused by the race
+  child's tick-0 hash: the child sends that client a named reject, but its seat stays filled and
+  never ready, so the race sits out `--join-timeout` and the room returns with "everyone
+  connected but not everyone loaded within 60s", not the content reason. EU and USA pressings of
+  one platform's title are not told apart before the race either (the same rule as LAN).
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
   race's loading and reconnects to the lobby misses it; it times out at the child and returns.
 - **A SIGKILLed lobby orphans its running race child**, which exits on its own at the end of the
@@ -509,7 +528,9 @@ slot. `--online-room N` joins a named room; `--online-max`, `--online-class`, `-
 - **No kick, no spectators, no chat, no quick match, no invite-only**; Omega has some of them.
 - **One race slot is per server**, so a second title waits behind the first. The containers shape
   (a game per room on its own port) is the same `Runner` seam with a spawner behind it.
-- The **AI fill** setting follows `RaceParams.opponents` as it already did.
+- **AI fill** (`RaceParams.opponents`) only matters in modes without opponents: the grid is
+  full when the flag is set or the mode has opponents (`oag-raceplay` `load.rs`, `full_grid`), so
+  a `single_race` room always has AI whatever the room says. `--online-create` hardcodes `false`.
 - Omega and 2048: not a format finding. The lobby carries a title's name, so those titles are
   hostable as soon as a race on them loads through `oag_net::race::load`; Omega's race is
   incomplete (`omega-status.md`), so that stays **checked, applies, not wired**.

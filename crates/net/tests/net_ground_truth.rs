@@ -246,7 +246,13 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
     // Keep draining the lobby's output so its pipe never fills.
     std::thread::spawn(move || lines.for_each(drop));
     let outcome = std::panic::catch_unwind(|| {
-        let titles = ["Wipeout Pulse".to_string()];
+        let opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+            .expect("the image opens");
+        let titles = [oag_net::wire::online::Edition {
+            title: opened.title.name.to_string(),
+            platform: opened.archives.layout.platform.to_string(),
+            content: oag_net::discovery::NO_MODS,
+        }];
         let mut people: Vec<LobbyClient> = ["Ada", "Bob"]
             .iter()
             .map(|name| {

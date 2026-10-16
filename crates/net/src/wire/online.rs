@@ -19,6 +19,20 @@ pub const MIN_PLAYERS: u8 = 2;
 /// The most people a room seats (Omega's lobby draws eight rows).
 pub const MAX_PLAYERS: u8 = 8;
 
+/// What a machine says it can race, per title: enough for the lobby to show it only rooms it
+/// can join. The same facts LAN discovery compares ([`crate::discovery::differs`]), minus the
+/// build, which the standalone server cannot know (see `docs/networking/online-lobby.md`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Edition {
+    /// The title (`oag_title::Title::name`).
+    pub title: String,
+    /// The platform of the image (`oag_disc::Platform`'s display): a PSP and a PS2 pressing of
+    /// one title are told apart, as in discovery.
+    pub platform: String,
+    /// The mods this machine runs, fingerprinted (0: none). Mods may change the sim.
+    pub content: u64,
+}
+
 /// What the owner of a room decides, after Omega's `MP Select` table. Weapons are not here:
 /// a network race holds them off (ADR-0069, condition 2).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -171,8 +185,8 @@ pub enum Message {
         protocol: u16,
         /// The chosen name.
         name: String,
-        /// The titles this machine has an image for.
-        titles: Vec<String>,
+        /// What this machine can race, one per title it has an image for.
+        titles: Vec<Edition>,
         /// A token an earlier [`Self::Welcome`] issued, empty for none.
         token: String,
     },
@@ -302,6 +316,28 @@ impl RaceJob {
     }
 }
 
+fn put_editions(out: &mut Vec<u8>, list: &[Edition]) {
+    out.push(u8::try_from(list.len()).unwrap_or(u8::MAX));
+    for e in list.iter().take(usize::from(u8::MAX)) {
+        put_string(out, &e.title);
+        put_string(out, &e.platform);
+        out.extend_from_slice(&e.content.to_le_bytes());
+    }
+}
+
+fn take_editions(r: &mut Reader<'_>) -> Result<Vec<Edition>, Malformed> {
+    let count = r.u8()?;
+    (0..count)
+        .map(|_| {
+            Ok(Edition {
+                title: r.string()?,
+                platform: r.string()?,
+                content: r.u64()?,
+            })
+        })
+        .collect()
+}
+
 fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
     for text in [&s.title, &s.track, &s.class, &s.mode] {
         put_string(out, text);
@@ -374,7 +410,7 @@ impl Message {
                 out.extend_from_slice(&MAGIC);
                 out.extend_from_slice(&protocol.to_le_bytes());
                 put_string(&mut out, name);
-                put_strings(&mut out, titles);
+                put_editions(&mut out, titles);
                 put_string(&mut out, token);
             }
             Self::ListRooms => out.push(0x21),
@@ -475,7 +511,7 @@ impl Message {
                 Self::Hello {
                     protocol: r.u16()?,
                     name: r.string()?,
-                    titles: take_strings(&mut r)?,
+                    titles: take_editions(&mut r)?,
                     token: r.string()?,
                 }
             }
@@ -555,7 +591,7 @@ impl Message {
 
     /// The hello a client opens with.
     #[must_use]
-    pub fn hello(name: &str, titles: &[String], token: &str) -> Self {
+    pub fn hello(name: &str, titles: &[Edition], token: &str) -> Self {
         Self::Hello {
             protocol: PROTOCOL,
             name: name.to_string(),
@@ -583,7 +619,18 @@ mod tests {
     #[test]
     fn every_lobby_message_round_trips() {
         let messages = [
-            Message::hello("ann", &["Wipeout Pulse".into(), "Wipeout HD".into()], "tok"),
+            Message::hello(
+                "ann",
+                &[
+                    Edition {
+                        title: "Wipeout Pulse".into(),
+                        platform: "PSP".into(),
+                        content: 0xABCD,
+                    },
+                    Edition::default(),
+                ],
+                "tok",
+            ),
             Message::ListRooms,
             Message::CreateRoom(settings()),
             Message::JoinRoom { room: 9 },

@@ -16,7 +16,7 @@ use web_time::{Duration, Instant};
 use super::race_proc::{Handle, Runner, Status};
 use super::rooms::{ClientId, Config as RoomsConfig, Rooms};
 use crate::link::Link;
-use crate::wire::online::{Message, RaceJob, Refusal};
+use crate::wire::online::{Edition, Message, RaceJob, Refusal};
 use crate::wire::{Control, PROTOCOL};
 use crate::wt::{Identity, Listener, WtLink};
 
@@ -199,7 +199,7 @@ impl Server {
         mut link: WtLink,
         protocol: u16,
         name: &str,
-        titles: Vec<String>,
+        titles: Vec<Edition>,
         token_in: &str,
     ) {
         if protocol != PROTOCOL {
@@ -255,7 +255,7 @@ impl Server {
         let message = Message::Welcome {
             token: client.token.clone(),
             name: name.to_string(),
-            titles: self.rooms.titles().to_vec(),
+            titles: self.rooms.titles(),
         };
         client.link.send_lobby(&message);
     }

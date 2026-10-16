@@ -14,9 +14,11 @@ tested locally; nothing has been deployed or tried over a real network.
    settings (`MP Select`) or the game list, team, the lobby; each needs `menu.toml` rows with
    `string_id`s and English text, and pointer support. `oag_game::online::run` is the flow to
    split into a per-frame state like `session::lan`'s.
-3. **A content fingerprint before the race loads.** Today a different pressing or a mod is
-   caught by the race child's tick-0 hash and named, after the countdown. The hello carries the
-   protocol and the titles only; a build and mod fingerprint in it would refuse at join.
+3. **The build at join.** The hello carries title, platform and mods (the room list and joins use
+   `discovery::differs`), not the build: the standalone server has no build string. A client of
+   another build is caught by the race child's tick-0 hash only after the countdown, as a join
+   timeout. Give `oag-server` a build identity (an env var at build time) and compare it.
+   Also: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
 4. **Settings Omega has and `RaceParams` lacks**: laps, eliminations target, zone target,
    barrel rolls, pilot assist allowed. Weapons stay off (ADR-0069, condition 2).
 5. **Session takeover re-sending a pending hand-off**, and `PR_SET_PDEATHSIG` so a killed lobby
@@ -29,4 +31,4 @@ tested locally; nothing has been deployed or tried over a real network.
 
 1. Maintainer: run the remote test above and report what the host's firewall and IPv6 did.
 2. A lane for the ONLINE screens in `oag-ui-screens` over `oag_net::online::client::LobbyClient`.
-3. The pre-race content fingerprint (open 3), reusing `oag_net::race::fingerprint`'s inputs.
+3. The build at join (open 3).

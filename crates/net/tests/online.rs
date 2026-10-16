@@ -11,12 +11,20 @@ use oag_net::online::client::{Handoff, LobbyClient};
 use oag_net::online::race_proc::{ChildRunner, Limits, ThreadRunner};
 use oag_net::online::rooms::Config as RoomsConfig;
 use oag_net::online::server::{Config, Server};
-use oag_net::wire::online::{Phase as RoomPhase, RoomSettings};
+use oag_net::wire::online::{Edition, Phase as RoomPhase, RoomSettings};
 use web_time::Duration;
 
 use crate::loopback::headless;
 
 const TITLE: &str = "Wipeout Test";
+
+fn edition() -> Edition {
+    Edition {
+        title: TITLE.into(),
+        platform: "PSP".into(),
+        content: 0,
+    }
+}
 
 fn settings() -> RoomSettings {
     RoomSettings {
@@ -34,7 +42,7 @@ fn config() -> Config {
         listen: "127.0.0.1:0".parse().expect("addr"),
         cert_names: Vec::new(),
         rooms: RoomsConfig {
-            titles: vec![TITLE.into()],
+            titles: vec![edition()],
             countdown_ms: 100,
             ..RoomsConfig::default()
         },
@@ -75,7 +83,7 @@ impl Lab {
         self.people.push(LobbyClient::connect(
             Box::new(link) as Box<dyn Link>,
             name,
-            &[TITLE.to_string()],
+            &[edition()],
             "",
         ));
         let who = self.people.len() - 1;

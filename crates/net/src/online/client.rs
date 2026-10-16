@@ -5,7 +5,7 @@
 //! updates the fields, and the screens (or a test) read the fields.
 
 use crate::link::Link;
-use crate::wire::online::{Message, Refusal, RoomInfo, RoomSettings, Snapshot};
+use crate::wire::online::{Edition, Message, Refusal, RoomInfo, RoomSettings, Snapshot};
 
 /// Where a race is, as the lobby told this client.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,9 +42,9 @@ pub struct LobbyClient {
 }
 
 impl LobbyClient {
-    /// Says hello on `link` as `name`, able to race `titles`; `token` is an earlier
+    /// Says hello on `link` as `name`, able to race `titles` (each with its platform and content); `token` is an earlier
     /// session's, empty for a new one.
-    pub fn connect(mut link: Box<dyn Link>, name: &str, titles: &[String], token: &str) -> Self {
+    pub fn connect(mut link: Box<dyn Link>, name: &str, titles: &[Edition], token: &str) -> Self {
         link.send_lobby(&Message::hello(name, titles, token));
         Self {
             link,

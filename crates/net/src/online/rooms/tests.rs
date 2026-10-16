@@ -3,9 +3,17 @@ use super::*;
 const PULSE: &str = "Wipeout Pulse";
 const HD: &str = "Wipeout HD";
 
+fn edition(title: &str) -> Edition {
+    Edition {
+        title: title.into(),
+        platform: "PSP".into(),
+        content: 0,
+    }
+}
+
 fn lobby() -> Rooms {
     Rooms::new(Config {
-        titles: vec![PULSE.into(), HD.into()],
+        titles: vec![edition(PULSE), edition(HD)],
         countdown_ms: 1_000,
         ..Config::default()
     })
@@ -24,7 +32,7 @@ fn settings(title: &str) -> RoomSettings {
 
 fn person(rooms: &mut Rooms, id: ClientId, name: &str, titles: &[&str]) {
     rooms
-        .connect(id, name, titles.iter().map(|t| (*t).to_string()).collect())
+        .connect(id, name, titles.iter().map(|t| edition(t)).collect())
         .expect("a free name");
 }
 
@@ -113,6 +121,61 @@ fn the_list_shows_only_rooms_in_a_title_the_asker_can_race() {
     );
     rooms.handle(2, Message::JoinRoom { room: 3 });
     assert_eq!(refusal(last(&mut rooms, 2)), Refusal::Content);
+}
+
+#[test]
+fn a_pressing_or_a_mod_set_that_differs_from_the_servers_hides_the_room_and_refuses_the_join() {
+    let mut rooms = lobby();
+    person(&mut rooms, 1, "ann", &[PULSE]);
+    rooms
+        .connect(
+            2,
+            "ps2",
+            vec![Edition {
+                platform: "PS2".into(),
+                ..edition(PULSE)
+            }],
+        )
+        .expect("name");
+    rooms
+        .connect(
+            3,
+            "modded",
+            vec![Edition {
+                content: 0xBEEF,
+                ..edition(PULSE)
+            }],
+        )
+        .expect("name");
+    rooms.handle(1, Message::CreateRoom(settings(PULSE)));
+    rooms.take_outbox();
+    assert_eq!(rooms.list(1).len(), 1);
+    assert!(
+        rooms.list(2).is_empty(),
+        "a PS2 pressing is not the server's PSP one"
+    );
+    assert!(
+        rooms.list(3).is_empty(),
+        "other mods would simulate differently"
+    );
+    rooms.handle(2, Message::JoinRoom { room: 1 });
+    assert_eq!(refusal(last(&mut rooms, 2)), Refusal::Content);
+    rooms.handle(3, Message::JoinRoom { room: 1 });
+    match last(&mut rooms, 3) {
+        Some(Message::Rejected {
+            code: Refusal::Content,
+            text,
+        }) => {
+            assert!(text.contains("mods"), "{text}");
+        }
+        other => panic!("{other:?}"),
+    }
+    rooms.handle(3, Message::CreateRoom(settings(PULSE)));
+    assert_eq!(
+        refusal(last(&mut rooms, 3)),
+        Refusal::Content,
+        "nor can they make one"
+    );
 }
 
 #[test]

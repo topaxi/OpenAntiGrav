@@ -658,9 +658,16 @@ impl NetArgs {
                 .map_err(|e| anyhow::anyhow!("--lobby-hash @{path}: {e}"))?,
             None => given.to_string(),
         };
-        let title = oag_source::title::identify(source)
-            .ok_or_else(|| anyhow::anyhow!("{source} is not a disc this build knows"))?
-            .name;
+        let opened = oag_source::title::open_source(source, Vec::new(), Vec::new())
+            .map_err(|e| anyhow::anyhow!("{source} is not a disc this build knows: {e:#}"))?;
+        let title = opened.title.name;
+        let edition = oag_net::wire::online::Edition {
+            title: title.to_string(),
+            platform: opened.archives.layout.platform.to_string(),
+            content: oag_game::mods::Mods::load()
+                .ok()
+                .map_or(0, |mods| mods.content_fingerprint()),
+        };
         let action = if self.online_create {
             Action::Create(oag_net::wire::online::RoomSettings {
                 title: title.to_string(),
@@ -680,7 +687,7 @@ impl NetArgs {
                 .online_name
                 .clone()
                 .unwrap_or_else(|| format!("oag-game {}", std::process::id())),
-            titles: vec![title.to_string()],
+            titles: vec![edition],
             action,
             team: self
                 .online_team

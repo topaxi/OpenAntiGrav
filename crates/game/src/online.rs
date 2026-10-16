@@ -10,7 +10,7 @@
 use anyhow::{Result, anyhow, bail};
 use oag_net::link::Link;
 use oag_net::online::client::LobbyClient;
-use oag_net::wire::online::{Phase, RoomSettings};
+use oag_net::wire::online::{Edition, Phase, RoomSettings};
 use web_time::{Duration, Instant};
 
 use crate::net_play::Connect;
@@ -37,8 +37,9 @@ pub struct Plan {
     pub cert_hash: [u8; 32],
     /// The name to go by.
     pub name: String,
-    /// The titles this machine can race.
-    pub titles: Vec<String>,
+    /// What this machine can race: its title, the image's platform and its mods' fingerprint,
+    /// which the lobby compares with the server's to show it only rooms it can join.
+    pub titles: Vec<Edition>,
     /// Make a room or join one.
     pub action: Action,
     /// The team to fly, `--team`'s spelling.
@@ -83,6 +84,7 @@ pub fn run(plan: &Plan) -> Result<Connect> {
                 .rsplit_once(':')
                 .map_or(plan.addr.as_str(), |(host, _)| host);
             println!("online: the race is on {host}:{}", handoff.port);
+            keep_lobby_open(lobby);
             return Ok(Connect {
                 addr: format!("{host}:{}", handoff.port),
                 cert_hash: handoff.cert_hash,
@@ -156,5 +158,29 @@ pub fn run(plan: &Plan) -> Result<Connect> {
             }
         }
         std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+/// The lobby link stays open for the whole race (the lobby pushes the end of the race on it,
+/// and a closed link would have the lobby drop this person from their room): a thread polls
+/// it until the process exits and says when the room is open again.
+fn keep_lobby_open(mut lobby: LobbyClient) {
+    let spawned = std::thread::Builder::new()
+        .name("oag-lobby".into())
+        .spawn(move || {
+            let mut note = String::new();
+            while lobby.poll().is_ok() {
+                if let Some(room) = &lobby.room
+                    && room.phase == Phase::Open
+                    && room.note != note
+                {
+                    println!("online: back in the room: {}", room.note);
+                    note.clone_from(&room.note);
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        });
+    if let Err(e) = spawned {
+        log::warn!("online: the lobby link is not kept open: {e}");
     }
 }

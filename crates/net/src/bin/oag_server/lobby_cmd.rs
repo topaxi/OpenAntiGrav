@@ -11,10 +11,11 @@
 
 use std::net::SocketAddr;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use oag_net::online::race_proc::{ChildRunner, Limits};
 use oag_net::online::rooms::Config as RoomsConfig;
 use oag_net::online::server::{Config, Server};
+use oag_net::wire::online::Edition;
 use web_time::Duration;
 
 #[derive(clap::Args, Debug)]
@@ -61,19 +62,27 @@ pub struct Args {
 pub fn run(args: &Args) -> Result<()> {
     oag_log::tool::start("oag-server-lobby", "warn,oag=info,oag_net=info", &args.log);
     let mut images = Vec::new();
+    let mut editions = Vec::new();
     let sources = if args.images.is_empty() {
         vec![oag_source::source::resolve(None, None)?]
     } else {
         args.images.clone()
     };
     for source in sources {
-        let Some(title) = oag_source::title::identify(&source) else {
-            bail!("{source} is not a disc or folder of a title this build knows");
-        };
-        println!("hosting {} from {source}", title.name);
-        images.push((title.name.to_string(), source));
+        let opened =
+            oag_source::title::open_source(&source, Vec::new(), Vec::new()).with_context(|| {
+                format!("{source} is not a disc or folder of a title this build knows")
+            })?;
+        let platform = opened.archives.layout.platform.to_string();
+        println!("hosting {} ({platform}) from {source}", opened.title.name);
+        editions.push(Edition {
+            title: opened.title.name.to_string(),
+            platform,
+            content: oag_net::discovery::NO_MODS,
+        });
+        images.push((opened.title.name.to_string(), source));
     }
-    let titles: Vec<String> = images.iter().map(|(t, _)| t.clone()).collect();
+    let titles = editions;
     let limits = Limits {
         join_timeout: Duration::from_secs(args.join_timeout),
         max_ticks: args.max_ticks.unwrap_or(Limits::default().max_ticks),
