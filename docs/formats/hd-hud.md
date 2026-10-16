@@ -602,9 +602,9 @@ What a `<CurveBar>` carries, off the disc's own XML:
   stub of about 9-12%. The thrust bar at 98% is **dark blue toward its tip**, so
   the grade spans the whole `maxWidth` and a crop shows the part up to the value
   rather than squeezing the whole grade into the cropped width. Those two
-  readings fit a full scale near 600 km/h within the frames' motion blur.
-- **Chosen, not measured:** the full-scale speed (`oag_hud::DEFAULT_SPEED_FULL_KMH`,
-  600, the exhaust ramp's own ceiling), that the fill is a straight horizontal
+  readings fit a full scale between 600 and 700 km/h within the frames' motion blur; the executable's own 1/700 (`Hud_UpdateSpeedReadout`) is the figure used (2026-10-16, `hd-thrust-bar`: the yellow ends at 82% of the width at 529 km/h against 76% predicted by 700 and 88% by 600, and at 6% at 74 km/h against 11% and 12%).
+- **Read off the executable, frames agree loosely:** the full-scale speed
+  (`oag_hud::DEFAULT_SPEED_FULL_KMH`, 700). **Chosen, not measured:** that the fill is a straight horizontal
   crop of the art up to `CurveStartPos` and past it (the frames cannot tell a
   crop from a path-length fill where the strip rises), and the angle of the fill's
   cut end. `CurveStartPos` is parsed by nothing: it is not read.

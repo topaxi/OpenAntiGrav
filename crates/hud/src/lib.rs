@@ -751,16 +751,16 @@ pub struct Readout {
 
 /// What [`Readout::speed_full_kmh`] defaults to.
 ///
-/// **A placeholder, and labelled one so it is never mistaken for a recovered
-/// value.** The one bounded piece of evidence about the original's speed range is
-/// the exhaust's own ramp, which saturates at **600 km/h**
-/// (`oag_fx::exhaust::RAMP_FLOOR_KMH` + `RAMP_SPAN_KMH`, both recovered from
-/// the instruction stream). That is a ramp for a visual effect, not a bar
-/// maximum, so using it here is an inference and not a small one.
-///
-/// What would retire it: a reference frame at a known speed, read off the bar's
-/// fill fraction. Until then the bar's *shape* is right and its *scale* is ours.
-pub const DEFAULT_SPEED_FULL_KMH: f32 = 600.0;
+/// **HD's own figure, read off its executable: 700.** `Hud_UpdateSpeedReadout`
+/// (`0x00086e88`) multiplies the speed by `0x008a7708`, `0x3abb3ee7` = 1/700,
+/// and crops the fill to the result. The two reference frames
+/// (`talons-matched/00.png`, `01.png`) fit it no worse than the 600 this held
+/// before: at 529 km/h the fill's yellow ends at 82% of the bar's width where
+/// 700 predicts 76% and 600 predicts 88%; at 74 km/h it ends at 6% against 11%
+/// and 12%. Both are within the motion blur and the curve's path-length
+/// effect, so the executable decides. Pulse and Pure share the default and have
+/// no figure of their own: their bar's scale remains unmeasured.
+pub const DEFAULT_SPEED_FULL_KMH: f32 = 700.0;
 
 impl Readout {
     /// A readout with nothing known, for a test or a race that has not started.

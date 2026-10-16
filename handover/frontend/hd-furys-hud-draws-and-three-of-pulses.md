@@ -129,7 +129,7 @@ other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
   captures completes a lap. Confidence 70 stands; see `hd-hud.md`'s per-lap
   section.
 
-- **HD/Omega `ThrustBar` (2026-10-16): done.** Drawn off the craft's throttle after Pilot Assist's scale (`Readout::thrust_percent`) with its truncated `NN%` label, no chase; see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Still open from the speed bar: its full scale (`Hud_UpdateSpeedReadout` multiplies by a reciprocal of 700, the frames read nearer 600) and crop-versus-path-length past `CurveStartPos`.
+- **HD/Omega `ThrustBar` (2026-10-16): done.** Drawn off the craft's throttle after Pilot Assist's scale (`Readout::thrust_percent`) with its truncated `NN%` label, no chase; see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Still open from the speed bar: its full scale (`Hud_UpdateSpeedReadout` multiplies by a reciprocal of 700, now `DEFAULT_SPEED_FULL_KMH`) and crop-versus-path-length past `CurveStartPos`.
 
 ## Next Steps
 
