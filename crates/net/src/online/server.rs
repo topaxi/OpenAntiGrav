@@ -232,7 +232,7 @@ impl Server {
         }
         let id = self.next_client;
         match self.rooms.connect(id, name, titles) {
-            Err(rejected) => link.send_lobby(&rejected),
+            Err((code, text)) => link.send_lobby(&Message::Rejected { code, text }),
             Ok(()) => {
                 self.next_client += 1;
                 self.clients.insert(

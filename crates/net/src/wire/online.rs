@@ -291,7 +291,7 @@ impl RaceJob {
     /// [`Malformed`] for odd or non-hex text, or bytes that are not a job.
     pub fn from_line(line: &str) -> Result<Self, Malformed> {
         let line = line.trim();
-        if line.len() % 2 != 0 {
+        if !line.len().is_multiple_of(2) {
             return Err(Malformed("job line is not whole bytes"));
         }
         let bytes = (0..line.len() / 2)

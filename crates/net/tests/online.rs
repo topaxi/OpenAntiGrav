@@ -174,7 +174,7 @@ fn fly(lab: &mut Lab, racers: &mut [Racer]) {
         for racer in racers.iter_mut() {
             if racer.race.is_none() {
                 if let Some(welcome) = racer.client.poll_welcome().expect("welcomed") {
-                    racer.seat = Some(usize::from(welcome.seat));
+                    racer.seat = Some(welcome.seat);
                     let mut race = headless(&welcome.params);
                     racer.client.ready(&mut race).expect("the same start state");
                     racer.race = Some(race);

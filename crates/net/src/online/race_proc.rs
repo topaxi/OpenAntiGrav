@@ -135,10 +135,11 @@ pub fn run_race(
         stop,
         &mut |line| {
             // The once-a-second progress line also starts with `tick N`; it has a hash in it.
-            if line.starts_with("tick ") && !line.contains(" hash ") {
-                if let Some((_, why)) = line.split_once(": ") {
-                    ended = why.to_string();
-                }
+            if line.starts_with("tick ")
+                && !line.contains(" hash ")
+                && let Some((_, why)) = line.split_once(": ")
+            {
+                ended = why.to_string();
             }
             say(line);
         },
@@ -146,13 +147,15 @@ pub fn run_race(
     Ok(ended)
 }
 
+/// Builds the race for a job's params.
+pub type Loader =
+    Arc<dyn Fn(&crate::wire::RaceParams) -> anyhow::Result<Box<oag_raceplay::Race>> + Send + Sync>;
+
 /// A race on a thread of this process, loading with `load`: what the tests run, and a
 /// runner for a server that does not want a child.
 pub struct ThreadRunner {
     /// Builds the race for a job's params.
-    pub load: Arc<
-        dyn Fn(&crate::wire::RaceParams) -> anyhow::Result<Box<oag_raceplay::Race>> + Send + Sync,
-    >,
+    pub load: Loader,
     /// Where the race listens (port 0: any).
     pub listen: SocketAddr,
     /// The bounds.

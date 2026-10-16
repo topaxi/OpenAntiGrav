@@ -109,11 +109,11 @@ pub struct Rooms {
     now: u64,
 }
 
-fn refuse(code: Refusal, text: &str) -> Message {
-    Message::Rejected {
-        code,
-        text: text.to_string(),
-    }
+/// A refusal and the line that goes with it.
+type Fail = (Refusal, String);
+
+fn refuse(code: Refusal, text: &str) -> Fail {
+    (code, text.to_string())
 }
 
 impl Rooms {
@@ -145,12 +145,7 @@ impl Rooms {
     /// # Errors
     ///
     /// [`Refusal::BadName`]: empty, too long, or another connected person has it.
-    pub fn connect(
-        &mut self,
-        id: ClientId,
-        name: &str,
-        titles: Vec<String>,
-    ) -> Result<(), Message> {
+    pub fn connect(&mut self, id: ClientId, name: &str, titles: Vec<String>) -> Result<(), Fail> {
         let name = name.trim();
         if name.is_empty() || name.chars().count() > NAME_MAX || name.chars().any(char::is_control)
         {
@@ -275,7 +270,7 @@ impl Rooms {
         }
     }
 
-    fn validate(&self, id: ClientId, settings: &mut RoomSettings) -> Result<(), Message> {
+    fn validate(&self, id: ClientId, settings: &mut RoomSettings) -> Result<(), Fail> {
         if !self.config.titles.contains(&settings.title) {
             return Err(refuse(
                 Refusal::BadSettings,
@@ -345,12 +340,12 @@ impl Rooms {
                 &format!("a client cannot send {other:?}"),
             )),
         };
-        if let Err(rejected) = result {
-            self.say(id, rejected);
+        if let Err((code, text)) = result {
+            self.say(id, Message::Rejected { code, text });
         }
     }
 
-    fn create(&mut self, id: ClientId, mut settings: RoomSettings) -> Result<(), Message> {
+    fn create(&mut self, id: ClientId, mut settings: RoomSettings) -> Result<(), Fail> {
         if self.room_of(id).is_some() {
             return Err(refuse(Refusal::InRoom, "leave your room first"));
         }
@@ -375,7 +370,7 @@ impl Rooms {
         Ok(())
     }
 
-    fn join(&mut self, id: ClientId, room: u32) -> Result<(), Message> {
+    fn join(&mut self, id: ClientId, room: u32) -> Result<(), Fail> {
         if self.room_of(id).is_some() {
             return Err(refuse(Refusal::InRoom, "leave your room first"));
         }
@@ -408,7 +403,7 @@ impl Rooms {
         Ok(())
     }
 
-    fn owned(&self, id: ClientId) -> Result<usize, Message> {
+    fn owned(&self, id: ClientId) -> Result<usize, Fail> {
         let Some(room) = self.room_of(id) else {
             return Err(refuse(Refusal::NotInRoom, "you are not in a room"));
         };
@@ -421,7 +416,7 @@ impl Rooms {
         Ok(index)
     }
 
-    fn edit(&mut self, id: ClientId, mut settings: RoomSettings) -> Result<(), Message> {
+    fn edit(&mut self, id: ClientId, mut settings: RoomSettings) -> Result<(), Fail> {
         let index = self.owned(id)?;
         if self.rooms[index].stage != Stage::Open {
             return Err(refuse(
@@ -466,7 +461,7 @@ impl Rooms {
         Ok(())
     }
 
-    fn ready(&mut self, id: ClientId, team: &str, ready: bool) -> Result<(), Message> {
+    fn ready(&mut self, id: ClientId, team: &str, ready: bool) -> Result<(), Fail> {
         let Some(room) = self.room_of(id) else {
             return Err(refuse(Refusal::NotInRoom, "you are not in a room"));
         };
@@ -495,7 +490,7 @@ impl Rooms {
         Ok(())
     }
 
-    fn start(&mut self, id: ClientId) -> Result<(), Message> {
+    fn start(&mut self, id: ClientId) -> Result<(), Fail> {
         let index = self.owned(id)?;
         let room = &self.rooms[index];
         if room.stage != Stage::Open {

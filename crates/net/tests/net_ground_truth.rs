@@ -317,11 +317,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             for (client, race, who) in &mut racers {
                 if race.is_none() {
                     if let Some(welcome) = client.poll_welcome().expect("welcomed") {
-                        assert_eq!(
-                            usize::from(welcome.seat),
-                            *who,
-                            "the token seats the person"
-                        );
+                        assert_eq!(welcome.seat, *who, "the token seats the person");
                         let mut loaded = oag_net::race::load(&welcome.params, &source)
                             .expect("loads")
                             .0;
