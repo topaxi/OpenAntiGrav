@@ -70,6 +70,41 @@ Every value is ticks (`u32`/`u64`), the same unit `oag_hud::format_lap_time`
 already takes, never a formatted string - formatting is a presentation
 concern, and this file is not one.
 
+## Loyalty: one total per team, across titles
+
+`[[loyalty]]` rows are keyed by the team's **shared identity** (`oag_title::team`), not by title:
+Feisar's total counts in Pulse, Pure, HD, 2048 and Omega. Each title lists its team ids and the
+identity each stands for in `Title::teams`; an id not listed is its own case-folded spelling, so
+`AG_Systems` and `ag_systems` meet with no table. How a race earns points stays each title's law
+(Pulse's `award`, HD's `oag_hd::loyalty`); each title's unlock thresholds stay its own, and an
+`<Unlock Team="any">` row ranges over **that title's roster only** (`Store::loyalty_best`), so
+Omega's `Tigron` opens nothing in Pulse. Earning is wired for Pulse and HD (PSN included); Pure,
+2048 and Omega read the shared total but award nothing of their own: **open**.
+
+Kept apart, listed for the maintainer rather than guessed (a one-token change in the title's
+`TEAM_IDENTITIES` merges each):
+
+| Ids | Why not merged |
+| --- | --- |
+| Pulse `Mantis` / HD, 2048, Omega `Mirage` | the pack is sold as Mirage's, the id differs |
+| `Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048` / `Feisar`.. | both sets sit on one 2048 and Omega roster, so they are not spelling variants |
+| Omega `Tigron` / `Tigron_x` | two teams of Omega's own |
+| Pure `Medievil` | no counterpart elsewhere |
+
+**Migration.** A file from before the change holds `title` + `team` rows. `parse` folds them into
+the shared rows by **sum**, capped at 100,000 after: the shared total is what the team would hold
+had every title banked into one store, and taking the largest would drop a player's progress in
+every other title. A title name this build does not know folds under the team id and is named in
+the load notes. Folded rows carry no `title`, so a second load changes nothing.
+
+## `[dev]` in `settings.toml`
+
+`[dev] unlock_everything` (bool) opens every gate like `--unlock-all`. **Absent means on in a
+debug build** (`cfg!(debug_assertions)`), ignored in release. The table is kept intact when a
+release build rewrites the file. A test or capture that checks locked state writes
+`unlock_everything = false` into its own settings. `settings.toml` has no TOML Schema under
+`schemas/v1/`, so there is none to update.
+
 ## Where a race's result is captured, and why there are two sites
 
 **Never from inside `Race::tick`.** This project's core architectural rule -
