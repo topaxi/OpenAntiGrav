@@ -828,6 +828,22 @@ pub fn run(
                 );
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
+            } else if let Some((room, people, focus)) = join_page::online(page) {
+                // The online lobby's room and room list - see `crate::main::session::online`.
+                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let (list, clip) = join_page::capture_online(
+                    room,
+                    people,
+                    focus,
+                    title.name,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    footer,
+                );
+                ticker_clip = clip;
+                (backdrop, video_format, list, space)
             } else if let Some(request) = window_layout_page::request(page) {
                 // The window layout screen, after the join screen - see
                 // `crate::main::session::window_layout` for the live flow.

@@ -54,6 +54,7 @@ pub use oag_gameplay::input;
 /// its owner.
 pub use oag_input::keys;
 pub mod lan_list;
+pub mod online_screen;
 pub mod launcher;
 pub mod loading;
 pub mod logfile;

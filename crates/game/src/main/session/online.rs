@@ -26,7 +26,8 @@ use log::{error, info, warn};
 use oag_game::net_play::Pending;
 use oag_gameplay::input::Button;
 use oag_net::online::client::{Handoff, LobbyClient};
-use oag_net::wire::online::{Edition, Member, Phase, RoomInfo, RoomSettings, Snapshot};
+use oag_game::online_screen::with_port;
+use oag_net::wire::online::{Edition, RoomSettings};
 use oag_thread::Task;
 use oag_ui::menu::nav::Nav;
 use oag_ui_screens::join::{Event, Join, Labels};
@@ -37,9 +38,6 @@ use crate::overlay::{OnlineField as Field, Prompt, Purpose};
 use crate::stage::Stage;
 
 use super::Session;
-
-/// The lobby's port when the typed address names none. **Chosen**: `oag-server lobby`'s own.
-const DEFAULT_PORT: u16 = 60000;
 
 /// How often the room list is asked for again while it is on screen. **Chosen.**
 const REFRESH: Duration = Duration::from_millis(1000);
@@ -95,108 +93,6 @@ enum Step {
     Dialing(Task<Result<oag_net::wt::WtLink>>, Handoff),
     /// Said hello to the race, waiting for the welcome.
     Waiting(Box<Pending>),
-}
-
-/// What this lobby makes of a room for the screen: the left word, the right text, the line
-/// under the title and whether it can be chosen.
-#[derive(Debug, PartialEq, Eq)]
-pub(crate) struct RoomRow {
-    pub(crate) left: String,
-    pub(crate) right: String,
-    pub(crate) note: Option<String>,
-    pub(crate) blocked: bool,
-}
-
-/// The list's rows from the lobby's rooms.
-pub(crate) fn room_rows(rooms: &[RoomInfo], say: &dyn Fn(&str, &str) -> String) -> Vec<RoomRow> {
-    rooms
-        .iter()
-        .map(|room| {
-            let owner: String = room.owner.to_uppercase().chars().take(8).collect();
-            let track = if room.settings.track.is_empty() {
-                say("OAG_ONLINE_DEFAULT_TRACK", "DEFAULT CIRCUIT")
-            } else {
-                room.settings
-                    .track
-                    .rsplit(['\\', '/'])
-                    .nth(1)
-                    .unwrap_or(&room.settings.track)
-                    .to_uppercase()
-            };
-            let line = format!(
-                "{} / {} / {}",
-                track,
-                room.settings.class.to_uppercase(),
-                room.settings.mode.to_uppercase()
-            );
-            RoomRow {
-                left: owner,
-                right: format!(
-                    "{} ({}/{})",
-                    room.settings.title.to_uppercase(),
-                    room.members,
-                    room.settings.max_players
-                ),
-                note: Some(if room.joinable {
-                    line
-                } else {
-                    say(
-                        "OAG_ONLINE_ROW_CLOSED",
-                        "NOT JOINABLE: FULL, STARTED, OR NOT YOUR TITLE, BUILD OR MODS",
-                    )
-                }),
-                blocked: !room.joinable,
-            }
-        })
-        .collect()
-}
-
-/// A member's line in the room.
-pub(crate) fn member_line(member: &Member, say: &dyn Fn(&str, &str) -> String) -> String {
-    let mut line = member.name.to_uppercase();
-    if member.owner {
-        line.push_str(&format!(" ({})", say("OAG_ONLINE_HOST", "HOST")));
-    }
-    line.push_str(&format!(
-        "  {}",
-        if member.ready {
-            say("OAG_ONLINE_READY", "READY")
-        } else {
-            say("OAG_ONLINE_PICKING", "PICKING")
-        }
-    ));
-    line
-}
-
-/// The line under a room's title: the room's note, else where the room is.
-pub(crate) fn room_hint(room: &Snapshot, owner: bool, say: &dyn Fn(&str, &str) -> String) -> String {
-    let phase = match room.phase {
-        Phase::Open if owner => say("OAG_ONLINE_ROOM_HINT_OWNER", "PRESS START WHEN EVERYONE IS READY"),
-        Phase::Open => say("OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
-        Phase::Queued { position } => say(
-            "OAG_ONLINE_QUEUED",
-            "ANOTHER GAME IS RACING: YOU ARE NUMBER %d IN LINE",
-        )
-        .replace("%d", &position.to_string()),
-        Phase::Countdown { millis } => say("OAG_ONLINE_COUNTDOWN", "THE RACE STARTS IN %d")
-            .replace("%d", &millis.div_ceil(1000).to_string()),
-        Phase::Racing => say("OAG_ONLINE_RACING", "THE RACE IS STARTING"),
-    };
-    if room.note.is_empty() {
-        phase
-    } else {
-        format!("{} - {phase}", room.note.to_uppercase())
-    }
-}
-
-/// `host:port` with the default port added when none is typed.
-pub(crate) fn with_port(typed: &str) -> String {
-    let typed = typed.trim();
-    if typed.rsplit_once(':').is_some_and(|(_, port)| port.parse::<u16>().is_ok()) {
-        typed.to_string()
-    } else {
-        format!("{typed}:{DEFAULT_PORT}")
-    }
 }
 
 impl Session {
@@ -759,7 +655,6 @@ impl Session {
         let Some(mut online) = self.online.take() else {
             return;
         };
-        let say = |id: &str, english: &str| self.online_say(id, english);
         let mut hub = false;
         let mut launch = None;
         // The welcome opens the ONLINE page.
@@ -853,19 +748,14 @@ impl Session {
             .then(|| online.notice.take().map(|(text, _)| text))
             .flatten();
         let screen_rows = match (&online.step, &online.lobby) {
-            (Step::List, Some(lobby)) => Some(Rows::Rooms(room_rows(&lobby.rooms, &say))),
+            (Step::List, Some(lobby)) => Some(Rows::Rooms(lobby.rooms.clone())),
             (Step::Room, Some(lobby)) => lobby.room.as_ref().map(|room| {
                 let owner = room.members.first().is_some_and(|m| m.owner)
                     && room.members.first().map(|m| &m.name) == lobby.name.as_ref();
-                Rows::Room(
-                    room.members.iter().map(|m| member_line(m, &say)).collect(),
-                    room_hint(room, owner, &say),
-                    owner,
-                )
+                Rows::Room(room.clone(), owner)
             }),
             _ => None,
         };
-        let in_room = matches!(online.step, Step::Room);
         let to_hub = matches!(online.step, Step::Hub) && online.lobby.is_some();
         self.online = Some(online);
         if hub {
@@ -886,29 +776,38 @@ impl Session {
             }
             return;
         }
-        if let Stage::Menu(stage) = &mut self.stage
-            && let Some(screen) = stage.lan.as_mut()
-        {
+        let track_labels: Vec<(String, String)> = self.shell.as_ref().map_or_else(Vec::new, |shell| {
+            shell
+                .tracks
+                .iter()
+                .map(|(track, name)| (track.entry_name().to_string(), name.clone()))
+                .collect()
+        });
+        let (Some(shell), Stage::Menu(stage)) = (self.shell.as_ref(), &mut self.stage) else {
+            return;
+        };
+        if let Some(screen) = stage.lan.as_mut() {
             match screen_rows {
-                Some(Rows::Rooms(rows)) => {
-                    screen.set_seats(rows.iter().map(|r| r.right.clone()).collect());
-                    screen.set_row_labels(rows.iter().map(|r| r.left.clone()).collect());
-                    screen.set_notes(
-                        rows.iter().map(|r| r.note.clone()).collect(),
-                        rows.iter().map(|r| r.blocked).collect(),
-                    );
+                Some(Rows::Rooms(rooms)) => {
+                    oag_game::online_screen::fill_list(screen, &rooms, &shell.strings, &|entry| {
+                        track_labels
+                            .iter()
+                            .find(|(known, _)| known == entry)
+                            .map(|(_, name)| name.clone())
+                    });
                     if let Some(notice) = notice {
                         screen.set_hint(notice);
                     }
                 }
-                Some(Rows::Room(lines, hint, _owner)) => {
-                    screen.set_seats(lines);
-                    screen.set_hint(notice.unwrap_or(hint));
+                Some(Rows::Room(room, owner)) => {
+                    oag_game::online_screen::fill_room(screen, &room, owner, &shell.strings);
+                    if let Some(notice) = notice {
+                        screen.set_hint(notice);
+                    }
                 }
                 None => {}
             }
         }
-        let _ = in_room;
     }
 
     /// The welcome has come: remember the answers and open the ONLINE page.
@@ -966,6 +865,6 @@ impl Session {
 }
 
 enum Rows {
-    Rooms(Vec<RoomRow>),
-    Room(Vec<String>, String, bool),
+    Rooms(Vec<oag_net::wire::online::RoomInfo>),
+    Room(oag_net::wire::online::Snapshot, bool),
 }
