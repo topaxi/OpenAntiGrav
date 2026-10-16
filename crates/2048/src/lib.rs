@@ -155,7 +155,7 @@ pub const TITLE: &Title = &Title {
         // Ships it as `.gxt`; the eboot does not name it, so Pulse's law.
         ghost_static: Some(oag_title::weapons::GhostStatic {
             entry: r"Data\Tex\staticglow.mip",
-            origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         }),
         ..oag_title::weapons::WeaponModels::EMPTY
     },
@@ -166,7 +166,7 @@ pub const TITLE: &Title = &Title {
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     }),
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
@@ -185,7 +185,7 @@ pub const TITLE: &Title = &Title {
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     },
     pressings: None,
     pre_race: None,
@@ -206,7 +206,7 @@ pub const TITLE: &Title = &Title {
 const EFFECTS: oag_title::Effects = {
     use oag_title::Trigger;
     let mut effects =
-        oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Omega Collection"))
+        oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
             .without(Trigger::PlasmaBlast)
             .without(Trigger::EngineFlare)
             .without(Trigger::LeachbeamEnergy);
