@@ -19,7 +19,16 @@
 //! cargo run -p oag-game -- <the same image> --connect 127.0.0.1:4433 --cert-hash <64 hex digits>
 //! ```
 //!
+//! `oag-server lobby` is the online lobby (`docs/networking/online-lobby.md`): it lists rooms
+//! for every title it has an image for and runs one race at a time as a child,
+//! `oag-server race`, which reads its job off standard input.
+//!
 //! See `docs/networking/README.md`, "Running a local server".
+
+#[path = "oag_server/lobby_cmd.rs"]
+mod lobby_cmd;
+#[path = "oag_server/race_cmd.rs"]
+mod race_cmd;
 
 use std::net::SocketAddr;
 
@@ -30,9 +39,22 @@ use oag_net::serve::Pace;
 use oag_net::wire::RaceParams;
 use web_time::Duration;
 
+#[derive(clap::Subcommand, Debug)]
+enum Cmd {
+    /// The online lobby: rooms for every title it has an image for, one race at a time.
+    Lobby(lobby_cmd::Args),
+    /// One race for the lobby (not run by hand): reads its job from standard input.
+    Race(race_cmd::Args),
+}
+
 #[derive(Parser, Debug)]
-#[command(about = "The headless authoritative race server (WebTransport)")]
+#[command(
+    about = "The headless authoritative race server (WebTransport)",
+    args_conflicts_with_subcommands = true
+)]
 struct Cli {
+    #[command(subcommand)]
+    cmd: Option<Cmd>,
     /// The address to listen on. Port 4433 is chosen, not standard.
     #[arg(long, default_value = "127.0.0.1:4433")]
     listen: SocketAddr,
@@ -88,6 +110,11 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    match cli.cmd {
+        Some(Cmd::Lobby(args)) => return lobby_cmd::run(&args),
+        Some(Cmd::Race(args)) => return race_cmd::run(&args),
+        None => {}
+    }
     oag_log::tool::start("oag-server", "warn,oag=info,oag_server=info", &cli.log);
 
     let source = oag_source::source::resolve(cli.image.as_deref(), None)?;

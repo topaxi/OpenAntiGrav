@@ -53,6 +53,17 @@ pub trait Link: Send {
         self.recv_reliable().map(|bytes| Control::decode(&bytes))
     }
 
+    /// Sends an online-lobby [`online::Message`](crate::wire::online::Message).
+    fn send_lobby(&mut self, message: &crate::wire::online::Message) {
+        self.send_reliable(message.encode());
+    }
+
+    /// The next online-lobby message, if one has arrived.
+    fn recv_lobby(&mut self) -> Option<Result<crate::wire::online::Message, Malformed>> {
+        self.recv_reliable()
+            .map(|bytes| crate::wire::online::Message::decode(&bytes))
+    }
+
     /// Sends a [`Datagram`] message.
     fn send(&mut self, message: &Datagram) {
         self.send_datagram(message.encode());

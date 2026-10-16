@@ -470,7 +470,7 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
 ## Hosting model
 
 **Chosen, not measured.** Direction from the maintainer discussion of 2026-10-14.
-`oag-server` already runs one race per process; the warm loop and the lobby in item 3 are not built.
+`oag-server` already runs one race per process; the online lobby (item 3's "separate small lobby") was built as a first spike on 2026-10-16 ([online-lobby.md](online-lobby.md), part 5); the warm loop is not.
 
 1. **One race per `oag-server` process.** Each process runs one match: one canonical
    `RaceSim`, one 60 Hz tick loop, one set of clients. This is the usual shape for
@@ -492,8 +492,11 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
    - A reset-and-wait loop returns a finished race to waiting instead of exiting. This
      gives pooling without a fleet manager.
    - A separate small lobby or matchmaker starts or reuses servers and gives each client
-     the address and the certificate hash. No lobby exists yet; the flow Omega
-     used, what a lobby needs and the v1 plan are in [online-lobby.md](online-lobby.md).
+     the address and the certificate hash. **Built as a spike (2026-10-16):** `oag-server lobby`
+     (rooms, one game slot with a queue, a forked `oag-server race` child, the clients
+     reconnecting by seat token), `oag-game --online`; the flow Omega used, the wire messages,
+     the ports (UDP 60000 lobby, UDP 60001 race), how to run it and the deploy steps are in
+     [online-lobby.md](online-lobby.md).
    - LAN stays a listen server inside the client (decision 3 above).
 
 ## Running a local server

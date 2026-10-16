@@ -62,6 +62,8 @@ pub mod mods;
 pub mod movie;
 pub mod music_state;
 pub mod net_play;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod online;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

@@ -207,6 +207,160 @@ fn a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets() {
     assert!(matches > 200, "{matches} confirmed ticks agreed");
 }
 
+/// The online lobby the way the maintainer runs it: the real `oag-server lobby` process on
+/// localhost, two lobby clients that make a room and press START, the real `oag-server race`
+/// child it forks on a second port, both clients reconnecting to it with their seat tokens (in
+/// the wrong order), a real circuit raced with the hashes agreeing, the child exiting at its
+/// tick limit, and both clients back in their room with the reason.
+#[test]
+#[ignore = "needs a disc image"]
+fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+
+    use oag_net::client::Phase;
+    use oag_net::online::client::LobbyClient;
+    use oag_net::wire::online::{Phase as RoomPhase, RoomSettings};
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let mut lobby = Command::new(env!("CARGO_BIN_EXE_oag-server"))
+        .args(["lobby", "--image", &source])
+        .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
+        .args(["--countdown-ms", "200", "--max-ticks", "300"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("the lobby starts");
+    let mut lines = std::io::BufReader::new(lobby.stdout.take().expect("piped")).lines();
+    let (mut addr, mut hash) = (None, None);
+    while addr.is_none() || hash.is_none() {
+        let line = lines.next().expect("the lobby is up").expect("a line");
+        if let Some(a) = line.strip_prefix("lobby listening on ") {
+            addr = Some(a.to_string());
+        } else if let Some(h) = line.strip_prefix("lobby cert-hash ") {
+            hash = Some(oag_net::wt::parse_hash(h).expect("hash"));
+        }
+    }
+    let (addr, hash) = (addr.expect("addr"), hash.expect("hash"));
+    // Keep draining the lobby's output so its pipe never fills.
+    std::thread::spawn(move || lines.for_each(drop));
+    let outcome = std::panic::catch_unwind(|| {
+        let opened = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+            .expect("the image opens");
+        let titles = [oag_net::wire::online::Edition {
+            title: opened.title.name.to_string(),
+            platform: opened.archives.layout.platform.to_string(),
+            content: oag_net::discovery::NO_MODS,
+        }];
+        let mut people: Vec<LobbyClient> = ["Ada", "Bob"]
+            .iter()
+            .map(|name| {
+                let link = oag_net::wt::connect(&addr, hash).expect("connects to the lobby");
+                LobbyClient::connect(Box::new(link) as Box<dyn Link>, name, &titles, "")
+            })
+            .collect();
+        let pump = |people: &mut Vec<LobbyClient>, done: &dyn Fn(&[LobbyClient]) -> bool| {
+            let started = std::time::Instant::now();
+            while !done(people) {
+                assert!(started.elapsed().as_secs() < 240, "the lobby stalled");
+                for person in people.iter_mut() {
+                    let _ = person.poll();
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+        };
+        pump(&mut people, &|p| p.iter().all(LobbyClient::welcomed));
+        people[0].create(RoomSettings {
+            title: "Wipeout Pulse".into(),
+            track: params().track,
+            class: "VENOM".into(),
+            mode: "single_race".into(),
+            max_players: 2,
+            opponents: true,
+        });
+        pump(&mut people, &|p| p[0].room.is_some());
+        let room = people[0].room.as_ref().expect("room").id;
+        people[1].join(room);
+        pump(&mut people, &|p| p[1].room.is_some());
+        people[0].ready("Feisar", true);
+        people[1].ready("Qirex", true);
+        pump(&mut people, &|p| {
+            p[0].room
+                .as_ref()
+                .is_some_and(|r| r.members.iter().all(|m| m.ready))
+        });
+        people[0].start();
+        pump(&mut people, &|p| p.iter().all(LobbyClient::has_handoff));
+        let handoffs: Vec<_> = people
+            .iter_mut()
+            .map(|p| p.take_handoff().expect("handoff"))
+            .collect();
+        let ip = addr.rsplit_once(':').expect("host:port").0.to_string();
+        let mut racers: Vec<(Client, Option<Box<oag_raceplay::Race>>, usize)> = [1usize, 0]
+            .iter()
+            .map(|&who| {
+                let h = &handoffs[who];
+                let link = oag_net::wt::connect(&format!("{ip}:{}", h.port), h.cert_hash)
+                    .expect("connects to the race child");
+                (
+                    Client::connect_seat(Box::new(link), &h.name, "", &h.token),
+                    None,
+                    who,
+                )
+            })
+            .collect();
+        let (mut matches, mut mismatches) = (0, 0);
+        let started = std::time::Instant::now();
+        while racers
+            .iter()
+            .any(|(c, _, _)| !matches!(c.phase(), Phase::Over(_)))
+        {
+            assert!(started.elapsed().as_secs() < 240, "the race stalled");
+            for person in &mut people {
+                let _ = person.poll();
+            }
+            for (client, race, who) in &mut racers {
+                if race.is_none() {
+                    if let Some(welcome) = client.poll_welcome().expect("welcomed") {
+                        assert_eq!(welcome.seat, *who, "the token seats the person");
+                        let mut loaded = oag_net::race::load(&welcome.params, &source)
+                            .expect("loads")
+                            .0;
+                        client.ready(&mut loaded).expect("the same start state");
+                        *race = Some(loaded);
+                    }
+                    continue;
+                }
+                let race = race.as_mut().expect("loaded");
+                client.poll();
+                if client.phase() == &Phase::Racing {
+                    let own = client.bot_input(race);
+                    client.step(race, &own);
+                    let stats = client.take_stats();
+                    matches += stats.hash_matches;
+                    mismatches += stats.hash_mismatches;
+                    std::thread::sleep(std::time::Duration::from_micros(14_000));
+                }
+            }
+        }
+        assert_eq!(mismatches, 0);
+        assert!(matches > 100, "{matches} confirmed ticks agreed");
+        pump(&mut people, &|p| {
+            p.iter().all(|c| {
+                c.room
+                    .as_ref()
+                    .is_some_and(|r| r.phase == RoomPhase::Open && r.note.contains("max-ticks"))
+            })
+        });
+    });
+    let _ = lobby.kill();
+    let _ = lobby.wait();
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 /// Polls `done` until it holds, failing after three minutes (a load on a busy machine).
 fn wait(what: &str, mut done: impl FnMut() -> bool) {
     let started = std::time::Instant::now();

@@ -551,12 +551,71 @@ pub(crate) struct NetArgs {
     /// a run on localhost at a real network's numbers.
     #[arg(long, value_name = "RTT_MS[:LOSS]", requires = "connect")]
     pub(crate) net_shim: Option<String>,
+
+    /// Race through the online lobby at HOST:PORT (`oag-server lobby`): make or join a room,
+    /// pick a ship, and race on the server it hands this machine to. Implies `--race`, and
+    /// then goes the way `--connect` does. Needs `--lobby-hash`. A command-line path for the
+    /// first spike; the menus' ONLINE screens are open work.
+    #[arg(long, value_name = "HOST:PORT", requires = "lobby_hash", conflicts_with = "connect")]
+    pub(crate) online: Option<String>,
+
+    /// The lobby certificate's SHA-256 (`lobby cert-hash` line), or `@FILE`.
+    #[arg(long, value_name = "HEX|@FILE", requires = "online")]
+    pub(crate) lobby_hash: Option<String>,
+
+    /// The name this player goes by in the lobby.
+    #[arg(long, requires = "online")]
+    pub(crate) online_name: Option<String>,
+
+    /// Make a room (with `--online-track`, `--online-class`, `--online-mode`,
+    /// `--online-max`) and press START once `--online-start-at` people are ready.
+    /// Without it, join `--online-room`, or the first joinable room.
+    #[arg(long, requires = "online")]
+    pub(crate) online_create: bool,
+
+    /// The room to join, from the lobby's list.
+    #[arg(long, requires = "online", conflicts_with = "online_create")]
+    pub(crate) online_room: Option<u32>,
+
+    /// The team to fly, as `--team` spells it. Required with `--online`: picking a ship is
+    /// what readies a person in the lobby, and a default would be a title's guess.
+    #[arg(long, requires = "online")]
+    pub(crate) online_team: Option<String>,
+
+    /// The circuit of a room made with `--online-create`, as `--track` spells it.
+    #[arg(long, requires = "online", default_value = "")]
+    pub(crate) online_track: String,
+
+    /// The speed class of a room made with `--online-create`.
+    #[arg(long, requires = "online", default_value = "VENOM")]
+    pub(crate) online_class: String,
+
+    /// The race mode of a room made with `--online-create`.
+    #[arg(long, requires = "online", default_value = "single_race")]
+    pub(crate) online_mode: String,
+
+    /// The most people in a room made with `--online-create`.
+    #[arg(long, requires = "online", default_value_t = 2)]
+    pub(crate) online_max: u8,
+
+    /// A room made with `--online-create` presses START when this many are ready.
+    #[arg(long, requires = "online", default_value_t = 2)]
+    pub(crate) online_start_at: usize,
 }
 
 impl NetArgs {
     /// The connection asked for, if any, its hash and shim parsed.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(crate) fn connect(&self) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
+    pub(crate) fn connect(&self, source: &str) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
+        if let Some(plan) = self.online_plan(source)? {
+            return oag_game::online::run(&plan).map(|connect| {
+                Some(oag_game::net_play::Connect {
+                    shim: self.shim().ok().flatten(),
+                    bot: self.net_bot,
+                    ..connect
+                })
+            });
+        }
         let Some(addr) = &self.connect else {
             return Ok(None);
         };
@@ -566,28 +625,86 @@ impl NetArgs {
                 .map_err(|e| anyhow::anyhow!("--cert-hash @{path}: {e}"))?,
             None => given.to_string(),
         };
-        let shim = self
-            .net_shim
-            .as_deref()
-            .map(oag_net::link::Conditions::parse)
-            .transpose()
-            .map_err(anyhow::Error::msg)?;
         Ok(Some(oag_game::net_play::Connect {
             addr: addr.clone(),
             cert_hash: oag_net::wt::parse_hash(hex.trim())?,
-            shim,
+            shim: self.shim()?,
             bot: self.net_bot,
             name: format!("oag-game {}", std::process::id()),
+            token: String::new(),
+        }))
+    }
+
+    /// `--net-shim`, parsed.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn shim(&self) -> anyhow::Result<Option<oag_net::link::Conditions>> {
+        self.net_shim
+            .as_deref()
+            .map(oag_net::link::Conditions::parse)
+            .transpose()
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// The lobby flow `--online` asked for, if any.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn online_plan(&self, source: &str) -> anyhow::Result<Option<oag_game::online::Plan>> {
+        use oag_game::online::{Action, Plan};
+        let Some(addr) = &self.online else {
+            return Ok(None);
+        };
+        let given = self.lobby_hash.as_deref().unwrap_or_default();
+        let hex = match given.strip_prefix('@') {
+            Some(path) => std::fs::read_to_string(path)
+                .map_err(|e| anyhow::anyhow!("--lobby-hash @{path}: {e}"))?,
+            None => given.to_string(),
+        };
+        let opened = oag_source::title::open_source(source, Vec::new(), Vec::new())
+            .map_err(|e| anyhow::anyhow!("{source} is not a disc this build knows: {e:#}"))?;
+        let title = opened.title.name;
+        let edition = oag_net::wire::online::Edition {
+            title: title.to_string(),
+            platform: opened.archives.layout.platform.to_string(),
+            content: oag_game::mods::Mods::load()
+                .ok()
+                .map_or(0, |mods| mods.content_fingerprint()),
+        };
+        let action = if self.online_create {
+            Action::Create(oag_net::wire::online::RoomSettings {
+                title: title.to_string(),
+                track: self.online_track.clone(),
+                class: self.online_class.clone(),
+                mode: self.online_mode.clone(),
+                max_players: self.online_max,
+                opponents: false,
+            })
+        } else {
+            Action::Join(self.online_room)
+        };
+        Ok(Some(Plan {
+            addr: addr.clone(),
+            cert_hash: oag_net::wt::parse_hash(hex.trim())?,
+            name: self
+                .online_name
+                .clone()
+                .unwrap_or_else(|| format!("oag-game {}", std::process::id())),
+            titles: vec![edition],
+            action,
+            team: self
+                .online_team
+                .clone()
+                .filter(|team| !team.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("--online needs --online-team (the ship to pick)"))?,
+            start_at: self.online_start_at,
         }))
     }
 
     /// The browser build has no native transport (`oag_net::wt` is native only), so
     /// `--connect` is refused there.
     #[cfg(target_arch = "wasm32")]
-    pub(crate) fn connect(&self) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
-        match &self.connect {
-            Some(_) => anyhow::bail!("--connect is not available in the browser build"),
-            None => Ok(None),
+    pub(crate) fn connect(&self, _source: &str) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
+        match (&self.connect, &self.online) {
+            (None, None) => Ok(None),
+            _ => anyhow::bail!("--connect and --online are not available in the browser build"),
         }
     }
 }

@@ -456,7 +456,7 @@ fn run(cli: Cli) -> Result<()> {
     // command line rather than something to discover eight seconds of intro
     // later.
     // `--connect` is a race too: the server's.
-    if cli.race || cli.net.connect.is_some() {
+    if cli.race || cli.net.connect.is_some() || cli.net.online.is_some() {
         // `--prefetch` is a front-end thing, and saying so is better than
         // quietly doing nothing. `--race` exists to skip the boot sequence, and
         // hanging its exit on ten minutes of `ffmpeg` would invert the one
@@ -479,13 +479,13 @@ fn run(cli: Cli) -> Result<()> {
         #[cfg(not(target_arch = "wasm32"))]
         let net = cli
             .net
-            .connect()?
+            .connect(&source)?
             .map(|connect| oag_game::net_play::NetPlay::connect(&connect))
             .transpose()?;
         #[cfg(target_arch = "wasm32")]
         let net: Option<oag_game::net_play::NetPlay> = {
             // Refuses `--connect` by name; the browser build never joins a server.
-            cli.net.connect()?;
+            cli.net.connect(&source)?;
             None
         };
         let options = pending.race_options(&source, Vec::new());

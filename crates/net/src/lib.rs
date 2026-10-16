@@ -31,6 +31,7 @@ pub mod host;
 pub mod lan;
 pub mod link;
 pub mod lobby;
+pub mod online;
 pub mod race;
 pub mod serve;
 pub mod stats;

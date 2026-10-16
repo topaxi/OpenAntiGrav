@@ -86,6 +86,8 @@ pub struct Host {
     joining: Vec<Box<dyn Link>>,
     history: Vec<TickRecord>,
     phase: Phase,
+    /// Seat tokens a lobby issued, by seat: when set, a hello is seated by its token.
+    expected: Vec<(String, String)>,
 }
 
 impl Host {
@@ -103,7 +105,18 @@ impl Host {
             joining: Vec::new(),
             history: Vec::new(),
             phase: Phase::Lobby,
+            expected: Vec::new(),
         }
+    }
+
+    /// Seats only the people a lobby named: `seats[i]` is the (name, token) of seat `i`,
+    /// and a hello is seated where its token says whatever order the clients arrive in.
+    /// A hello without a listed token is refused by name.
+    pub fn expect_seats(&mut self, seats: Vec<(String, String)>) {
+        self.seats = (0..seats.len().clamp(1, MAX_PLAYERS))
+            .map(|_| None)
+            .collect();
+        self.expected = seats;
     }
 
     /// The tick-0 hash every client must reproduce.
@@ -250,9 +263,31 @@ impl Host {
                 continue;
             };
             let reason = match message {
-                Ok(Control::Hello { protocol, name, .. }) if protocol == PROTOCOL => {
-                    // `seat` has already sent a refusal its reason by name.
-                    if let Err(why) = self.seat(link, name) {
+                Ok(Control::Hello {
+                    protocol,
+                    name,
+                    token,
+                    ..
+                }) if protocol == PROTOCOL => {
+                    // `seat_at` has already sent a refusal its reason by name.
+                    let placed = if self.expected.is_empty() {
+                        self.seat(link, name)
+                    } else if let Some(slot) = self
+                        .expected
+                        .iter()
+                        .position(|(_, wanted)| !token.is_empty() && *wanted == token)
+                    {
+                        let name = self.expected[slot].0.clone();
+                        self.seat_at(Some(slot), link, name)
+                    } else {
+                        link.send_control(&Control::Reject {
+                            reason: "this race seats the people its lobby named; \
+                                     your seat token is not one of them"
+                                .into(),
+                        });
+                        Err("unknown seat token".to_string())
+                    };
+                    if let Err(why) = placed {
                         log::warn!("net: refused a connection: {why}");
                     }
                     continue;
@@ -278,8 +313,30 @@ impl Host {
     /// # Errors
     ///
     /// The race has started, or every seat is taken.
-    pub fn seat(&mut self, mut link: Box<dyn Link>, name: String) -> Result<usize, String> {
-        let reason = match self.seats.iter().position(Option::is_none) {
+    pub fn seat(&mut self, link: Box<dyn Link>, name: String) -> Result<usize, String> {
+        self.seat_at(None, link, name)
+    }
+
+    /// [`Self::seat`] into `slot` when given (it must be empty), else the first empty one.
+    ///
+    /// # Errors
+    ///
+    /// The race has started, or the seat is taken.
+    pub fn seat_at(
+        &mut self,
+        slot: Option<usize>,
+        mut link: Box<dyn Link>,
+        name: String,
+    ) -> Result<usize, String> {
+        let free = match slot {
+            Some(slot) => self
+                .seats
+                .get(slot)
+                .is_some_and(Option::is_none)
+                .then_some(slot),
+            None => self.seats.iter().position(Option::is_none),
+        };
+        let reason = match free {
             Some(slot) if self.phase == Phase::Lobby => {
                 log::info!("net: {name:?} takes seat {slot}");
                 link.send_control(&Control::Welcome {

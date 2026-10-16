@@ -143,6 +143,9 @@ pub enum Control {
         name: String,
         /// The team this person wants to fly (`--team`'s spelling), empty for the host's choice.
         team: String,
+        /// The seat token a lobby handed this person for this race, empty on a LAN host or
+        /// a plain `oag-server`. A server started with seat tokens seats a hello by it.
+        token: String,
     },
     /// Server to client: the seat (grid slot) this client flies, the race, and the
     /// state hash at tick 0 after the race starts, which the client must reproduce.
@@ -242,12 +245,12 @@ impl std::fmt::Display for Malformed {
 
 impl std::error::Error for Malformed {}
 
-struct Reader<'a> {
-    bytes: &'a [u8],
+pub(crate) struct Reader<'a> {
+    pub(crate) bytes: &'a [u8],
 }
 
 impl<'a> Reader<'a> {
-    fn take(&mut self, n: usize) -> Result<&'a [u8], Malformed> {
+    pub(crate) fn take(&mut self, n: usize) -> Result<&'a [u8], Malformed> {
         if self.bytes.len() < n {
             return Err(Malformed("truncated"));
         }
@@ -256,32 +259,32 @@ impl<'a> Reader<'a> {
         Ok(head)
     }
 
-    fn u8(&mut self) -> Result<u8, Malformed> {
+    pub(crate) fn u8(&mut self) -> Result<u8, Malformed> {
         Ok(self.take(1)?[0])
     }
 
-    fn u16(&mut self) -> Result<u16, Malformed> {
+    pub(crate) fn u16(&mut self) -> Result<u16, Malformed> {
         let b = self.take(2)?;
         Ok(u16::from_le_bytes([b[0], b[1]]))
     }
 
-    fn u32(&mut self) -> Result<u32, Malformed> {
+    pub(crate) fn u32(&mut self) -> Result<u32, Malformed> {
         let b = self.take(4)?;
         Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
     }
 
-    fn u64(&mut self) -> Result<u64, Malformed> {
+    pub(crate) fn u64(&mut self) -> Result<u64, Malformed> {
         let lo = u64::from(self.u32()?);
         let hi = u64::from(self.u32()?);
         Ok(lo | hi << 32)
     }
 
-    fn string(&mut self) -> Result<String, Malformed> {
+    pub(crate) fn string(&mut self) -> Result<String, Malformed> {
         let len = usize::from(self.u16()?);
         String::from_utf8(self.take(len)?.to_vec()).map_err(|_| Malformed("string is not UTF-8"))
     }
 
-    fn end(&self) -> Result<(), Malformed> {
+    pub(crate) fn end(&self) -> Result<(), Malformed> {
         if self.bytes.is_empty() {
             Ok(())
         } else {
@@ -290,7 +293,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-fn put_string(out: &mut Vec<u8>, text: &str) {
+pub(crate) fn put_string(out: &mut Vec<u8>, text: &str) {
     let bytes = &text.as_bytes()[..text.len().min(usize::from(u16::MAX))];
     out.extend_from_slice(&u16::try_from(bytes.len()).unwrap_or(u16::MAX).to_le_bytes());
     out.extend_from_slice(bytes);
@@ -398,12 +401,14 @@ impl Control {
                 protocol,
                 name,
                 team,
+                token,
             } => {
                 out.push(1);
                 out.extend_from_slice(&MAGIC);
                 out.extend_from_slice(&protocol.to_le_bytes());
                 put_string(&mut out, name);
                 put_string(&mut out, team);
+                put_string(&mut out, token);
             }
             Self::Welcome {
                 seat,
@@ -460,6 +465,7 @@ impl Control {
                     protocol: reader.u16()?,
                     name: reader.string()?,
                     team: reader.string()?,
+                    token: reader.string()?,
                 }
             }
             2 => Self::Welcome {
@@ -552,6 +558,8 @@ impl Datagram {
         Ok(message)
     }
 }
+
+pub mod online;
 
 #[cfg(test)]
 mod tests;
