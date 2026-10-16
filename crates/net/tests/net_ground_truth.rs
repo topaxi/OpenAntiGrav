@@ -31,6 +31,7 @@ fn params() -> RaceParams {
         people: 2,
         opponents: true,
         weapons: false,
+        laps: 0,
     }
 }
 
@@ -279,6 +280,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             mode: "single_race".into(),
             max_players: 2,
             opponents: true,
+            laps: 0,
         });
         pump(&mut people, &|p| p[0].room.is_some());
         let room = people[0].room.as_ref().expect("room").id;

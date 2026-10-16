@@ -130,6 +130,9 @@ pub struct RaceParams {
     /// Whether weapons are on. Version 1 servers always say no: weapons are not
     /// server events yet (ADR-0069, condition 2).
     pub weapons: bool,
+    /// Laps the race runs, or 0 for the mode's own (`Options::laps_override`). Chosen: only
+    /// the modes that end on laps read it.
+    pub laps: u8,
 }
 
 /// The reliable, ordered stream's messages.
@@ -360,6 +363,7 @@ impl RaceParams {
         out.push(self.people);
         out.push(u8::from(self.opponents));
         out.push(u8::from(self.weapons));
+        out.push(self.laps);
     }
 
     fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
@@ -387,6 +391,7 @@ impl RaceParams {
             people: reader.u8()?,
             opponents: reader.u8()? != 0,
             weapons: reader.u8()? != 0,
+            laps: reader.u8()?,
         })
     }
 }

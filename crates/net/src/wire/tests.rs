@@ -25,6 +25,7 @@ fn params() -> RaceParams {
         people: 2,
         opponents: true,
         weapons: false,
+        laps: 3,
     }
 }
 

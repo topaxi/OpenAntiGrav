@@ -51,6 +51,9 @@ pub struct RoomSettings {
     pub max_players: u8,
     /// Whether the AI fills the rest of the grid.
     pub opponents: bool,
+    /// Laps the race runs, `0` for the mode's own, else `1..=20` (Omega's slider is 3 to 20;
+    /// fewer is chosen, for a short test race).
+    pub laps: u8,
 }
 
 /// One person in a room.
@@ -348,6 +351,7 @@ fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
     }
     out.push(s.max_players);
     out.push(u8::from(s.opponents));
+    out.push(s.laps);
 }
 
 fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
@@ -358,6 +362,7 @@ fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
         mode: r.string()?,
         max_players: r.u8()?,
         opponents: r.u8()? != 0,
+        laps: r.u8()?,
     })
 }
 
@@ -617,6 +622,7 @@ mod tests {
             mode: "single_race".into(),
             max_players: 4,
             opponents: true,
+            laps: 3,
         }
     }
 
@@ -722,6 +728,7 @@ mod tests {
                 people: 2,
                 opponents: false,
                 weapons: false,
+                laps: 3,
             },
             seats: vec![("ann".into(), "t0".into()), ("bob".into(), "t1".into())],
         };

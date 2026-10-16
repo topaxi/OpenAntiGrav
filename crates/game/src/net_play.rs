@@ -230,7 +230,7 @@ impl NetPlay {
             opponent_teams: Vec::new(),
             grid_teams: Vec::new(),
             seat_picks: server.seat_picks,
-            laps_override: None,
+            laps_override: server.laps_override,
             eliminator_kill_target: None,
             zone_stage: None,
             ..options

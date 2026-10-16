@@ -35,6 +35,7 @@ fn settings() -> RoomSettings {
         mode: "single_race".into(),
         max_players: 4,
         opponents: false,
+        laps: 0,
     }
 }
 
