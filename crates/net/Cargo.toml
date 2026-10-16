@@ -22,6 +22,7 @@ anyhow.workspace = true
 clap.workspace = true
 log.workspace = true
 oag-ai.workspace = true
+oag-assets.workspace = true
 oag-core.workspace = true
 oag-gameplay.workspace = true
 oag-log.workspace = true
@@ -29,6 +30,7 @@ oag-physics.workspace = true
 oag-race.workspace = true
 oag-raceplay.workspace = true
 oag-source.workspace = true
+oag-title.workspace = true
 web-time = "1.1.0"
 
 # The native transport. QUIC through quinn, rustls on `ring` only (no aws-lc C

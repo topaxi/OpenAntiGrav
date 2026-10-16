@@ -23,6 +23,7 @@ fn edition() -> Edition {
         title: TITLE.into(),
         platform: "PSP".into(),
         content: 0,
+        build: "0.1 (abc)".into(),
     }
 }
 

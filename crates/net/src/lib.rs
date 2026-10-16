@@ -26,6 +26,8 @@
 #[cfg(feature = "client")]
 pub mod client;
 pub mod discovery;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod extract;
 pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lan;
@@ -38,3 +40,34 @@ pub mod stats;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;
+
+/// The short commit hash this build was made from (`OAG_GIT_HASH`, or `git`'s answer, or
+/// `unknown`); see `build.rs`.
+pub const GIT_HASH: &str = env!("OAG_GIT_HASH");
+
+/// The version suffix the build was given (`OAG_VERSION_SUFFIX`), empty for a release.
+pub const VERSION_SUFFIX: &str = env!("OAG_VERSION_SUFFIX");
+
+/// The version a build reports: the crate version, `OAG_VERSION_SUFFIX` if the
+/// build was given one (the nightly workflow passes `-nightly`), and the commit.
+/// A tagged release leaves the suffix empty. What a LAN host and an online lobby compare
+/// ([`discovery::differs`]) and what `oag-game --version` and `oag-server --version` print.
+pub const BUILD_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    env!("OAG_VERSION_SUFFIX"),
+    " (",
+    env!("OAG_GIT_HASH"),
+    ")"
+);
+
+#[cfg(test)]
+mod build_version_tests {
+    use super::{BUILD_VERSION, GIT_HASH, VERSION_SUFFIX};
+
+    #[test]
+    fn the_build_version_carries_suffix_and_commit() {
+        let expected = format!("{}{VERSION_SUFFIX} ({GIT_HASH})", env!("CARGO_PKG_VERSION"));
+        assert_eq!(BUILD_VERSION, expected);
+        assert!(BUILD_VERSION.contains(VERSION_SUFFIX));
+    }
+}

@@ -523,7 +523,7 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     };
     put("format", "1".to_string());
     put("title", json_string(facts.title));
-    put("git_hash", json_string(env!("OAG_GIT_HASH")));
+    put("git_hash", json_string(oag_net::GIT_HASH));
     put(
         "build",
         json_string(&format!(

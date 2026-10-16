@@ -79,7 +79,7 @@ fn segment(part: &str) -> String {
 #[must_use]
 pub fn header(key: &Key, team: &str, seed: u64) -> Header {
     let mut header = Header::new(&key.title, &key.track, &key.mode, &key.class, team, seed);
-    header.build = env!("OAG_GIT_HASH").to_string();
+    header.build = oag_net::GIT_HASH.to_string();
     header
 }
 

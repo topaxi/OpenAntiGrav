@@ -79,6 +79,7 @@ pub fn run(args: &Args) -> Result<()> {
             title: opened.title.name.to_string(),
             platform,
             content: oag_net::discovery::NO_MODS,
+            build: oag_net::BUILD_VERSION.to_string(),
         });
         images.push((opened.title.name.to_string(), source));
     }

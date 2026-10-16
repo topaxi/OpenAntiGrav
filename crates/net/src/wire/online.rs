@@ -20,8 +20,7 @@ pub const MIN_PLAYERS: u8 = 2;
 pub const MAX_PLAYERS: u8 = 8;
 
 /// What a machine says it can race, per title: enough for the lobby to show it only rooms it
-/// can join. The same facts LAN discovery compares ([`crate::discovery::differs`]), minus the
-/// build, which the standalone server cannot know (see `docs/networking/online-lobby.md`).
+/// can join. The same facts LAN discovery compares ([`crate::discovery::differs`]).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Edition {
     /// The title (`oag_title::Title::name`).
@@ -31,6 +30,9 @@ pub struct Edition {
     pub platform: String,
     /// The mods this machine runs, fingerprinted (0: none). Mods may change the sim.
     pub content: u64,
+    /// The build ([`crate::BUILD_VERSION`]): a different build may simulate differently, and
+    /// the lobby refuses it by name at the hello rather than at the race's tick-0 hash.
+    pub build: String,
 }
 
 /// What the owner of a room decides, after Omega's `MP Select` table. Weapons are not here:
@@ -322,6 +324,7 @@ fn put_editions(out: &mut Vec<u8>, list: &[Edition]) {
         put_string(out, &e.title);
         put_string(out, &e.platform);
         out.extend_from_slice(&e.content.to_le_bytes());
+        put_string(out, &e.build);
     }
 }
 
@@ -333,6 +336,7 @@ fn take_editions(r: &mut Reader<'_>) -> Result<Vec<Edition>, Malformed> {
                 title: r.string()?,
                 platform: r.string()?,
                 content: r.u64()?,
+                build: r.string()?,
             })
         })
         .collect()
@@ -626,6 +630,7 @@ mod tests {
                         title: "Wipeout Pulse".into(),
                         platform: "PSP".into(),
                         content: 0xABCD,
+                        build: "0.1.0 (abc1234)".into(),
                     },
                     Edition::default(),
                 ],

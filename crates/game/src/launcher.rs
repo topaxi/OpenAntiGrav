@@ -818,7 +818,7 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
     out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
 
     // The build's own short commit hash, bottom right - `env!` reads
-    // `OAG_GIT_HASH`, set at compile time by `build.rs`. This is the one
+    // `oag_net::GIT_HASH`, set at compile time by `oag-net`'s `build.rs`. This is the one
     // screen every build shows before anything else can go wrong, which
     // makes it the answer to "which build is this" for a bug report or a
     // Deck deploy that isn't finding what a newer commit should have fixed.
@@ -829,7 +829,7 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
         color: DIM,
         border: None,
         align: Align::Right,
-        text: env!("OAG_GIT_HASH").to_string(),
+        text: oag_net::GIT_HASH.to_string(),
         wrap_width: None,
     });
 

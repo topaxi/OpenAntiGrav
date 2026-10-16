@@ -252,6 +252,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             title: opened.title.name.to_string(),
             platform: opened.archives.layout.platform.to_string(),
             content: oag_net::discovery::NO_MODS,
+            build: oag_net::BUILD_VERSION.to_string(),
         }];
         let mut people: Vec<LobbyClient> = ["Ada", "Bob"]
             .iter()
