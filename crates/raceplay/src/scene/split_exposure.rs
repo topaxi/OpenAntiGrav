@@ -100,6 +100,23 @@ impl Scene {
     }
 }
 
+impl Scene {
+    /// How many seat lanes HD's or Omega's chain has built so far, for the tests: a lane kept
+    /// from frame to frame is built once.
+    #[cfg(test)]
+    pub(crate) fn split_exposure_builds(&self) -> u64 {
+        self.hd
+            .as_ref()
+            .map(oag_post::hd_bloom::Chain::seat_lane_builds)
+            .or_else(|| {
+                self.omega
+                    .as_ref()
+                    .map(oag_post::omega_tonemap::Chain::seat_lane_builds)
+            })
+            .unwrap_or(0)
+    }
+}
+
 /// A view's rectangle in whole pixels, as the scene pass drew it.
 fn pixels(rect: (f32, f32, f32, f32)) -> (u32, u32, u32, u32) {
     (rect.0 as u32, rect.1 as u32, rect.2 as u32, rect.3 as u32)

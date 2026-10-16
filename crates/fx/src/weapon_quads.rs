@@ -123,6 +123,18 @@ pub struct Drawn {
     flash_count: u32,
 }
 
+/// What [`Pipeline::draw`] binds: handles no upload replaces, cloned into a view's
+/// recording so a later view's upload can run beside it (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    bolt_texture: wgpu::BindGroup,
+    flash_texture: wgpu::BindGroup,
+    bolt_vertices: wgpu::Buffer,
+    flash_vertices: wgpu::Buffer,
+}
+
 /// Draws the bolt and the flash.
 ///
 /// One render pipeline covers both: `Cannon_BuildBoltList` and
@@ -131,13 +143,8 @@ pub struct Drawn {
 /// per-draw difference is which texture and vertex buffer is bound.
 #[derive(Debug)]
 pub struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+    drawer: Drawer,
     uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    bolt_texture: wgpu::BindGroup,
-    flash_texture: wgpu::BindGroup,
-    bolt_vertices: wgpu::Buffer,
-    flash_vertices: wgpu::Buffer,
     bolt_count: u32,
     flash_count: u32,
 }
@@ -298,13 +305,15 @@ impl Pipeline {
         let flash_texture = bind_texture(device, queue, &texture_layout, "cannon flash", flash);
 
         Self {
-            pipeline,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+                bolt_texture,
+                flash_texture,
+                bolt_vertices,
+                flash_vertices,
+            },
             uniforms,
-            bind_group,
-            bolt_texture,
-            flash_texture,
-            bolt_vertices,
-            flash_vertices,
             bolt_count: 0,
             flash_count: 0,
         }
@@ -334,7 +343,11 @@ impl Pipeline {
             bolt.len(),
         );
         let n = bolt.len().min(cap);
-        queue.write_buffer(&self.bolt_vertices, 0, bytemuck::cast_slice(&bolt[..n]));
+        queue.write_buffer(
+            &self.drawer.bolt_vertices,
+            0,
+            bytemuck::cast_slice(&bolt[..n]),
+        );
         self.bolt_count = n as u32;
 
         let cap = MAX_ROUNDS * FLASH_VERTICES_PER_ROUND;
@@ -344,7 +357,11 @@ impl Pipeline {
             flash.len(),
         );
         let n = flash.len().min(cap);
-        queue.write_buffer(&self.flash_vertices, 0, bytemuck::cast_slice(&flash[..n]));
+        queue.write_buffer(
+            &self.drawer.flash_vertices,
+            0,
+            bytemuck::cast_slice(&flash[..n]),
+        );
         self.flash_count = n as u32;
     }
 
@@ -357,6 +374,19 @@ impl Pipeline {
         }
     }
 
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws into a pass the caller already opened, after the opaque
     /// geometry (this pipeline blends).
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {

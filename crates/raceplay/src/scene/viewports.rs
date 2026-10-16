@@ -44,9 +44,11 @@
 //!   measures its velocity against a camera history of its own ([`motion::split_history`]),
 //!   writes it into its rectangle of the velocity and depth attachments (a later view
 //!   *loads* them, as it loads the colour), and [`Scene::blur_split_views`] then runs the
-//!   blur over each rectangle, one submission each. **No camera jitter and no temporal
-//!   upscaler input**: the upscaler's frame record holds one camera, and the window's is
-//!   kept cleared. **Chosen, not measured.**
+//!   blur over each rectangle, one submission each. **Camera jitter and the temporal
+//!   upscaler per view too** (2026-10-16): each view jitters on its seat's own sequence and
+//!   records its frame in its seat's history, and [`Scene::temporal`] answers a frame per view
+//!   so the upscaler resolves each with a chain of its own; the window's own record is kept
+//!   cleared. **Chosen, not measured.**
 //! - **HD's and Omega's post chains run once per view, after the last one**
 //!   ([`Scene::run_split_post`], `split_exposure`). Both draw the scene into a linear
 //!   float target and then encode it into `view` with a pass that *clears* `view`
@@ -151,6 +153,8 @@ impl Scene {
         race.set_viewpoint(slot);
         self.layer.set(Layer::Window);
         self.reuse_frame_work.set(shared);
+        self.begin_split_frame(shared);
+        self.note_split_views(window, &[]);
         self.history.set(window);
         let stats = self.render(
             device,
@@ -241,8 +245,8 @@ impl Scene {
     /// capture both draw through it.
     ///
     /// `effects` is the window's blur, jitter and timers; a window of several seats is a
-    /// split and draws the blur only (once per view, [`Scene::blur_split_views`]; the jitter
-    /// is one camera's - **chosen, not measured**). `view_timers` brackets each of
+    /// split and draws the blur once per view ([`Scene::blur_split_views`]) and the jitter on
+    /// each seat's own sequence (**chosen, not measured**). `view_timers` brackets each of
     /// the window's seats' scene passes, as [`Scene::render_viewports`]'s does: empty
     /// everywhere but the render bench, where it stands in for `effects.timestamps`.
     ///
@@ -401,13 +405,28 @@ impl Scene {
     ) -> SceneStats {
         let mut stats = SceneStats::default();
         self.reuse_frame_work.set(shared);
-        // A split draws no camera jitter and feeds no temporal upscaler, so the window's own
-        // record is cleared as `render` always did for it (jitter `None`): the views' histories
-        // below are not the window's.
+        // Each view jitters and records its frame in its seat's history, and the upscaler
+        // resolves each view from that (`Scene::temporal`); the window's own record is not
+        // one of them, so it is cleared.
         self.histories[window.min(motion::MAX_HISTORIES - 1)]
             .last_frame
             .set(None);
+        let noted: Vec<motion::SplitView> = slots
+            .iter()
+            .zip(rects)
+            .map(|(&slot, rect)| {
+                (
+                    slot,
+                    (rect.0 as u32, rect.1 as u32, rect.2 as u32, rect.3 as u32),
+                )
+            })
+            .collect();
+        self.note_split_views(window, &noted);
         self.split_live.set(true);
+        self.begin_split_frame(shared);
+        for &slot in slots {
+            self.keep_split_seat(slot);
+        }
         let recording = self.split_recording();
         if recording == super::Recording::Interleaved {
             for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
@@ -431,7 +450,7 @@ impl Scene {
                         // The blur runs after the last view: `Scene::blur_split_views`.
                         oag_display::display::MotionBlur::Off,
                         shadows,
-                        None,
+                        effects.camera_jitter,
                         zone_spectrum,
                         timer
                             .as_deref()
@@ -455,8 +474,7 @@ impl Scene {
                 pvs_cull,
                 anim_seconds,
                 shadows,
-                // A split draws no camera jitter, as `render` was handed for it.
-                camera_jitter: None,
+                camera_jitter: effects.camera_jitter,
                 zone_spectrum,
             };
             stats = self.render_slots_batched(

@@ -47,7 +47,9 @@
 //! [`effect_path`] are re-exports of [`crate::psys`]'s, which is where they
 //! moved when they stopped being spark-specific.
 
-pub use crate::psys::{BLEND, BLEND_ALPHA_OVER, Drawn, MAX_VERTICES, Pipeline, effect_path};
+pub use crate::psys::{
+    BLEND, BLEND_ALPHA_OVER, Drawer, Drawn, MAX_VERTICES, Pipeline, effect_path,
+};
 
 /// The effect `ShipCollisionFx_Trigger` spawns when the contact dealt
 /// damage: a four-emitter tree - orange smoke puffs, a bright spark

@@ -237,6 +237,39 @@ macro_rules! pass_wgsl {
 /// axis - `FFX_FSR3UPSCALER_THREAD_GROUP_WIDTH` and `..._HEIGHT`.
 const GROUP: u32 = 8;
 
+/// A constants buffer and group 0 bound to it with `samplers` (point, then linear clamp).
+fn shared_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    [point, linear]: &[wgpu::Sampler; 2],
+) -> (wgpu::Buffer, wgpu::BindGroup) {
+    let constants = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("fsr3 constants"),
+        size: Constants::SIZE as u64,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let shared = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("fsr3 shared"),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: constants.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(point),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(linear),
+            },
+        ],
+    });
+    (constants, shared)
+}
+
 /// How many workgroups cover `size` at `group` threads each.
 fn groups(size: u32, group: u32) -> u32 {
     size.div_ceil(group.max(1))
@@ -245,12 +278,14 @@ fn groups(size: u32, group: u32) -> u32 {
 /// The pipelines, the intermediates, and the history's own bookkeeping.
 #[derive(Debug)]
 pub struct Fsr3 {
-    /// Group 0 of every pass, built once. The samplers and the layout it was
-    /// built from are not kept beside it: a `wgpu::BindGroup` holds its own
-    /// resources alive, and the layout is only needed while pipelines are being
-    /// created.
+    /// Group 0 of every pass, built once per chain: the constants buffer and the two
+    /// samplers.
     shared: wgpu::BindGroup,
     constants: wgpu::Buffer,
+    /// What [`Self::shared`] was built from, kept so [`Self::sibling`] can bind a constants
+    /// buffer of its own with the same samplers.
+    shared_layout: wgpu::BindGroupLayout,
+    samplers: [wgpu::Sampler; 2],
     written: Option<Constants>,
     /// The previous frame's constants, which is where the four `previousFrame*`
     /// fields and the frame index come from. `None` before the first frame and
@@ -338,34 +373,11 @@ impl Fsr3 {
                 ..Default::default()
             })
         };
-        let point = sampler("fsr3 point clamp", wgpu::FilterMode::Nearest);
-        let linear = sampler("fsr3 linear clamp", wgpu::FilterMode::Linear);
-
-        let constants = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("fsr3 constants"),
-            size: Constants::SIZE as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let shared = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("fsr3 shared"),
-            layout: &shared_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: constants.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&point),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&linear),
-                },
-            ],
-        });
+        let samplers = [
+            sampler("fsr3 point clamp", wgpu::FilterMode::Nearest),
+            sampler("fsr3 linear clamp", wgpu::FilterMode::Linear),
+        ];
+        let (constants, shared) = shared_group(device, &shared_layout, &samplers);
 
         let clear_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("fsr3 clear"),
@@ -575,6 +587,8 @@ impl Fsr3 {
         Ok(Self {
             shared,
             constants,
+            shared_layout,
+            samplers,
             written: None,
             previous: None,
             clear_layout,
@@ -601,6 +615,46 @@ impl Fsr3 {
             groups: None,
             group_rebuilds: 0,
         })
+    }
+
+    /// A chain with this one's pipelines and a history, constants and intermediates of its own:
+    /// one per split-screen view, so each view reconstructs from its own frames. Shares every
+    /// compiled pass (a clone of a handle), so a view's chain costs its buffers and targets and
+    /// no shader build.
+    #[must_use]
+    pub fn sibling(&self, device: &wgpu::Device) -> Self {
+        let (constants, shared) = shared_group(device, &self.shared_layout, &self.samplers);
+        Self {
+            shared,
+            constants,
+            shared_layout: self.shared_layout.clone(),
+            samplers: self.samplers.clone(),
+            written: None,
+            previous: None,
+            clear_layout: self.clear_layout.clone(),
+            clear: self.clear.clone(),
+            prepare_inputs_layout: self.prepare_inputs_layout.clone(),
+            prepare_inputs: self.prepare_inputs.clone(),
+            luma_pyramid_layout: self.luma_pyramid_layout.clone(),
+            luma_pyramid: self.luma_pyramid.clone(),
+            shading_change_pyramid_layout: self.shading_change_pyramid_layout.clone(),
+            shading_change_pyramid_mip0: self.shading_change_pyramid_mip0.clone(),
+            shading_change_pyramid_reduce: self.shading_change_pyramid_reduce.clone(),
+            shading_change_layout: self.shading_change_layout.clone(),
+            shading_change: self.shading_change.clone(),
+            prepare_reactivity_layout: self.prepare_reactivity_layout.clone(),
+            prepare_reactivity: self.prepare_reactivity.clone(),
+            luma_instability_layout: self.luma_instability_layout.clone(),
+            luma_instability: self.luma_instability.clone(),
+            accumulate_layout: self.accumulate_layout.clone(),
+            accumulate: self.accumulate.clone(),
+            rcas_layout: self.rcas_layout.clone(),
+            rcas: self.rcas.clone(),
+            levels: self.levels.clone(),
+            targets: None,
+            groups: None,
+            group_rebuilds: 0,
+        }
     }
 
     /// The resolved frame, in the same **gamma** space it was handed - see

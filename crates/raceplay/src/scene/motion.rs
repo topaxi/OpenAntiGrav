@@ -71,6 +71,17 @@ pub(super) struct History {
     pub(super) blur_shake: std::cell::Cell<Mat4>,
 }
 
+impl History {
+    /// Forgets the camera: the next frame measures against itself, starts the jitter sequence
+    /// again (so its record says reset and a temporal upscaler drops its history) and has no
+    /// record before it. What a split seat that missed a frame gets.
+    pub(super) fn forget(&self) {
+        self.motion.borrow_mut().take();
+        self.frame_index.set(0);
+        self.last_frame.set(None);
+    }
+}
+
 /// One tick's worth of the matrices anything draws with.
 #[derive(Clone, Debug)]
 pub(super) struct Snapshot {
@@ -381,23 +392,44 @@ impl super::Scene {
     /// which there would be no history anyway.
     ///
     /// `window` is whose frame: 0 for a race that is not dealt across windows, and for window 1.
-    /// A window whose picture is several views (a split) has none, so a temporal upscaler
-    /// there falls to its spatial rung.
+    /// **A window whose picture is several views (a split) answers one frame per view**, each
+    /// its seat's record and its rectangle of the scene target, so the upscaler resolves each
+    /// view with a chain of its own (`oag_present::upscale`'s `views`); `None` when any view
+    /// has no record yet.
     #[must_use]
-    pub fn temporal(
-        &self,
-        window: usize,
-    ) -> Option<(&wgpu::TextureView, &wgpu::TextureView, TemporalFrame)> {
-        self.histories[window.min(MAX_HISTORIES - 1)]
-            .last_frame
-            .get()
-            .map(|frame| {
-                (
-                    &self.attachment_views.depth,
-                    &self.attachment_views.velocity,
-                    frame,
-                )
-            })
+    pub fn temporal(&self, window: usize) -> Option<oag_present::upscale::Temporal<'_>> {
+        let window = window.min(MAX_HISTORIES - 1);
+        let views = self.split_views.borrow();
+        let frames = match views.get(window).filter(|views| !views.is_empty()) {
+            Some(views) => views
+                .iter()
+                .map(|&(slot, rect)| {
+                    self.histories[split_history(slot)]
+                        .last_frame
+                        .get()
+                        .map(|frame| frame.for_view(Some((slot, rect))))
+                })
+                .collect::<Option<Vec<_>>>()?,
+            None => vec![self.histories[window].last_frame.get()?.for_view(None)],
+        };
+        Some(oag_present::upscale::Temporal {
+            depth: &self.attachment_views.depth,
+            velocity: &self.attachment_views.velocity,
+            sample_count: self.msaa.samples(),
+            frames,
+        })
+    }
+
+    /// Notes which views window `window` drew this frame, in view order (empty for a picture of
+    /// its own), for [`Self::temporal`].
+    pub(super) fn note_split_views(&self, window: usize, views: &[SplitView]) {
+        let mut noted = self.split_views.borrow_mut();
+        let window = window.min(MAX_HISTORIES - 1);
+        if noted.len() <= window {
+            noted.resize_with(window + 1, Vec::new);
+        }
+        noted[window].clear();
+        noted[window].extend_from_slice(views);
     }
 
     /// How many samples this scene's attachments carry.
@@ -412,6 +444,26 @@ impl super::Scene {
         self.msaa.samples()
     }
 }
+
+impl TemporalFrame {
+    /// The upscaler's view of this record: the whole picture, or the view `(seat, rect)`.
+    fn for_view(
+        self,
+        view: Option<(usize, (u32, u32, u32, u32))>,
+    ) -> oag_present::upscale::ViewFrame {
+        oag_present::upscale::ViewFrame {
+            view,
+            camera: self.camera,
+            jitter: self.jitter,
+            phase_count: self.phase_count,
+            reset: self.reset,
+        }
+    }
+}
+
+/// One view of a split as the upscaler is told of it: the seat it follows and its rectangle of
+/// the scene target, `x, y, width, height` in pixels.
+pub(super) type SplitView = (usize, (u32, u32, u32, u32));
 
 /// What one frame was drawn with, for the upscaler that resolves it.
 ///

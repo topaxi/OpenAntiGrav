@@ -482,6 +482,13 @@ not take: every intermediate here is at least as wide as upstream's, so any
 arithmetic upstream performs in halves is performed here in floats. That is not
 correctable by matching formats.
 
+## A split screen: a chain per view (2026-10-16)
+
+Each view of a split is resolved by a chain of its own (`Fsr3::sibling`: the passes shared, the
+history and intermediates per seat), reading its inputs at the view's corner through
+`Dispatch::input_offset`, which lives in the constants block's padding and is zero for a whole
+picture. See [split-screen.md](split-screen.md), "Per-view FSR 3".
+
 ## The fallback ladder
 
 ADR-0012's requirement is that a missing capability **degrade, never fail to

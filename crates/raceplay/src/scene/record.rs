@@ -11,11 +11,11 @@
 //! and comparing the pictures.
 //!
 //! **What a view keeps for itself**: the draws it decided ([`Draw`]), its culling sets, the
-//! counts each effect pipeline's upload left ([`EffectsDrawn`]) and the shadow's runs, its
+//! counts each effect pipeline's upload left and the handles its draw binds ([`EffectsDrawn`]:
+//! a clone of each pipeline's `Drawer`, so no recording holds a pipeline a later view's upload
+//! writes, which is what lets a prepare run beside a recording) and the shadow's runs, its
 //! depth-prepass order (sorted while recording, from its own eye), and its `LodGroup` choice,
 //! which a drawable holds once per view ([`ViewBlock::index`]).
-
-use std::cell::Ref;
 
 use super::viewports::Layer;
 use super::*;
@@ -71,16 +71,21 @@ impl<'a> DrawList<'a> {
     }
 }
 
-/// What each effect pipeline's upload left to draw for one view.
-#[derive(Clone, Copy, Debug, Default)]
+/// What each effect pipeline's upload left to draw for one view, and the handles that draws
+/// it: each pipeline's `Drawer`, cloned (a few reference counts) when the view is prepared.
+/// The handles never change once a pipeline is built; holding a clone rather than the pipeline
+/// is what lets a later view's upload, which needs the pipeline `&mut`, run while this view
+/// records ([`super::Recording::Overlapped`]).
+#[derive(Clone, Debug)]
 pub(super) struct EffectsDrawn {
-    exhaust: exhaust::Drawn,
-    sparks: sparks::Drawn,
-    /// [`Scene::beams`]' order.
-    beams: [oag_fx::beam::Drawn; BEAMS],
-    clouds: oag_fx::cloud::Drawn,
-    weapon_quads: oag_fx::weapon_quads::Drawn,
-    mist: oag_fx::mist::Drawn,
+    exhaust: (exhaust::Drawer, exhaust::Drawn),
+    sparks: (sparks::Drawer, sparks::Drawn),
+    /// [`Scene::beams`]' order; `None` where the title builds none.
+    beams: [Option<(oag_fx::beam::Drawer, oag_fx::beam::Drawn)>; BEAMS],
+    clouds: Option<(oag_fx::cloud::Drawer, oag_fx::cloud::Drawn)>,
+    weapon_quads: (oag_fx::weapon_quads::Drawer, oag_fx::weapon_quads::Drawn),
+    mist: Option<(oag_fx::mist::Drawer, oag_fx::mist::Drawn)>,
+    shadow: oag_render::shadow::Drawer,
 }
 
 /// The strip pipelines, in the order the effects draw them: the Leach beam, the magstrip wake's
@@ -111,19 +116,6 @@ pub(super) struct ViewPass<'a> {
     pub(super) blur_shake: Mat4,
 }
 
-/// The effect pipelines borrowed out of their cells for one frame's recording, on the thread
-/// that prepared it: [`Self::recorder`] hands out plain references the recording threads share.
-pub(super) struct Borrowed<'a> {
-    scene: &'a Scene,
-    exhaust: Ref<'a, exhaust::Pipeline>,
-    sparks: Ref<'a, sparks::Pipeline>,
-    beams: [Option<Ref<'a, oag_fx::beam::Pipeline>>; BEAMS],
-    clouds: Ref<'a, clouds::Clouds>,
-    weapon_quads: Ref<'a, oag_fx::weapon_quads::Pipeline>,
-    mist: Ref<'a, Option<oag_fx::mist::Pipeline>>,
-    shadow: Ref<'a, oag_render::shadow::Pipeline>,
-}
-
 impl Scene {
     /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
     fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
@@ -131,22 +123,33 @@ impl Scene {
         [self.beam.as_ref(), contact, atlas, smoke, leach]
     }
 
-    /// What every effect pipeline's last upload left, for the view that made them.
+    /// What every effect pipeline's last upload left, and the handles that draw it, for the
+    /// view that made them.
     pub(super) fn effects_drawn(&self) -> EffectsDrawn {
+        let exhaust = self.exhaust.borrow();
+        let sparks = self.sparks.borrow();
+        let weapon_quads = self.weapon_quads.pipeline.borrow();
         EffectsDrawn {
-            exhaust: self.exhaust.borrow().drawn(),
-            sparks: self.sparks.borrow().drawn(),
-            beams: self
-                .beams()
-                .map(|beam| beam.map(|b| b.borrow().drawn()).unwrap_or_default()),
-            clouds: self.clouds.borrow().drawn(),
-            weapon_quads: self.weapon_quads.pipeline.borrow().drawn(),
+            exhaust: (exhaust.drawer().clone(), exhaust.drawn()),
+            sparks: (sparks.drawer().clone(), sparks.drawn()),
+            beams: self.beams().map(|beam| {
+                beam.map(|beam| {
+                    let beam = beam.borrow();
+                    (beam.drawer().clone(), beam.drawn())
+                })
+            }),
+            clouds: self
+                .clouds
+                .borrow()
+                .pipeline()
+                .map(|clouds| (clouds.drawer().clone(), clouds.drawn())),
+            weapon_quads: (weapon_quads.drawer().clone(), weapon_quads.drawn()),
             mist: self
                 .mist
                 .borrow()
                 .as_ref()
-                .map(oag_fx::mist::Pipeline::drawn)
-                .unwrap_or_default(),
+                .map(|mist| (mist.drawer().clone(), mist.drawn())),
+            shadow: self.shadow.borrow().drawer().clone(),
         }
     }
 
@@ -156,42 +159,16 @@ impl Scene {
         into.extend_from_slice(self.shadow.borrow().runs());
     }
 
-    /// The effect pipelines out of their cells, for [`Borrowed::recorder`].
-    pub(super) fn borrow_for_recording(&self) -> Borrowed<'_> {
-        Borrowed {
-            scene: self,
-            exhaust: self.exhaust.borrow(),
-            sparks: self.sparks.borrow(),
-            beams: self
-                .beams()
-                .map(|beam| beam.map(std::cell::RefCell::borrow)),
-            clouds: self.clouds.borrow(),
-            weapon_quads: self.weapon_quads.pipeline.borrow(),
-            mist: self.mist.borrow(),
-            shadow: self.shadow.borrow(),
-        }
-    }
-}
-
-impl Borrowed<'_> {
-    /// What every view's recording reads.
+    /// What every view's recording reads besides its [`ViewPass`].
     pub(super) fn recorder(&self) -> Recorder<'_> {
-        let scene = self.scene;
         Recorder {
-            track: &scene.track,
-            sky: scene.sky.as_ref(),
-            track_shine: scene.track_shine.as_ref().map(shine::TrackShine::parts),
-            sections: scene.visibility.as_ref().map(|v| &v.sections),
-            sorts_opaque: scene.hd.is_some(),
-            exhaust: &self.exhaust,
-            sparks: &self.sparks,
-            beams: [0, 1, 2, 3, 4].map(|i| self.beams[i].as_deref()),
-            clouds: self.clouds.pipeline(),
-            weapon_quads: &self.weapon_quads,
-            mist: self.mist.as_ref(),
-            shadow: &self.shadow,
-            ghost: scene.ghost.pipeline(),
-            attachments: &scene.attachment_views,
+            track: &self.track,
+            sky: self.sky.as_ref(),
+            track_shine: self.track_shine.as_ref().map(shine::TrackShine::parts),
+            sections: self.visibility.as_ref().map(|v| &v.sections),
+            sorts_opaque: self.hd.is_some(),
+            ghost: self.ghost.pipeline(),
+            attachments: &self.attachment_views,
         }
     }
 }
@@ -205,13 +182,6 @@ pub(super) struct Recorder<'a> {
     sections: Option<&'a DrawSections>,
     /// Whether the circuit's opaque depth goes down nearest first: HD's prepass.
     sorts_opaque: bool,
-    exhaust: &'a exhaust::Pipeline,
-    sparks: &'a sparks::Pipeline,
-    beams: [Option<&'a oag_fx::beam::Pipeline>; BEAMS],
-    clouds: Option<&'a oag_fx::cloud::Pipeline>,
-    weapon_quads: &'a oag_fx::weapon_quads::Pipeline,
-    mist: Option<&'a oag_fx::mist::Pipeline>,
-    shadow: &'a oag_render::shadow::Pipeline,
     ghost: Option<&'a oag_render::ghost::Pipeline>,
     attachments: &'a motion::Attachments,
 }
@@ -339,7 +309,7 @@ impl Recorder<'_> {
                 }
                 Draw::Additive(drawable) => stats.add(drawable.draw_additive(&mut render, block)),
                 Draw::Overlay(drawable) => stats.add(drawable.draw_overlay(&mut render, block)),
-                Draw::Shadow => self.shadow.draw(&mut render, &pass.shadow_runs),
+                Draw::Shadow => pass.effects.shadow.draw(&mut render, &pass.shadow_runs),
                 Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
             }
         }
@@ -433,29 +403,27 @@ impl Recorder<'_> {
         pass: &ViewPass<'_>,
         stats: &mut SceneStats,
     ) {
-        let drawn = &pass.effects;
+        let effects = &pass.effects;
         oag_gpu::perfprobe::marks::mark(render, "exhaust, sparks, clouds, ghost");
-        self.exhaust.draw(render, drawn.exhaust);
-        self.sparks.draw(render, drawn.sparks);
-        for (beam, drawn) in self.beams.iter().zip(drawn.beams) {
-            if let Some(beam) = beam {
-                beam.draw(render, drawn);
-            }
+        effects.exhaust.0.draw(render, effects.exhaust.1);
+        effects.sparks.0.draw(render, effects.sparks.1);
+        for (beam, drawn) in effects.beams.iter().flatten() {
+            beam.draw(render, *drawn);
         }
-        if let Some(clouds) = self.clouds {
-            clouds.draw(render, drawn.clouds);
+        if let Some((clouds, drawn)) = &effects.clouds {
+            clouds.draw(render, *drawn);
         }
-        self.weapon_quads.draw(render, drawn.weapon_quads);
+        effects.weapon_quads.0.draw(render, effects.weapon_quads.1);
         // The ghost, last of the world - see `oag_render::ghost`, "what is ours", for why last.
         if let (Some(pipeline), Some((hull, fade))) = (self.ghost, &pass.ghost) {
             stats.draws_submitted += pipeline.draw(render, hull, *fade);
         }
         // The render queue's key `0x4f000000`, which the flash shares: after
         // every world layer, under the HUD.
-        if let Some(mist) = self.mist {
-            mist.draw(render, drawn.mist);
+        if let Some((mist, drawn)) = &effects.mist {
+            mist.draw(render, *drawn);
         }
-        self.sparks.draw_flash(render, drawn.sparks);
+        effects.sparks.0.draw_flash(render, effects.sparks.1);
         oag_gpu::perfprobe::marks::mark(render, "end");
     }
 }

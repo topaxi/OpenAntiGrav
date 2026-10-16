@@ -98,10 +98,7 @@ impl Scene {
         let pass = self.prepare_view(
             &uploads, encoder, view, race, viewport, &settings, timestamps,
         );
-        let mut stats = self
-            .borrow_for_recording()
-            .recorder()
-            .record(&pass, encoder);
+        let mut stats = self.recorder().record(&pass, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_shake = pass.blur_shake;
         drop(pass);
@@ -269,8 +266,9 @@ impl Scene {
         //
         // Shaken views, so the buffer stays true screen motion for the temporal
         // upscaler; the blur subtracts the shake itself, `blur_shake` below.
-        if matches!(self.layer.get(), Layer::Whole | Layer::Window) {
+        if self.layer.get() == Layer::Whole {
             self.retire_split_histories();
+            self.note_split_views(0, &[]);
         }
         let prev = MotionState::advance(
             &self.history().motion,

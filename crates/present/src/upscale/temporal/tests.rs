@@ -98,10 +98,13 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
                 depth: &depth,
                 velocity: &velocity,
                 sample_count: 1,
-                camera: oag_post::fsr3::Camera::default(),
-                jitter: (0.0, 0.0),
-                phase_count: oag_post::jitter::phases(render.0, 16),
-                reset: true,
+                frames: vec![super::ViewFrame {
+                    view: None,
+                    camera: oag_post::fsr3::Camera::default(),
+                    jitter: (0.0, 0.0),
+                    phase_count: oag_post::jitter::phases(render.0, 16),
+                    reset: true,
+                }],
             }),
             None,
         );
@@ -143,5 +146,112 @@ fn fsr3_skips_the_spatial_anti_aliasing_pass_rather_than_discarding_it() {
     assert!(
         !encoded,
         "FXAA was asked for, not FSR 3.1 - nothing here should have run it"
+    );
+}
+
+/// A split screen's frame resolves each view with a chain of its own, and a whole picture
+/// after it drops them. Fails when a split is resolved as one picture (no chain per seat), and
+/// when the seats' chains outlive the split.
+///
+/// **Skips with no adapter**, so a green CI run is not evidence it ran.
+#[test]
+fn a_split_resolves_each_view_with_a_chain_of_its_own() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    if !oag_post::fsr3::supported(&adapter) {
+        eprintln!("no compute shaders; skipping");
+        return;
+    }
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no device; skipping");
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let render = (16u32, 8u32);
+    let attachment = |label: &str, texture_format| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some(label),
+                size: wgpu::Extent3d {
+                    width: render.0,
+                    height: render.1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: texture_format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&Default::default())
+    };
+    let depth = attachment("depth", wgpu::TextureFormat::Depth32Float);
+    let velocity = attachment("velocity", oag_gpu::formats::VELOCITY_FORMAT);
+    let mut framebuffer = Framebuffer::new(&device, format, render).expect("the pipeline");
+    framebuffer.resize_output(&device, (32, 16));
+    let frame = |view| super::ViewFrame {
+        view,
+        camera: oag_post::fsr3::Camera::default(),
+        jitter: (0.0, 0.0),
+        phase_count: oag_post::jitter::phases(render.0, 32),
+        reset: true,
+    };
+    let presentation = Presentation {
+        reconstruction: Reconstruction::Fsr3,
+        sharpness: 0.2,
+        brightness: Brightness::NEUTRAL,
+        gamma: Gamma::NEUTRAL,
+    };
+    let mut resolve = |frames| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        let _ = framebuffer.resolve_scene(
+            &device,
+            &queue,
+            &mut encoder,
+            (0.0, 0.0, 32.0, 16.0),
+            &presentation,
+            Some(Temporal {
+                depth: &depth,
+                velocity: &velocity,
+                sample_count: 1,
+                frames,
+            }),
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+        framebuffer.split_chains()
+    };
+    // Left and right, the layout's two-pixel gap between them.
+    let split = vec![
+        frame(Some((0, (0, 0, 7, 8)))),
+        frame(Some((1, (9, 0, 7, 8)))),
+    ];
+    assert_eq!(resolve(split.clone()), 2, "a chain per seat");
+    assert_eq!(resolve(split), 2, "the same chains the next frame");
+    assert_eq!(resolve(vec![frame(None)]), 0, "a whole picture drops them");
+}
+
+#[test]
+fn a_view_lands_where_the_blit_would_put_it() {
+    // A 2:1 upscale of a 2h split: each edge doubles, the gap with it.
+    let rect = (0.0, 0.0, 64.0, 32.0);
+    assert_eq!(
+        super::super::views::output_rect((0, 0, 32, 7), (32, 16), rect),
+        (0.0, 0.0, 64.0, 14.0)
+    );
+    assert_eq!(
+        super::super::views::output_rect((0, 9, 32, 7), (32, 16), rect),
+        (0.0, 18.0, 64.0, 14.0)
+    );
+    // A letterboxed presentation rectangle offsets every view by its corner.
+    assert_eq!(
+        super::super::views::output_rect((0, 0, 32, 16), (32, 16), (10.0, 4.0, 48.0, 24.0)),
+        (10.0, 4.0, 48.0, 24.0)
     );
 }

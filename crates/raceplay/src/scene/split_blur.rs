@@ -69,6 +69,13 @@ impl Scene {
     /// Forgets the split seats' camera histories, once, on the first single-view frame after a
     /// split: a seat that comes back later would otherwise measure its first frame against a
     /// pose from before the gap and smear it (capped at the blur's reach, but a visible streak).
+    ///
+    /// **Only a frame that draws no window and no split** (`Layer::Whole`).
+    /// A multi-window frame whose one-seat window draws beside a split window keeps the split's
+    /// seats: their state is forgotten per seat instead, by [`Self::keep_split_seat`], when a
+    /// seat missed a frame. Retired here on every one-seat window's frame, the split window's
+    /// seats lost their camera histories (no motion, so no blur) and HD's and Omega's
+    /// adaptation every frame.
     pub(super) fn retire_split_histories(&self) {
         if self.split_live.replace(false) {
             // HD's and Omega's per-seat adaptation goes with them (`split_exposure`).
@@ -79,8 +86,39 @@ impl Scene {
                 omega.retire_seats();
             }
             for history in &self.histories[motion::MAX_HISTORIES..] {
-                history.motion.borrow_mut().take();
+                history.forget();
             }
+            for drawn in &self.seat_drawn {
+                drawn.set(None);
+            }
+        }
+    }
+
+    /// Counts a frame, for a draw that starts one: a split or a window drawn with `shared`
+    /// false (the first of the frame to draw, which does the frame's shared work). A seat's
+    /// split state is kept only while the seat is drawn in consecutive frames.
+    pub(super) fn begin_split_frame(&self, shared: bool) {
+        if !shared {
+            self.split_frame.set(self.split_frame.get().wrapping_add(1));
+        }
+    }
+
+    /// Stamps `slot`'s seat as drawn this frame, first forgetting its camera history and HD's
+    /// or Omega's adaptation lane when it was not drawn as a split view the frame before: a
+    /// seat back after a gap (a window that drew it alone for a while, the intro's one view, a
+    /// closed window) settles from its own first frame, as after a single-view frame.
+    pub(super) fn keep_split_seat(&self, slot: usize) {
+        let seat = slot.min(motion::MAX_HISTORIES - 1);
+        let now = self.split_frame.get();
+        let last = self.seat_drawn[seat].replace(Some(now));
+        if last.is_some_and(|frame| frame != now && frame.wrapping_add(1) != now) {
+            if let Some(hd) = &self.hd {
+                hd.retire_seat(seat);
+            }
+            if let Some(omega) = &self.omega {
+                omega.retire_seat(seat);
+            }
+            self.histories[motion::split_history(seat)].forget();
         }
     }
 }

@@ -37,10 +37,13 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
   default. Evidence: `docs/rendering/split-screen.md` "Prepare and record",
   `docs/tools/render-bench.md` "Threaded views". **Open: the Deck A/B** (commands there) decides
   whether any platform defaults to threads; a persistent worker pool (would need `unsafe` lifetime
-  erasure, a spinning core gains, a parked one does not) is not built. **The lever the numbers
-  point at instead**: record view k on a worker while view k+1 is prepared and submit each as it
-  is recorded (the GPU starts early, as interleaved does); it needs the effect pipelines' uploads
-  to stop holding `&mut` state the recording reads.
+  erasure, a spinning core gains, a parked one does not) is not built. ~~**The lever the numbers
+  point at instead**: record view k on a worker while view k+1 is prepared~~ **Built, measured
+  slower, opt-in (2026-10-16, `split-followups`)**: `OAG_SPLIT_RECORDING=overlapped`, the effect
+  pipelines' draw handles are a cloneable `Drawer` each view keeps; 50 to 130 % more CPU than
+  interleaved on NVIDIA, 25 to 150 % on the iGPU, within 7 to 11 % pinned to one core (a worker
+  woken per view). `docs/tools/render-bench.md`, "Overlapped recording". Open: the Deck A/B; a
+  spinning worker is not built.
 - **Render bundles are not cheap**: a bundle's commands are fixed at creation, and every drawable's
   draw list changes each view with the culling and the level of detail, with per-view dynamic offsets.
 - **The Arrow Lake iGPU's driver (Mesa ANV) costs about four times NVIDIA's CPU on Pulse** and is

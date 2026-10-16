@@ -253,8 +253,8 @@ fn it_is_the_view_that_moves_wherever_it_is_drawn() {
 
 /// Each seat's view keeps the history of its own camera, apart from every window's: a seat's
 /// previous view-projection is its own last one, the two seats look through different
-/// cameras, window 0's history is not written by a split, and no upscaler record is kept for
-/// the split.
+/// cameras, window 0's history is not written by a split, and a split drawn without jitter
+/// keeps no upscaler record.
 #[test]
 fn every_view_keeps_the_history_of_its_own_camera() {
     let Some((device, queue)) = test_gpu() else {
@@ -291,7 +291,10 @@ fn every_view_keeps_the_history_of_its_own_camera() {
             scene.motion_probe(0).is_none(),
             "the split does not write window 0's history"
         );
-        assert!(scene.temporal(0).is_none(), "a split feeds no upscaler");
+        assert!(
+            scene.temporal(0).is_none(),
+            "a split drawn without jitter feeds no upscaler"
+        );
     }
 }
 

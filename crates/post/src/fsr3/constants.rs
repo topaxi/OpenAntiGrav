@@ -102,6 +102,10 @@ pub struct Dispatch {
     /// The rectangle of the scene target actually drawn this frame -
     /// upstream's `renderSize`.
     pub render: (u32, u32),
+    /// Where that rectangle starts in the scene target: `(0, 0)` for a whole picture, a view's
+    /// corner for one view of a split screen. Not upstream's; see
+    /// [`Constants::input_offset`].
+    pub input_offset: (u32, u32),
     /// The scene target's allocation - upstream's `maxRenderSize`. Larger than
     /// [`Dispatch::render`] whenever a controller is varying the extent, per
     /// [ADR-0037](../../../../docs/architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md).
@@ -142,6 +146,7 @@ impl Default for Dispatch {
     fn default() -> Self {
         Self {
             render: (1, 1),
+            input_offset: (0, 0),
             max_render: (1, 1),
             upscale: (1, 1),
             jitter: (0.0, 0.0),
@@ -198,8 +203,14 @@ pub struct Constants {
     /// existed - and it is placed *after* every upstream field, so the layout
     /// this block is a transliteration of is untouched.
     pub rcas_sharpness: f32,
-    /// To the 16-byte multiple a uniform buffer's size must be.
-    pub padding: [f32; 2],
+    /// Where the render rectangle starts in the three input textures, in pixels: every load
+    /// of the scene's colour, depth and velocity adds it (`prepare_inputs`, `accumulate`).
+    ///
+    /// **Ours, in the rest of upstream's padding** (the block stays 160 bytes). Zero for a
+    /// whole picture, so its bytes are the padding's zeros; a split-screen view's chain sets
+    /// it to the view's corner, so a chain sized to the view reads the view where it was drawn
+    /// and every intermediate starts at its own corner.
+    pub input_offset: [i32; 2],
 }
 
 /// This renderer's velocity attachment holds the **current-minus-previous** UV
@@ -289,7 +300,10 @@ impl Constants {
             accumulation_added_per_frame: ACCUMULATION_ADDED_PER_FRAME,
             min_disocclusion_accumulation: MIN_DISOCCLUSION_ACCUMULATION,
             rcas_sharpness: dispatch.sharpness.factor(),
-            padding: [0.0; 2],
+            input_offset: [
+                dispatch.input_offset.0 as i32,
+                dispatch.input_offset.1 as i32,
+            ],
         }
     }
 

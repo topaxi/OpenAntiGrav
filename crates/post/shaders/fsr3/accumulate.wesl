@@ -54,6 +54,7 @@ import package::fsr3::common::{
     exposure,
     frame_index,
     get_4k_velocity,
+    input_offset,
     is_on_screen,
     is_uv_inside,
     jitter,
@@ -83,7 +84,7 @@ import package::fsr3::common::{
 @group(1) @binding(7) var rw_internal_upscaled_color: texture_storage_2d<rgba16float, write>;
 
 fn load_input_color(px_pos: vec2<i32>) -> vec3<f32> {
-    return textureLoad(r_input_color_jittered, px_pos, 0).rgb;
+    return textureLoad(r_input_color_jittered, px_pos + input_offset(), 0).rgb;
 }
 
 fn load_dilated_motion_vector(px_pos: vec2<i32>) -> vec2<f32> {

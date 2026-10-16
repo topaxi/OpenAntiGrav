@@ -156,17 +156,28 @@ impl Lane {
     }
 }
 
-/// The seats' lanes, built when a split first asks for them.
+/// The seats' lanes, built when a split first asks for them, and how many builds that took
+/// (a lane forgotten and asked for again is built again, which a live count cannot show).
 #[derive(Debug, Default)]
-pub(super) struct SeatLanes(RefCell<Vec<Option<Lane>>>);
+pub(super) struct SeatLanes(RefCell<Vec<Option<Lane>>>, Cell<u64>);
 
 impl SeatLanes {
     pub(super) fn built(&self) -> usize {
         self.0.borrow().iter().flatten().count()
     }
 
+    pub(super) fn builds(&self) -> u64 {
+        self.1.get()
+    }
+
     pub(super) fn clear(&self) {
         self.0.borrow_mut().clear();
+    }
+
+    pub(super) fn retire(&self, seat: usize) {
+        if let Some(lane) = self.0.borrow_mut().get_mut(seat) {
+            lane.take();
+        }
     }
 
     pub(super) fn get_or_build(
@@ -181,6 +192,7 @@ impl SeatLanes {
             }
             if lanes[seat].is_none() {
                 lanes[seat] = Some(build());
+                self.1.set(self.1.get() + 1);
             }
         }
         std::cell::Ref::map(self.0.borrow(), |lanes| {
@@ -264,5 +276,19 @@ impl Chain {
     /// the luminance it had before the gap.
     pub fn retire_seats(&self) {
         self.seats.clear();
+    }
+
+    /// Forgets one seat's adaptation: a seat that was not drawn as a split view last frame
+    /// settles from its own first frame again, whatever the other seats do.
+    pub fn retire_seat(&self, seat: usize) {
+        self.seats.retire(seat.min(MAX_SEATS - 1));
+    }
+
+    /// How many seat lanes have been built so far, a lane forgotten and built again counting
+    /// twice: what shows a lane kept from frame to frame, where [`Self::seat_lanes`] reads the
+    /// same for a lane kept and a lane rebuilt every frame.
+    #[must_use]
+    pub fn seat_lane_builds(&self) -> u64 {
+        self.seats.builds()
     }
 }

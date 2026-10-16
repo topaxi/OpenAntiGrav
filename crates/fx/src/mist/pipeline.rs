@@ -40,12 +40,19 @@ pub struct Drawn {
     visible: bool,
 }
 
-/// The mist pipeline, its texture and its twelve vertices.
-#[derive(Debug)]
-pub struct Pipeline {
+/// What [`Pipeline::draw`] binds: handles no upload replaces, cloned into a view's
+/// recording so a later view's upload can run beside it (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     vertices: wgpu::Buffer,
+}
+
+/// The mist pipeline, its texture and its twelve vertices.
+#[derive(Debug)]
+pub struct Pipeline {
+    drawer: Drawer,
     /// Whether the last [`Pipeline::upload`] had anything to draw.
     visible: bool,
 }
@@ -151,9 +158,11 @@ impl Pipeline {
             mapped_at_creation: false,
         });
         Self {
-            pipeline,
-            bind_group,
-            vertices,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+                vertices,
+            },
             visible: false,
         }
     }
@@ -167,7 +176,7 @@ impl Pipeline {
     ) {
         self.visible = vertices.is_some();
         if let Some(vertices) = vertices {
-            queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(vertices));
+            queue.write_buffer(&self.drawer.vertices, 0, bytemuck::cast_slice(vertices));
         }
     }
 
@@ -179,6 +188,19 @@ impl Pipeline {
         }
     }
 
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws into a pass the caller opened, after the world and before the
     /// HUD.
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {

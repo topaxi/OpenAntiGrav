@@ -323,16 +323,23 @@ pub struct Drawn {
     count: u32,
 }
 
+/// What [`Pipeline::draw`] binds: handles no upload replaces, cloned into a view's
+/// recording so a later view's upload can run beside it (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
+    pipeline: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    texture: wgpu::BindGroup,
+    vertices: wgpu::Buffer,
+}
+
 /// The cloud draw pipeline: one texture, one blend class, in `psys::Pipeline`'s
 /// shape rather than `exhaust::Pipeline`'s - there is no ribbon and no HD
 /// variant here.
 #[derive(Debug)]
 pub struct Pipeline {
-    pipeline: wgpu::RenderPipeline,
+    drawer: Drawer,
     uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
-    texture: wgpu::BindGroup,
-    vertices: wgpu::Buffer,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     count: u32,
 }
@@ -484,11 +491,13 @@ impl Pipeline {
         let texture = bind_texture(device, queue, &texture_layout, texture);
 
         Self {
-            pipeline,
+            drawer: Drawer {
+                pipeline,
+                bind_group,
+                texture,
+                vertices,
+            },
             uniforms,
-            bind_group,
-            texture,
-            vertices,
             count: 0,
         }
     }
@@ -509,7 +518,11 @@ impl Pipeline {
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
         let n = vertices.len().min(MAX_VERTICES);
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
+        queue.write_buffer(
+            &self.drawer.vertices,
+            0,
+            bytemuck::cast_slice(&vertices[..n]),
+        );
         self.count = n as u32;
     }
 
@@ -519,6 +532,19 @@ impl Pipeline {
         Drawn { count: self.count }
     }
 
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws into a pass the caller already opened.
     ///
     /// Must be issued after the opaque geometry, for the same depth-write-off

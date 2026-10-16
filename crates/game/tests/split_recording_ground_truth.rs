@@ -1,7 +1,8 @@
 //! A split screen's views draw the same picture however they are recorded: one after another
 //! (`OAG_SPLIT_RECORDING=interleaved`, prepare, record and submit per view), every view prepared
-//! and then recorded last view first on one thread (`reversed`), and recorded at once on threads
-//! of their own (`threaded`). The default is `interleaved`. See `oag_raceplay::Recording`.
+//! and then recorded last view first on one thread (`reversed`), recorded at once on threads
+//! of their own (`threaded`), and each recorded on a worker while the next is prepared
+//! (`overlapped`). The default is `interleaved`. See `oag_raceplay::Recording`.
 //!
 //! **What fails it**: anything a view's recording reads that a later view's prepare changes, and
 //! any write a later view's prepare makes that is not kept for its own submission. The first
@@ -49,13 +50,13 @@ fn capture(
     std::fs::read(&shot).expect("the screenshot was written")
 }
 
-/// The three recordings of one frame, byte for byte.
+/// The four recordings of one frame, byte for byte.
 fn same_every_way(name: &str, image: &std::path::Path, args: &[&str]) {
     let dir = std::env::temp_dir()
         .join("oag-split-recording-ground-truth")
         .join(name);
     let interleaved = capture(&dir, image, "interleaved", args);
-    for recording in ["reversed", "threaded"] {
+    for recording in ["reversed", "threaded", "overlapped"] {
         assert!(
             capture(&dir, image, recording, args) == interleaved,
             "{name}: the {recording} recording draws a different picture than the interleaved one \

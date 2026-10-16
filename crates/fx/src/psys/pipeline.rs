@@ -62,6 +62,18 @@ pub struct Drawn {
     flash: crate::flash::Drawn,
 }
 
+/// What [`Pipeline::draw`] and [`Pipeline::draw_flash`] bind, cloned into a view's recording
+/// (`crate::exhaust::Drawer`).
+#[derive(Clone, Debug)]
+pub struct Drawer {
+    additive: wgpu::RenderPipeline,
+    alpha_over: wgpu::RenderPipeline,
+    bind_group: wgpu::BindGroup,
+    additive_vertices: wgpu::Buffer,
+    alpha_vertices: wgpu::Buffer,
+    flash: crate::flash::Drawer,
+}
+
 /// The particle draw pipeline - two of them, one per blend class, sharing
 /// the shader and layout.
 ///
@@ -75,16 +87,12 @@ pub struct Drawn {
 /// `exhaust::Pipeline` documents.
 #[derive(Debug)]
 pub struct Pipeline {
-    additive: wgpu::RenderPipeline,
-    alpha_over: wgpu::RenderPipeline,
+    drawer: Drawer,
     uniforms: wgpu::Buffer,
-    bind_group: wgpu::BindGroup,
     /// The [`Sheet`]'s texels on the GPU, transparent until the first sync.
     sheet: wgpu::Texture,
     /// [`Sheet::generation`] of what [`Self::sheet`] holds.
     sheet_generation: Option<u64>,
-    additive_vertices: wgpu::Buffer,
-    alpha_vertices: wgpu::Buffer,
     /// Vertices actually uploaded by the last [`Pipeline::upload`].
     additive_count: u32,
     alpha_count: u32,
@@ -283,16 +291,20 @@ impl Pipeline {
         let additive_vertices = buffer("psys additive vertices");
         let alpha_vertices = buffer("psys alpha-over vertices");
 
+        let flash = crate::flash::Pipeline::new(device, format, sample_count, velocity);
         Self {
-            flash: crate::flash::Pipeline::new(device, format, sample_count, velocity),
-            additive,
-            alpha_over,
+            drawer: Drawer {
+                additive,
+                alpha_over,
+                bind_group,
+                additive_vertices,
+                alpha_vertices,
+                flash: flash.drawer().clone(),
+            },
+            flash,
             uniforms,
-            bind_group,
             sheet,
             sheet_generation: None,
-            additive_vertices,
-            alpha_vertices,
             additive_count: 0,
             alpha_count: 0,
             distort,
@@ -361,7 +373,7 @@ impl Pipeline {
         );
         let n = additive.len().min(MAX_VERTICES);
         queue.write_buffer(
-            &self.additive_vertices,
+            &self.drawer.additive_vertices,
             0,
             bytemuck::cast_slice(&additive[..n]),
         );
@@ -369,7 +381,7 @@ impl Pipeline {
 
         let n = alpha_over.len().min(MAX_VERTICES);
         queue.write_buffer(
-            &self.alpha_vertices,
+            &self.drawer.alpha_vertices,
             0,
             bytemuck::cast_slice(&alpha_over[..n]),
         );
@@ -394,8 +406,14 @@ impl Pipeline {
         size: (u32, u32),
         viewport: (f32, f32, f32, f32),
     ) -> Option<&wgpu::TextureView> {
-        self.distort
-            .encode(device, encoder, &self.bind_group, depth, size, viewport)
+        self.distort.encode(
+            device,
+            encoder,
+            &self.drawer.bind_group,
+            depth,
+            size,
+            viewport,
+        )
     }
 
     /// The texture behind [`Self::encode_distort`]'s view, for a readback. It
@@ -413,7 +431,7 @@ impl Pipeline {
     /// Draws the screen flash, if one runs - **last** in the scene pass, so
     /// it washes over everything the pass drew and nothing the HUD does.
     pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
-        self.flash.draw(pass, drawn.flash);
+        self.drawer.draw_flash(pass, drawn);
     }
 
     /// What the last uploads left to draw, for [`Self::draw`] and [`Self::draw_flash`].
@@ -424,6 +442,24 @@ impl Pipeline {
             alpha_count: self.alpha_count,
             flash: self.flash.drawn(),
         }
+    }
+
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] and [`Self::draw_flash`] bind.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
+    /// The screen flash: [`Pipeline::draw_flash`].
+    pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.flash.draw(pass, drawn.flash);
     }
 
     /// Draws into a pass the caller already opened.

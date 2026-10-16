@@ -1113,19 +1113,18 @@ pub struct Drawn {
     trail_count: u32,
 }
 
-#[derive(Debug)]
-pub struct Pipeline {
+/// What [`Pipeline::draw`] binds: handles no upload replaces, so a view's recording can hold a
+/// clone while a later view's upload runs beside it (a split's overlapped recording).
+#[derive(Clone, Debug)]
+pub struct Drawer {
     pipeline: wgpu::RenderPipeline,
     /// The ribbon's own pipeline: identical but for [`TRAIL_BLEND`], because
     /// the original's trail display list sets a different blend than the
     /// flare's (`GU_FIX`/`GU_FIX` against `GU_SRC_ALPHA`/`GU_FIX`).
     trail_pipeline: wgpu::RenderPipeline,
-    uniforms: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     texture: wgpu::BindGroup,
     vertices: wgpu::Buffer,
-    /// Vertices actually uploaded by the last [`Pipeline::upload`].
-    count: u32,
     /// `Data\Tex\engineFlare\Engine_noise.mip`, the ribbon's own texture.
     ///
     /// The original binds one of three slots per layer
@@ -1133,6 +1132,14 @@ pub struct Pipeline {
     /// bind group covers it.
     noise: wgpu::BindGroup,
     trail_vertices: wgpu::Buffer,
+}
+
+#[derive(Debug)]
+pub struct Pipeline {
+    drawer: Drawer,
+    uniforms: wgpu::Buffer,
+    /// Vertices actually uploaded by the last [`Pipeline::upload`].
+    count: u32,
     trail_count: u32,
 }
 
@@ -1360,15 +1367,17 @@ impl Pipeline {
         );
 
         Self {
-            pipeline,
-            trail_pipeline,
+            drawer: Drawer {
+                pipeline,
+                trail_pipeline,
+                bind_group,
+                texture,
+                vertices,
+                noise,
+                trail_vertices,
+            },
             uniforms,
-            bind_group,
-            texture,
-            vertices,
             count: 0,
-            noise,
-            trail_vertices,
             trail_count: 0,
         }
     }
@@ -1400,12 +1409,20 @@ impl Pipeline {
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
         let n = vertices.len().min(MAX_VERTICES);
-        queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
+        queue.write_buffer(
+            &self.drawer.vertices,
+            0,
+            bytemuck::cast_slice(&vertices[..n]),
+        );
         self.count = n as u32;
 
         let t = trail.len().min(MAX_TRAIL_VERTICES);
         if t > 0 {
-            queue.write_buffer(&self.trail_vertices, 0, bytemuck::cast_slice(&trail[..t]));
+            queue.write_buffer(
+                &self.drawer.trail_vertices,
+                0,
+                bytemuck::cast_slice(&trail[..t]),
+            );
         }
         self.trail_count = t as u32;
     }
@@ -1419,6 +1436,19 @@ impl Pipeline {
         }
     }
 
+    /// Draws into a pass the caller already opened: [`Drawer::draw`].
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.drawer.draw(pass, drawn);
+    }
+
+    /// The handles [`Self::draw`] binds, for a recording that runs beside the next upload.
+    #[must_use]
+    pub fn drawer(&self) -> &Drawer {
+        &self.drawer
+    }
+}
+
+impl Drawer {
     /// Draws into a pass the caller already opened.
     ///
     /// Must be issued **after** the opaque geometry: with depth write off, the

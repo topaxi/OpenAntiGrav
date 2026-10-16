@@ -31,6 +31,7 @@ import package::fsr3::common::{
     get_4k_velocity,
     get_bilinear_sampling_data,
     get_view_space_depth_in_meters,
+    input_offset,
     is_on_screen,
     reconstructed_depth_mv_px_threshold,
     render_size,
@@ -62,11 +63,11 @@ import package::fsr3::common::{
 @group(1) @binding(7) var rw_current_luma: texture_storage_2d<rgba16float, write>;
 
 fn load_input_depth(px_pos: vec2<i32>) -> f32 {
-    return textureLoad(r_input_depth, px_pos, 0).x;
+    return textureLoad(r_input_depth, px_pos + input_offset(), 0).x;
 }
 
 fn load_input_color(px_pos: vec2<i32>) -> vec3<f32> {
-    return textureLoad(r_input_color_jittered, px_pos, 0).rgb;
+    return textureLoad(r_input_color_jittered, px_pos + input_offset(), 0).rgb;
 }
 
 // Upstream multiplies by `MotionVectorScale()` to convert the engine's units
@@ -77,7 +78,7 @@ fn load_input_color(px_pos: vec2<i32>) -> vec3<f32> {
 // ADR-0039's ordering cancels the jitter before the buffer is written. Kept as
 // the same two operations so the shader still reads like upstream's.
 fn load_input_motion_vector(px_pos: vec2<i32>) -> vec2<f32> {
-    let src = textureLoad(r_input_motion_vectors, px_pos, 0).xy;
+    let src = textureLoad(r_input_motion_vectors, px_pos + input_offset(), 0).xy;
     var uv_motion_vector = src * constants.motion_vector_scale;
     uv_motion_vector -= constants.motion_vector_jitter_cancellation;
     return uv_motion_vector;
