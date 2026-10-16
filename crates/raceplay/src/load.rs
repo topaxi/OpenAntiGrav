@@ -830,7 +830,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .applies(archives.layout.platform);
     #[cfg(feature = "view")]
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
-    let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
+    let pulse_ps2_data =
+        vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
+    let track_stats = track_stats::read(
+        &options.source,
+        &mut archives,
+        &track,
+        (pulse_psp, pulse_ps2_data),
+        &mut report,
+    );
     let original_laws =
         original_laws::resolve(&mut archives, title, &track, &options.class, &mut report);
     let finished_thrust = super::finished_thrust::read(

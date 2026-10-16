@@ -94,4 +94,9 @@ fn a_ps2_circuit_plays_its_placed_effects_and_cuts_to_its_cameras() {
         loaded.report.join("\n")
     );
     assert!(has("destroy camera: 8 authored Camera node(s)"));
+    let stats = loaded
+        .track_stats
+        .as_ref()
+        .expect("the PS2 pressing keeps stats.xml beside the circuit");
+    assert!(!stats.race_times.is_empty(), "no authored race times");
 }

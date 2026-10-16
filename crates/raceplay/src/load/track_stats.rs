@@ -14,13 +14,14 @@ use oag_tables::track_stats::{self, TrackStats};
 /// or when the file is absent or unreadable. Says which in `report`.
 pub(super) fn read(
     source: &str,
+    archives: &mut oag_assets::Archives,
     track: &str,
-    pulse_psp: bool,
+    (pulse_psp, pulse_ps2): (bool, bool),
     report: &mut Vec<String>,
 ) -> Option<TrackStats> {
-    if !pulse_psp {
+    if !pulse_psp && !pulse_ps2 {
         report.push(
-            "track stats: not read (only Pulse on a PSP disc keeps them in FEData.wad); the \
+            "track stats: not read (only Pulse on a PSP or PS2 disc keeps them); the \
              HUD's RECORD readout has no authored time"
                 .into(),
         );
@@ -34,10 +35,15 @@ pub(super) fn read(
     };
     let entry = format!(r"{directory}\{name}");
     let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
-    let blob = oag_assets::Archive::open(&spec)
-        .and_then(|mut archive| archive.read_name(&entry))
-        .map_err(|e| report.push(format!("track stats: {entry} did not read ({e})")))
-        .ok()?;
+    // The PS2 pressing keeps the same file in the archive the race reads its
+    // geometry from, under the same entry name.
+    let blob = if pulse_ps2 {
+        archives.read_name(&entry)
+    } else {
+        oag_assets::Archive::open(&spec).and_then(|mut archive| archive.read_name(&entry))
+    }
+    .map_err(|e| report.push(format!("track stats: {entry} did not read ({e})")))
+    .ok()?;
     match track_stats::from_blob(&blob) {
         Ok(stats) => {
             report.push(format!(
