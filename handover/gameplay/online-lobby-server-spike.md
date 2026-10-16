@@ -1,42 +1,32 @@
-# Online lobby server spike: build steps
+# Online lobby server: the spike is built, what is left
 
-2026-10-16, from the research lane `online-lobby-research`. The flow, the needs and the
-plan, with evidence and confidences, are in
-[`docs/networking/online-lobby.md`](../../docs/networking/online-lobby.md). Nothing is built.
-
-The maintainer's goal: a first spike of a server for a remote host, following Omega's lobby
-where possible; one binary; one game at a time, the rest queued; later a lobby with games
-spawned in containers.
+2026-10-16. The flow, the needs and what was built, with the wire messages, ports, run and
+deploy steps, are in [`docs/networking/online-lobby.md`](../../docs/networking/online-lobby.md)
+(parts 1 to 3 research, part 5 the spike). Server side and a command-line client are done and
+tested locally; nothing has been deployed or tried over a real network.
 
 ## Open
 
-Four decisions for the maintainer, ranked, with the recommendation (full text in the page):
-
-1. Is a TCP port available for the lobby (behind the webserver)? Yes: lobby over TCP and the
-   race child owns UDP 60000 (queue and rooms survive a crash). No: lobby and race in one
-   process, one UDP endpoint, race in a thread.
-2. Fork or thread: a forked child cannot take the QUIC connections the lobby holds, so a
-   thread in v1 behind a runner seam; a child when a second port exists.
-3. Identity: a chosen name plus a session token, no accounts.
-4. One title per server process in v1, advertised in the room list.
-
-Also open: why 436 `libSceNpToolkit2` imports resolve to shadPS4 stubs although the
-game's own PRX loads (a shadPS4 question, not needed for the spike), and the walk past
-`NetLoginPage` (needs PSN sign-in, so the screens after it are read, not seen).
+1. **The maintainer's remote test.** Build with `scripts/build-server-portable.sh`, open UDP
+   60000 (lobby) and UDP 60001 (race child), run `oag-server lobby` (steps in the doc), connect
+   two `oag-game --online` clients from another machine. Not done: no remote host was touched.
+2. **The menu screens.** `--online` is a flag path. Omega's order is ONLINE, CREATE or JOIN,
+   settings (`MP Select`) or the game list, team, the lobby; each needs `menu.toml` rows with
+   `string_id`s and English text, and pointer support. `oag_game::online::run` is the flow to
+   split into a per-frame state like `session::lan`'s.
+3. **A content fingerprint before the race loads.** Today a different pressing or a mod is
+   caught by the race child's tick-0 hash and named, after the countdown. The hello carries the
+   protocol and the titles only; a build and mod fingerprint in it would refuse at join.
+4. **Settings Omega has and `RaceParams` lacks**: laps, eliminations target, zone target,
+   barrel rolls, pilot assist allowed. Weapons stay off (ADR-0069, condition 2).
+5. **Session takeover re-sending a pending hand-off**, and `PR_SET_PDEATHSIG` so a killed lobby
+   takes its race child with it.
+6. **Kick, spectate, chat, invite-only, quick match**: not built, Omega has some of them.
+7. **Containers**: the `Runner` seam (`online::race_proc`) is where a spawner per room on its own
+   port goes; the hand-off already carries a port and a hash.
 
 ## Next Steps
 
-1. `Room` model and state machine (`Open`, `Countdown`, `Racing`, `Finished`), settings from
-   Omega's `MP Select` table mapped onto `RaceParams`; unit tests that fail if a setting is
-   dropped on the way to the race.
-2. Lobby messages in `oag_net::wire` (edit v1 in place): list, create, join, edit settings,
-   ready, start, leave, kick, a room snapshot pushed to members, named rejects.
-3. Content and version check before the race loads, using the existing fingerprint.
-4. Room owner (settings and START only, migrates on leave); the race stays server-authoritative.
-5. One game slot with a waiting queue and a "race in progress" state.
-6. The runner seam: a function from settings to a finished race, a thread first; a dead
-   race returns its members to the room list with a reason.
-7. Drive it with `--net-bot` clients end to end on localhost, then against the remote host
-   (UDP 60000, `[::]`, glibc 2.35 build) when the maintainer says to deploy.
-8. Front-end screens modelled on Omega's `OnlineMainMenu`, `Game List`, `MP Select`,
-   `GameLobby`, with pointer support.
+1. Maintainer: run the remote test above and report what the host's firewall and IPv6 did.
+2. A lane for the ONLINE screens in `oag-ui-screens` over `oag_net::online::client::LobbyClient`.
+3. The pre-race content fingerprint (open 3), reusing `oag_net::race::fingerprint`'s inputs.

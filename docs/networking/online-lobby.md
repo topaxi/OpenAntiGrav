@@ -4,10 +4,11 @@ Research for a first online lobby server (2026-10-16). Part 1 is read off Wipeou
 Omega Collection's own front end (PS4, patch v1.07). Part 2 maps it onto
 [`oag-net`](README.md). Part 3 is the shadPS4 attempt and the firmware question.
 Part 4 is the architecture plan, which is **chosen, not measured**; it has no
-confidence scores. Every other claim carries a score from the
+confidence scores. Part 5 is what the first spike built, after the maintainer's decisions
+of 2026-10-16, which replace part 4's recommendations. Every other claim carries a score from the
 [rubric](../reverse-engineering/confidence-rubric.md).
 
-Nothing here is built. No server code changed.
+Parts 1 to 4 are research and changed no code. Part 5 is the spike that followed.
 
 ## 1. Omega's online screen flow
 
@@ -252,7 +253,12 @@ fits that (an AMD device here), and not more: it does not say the NVIDIA bug is 
   our own server speaking whatever the title connects to, which is a different project
   (the game's room layer is NP Matching2 on Sony's servers).
 
-## 4. Plan: v1 architecture (chosen, not measured)
+## 4. Plan: v1 architecture (chosen, not measured; superseded by part 5)
+
+**Superseded (2026-10-16):** the maintainer chose a WebTransport lobby, a forked race child
+the clients reconnect to, name plus token identity, every title in one process and exactly
+one game slot. Part 5 is what was built; the options below stay as the reasoning that led
+to the question.
 
 **Goal (maintainer, 2026-10-16):** a first spike of a server for a remote host, following
 Omega's lobby flow where possible; one binary; one concurrent game, everyone else waits.
@@ -332,6 +338,181 @@ isolate.
 4. **Which title or titles the server hosts.** Omega's lobby lists the content pack as a
    room attribute (`Game`: HD or 2048). Recommendation: one title per server process in v1
    (the image it was started with), advertised in the room list.
+
+## 5. The spike (2026-10-16, built)
+
+Everything here is **chosen, not measured**: Omega's lobby is the model for the order of the
+screens and for the rules, the bytes and the numbers are ours.
+
+### The decisions it follows (maintainer, 2026-10-16)
+
+1. The lobby speaks **WebTransport**, the transport the race already uses: UDP, not TCP.
+2. The race is a **forked child** (`oag-server race`, exec of the same binary, not `fork()`:
+   forking a process with a live tokio runtime is unsafe) and the **clients reconnect** to it.
+   The lobby hands each client the race's **port and certificate hash** (not an address: the
+   lobby, bound to `[::]`, does not know its public one; the client combines the host it
+   dialled with the port).
+3. **Identity** is a chosen name (1 to 24 characters, unique, case-blind) plus a session token
+   the lobby issues in its welcome. No accounts. A hello carrying a connected session's token
+   and name takes that session over (a reconnect after a dropped link).
+4. **All titles in one process**: `--image` is repeatable, each opened with
+   `oag_source::title::identify`. A room is in one title. A client says which titles it can
+   race in its hello, and the **room list shows only rooms it can join**; a join into a title it
+   lacks is refused `Content`.
+5. **Exactly one game slot.** A room whose owner presses START queues FIFO and is told its
+   place (`Queued { position }`, 1 is next). When the slot frees, the front room is
+   re-validated (still at the minimum, still everyone ready) and counts down; a room that no
+   longer qualifies is skipped with a note, not left blocking.
+
+**After a race the players return to their room** (chosen; the menus were the alternative). The
+client's lobby link stays open for the whole race, so the lobby can push the queue and the end
+of the race, and everyone is back in their room with picks cleared and the race's reason in
+the room's note ("every person has finished", "--max-ticks reached", "the race process exited
+with exit status: 2: error text", "timed out after 60s waiting for ...").
+
+### Where it lives
+
+| Piece | Path |
+| --- | --- |
+| Wire messages (tags `0x20..`, disjoint from `Control` 1 to 8 and `Datagram` `0x10`/`0x11`) | `crates/net/src/wire/online.rs` |
+| Rooms: every rule, no I/O | `crates/net/src/online/rooms.rs` |
+| The service over WebTransport | `crates/net/src/online/server.rs` |
+| The race behind a seam: `Runner`, `ChildRunner` (exec), `ThreadRunner` (tests), `run_race` | `crates/net/src/online/race_proc.rs` |
+| A lobby client over any `Link` | `crates/net/src/online/client.rs` |
+| `oag-server lobby`, `oag-server race` | `crates/net/src/bin/oag_server/` |
+| `oag-game --online` | `crates/game/src/online.rs`, `crates/game/src/main/cli/extra.rs` |
+
+`oag-server` with no subcommand is the standalone race server it always was. Rule 6 of
+`just check-deps` holds: the lobby is `oag-net` without the `client` feature, and the one new
+dependency is `ring`'s random source, already linked.
+
+### The wire messages
+
+Client to lobby: `Hello { protocol, name, titles, token }` (magic `OAGL`), `ListRooms`,
+`CreateRoom(settings)`, `JoinRoom { room }`, `Edit(settings)` (owner), `Ready { team, ready }`
+(a pick is the ready, as Omega's ship choice is), `Start` (owner), `Leave`.
+
+Lobby to client: `Welcome { token, name, titles }`, `Rooms(list)`, `Room(snapshot)` (pushed on
+every change, owner first), `Left { reason }`, `Handoff { port, cert_hash, token, name }`,
+`Rejected { code, text }`.
+
+Named refusals (`Refusal`): `Full`, `Started`, `Content`, `Version`, `NoSuchRoom`, `NotOwner`,
+`NeedPlayers`, `NotReady`, `BadName`, `NotInRoom`, `InRoom`, `BadSettings`.
+
+Room settings (`RoomSettings`): title, track, class, mode, max players (2 to 8), AI fill.
+Weapons are not a setting: a network race holds them off (ADR-0069, condition 2). Omega's laps,
+barrel rolls, pilot-assist-allowed, eliminations and zone targets are not carried: `RaceParams`
+has no field for them yet.
+
+A game client that dials the lobby (`--connect`) is refused by name ("this is the online
+lobby, not a race"); a lobby client that dials a race port gets the race host's own malformed
+refusal.
+
+The race hello gained a **seat token** (`Control::Hello.token`, v1 edited in place, no version
+bump). A race child started with a job (`Host::expect_seats`) seats each hello by its token, so
+seat 0 is the room's owner whatever order the clients reconnect in, and a stranger without a
+token is refused by name.
+
+### The rules (rooms.rs, each with a unit test)
+
+- The owner is the room's creator and the next in join order when they leave ("... has been
+  made host of this game" is the room's note, Omega's string). Only the owner edits settings
+  and presses START.
+- START needs 2 people (`--min-players`; Omega's lobby says "at least %d players" without the
+  number) and every pick made; a refusal names who is being waited for.
+- An edit that changes the settings clears every pick (as `ApplySettings` re-opens the lobby)
+  and removes a member who lacks the new title ("picked content that you do not have", Omega's
+  `ONL_KICK_CONTENT`).
+- Taking a pick back, or dropping below the minimum, while queued or counting down cancels the
+  start and returns the room to `Open` with the reason.
+- The countdown is `--countdown-ms` (3000 by default); the room's snapshot carries the milliseconds
+  left once a second.
+- A room whose members all left while its race runs stays until the race is reported over, so the
+  slot is not freed early.
+
+### The race child
+
+`oag-server race --image I --listen ADDR --join-timeout S --max-ticks N` reads one hex line
+(`RaceJob`: the `RaceParams` plus `(name, token)` per seat) off **standard input**, not argv,
+where any local user could read the tokens. It loads the race, binds, prints `listening on ADDR`
+and `cert-hash HEX`, seats the people by token, waits for them to load (**`--join-timeout`, 60
+s: a no-show ends the race with the names missing, it never holds the only slot**), runs the
+race, prints `race-over REASON` and exits 0; a failure prints `error: WHY` on stderr and exits 2.
+The lobby reads both pipes on threads for the whole race (a full pipe would stall the child and
+look like a frozen race), kills a child that does not come up within `--load-timeout` (120 s) and
+kills the child when its handle drops. A race is stopped at `--max-ticks` (30 minutes by default).
+
+### Ports
+
+Two UDP ports, both configurable, both listening on `[::]` (dual stack): the lobby
+(`--listen`, **60000**) and the race child (`--race-listen`, **60001**). One race runs at a time,
+so one race port. Nothing else is needed; no TCP.
+
+### Run it locally
+
+```sh
+cargo build -p oag-net --bin oag-server -p oag-game
+target/debug/oag-server lobby --image data/images/pulse-psp-eu.chd \
+  --listen 127.0.0.1:0 --race-listen 127.0.0.1:0 --hash-out /tmp/lobby.hash
+# prints: lobby listening on 127.0.0.1:PORT, race port 0, lobby cert-hash <64 hex digits>
+
+# Ada makes a room and starts when two are ready; Bob joins the first joinable room.
+target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:PORT --lobby-hash @/tmp/lobby.hash --online-name Ada --online-team Feisar \
+  --online-create --online-track 'Data\Environments\01_Track\track.vex' \
+  --screenshot /tmp/a.png --ticks 600
+target/debug/oag-game data/images/pulse-psp-eu.chd --no-audio --net-bot \
+  --online 127.0.0.1:PORT --lobby-hash @/tmp/lobby.hash --online-name Bob --online-team Qirex \
+  --screenshot /tmp/b.png --ticks 600
+```
+
+Measured on 2026-10-16 with that command on localhost: both clients welcomed, room made and
+joined, countdown 500 ms, the child forked, both reconnected with their tokens as seats 0 and 1,
+0 bad state hashes on 600 ticks, the child exited on the clients leaving and the lobby freed the
+slot. `--online-room N` joins a named room; `--online-max`, `--online-class`, `--online-mode`,
+`--online-start-at` set the room.
+
+### Deploying to a remote host (not done by the spike)
+
+1. Build: `scripts/build-server-portable.sh musl target/portable/oag-server` (static, any x86-64
+   Linux) or `scripts/build-server-portable.sh 2.35 ...` (glibc 2.35). The lobby execs itself for
+   races, so the one binary is all that travels, plus one image per title.
+2. Open **UDP 60000** (the lobby) and **UDP 60001** (the race child) inbound. Nothing else.
+3. Run `./oag-server lobby --image <image> [--image <image> ...] --listen '[::]:60000'
+   --race-listen '[::]:60001' --hash-out lobby.hash` with the four `XDG_*` variables in a
+   directory of its own. The race child inherits the environment.
+4. Give the players the host name, `60000` and the contents of `lobby.hash`. The lobby's hash
+   changes on every restart; the race child mints its own and the lobby passes it on.
+
+### Tests
+
+- `wire::online` and `online::rooms` unit tests (round trips, every rule above).
+- `tests/online.rs`, no disc, over real WebTransport on localhost: two rooms race one after the
+  other through one slot (the second is told it is queued, then hands off only after the first
+  race is over), reconnecting in the wrong order still seats by token, 0 hash mismatches, the room
+  returns open with the reason; a child that crashes after coming up; a child that never comes up
+  is killed; a title with no image refuses; a game client on the lobby port is refused by name.
+- `net_ground_truth::the_lobby_forks_a_real_race_...` (`#[ignore]`, `just test-data`): the real
+  `oag-server lobby` forks the real `oag-server race` on a real circuit.
+
+### Open
+
+- **No menu screens.** `--online` is a command-line path; Omega's order (ONLINE, CREATE or JOIN,
+  settings or list, team, lobby) is the plan for `oag-ui-screens`, with pointer support.
+- **The content check is the title name plus the race child's tick-0 hash**, not a build or mod
+  fingerprint exchanged before the race loads (a different pressing or a mod is refused at the
+  child's ready, named, and the room returns). The protocol version is checked at the hello.
+- **A session takeover does not re-send a pending hand-off**, so a client that drops during the
+  race's loading and reconnects to the lobby misses it; it times out at the child and returns.
+- **A SIGKILLed lobby orphans its running race child**, which exits on its own at the end of the
+  race or the join timeout. No `PR_SET_PDEATHSIG` (it needs `libc`).
+- **No kick, no spectators, no chat, no quick match, no invite-only**; Omega has some of them.
+- **One race slot is per server**, so a second title waits behind the first. The containers shape
+  (a game per room on its own port) is the same `Runner` seam with a spawner behind it.
+- The **AI fill** setting follows `RaceParams.opponents` as it already did.
+- Omega and 2048: not a format finding. The lobby carries a title's name, so those titles are
+  hostable as soon as a race on them loads through `oag_net::race::load`; Omega's race is
+  incomplete (`omega-status.md`), so that stays **checked, applies, not wired**.
 
 ## Sources
 
