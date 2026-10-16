@@ -180,9 +180,15 @@ pub fn take_misses() -> Vec<String> {
 mod tests {
     use super::*;
 
+    /// The recorder is process-wide, so the tests that use it take turns.
+    static TURN: Mutex<()> = Mutex::new(());
+
     /// One test owns the process-wide recorder, so the cases run in sequence.
     #[test]
     fn overlapping_and_touching_reads_merge_and_a_gap_stays() {
+        let _turn = TURN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         start(Path::new("/src"));
         note("/src/a/Data.wad", 1000, 100, 10);
         note("/src/a/Data.wad", 1000, 110, 10);
@@ -207,6 +213,9 @@ mod tests {
     /// Reads in any order merge to exactly the bytes they cover: compared with a bitmap.
     #[test]
     fn merging_matches_a_bitmap_for_reads_in_any_order() {
+        let _turn = TURN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut state = 0x2545_f491_4f6c_dd1d_u64;
         let mut next = move |n: u64| {
             state ^= state << 13;
