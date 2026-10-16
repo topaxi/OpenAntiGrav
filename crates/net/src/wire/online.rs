@@ -7,7 +7,7 @@
 //! dials the wrong port is refused by name by either end. Chosen, not measured: the
 //! shapes follow Omega's lobby (`docs/networking/online-lobby.md`), the bytes are ours.
 
-use super::{Malformed, PROTOCOL, Reader, put_string};
+use super::{Malformed, PROTOCOL, RaceParams, Reader, put_string};
 
 /// The first four bytes of a lobby hello, so a race client dialling a lobby is refused by name.
 pub const MAGIC: [u8; 4] = *b"OAGL";
@@ -235,6 +235,71 @@ pub enum Message {
         /// A line for the screen.
         text: String,
     },
+}
+
+/// What the lobby tells a race process it brought up: the race, and who sits where with
+/// the token each person must say in their race hello. Written to the child's standard
+/// input as one hex line (not argv, where any local user can read the tokens).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RaceJob {
+    /// The race.
+    pub params: RaceParams,
+    /// `(name, seat token)` by seat.
+    pub seats: Vec<(String, String)>,
+}
+
+impl RaceJob {
+    /// The job as bytes.
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.params.put(&mut out);
+        out.push(u8::try_from(self.seats.len()).unwrap_or(u8::MAX));
+        for (name, token) in self.seats.iter().take(usize::from(u8::MAX)) {
+            put_string(&mut out, name);
+            put_string(&mut out, token);
+        }
+        out
+    }
+
+    /// Parses the job.
+    ///
+    /// # Errors
+    ///
+    /// [`Malformed`] for truncated bytes or bytes left over.
+    pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
+        let mut r = Reader { bytes };
+        let params = RaceParams::take(&mut r)?;
+        let count = r.u8()?;
+        let seats = (0..count)
+            .map(|_| Ok((r.string()?, r.string()?)))
+            .collect::<Result<Vec<_>, Malformed>>()?;
+        r.end()?;
+        Ok(Self { params, seats })
+    }
+
+    /// The job as one line of hex.
+    #[must_use]
+    pub fn to_line(&self) -> String {
+        self.encode().iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    /// Parses [`Self::to_line`].
+    ///
+    /// # Errors
+    ///
+    /// [`Malformed`] for odd or non-hex text, or bytes that are not a job.
+    pub fn from_line(line: &str) -> Result<Self, Malformed> {
+        let line = line.trim();
+        if line.len() % 2 != 0 {
+            return Err(Malformed("job line is not whole bytes"));
+        }
+        let bytes = (0..line.len() / 2)
+            .map(|i| u8::from_str_radix(&line[2 * i..2 * i + 2], 16))
+            .collect::<Result<Vec<u8>, _>>()
+            .map_err(|_| Malformed("job line is not hex"))?;
+        Self::decode(&bytes)
+    }
 }
 
 fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
@@ -587,6 +652,30 @@ mod tests {
             };
             assert_eq!(Message::decode(&message.encode()), Ok(message));
         }
+    }
+
+    #[test]
+    fn a_race_job_round_trips_through_its_stdin_line() {
+        let job = RaceJob {
+            params: RaceParams {
+                title: "Wipeout Pulse".into(),
+                track: "01_Track".into(),
+                team: "Feisar".into(),
+                teams: vec!["Feisar".into(), "Qirex".into()],
+                class: "VENOM".into(),
+                mode: "single_race".into(),
+                difficulty: "elite".into(),
+                scheme: "veteran".into(),
+                seed: 0xFEED_0000_0000_0001,
+                people: 2,
+                opponents: false,
+                weapons: false,
+            },
+            seats: vec![("ann".into(), "t0".into()), ("bob".into(), "t1".into())],
+        };
+        assert_eq!(RaceJob::from_line(&job.to_line()), Ok(job));
+        assert!(RaceJob::from_line("zz").is_err());
+        assert!(RaceJob::from_line("abc").is_err());
     }
 
     #[test]
