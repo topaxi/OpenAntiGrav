@@ -472,6 +472,10 @@ pub struct RaceView {
     /// no camera and read by the shot (see [`crate::lock`] and
     /// [`sight::Sight::follow`]). Nothing in the simulation reads this field.
     pub(super) sight: sight::Sight,
+    /// The grids [`Self::sight`] and every slot's reticle take, for a view cut top and bottom
+    /// (or not at all) and, where the title authors one, for a view cut left and right.
+    /// `Race::fit_sights` picks per slot.
+    pub(super) sight_screens: ([f32; 2], Option<[f32; 2]>),
     /// What [`Self::sight`] said last tick, which is what the tone plays off.
     pub(super) sight_state: sight::State,
     /// The field-of-view setting the picture is being drawn at.

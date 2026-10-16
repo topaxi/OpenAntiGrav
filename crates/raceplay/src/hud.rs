@@ -68,14 +68,13 @@ pub const fn hud_layout_for(
     }
 }
 
-/// How many views a race is cut into and which way, as the HUD load needs them
-/// ([`Options::views`](crate::Options::views), [`Options::cut`](crate::Options::cut)).
+/// How many views a race is cut into, as the HUD load needs them
+/// ([`Options::views`](crate::Options::views)). Which way they are cut is the drawing
+/// window's, not the load's.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SplitViews {
     /// The views drawn; `0` and `1` are no split.
     pub(super) count: u8,
-    /// Which way two of them are cut.
-    pub(super) cut: oag_render::viewport::Cut,
     /// How many people fly the race: a Time Trial of several draws the arcade layout
     /// ([`hud_layout_for`]).
     pub(super) people: usize,
@@ -146,13 +145,16 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
-    let split = split_assets(archives, title, mode, views, space, report);
+    let (split, split_columns) = split_assets(archives, title, mode, views, space, report);
     // The sheet packs the textures of every layout this race can draw, the
     // whole-screen one first so a race with no split packs what it always did.
-    let sheet = match (&layout, &split) {
-        (Some(layout), Some(split)) => {
+    let sheet = match (
+        &layout,
+        split.iter().chain(&split_columns).collect::<Vec<_>>(),
+    ) {
+        (Some(layout), families) if !families.is_empty() => {
             let mut every = layout.clone();
-            for authored in &split.layouts {
+            for authored in families.iter().flat_map(|family| &family.layouts) {
                 every.sprites.extend(authored.sprites.iter().cloned());
                 every.models.extend(authored.models.iter().cloned());
             }
@@ -256,7 +258,7 @@ pub(super) fn load_hud(
         views.count,
         layout.as_ref(),
         heights,
-        split.is_some(),
+        split.is_some() || split_columns.is_some(),
         report,
     );
 
@@ -275,6 +277,7 @@ pub(super) fn load_hud(
         space,
         art: title.hud_art,
         split,
+        split_columns,
         split_hud,
     }
 }
@@ -364,10 +367,12 @@ fn load_split_hud(
 }
 
 /// The title's own two-player split-screen layouts for `mode`, when the race is
-/// loaded for exactly two views and the title ships them.
+/// loaded for exactly two views and the title ships them: the top-and-bottom family
+/// and, where the title ships its `vert_` twins, the left-and-right one.
 ///
-/// **Two views only**: the authored family covers a pair, top and bottom or (for a
-/// vertical `cut`, on a title that ships the `vert_` twins) left and right, and nothing
+/// **Both families, whatever the cut**: which a view draws is its window's cut,
+/// chosen at draw time ([`oag_hud::Assets::split_family`]); a `2h,2v` layout is one
+/// race with both. **Two views only**: the authored family covers a pair, and nothing
 /// more, so any other count, and every mode the family has no layout
 /// for (Time Trial, Speed Lap, Zone: HD ships a Zone one that is not wired),
 /// keep the whole-screen layout scaled into each view. A layout that does not
@@ -380,27 +385,50 @@ fn split_assets(
     views: SplitViews,
     space: oag_display::space::Space,
     report: &mut Vec<String>,
-) -> Option<oag_hud::SplitAssets> {
+) -> (Option<oag_hud::SplitAssets>, Option<oag_hud::SplitAssets>) {
     let SplitViews {
         count: views,
-        cut,
         people,
     } = views;
-    let authored = title.hud.split.filter(|_| views == 2)?;
-    let vertical = authored
-        .vertical
-        .filter(|_| cut.for_views(usize::from(views)) == oag_render::viewport::Cut::Vertical);
-    let (arcade, elimination) = vertical
-        .map_or((authored.arcade, authored.elimination), |vertical| {
-            (vertical.arcade, vertical.elimination)
-        });
-    let roots = match mode {
-        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => arcade,
-        Mode::Eliminator => elimination,
-        // The Multiplayer Time Trial draws the arcade HUD, so its split is the arcade one.
-        Mode::TimeTrial if mode.is_multiplayer_time_trial(people) => arcade,
-        Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => return None,
+    let Some(authored) = title.hud.split.filter(|_| views == 2) else {
+        return (None, None);
     };
+    let pick = |(arcade, elimination): ([&'static str; 2], [&'static str; 2])| {
+        match mode {
+            Mode::SingleRace | Mode::Tournament | Mode::Head2Head => Some(arcade),
+            Mode::Eliminator => Some(elimination),
+            // The Multiplayer Time Trial draws the arcade HUD, so its split is the arcade one.
+            Mode::TimeTrial if mode.is_multiplayer_time_trial(people) => Some(arcade),
+            Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => None,
+        }
+    };
+    let rows = pick((authored.arcade, authored.elimination)).and_then(|roots| {
+        let view = (space.size.0, authored.view_height as f32);
+        compose_family(archives, &roots, view, (0.0, view.1), report)
+    });
+    let columns = authored.vertical.and_then(|vertical| {
+        let roots = pick((vertical.arcade, vertical.elimination))?;
+        let width = vertical.view_width as f32;
+        compose_family(
+            archives,
+            &roots,
+            (width, space.size.1),
+            (width, 0.0),
+            report,
+        )
+    });
+    (rows, columns)
+}
+
+/// Composes the two roots of one authored pair into a [`oag_hud::SplitAssets`], or `None`
+/// with a report line when either does not compose whole.
+fn compose_family(
+    archives: &mut oag_assets::Archives,
+    roots: &[&str; 2],
+    view: (f32, f32),
+    step: (f32, f32),
+    report: &mut Vec<String>,
+) -> Option<oag_hud::SplitAssets> {
     let mut layouts = Vec::new();
     for root in roots {
         let composed = oag_hud::compose(root, |path| archives.read_name(path).ok());
@@ -419,16 +447,6 @@ fn split_assets(
         layouts.push(composed.layout);
     }
     let layouts: [oag_hud::Layout; 2] = layouts.try_into().ok()?;
-    let (view, step) = match vertical {
-        Some(vertical) => {
-            let width = vertical.view_width as f32;
-            ((width, space.size.1), (width, 0.0))
-        }
-        None => {
-            let height = authored.view_height as f32;
-            ((space.size.0, height), (0.0, height))
-        }
-    };
     Some(oag_hud::SplitAssets {
         layouts,
         view,

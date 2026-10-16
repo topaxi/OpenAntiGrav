@@ -786,7 +786,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.language.as_deref(),
         crate::hud::SplitViews {
             count: options.views,
-            cut: options.cut,
             people: usize::from(options.people_flying()),
         },
         &mut report,

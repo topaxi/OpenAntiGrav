@@ -421,6 +421,18 @@ impl Sight {
         self.screen
     }
 
+    /// Moves the reticle to another grid (its view was cut the other way): a reticle that
+    /// has nothing on screen starts again at the new grid's centre, one that follows a
+    /// target is re-projected by the next [`Self::follow`] regardless. A no-op on the grid
+    /// it is already in.
+    pub fn set_screen(&mut self, screen: [f32; 2]) {
+        if self.screen != screen {
+            self.screen = screen;
+            self.centre = [screen[0] * 0.5, screen[1] * 0.5];
+            self.previous = None;
+        }
+    }
+
     /// Which weapon's art the reticle is wearing.
     ///
     /// The draw path picks its widget set off this and **not** off whatever the

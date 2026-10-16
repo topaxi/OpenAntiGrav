@@ -65,7 +65,7 @@ pub mod time_gap;
 mod time_trial_pace;
 mod widget;
 
-pub use assets::{Assets, SplitAssets};
+pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
 pub use draw::{Context, Frame, Span, draw_list, sprite_draw};
 pub use head_to_head::HeadToHead;

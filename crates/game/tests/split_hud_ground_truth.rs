@@ -85,6 +85,7 @@ fn draws<'a>(
     oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_columns.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
         race.cut(),
@@ -260,6 +261,7 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
     let views = oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_columns.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
         oag_render::viewport::Cut::Horizontal,
@@ -289,21 +291,6 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
     }
 }
 
-fn hd_loaded_cut(views: u8, cut: oag_render::viewport::Cut) -> Option<race::Loaded> {
-    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
-    Some(
-        race::load(&race::Options {
-            source: image.display().to_string(),
-            class: "VENOM".to_string(),
-            mode: oag_race::Mode::SingleRace,
-            views,
-            cut,
-            ..race::Options::default()
-        })
-        .expect("loading the race"),
-    )
-}
-
 /// A race cut vertically reads HD's `vert_` layouts, one per player: the second is the
 /// first moved right half the screen (960), each sits in its own column of the 1920x1080
 /// grid, the reticle is view-relative to a 960x1080 view, and each view's text lands in its
@@ -312,27 +299,22 @@ fn hd_loaded_cut(views: u8, cut: oag_render::viewport::Cut) -> Option<race::Load
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
     use oag_render::viewport::Cut;
-    let (Some(vertical), Some(horizontal), Some(three)) = (
-        hd_loaded_cut(2, Cut::Vertical),
-        hd_loaded_cut(2, Cut::Horizontal),
-        hd_loaded_cut(3, Cut::Vertical),
-    ) else {
+    let (Some(two), Some(three)) = (hd_loaded(2), hd_loaded(3)) else {
         return;
     };
     assert!(
         three.hud.split.is_none(),
         "a vertical cut means nothing but for two views: three read no authored layout"
     );
-    let rows = horizontal
-        .hud
-        .split
-        .as_ref()
-        .expect("the horizontal family");
+    let rows = two.hud.split.as_ref().expect("the horizontal family");
     assert_eq!(rows.view, (1920.0, 540.0));
     assert_eq!(rows.step, (0.0, 540.0));
 
-    let hud = vertical.hud;
-    let split = hud.split.as_ref().expect("HD ships the vert_ layouts");
+    let hud = &two.hud;
+    let split = hud
+        .split_columns
+        .as_ref()
+        .expect("HD ships the vert_ layouts");
     let [left, right] = &split.layouts;
     assert!(left.skipped.is_empty() && right.skipped.is_empty());
     assert_eq!(left.sprites.len(), right.sprites.len());
@@ -364,7 +346,7 @@ fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
     assert_eq!(split.view, (960.0, 1080.0));
     assert_eq!(split.step, (960.0, 0.0));
     assert_eq!(split.region(1), [960.0, 0.0, 960.0, 1080.0]);
-    assert_eq!(hud.sight_screen(), (960.0, 1080.0));
+    assert_eq!(hud.sight_screen_for(true), (960.0, 1080.0));
     for layout in &split.layouts {
         for reference in layout.textures() {
             assert!(
@@ -396,6 +378,7 @@ fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
     let views = oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_columns.as_ref(),
         hud.split_hud.as_ref(),
         vec![Readout::blank(), Readout::blank()],
         Cut::Vertical,
@@ -448,7 +431,7 @@ fn hd_draws_a_reticle_in_its_authored_vertical_split_view() {
 }
 
 fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
-    let Some(loaded) = hd_loaded_cut(2, cut) else {
+    let Some(loaded) = hd_loaded(2) else {
         return;
     };
     let hud = loaded.hud;
@@ -629,25 +612,19 @@ fn omega_wires_hds_vert_layouts_one_column_apart() {
     };
     // A vertically cut two-view Omega race reads them: the layouts it draws are the 960-wide
     // columns, one view apart, where the horizontal cut's are the half-height rows.
-    let load = |cut| {
+    let load = || {
         race::load(&race::Options {
             source: ps4.display().to_string(),
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             views: 2,
-            cut,
             ..race::Options::default()
         })
         .expect("loading Omega's race")
     };
-    let vertical = load(oag_render::viewport::Cut::Vertical);
-    let horizontal = load(oag_render::viewport::Cut::Horizontal);
-    let columns = vertical.hud.split.as_ref().expect("the vert_ family");
-    let rows = horizontal
-        .hud
-        .split
-        .as_ref()
-        .expect("the horizontal family");
+    let loaded = load();
+    let columns = loaded.hud.split_columns.as_ref().expect("the vert_ family");
+    let rows = loaded.hud.split.as_ref().expect("the horizontal family");
     assert_eq!(columns.view, (960.0, 1080.0));
     assert_eq!(columns.step, (960.0, 0.0));
     assert_eq!(rows.view, (1920.0, 540.0));
@@ -877,13 +854,12 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
         let Some(path) = oag_testdata::image(source) else {
             continue;
         };
-        let load = |cut| {
+        let load = || {
             race::load(&race::Options {
                 source: path.display().to_string(),
                 class: "VENOM".to_string(),
                 mode: oag_race::Mode::SingleRace,
                 views: 2,
-                cut,
                 ..race::Options::default()
             })
             .expect("loading the race")
@@ -892,7 +868,7 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
             (Cut::Vertical, "tall", 0.89),
             (Cut::Horizontal, "strip", 3.56),
         ] {
-            let loaded = load(cut);
+            let loaded = load();
             let file = loaded
                 .hud
                 .split_hud
@@ -903,7 +879,7 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
                 .unwrap_or_else(|| panic!("{source}: no rule for {rule}"));
             assert_eq!(answered.name, rule, "{source} {cut:?}");
         }
-        let loaded = load(Cut::Vertical);
+        let loaded = load();
         let hud = loaded.hud;
         let mut race = race::Race::start(loaded.setup);
         oag_game::split_screen::apply(&mut race, 2, Cut::Vertical);
@@ -953,5 +929,53 @@ fn hd_authors_the_bar_and_both_places_but_no_gap_label() {
             layout.label("PositionOf").is_none(),
             "no gap label is authored"
         );
+    }
+}
+
+/// **The window's own cut picks the family**, not the load's: `--window-seats 2h,2v` is one
+/// race whose first window is two seats top and bottom and whose second is two side by side
+/// (the maintainer's 2026-10-16 report: the second window drew the horizontal HUD). One
+/// load, then each window's draw reads the rows family or HD's `vert_` columns by its own
+/// cut, and each slot's reticle projects into its own view's grid.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_a_two_h_two_v_race_draws_each_window_its_own_family() {
+    let Some(loaded) = hd_loaded(2) else { return };
+    let hud = loaded.hud;
+    let mut race = race::Race::start(loaded.setup);
+    let layout =
+        oag_game::split_screen::parse_window_seats("2h,2v", oag_render::viewport::Cut::Horizontal)
+            .expect("the layout parses");
+    assert_eq!(oag_game::split_screen::apply_windows(&mut race, &layout), 4);
+    let rows = hud.split.as_ref().expect("the rows family");
+    let columns = hud.split_columns.as_ref().expect("the vert_ family");
+    assert_ne!(rows.view, columns.view);
+    let expect = [(rows, [1920.0, 540.0]), (columns, [960.0, 1080.0])];
+    for (window, (family, grid)) in expect.into_iter().enumerate() {
+        let slots = race.window_drawn(window);
+        assert_eq!(slots.len(), 2, "window {window} holds two seats");
+        let readouts: Vec<Readout> = slots.iter().map(|&slot| race.readout_for(slot)).collect();
+        let views = oag_game::hud_views::view_draws(
+            hud.context().expect("the layout parsed"),
+            hud.split.as_ref(),
+            hud.split_columns.as_ref(),
+            hud.split_hud.as_ref(),
+            readouts,
+            race.window_cut(window),
+            VIEWPORT,
+            hud.space,
+        );
+        assert!(
+            std::ptr::eq(views[0].cx.layout, &family.layouts[0])
+                && std::ptr::eq(views[1].cx.layout, &family.layouts[1]),
+            "window {window} draws the family its own cut names"
+        );
+        for &slot in &slots {
+            assert_eq!(
+                race.sight_screen_of(slot),
+                grid,
+                "window {window}, slot {slot}: the reticle's grid is its view's"
+            );
+        }
     }
 }

@@ -287,12 +287,6 @@ pub struct Options {
     /// `views` is then what one window's HUD needs (`--window-seats 1,1` is one view), not the
     /// head count, and reading it for the grid put the second person at the front as an opponent.
     pub people: u8,
-    /// Which way two views are cut, [`oag_render::viewport::Cut`]. Like [`Self::views`] only
-    /// the load needs it: a title's authored left-and-right HUD
-    /// ([`oag_title::hud::VerticalLayouts`]) is read for a vertical cut. The race box's
-    /// `SPLIT SCREEN` row sets it; it means nothing for any other view count.
-    #[cfg(feature = "view")]
-    pub cut: oag_render::viewport::Cut,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
     /// the race box, RACE REMIX and the command line; a campaign launch leaves

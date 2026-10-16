@@ -65,6 +65,7 @@ fn per_view(race: &race::Race, hud: &oag_hud::Assets) -> Vec<([f32; 4], Vec<Word
     let draws = oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_columns.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
         race.cut(),
