@@ -67,14 +67,14 @@ impl DestroyCamera {
     }
 }
 
-/// Every authored `Camera` in a circuit as a [`Station`], or none off Pulse's
-/// PSP source (`pulse_psp`, the loader's own flag).
+/// Every authored `Camera` in a circuit as a [`Station`], or none off a source
+/// whose `circuit_effects` rule is not read (`circuit_fx`, the loader's flag).
 pub(super) fn stations(
-    pulse_psp: bool,
+    circuit_fx: bool,
     track_blob: &[u8],
     report: &mut Vec<String>,
 ) -> Vec<Station> {
-    if !pulse_psp {
+    if !circuit_fx {
         return Vec::new();
     }
     let stations: Vec<Station> = oag_vex::camera::cameras(track_blob)

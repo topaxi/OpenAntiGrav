@@ -61,6 +61,21 @@ the PS2 reticle with a lock on it, to settle that size and the orthographic
 span of the PS2's `<Mode3D>` block (the placeholders keep the PSP's
 `x="-240" y="136"`).
 
+### PS2 Pulse takes the PSP's circuit effects, wreck and destroy camera (2026-10-16)
+
+The PS2 disc authors the same circuit nodes as the PSP (circuit 1: three
+`WO_BLUE_WELDER` and eight `Camera` nodes on both; census in
+`crates/raceplay/tests/ps2_hud_sights_ground_truth.rs`), so the loader's
+`circuit_effects` rule (`oag_title::Looks`) now applies to both pressings: the
+circuit's placed `ParticleSystem` nodes, its `<Weather>` and the destroy camera's
+stations. The `hull_wreck` rule applies to both too, the PS2 wreck taking its
+texture set from the entry before it. **Checked, applies, wired**: the PSP's
+law carried over, the PS2 port itself unread (confidence 70, same data, same
+class ids). **Still PSP-only**: the hull's absorb and LeachBeam overlays (a PS2
+VIF batch has no GE-input batch scale to project from), the Quake's road ripple,
+the track's chrome shine and the GE hull lights, all of which move PSP-shaped
+GE batches. Not seen on a frame: the steam on circuits 5, 7 and 11.
+
 ### The PS2 ships the same HUD and hides both halves of it
 
 Same five layouts under the same names, the same widget counts, and - the part

@@ -21,19 +21,22 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 #[cfg(feature = "view")]
 /// Lights the hulls with the circuit's own `AmbientLight`/`DirectionalLight`
 /// nodes and marks every `.vex` model the race draws as stamping the glow
-/// mask. A no-op when `pulse_psp` is false.
+/// mask. The circuit's own placed effects and weather follow `circuit_fx`, which
+/// the PS2 shares; everything else is a no-op when `pulse_psp` is false.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    pulse_psp: bool,
+    (pulse_psp, circuit_fx): (bool, bool),
     track_blob: &[u8],
     (archives, track): (&mut oag_assets::Archives, &str),
 ) {
+    let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
+    if circuit_fx {
+        place_scenery_fx(loaded, track_blob, &nodes);
+        place_weather(loaded, track_blob, &nodes, archives, track);
+    }
     if !pulse_psp {
         return;
     }
-    let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
-    place_scenery_fx(loaded, track_blob, &nodes);
-    place_weather(loaded, track_blob, &nodes, archives, track);
     match mesh_render::HullLights::from_track(track_blob, &nodes, 255) {
         Some(hull) => {
             loaded.report.push(format!(
@@ -172,16 +175,21 @@ fn mist_texture(
             return None;
         }
     };
-    match oag_texture::texture::Texture::parse(&blob) {
-        Ok(texture) => {
+    let decoded = match oag_texture::texture::Texture::parse(&blob) {
+        Ok(texture) => Ok((texture.width, texture.height, texture.to_rgba())),
+        Err(error) => oag_texture::ps2_texture::parse(&blob)
+            .map(|texture| (texture.width, texture.height, texture.to_rgba()))
+            .map_err(|_| error),
+    };
+    match decoded {
+        Ok((width, height, rgba)) => {
             report.push(format!(
-                "mist: {name}, {}x{}, two additive screen layers under the HUD",
-                texture.width, texture.height
+                "mist: {name}, {width}x{height}, two additive screen layers under the HUD"
             ));
             Some(oag_fx::exhaust::FlareTexture {
-                width: u32::from(texture.width),
-                height: u32::from(texture.height),
-                rgba: texture.to_rgba(),
+                width: u32::from(width),
+                height: u32::from(height),
+                rgba,
             })
         }
         Err(error) => {

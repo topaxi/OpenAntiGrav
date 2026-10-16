@@ -706,6 +706,10 @@ pub struct Looks {
     pub measured_draws: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.
     pub ps2_glow_mask: Rule,
+    /// What a circuit's own `.vex` authors for the race to play: its placed
+    /// `ParticleSystem` nodes, its `<Weather>` element and its `Camera` nodes
+    /// (the destroy camera's stations). Keyed on the race's own archive.
+    pub circuit_effects: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// The front end never waits at its language picker on a fresh run: the
@@ -739,6 +743,7 @@ impl Looks {
             laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
+            circuit_effects: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,

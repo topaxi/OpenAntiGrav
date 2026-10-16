@@ -823,6 +823,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pose_override = pose::resolve(options.pose, &spline, &mut report);
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     #[cfg(feature = "view")]
+    let circuit_fx = vex_geometry
+        && title
+            .looks
+            .circuit_effects
+            .applies(archives.layout.platform);
+    #[cfg(feature = "view")]
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
     let original_laws =
@@ -913,7 +919,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             #[cfg(feature = "view")]
-            destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
+            destroy_stations: super::destroy_camera::stations(circuit_fx, &track_blob, &mut report),
             #[cfg(feature = "view")]
             intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
@@ -1092,7 +1098,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         loaded.track_model.shine_draws.clear();
     }
     #[cfg(feature = "view")]
-    pulse_psp::finish(&mut loaded, pulse_psp, &track_blob, (&mut archives, &track));
+    pulse_psp::finish(
+        &mut loaded,
+        (pulse_psp, circuit_fx),
+        &track_blob,
+        (&mut archives, &track),
+    );
     #[cfg(feature = "view")]
     pulse_ps2::finish(
         &mut loaded,

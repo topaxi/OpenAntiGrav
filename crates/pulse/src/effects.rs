@@ -113,6 +113,13 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // `PsysNode_Init`, `Weather_Update` and the destroy camera, read on the PSP
+    // (`placed-particle-systems.md`, `weather.md`); the PS2 circuits author the
+    // same nodes, so the PSP's law is carried over.
+    circuit_effects: Rule {
+        on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // `docs/ghidra/functions/psp-pulse-usa/shield-pickup.md`; the PS2 tint is
     // measured on PCSX2 (`oag_render::shield::PS2_PULSE_PALETTE`).
     shield_palette: ShieldPalettes {

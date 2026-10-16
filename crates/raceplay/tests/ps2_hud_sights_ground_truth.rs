@@ -68,3 +68,30 @@ fn every_ps2_team_has_a_textured_wreck() {
         );
     }
 }
+
+/// A PS2 circuit's own placed particle effects, weather anchors and `Camera`
+/// nodes play as they do on the PSP: circuit 1 places three welders and eight
+/// cameras on both pressings.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_ps2_circuit_plays_its_placed_effects_and_cuts_to_its_cameras() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(r"Data\Environments\01_Track\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let has = |text: &str| loaded.report.iter().any(|line| line.contains(text));
+    assert!(
+        has("placed effect: 3 x WO_BLUE_WELDER, played from load on its node"),
+        "{}",
+        loaded.report.join("\n")
+    );
+    assert!(has("destroy camera: 8 authored Camera node(s)"));
+}
