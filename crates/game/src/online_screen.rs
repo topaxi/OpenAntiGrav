@@ -107,12 +107,21 @@ pub fn room_line(
                 .to_string()
         })
     };
-    format!(
+    let mut line = format!(
         "{} / {} / {}",
         track.to_uppercase(),
         room.settings.class.to_uppercase(),
         room.settings.mode.replace('_', " ").to_uppercase()
-    )
+    );
+    // The owner's lap count, when there is one (`0` is the mode's own).
+    if room.settings.laps > 0 {
+        line.push_str(&format!(
+            " / {} {}",
+            room.settings.laps,
+            say(strings, "OAG_ONLINE_LAPS", "LAPS")
+        ));
+    }
+    line
 }
 
 /// A member's line in the room: the name, the host mark and whether the pick is made.
