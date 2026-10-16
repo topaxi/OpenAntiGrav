@@ -62,21 +62,35 @@ pub fn open_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Res
     Ok(opened)
 }
 
-/// [`open_source`] before the asset layers are mounted around the archives.
-fn open_unlayered(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Opened> {
-    // **A server extraction names its title.** Its archives are the source's own at the
-    // same paths, so the search below would take a Pure extraction for Pulse (the two
-    // ship identical archive names, and a folder has no serial to tell them apart).
+/// [`open_source`] for the headless server, which may also be handed a server extraction
+/// ([`crate::extract`]). A client never calls it: an extraction is the server's, and
+/// [`open_source`] does not recognise one.
+///
+/// An extraction names its title in its manifest. Its archives are the source's own at the
+/// same paths, so [`open_source`]'s search would take a Pure extraction for Pulse (the two
+/// ship identical archive names, and a folder has no serial to tell them apart).
+///
+/// # Errors
+///
+/// As [`open_source`].
+pub fn open_server_source(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Opened> {
     if let Some(named) = crate::extract::title_named(source)
         && let Some(opener) = PULSE_DENY_LIST_OPENERS
             .iter()
             .find(|opener| opener.target.name == named)
     {
-        return (opener.open)(source, pure_packs).map(|archives| Opened {
+        let mut opened = (opener.open)(source, pure_packs).map(|archives| Opened {
             archives,
             title: opener.target,
-        });
+        })?;
+        opened.archives = crate::layers::mount(opened.archives, opened.title);
+        return Ok(opened);
     }
+    open_source(source, packs, pure_packs)
+}
+
+/// [`open_source`] before the asset layers are mounted around the archives.
+fn open_unlayered(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Opened> {
     // **Tried before Pulse, and by a different test.** Pure is reached by
     // Pulse's deny-list naming it, because the two ship archives under identical
     // names; HD shares no archive name with either, so there is nothing for a

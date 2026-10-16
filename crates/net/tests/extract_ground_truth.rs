@@ -3,6 +3,12 @@
 //! every one and reports a `gap` otherwise), and then each is flown tick by tick from the source
 //! and from the extraction and its state hash compared at every tick.
 //!
+//! These tests run with oag-raceplay's `view` feature on (the crate's dev-dependency turns it on),
+//! so the loads here read textures, meshes and sound a lean server never reads and the extractions
+//! are supersets of a lean one: they prove the mechanism, not the sizes. `oag-server extract`
+//! itself refuses to run in such a build (`oag_raceplay::VIEW`); the sizes in
+//! docs/networking/online-lobby.md come from a lean build.
+//!
 //! The AI field flies the grid and nobody gives input: the simulation the server runs, with
 //! nothing the extraction could be hiding behind. **Not a three-lap race**: that is 15,000 ticks
 //! and more, and a title's loaded race is a gigabyte, so the long case flies 1,800 ticks (thirty
