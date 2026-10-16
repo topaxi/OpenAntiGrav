@@ -205,11 +205,10 @@ pub const TITLE: &Title = &Title {
 /// Wipeout 2048 never authors".
 const EFFECTS: oag_title::Effects = {
     use oag_title::Trigger;
-    let mut effects =
-        oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
-            .without(Trigger::PlasmaBlast)
-            .without(Trigger::EngineFlare)
-            .without(Trigger::LeachbeamEnergy);
+    let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+        .without(Trigger::PlasmaBlast)
+        .without(Trigger::EngineFlare)
+        .without(Trigger::LeachbeamEnergy);
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects
 };
