@@ -38,6 +38,7 @@ impl Default for Options {
             class: SpeedClass::VENOM.as_str().to_string(),
             mode: Mode::default(),
             language: None,
+            hud_style: None,
             eliminator_kill_target: None,
             laps_override: None,
             weapons_override: None,

@@ -669,6 +669,20 @@ string_id = "OAG_DISPLAY_FRONT_END_STYLE"
 setting = "display.front_end_style"
 values_from = "front_end_styles"
 
+# Which `HUD Style` skin a race draws. The values are the *disc's* list - Wipeout HD
+# and Omega author `HD`, `2097` and `WIP3OUT` (`additional_definition.xml`, default `HD`)
+# - and the row is dropped on a title that authors none (Pulse, Pure, 2048:
+# `menu::Definition::drop_unavailable_hud_style`). The original gates `2097` and
+# `WIP3OUT` behind loyalty (6000, 10000); this build does not track loyalty on those
+# titles yet, so both are offered (`docs/ui/hud-skins.md`). Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "HUD STYLE"
+string_id = "OAG_DISPLAY_HUD_STYLE"
+setting = "display.hud_style"
+values_from = "hud_styles"
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
 # `off` never waits and tears; `on` is classic vsync, which never tears and
 # halves the rate when a frame misses a refresh; `smooth` is that miss handled
 # properly - the newest finished frame is presented and the rest discarded.

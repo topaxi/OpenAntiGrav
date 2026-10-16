@@ -155,8 +155,8 @@ there, from the cited evidence.
 | --- | --- | --- |
 | Default root skin: `arcade`, `elimination`, `timetrial`, `speedlap`, `zone` (+ 32 fragments) | wired (`oag_hd::hud::LAYOUTS`) | default, `HUD Style` = `HD` (list default). `fury_hud` is not a second skin: it is the atlas the Eliminator, Detonator and Duel layouts name (31 root closures, 5 of them wired), `hdhud` the rest |
 | `splitscreen_hud/splitscreen_hud_{0,1}`, `splitscreen_elimination_hud_{0,1}` and the four `vert_` twins | wired (`oag_hd::hud::SPLIT`) | two-player split, Single Race and Eliminator; PSN lacks the Eliminator pair |
-| `2097_hud` (27 files + 4 font + 2 texture + 23 split), `wo3_hud` (same) | **unwired**: `skins::{WO3, RETRO_2097}` and `ROOTS` name them, nothing selects them | `HUD Style` list in `plugins/frontend/gui/additional_definition.xml` (entries `HD`, `2097`, `WIP3OUT`; read today on Fury **and** PSN); `PI_HUD` rows in `definition.xml` with `Location="Data\XML\2097_hud"` / `wo3_hud`, `<Unlock locked="true" team="any" loyalty=6000>` and `10000`; reach **85**, unlock threshold **85** (read off the data); the executable's race managers branch on the strings, [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md) |
-| `HUD Style P2` (split-screen player 2's own skin) | unwired | named by the executable ([hud-skins.md](hud-skins.md)); confidence 70 |
+| `2097_hud` (27 files + 4 font + 2 texture + 23 split), `wo3_hud` (same) | **wired** (2026-10-16): `oag_hd::hud::SKINS`, picked by `display.hud_style` / `--hud-style` ([hud-skins.md](hud-skins.md), part E); the Eliminator keeps the default root (the executable names no skinned one) | `HUD Style` list in `plugins/frontend/gui/additional_definition.xml` (entries `HD`, `2097`, `WIP3OUT`; read today on Fury **and** PSN); `PI_HUD` rows in `definition.xml` with `Location="Data\XML\2097_hud"` / `wo3_hud`, `<Unlock locked="true" team="any" loyalty=6000>` and `10000`; reach **85**, unlock threshold **85** (read off the data); the executable's race managers branch on the strings, [race-hud.md](../ghidra/functions/ps3-hdfury-eu/race-hud.md) |
+| `HUD Style P2` (split-screen player 2's own skin) | unwired (the skin is chosen for both views) | named by the executable ([hud-skins.md](hud-skins.md)); confidence 70 |
 | `splitscreenzone_hud` (10 on the disc, 16 on PSN): `zone_hud`, `zone_hud1`, `zone_hud_2097[_1]`, `zone_hud_wo3[_1]`, `vert` twins | unwired: Zone is not offered in our split | two-player Zone; the `_2097`/`_wo3` files say the Zone split follows `HUD Style` (confidence 60, from names) |
 | `detonator_hud` | named in `oag_hd::hud::layouts::DETONATOR`, not drawn | Detonator mode (Fury); this engine has no such mode |
 | `duel_hud/*` (5 + 5 split) | named, not drawn | Duel mode; no such mode here |
@@ -171,7 +171,7 @@ there, from the cited evidence.
 | --- | --- | --- |
 | Bare root skin (HD's five roots at HD's paths, 83 fragments incl. `_vr`/`_vr_ext`) | wired (`oag_omega::hud::LAYOUTS`, `.gnf`) | default: `HUD Style` default is `HD` (read today in Omega's `additional_definition.xml`) and the arcade manager takes the bare root for anything but `WIP3OUT`/`2097` ([race-hud-selection.md](../ghidra/functions/ps4-omega-eu/race-hud-selection.md)); reach 80 |
 | `splitscreen_hud` (4 two-view + 4 `vert_` roots) | wired (`oag_omega::hud::SPLIT`) | two-player split |
-| `2097_hud`, `wo3_hud` | **unwired** | `HUD Style` `2097`/`WIP3OUT`, same `PI_HUD` rows and loyalty 6000 / 10000 as HD (`definition.xml` in base, patch `data08`/`data09`); reach 85 |
+| `2097_hud`, `wo3_hud` | **wired** (2026-10-16, `oag_omega::hud::SKINS`, all five modes and every split pair) | `HUD Style` `2097`/`WIP3OUT`, same `PI_HUD` rows and loyalty 6000 / 10000 as HD (`definition.xml` in base, patch `data08`/`data09`); reach 85 |
 | `2048_hud` (119 files: 43 with no includer; `_hd`, `_splitscreen_h/_v`, `_vr`, `_vr_ext`) | **unwired** | by 2048-lineage race managers reached through virtual dispatch (`FUN_015ae4d0`, `FUN_015ac880`, `FUN_015bc700`); which race picks it is **not determined**, address above |
 | `2048_hud/*_splitscreen_h/_v` | unwired | the 2048-lineage managers' split layouts, same open question |
 | `*_vr`, `*_vr_ext`, `hud/vr_hud*` models, `duel_hud_*_vr*` | unwired | PSVR only; VR is not planned, so **never reachable** here |
@@ -195,7 +195,7 @@ there, from the cited evidence.
 | Family | Finding |
 | --- | --- |
 | Default / bare root skin | **ported**: Omega carries HD's roots at HD's paths and draws them; 2048 ships the bare root and plays it only as the demo. |
-| `2097_hud`, `wo3_hud` | **checked, applies, not wired** on Omega (selector and unlock rows present, same files as HD); **checked, differs** on 2048 (files present, no selector or unlock rows). |
+| `2097_hud`, `wo3_hud` | **ported** on Omega (`oag_omega::hud::SKINS`, own ground-truth test `hud_style_ground_truth`); **checked, differs** on 2048 (files present, no selector or unlock rows). |
 | `2048_hud` | 2048 plays it; **checked, applies, not wired** on Omega (119 files, `_vr`/`_split_h/_v` extras, selector in the executable not read). |
 | `splitscreen_hud` | HD **wired**, Omega **ported**; **checked, applies, not wired** on 2048 (31 authored files, 2048 draws our own TOML). |
 | `splitscreenzone_hud`, `duel_hud` | **checked, applies, not wired** on HD, Omega and 2048 (no Zone-split or Duel mode here). |
@@ -208,10 +208,9 @@ there, from the cited evidence.
 
 Reachable in the original, unwired here, in the order a player would notice:
 
-1. **`HUD Style`: `2097` and `WIP3OUT` on HD (disc and PSN) and Omega**,
-   with the `HUD Style P2` slot and the loyalty unlocks. Every file, font and
-   atlas is in the census and composes; what is missing is a selector, a
-   per-title `skins` table, and the unlock gate.
+1. ~~`HUD Style`: `2097` and `WIP3OUT` on HD (disc and PSN) and Omega~~: landed
+   2026-10-16 ([hud-skins.md](hud-skins.md), part E). Still open: the `HUD Style P2`
+   slot and the loyalty unlock gate (both skins are offered unlocked).
 2. **Omega's `2048_hud` set**: the selector (which races) is unread.
 3. **Split-screen Zone** (`splitscreenzone_hud`) and Omega's `2048_hud`
    split-h/-v layouts: waiting on a Zone split and on item 2.

@@ -403,3 +403,89 @@ substitute source for Pulse's sprites stays open (thread).
   **checked, applies, not wired** for the 4x atlas (both ship it, neither draws
   it); **checked, applies** for the unlock rows (Omega carries the same two;
   2048 carries none). HD front-end side: HD is the source of the unlock rows.
+
+## E. `HUD Style` selects the skin (2026-10-16, `hud-style-skins` lane)
+
+HD, the HD PSN download and Omega draw `2097_hud` and `wo3_hud` when the player's `HUD Style`
+says so. **Ported on Omega with its own test; 2048 stays checked, differs** (no list, no rows).
+
+**The mechanism.** `oag_title::HudLayouts::skins` is the disc's list, default first
+(`HD`, `2097`, `WIP3OUT`), each a `HudSkin { name, layouts, font_role, loyalty }`; `layouts` is a
+whole `HudLayouts`, split pairs of both cuts included, so a skin is the title's table
+re-pointed and nothing branches on a title. `display.hud_style` (empty = the list's default) or
+`--hud-style` reaches `race::Options::hud_style`, resolved by `oag_raceplay::hud::hud_roots`
+against the **craft's** title (the HUD follows the craft). A name the list lacks draws the
+default and says so in the loader report; a title with no list ignores it. The HUD STYLE row of
+the DISPLAY page is `values_from = "hud_styles"` (`menu::ValueSource::HudStyles`) and is dropped
+on Pulse, Pure and 2048 (`Definition::drop_unavailable_hud_style`).
+
+**Which file each mode loads is the executable's, not the manifest's** (`strings` over
+`EBOOT.elf` and `eboot.bin`, 2026-10-16):
+
+| Title | `2097_HUD\`, `wo3_HUD\` literals | Consequence |
+| --- | --- | --- |
+| HD, Fury, PSN | `Arcade`, `SpeedLap`, `TimeTrial`, `Zone`; **no `Elimination`**, and no skinned Eliminator split pair | the Eliminator keeps the default root and split pair in every skin, although the disc ships `2097_hud/elimination_hud.xml`; nothing loads it (confidence 85) |
+| Omega | all five, `Elimination` included, and every split pair of both cuts | all five modes follow the skin |
+
+(`race-hud.md` read HD's `wo3_HUD\Zone_HUD.xml` as the only skinned Zone; the strings carry
+`2097_HUD\Zone_HUD.xml` as well.)
+
+**The skin's own typeface is a fourth text face.** Both skins author `font="2097HUD"` /
+`font="wo3HUD"` beside `HUD` and `HUDSmall` in the same layouts (80 + 12 + 23 labels in
+`2097_hud`), so folding it into `HUD` would redraw the 12 `HUD` captions in the wrong face.
+`oag_hud::Font::Skin`, `Frame::skin_text`, `Assets::skin_font` and a fourth overlay pass carry
+it. The face is the language definition's slot of that name: **HD ships each plugin's
+`definition.xml` twice and only `DATA03`'s copy has the `2097HUD`/`wo3HUD` slots**, so the skin's
+face is resolved over every copy (`oag_ui::language::load::definition_copies_with_font`); the first-copy read the rest of the HUD uses
+finds none and draws 5x7. Faces: HD 2097 1024x1024 line 70, WO3 line 68; Omega's are 2x (138 for
+WO3) and take the same `font_texel_scale` as its other HUD faces. `<Font>` declarations inside
+the split files are not read (the slot is the source).
+
+**The bars.** Both skins author the speed and thrust bars as `<CurveBar>` with `color1..4 = 0`
+(invisible), and the visible bars are `SpeedBarWo3`, `ThrustBarWo3` and `nrgBarWo3` images,
+which the executables name. They are cropped by the speed, thrust and shield fractions exactly
+as `SpeedBar`/`ThrustBar`/`ShieldBar` are (`speed_full_kmh` unchanged), with their frames
+`speedbarbg` and `nrgbg` on the allow-list. **Chosen from the widget names, not measured**: no
+frame of the original in a retro skin has been compared. The speed unit: the retro skins
+author the unit as an unnamed `RC_KMH` label, so the value no longer prints `kmh` twice.
+
+**Sources checked.** HD disc, the plain HD PSN download and Omega: every root a skin names, both
+split cuts included, composes whole on all three and the skin's font slot is declared by a copy
+of a language definition (`hud_style_ground_truth`). The PSN download lacks the default skin's
+Eliminator split pairs, as before (`hud-assets.md`), which is no change for the skins: they name
+none. Three or more views take `SplitHud_HD.toml`, whose groups now also place the retro bars
+and their frames (`speedbarbg`, `nrgbg`, `nrgBarWo3`, `topdots`, `bottomdots`; chosen, not
+measured). That route has no unnamed `RC_KMH` label to place, so a split view prints the value
+with its own `kmh`. No Pulse, Pure or 2048 layout authors an `RC_KMH` label, so the unit rule
+moves nothing there (`no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label`).
+
+**Not done, recorded open.**
+
+- **Unlock.** The disc's `PI_HUD` rows gate `2097` at loyalty 6000 and `WIP3OUT` at 10000
+  (`HudSkin::loyalty`). This build keeps loyalty per title and only Pulse awards it
+  (`Title::campaign.loyalty_unlocks`), so HD and Omega have no way to earn it: **both skins
+  are offered unlocked** (chosen, not measured) rather than closed forever. The rule is held for
+  the shared-loyalty work.
+- **`HUD Style P2`** (player 2's own skin in split screen; the executable names it, confidence 70)
+  is not wired: no read says how the two settings combine, and the split pair is chosen as one
+  skin. The pair is composed per player (`compose_family`), which is where it would split.
+- **Zone split** (`splitscreenzone_hud`) needs a Zone split first; not offered here.
+- **Looks, checked against the layouts' own numbers (2026-10-16), no original frame.**
+  *Shield hexagon*: both skins author it (`DamageBarBg`, `DamageBar` in their own
+  `hud_damage_indicator.xml`) with the shield text `color="0"`; HD's runtime shield colours and
+  fill (`HudArt::runtime`, read off frames of the default skin) used to draw over it as a blue
+  hexagon and a visible `100`. `HudSkin::art` now drops `runtime` for the retro skins, and
+  `color="0"` (a plain decimal, which `0x` parsing read as absent, i.e. white) reads as
+  transparent. The retro shield readout is therefore the authored hexagon outline only, with no
+  fill level: unmeasured. *WIP3OUT's white rectangles* are authored solid quads whose texture
+  resolves: `wo3_hud.gtf` is a mask atlas of solid white slabs and half-transparent grey ones
+  (alpha 255 and 102), and the quads at top centre, before the lap time and before the speed bar
+  (`PickupBackground`, `TimeIcon`, `SpeedBarBG`) carry no `color`. White digits on a white slab
+  read badly, which suggests the original blends them differently; how is not read.
+  *Text collisions*: the layouts' own numbers leave 6 px (total time) and about 0 px ("of" and
+  the lap total) between neighbours at the faces' advances (digit 59 at scale 1 in `wo3.fnt`),
+  and 2097's `Lap` (right-aligned at 40) and `Lap Outof` (left at 0) are authored at the same
+  row and scale, so they overlap by authoring. `align` is honoured and no metric is wrong that
+  could be told apart without an original frame; none was taken (RPCS3 would need the
+  `HUD Style` setting and a loyalty total poked in, which this lane did not attempt).
+  `ThrustBarText` shows a `%` the 2097 face has no glyph for.

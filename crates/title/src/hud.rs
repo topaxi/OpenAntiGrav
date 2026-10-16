@@ -84,6 +84,53 @@ pub struct HudLayouts {
     /// one is in `assets/fallback/`. `None` draws the whole-screen layout scaled
     /// into each view instead.
     pub split_layout: Option<&'static str>,
+    /// The disc's `HUD Style` list, one entry per skin, default first. Empty on a title
+    /// that authors no such list (Pulse, Pure, 2048). A skin's own [`HudSkin::layouts`]
+    /// carries an empty list, so the lookup never recurses.
+    pub skins: &'static [HudSkin],
+}
+
+/// One entry of the disc's `HUD Style` list (`additional_definition.xml`: `HD`, `2097`,
+/// `WIP3OUT`) and the roots the executable's race managers load for it.
+///
+/// A mode the executable names no skinned file for keeps the default skin's root in
+/// [`Self::layouts`], as the original does (HD's Eliminator has no `2097_HUD\` or
+/// `wo3_HUD\` literal, although the disc ships one).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HudSkin {
+    /// The list entry as the disc spells it, which is also what the setting stores.
+    pub name: &'static str,
+    /// The roots a race of this skin reads.
+    pub layouts: &'static HudLayouts,
+    /// The language-plugin font slot of this skin's own typeface (`2097HUD`, `wo3HUD`),
+    /// the face a layout's `font="2097HUD"` labels draw in. `None` for the default skin.
+    pub font_role: Option<&'static str>,
+    /// The title's [`HudArt`] with what the skin does not author taken out, `None` for the
+    /// title's own. A retro skin lays out its own shield hexagon and hides its shield text
+    /// (`color="0"`), so the default skin's runtime shield colours and fill, read off HD's
+    /// frames, must not draw over it.
+    pub art: Option<&'static HudArt>,
+    /// Loyalty the disc's `PI_HUD` row asks before the skin is offered (`Unlock
+    /// loyalty=`); `0` where the row is not locked.
+    pub loyalty: u32,
+}
+
+impl HudLayouts {
+    /// The skin a setting names, matched without regard to case, or `None` for an empty
+    /// or unknown name (the caller falls back to [`Self::default_skin`] and reports).
+    #[must_use]
+    pub fn skin(&self, name: Option<&str>) -> Option<&'static HudSkin> {
+        let name = name?.trim();
+        self.skins
+            .iter()
+            .find(|skin| skin.name.eq_ignore_ascii_case(name))
+    }
+
+    /// The list's default skin (its first entry), `None` on a title with no list.
+    #[must_use]
+    pub fn default_skin(&self) -> Option<&'static HudSkin> {
+        self.skins.first()
+    }
 }
 
 /// A title's authored two-player split-screen HUD: one root per player, for the

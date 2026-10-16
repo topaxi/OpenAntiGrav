@@ -40,10 +40,10 @@ exactly 4x but not Pulse's typeface at high resolution.
 1. ~~Draw the halo (`borderExtendPixels`)~~ and ~~a HUD scale filter for
    raster-HUD titles~~: landed (`hud-skins.md` part D). Optional: a settings row
    for `hud_scale`, as a follow-up.
-2. **Config `[hud] skin`** and a `skins: &[HudSkin]` table on `Title` (design in
-   hud-skins.md part C, chosen not measured), HD's `2097` and `wo3` first (same
-   shape as the default, unlock rows `loyalty 6000` and `10000` read), then the
-   same two on Omega.
+2. ~~`skins` table, HD's and Omega's `2097` and `wo3`~~: landed 2026-10-16
+   (`hud-skins.md` part E). Open from it: the loyalty gate (both skins are offered unlocked until
+   loyalty is shared across titles), `HUD Style P2`, and an original frame of a retro skin to
+   settle the chosen bar mapping, the 2097 lap counter overlap and the WIP3OUT white tags.
 3. **Pulse sprites from the 4x sheet** when HD, Omega or 2048 is also mounted:
    an asset substitution, not a skin; sprites only, the text stays 25 px. Needs a
    product decision first (a Pulse draw depending on a second disc). Not built

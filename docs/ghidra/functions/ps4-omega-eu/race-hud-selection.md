@@ -33,6 +33,14 @@ bare name, a split-screen one `SplitScreen_hud\SplitScreen_HUD_0/1.xml` (or
 three-skin split, so HD's own `docs/ghidra/functions/ps3-hdfury-eu/race-hud.md`
 reading carries: the bare root is the default skin.
 
+## Every manager's skin literals (2026-10-16)
+
+`strings` over `eboot.bin` names all of `Arcade`, `TimeTrial`, `SpeedLap`, `Zone` **and
+`Elimination`** under both `2097_HUD\` and `wo3_HUD\` (HD's executable has no skinned
+Eliminator), and every `SplitScreen_hud\` pair of both cuts, Eliminator pairs included, under
+both. `oag_omega::hud::SKINS` carries them (confidence 70: the literals are present; only
+`RaceManager_ConstructArcadeHud`'s branch was read). `HUD Style P2` is also named; unread.
+
 ## What it settles, and what it does not
 
 - Settled: the five root layouts a single-player race reads are the bare

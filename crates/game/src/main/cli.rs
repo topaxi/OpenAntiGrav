@@ -434,6 +434,12 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 
+    /// The `HUD Style` skin for this run, one of the title's own list (`HD`, `2097`,
+    /// `WIP3OUT` on Wipeout HD and Omega), over the saved `display.hud_style`. A name
+    /// the title does not list draws its default skin and says so in the loader report.
+    #[arg(long)]
+    pub(crate) hud_style: Option<String>,
+
     /// The track's `.vex` entry name, for either way into a race. The same name
     /// on both **Pulse** releases, PSP and PS2.
     ///

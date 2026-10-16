@@ -53,6 +53,14 @@ skin variants at all: `Elimination_HUD.xml`, `MPTag_HUD.xml`,
 `Duel_HUD\Duel_HUD.xml`, and `wo3_HUD\Zone_HUD.xml`, which exists only in the
 `wo3` directory.
 
+**Correction, 2026-10-16** (`strings` over `EBOOT.elf`): the executable also names
+`Data\XML\2097_HUD\Zone_HUD.xml`, so Zone has both retro skins and Elimination none;
+`Data\XML\*_HUD\SplitScreen_hud\{,Vert_}SplitScreen_HUD_{0,1}.xml` are named for both skins and no
+skinned Eliminator split is. The skin is chosen by the `HUD Style` setting
+(`additional_definition.xml`, `HD`/`2097`/`WIP3OUT`) and is wired in `oag_hd::hud::SKINS`;
+the control flow that compares the setting was not read (confidence 85 on the file set, none on
+the branch).
+
 Nothing here reads how a skin is chosen. The paths are literals in the
 constructors, so the choice is made by *which call runs*, not by composing a
 directory name at runtime - which means the selection logic is in the

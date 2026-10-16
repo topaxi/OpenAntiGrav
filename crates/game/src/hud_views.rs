@@ -329,7 +329,7 @@ pub fn countdown_frame(
         });
         frame.spans.push(Span {
             clip: [x, y, width, height],
-            start: [frame.sprites.len(), frame.hud_text.len() - 1, 0, 0],
+            start: [frame.sprites.len(), frame.hud_text.len() - 1, 0, 0, 0],
         });
     }
     frame

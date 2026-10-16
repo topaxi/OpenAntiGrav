@@ -8,6 +8,7 @@ const HEIGHTS: LineHeights = LineHeights {
     hud: 25.0,
     small: 10.0,
     default: 13.0,
+    skin: 13.0,
 };
 
 fn file(body: &str) -> String {

@@ -428,6 +428,7 @@ impl Session {
         // cannot race a value picked-then-abandoned earlier in the session.
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
+        options.hud_style = self.settings.display.hud_style_choice();
         // The same refresh, for the BOOST ZOOM row: a race reads it when it loads.
         options.boost_zoom = self
             .settings

@@ -30,6 +30,9 @@ pub enum Font {
     /// is meant to say is unread, but the variant exists so the parser does
     /// not silently fold them into a font they are not.
     Default,
+    /// `font="2097HUD"` / `font="wo3HUD"`: the retro skins' own typeface, a fourth face
+    /// beside the three above. Its slot is [`oag_title::HudSkin::font_role`].
+    Skin,
 }
 
 impl Font {
@@ -37,6 +40,7 @@ impl Font {
         match value.to_ascii_lowercase().as_str() {
             "hudsmall" => Self::Small,
             "default" => Self::Default,
+            "2097hud" | "wo3hud" => Self::Skin,
             _ => Self::Hud,
         }
     }

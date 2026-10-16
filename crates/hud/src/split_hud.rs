@@ -336,6 +336,8 @@ pub struct LineHeights {
     pub small: f32,
     /// The `Default` face.
     pub default: f32,
+    /// The skin's own face (`2097HUD`, `wo3HUD`).
+    pub skin: f32,
 }
 
 /// One group's widgets cut out of the title's layout, with where its anchor
@@ -406,6 +408,7 @@ pub fn arrange(rule: &Rule, layout: &Layout, heights: LineHeights) -> Vec<Piece>
                     crate::Font::Hud => heights.hud,
                     crate::Font::Small => heights.small,
                     crate::Font::Default => heights.default,
+                    crate::Font::Skin => heights.skin,
                 };
                 let top = top_edge(label, line);
                 bounds.add_rect([label.x, top, 0.0, line * label.scale]);

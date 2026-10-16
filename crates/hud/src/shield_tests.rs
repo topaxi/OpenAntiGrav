@@ -72,6 +72,7 @@ fn context<'a>(
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     }
 }
 

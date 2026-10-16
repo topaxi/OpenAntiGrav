@@ -199,6 +199,11 @@ pub enum ValueSource {
     /// supplies one row, which draws the setting as the fact it is rather than
     /// as a choice that does nothing.
     FrontEndStyles,
+    /// The `HUD Style` skins this title's disc lists (`HD`, `2097`, `WIP3OUT`), valued and
+    /// shown by the disc's own entry strings (`oag_title::HudLayouts::skins`). Supplied for
+    /// the reason [`Self::FrontEndStyles`] is; a title that lists none has the row dropped
+    /// (`Definition::drop_unavailable_hud_style`).
+    HudStyles,
     /// The teams this source offers, from its own plugin definition and from
     /// any `crate::dlc` mounted behind it.
     ///
@@ -329,6 +334,7 @@ impl ValueSource {
             Self::RaceModes => "race_modes",
             Self::MusicSources => "music_sources",
             Self::FrontEndStyles => "front_end_styles",
+            Self::HudStyles => "hud_styles",
             Self::Teams => "teams",
             Self::Titles => "titles",
             Self::CraftTitles => "craft_titles",
@@ -361,6 +367,7 @@ impl ValueSource {
             "race_modes" => Some(Self::RaceModes),
             "music_sources" => Some(Self::MusicSources),
             "front_end_styles" => Some(Self::FrontEndStyles),
+            "hud_styles" => Some(Self::HudStyles),
             "teams" => Some(Self::Teams),
             "titles" => Some(Self::Titles),
             "craft_titles" => Some(Self::CraftTitles),
