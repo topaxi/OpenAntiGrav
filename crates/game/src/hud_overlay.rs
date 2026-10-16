@@ -64,7 +64,7 @@ pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
             }
             mine.spans.push(Span {
                 clip: view.placement.clip,
-                start: [0; 4],
+                start: [0; 5],
             });
             frame.extend(mine);
             continue;
@@ -109,6 +109,7 @@ pub struct Overlay {
     hud_line_height: f32,
     small_line_height: f32,
     default_line_height: f32,
+    skin_line_height: f32,
     /// The grid the layout is authored in - `Assets::space`, kept so the
     /// frame loop can hand a screen filter the title's own row count on the
     /// `--race` route, which has no menu shell to read it from.
@@ -119,6 +120,8 @@ pub struct Overlay {
     captions: crate::render::Renderer,
     /// Draws the per-craft rows, in the `Default` face.
     rows: crate::render::Renderer,
+    /// Draws the retro skins' own face (`2097HUD`, `wo3HUD`).
+    skin: crate::render::Renderer,
     /// The authored split layouts, [`Assets::split`].
     split: Option<oag_hud::SplitAssets>,
     split_columns: Option<oag_hud::SplitAssets>,
@@ -188,10 +191,19 @@ impl Overlay {
             &assets.sheet,
         )?;
         rows.set_space(assets.space);
+        let mut skin = crate::render::Renderer::new(
+            device,
+            queue,
+            format,
+            None,
+            assets.skin_font.clone(),
+            &assets.sheet,
+        )?;
+        skin.set_space(assets.space);
         // The player's stretch, for a title whose HUD is raster art; every
         // other HUD keeps the linear draw it was made for.
         let stretch = stretch_for(assets.art, hud_scale);
-        for renderer in [&mut values, &mut captions, &mut rows] {
+        for renderer in [&mut values, &mut captions, &mut rows, &mut skin] {
             renderer.set_hud_scale(device, stretch);
         }
 
@@ -199,6 +211,7 @@ impl Overlay {
             hud_line_height: assets.font.line_height,
             small_line_height: assets.small_font.line_height,
             default_line_height: assets.default_font.line_height,
+            skin_line_height: assets.skin_font.line_height,
             sheet: assets.sheet.clone(),
             art: assets.art,
             strings: assets.strings.clone(),
@@ -207,6 +220,7 @@ impl Overlay {
             values,
             captions,
             rows,
+            skin,
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
@@ -243,6 +257,7 @@ impl Overlay {
             hud_line_height: self.hud_line_height,
             small_line_height: self.small_line_height,
             default_line_height: self.default_line_height,
+            skin_line_height: self.skin_line_height,
             default_border: self.layout.default_border(),
         }
     }
@@ -361,6 +376,7 @@ impl Overlay {
         starts.extend(values);
         let captions = scissors(&|span| span.start[2], 0);
         let rows = scissors(&|span| span.start[3], 0);
+        let skin = scissors(&|span| span.start[4], 0);
 
         // Sprites first so text sits over the bars, and both in one pass because
         // one renderer holds both the sheet and the value font.
@@ -380,6 +396,11 @@ impl Overlay {
             self.rows.set_scissors(rows);
             self.rows
                 .overlay(device, queue, encoder, view, &frame.default_text, viewport);
+        }
+        if !frame.skin_text.is_empty() {
+            self.skin.set_scissors(skin);
+            self.skin
+                .overlay(device, queue, encoder, view, &frame.skin_text, viewport);
         }
     }
 }

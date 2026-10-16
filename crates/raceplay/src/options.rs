@@ -191,6 +191,11 @@ pub struct Options {
     /// OPTIONS page's LANGUAGE row can change the live setting without
     /// rebuilding this struct at all.
     pub language: Option<String>,
+    /// The player's `HUD Style`: an entry of the craft's title's disc list
+    /// ([`oag_title::HudLayouts::skins`]), or `None` for the list's default. A name the
+    /// title's list does not hold draws the default skin and says so in the loader report.
+    /// Presentation only: nothing the simulation, a replay or a net message carries.
+    pub hud_style: Option<String>,
     /// The kill count that ends an Eliminator event, or `None` for
     /// [`Mode::ELIMINATOR_KILL_TARGET_DEFAULT`].
     ///

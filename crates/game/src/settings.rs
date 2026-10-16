@@ -261,6 +261,14 @@ pub struct Display {
     /// except HD and is HD's own base styling.
     #[serde(default)]
     pub front_end_style: String,
+    /// Which of the title's own `HUD Style` skins a race draws (`HD`, `2097` or `WIP3OUT`
+    /// on Wipeout HD and Omega, whose discs author the list).
+    ///
+    /// A `String` for the reason [`Self::front_end_style`] is one: the list is the disc's.
+    /// Empty means the list's default; a name another title's list holds draws the default
+    /// here and says so in the loader report. Read when a race loads.
+    #[serde(default)]
+    pub hud_style: String,
     /// How a finished frame reaches the display: `off`, `on` or `smooth`.
     ///
     /// **`off` by default**, because this is a racing game and vsync's cost is
@@ -310,6 +318,15 @@ fn default_pause_on_focus_loss() -> bool {
     true
 }
 
+impl Display {
+    /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
+    #[must_use]
+    pub fn hud_style_choice(&self) -> Option<String> {
+        let name = self.hud_style.trim();
+        (!name.is_empty()).then(|| name.to_string())
+    }
+}
+
 impl Default for Display {
     fn default() -> Self {
         Self {
@@ -319,6 +336,7 @@ impl Default for Display {
             canvas_size: default_canvas_size(),
             aspect: Default::default(),
             front_end_style: String::new(),
+            hud_style: String::new(),
             vsync: Default::default(),
             frame_limit: Default::default(),
             brightness: Default::default(),
@@ -867,6 +885,7 @@ pub fn menu_seeds(
             "display.front_end_style",
             text(&settings.display.front_end_style),
         ),
+        ("display.hud_style", text(&settings.display.hud_style)),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),

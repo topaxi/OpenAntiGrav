@@ -6,6 +6,41 @@
 
 use super::*;
 
+/// The roots a race of `style` reads on `title`: the named skin's, or the title's own
+/// (the default skin) for no name, an unknown one, or a title with no `HUD Style` list.
+///
+/// An unknown name is reported, since a setting saved on another title's list is an
+/// ordinary state (the file is shared) and the HUD would otherwise silently differ from
+/// what the row says.
+pub(super) fn hud_roots(
+    title: &'static oag_title::Title,
+    style: Option<&str>,
+    report: &mut Vec<String>,
+) -> (
+    &'static oag_title::HudLayouts,
+    Option<&'static oag_title::HudSkin>,
+) {
+    let Some(default) = title.hud.default_skin() else {
+        return (title.hud, None);
+    };
+    let skin = match (
+        style.map(str::trim).filter(|s| !s.is_empty()),
+        title.hud.skin(style),
+    ) {
+        (_, Some(skin)) => skin,
+        (None, None) => default,
+        (Some(name), None) => {
+            report.push(format!(
+                "HUD Style {name:?} is not in this title's list; the {} skin is drawn",
+                default.name
+            ));
+            default
+        }
+    };
+    report.push(format!("HUD Style: {}", skin.name));
+    (skin.layouts, Some(skin))
+}
+
 /// Which layout a mode draws its HUD from, on the title that is open.
 ///
 /// **The names are the title's** ([`oag_title::HudLayouts`]) and the mapping is
@@ -29,11 +64,11 @@ use super::*;
 /// Layouts no mode here reaches - HD's Detonator, Duel and MPTag - stay in
 /// their own title crate waiting for the mode that uses them.
 #[must_use]
-pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'static str {
+pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str {
     match mode {
-        Mode::TimeTrial => title.hud.time_trial,
-        Mode::SpeedLap => title.hud.speed_lap,
-        Mode::Zone => title.hud.zone,
+        Mode::TimeTrial => hud.time_trial,
+        Mode::SpeedLap => hud.speed_lap,
+        Mode::Zone => hud.zone,
         // Measured, not assumed: `docs/formats/race-setup.md`'s own reading
         // of `docs/ui/hud.md`'s five-layout census finds no
         // `Tournament_HUD.xml` at all, and cites `Arcade_HUD.xml` as "the
@@ -43,8 +78,8 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
         // `HeadToHeadBar` widget through this same layout by branching on
         // the live game mode rather than loading a different file - see
         // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
-        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => title.hud.arcade,
-        Mode::Eliminator => title.hud.elimination,
+        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => hud.arcade,
+        Mode::Eliminator => hud.elimination,
     }
 }
 
@@ -57,14 +92,14 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
 /// loads `TimeTrial_HUD.xml`. The other titles take Pulse's rule: **chosen, not measured**.
 #[must_use]
 pub const fn hud_layout_for(
-    title: &'static oag_title::Title,
+    hud: &oag_title::HudLayouts,
     mode: Mode,
     people: usize,
 ) -> &'static str {
     if mode.is_multiplayer_time_trial(people) {
-        title.hud.arcade
+        hud.arcade
     } else {
-        hud_layout(title, mode)
+        hud_layout(hud, mode)
     }
 }
 
@@ -90,16 +125,21 @@ pub(super) struct SplitViews {
 /// choice - passed straight through rather than read here: `None` when
 /// nothing has been chosen yet, resolved the same way everywhere else a
 /// chosen language is resolved, through [`oag_ui::language::load::chosen_language`].
+///
+/// `style` is `race::Options::hud_style`, resolved by [`hud_roots`].
+#[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
 pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
+    style: Option<&str>,
     views: SplitViews,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
-    let entry = hud_layout_for(title, mode, views.people);
+    let (hud, skin) = hud_roots(title, style, report);
+    let entry = hud_layout_for(hud, mode, views.people);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
     // for them; HD's roots are *shells* that pull in up to sixteen fragments by
@@ -145,7 +185,7 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
-    let (split, split_columns) = split_assets(archives, title, mode, views, space, report);
+    let (split, split_columns) = split_assets(archives, hud, mode, views, space, report);
     // The sheet packs the textures of every layout this race can draw, the
     // whole-screen one first so a race with no split packs what it always did.
     let sheet = match (
@@ -246,10 +286,22 @@ pub(super) fn load_hud(
         font.clone()
     };
 
+    // The skin's own face, only for a retro `HUD Style`; the value face again otherwise
+    // (nothing draws in it), so a default-skin race costs no further font decode. A slot
+    // that will not resolve is reported by `hud_font` and draws in the 5x7 set.
+    let skin_font = match skin.and_then(|skin| skin.font_role) {
+        Some(role) => {
+            let copies = slot_copies(archives, language_plugins, role);
+            let preferred = chosen.and_then(|c| copies.iter().find(|l| l.plugin == c.plugin));
+            hud_font(archives, &copies, preferred, role, report)
+        }
+        None => font.clone(),
+    };
     let heights = oag_hud::split_hud::LineHeights {
         hud: font.line_height,
         small: small_font.line_height,
         default: default_font.line_height,
+        skin: skin_font.line_height,
     };
     let split_hud = load_split_hud(
         archives,
@@ -268,6 +320,7 @@ pub(super) fn load_hud(
         font,
         small_font,
         default_font,
+        skin_font,
         strings,
         // The grid the layout's numbers are in, off the mounted source rather
         // than defaulted: `Space::default()` is the PSP's 480x272, and an HD
@@ -280,6 +333,31 @@ pub(super) fn load_hud(
         split_columns,
         split_hud,
     }
+}
+
+/// The language plugins' definition copies that fill the font slot `role`, every copy of every
+/// plugin rather than the first one `load_languages` reads.
+///
+/// HD ships each plugin's `definition.xml` in `DATA02` and again in `DATA03`, and only
+/// `DATA03`'s copy carries the retro skins' `2097HUD` and `wo3HUD` slots
+/// (`docs/formats/hd-frontend.md`); the first-copy read has no such slot, so the skin's face
+/// would be drawn in 5x7. Used for a skin's slot alone, so no other font or string moves.
+fn slot_copies(
+    archives: &mut oag_assets::Archives,
+    plugins: &[&str],
+    role: &str,
+) -> Vec<oag_ui::language::Language> {
+    let mut copies = Vec::new();
+    for plugin in plugins {
+        let name = oag_pulse::names::language_definition(plugin);
+        for (_, blob) in archives.read_every_name(&name) {
+            let language = oag_ui::xml::expand(&blob)
+                .ok()
+                .and_then(|xml| oag_ui::language::Language::from_definition(plugin, &xml));
+            copies.extend(language.filter(|language| language.font(role).is_some()));
+        }
+    }
+    copies
 }
 
 /// This project's split-screen layout file for a race of `views` views, cut for
@@ -380,7 +458,7 @@ fn load_split_hud(
 /// half HUD.
 fn split_assets(
     archives: &mut oag_assets::Archives,
-    title: &'static oag_title::Title,
+    hud: &oag_title::HudLayouts,
     mode: Mode,
     views: SplitViews,
     space: oag_display::space::Space,
@@ -390,7 +468,7 @@ fn split_assets(
         count: views,
         people,
     } = views;
-    let Some(authored) = title.hud.split.filter(|_| views == 2) else {
+    let Some(authored) = hud.split.filter(|_| views == 2) else {
         return (None, None);
     };
     let pick = |(arcade, elimination): ([&'static str; 2], [&'static str; 2])| {

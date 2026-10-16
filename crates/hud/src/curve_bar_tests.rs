@@ -48,6 +48,7 @@ fn fill_at(kmh: f32) -> Option<([f32; 4], [f32; 4], [f32; 4])> {
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     };
     let readout = Readout {
         speed_kmh: kmh,
@@ -125,6 +126,7 @@ fn thrust_at(percent: f32) -> (Option<f32>, Option<String>) {
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     };
     let readout = Readout {
         thrust_percent: percent,

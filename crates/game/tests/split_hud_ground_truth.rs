@@ -678,6 +678,7 @@ fn the_shipped_split_files_name_only_widgets_their_titles_author() {
         hud: 25.0,
         small: 10.0,
         default: 13.0,
+        skin: 13.0,
     };
     let mut checked = Vec::new();
     for (image, file) in [

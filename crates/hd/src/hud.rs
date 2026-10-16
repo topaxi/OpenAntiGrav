@@ -29,10 +29,10 @@
 /// three-way split appears in the fonts: `docs/formats/hd-frontend.md` records
 /// `skin.xml` declaring `HUD`, `wo3HUD` and `2097HUD` font slots.
 ///
-/// **How a skin is chosen is not read here.** The executable's race-manager
-/// constructors pass whole paths as literals, so the choice is made by which
-/// call runs rather than by composing a directory at runtime - see
-/// `docs/ghidra/functions/ps3-hdfury-eu/race-hud.md`.
+/// **The executable's race-manager constructors pass whole paths as literals**, so the
+/// choice is made by which call runs rather than by composing a directory at runtime
+/// (`docs/ghidra/functions/ps3-hdfury-eu/race-hud.md`); [`SKINS`] holds the literals and
+/// the `HUD Style` setting picks the entry.
 pub mod skins {
     /// No prefix: the default, modern HUD.
     pub const DEFAULT: &str = "";
@@ -48,14 +48,64 @@ pub mod skins {
 /// The constants below are the same values, kept as named items because that is
 /// where their evidence is written down; this is the table the engine reads.
 ///
-/// **The default skin, because how a skin is chosen is not read** - see
-/// [`skins`]. The `wo3` and `2097` roots stay in [`ROOTS`] until something can
-/// say which one a race is in.
+/// **The default skin**; the `HUD Style` setting picks another through
+/// [`oag_title::HudLayouts::skin`] over [`SKINS`].
 ///
 /// `speed_lap` is this title's own file. Both PSP discs ship none and draw the
 /// time trial's instead, which is the divergence
 /// [`oag_title::hud`](oag_title::hud) exists for.
 pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
+    skins: SKINS,
+    ..BASE
+};
+
+/// The disc's `HUD Style` list (`HD`, `2097`, `WIP3OUT`; default `HD`), with the roots
+/// the executable's race managers load for each.
+///
+/// **Read off the executable's `*_HUD.xml` literals, not off the manifest**
+/// (`strings` over `EBOOT.elf`, 2026-10-16). Both retro skins name `Arcade`, `SpeedLap`,
+/// `TimeTrial` and `Zone` and **no `Elimination`**, although the disc ships
+/// `2097_hud/elimination_hud.xml` and the `wo3` twin: nothing loads them, so the
+/// Eliminator keeps the default skin's root in every skin, and so does its split pair.
+/// Confidence 85 (literals present; which branch loads each is [`skins`]' reading in
+/// `race-hud.md`). The loyalty figures are the `PI_HUD` rows' `Unlock loyalty=`.
+pub const SKINS: &[oag_title::HudSkin] = &[
+    oag_title::HudSkin {
+        name: "HD",
+        layouts: &BASE,
+        font_role: None,
+        loyalty: 0,
+    },
+    oag_title::HudSkin {
+        name: "2097",
+        layouts: &oag_title::HudLayouts {
+            arcade: "/data/xml/2097_hud/arcade_hud.xml",
+            time_trial: "/data/xml/2097_hud/timetrial_hud.xml",
+            speed_lap: "/data/xml/2097_hud/speedlap_hud.xml",
+            zone: "/data/xml/2097_hud/zone_hud.xml",
+            split: Some(SPLIT_2097),
+            ..BASE
+        },
+        font_role: Some("2097HUD"),
+        loyalty: 6000,
+    },
+    oag_title::HudSkin {
+        name: "WIP3OUT",
+        layouts: &oag_title::HudLayouts {
+            arcade: "/data/xml/wo3_hud/arcade_hud.xml",
+            time_trial: "/data/xml/wo3_hud/timetrial_hud.xml",
+            speed_lap: "/data/xml/wo3_hud/speedlap_hud.xml",
+            zone: "/data/xml/wo3_hud/zone_hud.xml",
+            split: Some(SPLIT_WO3),
+            ..BASE
+        },
+        font_role: Some("wo3HUD"),
+        loyalty: 10000,
+    },
+];
+
+/// The default skin's roots, with no skin list: what every other skin overrides.
+const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     arcade: layouts::ARCADE,
     time_trial: layouts::TIME_TRIAL,
     speed_lap: layouts::SPEED_LAP,
@@ -63,7 +113,52 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     elimination: layouts::ELIMINATION,
     split: Some(SPLIT),
     split_layout: Some(r"Data\XML\SplitHud_HD.toml"),
+    skins: &[],
 };
+
+/// The 2097 skin's split pairs: its own single-race roots (both cuts), the default skin's
+/// Eliminator pairs (the executable names no skinned Eliminator split).
+const SPLIT_2097: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
+    arcade: [
+        "/data/xml/2097_hud/splitscreen_hud/splitscreen_hud_0.xml",
+        "/data/xml/2097_hud/splitscreen_hud/splitscreen_hud_1.xml",
+    ],
+    vertical: Some(oag_title::hud::VerticalLayouts {
+        arcade: [
+            "/data/xml/2097_hud/splitscreen_hud/vert_splitscreen_hud_0.xml",
+            "/data/xml/2097_hud/splitscreen_hud/vert_splitscreen_hud_1.xml",
+        ],
+        elimination: VERT_ELIMINATION,
+        view_width: 960,
+    }),
+    elimination: SPLIT.elimination,
+    view_height: 540,
+};
+
+/// The Wipeout 3 skin's split pairs: its own single-race roots (both cuts), the default skin's
+/// Eliminator pairs (the executable names no skinned Eliminator split).
+const SPLIT_WO3: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
+    arcade: [
+        "/data/xml/wo3_hud/splitscreen_hud/splitscreen_hud_0.xml",
+        "/data/xml/wo3_hud/splitscreen_hud/splitscreen_hud_1.xml",
+    ],
+    vertical: Some(oag_title::hud::VerticalLayouts {
+        arcade: [
+            "/data/xml/wo3_hud/splitscreen_hud/vert_splitscreen_hud_0.xml",
+            "/data/xml/wo3_hud/splitscreen_hud/vert_splitscreen_hud_1.xml",
+        ],
+        elimination: VERT_ELIMINATION,
+        view_width: 960,
+    }),
+    elimination: SPLIT.elimination,
+    view_height: 540,
+};
+
+/// The default skin's left-and-right Eliminator pair, shared by every skin (see [`SKINS`]).
+const VERT_ELIMINATION: [&str; 2] = [
+    "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_0.xml",
+    "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_1.xml",
+];
 
 /// The two-player split-screen HUD the disc authors, default skin: one 1920x1080
 /// layout per player, the second the first shifted down 540.
@@ -74,8 +169,8 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// further down than player 0's. `crates/game/tests/split_hud_ground_truth.rs`
 /// re-derives both from the archives. Not in [`ROOTS`], which stays the
 /// single-screen set. The `vert_` left-and-right twins are
-/// [`oag_title::hud::VerticalLayouts`], read for a race cut vertically; Wo3 and 2097 skins
-/// and the Zone layout are shipped and not wired.
+/// [`oag_title::hud::VerticalLayouts`], read for a race cut vertically; the Wo3 and 2097
+/// skins' pairs are in [`SKINS`]. The Zone split layout is shipped and not wired.
 pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
     arcade: [
         "/data/xml/splitscreen_hud/splitscreen_hud_0.xml",
@@ -91,10 +186,7 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
             "/data/xml/splitscreen_hud/vert_splitscreen_hud_0.xml",
             "/data/xml/splitscreen_hud/vert_splitscreen_hud_1.xml",
         ],
-        elimination: [
-            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_0.xml",
-            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_1.xml",
-        ],
+        elimination: VERT_ELIMINATION,
         view_width: 960,
     }),
 };
@@ -377,6 +469,13 @@ pub const ALWAYS_ON: &[&str] = &[
     "SpeedBar",
     "ThrustBar",
     "SpeedBarOverlay",
+    // The retro `HUD Style` skins' bars and their frames (`2097_hud`, `wo3_hud`); a name a
+    // layout does not author is simply not found, so the default skin is unchanged.
+    "speedbarbg",
+    "nrgbg",
+    "SpeedBarWo3",
+    "ThrustBarWo3",
+    "nrgBarWo3",
     // Zone's ladder. Authored by the Zone roots alone; see the section above.
     "ZoneBG",
     "CurrentZonePanel",

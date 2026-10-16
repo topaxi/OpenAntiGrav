@@ -242,6 +242,16 @@ impl Session {
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
+        model.supply(
+            menu::ValueSource::HudStyles,
+            &shell
+                .title
+                .hud
+                .skins
+                .iter()
+                .map(|skin| menu::Choice::plain(skin.name))
+                .collect::<Vec<_>>(),
+        );
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
