@@ -650,30 +650,10 @@ pub const EVENT_AI_DEFAULTS: oag_title::original_driver::EventAi =
         level: 1,
     };
 
-#[cfg(test)]
-mod event_ai_tests {
-    #[test]
-    fn the_driver_carries_the_constructors_event_defaults() {
-        let ai = super::ORIGINAL_DRIVER
-            .event_ai
-            .expect("2048 events author AI");
-        assert_eq!(
-            (
-                ai.skill_scale,
-                ai.pad_tracking,
-                ai.weapon_avoidance,
-                ai.level
-            ),
-            (2.0, 1.0, 1.0, 1)
-        );
-    }
-}
-
 /// The five native teams ([`NATIVE_TEAMS`]) and the twelve HD-derived ones ([`GUEST_TEAMS`]).
 /// **`Feisar2048` and its four siblings are kept apart from `Feisar` and the rest**: both sets
 /// are on one 2048 roster under different ids, so they are not spelling variants, and whether
 /// the player sees them as one team is not something the data says (`docs/architecture/persistence.md`).
-
 pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("AG_Systems2048", "ag_systems2048"),
     oag_title::team::team("Auricom2048", "auricom2048"),
@@ -693,3 +673,22 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Qirex", "qirex"),
     oag_title::team::team("Triakis", "triakis"),
 ];
+
+#[cfg(test)]
+mod event_ai_tests {
+    #[test]
+    fn the_driver_carries_the_constructors_event_defaults() {
+        let ai = super::ORIGINAL_DRIVER
+            .event_ai
+            .expect("2048 events author AI");
+        assert_eq!(
+            (
+                ai.skill_scale,
+                ai.pad_tracking,
+                ai.weapon_avoidance,
+                ai.level
+            ),
+            (2.0, 1.0, 1.0, 1)
+        );
+    }
+}

@@ -831,6 +831,23 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
 };
 
+/// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own
+/// case-folded spelling. `detonator` is a craft, not a team.
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mirage", "mirage"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -902,21 +919,3 @@ mod tests {
         assert_eq!(ZONE_STAGES.next_zone(999), None);
     }
 }
-
-/// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own
-/// case-folded spelling. `detonator` is a craft, not a team.
-
-pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
-    oag_title::team::team("AG_Systems", "ag_systems"),
-    oag_title::team::team("Assegai", "assegai"),
-    oag_title::team::team("Auricom", "auricom"),
-    oag_title::team::team("EGX", "egx"),
-    oag_title::team::team("Feisar", "feisar"),
-    oag_title::team::team("Goteki", "goteki"),
-    oag_title::team::team("Harimau", "harimau"),
-    oag_title::team::team("Icaras", "icaras"),
-    oag_title::team::team("Mirage", "mirage"),
-    oag_title::team::team("Piranha", "piranha"),
-    oag_title::team::team("Qirex", "qirex"),
-    oag_title::team::team("Triakis", "triakis"),
-];

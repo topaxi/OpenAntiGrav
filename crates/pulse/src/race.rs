@@ -471,6 +471,25 @@ pub fn track_description_id(track_id: &str) -> Option<String> {
     (digits.chars().count() == 2).then(|| format!("MSC_TRACK_{digits}"))
 }
 
+/// Every team id Pulse can name (the base disc's [`TEAMS`] and the packs' [`DLC_TEAMS`]) and the
+/// identity loyalty keeps it under. **`Mantis` is kept as its own identity, not folded into
+/// HD's `Mirage`**: the pack is sold as Mirage's, but the id differs and no table here says the
+/// two are one team, so merging them is left to the maintainer (`docs/architecture/persistence.md`).
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mantis", "mantis"),
+];
+
 #[cfg(test)]
 mod track_description_tests {
     use super::*;
@@ -488,23 +507,3 @@ mod track_description_tests {
         assert_eq!(track_description_id("7"), None);
     }
 }
-
-/// Every team id Pulse can name (the base disc's [`TEAMS`] and the packs' [`DLC_TEAMS`]) and the
-/// identity loyalty keeps it under. **`Mantis` is kept as its own identity, not folded into
-/// HD's `Mirage`**: the pack is sold as Mirage's, but the id differs and no table here says the
-/// two are one team, so merging them is left to the maintainer (`docs/architecture/persistence.md`).
-
-pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
-    oag_title::team::team("AG_Systems", "ag_systems"),
-    oag_title::team::team("Assegai", "assegai"),
-    oag_title::team::team("EGX", "egx"),
-    oag_title::team::team("Feisar", "feisar"),
-    oag_title::team::team("Goteki", "goteki"),
-    oag_title::team::team("Piranha", "piranha"),
-    oag_title::team::team("Qirex", "qirex"),
-    oag_title::team::team("Triakis", "triakis"),
-    oag_title::team::team("Auricom", "auricom"),
-    oag_title::team::team("Harimau", "harimau"),
-    oag_title::team::team("Icaras", "icaras"),
-    oag_title::team::team("Mantis", "mantis"),
-];

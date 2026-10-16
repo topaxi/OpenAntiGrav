@@ -337,28 +337,9 @@ const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
     },
 ];
 
-#[cfg(test)]
-mod effect_dir_tests {
-    #[test]
-    fn a_2048_circuit_plays_the_2048_set_and_every_other_the_hd_era_one() {
-        assert_eq!(
-            super::DEFAULTS.effect_dir_for(r"Data\environments2048\tower\track.vex"),
-            r"Data\particles2048"
-        );
-        for circuit in [
-            super::DEFAULTS.track,
-            r"Data\environments\zone_1\track.vex",
-            r"Data\environments\01_vineta_k\track.vex",
-        ] {
-            assert_eq!(super::DEFAULTS.effect_dir_for(circuit), r"Data\particles");
-        }
-    }
-}
-
 /// Omega's nineteen `PI_Team`: the twelve HD-era ones ([`HD_ERA_TEAMS`]), the five 2048-era ones
 /// under their 2048 ids, and the two Tigrons. Kept apart for the same reasons as in Pulse (`Mantis`)
 /// and 2048 (`Feisar2048`); `Tigron` and `Tigron_x` are two teams of Omega's own.
-
 pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("AG_Systems", "ag_systems"),
     oag_title::team::team("Assegai", "assegai"),
@@ -380,3 +361,21 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Tigron", "tigron"),
     oag_title::team::team("Tigron_x", "tigron_x"),
 ];
+
+#[cfg(test)]
+mod effect_dir_tests {
+    #[test]
+    fn a_2048_circuit_plays_the_2048_set_and_every_other_the_hd_era_one() {
+        assert_eq!(
+            super::DEFAULTS.effect_dir_for(r"Data\environments2048\tower\track.vex"),
+            r"Data\particles2048"
+        );
+        for circuit in [
+            super::DEFAULTS.track,
+            r"Data\environments\zone_1\track.vex",
+            r"Data\environments\01_vineta_k\track.vex",
+        ] {
+            assert_eq!(super::DEFAULTS.effect_dir_for(circuit), r"Data\particles");
+        }
+    }
+}
