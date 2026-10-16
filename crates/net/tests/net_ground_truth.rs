@@ -229,7 +229,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
     let mut lobby = Command::new(env!("CARGO_BIN_EXE_oag-server"))
         .args(["lobby", "--image", &source])
         .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
-        .args(["--countdown-ms", "200", "--max-ticks", "300"])
+        .args(["--countdown-ms", "200", "--max-ticks", "9000"])
         .stdout(Stdio::piped())
         .spawn()
         .expect("the lobby starts");
@@ -280,7 +280,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             mode: "single_race".into(),
             max_players: 2,
             opponents: true,
-            laps: 0,
+            laps: 1,
         });
         pump(&mut people, &|p| p[0].room.is_some());
         let room = people[0].room.as_ref().expect("room").id;
@@ -343,17 +343,40 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                     let stats = client.take_stats();
                     matches += stats.hash_matches;
                     mismatches += stats.hash_mismatches;
-                    std::thread::sleep(std::time::Duration::from_micros(14_000));
+                    std::thread::sleep(std::time::Duration::from_micros(8_000));
                 }
             }
         }
         assert_eq!(mismatches, 0);
-        assert!(matches > 100, "{matches} confirmed ticks agreed");
+        assert!(matches > 2_000, "{matches} confirmed ticks agreed");
+        for (client, race, who) in &racers {
+            let race = race.as_ref().expect("loaded");
+            assert_eq!(
+                client.phase(),
+                &Phase::Over("every person has finished".into()),
+                "person {who} was told the race ran to the finish line, not to a limit"
+            );
+            assert!(
+                race.finished(),
+                "person {who}'s own state has every person finished"
+            );
+            let board = race.results().expect("a finished race has a board");
+            assert_eq!(board.laps_target, Some(1));
+            assert!(
+                board
+                    .rows
+                    .iter()
+                    .filter(|row| row.player)
+                    .all(|row| row.finished()),
+                "both people are on the board as finishers"
+            );
+        }
+        // The room is open again with the reason, and the slot is free.
         pump(&mut people, &|p| {
             p.iter().all(|c| {
-                c.room
-                    .as_ref()
-                    .is_some_and(|r| r.phase == RoomPhase::Open && r.note.contains("max-ticks"))
+                c.room.as_ref().is_some_and(|r| {
+                    r.phase == RoomPhase::Open && r.note.contains("every person has finished")
+                })
             })
         });
     });
@@ -362,6 +385,57 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
     }
+}
+
+/// A race child whose lobby is gone stops: the lobby holds the child's standard input open, so
+/// when the lobby dies (SIGKILL included) the pipe closes and the child exits instead of holding
+/// the race port for its whole join timeout.
+#[test]
+#[ignore = "needs a disc image"]
+fn a_race_child_stops_when_its_lobby_is_gone() {
+    use std::io::{BufRead, Write};
+    use std::process::{Command, Stdio};
+
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let job = oag_net::wire::online::RaceJob {
+        params: RaceParams {
+            title: "Wipeout Pulse".into(),
+            ..params()
+        },
+        seats: vec![("Ada".into(), "tok".into())],
+    };
+    let mut child = Command::new(env!("CARGO_BIN_EXE_oag-server"))
+        .args(["race", "--image", &image.display().to_string()])
+        .args(["--listen", "127.0.0.1:0", "--join-timeout", "600"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("the child starts");
+    let mut stdin = child.stdin.take().expect("piped");
+    writeln!(stdin, "{}", job.to_line()).expect("the job is sent");
+    let mut lines = std::io::BufReader::new(child.stdout.take().expect("piped")).lines();
+    while !lines
+        .next()
+        .expect("the child is up")
+        .expect("a line")
+        .starts_with("cert-hash ")
+    {}
+    assert!(
+        child.try_wait().expect("polls").is_none(),
+        "the child waits for its people while the lobby is there"
+    );
+    drop(stdin);
+    wait("the child to notice the lobby is gone", || {
+        child.try_wait().expect("polls").is_some()
+    });
+    let status = child.wait().expect("exited");
+    assert_eq!(
+        status.code(),
+        Some(2),
+        "it stops with a reason, not a crash"
+    );
 }
 
 /// Polls `done` until it holds, failing after three minutes (a load on a busy machine).
