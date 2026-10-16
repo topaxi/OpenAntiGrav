@@ -14,6 +14,7 @@ mod backdrop;
 mod drawing;
 mod event_card;
 mod intro;
+mod navs;
 mod pointer;
 mod screens;
 mod selection;

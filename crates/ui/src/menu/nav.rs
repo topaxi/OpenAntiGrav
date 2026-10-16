@@ -69,6 +69,7 @@ impl Menu {
     /// [`Self::pointer`]; a menu nobody drains just keeps the log, which a
     /// stage that does not play them should not leave unbounded - the
     /// composition root drains it either way.
+    #[must_use]
     pub fn take_nav(&mut self) -> Vec<Nav> {
         std::mem::take(&mut self.nav.0)
     }

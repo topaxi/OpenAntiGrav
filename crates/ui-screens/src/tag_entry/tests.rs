@@ -241,3 +241,143 @@ fn a_name_longer_than_the_row_is_still_built_without_panicking() {
     let entry = TagEntry::new(labels(), geometry(2), ALPHABET, "abcdef");
     assert_eq!(entry.text(), "ab");
 }
+
+mod navs {
+    use super::*;
+    use oag_ui::menu::nav::{Dir, Nav};
+    use oag_ui::pointer::Pointer;
+
+    fn entry(initial: &str) -> TagEntry {
+        TagEntry::new(labels(), geometry(3), ALPHABET, initial)
+    }
+
+    fn press(entry: &mut TagEntry, button: Button) -> Outcome {
+        entry.update(&mut tick(&[button]))
+    }
+
+    /// `TagInput_Update` (`0x088cae88`): up and down scroll a glyph with
+    /// `UPDOWN`, left and right step along the row with `LEFTRIGHT`.
+    #[test]
+    fn scrolling_a_glyph_and_stepping_along_the_row_play_the_originals_cues() {
+        let mut entry = entry("");
+        press(&mut entry, Button::Up);
+        press(&mut entry, Button::Down);
+        press(&mut entry, Button::Right);
+        press(&mut entry, Button::Left);
+        assert_eq!(
+            entry.take_nav(),
+            [
+                Nav::Moved(Some(Dir::Up)),
+                Nav::Moved(Some(Dir::Down)),
+                Nav::Stepped(Some(Dir::Right)),
+                Nav::Stepped(Some(Dir::Left)),
+            ]
+        );
+    }
+
+    /// The original plays `DECLINE` when a step cannot be taken: left of the
+    /// first cell, right of the confirm slot.
+    #[test]
+    fn a_step_the_row_cannot_take_declines() {
+        let mut entry = entry("");
+        press(&mut entry, Button::Left);
+        assert_eq!(entry.take_nav(), [Nav::Decline]);
+        for _ in 0..4 {
+            press(&mut entry, Button::Right);
+        }
+        assert_eq!(
+            entry.take_nav(),
+            [
+                Nav::Stepped(Some(Dir::Right)),
+                Nav::Stepped(Some(Dir::Right)),
+                Nav::Stepped(Some(Dir::Right)),
+                Nav::Decline,
+            ],
+            "three cells, then the confirm slot, then no further"
+        );
+    }
+
+    /// On the confirm slot a scroll changes no glyph, and the original's
+    /// handler does not run for it, so it is silent.
+    #[test]
+    fn scrolling_on_the_confirm_slot_is_silent() {
+        let mut entry = entry("");
+        for _ in 0..3 {
+            press(&mut entry, Button::Right);
+        }
+        let _ = entry.take_nav();
+        press(&mut entry, Button::Up);
+        assert!(entry.take_nav().is_empty());
+        assert_eq!(press(&mut entry, Button::Cross), Outcome::Accepted);
+        assert_eq!(
+            entry.take_nav(),
+            [Nav::Decline, Nav::Accept],
+            "measured: the advance that cannot advance, then the confirm"
+        );
+        let mut entry = self::entry("");
+        press(&mut entry, Button::Start);
+        assert_eq!(entry.take_nav(), [Nav::Accept]);
+    }
+
+    #[test]
+    fn cancel_declines_and_a_typed_character_advances() {
+        let mut entry = entry("");
+        entry.edit(crate::prompt::Edit::Type('a'));
+        entry.edit(crate::prompt::Edit::Type('?'));
+        assert_eq!(
+            entry.take_nav(),
+            [Nav::Stepped(Some(Dir::Right)), Nav::Decline],
+            "a character outside the alphabet is refused"
+        );
+        assert_eq!(press(&mut entry, Button::Circle), Outcome::Cancelled);
+        assert_eq!(entry.take_nav(), [Nav::Decline]);
+    }
+
+    #[test]
+    fn the_pointer_plays_the_pads_cues() {
+        let mut entry = entry("");
+        let cell = |index: usize| {
+            let fill = &entry.geometry.cells[index];
+            (fill.x + 1.0, fill.y + 1.0)
+        };
+        let (second, third) = (cell(1), cell(2));
+        let over = |at| Pointer {
+            at: Some(at),
+            moved: true,
+            ..Pointer::default()
+        };
+        entry.pointer(&over(second));
+        entry.pointer(&over(second));
+        assert_eq!(
+            entry.take_nav(),
+            [Nav::Stepped(Some(Dir::Right))],
+            "one step onto the cell, none while resting on it"
+        );
+        entry.pointer(&Pointer {
+            scroll: 1,
+            ..over(third)
+        });
+        assert_eq!(
+            entry.take_nav(),
+            [Nav::Stepped(Some(Dir::Right)), Nav::Moved(Some(Dir::Up))]
+        );
+        let confirm = entry.confirm_rect().expect("the confirm slot has a rect");
+        let accept = Pointer {
+            at: Some((confirm[0] + 1.0, confirm[1] + 1.0)),
+            moved: true,
+            clicked: true,
+            ..Pointer::default()
+        };
+        assert_eq!(entry.pointer(&accept), Outcome::Accepted);
+        assert_eq!(
+            entry.take_nav(),
+            [Nav::Stepped(Some(Dir::Right)), Nav::Decline, Nav::Accept]
+        );
+        let back = Pointer {
+            back: true,
+            ..Pointer::default()
+        };
+        assert_eq!(entry.pointer(&back), Outcome::Cancelled);
+        assert_eq!(entry.take_nav(), [Nav::Decline]);
+    }
+}

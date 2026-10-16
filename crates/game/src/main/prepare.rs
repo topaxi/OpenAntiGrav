@@ -298,15 +298,10 @@ impl Pending {
         oag_raceplay::loader_log::lines(boot_shell.report.drain(..));
         // Read while the archives are still in hand: the media worker takes
         // them next. A few kilobytes, and silence on a title with no bank.
-        let menu_sfx = oag_sound::sfx::MenuSfx::load(
+        let menu_sfx = oag_game::sound::load_menu_sfx(
             &mut archives,
-            title.race.sounds,
-            title
-                .race
-                .zone_announcer
-                .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
-            // The style the served front end is in, which picks HD's
-            // `accept_fury`/`reject_fury`. See `boot::sprites::fury_style`.
+            title,
+            // The style the served front end is in. See `boot::sprites::fury_style`.
             boot_shell
                 .frame
                 .blocks

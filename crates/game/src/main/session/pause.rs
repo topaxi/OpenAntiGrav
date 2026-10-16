@@ -3,7 +3,9 @@
 //! line.
 
 use log::info;
-use oag_game::pause::{Line, State, Table, clock, go, line, present_seats, several_people, step, strings};
+use oag_game::pause::{
+    Line, State, Table, clock, go, line, present_seats, press_cue, several_people, step, strings,
+};
 use oag_gameplay::cue::Cue;
 
 use crate::stage::Stage;
@@ -116,6 +118,10 @@ impl super::Session {
         }
         self.pause = after;
         info!("pause: {before:?} -> {after:?}");
+        // Measured on Pulse (USA): START plays `ACCEPT` both on pausing a race
+        // and on resuming it (`ConfirmButton_Update`). Only a press: the
+        // countdown running out is not one.
+        self.play_navs(press_cue(before, after, presses));
         let cue = match (before, after) {
             (State::Paused { .. }, State::Resuming { .. }) => Some(Cue::Ready),
             _ if go(before, after) => {

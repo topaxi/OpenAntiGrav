@@ -150,6 +150,14 @@ checks against the real disc. A reader after the anonymous instances (Pulse's
 own profile-name/tag screens) walks `oag_tables::fexml::parse`'s tree
 directly - see `oag_ui_screens::tag_entry`.
 
+**The buttons are measured (2026-10-16).** `TagInput_Update` (`0x088cae88`) and a live PPSSPP walk of the first-boot name
+and tag screens ([menu-sounds.md](../ghidra/functions/psp-pulse-usa/menu-sounds.md#text-entry-dialogs-and-the-boot-2026-10-16-lane-pulse-frontend-sfx)):
+Up and Down scroll the glyph under the cursor, Left and Right step along the row and **onto the confirm slot after the
+last cell**, **Cross steps forward the same way as Right**, Circle steps back (and does nothing on cell 0 - the widget has
+no cancel), Square is unbound, and holding a direction repeats (after 10 frames, then every 2). This confirms the
+"scrolls one glyph at a time, then a confirm slot" shape and corrects the port's reading in two places: the port's Cross on a
+cell does nothing and its Circle cancels, neither of which the widget does. Both are still the port's own, unchanged.
+
 **The alphabet is not in this file.** It is 70 bytes in `BOOT.BIN`, not the
 WAD - see `oag_pulse::tag_input::ALPHABET`.
 

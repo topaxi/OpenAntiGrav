@@ -335,3 +335,30 @@ fn a_split_lifts_the_count_off_the_craft() {
     assert!((anchor_y(1) - 171.0 / 272.0).abs() < 1e-6, "authored");
     assert_eq!(anchor_y(1), anchor_y(0));
 }
+
+#[test]
+fn start_plays_accept_on_pausing_and_on_resuming_and_is_silent_otherwise() {
+    use oag_ui::menu::nav::Nav;
+    let cue =
+        |before, presses, now, table| press_cue(before, step(before, presses, now, table), presses);
+    assert_eq!(
+        cue(State::Running, P1, 1.0, ALONE),
+        Some(Nav::Accept),
+        "pausing"
+    );
+    let paused = step(State::Running, P1, 1.0, ALONE);
+    assert_eq!(cue(paused, P1, 2.0, ALONE), Some(Nav::Accept), "resuming");
+    assert_eq!(cue(State::Running, 0, 2.0, ALONE), None, "no press");
+
+    let paused = paused_by_two(0.0);
+    assert_eq!(cue(paused, P1, 1.0, TWO), None, "not their pause");
+    let Some(Nav::Accept) = cue(paused, P2, 1.0, TWO) else {
+        panic!("the owner's press resumes");
+    };
+    let resuming = State::Resuming { since: 1.0 };
+    assert_eq!(
+        cue(resuming, 0, 1.0 + RESUME_SECONDS, TWO),
+        None,
+        "the countdown running out is not a press"
+    );
+}

@@ -7,6 +7,7 @@
 //! these; what moved is the handling of each individual screen.
 
 use super::*;
+use crate::menu::nav::{Dir, Nav};
 
 impl Frontend {
     /// The disc's own movie leg: play `Data\Movies\Intro.PMF` to its end, or
@@ -26,6 +27,7 @@ impl Frontend {
                     states::LOGO_FMV_REDIRECT
                 ));
                 self.machine.fire(states::LOGO_FMV_REDIRECT);
+                self.navs.push(Nav::Accept);
                 return;
             }
         }
@@ -165,12 +167,15 @@ impl Frontend {
         if input.is_pressed(Button::Down) {
             input.consume_press(Button::Down);
             self.selected = (self.selected + 1) % count;
+            self.navs.push(Nav::Moved(Some(Dir::Down)));
         } else if input.is_pressed(Button::Up) {
             input.consume_press(Button::Up);
             self.selected = (self.selected + count - 1) % count;
+            self.navs.push(Nav::Moved(Some(Dir::Up)));
         } else if input.is_pressed(Button::Cross) {
             input.consume_press(Button::Cross);
             self.confirm_language();
+            self.navs.push(Nav::Accept);
         }
     }
 
@@ -348,6 +353,7 @@ impl Frontend {
                 states::LAUNCH_GAME
             ));
             self.machine.fire(states::LAUNCH_GAME);
+            self.navs.push(Nav::Accept);
         }
     }
 

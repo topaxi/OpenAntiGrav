@@ -165,6 +165,18 @@ impl Prompt {
         }
     }
 
+    /// The navigation sounds the model called for since the last call, oldest
+    /// first. Drained by `Session::tick_prompt` before an accept or a cancel
+    /// drops the prompt, or the answer's own cue would go with it.
+    #[must_use]
+    pub(crate) fn take_nav(&mut self) -> Vec<oag_ui::menu::nav::Nav> {
+        match &mut self.model {
+            Model::Keyboard(keyboard) => keyboard.take_nav(),
+            Model::TagEntry(tag_entry) => tag_entry.take_nav(),
+            Model::Confirm(confirm) => confirm.take_nav(),
+        }
+    }
+
     /// What this looks like, over whatever the menus already drew.
     pub(crate) fn draw(&self, skin: &Skin) -> Vec<Draw> {
         match &self.model {

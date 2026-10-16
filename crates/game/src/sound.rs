@@ -86,6 +86,41 @@ pub fn menu_cue(
     }
 }
 
+/// Reads the front end's navigation sounds, voices and results lines out of
+/// `title`'s own banks. **The one place the load's arguments are decided**: a
+/// boot and the ground-truth tests that hold its result to the disc all come
+/// through here, so the zone tick and the Fury style cannot drift between them.
+/// `fury` is the style the served front end is in, which picks HD's
+/// `accept_fury`/`reject_fury`.
+pub fn load_menu_sfx(
+    archives: &mut oag_assets::source::Archives,
+    title: &oag_title::Title,
+    fury: bool,
+) -> oag_sound::sfx::MenuSfx {
+    oag_sound::sfx::MenuSfx::load(
+        archives,
+        title.race.sounds,
+        title
+            .race
+            .zone_announcer
+            .map_or(oag_title::SequenceTick::Unknown, |z| z.tick),
+        fury,
+    )
+}
+
+/// Starts the cue `nav` calls for on the front-end sound path, and says which
+/// cue it was and whether it began. What the session's `play_navs` does for
+/// each nav a screen logged, so a test drives exactly that.
+pub fn play_nav(
+    sfx: &mut oag_sound::sfx::MenuSfx,
+    audio: &Audio,
+    nav: oag_ui::menu::nav::Nav,
+    pad: Option<oag_ui::menu::nav::Dir>,
+) -> (oag_gameplay::cue::Cue, bool) {
+    let cue = menu_cue(nav, pad);
+    (cue, sfx.play(audio, cue))
+}
+
 /// Plays one tick of `race`'s sound effects. See [`Audio::race_tick`].
 ///
 /// Called from inside the fixed-timestep loop, immediately after `Race::tick`,

@@ -194,6 +194,15 @@ pub fn step(state: State, presses: u8, now: f64, table: Table) -> State {
     }
 }
 
+/// The sound a Start press makes. **Measured on Pulse (USA)**: START plays
+/// `ACCEPT` both on pausing a race and on resuming one (`ConfirmButton_Update`,
+/// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`). Only a press that
+/// changed the state counts: another player's Start on a pause that is not
+/// theirs, and the countdown running out, are silent.
+pub fn press_cue(before: State, after: State, presses: u8) -> Option<oag_ui::menu::nav::Nav> {
+    (presses != 0 && before != after).then_some(oag_ui::menu::nav::Nav::Accept)
+}
+
 /// Whether the countdown has just run out: [`step`] took `before` to
 /// [`State::Running`] by waiting, rather than by a resume with no countdown.
 pub fn go(before: State, after: State) -> bool {

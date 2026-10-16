@@ -12,11 +12,13 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    press and silence before the first; a PPSSPP audio dump of the same walk was not made. `ACCEPT` and `DECLINE`
    saturate the 16-bit output on Pulse at the default level (the bank is authored hot and the mixer clamps as the
    hardware does).
-2. **The menu navigation sounds' session path has no test of its own** (`Session::play_navs`): the ground truth drives
-   the same `Menu`, `take_nav`, `menu_cue` and `MenuSfx::play`, and a windowed `oag-game --no-audio` run showed the
-   `menu sound:` lines for Down, Return, BackSpace and Right. Dropping the call in `frame.rs` or the load in `prepare.rs`
-   would only show there. The voices below have a seam now; `play_navs` does not. (The 2026-10-11 walk also logged
-   `MenuUp/Down/StepLeft/StepRight/Accept/Decline` through the whole front end, now into a WAV.)
+2. **The session path's seam is partial.** `oag_game::sound::load_menu_sfx` (the one load `prepare.rs` and the
+   ground truths share) and `oag_game::sound::play_nav` (what `Session::play_navs` does per nav, now also what
+   `menu_sfx_ground_truth.rs` calls) are tested against the disc; every `take_nav` is `#[must_use]`, so a drive that
+   drops the drain fails `-D warnings`. What no test reaches is `frame.rs` calling `play_navs` and `prepare.rs`
+   storing the result: a `Session` needs a GPU and a window, and no headless driver of one exists. A windowed
+   `oag-game --no-audio` run under Xvfb with xdotool (pointer moves and clicks) logged the `menu sound:` lines for the boot
+   picker, the main menu, the options pages and the rename prompt on 2026-10-16.
 3. ~~`TELETYPE`~~ **Closed 2026-10-11 (negative):** it is a per-menu-row cue off the `Menu` class, and 0 hits on PPSSPP across boot, main menu, single player and racebox; no authored `MenuDisplayType` is `TELETYPE` or `SCROLLING` (evidence in menu-sounds.md). Open only: a Menu with no authored type on an unwalked page, and ~~the silent `<Text DisplayType="TELETYPE">` type-in~~ **closed 2026-10-11 (lane `pulse-typein`, negative): the original's `Text` class has no type-in, it draws whole like the port** ([text-display-type.md](../../docs/ghidra/functions/psp-pulse-usa/text-display-type.md)); open only: HD/Omega's `Text` class (105 authored on HD) is unread and uncaptured.
    The place and medal lines landed 2026-10-11 (lane `pulse-endrace-voice`, [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-end-of-race-voices)):
    Single Race and Eliminator on `Results` entry, Tournament at the first page flip off the standings rank,
@@ -31,12 +33,22 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    speech bus and dry (chosen, not measured); the four DLC teams' registers are inferred (2, 6, 11, 12), no pack was
    mounted on the capture; the PS2 trigger was not observed; HD's voice bank (plays on a team *change*, in a bank this
    disc's `frontend.bnk`/`speech.bnk` do not carry) is not located.
-5. **Confirm dialogs, the on-screen keyboard, the language picker, the boot front end and the pause menu's own
-   `ConfirmButton`s** raise no sound: only the screens above were routed. A locked tier or cell on the campaign
-   screens plays `DECLINE` (`Session::campaign_nav`, read-only on `handle_campaign`'s own refusal tests, the one line
-   of `campaign.rs` this lane touched). A launch the campaign then refuses (`launch_campaign_cell`'s notice) is
-   silent. The campaign grids never move onto an empty cell, so the original's `DECLINE`-instead-of-`UPDOWN` move has
-   no counterpart.
+5. ~~**Confirm dialogs, the on-screen keyboard, the language picker, the boot front end and the pause menu's own
+   `ConfirmButton`s** raise no sound~~ **Routed 2026-10-16 (lane `pulse-frontend-sfx`,
+   [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#text-entry-dialogs-and-the-boot-2026-10-16-lane-pulse-frontend-sfx)):**
+   measured on PPSSPP with a breakpoint on `Sound_PlayNamedInSlot`. The name and tag entry is `TagInput_Update`
+   (`0x088cae88`), and `TagEntry` now plays its cues (glyph scroll `UPDOWN`, a step `LEFTRIGHT`, a step it cannot take
+   `DECLINE`, Cross on the slot `DECLINE` then `ACCEPT`), pad and pointer. The boot's movie skip and `Show Logo`'s press
+   play `ACCEPT`; START pausing or resuming a race plays `ACCEPT`; the pause menu is a `Menu` with no confirm dialog
+   (`QUIT RACE` is one `ACCEPT`). The yes/no `Confirm`, the key grid `Keyboard` and the language picker have no measured
+   counterpart and borrow those cues (chosen, not measured; the picker by widget class, since Pulse USA never shows it).
+   A cell the campaign cannot launch (`launch_campaign_cell`'s notice) plays `DECLINE` instead of `ACCEPT`.
+   Open on it: the port's Cross on a `TagEntry` cell does not advance and its Circle cancels, where the original
+   advances and steps back (behaviour, not sound, left alone); the `+0x129` flag that caps the advance one short of
+   the slot (AllowBlank?) was not measured; the EU disc's picker and Pure's `TagInput` were not walked (the probe's
+   address is the USA binary's; Pure is not open in the shared bridge); `Show Logo` takes CROSS in the original and
+   this build reads START only; the PS2 executable was not read. The campaign grids still never move onto an empty
+   cell, so the original's `DECLINE`-instead-of-`UPDOWN` move has no counterpart.
 6. **Chosen, not measured:** pointer hover and click use the pad's cues; confirming a toggle row plays `LEFTRIGHT`;
    closing the root menu plays `DECLINE`; `Results` and `Rewards` advancing plays `ACCEPT`. The widget flag `+0x269`
    (silences `ACCEPT`) was not swept, so a few original buttons that stay silent here make a sound.
