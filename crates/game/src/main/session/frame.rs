@@ -719,6 +719,10 @@ impl Session {
                     // click would fight with.
                     if stage.endrace.is_none() {
                         pointer::press_for_click(&mut self.controls, &pointer);
+                        // A click in any further window of a multi-window race is the same press.
+                        for (seat, _) in &seat_pointers {
+                            pointer::press_for_click(&mut self.controls, seat);
+                        }
                     }
                     // **A race that ended any way but the line is over, so
                     // nothing is stepped.** The world is left exactly as the
