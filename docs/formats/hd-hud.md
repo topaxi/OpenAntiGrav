@@ -568,6 +568,64 @@ Two smaller ones, both the same shape of mistake:
   crops the speed readout off its right edge, so the recovered text has not been
   read back off the original.
 
+## HD's speed bar fill is a `<CurveBar>`, and it draws
+
+**2026-10-16.** A maintainer playing HD saw the speed bar's frame and its km/h
+label and no fill. The fill was authored all along: `HUD_speed_bars.xml` (in the
+arcade, time trial and speed lap layouts) has `SpeedBarBG`, `ThrustBarBG` and
+`SpeedBarOverlay` as `<Image>`s and **`SpeedBar` and `ThrustBar` as
+`<CurveBar>`**, an element `Layout::collect` did not know and walked straight
+past, so neither reached `sprites` or the loader report's `skipped`. Nothing
+else was wrong: `SpeedBar` was never on `oag_hd::hud::ALWAYS_ON` because no
+sprite of that name existed to list.
+
+What a `<CurveBar>` carries, off the disc's own XML:
+
+| Attribute | `SpeedBar` | `ThrustBar` |
+| --- | --- | --- |
+| `x`, `y`, `width`, `height`, `U`, `V`, `TxtrWidth`, `TxtrHeight` | the same as `SpeedBarBG`'s | the same as `ThrustBarBG`'s |
+| `maxWidth` | 452 (= `width`) | 393 |
+| `CurveStartPos` | 290 | 284 |
+| `color1`, `color2` / `color3`, `color4` | `0xFFFFFF0C` yellow / `0xFFFF7F0C` orange | `0xFFB7D1FF` light blue / `0xFF072476` dark blue |
+
+- **Parsed as a sprite with a gradient.** `oag_hud::Sprite::gradient` holds the
+  left and right edge colours (`color1`/`color2` the left, `color3`/`color4` the
+  right, each pair meaned - the reading `Fill::draw` gives the same four
+  attributes) and `oag_ui::frontend::Draw::GradientSprite`, drawn by
+  `ui.wesl`'s mode 6, grades the sprite's own texels across the quad. The fill
+  is then the existing `bar_fraction`/`crop_horizontally` path, with the grade
+  kept on the whole bar so a part-full bar ends part way along it.
+- **Frames of the running original agree** (`data/reference/hd-capture/talons-matched/`,
+  1280x720, Feisar `concept1` on Talon's Junction). At 529 km/h (`01.png`) a yellow
+  strip fills the bar's lower edge to about 82-88% of its length, beneath the
+  light-blue thrust bar and its `91%` label; at 74 km/h (`00.png`) a short yellow
+  stub of about 9-12%. The thrust bar at 98% is **dark blue toward its tip**, so
+  the grade spans the whole `maxWidth` and a crop shows the part up to the value
+  rather than squeezing the whole grade into the cropped width. Those two
+  readings fit a full scale near 600 km/h within the frames' motion blur.
+- **Chosen, not measured:** the full-scale speed (`oag_hud::DEFAULT_SPEED_FULL_KMH`,
+  600, the exhaust ramp's own ceiling), that the fill is a straight horizontal
+  crop of the art up to `CurveStartPos` and past it (the frames cannot tell a
+  crop from a path-length fill where the strip rises), and the angle of the fill's
+  cut end. `CurveStartPos` is parsed by nothing: it is not read.
+- **`ThrustBar` is parsed and not drawn.** It is the light-to-dark-blue bar above
+  the speed strip with the `ThrustBarText` percentage (`91%` at 529 km/h, `98%`
+  stationary on the grid), so it is the thrust the original's HUD chases toward
+  the ship's thrust level (2048's `thrust_chase_percent`, whose target is itself
+  unmeasured), not a speed. Allow-listed with no value source it would draw full,
+  which is an invention, so it stays off `ALWAYS_ON` until a value is wired.
+- **`SpeedBarMark` is not HD's.** No HD layout authors it, so the slide question
+  in [the HUD page](../ui/hud.md) is Pulse's alone and stays open.
+- **Omega: ported.** Its `Data\XML\{Arcade,TimeTrial,SpeedLap}_HUD.xml` author the
+  same pair, `SpeedBar` is on `oag_omega`'s `always_on`, and
+  `omega_hud_ground_truth::the_speed_bar_fill_is_authored_in_the_three_race_layouts`
+  pins it. A race at 376 km/h draws the fill.
+- **2048: checked, differs.** The skin 2048 plays (`2048_hud`) authors its bars as
+  plain `<Image>`s (`ThrustBar`, `SpeedBar0`-`4`); only the bare root skin, kept
+  for the demo, carries HD's two `<CurveBar>`s, and nothing plays it. Pinned by
+  `vita_2048_hud_ground_truth::only_the_unplayed_bare_root_authors_curve_bars`.
+- **Pulse and Pure** author `SpeedBar` as an `<Image>`, unchanged.
+
 ## Zone's ladder draws, and the widget it is missing is missing for a reason
 
 **2026-08-31.** The column down the left of a Zone race - the current zone, the

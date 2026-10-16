@@ -89,6 +89,11 @@ pub(super) const MODE_FACE_ATLAS: f32 = 4.0;
 /// fallback to [`MODE_ATLAS`] the way [`MODE_FACE_ATLAS`] does.
 pub(super) const MODE_BUTTONS_ATLAS: f32 = 5.0;
 
+/// [`MODE_GRADIENT`] over a sprite-sheet quad - [`super::Draw::GradientSprite`].
+/// The vertex stage grades `color` into `border` across the quad and hands the
+/// fragment stage an ordinary [`MODE_SPRITE`] quad.
+pub(super) const MODE_SPRITE_GRADIENT: f32 = 6.0;
+
 impl Renderer {
     pub(super) fn push_solid(&mut self, rect: [f32; 4], color: [f32; 4], chamfer: [f32; 2]) {
         let solid = self.atlas.solid;

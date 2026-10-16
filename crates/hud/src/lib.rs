@@ -260,6 +260,22 @@ impl Layout {
                 continue;
             }
 
+            // HD's speed and thrust bars. A `<CurveBar>` carries everything an
+            // `<Image>` does (`x`/`y`/`width`/`height`/`U`/`V`/`TxtrWidth`/
+            // `TxtrHeight`/`src`) plus `maxWidth`, `CurveStartPos` and
+            // `color1`..`color4`, so it is read as the sprite it is and its
+            // gradient is carried on it. It was dropped silently until
+            // 2026-10-16, which is why HD drew a speed bar's frame and label
+            // and no fill.
+            if name.eq_ignore_ascii_case("CurveBar") {
+                if let Some(mut sprite) = self.sprite_from(child, x, y) {
+                    sprite.gradient = self.gradient_from(child);
+                    self.sprites.push(sprite);
+                }
+                self.collect(child, x, y, orthographic, origin);
+                continue;
+            }
+
             if name.eq_ignore_ascii_case("Text") {
                 if let Some(label) = self.label_from(child, x, y) {
                     self.labels.push(label);
@@ -330,7 +346,26 @@ impl Layout {
             // [`Sprite::rotation`]; `Node::value` folds the two spellings the
             // Zone layout ships.
             rotation: number(&self.constants, node.value("RotationTheta")).unwrap_or(0.0),
+            gradient: None,
         })
+    }
+
+    /// A `<CurveBar>`'s `color1`..`color4` as a left and a right edge colour.
+    ///
+    /// The mean of each edge's two corners, the reading
+    /// `oag_ui::screen::Fill::draw` already gives the same four attributes on a
+    /// fill: `color1`/`color2` the left edge, `color3`/`color4` the right. Both
+    /// shipped bars author equal pairs. `None` unless all four resolve.
+    fn gradient_from(&self, node: &Node) -> Option<[[f32; 4]; 2]> {
+        let at = |key: &str| {
+            let value = resolve(&self.constants, node.value(key)?)?;
+            parse_argb(value).map(argb_to_rgba)
+        };
+        let mean = |a: [f32; 4], b: [f32; 4]| std::array::from_fn(|i| (a[i] + b[i]) * 0.5);
+        Some([
+            mean(at("color1")?, at("color2")?),
+            mean(at("color3")?, at("color4")?),
+        ])
     }
 
     fn label_from(&mut self, node: &Node, offset_x: f32, offset_y: f32) -> Option<Label> {
@@ -938,6 +973,8 @@ pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
         && rect[1] + rect[3] <= screen.1
 }
 
+#[cfg(test)]
+mod curve_bar_tests;
 #[cfg(test)]
 mod pickup_model_tests;
 #[cfg(test)]

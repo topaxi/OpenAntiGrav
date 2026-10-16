@@ -75,6 +75,7 @@ pub fn place(draw: &Draw, p: &Placement) -> Option<Draw> {
         match &mut draw {
             Draw::Fill { rect, .. }
             | Draw::GradientFill { rect, .. }
+            | Draw::GradientSprite { rect, .. }
             | Draw::Sprite { rect, .. }
             | Draw::RotatedSprite { rect, .. }
             | Draw::TiledSprite { rect, .. }

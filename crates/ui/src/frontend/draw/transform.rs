@@ -34,7 +34,7 @@ impl Draw {
             // The left edge's, which is the one a caller reading "the colour"
             // of a rule that fades in from the left would expect. Fading
             // both edges is [`Self::fade`]'s job, not this accessor's.
-            Self::GradientFill { left, .. } => Some(left),
+            Self::GradientFill { left, .. } | Self::GradientSprite { left, .. } => Some(left),
             Self::Video { .. } | Self::FuryBackdrop(_) | Self::SceneBackdrop(_) => None,
         }
     }
@@ -92,7 +92,12 @@ impl Draw {
                 rect[3] *= scale;
                 color[3] *= alpha;
             }
-            Self::GradientFill { rect, left, right } => {
+            Self::GradientFill {
+                rect, left, right, ..
+            }
+            | Self::GradientSprite {
+                rect, left, right, ..
+            } => {
                 rect[0] = about(rect[0], origin.0);
                 rect[1] = about(rect[1], origin.1);
                 rect[2] *= scale;
@@ -111,7 +116,9 @@ impl Draw {
     /// Both edges of a [`Self::GradientFill`], which is the one variant
     /// [`Self::colour_mut`] cannot fade on its own.
     pub fn fade(&mut self, alpha: f32) {
-        if let Self::GradientFill { left, right, .. } = self {
+        if let Self::GradientFill { left, right, .. } | Self::GradientSprite { left, right, .. } =
+            self
+        {
             left[3] *= alpha;
             right[3] *= alpha;
         } else if let Some(color) = self.colour_mut() {
