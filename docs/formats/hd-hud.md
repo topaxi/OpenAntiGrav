@@ -624,7 +624,7 @@ What a `<CurveBar>` carries, off the disc's own XML:
   **Omega: ported**, the three race layouts author the same `ThrustBar`/`ThrustBarText` and the
   feed is title-agnostic; the Omega executable's own writer is not read (no PS4 capture path), so
   the value law is HD's by lineage. Drawn on single screen and both split cuts for HD and Omega
-  (in the headless `--window-seats 2h,2v` run an AI-flown seat read 0% while moving; the cause was not chased, a person-flown seat reads its throttle).
+  (in the headless `--window-seats 2h,2v` run with `--hold cross` only seat 0 holds throttle; another seat read 0% while moving because seat 0 rammed it from behind at tick ~340 and shoved it along at its own speed - no wrong-slot bug, and under `--autopilot` every seat reads its throttle, 99.6 to 100).
 - **`SpeedBarMark` is not HD's.** No HD layout authors it, so the slide question
   in [the HUD page](../ui/hud.md) is Pulse's alone and stays open.
 - **Omega: ported.** Its `Data\XML\{Arcade,TimeTrial,SpeedLap}_HUD.xml` author the
