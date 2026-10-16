@@ -106,8 +106,16 @@ fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
     assert!(race.finished());
     let player = race.player_slot();
     assert_eq!(race.window_drawn(0), vec![player]);
-    assert_eq!(race.window_drawn(1), vec![player], "window 2 shows the end too");
-    assert_eq!(race.window_cut(1), Default::default(), "one view is not cut");
+    assert_eq!(
+        race.window_drawn(1),
+        vec![player],
+        "window 2 shows the end too"
+    );
+    assert_eq!(
+        race.window_cut(1),
+        Default::default(),
+        "one view is not cut"
+    );
     assert!(race.window_drawn(2).is_empty(), "a window with no seat");
 }
 
