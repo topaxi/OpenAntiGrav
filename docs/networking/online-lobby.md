@@ -544,8 +544,10 @@ From here the round trip is about 10 ms.
 
 ### Open
 
-- **Menu screens: landed** (part 8). Open there: owner-side editing of a room's settings, a
-  max-players choice, kick, and the sub-pages Omega has beyond the list.
+- **Menu screens: landed** (part 8), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
+  lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
+  and size. Open there: kick and the other
+  sub-pages Omega has beyond the list.
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
@@ -790,9 +792,9 @@ the two is ever live), the pages in `assets/ui/menu.toml` (`online`).
 | connecting | CONNECTING... on the list screen with only BACK | the dial runs off the frame thread (`oag_thread::Task`) |
 | refused or unreachable | the address keyboard again, a line under the text | the server's own text, e.g. the refused build with both builds named; `Rejected` is read before the closing link so it is never lost to "the lobby closed" |
 | ONLINE page | CREATE GAME, JOIN GAME, BACK | pushed on the welcome; BACK drops the connection |
-| CREATE GAME | the RACE page, Track Select, Ship Select, then the room | Eliminator and Head to Head are dimmed (a network race holds weapons off, and Head to Head is two people in a room of up to eight); a stored one becomes a Single Race. Max players is 8, AI fill follows the RACE page |
+| CREATE GAME | the RACE page, Track Select, Ship Select, then the room | Eliminator and Head to Head are dimmed (a network race holds weapons off, and Head to Head is two people in a room of up to eight); a stored one becomes a Single Race. A new room seats 8; its owner changes that in the room. AI fill follows the RACE page. A title with no Ship Select (2048) has the pick on the RACE page, and a joiner who never saw one sends the title's own default team (`oag_title::RaceDefaults::team`) |
 | JOIN GAME | Ship Select, then the list: owner left, title and head count right, the circuit, class and mode (the title's own circuit name) under the title while the cursor is on it | rows the server marks not joinable are dimmed with the reason; the empty row makes a room instead; the list is asked for again every second |
-| the room | one seat per person, `NAME (HOST)  READY` or `PICKING`, START RACE for the host, BACK leaves | the pick is the ready (sent once in the room, and again if an edit clears it); the line under the title is the room's note, then where the room is: the host's prompt, "number N in line" while another game races (`Phase::Queued`), the countdown |
+| the room | one seat per person up to the room's size, `NAME (HOST)  READY` or `PICKING`, START RACE for the host, BACK leaves; a seat says the room's circuit, class and mode while the cursor is on it. **The owner also has ROOM SETTINGS** (the RACE page, Track Select and Ship Select again, seeded with the room's own mode, class and circuit; START sends `Edit` and the room is back; BACK leaves it as it was) **and MAX PLAYERS** (confirm or a click one more, left and right one either way, wrapping between the people already seated and 8; the server holds the number and asks the latest to join to go if it ever shrinks below the head count). An edit clears every ready and the pick is sent again by itself | the pick is the ready (sent once in the room, and again if an edit clears it); the line under the title is the room's note, then where the room is: the host's prompt, "number N in line" while another game races (`Phase::Queued`), the countdown |
 | the race | the ordinary network race (`Pending`, tick-0 check, `launch_race`) with the seat token | the lobby link is polled in every stage and kept open for the whole race |
 | after the race | the room again, with the room's note ("--max-ticks reached", a crashed child, ...) | `Session::online_menus_opened`, called as the menus reopen |
 
@@ -802,11 +804,38 @@ the room list for five seconds), a refused START (not enough people, someone has
 host kicked or the room gone (`Left { reason }`: a screen of its own with BACK), the lobby closing
 mid-flow (the same), the race child failing to come up (the room's note after the return).
 
-**Not in the menus:** the keyboard grid has no colon (it stays four rows), so a lobby on another
-port than 60000 is written into `[online] address` once; `--online` stays the headless
-command-line flow of part 5 (it does not open the screens).
+**The address keyboard has a colon and brackets** (`ADDRESS_KEYS` gained `:[]`, a fifth row, shared
+with LAN's address keyboard), so `host:60500`, `[::1]:60500` and a bare `::1` (bracketed for the
+dial) are typed on the pad; no port means 60000. **Chosen, not measured:** the room's size is
+2 to 8 for every title (`oag_net::wire::online::MAX_PLAYERS`, Omega's eight rows); no title
+crate carries a measured grid size, so none is capped lower. Laps and weapons are not room
+settings: `RoomSettings` has no laps field and a network race holds weapons off (ADR-0069).
+A 64-digit certificate is drawn on two lines, readable on every face, where it ran off the panel
+on every title. `--online` stays the headless command-line flow of part 5 (it does not open the
+screens).
 
-**Walked on 2026-10-16** (Pulse PSP EU, a debug build, `oag-server lobby` on localhost, two
+**Walked live, 2026-10-16** (`online-menus-titles`): Pure, HD, 2048 and Omega
+each from a fresh profile's front end through the three keyboards, CREATE, JOIN, ready, START, the
+hand-off, the race to `--max-ticks 600` and both clients back in the room (Omega's clients crawl
+on software Vulkan and took minutes to reach the end; they did). Found and fixed on the way: the
+certificate ran off the keyboard panel on every title; 2048's joiner never became ready (its
+stored team is not in the roster and there is no Ship Select to pick one); HD and Omega's room
+said "PLAYER 2 PRESS START TO JOIN" for a seat somebody arrives at over the network (the disc's
+local-split line, `FE_GUEST_JOIN`; **LAN's host lobby had the same line and loses it too**). Checked, not
+changed: a fresh profile's MODE is Time Trial, which with two people is Pulse's measured multiplayer
+Time Trial (`oag_race::Mode::is_multiplayer_time_trial`), so it is a legitimate room; circuit names
+on 2048 (`square`) and Omega (`16_Track`) are the raw ids because the RACE and Track Select pages
+of those titles show the same ids (the room line and the race loaded the same circuit); 2048's
+TEAM row shows a clipped raw craft id, a general front-end matter. The pointer was walked on Pure and
+HD: the list, the room, MAX PLAYERS, ROOM SETTINGS and BACK. **A full room is twelve rows for its
+owner** (eight seats, ROOM SETTINGS, MAX PLAYERS, START, BACK), which ran START and BACK off the
+picture on both PSP titles: the join screen now closes its rows up to fit above the footer
+(`Join::layout`, shared by the drawing and the pointer's hit-test, down to 0.4 of the usual
+size), checked in stills of an eight-person room on Pulse, Pure, HD and 2048 and in a test
+that clicks BACK. The room's note wins over the START line when the two do not fit one line,
+because the note is where a failed race says why.
+
+**Earlier, 2026-10-16** (Pulse PSP EU, a debug build, `oag-server lobby` on localhost, two
 windowed `oag-game` clients each in its own Xvfb on lavapipe, driven by xdotool, mouse for the
 first screens and held keys after): connect (including the refused build, with both builds named),
 the hub, CREATE (RACE page, Track Select, Ship Select), JOIN (Ship Select, the list with the room

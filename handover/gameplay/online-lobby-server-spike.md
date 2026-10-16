@@ -8,7 +8,7 @@ tested locally; nothing has been deployed or tried over a real network.
 ## Open
 
 1. ~~The remote test~~ (done 2026-10-16, "Measured over the internet" in the doc): UDP 60000-60010 reach the host with nothing to open, two clients raced a lean Pulse over the internet with 0 bad hashes and returned to the room. Open still: only Pulse and only `--max-ticks` endings were run remotely (HD/Omega/2048 and their memory on a 1 GB host are not; the finish line and all six titles ran on localhost, part 7), and the host was IPv6-only, so a v4-only player path is untested.
-2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 8). Open: owner-side room settings editing and a max-players choice (a room is 8 with the RACE page's AI), kick, the Omega sub-pages, a live walk on HD, 2048 and Omega (stills only there), a lobby on a port other than 60000 typed on the pad.
+2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 8). Landed 2026-10-16 (`online-menus-titles`): the owner's ROOM SETTINGS and MAX PLAYERS, a typed port and IPv6 literal, a live walk on Pure, HD, 2048 and Omega, the pointer on Pure and HD. Open: kick, the Omega sub-pages.
 3. ~~The build at join~~ (landed 2026-10-16, part 6 of the doc): a hello of another build is refused by name. Open still: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
 4. **Settings Omega has and `RaceParams` lacks**: (laps landed, part 7) eliminations target, zone target,
    barrel rolls, pilot assist allowed. Weapons stay off (ADR-0069, condition 2).

@@ -99,6 +99,10 @@ OAG_ONLINE_ROOM_HINT_OWNER = { text = "APPUYEZ SUR START QUAND TOUT LE MONDE EST
 OAG_ONLINE_HOST = { text = "HÔTE", human = false }
 OAG_ONLINE_READY = { text = "PRÊT", human = false }
 OAG_ONLINE_PICKING = { text = "CHOISIT", human = false }
+OAG_ONLINE_ROOM_SETTINGS = { text = "PARAMÈTRES DU SALON", human = false }
+OAG_ONLINE_MAX_PLAYERS = { text = "JOUEURS MAX.", human = false }
+OAG_ONLINE_LAPS = { text = "TOURS", human = false }
+OAG_ONLINE_LAPS_OWN = { text = "CELUI DU MODE", human = false }
 OAG_ONLINE_QUEUED = { text = "UNE AUTRE PARTIE COURT : VOUS ÊTES N° %d DANS LA FILE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "LA COURSE COMMENCE DANS %d", human = false }
 OAG_ONLINE_RACING = { text = "LA COURSE VA COMMENCER", human = false }

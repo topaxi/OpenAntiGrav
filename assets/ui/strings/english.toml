@@ -103,6 +103,10 @@ OAG_ONLINE_ROOM_HINT_OWNER = { text = "PRESS START WHEN EVERYONE IS READY", huma
 OAG_ONLINE_HOST = { text = "HOST", human = false }
 OAG_ONLINE_READY = { text = "READY", human = false }
 OAG_ONLINE_PICKING = { text = "PICKING", human = false }
+OAG_ONLINE_ROOM_SETTINGS = { text = "ROOM SETTINGS", human = false }
+OAG_ONLINE_MAX_PLAYERS = { text = "MAX PLAYERS", human = false }
+OAG_ONLINE_LAPS = { text = "LAPS", human = false }
+OAG_ONLINE_LAPS_OWN = { text = "MODE'S OWN", human = false }
 OAG_ONLINE_QUEUED = { text = "ANOTHER GAME IS RACING: YOU ARE NUMBER %d IN LINE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "THE RACE STARTS IN %d", human = false }
 OAG_ONLINE_RACING = { text = "THE RACE IS STARTING", human = false }

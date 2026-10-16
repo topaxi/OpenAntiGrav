@@ -83,6 +83,9 @@ enum Step {
     Hub,
     /// CREATE GAME's RACE page, Track Select and Ship Select.
     Settings,
+    /// The room owner's ROOM SETTINGS: the same RACE page and pickers, seeded with the room's own
+    /// settings, and START sends an edit instead of making a room.
+    Editing,
     /// JOIN GAME's Ship Select.
     ShipPick,
     /// The room list.
@@ -311,7 +314,7 @@ impl Session {
 
     /// Whether the RACE page is CREATE GAME's settings step.
     pub(crate) fn online_creating(&self) -> bool {
-        matches!(&self.online, Some(Online { step: Step::Settings, .. }))
+        matches!(&self.online, Some(Online { step: Step::Settings | Step::Editing, .. }))
     }
 
     /// Whether JOIN GAME is in its Ship Select.
@@ -333,11 +336,15 @@ impl Session {
         let gone = match &online.step {
             Step::Typing => stage.prompt.is_none(),
             Step::Hub => page != "online" && !screens,
-            Step::Settings => page != "race" && !screens,
+            Step::Settings | Step::Editing => page != "race" && !screens,
             Step::ShipPick => !screens,
             _ => false,
         };
         if !gone {
+            return;
+        }
+        if matches!(online.step, Step::Editing) {
+            self.online_back_to_room();
             return;
         }
         let back_to_hub = matches!(online.step, Step::Settings | Step::ShipPick)
@@ -352,15 +359,20 @@ impl Session {
         }
     }
 
-    /// The create step's launch: the RACE page's choices become a room.
-    pub(crate) fn open_online_room_from_settings(&mut self) {
-        let Some(options) = self.race_options.clone() else {
-            return;
-        };
+    /// The team a person goes into a room with: the settings' own, or - when a title with no
+    /// Ship Select does not offer the stored one (2048 has no `Assegai`) - the title's own
+    /// default, so a joiner who never saw a picker still has a pick to send as the ready.
+    fn online_team(&self, options: &oag_raceplay::Options) -> String {
         let Some(shell) = self.shell.as_ref() else {
-            return;
+            return options.team.clone().unwrap_or_default();
         };
-        let settings = RoomSettings {
+        oag_game::online_screen::room_team(options.team.as_deref(), shell.title.race.team, &shell.teams)
+    }
+
+    /// The RACE page's choices as a room's settings, `max_players` seats.
+    fn room_settings_from(&self, options: &oag_raceplay::Options, max_players: u8) -> Option<RoomSettings> {
+        let shell = self.shell.as_ref()?;
+        Some(RoomSettings {
             title: shell.title.name.to_string(),
             track: options.track.clone().unwrap_or_default(),
             class: options.class.clone(),
@@ -371,13 +383,43 @@ impl Session {
                 }
                 other => other.name().to_string(),
             },
-            max_players: oag_net::wire::online::MAX_PLAYERS,
+            max_players,
             opponents: options.opponents,
             laps: options
                 .laps_override
                 .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
+        })
+    }
+
+    /// The RACE page's launch while online: CREATE GAME's choices become a room, or the owner's
+    /// ROOM SETTINGS become an edit of the room they are in.
+    pub(crate) fn open_online_room_from_settings(&mut self) {
+        let Some(options) = self.race_options.clone() else {
+            return;
         };
-        let team = options.team.clone().unwrap_or_default();
+        let editing = matches!(&self.online, Some(Online { step: Step::Editing, .. }));
+        let max_players = self
+            .online
+            .as_ref()
+            .and_then(|online| online.lobby.as_ref())
+            .and_then(|lobby| lobby.room.as_ref())
+            .filter(|_| editing)
+            .map_or(oag_net::wire::online::MAX_PLAYERS, |room| room.settings.max_players);
+        let Some(mut settings) = self.room_settings_from(&options, max_players) else {
+            return;
+        };
+        // The RACE page has no lap count: an edit keeps the room's own, which LAPS on the room
+        // screen sets.
+        if editing
+            && let Some(room) = self
+                .online
+                .as_ref()
+                .and_then(|online| online.lobby.as_ref())
+                .and_then(|lobby| lobby.room.as_ref())
+        {
+            settings.laps = room.settings.laps;
+        }
+        let team = self.online_team(&options);
         let Some(online) = &mut self.online else {
             return;
         };
@@ -386,7 +428,11 @@ impl Session {
         };
         online.team = team;
         online.pick_sent = false;
-        lobby.create(settings);
+        if editing {
+            lobby.edit(settings);
+        } else {
+            lobby.create(settings);
+        }
         online.step = Step::Room;
         // The room stands over the ONLINE page, not over the RACE page it was made on, so
         // BACK from the room lands on the page the player chose CREATE GAME from.
@@ -402,12 +448,97 @@ impl Session {
         self.show_room_screen();
     }
 
+    /// ROOM SETTINGS: the RACE page again, showing the room's own mode, class and circuit; START
+    /// sends the owner's changes as an edit.
+    fn open_online_edit(&mut self) {
+        let Some(room) = self
+            .online
+            .as_ref()
+            .and_then(|online| online.lobby.as_ref())
+            .and_then(|lobby| lobby.room.clone())
+        else {
+            return;
+        };
+        let track_id = self.shell.as_ref().and_then(|shell| {
+            shell
+                .tracks
+                .iter()
+                .find(|(track, _)| track.entry_name() == room.settings.track)
+                .map(|(track, _)| track.id.clone())
+        });
+        self.settings.race.mode = room.settings.mode.clone();
+        self.settings.race.class = room.settings.class.clone();
+        if let Some(id) = &track_id {
+            self.settings.race.track = id.clone();
+        }
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.lan = None;
+            if !stage.menu.push("race") {
+                return;
+            }
+            use oag_ui::menu::Value;
+            stage.menu.seed("race.mode", &Value::Text(room.settings.mode.clone()));
+            stage.menu.seed("race.class", &Value::Text(room.settings.class.clone()));
+            if let Some(id) = track_id {
+                stage.menu.seed("race.track", &Value::Text(id));
+            }
+        }
+        if let Some(online) = &mut self.online {
+            online.step = Step::Editing;
+        }
+        self.resupply_race_modes();
+    }
+
+    /// LAPS on the room screen: one more or fewer lap (`by`) from `0`, the mode's own, up to
+    /// 20, wrapping. Sent as an edit like MAX PLAYERS.
+    fn online_step_laps(&mut self, by: i32) {
+        let Some(lobby) = self.online.as_mut().and_then(|online| online.lobby.as_mut()) else {
+            return;
+        };
+        let Some(room) = lobby.room.as_ref() else {
+            return;
+        };
+        let next = oag_game::online_screen::step_max_players(
+            i32::from(room.settings.laps),
+            by,
+            0,
+            i32::from(oag_game::online_screen::MAX_LAPS),
+        );
+        let mut settings = room.settings.clone();
+        settings.laps = u8::try_from(next).unwrap_or(settings.laps);
+        lobby.edit(settings);
+    }
+
+    /// MAX PLAYERS on the room screen: one more or fewer seat (`by`), never fewer than the people
+    /// already seated, wrapping round at the ends. The server holds the number and tells everyone.
+    fn online_step_max_players(&mut self, by: i32) {
+        let Some(lobby) = self.online.as_mut().and_then(|online| online.lobby.as_mut()) else {
+            return;
+        };
+        let Some(room) = lobby.room.as_ref() else {
+            return;
+        };
+        let fewest = i32::try_from(room.members.len())
+            .unwrap_or(0)
+            .max(i32::from(oag_net::wire::online::MIN_PLAYERS));
+        let most = i32::from(oag_net::wire::online::MAX_PLAYERS);
+        let next = oag_game::online_screen::step_max_players(
+            i32::from(room.settings.max_players),
+            by,
+            fewest,
+            most,
+        );
+        let mut settings = room.settings.clone();
+        settings.max_players = u8::try_from(next).unwrap_or(settings.max_players);
+        lobby.edit(settings);
+    }
+
     /// The pick is made on JOIN GAME: the list is next.
     pub(crate) fn open_online_list(&mut self) {
         let team = self
             .race_options
             .as_ref()
-            .and_then(|options| options.team.clone())
+            .map(|options| self.online_team(options))
             .unwrap_or_default();
         let Some(online) = &mut self.online else {
             return;
@@ -458,6 +589,12 @@ impl Session {
         if presses & Button::Cross.bit() != 0 {
             events.extend(screen.confirm());
         }
+        if presses & Button::Left.bit() != 0 {
+            events.extend(screen.adjust(-1));
+        }
+        if presses & Button::Right.bit() != 0 {
+            events.extend(screen.adjust(1));
+        }
         if presses & Button::Start.bit() != 0 {
             if screen.is_list() {
                 events.extend(screen.confirm());
@@ -492,6 +629,24 @@ impl Session {
                     && let Some(lobby) = &mut online.lobby
                 {
                     lobby.start();
+                    self.play_navs(Some(Nav::Accept));
+                }
+            }
+            Event::Settings => {
+                if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
+                    self.open_online_edit();
+                    self.play_navs(Some(Nav::Accept));
+                }
+            }
+            Event::Laps(by) => {
+                if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
+                    self.online_step_laps(by);
+                    self.play_navs(Some(Nav::Accept));
+                }
+            }
+            Event::MaxPlayers(by) => {
+                if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
+                    self.online_step_max_players(by);
                     self.play_navs(Some(Nav::Accept));
                 }
             }
@@ -837,7 +992,12 @@ impl Session {
                     }
                 }
                 Some(Rows::Room(room, owner)) => {
-                    oag_game::online_screen::fill_room(screen, &room, owner, &shell.strings);
+                    oag_game::online_screen::fill_room(screen, &room, owner, &shell.strings, &|entry| {
+                        track_labels
+                            .iter()
+                            .find(|(known, _)| known == entry)
+                            .map(|(_, name)| name.clone())
+                    });
                     if let Some(notice) = notice {
                         screen.set_hint(notice);
                     }

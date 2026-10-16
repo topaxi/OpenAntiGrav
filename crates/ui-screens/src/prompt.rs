@@ -129,11 +129,12 @@ pub enum Key {
 /// parameter, and it is cheap to make one then rather than to guess now.
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/// The alphabet of an address (a host name or an IPv4 address): digits, the dot and the hyphen
-/// and the letters a host name is made of. 38 characters, so with the two special keys the
-/// grid is the same four rows as a pilot's. **Ours, chosen**: LAN play's manual address entry
-/// ([`Keyboard::with_keys`]); an IPv6 literal cannot be typed on it.
-pub const ADDRESS_KEYS: &str = "0123456789.-abcdefghijklmnopqrstuvwxyz";
+/// The alphabet of an address: digits, the dot and the hyphen and the letters a host name is
+/// made of, then the colon of a port and of an IPv6 literal and the brackets that set one off
+/// (`[::1]:60000`). 41 characters, so with the two special keys the grid is five rows where a
+/// pilot's is four. **Ours, chosen**: LAN play's manual address entry and the online lobby's
+/// ([`Keyboard::with_keys`]).
+pub const ADDRESS_KEYS: &str = "0123456789.-abcdefghijklmnopqrstuvwxyz:[]";
 
 /// How many cells a row of the grid holds.
 ///
@@ -462,19 +463,34 @@ impl Keyboard {
         // The buffer, drawn larger than a row because it is the one thing on
         // this screen the player is actually building.
         let mut y = panel.body_y;
-        out.push(Draw::Text {
-            x: panel.text_x,
-            y,
-            scale: panel.scale * 1.4,
-            color: skin.selected(),
-            border: None,
-            align: Align::Left,
-            // A caret, so an empty buffer is visibly empty rather than
-            // indistinguishable from a missing one.
-            text: format!("{}_", self.text),
-            wrap_width: None,
-        });
-        y += line * 1.3;
+        // A caret, so an empty buffer is visibly empty rather than
+        // indistinguishable from a missing one.
+        let buffer: Vec<char> = format!("{}_", self.text).chars().collect();
+        let lines = buffer_lines(&buffer);
+        for (n, line_text) in lines.iter().enumerate() {
+            out.push(Draw::Text {
+                x: panel.text_x,
+                y: y + line * BUFFER_LINE_PITCH * n as f32,
+                scale: panel.scale
+                    * if lines.len() == 1 {
+                        1.4
+                    } else {
+                        SPLIT_BUFFER_SCALE
+                    },
+                color: skin.selected(),
+                border: None,
+                align: Align::Left,
+                text: line_text.clone(),
+                wrap_width: None,
+            });
+        }
+        // The note sits under the last line of the buffer, so a split one pushes it down.
+        y += line
+            * if lines.len() == 1 {
+                1.3
+            } else {
+                SPLIT_NOTE_DROP
+            };
         if let Some(note) = &self.note {
             out.push(Draw::Text {
                 x: panel.text_x,
@@ -493,7 +509,7 @@ impl Keyboard {
         // second line landed *through* the grid's top-left key. The gap is
         // reserved unconditionally so the grid does not jump when a note
         // appears mid-typing, which it does on every keystroke.
-        y += line * NOTE_ROOM;
+        y = panel.body_y + line * 1.3 + line * NOTE_ROOM;
 
         let grid = Grid::new(&panel, y);
         let (cell_w, cell_h) = (grid.cell_w, grid.cell_h);
@@ -559,6 +575,28 @@ impl Keyboard {
         }
         out
     }
+}
+
+/// The longest buffer, in glyphs, drawn on one line at full size. **Chosen, not measured:** a
+/// name or an address (40 at most) is shorter on the faces it was looked at; Pure's fits 22 at
+/// this size and 2048's 27.
+const ONE_LINE_GLYPHS: usize = 20;
+/// A buffer past [`ONE_LINE_GLYPHS`] is drawn on two lines at this share of a row's size: 33
+/// glyphs of the widest face fit the panel's width, which 64 digits of a lobby certificate and
+/// its caret need, and the keyboard's grid, which the pointer hit-tests, stays where it was.
+const SPLIT_BUFFER_SCALE: f32 = 0.78;
+/// The second line of a split buffer, in rows below the first.
+const BUFFER_LINE_PITCH: f32 = 0.9;
+/// Where the note goes under a split buffer, in rows below its first line.
+const SPLIT_NOTE_DROP: f32 = 1.9;
+
+/// The lines a buffer is drawn on: one, or two halves when it is too long for a line.
+fn buffer_lines(buffer: &[char]) -> Vec<String> {
+    if buffer.len() <= ONE_LINE_GLYPHS {
+        return vec![buffer.iter().collect()];
+    }
+    let (first, second) = buffer.split_at(buffer.len().div_ceil(2));
+    vec![first.iter().collect(), second.iter().collect()]
 }
 
 /// One change to a [`Keyboard`]'s buffer, whichever device asked for it.

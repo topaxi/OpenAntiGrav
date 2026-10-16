@@ -18,6 +18,10 @@ fn labels() -> Labels {
         guest: None,
         keyboard: "KEYBOARD".into(),
         pad: "GAMEPAD".into(),
+        settings: "ROOM SETTINGS".into(),
+        max_players: "MAX PLAYERS".into(),
+        laps: "LAPS".into(),
+        laps_own: "OWN".into(),
         start: "START".into(),
         back: "BACK".into(),
     }
@@ -419,4 +423,152 @@ fn a_row_with_a_note_is_dimmed_unselectable_and_says_why() {
         said(&list).contains(&"PRESS A BUTTON TO JOIN".to_string()),
         "on BACK the hint comes back"
     );
+}
+
+#[test]
+fn a_room_on_the_network_never_asks_the_second_seat_to_press_start() {
+    // HD and Omega author "PLAYER 2 PRESS START TO JOIN" for local split screen; a room's
+    // empty seat is somebody still to arrive over the network.
+    let strings = oag_ui::language::StringTable::from_xml(
+        r#"<Strings><Entry ID="FE_GUEST_JOIN" String="Player 2 press start to join"></Entry></Strings>"#,
+    );
+    assert!(
+        Labels::read(&strings).guest.is_some(),
+        "the premise: the disc authors one"
+    );
+    assert_eq!(Labels::read_online_room(&strings).guest, None);
+    assert_eq!(Labels::read_lan_lobby(&strings).guest, None);
+}
+
+#[test]
+fn only_the_room_owner_has_the_settings_and_max_players_rows() {
+    let mut join = screen(2);
+    assert_eq!(
+        join.rows(),
+        [
+            Row::Seat(0),
+            Row::Seat(1),
+            Row::Empty,
+            Row::Start,
+            Row::Back
+        ],
+        "a guest sees neither"
+    );
+    join.set_owner(Some(6));
+    assert_eq!(
+        join.rows(),
+        [
+            Row::Seat(0),
+            Row::Seat(1),
+            Row::Empty,
+            Row::Settings,
+            Row::MaxPlayers,
+            Row::Start,
+            Row::Back
+        ]
+    );
+    join.set_owner(None);
+    assert_eq!(join.rows().len(), 5);
+}
+
+#[test]
+fn the_owners_rows_answer_the_pad_and_the_pointer_alike() {
+    let skin = skin();
+    let mut join = screen(2);
+    join.set_owner(Some(6));
+    // Pad: step down onto each of them (the cursor starts on the last row going down).
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::Seat(0)));
+    join.step(1);
+    join.step(1);
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::Settings));
+    assert_eq!(join.confirm(), Some(Event::Settings));
+    assert_eq!(
+        join.adjust(1),
+        None,
+        "left and right do nothing on ROOM SETTINGS"
+    );
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::MaxPlayers));
+    assert_eq!(join.confirm(), Some(Event::MaxPlayers(1)));
+    assert_eq!(join.adjust(-1), Some(Event::MaxPlayers(-1)));
+    // Pointer: the same rows by a click, on the rows as this screen draws them.
+    let mut join = screen(2);
+    join.set_owner(Some(6));
+    let layout = join.layout(&skin);
+    let row = |index: usize| {
+        (
+            layout.width / 2.0,
+            layout.top + (index as f32 + 0.5) * layout.line,
+        )
+    };
+    assert_eq!(
+        join.pointer(&click(row(3)), &skin),
+        [Event::Moved, Event::Settings]
+    );
+    assert_eq!(
+        join.pointer(&click(row(4)), &skin),
+        [Event::Moved, Event::MaxPlayers(1)]
+    );
+}
+
+#[test]
+fn a_rooms_size_is_how_many_seats_the_grid_has() {
+    let mut join = screen(2);
+    join.set_capacity(2);
+    assert_eq!(
+        join.rows(),
+        [Row::Seat(0), Row::Seat(1), Row::Start, Row::Back],
+        "full: no empty seat"
+    );
+    join.set_capacity(4);
+    assert!(join.rows().contains(&Row::Empty));
+}
+
+#[test]
+fn the_owner_of_a_full_room_still_sees_and_can_click_start_and_back() {
+    // Twelve rows (eight seats, ROOM SETTINGS, MAX PLAYERS, START, BACK) ran off the picture
+    // at the usual pitch on both PSP titles.
+    for menu in [
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_pure::FRONT_END.menu.unwrap(),
+    ] {
+        let skin = Skin::new(menu, oag_display::space::Space::PSP, 22.0);
+        let mut join = Join::new(labels(), 8);
+        join.set_seats((0..8).map(|n| format!("P{n}")).collect());
+        join.set_owner(Some(8));
+        assert_eq!(join.rows().len(), 12);
+        let layout = join.layout(&skin);
+        let (_, height) = skin.space().size;
+        let last = layout.top + 12.0 * layout.line;
+        assert!(last <= height * 0.85, "the rows end at {last} of {height}");
+        // The same layout answers the pointer: a click on the drawn BACK row is BACK.
+        let at = (layout.width / 2.0, layout.top + 11.5 * layout.line);
+        let events = join.pointer(&click(at), &skin);
+        assert!(events.contains(&Event::Back), "{events:?}");
+        // A screen with few rows keeps the skin's own pitch.
+        let few = screen(2);
+        assert_eq!(few.layout(&skin).line, Layout::new(&skin).line);
+    }
+}
+
+#[test]
+fn the_laps_row_is_the_owners_and_only_while_the_mode_ends_on_laps() {
+    let mut join = screen(2);
+    join.set_owner(Some(8));
+    assert!(!join.rows().contains(&Row::Laps));
+    join.set_laps(Some(0));
+    let rows = join.rows();
+    let at = rows.iter().position(|r| *r == Row::Laps).expect("laps row");
+    assert_eq!(rows[at - 1], Row::MaxPlayers, "right under MAX PLAYERS");
+    join.step(1);
+    while join.hover() != Some(Row::Laps) {
+        join.step(1);
+    }
+    assert_eq!(join.confirm(), Some(Event::Laps(1)));
+    assert_eq!(join.adjust(-1), Some(Event::Laps(-1)));
+    join.set_laps(None);
+    assert!(!join.rows().contains(&Row::Laps));
+    assert_eq!(join.hover(), None, "the cursor was on the row that went");
 }

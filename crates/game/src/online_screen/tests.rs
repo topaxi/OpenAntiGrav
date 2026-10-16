@@ -35,6 +35,18 @@ fn a_port_is_added_only_when_none_is_given() {
     assert_eq!(with_port("race.example.org"), "race.example.org:60000");
     assert_eq!(with_port(" 10.0.0.2:7000 "), "10.0.0.2:7000");
     assert_eq!(with_port("host:notaport"), "host:notaport:60000");
+    assert_eq!(
+        with_port("::1"),
+        "[::1]:60000",
+        "a bare IPv6 literal is bracketed"
+    );
+    assert_eq!(with_port("[::1]"), "[::1]:60000");
+    assert_eq!(with_port("[2001:db8::7]:7000"), "[2001:db8::7]:7000");
+    assert_eq!(
+        with_port("[::1]:x"),
+        "[::1]:x:60000",
+        "a bad port is not taken for one"
+    );
 }
 
 #[test]
@@ -147,9 +159,185 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
         note: String::new(),
     };
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
-    fill_room(&mut screen, &snapshot, false, &strings());
+    fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
     assert_eq!(screen.count(), 3);
     assert_eq!(screen.labels().hint, "THE HOST STARTS THE RACE");
-    fill_room(&mut screen, &snapshot, true, &strings());
+    fill_room(&mut screen, &snapshot, true, &strings(), &|_| None);
     assert_eq!(screen.labels().hint, "PRESS START WHEN EVERYONE IS READY");
+}
+
+#[test]
+fn a_room_pick_without_a_ship_select_falls_back_to_the_titles_own_team_not_to_nothing() {
+    let roster: Vec<oag_ui::menu::Choice> = ["qirex2048\\3", "feisar2048\\3", "auricom2048\\3"]
+        .iter()
+        .map(|id| oag_ui::menu::Choice::labelled(*id, *id))
+        .collect();
+    // The settings' stored team is not in 2048's roster, so the page left none picked.
+    assert_eq!(room_team(None, "Feisar2048\\3", &roster), "feisar2048\\3");
+    assert_eq!(
+        room_team(None, "nobody", &roster),
+        "qirex2048\\3",
+        "the first, as a last resort"
+    );
+    assert_eq!(
+        room_team(Some("auricom2048\\3"), "feisar2048\\3", &roster),
+        "auricom2048\\3"
+    );
+    assert_eq!(room_team(None, "x", &[]), "");
+}
+
+fn snapshot_of(people: usize, max_players: u8, phase: Phase) -> Snapshot {
+    let mut settings = room(1, "ada", 1, true).settings;
+    settings.max_players = max_players;
+    Snapshot {
+        id: 1,
+        settings,
+        members: (0..people)
+            .map(|n| Member {
+                name: format!("p{n}"),
+                team: String::new(),
+                ready: true,
+                owner: n == 0,
+            })
+            .collect(),
+        phase,
+        note: String::new(),
+    }
+}
+
+#[test]
+fn the_owner_gets_the_settings_rows_and_the_room_has_as_many_seats_as_its_size() {
+    use oag_ui_screens::join::Row;
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 2, Phase::Open),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(screen.rows().contains(&Row::Settings) && screen.rows().contains(&Row::MaxPlayers));
+    assert!(
+        !screen.rows().contains(&Row::Empty),
+        "two seats, two people: the room is full"
+    );
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Open),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(
+        screen.rows().contains(&Row::Empty),
+        "a size of five leaves seats"
+    );
+    // A guest, or an owner once the room is queued or racing, has neither row.
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Open),
+        false,
+        &strings(),
+        &|_| None,
+    );
+    assert!(!screen.rows().contains(&Row::Settings));
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Racing),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(!screen.rows().contains(&Row::MaxPlayers));
+}
+
+#[test]
+fn a_seat_says_what_the_owner_chose_while_the_cursor_is_on_it() {
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 8, Phase::Open),
+        false,
+        &strings(),
+        &|_| Some("VINETA K".into()),
+    );
+    screen.step(1);
+    let hovered = oag_ui_screens::join::draw_list(
+        &screen,
+        &oag_ui::menu::Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        ),
+        &Default::default(),
+        None,
+        false,
+    )
+    .flatten();
+    let text: Vec<String> = hovered
+        .iter()
+        .filter_map(|d| match d {
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        text.iter().any(|t| t == "VINETA K / VENOM / SINGLE RACE"),
+        "{text:?}"
+    );
+}
+
+#[test]
+fn max_players_steps_by_one_and_wraps_between_the_fewest_and_the_most() {
+    assert_eq!(
+        step_max_players(8, 1, 2, 8),
+        2,
+        "past the most is the fewest"
+    );
+    assert_eq!(step_max_players(2, -1, 2, 8), 8);
+    assert_eq!(step_max_players(5, 1, 3, 8), 6);
+    assert_eq!(
+        step_max_players(3, -1, 3, 8),
+        8,
+        "never below the people seated"
+    );
+    assert_eq!(
+        step_max_players(2, 1, 2, 2),
+        2,
+        "a full two-seat room has one size"
+    );
+}
+
+#[test]
+fn a_long_note_is_never_dropped_for_the_start_instruction() {
+    // What a race child that came up and then died leaves as the room's note (its exit and
+    // the last line it said), longer than the line has room for with the hint after it.
+    let note = "the race process exited with status 3: error: the circuit would not load";
+    let mut snapshot = snapshot_of(2, 8, Phase::Open);
+    snapshot.note = note.into();
+    assert_eq!(room_hint(&snapshot, true, &strings()), note.to_uppercase());
+    // A short note still shares the line with the instruction.
+    snapshot.note = "bob joined".into();
+    assert_eq!(
+        room_hint(&snapshot, true, &strings()),
+        "BOB JOINED - PRESS START WHEN EVERYONE IS READY"
+    );
+}
+
+#[test]
+fn the_laps_row_follows_the_mode_and_the_owner() {
+    use oag_ui_screens::join::Row;
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    let mut room = snapshot_of(2, 8, Phase::Open);
+    room.settings.mode = "single_race".into();
+    fill_room(&mut screen, &room, true, &strings(), &|_| None);
+    assert!(screen.rows().contains(&Row::Laps));
+    fill_room(&mut screen, &room, false, &strings(), &|_| None);
+    assert!(!screen.rows().contains(&Row::Laps), "a guest has none");
+    room.settings.mode = "zone".into();
+    fill_room(&mut screen, &room, true, &strings(), &|_| None);
+    assert!(
+        !screen.rows().contains(&Row::Laps),
+        "Zone does not end on laps"
+    );
 }

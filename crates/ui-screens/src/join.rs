@@ -41,6 +41,14 @@ pub struct Labels {
     pub keyboard: String,
     /// "GAMEPAD", for a pad the backend gave no name.
     pub pad: String,
+    /// The room owner's row that opens the room's settings.
+    pub settings: String,
+    /// The room owner's row that sets how many people the room seats.
+    pub max_players: String,
+    /// The room owner's row that sets the laps, in a mode that ends on them.
+    pub laps: String,
+    /// What the laps row says for `0`: the mode's own count.
+    pub laps_own: String,
     /// The row that begins the race.
     pub start: String,
     /// The row that leaves the screen.
@@ -61,6 +69,10 @@ impl Labels {
             guest: strings.get("FE_GUEST_JOIN").map(str::to_uppercase),
             keyboard: say("OAG_JOIN_KEYBOARD", "KEYBOARD"),
             pad: say("OAG_JOIN_PAD", "GAMEPAD"),
+            settings: say("OAG_ONLINE_ROOM_SETTINGS", "ROOM SETTINGS"),
+            max_players: say("OAG_ONLINE_MAX_PLAYERS", "MAX PLAYERS"),
+            laps: say("OAG_ONLINE_LAPS", "LAPS"),
+            laps_own: say("OAG_ONLINE_LAPS_OWN", "MODE'S OWN"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
         }
@@ -79,6 +91,9 @@ impl Labels {
                 "THE OTHERS JOIN FROM JOIN GAME, THEN YOU START",
             ),
             empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            // The disc's "PLAYER 2 PRESS START TO JOIN" is local split screen's line; here the
+            // others arrive over the network and nobody presses anything to join.
+            guest: None,
             start: say("OAG_LAN_START", "START RACE"),
             ..Self::read(strings)
         }
@@ -119,6 +134,9 @@ impl Labels {
             title: say("OAG_ONLINE_ROOM_TITLE", "GAME LOBBY"),
             hint: say("OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
             empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            // The disc's "PLAYER 2 PRESS START TO JOIN" is local split screen's line; here the
+            // others arrive over the network and nobody presses anything to join.
+            guest: None,
             start: say("OAG_LAN_START", "START RACE"),
             ..Self::read(strings)
         }
@@ -132,6 +150,12 @@ pub enum Row {
     Seat(usize),
     /// The next seat, empty.
     Empty,
+    /// The room owner's row that opens the room's settings.
+    Settings,
+    /// The room owner's row that shows, and steps, how many people the room seats.
+    MaxPlayers,
+    /// The room owner's row that shows, and steps, the laps (`0` is the mode's own).
+    Laps,
     /// Begin the race.
     Start,
     /// Leave the screen.
@@ -147,6 +171,13 @@ pub enum Event {
     Join,
     /// A click on seat `n`: it is given up.
     Leave(usize),
+    /// The owner's click on ROOM SETTINGS.
+    Settings,
+    /// The owner's click on MAX PLAYERS (`1`, one more, wrapping round to the fewest), or a pad's
+    /// left and right on it (`-1`, `1`).
+    MaxPlayers(i32),
+    /// The owner's click on LAPS (`1`), or left and right on it (`-1`, `1`).
+    Laps(i32),
     /// A click on START with somebody seated.
     Start,
     /// A click on BACK, or the secondary button.
@@ -176,6 +207,11 @@ pub struct Join {
     notes: Vec<Option<String>>,
     /// In a list, the rows that cannot be chosen: drawn dimmed, answering nothing.
     blocked: Vec<bool>,
+    /// The room owner's rows: ROOM SETTINGS, and MAX PLAYERS showing this number. `None` for
+    /// everybody else, who sees neither row.
+    owner_max: Option<u8>,
+    /// The laps row, shown with this count (`0` the mode's own) in a mode that ends on laps.
+    owner_laps: Option<u8>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -228,7 +264,37 @@ const TEXT_TOP_PAD: f32 = 1.9;
 /// widest face (Pulse's) fits `NAME  OTHER VERSION` beside `WIPEOUT PULSE (8/8)` at this size.
 const LIST_ROW_SCALE: f32 = 0.7;
 
+/// Where the last row may end, as a fraction of the grid's height: the footer's chrome (the
+/// legend, and the ticker on Pulse) starts under it. **Chosen, not measured**, the same limit
+/// the layout screen keeps its rows above ([`crate::window_layout`]).
+const ROWS_BOTTOM: f32 = 0.84;
+/// The smallest a crowded screen's rows are drawn, as a share of their usual size.
+const MIN_FIT: f32 = 0.4;
+
 impl Layout {
+    /// These rows closed up so `rows` of them end above the footer: the pitch, the text and a
+    /// block's height shrink together, and a screen whose rows already fit is left as it is.
+    /// The owner of a full room has twelve (eight seats, ROOM SETTINGS, MAX PLAYERS, START,
+    /// BACK), which at the usual pitch ran START and BACK off the bottom of the picture.
+    pub(crate) fn fitted(mut self, rows: usize, height: f32) -> Self {
+        // The hint goes under the rows on a title that draws blocks.
+        let below = if self.hint_below { 0.7 } else { 0.0 };
+        let need = (rows as f32 + below) * self.line;
+        let room = height * ROWS_BOTTOM - self.top;
+        if need <= room {
+            return self;
+        }
+        let by = (room / need).max(MIN_FIT);
+        self.line *= by;
+        self.scale *= by;
+        self.text_pad *= by;
+        if let Some(blocks) = self.blocks.as_mut() {
+            blocks.height *= by;
+            blocks.scale.1 *= by;
+        }
+        self
+    }
+
     pub(crate) fn new(skin: &Skin) -> Self {
         let (width, grid_height) = skin.space().size;
         if let (Some(list), Some(numbers)) = (skin.list(), skin.blocks()) {
@@ -294,6 +360,45 @@ impl Join {
             row_labels: Vec::new(),
             notes: Vec::new(),
             blocked: Vec::new(),
+            owner_max: None,
+            owner_laps: None,
+        }
+    }
+
+    /// Shows the room owner's two rows, MAX PLAYERS saying `max`; `None` hides them.
+    pub fn set_owner(&mut self, max: Option<u8>) {
+        self.owner_max = max;
+        if !self.owner_max.is_some() && matches!(self.hover, Some(Row::Settings | Row::MaxPlayers))
+        {
+            self.hover = None;
+        }
+    }
+
+    /// Shows the owner's LAPS row saying `laps` (`0` the mode's own); `None` hides it.
+    pub fn set_laps(&mut self, laps: Option<u8>) {
+        self.owner_laps = laps;
+        if laps.is_none() && self.hover == Some(Row::Laps) {
+            self.hover = None;
+        }
+    }
+
+    /// How many seats the grid has: a room's size, which its owner can change.
+    pub fn set_capacity(&mut self, capacity: usize) {
+        self.capacity = capacity;
+        if let Some(Row::Seat(n)) = self.hover
+            && n >= self.capacity
+        {
+            self.hover = None;
+        }
+    }
+
+    /// The pad's left (`-1`) and right (`1`) on the highlighted row: the owner steps MAX PLAYERS.
+    #[must_use]
+    pub fn adjust(&self, by: i32) -> Option<Event> {
+        match self.hover {
+            Some(Row::MaxPlayers) => Some(Event::MaxPlayers(by)),
+            Some(Row::Laps) => Some(Event::Laps(by)),
+            _ => None,
         }
     }
 
@@ -362,6 +467,9 @@ impl Join {
             Row::Seat(n) if self.is_blocked(n) => None,
             Row::Seat(n) => Some(Event::Leave(n)),
             Row::Empty => Some(Event::Join),
+            Row::Settings => Some(Event::Settings),
+            Row::MaxPlayers => Some(Event::MaxPlayers(1)),
+            Row::Laps => Some(Event::Laps(1)),
             Row::Start if self.can_start() => Some(Event::Start),
             Row::Start => None,
             Row::Back => Some(Event::Back),
@@ -391,13 +499,20 @@ impl Join {
         }
     }
 
-    /// The rows, top to bottom: every seat, the empty one if the grid has room,
-    /// START, BACK.
+    /// The rows, top to bottom: every seat, the empty one if the grid has room, the owner's
+    /// ROOM SETTINGS and MAX PLAYERS, START, BACK.
     #[must_use]
     pub fn rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = (0..self.seats.len()).map(Row::Seat).collect();
         if self.seats.len() < self.capacity {
             rows.push(Row::Empty);
+        }
+        if self.owner_max.is_some() && !self.listing {
+            rows.push(Row::Settings);
+            rows.push(Row::MaxPlayers);
+            if self.owner_laps.is_some() {
+                rows.push(Row::Laps);
+            }
         }
         if !self.listing {
             rows.push(Row::Start);
@@ -410,6 +525,13 @@ impl Join {
     #[must_use]
     pub fn count(&self) -> usize {
         self.seats.len()
+    }
+
+    /// Where this screen's rows sit: the skin's, closed up when there are too many for the
+    /// picture. The drawing and the pointer's hit-test both read it, so a click lands on the
+    /// row that was drawn there.
+    pub(crate) fn layout(&self, skin: &Skin) -> Layout {
+        Layout::new(skin).fitted(self.rows().len(), skin.space().size.1)
     }
 
     /// The row the pointer is over, if it has moved onto one.
@@ -430,7 +552,7 @@ impl Join {
         let Some(at) = pointer.at else {
             return out;
         };
-        let layout = Layout::new(skin);
+        let layout = self.layout(skin);
         let rows = self.rows();
         let Some(row) = row_at(at, 0.0, layout.width, layout.top, layout.line, rows.len())
             .map(|index| rows[index])
@@ -459,18 +581,19 @@ impl Join {
                 (
                     self.hover == Some(*row),
                     // A list's TYPE AN ADDRESS row, like START and BACK, has no value.
-                    !matches!(row, Row::Start | Row::Back) && !(self.listing && *row == Row::Empty),
+                    !matches!(row, Row::Start | Row::Back | Row::Settings)
+                        && !(self.listing && *row == Row::Empty),
                 )
             })
             .collect();
-        row_blocks(skin, frame, &shape)
+        row_blocks_in(&self.layout(skin), frame, &shape)
     }
 
     /// The hint and the rows, drawn on the skin's grid. `frame` is the title's own, for the
     /// hint's ink on a title that draws blocks.
     #[must_use]
     pub fn body(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
-        let layout = Layout::new(skin);
+        let layout = self.layout(skin);
         let text =
             |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
                 x,
@@ -542,6 +665,18 @@ impl Join {
                         ),
                     }
                 }
+                Row::Settings => (self.labels.settings.clone(), String::new()),
+                Row::Laps => (
+                    self.labels.laps.clone(),
+                    match self.owner_laps.unwrap_or_default() {
+                        0 => self.labels.laps_own.clone(),
+                        n => n.to_string(),
+                    },
+                ),
+                Row::MaxPlayers => (
+                    self.labels.max_players.clone(),
+                    self.owner_max.unwrap_or_default().to_string(),
+                ),
                 Row::Start => {
                     if !self.can_start() {
                         ink = dim(ink);
@@ -585,7 +720,11 @@ impl Join {
 /// titles, whose rows are bare text). Shared by every screen drawn in the join screen's
 /// rows ([`crate::window_layout`]).
 pub(crate) fn row_blocks(skin: &Skin, frame: &Frame, rows: &[(bool, bool)]) -> Vec<Draw> {
-    let layout = Layout::new(skin);
+    row_blocks_in(&Layout::new(skin), frame, rows)
+}
+
+/// [`row_blocks`] on a layout already worked out, for a screen that closes its rows up.
+pub(crate) fn row_blocks_in(layout: &Layout, frame: &Frame, rows: &[(bool, bool)]) -> Vec<Draw> {
     let (Some(shape), Some(art), Some(ink)) = (layout.blocks.as_ref(), frame.blocks, frame.ink)
     else {
         return Vec::new();
