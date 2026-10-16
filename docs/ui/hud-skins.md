@@ -461,11 +461,18 @@ moves nothing there (`no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label`
 
 **Not done, recorded open.**
 
-- **Unlock.** The disc's `PI_HUD` rows gate `2097` at loyalty 6000 and `WIP3OUT` at 10000
-  (`HudSkin::loyalty`). This build keeps loyalty per title and only Pulse awards it
-  (`Title::campaign.loyalty_unlocks`), so HD and Omega have no way to earn it: **both skins
-  are offered unlocked** (chosen, not measured) rather than closed forever. The rule is held for
-  the shared-loyalty work.
+- **Unlock (2026-10-16, `shared-loyalty`).** The disc's `PI_HUD` rows gate `2097` at loyalty 6000
+  and `WIP3OUT` at 10000, `team="any"` (`HudSkin::loyalty`, measured off the data). A skin is
+  offered when **the best single team of the title's roster** has reached the figure
+  (`oag_game::unlock::hud_skin_unlocked`, the `any` rule of Pulse's traced `Unlock_LoyaltyMet`);
+  loyalty is one total per team shared across titles (`persistence.md`, "Loyalty"), so Feisar's
+  points from HD open the skin on Omega. That HD's own executable evaluates `PI_HUD`'s `any` as
+  the best team and not a sum is **inherited from Pulse, not measured on HD**: the `Unlock` string
+  (`0x00786b60`) is referenced from `FUN_00479048`, `FUN_00479030`, `FUN_00479168`,
+  `FUN_004792b8`, `FUN_00478ff0` and `FUN_00166210`, none read. A saved skin that is still
+  locked draws the default and stays saved (`available_hud_style`, at the menu launch); `--race`
+  and `--hud-style` name a skin outright and pass, as `--unlock-all` does. Omega earns no loyalty
+  of its own (its end-race screens are not wired), so it reads what Pulse and HD banked.
 - **`HUD Style P2`** (player 2's own skin in split screen; the executable names it, confidence 70)
   is not wired: no read says how the two settings combine, and the split pair is chosen as one
   skin. The pair is composed per player (`compose_family`), which is where it would split.

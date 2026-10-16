@@ -766,33 +766,141 @@ fn an_undifferenced_stored_row_falls_back_to_plain_medal_comparison() {
 /// through a write the same way [`CampaignRecord`] does.
 #[test]
 fn loyalty_accumulates_caps_and_round_trips() {
+    let pulse = oag_pulse::TITLE;
     let mut store = Store::default();
-    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 0);
+    assert_eq!(store.loyalty_total(pulse, "assegai"), 0);
 
-    assert_eq!(store.record_loyalty("wipeout pulse", "Assegai", 90), 90);
+    assert_eq!(store.record_loyalty(pulse, "Assegai", 90), 90);
     assert_eq!(
-        store.record_loyalty("Wipeout Pulse", "assegai", 90),
+        store.record_loyalty(pulse, "assegai", 90),
         180,
-        "case-insensitive, the same way Key::new lower-cases every part"
+        "case-insensitive"
     );
-    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 180);
+    assert_eq!(store.loyalty_total(pulse, "assegai"), 180);
 
     // A different team gets its own row, not a shared one.
-    store.record_loyalty("wipeout pulse", "qirex", 30);
-    assert_eq!(store.loyalty_total("wipeout pulse", "assegai"), 180);
-    assert_eq!(store.loyalty_total("wipeout pulse", "qirex"), 30);
+    store.record_loyalty(pulse, "qirex", 30);
+    assert_eq!(store.loyalty_total(pulse, "assegai"), 180);
+    assert_eq!(store.loyalty_total(pulse, "qirex"), 30);
 
     assert_eq!(
-        store.record_loyalty("wipeout pulse", "assegai", 99_999),
+        store.record_loyalty(pulse, "assegai", 99_999),
         100_000,
         "capped, not left to overflow past it"
     );
 
     let text = toml::to_string_pretty(&store).expect("serialises");
+    assert!(
+        !text.contains("title"),
+        "the legacy key is never written: {text}"
+    );
     let (parsed, notes) = parse(&text).expect("parses back");
     assert!(
         notes.is_empty(),
         "a clean write should need no notes: {notes:?}"
     );
-    assert_eq!(parsed.loyalty_total("wipeout pulse", "qirex"), 30);
+    assert_eq!(parsed.loyalty_total(pulse, "qirex"), 30);
+}
+
+/// One team's total is shared by every title that has the team, and a team only
+/// one title has stays that title's.
+#[test]
+fn loyalty_is_shared_across_titles_by_team() {
+    let mut store = Store::default();
+    store.record_loyalty(oag_pulse::TITLE, "Feisar", 100);
+    store.record_loyalty(oag_hd::TITLE, "feisar", 50);
+    store.record_loyalty(oag_omega::TITLE, "Tigron", 70);
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+    ] {
+        assert_eq!(store.loyalty_total(title, "Feisar"), 150, "{}", title.name);
+    }
+    assert_eq!(
+        store.loyalty_total(oag_pulse::TITLE, "Tigron"),
+        70,
+        "the row is by team"
+    );
+    assert_eq!(store.loyalty_best(oag_pulse::TITLE), 150);
+    assert_eq!(store.loyalty_best(oag_omega::TITLE), 150);
+    let mut tigron_only = Store::default();
+    tigron_only.record_loyalty(oag_omega::TITLE, "Tigron", 70);
+    assert_eq!(tigron_only.loyalty_best(oag_pulse::TITLE), 0);
+    assert_eq!(tigron_only.loyalty_best(oag_omega::TITLE), 70);
+}
+
+/// A file written before loyalty was shared keeps every point: per-title rows fold into the
+/// team's row by sum, capped after, and a second save/load changes nothing.
+#[test]
+fn legacy_per_title_loyalty_rows_are_summed_into_the_shared_row() {
+    let text = r#"
+[[loyalty]]
+title = "wipeout pulse"
+team = "feisar"
+total = 5000
+
+[[loyalty]]
+title = "wipeout hd"
+team = "feisar"
+total = 3000
+
+[[loyalty]]
+title = "wipeout hd"
+team = "qirex"
+total = 99000
+
+[[loyalty]]
+title = "wipeout pure"
+team = "qirex"
+total = 99000
+
+[[loyalty]]
+title = "a title from the future"
+team = "Zork"
+total = 7
+"#;
+    let (store, notes) = parse(text).expect("parses");
+    assert_eq!(store.loyalty_total(oag_omega::TITLE, "Feisar"), 8000);
+    assert_eq!(
+        store.loyalty_total(oag_pulse::TITLE, "Qirex"),
+        100_000,
+        "capped after the fold"
+    );
+    assert_eq!(store.loyalty_total(oag_pulse::TITLE, "zork"), 7);
+    assert_eq!(notes.len(), 1, "only the unknown title is named: {notes:?}");
+
+    let written = toml::to_string_pretty(&store).expect("serialises");
+    let (again, again_notes) = parse(&written).expect("parses back");
+    assert_eq!(again.loyalty, store.loyalty, "folding is idempotent");
+    assert!(again_notes.is_empty());
+}
+
+/// Every title's roster lists the ids its own race code names, each under a lower-case
+/// identity, and the ids that two titles spell alike meet in one identity.
+#[test]
+fn every_roster_covers_its_race_ids_under_lower_case_identities() {
+    let covered = |title: &oag_title::Title, ids: &[&str]| {
+        for id in ids {
+            assert!(
+                title.teams.iter().any(|team| team.id == *id),
+                "{} lacks {id}",
+                title.name
+            );
+        }
+        for team in title.teams {
+            assert_eq!(team.identity, team.identity.to_ascii_lowercase());
+        }
+    };
+    covered(oag_pulse::TITLE, &oag_pulse::race::TEAMS);
+    covered(oag_pulse::TITLE, &oag_pulse::race::DLC_TEAMS);
+    covered(oag_hd::TITLE, &oag_hd::race::TEAMS);
+    covered(oag_2048::TITLE, &oag_2048::race::NATIVE_TEAMS);
+    covered(oag_2048::TITLE, &oag_2048::race::GUEST_TEAMS);
+    covered(oag_omega::TITLE, &oag_omega::race::HD_ERA_TEAMS);
+    assert_eq!(
+        oag_pure::TITLE.team_identity("AG_Systems"),
+        oag_omega::TITLE.team_identity("ag_systems")
+    );
 }

@@ -159,7 +159,7 @@ impl Gate {
 /// team's own total. [`unlock_all`] opens everything - ours, not the
 /// original's.
 #[must_use]
-pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &str) -> bool {
+pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &oag_title::Title) -> bool {
     if unlock_all() {
         return true;
     }
@@ -184,6 +184,51 @@ pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &str) -> bo
         }
     }
     unlocked
+}
+
+/// Whether the `HUD Style` skin passes its `PI_HUD` row, `<Unlock team="any" loyalty="N">`.
+///
+/// **The rule is the best single team of the title's roster reaching `N`**
+/// ([`Store::loyalty_best`]), the `any` the row's own `team="any"` attribute names, evaluated
+/// as Pulse's traced `Unlock_LoyaltyMet` does. The `team="any"` and the thresholds (`6000`,
+/// `10000`) are measured off the disc's data; that HD's own executable evaluates `any` as the
+/// best team rather than a sum is **inherited from Pulse, not measured on HD** (its `PI_HUD`
+/// evaluator was not traced).
+#[must_use]
+pub fn hud_skin_unlocked(
+    skin: &oag_title::HudSkin,
+    records: &Store,
+    title: &oag_title::Title,
+) -> bool {
+    let row = LoyaltyRow {
+        team: "any".to_string(),
+        loyalty: skin.loyalty,
+        exclusive: false,
+    };
+    loyalty_unlocked(&[row], records, title)
+}
+
+/// The saved `HUD Style`, or `None` (the default skin) while it names a skin still locked.
+/// The saved value is left alone, so the skin applies once it unlocks. A name the title does not
+/// list passes through for the loader to report.
+#[must_use]
+pub fn available_hud_style(
+    saved: Option<String>,
+    records: &Store,
+    title: &oag_title::Title,
+) -> Option<String> {
+    let name = saved?;
+    match title.hud.skin(Some(&name)) {
+        Some(skin) if !hud_skin_unlocked(skin, records, title) => {
+            log::info!(
+                "HUD Style {} is still locked ({} loyalty); the default skin is drawn",
+                skin.name,
+                skin.loyalty
+            );
+            None
+        }
+        _ => Some(name),
+    }
 }
 
 /// Whether `title` gates its craft variants at all: Pulse authors the
@@ -224,34 +269,94 @@ mod tests {
         }
     }
 
+    const T: &oag_title::Title = oag_pulse::TITLE;
+
     #[test]
     fn no_rows_means_unlocked_and_a_missed_exclusive_row_means_locked() {
         let store = Store::default();
-        assert!(loyalty_unlocked(&[], &store, "t"));
-        assert!(!loyalty_unlocked(&[row("a", 10, true)], &store, "t"));
+        assert!(loyalty_unlocked(&[], &store, T));
+        assert!(!loyalty_unlocked(&[row("Feisar", 10, true)], &store, T));
     }
 
     #[test]
     fn exclusive_rows_are_alternatives_and_any_is_the_best_team() {
         let mut store = Store::default();
-        store.record_loyalty("t", "b", 50);
-        let rows = [row("a", 10, true), row("any", 50, true)];
-        assert!(loyalty_unlocked(&rows, &store, "t"), "b alone reaches any");
-        store.record_loyalty("t", "c", 30);
-        let rows = [row("a", 10, true), row("any", 80, true)];
+        store.record_loyalty(T, "Qirex", 50);
+        let rows = [row("Feisar", 10, true), row("any", 50, true)];
         assert!(
-            !loyalty_unlocked(&rows, &store, "t"),
-            "50 and 30 are not 80"
+            loyalty_unlocked(&rows, &store, T),
+            "Qirex alone reaches any"
         );
+        store.record_loyalty(T, "Assegai", 30);
+        let rows = [row("Feisar", 10, true), row("any", 80, true)];
+        assert!(!loyalty_unlocked(&rows, &store, T), "50 and 30 are not 80");
     }
 
     #[test]
     fn plain_rows_must_all_hold() {
         let mut store = Store::default();
-        store.record_loyalty("t", "a", 10);
-        let rows = [row("a", 10, false), row("b", 5, false)];
-        assert!(!loyalty_unlocked(&rows, &store, "t"));
-        store.record_loyalty("t", "b", 5);
-        assert!(loyalty_unlocked(&rows, &store, "t"));
+        store.record_loyalty(T, "Feisar", 10);
+        let rows = [row("Feisar", 10, false), row("Qirex", 5, false)];
+        assert!(!loyalty_unlocked(&rows, &store, T));
+        store.record_loyalty(T, "Qirex", 5);
+        assert!(loyalty_unlocked(&rows, &store, T));
+    }
+
+    #[test]
+    fn hud_styles_gate_on_the_best_team_and_a_locked_saved_one_falls_back() {
+        let hd = oag_hd::TITLE;
+        let mut store = Store::default();
+        assert_eq!(available_hud_style(Some("2097".into()), &store, hd), None);
+        assert_eq!(
+            available_hud_style(Some("HD".into()), &store, hd).as_deref(),
+            Some("HD")
+        );
+        let locked = |s: &Store| {
+            oag_ui::menu::hud_style_choices(hd, |skin| hud_skin_unlocked(skin, s, hd))
+                .iter()
+                .map(|c| c.value.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(locked(&store), ["HD"]);
+        store.record_loyalty(hd, "Feisar", 6000);
+        assert_eq!(locked(&store), ["HD", "2097"]);
+        assert_eq!(
+            available_hud_style(Some("2097".into()), &store, hd).as_deref(),
+            Some("2097")
+        );
+        assert_eq!(
+            available_hud_style(Some("WIP3OUT".into()), &store, hd),
+            None
+        );
+        store.record_loyalty(oag_pulse::TITLE, "Qirex", 10_000);
+        assert_eq!(
+            locked(&store),
+            ["HD", "2097", "WIP3OUT"],
+            "Qirex's loyalty earned in Pulse opens HD's last skin"
+        );
+    }
+
+    #[test]
+    fn a_team_only_another_title_has_does_not_open_this_titles_any_row() {
+        let mut store = Store::default();
+        store.record_loyalty(oag_omega::TITLE, "Tigron", 20_000);
+        assert!(!loyalty_unlocked(&[row("any", 10, true)], &store, T));
+        assert!(loyalty_unlocked(
+            &[row("any", 10, true)],
+            &store,
+            oag_omega::TITLE
+        ));
+    }
+
+    #[test]
+    fn a_teams_loyalty_earned_in_one_title_counts_in_another() {
+        let mut store = Store::default();
+        store.record_loyalty(oag_hd::TITLE, "Feisar", 6000);
+        assert!(loyalty_unlocked(&[row("Feisar", 6000, false)], &store, T));
+        assert!(loyalty_unlocked(
+            &[row("any", 6000, true)],
+            &store,
+            oag_omega::TITLE
+        ));
     }
 }

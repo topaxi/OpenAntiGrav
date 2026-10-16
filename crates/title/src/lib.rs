@@ -59,6 +59,7 @@ pub mod prompts;
 pub mod race;
 pub mod shadow;
 pub mod speed;
+pub mod team;
 pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
@@ -125,6 +126,9 @@ pub struct Title {
     /// them are always up, and the one colour this build substitutes. See
     /// [`hud::HudArt`].
     pub hud_art: &'static hud::HudArt,
+    /// The team ids this title's roster names and the shared identity each is kept
+    /// under, for loyalty. See [`team`].
+    pub teams: team::Roster,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///
@@ -811,6 +815,12 @@ pub struct ForeignSerial {
 }
 
 impl Title {
+    /// The shared identity `team` (an id as this title spells it) is kept under.
+    #[must_use]
+    pub fn team_identity(&self, team: &str) -> String {
+        team::identity_of(self.teams, team)
+    }
+
     /// What this title throws on `trigger`, or `None` when it draws nothing
     /// there (it does not do it, or it is unread).
     #[must_use]

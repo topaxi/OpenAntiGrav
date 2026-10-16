@@ -326,7 +326,7 @@ fn run(cli: Cli) -> Result<()> {
     // Resolved beside the source below, but it cannot fail: no DLC is the
     // ordinary state of a copy of the game.
     let dlc = source::resolve_dlc(&cli.dlc, &settings.source.dlc);
-    oag_game::unlock::set_unlock_all(cli.unlock_all);
+    oag_game::unlock::set_unlock_all(cli.unlock_all || settings.dev.unlocks_everything());
 
     // Opened before either way in, because both want sound and neither owns the
     // other. **Only the device, not the music itself** - `start_music` is

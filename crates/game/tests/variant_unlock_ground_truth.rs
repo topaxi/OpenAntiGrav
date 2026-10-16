@@ -15,7 +15,7 @@ use oag_game::records::Store;
 use oag_game::unlock::loyalty_unlocked;
 use oag_raceplay::catalogue::{self, LoyaltyRow, Team};
 
-const TITLE: &str = "Wipeout Pulse";
+const TITLE: &oag_title::Title = oag_pulse::TITLE;
 
 fn teams() -> Option<Vec<Team>> {
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;

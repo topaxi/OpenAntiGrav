@@ -14,3 +14,5 @@
 ## Next Steps
 
 1. Watch `Definition_IsUnlocked` in PPSSPP with loyalty written to confirm the `any` branch live.
+
+- 2026-10-16 `shared-loyalty`: loyalty is now one total per team shared across titles (`docs/architecture/persistence.md`, "Loyalty"); Pure, 2048 and Omega award nothing of their own (open); `Mantis`/`Mirage`, the `*2048` teams, `Tigron` and `Medievil` are kept apart pending the maintainer. HD's `PI_HUD` `any` evaluation is inherited from Pulse: starting points `FUN_00479048`, `FUN_00478ff0`, `FUN_00166210` (xrefs of the `Unlock` string at `0x00786b60`).

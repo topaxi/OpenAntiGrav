@@ -101,13 +101,18 @@ pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
 }
 
 /// The `HUD Style` skins `title`'s disc lists, valued and shown by the disc's own entry strings.
-/// Empty where it lists none, which is where the row is dropped.
+/// Empty where it lists none, which is where the row is dropped. A skin `unlocked` refuses
+/// is absent from the list, as the original's list builder leaves a locked entry out.
 #[must_use]
-pub fn hud_style_choices(title: &oag_title::Title) -> Vec<Choice> {
+pub fn hud_style_choices(
+    title: &oag_title::Title,
+    unlocked: impl Fn(&oag_title::HudSkin) -> bool,
+) -> Vec<Choice> {
     title
         .hud
         .skins
         .iter()
+        .filter(|skin| unlocked(skin))
         .map(|skin| Choice::plain(skin.name))
         .collect()
 }

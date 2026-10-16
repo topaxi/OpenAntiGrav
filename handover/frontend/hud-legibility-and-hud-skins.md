@@ -41,8 +41,7 @@ exactly 4x but not Pulse's typeface at high resolution.
    raster-HUD titles~~: landed (`hud-skins.md` part D). Optional: a settings row
    for `hud_scale`, as a follow-up.
 2. ~~`skins` table, HD's and Omega's `2097` and `wo3`~~: landed 2026-10-16
-   (`hud-skins.md` part E). Open from it: the loyalty gate (both skins are offered unlocked until
-   loyalty is shared across titles), `HUD Style P2`, and an original frame of a retro skin to
+   (`hud-skins.md` part E). The loyalty gate landed 2026-10-16 (HD's own `any` evaluation inherited from Pulse, untraced). Open from it: `HUD Style P2`, and an original frame of a retro skin to
    settle the chosen bar mapping, the 2097 lap counter overlap and the WIP3OUT white tags.
 3. **Pulse sprites from the 4x sheet** when HD, Omega or 2048 is also mounted:
    an asset substitution, not a skin; sprites only, the text stays 25 px. Needs a
