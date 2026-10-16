@@ -985,10 +985,11 @@ fn a_loaded_race_reports_what_its_banks_did() {
     // One line per cue, whether it loaded or not: a race that came up silent
     // has to say so in the same place a race that did not says what it read.
     // Pulse also loads the start-of-race voice from the mode's own speech bank,
-    // one line for `ready` and one for `go`.
+    // one line for `ready` and one for `go`, and one line per lap announcer
+    // voice (loaded for `PERFECT_LAP`, "not played" for Pulse's `NEW_LAP_REC`).
     assert_eq!(
         sfx.len(),
-        Cue::ALL.len() + Cue::COUNTDOWN.len(),
+        Cue::ALL.len() + Cue::COUNTDOWN.len() + Cue::LAP_VOICES.len(),
         "the load report is incomplete"
     );
     assert!(
