@@ -42,9 +42,9 @@ relative (Pure from Pulse, Omega from HD, 2048 from HD via Omega).
    profile's best-place record; this build has no such record. Decide whether a two-person race
    writes anything (modern saves: no per-person profile exists).
 2. ~~Pure, HD, Omega, 2048 readout~~ landed 2026-10-16 (`h2h-readout-titles`): the place stands, the
-   gap sits under it (`docs/rendering/split-screen.md`), chosen, not measured. Still open: whether
-   HD's `Hud_BindWidgets` mode-9 branch (`0x0009e0ec`) sizes its authored `HeadToHeadBar` at
-   runtime (the per-frame writer is unread), which would give HD a measured bar.
+   gap sits under it (`docs/rendering/split-screen.md`), chosen, not measured. Still open (2026-10-16, `hd-h2h-bar`): HD's writer is `Hud_UpdatePositionCounter` (`0x00096088`), and
+   HD authors its gap label as `DistanceApart` (not `PositionOf`). Law: second row at `clamp(2*gap, 240, 720)`, `%s%3.0fm`. Open: whether it sizes
+   the bar - needs HD's HUD `Image` field map (is `+0xb0` Height?) or a forced mode 9 on RPCS3; see the HD head2head page.
 3. The left and right cut's leader row at `y = 49` (this build keeps the authored place) and the
    one-person player row's profile tag.
 

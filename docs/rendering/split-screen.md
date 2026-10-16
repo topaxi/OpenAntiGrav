@@ -443,9 +443,12 @@ over `portrait`:
   Cross-check: 2048 and Omega, **checked, applies**: 2048's `HUD_positions.xml` authors the same
   bare `Position` HD-lineage layouts do, Omega reads HD's files; both **ported** (tests
   `*_keeps_*_place_and_gains_the_gap`). HD's `Hud_BindWidgets` (`0x0009e0ec`, `HeadToHeadBar` at
-  `0x0077fb00`) does branch on modes 9 and 0x12 under HUD flag `0x40`, setting widgets
-  `+0x29c`/`+0x2a0` up; the per-frame writer of the bar's height was not read, so whether HD
-  sizes its authored bar at runtime stays **open**.
+  `0x0077fb00`) does branch on modes 9 and 0x12 under HUD flag `0x40`. **2026-10-16
+  (`hd-h2h-bar`): the writer is `Hud_UpdatePositionCounter` (`0x00096088`) and HD does author a gap
+  label, `DistanceApart`** (the earlier "no gap label" was a name miss for Pulse's `PositionOf`).
+  It places the second row at `clamp(2 * gap, 240, 720)` and writes `%s%3.0fm` in Pulse's colours;
+  whether it sizes the bar stays **open** (50: the Image field map is unrecovered), so the borrowed
+  readout stands. Evidence: [hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md).
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule
