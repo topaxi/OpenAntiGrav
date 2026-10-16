@@ -397,7 +397,7 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     assert!(!oag_pulse::TITLE.looks.measured_draws.applies(Platform::Ps2));
     assert!(!oag_pulse::TITLE.looks.ps2_glow_mask.applies(Platform::Psp));
     assert!(wreck(oag_pulse::TITLE, Platform::Psp));
-    assert!(!wreck(oag_pulse::TITLE, Platform::Ps2));
+    assert!(wreck(oag_pulse::TITLE, Platform::Ps2));
     for other in [
         oag_pure::TITLE,
         oag_hd::TITLE,

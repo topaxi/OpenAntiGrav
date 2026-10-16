@@ -84,9 +84,11 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
-    // `Ship_SetState` case 5's `shipwreck.vex` swap, measured on the PSP only.
+    // `Ship_SetState` case 5's `shipwreck.vex` swap, measured on the PSP; the
+    // PS2 disc ships the same file per team and its port is unread, so the
+    // PSP's law is carried over (PS2 skins it from the preceding entry).
     hull_wreck: Rule {
-        on: PSP,
+        on: Platforms::Any,
         origin: Origin::Measured,
     },
     absorb_shell: Rule::UNREAD,

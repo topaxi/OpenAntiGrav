@@ -56,7 +56,7 @@ pub(super) fn load(
             return None;
         }
     };
-    let wreck = match mesh::build_with_textures(&name, &blob, None) {
+    let mut wreck = match mesh::build_with_textures(&name, &blob, None) {
         Ok(wreck) => wreck,
         Err(error) => {
             report.push(format!(
@@ -66,6 +66,11 @@ pub(super) fn load(
             return None;
         }
     };
+    // A PS2 model's texture block is empty by design; the hull's own gate, on
+    // the same signature, so a PSP wreck never reaches the directory rule.
+    if !wreck.textures.is_empty() && wreck.textures.iter().all(Option::is_none) {
+        ps2_skin(archives, &name, &blob, &mut wreck, report);
+    }
     let fx = collision_fx_locators(&blob);
     report.push(format!(
         "{name}: {} triangle(s), {} Ship Collision Fx locator(s), {} 0x2000 batch(es) - the \
