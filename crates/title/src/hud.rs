@@ -491,7 +491,7 @@ pub struct HudArt {
     /// **Pulse, Pure and 2048: 600, ours, not recovered.** Nothing has
     /// established what sets those bars' maximum. 600 is an inference: the
     /// exhaust's own ramp saturates at 600 km/h (`oag_fx::exhaust::RAMP_FLOOR_KMH`
-    /// + `RAMP_SPAN_KMH`, both recovered), a ramp for a visual effect and not a
+    /// plus `RAMP_SPAN_KMH`, both recovered), a ramp for a visual effect and not a
     /// bar maximum. A reference frame at a known speed would settle it.
     pub speed_full_kmh: u32,
     /// The font role this title's language plugins name for the HUD's value
