@@ -19,5 +19,7 @@ the executable and every plugin XML, but the award path itself was not decompile
   (`Title::loyalty`, `Origin::InheritedFrom("Wipeout Omega Collection")`). That is a chosen
   carry-over, not a recovered one.
 
+The XP system that replaces it is read in `xp-award.md` (not loyalty: falsified, 85).
+
 Cross-check against Omega: checked, differs (Omega's executable carries HD's law,
 `docs/ghidra/functions/ps4-omega-eu/endrace-loyalty.md`).
