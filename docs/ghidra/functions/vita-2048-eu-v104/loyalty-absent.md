@@ -13,10 +13,10 @@ the executable and every plugin XML, but the award path itself was not decompile
   `ER_TOT_LOY` and `MAN_2_SL` text, shared across the studio's titles and drawn by
   nothing: `EndRace_Definition.xml` and `LegacyEndRace_Definition.xml` have no loyalty
   widget, and the page lists `PASS_BONUS_XP`, `FE_EVENT_XP` (XP) instead.
-- Conclusion: **2048 earns experience, not loyalty.** Per the maintainer rule
-  (an unmeasured title runs Pulse's known law), this project pays 2048's races Pulse's
-  law into the shared per-team total, labelled inherited
-  (`Title::loyalty`, `Origin::InheritedFrom("Wipeout Pulse")`). That is a chosen
+- Conclusion: **2048 earns experience, not loyalty.** The maintainer chose
+  (2026-10-16) that 2048, whose assets Omega re-ships, runs Omega's measured law (HD's,
+  `ps4-omega-eu/endrace-loyalty.md`) into the shared per-team total, labelled inherited
+  (`Title::loyalty`, `Origin::InheritedFrom("Wipeout Omega Collection")`). That is a chosen
   carry-over, not a recovered one.
 
 Cross-check against Omega: checked, differs (Omega's executable carries HD's law,

@@ -50,7 +50,7 @@ set of Omega's newer modes (the "Zone Battle"/"Eradication" family), not verifie
 
 - **HD**: ported, identical (HD is the source). `oag_hd::loyalty::award` pays Omega's races
   since 2026-10-16 (`Title::loyalty`, `LoyaltyLaw::Hd`, `Origin::Measured`).
-- **2048**: checked, differs. 2048's executable has no `ER_ELIM`/`ER_PZONE`/`ER_LOY`
+- **2048**: ported as inherited (no loyalty of its own, so it runs this law). Its executable otherwise differs: 2048's executable has no `ER_ELIM`/`ER_PZONE`/`ER_LOY`
   string and its end-of-race page shows XP instead; see
   `docs/ghidra/functions/vita-2048-eu-v104/loyalty-absent.md`. The Omega code is the
   HD lineage, not 2048's, even where the assets are 2048's.

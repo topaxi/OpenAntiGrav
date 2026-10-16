@@ -89,8 +89,8 @@ pub const TITLE: &Title = &Title {
     hud_art: hud::ART,
     teams: race::TEAM_IDENTITIES,
     loyalty: Some(oag_title::loyalty::LoyaltyEarning {
-        law: oag_title::loyalty::LoyaltyLaw::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        law: oag_title::loyalty::LoyaltyLaw::Hd,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
         banked_by_endrace: false,
     }),
     race: race::DEFAULTS,
@@ -155,7 +155,7 @@ pub const TITLE: &Title = &Title {
         // Ships it as `.gxt`; the eboot does not name it, so Pulse's law.
         ghost_static: Some(oag_title::weapons::GhostStatic {
             entry: r"Data\Tex\staticglow.mip",
-            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+            origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
         }),
         ..oag_title::weapons::WeaponModels::EMPTY
     },
@@ -166,7 +166,7 @@ pub const TITLE: &Title = &Title {
     looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
         ps2: oag_title::ShieldPalette::Ps2Pulse,
         elsewhere: oag_title::ShieldPalette::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
     }),
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
@@ -185,7 +185,7 @@ pub const TITLE: &Title = &Title {
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
     },
     pressings: None,
     pre_race: None,
@@ -205,10 +205,11 @@ pub const TITLE: &Title = &Title {
 /// Wipeout 2048 never authors".
 const EFFECTS: oag_title::Effects = {
     use oag_title::Trigger;
-    let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
-        .without(Trigger::PlasmaBlast)
-        .without(Trigger::EngineFlare)
-        .without(Trigger::LeachbeamEnergy);
+    let mut effects =
+        oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Omega Collection"))
+            .without(Trigger::PlasmaBlast)
+            .without(Trigger::EngineFlare)
+            .without(Trigger::LeachbeamEnergy);
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
     effects
 };
