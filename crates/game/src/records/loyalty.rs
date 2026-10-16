@@ -59,7 +59,6 @@ impl Store {
             Some(at) => &mut self.loyalty[at],
             None => {
                 self.loyalty.push(LoyaltyRecord {
-                    title: String::new(),
                     team: identity.to_owned(),
                     total: 0,
                 });
@@ -76,43 +75,4 @@ impl Store {
         self.loyalty.sort_by(|a, b| a.team.cmp(&b.team));
         total
     }
-}
-
-/// Folds the rows an earlier build kept per `(title, team)` into the shared per-team rows.
-///
-/// **Sum, capped at the ceiling after the fold.** The shared total is what the team would hold
-/// had every title banked into one store from the start, and that is the sum of what each
-/// title banked; taking the largest would silently drop a player's progress in every other
-/// title, and "a player loses nothing" is the point of migrating. The cost is that a player
-/// who earned 5000 in Pulse and 3000 in HD starts at 8000, which is what sharing them means.
-/// A row whose title this build does not know folds under its case-folded team id and is
-/// named in `notes`. Idempotent: a folded row has no title, [`super::parse`] only folds rows
-/// that have one, and `save` writes only folded rows.
-pub(super) fn fold_legacy_loyalty(
-    rows: Vec<LoyaltyRecord>,
-    notes: &mut Vec<String>,
-) -> Vec<LoyaltyRecord> {
-    let mut store = Store::default();
-    let (legacy, current): (Vec<_>, Vec<_>) =
-        rows.into_iter().partition(|row| !row.title.is_empty());
-    for row in current {
-        store.add_loyalty(&row.team.trim().to_ascii_lowercase(), row.total);
-    }
-    for row in legacy {
-        let known = crate::settings::KNOWN_TITLES
-            .iter()
-            .find(|title| title.name.eq_ignore_ascii_case(row.title.trim()));
-        let identity = match known {
-            Some(title) => title.team_identity(&row.team),
-            None => {
-                notes.push(format!(
-                    "loyalty row for unknown title {:?} folded under its team id {:?}",
-                    row.title, row.team
-                ));
-                row.team.trim().to_ascii_lowercase()
-            }
-        };
-        store.add_loyalty(&identity, row.total);
-    }
-    store.loyalty
 }

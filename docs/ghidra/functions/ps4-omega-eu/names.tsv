@@ -132,3 +132,4 @@
 0x01393610	function	Collision_Construct	76	mp-time-trial-collision.md
 0x0131ca50	function	Collision_ProcessPairs	74	mp-time-trial-collision.md
 0x012539b0	function	Collision_TestObbSphere	72	mp-time-trial-collision.md
+0x016544a0	function	Race_ComputeLoyaltyAward	80	endrace-loyalty.md

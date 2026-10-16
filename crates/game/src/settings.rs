@@ -64,7 +64,6 @@ use oag_mesh::mesh_render::Anisotropy;
 mod controls;
 mod race;
 mod render_profile;
-pub(crate) use render_profile::KNOWN_TITLES;
 pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};

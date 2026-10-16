@@ -51,6 +51,11 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     teams: race::TEAM_IDENTITIES,
+    loyalty: Some(oag_title::loyalty::LoyaltyEarning {
+        law: oag_title::loyalty::LoyaltyLaw::Pulse,
+        origin: oag_title::Origin::Measured,
+        banked_by_endrace: true,
+    }),
     race: race::DEFAULTS,
     // `Data\Tex\engineFlare\Engine_noise.mip`, a literal string in both the
     // PSP and PS2 executables, so an exact archive hit rather than a mined

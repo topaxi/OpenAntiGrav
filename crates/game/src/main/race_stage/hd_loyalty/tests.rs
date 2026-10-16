@@ -63,3 +63,41 @@ fn every_mode_maps_to_the_id_the_dispatch_table_names() {
     assert_eq!(hd_mode_id(oag_race::Mode::TimeTrial), 5);
     assert_eq!(hd_mode_id(oag_race::Mode::Eliminator), 8);
 }
+
+fn earning(title: &oag_title::Title) -> oag_title::loyalty::LoyaltyEarning {
+    title.loyalty.expect("this title earns loyalty")
+}
+
+/// A Zone race with two zones cleared pays 10 a zone under Pulse's law and 5
+/// under HD's, so a title that stopped naming its law would change the number.
+#[test]
+fn each_title_is_paid_under_the_law_its_data_names() {
+    let zone = HdRace {
+        mode: oag_race::Mode::Zone,
+        laps: 0,
+        kills: 0,
+        zones: 2,
+        difficulty: None,
+    };
+    assert_eq!(earned(earning(oag_pulse::TITLE), zone), 20);
+    assert_eq!(earned(earning(oag_pure::TITLE), zone), 20);
+        assert_eq!(earned(earning(oag_hd::TITLE), zone), 10);
+    assert_eq!(earned(earning(oag_omega::TITLE), zone), 10);
+    assert_eq!(earned(earning(oag_2048::TITLE), zone), 10);
+}
+
+#[test]
+fn only_omega_pure_and_2048_are_banked_by_the_session() {
+    let banked = |title: &oag_title::Title| earning(title).banked_by_endrace;
+    assert!(banked(oag_pulse::TITLE) && banked(oag_hd::TITLE));
+    assert!(!banked(oag_pure::TITLE) && !banked(oag_2048::TITLE) && !banked(oag_omega::TITLE));
+    assert_eq!(
+        earning(oag_2048::TITLE).origin,
+        oag_title::Origin::InheritedFrom("Wipeout Omega Collection")
+    );
+    assert_eq!(
+        earning(oag_pure::TITLE).origin,
+        oag_title::Origin::InheritedFrom("Wipeout Pulse")
+    );
+    assert_eq!(earning(oag_omega::TITLE).origin, oag_title::Origin::Measured);
+}

@@ -484,11 +484,6 @@ impl CampaignRecord {
 /// circuit/mode/class row.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoyaltyRecord {
-    /// **Legacy, read and never written.** Before loyalty was shared across titles a row was
-    /// kept per `(title, team)`; [`parse`] folds such a row into its team's shared row and
-    /// leaves this empty (see [`fold_legacy_loyalty`]).
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub title: String,
     /// The team's shared identity ([`oag_title::team`]), lower-cased: `"feisar"` is the one
     /// total Pulse, Pure, HD, 2048 and Omega all read.
     pub team: String,
@@ -501,7 +496,7 @@ pub struct LoyaltyRecord {
 
 impl LoyaltyRecord {
     fn matches(&self, team: &str) -> bool {
-        self.title.is_empty() && self.team == team
+        self.team == team
     }
 }
 
@@ -831,7 +826,6 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
         Some(_) => notes.push("`loyalty` is not an array of tables; ignoring it".to_string()),
         None => {}
     }
-    let loyalty = loyalty::fold_legacy_loyalty(loyalty, &mut notes);
 
     Ok((
         Store {

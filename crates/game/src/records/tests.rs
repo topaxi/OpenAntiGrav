@@ -790,10 +790,6 @@ fn loyalty_accumulates_caps_and_round_trips() {
     );
 
     let text = toml::to_string_pretty(&store).expect("serialises");
-    assert!(
-        !text.contains("title"),
-        "the legacy key is never written: {text}"
-    );
     let (parsed, notes) = parse(&text).expect("parses back");
     assert!(
         notes.is_empty(),
@@ -829,52 +825,6 @@ fn loyalty_is_shared_across_titles_by_team() {
     tigron_only.record_loyalty(oag_omega::TITLE, "Tigron", 70);
     assert_eq!(tigron_only.loyalty_best(oag_pulse::TITLE), 0);
     assert_eq!(tigron_only.loyalty_best(oag_omega::TITLE), 70);
-}
-
-/// A file written before loyalty was shared keeps every point: per-title rows fold into the
-/// team's row by sum, capped after, and a second save/load changes nothing.
-#[test]
-fn legacy_per_title_loyalty_rows_are_summed_into_the_shared_row() {
-    let text = r#"
-[[loyalty]]
-title = "wipeout pulse"
-team = "feisar"
-total = 5000
-
-[[loyalty]]
-title = "wipeout hd"
-team = "feisar"
-total = 3000
-
-[[loyalty]]
-title = "wipeout hd"
-team = "qirex"
-total = 99000
-
-[[loyalty]]
-title = "wipeout pure"
-team = "qirex"
-total = 99000
-
-[[loyalty]]
-title = "a title from the future"
-team = "Zork"
-total = 7
-"#;
-    let (store, notes) = parse(text).expect("parses");
-    assert_eq!(store.loyalty_total(oag_omega::TITLE, "Feisar"), 8000);
-    assert_eq!(
-        store.loyalty_total(oag_pulse::TITLE, "Qirex"),
-        100_000,
-        "capped after the fold"
-    );
-    assert_eq!(store.loyalty_total(oag_pulse::TITLE, "zork"), 7);
-    assert_eq!(notes.len(), 1, "only the unknown title is named: {notes:?}");
-
-    let written = toml::to_string_pretty(&store).expect("serialises");
-    let (again, again_notes) = parse(&written).expect("parses back");
-    assert_eq!(again.loyalty, store.loyalty, "folding is idempotent");
-    assert!(again_notes.is_empty());
 }
 
 /// Every title's roster lists the ids its own race code names, each under a lower-case

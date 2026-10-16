@@ -954,6 +954,27 @@ impl Session {
                         None,
                     );
                 }
+                // A title whose EndRace screens do not bank the award (Pure, 2048
+                // and Omega read none of Pulse's or HD's) is paid here, under the
+                // law its `Title::loyalty` names.
+                if let (Some(shell), Some(options)) =
+                    (self.shell.as_ref(), self.race_options.as_ref())
+                    && let Some(earning) = shell.title.loyalty.filter(|e| !e.banked_by_endrace)
+                    && let Some(team) = options.team.as_deref()
+                {
+                    let award = crate::race_stage::hd_loyalty::earned(
+                        earning,
+                        crate::race_stage::hd_loyalty::HdRace {
+                            mode: options.mode,
+                            laps: observation.laps_completed,
+                            kills: stage.race.sim.world.ships[0].standing.kills,
+                            zones: u32::from(stage.race.sim.world.primary_race().zone),
+                            difficulty: stage.campaign_difficulty,
+                        },
+                    );
+                    let total = self.records.record_loyalty(shell.title, team, award);
+                    log::info!("loyalty: {team} +{award} (total {total})");
+                }
                 self.records.record(key, observation);
                 if let Err(e) = records::save(&self.records) {
                     error!("could not save race records: {e:#}");
