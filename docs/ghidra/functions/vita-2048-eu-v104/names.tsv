@@ -167,3 +167,11 @@
 # 2026-10-14 (mp-collision-re): the MPTimeTrial class that is still compiled in. See mp-time-trial-collision.md.
 0x8116385c	function	MPTimeTrialRaceManager_Construct	80	mp-time-trial-collision.md
 0x8115f3de	function	RaceManager_ConstructByMode	76	mp-time-trial-collision.md
+# 2026-10-16 (xp-loyalty): the per-profile XP system. See xp-award.md.
+0x8101311c	function	Profile_Construct	70	xp-award.md
+0x81012ecc	function	XPAwards_Load	85	xp-award.md
+0x81012c80	function	XPAwards_ParseAward	80	xp-award.md
+0x81012ad0	function	XPRanks_Load	85	xp-award.md
+0x810134ce	function	Profile_AwardXP	80	xp-award.md
+0x8101340a	function	Profile_BankRaceXP	78	xp-award.md
+0x810133da	function	Profile_GetXPRank	85	xp-award.md
