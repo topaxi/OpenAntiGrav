@@ -59,6 +59,16 @@ impl Remix {
         }
     }
 
+    /// [`Self::open`] for the headless server: one source, which may be a server extraction
+    /// ([`crate::title::open_server_source`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`crate::title::open_server_source`].
+    pub fn open_server(source: &str, packs: Vec<Pack>, pure_packs: Vec<Pack>) -> Result<Self> {
+        crate::title::open_server_source(source, packs, pure_packs).map(Self::Single)
+    }
+
     /// Splits into the track's opened source, the craft's own when this is a
     /// genuine remix (`None` in the ordinary single-source case), and both
     /// titles - track first, craft second, equal to each other when `Single`.

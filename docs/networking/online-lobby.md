@@ -541,8 +541,10 @@ The host needs the binary and one extraction per title, no disc image (part 6).
 
 `oag-server extract --image <image or folder> [--image ...] --out data/server` keeps only what the
 races a server can offer read of a source, one folder per image (named after it). The folder opens
-in place of the source anywhere `--image` is taken (`oag-server lobby`, `oag-server race`, `oag-server`,
-`oag-game`), so a host needs the extraction and never the disc. **Never commit one**: it is the
+in place of the source wherever the server takes `--image` (`oag-server lobby`, `oag-server race`,
+`oag-server`), so a host needs the extraction and never the disc. **Server only**: a client
+(`oag-game`) neither opens nor recognises one (`oag_source::title::open_server_source`, reached
+through `Options::server_source`, which only `oag_net::race` sets). **Never commit one**: it is the
 source's own content, sliced (`docs/overview/legal.md`); it lives under `data/`, which is ignored.
 
 **How it records.** Every archive reader sits on one lazy `(offset, len)` source

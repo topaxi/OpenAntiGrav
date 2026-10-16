@@ -65,6 +65,7 @@ pub fn options(params: &RaceParams, source: &str) -> Result<Options> {
         opponents: params.opponents,
         weapons_override: Some(params.weapons),
         no_driver_for_class: !oag_ai::coverage::project_driver_covers(&params.class),
+        server_source: true,
         ..Options::default()
     })
 }

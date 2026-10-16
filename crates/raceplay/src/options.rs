@@ -298,6 +298,9 @@ pub struct Options {
     /// it `false` because its own controller (the original's) is chosen by the
     /// tables its title authors for the class.
     pub no_driver_for_class: bool,
+    /// [`Options::source`] may be a server extraction (`oag_source::extract`): set by the
+    /// headless server only. A client never opens one.
+    pub server_source: bool,
     /// Play the trail-hit sparks on the player regardless of the trigger.
     ///
     /// A verification aid for the draw path alone - see the `--trail-sparks`

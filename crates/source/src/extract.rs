@@ -6,7 +6,7 @@
 //! which each archive is a sparse stand-in holding only the byte ranges a recorded
 //! load read ([`oag_assets::sparse`]), the small identity files that tell the
 //! source's console apart are copied whole, and [`MANIFEST`] names what it is.
-//! [`crate::title::open_source`] opens it like any folder source, as the title the
+//! [`crate::title::open_server_source`] (the server's, never a client's) opens it like a folder source, as the title the
 //! manifest names.
 //!
 //! This module is the mechanism: the manifest, and writing the files of a
@@ -136,7 +136,7 @@ impl Manifest {
 }
 
 /// The title a source names when it is a server extraction, for
-/// [`crate::title::open_source`] to open it as.
+/// [`crate::title::open_server_source`] to open it as.
 #[must_use]
 pub fn title_named(source: &str) -> Option<String> {
     Manifest::of(Path::new(source)).map(|manifest| manifest.title)
