@@ -21,6 +21,9 @@ use crate::wire::online::{
 };
 use crate::wire::{PROTOCOL, RaceParams};
 
+/// The most laps a room may ask for (Omega's slider ends at 20).
+const MAX_LAPS: u8 = 20;
+
 /// One connected person, as the lobby knows them.
 pub type ClientId = u32;
 
@@ -353,6 +356,12 @@ impl Rooms {
         settings.max_players = settings
             .max_players
             .clamp(self.config.min_players, MAX_PLAYERS);
+        let mode = oag_race::Mode::from_name(&settings.mode);
+        settings.laps = if mode.is_some_and(crate::race::mode_has_laps) {
+            settings.laps.min(MAX_LAPS)
+        } else {
+            0
+        };
         Ok(())
     }
 
@@ -784,6 +793,7 @@ impl Rooms {
             people: u8::try_from(seats.len()).unwrap_or(MAX_PLAYERS),
             opponents: room.settings.opponents,
             weapons: false,
+            laps: room.settings.laps,
         };
         Launch {
             room: room.id,

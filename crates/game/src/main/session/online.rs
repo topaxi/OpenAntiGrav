@@ -385,6 +385,9 @@ impl Session {
             },
             max_players,
             opponents: options.opponents,
+            laps: options
+                .laps_override
+                .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
         })
     }
 

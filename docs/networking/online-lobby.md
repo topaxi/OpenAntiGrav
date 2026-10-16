@@ -439,7 +439,9 @@ token is refused by name.
 ### The race child
 
 `oag-server race --image I --listen ADDR --join-timeout S --max-ticks N` reads one hex line
-(`RaceJob`: the `RaceParams` plus `(name, token)` per seat) off **standard input**, not argv,
+(`RaceJob`: the `RaceParams` plus `(name, token)` per seat) off **standard input**, not argv (and
+keeps reading it: the lobby holds the pipe open and its end of file stops the race, part 7, so a
+hand-piped `echo LINE | oag-server race` stops at once),
 where any local user could read the tokens. It loads the race, binds, prints `listening on ADDR`
 and `cert-hash HEX`, seats the people by token, waits for them to load (**`--join-timeout`, 60
 s: a no-show ends the race with the names missing, it never holds the only slot**), runs the
@@ -534,24 +536,23 @@ From here the round trip is about 10 ms.
   is killed; a title with no image refuses; a game client on the lobby port is refused by name.
 - `net_ground_truth::the_lobby_forks_a_real_race_...` (`#[ignore]`, `just test-data`): the real
   `oag-server lobby` forks the real `oag-server race` on a real circuit, one room. **Coverage is
-  honest, not complete:** every race in these tests ends at its `--max-ticks` limit, not at a
-  finish line, and the second queued room races only through `ThreadRunner`; the real child is
+  honest, not complete:** this part's races ended at their `--max-ticks` limit, not at a
+  finish line (part 7 races one to the line), and the second queued room races only through `ThreadRunner`; the real child is
   covered by the one-room test.
 - `discovery` unit tests: `differs` and `content_fingerprint`; `online::rooms`: a PS2 pressing or
   other mods is hidden from the list and refused.
 
 ### Open
 
-- **Menu screens: landed** (part 7), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
+- **Menu screens: landed** (part 8), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
   lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
-  and size. Open there: kick, laps (`RoomSettings` has no field for it) and the other
+  and size. Open there: kick and the other
   sub-pages Omega has beyond the list.
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
   race's loading and reconnects to the lobby misses it; it times out at the child and returns.
-- **A SIGKILLed lobby orphans its running race child**, which exits on its own at the end of the
-  race or the join timeout. No `PR_SET_PDEATHSIG` (it needs `libc`).
+- ~~A SIGKILLed lobby orphans its running race child~~ (fixed, part 7).
 - **No kick, no spectators, no chat, no quick match, no invite-only**; Omega has some of them.
 - **One race slot is per server**, so a second title waits behind the first. The containers shape
   (a game per room on its own port) is the same `Runner` seam with a spawner behind it.
@@ -651,7 +652,131 @@ and with both builds: *"this server is build X, yours is Y: races only match bet
 (which also decides LAN `compat`) compares it, so rooms and joins use the same rule. `oag-server
 --version` prints it, and the extraction manifest records the extractor's.
 
-## 7. The online menus (2026-10-16)
+## 7. Racing to the finish line, on every title (2026-10-16)
+
+Everything here is **chosen, not measured** unless it says otherwise: the original has no network race.
+
+### What was already true, and what was missing
+
+The race child already ended a race when every person had finished (`serve::run`, `Host::finished`)
+and every client already derived the results board from its own confirmed state, but every test
+raced to a tick limit, so nothing had ever run a finish line. Running one found three things, all
+fixed.
+
+1. **No lap count.** A room had no laps, so the shortest race was the mode's own (3 to 5 laps).
+   `RoomSettings.laps` and `RaceParams.laps` (v1 edited in place; `0` is the mode's own) reach
+   `Options::laps_override` through `oag_net::race::options`, the one function both ends use, and
+   **only in a mode that ends on laps** (`race::mode_has_laps`: single race, tournament, head to head,
+   time trial; Speed Lap, Zone and Eliminator never end on laps and `laps_override` must not be set
+   for them). A room's value is capped at 20 (Omega's slider) and zeroed in the other modes. `oag-server
+   --laps`, `oag-game --online-laps`.
+2. **A leaver held the finish open.** A seat whose person left kept repeating its last input and
+   `Race::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
+   `TickRecord.retired` (a cumulative seat mask, one byte a record) carries the departure: from the
+   record it first appears in, **both ends** set that slot's controller to the AI
+   (`race::retire`) before the tick runs, so the controllers (which are hashed) agree and the end rule
+   counts the remaining people only. The owner (seat 0) and a joiner both tested. A seat that sends
+   nothing for 8 s while racing is dropped the same way (`Host::drop_silent`): a vanished player sends
+   no close frame, and QUIC's idle timeout alone is 30 s; the dropped seat is sent an `End` with the
+   reason (a player who only stalled is taken back to the menus). The retired craft **is flown by
+   the AI driver** (`net_ground_truth::a_retired_person_s_craft_is_flown_by_the_ai`: an unretired
+   person who sends nothing sits at speed 0, the same craft retired at tick 300 is at 137 u/s 600
+   ticks later). The client applies the newest mask to its present simulation too, because the game
+   asks the present whether the race is finished (`loopback::a_person_who_leaves_...`).
+3. **A server running from an extraction raced differently from the clients after the finish.** Pulse
+   PSP's track stats were opened with `"<source>:<archive>"`, the image form, which a folder (an
+   extraction) cannot answer: the read failed with an i/o error, the AI skill scale fell back from 3.10
+   to 2.00, and the **finished** craft's thrust cap (the post-finish law, `finished_thrust`) came out at
+   62.3 instead of 68.9, so the server's state hash disagreed with both clients' from about 4 s before the
+   end, and for ever after. No tick-0 hash could see it, and the extractor's miss list is silent about
+   it (an i/o error is not a `NotExtracted`). `track_stats::read` (and the campaign's skill lookup) now
+   build the spec with `oag_assets::source::archive_spec`, which joins a folder with a separator. The
+   extraction ground truth (`extract_ground_truth.rs`) flies a third race on every title, one person
+   for one lap with the autopilot standing in for the clients, **to the finish line**, from the source
+   and from the extraction, and compares every tick; it failed on Pulse PSP before the fix and passes
+   on all six after it. The race child now also names any extraction read it lacks as it happens
+   (`warning: the extraction lacks a read the race made`, on its log and standard error).
+
+### The standings
+
+The results the clients show are the **confirmed board**: each client builds it from its own
+confirmed state, which the tick hash proves equal to the server's, and `Client::advance_confirmed`
+recaptures it from the confirmed state the first time it is finished. Nothing is sent: the server's
+`End` carries only the reason. Both clients' boards were identical in every run below. What a client
+shows, **seen** in a windowed `--online --net-bot` client (Xvfb, software Vulkan, Pulse PSP, one
+lap): the in-race view to the line, then the built-in results table ("race complete", eight
+rows with the two people marked P1 and P2, laps, best lap, time, "x or escape leaves the race"),
+the one a `--race`-style launch shows (no EndRace screens are built on this path, which has no
+front end); `--net-bot` headless prints the board. The 1280x720 window clips the table's last
+column, which is the results table's own layout. Returning to the room is the
+menus lane's (the `--online` flag path prints `back in the room: REASON`). The lobby's room note
+carries only the reason ("every person has finished"), not the places; carrying the rows in `End` so
+the room screen can show them is open.
+
+### The orphaned race child
+
+The lobby now keeps the child's standard input open for the whole race (it was closed right after
+the job line), and the child treats that pipe's end of file as "the lobby is gone" and stops
+(`oag-server race`: `lobby_watch`; it prints `error: the lobby stopped the race` and exits 2). The
+kernel closes the pipe when the lobby dies for any reason, SIGKILL included, so no `libc` call is
+needed. Measured: a lobby SIGKILLed 200 ticks into a race, its child gone within 3 s (without it the
+child ran on to the end of the race or the join timeout), so the race port is free for a restarted
+lobby. `net_ground_truth::a_race_child_stops_when_its_lobby_is_gone`.
+
+### Every title, localhost
+
+Per title: the real `oag-server lobby` on a **lean extraction** of the server's image (build `oag-server`
+alone, `oag-server extract`), two `oag-game --online --net-bot` clients on the **full image** making
+and joining a room (one lap, the title's default circuit, class VENOM), the lobby forking the real race
+child. Debug builds; 6 titles. "ok/bad" is the sum of the clients' per-second hash counters.
+
+| Title (client image, server extraction) | Tick-0 hash, both clients | ok / bad (client A, B) | Humans crossed at | Race ended at tick | Extraction |
+| --- | --- | --- | --- | --- | --- |
+| Pulse PSP EU | equal | 2853 / 0, 2853 / 0 | 2540, 2601 | ~2857 | 182 MiB |
+| Pulse PS2 EU | equal | 2801 / 0, 2800 / 0 | 2559, 2582 | ~2805 | 109 MiB |
+| Pure PSP EU | equal | 2817 / 0, 2818 / 0 | 2566, 2590 | ~2820 | 56 MiB |
+| HD (PS3 EU) | equal | 2876 / 0, 2874 / 0 | 2638, 2647 | ~2881 | 41 MiB |
+| 2048 (Vita folder) | equal | 4866 / 0, 4869 / 0 | 4058, 4651 | ~4871 | 5.6 MiB |
+| Omega (PS4 folder) | equal | 2822 / 0, 2823 / 0 | 2568, 2579 | ~2826 | 41 MiB |
+
+All six ended with `every person has finished`, both clients printed an identical board and `back in
+the room: every person has finished`, and the lobby freed the slot. Pulse PSP's first attempt in this
+table had 49 bad hashes (item 3 above); the row is the rerun after the fix from a fresh extraction.
+The AI field fills the grid whatever the room says (the `opponents` note in part 5): the boards list
+eight craft. 2048's circuit is slow (a lap is about 4,000 ticks).
+
+Leavers, Pulse PSP, same setup (the leaver's seat is dropped by the server after the 8 s silence): the joiner killed (SIGKILL, no close frame) at tick 600 and, in
+another run, the owner killed: the race ended `every person has finished` when the remaining person
+crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft on the board unfinished.
+
+### Tests
+
+- `loopback::a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree` (no disc): the record
+  carries the seat, both controllers flip, the survivor's hashes agree on every confirmed tick.
+- `loopback::a_silent_seat_is_dropped_and_told` (no disc): `drop_silent` drops, tells and retires.
+- `race::laps_are_set_only_for_a_mode_that_ends_on_laps`, `rooms::laps_are_kept_only_for_a_mode_that_ends_on_laps`.
+- `net_ground_truth::the_lobby_forks_a_real_race_...` now races **one lap to the finish line**:
+  both clients' state is finished with a one-lap board, the phase is `Over("every person has
+  finished")`, the room returns open with that note (43 s). Before, every lobby test ended at a limit.
+- `extract_ground_truth` (above) and `net_ground_truth::a_race_child_stops_when_its_lobby_is_gone`.
+- A finish line needs a real circuit, so there is no disc-free end-to-end test of one; the disc-free
+  layers are the retirement and the lap gating above.
+
+### Open
+
+- Session takeover still does not re-send a pending hand-off (part 5).
+- The room note carries the reason only; the places are not sent to the lobby.
+- The windowed client's return from the results table to the room is the menus lane's: the table
+  says "x or escape leaves the race" and the `--online` flag path has no room screen to go back to.
+- Omega's laps slider is 3 to 20; a room here may ask for 1 (chosen, for a short race).
+- 2048 and Omega: this is not a format finding. The finish and retirement code is title-blind and
+  ran on both (**ported**, with the table above as the ground truth); the track-stats fix concerns
+  Pulse PSP's `FEData.wad` only (`track_stats::read` reads nothing on any other title,
+  **checked, differs**).
+||||||| 9f3afc3b2
+
+
+## 8. The online menus (2026-10-16)
 
 **Ours, chosen, not measured** except where it says Omega's. Omega's order, with our login:
 MULTIPLAYER, ONLINE, a connect step, CREATE GAME or JOIN GAME, the settings (CREATE) or the room

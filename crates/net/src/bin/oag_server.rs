@@ -93,6 +93,9 @@ struct Cli {
     /// How many people race, each from their own client, in grid slots `0..N`.
     #[arg(long, default_value_t = 1)]
     people: u8,
+    /// Laps the race runs; 0 is the mode's own count.
+    #[arg(long, default_value_t = 0)]
+    laps: u8,
     /// No AI on the grid, only the people.
     #[arg(long)]
     no_opponents: bool,
@@ -138,6 +141,7 @@ fn main() -> Result<()> {
         opponents: !cli.no_opponents,
         // Weapons are not server events yet (ADR-0069, condition 2).
         weapons: false,
+        laps: cli.laps,
     };
     let (race, title) = oag_net::race::load(&params, &source)?;
     params.title = title.to_string();

@@ -64,10 +64,24 @@ pub fn options(params: &RaceParams, source: &str) -> Result<Options> {
         people: params.people,
         opponents: params.opponents,
         weapons_override: Some(params.weapons),
+        laps_override: lap_count(mode, params.laps),
         no_driver_for_class: !oag_ai::coverage::project_driver_covers(&params.class),
         server_source: true,
         ..Options::default()
     })
+}
+
+/// Whether `mode` ends on a lap count, so a room may set one. `Options::laps_override` must
+/// not be set for the rest: Speed Lap and Zone never end on their own, and Eliminator ends on
+/// kills.
+#[must_use]
+pub fn mode_has_laps(mode: oag_race::Mode) -> bool {
+    mode.laps_target(oag_race::SpeedClass::ALL[0]).is_some()
+}
+
+/// The lap count a race runs: the room's, in a mode that ends on laps, else the mode's own.
+fn lap_count(mode: oag_race::Mode, laps: u8) -> Option<u32> {
+    (laps > 0 && mode_has_laps(mode)).then_some(u32::from(laps))
 }
 
 /// The team seat `seat` flies: its own entry in [`RaceParams::teams`], else the race's default.
@@ -103,6 +117,18 @@ pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
     race.set_autopilot(false);
     race.set_pilot_assist(oag_physics::pilot_assist::Level::Off);
     Ok(())
+}
+
+/// Hands the craft of every seat in `retired` (a [`crate::wire::TickRecord::retired`] mask) to
+/// the AI driver: a person who left must not hold the race open, and the end rule
+/// (`Race::finished`) counts only people. Both ends call it with the same mask at the same
+/// tick. **Chosen, not measured**: the original has no network race.
+pub fn retire(race: &mut Race, retired: u8) {
+    for slot in 0..oag_gameplay::MAX_PLAYERS.min(8) {
+        if retired >> slot & 1 == 1 {
+            race.sim.world.controllers[slot] = Controller::Ai;
+        }
+    }
 }
 
 /// The state hash a prepared race starts from: what the client must reproduce to
@@ -150,6 +176,18 @@ pub fn check_title(params: &RaceParams, opened: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Laps reach the race only in a mode that ends on laps: Speed Lap, Zone and Eliminator
+    /// would end a race the original never ends.
+    #[test]
+    fn laps_are_set_only_for_a_mode_that_ends_on_laps() {
+        use oag_race::Mode;
+        assert_eq!(lap_count(Mode::SingleRace, 1), Some(1));
+        assert_eq!(lap_count(Mode::SingleRace, 0), None);
+        for mode in [Mode::SpeedLap, Mode::Zone, Mode::Eliminator] {
+            assert_eq!(lap_count(mode, 5), None, "{mode:?}");
+        }
+    }
 
     /// Every person flies their own team: seat 0 is the race's team, the rest are `seat_picks`
     /// in slot order, a seat that named none flies the default, and no seat is skipped.

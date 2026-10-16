@@ -17,6 +17,7 @@ fn room(id: u32, owner: &str, members: u8, joinable: bool) -> RoomInfo {
             mode: "single_race".into(),
             max_players: 8,
             opponents: false,
+            laps: 0,
         },
         members,
         joinable,

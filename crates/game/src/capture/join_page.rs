@@ -90,6 +90,7 @@ pub(super) fn capture_online(
         mode: "single_race".into(),
         max_players: 8,
         opponents: false,
+        laps: 0,
     };
     let screen = if room {
         let mut screen = Join::new(Labels::read_online_room(strings), oag_gameplay::MAX_PLAYERS);
