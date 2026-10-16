@@ -87,7 +87,7 @@ into the shared total, under the law its data names:
 | HD / Fury | HD's `0x00023f98` (82, static) | measured | the EndRace Results flow |
 | Omega | HD's law, repeated in Omega's own `0x016544a0` (80, static) | measured | the session, when the result is saved |
 | Pure | Pulse's | inherited: Pure's executable and data carry no loyalty (85) | the session |
-| 2048 | HD's, via Omega's `Race_ComputeLoyaltyAward` (maintainer, 2026-10-16) | inherited from Omega: 2048 earns XP (a separate per-profile rank system, not loyalty, 85: `vita-2048-eu-v104/xp-award.md`), carries no loyalty (75). XP is not kept by this project | the session |
+| 2048 | HD's, via Omega's `Race_ComputeLoyaltyAward` (maintainer, 2026-10-16) | inherited from Omega: 2048 earns XP (a separate per-profile rank system, not loyalty, 84: `vita-2048-eu-v104/xp-award.md`), carries no loyalty (75). XP is not kept by this project | the session |
 
 Evidence: `docs/ghidra/functions/ps4-omega-eu/endrace-loyalty.md`,
 `psp-pure-usa/loyalty-absent.md`, `vita-2048-eu-v104/loyalty-absent.md`. Omega has two

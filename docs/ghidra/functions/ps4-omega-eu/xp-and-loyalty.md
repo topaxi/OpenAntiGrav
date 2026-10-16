@@ -31,5 +31,6 @@ the two Results blocks (both big constructors, 14 KB for `FUN_0149f910`), and wh
 Omega's loyalty-gated unlocks and its XP rank are both user-visible. **Not wired** in this
 project: Omega races pay loyalty only; XP is not kept.
 
-Cross-check: 2048 - ported (see `vita-2048-eu-v104/xp-award.md`, the same system, same
-award table); HD - checked, differs (HD has no XP).
+Cross-check: 2048 - checked, applies, not wired (XP award table byte-identical,
+`vita-2048-eu-v104/xp-award.md`); ranks - checked, differs (half the thresholds); HD - checked,
+differs (HD has no XP). Wiring left open in a handover thread.

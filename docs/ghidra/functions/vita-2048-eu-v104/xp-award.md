@@ -7,12 +7,12 @@ from `data.psarc` (`data/xml/XPAwards.xml`, `data/xml/XPRanks.xml`). Static read
 | Address | Name | Confidence |
 | --- | --- | --- |
 | `0x8101311c` | `Profile_Construct` | 70 |
-| `0x81012ecc` | `XPAwards_Load` | 85 |
+| `0x81012ecc` | `XPAwards_Load` | 84 |
 | `0x81012c80` | `XPAwards_ParseAward` | 80 |
-| `0x81012ad0` | `XPRanks_Load` | 85 |
+| `0x81012ad0` | `XPRanks_Load` | 84 |
 | `0x810134ce` | `Profile_AwardXP` | 80 |
 | `0x8101340a` | `Profile_BankRaceXP` | 78 |
-| `0x810133da` | `Profile_GetXPRank` | 85 |
+| `0x810133da` | `Profile_GetXPRank` | 84 |
 
 ## What it is
 
@@ -20,7 +20,7 @@ from `data.psarc` (`data/xml/XPAwards.xml`, `data/xml/XPRanks.xml`). Static read
 (`XPAwards_Load(this, "Data\\XML\\XPAwards.xml")`, `XPRanks_Load(this, ...)`). The XP total
 is a `u32` at profile `+0x3257c`. It is **one total per profile**, not per team.
 
-**Awards** are a 78-row table at `0x81577760`, stride `0x1c`: `+0` name string, `+4` zone,
+**Awards** are a 78-row table (indices 0-77, the destructor loops `0x4e` times) at `0x81577760`, stride `0x1c`: `+0` name string, `+4` zone,
 `+8` elim, `+0xc` zombie, `+0x10` race, `+0x14` speed (the XML's five per-mode values, in
 that order), `+0x18` group string (`AWARD_GROUP_AGILITY`/`COMBAT`/`SPEED`).
 `Profile_AwardXP(profile, awardIndex, useClassMult, useSkillMult)`:
@@ -31,7 +31,7 @@ award inside a 2.0 s window counts toward a chain: five in a row pays `chain * 2
 sites (gameplay events: barrel roll, perfect lap, kill, pad hit, boost start, zones, air
 time, evading a weapon, finishing position, "held 1st for N s").
 
-`XPAwards.xml` (77 rows, `index` 0-77): the terms are **events**, not a lap/kill/zone
+`XPAwards.xml` (78 rows, `index` 0-77): the terms are **events**, not a lap/kill/zone
 sum. Campaign `Event complete - PASS` / `ELITE` pay 10000 each in every mode; multiplayer
 finish/win 10; `Perfect lap` 30; `Opponent destroyed` 50; barrel roll, speed pad, weapon pad
 10; boost start 30; `Finished 1st`..`8th` 50..5 (0 in zombie after 1st); weapon hit/shield
@@ -54,7 +54,7 @@ rank-up) and by a Vita activity-feed string (`FUN_81013c8e`, the rank is the pay
 
 ## Verdict on "2048's XP is its loyalty"
 
-**Falsified, confidence 85.** Against the falsifier the lane was given: 2048's XP is a
+**Falsified, confidence 84** (the rubric's decompile-only ceiling; the authored XML is a second source for the table, not for the live behaviour). Against the falsifier the lane was given: 2048's XP is a
 per-profile level (50 ranks off cumulative thresholds) with its own terms; none of
 loyalty's terms appear in it. Loyalty (HD law, `ps3-hdfury-eu/endrace-loyalty.md`) is
 `mult * (laps*rate + perfect*rate + zones*5 + perfect_zones*15 + kills*rate)` per **team**,
@@ -74,9 +74,9 @@ three of the eight `Profile_GetXPRank` callers decompiled).
 
 ## Cross-check
 
-- **Omega**: ported-as-checked, applies, not wired. Omega's `eboot.bin` carries the same
+- **Omega**: XP - checked, applies, not wired; ranks - checked, differs. Omega's `eboot.bin` carries the same
   loader (`FrontendRoot_Construct` references `Data\XML\XPAwards.xml` at `0x0182eb7a`) and
   its `data00.psarc` ships a **byte-identical** `Data/xml/XPAwards.xml` (9177 bytes) and a
   different `XPRanks.xml` (same 50 ranks, thresholds exactly **half** of 2048's: 15000,
   30000, 50000, ...). See `ps4-omega-eu/xp-and-loyalty.md`.
-- **HD**: checked, differs (no XP; loyalty only).
+- **HD**: checked, differs (no XP; loyalty only). Wiring left open in a handover thread.
