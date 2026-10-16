@@ -190,9 +190,8 @@ pub struct Label {
 /// The same convention the front end's screens use, where
 /// [`oag_ui::screen::Screen::fills`] holds the colour-only kind. Exactly one HUD
 /// widget is of this kind, `HeadToHeadBar` in the arcade and eliminator layouts,
-/// and it is authored `width="5" height="0"` - a zero-height bar, so its length
-/// is supplied at runtime and the authored height is a floor rather than a size.
-/// That is recorded rather than acted on: nothing here drives it.
+/// and it is authored `height="0"` (`width="5"` on Pulse, `20` on HD) - a zero-height bar, so
+/// its length is supplied at runtime: `oag_hud::head_to_head` sizes it from the gap.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fill {
     /// The `name` attribute.

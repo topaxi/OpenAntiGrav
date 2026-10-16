@@ -73,7 +73,7 @@ holds a rule over every cell and is true of zero `Head2Head` cells.
 
 **Binary:** `/hdfury/EBOOT-ps3-hdfury-eu.elf`. No new names (both functions are already
 named). Static only: **no live RPCS3 check**, and no menu reaches mode 9 (above), so a live
-check would need the mode forced.
+check would need the mode forced. Omega: **ported** (it reads HD's layouts; the bar draws there too, `omega_draws_hds_rows_and_gap_label`).
 
 ### Correction: HD does author a gap label
 
@@ -88,7 +88,7 @@ vertalign="bottom" x="180" y="104" color="FEConst->HudColour2" .../>` beside `Po
 
 ### What binds it
 
-`Hud_BindWidgets` (`0x0009e0ec`), HUD flag `0x40`, TOC base `0x008ad4d8` (slots
+`Hud_BindWidgets` (`0x0009bb30`, the mode 9 / 0x12 branch near `0x0009e0ec` is inside it, not a function of its own), HUD flag `0x40`, TOC base `0x008ad4d8` (slots
 `0x008a7b40..` hold the strings at `0x0077fac0..`: `Cockpit321Go`, `Position`,
 `Position Outof`, `PositionTxt`, `HeadToHeadBar` (`0x0077fb00`), `DistanceApart`
 (`0x0077fb10`), `PositionPanel`):
@@ -132,15 +132,40 @@ Read from the decompile; constants read from memory.
 | `D = clamp(2 * gap, 240, 720)` places `Position Outof`; gap = progress difference | 75 | decompile and constants, 4x agreement with Pulse's measured law; no live run |
 | Label `"%s%3.0fm"`, `-`/`+`, `0xff30ff30`/`0xffff3030` | 80 | strings and colours read; identical to Pulse's live-measured set |
 | `DistanceApart` is HD's gap label, midpoint of bar top and second row | 70 | name binding certain (85); midpoint formula reads as Pulse's but depends on the next row |
-| **The runtime sets the bar's height** | **50** | **not settled**: it rests on `vt[0x74]` being GetY and `+0xb0` being Height on HD's Image. The Image field map was not recovered (the attribute loader was not found; Pulse's Image has x,y,w,h at `+0x94..+0xa0`, and by that shift `+0xb0` could be Width). Hypothesis only: no rename, no wiring |
+| **The runtime sets the bar's height: `bar+0xb0 = D - GetY()`, `+0xb0` is an `<Image>`'s Height** | **78** | settled statically 2026-10-16 (`hd-h2h-bar-size`), see the next section; not seen live. No rename, no new name |
 | Mode 9 is reachable by a player | 85 | no (above) |
 
-### Next address to try
+### The Image field map, settled statically (2026-10-16, `hd-h2h-bar-size`)
 
-The `<Values>` loader of HD's HUD `Image` (the attribute strings `width`/`height` at `0x00789650`
-and `0x00789420` are read by `FUN_004ef30c` and `FUN_004d539c`; the `Height`/`TxtrHeight` run at
-`0x0078b6a0` is TOC slot `0x008ad664`, read by `FUN_0052d6c8`, which is not it). Or force mode 9 on
-RPCS3 and read the bar's drawn height: `D - 120` if it is a height.
+The thread's two named addresses were the wrong ones: `FUN_004ef30c` is a syscall wrapper and
+`FUN_004d539c` a TOC initialiser, neither reads XML. The map comes from two functions that
+already crop an `<Image>`:
+
+- **`Hud_BindWidgets` (`0x0009bb30`), the stretch `0x0009bee0`-`0x0009bf28`** reads `DamageBar` (`hud+0x1b0`, an `<Image>` in every
+  shipped HUD file): `vt[0x60]()` -> `hud+0x1dc` (H), `+0xd0` -> `hud+0x1e0` (V0), `+0xd8` -> `hud+0x1e4` (TH),
+  `vt[0x74]()` -> `hud+0x1d8` (y0).
+- **`Hud_UpdateShieldReadout` `0x00086750`-`0x000867ac`** writes it back: `+0xb0 = f * H`,
+  SetY (`vt[0x70]`) to `y0 + (1 - f) * H * 0.5`, `+0xd8 = f * TH`, `+0xd0 = V0 + (1 - f) * TH`. A bottom-pinned
+  vertical crop needs `+0xb0` to be the height (it is cropped together with the source height at `+0xd8`)
+  and `vt[0x70]`/`vt[0x74]` to be SetY/GetY.
+
+| Image field | Offset |
+| --- | --- |
+| width (`ThrustBar`, and the `hud+0x190` tail: `+0xac`, with source width `+0xd4` and U `+0xcc`) | `+0xac` |
+| **height** | **`+0xb0`** |
+| source V / source height | `+0xd0` / `+0xd8` |
+| vtable | `0x60` GetHeight, `0x70` SetY, `0x74` GetY |
+
+That is Pulse's x,y,w,h shifted by `0x10`; "could be Width" is dead. Applied to the bar: `bar+0xb0 =
+D - GetY()` is a height, and the label's `(D + GetY()) * 0.5` is the midpoint of a bar running from `GetY()`
+to `D`. The authored bar is `<Image name="HeadToHeadBar"><Values x="200" y="120" width="20" height="0"
+color="0xB40048FF"/>` in every shipped layout (`DATA00`, `DATA02`, `DATA03`, `hud_positions`,
+`splitscreen_positions` and the `2097`/`wo3` twins), with no alignment attribute, so it is top-left
+anchored and `GetY()` is the authored `120`; `D >= 240` keeps its height at least `120`.
+
+What stays inferred (hence 78, not 85): that `HeadToHeadBar` is the same `Image` class as `DamageBar` (both
+are `<Image>` elements; the vtable was not read), and that `GetY` returns the local `y`. Not seen live: no
+menu reaches mode 9, and the lane did not force one on RPCS3.
 
 ### 2048 / Omega
 
@@ -157,7 +182,7 @@ below runs on it (`omega_draws_hds_rows_and_gap_label`, looked at both cuts).
 so the second seat's layout, 540 lower, follows); `DistanceApart` carries `-`/`+` and the gap in green/red at the
 midpoint of the bar's authored top and the second row. Rows are in the layout's authored font and anchors.
 
-- **Bar: undrawn** (sizing unsettled, confidence 50).
+- **Bar: drawn** (2026-10-16, `hd-h2h-bar-size`, confidence 78): a `20` wide solid rectangle from the authored `y = 120` to the second row, `D - 120` tall, in the authored colour `0xB40048FF`.
 - **Chosen, not measured:** the rows are the ordinal alone. The original's `"%s %s"` adds the team name, and at
   `Position`'s authored size (scale 1.0, HUD font) `1ST FEISAR` ran out of its view in a first picture.
 - **Top-and-bottom cut:** the clamp has no stacked variant, so the second row sits at layout y 240..720 in a view
@@ -166,4 +191,4 @@ midpoint of the bar's authored top and the second row. Rows are in the layout's 
 - Pure and 2048 keep the borrowed gap-under-the-place readout.
 - Pins: `hd_second_row_follows_the_4x_clamp_and_the_gap_uses_distance_apart`,
   `hd_colours_the_leader_green_and_the_trailer_red` (`oag-hud`); `hd_draws_its_rows_and_its_own_gap_label`,
-  `omega_draws_hds_rows_and_gap_label` (`oag-game`).
+  `omega_draws_hds_rows_and_gap_label` (`oag-game`; both now also assert one bar per view inside the view, both cuts).

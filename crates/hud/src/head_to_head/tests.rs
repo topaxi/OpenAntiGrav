@@ -215,14 +215,17 @@ fn hd_frame(gap: f32, leads: bool) -> Frame {
 }
 
 /// `Hud_UpdatePositionCounter` (`0x00096088`): the second row sits at `clamp(2 * gap, 240, 720)`,
-/// 4x Pulse's law, on HD's `DistanceApart` label, with no bar drawn and the place replaced by
+/// 4x Pulse's law, on HD's `DistanceApart` label, with the bar `D - 120` tall and the place replaced by
 /// the two rows.
 #[test]
 fn hd_second_row_follows_the_4x_clamp_and_the_gap_uses_distance_apart() {
     let bottoms = |gap| {
         let frame = hd_frame(gap, true);
         let rows = texts(&frame);
-        assert!(fill_rect(&frame).is_none(), "HD's bar stays undrawn");
+        let bar = fill_rect(&frame).expect("HD's bar draws");
+        // `bar+0xb0 = D - GetY()`: authored x 200, y 120, width 20, no height of its own.
+        assert_eq!((bar[0], bar[1], bar[2]), (200.0, 120.0, 20.0));
+        assert_eq!(bar[3], (2.0 * gap).clamp(240.0, 720.0) - 120.0, "gap {gap}");
         assert!(rows.iter().all(|r| r.0 != "2/2"), "the place is replaced");
         assert!(rows.iter().any(|r| r.0 == "-" || r.0.starts_with('-')));
         let second = rows.iter().find(|r| r.0 == "IG_HUD_2ND").unwrap().1;

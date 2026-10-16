@@ -101,6 +101,40 @@ fn per_view(race: &race::Race, hud: &oag_hud::Assets) -> Vec<([f32; 4], Vec<Word
         .collect()
 }
 
+/// Each view's solid rectangles (`Draw::Fill`), with the view's clip rectangle.
+fn fills(race: &race::Race, hud: &oag_hud::Assets) -> Vec<([f32; 4], Vec<[f32; 4]>)> {
+    let readouts: Vec<Readout> = (0..2).map(|slot| race.readout_for(slot)).collect();
+    let draws = oag_game::hud_views::view_draws(
+        hud.context().expect("the layout parsed"),
+        hud.split.as_ref(),
+        hud.split_columns.as_ref(),
+        hud.split_hud.as_ref(),
+        readouts,
+        race.cut(),
+        VIEWPORT,
+        hud.space,
+    );
+    let clips = [
+        draws[0].placement.clip,
+        draws.last().unwrap().placement.clip,
+    ];
+    clips
+        .iter()
+        .map(|clip| {
+            let rects = draws
+                .iter()
+                .filter(|draw| draw.placement.clip == *clip)
+                .flat_map(|draw| views_frame(std::slice::from_ref(draw)).sprites)
+                .filter_map(|draw| match draw {
+                    Draw::Fill { rect, .. } => Some(rect),
+                    _ => None,
+                })
+                .collect();
+            (*clip, rects)
+        })
+        .collect()
+}
+
 /// Both views draw the Head to Head swap - `1st`, `2nd` and a gap label, with no place
 /// out of eight - each against the other person: the same distance, the opposite sign,
 /// and every word inside its own view, in both cuts, with the gap short (tick 300) and
@@ -283,8 +317,9 @@ fn pure_keeps_its_place_and_gains_the_gap() {
 /// the place panel and its number are gone, `Position` and `Position Outof` carry the `1ST`
 /// and `2ND` rows (ordinal alone: **chosen**, the original's team name runs out of the view),
 /// and HD's own `DistanceApart` carries the signed gap, one gap seen from both seats with
-/// opposite signs, in both cuts, every word inside its own view. The bar stays undrawn
-/// (its sizing is unsettled). Fails if the place comes back or the rows are dropped.
+/// opposite signs, in both cuts, every word inside its own view. The `HeadToHeadBar` is one
+/// solid rectangle per view, inside it (`bar+0xb0 = D - GetY()`, confidence 78). Fails if
+/// the place comes back, the rows are dropped or the bar goes missing.
 fn hd_rows_and_gap(source: Option<std::path::PathBuf>) {
     let Some(source) = source else { return };
     for cut in [Cut::Vertical, Cut::Horizontal] {
@@ -318,6 +353,20 @@ fn hd_rows_and_gap(source: Option<std::path::PathBuf>) {
                 );
             }
             gaps.push(gap.2.clone());
+        }
+        for (view, (clip, rects)) in fills(&race, &hud).iter().enumerate() {
+            let label = format!("{cut:?} view {view}");
+            let [bar] = rects.as_slice() else {
+                panic!("{label}: expected the one bar, got {rects:?}");
+            };
+            assert!(bar[2] > 0.0 && bar[3] > 0.0, "{label}: empty bar {bar:?}");
+            assert!(
+                bar[0] >= clip[0]
+                    && bar[1] >= clip[1]
+                    && bar[0] + bar[2] <= clip[0] + clip[2]
+                    && bar[1] + bar[3] <= clip[1] + clip[3],
+                "{label}: bar {bar:?} is outside its view {clip:?}"
+            );
         }
         assert_eq!(gaps[0][1..], gaps[1][1..], "{cut:?}: one gap, two seats");
         assert_ne!(
