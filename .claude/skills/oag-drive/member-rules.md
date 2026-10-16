@@ -4,7 +4,7 @@ Every `/oag-drive` member reads this before anything else. The lead's brief
 supplies the lane-specific values used below: `<lane>` (worktree, branch and
 scratch name), `:9N` (your Xvfb display), any emulator ports, the other lanes
 you must not touch, and the gate baseline. If the brief is missing one of
-them, ask the lead with `SendMessage` to `main` rather than guessing.
+them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve from a member) rather than guessing.
 
 ## Step zero
 
