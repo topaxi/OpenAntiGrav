@@ -8,6 +8,7 @@ fn edition(title: &str) -> Edition {
         title: title.into(),
         platform: "PSP".into(),
         content: 0,
+        build: "0.1 (abc)".into(),
     }
 }
 
@@ -514,4 +515,30 @@ fn the_launch_carries_every_setting_and_seat_into_the_race_params() {
             .collect::<Vec<_>>(),
         ["ann", "bob", "cy"]
     );
+}
+
+#[test]
+fn a_build_that_differs_from_the_servers_is_refused_at_the_hello_naming_both() {
+    let mut rooms = lobby();
+    let other = Edition {
+        build: "0.1 (def)".into(),
+        ..edition(PULSE)
+    };
+    let (code, text) = rooms
+        .connect(1, "old", vec![other])
+        .expect_err("another build");
+    assert_eq!(code, Refusal::Version);
+    assert!(
+        text.contains("0.1 (abc)") && text.contains("0.1 (def)"),
+        "{text}"
+    );
+    // A title the server does not host is no reason to refuse: nothing would be raced in it.
+    let elsewhere = Edition {
+        build: "0.1 (def)".into(),
+        ..edition("Wipeout 2048")
+    };
+    rooms
+        .connect(2, "new", vec![elsewhere])
+        .expect("no shared title");
+    person(&mut rooms, 3, "same", &[PULSE]);
 }

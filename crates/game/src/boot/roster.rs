@@ -154,50 +154,7 @@ pub(super) fn load_teams(
 ) -> Vec<oag_raceplay::catalogue::Team> {
     let declared = oag_raceplay::catalogue::all_teams(documents);
     let declared_count = declared.len();
-    // **Wipeout 2048's own roster is two levels deep**: `feisar2048` is a
-    // `PI_Team`, and its hull and `handlingstats.xml` are under
-    // `feisar2048\1`..`\4`, one numbered craft each. The title's own
-    // default team (`oag_2048::race::DEFAULT_TEAM`, `feisar2048\3`) names
-    // which slot a race flies, so a team that is not raceable by its bare id
-    // is tried at that slot and, if it is there, offered under it - the same
-    // stand-in `session::placeholder::raceable_teams` makes, for the same
-    // reason: the original's craft picker is unread, so every team flies one
-    // fixed craft until it is. No slot on a title whose default team carries
-    // none, which is every other title, where this is a no-op.
-    let craft_slot = race.team.rsplit_once('\\').map(|(_, slot)| slot);
-    let dirs = (race.ship_dir, race.handling_dir);
-    let mut teams: Vec<oag_raceplay::catalogue::Team> = Vec::new();
-    for mut team in declared {
-        if raceable(archives, dirs, &team.id) {
-            teams.push(team);
-            continue;
-        }
-        if let Some(slot) = craft_slot {
-            let slotted = format!("{}\\{slot}", team.id);
-            if raceable(archives, dirs, &slotted) {
-                team.id = slotted;
-                teams.push(team);
-                continue;
-            }
-        }
-        // A guest roster this title offers as teams of its own (Omega's 2048-era
-        // five): the bare id names no craft, so the team is raceable when every
-        // craft it offers is, each in the directories its roster names. Offered
-        // under the bare id - the variant row and `combine_variant` choose the craft.
-        if let Some(guest) = race.guest_roster.filter(|guest| guest.offered)
-            && guest.variants.teams.contains(&team.id.as_str())
-            && guest.variants.variants.iter().all(|variant| {
-                let craft = guest.variants.join.combine(&team.id, variant.suffix);
-                raceable(
-                    archives,
-                    (race.ships_for(&craft).dir, race.handling_dir_for(&craft)),
-                    &craft,
-                )
-            })
-        {
-            teams.push(team);
-        }
-    }
+    let teams = oag_raceplay::catalogue::raceable_teams(archives, race, declared);
 
     if teams.len() != declared_count {
         report.push(format!(
@@ -238,29 +195,6 @@ pub(super) fn load_teams(
         documents.len()
     ));
     teams
-}
-
-/// Whether both files a race reads for a team are on this source.
-fn raceable(
-    archives: &oag_assets::Archives,
-    (ship_dir, handling_dir): (&str, &str),
-    id: &str,
-) -> bool {
-    archives
-        // The ordinary hull, spelled directly rather than through
-        // `race::ship_entry_name`: this asks whether a team is *raceable*, which
-        // is a question about the normal hull and never about the Zone one, and
-        // routing it through the mode-aware helper meant passing a `ZoneCraft`
-        // that could not affect the answer.
-        .locate(&oag_pulse::race::ships::entry_name_in(
-            ship_dir,
-            id,
-            oag_pulse::race::ships::HULL,
-        ))
-        .is_some()
-        && archives
-            .locate(&oag_tables::handling::entry_name_in(handling_dir, id))
-            .is_some()
 }
 
 /// What each circuit is called, out of whichever copy of the string table names

@@ -667,6 +667,7 @@ impl NetArgs {
             content: oag_game::mods::Mods::load()
                 .ok()
                 .map_or(0, |mods| mods.content_fingerprint()),
+            build: oag_net::BUILD_VERSION.to_string(),
         };
         let action = if self.online_create {
             Action::Create(oag_net::wire::online::RoomSettings {

@@ -764,6 +764,7 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
             return Ok(None);
         };
         let data = std::fs::read(path.join(file))?;
+        crate::record::note_loose(&path.join(file).to_string_lossy());
         return Ok(Some((file.clone(), data)));
     }
 
@@ -781,6 +782,7 @@ pub fn read_loose_file(source: &str, candidates: &[&str]) -> Result<Option<(Stri
         return Ok(None);
     };
     let data = disc.read_entry(&entry)?;
+    crate::record::note_loose(&entry.path);
     Ok(Some((entry.path, data)))
 }
 
@@ -869,7 +871,11 @@ fn package_title_id(root: &std::path::Path, files: &[String]) -> Option<String> 
     files
         .iter()
         .filter(|f| names(f, "PARAM.SFO"))
-        .find_map(|f| oag_disc::sfo::title_id(&std::fs::read(root.join(f)).ok()?))
+        .find_map(|f| {
+            let bytes = std::fs::read(root.join(f)).ok()?;
+            crate::record::note_loose(&root.join(f).to_string_lossy());
+            oag_disc::sfo::title_id(&bytes)
+        })
 }
 
 /// Which console a file list belongs to, by the file each one identifies itself

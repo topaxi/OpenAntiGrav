@@ -9,6 +9,7 @@
 //!
 //! - [`source`]: the image search path and the container rules.
 //! - [`title`]: [`title::open_source`], a source opened as whichever title it is.
+//! - [`extract`]: a server extraction, the slice of a source a server's races read.
 //! - [`dlc`]: the downloadable-content directories and the packs in them.
 //! - [`layers`]: the player's override and this project's fallback, mounted around a title's archives.
 //! - [`remix`]: a race's track and craft sources, one or two.
@@ -19,6 +20,7 @@
 pub mod ballisticng;
 pub mod cache;
 pub mod dlc;
+pub mod extract;
 pub mod layers;
 pub mod remix;
 pub mod source;

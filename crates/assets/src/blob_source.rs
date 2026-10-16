@@ -28,6 +28,13 @@ pub(crate) enum BlobSource {
     File {
         file: std::fs::File,
         len: u64,
+        path: PathBuf,
+    },
+    /// A server extraction's stand-in for an archive: only the ranges a load read.
+    /// Chosen by the file's first bytes, never by its name (`crate::sparse`).
+    Sparse {
+        sparse: crate::sparse::Sparse,
+        path: PathBuf,
     },
     Disc {
         /// **Shared, so the containers of one disc are one open image.**
@@ -65,13 +72,39 @@ impl BlobSource {
     pub(crate) fn len(&self) -> u64 {
         match self {
             Self::File { len, .. } => *len,
+            Self::Sparse { sparse, .. } => sparse.len(),
             Self::Disc { entry, .. } => entry.size,
         }
     }
 
     pub(crate) fn read(&mut self, offset: u64, len: u64) -> Result<Vec<u8>> {
         let len = len.min(self.len().saturating_sub(offset));
+        if crate::record::active() {
+            let total = self.len();
+            match &*self {
+                Self::File { path, .. } | Self::Sparse { path, .. } => {
+                    crate::record::note(&path.to_string_lossy(), total, offset, len);
+                }
+                Self::Disc { entry, .. } => {
+                    crate::record::note(&entry.path, total, offset, len);
+                }
+            }
+        }
         match self {
+            Self::Sparse { sparse, path } => {
+                sparse.read(offset, len).map(<[u8]>::to_vec).ok_or_else(|| {
+                    crate::record::note_miss(format!(
+                        "{} {offset}..{}",
+                        path.display(),
+                        offset + len
+                    ));
+                    Error::NotExtracted {
+                        archive: path.display().to_string(),
+                        offset,
+                        len,
+                    }
+                })
+            }
             Self::File { file, .. } => {
                 use std::io::{Read, Seek, SeekFrom};
                 file.seek(SeekFrom::Start(offset))?;
@@ -103,9 +136,7 @@ impl BlobSource {
             // real file, and the error is much more useful this way.
             return Err(Error::BadSpec(spec.to_string()));
         }
-        let file = std::fs::File::open(&path)?;
-        let len = file.metadata()?.len();
-        Ok(Self::File { file, len })
+        Self::open_file(&path)
     }
 
     /// Opens a container file that is already known to be one, bypassing
@@ -134,8 +165,22 @@ impl BlobSource {
     }
 
     pub(crate) fn open_file(path: &Path) -> Result<Self> {
-        let file = std::fs::File::open(path)?;
+        use std::io::Read;
+        let mut file = std::fs::File::open(path)?;
         let len = file.metadata()?.len();
-        Ok(Self::File { file, len })
+        let mut head = [0u8; 4];
+        if file.read_exact(&mut head).is_ok() && crate::sparse::Sparse::is_sparse(&head) {
+            let sparse =
+                crate::sparse::Sparse::parse(&path.display().to_string(), std::fs::read(path)?)?;
+            return Ok(Self::Sparse {
+                sparse,
+                path: path.to_path_buf(),
+            });
+        }
+        Ok(Self::File {
+            file,
+            len,
+            path: path.to_path_buf(),
+        })
     }
 }

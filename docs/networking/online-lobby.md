@@ -363,7 +363,7 @@ screens and for the rules, the bytes and the numbers are ours.
    a room into a title or platform it lacks, or with other mods, is refused `Content` and says
    which. The server's own mods fingerprint is `discovery::NO_MODS` (it loads none);
    `Mods::content_fingerprint` moved onto `discovery::content_fingerprint` so both ends hash alike.
-   **Not compared: the build** (see Open).
+   **The build is compared too** (6 below): a hello from another build is refused by name.
 5. **Exactly one game slot.** A room whose owner presses START queues FIFO and is told its
    place (`Queued { position }`, 1 is next). When the slot frees, the front room is
    re-validated (still at the minimum, still everyone ready) and counts down; a room that no
@@ -483,14 +483,20 @@ joined, countdown 500 ms, the child forked, both reconnected with their tokens a
 
 ### Deploying to a remote host (not done by the spike)
 
+The host needs the binary and one extraction per title, no disc image (part 6).
+
 1. Build: `scripts/build-server-portable.sh musl target/portable/oag-server` (static, any x86-64
    Linux) or `scripts/build-server-portable.sh 2.35 ...` (glibc 2.35). The lobby execs itself for
-   races, so the one binary is all that travels, plus one image per title.
-2. Open **UDP 60000** (the lobby) and **UDP 60001** (the race child) inbound. Nothing else.
-3. Run `./oag-server lobby --image <image> [--image <image> ...] --listen '[::]:60000'
+   races, so the one binary is all that travels.
+2. Extract on your own machine, from your own images (part 6):
+   `oag-server extract --image data/images/pulse-psp-eu.chd --image data/extracted/vita ... --out data/server`.
+   Copy each `data/server/<name>/` folder to the host.
+3. Open **UDP 60000** (the lobby) and **UDP 60001** (the race child) inbound. Nothing else.
+4. Run `./oag-server lobby --image <extraction> [--image <extraction> ...] --listen '[::]:60000'
    --race-listen '[::]:60001' --hash-out lobby.hash` with the four `XDG_*` variables in a
-   directory of its own. The race child inherits the environment.
-4. Give the players the host name, `60000` and the contents of `lobby.hash`. The lobby's hash
+   directory of its own. The race child inherits the environment. A whole image or an unpacked
+   folder works in place of an extraction, so a host that has the disc can use it.
+5. Give the players the host name, `60000` and the contents of `lobby.hash`. The lobby's hash
    changes on every restart; the race child mints its own and the lobby passes it on.
 
 ### Tests
@@ -513,14 +519,8 @@ joined, countdown 500 ms, the child forked, both reconnected with their tokens a
 
 - **No menu screens.** `--online` is a command-line path; Omega's order (ONLINE, CREATE or JOIN,
   settings or list, team, lobby) is the plan for `oag-ui-screens`, with pointer support.
-- **The build is not compared at join.** LAN discovery compares it, but the standalone server has
-  no build string of its own (`BUILD_VERSION` is `oag-game`'s, from its build script), and
-  inventing one would hide every room on a server built any other way. The protocol version is
-  checked at the hello; a client of a different build that gets through is refused by the race
-  child's tick-0 hash: the child sends that client a named reject, but its seat stays filled and
-  never ready, so the race sits out `--join-timeout` and the room returns with "everyone
-  connected but not everyone loaded within 60s", not the content reason. EU and USA pressings of
-  one platform's title are not told apart before the race either (the same rule as LAN).
+- **EU and USA pressings of one platform's title are not told apart before the race** (the
+  same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
   race's loading and reconnects to the lobby misses it; it times out at the child and returns.
 - **A SIGKILLed lobby orphans its running race child**, which exits on its own at the end of the
@@ -534,6 +534,88 @@ joined, countdown 500 ms, the child forked, both reconnected with their tokens a
 - Omega and 2048: not a format finding. The lobby carries a title's name, so those titles are
   hostable as soon as a race on them loads through `oag_net::race::load`; Omega's race is
   incomplete (`omega-status.md`), so that stays **checked, applies, not wired**.
+
+## 6. The server extraction and the build string (2026-10-16)
+
+### The extractor
+
+`oag-server extract --image <image or folder> [--image ...] --out data/server` keeps only what the
+races a server can offer read of a source, one folder per image (named after it). The folder opens
+in place of the source anywhere `--image` is taken (`oag-server lobby`, `oag-server race`, `oag-server`,
+`oag-game`), so a host needs the extraction and never the disc. **Never commit one**: it is the
+source's own content, sliced (`docs/overview/legal.md`); it lives under `data/`, which is ignored.
+
+**How it records.** Every archive reader sits on one lazy `(offset, len)` source
+(`oag_assets::blob_source`), so noting the ranges there sees every read a load makes, by every
+path: entry reads, hash reads, table-of-contents parses, the presence probes (a probe reads the
+table). `oag_assets::record` does that, off by default (one relaxed atomic load per read), and
+`oag_assets::sparse` is the stand-in file: the archive's full length and the bytes of just the
+recorded ranges, under the archive's own relative path. A reader opened on it behaves as on the
+whole archive for every recorded read and fails **by name** (`NotExtracted`) for any other; it
+never answers with zeros. The same reasoning is why the format is not a pruned WAD or PSARC: a
+pruned archive would change the answers to "is X here" and "list the entries", and would need
+writers for both formats.
+
+The identity files that tell a folder's console apart (`UMD_DATA.BIN`, `SYSTEM.CNF`, `PARAM.SFO`)
+and any loose file a load reads are copied whole. `oag-extract.txt` (tab separated) names the
+title, platform, serial, source file name, the source's SHA-256, the extractor's build string, what
+was swept and every file with its length, kept bytes and SHA-256. `oag_source::title::open_source`
+reads the title out of it: a Pure extraction would otherwise open as Pulse, the two ship archives of
+identical names and a folder has no serial.
+
+**What it loads.** The lobby fixes difficulty (`elite`), scheme (`veteran`) and weapons (off) of
+every race, so the axes are a room's circuit, class and mode, the number of people and each seat's
+team. `oag_net::extract::plan` walks each once with the rest at defaults (every circuit, every Zone
+circuit, every team alone and as a full grid of eight in rotation, no opponents), then crosses every
+class with every mode on two circuits. The offer is read from the title's own definitions
+(`catalogue::documents`, `catalogue::raceable_teams`, the one team filter the menu also uses). After
+writing, `extract` loads the **whole plan again from the extraction** and requires the same tick-0
+state hash for every race that loaded from the source; a mismatch is a `GAP` and a non-zero exit.
+
+**Not offered, so not extracted:** downloadable content (the server's race options carry no pack
+folder) and the player override layer; a team or race the source itself refuses is listed as such
+(Omega's guest roster of 2048-era craft needs a hull variant `RaceParams` cannot carry yet, and
+the Zone variant of a circuit that has none).
+
+**Sizes** (the 6 EU sources on this machine, 2026-10-16; what is kept of what the source holds):
+
+| Source | Kept | Of | Races checked from the extraction | Time (debug build, loaded machine) |
+| --- | --- | --- | --- | --- |
+| Pulse PSP (`pulse-psp-eu.chd`) | 190 MiB | 307 MiB | 109 loaded, 0 gaps | 1.5 min |
+| Pulse PS2 (`pulse-ps2-eu.chd`) | 204 MiB | 361 MiB | 183 loaded, 0 gaps | 3.4 min |
+| Pure PSP (`pure-psp-eu.chd`) | 62 MiB | 235 MiB | 102 loaded, 0 gaps | 1 min |
+| HD (`hdfury-ps3-eu.iso`) | 1,072 MiB | 1,879 MiB | 189 loaded, 0 gaps | 13 min |
+| 2048 (`data/extracted/vita`) | 288 MiB | 2,303 MiB | 109 loaded, 0 gaps | 6.4 min |
+| Omega (`data/extracted/ps4`) | not measured at full breadth | 47,091 MiB | the full check did not finish (below) | |
+
+The AI's teams are drawn from the title's whole declared pool by the race's seed, and the
+lobby's seed is arbitrary, so the plan includes seeds that put every pool team on a grid slot
+(`covering_seeds`). That is what grew HD from 41 MiB and 2048 from 5 MiB: without it a race with
+another seed read an AI team's hull, handling and engine sound the extraction lacked (found by the
+ground truth, which loud-fails on any such read: `record::take_misses`).
+
+**Open:** Omega's full-offer check was not completed: each Omega race load costs 1.3 to 2.6 s and
+about 1.7 GB, the plan is 277 races twice, and the second (from the extraction) pass grew to 19 GB
+resident over 55 minutes in one run, cause not found (the single-race and ground-truth loads from
+an Omega extraction behave: 1.7 s, 1.7 GB, hashes equal). The ground truth passes for Omega on two
+named races.
+
+A race reads whole entries (a circuit's `.vex` carries its geometry, collision and textures in one
+compressed blob), so the PSP titles keep most of their circuits and ships. Each extraction took 7 to 45 s
+(debug build, opt-level 2).
+
+### The build string
+
+`oag_net::BUILD_VERSION` (`0.1.0 (abc1234)`) is the one build string, from `crates/net/build.rs`
+(`OAG_GIT_HASH`, else `git`, else `unknown`; `OAG_VERSION_SUFFIX`), moved there from `oag-game`'s build
+script so the server and the client read one definition; `oag-game` takes `oag_net::BUILD_VERSION`
+and `oag_net::GIT_HASH`. `just test-data` sets `OAG_GIT_HASH=test-data`, so a commit does not rebuild
+every binary. The lobby's `Edition` carries it (`oag-server lobby` states its own, `oag-game --online`
+its own), and `Rooms::connect` refuses a hello whose build differs on a title the server hosts, by name
+and with both builds: *"this server is build X, yours is Y: races only match between the same build"*
+(`Refusal::Version`), where it was a 60 s join timeout at the race child's tick-0 hash. `discovery::differs`
+(which also decides LAN `compat`) compares it, so rooms and joins use the same rule. `oag-server
+--version` prints it, and the extraction manifest records the extractor's.
 
 ## Sources
 

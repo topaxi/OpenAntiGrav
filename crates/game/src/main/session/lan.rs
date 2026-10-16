@@ -80,7 +80,7 @@ impl LanFacts {
     fn local(&self) -> oag_net::discovery::Local<'_> {
         oag_net::discovery::Local {
             protocol: oag_net::wire::PROTOCOL,
-            build: oag_game::BUILD_VERSION,
+            build: oag_net::BUILD_VERSION,
             title: &self.title,
             platform: &self.platform,
             content: self.content,
@@ -216,7 +216,7 @@ impl Session {
             name: name.clone(),
             track_label,
             platform: facts.platform.clone(),
-            build: oag_game::BUILD_VERSION.to_string(),
+            build: oag_net::BUILD_VERSION.to_string(),
             content: facts.content,
             port: oag_net::lan::DEFAULT_PORT,
             discovery_port: oag_net::discovery::PORT,

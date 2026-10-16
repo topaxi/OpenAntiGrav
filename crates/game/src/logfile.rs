@@ -42,8 +42,8 @@ pub fn header(
         format!(
             "oag-game {}{} ({profile} build, git {}) on {} {}",
             env!("CARGO_PKG_VERSION"),
-            env!("OAG_VERSION_SUFFIX"),
-            env!("OAG_GIT_HASH"),
+            oag_net::VERSION_SUFFIX,
+            oag_net::GIT_HASH,
             std::env::consts::OS,
             std::env::consts::ARCH
         ),
@@ -83,7 +83,7 @@ mod tests {
         );
         assert!(steam.contains("SteamGameId=unset"), "{steam}");
         assert!(steam.contains("\"/run/pads\" (exists)"), "{steam}");
-        assert!(lines[0].contains(env!("OAG_GIT_HASH")));
+        assert!(lines[0].contains(oag_net::GIT_HASH));
         assert!(lines[1].contains("\"a.chd\""));
         let missing = header(None, &env, &|_| false);
         assert!(missing.last().unwrap().contains("(missing)"));

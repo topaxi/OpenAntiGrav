@@ -15,6 +15,10 @@
 # (default 2.35, Ubuntu 22.04), needing libc and libm only (see
 # `crates/net/tests/server_libs.rs`).
 #
+# The build string the lobby compares (`oag_net::BUILD_VERSION`) is the checkout's short commit hash,
+# read by `crates/net/build.rs`; `OAG_GIT_HASH=<hash>` in the environment overrides it, and a
+# client of any other build is refused by name at the hello.
+#
 # Either way the result is stripped into OUT (default `target/portable/oag-server`).
 # Nothing is installed anywhere.
 set -eu

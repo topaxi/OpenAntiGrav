@@ -752,8 +752,10 @@ installed on the server's host.
    server against the game as a `--net-bot` client, 1,039 confirmed ticks at a
    100 ms `--net-shim`, 0 bad hashes, and the same tick-0 fingerprint as the glibc
    build.
-2. **Copy the binary and the one image** the race is on (`pulse-psp-eu.chd`, 210 MB)
-   to a directory of its own, and give the server that directory for its settings
+2. **Copy the binary and the one extraction** the race is on, to a directory of its own
+   (`oag-server extract --image data/images/pulse-psp-eu.chd --out data/server` keeps only what
+   the server's races read, 183 MiB of Pulse's 308; a whole image works too; see
+   [the online lobby, part 6](online-lobby.md#6-the-server-extraction-and-the-build-string-2026-10-16)), and give the server that directory for its settings
    and logs (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`).
 3. **Run it listening on every address**, on a UDP port the host lets through:
 

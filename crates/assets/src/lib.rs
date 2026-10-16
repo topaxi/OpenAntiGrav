@@ -34,7 +34,9 @@ pub mod dlc;
 pub mod layers;
 pub mod psarc;
 pub mod read_memo;
+pub mod record;
 pub mod source;
+pub mod sparse;
 #[cfg(test)]
 mod testing;
 
@@ -133,6 +135,30 @@ pub enum Error {
         hash: u32,
         /// The name it came from, when the caller supplied one.
         name: Option<String>,
+    },
+
+    /// A read of an archive that a server extraction (see [`sparse`]) did not keep.
+    #[error(
+        "{archive} is a server extraction and holds no bytes at {offset}..{}; \
+         extract again with the race that needs them",
+        offset + len
+    )]
+    NotExtracted {
+        /// The archive read.
+        archive: String,
+        /// The first byte asked for.
+        offset: u64,
+        /// How many bytes.
+        len: u64,
+    },
+
+    /// A sparse archive file that does not parse.
+    #[error("{archive}: not a usable server extraction file ({why})")]
+    BadSparse {
+        /// The file.
+        archive: String,
+        /// What is wrong with it.
+        why: String,
     },
 
     /// A loose layer entry (see [`layers`]) holds no file by that name.

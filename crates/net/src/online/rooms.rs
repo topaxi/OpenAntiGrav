@@ -164,6 +164,27 @@ impl Rooms {
         {
             return Err(refuse(Refusal::BadName, "that name is in use"));
         }
+        // A build that differs on a title this server races is refused here, by name, instead of
+        // at the race's tick-0 hash a minute later.
+        if let Some(server) = self.config.titles.iter().find(|server| {
+            titles.iter().any(|theirs| {
+                theirs.title == server.title
+                    && theirs.platform == server.platform
+                    && theirs.build != server.build
+            })
+        }) {
+            let theirs = titles
+                .iter()
+                .find(|theirs| theirs.title == server.title)
+                .map_or("", |theirs| theirs.build.as_str());
+            return Err(refuse(
+                Refusal::Version,
+                &format!(
+                    "this server is build {}, yours is {theirs}: races only match between the same build",
+                    server.build
+                ),
+            ));
+        }
         self.people.insert(
             id,
             Person {
@@ -224,14 +245,14 @@ impl Rooms {
         };
         let local = Local {
             protocol: PROTOCOL,
-            build: "",
+            build: &theirs.build,
             title: &theirs.title,
             platform: &theirs.platform,
             content: theirs.content,
         };
         let host = Local {
             protocol: PROTOCOL,
-            build: "",
+            build: &server.build,
             title: &server.title,
             platform: &server.platform,
             content: server.content,
@@ -245,6 +266,10 @@ impl Rooms {
 
     fn content_refusal(&self, id: ClientId, title: &str) -> Fail {
         match self.mismatch(id, title) {
+            Some(Compat::OtherVersion) => refuse(
+                Refusal::Version,
+                "your build differs from the server's, so the race would not match",
+            ),
             Some(Compat::OtherContent) => refuse(
                 Refusal::Content,
                 "your mods differ from the server's, so the race would not match",

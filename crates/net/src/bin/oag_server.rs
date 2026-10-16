@@ -25,6 +25,8 @@
 //!
 //! See `docs/networking/README.md`, "Running a local server".
 
+#[path = "oag_server/extract_cmd.rs"]
+mod extract_cmd;
 #[path = "oag_server/lobby_cmd.rs"]
 mod lobby_cmd;
 #[path = "oag_server/race_cmd.rs"]
@@ -43,6 +45,8 @@ use web_time::Duration;
 enum Cmd {
     /// The online lobby: rooms for every title it has an image for, one race at a time.
     Lobby(lobby_cmd::Args),
+    /// Keep only what the races a server offers read of a disc or folder (`docs/networking/online-lobby.md`).
+    Extract(extract_cmd::Args),
     /// One race for the lobby (not run by hand): reads its job from standard input.
     Race(race_cmd::Args),
 }
@@ -50,6 +54,7 @@ enum Cmd {
 #[derive(Parser, Debug)]
 #[command(
     about = "The headless authoritative race server (WebTransport)",
+    version = oag_net::BUILD_VERSION,
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
@@ -113,6 +118,7 @@ fn main() -> Result<()> {
     match cli.cmd {
         Some(Cmd::Lobby(args)) => return lobby_cmd::run(&args),
         Some(Cmd::Race(args)) => return race_cmd::run(&args),
+        Some(Cmd::Extract(args)) => return extract_cmd::run(&args),
         None => {}
     }
     oag_log::tool::start("oag-server", "warn,oag=info,oag_server=info", &cli.log);
