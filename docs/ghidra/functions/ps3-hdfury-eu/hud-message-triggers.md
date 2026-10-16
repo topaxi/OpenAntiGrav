@@ -89,8 +89,11 @@ red `0xff3030` for a bad one. The differences:
    `oag_title::lap_hud::LapVoices`, both in HD's own `speech.bnk` (`PERFECT_LAP`
    0.87 s, `NEW_LAP_REC` 1.24 s, no authored lead-in), raised on the crossing tick
    with the line (so no record voice in Time Trial, where the line is off). The
-   gate byte is not modelled (its meaning is unread). `cont_elim` stays unwired
-   (Elimination, the attacker byte).
+   gate byte is not modelled (its meaning is unread). The original queues an
+   announcer cue behind any announcer line still playing; the port starts it at
+   once (**chosen, not measured**, as [endrace-voices.md](endrace-voices.md) does
+   for the results voice). `cont_elim` stays unwired (Elimination, the attacker
+   byte).
 4. **A voice-only branch.** `hud+0x44 & 0x20` turns the whole drain into
    "`0x1` plays `PERFECT_LAP` and nothing is drawn". What sets that bit is not read
    (a second local player is the obvious reading; 40).
