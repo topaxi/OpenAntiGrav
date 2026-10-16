@@ -154,7 +154,7 @@ directly - see `oag_ui_screens::tag_entry`.
 and tag screens ([menu-sounds.md](../ghidra/functions/psp-pulse-usa/menu-sounds.md#text-entry-dialogs-and-the-boot-2026-10-16-lane-pulse-frontend-sfx)):
 Up and Down scroll the glyph under the cursor, Left and Right step along the row and **onto the confirm slot after the
 last cell**, **Cross steps forward the same way as Right**, Circle steps back (and does nothing on cell 0 - the widget has
-no cancel), Square is unbound, and holding a direction repeats (after 10 frames, then every 2). This confirms the
+no cancel), Square is unbound, and holding Up or Down repeats (after 10 frames, then every 2; the other buttons do not). This confirms the
 "scrolls one glyph at a time, then a confirm slot" shape and corrects the port's reading in two places: the port's Cross on a
 cell does nothing and its Circle cancels, neither of which the widget does. Both are still the port's own, unchanged.
 

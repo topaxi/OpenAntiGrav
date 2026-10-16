@@ -255,7 +255,7 @@ impl TagEntry {
 
     /// Cross on the confirm slot. **Measured**: the original plays `DECLINE`
     /// (`TagInput_Update`'s advance, which has nowhere to go) and then `ACCEPT`
-    /// (the confirm button), a frame apart.
+    /// (the confirm button), on the same press and within a frame or two.
     fn accept_on_slot(&mut self) {
         self.navs.push(Nav::Decline);
         self.navs.push(Nav::Accept);

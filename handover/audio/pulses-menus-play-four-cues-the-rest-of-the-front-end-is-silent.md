@@ -53,7 +53,8 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    closing the root menu plays `DECLINE`; `Results` and `Rewards` advancing plays `ACCEPT`. The widget flag `+0x269`
    (silences `ACCEPT`) was not swept, so a few original buttons that stay silent here make a sound.
 7. **A menu SFX volume row** was not added; the sounds ride the SFX bus (`Bus::Sfx`) and its setting.
-8. **HD**: wired 2026-10-08 (lane `hd-menu-sfx`): `navUp`/`navDown`/`navLeft`/`navRight`, `accept`/`reject` and the
+8. **HD**: (2026-10-16: pausing a race with START, the rename/delete prompts and the boot screens now also play HD's
+   `accept`/`navUp`/... through the shared path, unmeasured on HD; a lane may gate them to Pulse.) wired 2026-10-08 (lane `hd-menu-sfx`): `navUp`/`navDown`/`navLeft`/`navRight`, `accept`/`reject` and the
    `_fury` spellings, from Title data (`SoundBanks::frontend.cues`), pad and pointer. Evidence
    [menu-sounds.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-sounds.md). Open on HD: a blocked step plays `reject`
    in the original and the port's rows wrap; `unlockcell`/`unlockscreen` (cell unlock, `ShowUnlocks`), `~podiumticker`/

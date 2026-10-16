@@ -184,7 +184,7 @@ just play --screenshot /tmp/converting.png --loading-screen 37/115 --ticks 1
 | `LogoFMV` | Entered at boot. `Data\Movies\Intro.PMF` plays straight through, 1200 frames of it. START or cross skips it. |
 | `LogoFMVRedirectScreen` | Only on the skip. A one-shot redirect state, entered and left the same frame; the movie *ending* does not pass through it. |
 | `Language Selection` | The disc's own picker. Up and down move, cross selects. |
-| `Show Logo` | The Pulse logo and PRESS START. START advances it, and so does CROSS (measured on PPSSPP 2026-10-16, both play `ACCEPT`; this build reads START only). No timeout. |
+| `Show Logo` | The Pulse logo and PRESS START. START advances it, and so does CROSS (measured on PPSSPP, USA, 2026-10-16, both play `ACCEPT`; this build reads START only). No timeout. |
 | `Launch Game` | End of the front end. The composition root opens [the menus](menus.md), which are **ours** - see that page for why they are not the disc's `MainMenu_Definition.xml`. |
 
 Every one of those names is a **string literal from the original**, not one we

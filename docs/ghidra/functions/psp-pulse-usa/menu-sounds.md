@@ -142,8 +142,9 @@ The widget class is registered by `FUN_088cbcbc` (it passes the string `TagInput
 | Circle | cursor on cell 0 | silent (no back) | none |
 | Square | any | silent | none |
 
-Holding Up, Down, Left or Right repeats (the decompile: first repeat after 10 frames, then every 2). **Cross on the
-confirm slot plays two cues in one tick**: the widget's own advance has nowhere to go (`DECLINE`) and the sibling
+Holding **Up or Down** repeats, each repeat with `UPDOWN` (the decompile reads `Input_IsHeld` for those two only: first
+repeat after 10 frames, then every 2); Left, Right, Cross and Circle are presses only. **Cross on the confirm slot plays
+two cues on the same press, within a frame or two of each other** (the debugger's clock cannot say which): the widget's own advance has nowhere to go (`DECLINE`) and the sibling
 `ConfirmButton_Update` then accepts (`ACCEPT`), measured on `NameSetup2FromBoot` and `TagSetup2FromBoot` (a 10 cell
 name and a 3 cell tag). A blank name did not stop the cursor reaching the slot. The decompile also reads a flag
 (`+0x129`) and a count (`FUN_088ca80c`) that cap the advance one short of the slot; which field sets them (the
@@ -209,6 +210,12 @@ buffer, as the widget's cannot-advance step). Whether the original's "no" on a y
 also asks `plan_cell` (the same pure plan `launch_campaign_cell` runs) so a cell the build cannot race (a mode it does
 not run, a circuit the disc lacks) plays `DECLINE` instead of `ACCEPT` followed by the notice. **Chosen, not
 measured**: the original has no such refusal.
+
+**Which titles hear this.** Everything above goes through the title's own front-end bank (`play_navs`), so Pulse hears
+measured cues; **Pure and HD inherit them unmeasured** (the cue names resolve from each title's `Title` data: HD's
+`accept`, `navUp` and so on), which means pausing an HD race with START, HD's rename and delete prompts and its boot
+screens now play HD's cues too, with nothing measured on HD for any of them; Omega and 2048 have no front-end bank in
+this build and stay silent. Scoping HD or Pure out is a one-line gate at the callers and was left to the lead.
 
 **Pure and the PS2 pressing.** Pure is **not checkable here**: `/pure/BOOT-psp-pure-usa.BIN` is not open in the shared
 Ghidra bridge and opening it would change the maintainer's session; the four cues play on its menus already and
