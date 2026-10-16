@@ -81,8 +81,27 @@ const STACKED_HALF_MAX: f32 = 85.0;
 pub(super) fn owns(name: &str) -> bool {
     matches!(
         name,
-        "Position" | "Position Outof" | "PositionOf" | "PositionTxt"
+        "Position" | "Position Outof" | "PositionOf" | "DistanceApart" | "PositionTxt"
     )
+}
+
+/// HD's gap label, where Pulse's is `PositionOf`: the same widget under another name.
+const HD_GAP_LABEL: &str = "DistanceApart";
+/// HD's second row sits at `clamp(2 * gap, 240, 720)` (`Hud_UpdatePositionCounter`, `0x00096088`),
+/// in the layout's 1920-wide space: exactly 4x Pulse's `clamp(gap / 2, 60, 180)`, with no
+/// separate top-and-bottom clamp.
+const HD_ROW_MIN: f32 = 240.0;
+const HD_ROW_MAX: f32 = 720.0;
+
+/// Whether the layout is HD's Head to Head shape (an authored `DistanceApart`).
+fn is_hd_shape(layout: &super::Layout) -> bool {
+    layout.label("PositionOf").is_none() && layout.label(HD_GAP_LABEL).is_some()
+}
+
+/// Whether the place panel and its arc are hidden: HD's bind clears the visible flags of
+/// `PositionTxt` and `PositionPanel` in mode 9 (`Hud_BindWidgets`, `0x0009e0ec`).
+pub(super) fn hides_place_panel(cx: &Context<'_>, readout: &Readout) -> bool {
+    readout.head_to_head.is_some() && is_hd_shape(cx.layout)
 }
 
 /// The gap label's scale where it stands under an authored place: a little over the
@@ -95,12 +114,15 @@ const BARE_CLEARANCE_LINES: f32 = 0.25;
 
 /// The Head2Head widgets, or nothing when the layout lacks any of them.
 ///
-/// Two shapes, by what the layout authors:
+/// Three shapes, by what the layout authors:
+///
+/// - HD's and Omega's: `DistanceApart` for the gap label. The place panel is hidden, `Position` and
+///   `Position Outof` carry `1ST`/`2ND` (`clamp(2 * gap, 240, 720)`), the bar is not drawn.
+///   `Hud_UpdatePositionCounter`, confidence 75-80; the ordinal-only rows are chosen.
 ///
 /// - Pulse's own: `HeadToHeadBar`, `Position`, `Position Outof` and `PositionOf` all there
 ///   (Pulse PSP and PS2). Measured.
-/// - Every other: Pure authors no Head to Head, HD and Omega a bar of no height and no
-///   `PositionOf`, 2048 a bare `Position`. The place stands as authored (`2/2`, a hex
+/// - Every other: Pure authors no Head to Head and 2048 a bare `Position`. The place stands as authored (`2/2`, a hex
 ///   panel) and the gap sits under it ([`gap_under_place`]). **Chosen, not measured**: it
 ///   borrows Pulse's gap label and colours, not its rows, whose ordinals only Pulse has.
 ///
@@ -110,10 +132,13 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         return false;
     };
     let layout = cx.layout;
+    let hd = is_hd_shape(layout);
     let (Some(first), Some(second), Some(of), Some(bar)) = (
         layout.label("Position"),
         layout.label("Position Outof"),
-        layout.label("PositionOf"),
+        layout
+            .label("PositionOf")
+            .or_else(|| layout.label(HD_GAP_LABEL)),
         layout.fill("HeadToHeadBar"),
     ) else {
         gap_under_place(cx, state, frame);
@@ -125,7 +150,11 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
     } else {
         (HALF_MIN, HALF_MAX)
     };
-    let half = (state.gap * 0.5).clamp(low, high);
+    let half = if hd {
+        (state.gap * 2.0).clamp(HD_ROW_MIN, HD_ROW_MAX)
+    } else {
+        (state.gap * 0.5).clamp(low, high)
+    };
     let bottom = bar.origin_y + half;
     let tint = argb_to_rgba(if state.player_leads {
         LEADING
@@ -149,20 +178,27 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         wrap_width: None,
     };
 
-    frame.sprites.push(Draw::Fill {
-        rect: [bar.rect[0], bar.rect[1], bar.rect[2], half - y_authored],
-        color: bar.color,
-    });
+    // HD's bar stays undrawn: whether the runtime sizes it is unsettled
+    // (`docs/ghidra/functions/ps3-hdfury-eu/head2head.md`, confidence 50).
+    if !hd {
+        frame.sprites.push(Draw::Fill {
+            rect: [bar.rect[0], bar.rect[1], bar.rect[2], half - y_authored],
+            color: bar.color,
+        });
+    }
     // The bind copies `Position`'s `x` (`+0x9c`) and align (`+0x168`) onto
     // `Position Outof`, so the two rows share one right edge (measured live
     // 2026-09-29: within 3 px). `PositionOf` keeps its own `x`: the gap label's
     // right edge sat about 8 px past the rows'.
     let second = &super::Label {
-        x: first.x,
+        x: if hd { second.x } else { first.x },
         ..second.clone()
     };
     // `"%s %s"`: the ordinal, then the craft's team name where there is one.
-    let row = |id: &str, team: Option<&String>| match team {
+    // HD's rows are the ordinal alone, **chosen, not measured**: the original's `"%s %s"` puts a team
+    // name after it, and at the layout's own size (`Position` scale 1.0 in the HUD font, a
+    // hex-panel number's size) `1ST FEISAR` runs out of its view.
+    let row = |id: &str, team: Option<&String>| match team.filter(|_| !hd) {
         Some(team) => format!(
             "{} {}",
             cx.strings.get_or_id(id),
@@ -178,8 +214,19 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
     // The leader row stands on the bar's top: `Position` and the bar share the authored `y`
     // (30), and the row is bottom-aligned. That is the same place in both cuts of this
     // layout, so the top and bottom cut changes the bar's length and not this row.
-    let first_y = top_edge(first, cx.default_line_height);
-    frame.default_text.push(text(
+    // HD keeps both rows in the layout's authored font and anchors; the second is
+    // bottom-aligned at `y = half`.
+    let (rows, row_line, second_scale) = if hd {
+        (&mut frame.hud_text, cx.hud_line_height, second.scale)
+    } else {
+        (
+            &mut frame.default_text,
+            cx.default_line_height,
+            SECOND_ROW_SCALE,
+        )
+    };
+    let first_y = top_edge(first, row_line);
+    rows.push(text(
         first,
         first_y,
         first.scale,
@@ -187,11 +234,17 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         first_colour,
         row("IG_HUD_1ST", first_team),
     ));
-    frame.default_text.push(text(
+    let second_y = if hd {
+        bottom - row_line * second_scale
+    } else {
+        bottom
+    };
+    let second_align = if hd { second.align } else { first.align };
+    rows.push(text(
         second,
-        bottom,
-        SECOND_ROW_SCALE,
-        first.align,
+        second_y,
+        second_scale,
+        second_align,
         second_colour,
         row("IG_HUD_2ND", second_team),
     ));

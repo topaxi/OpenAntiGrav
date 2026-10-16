@@ -191,3 +191,71 @@ fn a_layout_without_pulses_widgets_keeps_its_place_and_gains_the_gap_under_it() 
     assert_eq!(*colour, argb_to_rgba(0xFFFF_3030));
     assert_eq!(gap, "+ 42m");
 }
+
+const HD_XML: &str = r#"<Screen>
+<Text name="PositionTxt"><Values idstring="IG_HUD_POS" font="HUDSmall" align="left" scale="0.8" x="70" y="0"/></Text>
+<Text name="Position"><Values scale="1.0" font="HUD" align="centre" vertalign="middle" x="182" y="92"/></Text>
+<Text name="DistanceApart"><Values string="" scale="0.6" font="HUD" align="right" vertalign="bottom" x="180" y="104"/></Text>
+<Text name="Position Outof"><Values scale="0.6" font="HUD" align="left" vertalign="bottom" x="255" y="80"/></Text>
+<Image name="HeadToHeadBar"><Values x="200" y="120" width="20" height="0" Color="0xB40048FF"/></Image>
+</Screen>"#;
+
+fn hd_frame(gap: f32, leads: bool) -> Frame {
+    let layout = Layout::from_xml(HD_XML);
+    let strings = strings();
+    let mut readout = Readout::blank();
+    readout.place = 2;
+    readout.ships = 2;
+    readout.head_to_head = Some(HeadToHead {
+        gap,
+        player_leads: leads,
+        ..HeadToHead::default()
+    });
+    draw_list(&context(&layout, &strings), &readout)
+}
+
+/// `Hud_UpdatePositionCounter` (`0x00096088`): the second row sits at `clamp(2 * gap, 240, 720)`,
+/// 4x Pulse's law, on HD's `DistanceApart` label, with no bar drawn and the place replaced by
+/// the two rows.
+#[test]
+fn hd_second_row_follows_the_4x_clamp_and_the_gap_uses_distance_apart() {
+    let bottoms = |gap| {
+        let frame = hd_frame(gap, true);
+        let rows = texts(&frame);
+        assert!(fill_rect(&frame).is_none(), "HD's bar stays undrawn");
+        assert!(rows.iter().all(|r| r.0 != "2/2"), "the place is replaced");
+        assert!(rows.iter().any(|r| r.0 == "-" || r.0.starts_with('-')));
+        let second = rows.iter().find(|r| r.0 == "IG_HUD_2ND").unwrap().1;
+        let label = rows.iter().find(|r| r.0.ends_with('m')).unwrap().1;
+        (second, label)
+    };
+    let (low, _) = bottoms(10.0);
+    let (mid, mid_label) = bottoms(200.0);
+    let (high, _) = bottoms(900.0);
+    // Bottom-aligned at y = D: the top is D less one 0.6-scale line.
+    let line = 0.6 * context_line();
+    assert_eq!(low, 240.0 - line);
+    assert_eq!(mid, 400.0 - line);
+    assert_eq!(high, 720.0 - line);
+    // The gap label sits at the midpoint of the bar's top (120) and the second row.
+    assert_eq!(
+        mid_label,
+        (120.0 + 400.0) * 0.5 - 0.6 * context_line() / 2.0
+    );
+}
+
+fn context_line() -> f32 {
+    let layout = Layout::from_xml(HD_XML);
+    let strings = strings();
+    context(&layout, &strings).hud_line_height
+}
+
+#[test]
+fn hd_colours_the_leader_green_and_the_trailer_red() {
+    let leading = texts(&hd_frame(100.0, true));
+    let gap = leading.iter().find(|r| r.0.ends_with('m')).unwrap();
+    assert_eq!(gap.2, argb_to_rgba(0xFF30_FF30));
+    let trailing = texts(&hd_frame(100.0, false));
+    let gap = trailing.iter().find(|r| r.0.ends_with('m')).unwrap();
+    assert_eq!(gap.2, argb_to_rgba(0xFFFF_3030));
+}

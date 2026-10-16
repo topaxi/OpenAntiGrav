@@ -739,3 +739,4 @@
 0x00035760	function	Collision_TestObbObb	82	mp-time-trial-collision.md
 0x0003a320	function	Collision_ConstructObb	80	mp-time-trial-collision.md
 0x0003a1a8	function	Collision_SetObbHalfExtents	78	mp-time-trial-collision.md
+0x0009e0ec	function	Hud_BindWidgets	85	head2head.md

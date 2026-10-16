@@ -43,7 +43,7 @@ relative (Pure from Pulse, Omega from HD, 2048 from HD via Omega).
    writes anything (modern saves: no per-person profile exists).
 2. ~~Pure, HD, Omega, 2048 readout~~ landed 2026-10-16 (`h2h-readout-titles`): the place stands, the
    gap sits under it (`docs/rendering/split-screen.md`), chosen, not measured. Still open (2026-10-16, `hd-h2h-bar`): HD's writer is `Hud_UpdatePositionCounter` (`0x00096088`), and
-   HD authors its gap label as `DistanceApart` (not `PositionOf`). Law: second row at `clamp(2*gap, 240, 720)`, `%s%3.0fm`. Open: whether it sizes
+   HD authors its gap label as `DistanceApart` (not `PositionOf`). Law wired on HD and Omega (rows, `DistanceApart`, panel hidden). Open: whether it sizes
    the bar - needs HD's HUD `Image` field map (is `+0xb0` Height?) or a forced mode 9 on RPCS3; see the HD head2head page.
 3. The left and right cut's leader row at `y = 49` (this build keeps the authored place) and the
    one-person player row's profile tag.

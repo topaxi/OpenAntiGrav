@@ -144,6 +144,26 @@ RPCS3 and read the bar's drawn height: `D - 120` if it is a height.
 
 ### 2048 / Omega
 
-Omega **checked, applies, not wired**: it reads HD's layouts (the same split layouts, pinned by
-`hd_2048_and_omega_ship_the_same_split_layouts_540_apart`), so `DistanceApart` is there too.
+Omega **ported**: it reads HD's layouts (the same split layouts, pinned by
+`hd_2048_and_omega_ship_the_same_split_layouts_540_apart`), so `DistanceApart` is there too, and the wiring
+below runs on it (`omega_draws_hds_rows_and_gap_label`, looked at both cuts).
 2048 authors no Head to Head widget (merged 2026-10-16): **checked, differs**.
+
+### Wired (same day)
+
+`oag_hud::head_to_head` takes HD's shape when a layout authors `DistanceApart` and no `PositionOf`
+(layout data, no `title.name` branch): `PositionTxt`, `PositionPanel` and the place arc are hidden;
+`Position` carries `1ST`, `Position Outof` carries `2ND` bottom-aligned at `clamp(2*gap, 240, 720)` (layout-local,
+so the second seat's layout, 540 lower, follows); `DistanceApart` carries `-`/`+` and the gap in green/red at the
+midpoint of the bar's authored top and the second row. Rows are in the layout's authored font and anchors.
+
+- **Bar: undrawn** (sizing unsettled, confidence 50).
+- **Chosen, not measured:** the rows are the ordinal alone. The original's `"%s %s"` adds the team name, and at
+  `Position`'s authored size (scale 1.0, HUD font) `1ST FEISAR` ran out of its view in a first picture.
+- **Top-and-bottom cut:** the clamp has no stacked variant, so the second row sits at layout y 240..720 in a view
+  540 high: it fits up to a gap of 270 and is cut off by the view's scissor beyond that. The side-by-side cut
+  (1080 high) fits the whole range. Evidence the original's split mode was never tuned for this mode.
+- Pure and 2048 keep the borrowed gap-under-the-place readout.
+- Pins: `hd_second_row_follows_the_4x_clamp_and_the_gap_uses_distance_apart`,
+  `hd_colours_the_leader_green_and_the_trailer_red` (`oag-hud`); `hd_draws_its_rows_and_its_own_gap_label`,
+  `omega_draws_hds_rows_and_gap_label` (`oag-game`).

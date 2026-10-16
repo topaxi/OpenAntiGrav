@@ -743,8 +743,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // An always-on name draws **once**, even where the layout authors it twice.
     // See `ONE_WIDGET_PER_NAME`.
     let mut drawn_once: Vec<&str> = Vec::new();
+    let hide_panel = super::head_to_head::hides_place_panel(cx, readout);
     for sprite in &cx.layout.sprites {
-        if !cx.art.always_on.contains(&sprite.name.as_str())
+        if (hide_panel && sprite.name == "PositionPanel")
+            || !cx.art.always_on.contains(&sprite.name.as_str())
             || drawn_once.contains(&sprite.name.as_str())
         {
             continue;
