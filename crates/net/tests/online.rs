@@ -316,6 +316,84 @@ fn a_client_of_the_race_port_and_a_client_of_the_lobby_port_are_refused_by_name(
     assert!(format!("{refused}").contains("online lobby"), "{refused}");
 }
 
+#[test]
+fn a_client_of_another_build_reads_the_refusal_before_the_close() {
+    let mut lab = Lab::new(thread_runner(60));
+    let link = oag_net::wt::connect(&lab.server.local_addr().to_string(), lab.server.cert_hash())
+        .expect("connects");
+    let other = Edition {
+        build: "0.1 (zzz)".into(),
+        ..edition()
+    };
+    let mut client = LobbyClient::connect(Box::new(link) as Box<dyn Link>, "Eve", &[other], "");
+    let started = std::time::Instant::now();
+    let (code, text) = loop {
+        lab.server.poll();
+        let polled = client.poll();
+        if let Some(refused) = client.refused.take() {
+            break refused;
+        }
+        assert!(
+            polled.is_ok(),
+            "the link closed before the refusal was read: {polled:?}"
+        );
+        assert!(started.elapsed().as_secs() < 20, "no answer");
+        std::thread::sleep(Duration::from_millis(2));
+    };
+    assert_eq!(code, oag_net::wire::online::Refusal::Version);
+    assert!(
+        text.contains("races only match between the same build"),
+        "{text}"
+    );
+}
+
+/// A link whose far end said something and then hung up: the order a refused hello arrives in
+/// over a real network, where the close is read in the same poll as the refusal.
+struct HungUp(oag_net::link::Loopback);
+
+impl Link for HungUp {
+    fn send_datagram(&mut self, bytes: Vec<u8>) {
+        self.0.send_datagram(bytes);
+    }
+    fn recv_datagram(&mut self) -> Option<Vec<u8>> {
+        self.0.recv_datagram()
+    }
+    fn send_reliable(&mut self, bytes: Vec<u8>) {
+        self.0.send_reliable(bytes);
+    }
+    fn recv_reliable(&mut self) -> Option<Vec<u8>> {
+        self.0.recv_reliable()
+    }
+    fn closed(&self) -> Option<String> {
+        Some("closed: code=0 reason=bye".into())
+    }
+    fn max_datagram(&self) -> usize {
+        1_200
+    }
+}
+
+#[test]
+fn a_refusal_that_arrives_with_the_close_is_still_read() {
+    use oag_net::wire::online::{Message, Refusal};
+    let (mut lobby, client_end) = oag_net::link::Loopback::pair();
+    lobby.send_lobby(&Message::Rejected {
+        code: Refusal::Version,
+        text: "this server is build X, yours is Y".into(),
+    });
+    let mut client = LobbyClient::connect(Box::new(HungUp(client_end)), "Eve", &[edition()], "");
+    assert!(
+        client.poll().is_ok(),
+        "the refusal must be handed over before the close"
+    );
+    let (code, text) = client.refused.take().expect("the refusal was read");
+    assert_eq!(code, Refusal::Version);
+    assert!(text.contains("build X"));
+    assert!(
+        client.poll().is_err(),
+        "the close is reported on the next poll"
+    );
+}
+
 /// A shell script standing in for `oag-server race`.
 fn fake_race(body: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
