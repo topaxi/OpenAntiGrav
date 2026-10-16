@@ -22,25 +22,7 @@ pub(crate) fn drive(
     sleep: std::time::Duration,
 ) -> Vec<Stats> {
     let mut totals = vec![Stats::default(); clients.len()];
-    for (client, race, _) in clients.iter_mut() {
-        loop {
-            host.poll();
-            if client.poll_welcome().expect("welcomed").is_some() {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
-        client.ready(race).expect("same start state");
-    }
-    let asked = std::time::Instant::now();
-    while !host.all_ready() {
-        host.poll();
-        for (client, _, _) in clients.iter_mut() {
-            client.poll();
-        }
-        assert!(asked.elapsed().as_secs() < 5, "{:?}", host.seat_names());
-        std::thread::sleep(std::time::Duration::from_millis(1));
-    }
+    ready_all(host, clients);
     host.start(0);
     while host.tick_number() < ticks {
         host.poll();
@@ -88,6 +70,29 @@ pub(crate) fn drive(
         std::thread::sleep(std::time::Duration::from_millis(2));
     }
     totals
+}
+
+/// Welcomes every client and waits until the host has them all ready.
+pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilot)]) {
+    for (client, race, _) in clients.iter_mut() {
+        loop {
+            host.poll();
+            if client.poll_welcome().expect("welcomed").is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        client.ready(race).expect("same start state");
+    }
+    let asked = std::time::Instant::now();
+    while !host.all_ready() {
+        host.poll();
+        for (client, _, _) in clients.iter_mut() {
+            client.poll();
+        }
+        assert!(asked.elapsed().as_secs() < 5, "{:?}", host.seat_names());
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
 }
 
 pub(crate) fn params(people: u8) -> RaceParams {
@@ -210,4 +215,49 @@ fn a_client_with_different_content_is_refused_at_the_start() {
         host.departed(),
         "the refused seat is a departure a lobby can end the start on"
     );
+}
+
+/// A person who leaves mid-race is retired on both ends at the same tick: the record carries
+/// the seat, the server's and the survivor's craft stop being a person's, and the hashes still
+/// agree on every confirmed tick.
+#[test]
+fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
+    use oag_gameplay::Controller;
+    let params = params(2);
+    let mut host = Host::new(headless(&params), params);
+    let mut clients = seated(&mut host, 2, 0.0);
+    ready_all(&mut host, &mut clients);
+    host.start(0);
+    let mut survivor_mismatches = 0;
+    let mut survivor_matches = 0;
+    while host.tick_number() < 300 {
+        host.poll();
+        host.tick();
+        for (n, (client, race, pilot)) in clients.iter_mut().enumerate() {
+            if n == 1 && host.tick_number() > 100 {
+                continue;
+            }
+            let own = pilot(client, race);
+            client.step(race, &own);
+            if n == 1 && host.tick_number() == 100 {
+                client.leave("quit");
+            }
+            let stats = client.take_stats();
+            if n == 0 {
+                survivor_mismatches += stats.hash_mismatches;
+                survivor_matches += stats.hash_matches;
+            }
+        }
+    }
+    host.end("the test is over");
+    assert_eq!(survivor_mismatches, 0);
+    assert!(survivor_matches > 200, "{survivor_matches}");
+    let history = host.history();
+    assert_eq!(history[50].retired, 0);
+    assert_eq!(
+        history[299].retired, 0b10,
+        "seat 1 is retired once it has left"
+    );
+    assert_eq!(host.race().sim.world.controllers[1], Controller::Ai);
+    assert_eq!(host.race().sim.world.controllers[0], Controller::Remote);
 }

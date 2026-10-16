@@ -456,6 +456,7 @@ impl Client {
                     *last = *held;
                 }
             }
+            crate::race::retire(race, record.retired);
             race.tick_sim_only(&inputs);
             if race.sim.state_hash() == record.hash {
                 self.stats.hash_matches += 1;

@@ -209,6 +209,11 @@ pub struct TickRecord {
     pub hash: u64,
     /// The input the server applied to each person's slot, `0..people` in order.
     pub inputs: Vec<Held>,
+    /// The seats whose person has left, one bit a seat (bit 0 is seat 0), cumulative. From
+    /// the tick it first appears in, both ends hand that craft to the AI driver before the
+    /// tick runs ([`crate::race::retire`]), so a leaver cannot hold the race open. Chosen, not
+    /// measured.
+    pub retired: u8,
 }
 
 /// The unreliable datagrams' messages.
@@ -314,6 +319,7 @@ impl Confirmed {
         );
         for tick in &self.ticks {
             out.extend_from_slice(&tick.hash.to_le_bytes());
+            out.push(tick.retired);
             for held in tick.inputs.iter().take(people) {
                 held.put(out);
             }
@@ -327,10 +333,15 @@ impl Confirmed {
         let mut ticks = Vec::with_capacity(count);
         for _ in 0..count {
             let hash = reader.u64()?;
+            let retired = reader.u8()?;
             let inputs = (0..people)
                 .map(|_| Held::take(reader))
                 .collect::<Result<_, _>>()?;
-            ticks.push(TickRecord { hash, inputs });
+            ticks.push(TickRecord {
+                hash,
+                inputs,
+                retired,
+            });
         }
         Ok(Self { first, ticks })
     }
@@ -338,7 +349,7 @@ impl Confirmed {
     /// The bytes one tick record costs with `people` people.
     #[must_use]
     pub const fn record_bytes(people: usize) -> usize {
-        8 + people * Held::BYTES
+        9 + people * Held::BYTES
     }
 }
 

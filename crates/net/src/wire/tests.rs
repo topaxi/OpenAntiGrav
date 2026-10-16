@@ -55,10 +55,12 @@ fn every_control_message_round_trips() {
                 TickRecord {
                     hash: 1,
                     inputs: vec![held(1, 0.5), held(2, -1.0)],
+                    retired: 0,
                 },
                 TickRecord {
                     hash: u64::MAX,
                     inputs: vec![held(3, 0.0), held(0, 1.0e-7)],
+                    retired: 0b10,
                 },
             ],
         }),
@@ -92,6 +94,7 @@ fn every_datagram_round_trips_with_the_exact_bits() {
             ticks: vec![TickRecord {
                 hash: 42,
                 inputs: vec![held(1, 0.1)],
+                retired: 1,
             }],
         },
     };

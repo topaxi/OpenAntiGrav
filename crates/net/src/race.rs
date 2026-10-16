@@ -119,6 +119,18 @@ pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
     Ok(())
 }
 
+/// Hands the craft of every seat in `retired` (a [`crate::wire::TickRecord::retired`] mask) to
+/// the AI driver: a person who left must not hold the race open, and the end rule
+/// (`Race::finished`) counts only people. Both ends call it with the same mask at the same
+/// tick. **Chosen, not measured**: the original has no network race.
+pub fn retire(race: &mut Race, retired: u8) {
+    for slot in 0..oag_gameplay::MAX_PLAYERS.min(8) {
+        if retired >> slot & 1 == 1 {
+            race.sim.world.controllers[slot] = Controller::Ai;
+        }
+    }
+}
+
 /// The state hash a prepared race starts from: what the client must reproduce to
 /// join.
 #[must_use]

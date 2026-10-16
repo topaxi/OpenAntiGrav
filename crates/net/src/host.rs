@@ -19,6 +19,7 @@
 //! - [`RESEND_CHUNK`]: how many ticks a resend carries per message.
 
 use std::collections::BTreeMap;
+use web_time::{Duration, Instant};
 
 use oag_gameplay::input::Input;
 use oag_gameplay::{MAX_PLAYERS, PlayerInputs};
@@ -50,6 +51,8 @@ pub struct Seat {
     newest: Option<u32>,
     /// Why the seat left, once it has.
     left: Option<String>,
+    /// When anything last arrived from the seat.
+    heard: Instant,
     counts: SeatCounts,
 }
 
@@ -232,6 +235,7 @@ impl Host {
                         first,
                         inputs,
                     }) if usize::from(from) == slot => {
+                        seat.heard = Instant::now();
                         for (i, held) in inputs.into_iter().enumerate() {
                             let tick = first.saturating_add(u32::try_from(i).unwrap_or(u32::MAX));
                             if tick < next {
@@ -353,6 +357,7 @@ impl Host {
                     edges: Input::new(),
                     newest: None,
                     left: None,
+                    heard: Instant::now(),
                     counts: SeatCounts::default(),
                 });
                 return Ok(slot);
@@ -370,6 +375,7 @@ impl Host {
     /// `lead_ticks` ticks from now.
     pub fn start(&mut self, lead_ticks: u16) {
         for seat in self.seats.iter_mut().flatten() {
+            seat.heard = Instant::now();
             seat.link.send_control(&Control::Start { lead_ticks });
         }
         self.phase = Phase::Racing;
@@ -403,12 +409,25 @@ impl Host {
             };
             applied.push(held);
         }
+        let retired = self.retired_mask();
+        crate::race::retire(&mut self.race, retired);
         self.race.tick_sim_only(&inputs);
         self.history.push(TickRecord {
             hash: self.race.sim.state_hash(),
             inputs: applied,
+            retired,
         });
         self.broadcast();
+    }
+
+    /// The seats whose person has left, as [`TickRecord::retired`] carries them.
+    fn retired_mask(&self) -> u8 {
+        self.seats
+            .iter()
+            .enumerate()
+            .take(8)
+            .filter(|(_, seat)| seat.as_ref().is_some_and(|seat| seat.left.is_some()))
+            .fold(0, |mask, (slot, _)| mask | 1 << slot)
     }
 
     fn broadcast(&mut self) {
@@ -433,6 +452,23 @@ impl Host {
                 },
             });
         }
+    }
+
+    /// Retires every seat nothing has arrived from for `after` while the race runs: a vanished
+    /// player (no close frame) would otherwise hold the seat until QUIC's 30 s idle timeout.
+    /// Returns how many were retired. Chosen, not measured.
+    pub fn drop_silent(&mut self, after: Duration) -> usize {
+        let mut dropped = 0;
+        for (slot, seat) in self.seats.iter_mut().enumerate() {
+            let Some(seat) = seat.as_mut() else { continue };
+            if seat.left.is_none() && seat.heard.elapsed() > after {
+                let why = format!("no input for {after:?}");
+                log::warn!("net: seat {slot} ({}) left: {why}", seat.name);
+                seat.left = Some(why);
+                dropped += 1;
+            }
+        }
+        dropped
     }
 
     /// Whether every person's craft has finished ([`Race::finished`]).
