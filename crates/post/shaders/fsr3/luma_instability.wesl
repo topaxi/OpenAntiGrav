@@ -47,7 +47,8 @@ import package::fsr3::common::{
 @group(1) @binding(3) var r_luma_history: texture_2d<f32>;
 @group(1) @binding(4) var r_farthest_depth_mip1: texture_2d<f32>;
 @group(1) @binding(5) var rw_luma_history: texture_storage_2d<rgba16float, write>;
-@group(1) @binding(6) var rw_luma_instability: texture_storage_2d<rgba16float, write>;
+@if(!narrow) @group(1) @binding(6) var rw_luma_instability: texture_storage_2d<rgba16float, write>;
+@if(narrow) @group(1) @binding(6) var rw_luma_instability: texture_storage_2d<r16float, write>;
 
 fn load_dilated_motion_vector(px_pos: vec2<i32>) -> vec2<f32> {
     return textureLoad(r_dilated_motion_vectors, px_pos, 0).xy;

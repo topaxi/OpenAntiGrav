@@ -63,6 +63,7 @@ use anyhow::Result;
 
 mod bindings;
 mod constants;
+mod formats;
 mod groups;
 mod resources;
 
@@ -72,6 +73,7 @@ use bindings::{
 };
 
 pub use constants::{Camera, Constants, Dispatch, camera_from_projection};
+pub use formats::Formats;
 pub use resources::{PYRAMID_MIPS, Sizes, Targets};
 
 /// Whether `adapter` can run this at all.
@@ -231,6 +233,13 @@ macro_rules! pass_wgsl {
     ($name:literal) => {
         include_str!(concat!(env!("OUT_DIR"), "/fsr3_", $name, ".wgsl"))
     };
+    ($name:literal, $formats:expr) => {
+        if $formats.is_narrow() {
+            include_str!(concat!(env!("OUT_DIR"), "/fsr3_", $name, "_narrow.wgsl"))
+        } else {
+            include_str!(concat!(env!("OUT_DIR"), "/fsr3_", $name, ".wgsl"))
+        }
+    };
 }
 
 /// How many threads each of upstream's render-resolution passes covers, in each
@@ -317,6 +326,8 @@ pub struct Fsr3 {
     /// [`level_entry`]; written once, because the extents are a function of the
     /// allocation rather than of the frame.
     levels: Vec<wgpu::Buffer>,
+    /// The storage formats the layouts, the shader artifacts and [`Self::targets`] agree on.
+    formats: Formats,
 
     targets: Option<Targets>,
     /// Both ping-pong parities' bind groups, or `None` before the first frame
@@ -356,6 +367,15 @@ impl Fsr3 {
     /// rather than unwrapping it, so a broken shader reports itself once and
     /// leaves the game running on the next rung of the ladder.
     pub fn new(device: &wgpu::Device) -> Result<Self> {
+        Self::with_formats(device, Formats::probe(device))
+    }
+
+    /// [`Self::new`] with the storage formats chosen by the caller, for a test that runs both sets.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::new`].
+    pub fn with_formats(device: &wgpu::Device, formats: Formats) -> Result<Self> {
         let shared_layout = shared_layout(device);
 
         // **Both clamp**, which is what upstream's `s_PointClamp` and
@@ -388,11 +408,11 @@ impl Fsr3 {
                 load_multisampled_entry(0, multisampled),
                 load_multisampled_entry(1, multisampled),
                 load_entry(2),
-                store_entry(3, wgpu::TextureFormat::Rgba16Float),
-                store_entry(4, wgpu::TextureFormat::R32Float),
+                store_entry(3, formats.pair()),
+                store_entry(4, formats.depth()),
                 atomic_entry(5),
-                store_entry(6, wgpu::TextureFormat::R32Float),
-                store_entry(7, wgpu::TextureFormat::Rgba16Float),
+                store_entry(6, formats.scalar()),
+                store_entry(7, formats.filterable()),
             ]
         };
         let prepare_inputs_layout = [false, true].map(|multisampled| {
@@ -404,10 +424,7 @@ impl Fsr3 {
         let luma_pyramid_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("fsr3 luma pyramid"),
-                entries: &[
-                    load_entry(0),
-                    store_entry(1, wgpu::TextureFormat::Rgba16Float),
-                ],
+                entries: &[load_entry(0), store_entry(1, formats.filterable())],
             });
         // One layout for both pyramid entry points, so that a level-0 dispatch
         // and a reduce dispatch bind the same shape. Each reads a different
@@ -421,7 +438,7 @@ impl Fsr3 {
                     load_entry(1),
                     load_entry(2),
                     load_entry(3),
-                    store_entry(4, wgpu::TextureFormat::Rgba16Float),
+                    store_entry(4, formats.pair()),
                     level_entry(5),
                 ],
             });
@@ -429,10 +446,7 @@ impl Fsr3 {
         let shading_change_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("fsr3 shading change"),
-                entries: &[
-                    sample_entry(0),
-                    store_entry(1, wgpu::TextureFormat::Rgba8Unorm),
-                ],
+                entries: &[sample_entry(0), store_entry(1, formats.unorm())],
             });
         let prepare_reactivity_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -445,8 +459,8 @@ impl Fsr3 {
                     sample_entry(4),
                     sample_entry(5),
                     store_entry(6, wgpu::TextureFormat::Rgba8Unorm),
-                    store_entry(7, wgpu::TextureFormat::Rgba8Unorm),
-                    store_entry(8, wgpu::TextureFormat::Rgba8Unorm),
+                    store_entry(7, formats.unorm()),
+                    store_entry(8, formats.unorm()),
                 ],
             });
         let luma_instability_layout =
@@ -459,7 +473,7 @@ impl Fsr3 {
                     sample_entry(3),
                     sample_entry(4),
                     store_entry(5, wgpu::TextureFormat::Rgba16Float),
-                    store_entry(6, wgpu::TextureFormat::Rgba16Float),
+                    store_entry(6, formats.filterable()),
                 ],
             });
         let accumulate_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -529,50 +543,50 @@ impl Fsr3 {
         let prepare_inputs = [
             pipeline(
                 "fsr3 prepare inputs",
-                pass_wgsl!("prepare_inputs"),
+                pass_wgsl!("prepare_inputs", formats),
                 "cs_prepare_inputs",
                 &prepare_inputs_layout[0],
             ),
             pipeline(
                 "fsr3 prepare inputs (msaa)",
-                pass_wgsl!("prepare_inputs_msaa"),
+                pass_wgsl!("prepare_inputs_msaa", formats),
                 "cs_prepare_inputs",
                 &prepare_inputs_layout[1],
             ),
         ];
         let luma_pyramid = pipeline(
             "fsr3 luma pyramid",
-            pass_wgsl!("luma_pyramid"),
+            pass_wgsl!("luma_pyramid", formats),
             "cs_luma_pyramid",
             &luma_pyramid_layout,
         );
         let shading_change_pyramid_mip0 = pipeline(
             "fsr3 shading change pyramid mip0",
-            pass_wgsl!("shading_change_pyramid"),
+            pass_wgsl!("shading_change_pyramid", formats),
             "cs_shading_change_pyramid_mip0",
             &shading_change_pyramid_layout,
         );
         let shading_change_pyramid_reduce = pipeline(
             "fsr3 shading change pyramid reduce",
-            pass_wgsl!("shading_change_pyramid"),
+            pass_wgsl!("shading_change_pyramid", formats),
             "cs_shading_change_pyramid_reduce",
             &shading_change_pyramid_layout,
         );
         let shading_change = pipeline(
             "fsr3 shading change",
-            pass_wgsl!("shading_change"),
+            pass_wgsl!("shading_change", formats),
             "cs_shading_change",
             &shading_change_layout,
         );
         let prepare_reactivity = pipeline(
             "fsr3 prepare reactivity",
-            pass_wgsl!("prepare_reactivity"),
+            pass_wgsl!("prepare_reactivity", formats),
             "cs_prepare_reactivity",
             &prepare_reactivity_layout,
         );
         let luma_instability = pipeline(
             "fsr3 luma instability",
-            pass_wgsl!("luma_instability"),
+            pass_wgsl!("luma_instability", formats),
             "cs_luma_instability",
             &luma_instability_layout,
         );
@@ -611,6 +625,7 @@ impl Fsr3 {
             rcas_layout,
             rcas,
             levels,
+            formats,
             targets: None,
             groups: None,
             group_rebuilds: 0,
@@ -651,6 +666,7 @@ impl Fsr3 {
             rcas_layout: self.rcas_layout.clone(),
             rcas: self.rcas.clone(),
             levels: self.levels.clone(),
+            formats: self.formats,
             targets: None,
             groups: None,
             group_rebuilds: 0,
@@ -686,6 +702,12 @@ impl Fsr3 {
     #[must_use]
     pub fn sizes(&self) -> Option<Sizes> {
         self.targets.as_ref().map(Targets::sizes)
+    }
+
+    /// The storage formats this chain was built with.
+    #[must_use]
+    pub fn formats(&self) -> Formats {
+        self.formats
     }
 
     /// The constants this frame was dispatched with, for a test.
@@ -963,7 +985,7 @@ impl Fsr3 {
         {
             return;
         }
-        self.targets = Some(Targets::new(device, max_render, upscale));
+        self.targets = Some(Targets::new(device, max_render, upscale, self.formats));
         // Every bind group points into the targets just dropped.
         self.groups = None;
         // A new history is no history. Without this, the first frame after a

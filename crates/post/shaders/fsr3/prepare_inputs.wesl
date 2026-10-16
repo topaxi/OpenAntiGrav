@@ -51,7 +51,8 @@ import package::fsr3::common::{
 // velocity across a silhouette edge, which is where the two surfaces have the
 // least in common.
 @group(1) @binding(2) var r_input_color_jittered: texture_2d<f32>;
-@group(1) @binding(3) var rw_dilated_motion_vectors: texture_storage_2d<rgba16float, write>;
+@if(!narrow) @group(1) @binding(3) var rw_dilated_motion_vectors: texture_storage_2d<rgba16float, write>;
+@if(narrow) @group(1) @binding(3) var rw_dilated_motion_vectors: texture_storage_2d<rg16float, write>;
 @group(1) @binding(4) var rw_dilated_depth: texture_storage_2d<r32float, write>;
 // **A buffer, where upstream has an `R32_UINT` UAV.** `StoreReconstructedDepth`
 // scatters with an `InterlockedMin`, and a texture atomic needs
@@ -59,8 +60,10 @@ import package::fsr3::common::{
 // indexing is `y * render_size.x + x`, so the buffer is exactly as large as the
 // texture would have been. See `post::fsr3::resources`.
 @group(1) @binding(5) var<storage, read_write> rw_reconstructed_previous_nearest_depth: array<atomic<u32>>;
-@group(1) @binding(6) var rw_farthest_depth: texture_storage_2d<r32float, write>;
-@group(1) @binding(7) var rw_current_luma: texture_storage_2d<rgba16float, write>;
+@if(!narrow) @group(1) @binding(6) var rw_farthest_depth: texture_storage_2d<r32float, write>;
+@if(narrow) @group(1) @binding(6) var rw_farthest_depth: texture_storage_2d<r16float, write>;
+@if(!narrow) @group(1) @binding(7) var rw_current_luma: texture_storage_2d<rgba16float, write>;
+@if(narrow) @group(1) @binding(7) var rw_current_luma: texture_storage_2d<r16float, write>;
 
 fn load_input_depth(px_pos: vec2<i32>) -> f32 {
     return textureLoad(r_input_depth, px_pos + input_offset(), 0).x;

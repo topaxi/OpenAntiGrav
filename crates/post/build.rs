@@ -44,6 +44,43 @@ const ARTIFACTS: &[(&str, &str, &[&str])] = &[
     ),
     ("fsr3_accumulate", "package::fsr3::accumulate", &[]),
     ("fsr3_rcas", "package::fsr3::rcas", &[]),
+    // The passes that write a narrowed intermediate, built again with the formats upstream holds
+    // them in (`Formats::narrow`). `clear`, `accumulate` and `rcas` write nothing that narrows.
+    (
+        "fsr3_prepare_inputs_narrow",
+        "package::fsr3::prepare_inputs",
+        &["narrow"],
+    ),
+    (
+        "fsr3_prepare_inputs_msaa_narrow",
+        "package::fsr3::prepare_inputs",
+        &["msaa", "narrow"],
+    ),
+    (
+        "fsr3_luma_pyramid_narrow",
+        "package::fsr3::luma_pyramid",
+        &["narrow"],
+    ),
+    (
+        "fsr3_shading_change_pyramid_narrow",
+        "package::fsr3::shading_change_pyramid",
+        &["narrow"],
+    ),
+    (
+        "fsr3_shading_change_narrow",
+        "package::fsr3::shading_change",
+        &["narrow"],
+    ),
+    (
+        "fsr3_prepare_reactivity_narrow",
+        "package::fsr3::prepare_reactivity",
+        &["narrow"],
+    ),
+    (
+        "fsr3_luma_instability_narrow",
+        "package::fsr3::luma_instability",
+        &["narrow"],
+    ),
 ];
 
 fn main() {
