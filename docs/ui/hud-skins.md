@@ -471,8 +471,8 @@ moves nothing there (`no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label`
   (`0x00786b60`) is referenced from `FUN_00479048`, `FUN_00479030`, `FUN_00479168`,
   `FUN_004792b8`, `FUN_00478ff0` and `FUN_00166210`, none read. A saved skin that is still
   locked draws the default and stays saved (`available_hud_style`, at the menu launch); `--race`
-  and `--hud-style` name a skin outright and pass, as `--unlock-all` does. Omega earns no loyalty
-  of its own (its end-race screens are not wired), so it reads what Pulse and HD banked.
+  and `--hud-style` name a skin outright and pass, as `--unlock-all` does. Omega pays HD's law
+  into the shared total itself since 2026-10-16 (`persistence.md`, "Loyalty").
 - **`HUD Style P2`** (player 2's own skin in split screen; the executable names it, confidence 70)
   is not wired: no read says how the two settings combine, and the split pair is chosen as one
   skin. The pair is composed per player (`compose_family`), which is where it would split.

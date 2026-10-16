@@ -88,6 +88,11 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     teams: race::TEAM_IDENTITIES,
+    loyalty: Some(oag_title::loyalty::LoyaltyEarning {
+        law: oag_title::loyalty::LoyaltyLaw::Pulse,
+        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        banked_by_endrace: false,
+    }),
     race: race::DEFAULTS,
     // **`bluered`, because the shipped executable names it** - the literal
     // `data/RibbonEffects/enginetrail_bluered_triangle.vex` - exactly as on HD.

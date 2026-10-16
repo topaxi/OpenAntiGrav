@@ -78,8 +78,22 @@ identity each stands for in `Title::teams`; an id not listed is its own case-fol
 `AG_Systems` and `ag_systems` meet with no table. How a race earns points stays each title's law
 (Pulse's `award`, HD's `oag_hd::loyalty`); each title's unlock thresholds stay its own, and an
 `<Unlock Team="any">` row ranges over **that title's roster only** (`Store::loyalty_best`), so
-Omega's `Tigron` opens nothing in Pulse. Earning is wired for Pulse and HD (PSN included); Pure,
-2048 and Omega read the shared total but award nothing of their own: **open**.
+Omega's `Tigron` opens nothing in Pulse. **Earning (2026-10-16, `Title::loyalty`)**: every title pays its finished races
+into the shared total, under the law its data names:
+
+| Title | Law | Origin | Banked by |
+| --- | --- | --- | --- |
+| Pulse | Pulse's `Race_ComputeLoyaltyAward` (95, live) | measured | the EndRace Rewards flow |
+| HD / Fury | HD's `0x00023f98` (82, static) | measured | the EndRace Results flow |
+| Omega | HD's law, repeated in Omega's own `0x016544a0` (80, static) | measured | the session, when the result is saved |
+| Pure | Pulse's | inherited: Pure's executable and data carry no loyalty (85) | the session |
+| 2048 | Pulse's | inherited: 2048 earns XP, carries no loyalty (75) | the session |
+
+Evidence: `docs/ghidra/functions/ps4-omega-eu/endrace-loyalty.md`,
+`psp-pure-usa/loyalty-absent.md`, `vita-2048-eu-v104/loyalty-absent.md`. Omega has two
+rules this project does not model (an unnamed rules object doubling the kill rate and a
+forced x3 flag, confidence 65). Neither Pure's nor 2048's screens show the award; it only
+feeds the shared total the Pulse/HD-gated unlocks and HUD skins read.
 
 Ids that differ but are one team (maintainer ruling, 2026-10-16), merged in each title's
 `TEAM_IDENTITIES`:

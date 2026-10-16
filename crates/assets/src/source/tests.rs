@@ -163,6 +163,7 @@ const TITLE: &Title = &Title {
     pre_race: None,
     adverts: None,
     teams: &[],
+    loyalty: None,
     hud_art: &oag_title::HudArt {
         texture_extension: None,
         always_on: &[],

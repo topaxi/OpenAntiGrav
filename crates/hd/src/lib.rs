@@ -85,6 +85,11 @@ pub const TITLE: &Title = &Title {
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
     teams: race::TEAM_IDENTITIES,
+    loyalty: Some(oag_title::loyalty::LoyaltyEarning {
+        law: oag_title::loyalty::LoyaltyLaw::Hd,
+        origin: oag_title::Origin::Measured,
+        banked_by_endrace: true,
+    }),
     race: race::DEFAULTS,
     // **HD authors its ribbon rather than naming a texture.** The template is
     // one triangle; its material names the colour texture, the noise texture

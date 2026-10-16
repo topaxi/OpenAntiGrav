@@ -50,6 +50,7 @@ pub mod language;
 pub mod lap_hud;
 pub mod launch_hover;
 pub mod loading;
+pub mod loyalty;
 pub mod main_menu;
 pub mod menu;
 pub mod original_driver;
@@ -129,6 +130,9 @@ pub struct Title {
     /// The team ids this title's roster names and the shared identity each is kept
     /// under, for loyalty. See [`team`].
     pub teams: team::Roster,
+    /// How this title's races pay loyalty, or `None` when they pay none. See
+    /// [`loyalty::LoyaltyEarning`].
+    pub loyalty: Option<loyalty::LoyaltyEarning>,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///

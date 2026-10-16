@@ -61,6 +61,28 @@ pub(crate) fn hd_award(race: HdRace) -> u32 {
     })
 }
 
+/// This race's award under the law `earning` names, from the tallies this
+/// project keeps: Pulse's `loyalty_award` or HD's [`hd_award`]. The one place a
+/// title's [`oag_title::loyalty::LoyaltyLaw`] becomes a number.
+#[must_use]
+pub(crate) fn earned(earning: oag_title::loyalty::LoyaltyEarning, race: HdRace) -> u32 {
+    match earning.law {
+        oag_title::loyalty::LoyaltyLaw::Hd => hd_award(race),
+        oag_title::loyalty::LoyaltyLaw::Pulse => super::endrace::loyalty_award(
+            super::endrace::LoyaltyInputs {
+                mode: race.mode,
+                laps: race.laps,
+                perfect_laps: 0,
+                kills: race.kills,
+                zones: race.zones,
+                perfect_zones: 0,
+                difficulty: None,
+                suggested_ship: false,
+            },
+        ),
+    }
+}
+
 #[cfg(test)]
 #[path = "hd_loyalty/tests.rs"]
 mod tests;
