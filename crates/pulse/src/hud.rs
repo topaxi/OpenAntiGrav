@@ -89,6 +89,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     zone_speed_classes: None,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
+    speed_full_kmh: 600,
     // Measured: every one of Pulse's own language plugins names
     // `<Font><Values name="HUD" ...Src="...\PulseHud.fnt">` and `HUDSmall`
     // -> `small.fnt` - see `oag_ui::language::roles`' own doc table (role

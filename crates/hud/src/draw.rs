@@ -41,9 +41,9 @@ pub(super) const FALLBACK_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 /// The two are recognised by name because the layout gives no other signal: a
 /// fill and its background are identical in every attribute but colour. See
 /// `each_bar_exactly_overlays_its_own_background` in the ground-truth tests.
-pub(super) fn bar_fraction(name: &str, readout: &Readout) -> Option<f32> {
+pub(super) fn bar_fraction(name: &str, readout: &Readout, art: &oag_title::HudArt) -> Option<f32> {
     match name {
-        "SpeedBar" => Some(readout.speed_fraction()),
+        "SpeedBar" => Some(readout.speed_fraction(art.speed_full_kmh as f32)),
         "ThrustBar" => Some(readout.thrust_fraction()),
         "ShieldBar" => Some(readout.shield_fraction()),
         _ => None,
@@ -739,7 +739,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         // `ShieldBar`'s absorb flash, painted *under* the bar - see
         // `shield_bar::tint`. `None` outside the absorb window.
         let mut flash = None;
-        let drawn = match bar_fraction(&sprite.name, readout) {
+        let drawn = match bar_fraction(&sprite.name, readout, cx.art) {
             // A bar at zero is not drawn at all: a zero-width quad is a
             // degenerate triangle pair, and asking the rasteriser to do nothing
             // is worse than not asking.

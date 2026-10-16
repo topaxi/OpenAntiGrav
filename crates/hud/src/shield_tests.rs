@@ -155,7 +155,6 @@ fn flash_forces_red_above_the_floor() {
 fn the_flash_does_not_bleed_into_the_speed_bar() {
     let mut readout = readout_with(90.0, 100.0, true);
     readout.speed_kmh = 300.0;
-    readout.speed_full_kmh = 600.0;
     let color = drawn_colour(&readout, "SpeedBar").expect("a half-full speed bar draws");
     assert_eq!(color, argb_to_rgba(0xFF7D_EFC0));
 }

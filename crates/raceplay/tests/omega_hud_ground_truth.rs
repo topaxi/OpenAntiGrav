@@ -267,6 +267,7 @@ fn the_speed_bar_fill_is_authored_in_the_three_race_layouts() {
     let Some(mut archives) = open() else { return };
     assert!(oag_omega::TITLE.hud_art.always_on.contains(&"SpeedBar"));
     assert!(oag_omega::TITLE.hud_art.always_on.contains(&"ThrustBar"));
+    assert_eq!(oag_omega::TITLE.hud_art.speed_full_kmh, 700);
     let [arcade, _, time_trial, speed_lap, _] = modes();
     for root in [arcade, time_trial, speed_lap] {
         let layout = composed(&mut archives, root).layout;

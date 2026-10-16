@@ -531,13 +531,6 @@ pub struct Readout {
     /// Speed in km/h - `|velocity| * 3.6`, using the recovered factor in
     /// [`oag_fx::exhaust::SPEED_TO_KMH`].
     pub speed_kmh: f32,
-    /// The speed the bar reads full at, in km/h.
-    ///
-    /// **Ours, not recovered.** The original's bar has some maximum and nothing
-    /// has established what sets it - a speed class's top speed, a constant, or
-    /// the craft's `<Engine>` figures. [`DEFAULT_SPEED_FULL_KMH`] explains the
-    /// placeholder.
-    pub speed_full_kmh: f32,
     /// Shield energy remaining.
     pub shield: f32,
     /// The pool it started from, from `<Misc shield/>`.
@@ -749,33 +742,18 @@ pub struct Readout {
     pub time_gap: Option<time_gap::GapLine>,
 }
 
-/// What [`Readout::speed_full_kmh`] defaults to.
-///
-/// **HD's own figure, read off its executable: 700.** `Hud_UpdateSpeedReadout`
-/// (`0x00086e88`) multiplies the speed by `0x008a7708`, `0x3abb3ee7` = 1/700,
-/// and crops the fill to the result. The two reference frames
-/// (`talons-matched/00.png`, `01.png`) fit it no worse than the 600 this held
-/// before: at 529 km/h the fill's yellow ends at 82% of the bar's width where
-/// 700 predicts 76% and 600 predicts 88%; at 74 km/h it ends at 6% against 11%
-/// and 12%. Both are within the motion blur and the curve's path-length
-/// effect, so the executable decides. Pulse and Pure share the default and have
-/// no figure of their own: their bar's scale remains unmeasured.
-pub const DEFAULT_SPEED_FULL_KMH: f32 = 700.0;
-
 impl Readout {
     /// A readout with nothing known, for a test or a race that has not started.
     #[must_use]
     pub fn blank() -> Self {
-        Self {
-            speed_full_kmh: DEFAULT_SPEED_FULL_KMH,
-            ..Self::default()
-        }
+        Self { ..Self::default() }
     }
 
-    /// How full the speed bar is, `0..=1`.
+    /// How full the speed bar is, `0..=1`, against the title's
+    /// [`oag_title::HudArt::speed_full_kmh`].
     #[must_use]
-    pub fn speed_fraction(&self) -> f32 {
-        fraction(self.speed_kmh, self.speed_full_kmh)
+    pub fn speed_fraction(&self, full_kmh: f32) -> f32 {
+        fraction(self.speed_kmh, full_kmh)
     }
 
     /// How full HD's thrust bar is, `0..=1` (the original does not clamp).

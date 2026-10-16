@@ -51,7 +51,6 @@ fn fill_at(kmh: f32) -> Option<([f32; 4], [f32; 4], [f32; 4])> {
     };
     let readout = Readout {
         speed_kmh: kmh,
-        speed_full_kmh: 600.0,
         ..Readout::blank()
     };
     draw_list(&cx, &readout)
@@ -82,8 +81,8 @@ fn a_curve_bar_parses_as_a_sprite_carrying_its_gradient() {
 fn the_speed_bar_fill_grows_with_speed_and_keeps_the_grade_of_the_whole_bar() {
     assert!(fill_at(0.0).is_none(), "an empty bar draws nothing");
 
-    let (slow, _, slow_right) = fill_at(150.0).expect("a quarter full draws");
-    let (fast, _, fast_right) = fill_at(450.0).expect("three quarters full draws");
+    let (slow, _, slow_right) = fill_at(175.0).expect("a quarter full draws");
+    let (fast, _, fast_right) = fill_at(525.0).expect("three quarters full draws");
     assert_eq!(slow[2], 452.0 * 0.25);
     assert_eq!(fast[2], 452.0 * 0.75);
     assert!(fast[2] > slow[2]);
@@ -158,4 +157,14 @@ fn the_thrust_bar_follows_the_craft_throttle_and_prints_it_truncated() {
     let (assisted, label) = thrust_at(98.999_99);
     assert!(assisted.unwrap() > half.unwrap());
     assert_eq!(label.as_deref(), Some("98%"));
+}
+
+#[test]
+fn the_speed_bar_scale_is_the_titles_own() {
+    assert_eq!(oag_hd::hud::ART.speed_full_kmh, 700);
+    assert_eq!(oag_pulse::hud::ART.speed_full_kmh, 600);
+    assert_eq!(oag_pure::hud::ART.speed_full_kmh, 600);
+    // HD's bar is half full at 350 km/h, where a 600 scale would read 58%.
+    let (half, _, _) = fill_at(350.0).expect("draws");
+    assert_eq!(half[2], 452.0 * 0.5);
 }
