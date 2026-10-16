@@ -472,9 +472,9 @@ pub fn track_description_id(track_id: &str) -> Option<String> {
 }
 
 /// Every team id Pulse can name (the base disc's [`TEAMS`] and the packs' [`DLC_TEAMS`]) and the
-/// identity loyalty keeps it under. **`Mantis` is kept as its own identity, not folded into
-/// HD's `Mirage`**: the pack is sold as Mirage's, but the id differs and no table here says the
-/// two are one team, so merging them is left to the maintainer (`docs/architecture/persistence.md`).
+/// identity loyalty keeps it under. **`Mantis` is the same team as HD's `Mirage`**
+/// (maintainer, 2026-10-16: the pack is sold as Mirage's), so it is kept under `mirage`
+/// (`docs/architecture/persistence.md`).
 pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("AG_Systems", "ag_systems"),
     oag_title::team::team("Assegai", "assegai"),
@@ -487,7 +487,7 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Auricom", "auricom"),
     oag_title::team::team("Harimau", "harimau"),
     oag_title::team::team("Icaras", "icaras"),
-    oag_title::team::team("Mantis", "mantis"),
+    oag_title::team::team("Mantis", "mirage"),
 ];
 
 #[cfg(test)]
@@ -505,5 +505,15 @@ mod track_description_tests {
             Some("MSC_TRACK_32")
         );
         assert_eq!(track_description_id("7"), None);
+    }
+}
+
+#[cfg(test)]
+mod team_identity_tests {
+    use oag_title::team::identity_of;
+
+    #[test]
+    fn mantis_is_mirage() {
+        assert_eq!(identity_of(super::TEAM_IDENTITIES, "Mantis"), "mirage");
     }
 }

@@ -81,15 +81,15 @@ identity each stands for in `Title::teams`; an id not listed is its own case-fol
 Omega's `Tigron` opens nothing in Pulse. Earning is wired for Pulse and HD (PSN included); Pure,
 2048 and Omega read the shared total but award nothing of their own: **open**.
 
-Kept apart, listed for the maintainer rather than guessed (a one-token change in the title's
-`TEAM_IDENTITIES` merges each):
+Ids that differ but are one team (maintainer ruling, 2026-10-16), merged in each title's
+`TEAM_IDENTITIES`:
 
-| Ids | Why not merged |
+| Ids | Shared identity |
 | --- | --- |
-| Pulse `Mantis` / HD, 2048, Omega `Mirage` | the pack is sold as Mirage's, the id differs |
-| `Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048` / `Feisar`.. | both sets sit on one 2048 and Omega roster, so they are not spelling variants |
-| Omega `Tigron` / `Tigron_x` | two teams of Omega's own |
-| Pure `Medievil` | no counterpart elsewhere |
+| Pulse `Mantis` = HD, 2048, Omega `Mirage` | `mirage` |
+| `Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048` = `Feisar`.. | the base team's |
+| Omega `Tigron_x` = `Tigron` | `tigron` |
+| Pure `Medievil` | its own (no counterpart elsewhere) |
 
 **Migration.** A file from before the change holds `title` + `team` rows. `parse` folds them into
 the shared rows by **sum**, capped at 100,000 after: the shared total is what the team would hold
