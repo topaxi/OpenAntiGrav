@@ -117,8 +117,8 @@ const BARE_CLEARANCE_LINES: f32 = 0.25;
 /// Three shapes, by what the layout authors:
 ///
 /// - HD's and Omega's: `DistanceApart` for the gap label. The place panel is hidden, `Position` and
-///   `Position Outof` carry `1ST`/`2ND` (`clamp(2 * gap, 240, 720)`), the bar is not drawn.
-///   `Hud_UpdatePositionCounter`, confidence 75-80; the ordinal-only rows are chosen.
+///   `Position Outof` carry `1ST`/`2ND` (`clamp(2 * gap, 240, 720)`), the bar runs from its
+///   authored `y` to the second row. `Hud_UpdatePositionCounter`, confidence 75-80; the ordinal-only rows are chosen.
 ///
 /// - Pulse's own: `HeadToHeadBar`, `Position`, `Position Outof` and `PositionOf` all there
 ///   (Pulse PSP and PS2). Measured.
@@ -178,14 +178,14 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         wrap_width: None,
     };
 
-    // HD's bar stays undrawn: whether the runtime sizes it is unsettled
-    // (`docs/ghidra/functions/ps3-hdfury-eu/head2head.md`, confidence 50).
-    if !hd {
-        frame.sprites.push(Draw::Fill {
-            rect: [bar.rect[0], bar.rect[1], bar.rect[2], half - y_authored],
-            color: bar.color,
-        });
-    }
+    // HD's bar is `Hud_UpdatePositionCounter`'s `bar+0xb0 = D - GetY()`: `+0xb0` is an `<Image>`'s
+    // Height (`Hud_UpdateShieldReadout` writes `DamageBar`'s crop height there), so the bar
+    // runs from its authored `y` to the second row, Pulse's relation, with the authored
+    // `x` and `width` (`docs/ghidra/functions/ps3-hdfury-eu/head2head.md`, confidence 78).
+    frame.sprites.push(Draw::Fill {
+        rect: [bar.rect[0], bar.rect[1], bar.rect[2], half - y_authored],
+        color: bar.color,
+    });
     // The bind copies `Position`'s `x` (`+0x9c`) and align (`+0x168`) onto
     // `Position Outof`, so the two rows share one right edge (measured live
     // 2026-09-29: within 3 px). `PositionOf` keeps its own `x`: the gap label's

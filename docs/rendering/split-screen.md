@@ -448,7 +448,7 @@ over `portrait`:
   label, `DistanceApart`** (the earlier "no gap label" was a name miss for Pulse's `PositionOf`).
   It places the second row at `clamp(2 * gap, 240, 720)` and writes `%s%3.0fm` in Pulse's colours;
   it is **wired on HD and Omega** (rows `1ST`/`2ND`, gap on `DistanceApart`, panel hidden, second row at
-  `clamp(2*gap,240,720)`); the bar stays undrawn (50: the Image field map is unrecovered). Pure and 2048 keep the borrowed readout. Evidence: [hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md).
+  `clamp(2*gap,240,720)`); the bar runs from its authored `y` to the second row, `D - y` tall (`+0xb0` is an `<Image>`'s Height, 78, settled statically 2026-10-16, `hd-h2h-bar-size`). Pure and 2048 keep the borrowed readout. Evidence: [hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md).
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule
