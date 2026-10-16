@@ -39,6 +39,9 @@ pub struct Assets {
     /// name it. Loaded only when the layout has one; otherwise it is the value
     /// face again, which nothing draws in.
     pub default_font: oag_ui::font::Atlas,
+    /// The skin's own face (`2097HUD`, `wo3HUD`) when the race is in a retro `HUD Style`;
+    /// the `HUD` face again otherwise, which nothing draws in.
+    pub skin_font: oag_ui::font::Atlas,
     /// The language's string table, for the `IG_HUD_*` captions.
     pub strings: oag_ui::language::StringTable,
     /// The grid this layout's coordinates are in, and what it is shown as.
@@ -148,6 +151,7 @@ impl Assets {
             hud_line_height: self.font.line_height,
             small_line_height: self.small_font.line_height,
             default_line_height: self.default_font.line_height,
+            skin_line_height: self.skin_font.line_height,
         })
     }
 }

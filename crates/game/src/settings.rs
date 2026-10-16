@@ -128,6 +128,9 @@ pub struct Settings {
     pub ai: Ai,
     #[serde(default)]
     pub log: Log,
+    /// Developer switches, read in debug builds only (see [`Dev`]).
+    #[serde(default, skip_serializing_if = "Dev::is_empty")]
+    pub dev: Dev,
     /// The language picked last time, by the XML's own English name
     /// (`English`, `French`).
     ///
@@ -146,6 +149,30 @@ pub struct Settings {
 /// Both keys are **absent until a player writes them**, and the rewrite
 /// [`load`] does leaves them absent: writing the resolved default path back
 /// would freeze it, and a later `$XDG_STATE_HOME` would stop applying.
+/// The `[dev]` table. **Ours, not the original's**, and read only when the build has
+/// `debug_assertions` on; a release build ignores every key but keeps the table in the file
+/// when it rewrites it, so moving between a dev and a release build loses nothing.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Dev {
+    /// Open every gate (circuits, craft variants, HUD Style skins) like `--unlock-all`.
+    /// **Absent means on in a debug build** and the game as shipped is untouched; write
+    /// `false` to test locked behaviour in a dev build.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unlock_everything: Option<bool>,
+}
+
+impl Dev {
+    fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Whether every gate is open: a debug build and `unlock_everything` not set to `false`.
+    #[must_use]
+    pub fn unlocks_everything(&self) -> bool {
+        cfg!(debug_assertions) && self.unlock_everything.unwrap_or(true)
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Log {
     /// Absent: `$XDG_STATE_HOME/oag/logs/oag-game.log` (see `oag_log::path`).
@@ -261,6 +288,14 @@ pub struct Display {
     /// except HD and is HD's own base styling.
     #[serde(default)]
     pub front_end_style: String,
+    /// Which of the title's own `HUD Style` skins a race draws (`HD`, `2097` or `WIP3OUT`
+    /// on Wipeout HD and Omega, whose discs author the list).
+    ///
+    /// A `String` for the reason [`Self::front_end_style`] is one: the list is the disc's.
+    /// Empty means the list's default; a name another title's list holds draws the default
+    /// here and says so in the loader report. Read when a race loads.
+    #[serde(default)]
+    pub hud_style: String,
     /// How a finished frame reaches the display: `off`, `on` or `smooth`.
     ///
     /// **`off` by default**, because this is a racing game and vsync's cost is
@@ -310,6 +345,15 @@ fn default_pause_on_focus_loss() -> bool {
     true
 }
 
+impl Display {
+    /// The saved `HUD Style` as a name for `race::Options::hud_style`, `None` while empty.
+    #[must_use]
+    pub fn hud_style_choice(&self) -> Option<String> {
+        let name = self.hud_style.trim();
+        (!name.is_empty()).then(|| name.to_string())
+    }
+}
+
 impl Default for Display {
     fn default() -> Self {
         Self {
@@ -319,6 +363,7 @@ impl Default for Display {
             canvas_size: default_canvas_size(),
             aspect: Default::default(),
             front_end_style: String::new(),
+            hud_style: String::new(),
             vsync: Default::default(),
             frame_limit: Default::default(),
             brightness: Default::default(),
@@ -867,6 +912,7 @@ pub fn menu_seeds(
             "display.front_end_style",
             text(&settings.display.front_end_style),
         ),
+        ("display.hud_style", text(&settings.display.hud_style)),
         ("race.mode", text(&settings.race.mode)),
         ("race.class", text(&settings.race.class)),
         ("race.team", text(&settings.race.team)),

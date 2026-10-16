@@ -27,15 +27,22 @@ exactly 4x but not Pulse's typeface at high resolution.
 - `hud_scale` has no settings row and no per-title default; `sharp-bilinear`
   everywhere raster is a chosen default (Deck: `integer` shrinks the HUD 25 %).
 
+- **Census 2026-10-16** ([hud-assets.md](../../docs/ui/hud-assets.md)): the `HUD Style` list
+  (`HD`, `2097`, `WIP3OUT`; default `HD`) and its `PI_HUD` unlock rows (loyalty 6000 / 10000,
+  `Values Location=` names `Data\XML\2097_hud` / `wo3_hud`) are in HD Fury, the plain HD PSN
+  download and Omega, so the two retro skins are reachable on all three and none is selectable
+  here. HD's `splitscreenzone_hud` carries `zone_hud_2097*`/`zone_hud_wo3*` (the Zone split follows
+  the setting), and `HUD Style P2` gives split player 2 its own. Omega alone adds `HUD Effects`
+  (`OPT_HUD_EFFECTS`, default on), unread.
+
 ## Next Steps
 
 1. ~~Draw the halo (`borderExtendPixels`)~~ and ~~a HUD scale filter for
    raster-HUD titles~~: landed (`hud-skins.md` part D). Optional: a settings row
    for `hud_scale`, as a follow-up.
-2. **Config `[hud] skin`** and a `skins: &[HudSkin]` table on `Title` (design in
-   hud-skins.md part C, chosen not measured), HD's `2097` and `wo3` first (same
-   shape as the default, unlock rows `loyalty 6000` and `10000` read), then the
-   same two on Omega.
+2. ~~`skins` table, HD's and Omega's `2097` and `wo3`~~: landed 2026-10-16
+   (`hud-skins.md` part E). The loyalty gate landed 2026-10-16 (HD's own `any` evaluation inherited from Pulse, untraced). Open from it: `HUD Style P2`, and an original frame of a retro skin to
+   settle the chosen bar mapping, the 2097 lap counter overlap and the WIP3OUT white tags.
 3. **Pulse sprites from the 4x sheet** when HD, Omega or 2048 is also mounted:
    an asset substitution, not a skin; sprites only, the text stays 25 px. Needs a
    product decision first (a Pulse draw depending on a second disc). Not built

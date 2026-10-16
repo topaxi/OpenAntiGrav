@@ -14,3 +14,5 @@
 ## Next Steps
 
 1. Watch `Definition_IsUnlocked` in PPSSPP with loyalty written to confirm the `any` branch live.
+
+- 2026-10-16 `shared-loyalty`: loyalty is now one total per team shared across titles (`docs/architecture/persistence.md`, "Loyalty"); earning landed the same day (`loyalty-earning`): Omega pays HD's law (measured, static), Pure and 2048 Pulse's (inherited; neither original has loyalty); `Mantis`=`Mirage`, `*2048`=base teams, `Tigron_x`=`Tigron` merged, `Medievil` its own. Open: Omega's two unmodelled rules (`persistence.md`). HD's `PI_HUD` `any` evaluation is inherited from Pulse: starting points `FUN_00479048`, `FUN_00478ff0`, `FUN_00166210` (xrefs of the `Unlock` string at `0x00786b60`).

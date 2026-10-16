@@ -242,6 +242,12 @@ impl Session {
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
+        model.supply(
+            menu::ValueSource::HudStyles,
+            &menu::hud_style_choices(shell.title, |skin| {
+                oag_game::unlock::hud_skin_unlocked(skin, &self.records, shell.title)
+            }),
+        );
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.

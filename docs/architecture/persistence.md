@@ -70,6 +70,52 @@ Every value is ticks (`u32`/`u64`), the same unit `oag_hud::format_lap_time`
 already takes, never a formatted string - formatting is a presentation
 concern, and this file is not one.
 
+## Loyalty: one total per team, across titles
+
+`[[loyalty]]` rows are keyed by the team's **shared identity** (`oag_title::team`), not by title:
+Feisar's total counts in Pulse, Pure, HD, 2048 and Omega. Each title lists its team ids and the
+identity each stands for in `Title::teams`; an id not listed is its own case-folded spelling, so
+`AG_Systems` and `ag_systems` meet with no table. How a race earns points stays each title's law
+(Pulse's `award`, HD's `oag_hd::loyalty`); each title's unlock thresholds stay its own, and an
+`<Unlock Team="any">` row ranges over **that title's roster only** (`Store::loyalty_best`), so
+Omega's `Tigron` opens nothing in Pulse. **Earning (2026-10-16, `Title::loyalty`)**: every title pays its finished races
+into the shared total, under the law its data names:
+
+| Title | Law | Origin | Banked by |
+| --- | --- | --- | --- |
+| Pulse | Pulse's `Race_ComputeLoyaltyAward` (95, live) | measured | the EndRace Rewards flow |
+| HD / Fury | HD's `0x00023f98` (82, static) | measured | the EndRace Results flow |
+| Omega | HD's law, repeated in Omega's own `0x016544a0` (80, static) | measured | the session, when the result is saved |
+| Pure | Pulse's | inherited: Pure's executable and data carry no loyalty (85) | the session |
+| 2048 | HD's, via Omega's `Race_ComputeLoyaltyAward` (maintainer, 2026-10-16) | inherited from Omega: 2048 earns XP (a separate per-profile rank system, not loyalty, 84: `vita-2048-eu-v104/xp-award.md`), carries no loyalty (75). XP is not kept by this project | the session |
+
+Evidence: `docs/ghidra/functions/ps4-omega-eu/endrace-loyalty.md`,
+`psp-pure-usa/loyalty-absent.md`, `vita-2048-eu-v104/loyalty-absent.md`. Omega has two
+rules this project does not model (an unnamed rules object doubling the kill rate and a
+forced x3 flag, confidence 65). Neither Pure's nor 2048's screens show the award; it only
+feeds the shared total the Pulse/HD-gated unlocks and HUD skins read.
+
+Ids that differ but are one team (maintainer ruling, 2026-10-16), merged in each title's
+`TEAM_IDENTITIES`:
+
+| Ids | Shared identity |
+| --- | --- |
+| Pulse `Mantis` = HD, 2048, Omega `Mirage` | `mirage` |
+| `Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048` = `Feisar`.. | the base team's |
+| Omega `Tigron_x` = `Tigron` | `tigron` |
+| Pure `Medievil` | its own (no counterpart elsewhere) |
+
+The store reads only this shared per-team format; nothing is released, so there is no
+migration path for rows an earlier build kept per title.
+
+## `[dev]` in `settings.toml`
+
+`[dev] unlock_everything` (bool) opens every gate like `--unlock-all`. **Absent means on in a
+debug build** (`cfg!(debug_assertions)`), ignored in release. The table is kept intact when a
+release build rewrites the file. A test or capture that checks locked state writes
+`unlock_everything = false` into its own settings. `settings.toml` has no TOML Schema under
+`schemas/v1/`, so there is none to update.
+
 ## Where a race's result is captured, and why there are two sites
 
 **Never from inside `Race::tick`.** This project's core architectural rule -

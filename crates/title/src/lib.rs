@@ -50,6 +50,7 @@ pub mod language;
 pub mod lap_hud;
 pub mod launch_hover;
 pub mod loading;
+pub mod loyalty;
 pub mod main_menu;
 pub mod menu;
 pub mod original_driver;
@@ -59,6 +60,7 @@ pub mod prompts;
 pub mod race;
 pub mod shadow;
 pub mod speed;
+pub mod team;
 pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
@@ -71,7 +73,7 @@ pub use effects::{
     ShieldPalettes, Trigger,
 };
 pub use endrace::{EndRaceDialect, EndRaceStyle};
-pub use hud::{HudArt, HudLayouts, ResumeCountdown, ZoneSpeedClasses};
+pub use hud::{HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, MainMenu, OriginalRow};
@@ -125,6 +127,12 @@ pub struct Title {
     /// them are always up, and the one colour this build substitutes. See
     /// [`hud::HudArt`].
     pub hud_art: &'static hud::HudArt,
+    /// The team ids this title's roster names and the shared identity each is kept
+    /// under, for loyalty. See [`team`].
+    pub teams: team::Roster,
+    /// How this title's races pay loyalty, or `None` when they pay none. See
+    /// [`loyalty::LoyaltyEarning`].
+    pub loyalty: Option<loyalty::LoyaltyEarning>,
     /// What a race falls back to when the caller names no circuit or team. See
     /// [`race::RaceDefaults`].
     ///
@@ -811,6 +819,12 @@ pub struct ForeignSerial {
 }
 
 impl Title {
+    /// The shared identity `team` (an id as this title spells it) is kept under.
+    #[must_use]
+    pub fn team_identity(&self, team: &str) -> String {
+        team::identity_of(self.teams, team)
+    }
+
     /// What this title throws on `trigger`, or `None` when it draws nothing
     /// there (it does not do it, or it is unread).
     #[must_use]

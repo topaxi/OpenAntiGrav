@@ -38,7 +38,7 @@
 //!   about 3.1 s. The law is unread, so it is a steady colour here.
 
 use super::draw::{Context, Frame, top_edge};
-use super::{Draw, Readout, argb_to_rgba};
+use super::{Draw, Readout, VertAlign, argb_to_rgba};
 
 /// The gap to the one opponent.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -85,7 +85,26 @@ pub(super) fn owns(name: &str) -> bool {
     )
 }
 
+/// The gap label's scale where it stands under an authored place: a little over the
+/// 0.6 of `Position Outof`, which 2048's `Hud` font makes too small to read at a view.
+const BESIDE_GAP_SCALE: f32 = 0.8;
+/// A place that sits in a panel (`vertalign="middle"`, HD's hex) gets the gap this many of
+/// its own lines below its centre, which clears the panel; a bare number gets a quarter line.
+const PANEL_CLEARANCE_LINES: f32 = 0.5;
+const BARE_CLEARANCE_LINES: f32 = 0.25;
+
 /// The Head2Head widgets, or nothing when the layout lacks any of them.
+///
+/// Two shapes, by what the layout authors:
+///
+/// - Pulse's own: `HeadToHeadBar`, `Position`, `Position Outof` and `PositionOf` all there
+///   (Pulse PSP and PS2). Measured.
+/// - Every other: Pure authors no Head to Head, HD and Omega a bar of no height and no
+///   `PositionOf`, 2048 a bare `Position`. The place stands as authored (`2/2`, a hex
+///   panel) and the gap sits under it ([`gap_under_place`]). **Chosen, not measured**: it
+///   borrows Pulse's gap label and colours, not its rows, whose ordinals only Pulse has.
+///
+/// Returns whether the place widgets are replaced ([`owns`]).
 pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> bool {
     let Some(state) = readout.head_to_head.as_ref() else {
         return false;
@@ -97,6 +116,7 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         layout.label("PositionOf"),
         layout.fill("HeadToHeadBar"),
     ) else {
+        gap_under_place(cx, state, frame);
         return false;
     };
     let y_authored = bar.rect[1] - bar.origin_y;
@@ -183,13 +203,45 @@ pub(super) fn draws(cx: &Context<'_>, readout: &Readout, frame: &mut Frame) -> b
         of.scale,
         first.align,
         tint,
-        format!(
-            "{}{:3.0}m",
-            if state.player_leads { "-" } else { "+" },
-            state.gap
-        ),
+        gap_text(state),
     ));
     true
+}
+
+/// The gap alone, one line under the layout's own `Position`, in its font, alignment and
+/// border, tinted as Pulse's gap is. The place stays.
+fn gap_under_place(cx: &Context<'_>, state: &HeadToHead, frame: &mut Frame) {
+    let Some(place) = cx.layout.label("Position") else {
+        return;
+    };
+    let line = cx.hud_line_height * place.scale;
+    let lines = if place.vertalign == VertAlign::Middle {
+        PANEL_CLEARANCE_LINES
+    } else {
+        BARE_CLEARANCE_LINES
+    };
+    frame.hud_text.push(Draw::Text {
+        x: place.x,
+        y: top_edge(place, cx.hud_line_height) + line + line * lines,
+        scale: BESIDE_GAP_SCALE,
+        color: argb_to_rgba(if state.player_leads {
+            LEADING
+        } else {
+            TRAILING
+        }),
+        border: Some(place.border.unwrap_or(cx.default_border)),
+        align: place.align,
+        text: gap_text(state),
+        wrap_width: None,
+    });
+}
+
+fn gap_text(state: &HeadToHead) -> String {
+    format!(
+        "{}{:3.0}m",
+        if state.player_leads { "-" } else { "+" },
+        state.gap
+    )
 }
 
 #[cfg(test)]

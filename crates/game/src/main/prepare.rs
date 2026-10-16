@@ -144,6 +144,11 @@ impl Pending {
             // one source, and `race::load` treats that as "craft comes from
             // the same place as the track". See `race::Options::craft_source`.
             craft_source: self.cli.craft_source.clone(),
+            hud_style: self
+                .cli
+                .hud_style
+                .clone()
+                .or_else(|| self.settings.display.hud_style_choice()),
             dlc: self.dlc.clone(),
             // Passed straight through, `None` included: `race::load` resolves an
             // unnamed circuit from the title it opened, which is the only place
@@ -341,6 +346,8 @@ impl Pending {
         definition.drop_unavailable_race_variant(title);
         // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
         definition.drop_unavailable_boost_zoom(title);
+        // And the HUD STYLE row, where the disc authors the list: HD and Omega.
+        definition.drop_unavailable_hud_style(title);
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);

@@ -208,11 +208,13 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     };
     let heights = oag_hud::split_hud::LineHeights {
         hud: 25.0,
         small: 10.0,
         default: 13.0,
+        skin: 13.0,
     };
     let file = oag_hud::split_hud::SplitHud::parse(FILE).unwrap();
     let assets = oag_hud::split_hud::SplitHudAssets::new(

@@ -118,6 +118,7 @@ fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
             hud_line_height: 92.0,
             small_line_height: 34.0,
             default_line_height: 34.0,
+            skin_line_height: 34.0,
             default_border: layout.default_border(),
         };
         let mut board = oag_hud::messages::MessageBoard::default();

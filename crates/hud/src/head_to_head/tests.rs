@@ -163,3 +163,31 @@ fn the_top_and_bottom_cut_clamps_to_40_and_85_with_the_leader_on_the_bar() {
         "the leader row is Default-font text"
     );
 }
+
+/// A layout that is not Pulse's (no `PositionOf`, no bar of its own: 2048's bare `Position`)
+/// keeps its place and gains a coloured gap under it, not Pulse's rows.
+#[test]
+fn a_layout_without_pulses_widgets_keeps_its_place_and_gains_the_gap_under_it() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="Position"><Values scale="1.0" font="HUD" align="right" vertalign="top" x="945" y="30"/></Text></Screen>"#,
+    );
+    let strings = strings();
+    let mut readout = Readout::blank();
+    readout.place = 2;
+    readout.ships = 2;
+    readout.head_to_head = Some(HeadToHead {
+        gap: 42.0,
+        player_leads: false,
+        ..HeadToHead::default()
+    });
+    let frame = draw_list(&context(&layout, &strings), &readout);
+    let rows = texts(&frame);
+    let place = rows.iter().find(|row| row.0 == "2/2").expect("the place");
+    let (gap, y, colour) = rows
+        .iter()
+        .find(|row| row.0 == "+ 42m")
+        .expect("the gap label");
+    assert!(*y > place.1, "under the place: {rows:?}");
+    assert_eq!(*colour, argb_to_rgba(0xFFFF_3030));
+    assert_eq!(gap, "+ 42m");
+}

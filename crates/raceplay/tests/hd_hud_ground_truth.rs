@@ -746,6 +746,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
         hud_line_height: 92.0,
         small_line_height: 34.0,
         default_line_height: 34.0,
+        skin_line_height: 34.0,
         default_border: layout.default_border(),
     };
 
@@ -847,6 +848,7 @@ fn the_zone_eight_frame_is_reproduced_row_for_row() {
         hud_line_height: 92.0,
         small_line_height: 34.0,
         default_line_height: 34.0,
+        skin_line_height: 34.0,
         default_border: layout.default_border(),
     };
 
@@ -929,6 +931,7 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
         hud_line_height: 92.0,
         small_line_height: 34.0,
         default_line_height: 34.0,
+        skin_line_height: 34.0,
         default_border: layout.default_border(),
     };
     let frame = hud::draw_list(&cx, &oag_hud::Readout::default());

@@ -33,6 +33,8 @@ oag-testdata.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-2048.workspace = true
 oag-hd.workspace = true
+oag-omega.workspace = true
+oag-source.workspace = true
 oag-pulse.workspace = true
 oag-pure.workspace = true
 

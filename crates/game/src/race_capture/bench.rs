@@ -329,25 +329,66 @@ pub(super) fn run_split(
 /// `OAG_RESOLVE_BENCH=N` on a `--presented` capture: the presentation resolve (`resolve`
 /// encodes the upscaler and the blit) run `N` times over the captured frame, each submitted and
 /// waited for, so a reading is its CPU and GPU serialised. What the single-frame bench above
-/// leaves out, and what FSR 3 per split view costs (`docs/tools/render-bench.md`).
+/// leaves out, and what FSR 3 per split view costs (`docs/tools/render-bench.md`). `resolve` is
+/// told the run's index, so a caller can resolve a steady-state frame rather than the capture's.
 pub(super) fn run_resolve(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    mut resolve: impl FnMut(&mut wgpu::CommandEncoder),
+    mut resolve: impl FnMut(
+        &mut wgpu::CommandEncoder,
+        Option<oag_post::fsr3::ChainTimestamps<'_>>,
+        usize,
+    ) -> bool,
 ) {
     let Some(count) = runs("OAG_RESOLVE_BENCH") else {
         return;
     };
+    // FSR 3's two timestamp pairs (`FSR3 REN` and `FSR3 OUT` on the overlay), claimed and
+    // resolved every iteration: a claimed slot nobody resolves never comes back.
+    let mut timers = PassTimer::new(device, queue).zip(PassTimer::new(device, queue));
     let mut samples = Vec::with_capacity(count);
-    for _ in 0..count {
+    let (mut ren, mut out) = (Vec::new(), Vec::new());
+    for run in 0..count {
         let start = std::time::Instant::now();
         let mut encoder = encoder(device);
-        resolve(&mut encoder);
+        let written = if let Some((scaled, presented)) = timers.as_mut() {
+            scaled.begin(run as u64);
+            presented.begin(run as u64);
+            let stamps = scaled
+                .compute_writes()
+                .zip(presented.compute_writes())
+                .map(|(scaled, presented)| oag_post::fsr3::ChainTimestamps { scaled, presented });
+            let written = resolve(&mut encoder, stamps, run);
+            if written {
+                scaled.resolve(&mut encoder);
+                presented.resolve(&mut encoder);
+            } else {
+                scaled.abandon();
+                presented.abandon();
+            }
+            written
+        } else {
+            resolve(&mut encoder, None, run);
+            false
+        };
         queue.submit(Some(encoder.finish()));
         device
             .poll(wgpu::PollType::wait_indefinitely())
             .expect("the GPU");
         samples.push(start.elapsed().as_secs_f64() * 1e6);
+        if let (true, Some((scaled, presented))) = (written, timers.as_mut()) {
+            let (a, b) = (scaled.read(device), presented.read(device));
+            if let (Some(a), Some(b)) = (a, b) {
+                ren.push(f64::from(a.seconds) * 1e6);
+                out.push(f64::from(b.seconds) * 1e6);
+            }
+        }
     }
     report("presentation resolve (serialised: CPU + GPU)", &mut samples);
+    if ren.is_empty() {
+        println!("bench FSR3 REN/OUT: not timed (no timestamps, or no temporal chain)");
+    } else {
+        report("FSR3 REN (render-extent dispatches), GPU", &mut ren);
+        report("FSR3 OUT (accumulate + rcas), GPU", &mut out);
+    }
 }

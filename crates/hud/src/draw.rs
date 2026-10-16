@@ -36,6 +36,15 @@ pub(super) const BORDER_CONSTANT: &str = "HudBGColour";
 /// belt-and-braces default rather than a value in use.
 pub(super) const FALLBACK_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
+/// The retro `HUD Style` skins' bar fills (`2097_hud`, `wo3_hud`), the same three values as
+/// `SpeedBar`, `ThrustBar` and `ShieldBar`: the executable names all three widgets
+/// (`SpeedBarWo3`, `ThrustBarWo3`, `nrgBarWo3`, in HD's and Omega's `.rodata`), and the
+/// `ENERGY` caption beside the third says what it shows. **Chosen from the names, not
+/// measured**: no frame of the original in a retro skin has been compared.
+const RETRO_SPEED_BAR: &str = "SpeedBarWo3";
+const RETRO_THRUST_BAR: &str = "ThrustBarWo3";
+const RETRO_ENERGY_BAR: &str = "nrgBarWo3";
+
 /// Whether a widget is one of the bar fills, whose width tracks a value.
 ///
 /// The two are recognised by name because the layout gives no other signal: a
@@ -43,9 +52,9 @@ pub(super) const FALLBACK_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 /// `each_bar_exactly_overlays_its_own_background` in the ground-truth tests.
 pub(super) fn bar_fraction(name: &str, readout: &Readout, art: &oag_title::HudArt) -> Option<f32> {
     match name {
-        "SpeedBar" => Some(readout.speed_fraction(art.speed_full_kmh as f32)),
-        "ThrustBar" => Some(readout.thrust_fraction()),
-        "ShieldBar" => Some(readout.shield_fraction()),
+        "SpeedBar" | RETRO_SPEED_BAR => Some(readout.speed_fraction(art.speed_full_kmh as f32)),
+        "ThrustBar" | RETRO_THRUST_BAR => Some(readout.thrust_fraction()),
+        "ShieldBar" | RETRO_ENERGY_BAR => Some(readout.shield_fraction()),
         _ => None,
     }
 }
@@ -547,6 +556,9 @@ pub(super) fn place_owns_the_anchor(layout: &Layout, readout: &Readout) -> bool 
 /// [`place_owns_the_anchor`] makes from two coincident anchors.
 pub(super) const SPEED_UNIT_WIDGET: &str = "SpeedBarTextKMH";
 
+/// The string id that sibling carries (`KM/H`), by which a skin that leaves it unnamed is found.
+const SPEED_UNIT_STRING: &str = "RC_KMH";
+
 /// Everything the HUD needs that does not change from frame to frame.
 ///
 /// Bundled rather than passed as four arguments because the caller assembles it
@@ -575,6 +587,9 @@ pub struct Context<'a> {
     /// Line height of the `Default` font (`pulse_text.fnt`), as actually
     /// loaded. Only the per-craft rows use it - see [`super::kill_tags`].
     pub default_line_height: f32,
+    /// Line height of the skin's own face (`2097HUD`, `wo3HUD`), as loaded; the `HUD`
+    /// face's again where the skin names none.
+    pub skin_line_height: f32,
     /// What a widget with no `BorderColor` outlines its glyphs in.
     ///
     /// 57 of the 84 HUD-font widgets are in that position, and the original draws
@@ -584,9 +599,9 @@ pub struct Context<'a> {
 
 /// One frame's worth of HUD, split by which pass draws it.
 ///
-/// Four lists rather than one because a [`crate::render::Renderer`] binds
-/// exactly one font atlas, so the three text fonts cannot share a pass. Draw them
-/// in field order: sprites, then `HUD`, `HUDSmall` and `Default` text.
+/// Five lists rather than one because a [`crate::render::Renderer`] binds
+/// exactly one font atlas, so the four text fonts cannot share a pass. Draw them
+/// in field order: sprites, then `HUD`, `HUDSmall`, `Default` and skin text.
 ///
 /// Splitting text across two passes means paint order is no longer strictly the
 /// layout's document order *between* fonts. That is safe here because no label
@@ -602,21 +617,23 @@ pub struct Frame {
     pub small_text: Vec<Draw>,
     /// Text in the `Default` font: the per-craft rows.
     pub default_text: Vec<Draw>,
+    /// Text in the skin's own face (`2097HUD`, `wo3HUD`).
+    pub skin_text: Vec<Draw>,
     /// For a split screen, where each view's draws start in the four lists, so the
     /// pass can scissor them to the view. Empty for a whole-screen frame, which is
     /// painted unclipped.
     pub spans: Vec<Span>,
 }
 
-/// One view's share of a [`Frame`]: its draws run from these indices of the four
+/// One view's share of a [`Frame`]: its draws run from these indices of the five
 /// lists to the next span's, and are clipped to `clip`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
     /// The view's rectangle in the HUD's grid, `[x, y, width, height]`.
     pub clip: [f32; 4],
     /// Where its draws start in [`Frame::sprites`], [`Frame::hud_text`],
-    /// [`Frame::small_text`] and [`Frame::default_text`].
-    pub start: [usize; 4],
+    /// [`Frame::small_text`], [`Frame::default_text`] and [`Frame::skin_text`].
+    pub start: [usize; 5],
 }
 
 impl Frame {
@@ -627,12 +644,17 @@ impl Frame {
             && self.hud_text.is_empty()
             && self.small_text.is_empty()
             && self.default_text.is_empty()
+            && self.skin_text.is_empty()
     }
 
     /// How many quads' worth of work this frame is, for a log line.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.sprites.len() + self.hud_text.len() + self.small_text.len() + self.default_text.len()
+        self.sprites.len()
+            + self.hud_text.len()
+            + self.small_text.len()
+            + self.default_text.len()
+            + self.skin_text.len()
     }
 }
 
@@ -834,7 +856,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     let place_shown = place_owns_the_anchor(cx.layout, readout)
         || super::time_trial_pace::mode_hides_total_time(cx.art, readout);
     // Likewise a fact about the layout rather than about one widget.
-    let speed_unit = cx.layout.label(SPEED_UNIT_WIDGET).is_none();
+    // The retro skins author the unit as an unnamed `RC_KMH` label beside the value, so the
+    // sibling is found by its string as well as by HD's name for it.
+    let speed_unit = cx.layout.label(SPEED_UNIT_WIDGET).is_none()
+        && !cx
+            .layout
+            .labels
+            .iter()
+            .any(|label| label.idstring.as_deref() == Some(SPEED_UNIT_STRING));
     // `speed_unit`'s own pattern: `Position` carries the whole `8/8` only
     // where the layout authors no separate `Position Outof` to put the field
     // size in - see `text_for`'s own doc comment.
@@ -880,6 +909,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         let line_height = match label.font {
             Font::Small => cx.small_line_height,
             Font::Default => cx.default_line_height,
+            Font::Skin => cx.skin_line_height,
             Font::Hud => cx.hud_line_height,
         };
         // The next class's name is the one widget in any layout whose authored
@@ -914,6 +944,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         match label.font {
             Font::Small => frame.small_text.push(draw),
             Font::Default => frame.default_text.push(draw),
+            Font::Skin => frame.skin_text.push(draw),
             Font::Hud => frame.hud_text.push(draw),
         }
     }

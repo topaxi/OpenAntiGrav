@@ -94,6 +94,7 @@ fn pure_pickup_context<'a>(
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     }
 }
 
@@ -220,6 +221,7 @@ fn a_title_with_no_icon_model_table_draws_nothing_through_this_path() {
         hud_line_height: 25.0,
         small_line_height: 10.0,
         default_line_height: 10.0,
+        skin_line_height: 10.0,
     };
     assert!(oag_pulse::hud::ART.pickup_icon_models.is_none());
     assert!(pickup_model_draws(&cx, Weapon::Turbo).is_empty());

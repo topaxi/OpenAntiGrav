@@ -81,7 +81,7 @@ pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 use draw::{BORDER_CONSTANT, FALLBACK_BORDER};
 
 use oag_ui::frontend::{Align, Draw};
-use oag_ui::screen::{argb_to_rgba, parse_argb};
+use oag_ui::screen::argb_to_rgba;
 
 /// A parsed HUD layout: pure geometry, straight off the disc.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -121,6 +121,13 @@ fn resolve<'a>(constants: &'a HashMap<String, String>, value: &'a str) -> Option
         Some(key) => constants.get(key.trim()).map(String::as_str),
         None => Some(value),
     }
+}
+
+/// `0xAARRGGBB`, or a plain decimal integer: the retro `HUD Style` skins author `color="0"` (and
+/// `color1..4="0"`) for a widget that is there and not seen, which `0x` parsing alone read as
+/// absent, and so drew white.
+fn parse_argb(value: &str) -> Option<u32> {
+    oag_ui::screen::parse_argb(value).or_else(|| value.trim().parse().ok())
 }
 
 /// A colour attribute, resolved and split into RGBA. White when absent.

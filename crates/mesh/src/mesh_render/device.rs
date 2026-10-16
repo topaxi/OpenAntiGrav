@@ -23,6 +23,17 @@
 /// comes back without the bit gets no timer at all - [`oag_gpu::timing::PassTimer::new`]
 /// checks the device rather than trusting the probe.
 ///
+/// `TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` rides along for FSR 3.1: it lets wgpu validate a
+/// storage binding on `R16Float`, `Rg16Float` and `R8Unorm` against what the adapter really
+/// supports, and those are the formats upstream holds the chain's intermediates in
+/// (`oag_post::fsr3::Formats::probe` asks the device whether it can). It only widens what
+/// validation accepts, so nothing that built before stops building; it also makes
+/// `sample_count: 2` valid on adapters that report it, which `display::Msaa` still does not
+/// offer (ADR-0013). Native only: WebGPU has no such feature, and the intersection drops it.
+///
+/// `SHADER_F16` likewise, for the passes FSR 3.1 computes in halves where upstream does
+/// (`Formats::probe`); the shaders that use it say `enable f16;`.
+///
 /// This reaches **every** `request_device` in the workspace, the captures and
 /// the viewer included, which is why it is one line here rather than a
 /// per-site decision: a device descriptor that differs between the window and
@@ -46,7 +57,11 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
         wgpu::Features::empty()
     };
     adapter.features()
-        & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY | probe)
+        & (wgpu::Features::TEXTURE_COMPRESSION_BC
+            | wgpu::Features::TIMESTAMP_QUERY
+            | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
+            | wgpu::Features::SHADER_F16
+            | probe)
         | arrays
 }
 

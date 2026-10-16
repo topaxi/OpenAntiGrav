@@ -129,6 +129,7 @@ OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS-GRÖSSE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }
+OAG_DISPLAY_HUD_STYLE = { text = "HUD-STIL", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }
 OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS = { text = "PAUSE BEI FOKUSVERLUST", human = false }
 OAG_DISPLAY_FRAME_LIMIT = { text = "BILDRATENLIMIT", human = false }

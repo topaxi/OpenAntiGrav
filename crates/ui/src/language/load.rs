@@ -32,7 +32,7 @@ pub fn load_languages(
         // the failure is legible from the load report rather than only from an
         // empty picker. Promoting the convention to an axis waits for the title
         // that disagrees, which is ADR-0022's rule and the same call S6 makes.
-        let name = pulse::names::language_definition(plugin);
+        let name = definition_entry(plugin);
         let Ok(blob) = archives.read_name(&name) else {
             report.push(format!(
                 "language plugin {plugin}: no {name} in this source"
@@ -71,6 +71,35 @@ pub fn load_languages(
         ));
     }
     out
+}
+
+/// The archive entry of a language plugin's `definition.xml`.
+fn definition_entry(plugin: &str) -> String {
+    pulse::names::language_definition(plugin)
+}
+
+/// Every copy, in every archive that carries one, of the plugins' `definition.xml` that fills
+/// the font slot `role`; the first-copy read [`load_languages`] does cannot see a slot only a
+/// later copy declares.
+///
+/// HD ships each plugin's definition twice and only `DATA03`'s copy has the retro HUD skins'
+/// `2097HUD` and `wo3HUD` slots (`docs/formats/hd-frontend.md`). Asked for one slot, so no
+/// other font or string moves.
+pub fn definition_copies_with_font(
+    archives: &mut oag_assets::Archives,
+    plugins: &[&str],
+    role: &str,
+) -> Vec<Language> {
+    let mut copies = Vec::new();
+    for plugin in plugins {
+        for (_, blob) in archives.read_every_name(&definition_entry(plugin)) {
+            let language = expand(&blob)
+                .ok()
+                .and_then(|xml| Language::from_definition(plugin, &xml));
+            copies.extend(language.filter(|language| language.font(role).is_some()));
+        }
+    }
+    copies
 }
 
 /// A native name a plugin's `Definition.xml` carries with its letters already

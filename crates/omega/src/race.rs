@@ -337,6 +337,31 @@ const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
     },
 ];
 
+/// Omega's nineteen `PI_Team`: the twelve HD-era ones ([`HD_ERA_TEAMS`]), the five 2048-era ones
+/// under their 2048 ids, and the two Tigrons. The `*2048` ids share the identity of their base
+/// team and `Tigron_x` is `Tigron` (maintainer, 2026-10-16).
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mirage", "mirage"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+    oag_title::team::team("AG_Systems2048", "ag_systems"),
+    oag_title::team::team("Auricom2048", "auricom"),
+    oag_title::team::team("Feisar2048", "feisar"),
+    oag_title::team::team("Piranha2048", "piranha"),
+    oag_title::team::team("Qirex2048", "qirex"),
+    oag_title::team::team("Tigron", "tigron"),
+    oag_title::team::team("Tigron_x", "tigron"),
+];
+
 #[cfg(test)]
 mod effect_dir_tests {
     #[test]
@@ -352,5 +377,18 @@ mod effect_dir_tests {
         ] {
             assert_eq!(super::DEFAULTS.effect_dir_for(circuit), r"Data\particles");
         }
+    }
+}
+
+#[cfg(test)]
+mod team_identity_tests {
+    use oag_title::team::identity_of;
+
+    #[test]
+    fn the_2048_ids_and_the_tigrons_share_identities() {
+        let of = |id| identity_of(super::TEAM_IDENTITIES, id);
+        assert_eq!(of("Feisar2048"), of("Feisar"));
+        assert_eq!(of("AG_Systems2048"), "ag_systems");
+        assert_eq!(of("Tigron_x"), of("Tigron"));
     }
 }

@@ -7,7 +7,7 @@
 
 use super::*;
 
-use super::readback::{self, Scene};
+use super::readback::{self, Scene, on_both_formats};
 
 /// The camera the race actually draws with, near enough: `oag-render`'s own
 /// `camera::perspective` is built from exactly these three numbers.
@@ -278,8 +278,7 @@ fn every_ported_pass_builds_and_dispatches_on_a_real_device() {
     );
 }
 
-#[test]
-fn a_jittered_still_scene_converges_on_a_history_it_trusts() {
+fn a_jittered_still_scene_converges_on_a_history_it_trusts(formats: Formats) {
     // **The one property that distinguishes a temporal upscaler from a blit**,
     // and the reason this fixture is the only one that turns jitter on. Without
     // a sub-pixel offset there is one sample per pixel per frame and nothing to
@@ -331,7 +330,7 @@ fn a_jittered_still_scene_converges_on_a_history_it_trusts() {
     assert_eq!(phases, 32, "the fixture upscales by two");
 
     let run = |count: usize| {
-        Scene::run_with(FIXTURE, &vec![still; count], true).map(|scene| {
+        Scene::run_with(formats, FIXTURE, &vec![still; count], true).map(|scene| {
             let output = scene
                 .fsr3
                 .output_texture()
@@ -365,7 +364,7 @@ fn a_jittered_still_scene_converges_on_a_history_it_trusts() {
     // The direct statement, read off `prepare_reactivity`'s own output rather
     // than inferred from pixels: after a full sequence of a still scene the
     // history is as deep as it goes and nothing has knocked it back.
-    let Some(scene) = Scene::run_with(FIXTURE, &vec![still; phases], true) else {
+    let Some(scene) = Scene::run_with(formats, FIXTURE, &vec![still; phases], true) else {
         return;
     };
     let targets = scene.fsr3.targets().expect("a dispatched frame");
@@ -415,8 +414,7 @@ pub(super) fn colour_pattern() -> Vec<[f32; 3]> {
         .collect()
 }
 
-#[test]
-fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
+fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum(formats: Formats) {
     // **The most transliteration-fragile line in `prepare_inputs`.** Upstream's
     // `FindDepthExtents` initialises `fFarthest` to the centre's depth and then
     // only ever `max`es it with a sample that was *nearer* than the running
@@ -432,6 +430,7 @@ fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
     let depth = depth_pattern();
     let colour = colour_pattern();
     let Some(scene) = Scene::run(
+        formats,
         size,
         &[readback::Input {
             depth: &depth,
@@ -444,12 +443,15 @@ fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
     let targets = scene.fsr3.targets().expect("a dispatched frame");
     let farthest = scene.read_r32(&targets.farthest_depth.texture);
 
+    // Upstream holds this in `R16_FLOAT`, whose rounding is half a unit in 2^-11: the narrow set
+    // reproduces it, the baseline's `R32Float` does not round.
+    let tolerance = if formats.is_narrow() { 1e-3 } else { 1e-4 };
     for y in 0..size.1 {
         for x in 0..size.0 {
             let at = (y * size.0 + x) as usize;
             let want = scene.view_space_metres(depth[at]);
             assert!(
-                (farthest[at] - want).abs() < want * 1e-4,
+                (farthest[at] - want).abs() < want * tolerance,
                 "({x}, {y}): got {}, wanted the centre's own {want}",
                 farthest[at]
             );
@@ -471,8 +473,7 @@ fn the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum() {
     );
 }
 
-#[test]
-fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
+fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average(formats: Formats) {
     // `SpdReduce4`: `(v0 + v1 + v2 + v3) * 0.25` over the 2x2 below each
     // half-resolution texel. Checked against the CPU-side view-space transform
     // rather than against a second run of the same shader, so a wrong
@@ -481,6 +482,7 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
     let depth = depth_pattern();
     let colour = colour_pattern();
     let Some(scene) = Scene::run(
+        formats,
         size,
         &[readback::Input {
             depth: &depth,
@@ -492,6 +494,8 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
     };
     let targets = scene.fsr3.targets().expect("a dispatched frame");
     let mip1 = scene.read_rg16(&targets.farthest_depth_mip1.texture, 0);
+    // The inputs are half-rounded in the narrow set before they are averaged and again after.
+    let tolerance = if formats.is_narrow() { 2e-3 } else { 1e-3 };
 
     let half = (size.0 / 2, size.1 / 2);
     for y in 0..half.1 {
@@ -503,19 +507,18 @@ fn the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average() {
             let want = (tap(0, 0) + tap(1, 0) + tap(0, 1) + tap(1, 1)) * 0.25;
             let got = mip1[(y * half.0 + x) as usize].0;
             // **A tenth of a percent, not a ten-thousandth**, because this
-            // target is `Rgba16Float`: it is sampled by `luma_instability`
-            // through `SampleFarthestDepthMip1`, and a filterable format is
-            // half-precision. The reduction is exact; the storage is not.
+            // target is half-precision (`Rgba16Float` or `R16Float`): it is sampled by
+            // `luma_instability` through `SampleFarthestDepthMip1`. The reduction is
+            // exact; the storage is not.
             assert!(
-                (got - want).abs() < want * 1e-3,
+                (got - want).abs() < want * tolerance,
                 "({x}, {y}): got {got}, wanted {want}"
             );
         }
     }
 }
 
-#[test]
-fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
+fn a_still_scene_reports_no_shading_change_at_any_pyramid_level(formats: Formats) {
     // **Two frames of an unchanging scene, which is the sharpest property this
     // pass has.** The neighbourhood it compares is identical either side, and
     // upstream's `ComputeMinimumDifference` handles that through a value that
@@ -534,7 +537,7 @@ fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
         depth: &depth,
         colour: &colour,
     };
-    let Some(scene) = Scene::run(FIXTURE, &[still, still]) else {
+    let Some(scene) = Scene::run(formats, FIXTURE, &[still, still]) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -572,8 +575,7 @@ fn a_still_scene_reports_no_shading_change_at_any_pyramid_level() {
     }
 }
 
-#[test]
-fn a_changed_scene_reports_a_signed_shading_change() {
+fn a_changed_scene_reports_a_signed_shading_change(formats: Formats) {
     // The control for the test above: with the second frame's colour actually
     // different, the pyramid must be non-zero - and *signed*, brightening
     // positive. Without this, a pass that wrote zeros unconditionally would
@@ -591,6 +593,7 @@ fn a_changed_scene_reports_a_signed_shading_change() {
     let dark = vec![[0.2f32, 0.2, 0.2]; texels];
     let bright = vec![[0.8f32, 0.8, 0.8]; texels];
     let Some(scene) = Scene::run(
+        formats,
         FIXTURE,
         &[
             readback::Input {
@@ -642,8 +645,7 @@ fn a_changed_scene_reports_a_signed_shading_change() {
     }
 }
 
-#[test]
-fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame() {
+fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame(formats: Formats) {
     // The feedback loop `accumulate` will weight its history by, and the reason
     // the `R8_UNORM` targets are held at `Rgba8Unorm` rather than widened: a
     // loop that quantises differently drifts differently.
@@ -660,7 +662,7 @@ fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame() {
         depth: &depth,
         colour: &colour,
     };
-    let Some(scene) = Scene::run(FIXTURE, &[still, still]) else {
+    let Some(scene) = Scene::run(formats, FIXTURE, &[still, still]) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -709,8 +711,7 @@ fn a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame() {
     }
 }
 
-#[test]
-fn a_still_scene_fills_the_luma_history_and_is_never_unstable() {
+fn a_still_scene_fills_the_luma_history_and_is_never_unstable(formats: Formats) {
     // **Seven frames, because the pass is gated twice and both gates take
     // time.** The instability factor is only computed where the accumulation is
     // over 0.9 frames deep, which at a third of a frame each takes until the
@@ -732,7 +733,7 @@ fn a_still_scene_fills_the_luma_history_and_is_never_unstable() {
         depth: &depth,
         colour: &colour,
     };
-    let Some(scene) = Scene::run(FIXTURE, &[still; 7]) else {
+    let Some(scene) = Scene::run(formats, FIXTURE, &[still; 7]) else {
         eprintln!("no adapter; skipping");
         return;
     };
@@ -893,7 +894,7 @@ fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
         return;
     };
 
-    let targets = Targets::new(&device, (960, 540), (1920, 1080));
+    let targets = Targets::new(&device, (960, 540), (1920, 1080), Formats::BASELINE);
     assert!(targets.fits((960, 540), (1920, 1080)));
     assert!(!targets.fits((640, 360), (1920, 1080)));
 
@@ -930,4 +931,123 @@ fn the_intermediates_are_allocated_at_the_ceiling_and_the_cost_is_reportable() {
          pyramid's own chain",
         sizes.half_render
     );
+}
+
+on_both_formats! {
+    a_jittered_still_scene_converges_on_a_history_it_trusts,
+    the_farthest_depth_is_the_centre_s_own_and_never_a_neighbourhood_maximum,
+    the_luma_pyramid_reduces_the_farthest_depth_by_a_plain_box_average,
+    a_still_scene_reports_no_shading_change_at_any_pyramid_level,
+    a_changed_scene_reports_a_signed_shading_change,
+    a_still_scene_accumulates_exactly_one_third_of_a_frame_per_frame,
+    a_still_scene_fills_the_luma_history_and_is_never_unstable,
+}
+
+#[test]
+fn a_device_that_can_store_upstream_s_formats_is_given_them_and_holds_less() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no adapter; skipping");
+        return;
+    };
+    // What the adapter says, independent of the device: the probe must agree with it.
+    let adapter_stores = Formats::NEEDED.iter().all(|format| {
+        adapter
+            .get_texture_format_features(*format)
+            .allowed_usages
+            .contains(wgpu::TextureUsages::STORAGE_BINDING)
+    }) && adapter
+        .features()
+        .contains(wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES);
+    let request = |features| {
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            required_features: features,
+            ..Default::default()
+        }))
+    };
+    // Without the device feature the answer is the baseline, whatever the adapter could do.
+    let Ok((plain, _)) = request(wgpu::Features::empty()) else {
+        eprintln!("no device; skipping");
+        return;
+    };
+    assert_eq!(Formats::probe(&plain), Formats::BASELINE);
+
+    let Ok((device, _)) =
+        request(adapter.features() & wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES)
+    else {
+        eprintln!("no device; skipping");
+        return;
+    };
+    let probed = Formats::probe(&device);
+    assert_eq!(
+        probed.is_narrow(),
+        adapter_stores,
+        "the probe and the adapter disagree"
+    );
+    if !adapter_stores {
+        eprintln!("this adapter cannot store the narrow formats; skipping the size check");
+        return;
+    }
+    let narrow = Targets::new(&device, (960, 540), (1920, 1080), Formats::NARROW).sizes();
+    let wide = Targets::new(&device, (960, 540), (1920, 1080), Formats::BASELINE).sizes();
+    assert!(
+        narrow.render < wide.render && narrow.half_render < wide.half_render,
+        "narrow {narrow:?} must hold less than baseline {wide:?}"
+    );
+    // At presentation size only `new_locks` narrows (4 bytes a texel to 1); the rest is colour.
+    assert!(narrow.upscale < wide.upscale);
+    eprintln!("baseline {wide:?}, narrow {narrow:?}");
+}
+
+#[test]
+fn the_half_path_resolves_what_the_full_path_does_to_within_half_precision() {
+    // The same still, jittered scene through a full sequence on each arithmetic. `accumulate`
+    // runs the history's bicubic in `f16` on one and `f32` on the other, so the two must differ
+    // (a half path that silently ran the full shader would read zero) and by no more than
+    // the half float's rounding amplified by the feedback.
+    let depth = depth_pattern();
+    let colour: Vec<[f32; 3]> = (0..FIXTURE.0 * FIXTURE.1)
+        .map(|i| {
+            let t = 0.40 + 0.002 * i as f32;
+            [t, t * 0.8, t * 0.6]
+        })
+        .collect();
+    let still = readback::Input {
+        depth: &depth,
+        colour: &colour,
+    };
+    let run = |formats: Formats| {
+        // A sub-pixel velocity, so the reprojection lands between history texels: on a texel
+        // centre the bicubic's weights are exactly (0, 1, 0, 0) in either precision.
+        let frames = vec![still; 32];
+        Scene::run_moving(formats, FIXTURE, &frames, true, [0.013, -0.007], |i| i == 0).map(
+            |scene| {
+                assert_eq!(
+                    scene.fsr3.formats(),
+                    formats,
+                    "the chain was built with another set"
+                );
+                let output = scene.fsr3.output_texture().expect("an output");
+                scene.read_rgba16(output)
+            },
+        )
+    };
+    let (Some(full), Some(half)) = (run(Formats::NARROW), run(Formats::NARROW.with_half())) else {
+        eprintln!("no device with half arithmetic; skipping");
+        return;
+    };
+    let worst = full
+        .iter()
+        .zip(&half)
+        .flat_map(|(a, b)| (0..3).map(move |c| (a[c] - b[c]).abs()))
+        .fold(0.0f32, f32::max);
+    eprintln!("worst difference, f16 against f32 accumulate: {worst}");
+    assert!(
+        worst > 0.0,
+        "the half path produced the full path's bytes: it did not run"
+    );
+    // Measured 0.0156 on this 16x8 fixture, the order of the settle residual the convergence test
+    // records (0.0176): the history is a feedback loop whose rectification box snaps a 1-ulp
+    // difference to the box's surface, so half rounding is not bounded by half's own ulp.
+    assert!(worst < 0.03, "half arithmetic moved the resolve by {worst}");
 }

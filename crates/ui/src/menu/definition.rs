@@ -474,6 +474,18 @@ impl Definition {
         }
     }
 
+    /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
+    /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
+    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_hud_style(&mut self, title: &oag_title::Title) {
+        if !title.hud.skins.is_empty() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("display.hud_style"));
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

@@ -650,6 +650,30 @@ pub const EVENT_AI_DEFAULTS: oag_title::original_driver::EventAi =
         level: 1,
     };
 
+/// The five native teams ([`NATIVE_TEAMS`]) and the twelve HD-derived ones ([`GUEST_TEAMS`]).
+/// **`Feisar2048` and its four siblings share the identity of `Feisar` and
+/// the rest** (maintainer, 2026-10-16): the same team under a 2048-era id
+/// (`docs/architecture/persistence.md`).
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems2048", "ag_systems"),
+    oag_title::team::team("Auricom2048", "auricom"),
+    oag_title::team::team("Feisar2048", "feisar"),
+    oag_title::team::team("Piranha2048", "piranha"),
+    oag_title::team::team("Qirex2048", "qirex"),
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mirage", "mirage"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+];
+
 #[cfg(test)]
 mod event_ai_tests {
     #[test]
@@ -666,5 +690,23 @@ mod event_ai_tests {
             ),
             (2.0, 1.0, 1.0, 1)
         );
+    }
+}
+
+#[cfg(test)]
+mod team_identity_tests {
+    use oag_title::team::identity_of;
+
+    #[test]
+    fn the_2048_ids_share_their_base_teams_identity() {
+        for (id, base) in [
+            ("Feisar2048", "feisar"),
+            ("Qirex2048", "qirex"),
+            ("Piranha2048", "piranha"),
+            ("AG_Systems2048", "ag_systems"),
+            ("Auricom2048", "auricom"),
+        ] {
+            assert_eq!(identity_of(super::TEAM_IDENTITIES, id), base);
+        }
     }
 }

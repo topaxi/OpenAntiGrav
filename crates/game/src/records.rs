@@ -484,9 +484,8 @@ impl CampaignRecord {
 /// circuit/mode/class row.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoyaltyRecord {
-    /// [`oag_title::Title::name`], lower-cased - see [`Key::title`].
-    pub title: String,
-    /// The team's own id (`Livery::team`, e.g. `"Assegai"`), lower-cased.
+    /// The team's shared identity ([`oag_title::team`]), lower-cased: `"feisar"` is the one
+    /// total Pulse, Pure, HD, 2048 and Omega all read.
     pub team: String,
     /// The running total - `Loyalty_AccumulateTotal`'s own `+= award`,
     /// capped the same place the original caps it: `100000`. See
@@ -496,8 +495,8 @@ pub struct LoyaltyRecord {
 }
 
 impl LoyaltyRecord {
-    fn matches(&self, title: &str, team: &str) -> bool {
-        self.title == title && self.team == team
+    fn matches(&self, team: &str) -> bool {
+        self.team == team
     }
 }
 
@@ -827,7 +826,6 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
         Some(_) => notes.push("`loyalty` is not an array of tables; ignoring it".to_string()),
         None => {}
     }
-    loyalty.sort_by(|a, b| (&a.title, &a.team).cmp(&(&b.title, &b.team)));
 
     Ok((
         Store {

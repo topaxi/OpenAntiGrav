@@ -113,7 +113,7 @@ fn each_extended_frame_keeps_where_its_draws_start() {
     all.extend(one.clone());
     all.extend(one);
     assert_eq!(all.spans.len(), 2);
-    assert_eq!(all.spans[0].start, [0, 0, 0, 0]);
-    assert_eq!(all.spans[1].start, [1, 1, 0, 0]);
+    assert_eq!(all.spans[0].start, [0, 0, 0, 0, 0]);
+    assert_eq!(all.spans[1].start, [1, 1, 0, 0, 0]);
     assert_eq!(all.spans[1].clip, HALF.clip);
 }

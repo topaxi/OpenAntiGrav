@@ -1,56 +1,65 @@
 //! The per-team loyalty half of [`Store`]: `Loyalty_AccumulateTotal`'s running
-//! total and the reads `Definition_IsUnlocked` compares against. Split out of
-//! `records.rs` under the 1,000-line rule; a move.
+//! total and the reads `Definition_IsUnlocked` compares against.
+//!
+//! **One total per team, shared by every title that has the team** (maintainer,
+//! 2026-10-16): a row is keyed by the team's shared identity
+//! ([`oag_title::team`]), so Feisar's loyalty counts in Pulse, Pure, HD, 2048 and
+//! Omega alike. How a race *earns* it stays each title's own law; each title's
+//! unlock thresholds stay its own.
+
+use oag_title::Title;
 
 use super::{LoyaltyRecord, Store};
 
+/// `Loyalty_AccumulateTotal`'s ceiling on a banked total.
+const CAP: u32 = 100_000;
+
 impl Store {
-    /// The team `(title, team)` names' own running total - `0` for a team
-    /// never raced, matching the original's own fresh-profile reading
-    /// (`EndRace Rewards`' `Total loyalty: 0`).
+    /// The team's running total as `title` names it - `0` for a team never
+    /// raced, matching the original's own fresh-profile reading (`EndRace
+    /// Rewards`' `Total loyalty: 0`). Shared with every title that has the team.
     #[must_use]
-    pub fn loyalty_total(&self, title: &str, team: &str) -> u32 {
-        let title = title.trim().to_ascii_lowercase();
-        let team = team.trim().to_ascii_lowercase();
+    pub fn loyalty_total(&self, title: &Title, team: &str) -> u32 {
+        self.identity_total(&title.team_identity(team))
+    }
+
+    fn identity_total(&self, identity: &str) -> u32 {
         self.loyalty
             .iter()
-            .find(|row| row.matches(&title, &team))
+            .find(|row| row.matches(identity))
             .map_or(0, |row| row.total)
     }
 
-    /// The largest running total any team of `title` holds - what an
+    /// The largest running total any team **of `title`'s roster** holds - what an
     /// `<Unlock Team="any" loyalty="N">` row compares: it passes when **some
     /// one team** reached `N` (`Unlock_LoyaltyMet` loops the teams and stops at
-    /// the first that does), not when the teams' totals add up to it.
+    /// the first that does), not when the teams' totals add up to it. Scoped to the
+    /// title's own teams: a team only Omega has (`Tigron`) does not open Pulse's rows.
     #[must_use]
-    pub fn loyalty_best(&self, title: &str) -> u32 {
-        let title = title.trim().to_ascii_lowercase();
-        self.loyalty
+    pub fn loyalty_best(&self, title: &Title) -> u32 {
+        title
+            .teams
             .iter()
-            .filter(|row| row.title == title)
-            .map(|row| row.total)
+            .map(|team| self.identity_total(&title.team_identity(team.id)))
             .max()
             .unwrap_or(0)
     }
 
-    /// Adds `award` to `(title, team)`'s own running total, creating the row
-    /// if this is the first race ever recorded for it, and returns the new
-    /// total - `Loyalty_AccumulateTotal`'s own `record+8 += award`, capped
-    /// the same place the original caps it: `100000`.
-    pub fn record_loyalty(&mut self, title: &str, team: &str, award: u32) -> u32 {
-        const CAP: u32 = 100_000;
-        let title = title.trim().to_ascii_lowercase();
-        let team = team.trim().to_ascii_lowercase();
-        let row = match self
-            .loyalty
-            .iter_mut()
-            .find(|row| row.matches(&title, &team))
-        {
-            Some(row) => row,
+    /// Adds `award` to the team's shared total, creating the row if this is the
+    /// first race ever recorded for it, and returns the new total -
+    /// `Loyalty_AccumulateTotal`'s own `record+8 += award`, capped the same
+    /// place the original caps it: `100000`.
+    pub fn record_loyalty(&mut self, title: &Title, team: &str, award: u32) -> u32 {
+        let identity = title.team_identity(team);
+        self.add_loyalty(&identity, award)
+    }
+
+    pub(super) fn add_loyalty(&mut self, identity: &str, award: u32) -> u32 {
+        let row = match self.loyalty.iter().position(|row| row.matches(identity)) {
+            Some(at) => &mut self.loyalty[at],
             None => {
                 self.loyalty.push(LoyaltyRecord {
-                    title,
-                    team,
+                    team: identity.to_owned(),
                     total: 0,
                 });
                 self.loyalty
@@ -63,8 +72,7 @@ impl Store {
 
         // Stable, for the same reason `Self::record`/`Self::record_campaign`
         // sort their own tables.
-        self.loyalty
-            .sort_by(|a, b| (&a.title, &a.team).cmp(&(&b.title, &b.team)));
+        self.loyalty.sort_by(|a, b| a.team.cmp(&b.team));
         total
     }
 }

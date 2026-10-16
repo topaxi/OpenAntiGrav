@@ -293,14 +293,23 @@ counts in findings 4 and 5 are work removed, not a profile.
   a part whose memory is shared with the CPU. Roughly 1.5-2x a native chain
   is what those two together cost, and that is the gap.
 
-  **The two levers, in the order worth trying**, neither of them started:
-  narrow the storage formats behind a probe of
-  `adapter.get_texture_format_features()` on the device's own adapter rather
-  than on a feature name (the guarantees have moved since `resources.rs`
-  chose the baseline, and it chose deliberately), and take the FP16 path
-  behind `wgpu::Features::SHADER_F16`. The two do not help the same passes,
-  so which to spend first is a question about *where in the chain* the time
-  goes - and **that instrument now exists**, see below.
+  **The two levers, both taken 2026-10-16** (numbers and method in
+  `docs/rendering/fsr3.md`, "What the two deviations cost, measured"): ~~narrow the
+  storage formats~~ behind `Formats::probe` on the device (`TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES`
+  now in `optional_features`), and ~~the FP16 path~~ behind `SHADER_F16` for `accumulate`'s history
+  bicubic. On RDNA (Raphael iGPU, RX 7800 XT) the formats cut `FSR3 REN` 24 to 27 % and the memory
+  32 %, the f16 history cuts `FSR3 OUT` 6 to 7 %; together 1.13x on the chain. **Not the 1.5 to
+  2x the Deck reading predicted**: `OUT` is `accumulate`'s texture traffic, 2.3 ms of the iGPU's
+  3.8 that no arithmetic change moves. **Found on the way: the bench measured reset frames**
+  (every run reprojected nothing), so the split-screen cost table undercounts `accumulate` by
+  about a third; the bench now resolves a steady-state frame.
+
+  **Still owed: the phone.** The maintainer's S24 (Xclipse 940) read `FSR3 REN` 3 ms and `FSR3 OUT`
+  7 ms before; the prediction from the RDNA numbers is roughly 2.2 and 6.5. The format probe also
+  compiles a shader storing to the three formats, because an Android driver is where the
+  `StorageImageExtendedFormats` SPIR-V capability (which wgpu declares without enabling the
+  Vulkan feature) could differ; a phone that fails it falls back to the baseline and the `info`
+  line says `baseline`. Nobody has looked at a moving race through the narrow or f16 path by eye.
 
 - **The chain is timed in two halves, since 2026-09-04.**
   [ADR-0045](../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md):
@@ -340,6 +349,9 @@ counts in findings 4 and 5 are work removed, not a profile.
 
 ## Next Steps
 
+0. **On the S24, read `FSR3 REN` and `FSR3 OUT` on the new APK** (`[graphics] perf_overlay = dev`,
+   UPSCALER = FSR 3, render scale 50), and read the `info` line `FSR 3.1 intermediates (... formats)`
+   from `adb logcat` to see which path the phone took.
 1. **Read `FSR3 REN` against `FSR3 OUT` on the Deck.** That single comparison
    is what decides between the two levers above, and it is now one look at the
    overlay rather than a profiling project. Everything else in this list is

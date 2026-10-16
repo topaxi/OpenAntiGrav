@@ -41,14 +41,10 @@ relative (Pure from Pulse, Omega from HD, 2048 from HD via Omega).
 1. **Records** (item 6). PS2's `Race_RecordResult` writes each person's place into one
    profile's best-place record; this build has no such record. Decide whether a two-person race
    writes anything (modern saves: no per-person profile exists).
-2. **Pure, HD, Omega, 2048 readout.** HD's authored split HUD (`splitscreen_hud_{0,1}.xml`,
-   pinned by `hd_authors_the_bar_and_both_places_but_no_gap_label`) carries `Position`,
-   `Position Outof` and a zero-height `HeadToHeadBar`, but **no `PositionOf` gap label**, and
-   `Position` is a centred number in a hex panel, so Pulse's rows-and-gap readout draws nothing
-   there and the place (`1 / 2`) stands, looked at on HD and Pure (Pure authors no
-   `HeadToHeadBar` at all). Omega reads HD's files; 2048's `HUD_positions.xml` was not read
-   this pass. A readout there is our own extension (fallback layer, mirroring the closest
-   relative: Pure from Pulse, Omega from HD, 2048 from HD via Omega), labelled ours.
+2. ~~Pure, HD, Omega, 2048 readout~~ landed 2026-10-16 (`h2h-readout-titles`): the place stands, the
+   gap sits under it (`docs/rendering/split-screen.md`), chosen, not measured. Still open: whether
+   HD's `Hud_BindWidgets` mode-9 branch (`0x0009e0ec`) sizes its authored `HeadToHeadBar` at
+   runtime (the per-frame writer is unread), which would give HD a measured bar.
 3. The left and right cut's leader row at `y = 49` (this build keeps the authored place) and the
    one-person player row's profile tag.
 

@@ -56,7 +56,7 @@ pub(crate) fn gated_variant_choices(
             .hull_unlocks
             .iter()
             .filter(|(stem, _)| stem.eq_ignore_ascii_case(&choice.value))
-            .all(|(_, rows)| oag_game::unlock::loyalty_unlocked(rows, &records, title.name))
+            .all(|(_, rows)| oag_game::unlock::loyalty_unlocked(rows, &records, title))
     });
     choices
 }

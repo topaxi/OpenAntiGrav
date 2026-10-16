@@ -124,9 +124,10 @@ impl Frame {
             hud_text: place_all(&self.hud_text),
             small_text: place_all(&self.small_text),
             default_text: place_all(&self.default_text),
+            skin_text: place_all(&self.skin_text),
             spans: vec![Span {
                 clip: p.clip,
-                start: [0; 4],
+                start: [0; 5],
             }],
         }
     }
@@ -139,15 +140,17 @@ impl Frame {
             self.hud_text.len(),
             self.small_text.len(),
             self.default_text.len(),
+            self.skin_text.len(),
         ];
         self.spans.extend(other.spans.into_iter().map(|span| Span {
             clip: span.clip,
-            start: [0, 1, 2, 3].map(|i| span.start[i] + at[i]),
+            start: [0, 1, 2, 3, 4].map(|i| span.start[i] + at[i]),
         }));
         self.sprites.extend(other.sprites);
         self.hud_text.extend(other.hud_text);
         self.small_text.extend(other.small_text);
         self.default_text.extend(other.default_text);
+        self.skin_text.extend(other.skin_text);
     }
 }
 

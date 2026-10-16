@@ -933,3 +933,47 @@ render_scale_chosen = false
     assert!(chosen(oag_pulse::TITLE, oag_disc::Platform::Psp));
     assert!(!chosen(oag_pure::TITLE, oag_disc::Platform::Psp));
 }
+
+/// The `HUD Style` choice survives the settings file, and an empty one reads as no choice
+/// (the title's own default) rather than as a skin named "".
+#[test]
+fn the_hud_style_round_trips_and_empty_means_the_default() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.display.hud_style_choice(), None);
+    settings.display.hud_style = "WIP3OUT".to_string();
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    let back: Settings = toml::from_str(&written).expect("parse");
+    assert_eq!(back.display.hud_style, "WIP3OUT");
+    assert_eq!(back.display.hud_style_choice().as_deref(), Some("WIP3OUT"));
+    settings.display.hud_style = "  ".to_string();
+    assert_eq!(settings.display.hud_style_choice(), None);
+}
+
+#[test]
+fn the_dev_table_defaults_on_in_a_debug_build_and_round_trips_in_every_build() {
+    let fresh = Settings::default();
+    assert_eq!(fresh.dev.unlocks_everything(), cfg!(debug_assertions));
+    let text = toml::to_string_pretty(&fresh).expect("serialises");
+    assert!(
+        !text.contains("[dev]"),
+        "a fresh file gains no [dev] table: {text}"
+    );
+
+    let off: Settings = toml::from_str("[dev]\nunlock_everything = false\n").expect("parses");
+    assert!(!off.dev.unlocks_everything());
+    let text = toml::to_string_pretty(&off).expect("serialises");
+    let back: Settings = toml::from_str(&text).expect("parses back");
+    assert_eq!(
+        back.dev.unlock_everything,
+        Some(false),
+        "kept on rewrite: {text}"
+    );
+
+    let on: Settings = toml::from_str("[dev]\nunlock_everything = true\n").expect("parses");
+    assert_eq!(
+        on.dev.unlocks_everything(),
+        cfg!(debug_assertions),
+        "release ignores it"
+    );
+    assert_eq!(on.dev.unlock_everything, Some(true));
+}

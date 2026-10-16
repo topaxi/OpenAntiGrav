@@ -471,6 +471,25 @@ pub fn track_description_id(track_id: &str) -> Option<String> {
     (digits.chars().count() == 2).then(|| format!("MSC_TRACK_{digits}"))
 }
 
+/// Every team id Pulse can name (the base disc's [`TEAMS`] and the packs' [`DLC_TEAMS`]) and the
+/// identity loyalty keeps it under. **`Mantis` is the same team as HD's `Mirage`**
+/// (maintainer, 2026-10-16: the pack is sold as Mirage's), so it is kept under `mirage`
+/// (`docs/architecture/persistence.md`).
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mantis", "mirage"),
+];
+
 #[cfg(test)]
 mod track_description_tests {
     use super::*;
@@ -486,5 +505,15 @@ mod track_description_tests {
             Some("MSC_TRACK_32")
         );
         assert_eq!(track_description_id("7"), None);
+    }
+}
+
+#[cfg(test)]
+mod team_identity_tests {
+    use oag_title::team::identity_of;
+
+    #[test]
+    fn mantis_is_mirage() {
+        assert_eq!(identity_of(super::TEAM_IDENTITIES, "Mantis"), "mirage");
     }
 }

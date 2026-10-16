@@ -485,6 +485,20 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         pitch_fade: Some((1030.0, 1180.0)),
     };
 
+/// The eight racing teams every Pure disc carries a full craft set for, and `Medievil`, a Pure
+/// team with no counterpart elsewhere. `Zone` and `Zone_01` are craft, not teams.
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+    oag_title::team::team("Medievil", "medievil"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_TEAM, DEFAULT_TRACK};

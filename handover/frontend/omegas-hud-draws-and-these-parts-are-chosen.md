@@ -19,8 +19,9 @@ composition" claim was a truncated census (NUL-separated PS4 manifest read by `s
 - **Which race selects the `2048_hud\` set.** It composes on Omega and its atlases resolve, but its
   constructors are reached by virtual dispatch (`FUN_015ae4d0`, `FUN_015ac880`, `FUN_015bc700`) and
   `Title::hud` is one set per title. Likely the `environments2048` circuits, as with particles; not read.
-- **`wo3_hud` and `2097_hud`** are the "HUD Style" values the arcade manager branches on; not wired
-  (same state as HD, `hud-legibility-and-hud-skins.md`).
+- **`wo3_hud` and `2097_hud`** are the "HUD Style" values the arcade manager branches on; wired
+  2026-10-16 (`oag_omega::hud::SKINS`, all five modes, unlocked; the other managers' branches are read
+  off their literals only).
 - **Zone's speed-class text** draws nothing: `zone_speed_classes` is `None` until Omega's class names
   are read.
 - **`always_on`, sights, `RUNTIME`, `shield_percent`, `message_slots` are HD's readings**, chosen, not
@@ -29,6 +30,12 @@ composition" claim was a truncated census (NUL-separated PS4 manifest read by `s
 - **Pilot Assist's indicator is wired (2026-10-11)** from the roots' own `HUD_assist_indicator.xml`
   (HD's four widgets; Zone none); the `2048_hud` set's `PilotAssist` icon waits on the selector above.
 - `hdHUD.gnf` is HD's art in part redrawn (mean difference 17 of 255); what changed is not looked at.
+
+- **Census 2026-10-16** ([hud-assets.md](../../docs/ui/hud-assets.md)): `2048_hud` is 119 files on Omega
+  (2048's 56 plus `_hd`, `_vr`, `_vr_ext` and `_splitscreen_h/_v` per mode, `.2x.gnf` atlases); the
+  bare root and `2048_hud` both compose; five `hud/zone_battle_hud_*.vex` the HD-lineage layouts name
+  are absent from Omega (dangling). The `HUD Style` list default is `HD`, which with the arcade
+  manager's fall-through puts the bare root as the default (reach 80). `HUD Effects` is read by nothing.
 
 ## Next Steps
 

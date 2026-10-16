@@ -291,6 +291,7 @@ impl Session {
                 self.settings.display.front_end_style = text.to_string();
                 self.reload_loading_assets();
             }
+            "display.hud_style" => self.settings.display.hud_style = text.to_string(),
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;
