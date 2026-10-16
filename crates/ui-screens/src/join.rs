@@ -602,7 +602,7 @@ impl Join {
                 Row::Settings => (self.labels.settings.clone(), String::new()),
                 Row::MaxPlayers => (
                     self.labels.max_players.clone(),
-                    format!("< {} >", self.owner_max.unwrap_or_default()),
+                    self.owner_max.unwrap_or_default().to_string(),
                 ),
                 Row::Start => {
                     if !self.can_start() {

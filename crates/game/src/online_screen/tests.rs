@@ -34,6 +34,18 @@ fn a_port_is_added_only_when_none_is_given() {
     assert_eq!(with_port("race.example.org"), "race.example.org:60000");
     assert_eq!(with_port(" 10.0.0.2:7000 "), "10.0.0.2:7000");
     assert_eq!(with_port("host:notaport"), "host:notaport:60000");
+    assert_eq!(
+        with_port("::1"),
+        "[::1]:60000",
+        "a bare IPv6 literal is bracketed"
+    );
+    assert_eq!(with_port("[::1]"), "[::1]:60000");
+    assert_eq!(with_port("[2001:db8::7]:7000"), "[2001:db8::7]:7000");
+    assert_eq!(
+        with_port("[::1]:x"),
+        "[::1]:x:60000",
+        "a bad port is not taken for one"
+    );
 }
 
 #[test]

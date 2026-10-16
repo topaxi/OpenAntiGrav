@@ -12,13 +12,27 @@ use oag_ui_screens::join::Join;
 /// The lobby's port when an address names none: `oag-server lobby`'s own.
 pub const DEFAULT_PORT: u16 = 60000;
 
-/// `host:port` with [`DEFAULT_PORT`] added when none is given.
+/// `host:port` with [`DEFAULT_PORT`] added when none is given. An IPv6 literal is
+/// `[::1]:60000` with its brackets, or bare (`::1`), which is bracketed here.
 #[must_use]
 pub fn with_port(typed: &str) -> String {
     let typed = typed.trim();
+    let has_port = |port: &str| port.parse::<u16>().is_ok();
+    if let Some(rest) = typed.strip_prefix('[') {
+        // `[addr]` or `[addr]:port`.
+        return match rest.split_once("]:") {
+            Some((_, port)) if has_port(port) => typed.to_string(),
+            _ if rest.ends_with(']') => format!("{typed}:{DEFAULT_PORT}"),
+            _ => format!("{typed}:{DEFAULT_PORT}"),
+        };
+    }
+    if typed.matches(':').count() > 1 {
+        // Two colons or more and no brackets: an IPv6 literal with no port.
+        return format!("[{typed}]:{DEFAULT_PORT}");
+    }
     if typed
         .rsplit_once(':')
-        .is_some_and(|(_, port)| port.parse::<u16>().is_ok())
+        .is_some_and(|(_, port)| has_port(port))
     {
         typed.to_string()
     } else {
@@ -119,6 +133,9 @@ pub fn member_line(member: &Member, strings: &StringTable) -> String {
     line
 }
 
+/// The most glyphs the line under a room's title holds on the widest face.
+const HINT_GLYPHS: usize = 60;
+
 /// The line under a room's title: the room's note, then where the room is.
 #[must_use]
 pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String {
@@ -141,10 +158,13 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
         }
         Phase::Racing => say(strings, "OAG_ONLINE_RACING", "THE RACE IS STARTING"),
     };
-    if room.note.is_empty() {
+    let with_note = format!("{} - {}", room.note.to_uppercase(), phase);
+    // **Chosen, not measured:** the line is one row of small text; past this many glyphs it
+    // ran off the right edge of Pure's face, so the standing instruction wins over the note.
+    if room.note.is_empty() || with_note.chars().count() > HINT_GLYPHS {
         phase
     } else {
-        format!("{} - {phase}", room.note.to_uppercase())
+        with_note
     }
 }
 

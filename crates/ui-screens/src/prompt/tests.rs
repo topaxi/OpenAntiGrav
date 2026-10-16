@@ -450,17 +450,21 @@ fn hovering_an_answer_moves_it_and_a_click_elsewhere_is_ignored() {
 fn an_address_keyboard_offers_the_dot_and_a_pilot_one_does_not() {
     let labels = Labels::default();
     let address = Keyboard::with_keys(labels.clone(), "", 40, ADDRESS_KEYS);
-    for c in ['0', '9', '.', 'a', 'z', '-'] {
+    for c in ['0', '9', '.', 'a', 'z', '-', ':', '[', ']'] {
         assert!(address.accepts(c), "{c:?}");
     }
-    assert!(!address.accepts('_') && !address.accepts('/') && !address.accepts(':'));
+    assert!(!address.accepts('_') && !address.accepts('/') && !address.accepts(' '));
     let pilot = Keyboard::new(labels, "", 24);
     assert!(!pilot.accepts('.') && pilot.accepts('-'));
     assert_eq!(address.cells(), ADDRESS_KEYS.len() + 2);
     assert_eq!(address.key(address.cells() - 1), Key::Accept);
     assert_eq!(address.key(address.cells() - 2), Key::Delete);
     assert_eq!(address.key(11), Key::Char('-'));
-    assert_eq!(address.cells(), 40, "the same four rows as a pilot's grid");
+    assert_eq!(
+        address.cells(),
+        43,
+        "five rows: the colon and the brackets of an IPv6 literal"
+    );
     // The cursor walks to the `.` (cell 10, the start of the second row) and presses it.
     let mut address = address;
     address.update(&mut tick(&[Button::Down]));
@@ -476,7 +480,7 @@ fn buffer_texts(keyboard: &Keyboard) -> Vec<String> {
         .filter_map(|d| match d {
             Draw::Text { text, scale, y, .. }
                 if !text.is_empty()
-                    && *scale > 0.8 * Panel::new(&skin()).scale
+                    && *scale > 0.7 * Panel::new(&skin()).scale
                     && *y < Panel::new(&skin()).body_y + Panel::new(&skin()).line * 2.0 =>
             {
                 Some(text.clone())
