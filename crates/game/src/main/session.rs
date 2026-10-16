@@ -638,6 +638,8 @@ pub(crate) struct Session {
     /// Stays set when the last seat closes, so a late event of a closed window is still
     /// not window 1's. Never set on a run with one window.
     pub(crate) screens_opened: bool,
+    /// The windowed inner size of each window F11 sent fullscreen, to put it back on the way out.
+    pub(crate) windowed_sizes: Vec<(winit::window::WindowId, winit::dpi::PhysicalSize<u32>)>,
     /// How many windows `--windows` asked for, in all, until the seats are opened (or
     /// refused for the title); `0` for a run with one window. See [`Session::screens_to_open`].
     #[cfg_attr(

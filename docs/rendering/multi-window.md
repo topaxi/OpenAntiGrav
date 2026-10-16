@@ -37,6 +37,12 @@ oag-game --race --window-seats 4,2 --screenshot shot.png --ticks 300   # headles
   bad entry is refused by name. Not with `--windows` or `--players`
   (`split_screen::parse_window_seats`, tested).
 - `--windows-fullscreen`: see Windows below.
+- **F11** in any window toggles that window alone between borderless fullscreen on the monitor it is
+  on right now and windowed (back at its previous size and position). Drag each window to its monitor,
+  press F11 in each. Per window and per session: the saved WINDOW MODE setting is not rewritten
+  (**chosen, not measured**). F11 is never a game input and no keyboard-seat routing sees it. Checked
+  under openbox on Xvfb (the window filled the screen and returned); a second monitor is the
+  maintainer's to try. On the web F11 is the browser's own.
 
 **Measuring without a person at it (2026-10-14, lane `split-preseat`).** Three dev switches, off by
 default, none a setting (`oag_game::devrun`, **chosen, not measured**):

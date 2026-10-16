@@ -155,6 +155,55 @@ pub(crate) fn fullscreen(
     }
 }
 
+/// What F11 asks of a window: borderless on the monitor it is on now (`current`), or windowed
+/// again when it is fullscreen already. `None` means "windowed". The monitor is the window's
+/// own at the moment of the press, which is what lets a player drag each window to its screen
+/// first. Per window and per session: the saved WINDOW MODE setting is not rewritten
+/// (**chosen, not measured**).
+pub(crate) fn toggled_fullscreen(
+    now: Option<winit::window::Fullscreen>,
+    current: Option<winit::monitor::MonitorHandle>,
+) -> Option<winit::window::Fullscreen> {
+    match now {
+        Some(_) => None,
+        None => Some(winit::window::Fullscreen::Borderless(current)),
+    }
+}
+
+/// Whether `key` is the fullscreen hotkey, on a fresh press (not an auto-repeat).
+pub(crate) fn is_fullscreen_key(key: &winit::keyboard::Key, pressed: bool, repeat: bool) -> bool {
+    pressed && !repeat && *key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::F11)
+}
+
+/// Flips `window` between borderless fullscreen on its current monitor and windowed.
+///
+/// A windowed window is fixed size (min = max, the float signal, see [`attributes`]) and winit
+/// keeps that pair as the window's own limits, so going fullscreen clears both (`set_resizable`
+/// alone restores the pair and the window manager then holds the window at its old size -
+/// measured under openbox) and the way back pins them to `restore`, the inner size remembered
+/// on the way in, rather than to whatever size the window has while it is still leaving
+/// fullscreen.
+pub(crate) fn toggle_fullscreen(
+    window: &winit::window::Window,
+    restore: &mut Option<winit::dpi::PhysicalSize<u32>>,
+) {
+    let next = toggled_fullscreen(window.fullscreen(), window.current_monitor());
+    if next.is_some() {
+        *restore = Some(window.inner_size());
+        window.set_min_inner_size(None::<winit::dpi::Size>);
+        window.set_max_inner_size(None::<winit::dpi::Size>);
+        window.set_resizable(true);
+        window.set_fullscreen(next);
+    } else {
+        window.set_fullscreen(None);
+        if let Some(size) = restore.take() {
+            let _ = window.request_inner_size(size);
+            window.set_min_inner_size(Some(size));
+            window.set_max_inner_size(Some(size));
+        }
+    }
+}
+
 /// How one window opens: the same for window 1 and every further window, so they float, tile
 /// or fill a monitor alike.
 pub(crate) struct Look<'a> {
@@ -559,5 +608,23 @@ mod tests {
             borderless.fullscreen,
             Some(winit::window::Fullscreen::Borderless(None))
         ));
+    }
+
+    #[test]
+    fn f11_goes_borderless_on_the_current_monitor_and_back_to_windowed() {
+        use winit::window::Fullscreen;
+        let on = toggled_fullscreen(None, None);
+        assert!(matches!(on, Some(Fullscreen::Borderless(None))));
+        assert!(toggled_fullscreen(on, None).is_none());
+    }
+
+    #[test]
+    fn only_a_fresh_f11_press_is_the_fullscreen_key() {
+        use winit::keyboard::{Key, NamedKey};
+        let f11 = Key::Named(NamedKey::F11);
+        assert!(is_fullscreen_key(&f11, true, false));
+        assert!(!is_fullscreen_key(&f11, false, false));
+        assert!(!is_fullscreen_key(&f11, true, true));
+        assert!(!is_fullscreen_key(&Key::Named(NamedKey::F10), true, false));
     }
 }

@@ -281,6 +281,24 @@ impl Session {
         options.opponents = true;
     }
 
+    /// F11 in window `id`: that window alone toggles borderless fullscreen on its own monitor.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    pub(crate) fn toggle_window_fullscreen(&mut self, id: winit::window::WindowId) {
+        let window = if self.gpu.output.window.id() == id {
+            &self.gpu.output.window
+        } else if let Some(screen) = self.screens.iter().find(|s| s.output.window.id() == id) {
+            &screen.output.window
+        } else {
+            return;
+        };
+        let at = self.windowed_sizes.iter().position(|(w, _)| *w == id);
+        let mut restore = at.map(|i| self.windowed_sizes.remove(i).1);
+        crate::window::toggle_fullscreen(window, &mut restore);
+        if let Some(size) = restore {
+            self.windowed_sizes.push((id, size));
+        }
+    }
+
     /// The ids of the further windows, in layout order (window 2 first).
     pub(crate) fn screen_ids(&self) -> Vec<winit::window::WindowId> {
         self.screens
