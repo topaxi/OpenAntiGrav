@@ -110,6 +110,7 @@ impl Session {
                         acquire: perf::Meter::new(),
                         present: perf::Meter::new(),
                         rings: super::timing::Rings::new(&self.gpu.device, &self.gpu.queue),
+                        pointer: crate::pointer::Window::default(),
                     })
                 });
             match opened {
@@ -515,6 +516,44 @@ impl Session {
         }
     }
 
+    /// A mouse or touch event on further window `index` (0 is window 2), latched on that
+    /// window's own pointer for [`Self::seat_pointers`].
+    pub(crate) fn seat_pointer(
+        &mut self,
+        index: usize,
+        event: &winit::event::WindowEvent,
+    ) {
+        use winit::event::WindowEvent;
+        let Some(screen) = self.screens.get_mut(index) else {
+            return;
+        };
+        match event {
+            WindowEvent::CursorMoved { position, .. } => {
+                screen.pointer.cursor_moved(position.x, position.y);
+            }
+            WindowEvent::CursorLeft { .. } => screen.pointer.cursor_left(),
+            WindowEvent::MouseInput { state, button, .. } => screen.pointer.button(*button, *state),
+            WindowEvent::MouseWheel { delta, .. } => screen.pointer.wheel(*delta),
+            WindowEvent::Touch(touch) => screen.pointer.touch(*touch),
+            _ => {}
+        }
+    }
+
+    /// One tick of every further window's pointer, each in that window's pixels with the aspect
+    /// rectangle its frame is drawn into: taken every tick so a click made mid-race is spent
+    /// rather than waiting for the end screens. What the end screens read
+    /// ([`Self::end_screen_pointer`]).
+    pub(crate) fn seat_pointers(&mut self) -> Vec<(oag_ui::pointer::Pointer, (f32, f32, f32, f32))> {
+        let aspect = self.settings.display.aspect;
+        self.screens
+            .iter_mut()
+            .map(|screen| {
+                let rect = display::viewport(screen.output.size(), aspect);
+                (screen.pointer.take(), rect)
+            })
+            .collect()
+    }
+
     /// The slots whose Start a click on a further window is, as the bitmask the pause reads
     /// (`oag_input::Controls::take_presses`): each clicked window's first seat. Taken: clicks
     /// are spent whether or not the race is paused, so a click while it ran cannot pause later.
@@ -765,21 +804,31 @@ impl Session {
         if upscaling && !encoded {
             screen.rings.abandon_upscale();
         }
-        stage.draw_window_track_panel(
-            &self.gpu,
-            encoder,
-            screen.framebuffer.output(),
-            rect,
-            window,
-        );
-        stage.draw_window_hud(
+        // The results and the end screens are the one flow every window draws at its own size
+        // (`RaceStage::draw_end_screens`); a race still running gets this window's panel and HUD.
+        if !stage.draw_end_screens(
             &self.gpu,
             encoder,
             screen.framebuffer.output(),
             rect,
             screen.framebuffer.output_size(),
-            window,
-        );
+        ) {
+            stage.draw_window_track_panel(
+                &self.gpu,
+                encoder,
+                screen.framebuffer.output(),
+                rect,
+                window,
+            );
+            stage.draw_window_hud(
+                &self.gpu,
+                encoder,
+                screen.framebuffer.output(),
+                rect,
+                screen.framebuffer.output_size(),
+                window,
+            );
+        }
         stage
             .scene
             .composite_bloom(encoder, screen.framebuffer.output(), rect);

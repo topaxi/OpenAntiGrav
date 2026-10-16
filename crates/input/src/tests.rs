@@ -327,6 +327,45 @@ fn take_presses_names_the_slot_the_keyboard_does_not_drive() {
     assert_eq!(controls.take_presses(Button::Start), 0, "consumed once");
 }
 
+/// The end screens of a multi-window race are one menu: a press made on another seat's slot
+/// reaches the keyboard's slot (the one the menu reads) a tick later, and only for the buttons
+/// asked for. Fails if the fold is dropped.
+#[test]
+fn fold_presses_hands_another_seats_press_to_the_keyboards_slot() {
+    let mut controls = Controls::without_pad();
+    controls.assignment_mut().assign_keyboard(1);
+    controls.set_key(&Key::Named(NamedKey::Space), true);
+    controls.player_snapshots();
+    controls.assignment_mut().assign_keyboard(0);
+    assert!(!controls.buttons().is_pressed(Button::Start));
+
+    controls.set_key(&Key::Named(NamedKey::Space), false);
+    controls.fold_presses(&[Button::Cross]);
+    assert_eq!(
+        controls.take_presses(Button::Start),
+        0b10,
+        "Start was not asked for, so it stays on slot 1"
+    );
+
+    let mut controls = Controls::without_pad();
+    controls.assignment_mut().assign_keyboard(1);
+    controls.set_key(&Key::Named(NamedKey::Space), true);
+    controls.player_snapshots();
+    controls.assignment_mut().assign_keyboard(0);
+    controls.set_key(&Key::Named(NamedKey::Space), false);
+    controls.fold_presses(&[Button::Start]);
+    assert_eq!(
+        controls.take_presses(Button::Start),
+        0,
+        "consumed where made"
+    );
+    controls.player_snapshots();
+    assert!(
+        controls.buttons().is_pressed(Button::Start),
+        "and tapped onto the keyboard's slot"
+    );
+}
+
 #[test]
 fn an_android_pad_button_is_a_pad_press_and_hides_nothing_it_should_not() {
     let mut controls = Controls::without_pad();

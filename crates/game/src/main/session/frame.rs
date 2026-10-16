@@ -19,6 +19,18 @@ use oag_ui::strings;
 const NET_OVER_TICKS: u32 = 60;
 use oag_ui::{font, menu};
 
+/// What the end screens of a multi-window race read from every seat, not only the keyboard's
+/// slot: the menu's move, confirm and back, the photo's spectator pad. **Chosen, not measured.**
+const END_SCREEN_BUTTONS: [Button; 7] = [
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+    Button::Cross,
+    Button::Start,
+    Button::Circle,
+];
+
 use crate::hints;
 use crate::stage::Stage;
 
@@ -319,6 +331,9 @@ impl Session {
             // And the pointer's, on the same latch terms: one take per tick,
             // in window pixels until a stage says which grid it draws in.
             let pointer = self.pointer.take();
+            // The further windows' too, every tick, so a click made mid-race is spent and the end
+            // screens (the finished arm below) see only what happened since the line.
+            let seat_pointers = self.seat_pointers();
             // HD's list rows are taller to the finger, and back to the
             // authored size once a pad, key or mouse speaks.
             if let Stage::Menu(stage) = &mut self.stage {
@@ -755,7 +770,18 @@ impl Session {
                         .as_ref()
                         .map(crate::race_stage::endrace_touch::EndRace::space);
                     if let Some(space) = space {
+                        // One menu for every window: a press on any seat's pad or keyboard and a
+                        // click in any window drive it (`docs/rendering/multi-window.md`).
+                        let windowed = stage.race.windowed();
+                        if windowed {
+                            self.controls.fold_presses(&END_SCREEN_BUTTONS);
+                        }
                         let grid = pointer::in_grid(pointer, space, rect);
+                        let grid = if windowed {
+                            pointer::end_screen_pointer(grid, space, &seat_pointers)
+                        } else {
+                            grid
+                        };
                         self.tick_endrace(&grid);
                     }
                 }
