@@ -112,6 +112,14 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         new_lap_record: "IG_HUD_NEWLAP_REC",
         final_lap: "IG_HUD_FIN_LAP",
         record_line_in_time_trial: true,
+        // `FUN_08829778` (`0x08829778`) plays `PERFECT_LAP` off `craft+0x860 & 0x200000`,
+        // the bit `Craft_UpdateLapProgress` sets with the line. `NEW_LAP_REC` sits in
+        // Pulse's speech banks and no code in the executable names it (a string census).
+        voices: oag_title::lap_hud::LapVoices {
+            perfect_lap: Some("PERFECT_LAP"),
+            new_lap_record: None,
+        },
+        speed_lap_medal: None,
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

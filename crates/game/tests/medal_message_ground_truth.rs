@@ -214,3 +214,132 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
         "only the standing line is up: {saying:?}"
     );
 }
+
+/// HD's Speed Lap block (`Craft_UpdateLapProgress` `0x000e553c`) raises the
+/// tier's line and plays its `_shrt` jingle on **every lap that is a new
+/// race-best and inside a tier**, not only when the tier improves. A cell with
+/// one wide bronze band and nothing better makes every best lap a bronze: the
+/// tier-improvement watch Pulse keeps would say it once; HD says it per lap.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
+    use oag_gameplay::cue::Cue;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut opened =
+        oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening HD");
+    let mut cell = oag_game::campaign::read_grids(
+        &mut opened.archives,
+        oag_hd::campaign::DEFINITION_ENTRY,
+        opened.title.campaign.grid_archive,
+    )
+    .expect("the grids")
+    .into_iter()
+    .flat_map(|grid| grid.cells)
+    .find(|cell| cell.name == "grid0_3_2")
+    .expect("grid0_3_2 is HD's first Speed Lap");
+    assert_eq!(cell.mode, oag_tables::race_campaign::Mode::SpeedLap);
+    cell.difficulty_targets = None;
+    (cell.gold, cell.silver, cell.bronze) = (1, 2, 1_000_000);
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SpeedLap,
+        track: Some(oag_hd::race::DEFAULT_TRACK.to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading HD");
+    for name in ["gold_med_shrt", "silver_med_shrt", "bronze_med_shrt"] {
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.starts_with(&format!("sfx: {name} -> "))),
+            "{name}: {:?}",
+            loaded.report
+        );
+    }
+    let render = |keep_voice: bool, wav: &str| {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data/shots")
+            .join(wav);
+        let mut audio = oag_sound::Audio::open(
+            &oag_sound::settings::Settings::default(),
+            Some(path.clone()),
+            None,
+            oag_audio::MIN_BUFFER,
+            false,
+        );
+        let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+        race.set_autopilot(true);
+        race.watch_laps(&loaded.hud, None);
+        let (mut earned, mut raised, mut best) = (None, Vec::new(), None);
+        let (mut bests, mut cues) = (Vec::new(), Vec::new());
+        for step in 0..6_000_u64 {
+            race.tick(&PlayerInputs::none());
+            let now = race.player_standing().best_lap_ticks;
+            if now != best {
+                bests.push(step);
+                best = now;
+            }
+            if let Some(tier) = oag_game::medal_watch::tick(
+                &cell,
+                oag_tables::race_campaign::Difficulty::Medium,
+                &mut earned,
+                &mut race,
+            ) {
+                raised.push((step, tier));
+            }
+            cues.extend(
+                race.pending_cues()
+                    .iter()
+                    .filter(|e| Cue::SPEED_LAP_MEDAL.contains(&e.cue))
+                    .map(|e| (step, e.cue)),
+            );
+            oag_game::sound::race_tick_keeping(&mut audio, &mut race, |e| {
+                keep_voice || !Cue::SPEED_LAP_MEDAL.contains(&e.cue)
+            });
+            audio.tick();
+        }
+        audio.finish().expect("writing the dump");
+        let file = std::fs::read(&path).expect("the dump");
+        let pcm: Vec<i16> = file[44..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b))
+            .collect();
+        (raised, bests, cues, pcm)
+    };
+    let (raised, bests, cues, with) = render(true, "speed-lap-medal-hd.wav");
+    let (_, _, _, without) = render(false, "speed-lap-medal-hd-without.wav");
+    assert!(bests.len() >= 2, "two laps were flown: {bests:?}");
+    assert_eq!(
+        raised.iter().map(|r| r.0).collect::<Vec<_>>(),
+        bests,
+        "one raise per new best lap, even in the same tier"
+    );
+    assert!(
+        raised
+            .iter()
+            .all(|r| r.1 == oag_tables::race_campaign::Medal::Bronze),
+        "{raised:?}"
+    );
+    assert_eq!(
+        cues.iter().map(|c| c.0).collect::<Vec<_>>(),
+        bests,
+        "the voice rides each raise: {cues:?}"
+    );
+    assert!(cues.iter().all(|c| c.1 == Cue::SpeedLapBronze), "{cues:?}");
+    let frame = |tick: u64| (tick as usize * 800 * 2).min(with.len());
+    let added: u64 = (frame(bests[0])..frame(bests[0] + 400))
+        .map(|i| u64::from(with[i].abs_diff(without[i])))
+        .sum();
+    assert!(
+        added > 100_000,
+        "bronze_med_shrt sounds after the lap: {added}"
+    );
+}

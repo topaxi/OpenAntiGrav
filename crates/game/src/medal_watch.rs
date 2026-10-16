@@ -7,9 +7,10 @@
 //! maintainer: a Zone run or a Speed Lap goes on after gold and the player could
 //! not tell which medal was already safe. **HD does raise one, in Speed Lap**: on
 //! every lap that is a new race-best and inside a tier, with a 3D trophy and a
-//! voice (`docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`); this
-//! watch raises on a tier improvement, which differs only when a new best stays in
-//! its tier, and draws no trophy. Two things come of it:
+//! voice (`docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`). A title
+//! that names that rule ([`oag_title::lap_hud::SpeedLapMedal`], HD) gets it here
+//! as measured, voice included and trophy not drawn; every other title's watch
+//! raises on a tier improvement only (chosen). Two things come of it:
 //!
 //! - the tick a tier is first reached (and again on each better tier), a
 //!   four-second line through the HUD's own message slots
@@ -82,6 +83,9 @@ pub fn tick(
     earned: &mut Option<Medal>,
     race: &mut Race,
 ) -> Option<Medal> {
+    if cell.mode == Mode::SpeedLap && race.speed_lap_medal_rule().is_some() {
+        return every_best_lap(cell, difficulty, earned, race);
+    }
     let value = live_value(&cell.mode, race)?;
     let now = cell.evaluate_medal_for_difficulty(value, difficulty);
     let better = improvement(*earned, now)?;
@@ -89,6 +93,39 @@ pub fn tick(
     race.raise_message(phrase(better), true);
     race.set_standing_message(phrase(better));
     Some(better)
+}
+
+/// HD's Speed Lap block (`Craft_UpdateLapProgress` `0x000e553c`): every lap that
+/// is a new race-best and inside a tier raises the tier's line and plays its
+/// jingle, whether or not the tier improved. The standing line still follows
+/// the best tier (chosen, not measured; the original shows a 3D trophy there).
+fn every_best_lap(
+    cell: &Cell,
+    difficulty: Difficulty,
+    earned: &mut Option<Medal>,
+    race: &mut Race,
+) -> Option<Medal> {
+    let ticks = race.take_new_best_lap()?;
+    let value = ticks_to_centiseconds(u64::from(ticks));
+    let now = cell.evaluate_medal_for_difficulty(value, difficulty)?;
+    race.raise_message(phrase(now), true);
+    race.raise_cue(voice(now));
+    if improvement(*earned, Some(now)).is_some() {
+        *earned = Some(now);
+        race.set_standing_message(phrase(now));
+    }
+    Some(now)
+}
+
+/// The cue a tier's jingle is.
+#[must_use]
+pub fn voice(medal: Medal) -> oag_gameplay::cue::Cue {
+    use oag_gameplay::cue::Cue;
+    match medal {
+        Medal::Gold => Cue::SpeedLapGold,
+        Medal::Silver => Cue::SpeedLapSilver,
+        Medal::Bronze => Cue::SpeedLapBronze,
+    }
 }
 
 #[cfg(test)]

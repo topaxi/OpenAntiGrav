@@ -11,6 +11,7 @@ use super::*;
 pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
     race: &'static oag_title::RaceDefaults,
+    lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
     slot_teams: &[String],
     report: &mut Vec<String>,
@@ -29,13 +30,24 @@ pub(super) fn banks_and_announcers(
     // The start-of-race voice, from the speech bank this mode opened rather
     // than the title's: Zone and Eliminator each load their own. See
     // `oag_title::CountdownVoice`.
-    if let Some(voice) = race.countdown_voice {
-        let entry = match mode {
+    let speech = match race.countdown_voice {
+        Some(voice) => match mode {
             Mode::Zone => voice.zone_bank,
             Mode::Eliminator => voice.eliminator_bank,
             _ => race.sounds.speech,
-        };
-        sounds.load_countdown(archives, entry, tick);
+        },
+        None => race.sounds.speech,
+    };
+    if race.countdown_voice.is_some() {
+        sounds.load_countdown(archives, speech, tick);
+    }
+    // The lap announcer shares the mode's speech slot on Pulse
+    // (`DAT_08ac1dfc`, `FUN_08829778`) and is the title's `speech.bnk` on HD.
+    if let Some(lap) = lap_hud {
+        sounds.load_lap_voices(archives, speech, tick, lap.voices);
+        if let Some(medal) = lap.speed_lap_medal {
+            sounds.load_speed_lap_medal(archives, tick, medal);
+        }
     }
     // The engine is a per-team crossfade table on HD and 2048, not a cue:
     // loaded only where the ship bank has no `~ENGINE`. 2048 addresses a bank

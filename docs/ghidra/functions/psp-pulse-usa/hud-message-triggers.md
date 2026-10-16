@@ -49,6 +49,57 @@ Facts that are easy to get wrong, all read off the decompile:
 - The three are drained in bit order, `PLAP` then `NEWLAP_REC` then `FIN_LAP`,
   each through the 0.8 s gate of the slot law.
 
+## The announcer voices (2026-10-16, `hud-lap-cues` lane)
+
+**Pulse plays `PERFECT_LAP` and nothing else beside the lap lines.** `FUN_08829778`
+(`0x08829778`, per-frame race-manager update, unnamed: its role is read, not
+named) plays `Sound_PlayNamedInSlot(DAT_08ac1e10, DAT_08ac1dfc, "PERFECT_LAP",
+0x400, 0, 0, 0)` at `0x088299c0` while `*(craft+0x860) & 0x200000` is set and the
+race state `+0x7c8 == 2`. `Craft_UpdateLapProgress` clears that bit at its first
+line every tick (`& 0xffdfffff`) and sets it at `0x08842ff0` together with the
+HUD's bit `0x1`, so the voice is **one tick, the crossing tick**, with the line.
+`DAT_08ac1dfc` is the mode's speech slot (`speech.bnk`, `speech_elim.bnk` or
+`speech_zone.bnk`: the slot `ready`/`go` use, [countdown-voice.md](countdown-voice.md)).
+Confidence 85. The cue is 0.955 s of speech after an authored 0.697 s lead-in
+(timeline delay, `oag-wad sounds`: two waveforms, left and right).
+
+- **`NEW_LAP_REC` is in all three Pulse speech banks and no code names it**: the
+  string census finds `IG_HUD_NEWLAP_REC` and `IG_HUD_LAP_REC` and no
+  `NEW_LAP_REC` in `BOOT.BIN`. Pulse's new-lap-record line is silent. 80 (a
+  string census, not a live watch).
+- **`FINAL_LAP` is voiced too, outside this lane**: the same function plays
+  `"FINAL_LAP"` (once, flag `+0x1986`) on `speech_results.bnk`'s slot
+  `DAT_08ac1e00` when the lap count reaches the last; so do `RACE_COMPLETE`,
+  `TOURN_COMPLETE`, `SESS_COMPLETE` at the finish. Open, not wired.
+- Wired as `oag_title::lap_hud::LapVoices` (`perfect_lap: Some("PERFECT_LAP")`,
+  `new_lap_record: None`), `Cue::PerfectLap`, raised in
+  `oag_raceplay::Race::raise_lap_messages` on the crossing tick. Disc-backed:
+  `lap_messages_ground_truth::pulse_voices_a_perfect_lap_on_the_crossing_tick_and_never_a_record`
+  renders the WAV with and without the voice and finds speech only where the bank
+  authors it (0.70 s after the cue). The seat a split-screen voice rides on is the
+  seat whose line it is (chosen, not measured).
+
+## The Elimination `CONT_ELIM` line: the attacker byte (2026-10-16)
+
+`Ship_Damage` (`0x088439ac`), on a craft's shield reaching zero with `param_3 == 2`
+(a weapon) in mode `8`: `attacker = (&DAT_08b31788)[victim->node->0x13c]`, the race
+manager's craft table indexed by the victim node's last-attacker slot; if it is not
+the victim itself (`!= victim+0x360`) it adds one to `attacker+0x8d8` (the kill
+count) and raises HUD bit `0x8` (green) when `attacker+0x48 == 0`, else `0x10`
+(red). **The line is raised on the player's HUD for any kill by any craft**, not
+only the player's.
+
+`craft+0x48` has one writer, `Craft_Construct_q` (`0x08840c74`), from its role
+argument (the value stored at `+0x368`): `0x08841098` / `0x088410d0` store `0` for
+roles `0` and `1`, `0x088410f0` stores `1` for roles `2` and `3`, nothing for `4`
+and above (confidence 90, the disassembly). So **green is "the attacker is not
+role 2 or 3"**. Whether roles 2 and 3 are the AI-driven craft and role 1 a second
+human or ghost is the open half (60: `+0x368 == 0` is the local player on seven
+uses, [autopilot.md](autopilot.md); the roles above `0` are unlabelled). The
+line is **left unwired**: wiring green for the player's kill and red for an AI's
+is the likely reading and not settled to 70. HD: `Ship_ApplyDamage_q`
+(`0x000e84d0`/`0x000e8488`) not read in this pass.
+
 ## The lap-line time gap (`Hud_UpdateTimeDiff`), confidence 85
 
 The maintainer saw it as "a periodic gap to the racer behind, green when you

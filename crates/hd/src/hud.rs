@@ -199,6 +199,20 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         new_lap_record: "IG_HUD_NEWLAP_REC",
         final_lap: "IG_HUD_FIN_LAP",
         record_line_in_time_trial: false,
+        // `Sound_QueueAnnouncerCue` in the drain at `0x91d20`; both cues are in HD's `speech.bnk`.
+        voices: oag_title::lap_hud::LapVoices {
+            perfect_lap: Some("PERFECT_LAP"),
+            new_lap_record: Some("NEW_LAP_REC"),
+        },
+        // `Craft_UpdateLapProgress` `0x000e553c`: every new race-best lap inside a tier of the
+        // cell's targets raises `ER_GMA`/`ER_SMA`/`ER_BMA` and plays these, in the
+        // `speech_results.bnk` the front end loads at boot. The 3D trophy is not drawn.
+        speed_lap_medal: Some(oag_title::lap_hud::SpeedLapMedal {
+            bank: r"Data\Sound\speech_results.bnk",
+            gold: "gold_med_shrt",
+            silver: "silver_med_shrt",
+            bronze: "bronze_med_shrt",
+        }),
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

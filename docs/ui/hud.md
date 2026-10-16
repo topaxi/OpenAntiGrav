@@ -1121,8 +1121,9 @@ The slot law is the same machine on all of them; what differs is data:
   text), drawn since 2026-10-12 (`oag_hud::messages::backing`; the earlier note that
   HD authors no backing frame was wrong, and is why a bright backdrop washed the
   text). HD announces a medal through these lines in Speed Lap (the measured
-  trigger: every best lap inside a tier), where the build's own line below raises on
-  a tier improvement.
+  trigger: every best lap inside a tier, with `gold_med_shrt` and its siblings),
+  **wired 2026-10-16** as `LapHud::speed_lap_medal`; every other title's line below
+  raises on a tier improvement.
 - **Pure** keys its eight phrases `HUD_<English>`, draws them **white** and words the
   gap as a sentence ("You are 2.0 secs behind"); its `HUD_Perfect Zone!` and
   `HUD_New Zone Record` are never raised in a race, so its lack of `ER_GMA` stays:

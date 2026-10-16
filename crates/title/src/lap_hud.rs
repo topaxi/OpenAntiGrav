@@ -80,6 +80,44 @@ pub struct SplitGapRule {
     pub table_crossings: u32,
 }
 
+/// The announcer cues a title plays beside its lap lines, by the name the
+/// speech bank spells them. `None` is "this title plays nothing here": either
+/// its bank has no such cue, or its executable has no caller for it, or the
+/// name is not yet read (each noted where the value is declared).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LapVoices {
+    /// Played with the perfect-lap line: Pulse and HD `PERFECT_LAP`.
+    pub perfect_lap: Option<&'static str>,
+    /// Played with the new-lap-record line: HD `NEW_LAP_REC`.
+    pub new_lap_record: Option<&'static str>,
+}
+
+impl LapVoices {
+    /// A title that plays neither.
+    pub const NONE: Self = Self {
+        perfect_lap: None,
+        new_lap_record: None,
+    };
+}
+
+/// The Speed Lap medal a title raises in the race itself: on every lap that is
+/// a new race-best and inside a tier of the campaign cell's targets, not only
+/// when the tier improves, with a short voice per tier. HD's
+/// `Craft_UpdateLapProgress` block at `0x000e553c`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`). A title
+/// without one keeps the build's own tier-improvement watch (chosen, not measured).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpeedLapMedal {
+    /// The bank the voices are in, loaded beside the race's own cues.
+    pub bank: &'static str,
+    /// Cue name for gold.
+    pub gold: &'static str,
+    /// Cue name for silver.
+    pub silver: &'static str,
+    /// Cue name for bronze.
+    pub bronze: &'static str,
+}
+
 /// What a title's HUD does at a lap crossing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LapHud {
@@ -93,6 +131,10 @@ pub struct LapHud {
     /// while the profile byte `0x009384e1` is clear (an ordinary race): its
     /// `0x91d20` skips the line in mode 5 behind that byte.
     pub record_line_in_time_trial: bool,
+    /// The announcer cues played on the crossing tick the lines are raised.
+    pub voices: LapVoices,
+    /// The Speed Lap medal rule, where the executable has one.
+    pub speed_lap_medal: Option<SpeedLapMedal>,
     /// How every line is tinted.
     pub tint: MessageTint,
     /// The split gap beside the lines.

@@ -21,7 +21,8 @@ record line in Time Trial, the count-up alone in Time Trial and Speed Lap, no pl
 stop and three gaps a lap**, 2048 and Omega HD's with one split a lap (chosen). The
 gap is to the **first craft over the split**, not the craft directly ahead or
 behind, on every title read. The chosen medal line (`oag_game::medal_watch`) stays
-for Zone and Speed Lap.
+for Zone and every Speed Lap but HD's, which raises per best lap with its voice (2026-10-16).
+Announcer voices: `oag_title::lap_hud::LapVoices`.
 
 ## Open
 
@@ -33,18 +34,23 @@ for Zone and Speed Lap.
 - **A live frame of the slot law and of a lap line** on PPSSPP (Pulse, Pure) and
   RPCS3 (HD): the flash phases, the 3.5 s hold, the 0.8 s gate, Pure's outline
   staying at full alpha while the text fades (read off one decompile, 70).
-- **HD's Speed Lap medal** (measured, `Craft_UpdateLapProgress` `0x000e553c`): the
-  line is raised on every lap that is a new race-best and inside a tier, with a 3D
-  trophy (`SpeedLapGoldMedal`/`Silver`/`Bronze` `<ImageModel>`s, `hd_gold.vex`,
-  208 x 150 at (1600, 200)) and the voice `gold_med_shrt`. `medal_watch` raises on a
-  tier improvement and draws no trophy; the HUD crate has no `<ImageModel>`.
-- **Announcer cues** the original plays with the lines: `PERFECT_LAP`,
-  `NEW_LAP_REC` (HD `0x91d20`; 2048 `RACE_Perfect_lap`/`RACE_New_lap_record`;
-  Omega `RACE_Perfect_lap`) and `cont_elim` on a kill. `Cue::ContElim` exists for a
-  wrecked opponent; the other two have no `Cue`.
-- **`CONT_ELIM`**: Pulse `Ship_Damage` (`0x088439ac`, attacker byte `+0x48` read at
-  60), HD `Ship_ApplyDamage_q` (`0x000e84d0`/`0x000e8488`), 2048 unread. Wire it in
-  Elimination once the attacker byte is settled.
+- **HD's Speed Lap trophy**: the medal line and its `gold_med_shrt`/`silver_med_shrt`/
+  `bronze_med_shrt` voice are wired as measured (2026-10-16, `LapHud::speed_lap_medal`,
+  every new race-best lap inside a tier). Still open: the 3D trophy
+  (`SpeedLapGoldMedal`/`Silver`/`Bronze` `<ImageModel>`s, `hd_gold.vex`, 208 x 150 at
+  (1600, 200)); the HUD crate has no `<ImageModel>`.
+- **Announcer voices landed 2026-10-16**: `PERFECT_LAP` on Pulse (`FUN_08829778`,
+  `craft+0x860 & 0x200000`) and HD, `NEW_LAP_REC` on HD only (Pulse's bank carries it and
+  no code names it); Pure's bank has neither. Open: 2048 (bank carries both, hashed; which
+  spelling is chosen by the unread `FUN_81000930(&DAT_8153fc40,-1)` global), Omega (Wwise
+  event names, no `SBlk` path), HD's gate byte `0x00938560`, Pulse's `FINAL_LAP` /
+  `RACE_COMPLETE` voices from the same function (`speech_results.bnk` slot).
+- **`CONT_ELIM`**: Pulse `Ship_Damage` (`0x088439ac`) credits `(&DAT_08b31788)[victim
+  node+0x13c]` and raises green when its `+0x48` is `0`, red otherwise; `+0x48` is written
+  once, in `Craft_Construct_q`, as `0` for roles 0-1 and `1` for roles 2-3 (90). What roles
+  2 and 3 are (AI-driven) is 60, so it stays **unwired**; HD `Ship_ApplyDamage_q`
+  (`0x000e84d0`/`0x000e8488`) and 2048 unread. The line goes to the player's HUD for any
+  kill by any craft. See Pulse's `hud-message-triggers.md`.
 - **HD**: the cap widening of a line wider than 240 px and the retro skin's halved
   alpha (`hud+0x6a0`); what `hud+0x44 & 0x20` is (voice-only) and what the profile
   byte `0x009384e1` is (its clear state is the ordinary race); the writers of
@@ -64,6 +70,7 @@ for Zone and Speed Lap.
 
 1. Capture a lap line on PPSSPP (Pulse and Pure) and RPCS3 (HD) and compare.
 2. Read 2048's gap routine and the split tables of 2048 and Omega.
-3. Wire the HD Speed Lap medal as measured (per-lap trigger), then the trophy model.
-4. Read `Ship_ApplyDamage_q`'s attacker byte and wire `CONT_ELIM` in Elimination.
-5. Add the `PERFECT_LAP`/`NEW_LAP_REC` announcer cues through the `Cue` table.
+3. Draw HD's Speed Lap trophy model (needs an `<ImageModel>` in `oag-hud`).
+4. Settle what `Craft_Construct_q`'s roles 2 and 3 are (60 today), then wire `CONT_ELIM` in
+   Elimination: green for a human attacker, red otherwise.
+5. 2048's perfect-lap / record voices: read the `FUN_81000930` global, then hashed lookup.

@@ -43,6 +43,10 @@ pub struct LapWatch {
     /// Cleared on a completed lap and **not** on the first crossing, so lap 1's
     /// verdict includes the drive from the grid to the line.
     dirty: bool,
+    /// The time of a lap that completed on a tick since the last
+    /// [`Self::take_new_best`] and was the race's best (`craft+0x7024 == lap`
+    /// on HD, where the Speed Lap medal block reads it).
+    new_best: Option<u32>,
 }
 
 impl LapWatch {
@@ -54,7 +58,19 @@ impl LapWatch {
             hud,
             stored_best_ticks,
             dirty: false,
+            new_best: None,
         }
+    }
+
+    /// The lap that just became the race's best, once.
+    pub fn take_new_best(&mut self) -> Option<u32> {
+        self.new_best.take()
+    }
+
+    /// The title's Speed Lap medal rule, when its executable has one.
+    #[must_use]
+    pub fn speed_lap_medal(&self) -> Option<oag_title::lap_hud::SpeedLapMedal> {
+        self.hud.speed_lap_medal
     }
 
     /// One tick: `hit` is whether the craft scraped a wall that nothing
@@ -68,6 +84,9 @@ impl LapWatch {
         }
         let perfect = !self.dirty;
         self.dirty = false;
+        if edge.lap_ticks.is_some() && edge.best_lap_ticks == edge.lap_ticks {
+            self.new_best = edge.lap_ticks;
+        }
         if edge.finished {
             return out;
         }
@@ -88,6 +107,22 @@ impl LapWatch {
             out.push(self.hud.final_lap);
         }
         out
+    }
+}
+
+impl LapWatch {
+    /// The announcer cue that goes with a raised line, when the title plays one
+    /// ([`oag_title::lap_hud::LapVoices`]).
+    #[must_use]
+    pub fn voice(&self, id: &str) -> Option<oag_gameplay::cue::Cue> {
+        use oag_gameplay::cue::Cue;
+        if id == self.hud.perfect_lap && self.hud.voices.perfect_lap.is_some() {
+            Some(Cue::PerfectLap)
+        } else if id == self.hud.new_lap_record && self.hud.voices.new_lap_record.is_some() {
+            Some(Cue::NewLapRecord)
+        } else {
+            None
+        }
     }
 }
 
@@ -119,7 +154,20 @@ impl super::Race {
             best_lap_ticks: state.best_lap_ticks,
         };
         let time_trial = self.sim.world.mode() == oag_race::Mode::TimeTrial;
-        for id in watch.observe(hit, time_trial, edge) {
+        let raised = watch.observe(hit, time_trial, edge);
+        for id in raised {
+            // The voice is queued on the crossing tick, not when the slot gate
+            // lets the line show: both originals play it where the bit is read
+            // (Pulse `FUN_08829778`, HD's drain), chosen per seat.
+            if let Some(cue) = self.view.huds[slot]
+                .lap_watch
+                .as_ref()
+                .and_then(|w| w.voice(id))
+            {
+                self.sim
+                    .cues
+                    .push(oag_gameplay::cue::CueEvent::new(cue, slot));
+            }
             self.view.huds[slot].messages.push(id, true);
         }
     }
