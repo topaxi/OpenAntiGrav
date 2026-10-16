@@ -5,7 +5,7 @@
 //! **Ours, chosen, not measured** (Omega's own `Game List` and `GameLobby` are the model for
 //! what is on them, `docs/networking/online-lobby.md`, part 1).
 
-use oag_net::wire::online::{Member, Phase, RoomInfo, Snapshot};
+use oag_net::wire::online::{Member, Phase, RoomInfo, RoomSettings, Snapshot};
 use oag_ui::language::StringTable;
 use oag_ui_screens::join::Join;
 
@@ -148,16 +148,56 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
     }
 }
 
-/// Fills `screen` (the room form) from `room`: one seat per person, and the line under the
-/// title. Whether `owner` (this person) may press START is the screen's `requiring`.
-pub fn fill_room(screen: &mut Join, room: &Snapshot, owner: bool, strings: &StringTable) {
+/// Fills `screen` (the room form) from `room`: one seat per person up to the room's size, the
+/// line under the title, and - for the owner, until START is pressed - ROOM SETTINGS and MAX
+/// PLAYERS. A seat says the room's circuit, class and mode while the cursor is on it, so a guest
+/// can see what the owner chose. `track_name` turns a circuit's entry name into the title's own.
+pub fn fill_room(
+    screen: &mut Join,
+    room: &Snapshot,
+    owner: bool,
+    strings: &StringTable,
+    track_name: &dyn Fn(&str) -> Option<String>,
+) {
+    screen.set_capacity(usize::from(room.settings.max_players));
+    screen.set_owner((owner && room.phase == Phase::Open).then_some(room.settings.max_players));
     screen.set_seats(
         room.members
             .iter()
             .map(|m| member_line(m, strings))
             .collect(),
     );
+    let info = room_info(&room.settings, strings, track_name);
+    screen.set_notes(
+        room.members.iter().map(|_| Some(info.clone())).collect(),
+        Vec::new(),
+    );
     screen.set_hint(room_hint(room, owner, strings));
+}
+
+/// A room's circuit, class and mode on one line.
+#[must_use]
+pub fn room_info(
+    settings: &RoomSettings,
+    strings: &StringTable,
+    track_name: &dyn Fn(&str) -> Option<String>,
+) -> String {
+    let info = RoomInfo {
+        id: 0,
+        owner: String::new(),
+        settings: settings.clone(),
+        members: 0,
+        joinable: true,
+    };
+    room_line(&info, strings, track_name)
+}
+
+/// The next room size: `current` moved by `by` seats, wrapping from `most` round to `fewest`
+/// and back.
+#[must_use]
+pub fn step_max_players(current: i32, by: i32, fewest: i32, most: i32) -> i32 {
+    let span = (most - fewest + 1).max(1);
+    fewest + (current - fewest + by).rem_euclid(span)
 }
 
 #[cfg(test)]

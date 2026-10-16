@@ -107,7 +107,7 @@ pub(super) fn capture_online(
             phase: Phase::Open,
             note: String::new(),
         };
-        crate::online_screen::fill_room(&mut screen, &snapshot, true, strings);
+        crate::online_screen::fill_room(&mut screen, &snapshot, true, strings, &|_| None);
         screen
     } else {
         let mut screen = Join::new(Labels::read_online_list(strings), 16).as_list();

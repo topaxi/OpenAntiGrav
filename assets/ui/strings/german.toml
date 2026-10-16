@@ -61,6 +61,8 @@ OAG_ONLINE_ROOM_HINT_OWNER = { text = "START DRÜCKEN, WENN ALLE BEREIT SIND", h
 OAG_ONLINE_HOST = { text = "HOST", human = false }
 OAG_ONLINE_READY = { text = "BEREIT", human = false }
 OAG_ONLINE_PICKING = { text = "WÄHLT", human = false }
+OAG_ONLINE_ROOM_SETTINGS = { text = "RAUMEINSTELLUNGEN", human = false }
+OAG_ONLINE_MAX_PLAYERS = { text = "MAX. SPIELER", human = false }
 OAG_ONLINE_QUEUED = { text = "EIN ANDERES SPIEL LÄUFT: DU BIST NUMMER %d IN DER WARTESCHLANGE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "DAS RENNEN STARTET IN %d", human = false }
 OAG_ONLINE_RACING = { text = "DAS RENNEN WIRD GESTARTET", human = false }

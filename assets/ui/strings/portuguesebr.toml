@@ -59,6 +59,8 @@ OAG_ONLINE_ROOM_HINT_OWNER = { text = "APERTE START QUANDO TODOS ESTIVEREM PRONT
 OAG_ONLINE_HOST = { text = "ANFITRIÃO", human = false }
 OAG_ONLINE_READY = { text = "PRONTO", human = false }
 OAG_ONLINE_PICKING = { text = "ESCOLHENDO", human = false }
+OAG_ONLINE_ROOM_SETTINGS = { text = "CONFIGURAÇÕES DA SALA", human = false }
+OAG_ONLINE_MAX_PLAYERS = { text = "MÁXIMO DE JOGADORES", human = false }
 OAG_ONLINE_QUEUED = { text = "OUTRO JOGO ESTÁ CORRENDO: VOCÊ É O Nº %d NA FILA", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "A CORRIDA COMEÇA EM %d", human = false }
 OAG_ONLINE_RACING = { text = "A CORRIDA ESTÁ COMEÇANDO", human = false }

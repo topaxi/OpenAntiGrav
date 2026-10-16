@@ -41,6 +41,10 @@ pub struct Labels {
     pub keyboard: String,
     /// "GAMEPAD", for a pad the backend gave no name.
     pub pad: String,
+    /// The room owner's row that opens the room's settings.
+    pub settings: String,
+    /// The room owner's row that sets how many people the room seats.
+    pub max_players: String,
     /// The row that begins the race.
     pub start: String,
     /// The row that leaves the screen.
@@ -61,6 +65,8 @@ impl Labels {
             guest: strings.get("FE_GUEST_JOIN").map(str::to_uppercase),
             keyboard: say("OAG_JOIN_KEYBOARD", "KEYBOARD"),
             pad: say("OAG_JOIN_PAD", "GAMEPAD"),
+            settings: say("OAG_ONLINE_ROOM_SETTINGS", "ROOM SETTINGS"),
+            max_players: say("OAG_ONLINE_MAX_PLAYERS", "MAX PLAYERS"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
         }
@@ -138,6 +144,10 @@ pub enum Row {
     Seat(usize),
     /// The next seat, empty.
     Empty,
+    /// The room owner's row that opens the room's settings.
+    Settings,
+    /// The room owner's row that shows, and steps, how many people the room seats.
+    MaxPlayers,
     /// Begin the race.
     Start,
     /// Leave the screen.
@@ -153,6 +163,11 @@ pub enum Event {
     Join,
     /// A click on seat `n`: it is given up.
     Leave(usize),
+    /// The owner's click on ROOM SETTINGS.
+    Settings,
+    /// The owner's click on MAX PLAYERS (`1`, one more, wrapping round to the fewest), or a pad's
+    /// left and right on it (`-1`, `1`).
+    MaxPlayers(i32),
     /// A click on START with somebody seated.
     Start,
     /// A click on BACK, or the secondary button.
@@ -182,6 +197,9 @@ pub struct Join {
     notes: Vec<Option<String>>,
     /// In a list, the rows that cannot be chosen: drawn dimmed, answering nothing.
     blocked: Vec<bool>,
+    /// The room owner's rows: ROOM SETTINGS, and MAX PLAYERS showing this number. `None` for
+    /// everybody else, who sees neither row.
+    owner_max: Option<u8>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -300,7 +318,33 @@ impl Join {
             row_labels: Vec::new(),
             notes: Vec::new(),
             blocked: Vec::new(),
+            owner_max: None,
         }
+    }
+
+    /// Shows the room owner's two rows, MAX PLAYERS saying `max`; `None` hides them.
+    pub fn set_owner(&mut self, max: Option<u8>) {
+        self.owner_max = max;
+        if !self.owner_max.is_some() && matches!(self.hover, Some(Row::Settings | Row::MaxPlayers))
+        {
+            self.hover = None;
+        }
+    }
+
+    /// How many seats the grid has: a room's size, which its owner can change.
+    pub fn set_capacity(&mut self, capacity: usize) {
+        self.capacity = capacity;
+        if let Some(Row::Seat(n)) = self.hover
+            && n >= self.capacity
+        {
+            self.hover = None;
+        }
+    }
+
+    /// The pad's left (`-1`) and right (`1`) on the highlighted row: the owner steps MAX PLAYERS.
+    #[must_use]
+    pub fn adjust(&self, by: i32) -> Option<Event> {
+        (self.hover == Some(Row::MaxPlayers)).then_some(Event::MaxPlayers(by))
     }
 
     /// This screen as a list to choose from ([`Self::listing`]), the rows' left-hand words
@@ -368,6 +412,8 @@ impl Join {
             Row::Seat(n) if self.is_blocked(n) => None,
             Row::Seat(n) => Some(Event::Leave(n)),
             Row::Empty => Some(Event::Join),
+            Row::Settings => Some(Event::Settings),
+            Row::MaxPlayers => Some(Event::MaxPlayers(1)),
             Row::Start if self.can_start() => Some(Event::Start),
             Row::Start => None,
             Row::Back => Some(Event::Back),
@@ -397,13 +443,17 @@ impl Join {
         }
     }
 
-    /// The rows, top to bottom: every seat, the empty one if the grid has room,
-    /// START, BACK.
+    /// The rows, top to bottom: every seat, the empty one if the grid has room, the owner's
+    /// ROOM SETTINGS and MAX PLAYERS, START, BACK.
     #[must_use]
     pub fn rows(&self) -> Vec<Row> {
         let mut rows: Vec<Row> = (0..self.seats.len()).map(Row::Seat).collect();
         if self.seats.len() < self.capacity {
             rows.push(Row::Empty);
+        }
+        if self.owner_max.is_some() && !self.listing {
+            rows.push(Row::Settings);
+            rows.push(Row::MaxPlayers);
         }
         if !self.listing {
             rows.push(Row::Start);
@@ -465,7 +515,8 @@ impl Join {
                 (
                     self.hover == Some(*row),
                     // A list's TYPE AN ADDRESS row, like START and BACK, has no value.
-                    !matches!(row, Row::Start | Row::Back) && !(self.listing && *row == Row::Empty),
+                    !matches!(row, Row::Start | Row::Back | Row::Settings)
+                        && !(self.listing && *row == Row::Empty),
                 )
             })
             .collect();
@@ -548,6 +599,11 @@ impl Join {
                         ),
                     }
                 }
+                Row::Settings => (self.labels.settings.clone(), String::new()),
+                Row::MaxPlayers => (
+                    self.labels.max_players.clone(),
+                    format!("< {} >", self.owner_max.unwrap_or_default()),
+                ),
                 Row::Start => {
                     if !self.can_start() {
                         ink = dim(ink);

@@ -385,7 +385,7 @@ impl Session {
 
     fn handle_lan(&mut self, event: Event) {
         match event {
-            Event::Moved => {}
+            Event::Moved | Event::Settings | Event::MaxPlayers(_) => {}
             Event::Back => {
                 self.end_lan();
                 self.play_navs(Some(Nav::Decline));

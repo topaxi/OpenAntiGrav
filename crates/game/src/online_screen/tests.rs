@@ -146,10 +146,10 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
         note: String::new(),
     };
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
-    fill_room(&mut screen, &snapshot, false, &strings());
+    fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
     assert_eq!(screen.count(), 3);
     assert_eq!(screen.labels().hint, "THE HOST STARTS THE RACE");
-    fill_room(&mut screen, &snapshot, true, &strings());
+    fill_room(&mut screen, &snapshot, true, &strings(), &|_| None);
     assert_eq!(screen.labels().hint, "PRESS START WHEN EVERYONE IS READY");
 }
 
@@ -171,4 +171,126 @@ fn a_room_pick_without_a_ship_select_falls_back_to_the_titles_own_team_not_to_no
         "auricom2048\\3"
     );
     assert_eq!(room_team(None, "x", &[]), "");
+}
+
+fn snapshot_of(people: usize, max_players: u8, phase: Phase) -> Snapshot {
+    let mut settings = room(1, "ada", 1, true).settings;
+    settings.max_players = max_players;
+    Snapshot {
+        id: 1,
+        settings,
+        members: (0..people)
+            .map(|n| Member {
+                name: format!("p{n}"),
+                team: String::new(),
+                ready: true,
+                owner: n == 0,
+            })
+            .collect(),
+        phase,
+        note: String::new(),
+    }
+}
+
+#[test]
+fn the_owner_gets_the_settings_rows_and_the_room_has_as_many_seats_as_its_size() {
+    use oag_ui_screens::join::Row;
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 2, Phase::Open),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(screen.rows().contains(&Row::Settings) && screen.rows().contains(&Row::MaxPlayers));
+    assert!(
+        !screen.rows().contains(&Row::Empty),
+        "two seats, two people: the room is full"
+    );
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Open),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(
+        screen.rows().contains(&Row::Empty),
+        "a size of five leaves seats"
+    );
+    // A guest, or an owner once the room is queued or racing, has neither row.
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Open),
+        false,
+        &strings(),
+        &|_| None,
+    );
+    assert!(!screen.rows().contains(&Row::Settings));
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 5, Phase::Racing),
+        true,
+        &strings(),
+        &|_| None,
+    );
+    assert!(!screen.rows().contains(&Row::MaxPlayers));
+}
+
+#[test]
+fn a_seat_says_what_the_owner_chose_while_the_cursor_is_on_it() {
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(
+        &mut screen,
+        &snapshot_of(2, 8, Phase::Open),
+        false,
+        &strings(),
+        &|_| Some("VINETA K".into()),
+    );
+    screen.step(1);
+    let hovered = oag_ui_screens::join::draw_list(
+        &screen,
+        &oag_ui::menu::Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        ),
+        &Default::default(),
+        None,
+        false,
+    )
+    .flatten();
+    let text: Vec<String> = hovered
+        .iter()
+        .filter_map(|d| match d {
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        text.iter().any(|t| t == "VINETA K / VENOM / SINGLE RACE"),
+        "{text:?}"
+    );
+}
+
+#[test]
+fn max_players_steps_by_one_and_wraps_between_the_fewest_and_the_most() {
+    assert_eq!(
+        step_max_players(8, 1, 2, 8),
+        2,
+        "past the most is the fewest"
+    );
+    assert_eq!(step_max_players(2, -1, 2, 8), 8);
+    assert_eq!(step_max_players(5, 1, 3, 8), 6);
+    assert_eq!(
+        step_max_players(3, -1, 3, 8),
+        8,
+        "never below the people seated"
+    );
+    assert_eq!(
+        step_max_players(2, 1, 2, 2),
+        2,
+        "a full two-seat room has one size"
+    );
 }

@@ -18,6 +18,8 @@ fn labels() -> Labels {
         guest: None,
         keyboard: "KEYBOARD".into(),
         pad: "GAMEPAD".into(),
+        settings: "ROOM SETTINGS".into(),
+        max_players: "MAX PLAYERS".into(),
         start: "START".into(),
         back: "BACK".into(),
     }
@@ -434,4 +436,83 @@ fn a_room_on_the_network_never_asks_the_second_seat_to_press_start() {
     );
     assert_eq!(Labels::read_online_room(&strings).guest, None);
     assert_eq!(Labels::read_lan_lobby(&strings).guest, None);
+}
+
+#[test]
+fn only_the_room_owner_has_the_settings_and_max_players_rows() {
+    let mut join = screen(2);
+    assert_eq!(
+        join.rows(),
+        [
+            Row::Seat(0),
+            Row::Seat(1),
+            Row::Empty,
+            Row::Start,
+            Row::Back
+        ],
+        "a guest sees neither"
+    );
+    join.set_owner(Some(6));
+    assert_eq!(
+        join.rows(),
+        [
+            Row::Seat(0),
+            Row::Seat(1),
+            Row::Empty,
+            Row::Settings,
+            Row::MaxPlayers,
+            Row::Start,
+            Row::Back
+        ]
+    );
+    join.set_owner(None);
+    assert_eq!(join.rows().len(), 5);
+}
+
+#[test]
+fn the_owners_rows_answer_the_pad_and_the_pointer_alike() {
+    let skin = skin();
+    let mut join = screen(2);
+    join.set_owner(Some(6));
+    // Pad: step down onto each of them (the cursor starts on the last row going down).
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::Seat(0)));
+    join.step(1);
+    join.step(1);
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::Settings));
+    assert_eq!(join.confirm(), Some(Event::Settings));
+    assert_eq!(
+        join.adjust(1),
+        None,
+        "left and right do nothing on ROOM SETTINGS"
+    );
+    join.step(1);
+    assert_eq!(join.hover(), Some(Row::MaxPlayers));
+    assert_eq!(join.confirm(), Some(Event::MaxPlayers(1)));
+    assert_eq!(join.adjust(-1), Some(Event::MaxPlayers(-1)));
+    // Pointer: the same rows by a click.
+    let mut join = screen(2);
+    join.set_owner(Some(6));
+    assert_eq!(
+        join.pointer(&click(centre(&skin, 3)), &skin),
+        [Event::Moved, Event::Settings]
+    );
+    assert_eq!(
+        join.pointer(&click(centre(&skin, 4)), &skin),
+        [Event::Moved, Event::MaxPlayers(1)]
+    );
+}
+
+#[test]
+fn a_rooms_size_is_how_many_seats_the_grid_has() {
+    let mut join = screen(2);
+    join.set_capacity(2);
+    assert_eq!(
+        join.rows(),
+        [Row::Seat(0), Row::Seat(1), Row::Start, Row::Back],
+        "full: no empty seat"
+    );
+    join.set_capacity(4);
+    assert!(join.rows().contains(&Row::Empty));
 }
