@@ -82,7 +82,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        self.bind_materials(pass, &mut last_bound);
+        self.bind_arrays(pass);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
@@ -212,7 +212,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        self.bind_materials(pass, &mut last_bound);
+        self.bind_arrays(pass);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;

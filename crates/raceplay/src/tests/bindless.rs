@@ -109,6 +109,18 @@ fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, half: usize, bindless: b
 /// `drawables` drawn one after another in one pass with identity matrices, read back row
 /// by row.
 fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawables: &[Drawable]) -> Vec<u8> {
+    pixels_with(device, queue, drawables, |drawable, pass| {
+        drawable.draw(pass, ViewBlock::NONE, None, None, None, None);
+    })
+}
+
+/// [`pixels`] with each drawable drawn by `draw`.
+fn pixels_with(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    drawables: &[Drawable],
+    draw: impl Fn(&Drawable, &mut wgpu::RenderPass<'_>),
+) -> Vec<u8> {
     let target = |format, usage| {
         device.create_texture(&wgpu::TextureDescriptor {
             label: Some("bindless test"),
@@ -167,7 +179,7 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawables: &[Drawable]) ->
             ..Default::default()
         });
         for drawable in drawables {
-            drawable.draw(&mut pass, ViewBlock::NONE, None, None, None, None);
+            draw(drawable, &mut pass);
         }
     }
     let row = SIZE * 4;
@@ -264,6 +276,38 @@ fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     assert_eq!(centres(&got), strips, "the strips through the arrays");
     assert!(
         got == expected,
+        "every pixel as the per-slot groups draw it"
+    );
+}
+
+/// **A drawable on the arrays draws first in a pass.** The overlay lists
+/// (`draw_overlay`, the plume and shield path) bound the arrays and pushed slot 0's row
+/// before their first `set_pipeline`; wgpu checks immediates against the current
+/// pipeline's layout, and a fresh pass has none, so a split-screen view whose pass began
+/// with an overlay died with "immediate data ... overruns the immediate data range with a
+/// size of 0". Every earlier test drew an opaque drawable first, whose pipeline was set.
+/// The same pixels as the per-slot groups, and no validation error.
+#[test]
+fn an_overlay_on_the_arrays_draws_first_in_a_pass() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    if !mesh_render::bindless::supported(&device) {
+        eprintln!("no binding arrays on this adapter: nothing to check");
+        return;
+    }
+    let overlay = |drawable: &Drawable, pass: &mut wgpu::RenderPass<'_>| {
+        drawable.draw_overlay(pass, ViewBlock::NONE);
+    };
+    let arrays = [0, 1].map(|half| drawable(&device, &queue, half, true));
+    assert!(arrays.iter().all(Drawable::binds_arrays));
+    let per_slot = [0, 1].map(|half| drawable(&device, &queue, half, false));
+    let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let got = pixels_with(&device, &queue, &arrays, overlay);
+    let error = pollster::block_on(scope.pop());
+    assert!(error.is_none(), "validation error: {error:?}");
+    assert!(
+        got == pixels_with(&device, &queue, &per_slot, overlay),
         "every pixel as the per-slot groups draw it"
     );
 }
