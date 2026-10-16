@@ -155,6 +155,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `(51, 509)`. See `oag_title::HudArt::shield_percent` and
     // `docs/formats/2048-hud.md`.
     shield_percent: true,
+    speed_full_kmh: 600,
     // **Measured, and the correction this axis exists for.** 2048's language
     // plugins name no `HUD` role at all - `english/Definition.xml` carries
     // `<Font><Values name="2048HUD" ...Src="Data\XML\2048_hud\font\2048_hud.fnt">`

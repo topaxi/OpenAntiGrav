@@ -479,6 +479,21 @@ pub struct HudArt {
     /// `Hud_UpdateShieldReadout` builds the digits by hand and appends
     /// nothing (`docs/ghidra/functions/ps3-hdfury-eu/hud-readouts.md`).
     pub shield_percent: bool,
+    /// The speed, in km/h, at which this title's `SpeedBar` reads full.
+    ///
+    /// **HD and Omega: 700, read off the executable.** `Hud_UpdateSpeedReadout`
+    /// (`0x00086e88`) multiplies the speed by `0x008a7708`, `0x3abb3ee7` =
+    /// 1/700, and crops the fill to the result. The two reference frames
+    /// (`talons-matched/00.png`, `01.png`) fit it no worse than 600: at 529
+    /// km/h the fill ends at 82% of the bar's width where 700 predicts 76% and
+    /// 600 predicts 88%; at 74 km/h it ends at 6% against 11% and 12%.
+    ///
+    /// **Pulse, Pure and 2048: 600, ours, not recovered.** Nothing has
+    /// established what sets those bars' maximum. 600 is an inference: the
+    /// exhaust's own ramp saturates at 600 km/h (`oag_fx::exhaust::RAMP_FLOOR_KMH`
+    /// plus `RAMP_SPAN_KMH`, both recovered), a ramp for a visual effect and not a
+    /// bar maximum. A reference frame at a known speed would settle it.
+    pub speed_full_kmh: u32,
     /// The font role this title's language plugins name for the HUD's value
     /// face - the big lap fraction, position fraction, speed and time
     /// readouts - as `oag_ui::language::Language::font` resolves it.

@@ -134,7 +134,6 @@ impl Race {
         let finished = self.finished_view(slot);
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
-            speed_full_kmh: oag_hud::DEFAULT_SPEED_FULL_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
             // pickup pays back into - `oag_physics::damage`. (This comment said
             // "nothing depletes this yet" until 2026-08-11, three subsystems
@@ -215,6 +214,7 @@ impl Race {
             shield_blink_phase_whole: hud.shield_blink_timer_whole,
             energy_bar_delay_fraction: hud.energy_bar_delay_fraction,
             thrust_chase_percent: hud.thrust_chase_percent,
+            thrust_percent: ship.physics.thrust.max(0.0),
             pilot_assist: self.pilot_assist_shown(),
             assist: hud.assist_indicator.readout(),
             mode: self.sim.world.mode(),

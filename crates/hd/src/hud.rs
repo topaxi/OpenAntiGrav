@@ -177,6 +177,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `talons-matched/{00,01,03}.png` read a bare number - `100`, `100`, `98` -
     // with no `%` anywhere. See `oag_title::HudArt::shield_percent`.
     shield_percent: false,
+    speed_full_kmh: 700,
     // lane/2048-hud-font: measured. Every language plugin's own
     // `definition.xml` (`DATA02`/`DATA03`) names
     // `<Font><Values name="HUD" ...Src="Data\FE\Fonts\PulseHud.fnt">` and
@@ -305,7 +306,7 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// left out because the alternative is an arcade HUD whose position readout
 /// floats on nothing.
 ///
-/// # `SpeedBar` is on the list, `ThrustBar` is not
+/// # `SpeedBar` and `ThrustBar` are on the list
 ///
 /// **2026-10-16.** HD authors both bars as `<CurveBar>` in
 /// `HUD_speed_bars.xml`, which the parser dropped without a word until then, so
@@ -313,8 +314,9 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// every race frame at a value (`talons-matched/01.png`, 529 km/h: a yellow
 /// strip along the bar's lower edge to about 88%) and is cropped to
 /// `speed_kmh / speed_full_kmh` by `oag_hud::draw`. `ThrustBar`, its sibling
-/// beside `ThrustBarText`'s percentage, is **not** here: it is a fill with no
-/// value source wired for HD, and an allow-listed fill draws full.
+/// beside `ThrustBarText`'s percentage, is cropped to
+/// `oag_hud::Readout::thrust_percent`: the craft's throttle after Pilot
+/// Assist's scale, read off the original (`docs/formats/hd-hud.md`).
 ///
 /// # What is deliberately left out
 ///
@@ -373,6 +375,7 @@ pub const ALWAYS_ON: &[&str] = &[
     "SpeedBarBG",
     "ThrustBarBG",
     "SpeedBar",
+    "ThrustBar",
     "SpeedBarOverlay",
     // Zone's ladder. Authored by the Zone roots alone; see the section above.
     "ZoneBG",

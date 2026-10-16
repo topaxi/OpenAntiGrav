@@ -994,10 +994,7 @@ fn the_speed_bar_fill_is_authored_beside_its_background_in_the_three_race_layout
         return;
     };
     assert!(oag_hd::hud::ALWAYS_ON.contains(&"SpeedBar"));
-    assert!(
-        !oag_hd::hud::ALWAYS_ON.contains(&"ThrustBar"),
-        "ThrustBar has no value source for HD yet; allow-listed it would draw full"
-    );
+    assert!(oag_hd::hud::ALWAYS_ON.contains(&"ThrustBar"));
     for root in [
         "/data/xml/arcade_hud.xml",
         "/data/xml/timetrial_hud.xml",
@@ -1015,11 +1012,12 @@ fn the_speed_bar_fill_is_authored_beside_its_background_in_the_three_race_layout
             [1.0, 127.0 / 255.0, 12.0 / 255.0, 1.0],
             "{root}: orange"
         );
-        assert!(
-            layout
-                .sprite("ThrustBar")
-                .is_some_and(|b| b.gradient.is_some())
-        );
+        let thrust = layout.sprite("ThrustBar").expect("ThrustBar is dropped");
+        let thrust_bg = layout.sprite("ThrustBarBG").expect("ThrustBarBG");
+        assert_eq!(thrust.rect, thrust_bg.rect, "{root}");
+        assert_eq!(thrust.uv, thrust_bg.uv, "{root}");
+        assert!(thrust.gradient.is_some(), "{root}");
+        assert!(layout.label("ThrustBarText").is_some(), "{root}");
     }
     for root in [
         "/data/xml/elimination_hud.xml",

@@ -126,6 +126,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,
+    speed_full_kmh: 700,
     hud_font_role: "HUD",
     hud_small_font_role: Some("HUDSmall"),
     total_time_timed_modes_only: false,
@@ -214,6 +215,7 @@ const ALWAYS_ON: &[&str] = &[
     "SpeedBarBG",
     "ThrustBarBG",
     "SpeedBar",
+    "ThrustBar",
     "SpeedBarOverlay",
     // Zone's ladder. Authored by the Zone roots alone; see the section above.
     "ZoneBG",

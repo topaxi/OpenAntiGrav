@@ -602,18 +602,29 @@ What a `<CurveBar>` carries, off the disc's own XML:
   stub of about 9-12%. The thrust bar at 98% is **dark blue toward its tip**, so
   the grade spans the whole `maxWidth` and a crop shows the part up to the value
   rather than squeezing the whole grade into the cropped width. Those two
-  readings fit a full scale near 600 km/h within the frames' motion blur.
-- **Chosen, not measured:** the full-scale speed (`oag_hud::DEFAULT_SPEED_FULL_KMH`,
-  600, the exhaust ramp's own ceiling), that the fill is a straight horizontal
+  readings fit a full scale between 600 and 700 km/h within the frames' motion blur; the executable's own 1/700 (`Hud_UpdateSpeedReadout`) is the figure used for HD and Omega, as per-title data (2026-10-16, `hd-thrust-bar`: the yellow ends at 82% of the width at 529 km/h against 76% predicted by 700 and 88% by 600, and at 6% at 74 km/h against 11% and 12%).
+- **Read off the executable, frames agree loosely:** the full-scale speed
+  (`oag_title::HudArt::speed_full_kmh`, 700 for HD and Omega; Pulse, Pure and 2048 keep 600). **Chosen, not measured:** that the fill is a straight horizontal
   crop of the art up to `CurveStartPos` and past it (the frames cannot tell a
   crop from a path-length fill where the strip rises), and the angle of the fill's
   cut end. `CurveStartPos` is parsed by nothing: it is not read.
-- **`ThrustBar` is parsed and not drawn.** It is the light-to-dark-blue bar above
-  the speed strip with the `ThrustBarText` percentage (`91%` at 529 km/h, `98%`
-  stationary on the grid), so it is the thrust the original's HUD chases toward
-  the ship's thrust level (2048's `thrust_chase_percent`, whose target is itself
-  unmeasured), not a speed. Allow-listed with no value source it would draw full,
-  which is an invention, so it stays off `ALWAYS_ON` until a value is wired.
+- **`ThrustBar` draws, cropped to the craft's throttle (2026-10-16, `hd-thrust-bar`).** It is the
+  light-to-dark-blue bar above the speed strip with the `ThrustBarText` percentage. The
+  executable crops it to `record[+8] * 0.01` of its width (`maxWidth` 393 = the sprite's own
+  width, so the plain horizontal crop is right) and prints `(int)record[+8]` and `%`, with no
+  chase of its own; `record[+8]` is `craft+0x30c * 100`, the throttle after Pilot Assist's scale -
+  99 or 92 on a Venom with the assist on, 0 with no throttle. See
+  [the evidence page](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#hud_updatespeedreadout-0x00086e88-and-what-thrustbar-shows).
+  `oag_hud::Readout::thrust_percent` carries `ship.physics.thrust` (which this engine already
+  scales by `PilotAssist_ThrustScale`), `ThrustBar` is on `oag_hd`'s and `oag_omega`'s
+  `ALWAYS_ON`, and `ThrustBarText` is the `"{}%"` of the truncated value. **Chosen, not
+  measured:** the bar is clamped to full where the original is not, and the grade, as the speed
+  bar's, is kept whole across the crop (the 98% frame is dark blue toward its tip).
+  2048's `thrust_chase_percent` is the other dialect: 2048's `Hud_Update` chases, HD's does not.
+  **Omega: ported**, the three race layouts author the same `ThrustBar`/`ThrustBarText` and the
+  feed is title-agnostic; the Omega executable's own writer is not read (no PS4 capture path), so
+  the value law is HD's by lineage. Drawn on single screen and both split cuts for HD and Omega
+  (in the headless `--window-seats 2h,2v` run with `--hold cross` only seat 0 holds throttle; another seat read 0% while moving because seat 0 rammed it from behind at tick ~340 and shoved it along at its own speed - no wrong-slot bug, and under `--autopilot` every seat reads its throttle, 99.6 to 100).
 - **`SpeedBarMark` is not HD's.** No HD layout authors it, so the slide question
   in [the HUD page](../ui/hud.md) is Pulse's alone and stays open.
 - **Omega: ported.** Its `Data\XML\{Arcade,TimeTrial,SpeedLap}_HUD.xml` author the

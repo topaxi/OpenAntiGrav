@@ -55,18 +55,18 @@ fn the_minute_field_is_not_capped() {
 #[test]
 fn a_bar_fraction_never_leaves_zero_to_one() {
     let mut readout = Readout::blank();
-    readout.speed_full_kmh = 600.0;
+    let full = 600.0;
 
     readout.speed_kmh = 0.0;
-    assert!((readout.speed_fraction() - 0.0).abs() < 1e-6);
+    assert!((readout.speed_fraction(full) - 0.0).abs() < 1e-6);
     readout.speed_kmh = 300.0;
-    assert!((readout.speed_fraction() - 0.5).abs() < 1e-6);
+    assert!((readout.speed_fraction(full) - 0.5).abs() < 1e-6);
     // Over the maximum clamps rather than overflowing the bar.
     readout.speed_kmh = 900.0;
-    assert!((readout.speed_fraction() - 1.0).abs() < 1e-6);
+    assert!((readout.speed_fraction(full) - 1.0).abs() < 1e-6);
     // Reverse reads as empty, not as a negative-width quad.
     readout.speed_kmh = -50.0;
-    assert!((readout.speed_fraction() - 0.0).abs() < 1e-6);
+    assert!((readout.speed_fraction(full) - 0.0).abs() < 1e-6);
 }
 
 /// A zero pool must give zero rather than `NaN`. A `NaN` width draws nothing

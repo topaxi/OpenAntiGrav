@@ -531,13 +531,6 @@ pub struct Readout {
     /// Speed in km/h - `|velocity| * 3.6`, using the recovered factor in
     /// [`oag_fx::exhaust::SPEED_TO_KMH`].
     pub speed_kmh: f32,
-    /// The speed the bar reads full at, in km/h.
-    ///
-    /// **Ours, not recovered.** The original's bar has some maximum and nothing
-    /// has established what sets it - a speed class's top speed, a constant, or
-    /// the craft's `<Engine>` figures. [`DEFAULT_SPEED_FULL_KMH`] explains the
-    /// placeholder.
-    pub speed_full_kmh: f32,
     /// Shield energy remaining.
     pub shield: f32,
     /// The pool it started from, from `<Misc shield/>`.
@@ -702,6 +695,17 @@ pub struct Readout {
     /// level behind per-class rates this project has not recovered, and this
     /// port feeds the raw thrust input (`0` or `100`) instead.
     pub thrust_chase_percent: f32,
+    /// HD's and Omega's `ThrustBar` and `ThrustBarText`, in percent: the
+    /// craft's throttle after Pilot Assist's scale (`craft+0x30c * 100`), with
+    /// no chase of the HUD's own.
+    ///
+    /// `Hud_UpdateSpeed`'s widget writer (`FUN_00086e88`) crops `ThrustBar` to
+    /// `record[+8] * 0.01` of its width and prints `(int)record[+8]` and `%`;
+    /// the record's `+8` read 99.0 with Pilot Assist on (`generalThrustPercent
+    /// WhenEnabled`), 92.0 during its penalty (`thrustPercentOnUse`) and 0.0
+    /// with no throttle held on a live Venom race. Not 2048's
+    /// [`Self::thrust_chase_percent`], which chases.
+    pub thrust_percent: f32,
     /// Whether 2048's Pilot Assist setting is on, which lights `PilotAssist`.
     ///
     /// The original reads one global byte (`DAT_81545468 + 0x3260e`, the
@@ -738,33 +742,24 @@ pub struct Readout {
     pub time_gap: Option<time_gap::GapLine>,
 }
 
-/// What [`Readout::speed_full_kmh`] defaults to.
-///
-/// **A placeholder, and labelled one so it is never mistaken for a recovered
-/// value.** The one bounded piece of evidence about the original's speed range is
-/// the exhaust's own ramp, which saturates at **600 km/h**
-/// (`oag_fx::exhaust::RAMP_FLOOR_KMH` + `RAMP_SPAN_KMH`, both recovered from
-/// the instruction stream). That is a ramp for a visual effect, not a bar
-/// maximum, so using it here is an inference and not a small one.
-///
-/// What would retire it: a reference frame at a known speed, read off the bar's
-/// fill fraction. Until then the bar's *shape* is right and its *scale* is ours.
-pub const DEFAULT_SPEED_FULL_KMH: f32 = 600.0;
-
 impl Readout {
     /// A readout with nothing known, for a test or a race that has not started.
     #[must_use]
     pub fn blank() -> Self {
-        Self {
-            speed_full_kmh: DEFAULT_SPEED_FULL_KMH,
-            ..Self::default()
-        }
+        Self { ..Self::default() }
     }
 
-    /// How full the speed bar is, `0..=1`.
+    /// How full the speed bar is, `0..=1`, against the title's
+    /// [`oag_title::HudArt::speed_full_kmh`].
     #[must_use]
-    pub fn speed_fraction(&self) -> f32 {
-        fraction(self.speed_kmh, self.speed_full_kmh)
+    pub fn speed_fraction(&self, full_kmh: f32) -> f32 {
+        fraction(self.speed_kmh, full_kmh)
+    }
+
+    /// How full HD's thrust bar is, `0..=1` (the original does not clamp).
+    #[must_use]
+    pub fn thrust_fraction(&self) -> f32 {
+        (self.thrust_percent * 0.01).clamp(0.0, 1.0)
     }
 
     /// How full the shield bar is, `0..=1`.
