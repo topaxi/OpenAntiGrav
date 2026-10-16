@@ -5,6 +5,7 @@
 use oag_gameplay::input::Button;
 use oag_ui::pointer::Pointer;
 
+use super::tests::skin;
 use super::*;
 
 fn tick(buttons: &[Button]) -> Input {
@@ -12,14 +13,6 @@ fn tick(buttons: &[Button]) -> Input {
     let mask = buttons.iter().fold(0u32, |mask, &b| mask | 1 << b.index());
     input.begin_frame(mask);
     input
-}
-
-fn skin() -> Skin {
-    Skin::new(
-        oag_pulse::FRONT_END.menu.unwrap(),
-        oag_display::space::Space::PSP,
-        22.0,
-    )
 }
 
 fn confirm() -> Confirm {
