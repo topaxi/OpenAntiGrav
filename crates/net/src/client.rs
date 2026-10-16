@@ -185,11 +185,18 @@ impl Client {
     }
 
     /// Says hello on `link`, as `name`, asking to fly `team` (empty: the host's choice).
-    pub fn connect_as(mut link: Box<dyn Link>, name: &str, team: &str) -> Self {
+    pub fn connect_as(link: Box<dyn Link>, name: &str, team: &str) -> Self {
+        Self::connect_seat(link, name, team, "")
+    }
+
+    /// Says hello on `link` with the seat `token` a lobby handed this person, which seats
+    /// it where the lobby put it whatever order the race's clients arrive in.
+    pub fn connect_seat(mut link: Box<dyn Link>, name: &str, team: &str, token: &str) -> Self {
         link.send_control(&Control::Hello {
             protocol: PROTOCOL,
             name: name.to_string(),
             team: team.to_string(),
+            token: token.to_string(),
         });
         Self {
             link,

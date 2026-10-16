@@ -52,6 +52,7 @@ impl Lobby {
                     protocol,
                     name,
                     team,
+                    ..
                 }) if protocol == PROTOCOL => {
                     self.waiting.push(Waiting { name, team, link });
                     continue;

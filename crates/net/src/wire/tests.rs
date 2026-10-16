@@ -35,6 +35,7 @@ fn every_control_message_round_trips() {
             protocol: PROTOCOL,
             name: "client".into(),
             team: "Qirex".into(),
+            token: "abc123".into(),
         },
         Control::Welcome {
             seat: 1,
@@ -102,6 +103,7 @@ fn a_bad_message_is_refused_by_name() {
         protocol: PROTOCOL,
         name: "x".into(),
         team: String::new(),
+        token: String::new(),
     }
     .encode();
     assert_eq!(

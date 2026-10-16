@@ -480,6 +480,7 @@ mod tests {
             protocol: PROTOCOL,
             name: "test".into(),
             team: String::new(),
+            token: String::new(),
         });
         let mut server = wait(|| listener.accept());
         let hello = wait(|| server.recv_control()).expect("parses");
