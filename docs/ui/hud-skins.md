@@ -470,8 +470,22 @@ moves nothing there (`no_pulse_pure_or_2048_layout_authors_an_rc_kmh_unit_label`
   is not wired: no read says how the two settings combine, and the split pair is chosen as one
   skin. The pair is composed per player (`compose_family`), which is where it would split.
 - **Zone split** (`splitscreenzone_hud`) needs a Zone split first; not offered here.
-- **Looks, unverified against an original frame.** WIP3OUT's solid white tags (`SpeedBarBG`,
-  position and lap panels) are drawn as the layout and `wo3_hud.gtf` author them; the 2097 lap
-  counter's `Lap` and `Lap Outof` labels overlap at their authored offsets (`x=40` right-aligned
-  and `x=0`), which an original frame would settle. `ThrustBarText` shows a `%` the 2097 face
-  has no glyph for.
+- **Looks, checked against the layouts' own numbers (2026-10-16), no original frame.**
+  *Shield hexagon*: both skins author it (`DamageBarBg`, `DamageBar` in their own
+  `hud_damage_indicator.xml`) with the shield text `color="0"`; HD's runtime shield colours and
+  fill (`HudArt::runtime`, read off frames of the default skin) used to draw over it as a blue
+  hexagon and a visible `100`. `HudSkin::art` now drops `runtime` for the retro skins, and
+  `color="0"` (a plain decimal, which `0x` parsing read as absent, i.e. white) reads as
+  transparent. The retro shield readout is therefore the authored hexagon outline only, with no
+  fill level: unmeasured. *WIP3OUT's white rectangles* are authored solid quads whose texture
+  resolves: `wo3_hud.gtf` is a mask atlas of solid white slabs and half-transparent grey ones
+  (alpha 255 and 102), and the quads at top centre, before the lap time and before the speed bar
+  (`PickupBackground`, `TimeIcon`, `SpeedBarBG`) carry no `color`. White digits on a white slab
+  read badly, which suggests the original blends them differently; how is not read.
+  *Text collisions*: the layouts' own numbers leave 6 px (total time) and about 0 px ("of" and
+  the lap total) between neighbours at the faces' advances (digit 59 at scale 1 in `wo3.fnt`),
+  and 2097's `Lap` (right-aligned at 40) and `Lap Outof` (left at 0) are authored at the same
+  row and scale, so they overlap by authoring. `align` is honoured and no metric is wrong that
+  could be told apart without an original frame; none was taken (RPCS3 would need the
+  `HUD Style` setting and a loyalty total poked in, which this lane did not attempt).
+  `ThrustBarText` shows a `%` the 2097 face has no glyph for.

@@ -67,6 +67,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
         name: "HD",
         layouts: &BASE,
         font_role: None,
+        art: None,
         loyalty: 0,
     },
     oag_title::HudSkin {
@@ -81,6 +82,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
             ..BASE
         },
         font_role: Some("2097HUD"),
+        art: Some(&RETRO_ART),
         loyalty: 6000,
     },
     oag_title::HudSkin {
@@ -95,9 +97,18 @@ pub const SKINS: &[oag_title::HudSkin] = &[
             ..BASE
         },
         font_role: Some("wo3HUD"),
+        art: Some(&RETRO_ART),
         loyalty: 10000,
     },
 ];
+
+/// [`ART`] for the retro skins: the same sprite, font and sight rules, without the default
+/// skin's runtime shield and lap-arc readings, which the retro layouts do not author
+/// (`oag_title::HudSkin::art`).
+const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
+    runtime: None,
+    ..*ART
+};
 
 /// The default skin's roots with no skin list, what every other skin overrides.
 const BASE: oag_title::HudLayouts = oag_title::HudLayouts {

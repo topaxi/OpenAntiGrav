@@ -105,6 +105,11 @@ pub struct HudSkin {
     /// The language-plugin font slot of this skin's own typeface (`2097HUD`, `wo3HUD`),
     /// the face a layout's `font="2097HUD"` labels draw in. `None` for the default skin.
     pub font_role: Option<&'static str>,
+    /// The title's [`HudArt`] with what the skin does not author taken out, `None` for the
+    /// title's own. A retro skin lays out its own shield hexagon and hides its shield text
+    /// (`color="0"`), so the default skin's runtime shield colours and fill, read off HD's
+    /// frames, must not draw over it.
+    pub art: Option<&'static HudArt>,
     /// Loyalty the disc's `PI_HUD` row asks before the skin is offered (`Unlock
     /// loyalty=`); `0` where the row is not locked.
     pub loyalty: u32,

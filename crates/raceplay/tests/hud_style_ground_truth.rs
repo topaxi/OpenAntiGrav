@@ -87,6 +87,27 @@ fn check_single_screen(title: &Title) {
             skin.name,
             loaded.report
         );
+        // The default skin's runtime shield readings (HD's measured colours) do not draw over
+        // a retro layout, whose shield text the layout authors transparent (`color="0"`).
+        assert_eq!(
+            loaded.hud.art.runtime.is_some(),
+            !retro,
+            "{} {}: the runtime shield readout is the default skin's",
+            title.title.name,
+            skin.name
+        );
+        if retro {
+            let text = layout
+                .label("ShieldBarText")
+                .expect("the skin's shield text");
+            assert!(
+                text.color[3] == 0.0,
+                "{} {}: color=\"0\" reads as transparent, not white ({:?})",
+                title.title.name,
+                skin.name,
+                text.color
+            );
+        }
         if retro {
             let face = loaded.hud.skin_font.line_height;
             assert!(

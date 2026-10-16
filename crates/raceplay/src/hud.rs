@@ -332,7 +332,7 @@ pub(super) fn load_hud(
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
         space,
-        art: title.hud_art,
+        art: skin.and_then(|skin| skin.art).unwrap_or(title.hud_art),
         split,
         split_columns,
         split_hud,
