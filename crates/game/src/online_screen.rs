@@ -184,7 +184,12 @@ pub fn fill_room(
     track_name: &dyn Fn(&str) -> Option<String>,
 ) {
     screen.set_capacity(usize::from(room.settings.max_players));
-    screen.set_owner((owner && room.phase == Phase::Open).then_some(room.settings.max_players));
+    let open = owner && room.phase == Phase::Open;
+    screen.set_owner(open.then_some(room.settings.max_players));
+    // Laps are the owner's to set where the mode ends on them.
+    let has_laps =
+        oag_race::Mode::from_name(&room.settings.mode).is_some_and(oag_net::race::mode_has_laps);
+    screen.set_laps((open && has_laps).then_some(room.settings.laps));
     screen.set_seats(
         room.members
             .iter()
@@ -216,7 +221,10 @@ pub fn room_info(
     room_line(&info, strings, track_name)
 }
 
-/// The next room size: `current` moved by `by` seats, wrapping from `most` round to `fewest`
+/// The most laps a room asks for (`RoomSettings::laps` is `1..=20`; `0` is the mode's own).
+pub const MAX_LAPS: u8 = 20;
+
+/// The next room size or lap count: `current` moved by `by` seats, wrapping from `most` round to `fewest`
 /// and back.
 #[must_use]
 pub fn step_max_players(current: i32, by: i32, fewest: i32, most: i32) -> i32 {

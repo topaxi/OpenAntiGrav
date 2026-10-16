@@ -88,7 +88,7 @@ impl Session {
         for event in open.screen_mut().pointer(pointer, &stage.skin) {
             outcomes.push(match event {
                 // Only an online room's owner has these rows; local multiplayer never does.
-                Event::Moved | Event::Settings | Event::MaxPlayers(_) => continue,
+                Event::Moved | Event::Settings | Event::MaxPlayers(_) | Event::Laps(_) => continue,
                 // A mouse is not a keyboard: once the platform has told keyboards apart, a
                 // click on the empty seat seats nobody (a keyboard press does).
                 Event::Join if told_apart => Outcome::Nothing,

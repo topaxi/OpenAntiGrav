@@ -405,9 +405,20 @@ impl Session {
             .and_then(|lobby| lobby.room.as_ref())
             .filter(|_| editing)
             .map_or(oag_net::wire::online::MAX_PLAYERS, |room| room.settings.max_players);
-        let Some(settings) = self.room_settings_from(&options, max_players) else {
+        let Some(mut settings) = self.room_settings_from(&options, max_players) else {
             return;
         };
+        // The RACE page has no lap count: an edit keeps the room's own, which LAPS on the room
+        // screen sets.
+        if editing
+            && let Some(room) = self
+                .online
+                .as_ref()
+                .and_then(|online| online.lobby.as_ref())
+                .and_then(|lobby| lobby.room.as_ref())
+        {
+            settings.laps = room.settings.laps;
+        }
         let team = self.online_team(&options);
         let Some(online) = &mut self.online else {
             return;
@@ -476,6 +487,26 @@ impl Session {
             online.step = Step::Editing;
         }
         self.resupply_race_modes();
+    }
+
+    /// LAPS on the room screen: one more or fewer lap (`by`) from `0`, the mode's own, up to
+    /// 20, wrapping. Sent as an edit like MAX PLAYERS.
+    fn online_step_laps(&mut self, by: i32) {
+        let Some(lobby) = self.online.as_mut().and_then(|online| online.lobby.as_mut()) else {
+            return;
+        };
+        let Some(room) = lobby.room.as_ref() else {
+            return;
+        };
+        let next = oag_game::online_screen::step_max_players(
+            i32::from(room.settings.laps),
+            by,
+            0,
+            i32::from(oag_game::online_screen::MAX_LAPS),
+        );
+        let mut settings = room.settings.clone();
+        settings.laps = u8::try_from(next).unwrap_or(settings.laps);
+        lobby.edit(settings);
     }
 
     /// MAX PLAYERS on the room screen: one more or fewer seat (`by`), never fewer than the people
@@ -604,6 +635,12 @@ impl Session {
             Event::Settings => {
                 if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
                     self.open_online_edit();
+                    self.play_navs(Some(Nav::Accept));
+                }
+            }
+            Event::Laps(by) => {
+                if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
+                    self.online_step_laps(by);
                     self.play_navs(Some(Nav::Accept));
                 }
             }

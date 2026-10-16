@@ -45,6 +45,10 @@ pub struct Labels {
     pub settings: String,
     /// The room owner's row that sets how many people the room seats.
     pub max_players: String,
+    /// The room owner's row that sets the laps, in a mode that ends on them.
+    pub laps: String,
+    /// What the laps row says for `0`: the mode's own count.
+    pub laps_own: String,
     /// The row that begins the race.
     pub start: String,
     /// The row that leaves the screen.
@@ -67,6 +71,8 @@ impl Labels {
             pad: say("OAG_JOIN_PAD", "GAMEPAD"),
             settings: say("OAG_ONLINE_ROOM_SETTINGS", "ROOM SETTINGS"),
             max_players: say("OAG_ONLINE_MAX_PLAYERS", "MAX PLAYERS"),
+            laps: say("OAG_ONLINE_LAPS", "LAPS"),
+            laps_own: say("OAG_ONLINE_LAPS_OWN", "MODE'S OWN"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
         }
@@ -148,6 +154,8 @@ pub enum Row {
     Settings,
     /// The room owner's row that shows, and steps, how many people the room seats.
     MaxPlayers,
+    /// The room owner's row that shows, and steps, the laps (`0` is the mode's own).
+    Laps,
     /// Begin the race.
     Start,
     /// Leave the screen.
@@ -168,6 +176,8 @@ pub enum Event {
     /// The owner's click on MAX PLAYERS (`1`, one more, wrapping round to the fewest), or a pad's
     /// left and right on it (`-1`, `1`).
     MaxPlayers(i32),
+    /// The owner's click on LAPS (`1`), or left and right on it (`-1`, `1`).
+    Laps(i32),
     /// A click on START with somebody seated.
     Start,
     /// A click on BACK, or the secondary button.
@@ -200,6 +210,8 @@ pub struct Join {
     /// The room owner's rows: ROOM SETTINGS, and MAX PLAYERS showing this number. `None` for
     /// everybody else, who sees neither row.
     owner_max: Option<u8>,
+    /// The laps row, shown with this count (`0` the mode's own) in a mode that ends on laps.
+    owner_laps: Option<u8>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -349,6 +361,7 @@ impl Join {
             notes: Vec::new(),
             blocked: Vec::new(),
             owner_max: None,
+            owner_laps: None,
         }
     }
 
@@ -357,6 +370,14 @@ impl Join {
         self.owner_max = max;
         if !self.owner_max.is_some() && matches!(self.hover, Some(Row::Settings | Row::MaxPlayers))
         {
+            self.hover = None;
+        }
+    }
+
+    /// Shows the owner's LAPS row saying `laps` (`0` the mode's own); `None` hides it.
+    pub fn set_laps(&mut self, laps: Option<u8>) {
+        self.owner_laps = laps;
+        if laps.is_none() && self.hover == Some(Row::Laps) {
             self.hover = None;
         }
     }
@@ -374,7 +395,11 @@ impl Join {
     /// The pad's left (`-1`) and right (`1`) on the highlighted row: the owner steps MAX PLAYERS.
     #[must_use]
     pub fn adjust(&self, by: i32) -> Option<Event> {
-        (self.hover == Some(Row::MaxPlayers)).then_some(Event::MaxPlayers(by))
+        match self.hover {
+            Some(Row::MaxPlayers) => Some(Event::MaxPlayers(by)),
+            Some(Row::Laps) => Some(Event::Laps(by)),
+            _ => None,
+        }
     }
 
     /// This screen as a list to choose from ([`Self::listing`]), the rows' left-hand words
@@ -444,6 +469,7 @@ impl Join {
             Row::Empty => Some(Event::Join),
             Row::Settings => Some(Event::Settings),
             Row::MaxPlayers => Some(Event::MaxPlayers(1)),
+            Row::Laps => Some(Event::Laps(1)),
             Row::Start if self.can_start() => Some(Event::Start),
             Row::Start => None,
             Row::Back => Some(Event::Back),
@@ -484,6 +510,9 @@ impl Join {
         if self.owner_max.is_some() && !self.listing {
             rows.push(Row::Settings);
             rows.push(Row::MaxPlayers);
+            if self.owner_laps.is_some() {
+                rows.push(Row::Laps);
+            }
         }
         if !self.listing {
             rows.push(Row::Start);
@@ -637,6 +666,13 @@ impl Join {
                     }
                 }
                 Row::Settings => (self.labels.settings.clone(), String::new()),
+                Row::Laps => (
+                    self.labels.laps.clone(),
+                    match self.owner_laps.unwrap_or_default() {
+                        0 => self.labels.laps_own.clone(),
+                        n => n.to_string(),
+                    },
+                ),
                 Row::MaxPlayers => (
                     self.labels.max_players.clone(),
                     self.owner_max.unwrap_or_default().to_string(),

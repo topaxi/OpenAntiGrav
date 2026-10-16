@@ -323,3 +323,21 @@ fn a_long_note_is_never_dropped_for_the_start_instruction() {
         "BOB JOINED - PRESS START WHEN EVERYONE IS READY"
     );
 }
+
+#[test]
+fn the_laps_row_follows_the_mode_and_the_owner() {
+    use oag_ui_screens::join::Row;
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    let mut room = snapshot_of(2, 8, Phase::Open);
+    room.settings.mode = "single_race".into();
+    fill_room(&mut screen, &room, true, &strings(), &|_| None);
+    assert!(screen.rows().contains(&Row::Laps));
+    fill_room(&mut screen, &room, false, &strings(), &|_| None);
+    assert!(!screen.rows().contains(&Row::Laps), "a guest has none");
+    room.settings.mode = "zone".into();
+    fill_room(&mut screen, &room, true, &strings(), &|_| None);
+    assert!(
+        !screen.rows().contains(&Row::Laps),
+        "Zone does not end on laps"
+    );
+}

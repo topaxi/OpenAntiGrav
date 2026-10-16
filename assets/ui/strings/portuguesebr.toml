@@ -61,6 +61,8 @@ OAG_ONLINE_READY = { text = "PRONTO", human = false }
 OAG_ONLINE_PICKING = { text = "ESCOLHENDO", human = false }
 OAG_ONLINE_ROOM_SETTINGS = { text = "CONFIGURAÇÕES DA SALA", human = false }
 OAG_ONLINE_MAX_PLAYERS = { text = "MÁXIMO DE JOGADORES", human = false }
+OAG_ONLINE_LAPS = { text = "VOLTAS", human = false }
+OAG_ONLINE_LAPS_OWN = { text = "PADRÃO DO MODO", human = false }
 OAG_ONLINE_QUEUED = { text = "OUTRO JOGO ESTÁ CORRENDO: VOCÊ É O Nº %d NA FILA", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "A CORRIDA COMEÇA EM %d", human = false }
 OAG_ONLINE_RACING = { text = "A CORRIDA ESTÁ COMEÇANDO", human = false }
