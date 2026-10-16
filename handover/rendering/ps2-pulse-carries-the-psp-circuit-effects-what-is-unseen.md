@@ -8,10 +8,7 @@ disc census: `docs/ui/hud.md` and `crates/raceplay/tests/ps2_hud_sights_ground_t
 
 ## Open
 
-- No frame shows the PS2 lock-on reticle: headless `--autopilot --give missile` never
-  forms a lock on either pressing, and the pickup hexagon draws empty on both. Size
-  (the PS2 `missile_sight_inner` quad is 12 units, the draw uses 8) and the PS2
-  `<Mode3D>` orthographic span are unmeasured.
+- The PS2 reticle is wired to the measured 512x512 law and matches a PCSX2 reference (`docs/ui/hud.md`); not seen: a lock on a real AI craft via the original's own pickup, the LeachBeam reticle, the widescreen scale path. Headless: `--mode single_race` is needed for any weapon HUD (the default `time_trial` has none).
 - Steam (circuits 5, 7, 11), weather and the destroy camera cut are loaded and
   reported on the PS2, not seen on a frame.
 - Still PSP-only: absorb and LeachBeam hull overlays (a PS2 VIF batch has no GE batch
@@ -20,6 +17,5 @@ disc census: `docs/ui/hud.md` and `crates/raceplay/tests/ps2_hud_sights_ground_t
 
 ## Next Steps
 
-- Play `just play ps2 --race` windowed: fly at an opponent holding a missile, then
-  check the reticle size against PCSX2.
+- Measure the PS2 LeachBeam reticle (`FUN_00138d78`) on PCSX2.
 - Read how the PS2 builds the hull overlay UVs from a VIF batch.

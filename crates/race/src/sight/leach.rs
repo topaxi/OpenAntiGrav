@@ -100,9 +100,9 @@ impl Sight {
                 // First frame on a target: always close in from open.
                 self.extent = EXTENT_OPEN;
             }
-            self.centre = at;
+            self.centre = self.law_of(at);
         }
-        self.target = on_screen;
+        self.target = on_screen.map(|at| self.law_of(at));
         let visible = on_screen.is_some();
 
         let (wanted, reference) = if visible {
@@ -161,7 +161,7 @@ impl Sight {
         std::array::from_fn(|i| {
             let [dx, dy] = corners[i];
             Piece {
-                centre: [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos],
+                centre: self.grid_of([cx + dx * cos - dy * sin, cy + dx * sin + dy * cos]),
                 rotation: super::BRACKET_ROTATIONS[i] + self.spin,
             }
         })

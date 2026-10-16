@@ -278,6 +278,7 @@ fn a_race_starts_with_the_loads_reticle_and_the_locks_ignore_the_split_view() {
         view_screen: [1920.0, 540.0],
         columns_screen: None,
         leach_law: true,
+        span: None,
     });
     assert_eq!(race.sight().screen(), [1920.0, 540.0]);
     assert!(
@@ -307,6 +308,7 @@ fn each_windows_slots_sight_in_their_own_views_grid() {
         lock_screen: [1920.0, 1080.0],
         view_screen: [1920.0, 540.0],
         columns_screen: Some([960.0, 1080.0]),
+        span: None,
         leach_law: false,
     });
     assert_eq!(race.set_viewport_count(4), 4);

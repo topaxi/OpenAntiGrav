@@ -409,3 +409,48 @@ fn the_lock_hash_covers_the_hold_and_not_the_picture() {
     b.update(DT, Some(centred()));
     assert_ne!(hash(&a), hash(&b), "the hash ignores the hold");
 }
+
+/// The PS2 runs the law in a 512x512 buffer: a locked reticle's brackets close
+/// to `6.0` of those units, which the 640x448 grid stretches by 1.25 across and
+/// 0.875 down, and the idle chase point is the literal `(240, 136)` in it.
+///
+/// Measured on PCSX2 against the original (`docs/ui/hud.md`): the brackets of a
+/// locked reticle sit `+-6.0` px of the 512 buffer around the inner box.
+#[test]
+fn a_ps2_reticle_runs_in_its_own_512_square_and_is_stretched_into_the_grid() {
+    let mut sight = Sight::new([640.0, 448.0]).in_span([512.0, 512.0]);
+    assert_eq!(sight.unit(), [1.25, 0.875]);
+    assert!(!sight.tinted());
+    assert_eq!(sight.centre(), [300.0, 119.0], "idle is (240, 136) in 512");
+
+    let target = Projected {
+        screen: [320.0, 224.0],
+        distance: 60.0,
+    };
+    let mut ticks = 0;
+    while !sight.locked() {
+        sight.update(DT, Some(target));
+        ticks += 1;
+        assert!(ticks < 900, "the reticle never locked");
+    }
+    for _ in 0..120 {
+        sight.update(DT, Some(target));
+    }
+    let [cx, cy] = sight.centre();
+    assert!(
+        (cx - 320.0).abs() < 0.01 && (cy - 224.0).abs() < 0.01,
+        "{cx} {cy}"
+    );
+    let zoom = (CHASE_STEP / 60.0_f32).clamp(1.0, 5.0);
+    let e = EXTENT_LOCKED * zoom;
+    let pieces = sight.brackets();
+    assert!(
+        (pieces[0].centre[0] - (320.0 - e * 1.25)).abs() < 0.01,
+        "{pieces:?}"
+    );
+    assert!(
+        (pieces[0].centre[1] - (224.0 - e * 0.875)).abs() < 0.01,
+        "{pieces:?}"
+    );
+    assert_eq!(sight.tint(), [1.0, 1.0, 1.0]);
+}

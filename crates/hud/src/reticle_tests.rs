@@ -1005,3 +1005,58 @@ fn an_unread_sight_dialect_draws_nothing() {
         "{frame:?}"
     );
 }
+
+/// The PS2's reticle draws each model at its authored quad (8 and 12 units of
+/// its 512x512 buffer) stretched into the 640x448 grid, the quarter-turned
+/// pieces with their two scales swapped so all four land 10 wide and 7 tall
+/// (measured on PCSX2, `docs/ui/hud.md`).
+#[test]
+fn a_ps2_reticle_is_stretched_into_its_grid_and_untinted() {
+    let layout = Layout::from_xml(SIGHTS);
+    let mut report = Vec::new();
+    let image = |src: &str, extent: f32| crate::sprite::DecodedImage {
+        src: src.to_string(),
+        width: 8,
+        height: 8,
+        rgba: vec![255u8; 8 * 8 * 4],
+        quad_extent: Some([extent, extent]),
+        blend: None,
+    };
+    let sheet = crate::sprite::Sheet::build_with(
+        &[],
+        vec![
+            image(r"Data\HUD\missile_sight_outer.vex", 8.0),
+            image(r"Data\HUD\missile_sight_inner.vex", 12.0),
+        ],
+        &mut report,
+    );
+    let strings = strings();
+    let mut reticle = sight::Sight::new([640.0, 448.0]).in_span([512.0, 512.0]);
+    let target = sight::Projected {
+        screen: [320.0, 224.0],
+        distance: 60.0,
+    };
+    for _ in 0..180 {
+        reticle.update(1.0 / 60.0, Some(target));
+    }
+    let readout = Readout {
+        sight: Some(reticle),
+        ..Readout::blank()
+    };
+    let frame = draw_list(&context(&layout, &strings, &sheet), &readout);
+    let sizes: Vec<[f32; 2]> = frame
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::BlendedSprite { rect, color, .. } => {
+                assert_eq!(&color[..3], &[1.0, 1.0, 1.0], "no PSP tint on the PS2");
+                Some([rect[2], rect[3]])
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sizes.len(), 5, "{sizes:?}");
+    let outer: Vec<_> = sizes.iter().filter(|s| s[0].min(s[1]) == 7.0).collect();
+    assert_eq!(outer.len(), 4, "{sizes:?}");
+    assert!(sizes.contains(&[15.0, 10.5]), "{sizes:?}");
+}

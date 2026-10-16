@@ -123,18 +123,32 @@ fn bracket_draws(
     let [r, g, b] = sight.tint();
     let colour = [r, g, b, alpha];
     let mut out = Vec::new();
+    let unit = sight.unit();
     let mut place = |name: &str, piece: oag_race::sight::Piece| {
         let Some(placed) = model_art(cx, name) else {
             return;
         };
+        // A title whose law runs in a span of its own (the PS2's 512x512) draws
+        // each model at its authored quad, stretched into the grid by that
+        // span's unit; the PSP's own is one constant, see [`SIGHT_SIZE`].
+        let [mut width, mut height] = match (unit, placed.quad_extent) {
+            ([1.0, 1.0], _) | (_, None) => [SIGHT_SIZE, SIGHT_SIZE],
+            ([ux, uy], Some([w, h])) => [w.round() * ux, h.round() * uy],
+        };
+        // The original swaps the two scales on the pieces it turns a quarter, so
+        // the stretch lands on the screen's axes rather than the model's.
+        let quarters = (piece.rotation / std::f32::consts::FRAC_PI_2).round();
+        if unit != [1.0, 1.0] && quarters.rem_euclid(2.0) == 1.0 {
+            std::mem::swap(&mut width, &mut height);
+        }
         out.push(Draw::BlendedSprite {
             // The model is a quad centred on its own origin, so the piece's
             // centre is the middle of the rectangle rather than its corner.
             rect: [
-                piece.centre[0] - SIGHT_SIZE * 0.5,
-                piece.centre[1] - SIGHT_SIZE * 0.5,
-                SIGHT_SIZE,
-                SIGHT_SIZE,
+                piece.centre[0] - width * 0.5,
+                piece.centre[1] - height * 0.5,
+                width,
+                height,
             ],
             uv: [
                 placed.x as f32,

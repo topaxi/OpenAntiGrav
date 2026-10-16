@@ -31,6 +31,9 @@ pub struct Sighting {
     /// Whether a held LeachBeam runs its own law (Pulse) rather than the
     /// Missile's. `oag_title::hud::Sights::runs_leach_law`.
     pub leach_law: bool,
+    /// The square the law runs in when it is not the grid (the PS2's 512x512
+    /// buffer), or `None`. See [`oag_race::sight::Sight::in_span`].
+    pub span: Option<[f32; 2]>,
 }
 
 impl Default for Sighting {
@@ -42,6 +45,7 @@ impl Default for Sighting {
             view_screen: oag_race::sight::SCREEN,
             columns_screen: None,
             leach_law: false,
+            span: None,
         }
     }
 }
@@ -60,6 +64,7 @@ impl Sighting {
                 .as_ref()
                 .map(|columns| [columns.view.0, columns.view.1]),
             leach_law: hud.art.sights.runs_leach_law(),
+            span: span_of(hud.space.size),
         }
     }
 
@@ -76,6 +81,7 @@ impl Sighting {
             view_screen: [size.0, size.1],
             columns_screen: None,
             leach_law: art.sights.runs_leach_law(),
+            span: span_of(size),
         }
     }
 
@@ -84,7 +90,7 @@ impl Sighting {
     pub fn view_sight(&self) -> Sight {
         let mut sight = Sight::new(self.view_screen);
         sight.set_leach_law(self.leach_law);
-        sight
+        self.spanned(sight)
     }
 
     /// One slot's simulation lock, in the lock grid.
@@ -92,6 +98,21 @@ impl Sighting {
     pub fn lock_sight(&self) -> Sight {
         let mut sight = Sight::new(self.lock_screen);
         sight.set_leach_law(self.leach_law);
-        sight
+        self.spanned(sight)
     }
+
+    fn spanned(&self, sight: Sight) -> Sight {
+        match self.span {
+            Some(span) => sight.in_span(span),
+            None => sight,
+        }
+    }
+}
+
+/// The PS2's span: its HUD grid is 640x448 and the original runs the reticle in
+/// a 512x512 buffer (measured on PCSX2, `docs/ui/hud.md`). Keyed on the grid
+/// because only the PS2 pressing of Pulse authors that one.
+fn span_of(size: (f32, f32)) -> Option<[f32; 2]> {
+    let ps2 = oag_display::space::Space::PS2.size;
+    (size == ps2).then_some([512.0, 512.0])
 }

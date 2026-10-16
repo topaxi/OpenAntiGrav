@@ -384,6 +384,10 @@ pub struct Sight {
     leach_seen: bool,
     /// Whether a held LeachBeam runs its own law rather than the Missile's.
     leach_law: bool,
+    /// The square the law runs in when it is not the grid: the PS2 writes its
+    /// widgets in a 512x512 buffer. `None` is the PSP's (and everyone else's)
+    /// own, where the law runs in the grid itself. See [`Self::in_span`].
+    span: Option<[f32; 2]>,
 }
 
 impl Default for Sight {
@@ -412,7 +416,74 @@ impl Sight {
             spin: 0.0,
             leach_seen: false,
             leach_law: false,
+            span: None,
         }
+    }
+
+    /// Runs the law in a `span` of its own instead of the grid, and without the
+    /// PSP's tint.
+    ///
+    /// **The PS2's, measured on PCSX2 against the original (confidence 88)**:
+    /// `FUN_00138008` projects and tests on-screen against a 512x512 buffer
+    /// (`DAT_00284fe0/e4`), the widgets are written one unit to the pixel of it,
+    /// the idle chase point is the literal `(240, 136)` applied in it, and no
+    /// code reads the tint words, so the reticle is white. Every length the law
+    /// states - the extents, the chase, the clamps - is in that space; the grid
+    /// is that space stretched by `screen / span` per axis, which is what
+    /// [`Self::brackets`], [`Self::inner`] and [`Self::centre`] hand back. A
+    /// reticle with no span is the identity: nothing here changes its bits.
+    #[must_use]
+    pub fn in_span(mut self, span: [f32; 2]) -> Self {
+        self.span = Some(span);
+        self.centre = self.idle_centre();
+        self
+    }
+
+    /// How many grid units one unit of the law's own space is, per axis.
+    #[must_use]
+    pub fn unit(&self) -> [f32; 2] {
+        match self.span {
+            Some(span) => [self.screen[0] / span[0], self.screen[1] / span[1]],
+            None => [1.0, 1.0],
+        }
+    }
+
+    /// Whether the reticle wears the PSP's yellow, red and blink tints.
+    #[must_use]
+    pub fn tinted(&self) -> bool {
+        self.span.is_none()
+    }
+
+    /// Where the reticle waits with nothing to chase, in the law's own space:
+    /// the middle of the grid, or the PS2's literal `(240, 136)`.
+    fn idle_centre(&self) -> [f32; 2] {
+        match self.span {
+            Some(_) => [240.0, 136.0],
+            None => [self.screen[0] * 0.5, self.screen[1] * 0.5],
+        }
+    }
+
+    /// How far the model's own art is turned from the PSP's: the PS2's corner
+    /// bracket has its corner top-left where the PSP's is bottom-left, and the
+    /// original writes every angle a quarter turn short of the PSP's.
+    fn art_turn(&self) -> f32 {
+        if self.span.is_some() {
+            std::f32::consts::FRAC_PI_2
+        } else {
+            0.0
+        }
+    }
+
+    /// A point of the law's space in the grid.
+    pub(super) fn grid_of(&self, at: [f32; 2]) -> [f32; 2] {
+        let unit = self.unit();
+        [at[0] * unit[0], at[1] * unit[1]]
+    }
+
+    /// The grid's point in the law's space.
+    pub(super) fn law_of(&self, at: [f32; 2]) -> [f32; 2] {
+        let unit = self.unit();
+        [at[0] / unit[0], at[1] / unit[1]]
     }
 
     /// The grid this reticle's coordinates are in.
@@ -428,7 +499,7 @@ impl Sight {
     pub fn set_screen(&mut self, screen: [f32; 2]) {
         if self.screen != screen {
             self.screen = screen;
-            self.centre = [screen[0] * 0.5, screen[1] * 0.5];
+            self.centre = self.idle_centre();
             self.previous = None;
         }
     }
@@ -513,6 +584,7 @@ impl Sight {
             on_screen.then_some((extrapolated, p.distance))
         });
         self.previous = target.map(|p| p.screen);
+        let visible = visible.map(|(at, distance)| (self.law_of(at), distance));
 
         self.hold = if visible.is_some() {
             self.hold + dt
@@ -616,8 +688,16 @@ impl Sight {
         Self {
             held: self.held,
             leach_law: self.leach_law,
+            span: self.span,
             ..Self::new(self.screen)
         }
+        .respanned()
+    }
+
+    /// `self` with its centre back at the idle point of its own span.
+    fn respanned(mut self) -> Self {
+        self.centre = self.idle_centre();
+        self
     }
 
     /// Writes what decides a future [`Self::update`]'s lock into a state hash.
@@ -654,7 +734,7 @@ impl Sight {
     /// The smoothed centre the brackets are drawn around.
     #[must_use]
     pub fn centre(&self) -> [f32; 2] {
-        self.centre
+        self.grid_of(self.centre)
     }
 
     /// Where the target actually is on screen, or `None` when there is none.
@@ -665,7 +745,7 @@ impl Sight {
     /// `locked() && centre() != aim()` is impossible by construction.
     #[must_use]
     pub fn aim(&self) -> Option<[f32; 2]> {
-        self.target
+        self.target.map(|at| self.grid_of(at))
     }
 
     /// The eased alpha, 0..1.
@@ -754,6 +834,9 @@ impl Sight {
                 [1.0, 1.0, 0.0]
             };
         }
+        if !self.tinted() {
+            return [1.0, 1.0, 1.0];
+        }
         if self.locked {
             [1.0, 0.0, 0.0]
         } else if self.blink {
@@ -778,8 +861,8 @@ impl Sight {
             [cx + e, cy + e],
         ];
         std::array::from_fn(|i| Piece {
-            centre: corners[i],
-            rotation: BRACKET_ROTATIONS[i],
+            centre: self.grid_of(corners[i]),
+            rotation: BRACKET_ROTATIONS[i] - self.art_turn(),
         })
     }
 
@@ -790,7 +873,7 @@ impl Sight {
         let limit = INNER_LEAD * self.extent;
         let Some(target) = self.target else {
             return Piece {
-                centre: self.centre,
+                centre: self.grid_of(self.centre),
                 rotation: 0.0,
             };
         };
@@ -803,7 +886,7 @@ impl Sight {
             dy *= t;
         }
         Piece {
-            centre: [cx + dx, cy + dy],
+            centre: self.grid_of([cx + dx, cy + dy]),
             rotation: 0.0,
         }
     }

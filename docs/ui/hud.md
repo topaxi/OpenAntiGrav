@@ -54,12 +54,26 @@ directory-position rule the hull, gantry and shield use, and only when every
 slot is empty. `crates/raceplay/tests/ps2_hud_sights_ground_truth.rs` fails
 without it (2026-10-16, confidence 90: the files are on the disc and decode,
 the rule is the shared one). Checked against the PSP: the three sight models
-there are 32x32 additive too. **Checked, differs**: the PS2's
-`missile_sight_inner` quad measures 12 units where the PSP's measures 8, and the
-sight draw still uses one constant of 8 for every piece. **Open**: a frame of
-the PS2 reticle with a lock on it, to settle that size and the orthographic
-span of the PS2's `<Mode3D>` block (the placeholders keep the PSP's
-`x="-240" y="136"`).
+there are 32x32 additive too. **Measured on PCSX2 against the original (2026-10-16, v2.9.39, a GS dump of
+the real HUD code driven with a pinned target, so the pickup chain is not
+exercised):** the PS2's `HudSight_Update` is `FUN_00138008` (Missile) and
+`FUN_00138d78` (LeachBeam), the PSP's law with every slot shifted +8. It
+projects and tests on-screen in a **512x512 buffer** (`DAT_00284fe0/e4`), writes
+its widgets one unit to the pixel of it, and waits at the literal `(240, 136)`
+applied there (so about `(300, 119)` in the 640x448 grid). The outer quad is
+8x8 and the inner 12x12 of those pixels at every state and distance, which is
+10x7 and 15x10.5 grid units; the brackets close to `+-6.0` of them. Idle draws
+nothing, and **the reticle is white** in seeking and locked alike: no code reads
+the tint words outside the function (confidence 80). The angles sit a quarter
+turn short of the PSP's because the PS2's bracket art has its corner top-left
+where the PSP's has it bottom-left, and two of the four pieces swap their
+scales. Confidence 88 on the span, 75 on the 0.8 / 1.1429 grid mapping (one HUD
+sprite matched by size). `oag_race::sight::Sight::in_span` runs the law in that
+square and stretches pieces into the grid; `oag_hud::sight_draw` draws each
+model at its authored quad times the stretch. A frame of ours matches the
+original's locked reticle. **Not obtained**: the PS2's held-weapon craft field,
+a lock on a real AI craft, the LeachBeam's reticle (its law shares the span, its
+art and angles are unmeasured) and the widescreen scale path (`DAT_0027e7e8/ec`).
 
 ### PS2 Pulse takes the PSP's circuit effects, wreck and destroy camera (2026-10-16)
 
