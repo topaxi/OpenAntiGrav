@@ -349,6 +349,13 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
         }
         assert_eq!(mismatches, 0);
         assert!(matches > 2_000, "{matches} confirmed ticks agreed");
+        // The game steps a client every frame, over or not: the end state settles then.
+        for (client, race, _) in &mut racers {
+            let race = race.as_mut().expect("loaded");
+            for _ in 0..3 {
+                client.step(race, &oag_gameplay::InputSnapshot::EMPTY);
+            }
+        }
         for (client, race, who) in &racers {
             let race = race.as_ref().expect("loaded");
             assert_eq!(
