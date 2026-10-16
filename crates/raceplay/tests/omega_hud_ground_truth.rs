@@ -266,6 +266,7 @@ fn the_widget_names_title_data_inherits_are_authored_by_omegas_layouts() {
 fn the_speed_bar_fill_is_authored_in_the_three_race_layouts() {
     let Some(mut archives) = open() else { return };
     assert!(oag_omega::TITLE.hud_art.always_on.contains(&"SpeedBar"));
+    assert!(oag_omega::TITLE.hud_art.always_on.contains(&"ThrustBar"));
     let [arcade, _, time_trial, speed_lap, _] = modes();
     for root in [arcade, time_trial, speed_lap] {
         let layout = composed(&mut archives, root).layout;

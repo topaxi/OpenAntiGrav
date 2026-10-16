@@ -214,6 +214,7 @@ const ALWAYS_ON: &[&str] = &[
     "SpeedBarBG",
     "ThrustBarBG",
     "SpeedBar",
+    "ThrustBar",
     "SpeedBarOverlay",
     // Zone's ladder. Authored by the Zone roots alone; see the section above.
     "ZoneBG",

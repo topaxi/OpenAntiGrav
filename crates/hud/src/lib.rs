@@ -702,6 +702,17 @@ pub struct Readout {
     /// level behind per-class rates this project has not recovered, and this
     /// port feeds the raw thrust input (`0` or `100`) instead.
     pub thrust_chase_percent: f32,
+    /// HD's and Omega's `ThrustBar` and `ThrustBarText`, in percent: the
+    /// craft's throttle after Pilot Assist's scale (`craft+0x30c * 100`), with
+    /// no chase of the HUD's own.
+    ///
+    /// `Hud_UpdateSpeed`'s widget writer (`FUN_00086e88`) crops `ThrustBar` to
+    /// `record[+8] * 0.01` of its width and prints `(int)record[+8]` and `%`;
+    /// the record's `+8` read 99.0 with Pilot Assist on (`generalThrustPercent
+    /// WhenEnabled`), 92.0 during its penalty (`thrustPercentOnUse`) and 0.0
+    /// with no throttle held on a live Venom race. Not 2048's
+    /// [`Self::thrust_chase_percent`], which chases.
+    pub thrust_percent: f32,
     /// Whether 2048's Pilot Assist setting is on, which lights `PilotAssist`.
     ///
     /// The original reads one global byte (`DAT_81545468 + 0x3260e`, the
@@ -765,6 +776,12 @@ impl Readout {
     #[must_use]
     pub fn speed_fraction(&self) -> f32 {
         fraction(self.speed_kmh, self.speed_full_kmh)
+    }
+
+    /// How full HD's thrust bar is, `0..=1` (the original does not clamp).
+    #[must_use]
+    pub fn thrust_fraction(&self) -> f32 {
+        (self.thrust_percent * 0.01).clamp(0.0, 1.0)
     }
 
     /// How full the shield bar is, `0..=1`.

@@ -23,6 +23,7 @@ decrypted `EBOOT.elf` wherever the decompiler's output is quoted below.
 | `0x000866c8` | `Hud_UpdateShieldReadout` | 82 |
 | `0x00096ef0` | `Hud_UpdateLapCounter` | 80 |
 | `0x00096088` | `Hud_UpdatePositionCounter` | 78 |
+| `0x00086e88` | `Hud_UpdateSpeedReadout` | 82 |
 | `0x00200468` | `Text_SetColour` | 72 |
 
 `Text_SetColour(text, argb, flag)` is four instructions: it stores `argb` at
@@ -313,6 +314,47 @@ is arithmetic on them - no recorded frame isolates a flash's first phase), so
 Only the `arming` mode of the probe script has been run end to end three times;
 `schedule` once (the second boot above); `sweep` is the `arm2.py` sweep that the
 absorb reading comes from, folded into the script and not re-run from it.
+
+## `Hud_UpdateSpeedReadout` (`0x00086e88`), and what `ThrustBar` shows
+
+**2026-10-16, `hd-thrust-bar`.** `Hud_Update` calls it when bit `0x1` of `hud+0x44` is
+set (`0x0009e3d0`, after `Hud_UpdateWrongWay`). It reads the same per-player record at
+`hud+0x40` the three functions above read: `+0x0` is the speed figure its digits and
+the `SpeedBar` crop come from, and **`+0x8` is the thrust percentage**.
+
+    thrust = record[+0x8] * 0.01                      # 0x008a76c0 = 0.01f
+    ThrustBar     (hud+0x538): +0xac (width) = thrust * widget[+0x140]    # no clamp, no chase
+    ThrustBarText (hud+0x53c): text = (int)record[+0x8] digits, then "%"  # truncating, no leading zeros
+
+`ThrustBar` and `ThrustBarText` were bound by name in `Hud_BindWidgets` (`0x0009bb30`:
+`lwz r4,-0x5a30(r2)` and `-0x5a2c(r2)`, the strings at `0x0077f820`/`0x0077f830`, stores at
+`hud+0x538`/`+0x53c`). The same function also writes the speed bar (`hud+0x198`, `km/h *
+0x008a7708`, a reciprocal of 700, clamped by `0x008a75bc`, zero below 5 km/h) - see
+[hd-hud.md](../../../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws) for why that
+scale is open against the frames. The HUD does **no smoothing** of the thrust value (2048's
+`Hud_Update` chases it at 140/100 per second; HD's does not).
+
+**Where `record+8` comes from, measured on the running original.** `scripts/rpcs3-hd-thrust-bar.py`
+finds the record the way `scripts/rpcs3-hud-probe.py` does and samples it with cross held, on the
+EU disc (Fury grid, a Venom-class race, Pilot Assist on in the profile):
+
+| Time into the run | `record+8` | Reading |
+| --- | --- | --- |
+| grid, cross not held | `0.0` | no throttle |
+| racing, cross held | `98.99999` | `generalThrustPercentWhenEnabled` 99 for Venom/Flash, as a float: `0.99f * 100` |
+| after contact (the assist's penalty window) | `91.99999` | `thrustPercentOnUse` 92 |
+| a few samples mid-run | `0.0` | throttle released by the craft (wall contact) while cross stayed held |
+| cross released, coasting | `0.0` | no throttle |
+
+That is `Craft_UpdateThrottle`'s `craft+0x30c = target * PilotAssist_ThrustScale`
+([pilot-assist.md](pilot-assist.md)), times 100, and it is why the reference frames read **98%**
+(stationary on the grid) and **91%** (529 km/h): `(int)98.99999` and `(int)91.99999` truncate,
+they do not round. Confidence **85** that the value is the craft's throttle after Pilot Assist's
+scale (three measured plateaus matching two authored table values and zero; the writer of the
+record itself - the per-tick mirror - was not located, so the link to `craft+0x30c` is by value,
+not by a store). With Pilot Assist off the scale is the literal `1.0`, so the bar reads 100 while
+the button is held (not measured on the running original). Not measured: the ramp between 0 and
+the plateau (samples were 0.8 s apart), and the zero stretches mid-run.
 
 ## Not read
 

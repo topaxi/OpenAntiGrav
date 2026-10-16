@@ -44,6 +44,7 @@ pub(super) const FALLBACK_BORDER: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 pub(super) fn bar_fraction(name: &str, readout: &Readout) -> Option<f32> {
     match name {
         "SpeedBar" => Some(readout.speed_fraction()),
+        "ThrustBar" => Some(readout.thrust_fraction()),
         "ShieldBar" => Some(readout.shield_fraction()),
         _ => None,
     }
@@ -140,6 +141,9 @@ pub(super) fn text_for(
             true => format!("{:.0} kmh", readout.speed_kmh.max(0.0)),
             false => format!("{:.0}", readout.speed_kmh.max(0.0)),
         }),
+        // HD's and Omega's thrust readout: the whole percent, truncated
+        // (`98.99999` prints `98`, as the original's frames do), then `%`.
+        "ThrustBarText" => Some(format!("{}%", readout.thrust_percent.max(0.0) as i32)),
         // A **percentage** on the titles that measure one - Pulse's own
         // reference frame reads `100%` on an undamaged craft, and `<Misc
         // shield/>` is a few hundred units. HD's three frames

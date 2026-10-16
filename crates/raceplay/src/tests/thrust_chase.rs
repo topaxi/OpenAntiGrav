@@ -39,3 +39,28 @@ fn the_bar_rises_at_140_a_second_and_falls_at_100() {
         "half a second at 100 a second is 50, got {fallen}"
     );
 }
+
+/// HD's `ThrustBar` has no chase of its own: `Readout::thrust_percent` is the
+/// craft's throttle after the tick, so it is zero with the button up and at
+/// the full figure the moment the physics reaches it.
+#[test]
+fn hds_thrust_percent_is_the_craft_throttle_with_no_chase() {
+    let mut race = Race::start(setup(Handling::default()));
+    for _ in 0..oag_race::COUNTDOWN_TICKS {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.readout().thrust_percent, 0.0);
+
+    held(&mut race, 90);
+    let held_value = race.readout().thrust_percent;
+    assert_eq!(held_value, race.ship().physics.thrust);
+    assert!(
+        held_value > 90.0,
+        "full throttle reads near 100, got {held_value}"
+    );
+
+    for _ in 0..90 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.readout().thrust_percent, 0.0);
+}
