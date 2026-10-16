@@ -596,7 +596,7 @@ lobby's seed is arbitrary, so the plan includes seeds that put every pool team o
 sound the extraction lacked (found by the ground truth, which loud-fails on any such read:
 `record::take_misses`).
 
-**Build it lean, or the extraction is not.** These numbers are from `cargo build -p oag-net --bin
+**Build it lean, or the extraction is not** (`oag-server extract` refuses to run in a build with `view` on, naming the right command). These numbers are from `cargo build -p oag-net --bin
 oag-server` alone. Built in one cargo invocation with the crate's tests or the game, the
 workspace's unified features turn `oag-raceplay`'s `view` on in the same binary, the load then
 reads textures, meshes, animation clips and sound banks, and the extraction grows: HD to 1,072 MiB
