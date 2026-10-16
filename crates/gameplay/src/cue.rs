@@ -539,6 +539,16 @@ pub enum Cue {
     /// new-lap-record message line. HD only; Pulse's bank carries it and its
     /// executable never names it. See [`Self::PerfectLap`].
     NewLapRecord,
+    /// HD's in-race Speed Lap gold jingle: `"gold_med_shrt"` in
+    /// `speech_results.bnk`, played by `Craft_UpdateLapProgress` (`0x000e553c`)
+    /// with the medal line on every new race-best lap inside the tier. A
+    /// title's name for it is `oag_title::lap_hud::SpeedLapMedal`; not in
+    /// [`Self::ALL`], loaded only where a title names it.
+    SpeedLapGold,
+    /// `"silver_med_shrt"`. See [`Self::SpeedLapGold`].
+    SpeedLapSilver,
+    /// `"bronze_med_shrt"`. See [`Self::SpeedLapGold`].
+    SpeedLapBronze,
     /// The HUD's message line sounding: `"MESSAGE"` in `hud.bnk` (0.34 s), played
     /// dry (`Sound_PlayNamedInSlot`, `0x400`) by `Hud_UpdateMessages`
     /// (`0x0881f148`) the tick a slot starts showing. Decompiled, not yet heard
@@ -634,6 +644,13 @@ pub enum Cue {
 }
 
 impl Cue {
+    /// The in-race Speed Lap medal jingles. See [`Self::SpeedLapGold`].
+    pub const SPEED_LAP_MEDAL: [Self; 3] = [
+        Self::SpeedLapGold,
+        Self::SpeedLapSilver,
+        Self::SpeedLapBronze,
+    ];
+
     /// The announcer lines beside the lap messages, loaded from the speech bank
     /// under the names a title gives them. See [`Self::PerfectLap`].
     pub const LAP_VOICES: [Self; 2] = [Self::PerfectLap, Self::NewLapRecord];

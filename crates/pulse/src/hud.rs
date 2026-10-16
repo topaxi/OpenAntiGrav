@@ -119,6 +119,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             perfect_lap: Some("PERFECT_LAP"),
             new_lap_record: None,
         },
+        speed_lap_medal: None,
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

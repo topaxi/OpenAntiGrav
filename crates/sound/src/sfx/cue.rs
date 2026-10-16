@@ -175,7 +175,10 @@ impl CueTables for Cue {
             | Self::ResultsThird
             | Self::MedalGold
             | Self::MedalSilver
-            | Self::MedalBronze => BankName::SpeechResults,
+            | Self::MedalBronze
+            | Self::SpeedLapGold
+            | Self::SpeedLapSilver
+            | Self::SpeedLapBronze => BankName::SpeechResults,
         }
     }
 
@@ -247,6 +250,9 @@ impl CueTables for Cue {
             Self::MedalGold => "gold_med",
             Self::MedalSilver => "silver_med",
             Self::MedalBronze => "bronze_med",
+            Self::SpeedLapGold => "gold_med_shrt",
+            Self::SpeedLapSilver => "silver_med_shrt",
+            Self::SpeedLapBronze => "bronze_med_shrt",
         }
     }
 
@@ -405,7 +411,10 @@ impl CueTables for Cue {
             | Self::ResultsThird
             | Self::MedalGold
             | Self::MedalSilver
-            | Self::MedalBronze => Placement::Unplaced,
+            | Self::MedalBronze
+            | Self::SpeedLapGold
+            | Self::SpeedLapSilver
+            | Self::SpeedLapBronze => Placement::Unplaced,
         }
     }
 }

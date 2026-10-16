@@ -11,7 +11,7 @@ use super::*;
 pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
     race: &'static oag_title::RaceDefaults,
-    lap_voices: oag_title::lap_hud::LapVoices,
+    lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
     slot_teams: &[String],
     report: &mut Vec<String>,
@@ -43,7 +43,12 @@ pub(super) fn banks_and_announcers(
     }
     // The lap announcer shares the mode's speech slot on Pulse
     // (`DAT_08ac1dfc`, `FUN_08829778`) and is the title's `speech.bnk` on HD.
-    sounds.load_lap_voices(archives, speech, tick, lap_voices);
+    if let Some(lap) = lap_hud {
+        sounds.load_lap_voices(archives, speech, tick, lap.voices);
+        if let Some(medal) = lap.speed_lap_medal {
+            sounds.load_speed_lap_medal(archives, tick, medal);
+        }
+    }
     // The engine is a per-team crossfade table on HD and 2048, not a cue:
     // loaded only where the ship bank has no `~ENGINE`. 2048 addresses a bank
     // of its own and keeps a second set of tables for Zone. See

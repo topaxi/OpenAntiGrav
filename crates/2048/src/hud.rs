@@ -193,6 +193,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         // The bank carries `PERFECT_LAP`/`NEW_LAP_REC` (hashed names) but the executable picks
         // them over `RACE_Perfect_lap` by a global (`FUN_81000930(&DAT_8153fc40, -1)`) not read.
         voices: oag_title::lap_hud::LapVoices::NONE,
+        speed_lap_medal: None,
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

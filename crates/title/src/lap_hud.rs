@@ -100,6 +100,24 @@ impl LapVoices {
     };
 }
 
+/// The Speed Lap medal a title raises in the race itself: on every lap that is
+/// a new race-best and inside a tier of the campaign cell's targets, not only
+/// when the tier improves, with a short voice per tier. HD's
+/// `Craft_UpdateLapProgress` block at `0x000e553c`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`). A title
+/// without one keeps the build's own tier-improvement watch (chosen, not measured).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpeedLapMedal {
+    /// The bank the voices are in, loaded beside the race's own cues.
+    pub bank: &'static str,
+    /// Cue name for gold.
+    pub gold: &'static str,
+    /// Cue name for silver.
+    pub silver: &'static str,
+    /// Cue name for bronze.
+    pub bronze: &'static str,
+}
+
 /// What a title's HUD does at a lap crossing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LapHud {
@@ -115,6 +133,8 @@ pub struct LapHud {
     pub record_line_in_time_trial: bool,
     /// The announcer cues played on the crossing tick the lines are raised.
     pub voices: LapVoices,
+    /// The Speed Lap medal rule, where the executable has one.
+    pub speed_lap_medal: Option<SpeedLapMedal>,
     /// How every line is tinted.
     pub tint: MessageTint,
     /// The split gap beside the lines.

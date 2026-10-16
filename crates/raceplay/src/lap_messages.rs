@@ -43,6 +43,10 @@ pub struct LapWatch {
     /// Cleared on a completed lap and **not** on the first crossing, so lap 1's
     /// verdict includes the drive from the grid to the line.
     dirty: bool,
+    /// The time of a lap that completed on a tick since the last
+    /// [`Self::take_new_best`] and was the race's best (`craft+0x7024 == lap`
+    /// on HD, where the Speed Lap medal block reads it).
+    new_best: Option<u32>,
 }
 
 impl LapWatch {
@@ -54,7 +58,19 @@ impl LapWatch {
             hud,
             stored_best_ticks,
             dirty: false,
+            new_best: None,
         }
+    }
+
+    /// The lap that just became the race's best, once.
+    pub fn take_new_best(&mut self) -> Option<u32> {
+        self.new_best.take()
+    }
+
+    /// The title's Speed Lap medal rule, when its executable has one.
+    #[must_use]
+    pub fn speed_lap_medal(&self) -> Option<oag_title::lap_hud::SpeedLapMedal> {
+        self.hud.speed_lap_medal
     }
 
     /// One tick: `hit` is whether the craft scraped a wall that nothing
@@ -68,6 +84,9 @@ impl LapWatch {
         }
         let perfect = !self.dirty;
         self.dirty = false;
+        if edge.lap_ticks.is_some() && edge.best_lap_ticks == edge.lap_ticks {
+            self.new_best = edge.lap_ticks;
+        }
         if edge.finished {
             return out;
         }

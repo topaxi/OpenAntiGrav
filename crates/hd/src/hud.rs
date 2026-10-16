@@ -204,6 +204,15 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             perfect_lap: Some("PERFECT_LAP"),
             new_lap_record: Some("NEW_LAP_REC"),
         },
+        // `Craft_UpdateLapProgress` `0x000e553c`: every new race-best lap inside a tier of the
+        // cell's targets raises `ER_GMA`/`ER_SMA`/`ER_BMA` and plays these, in the
+        // `speech_results.bnk` the front end loads at boot. The 3D trophy is not drawn.
+        speed_lap_medal: Some(oag_title::lap_hud::SpeedLapMedal {
+            bank: r"Data\Sound\speech_results.bnk",
+            gold: "gold_med_shrt",
+            silver: "silver_med_shrt",
+            bronze: "bronze_med_shrt",
+        }),
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

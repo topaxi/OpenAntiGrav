@@ -264,6 +264,47 @@ impl Banks {
         }
     }
 
+    /// Loads HD's in-race Speed Lap medal jingles, [`Cue::SPEED_LAP_MEDAL`], from
+    /// the title's `speech_results.bnk` under its own names
+    /// ([`oag_title::lap_hud::SpeedLapMedal`]). Never fails, on [`Self::load`]'s
+    /// terms.
+    pub fn load_speed_lap_medal(
+        &mut self,
+        archives: &mut Archives,
+        tick: oag_title::SequenceTick,
+        medal: oag_title::lap_hud::SpeedLapMedal,
+    ) {
+        let blob = match archives.read_name(medal.bank) {
+            Ok(blob) => blob,
+            Err(e) => {
+                self.report
+                    .push(format!("sfx: {} not read: {e}", medal.bank));
+                return;
+            }
+        };
+        let named = [
+            (Cue::SpeedLapGold, medal.gold),
+            (Cue::SpeedLapSilver, medal.silver),
+            (Cue::SpeedLapBronze, medal.bronze),
+        ];
+        let mut report = Vec::new();
+        for pair in named {
+            load_one(
+                &blob,
+                medal.bank,
+                pair,
+                tick,
+                &mut self.sounds,
+                Tables {
+                    timelines: &mut self.timelines,
+                    programs: &mut self.programs,
+                },
+                &mut report,
+            );
+        }
+        self.report.extend(report);
+    }
+
     /// Loads the crossfaded engine tables a grid needs, when this title's ship
     /// bank has no `~ENGINE` cue. Gated on the missing cue alone, so Pulse and
     /// Pure never read an `.xfx`. Never fails; see [`super::xfade::load`].

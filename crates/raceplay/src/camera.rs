@@ -320,6 +320,30 @@ impl Race {
         self.view.split_gap = Some(super::split_gap::SplitGap::new(lap_hud.gap));
     }
 
+    /// The time, in ticks, of a lap that has just become the race's best, once:
+    /// what HD's Speed Lap medal block tests (`Craft_UpdateLapProgress`,
+    /// `0x000e553c`). `None` on a title with no lap watch.
+    pub fn take_new_best_lap(&mut self) -> Option<u32> {
+        let slot = self.player_slot();
+        self.view.huds[slot].lap_watch.as_mut()?.take_new_best()
+    }
+
+    /// The title's in-race Speed Lap medal rule, when it has one
+    /// ([`oag_title::lap_hud::SpeedLapMedal`]).
+    #[must_use]
+    pub fn speed_lap_medal_rule(&self) -> Option<oag_title::lap_hud::SpeedLapMedal> {
+        let slot = self.player_slot();
+        self.view.huds[slot].lap_watch.as_ref()?.speed_lap_medal()
+    }
+
+    /// Queues `cue` for the player, to sound with this tick's.
+    pub fn raise_cue(&mut self, cue: oag_gameplay::cue::Cue) {
+        let slot = self.player_slot();
+        self.sim
+            .cues
+            .push(oag_gameplay::cue::CueEvent::new(cue, slot));
+    }
+
     /// Sets the HUD line that stays up for the rest of the race - the best
     /// medal earned so far. See [`oag_hud::messages::MessageBoard::set_standing`].
     pub fn set_standing_message(&mut self, id: &str) {
