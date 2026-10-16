@@ -1146,16 +1146,16 @@ pub fn capture(
             // exactly the picture already carrying on down the ladder; nothing
             // here claimed a slot for it to give back.
             if cfg!(feature = "perf-probe") {
-                bench::run_resolve(&device, &queue, |encoder| {
-                    let _ = framebuffer.resolve_scene(
+                bench::run_resolve(&device, &queue, |encoder, stamps| {
+                    framebuffer.resolve_scene(
                         &device,
                         &queue,
                         encoder,
                         rect,
                         &state.presentation,
                         temporal.clone(),
-                        None,
-                    );
+                        stamps,
+                    )
                 });
             }
             let _ = framebuffer.resolve_scene(
