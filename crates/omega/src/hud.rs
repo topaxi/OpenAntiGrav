@@ -146,6 +146,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         new_lap_record: "IG_HUD_NEWLAP_REC",
         final_lap: "IG_HUD_FIN_LAP",
         record_line_in_time_trial: false,
+        // Omega names `RACE_Perfect_lap`, a Wwise event; its banks are not `SBlk`.
+        voices: oag_title::lap_hud::LapVoices::NONE,
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

@@ -252,4 +252,43 @@ mod race_wiring {
         race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
         assert!(!dirty(&race));
     }
+
+    fn voices_after_a_lap(
+        hud: oag_title::lap_hud::LapHud,
+        stored: u32,
+    ) -> Vec<oag_gameplay::cue::Cue> {
+        let (mut race, clean) = watched();
+        race.view.huds[0].lap_watch = Some(LapWatch::new(hud, Some(stored)));
+        race.sim.world.race[0].lap = 2;
+        race.sim.world.race[0].best_lap_ticks = Some(3600);
+        race.sim.cues.clear();
+        let done = oag_race::Outcome {
+            lap_completed: true,
+            lap_ticks: Some(3600),
+            ..Default::default()
+        };
+        race.observe_lap(0, &done, &clean);
+        race.drain_cues().into_iter().map(|e| e.cue).collect()
+    }
+
+    /// Pulse voices the perfect lap on the crossing tick and, its executable
+    /// naming no record cue, a record says nothing aloud.
+    #[test]
+    fn pulse_queues_the_perfect_lap_voice_with_the_line_and_no_record_voice() {
+        use oag_gameplay::cue::Cue;
+        let hud = oag_pulse::hud::ART.lap_hud.expect("read");
+        assert_eq!(voices_after_a_lap(hud, 4000), [Cue::PerfectLap]);
+    }
+
+    #[test]
+    fn hd_queues_both_voices_and_pure_none() {
+        use oag_gameplay::cue::Cue;
+        let hd = oag_hd::hud::ART.lap_hud.expect("read");
+        assert_eq!(
+            voices_after_a_lap(hd, 4000),
+            [Cue::PerfectLap, Cue::NewLapRecord]
+        );
+        let pure = oag_pure::hud::ART.lap_hud.expect("read");
+        assert!(voices_after_a_lap(pure, 4000).is_empty());
+    }
 }

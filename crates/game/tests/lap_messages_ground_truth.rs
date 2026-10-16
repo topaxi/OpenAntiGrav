@@ -330,3 +330,200 @@ fn the_2048_lap_lines_run_on_its_own_layout_and_table() {
         "{ids:?}"
     );
 }
+
+/// What a time trial driven by the autopilot with a shield held up (so no scrape
+/// spoils a lap, `shield-pickup.md`) raised and sounded.
+struct Lapped {
+    /// `(tick, cue, a lap completed that tick)` for the two lap voices.
+    cues: Vec<(u64, oag_gameplay::cue::Cue, bool)>,
+    /// Perfect-lap lines raised.
+    perfect_lines: usize,
+    /// The rendered WAV's samples, interleaved left and right.
+    pcm: Vec<i16>,
+}
+
+const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
+
+fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
+    use oag_gameplay::cue::Cue;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/shots")
+        .join(wav);
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        Some(path.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let mut race = oag_raceplay::Race::start(loaded.setup.clone());
+    race.set_autopilot(true);
+    race.watch_laps(&loaded.hud, Some(60 * 600));
+    let perfect_id = loaded.hud.art.lap_hud.expect("read").perfect_lap;
+    let (mut cues, mut perfect_lines) = (Vec::new(), 0);
+    let mut lap = race.sim.world.primary_race().lap;
+    let mut before: [Option<String>; 4] = Default::default();
+    let mut after_finish = 0;
+    for step in 0..30_000_u64 {
+        race.sim.world.ships[0].physics.shield_pickup_timer = 1.0;
+        race.tick(&PlayerInputs::none());
+        let completed = race.sim.world.primary_race().lap != lap;
+        lap = race.sim.world.primary_race().lap;
+        let tick = step;
+        cues.extend(
+            race.pending_cues()
+                .iter()
+                .filter(|e| matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord))
+                .map(|e| (tick, e.cue, completed)),
+        );
+        for (slot, line) in race.readout().messages.iter().enumerate() {
+            let now = line.as_ref().map(|line| line.text.clone());
+            if now.as_deref() == Some(perfect_id) && now != before[slot] {
+                perfect_lines += 1;
+            }
+            before[slot] = now;
+        }
+        oag_game::sound::race_tick_keeping(&mut audio, &mut race, |e| {
+            voices || !matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord)
+        });
+        audio.tick();
+        if race.sim.world.primary_race().finished {
+            after_finish += 1;
+            if after_finish > 240 {
+                break;
+            }
+        }
+    }
+    audio.finish().expect("writing the dump");
+    let file = std::fs::read(&path).expect("the dump");
+    let pcm = file[44..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_le_bytes(*b))
+        .collect();
+    Lapped {
+        cues,
+        perfect_lines,
+        pcm,
+    }
+}
+
+/// What the voices added: the summed absolute difference between the render
+/// with them and the render without, over `from..to` ticks.
+fn added(with: &Lapped, without: &Lapped, from: u64, to: u64) -> u64 {
+    let frame = |tick: u64| (tick as usize * FRAMES_PER_TICK * 2).min(with.pcm.len());
+    (frame(from)..frame(to))
+        .map(|i| u64::from(with.pcm[i].abs_diff(without.pcm[i])))
+        .sum()
+}
+
+fn voice_loaded(loaded: &oag_raceplay::Loaded, name: &str) -> bool {
+    loaded
+        .report
+        .iter()
+        .any(|line| line.starts_with(&format!("sfx: {name} -> ")))
+}
+
+/// Pulse plays `PERFECT_LAP` with the perfect-lap line (`FUN_08829778`) on the
+/// crossing tick: 1.91 s of speech in its bank. It never plays `NEW_LAP_REC`,
+/// which the bank carries and the executable does not name.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_voices_a_perfect_lap_on_the_crossing_tick_and_never_a_record() {
+    use oag_gameplay::cue::Cue;
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = load(&image, oag_race::Mode::TimeTrial);
+    assert!(voice_loaded(&loaded, "PERFECT_LAP"), "{:?}", loaded.report);
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.starts_with("sfx: NEW_LAP_REC not played")),
+        "the loader says Pulse plays no record voice"
+    );
+    let run = lapped(&loaded, "lap-voice-pulse.wav", true);
+    let bare = lapped(&loaded, "lap-voice-pulse-without.wav", false);
+    let perfect: Vec<_> = run.cues.iter().filter(|c| c.1 == Cue::PerfectLap).collect();
+    assert!(
+        !perfect.is_empty(),
+        "a shielded lap is perfect: {:?}",
+        run.cues
+    );
+    assert_eq!(perfect.len(), run.perfect_lines, "one voice per line");
+    assert!(perfect.iter().all(|c| c.2), "on a crossing: {perfect:?}");
+    assert!(
+        !run.cues.iter().any(|c| c.1 == Cue::NewLapRecord),
+        "Pulse's record line has no voice"
+    );
+    // The bank authors a 0.697 s lead-in before the word, 0.955 s long: nothing
+    // is added in the half second after the cue and speech fills the second after.
+    let at = perfect[0].0;
+    assert!(added(&run, &bare, at.saturating_sub(120), at + 36) < 1000);
+    assert!(added(&run, &bare, at + 42, at + 102) > 100_000);
+    assert!(added(&run, &bare, at + 110, at + 170) < 1000);
+}
+
+/// HD plays both (`Sound_QueueAnnouncerCue`, `0x91d20`) out of `speech.bnk`: the
+/// perfect lap on the crossing tick, the record only outside Time Trial.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_voices_a_perfect_lap_from_its_speech_bank_and_skips_the_record_in_time_trial() {
+    use oag_gameplay::cue::Cue;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = load_track(
+        &image,
+        oag_race::Mode::TimeTrial,
+        oag_hd::race::DEFAULT_TRACK,
+    );
+    for name in ["PERFECT_LAP", "NEW_LAP_REC"] {
+        assert!(voice_loaded(&loaded, name), "{name}: {:?}", loaded.report);
+    }
+    let run = lapped(&loaded, "lap-voice-hd.wav", true);
+    let bare = lapped(&loaded, "lap-voice-hd-without.wav", false);
+    let perfect: Vec<_> = run.cues.iter().filter(|c| c.1 == Cue::PerfectLap).collect();
+    assert!(
+        !perfect.is_empty(),
+        "a shielded lap is perfect: {:?}",
+        run.cues
+    );
+    assert_eq!(perfect.len(), run.perfect_lines, "one voice per line");
+    assert!(perfect.iter().all(|c| c.2), "on a crossing: {perfect:?}");
+    assert!(
+        !run.cues.iter().any(|c| c.1 == Cue::NewLapRecord),
+        "no record line in Time Trial, so no record voice"
+    );
+    // 0.874 s of speech from the cue's own tick.
+    let at = perfect[0].0;
+    assert!(added(&run, &bare, at.saturating_sub(120), at) < 1000);
+    assert!(added(&run, &bare, at, at + 54) > 100_000);
+}
+
+/// Pure's bank carries neither voice: the loader says so and nothing plays.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pure_plays_no_lap_voice_and_says_so() {
+    let Some(image) = oag_testdata::image("pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = load_track(
+        &image,
+        oag_race::Mode::TimeTrial,
+        oag_pure::race::DEFAULT_TRACK,
+    );
+    assert!(!voice_loaded(&loaded, "PERFECT_LAP"));
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.starts_with("sfx: PERFECT_LAP not played")),
+        "{:?}",
+        loaded.report
+    );
+    let run = lapped(&loaded, "lap-voice-pure.wav", true);
+    assert!(run.cues.is_empty(), "{:?}", run.cues);
+}

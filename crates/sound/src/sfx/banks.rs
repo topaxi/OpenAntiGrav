@@ -209,6 +209,61 @@ impl Banks {
         self.report.extend(report);
     }
 
+    /// Loads the lap announcer, [`Cue::LAP_VOICES`], from `entry` under the
+    /// names the title gives them (`oag_title::lap_hud::LapVoices`).
+    ///
+    /// A `None` name loads nothing and says so in [`Self::report`]: the title's
+    /// bank has no such cue, or its executable never plays it, and silence is the
+    /// answer. Never fails, on [`Self::load`]'s terms.
+    pub fn load_lap_voices(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        tick: oag_title::SequenceTick,
+        voices: oag_title::lap_hud::LapVoices,
+    ) {
+        let named = [
+            (Cue::PerfectLap, voices.perfect_lap),
+            (Cue::NewLapRecord, voices.new_lap_record),
+        ];
+        let mut blob = None;
+        for (cue, name) in named {
+            let Some(name) = name else {
+                let line = format!(
+                    "sfx: {} not played: this title names no such voice",
+                    cue.name()
+                );
+                self.report.push(line);
+                continue;
+            };
+            if blob.is_none() {
+                match archives.read_name(entry) {
+                    Ok(b) => blob = Some(b),
+                    Err(e) => {
+                        self.report.push(format!("sfx: {entry} not read: {e}"));
+                        return;
+                    }
+                }
+            }
+            let mut report = Vec::new();
+            if let Some(blob) = &blob {
+                load_one(
+                    blob,
+                    entry,
+                    (cue, name),
+                    tick,
+                    &mut self.sounds,
+                    Tables {
+                        timelines: &mut self.timelines,
+                        programs: &mut self.programs,
+                    },
+                    &mut report,
+                );
+            }
+            self.report.extend(report);
+        }
+    }
+
     /// Loads the crossfaded engine tables a grid needs, when this title's ship
     /// bank has no `~ENGINE` cue. Gated on the missing cue alone, so Pulse and
     /// Pure never read an `.xfx`. Never fails; see [`super::xfade::load`].

@@ -199,6 +199,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         new_lap_record: "IG_HUD_NEWLAP_REC",
         final_lap: "IG_HUD_FIN_LAP",
         record_line_in_time_trial: false,
+        // `Sound_QueueAnnouncerCue` in the drain at `0x91d20`; both cues are in HD's `speech.bnk`.
+        voices: oag_title::lap_hud::LapVoices {
+            perfect_lap: Some("PERFECT_LAP"),
+            new_lap_record: Some("NEW_LAP_REC"),
+        },
         tint: oag_title::lap_hud::MessageTint::GoodBad,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Signed,

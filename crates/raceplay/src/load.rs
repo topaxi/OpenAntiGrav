@@ -683,6 +683,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
+        title
+            .hud_art
+            .lap_hud
+            .map_or(oag_title::lap_hud::LapVoices::NONE, |l| l.voices),
         options.mode,
         &slot_teams,
         &mut report,

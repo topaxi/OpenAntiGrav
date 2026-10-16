@@ -158,7 +158,9 @@ impl CueTables for Cue {
             | Self::Disengaging
             | Self::Ready
             | Self::Go
-            | Self::ContElim => BankName::Speech,
+            | Self::ContElim
+            | Self::PerfectLap
+            | Self::NewLapRecord => BankName::Speech,
             Self::MenuUp
             | Self::MenuDown
             | Self::MenuLeft
@@ -200,6 +202,8 @@ impl CueTables for Cue {
             Self::Ready => "ready",
             Self::Go => "go",
             Self::ContElim => "cont_elim",
+            Self::PerfectLap => "PERFECT_LAP",
+            Self::NewLapRecord => "NEW_LAP_REC",
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
@@ -323,6 +327,9 @@ impl CueTables for Cue {
             // `RaceMode_SetState` and `RaceMode_UpdateCountdown` call
             // `Sound_PlayNamedInSlot` with no emitter and `0x400`, as `Disengaging`.
             Self::Ready | Self::Go | Self::ContElim => Placement::Unplaced,
+            // `FUN_08829778` plays `PERFECT_LAP` through `Sound_PlayNamedInSlot` at
+            // `0x400` with no emitter, as the start voice does.
+            Self::PerfectLap | Self::NewLapRecord => Placement::Unplaced,
             // Read: case 4 hands it to the path with no emitter at `0x400`.
             Self::Blowup | Self::Message => Placement::Unplaced,
             // Both halves of `Ship_FireHeldWeapon`'s case 6 use `FUN_0883e9b0`, the

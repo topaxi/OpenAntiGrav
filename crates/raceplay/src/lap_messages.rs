@@ -91,6 +91,22 @@ impl LapWatch {
     }
 }
 
+impl LapWatch {
+    /// The announcer cue that goes with a raised line, when the title plays one
+    /// ([`oag_title::lap_hud::LapVoices`]).
+    #[must_use]
+    pub fn voice(&self, id: &str) -> Option<oag_gameplay::cue::Cue> {
+        use oag_gameplay::cue::Cue;
+        if id == self.hud.perfect_lap && self.hud.voices.perfect_lap.is_some() {
+            Some(Cue::PerfectLap)
+        } else if id == self.hud.new_lap_record && self.hud.voices.new_lap_record.is_some() {
+            Some(Cue::NewLapRecord)
+        } else {
+            None
+        }
+    }
+}
+
 fn centis(ticks: u32) -> u64 {
     u64::from(ticks) * 100 / 60
 }
@@ -119,7 +135,20 @@ impl super::Race {
             best_lap_ticks: state.best_lap_ticks,
         };
         let time_trial = self.sim.world.mode() == oag_race::Mode::TimeTrial;
-        for id in watch.observe(hit, time_trial, edge) {
+        let raised = watch.observe(hit, time_trial, edge);
+        for id in raised {
+            // The voice is queued on the crossing tick, not when the slot gate
+            // lets the line show: both originals play it where the bit is read
+            // (Pulse `FUN_08829778`, HD's drain), chosen per seat.
+            if let Some(cue) = self.view.huds[slot]
+                .lap_watch
+                .as_ref()
+                .and_then(|w| w.voice(id))
+            {
+                self.sim
+                    .cues
+                    .push(oag_gameplay::cue::CueEvent::new(cue, slot));
+            }
             self.view.huds[slot].messages.push(id, true);
         }
     }

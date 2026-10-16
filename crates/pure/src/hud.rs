@@ -180,6 +180,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         new_lap_record: "HUD_New Lap Record",
         final_lap: "HUD_Final Lap!",
         record_line_in_time_trial: true,
+        // Pure's `speech.bnk` carries neither cue (a name census).
+        voices: oag_title::lap_hud::LapVoices::NONE,
         tint: oag_title::lap_hud::MessageTint::White,
         gap: oag_title::lap_hud::SplitGapRule {
             text: oag_title::lap_hud::GapText::Phrases {
