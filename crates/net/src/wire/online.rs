@@ -344,7 +344,9 @@ impl Message {
             }
             Self::Rooms(rooms) => {
                 out.push(0x31);
-                out.extend_from_slice(&u16::try_from(rooms.len()).unwrap_or(u16::MAX).to_le_bytes());
+                out.extend_from_slice(
+                    &u16::try_from(rooms.len()).unwrap_or(u16::MAX).to_le_bytes(),
+                );
                 for room in rooms.iter().take(usize::from(u16::MAX)) {
                     out.extend_from_slice(&room.id.to_le_bytes());
                     put_string(&mut out, &room.owner);
@@ -564,7 +566,11 @@ mod tests {
         for message in messages {
             assert_eq!(Message::decode(&message.encode()), Ok(message));
         }
-        for phase in [Phase::Open, Phase::Countdown { millis: 3000 }, Phase::Racing] {
+        for phase in [
+            Phase::Open,
+            Phase::Countdown { millis: 3000 },
+            Phase::Racing,
+        ] {
             let room = Message::Room(Snapshot {
                 id: 1,
                 settings: settings(),

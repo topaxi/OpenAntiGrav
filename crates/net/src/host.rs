@@ -113,7 +113,9 @@ impl Host {
     /// and a hello is seated where its token says whatever order the clients arrive in.
     /// A hello without a listed token is refused by name.
     pub fn expect_seats(&mut self, seats: Vec<(String, String)>) {
-        self.seats = (0..seats.len().clamp(1, MAX_PLAYERS)).map(|_| None).collect();
+        self.seats = (0..seats.len().clamp(1, MAX_PLAYERS))
+            .map(|_| None)
+            .collect();
         self.expected = seats;
     }
 
@@ -327,7 +329,11 @@ impl Host {
         name: String,
     ) -> Result<usize, String> {
         let free = match slot {
-            Some(slot) => self.seats.get(slot).is_some_and(Option::is_none).then_some(slot),
+            Some(slot) => self
+                .seats
+                .get(slot)
+                .is_some_and(Option::is_none)
+                .then_some(slot),
             None => self.seats.iter().position(Option::is_none),
         };
         let reason = match free {
