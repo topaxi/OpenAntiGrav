@@ -198,7 +198,7 @@ impl Session {
                     zones: u32::from(stage.race.sim.world.primary_race().zone),
                     difficulty: stage.campaign_difficulty,
                 });
-                let total = self.records.record_loyalty(&title, &team, award);
+                let total = self.records.record_loyalty(title_ref, &team, award);
                 if let Err(e) = oag_game::records::save(&self.records) {
                     warn!("could not save the loyalty total: {e:#}");
                 }
@@ -222,7 +222,7 @@ impl Session {
             // rather than a blank name. A real launch through `Team
             // Selection` always names one.
             let loyalty = team.clone().map(|team| {
-                let total = self.records.record_loyalty(&title, &team, award);
+                let total = self.records.record_loyalty(title_ref, &team, award);
                 if let Err(e) = oag_game::records::save(&self.records) {
                     warn!("could not save the loyalty total: {e:#}");
                 }
@@ -298,7 +298,7 @@ impl Session {
                                 difficulty: None,
                                 suggested_ship: false,
                             });
-                            let total = self.records.record_loyalty(&title, team, award);
+                            let total = self.records.record_loyalty(title_ref, team, award);
                             oag_ui_screens::endrace::Loyalty {
                                 team_name: strings.get_or_id(team).to_string(),
                                 award,

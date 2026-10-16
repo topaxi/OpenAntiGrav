@@ -354,3 +354,29 @@ mod effect_dir_tests {
         }
     }
 }
+
+/// Omega's nineteen `PI_Team`: the twelve HD-era ones ([`HD_ERA_TEAMS`]), the five 2048-era ones
+/// under their 2048 ids, and the two Tigrons. Kept apart for the same reasons as in Pulse (`Mantis`)
+/// and 2048 (`Feisar2048`); `Tigron` and `Tigron_x` are two teams of Omega's own.
+
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mirage", "mirage"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+    oag_title::team::team("AG_Systems2048", "ag_systems2048"),
+    oag_title::team::team("Auricom2048", "auricom2048"),
+    oag_title::team::team("Feisar2048", "feisar2048"),
+    oag_title::team::team("Piranha2048", "piranha2048"),
+    oag_title::team::team("Qirex2048", "qirex2048"),
+    oag_title::team::team("Tigron", "tigron"),
+    oag_title::team::team("Tigron_x", "tigron_x"),
+];

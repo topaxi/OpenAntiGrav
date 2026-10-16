@@ -26,7 +26,7 @@ use super::Settings;
 /// ships an archive candidate for, and Pulse ships two (PSP and PS2); this
 /// list itself does not carry that, deliberately, so it stays the same list
 /// [`oag_source::title::open_source`] tries titles from.
-pub(super) const KNOWN_TITLES: &[&oag_title::Title] = &[
+pub(crate) const KNOWN_TITLES: &[&oag_title::Title] = &[
     oag_pulse::TITLE,
     oag_pure::TITLE,
     oag_hd::TITLE,

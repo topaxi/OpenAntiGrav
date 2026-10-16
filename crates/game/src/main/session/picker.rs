@@ -53,7 +53,7 @@ impl Session {
         let gate = self.unlock_gate();
         let offered: Vec<_> = offered
             .into_iter()
-            .filter(|(track, _)| gate.offers(track, &self.records, title.name))
+            .filter(|(track, _)| gate.offers(track, &self.records, title))
             .collect();
         let (listed, columns) = if hd {
             catalogue::direction_rows(title, mode, &offered)
@@ -241,7 +241,7 @@ impl Session {
                             .iter()
                             .filter(|skin| {
                                 !gates
-                                    || unlock::loyalty_unlocked(&skin.unlock, &records, title.name)
+                                    || unlock::loyalty_unlocked(&skin.unlock, &records, title)
                             })
                             .map(|skin| (skin.name.clone(), skin.location.clone()))
                             .collect()
@@ -296,7 +296,7 @@ impl Session {
                             models,
                             logo: details.map(|team| picker::hd::logo_src(&team.location)),
                             loyalty: gates
-                                .then(|| records.loyalty_total(title.name, &choice.value)),
+                                .then(|| records.loyalty_total(title, &choice.value)),
                         },
                     },
                     PreviewSource::Ship {

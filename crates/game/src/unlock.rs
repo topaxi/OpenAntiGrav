@@ -159,7 +159,7 @@ impl Gate {
 /// team's own total. [`unlock_all`] opens everything - ours, not the
 /// original's.
 #[must_use]
-pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &str) -> bool {
+pub fn loyalty_unlocked(rows: &[LoyaltyRow], records: &Store, title: &oag_title::Title) -> bool {
     if unlock_all() {
         return true;
     }
@@ -224,34 +224,60 @@ mod tests {
         }
     }
 
+    const T: &oag_title::Title = oag_pulse::TITLE;
+
     #[test]
     fn no_rows_means_unlocked_and_a_missed_exclusive_row_means_locked() {
         let store = Store::default();
-        assert!(loyalty_unlocked(&[], &store, "t"));
-        assert!(!loyalty_unlocked(&[row("a", 10, true)], &store, "t"));
+        assert!(loyalty_unlocked(&[], &store, T));
+        assert!(!loyalty_unlocked(&[row("Feisar", 10, true)], &store, T));
     }
 
     #[test]
     fn exclusive_rows_are_alternatives_and_any_is_the_best_team() {
         let mut store = Store::default();
-        store.record_loyalty("t", "b", 50);
-        let rows = [row("a", 10, true), row("any", 50, true)];
-        assert!(loyalty_unlocked(&rows, &store, "t"), "b alone reaches any");
-        store.record_loyalty("t", "c", 30);
-        let rows = [row("a", 10, true), row("any", 80, true)];
+        store.record_loyalty(T, "Qirex", 50);
+        let rows = [row("Feisar", 10, true), row("any", 50, true)];
         assert!(
-            !loyalty_unlocked(&rows, &store, "t"),
-            "50 and 30 are not 80"
+            loyalty_unlocked(&rows, &store, T),
+            "Qirex alone reaches any"
         );
+        store.record_loyalty(T, "Assegai", 30);
+        let rows = [row("Feisar", 10, true), row("any", 80, true)];
+        assert!(!loyalty_unlocked(&rows, &store, T), "50 and 30 are not 80");
     }
 
     #[test]
     fn plain_rows_must_all_hold() {
         let mut store = Store::default();
-        store.record_loyalty("t", "a", 10);
-        let rows = [row("a", 10, false), row("b", 5, false)];
-        assert!(!loyalty_unlocked(&rows, &store, "t"));
-        store.record_loyalty("t", "b", 5);
-        assert!(loyalty_unlocked(&rows, &store, "t"));
+        store.record_loyalty(T, "Feisar", 10);
+        let rows = [row("Feisar", 10, false), row("Qirex", 5, false)];
+        assert!(!loyalty_unlocked(&rows, &store, T));
+        store.record_loyalty(T, "Qirex", 5);
+        assert!(loyalty_unlocked(&rows, &store, T));
+    }
+
+    #[test]
+    fn a_team_only_another_title_has_does_not_open_this_titles_any_row() {
+        let mut store = Store::default();
+        store.record_loyalty(oag_omega::TITLE, "Tigron", 20_000);
+        assert!(!loyalty_unlocked(&[row("any", 10, true)], &store, T));
+        assert!(loyalty_unlocked(
+            &[row("any", 10, true)],
+            &store,
+            oag_omega::TITLE
+        ));
+    }
+
+    #[test]
+    fn a_teams_loyalty_earned_in_one_title_counts_in_another() {
+        let mut store = Store::default();
+        store.record_loyalty(oag_hd::TITLE, "Feisar", 6000);
+        assert!(loyalty_unlocked(&[row("Feisar", 6000, false)], &store, T));
+        assert!(loyalty_unlocked(
+            &[row("any", 6000, true)],
+            &store,
+            oag_omega::TITLE
+        ));
     }
 }

@@ -668,3 +668,28 @@ mod event_ai_tests {
         );
     }
 }
+
+/// The five native teams ([`NATIVE_TEAMS`]) and the twelve HD-derived ones ([`GUEST_TEAMS`]).
+/// **`Feisar2048` and its four siblings are kept apart from `Feisar` and the rest**: both sets
+/// are on one 2048 roster under different ids, so they are not spelling variants, and whether
+/// the player sees them as one team is not something the data says (`docs/architecture/persistence.md`).
+
+pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
+    oag_title::team::team("AG_Systems2048", "ag_systems2048"),
+    oag_title::team::team("Auricom2048", "auricom2048"),
+    oag_title::team::team("Feisar2048", "feisar2048"),
+    oag_title::team::team("Piranha2048", "piranha2048"),
+    oag_title::team::team("Qirex2048", "qirex2048"),
+    oag_title::team::team("AG_Systems", "ag_systems"),
+    oag_title::team::team("Assegai", "assegai"),
+    oag_title::team::team("Auricom", "auricom"),
+    oag_title::team::team("EGX", "egx"),
+    oag_title::team::team("Feisar", "feisar"),
+    oag_title::team::team("Goteki", "goteki"),
+    oag_title::team::team("Harimau", "harimau"),
+    oag_title::team::team("Icaras", "icaras"),
+    oag_title::team::team("Mirage", "mirage"),
+    oag_title::team::team("Piranha", "piranha"),
+    oag_title::team::team("Qirex", "qirex"),
+    oag_title::team::team("Triakis", "triakis"),
+];

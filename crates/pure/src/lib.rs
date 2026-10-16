@@ -48,6 +48,7 @@ pub const TITLE: &Title = &Title {
     front_end: Some(FRONT_END),
     hud: hud::LAYOUTS,
     hud_art: hud::ART,
+    teams: race::TEAM_IDENTITIES,
     race: race::DEFAULTS,
     // The same literal Pulse's executable carries, and Pure's disc answers it
     // - measured, not assumed: a Pure race reports `64x64 .mip, 4 mip

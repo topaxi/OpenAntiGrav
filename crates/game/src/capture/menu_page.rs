@@ -772,7 +772,7 @@ pub(super) fn picker_page(
                                         || crate::unlock::loyalty_unlocked(
                                             &skin.unlock,
                                             &saved,
-                                            title.name,
+                                            title,
                                         )
                                 })
                                 .map(|skin| {
@@ -809,7 +809,7 @@ pub(super) fn picker_page(
                             id: team.id.clone(),
                             label: team.label(strings).to_string(),
                             details: Details::Ship {
-                                loyalty: gates.then(|| saved.loyalty_total(title.name, &team.id)),
+                                loyalty: gates.then(|| saved.loyalty_total(title, &team.id)),
                                 rating: team.rating.map(|rating| oag_ui_screens::picker::Rating {
                                     speed: rating.speed,
                                     thrust: rating.thrust,
