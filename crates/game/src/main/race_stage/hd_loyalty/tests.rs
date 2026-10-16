@@ -79,21 +79,21 @@ fn each_title_is_paid_under_the_law_its_data_names() {
         zones: 2,
         difficulty: None,
     };
-    assert_eq!(earned(earning(&oag_pulse::TITLE), zone), 20);
-    assert_eq!(earned(earning(&oag_pure::TITLE), zone), 20);
-    assert_eq!(earned(earning(&oag_2048::TITLE), zone), 20);
-    assert_eq!(earned(earning(&oag_hd::TITLE), zone), 10);
-    assert_eq!(earned(earning(&oag_omega::TITLE), zone), 10);
+    assert_eq!(earned(earning(oag_pulse::TITLE), zone), 20);
+    assert_eq!(earned(earning(oag_pure::TITLE), zone), 20);
+    assert_eq!(earned(earning(oag_2048::TITLE), zone), 20);
+    assert_eq!(earned(earning(oag_hd::TITLE), zone), 10);
+    assert_eq!(earned(earning(oag_omega::TITLE), zone), 10);
 }
 
 #[test]
 fn only_omega_pure_and_2048_are_banked_by_the_session() {
     let banked = |title: &oag_title::Title| earning(title).banked_by_endrace;
-    assert!(banked(&oag_pulse::TITLE) && banked(&oag_hd::TITLE));
-    assert!(!banked(&oag_pure::TITLE) && !banked(&oag_2048::TITLE) && !banked(&oag_omega::TITLE));
+    assert!(banked(oag_pulse::TITLE) && banked(oag_hd::TITLE));
+    assert!(!banked(oag_pure::TITLE) && !banked(oag_2048::TITLE) && !banked(oag_omega::TITLE));
     assert_eq!(
-        earning(&oag_pure::TITLE).origin,
+        earning(oag_pure::TITLE).origin,
         oag_title::Origin::InheritedFrom("Wipeout Pulse")
     );
-    assert_eq!(earning(&oag_omega::TITLE).origin, oag_title::Origin::Measured);
+    assert_eq!(earning(oag_omega::TITLE).origin, oag_title::Origin::Measured);
 }
