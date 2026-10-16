@@ -145,7 +145,10 @@ the union of base and patch archives. HD has `detonator_hud`, `duel_hud` and
 ### Unlock and reachability
 
 - **HD / Fury: reachable.** The list and the unlock rows ship only in the
-  Fury layer (`DATA03`, `DATA05`, `DATA06`), not in the original `DATA02`. A
+  Fury layer (`DATA03`, `DATA05`, `DATA06`), not in the original `DATA02`
+  (**the plain PSN download carries them too**, and Omega's `additional_definition.xml`
+  has the same list with default `HD`; per-family counts and states in
+  [hud-assets.md](hud-assets.md)). A
   front-end list `HUD Style` (`global="HUD Style"`
   `save="true"` `default="HD"`, entries `HD`, `2097`, `WIP3OUT`) sits in
   `additional_definition.xml`; the executable branches four race managers

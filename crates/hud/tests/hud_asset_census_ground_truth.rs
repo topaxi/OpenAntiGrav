@@ -594,6 +594,9 @@ fn report(name: &str, title: &Title, census: &Census, closure: &Closure) {
             "asset {f} {path} {:?} refd_by={n}",
             state(path, refs, &wired)
         );
+        if let Some(refs) = refs {
+            println!("by {path}: {refs:?}");
+        }
     }
     for (needle, files) in &closure.selectors {
         println!("selector {needle}: {files:?}");

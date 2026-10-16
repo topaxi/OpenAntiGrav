@@ -30,6 +30,12 @@ composition" claim was a truncated census (NUL-separated PS4 manifest read by `s
   (HD's four widgets; Zone none); the `2048_hud` set's `PilotAssist` icon waits on the selector above.
 - `hdHUD.gnf` is HD's art in part redrawn (mean difference 17 of 255); what changed is not looked at.
 
+- **Census 2026-10-16** ([hud-assets.md](../../docs/ui/hud-assets.md)): `2048_hud` is 119 files on Omega
+  (2048's 56 plus `_hd`, `_vr`, `_vr_ext` and `_splitscreen_h/_v` per mode, `.2x.gnf` atlases); the
+  bare root and `2048_hud` both compose; five `hud/zone_battle_hud_*.vex` the HD-lineage layouts name
+  are absent from Omega (dangling). The `HUD Style` list default is `HD`, which with the arcade
+  manager's fall-through puts the bare root as the default (reach 80). `HUD Effects` is read by nothing.
+
 ## Next Steps
 
 1. Read the 2048-lineage manager's selector (xrefs to the vtables near `0x018c2380`) and make
