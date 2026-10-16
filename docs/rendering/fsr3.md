@@ -423,7 +423,30 @@ upstream's own value for a non-inverted projection, `1.0` as its bit pattern.
 `clear.wgsl` carries the argument, and it is also why that dispatch walks a
 texture extent rather than a texel count.
 
-### The intermediates are widened to baseline-storable formats
+### The intermediates are widened to baseline-storable formats, unless the device stores upstream's
+
+**Two format sets, one chosen per device (2026-10-16).** `oag_post::fsr3::Formats` is
+`BASELINE` (this section's table) or `NARROW` (upstream's own: `R16Float`, `Rg16Float`,
+`R8Unorm`). `Formats::probe(device)` picks `NARROW` when the device was created with
+`TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES` (which `oag_mesh::mesh_render::optional_features`
+now asks for wherever the adapter has it; native only) **and** it can create a storage texture
+in all three formats **and** its driver compiles a shader that stores to them. It asks the
+device itself rather than reading a feature name. The choice is logged once at `info` beside
+the intermediates' size (`FSR 3.1 intermediates (narrow, f16 formats): 32.8 MiB ...`).
+`OAG_FSR3_FORMATS=baseline` forces the baseline for an A/B on one machine.
+
+Per intermediate, `NARROW` differs from the table below in these rows only: the dilated motion
+vectors and the shading-change pyramid are `Rg16Float`, the farthest depth, the luma, the luma
+instability and the half-resolution farthest depth are `R16Float`, accumulation, shading change
+and the new locks are `R8Unorm`. **`dilated_depth` stays `R32Float` in both sets**, a deviation
+from upstream: its `R16_FLOAT` is for a reversed-Z projection, and this renderer's is not, so
+depth crowds toward 1.0 where a half float resolves only 2^-11 and the disocclusion test compares
+exactly those values. The passes that write a narrowed target build a second WGSL artifact (WESL
+feature `narrow`, `build.rs`); the sampled and loaded sides are format-independent, so
+`accumulate` and `rcas` have one build for both.
+
+The rest of this section describes the baseline, which is still what WebGPU, GL and any
+adapter without the storage formats gets.
 
 WebGPU guarantees storage-texture support for a fixed list of formats, and
 `R16_FLOAT`, `RG16_FLOAT` and `R8_UNORM` - which is most of what upstream holds
@@ -459,10 +482,10 @@ binding never becomes a problem.
 widened intermediate is a number in a texture descriptor, while a feature probe
 is a second code path that every future change has to keep working and that
 this machine cannot exercise. The cost is real - a sampled scalar is four times
-upstream's bytes - and it is unmeasured on the Steam Deck.
+upstream's bytes - and the measurement is in "What the two deviations cost" below.
 
-The consequence worth stating plainly: **FSR 3.1 here requests no wgpu feature
-at all.** ADR-0012 expected an adapter probe with a fallback chain because the
+The consequence worth stating plainly: **FSR 3.1 here *requires* no wgpu feature
+at all** (it asks, optionally, for the two above). ADR-0012 expected an adapter probe with a fallback chain because the
 storage formats were thought to be outside the baseline. The probe still exists,
 but what it probes for turned out to be one thing rather than several - see
 below.
@@ -477,10 +500,75 @@ same 256 levels over the same range that upstream's do. That matters because
 accumulation is a feedback loop, and a loop that quantises differently drifts
 differently.
 
-What does remain divergent is the FP16 path upstream ships and this port does
-not take: every intermediate here is at least as wide as upstream's, so any
-arithmetic upstream performs in halves is performed here in floats. That is not
-correctable by matching formats.
+What remained divergent was the FP16 path upstream ships. **Partly taken (2026-10-16):** on a
+device with `wgpu::Features::SHADER_F16` (requested by `optional_features` where the adapter
+has it, native only) `accumulate`'s history bicubic - the 16 tap fetch, the Lanczos rows and the
+deringing clamp, upstream's `FFX_MIN16_F` code in `ffx_fsr3upscaler_sample.h` - runs in `f16`;
+`OAG_FSR3_HALF=off` forces `f32`. One WESL source: `alias real = f16` under `@if(f16)`, `f32`
+otherwise, and `build.rs` builds `fsr3_accumulate_f16` beside `fsr3_accumulate`
+(`oag-shader-check` validates `enable f16;` under `SHADER_FLOAT16`). The weights themselves are
+still `f32` (the `sin`s), the nine-tap upsample, the rectification box and everything else stay
+`f32`: converting the upsample's samples to `f16` was tried and moved nothing (3.83 ms both
+ways on the iGPU), and the box's variance is a difference of means that half rounding would
+cancel. Upstream's other `FFX_HALF` code (the SPD pyramids, `reproject.h`) is not taken.
+
+## What the two deviations cost, measured (2026-10-16)
+
+`OAG_RESOLVE_BENCH=200` on a `--presented` capture of a release `perf-probe` build now prints
+`FSR3 REN` and `FSR3 OUT` beside the serialised total: the same two GPU timestamp pairs the
+`dev` overlay reads, claimed and resolved every run. **It also resolves a steady-state frame
+now, and the table in the split-screen section below was taken before that.** The capture's
+own frame is the first of the race (`reset: phase == 0`), so every one of the 200 runs was a
+reset frame: `accumulate` took the initial-sample path, never reprojected the history and
+skipped the upsample weights, which is why that table's `accumulate` cost was a third of what it
+is in play. Runs after the first are now `reset: false` and walk the jitter sequence.
+
+Release, 50 % render scale, `--ticks 300`, Pulse EU (HD EU the same to within 3 %: the chain does
+not see the title), `taskset -c 0-5`, the gate lock held, three rounds (two at 2340x1080),
+minimum of the medians, load average 3.7 to 6.2 on the iGPU rows (other lanes were building). Microseconds, GPU
+time from the timestamp pairs:
+
+| GPU, presentation size | baseline REN / OUT | narrow formats REN / OUT | + f16 history REN / OUT |
+| --- | ---: | ---: | ---: |
+| Raphael iGPU (RDNA2, 2 CUs), 1280x800 | 1,360 / 4,070 | 992 / 4,074 | 975 / 3,830 |
+| RX 7800 XT (RDNA3), 1280x800 | 86 / 169 | 65 / 169 | 65 / 157 |
+| RX 7800 XT, 2340x1080 (the S24's panel) | 178 / 369 | 130 / 368 | 130 / 342 |
+
+Intermediates: 48.4 to 32.8 MiB at 1280x800, 107.3 to 72.6 MiB at 2340x1080 (-32 %).
+
+- **The narrow formats cut `REN` by 27 % on the iGPU and 24 to 27 % on the 7800 XT and leave
+  `OUT` alone**, as the two halves predict: `REN` is the passes that read and write the widened
+  scalars, `OUT` reads colour in `Rgba16Float`, which was never widened.
+- **The f16 history takes `OUT` down 6 % (iGPU) and 7 % (7800 XT).** An ablation on the iGPU says
+  why it is not more: with the history sample returning a constant `OUT` falls 4.07 to 2.9 ms (the
+  16 loads are 1.2 ms), replacing the Lanczos `sin`s with the polynomial moves nothing (3.87 ms),
+  and `accumulate` doing nothing at all leaves `rcas` and the dispatch at about 0.5 ms. So the
+  remaining 2.3 ms is the nine-tap upsample, the rectification and the lock logic: load and
+  latency bound on 2 CUs, not arithmetic bound.
+- Neither lever is the "1.5 to 2x" the Deck reading predicted. Together they are 1.13x on the
+  iGPU's whole chain (5.43 to 4.81 ms) and 1.15x on the 7800 XT (255 to 222 us). The remaining cost is
+  `accumulate`'s texture traffic, which is upstream's algorithm.
+- **Quality.** A `--presented` capture is one frame with no history to reproject, so it cannot
+  show a temporal difference: baseline, narrow and f16 captures are byte-identical on both GPUs
+  (Pulse, still and with the throttle held, 600 to 1,500 ticks). What does show one is the readback
+  suite: every readback test runs on `baseline`, `narrow` and `half` (`on_both_formats!`); the
+  narrow farthest depth reads half-rounded as upstream's does (tolerance 1e-3 against 1e-4), and
+  a 32-frame still, jittered, sub-pixel-moving scene resolves within 0.0156 of the f32 one with
+  f16 history (the settle residual the convergence test records is 0.0176). **Not judged by eye
+  on a moving race**: this machine cannot run a windowed temporal capture, so the maintainer's
+  look at a driven race with `FSR3 REN/OUT` up is what remains.
+
+Reproduce (the bench; `OAG_FSR3_FORMATS=baseline OAG_FSR3_HALF=off` is the baseline row):
+
+```sh
+cargo build --release -p oag-game --features perf-probe
+XDG_CONFIG_HOME=/tmp/oag-fsr3/config XDG_DATA_HOME=/tmp/oag-fsr3/data XDG_STATE_HOME=/tmp/oag-fsr3/state \
+  OAG_RESOLVE_BENCH=200 ./target/release/oag-game data/images/pulse-psp-eu.chd --race --no-audio \
+  --mode single_race --players 1 --ticks 300 --size 1280x800 --presented --render-scale 50 \
+  --reconstruction fsr3 --screenshot /tmp/oag-fsr3/out.png 2>&1 | grep -E '^bench (presentation|FSR3)'
+```
+
+`[graphics] renderer = "vulkan: <adapter name>"` in the config picks the GPU.
 
 ## A split screen: a chain per view (2026-10-16)
 
