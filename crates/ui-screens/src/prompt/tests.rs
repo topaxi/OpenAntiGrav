@@ -468,28 +468,39 @@ fn an_address_keyboard_offers_the_dot_and_a_pilot_one_does_not() {
     assert_eq!(address.text(), ".");
 }
 
-/// The buffer's own line: the first text the keyboard draws, at the size it was drawn.
-fn buffer_scale(keyboard: &Keyboard) -> f32 {
-    let draws = keyboard.draw(&skin());
-    draws
+/// Every text the keyboard draws that is part of the buffer (the lines ending in or holding it).
+fn buffer_texts(keyboard: &Keyboard) -> Vec<String> {
+    keyboard
+        .draw(&skin())
         .iter()
-        .find_map(|d| match d {
-            Draw::Text { text, scale, .. } if text.ends_with('_') => Some(*scale),
+        .filter_map(|d| match d {
+            Draw::Text { text, scale, y, .. }
+                if !text.is_empty()
+                    && *scale > 0.8 * Panel::new(&skin()).scale
+                    && *y < Panel::new(&skin()).body_y + Panel::new(&skin()).line * 2.0 =>
+            {
+                Some(text.clone())
+            }
             _ => None,
         })
-        .expect("the buffer is drawn with its caret")
+        .collect()
 }
 
 #[test]
-fn a_sixty_four_digit_certificate_is_drawn_smaller_than_a_name_so_it_fits_the_panel() {
-    let name = Keyboard::new(Labels::default(), "ADA", 24);
-    let hash = Keyboard::with_keys(Labels::default(), &"0".repeat(64), 64, ADDRESS_KEYS);
-    let (name, hash) = (buffer_scale(&name), buffer_scale(&hash));
-    assert!(
-        hash < name * 0.35,
-        "{hash} against {name}: 65 glyphs at a name's size run off the panel"
+fn a_sixty_four_digit_certificate_is_drawn_on_two_lines_so_it_fits_the_panel() {
+    let hash = "0123456789abcdef".repeat(4);
+    let long = Keyboard::with_keys(Labels::default(), &hash, 64, ADDRESS_KEYS);
+    let lines = buffer_texts(&long);
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert_eq!(
+        lines.concat(),
+        format!("{hash}_"),
+        "nothing lost, the caret last"
     );
-    // Past a name's length and not before it: an address stays at full size.
+    assert!(lines.iter().all(|l| l.chars().count() <= 33), "{lines:?}");
+    // A name and an address stay on one line at full size.
+    let name = Keyboard::new(Labels::default(), "ADA", 24);
+    assert_eq!(buffer_texts(&name), ["ADA_"]);
     let address = Keyboard::with_keys(Labels::default(), "race.example.org", 40, ADDRESS_KEYS);
-    assert_eq!(buffer_scale(&address), name);
+    assert_eq!(buffer_texts(&address), ["race.example.org_"]);
 }
