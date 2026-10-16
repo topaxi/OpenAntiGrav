@@ -5,6 +5,7 @@
 //! `tests.rs`.
 
 use super::*;
+use crate::hud::hud_roots;
 use oag_livery::entry::{boost_entry_name, shield_entry_names, ship_entry_name};
 
 /// The hull and its plume must come from the same family, which is the
@@ -202,5 +203,77 @@ fn each_title_serves_its_own_hud_layouts() {
         hud_layout(oag_hd::TITLE.hud, Mode::SingleRace),
         hud_layout(oag_pulse::TITLE.hud, Mode::SingleRace),
         "HD's layouts are spelled as its own manifest stores them"
+    );
+}
+
+/// The `HUD Style` list picks the roots a race reads. HD's executable names no skinned
+/// Eliminator literal, so every HD skin keeps the default Eliminator root; Omega's names
+/// all five modes. A title with no list (Pulse) ignores a style and says nothing.
+#[test]
+fn a_hud_style_picks_the_skins_roots_by_mode() {
+    let mut report = Vec::new();
+    let default = oag_hd::TITLE.hud;
+    for (style, dir) in [
+        ("2097", "/data/xml/2097_hud/"),
+        ("wip3out", "/data/xml/wo3_hud/"),
+    ] {
+        let (hud, skin) = hud_roots(oag_hd::TITLE, Some(style), &mut report);
+        assert!(skin.expect("a skin").font_role.is_some());
+        for mode in [
+            Mode::SingleRace,
+            Mode::TimeTrial,
+            Mode::SpeedLap,
+            Mode::Zone,
+        ] {
+            assert!(hud_layout(hud, mode).starts_with(dir), "{style} {mode:?}");
+        }
+        assert_eq!(
+            hud_layout(hud, Mode::Eliminator),
+            hud_layout(default, Mode::Eliminator),
+            "{style}: HD's executable names no skinned Eliminator"
+        );
+        assert!(hud.split.expect("split").arcade[0].starts_with(dir));
+    }
+    for (style, dir) in [
+        ("2097", r"Data\XML\2097_HUD\"),
+        ("WIP3OUT", r"Data\XML\wo3_HUD\"),
+    ] {
+        let (hud, _) = hud_roots(oag_omega::TITLE, Some(style), &mut report);
+        for mode in Mode::ALL {
+            assert!(
+                hud_layout(hud, mode).starts_with(dir),
+                "Omega {style} {mode:?}"
+            );
+        }
+    }
+
+    // No name, or the list's own default: the title's roots, no font slot.
+    for style in [None, Some(""), Some("HD")] {
+        let (hud, skin) = hud_roots(oag_hd::TITLE, style, &mut report);
+        assert_eq!(
+            hud_layout(hud, Mode::SingleRace),
+            "/data/xml/arcade_hud.xml"
+        );
+        assert_eq!(skin.and_then(|skin| skin.font_role), None);
+    }
+
+    // An unknown name draws the default and is reported; a title with no list does neither.
+    let mut report = Vec::new();
+    let (hud, _) = hud_roots(oag_hd::TITLE, Some("nonsense"), &mut report);
+    assert_eq!(
+        hud_layout(hud, Mode::SingleRace),
+        "/data/xml/arcade_hud.xml"
+    );
+    assert!(
+        report
+            .iter()
+            .any(|line| line.contains("not in this title's list"))
+    );
+    let mut report = Vec::new();
+    let (hud, skin) = hud_roots(oag_pulse::TITLE, Some("2097"), &mut report);
+    assert!(skin.is_none() && report.is_empty());
+    assert_eq!(
+        hud_layout(hud, Mode::SingleRace),
+        hud_layout(oag_pulse::TITLE.hud, Mode::SingleRace)
     );
 }

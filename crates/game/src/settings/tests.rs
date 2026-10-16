@@ -933,3 +933,18 @@ render_scale_chosen = false
     assert!(chosen(oag_pulse::TITLE, oag_disc::Platform::Psp));
     assert!(!chosen(oag_pure::TITLE, oag_disc::Platform::Psp));
 }
+
+/// The `HUD Style` choice survives the settings file, and an empty one reads as no choice
+/// (the title's own default) rather than as a skin named "".
+#[test]
+fn the_hud_style_round_trips_and_empty_means_the_default() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.display.hud_style_choice(), None);
+    settings.display.hud_style = "WIP3OUT".to_string();
+    let written = toml::to_string_pretty(&settings).expect("serialise");
+    let back: Settings = toml::from_str(&written).expect("parse");
+    assert_eq!(back.display.hud_style, "WIP3OUT");
+    assert_eq!(back.display.hud_style_choice().as_deref(), Some("WIP3OUT"));
+    settings.display.hud_style = "  ".to_string();
+    assert_eq!(settings.display.hud_style_choice(), None);
+}

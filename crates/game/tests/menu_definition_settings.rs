@@ -267,6 +267,43 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     }
 }
 
+/// The HUD STYLE row is offered where the disc authors a `HUD Style` list (HD and Omega)
+/// and dropped on the titles that author none, and what it offers is that list.
+#[test]
+fn the_hud_style_row_is_offered_only_where_the_disc_lists_one() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("display.hud_style"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 0),
+        (oag_pure::TITLE, 0),
+        (oag_2048::TITLE, 0),
+        (oag_hd::TITLE, 1),
+        (oag_omega::TITLE, 1),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_hud_style(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+        let names: Vec<_> = title.hud.skins.iter().map(|skin| skin.name).collect();
+        assert_eq!(
+            names,
+            if offered == 1 {
+                vec!["HD", "2097", "WIP3OUT"]
+            } else {
+                vec![]
+            },
+            "{}",
+            title.name
+        );
+    }
+}
+
 /// Android drops QUIT (a phone app is left, not quit); every other row stays.
 #[test]
 fn drop_quit_removes_only_the_quit_rows() {
