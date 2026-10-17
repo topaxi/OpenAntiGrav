@@ -199,3 +199,27 @@ Track multiplier through, per the struck Open item above): both frames came
 back byte-identical to the ones this table already names, which is the
 finding, not a broken repro - see that item for the saturation reading and
 what would tell the two apart.
+
+## HD's look on Pulse and Pure (`graphics.zone_look`)
+
+An opt-in enhancement of this project's, **off by default, chosen and not
+measured** - no original does this. With `graphics.zone_look` on, a Zone race on
+a title with no Zone palette of its own (Pulse, Pure) flies the circuit that was
+picked instead of its dedicated Zone circuit, graded by HD's own
+`zonemode.effectsettings`, stage textures, stage ladder and transition sphere,
+read off the player's HD disc. Nothing from HD is stored: the disc is opened at
+race load (`oag_raceplay::Options::zone_look_source`, CLI `--zone-look-source`).
+
+- **Why the shader needed nothing:** the recolour in `mesh/shaders/shade.wesl`
+  applies to every surface of a Zone race whenever the scene's Zone uniform is on
+  (it is a blanket approximation, see `zone.wesl`), so it works on any mesh with
+  UVs and normals. Checked on Pulse's `16_Track` and a Pure circuit.
+- **Driver:** the HD ladder is keyed on the zone number, and Pulse's own Zone
+  counter steps every 10 s as HD's does, so the stage follows it unchanged.
+- **Menu:** the row shows only where an HD source is found and the booted title has
+  no palette (`Definition::drop_unavailable_zone_look`); under Zone the CIRCUIT row
+  then lists every circuit.
+- **Not borrowed yet:** HD's Zone sky, the Zone craft look, the HUD speed class.
+  The craft keep Pulse's own Zone hull.
+- **2048 and Omega:** 2048 already runs Zone on the picked circuit with its own
+  table (checked, same mechanism, no setting needed); Omega ships no palette.

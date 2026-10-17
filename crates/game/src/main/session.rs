@@ -811,6 +811,10 @@ pub(crate) struct Shell {
     /// [`Self::tracks`] - what the CIRCUIT row shows once MODE is Zone. See
     /// `boot::Shell::zone_tracks` and [`Self::tracks_for`].
     pub(crate) zone_tracks: Vec<(catalogue::Track, String)>,
+    /// Whether a Zone race wears a borrowed HD look over the ordinary circuit, in
+    /// which case [`Self::tracks_for`] offers every circuit under Zone too. Kept in
+    /// step with `graphics.zone_look` by `Session::sync_zone_look`.
+    pub(crate) zone_look: bool,
     /// Every team, valued by its id and labelled off the disc's string table.
     ///
     /// A pack's teams are in here too, and indistinguishable from the disc's -
@@ -1010,6 +1014,7 @@ impl Shell {
                     )
                 })
                 .collect(),
+            zone_look: false,
             zone_tracks: boot_shell
                 .zone_tracks
                 .iter()
@@ -1062,7 +1067,7 @@ impl Shell {
     /// so the row drawn, the row seeded and the circuit a launched race
     /// resolves against cannot disagree about which list is current.
     pub(crate) fn tracks_for(&self, mode: oag_race::Mode) -> &[(catalogue::Track, String)] {
-        if mode == oag_race::Mode::Zone {
+        if mode == oag_race::Mode::Zone && !self.zone_look {
             &self.zone_tracks
         } else {
             &self.tracks

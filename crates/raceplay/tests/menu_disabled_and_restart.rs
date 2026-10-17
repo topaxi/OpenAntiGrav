@@ -346,6 +346,9 @@ fn the_renderer_row_says_a_restart_is_needed() {
     // `graphics.boost_zoom` is the fourth: the borrowed ring is decided when the
     // race loads (`race::Options::boost_zoom`), so a race running keeps its own.
     //
+    // `graphics.zone_look` is the sixth, on the same terms: the borrowed look is
+    // decided when the race loads (`race::Options::zone_look_source`).
+    //
     // `display.hud_style` is the fifth, on the same terms: the skin is resolved when the
     // race loads (`race::Options::hud_style`), so a race running keeps its own.
     let deferred: Vec<&str> = definition
@@ -362,7 +365,8 @@ fn the_renderer_row_says_a_restart_is_needed() {
             "graphics.renderer",
             "graphics.msaa",
             "graphics.boost_fov_kick",
-            "graphics.boost_zoom"
+            "graphics.boost_zoom",
+            "graphics.zone_look"
         ]
     );
 }

@@ -8,6 +8,7 @@ impl Default for Options {
         Self {
             source: oag_source::source::DEFAULT_IMAGE.to_string(),
             craft_source: None,
+            zone_look_source: None,
             difficulty: oag_ai::Difficulty::default(),
             // Empty rather than the search path: a default that read the
             // filesystem would make two runs of the same test differ by what

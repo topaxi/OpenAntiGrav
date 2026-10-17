@@ -62,7 +62,12 @@ pub(super) fn resolve(
     // Which file, though, is a title fact: Pulse keeps it beside the race
     // circuit under a prefixed name, Pure and HD keep whole circuits of their
     // own. `ZoneCircuit` is that axis, measured on all three.
-    let track = if options.mode == Mode::Zone {
+    let track = if options.mode == Mode::Zone && options.borrows_zone_look(title) {
+        // The borrowed look grades the circuit that was picked; there is no
+        // Zone twin to fly. See `Options::zone_look_source`.
+        report.push(format!("zone: racing {track} in a borrowed Zone look"));
+        track
+    } else if options.mode == Mode::Zone {
         let zone = match &options.track {
             Some(_) => title.race.zone.variant_of(&track),
             None => title.race.zone.default_track(title.race.track),

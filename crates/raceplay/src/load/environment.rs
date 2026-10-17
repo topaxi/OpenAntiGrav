@@ -836,6 +836,41 @@ pub(super) fn zone_grade(
     grade
 }
 
+/// The Zone grade of a second release, laid over a circuit of this one. See
+/// [`crate::Options::zone_look_source`].
+///
+/// Opens `options.zone_look_source` as whichever title it is and runs that
+/// title's own [`zone_grade`] against it: its palette, stage ladder, stage
+/// textures and transition law, all read off its own disc. A source that will
+/// not open, or whose title ships no palette, leaves the circuit's own colours
+/// and says so.
+pub(super) fn borrowed_zone_grade(
+    options: &crate::Options,
+    track: &str,
+    report: &mut Vec<String>,
+) -> Option<crate::zone_grade::ZoneGrade> {
+    let source = options.zone_look_source.as_deref()?;
+    let opened = match oag_source::title::open_source(source, Vec::new(), Vec::new()) {
+        Ok(opened) => opened,
+        Err(error) => {
+            report.push(format!(
+                "zone look: {source} will not open ({error}) - the circuit keeps its own colours"
+            ));
+            return None;
+        }
+    };
+    let mut archives = opened.archives;
+    report.push(format!("zone look: borrowed from {}", opened.title.name));
+    zone_grade(
+        &mut archives,
+        opened.title.race,
+        oag_race::Mode::Zone,
+        options.zone_stage,
+        track,
+        report,
+    )
+}
+
 /// The shared texture every `cloudCube` sprite draws with - `oag_vex::cloud`
 /// names it; present in `Data.wad` per `cloud_ground_truth.rs`.
 const CLOUD_TEXTURE: &str = "Data\\Tex\\Cloud\\Wipeout_Clouds_D_128x64x4.mip";

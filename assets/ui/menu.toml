@@ -1278,6 +1278,21 @@ setting = "graphics.boost_zoom"
 values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# Wipeout HD's Zone look on a title whose own Zone is a dedicated circuit: Pulse and
+# Pure. **An enhancement of this project's, off by default** - a Zone race then
+# flies the ordinary circuit under HD's per-stage Zone palette, textures and
+# stage sweep, read off the player's own HD disc, instead of the title's authored
+# Zone circuit. The row is dropped where no HD source is found or the title
+# carries its own palette, by `Session::drop_unavailable_zone_look`. Read when a
+# race loads.
+[[page.entry]]
+kind = "choice"
+label = "HD ZONE LOOK"
+string_id = "OAG_GRAPHICS_ZONE_LOOK"
+setting = "graphics.zone_look"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over

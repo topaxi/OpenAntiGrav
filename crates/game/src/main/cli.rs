@@ -434,6 +434,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) craft_source: Option<String>,
 
+    /// A second disc image (Wipeout HD / Fury) whose Zone look a Zone race on a
+    /// title with none of its own (Pulse, Pure) wears over the ordinary circuit,
+    /// instead of flying that title's dedicated Zone circuit. See
+    /// `oag_raceplay::Options::zone_look_source`.
+    #[arg(long)]
+    pub(crate) zone_look_source: Option<String>,
+
     /// The `HUD Style` skin for this run, one of the title's own list (`HD`, `2097`,
     /// `WIP3OUT` on Wipeout HD and Omega), over the saved `display.hud_style`. A name
     /// the title does not list draws its default skin and says so in the loader report.

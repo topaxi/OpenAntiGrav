@@ -144,6 +144,7 @@ impl Pending {
             // one source, and `race::load` treats that as "craft comes from
             // the same place as the track". See `race::Options::craft_source`.
             craft_source: self.cli.craft_source.clone(),
+            zone_look_source: self.cli.zone_look_source.clone(),
             hud_style: self
                 .cli
                 .hud_style
@@ -347,6 +348,12 @@ impl Pending {
         definition.drop_unavailable_race_variant(title);
         // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
         definition.drop_unavailable_boost_zoom(title);
+        // The HD ZONE LOOK row exists where a Zone race has no palette of its own
+        // and an HD source is at hand: Pulse and Pure beside an HD disc.
+        let zone_look_source = oag_game::launcher::zone_look_source(&oag_game::launcher::survey(
+            &oag_source::source::candidates(),
+        ));
+        definition.drop_unavailable_zone_look(title, zone_look_source.is_some());
         // And the HUD STYLE row, where the disc authors the list: HD and Omega.
         definition.drop_unavailable_hud_style(title);
         // And the three rows the race box's own screens pick, on a title

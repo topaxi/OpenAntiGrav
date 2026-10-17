@@ -518,6 +518,16 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
+    /// Wear Wipeout HD/Fury's Zone look in a Zone race on a title whose own Zone
+    /// is a dedicated circuit (Pulse, Pure), read off the player's own HD disc.
+    /// **Off by default**: the title's authored Zone circuit stays the original
+    /// behaviour. Ignored where no HD source is found or the title carries its
+    /// own Zone palette. An enhancement of this project's, chosen and not
+    /// measured - see `oag_raceplay::Options::zone_look_source`. Read when a race
+    /// loads, so a change applies from the next race.
+    #[serde(default)]
+    pub zone_look: bool,
+
     /// Which of the original's three in-race camera perspectives to fly with.
     ///
     /// **The one setting on this page a race also writes.** SELECT cycles the
@@ -560,6 +570,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
+            zone_look: false,
             camera_view: default_camera_view(),
         }
     }
@@ -877,6 +888,14 @@ pub fn menu_seeds(
         (
             "graphics.boost_zoom",
             text(if settings.graphics.boost_zoom {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.zone_look",
+            text(if settings.graphics.zone_look {
                 "on"
             } else {
                 "off"

@@ -967,3 +967,45 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
          (held case reached {held_intensity})"
     );
 }
+
+/// **A borrowed HD Zone look races the ordinary circuit**, not the Zone twin:
+/// Pulse's `16_Track` with `zone_look_source` set loads the time-trial geometry,
+/// where without it the same Zone race loads `zone_track.vex`. See
+/// `Options::zone_look_source`.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_borrowed_hd_zone_look_keeps_the_ordinary_circuit() {
+    let (Some(pulse), Some(hd)) = (
+        image("data/images/pulse-psp-usa.chd"),
+        image("data/images/hdfury-ps3-eu-dec.iso"),
+    ) else {
+        return;
+    };
+    let track = oag_pulse::race::DEFAULT_TRACK;
+    let load_as = |mode, look: Option<&PathBuf>| {
+        race::load(&race::Options {
+            source: pulse.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            track: Some(track.to_string()),
+            zone_look_source: look.map(|path| path.display().to_string()),
+            ..race::Options::default()
+        })
+        .unwrap_or_else(|e| panic!("loading {track} as {mode:?}: {e:#}"))
+    };
+
+    let racing = load_as(oag_race::Mode::TimeTrial, None);
+    let authored = load_as(oag_race::Mode::Zone, None);
+    let borrowed = load_as(oag_race::Mode::Zone, Some(&hd));
+
+    assert_eq!(
+        borrowed.track_model.indices.len(),
+        racing.track_model.indices.len(),
+        "the borrowed look must fly the circuit that was picked"
+    );
+    assert_ne!(
+        borrowed.track_model.indices.len(),
+        authored.track_model.indices.len(),
+        "the authored Zone race must still fly the Zone twin"
+    );
+}

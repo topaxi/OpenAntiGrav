@@ -165,6 +165,24 @@ pub fn distinct_titles(rows: &[Candidate]) -> Vec<Candidate> {
         .collect()
 }
 
+/// The source whose Zone look a Zone race can borrow: the first playable row
+/// whose title ships one palette for the whole title
+/// ([`oag_title::ZonePalette::TitleWide`], Wipeout HD/Fury's), with its stage
+/// textures located. See `oag_raceplay::Options::zone_look_source`.
+#[must_use]
+pub fn zone_look_source(rows: &[Candidate]) -> Option<String> {
+    rows.iter()
+        .find(|row| {
+            row.playable().is_some_and(|title| {
+                matches!(
+                    title.race.zone_palette,
+                    Some(oag_title::ZonePalette::TitleWide(_))
+                ) && title.race.zone_stage_textures.is_some()
+            })
+        })
+        .map(|row| row.source.clone())
+}
+
 /// Whether `source` is an encrypted PS3 image no key opens, which a stated
 /// source gets the chooser's key prompt for instead of a bare error.
 ///

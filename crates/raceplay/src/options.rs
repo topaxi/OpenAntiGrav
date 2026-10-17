@@ -20,6 +20,17 @@ pub struct Options {
     /// supplies the livery, HUD, exhaust/flare and boost plume instead. See
     /// [`oag_source::remix::Remix`].
     pub craft_source: Option<String>,
+    /// A second release whose Zone look a Zone race wears, or `None` for the
+    /// title's own.
+    ///
+    /// **The `hd` value of the `zone look` setting**: a title with no Zone
+    /// palette of its own (Pulse, Pure) races the ordinary circuit it was
+    /// given, graded with this release's stage table, stage textures and
+    /// transition law instead of flying its dedicated Zone circuit. Ignored
+    /// outside a Zone race and on a title that ships its own palette.
+    /// Chosen, not measured: no original does this. See
+    /// [`Self::borrows_zone_look`].
+    pub zone_look_source: Option<String>,
     /// Directories to look in for downloadable content (`oag_source::dlc`), mounted
     /// behind `source`'s own archives.
     ///
@@ -1075,3 +1086,13 @@ pub use sighting::Sighting;
 
 /// `weapons_on` for [`Options`] and [`Setup`].
 mod weapons;
+
+impl Options {
+    /// Whether a Zone race on `title` wears [`Self::zone_look_source`]'s look.
+    #[must_use]
+    pub fn borrows_zone_look(&self, title: &oag_title::Title) -> bool {
+        self.mode == oag_race::Mode::Zone
+            && self.zone_look_source.is_some()
+            && title.race.zone_palette.is_none()
+    }
+}

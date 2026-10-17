@@ -416,7 +416,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         authored_fog,
         hd_bloom,
         omega_tonemap,
-        zone_grade,
+        mut zone_grade,
     } = environment::staging(
         &mut archives,
         &track,
@@ -426,6 +426,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    #[cfg(feature = "view")]
+    if zone_grade.is_none() && options.borrows_zone_look(title) {
+        zone_grade = environment::borrowed_zone_grade(options, &track, &mut report);
+    }
     #[cfg(feature = "view")]
     let spu_vertex_lights = engine_light::spu_vertex_lights_enabled(
         &mut archives,

@@ -143,6 +143,7 @@ impl Session {
     /// a rectangle. A stage that is not the front end leaves the menus where
     /// they are, which is what makes this safe to call from the frame loop.
     pub(crate) fn open_menus(&mut self) -> Result<()> {
+        self.sync_zone_look();
         let shell = self
             .shell
             .clone()
@@ -637,6 +638,20 @@ impl Session {
             .collect();
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::Tracks, &tracks);
+        }
+    }
+
+    /// Brings the shell's [`Shell::zone_look`] in step with `graphics.zone_look`: on
+    /// only where the booted title has no Zone palette of its own and an HD source
+    /// is at hand. Re-supplies CIRCUIT when that changed what Zone mode lists.
+    pub(crate) fn sync_zone_look(&mut self) {
+        let hd = oag_game::launcher::zone_look_source(&self.titles).is_some();
+        let Some(shell) = &mut self.shell else { return };
+        let borrowed =
+            self.settings.graphics.zone_look && hd && shell.title.race.zone_palette.is_none();
+        if shell.zone_look != borrowed {
+            shell.zone_look = borrowed;
+            self.resupply_tracks_for_mode();
         }
     }
 

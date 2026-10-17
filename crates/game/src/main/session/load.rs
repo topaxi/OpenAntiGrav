@@ -438,6 +438,13 @@ impl Session {
                 shell.title,
             );
         }
+        // And for the HD ZONE LOOK row: the first HD source this machine can open.
+        options.zone_look_source = self
+            .settings
+            .graphics
+            .zone_look
+            .then(|| oag_game::launcher::zone_look_source(&self.titles))
+            .flatten();
         // The same refresh, for the BOOST ZOOM row: a race reads it when it loads.
         options.boost_zoom = self
             .settings

@@ -185,6 +185,7 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "VISÃO DA CÂMERA", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CAMPO DE VISÃO", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "IMPULSO DO CAMPO DE VISÃO NO TURBO", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "ZOOM DO TURBO", human = false }
+OAG_GRAPHICS_ZONE_LOOK = { text = "VISUAL ZONE DO HD", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "INDICADOR DE DESEMPENHO", human = false }
 OAG_AUDIO_MUSIC_VOLUME = { text = "VOLUME DA MÚSICA", human = false }
 OAG_AUDIO_SFX_VOLUME = { text = "VOLUME DE SFX", human = false }

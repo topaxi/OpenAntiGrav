@@ -580,6 +580,20 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::zone_look_source`), so the next race.
+            "graphics.zone_look" => {
+                match text.as_str() {
+                    "on" => self.settings.graphics.zone_look = true,
+                    "off" => self.settings.graphics.zone_look = false,
+                    _ => {
+                        warn!("ignoring {setting} = {text:?}: expected on or off");
+                        return;
+                    }
+                }
+                // The CIRCUIT row under Zone offers every circuit while the look is
+                // borrowed, so it is re-supplied the way a MODE change does.
+                self.sync_zone_look();
+            }
             // Applied to the race already running, unlike the two rows above:
             // the original binds this to a button precisely so it can be changed
             // while flying, and a row that deferred it to the next race would be

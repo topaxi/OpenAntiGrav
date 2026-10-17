@@ -483,6 +483,19 @@ impl Definition {
         }
     }
 
+    /// Drops the HD ZONE LOOK row on a title that carries a Zone palette of its own
+    /// (`oag_title::RaceDefaults::zone_palette`) or when no HD source is at hand
+    /// (`hd_available`). Same once-before-read timing as
+    /// [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_zone_look(&mut self, title: &oag_title::Title, hd_available: bool) {
+        if title.race.zone_palette.is_none() && hd_available {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.zone_look"));
+        }
+    }
+
     /// Drops the HUD STYLE row on a title whose disc authors no `HUD Style` list
     /// (`oag_title::HudLayouts::skins`): Pulse, Pure and 2048. Same once-before-read
     /// timing as [`Self::drop_unavailable_boost_zoom`].
