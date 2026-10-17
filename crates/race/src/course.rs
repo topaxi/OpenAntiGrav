@@ -82,6 +82,9 @@ pub struct Course {
     /// ai_bound_left`, parallel to [`Self::positions`]. The lateral bound of a
     /// Repulser wave's sweep (`RepulserPool_SweepTargets`, `0x0886d5c8`).
     corridor_widths: Vec<f32>,
+    /// The spline points' light scales blended at each ring point, parallel to
+    /// [`Self::positions`] - what a craft's hull lights are scaled by there.
+    light_scales: Vec<[u8; 4]>,
     /// The alternate paths off the ring - see [`branch`].
     branches: Vec<Branch>,
     /// Every way round every fork - see [`route`].
@@ -174,6 +177,7 @@ impl Course {
         let mut paths = Vec::new();
         let mut centres = Vec::new();
         let mut corridor_widths = Vec::new();
+        let mut light_scales = Vec::new();
         let mut max_half_width = 0.0f32;
         let mut first = vec![None; ai.paths.len()];
         for &path_index in &ring {
@@ -183,6 +187,7 @@ impl Course {
                 positions.push(sample.pos);
                 centres.push(sample.centre);
                 corridor_widths.push(sample.corridor_width);
+                light_scales.push(sample.light_scale);
                 paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
                 max_half_width = max_half_width
                     .max(sample.half_widths.0)
@@ -222,6 +227,7 @@ impl Course {
             max_half_width,
             centres,
             corridor_widths,
+            light_scales,
             branches,
             routes,
         };
@@ -287,6 +293,16 @@ impl Course {
     #[must_use]
     pub fn centre(&self, index: usize) -> Option<Vec3> {
         self.centres.get(index).copied()
+    }
+
+    /// The four light-scale bytes at `index` - see [`Self::light_scales`].
+    ///
+    /// The nearest ring point's blend, where the original blends at the craft's
+    /// own spline parameter (`Spline_SampleSegment`): four samples to a
+    /// control-point interval keeps the two within one interval's step.
+    #[must_use]
+    pub fn light_scale(&self, index: usize) -> Option<[u8; 4]> {
+        self.light_scales.get(index).copied()
     }
 
     /// The alternate paths off the ring, in junction order - see [`Branch`].

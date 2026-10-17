@@ -68,10 +68,18 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // docs/ghidra/functions/psp-pulse-usa/scene-light.md.
     if scene.light.hull_ambient.w > 0.5 && in.lit > 0.5 {
         let n = normalize(out.normal);
-        var sum = scene.light.hull_ambient.rgb;
+        // The craft's own scales, `(byte * scale) >> 8` per colour byte as
+        // `SceneLight_BuildLightingList` packs them. The rig holds the bare
+        // bytes; `0.0` in the uniform is the default `255`, and a tunnel's
+        // spline points author `127`, which is what darkens the hull there.
+        let packed = u32(uniforms.hull_scale);
+        let ambient_scale = select(f32(packed & 255u), 255.0, packed == 0u);
+        let directional_scale = select(f32(packed >> 8u), 255.0, packed == 0u);
+        var sum = floor(floor(scene.light.hull_ambient.rgb * 255.0 + 0.5) * ambient_scale / 256.0) / 255.0;
         for (var i = 0u; i < 4u; i = i + 1u) {
             let l = scene.light.hull_direction[i];
-            sum = sum + scene.light.hull_diffuse[i].rgb * max(dot(n, l.xyz), 0.0) * l.w;
+            let diffuse = floor(floor(scene.light.hull_diffuse[i].rgb * 255.0 + 0.5) * directional_scale / 256.0) / 255.0;
+            sum = sum + diffuse * max(dot(n, l.xyz), 0.0) * l.w;
         }
         out.colour = vec4<f32>(clamp(sum, vec3<f32>(0.0), vec3<f32>(1.0)), in.colour.a);
         out.lit = 0.0;

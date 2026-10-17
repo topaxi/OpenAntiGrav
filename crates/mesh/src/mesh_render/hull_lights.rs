@@ -21,13 +21,19 @@
 //!
 //! # What is ours
 //!
-//! - **The scale is `255`.** The original's four scale bytes are per craft,
-//!   blended out of the spline points it sits over
-//!   (`oag_vex::track::SplinePoint::light_scale`), and a race does not carry
-//!   that blend to the renderer yet. `255` is what 455 of Talon's Junction's
-//!   862 points author; a craft over them reads `250` or `251` live, so this
-//!   is about 2 % bright there, and up to twice as bright in a tunnel that
-//!   authors `127`. Chosen, not measured.
+//! - **The scale is applied per craft in the shader, from the nearest ring
+//!   point.** The original's four scale bytes are per craft, blended out of
+//!   the spline points it sits over (`oag_vex::track::SplinePoint::light_scale`;
+//!   byte 0 scales the ambient, byte 1 the directionals - the tunnel authors
+//!   `[127, 127, 255, 255]`). The rig here is built at scale `256` (the bare
+//!   colour bytes) and `mesh.wesl` applies `(byte * scale) >> 8` per craft
+//!   from `oag_race::Course::light_scale`, which is how a craft darkens in a
+//!   tunnel. Which of the four bytes is which is read from the builder's two
+//!   scale arguments (ambient, then directional); the point-light pair is not
+//!   reproduced. The nearest ring point stands in for the original's blend at
+//!   the craft's own spline parameter. A draw with no scale reads `255`, about
+//!   2 % under the bare colours, which is what a craft over Talon's open road
+//!   reads live (`250` or `251`).
 //! - **Only a craft's hull takes it.** 16 of 113 lit-branch models carried a
 //!   light list live; the other 97 were never rebuilt, so the GE drew them
 //!   unlit. Which models those are is not mapped, so everything but the hull
@@ -74,7 +80,7 @@ impl HullLights {
     /// with a flat grey ambient (`0x30 * scale >> 8`) and one fixed light that
     /// this does not reproduce.
     #[must_use]
-    pub fn from_track(data: &[u8], nodes: &[vex::Node], scale: u8) -> Option<Self> {
+    pub fn from_track(data: &[u8], nodes: &[vex::Node], scale: u16) -> Option<Self> {
         let ambients = lighting::ambient_lights(data, nodes);
         let directionals = lighting::directional_lights(data, nodes);
         if ambients.is_empty() && directionals.is_empty() {
@@ -119,9 +125,17 @@ impl HullLights {
 /// `min(255, trunc(c * 255))`, times the scale, shifted right by eight, and
 /// read back by the GE as a byte.
 #[must_use]
-pub fn ge_channel(colour: f32, scale: u8) -> f32 {
+pub fn ge_channel(colour: f32, scale: u16) -> f32 {
     let byte = ((colour * 255.0) as u32).min(255);
     ((byte * u32::from(scale)) >> 8) as f32 / 255.0
+}
+
+/// A craft's two hull-light scale bytes as the one float `mesh.wesl` reads
+/// from the model uniform: `ambient | directional << 8`, integer-valued so it
+/// survives the trip exactly. `0.0` means the default `255` for both.
+#[must_use]
+pub fn pack_hull_scale(ambient: u8, directional: u8) -> f32 {
+    f32::from(u16::from(ambient) | u16::from(directional) << 8)
 }
 
 #[cfg(test)]
@@ -134,6 +148,19 @@ mod tests {
         // read live as LDC0 = (249, 232, 153).
         let bytes = [1.0, 0.9365, 0.619].map(|c| (ge_channel(c, 250) * 255.0).round() as u32);
         assert_eq!(bytes, [249, 232, 153]);
+    }
+
+    #[test]
+    fn a_hull_scale_packs_to_an_exact_integer_float() {
+        assert_eq!(pack_hull_scale(0, 0), 0.0);
+        assert_eq!(pack_hull_scale(127, 250), (127 + 250 * 256) as f32);
+    }
+
+    #[test]
+    fn the_bare_rig_darkens_to_the_tunnels_scale() {
+        // 16_Track's first light, 255 bare, at the tunnel's 127: 127 * 255 >> 8.
+        assert_eq!((ge_channel(1.0, 127) * 255.0).round() as u32, 126);
+        assert_eq!((ge_channel(1.0, 256) * 255.0).round() as u32, 255);
     }
 
     #[test]

@@ -50,7 +50,7 @@ pub(super) fn finish(
     if !pulse_psp {
         return;
     }
-    match mesh_render::HullLights::from_track(track_blob, &nodes, 255) {
+    match mesh_render::HullLights::from_track(track_blob, &nodes, 256) {
         Some(hull) => {
             loaded.report.push(format!(
                 "hull lights: the circuit's own, ambient {:?}, diffuse {:?}",

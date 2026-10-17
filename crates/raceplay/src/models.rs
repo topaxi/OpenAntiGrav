@@ -115,6 +115,28 @@ impl Race {
         self.sim.world.ships[slot].active
     }
 
+    /// The word a craft's hull-light scale is written to the model uniform as -
+    /// `oag_mesh::mesh_render::pack_hull_scale` of the ambient and directional
+    /// bytes the spline blends under the craft (`Craft_ApplyHullLightScale`,
+    /// `docs/ghidra/functions/psp-pulse-usa/scene-light.md`), or `0.0` (the
+    /// default `255`) for a craft the course has not located yet or a circuit
+    /// with no course.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_hull_scale(&self, slot: usize) -> f32 {
+        self.sim
+            .course
+            .as_ref()
+            .zip(self.sim.world.ships[slot].standing.course_index)
+            .and_then(|(course, index)| course.light_scale(index as usize))
+            .map_or(0.0, |[ambient, directional, ..]| {
+                oag_mesh::mesh_render::pack_hull_scale(ambient, directional)
+            })
+    }
+
     /// One model matrix per craft in play, the player's first.
     ///
     /// The player is index 0 and the seven opponents follow, which is the array

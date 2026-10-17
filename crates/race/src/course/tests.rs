@@ -340,3 +340,22 @@ fn a_craft_far_out_on_a_route_reads_progress_inside_the_span_it_replaces() {
         hint = Some(located.index);
     }
 }
+
+#[test]
+fn a_ring_point_carries_the_light_scale_the_spline_blends_there() {
+    let mut ai = square_track(2);
+    for path in &mut ai.paths {
+        for point in &mut path.points {
+            point.light_scale = [127, 127, 255, 255];
+        }
+    }
+    let course = Course::from_track(&ai, None).expect("a ring");
+    let scale = course.light_scale(course.len() / 2).expect("a ring point");
+    assert!(scale[0] >= 120 && scale[0] <= 127, "{scale:?}");
+    assert_eq!(scale[0], scale[1]);
+    assert_eq!(course.light_scale(course.len()), None);
+
+    let open = Course::from_track(&square_track(2), None).expect("a ring");
+    // The original's double truncation: a blend of 255s reads 251.
+    assert_eq!(open.light_scale(0).map(|s| s[0]), Some(251));
+}

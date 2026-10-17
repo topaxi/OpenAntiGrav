@@ -23,7 +23,10 @@ struct Uniforms {
     // (`slots::BOMB_FIRE`), a float the blast owns. Zero for every other draw.
     // Was padding until 2026-10-07.
     model_colour: f32,
-    _pad2: f32,
+    // Pulse's hull light scales, packed `ambient | directional << 8` as an
+    // integer-valued float; `0.0` is the default `255` for both. Written for a
+    // craft's hull alone. Was padding until 2026-10-17.
+    hull_scale: f32,
     // The previous simulation tick's `view_projection * model`, premultiplied.
     // **Deliberately not symmetric with the pair above**: fog and lighting
     // need world position, so the current camera and model stay separate;

@@ -591,13 +591,15 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
     ) {
-        self.write_hull(queue, view_projection, model, prev_mvp, None);
+        self.write_hull(queue, view_projection, model, prev_mvp, None, 0.0);
     }
 
     /// [`Self::write`] for a craft: `sun_occlusion_layer` names which layer
     /// of the frame's per-craft sun-occlusion array this hull samples - a
     /// craft under the `original` tier on Wipeout HD - or `None`, which is
     /// what every other drawable writes. See `oag_render::shadow::occlusion`.
+    /// `hull_scale` is [`mesh_render::pack_hull_scale`]'s word for Pulse's
+    /// hull lights, `0.0` for the default.
     #[track_caller]
     pub(super) fn write_hull(
         &self,
@@ -606,6 +608,7 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
+        hull_scale: f32,
     ) {
         self.write_uniforms(
             queue,
@@ -613,7 +616,7 @@ impl Drawable {
             model,
             prev_mvp,
             sun_occlusion_layer,
-            [0.0, 0.0],
+            [0.0, 0.0, hull_scale],
         );
     }
 
@@ -629,7 +632,14 @@ impl Drawable {
         prev_mvp: Mat4,
         clock: f32,
     ) {
-        self.write_uniforms(queue, view_projection, model, prev_mvp, None, [clock, 0.0]);
+        self.write_uniforms(
+            queue,
+            view_projection,
+            model,
+            prev_mvp,
+            None,
+            [clock, 0.0, 0.0],
+        );
     }
 
     /// [`Self::write_clocked`] for the Bomb's fireball, whose program also
@@ -651,7 +661,7 @@ impl Drawable {
             model,
             prev_mvp,
             None,
-            [clock, colour],
+            [clock, colour, 0.0],
         );
     }
 
@@ -663,7 +673,7 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
-        [clock, colour]: [f32; 2],
+        [clock, colour, hull_scale]: [f32; 3],
     ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
@@ -671,7 +681,7 @@ impl Drawable {
             sun_occlusion_layer: sun_occlusion_layer.map_or(0.0, |layer| layer as f32 + 1.0),
             model_clock: clock,
             model_colour: colour,
-            _pad2: 0.0,
+            hull_scale,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
         self.put_uniforms(queue, uniforms);
@@ -1072,7 +1082,8 @@ pub(crate) struct Uniforms {
     model_clock: f32,
     /// See `mesh_render`'s own mirror: `ColourAnim` on the Bomb's fireball.
     model_colour: f32,
-    _pad2: f32,
+    /// See `mesh_render`'s own mirror: Pulse's packed hull light scales.
+    hull_scale: f32,
     /// The previous tick's `view_projection * model`, premultiplied - one
     /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog
     /// and lighting need world position, velocity needs only clip position.

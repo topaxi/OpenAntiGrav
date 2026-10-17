@@ -125,6 +125,18 @@ the craft**. `16_Track`'s grid points read `255`, and the double truncation
 brings a blend of them to about `251`, against the live `250`. AI craft
 inside a tunnel read `133`: 231 of `16_Track`'s 862 points author `127`.
 
+**Wired 2026-10-17.** `oag_race::Course::light_scale` carries each ring point's
+blend, `Race::ship_hull_scale` reads it at the craft's `course_index`, and
+`mesh.wesl` applies `(byte * scale) >> 8` per craft to the bare rig (built at
+scale 256). Byte 0 scales the ambient and byte 1 the directionals - the order
+is read from the builder's two scale arguments and fits the tunnel's authored
+`[127, 127, 255, 255]` (the last two being the point-light pair, not
+reproduced); not confirmed live. The nearest ring point stands in for the
+blend at the craft's own parameter. Result: a Pulse craft darkens in a tunnel
+as the original's does. Checked against HD and the others: HD's darkening is
+its own sun-occlusion mechanism (`ship-sun-occlusion.md`); Pure authors no
+hull light rig, so it keeps its stand-in lighting (checked, differs).
+
 Confidence **85** for the copy and the accumulate (bodies read, writers
 named live), **75** for `Spline_SampleSegment`'s role (the basis constants
 and the call order are read; the caller that selects the segment is not).

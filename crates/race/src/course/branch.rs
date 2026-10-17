@@ -46,6 +46,7 @@ pub(super) struct Sample {
     pub(super) centre: Vec3,
     pub(super) corridor_width: f32,
     pub(super) half_widths: (f32, f32),
+    pub(super) light_scale: [u8; 4],
 }
 
 /// Every sample of `path`, [`super::Course::STEPS_PER_SEGMENT`] to a
@@ -66,6 +67,7 @@ pub(super) fn sample_path(path: &oag_vex::track::Path) -> Vec<Sample> {
                     centre: (left + right) * 0.5,
                     corridor_width: sample.ai_bound_right - sample.ai_bound_left,
                     half_widths: (sample.half_width_left, sample.half_width_right),
+                    light_scale: sample.light_scale,
                 });
             }
         }
