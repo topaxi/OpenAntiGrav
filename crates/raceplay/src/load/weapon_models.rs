@@ -85,10 +85,27 @@ pub(super) fn load(
             }
         };
     }
-    match mesh::build_with_textures(entry, &blob, None) {
+    // **A PS2 weapon model's texture block is empty**; its textures are the set
+    // in the archive entry before it, the same directory-position rule the hull
+    // and the plume answer to (`docs/formats/ps2-texture.md`). Without it the
+    // model draws untextured, which on the Rocket is a body that cannot be seen.
+    let set = (archives.layout.platform == oag_assets::Platform::Ps2)
+        .then(|| {
+            let blob = archives.read_preceding(entry).ok()?;
+            mesh::Ps2TextureSet::parse(&blob).ok()
+        })
+        .flatten();
+    match mesh::build_with_textures(entry, &blob, set.as_ref()) {
         Ok(model) => {
+            let skin = set.as_ref().map_or(String::new(), |set| {
+                format!(
+                    ", {} of {} texture(s) from the preceding archive entry",
+                    set.decoded_count(),
+                    set.entry_count()
+                )
+            });
             report.push(format!(
-                "{entry}: {} triangle(s), radius {:.2} - {fallback} is this model, \
+                "{entry}: {} triangle(s), radius {:.2}{skin} - {fallback} is this model, \
                  not a billboard",
                 model.indices.len() / 3,
                 model.radius
