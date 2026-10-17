@@ -1,8 +1,8 @@
 //! What Pulse on the PSP draws differently from every other source, measured
 //! live on PPSSPP: the hull's GE lights and the bloom's stencil-stamped glow
 //! mask. Neither has been measured on the PS2 port, Pure or any later title,
-//! so both stay behind [`is_pulse_psp`]. The Quake's road ripple joins them:
-//! it is read off the PSP executable and moves PSP-shaped GE batches.
+//! so both stay behind [`is_pulse_psp`]. The Quake's road ripple is read off the
+//! PSP executable and carried to the PS2 by the `road_ripple` rule.
 //!
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
@@ -25,7 +25,7 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 /// the PS2 shares; everything else is a no-op when `pulse_psp` is false.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (pulse_psp, circuit_fx): (bool, bool),
+    (pulse_psp, circuit_fx, road_ripple): (bool, bool, bool),
     track_blob: &[u8],
     (archives, track): (&mut oag_assets::Archives, &str),
 ) {
@@ -33,6 +33,19 @@ pub(super) fn finish(
     if circuit_fx {
         place_scenery_fx(loaded, track_blob, &nodes);
         place_weather(loaded, track_blob, &nodes, archives, track);
+    }
+    if road_ripple {
+        loaded.ripples = super::ripple::build(
+            track_blob,
+            &loaded.setup.ai,
+            loaded.setup.course.as_ref(),
+            [
+                Some(&loaded.track_model),
+                loaded.pad_model.as_ref(),
+                loaded.weapon_pad_model.as_ref(),
+            ],
+            &mut loaded.report,
+        );
     }
     if !pulse_psp {
         return;
@@ -49,18 +62,6 @@ pub(super) fn finish(
             .report
             .push("hull lights: the circuit authors none; hulls keep the stand-in rig".into()),
     }
-
-    loaded.ripples = super::ripple::build(
-        track_blob,
-        &loaded.setup.ai,
-        loaded.setup.course.as_ref(),
-        [
-            Some(&loaded.track_model),
-            loaded.pad_model.as_ref(),
-            loaded.weapon_pad_model.as_ref(),
-        ],
-        &mut loaded.report,
-    );
 
     super::glow_mask::stamp_models(loaded, false);
     loaded

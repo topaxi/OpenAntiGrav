@@ -94,6 +94,12 @@ fn a_ps2_circuit_plays_its_placed_effects_and_cuts_to_its_cameras() {
         loaded.report.join("\n")
     );
     assert!(has("destroy camera: 8 authored Camera node(s)"));
+    assert!(
+        loaded.ripples.track.as_ref().is_some_and(|r| !r.is_empty()),
+        "{}",
+        loaded.report.join("\n")
+    );
+    assert!(has("quake ripple: 404 of 404 road span(s) placed"));
     let stats = loaded
         .track_stats
         .as_ref()

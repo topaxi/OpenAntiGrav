@@ -68,6 +68,22 @@ const HEADER: usize = 0x10;
 /// Bytes per record.
 const RECORD: usize = 0x80;
 
+/// Where a record's per-vertex parameters are found.
+///
+/// The record is the same on both consoles; only `+0x48` differs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Parameters {
+    /// PSP: `+0x48` is relative to itself.
+    SelfRelative,
+    /// PS2: `+0x48` is a byte offset into one pool of `f32`s that starts where
+    /// the record table ends, laid end to end in table order, four bytes a
+    /// vertex. Measured on all 32 PS2 circuit files: every record's offset is
+    /// the previous one's plus four times its vertex count, and every value is
+    /// in `0..=1` or `0xffffffff`. The PS2 `+0x44` is not a position pointer
+    /// and is not read.
+    Pool,
+}
+
 /// A missing neighbour.
 const NONE: u16 = 0xffff;
 
@@ -129,6 +145,8 @@ pub fn spans(file: &[u8], node: &Node) -> Result<Vec<Span>> {
             len: file.len(),
         });
     }
+    let layout = parameter_layout(file, records, count);
+    let pool = end;
     let vec3 = |at: usize| [le.f32(file, at), le.f32(file, at + 4), le.f32(file, at + 8)];
     let relative = |at: usize| at.checked_add_signed(le.u32(file, at) as i32 as isize);
     let link = |index_at: usize, value_at: usize| {
@@ -144,8 +162,13 @@ pub fn spans(file: &[u8], node: &Node) -> Result<Vec<Span>> {
                 len: file.len(),
             };
             let batch = relative(r + 0x4c).ok_or(out_of_bounds("quake span batch"))?;
-            let first_position = relative(r + 0x44).ok_or(out_of_bounds("quake span vertices"))?;
-            let parameters_at = relative(r + 0x48).ok_or(out_of_bounds("quake span parameters"))?;
+            let (first_position, parameters_at) = match layout {
+                Parameters::SelfRelative => (
+                    relative(r + 0x44).ok_or(out_of_bounds("quake span vertices"))?,
+                    relative(r + 0x48).ok_or(out_of_bounds("quake span parameters"))?,
+                ),
+                Parameters::Pool => (0, pool + le.u32(file, r + 0x48) as usize),
+            };
             let stride = usize::from(le.u16(file, r + 0x3c));
             let vertex_count = usize::from(le.u16(file, r + 0x50));
             let last = parameters_at + vertex_count.saturating_sub(1) * stride + 4;
@@ -177,6 +200,21 @@ pub fn spans(file: &[u8], node: &Node) -> Result<Vec<Span>> {
             })
         })
         .collect()
+}
+
+/// Which console wrote the table: a first record whose batch is a VIF packet is
+/// the PS2's. Keyed on the data, never on a title.
+fn parameter_layout(file: &[u8], records: usize, count: usize) -> Parameters {
+    let le = ByteOrder::Little;
+    if count == 0 {
+        return Parameters::SelfRelative;
+    }
+    let at = records + 0x4c;
+    let batch = at.checked_add_signed(le.u32(file, at) as i32 as isize);
+    match batch.filter(|b| b + 0x0c <= file.len()) {
+        Some(b) if crate::vex::is_vif_batch(le.u16(file, b + 0x0a)) => Parameters::Pool,
+        _ => Parameters::SelfRelative,
+    }
 }
 
 /// The offset of every batch header in one mesh payload's list, in the order

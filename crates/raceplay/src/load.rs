@@ -829,6 +829,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             .circuit_effects
             .applies(archives.layout.platform);
     #[cfg(feature = "view")]
+    let road_ripple = vex_geometry && title.looks.road_ripple.applies(archives.layout.platform);
+    #[cfg(feature = "view")]
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let pulse_ps2_data =
         vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
@@ -1108,7 +1110,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     pulse_psp::finish(
         &mut loaded,
-        (pulse_psp, circuit_fx),
+        (pulse_psp, circuit_fx, road_ripple),
         &track_blob,
         (&mut archives, &track),
     );

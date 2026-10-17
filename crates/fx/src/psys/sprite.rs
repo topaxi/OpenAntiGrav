@@ -17,10 +17,11 @@
 //!
 //! # Where a sprite comes from
 //!
-//! PSP only: [`oag_pob::texture`] reads the sprite a `.pob` embeds
-//! right after an emitter's record. A PS2 `.pob` embeds none, and Wipeout
-//! HD ships its sprites as separate `.gtf` files this module does not load
-//! yet; both keep the procedural profile in `psys.wesl`, unchanged.
+//! PSP: [`oag_pob::texture`] reads the sprite a `.pob` embeds right after an
+//! emitter's record. A PS2 `.pob` embeds none but names the sprite by path
+//! (`Data\Psys\Tex\<stem>.tga`), which resolves on the PS2 disc as the `.pct`
+//! entry ([`Sprite::from_ps2`]). HD's `.gtf` sprites load for the effects its
+//! title lists; anything unread keeps the procedural profile in `psys.wesl`.
 //!
 //! # The atlas
 //!
@@ -105,6 +106,18 @@ impl Sprite {
             width: texture.width,
             height: texture.height,
             rgba: rgba.into_iter().flatten().collect::<Vec<u8>>().into(),
+        })
+    }
+
+    /// A PS2 `.pct` texture, the sprite a PS2 `.pob` names by path and embeds
+    /// none of. `None` for a blob [`oag_texture::ps2_texture`] does not read.
+    #[must_use]
+    pub fn from_ps2(blob: &[u8]) -> Option<Self> {
+        let texture = oag_texture::ps2_texture::parse(blob).ok()?;
+        Some(Self {
+            width: texture.width,
+            height: texture.height,
+            rgba: texture.to_rgba().into(),
         })
     }
 

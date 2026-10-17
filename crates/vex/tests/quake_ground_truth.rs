@@ -214,3 +214,73 @@ fn neighbour_links_are_distance_exact() {
         );
     }
 }
+
+/// The PS2 disc's span tables keep their parameters in one pool past the record
+/// table (`quake::Parameters::Pool`): every record's offset is the previous
+/// one's plus four bytes a vertex, every value is in `0..=1` or pinned, each
+/// span names a batch whose decoded vertex count is its own, and that batch is
+/// a VIF packet.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn ps2_parameters_lie_in_one_pool_of_unit_values() {
+    let Some(image) = oag_testdata::image("data/images/pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let mut checked = 0;
+    for n in 1..=16 {
+        for file in ["track.vex", "track_reversed.vex"] {
+            let name = format!("Data\\Environments\\{n:02}_Track\\{file}");
+            let Ok(blob) = archives.read_name(&name) else {
+                continue;
+            };
+            let nodes = vex::nodes(&blob).expect("nodes");
+            let node = vex::nodes_by_class(&nodes, quake::CLASS_QUAKE)
+                .next()
+                .expect("a Quake node");
+            let spans = quake::spans(&blob, node).expect("spans");
+            let payload = node.payload();
+            let u32_at = |at: usize| u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
+            let pool = payload.start + 0x10 + spans.len() * 0x80;
+            let mut next = 0usize;
+            for (i, span) in spans.iter().enumerate() {
+                let record = payload.start + 0x10 + i * 0x80;
+                assert_eq!(
+                    u32_at(record + 0x48) as usize,
+                    next,
+                    "{name}: span {i}'s pool offset"
+                );
+                next += span.parameters.len() * 4;
+                for (k, parameter) in span.parameters.iter().enumerate() {
+                    let at = pool + u32_at(record + 0x48) as usize + k * 4;
+                    match parameter {
+                        Some(p) => assert!((-1e-4..=1.0001).contains(p), "{name}: span {i}: {p}"),
+                        None => assert_eq!(u32_at(at), u32::MAX, "{name}: span {i}"),
+                    }
+                }
+            }
+            let (mut found, mut vertices) = (0, std::collections::BTreeMap::new());
+            let classes = vex::classes_of(&blob).expect("classes");
+            for class in [classes.mesh, classes.speedup_pad, classes.weapon_pad] {
+                for n in nodes.iter().filter(|n| Some(n.class_id) == class) {
+                    let body = &blob[n.payload()];
+                    for list in [0u8, 1] {
+                        let batches = vex::mesh_batches(body, list).expect("batches");
+                        for (batch, at) in batches.iter().zip(quake::batch_offsets(body, list)) {
+                            vertices.insert(n.payload().start + at, batch.vertices.len());
+                        }
+                    }
+                }
+            }
+            for span in &spans {
+                if let Some(&count) = vertices.get(&span.batch) {
+                    assert_eq!(count, span.parameters.len(), "{name}: vertex count");
+                    found += 1;
+                }
+            }
+            assert_eq!(found, spans.len(), "{name}: spans on the road mesh");
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 32);
+}

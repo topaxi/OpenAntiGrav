@@ -143,6 +143,7 @@ pub(super) fn particle_effect(
         oag_assets::Platform::Vita => Some("gxt"),
         oag_assets::Platform::Ps4 => Some("gnf"),
         oag_assets::Platform::Ps3 if gtf_sprites => Some("gtf"),
+        oag_assets::Platform::Ps2 => Some("pct"),
         _ => None,
     };
     let (mut sprites, mut absent) = (0usize, Vec::new());
@@ -157,6 +158,8 @@ pub(super) fn particle_effect(
             )
         } else if ext == "gtf" {
             format!("/data/psys/tex/{stem}.gtf")
+        } else if ext == "pct" {
+            oag_pulse::ps2_texture_name(&oag_pulse::ps2_strip_build_prefix(authored))?
         } else {
             format!(r"{dir}\Tex\{stem}.{ext}")
         };
@@ -165,6 +168,8 @@ pub(super) fn particle_effect(
                 psys::sprite::Sprite::from_gnf(&blob)
             } else if ext == "gtf" {
                 psys::sprite::Sprite::from_gtf(&blob)
+            } else if ext == "pct" {
+                psys::sprite::Sprite::from_ps2(&blob)
             } else {
                 psys::sprite::Sprite::from_gxt(&blob)
             }

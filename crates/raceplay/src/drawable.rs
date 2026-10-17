@@ -122,7 +122,7 @@ pub(super) struct Drawable {
     /// [`Self::bound`], found on first use.
     bound: std::sync::OnceLock<(Vec3, f32)>,
     /// The road spans a Quake ripples through this model - see
-    /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
+    /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP or PS2 circuit.
     ripple: std::sync::Mutex<Option<oag_render::ripple::Ripple>>,
     /// Each weapon pad's own position in HD's colour cycle - see
     /// [`Self::glow_weapon_pads`]. Empty on every drawable but HD's pads.

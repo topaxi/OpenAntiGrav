@@ -710,6 +710,9 @@ pub struct Looks {
     /// `ParticleSystem` nodes, its `<Weather>` element and its `Camera` nodes
     /// (the destroy camera's stations). Keyed on the race's own archive.
     pub circuit_effects: Rule,
+    /// The Quake's road ripple: the circuit's `Quake` span table moving the
+    /// road's vertices under the wave. Keyed on the race's own archive.
+    pub road_ripple: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// The front end never waits at its language picker on a fresh run: the
@@ -744,6 +747,7 @@ impl Looks {
             measured_draws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,
+            road_ripple: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,

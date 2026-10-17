@@ -33,10 +33,10 @@
 //! Each of these is authored in files this module already parses, and each
 //! would be a visible difference on some effect:
 //!
-//! - **Sprites on the PS2 and HD.** A PSP `.pob`'s own sprite is sampled, and
-//!   2048's `.gxt` ones through [`Effect::parse_with`] - see [`sprite`] and
-//!   [`streak`]. A PS2 `.pob` embeds none and HD's `.gtf` are not loaded, so
-//!   those draw the procedural falloff in `psys.wesl`.
+//! - **Sprites on HD.** A PSP `.pob`'s own sprite is sampled, and 2048's
+//!   `.gxt` and the PS2's `.pct` ones through [`Effect::parse_with`] - see
+//!   [`sprite`] and [`streak`]. HD's `.gtf` load only for the effects its title
+//!   lists; the rest draw the procedural falloff in `psys.wesl`.
 //! - The animated-attribute selectors `1`, `3`, `4` and `6`, which nothing on
 //!   the Pulse discs authors.
 
