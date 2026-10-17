@@ -704,6 +704,12 @@ pub struct Looks {
     /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
     pub measured_draws: Rule,
+    /// Pulse's particle laws, read off the PSP executable: the extent law that
+    /// places a spawn over its emitter's shape, the streak strips, the sprite
+    /// frame advance, the run law, templates and rotation (`psys::Effect`'s
+    /// `without_extents` and `without_pulse_psp_draw` take them away). Keyed on
+    /// the race's own archive.
+    pub particle_laws: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.
     pub ps2_glow_mask: Rule,
     /// What a circuit's own `.vex` authors for the race to play: its placed
@@ -745,6 +751,7 @@ impl Looks {
             laid_pose_scaled: Rule::UNREAD,
             laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
+            particle_laws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,

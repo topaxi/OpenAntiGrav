@@ -883,3 +883,34 @@ fn with_default_difficulty_overrides_pulses_own_medium_default() {
         .with_default_difficulty(Difficulty::Easy);
     assert_eq!(hd_default.difficulty(), Difficulty::Easy);
 }
+
+/// `GridSummary::medal_tier` at every boundary `GridSelection_PopulateTiles`
+/// (`0x088de630`) compares against.
+#[test]
+fn a_tiers_medal_follows_its_points_against_required_and_maximum() {
+    let tier = |max: u32, required: u32, earned: u32| {
+        GridSummary {
+            max_points: max,
+            required_points: required,
+            points_earned: earned,
+            ..GridSummary::empty()
+        }
+        .medal_tier()
+    };
+    // max 24, required 12: halfway is 18.
+    assert_eq!(tier(24, 12, 0), None);
+    assert_eq!(tier(24, 12, 11), None);
+    assert_eq!(tier(24, 12, 12), Some(Medal::Bronze));
+    assert_eq!(tier(24, 12, 17), Some(Medal::Bronze));
+    assert_eq!(tier(24, 12, 18), Some(Medal::Silver));
+    assert_eq!(tier(24, 12, 23), Some(Medal::Silver));
+    assert_eq!(tier(24, 12, 24), Some(Medal::Gold));
+    // An odd span truncates: max 30, required 15 gives (15 / 2) + 15 = 22.
+    assert_eq!(tier(30, 15, 21), Some(Medal::Bronze));
+    assert_eq!(tier(30, 15, 22), Some(Medal::Silver));
+    // Nothing required (grid15's FE_NA): any point is at least bronze.
+    assert_eq!(tier(48, 0, 1), Some(Medal::Bronze));
+    assert_eq!(tier(48, 0, 23), Some(Medal::Bronze));
+    assert_eq!(tier(48, 0, 24), Some(Medal::Silver));
+    assert_eq!(tier(48, 0, 48), Some(Medal::Gold));
+}

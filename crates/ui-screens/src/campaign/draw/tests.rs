@@ -3,6 +3,7 @@
 //! model-level tests the same way `draw.rs` itself was, under the
 //! 1,000-line rule (`scripts/check-file-size.py`).
 
+mod tier_medal;
 mod tint;
 
 use super::*;

@@ -1284,11 +1284,8 @@ outline and its padlock are never the same brightness, by design: the
 outline is deliberately dimmer than what will draw over it. Layer 2 (the
 medal swatch) reuses the same three literals `crate::campaign::draw::medal_argb`
 already carries (`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`), picked by a
-points-vs-threshold comparison this pass read but did not carry into this
-project's own `medal_tint` (still `medal_argb(Gold)` always - see that
-function's own "chosen, not measured" doc, now itself only half right: which
-colour is still chosen, but *whether* it varies by tier is now known and
-this build does not yet implement it). Confidence **90** (decompile literal,
+points-vs-threshold comparison - recovered in full and implemented
+2026-10-17, see "The tier's medal colour" below. Confidence **90** (decompile literal,
 consistent with `grid-selection-page1-grid0-unlocked.png`'s own dim
 cyan-teal outline and bright padlock).
 
@@ -1508,7 +1505,10 @@ for column in 0..3:                                          # the four tiles on
     pointsEarned = cached_points_earned[grid]
     if pointsEarned != 0:                                     # this grid has any points of its own
         GridController_ClearTileFlags(widget, LOCK_LAYER, column, 0, VISIBLE)       # hide the lock unconditionally
-        GridController_SetTileColor(widget, COLOUR_LAYER, column, 0, medal_tier_colour(pointsEarned, ...))
+        tier = medal tier of (pointsEarned, pointsPossible, requiredPoints)   # inline, no callee - see "The tier's medal colour" below
+        if tier is some:
+            GridController_SetTileColor(widget, COLOUR_LAYER, column, 0, fade_alpha<<24 | table[tier] & 0xffffff)
+            GridController_SetTileFlags(widget, COLOUR_LAYER, column, 0, VISIBLE)
 ```
 
 This last `if pointsEarned != 0` check runs **unconditionally after the
@@ -1559,7 +1559,70 @@ assumption would show the wrong lock state without actually being ungated
 reproduces the shipped ladder" (arithmetic invariant against the existing
 12/16/20/24/28 table).
 
-**`GridSelection_CommitSelection` (`0x088de180`, word 39 of `GridSelection`'s
+**### The tier's medal colour: perfect is gold, halfway past required is silver, required is bronze (2026-10-17, `medal-tier-colour`)
+
+There is no `medal_tier_colour` callee: the pseudocode above used that as a
+placeholder. A headless decompile of `GridSelection_PopulateTiles`
+(`0x088de630`) shows the tier pick inline, on the three cached `u16` arrays
+`GridSelection_PopulateGrids` (`0x088de380`) fills per grid:
+
+| Screen offset | Filled with |
+| --- | --- |
+| `+0xf4` | `Grid_PointsEarned(grid)` (`0x088c048c`) |
+| `+0xf8` | `Grid_PointsPossible(grid)` (`0x088c0570`), `3 x cellCount` |
+| `+0xfc` | `grid->RequiredPoints` (`+0xa4`) |
+
+```
+earned, possible, required = +0xf4[i], +0xf8[i], +0xfc[i]
+if earned != 0:
+    ClearTileFlags(widget, 4, column, 0, VISIBLE)           # lock hidden, whatever the tier
+    tier = 0xff
+    if earned == possible:                                  tier = 0   # gold
+    elif earned < (int)(possible - required) / 2 + required:
+        if required <= earned:                              tier = 2   # bronze
+    else:                                                   tier = 1   # silver
+    if tier != 0xff:
+        table = { 0xfffaeb38, 0xffdae3e4, 0xffdf942f }      # built on the stack, 0x088de8f4..0x088de908
+        SetTileColor(widget, 2, column, 0, table[tier] & 0xffffff | (int)(fade * 255) << 24)
+        SetTileFlags(widget, 2, column, 0, VISIBLE)
+```
+
+So a tier is gold only when every cell holds gold, silver from the point
+halfway between `RequiredPoints` and the maximum, bronze from
+`RequiredPoints`, and **draws no swatch at all** below `RequiredPoints` even
+though its points still hide the lock glyph. The halfway mark is a signed
+`div` by two, truncating. On the authored ladder above:
+
+| Grid | Bronze from | Silver from | Gold at |
+| --- | ---: | ---: | ---: |
+| `grid0` | 12 | 18 | 24 |
+| `grid1` | 16 | 23 | 30 |
+| `grid2` | 20 | 28 | 36 |
+| `grid3` | 24 | 33 | 42 |
+| `grid4`..`grid14` | 28 | 38 | 48 |
+| `grid15` | 1 | 24 | 48 | No swatch survives from an earlier page:
+`GridController_HideAllTiles` (`0x088a34c8`), called at the top of every
+populate, clears the visible flag on layers 1, 2 and 4 of every tile
+(`GridController_ClearTileFlags(widget, layer, x, y, 4)` for each) before
+the loop sets any.
+
+`CellSelection_PopulateGrid` (`0x088d5f50..0x088d5f64`) builds the same
+three immediates for a cell's own medal, so `medal_argb` is the measured
+swatch colour on both screens, not a borrowing from the `Target0..2 Image`
+swatches (which author the same values).
+
+**PS2: ported.** `SCES_547.48`'s `FUN_001b6490`, found through the
+twelve-byte table at `.data` `0x2b48f8`, is the same function line for line,
+with every screen offset shifted by four (`Locked` read at `+0xb0`, arrays
+at `+0xf8`/`+0xfc`/`+0x100`); see
+[`../ps2-pulse-eu/grid-selection.md`](../ps2-pulse-eu/grid-selection.md).
+
+Confidence **90** for the rule: an unambiguous decompile with literal
+constants, and the PS2 build agrees body for body. Not runtime-verified
+(no capture holds a profile with a medalled tier), so short of 95.
+`oag_ui_screens::campaign::GridSummary::medal_tier` implements it.
+
+`GridSelection_CommitSelection` (`0x088de180`, word 39 of `GridSelection`'s
 vtable at `0x08ad0064`, positionally confirmed the same `read_memory` way
 `CellSelection`'s was - word 9 at this address decodes to
 `GridSelection_Update` and word 29 to `GridSelection_OnEnter`, both already
@@ -2100,6 +2163,7 @@ dictionary; expand `<x y="...">` by looking `x` and `y` up as `xs`/`ys`.
 | `0x088de180` | `GridSelection_CommitSelection` | 82 |
 | `0x088de630` | `GridSelection_PopulateTiles` | 82 |
 | `0x088de320` | `GridSelection_FindTileAt` | 80 |
+| `0x088a34c8` | `GridController_HideAllTiles` | 82 |
 | `0x08809980` | `Profile_DifficultyRC` | 85 |
 | `0x088098f0` | `Profile_SetDifficultyRC` | 85 |
 | `0x088d6430` | `CellSelection_Update` | 85 |

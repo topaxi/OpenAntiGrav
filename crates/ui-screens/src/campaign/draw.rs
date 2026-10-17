@@ -12,7 +12,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{Fill, Image, Text, argb_to_rgba};
 
-use super::{CellSelection, GRIDS_PER_PAGE, GridSelection, Layout, hex_rect};
+use super::{CellSelection, GRIDS_PER_PAGE, GridSelection, GridSummary, Layout, hex_rect};
 
 #[cfg(test)]
 mod tests;
@@ -70,6 +70,7 @@ pub fn grid_draw_list(
     let page = model.page();
     let slot = model.slot();
     for image in &screen.images {
+        let mut tier_medal = None;
         if let Some(name) = image.name.as_deref()
             && let Some(slot_index) = hex_slot_of(name, "Medal_", 1)
                 .or_else(|| hex_slot_of(name, "Outline_", 1))
@@ -78,17 +79,19 @@ pub fn grid_draw_list(
             if page * GRIDS_PER_PAGE + slot_index >= model.grids().len() {
                 continue;
             }
-            if name.starts_with("Medal_")
-                && !model
+            if name.starts_with("Medal_") {
+                // The medal-colour swatch draws only once the tier's points
+                // reach a medal tier - `GridSummary::medal_tier`. Every
+                // tier's base hex (`Outline_x_y`) still draws regardless -
+                // see the module doc.
+                let Some(medal) = model
                     .grids()
                     .get(page * GRIDS_PER_PAGE + slot_index)
-                    .is_some_and(|grid| grid.points_earned > 0)
-            {
-                // The medal-colour swatch draws only once the tier has
-                // earned any points of its own - `GridSelection_PopulateTiles`'s
-                // own `if pointsEarned != 0` branch. Every tier's base hex
-                // (`Outline_x_y`) still draws regardless - see the module doc.
-                continue;
+                    .and_then(GridSummary::medal_tier)
+                else {
+                    continue;
+                };
+                tier_medal = Some(medal);
             }
             if name.starts_with("Lock_")
                 && !model.tier_shows_lock(page * GRIDS_PER_PAGE + slot_index)
@@ -115,7 +118,14 @@ pub fn grid_draw_list(
             .as_deref()
             .is_some_and(|n| n.starts_with("Medal_"))
         {
-            out.push(tinted_medal_draw(image, placed, medal_tint(0)));
+            if let Some(medal) = tier_medal {
+                let hex = image
+                    .name
+                    .as_deref()
+                    .and_then(|n| hex_slot_xy(n, "Medal_"))
+                    .and_then(|(x, y)| hex_rect(screen, x as usize, y as usize, sprites));
+                out.push(tinted_medal_draw(image, placed, hex, medal_argb(medal)));
+            }
             continue;
         }
         if image
@@ -283,6 +293,7 @@ pub fn cell_draw_list(
             out.push(tinted_medal_draw(
                 image,
                 placed,
+                hex_rect(screen, x as usize, y as usize, sprites),
                 model.medal_at(x, y).map_or(0xffff_ffff, medal_argb),
             ));
             continue;
@@ -623,14 +634,13 @@ pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
-/// `gold`/`silver`/`bronze[medal]` - `CellSelection_PopulateGrid`'s own
-/// `draw_medal_colour`. **Chosen, not measured**: the medal-colour swatch's
-/// real ARGB was not traced (no PPSSPP capture exercises it - every frame
-/// this build has is a zero-medal profile). Reused here from the panel's
-/// own `Target0..2 Image` swatches - `docs/ui/campaign-screens.md`'s
-/// measured table - since they are the same three-tier colour concept
-/// authored on the same screen, not an independently measured value for the
-/// hex fill itself.
+/// The medal-colour swatch's own ARGB: gold, silver, bronze. Both
+/// `CellSelection_PopulateGrid` (`0x088d5f50..64`) and
+/// `GridSelection_PopulateTiles` (`0x088de8f4..908`) build this three-entry
+/// table from immediates and index it by medal ordinal; PS2 reads the same
+/// twelve bytes from `.data` (`0x2b34c8`, `0x2b48f8`). The alpha byte is
+/// replaced by the screen's fade at draw time. The panel's `Target0..2
+/// Image` swatches author the same three values.
 pub(super) fn medal_argb(medal: Medal) -> u32 {
     match medal {
         Medal::Gold => 0xfffa_eb38,
@@ -639,21 +649,25 @@ pub(super) fn medal_argb(medal: Medal) -> u32 {
     }
 }
 
-/// `Grid Selection`'s own tint for a tier that has scored anything at all -
-/// `medal_tier_colour(pointsEarned, ...)`'s exact mapping was not traced, so
-/// this always answers gold's own swatch. **Chosen, not measured** twice
-/// over: whether to tint at all is [`GridSelection`]'s own `points_earned >
-/// 0` gate (measured, `GridSelection_PopulateTiles`), but which of the
-/// three colours is not.
-fn medal_tint(_points_earned: u32) -> u32 {
-    medal_argb(Medal::Gold)
-}
-
 /// A `Medal_x_y` swatch, tinted `argb` in place of the image's own authored
 /// colour (always `0xffffffff` on both screens - neither XML tints per
 /// medal itself, since the tint is a runtime choice).
-pub(super) fn tinted_medal_draw(image: &Image, placed: Placed, argb: u32) -> Draw {
-    sprite_draw(image, placed, image.x, image.y, argb)
+///
+/// Drawn at `hex`'s own origin - the slot's `Outline_x_y` rect from
+/// [`hex_rect`] - not at its own authored `x`/`y`. Pulse PSP authors both at
+/// the same place, so nothing moves there; the PS2 disc authors `Medal_x_y` at
+/// `y="0"` and `Outline_x_y` at `y="9"`, which drew the swatch nine units above
+/// the hex it fills. **Chosen, not measured**: no PS2 capture shows a
+/// medal-bearing cell, and a swatch that sits off its own outline is the one
+/// reading nobody would ship.
+pub(super) fn tinted_medal_draw(
+    image: &Image,
+    placed: Placed,
+    hex: Option<[f32; 4]>,
+    argb: u32,
+) -> Draw {
+    let [x, y] = hex.map_or([image.x, image.y], |h| [h[0], h[1]]);
+    sprite_draw(image, placed, x, y, argb)
 }
 
 /// `Selector`'s own draw, centred on `hex` - the selected hex's own rect

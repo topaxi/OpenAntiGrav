@@ -660,6 +660,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
+    #[cfg(feature = "view")]
+    let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
     // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the
     // same element and are left without it, not applied by extension.
     let start_boost = start_boost.filter(|_| extents);
@@ -671,7 +673,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         let gtf = craft_title.effects.sprites.contains(&name);
         let extent_law = craft_title.effects.extents.contains(&name);
         let dir = title.race.effect_dir_for(&track);
-        match particle_effect(&mut archives, dir, name, extents, extent_law, gtf) {
+        match particle_effect(&mut archives, dir, name, particle_laws, extent_law, gtf) {
             Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);

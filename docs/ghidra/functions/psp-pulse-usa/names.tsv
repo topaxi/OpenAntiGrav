@@ -1375,3 +1375,5 @@
 0x0884dc60	function	Body_RecordPairContact	82	contact-response.md
 # 2026-10-16 pulse-frontend-sfx: the TagInput text-entry widget's update and its live cue walk (menu-sounds.md)
 0x088cae88	function	TagInput_Update	88	menu-sounds.md
+# 2026-10-17 medal-tier-colour: the per-populate tile reset before Grid Selection colours its tiers (race-campaign.md)
+0x088a34c8	function	GridController_HideAllTiles	82	race-campaign.md

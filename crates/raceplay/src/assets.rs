@@ -159,7 +159,7 @@ pub(super) fn particle_effect(
         } else if ext == "gtf" {
             format!("/data/psys/tex/{stem}.gtf")
         } else if ext == "pct" {
-            oag_pulse::ps2_texture_name(&oag_pulse::ps2_strip_build_prefix(authored))?
+            oag_formats::wad::ps2_texture_name(&oag_formats::wad::ps2_strip_build_prefix(authored))?
         } else {
             format!(r"{dir}\Tex\{stem}.{ext}")
         };

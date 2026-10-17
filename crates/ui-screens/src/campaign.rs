@@ -46,12 +46,14 @@
 //!
 //! Both screens author two widgets at every hex slot - `Outline_x_y` (the
 //! base hex, always drawn) and `Medal_x_y` (a colour swatch, drawn only over
-//! a cell/tier that has actually earned a medal/points) - not one filled hex
-//! everywhere, which is what this build drew before 2026-09-14. See
+//! a cell that has earned a medal, or a tier whose points reach a medal
+//! tier) - not one filled hex everywhere, which is what this build drew
+//! before 2026-09-14. See
 //! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s
 //! `CellSelection_PopulateGrid`/`GridSelection_PopulateTiles` pseudocode and
-//! `docs/ui/campaign-screens.md`. The swatch's own tint is **chosen, not
-//! measured** - `medal_argb`/`medal_tint` in [`draw`] say why.
+//! `docs/ui/campaign-screens.md`. A cell's swatch takes its best medal's
+//! colour; a tier's takes [`GridSummary::medal_tier`], read off the grid's
+//! overall points.
 //!
 //! # `Lock_x_y` / `Lock_n_0`: drawn under a measured three-term rule
 //!
@@ -234,6 +236,41 @@ impl GridSummary {
             points_earned,
             locked: grid.locked,
             flyer_name: grid.flyer_name.clone(),
+        }
+    }
+
+    /// The medal colour `Grid Selection` fills this tier's hex with, from the
+    /// grid's overall points: `None` draws no swatch at all.
+    ///
+    /// `GridSelection_PopulateTiles` (`0x088de630`, PSP; `FUN_001b6490` on
+    /// PS2 says the same) picks the tier inline, in this order:
+    ///
+    /// 1. no points earned: no swatch;
+    /// 2. every point the grid offers (`Grid_PointsPossible`): gold;
+    /// 3. at least halfway from `RequiredPoints` to the maximum,
+    ///    `(max - required) / 2 + required` in signed integer arithmetic:
+    ///    silver;
+    /// 4. at least `RequiredPoints`: bronze;
+    /// 5. otherwise no swatch, though the lock glyph is still cleared
+    ///    ([`GridSelection::tier_shows_lock`]).
+    ///
+    /// See `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`, "The tier's
+    /// medal colour".
+    #[must_use]
+    pub fn medal_tier(&self) -> Option<Medal> {
+        let earned = i64::from(self.points_earned);
+        let max = i64::from(self.max_points);
+        let required = i64::from(self.required_points);
+        if earned == 0 {
+            None
+        } else if earned == max {
+            Some(Medal::Gold)
+        } else if earned >= (max - required) / 2 + required {
+            Some(Medal::Silver)
+        } else if earned >= required {
+            Some(Medal::Bronze)
+        } else {
+            None
         }
     }
 }

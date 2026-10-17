@@ -108,6 +108,13 @@ pub const LOOKS: &Looks = &Looks {
         on: PSP,
         origin: Origin::Measured,
     },
+    // `ParticleSystem_EmitLine`/`EmitSphere`, `DrawStreak` and the frame advance, read
+    // on the PSP. The PS2 ships the same `.pob` files (`docs/formats/pob.md`), so the
+    // PSP's law is carried over, unmeasured on the PS2.
+    particle_laws: Rule {
+        on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // Measured off GS dumps of the original on PCSX2: `docs/rendering/ps2-bloom.md`.
     ps2_glow_mask: Rule {
         on: Platforms::Only(&[Platform::Ps2]),

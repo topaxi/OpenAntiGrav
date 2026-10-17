@@ -251,3 +251,5 @@
 0x002dabd0	data	g_game_mode	92	head2head.md
 0x002dab08	data	g_racer_count	90	head2head.md
 0x002dab3c	data	g_split_mode	92	head2head.md
+# 2026-10-17 medal-tier-colour: Grid Selection tier tiles and their medal colour (grid-selection.md)
+0x001b6490	function	GridSelection_PopulateTiles	88	grid-selection.md

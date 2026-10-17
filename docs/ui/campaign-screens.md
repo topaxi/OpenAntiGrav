@@ -394,23 +394,28 @@ always drawn) and `Medal_x_y` (a colour swatch, drawn only where a cell/tier
 has actually earned a medal or points - `draw_medal_colour`/`if pointsEarned
 != 0`). `oag_ui_screens::campaign::draw::{grid_draw_list, cell_draw_list}` now
 follow that: `Medal_x_y` is skipped entirely (`Outline_x_y` still draws)
-unless `CellSelection::medal_at`/the tier's own `points_earned` says
-otherwise, and the swatch that does draw is tinted per the medal tier
-(`medal_argb`) or a single "earned" tint on `Grid Selection`
-(`medal_tint`).
+unless `CellSelection::medal_at`/the tier's own `GridSummary::medal_tier`
+says otherwise, and the swatch that does draw is tinted per the medal tier
+(`medal_argb`).
 
-**The swatch's own colour is chosen, not measured.** No PPSSPP capture this
-project holds exercises it - every frame under
-`data/reference/psp-campaign-screens/` is a zero-medal profile, so the
-`gold`/`silver`/`bronze[medal]` array `CellSelection_PopulateGrid`'s
-pseudocode names was never read off the executable or seen on screen.
-`medal_argb` reuses the panel's own measured `Target0..2 Image` swatches
-(`0xfffaeb38`/`0xffdae3e4`/`0xffdf942f`) as the closest available evidence -
-the same three-tier colour concept, authored on the same screen - not an
-independent reading of the hex fill itself. `Grid Selection`'s own
-`medal_tier_colour(pointsEarned, ...)` mapping was not traced at all, so its
-tint is always gold's own swatch regardless of how much of the tier is
-actually earned.
+**The swatch's colour is measured (2026-10-17).** Both
+`CellSelection_PopulateGrid` and `GridSelection_PopulateTiles` build the
+three-entry table `0xfffaeb38`/`0xffdae3e4`/`0xffdf942f` (gold, silver,
+bronze) from immediates, the same values the panel's `Target0..2 Image`
+swatches author, and the PS2 build reads the same twelve bytes from
+`.data`. A cell takes its best medal's entry. A tier takes the entry its
+**overall points** reach, not "any points means gold": gold only when every
+point the grid offers is earned, silver from halfway between
+`RequiredPoints` and the maximum (`(max - required) / 2 + required`,
+truncating), bronze from `RequiredPoints`, and no swatch below it, even
+though any points at all still hide the lock glyph. `grid0` (12 of 24
+required) is therefore bronze at 12, silver at 18, gold at 24.
+`GridSummary::medal_tier` implements it; the decompile, the per-grid
+thresholds and the PS2 cross-check are in
+[race-campaign.md](../ghidra/functions/psp-pulse-usa/race-campaign.md)'s
+"The tier's medal colour". Confidence **90**, not runtime-verified: no
+capture under `data/reference/psp-campaign-screens/` holds a medalled
+profile.
 
 **`Outline_x_y`'s own colour now resolves through `FEGlobals`, 2026-09-14.**
 `Cell Selection`'s copy authors `i="FEGlobals->CM_HEX_Outline"`
