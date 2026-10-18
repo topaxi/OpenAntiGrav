@@ -48,8 +48,9 @@ pub struct Adverts {
     /// level, LOD bias 0), with no anisotropy in the control word. A track quad
     /// whose coordinates run past 0..1 (a side panel tiling the banner) shows
     /// the picture repeated, where a clamp shows the edge texel smeared. Pulse
-    /// is `false`: its sampler state is unread, and a clamp is what it drew
-    /// before this field.
+    /// is `true`, **measured on PPSSPP (2026-10-18)**: every draw that samples
+    /// its 128 x 128 target has `TEXWRAP` 0 (repeat on U and V) and filter
+    /// `0x107` (linear, one level) in the GE list.
     pub wrap: bool,
     /// Whether a Zone race swaps the per-slot adverts for one shared texture.
     ///
@@ -73,7 +74,17 @@ pub struct Adverts {
     /// 255 on screen against a full white from the model route, whose white sits
     /// above the bloom gate's knee and smears into a halo.
     pub gantry_card: bool,
-    /// Whether every card is drawn with no lighting of its own, because the
+    /// Whether the pass that draws slot 8's model into its card takes no light.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-18)**: the card passes are
+    /// `TEX; MUL H0.xyz, H0, {1,1,1,1}` with no lighting term; the track's
+    /// `billboard8` quad lights the card once, afterwards. Wipeout Pulse:
+    /// **measured on PPSSPP (2026-10-18, `pulse-card-verify`)**: `LIGHTINGENABLE`
+    /// is 0 on every prim drawn into the 128 x 128 target in four dumps (three
+    /// circuits and a second boot), with `TEXFUNC` modulate, while the same
+    /// frames' main pass has it set on part of its prims.
+    pub card_unlit: bool,
+    /// Whether every advert card (slots other than 8, which is `card_unlit`) is drawn with no lighting of its own, because the
     /// original's card passes are `TEX; MUL H0.xyz, H0, {1,1,1,1}` and nothing
     /// else: the track quad that shows the card lights it once. `false` draws a
     /// card through the stand-in key and fill rig.
@@ -86,7 +97,7 @@ pub struct Adverts {
     /// programs: `TEX H0.xyz; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, 0` (opaque) or
     /// `TEX H0; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, H0` (blended), with the
     /// constant patched to one per draw. Pulse: not read, `false`.
-    pub unlit: bool,
+    pub adverts_unlit: bool,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,

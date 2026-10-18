@@ -2220,7 +2220,7 @@ no framed shot of it was obtained). The wrap needed for the U window was checked
 against the original on Moa Therma White (PPSSPP, `3 2` frame, one run), which is our `03_Track`
 (matched by its scenery and the sign on its left; the quad's U is 0.875..2.0 there): same panel,
 digit size and vertical position, no seam and no tiling inside the aperture
-(`fin/compare03.png` in the lane's scratch, not kept). **Chosen, not measured:** that the
+(`fin/compare03.png` in the lane's scratch, not kept). **Chosen, not measured** (superseded: read from the GE dump, see "Pulse's gantry card against the original" below): that the
 original's wrap *mode* is repeat in both axes: the picture agrees, the `TEXWRAP` register was not
 read from a GE dump.
 
@@ -2367,6 +2367,73 @@ lit HD material whose program resolves none: switching it off for all of them (`
 `10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) `tv_glow.gtf`
 on `02_track`'s `cf_vex_billboard` is not bound (no `ADD_SECOND`).
 
+## Pulse's gantry card against the original: sampler read, ten circuits laid (2026-10-18, `pulse-card-verify`)
+
+Follow-up to "Pulse: the gantry is a card too". **Method:** PPSSPP v1.20.4, software renderer,
+`pulse-psp-usa.chd`, Single Race, VENOM, every circuit reached through Track Select with the dev
+unlock (`psp-drive.py menu --unlock --track-down N`, identified by the craft's start position and by
+the gantry quad's bounding box below), `gpu.record.dump` read with `scripts/psp-ge-dump.py census`
+(now carrying `TEXWRAP`, `TEXFILTER`, `TEXMODE`, `TEXSCALE`, the target address and each draw's UV range).
+A draw "samples the card" when its texture address is the 128 x 128 target (`0x154000`, `TEXSIZE0`
+`0x707`) that 34 earlier prims drew into.
+
+**The sampler, measured.** On every card-sampling draw of ten circuit loads (`01`, `02`, `04`,
+`05`, `06`, `07`, `09`, `10`, `13`, `14`) and on a second PPSSPP boot (`16_Track`, Talon's Junction):
+`TEXWRAP = 0` (repeat on U and V), `TEXFILTER = 0x107` (linear magnification; minification
+`LINEAR_MIPMAP_LINEAR` over a level count of one, `TEXMODE` max level 0, so plain bilinear),
+`TEXSCALE V = -1`, `TEXSCALE U = +1`, alpha blend off. The decode reports clamp when it is set: the
+same dumps show `0x101` on the bloom ping-pong targets. So **Pulse's `wrap: true` is measured, not
+chosen** (confidence 80: two boots, eleven loads, one emulator; the same register on the PS2 is
+unread). `mesh_render::card_material` samples linear in both directions over one level, which is
+what the original's state reduces to: the card's own softness is the original's, not a sampler
+difference.
+
+**The gantry quad is the one ours draws.** On `01_Track` (Basilico Black, start `(-701.2, 4.0,
+144.5)`) the card is sampled by a 59-vertex prim, box x -733.9..-688.8, y 11.7..22.2, z 311.1, UV
+U 0.875..2.0 and V 0.5..2.0 (raw, before the V negation): our loader reports a 45.1 x 10.5
+panel on the same circuit. The same signature (a 59-vertex prim, U 0.875..2.0 / V 0.5..2.0, 45 x 10.5
+units) is the board on `02`, `04`, `05`, `07`, `09` and `10`. The other circuits author their own
+windows, and each matches the mount `crates/render/tests/gantry_mount_ground_truth.rs` finds by centre:
+`06` a 12-vertex prim at (170.5, 14.6, 310.1) with U/V 0..1 (ours: mount 171.5, 14.3, 312.3), `13` a 62-vertex prim
+(U 0.75..1.75, V 0..1; 36.2 wide, ours 36.3), `14` a 38-vertex prim at (267.2, 127.4, 549.3), U/V 0..1
+(ours 267.2, 127.4, 549.3).
+
+**Laid against ours (`--ticks 150`, same circuit and team; judged at player size, whole frame).**
+The original shows a dark-red panel with the digit on its left and black to the right, rounded
+corners, nothing showing through, on every circuit where the board was in frame (`01`, `04`-`07`, `09`, `10`, `13`; on `02` the capture was past the `3`, on
+`14` the original's start camera faces away from the board); ours reads the same on all ten
+(`01`, `02`, `04`, `05`, `06`, `07`, `09`, `10`, `13`, `14`). No see-through edge, no wrong tile, no seam
+on any. The cameras differ (the original's countdown camera sits further back than our chase
+camera), so digit size is not compared; the digit's softness is the same 128-wide card minified in
+both. Several originals were caught after the `3` (`2`, `1` or `GO`): the panel layout is the same in
+each phase. **Not captured:** `03` and `16` (done by the earlier lane), and `08`, `11`, `12`, `15`,
+which the original's Track Select does not offer (24 entries map to 12 circuits). `11` loads in ours
+with a "44.6 x 643.7" panel extent (a fit across two far-apart quads) and the board hangs very close
+over the grid; it is a circuit nobody can pick on the original, so it is recorded here and not chased.
+
+**Slot 1's two tiles (item 2): the original tiles too.** Quads whose raw V runs 0..2 (V -2..0 once
+negated), or U past 1, sample the card in the original under `TEXWRAP 0`: `13` has a 32-vertex prim U 0..1.75,
+V 0..2; `04` U 0..1.5, V 0..1.75; `09` U 0..2, V 0..1.5; `01` two prims U 0..3.0. With repeat in the
+hardware state those draw more than one tile, exactly what our wrapping sampler draws, so the
+change to every Pulse advert's sampling is the original's behaviour. A framed shot of one such quad
+in both was not obtained (the countdown camera does not frame it, and one `place` toward `14`'s
+second quad was not honoured by the game), so the picture-level confirmation is open; the register-level one is not.
+
+**The second `billboard8` quad on `14` (item 4): undecided.** The track authors two draws bound to
+`billboard8.tga`: the board's 108 indices at (267.2, 127.4, 549.3) and an 81-index draw
+(27 vertices, radius 8.5) at (378.8, 90.5, -273.9), 650 units away and out of the grid's view. The
+start frames of the original sample the card only on the board's quad. Whether the small one is a
+second board is decided by a dump taken near it; `psp-drive.py place` did not hold the pose (the craft was back at the grid), so
+this stays open. The `11` quad was not reachable on the original at all. (The survey now prints each
+`billboard8`-bound draw: `OAG_REQUIRE_GAME_DATA=1 cargo nextest run --cargo-profile quick -p oag-render
+--run-ignored all --no-capture every_circuit_authors`.)
+
+**Final lap / chequered:** not re-run on a second circuit; the first lane's Talon's Junction result stands.
+Time went to the sampler and the circuit sweep.
+
+**Per title.** PS2 unchanged (by analogy, not on PCSX2). HD already measured its own sampler above. 2048 and
+Omega: no gantry card (checked, not applicable).
+
 ## HD: the FINAL LAP and chequered states - the card was lit twice (2026-10-18, `gantry-finish`)
 
 Follow-up to "the gantry is sometimes blurry with transparent edges ... on the final lap or finish". The countdown
@@ -2421,6 +2488,20 @@ alone. (3) The card's R5G6B5 format is still RGBA8 here (chosen). (4) The final 
 dark) were compared only by eye. **Per title:** Omega, 2048: **checked, applies, not wired** for Omega (no card route),
 **checked, differs** for 2048 (no `billboard8` on its default circuit). Pulse's FINAL LAP mesh: not done, waits on
 `gantry-pulse` merging.
+
+### Is Pulse's card pass lit? No (2026-10-18, `pulse-card-verify`, lead's question)
+
+The same GE dumps, `census` now recording `LIGHTINGENABLE` (`0x17`), `LIGHT0-3`, `MATERIALUPDATE` and `TEXFUNC` per
+draw. Every prim drawn into the 128 x 128 card target (`0x154000`; 34 prims on `01`, 9-10 on `07`, 14 on `16`, 67 on
+`13`; four dumps, three circuits, two boots) has `LIGHTINGENABLE = 0`, no light enabled, `MATERIALUPDATE 0`, `TEXFUNC 0`
+(modulate), vertex type `0x13d`/`0x13f`/`0x80011c` (texture and 8888 vertex colour, no lighting inputs used). The
+control: the same frames' main pass has `LIGHTINGENABLE = 1` on 49-253 of its ~600-800 prims, so the decode reads the
+bit. So **Pulse's card pass is unlit**, like HD's (`TEX * 1`, measured on RPCS3 by `gantry-finish`). The flag is now
+a title field with provenance, `oag_title::adverts::Adverts::card_unlit` (HD and Pulse `true`), read by
+`place_card` in place of the `!pulse` test. **Picture effect on Pulse: none measured** - `01_Track` at tick 150
+is pixel-identical before and after (0 differing pixels, the digit reads `(238,238,255)` in both), so Pulse's model
+vertices already carried no stand-in light; the field records the measurement and keeps the two titles on one rule.
+PS2: not read (no PCSX2 capture).
 
 ## HD: every card is unlit, a pose-matched FINAL LAP pair, and the finish (2026-10-18, `hd-cards-unlit`)
 

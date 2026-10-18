@@ -310,7 +310,7 @@ fn pulse_psp_points_every_served_placeholder_at_its_card() {
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
     assert_eq!(
         wrapped, wanted,
-        "Pulse's card sampler wraps (chosen, not measured): its quads author UVs past 1 and negate V"
+        "Pulse's card sampler wraps (measured: TEXWRAP 0 in a GE dump): its quads author UVs past 1 and negate V"
     );
 }
 
@@ -324,7 +324,7 @@ fn pulse_ps2_points_every_served_placeholder_at_its_card() {
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
     assert_eq!(
         wrapped, wanted,
-        "Pulse's card sampler wraps (chosen, not measured): its quads author UVs past 1 and negate V"
+        "Pulse PS2's card sampler wraps (PSP measured TEXWRAP 0, PS2 by analogy): its quads author UVs past 1 and negate V"
     );
 }
 

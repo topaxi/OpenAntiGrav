@@ -118,9 +118,10 @@ pub const TITLE: &Title = &Title {
         far: 2017.7,
         colour_pool: true,
         flip_v: true,
-        // Chosen, not measured: Pulse's quads negate V over authored UVs up to 2.0, which only
-        // mean something wrapped. The picture agrees with PPSSPP on Talon's Junction and
-        // Moa Therma White (03_Track); `TEXWRAP` was not read from a GE dump.
+        // Measured (2026-10-18, PPSSPP software GE dumps, two boots, ten circuits): every
+        // draw sampling the 128 x 128 target carries `TEXWRAP` 0 (repeat on U and V), where
+        // the bloom targets read 0x101 (clamp) in the same decode. Pulse's quads negate V
+        // over authored UVs up to 2.0, which only mean something wrapped.
         wrap: true,
         zone_shares_one_texture: false,
         // Measured: the same dump shows the gantry as pass B into the 128 x 128 target,
@@ -128,7 +129,8 @@ pub const TITLE: &Title = &Title {
         // crisp digits (2026-10-18, Talon's Junction), where standing the model on the
         // mount drew it translucent over the scene.
         gantry_card: true,
-        unlit: false,
+        adverts_unlit: false,
+        card_unlit: true,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,
     }),
