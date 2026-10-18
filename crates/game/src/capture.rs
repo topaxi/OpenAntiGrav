@@ -461,6 +461,7 @@ pub fn run(
                 window_layout: Vec::new(),
                 cut: oag_render::viewport::Cut::Horizontal,
                 force_shake: None,
+                force_boost_kick: None,
                 intro_ticks: 0,
                 force_wreck: None,
                 force_hit: None,

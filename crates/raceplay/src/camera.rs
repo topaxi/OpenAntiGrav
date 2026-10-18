@@ -187,7 +187,7 @@ impl Race {
     ///
     /// What [`Self::view_shake_rotation`] is measured against, and so what the
     /// motion blur takes the shake out of its velocities with: see
-    /// [`Self::shake_screen_motion`]. Blended inside a draw the way
+    /// [`Self::lens_screen_motion`]. Blended inside a draw the way
     /// [`Self::view`] is, by the same alpha and on the same snaps.
     #[must_use]
     pub fn view_unshaken(&self) -> Mat4 {
@@ -240,28 +240,45 @@ impl Race {
         self.view() * self.view_unshaken().inverse()
     }
 
-    /// How far the impact shake moved the picture since the previous tick, as a
-    /// clip-space map for the motion blur: a pixel's clip position `c` goes to
-    /// where the same direction sat a tick ago under the shake alone,
-    /// `projection * previous * current^-1 * projection^-1`, where `current`
-    /// is this tick's [`Self::view_shake_rotation`] and `previous` the one the
-    /// last tick stored. [`Mat4::IDENTITY`] exactly when neither tick shook.
+    /// How far the camera's lens moved the picture since the previous frame, as
+    /// a clip-space map for the motion blur: a pixel's clip position `c` goes to
+    /// where the same direction sat then under the lens alone,
+    /// `previous_projection * previous_shake * shake^-1 * projection^-1`, where
+    /// `shake` is this tick's [`Self::view_shake_rotation`] and the two
+    /// `previous_` matrices are what the last frame stored. The lens is the
+    /// impact shake and the field of view: the boost kick and the speed widen
+    /// of [`Self::vertical_fov`], and the player's own setting.
+    /// [`Mat4::IDENTITY`] exactly when neither tick shook and the projection did
+    /// not change.
     ///
     /// **The velocity buffer itself stays true screen motion** - the temporal
     /// upscaler reprojects its history with it, and that has to follow the
-    /// shake - so it is the blur that takes this out: the shake turns the view
+    /// lens - so it is the blur that takes this out. The shake turns the view
     /// by up to six degrees in one tick, a velocity buffer reads that as the
     /// world flying past, and the first frame of a hard hit smeared whole,
-    /// which the original does not do. A rotation about the eye moves a pixel
-    /// by an amount that depends on where it is on screen and not on how deep
-    /// it is, which is why one matrix describes the whole frame.
+    /// which the original does not do. The boost kick widens the field by up to
+    /// about five per cent of its tangent in one tick, and the buffer read that
+    /// as everything rushing toward the middle of the screen: the player's own
+    /// craft, the nearest thing to the screen's edge that holds still under the
+    /// chase camera, smeared its hull back over the track on every speed pad.
+    /// Neither a turn about the eye nor a change of field moves a pixel by an
+    /// amount that depends on its depth - only on where it is on screen - which
+    /// is why one matrix describes the whole frame.
     #[must_use]
-    pub fn shake_screen_motion(&self, projection: Mat4, previous: Mat4) -> Mat4 {
-        let current = self.view_shake_rotation();
-        if current == Mat4::IDENTITY && previous == Mat4::IDENTITY {
+    pub fn lens_screen_motion(
+        &self,
+        projection: Mat4,
+        previous_projection: Mat4,
+        previous_shake: Mat4,
+    ) -> Mat4 {
+        let shake = self.view_shake_rotation();
+        if shake == Mat4::IDENTITY
+            && previous_shake == Mat4::IDENTITY
+            && projection == previous_projection
+        {
             return Mat4::IDENTITY;
         }
-        projection * previous * current.inverse() * projection.inverse()
+        previous_projection * previous_shake * shake.inverse() * projection.inverse()
     }
 
     /// Arms the player's camera shake as a wall hit of `severity` would
@@ -274,6 +291,16 @@ impl Race {
             oag_render::camera::shake::Side::Elsewhere,
             &mut self.view.shake_rng,
         );
+    }
+
+    /// Sets the boost's field-of-view kick to `open` (`0..=1`, fully open at 1)
+    /// in one step, for `--force-boost-kick`: a verification aid, so a capture
+    /// can widen the field on a still craft and show the lens change alone. The
+    /// kick is view state, so the craft is not boosted, and the next tick closes
+    /// it again at the usual rate. Widens nothing under
+    /// [`oag_display::display::BoostFovKick::OFF`].
+    pub fn force_boost_kick(&mut self, open: f32) {
+        self.view.boost_kick = open.clamp(0.0, 1.0);
     }
 
     /// Raises a HUD message line - `id` is a language-table id, `good` its

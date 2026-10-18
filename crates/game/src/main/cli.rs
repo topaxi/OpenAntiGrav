@@ -634,6 +634,19 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TICK:SEVERITY", requires = "race")]
     pub(crate) force_shake: Option<String>,
 
+    /// With `--race --screenshot`, open the boost's field-of-view kick at the
+    /// end of a tick with no boost behind it: `TICK:OPEN`, `OPEN` in `0..=1`
+    /// (fully open at 1), e.g. `120:0.15` and then `--ticks 121` for the frame
+    /// whose field has just widened. The craft is not boosted, the kick closes
+    /// again at its usual rate, and under `boost_fov_kick = 0` it widens
+    /// nothing.
+    ///
+    /// A verification aid: it changes the lens alone on a still craft, which is
+    /// how the motion blur is shown to leave a widening field unsmeared. See
+    /// [`Race::force_boost_kick`].
+    #[arg(long, value_name = "TICK:OPEN", requires = "race")]
+    pub(crate) force_boost_kick: Option<String>,
+
     /// Seed the world generator, instead of `race::SEED`.
     ///
     /// A verification aid - see `race::Options::seed`. The one thing in a race

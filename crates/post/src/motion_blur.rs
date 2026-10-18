@@ -77,8 +77,8 @@ struct Constants {
     inv_size: [f32; 2],
     tile: u32,
     _pad: f32,
-    /// [`Frame::camera_shake`], column-major.
-    shake: [[f32; 4]; 4],
+    /// [`Frame::lens_motion`], column-major.
+    lens: [[f32; 4]; 4],
 }
 
 impl Constants {
@@ -91,7 +91,7 @@ impl Constants {
         size: (u32, u32),
         strength: f32,
         tile: u32,
-        shake: Mat4,
+        lens: Mat4,
     ) -> Self {
         let (w, h) = (size.0.max(1) as f32, size.1.max(1) as f32);
         Self {
@@ -103,7 +103,7 @@ impl Constants {
             inv_size: [1.0 / w, 1.0 / h],
             tile,
             _pad: 0.0,
-            shake: shake.to_cols_array_2d(),
+            lens: lens.to_cols_array_2d(),
         }
     }
 }
@@ -188,18 +188,19 @@ pub struct Frame<'a> {
     /// does nothing at all, which is how "off" reaches it: the caller's
     /// setting is a strength, read fresh every frame.
     pub strength: f32,
-    /// How far the camera's impact shake moved the picture since the previous
-    /// tick, as a clip-space map: a pixel's clip position goes to where the
-    /// same direction sat a tick ago under the shake alone. The prepare pass
-    /// subtracts that motion from the velocity it reads, so the blur smears
-    /// what really moved and not the whole frame the shake turned - the
-    /// velocity buffer itself stays true screen motion, which the temporal
-    /// upscaler needs. [`Mat4::IDENTITY`] for none, and then exactly nothing
-    /// is subtracted.
+    /// How far the camera's lens moved the picture since the previous frame -
+    /// a race's impact shake and its changing field of view - as a clip-space
+    /// map: a pixel's clip position goes to where the same direction sat then
+    /// under the lens alone. The prepare pass subtracts that motion from the
+    /// velocity it reads, so the blur smears what really moved and not the
+    /// whole frame the shake turned or the zoom widened - the velocity buffer
+    /// itself stays true screen motion, which the temporal upscaler needs.
+    /// [`Mat4::IDENTITY`] for none, and then exactly nothing is subtracted.
     ///
-    /// A rotation about the eye moves a pixel by an amount that depends on its
-    /// screen position and not its depth, which is why one matrix will do.
-    pub camera_shake: Mat4,
+    /// Neither a rotation about the eye nor a change of field moves a pixel by
+    /// an amount that depends on its depth, only on its screen position, which
+    /// is why one matrix will do.
+    pub lens_motion: Mat4,
 }
 
 /// Velocity and depth folded together - see the module docs' step 1.
@@ -563,7 +564,7 @@ impl MotionBlur {
             frame.size,
             frame.strength,
             tile,
-            frame.camera_shake,
+            frame.lens_motion,
         );
         if self.written != Some(wanted) {
             queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&wanted));

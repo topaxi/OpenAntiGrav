@@ -10,7 +10,7 @@
 //!
 //! **One submission per view's chain.** `MotionBlur::render` writes its one uniform buffer
 //! with `queue.write_buffer`, which lands before the submission's commands, so two chains in
-//! one encoder would both run with the last view's rectangle, tile and shake - the trap
+//! one encoder would both run with the last view's rectangle, tile and lens map - the trap
 //! `Scene::render_slots` records for the scene draws. **Chosen, not measured.**
 
 use super::*;
@@ -43,7 +43,7 @@ impl Scene {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race viewport blur"),
             });
-            let shake = self.histories[motion::split_history(slot)].blur_shake.get();
+            let lens = self.histories[motion::split_history(slot)].blur_lens.get();
             ran |= self.encode_motion_blur(
                 device,
                 queue,
@@ -55,7 +55,7 @@ impl Scene {
                 ],
                 rect,
                 strength,
-                shake,
+                lens,
                 Some(oag_post::motion_blur::ChainTimestamps {
                     begin: if index == 0 { begin.take() } else { None },
                     end: if index == last { end.take() } else { None },

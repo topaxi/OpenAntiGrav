@@ -100,7 +100,7 @@ impl Scene {
         );
         let mut stats = self.recorder().record(&pass, encoder);
         oag_gpu::perfprobe::mark("scene-pass");
-        let blur_shake = pass.blur_shake;
+        let blur_lens = pass.blur_lens;
         drop(pass);
         let (hd_bloom_encoded, blur_encoded) = self.finish_view(
             device,
@@ -109,7 +109,7 @@ impl Scene {
             view,
             race,
             viewport,
-            (motion_blur, blur_shake),
+            (motion_blur, blur_lens),
             blur_timestamps,
             hd_bloom_timestamps,
         );
@@ -122,7 +122,7 @@ impl Scene {
 
     /// What follows a view's scene pass, recorded into `encoder`: HD's or Omega's chain or the
     /// PSP bloom's prepare for a whole picture, the borrowed boost zoom, and the motion blur
-    /// (`blur` is its strength and the camera shake it takes out). Returns whether HD's chain
+    /// (`blur` is its strength and the lens motion it takes out). Returns whether HD's chain
     /// and the blur were encoded.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn finish_view(
@@ -133,7 +133,7 @@ impl Scene {
         view: &wgpu::TextureView,
         race: &Race,
         viewport: (f32, f32, f32, f32),
-        (motion_blur, blur_shake): (oag_display::display::MotionBlur, Mat4),
+        (motion_blur, blur_lens): (oag_display::display::MotionBlur, Mat4),
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> (bool, bool) {
@@ -222,7 +222,7 @@ impl Scene {
             [view, velocity_view, depth_view],
             viewport,
             motion_blur.shutter(),
-            blur_shake,
+            blur_lens,
             blur_timestamps,
         );
         oag_gpu::perfprobe::mark("post-chain");
@@ -264,8 +264,9 @@ impl Scene {
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
         //
-        // Shaken views, so the buffer stays true screen motion for the temporal
-        // upscaler; the blur subtracts the shake itself, `blur_shake` below.
+        // Shaken and widened views, so the buffer stays true screen motion for
+        // the temporal upscaler; the blur subtracts the lens itself, `blur_lens`
+        // below.
         if self.layer.get() == Layer::Whole {
             self.retire_split_histories();
             self.note_split_views(0, &[]);
@@ -274,13 +275,15 @@ impl Scene {
             &self.history().motion,
             race,
             &self.weapon_quads.draw,
+            projection,
             view_projection,
             usize::from(race.ship_count()),
         );
         let prev_vp = prev.view_projection;
-        // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
-        let blur_shake = race.shake_screen_motion(projection, prev.shake);
-        self.history().blur_shake.set(blur_shake);
+        // The lens's own screen motion (the shake and the field of view), for the
+        // blur - see `Race::lens_screen_motion`.
+        let blur_lens = race.lens_screen_motion(projection, prev.projection, prev.shake);
+        self.history().blur_lens.set(blur_lens);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // The same unjittered matrix, for the section boxes' view test.
         let section_view = view_projection;
@@ -1098,7 +1101,7 @@ impl Scene {
             shadow_runs,
             ghost: self.ghost_draw(race, lod_eye),
             stats: behind_glass,
-            blur_shake,
+            blur_lens,
         }
     }
 }

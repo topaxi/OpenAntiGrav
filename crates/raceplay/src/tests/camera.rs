@@ -557,7 +557,7 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
     for tick in 0..4 {
         let previous_view = previous_shake * still;
         let current = projection * race.view();
-        let map = race.shake_screen_motion(projection, previous_shake);
+        let map = race.lens_screen_motion(projection, projection, previous_shake);
         assert_ne!(
             map,
             Mat4::IDENTITY,
@@ -582,14 +582,59 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
     }
 }
 
-/// With no shake in either tick the map is exactly the identity, so the blur
-/// of an unshaken frame is untouched to the bit.
+/// With no shake in either tick and the same projection in both the map is
+/// exactly the identity, so the blur of an unshaken frame at a steady field of
+/// view is untouched to the bit.
 #[test]
 fn no_shake_gives_the_blur_exactly_the_identity() {
     let race = Race::start(setup(Handling::default()));
     let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
     assert_eq!(
-        race.shake_screen_motion(projection, Mat4::IDENTITY),
+        race.lens_screen_motion(projection, projection, Mat4::IDENTITY),
         Mat4::IDENTITY
     );
+}
+
+/// The boost kick widens the field of view between two ticks, and a still
+/// world seen through the wider projection moves toward the middle of the
+/// screen by an amount that depends on where a point is on screen, not how
+/// deep: the map must predict that motion exactly, at every depth, so the blur
+/// can take it out. Points near the edge of the picture move most, which is
+/// where a craft's wing sits under the chase camera. A map that ignores the
+/// previous projection is the identity here and fails.
+#[test]
+fn the_blur_is_given_the_boost_kicks_own_screen_motion() {
+    use oag_display::display::{BoostFovKick, Fov};
+    let mut race = Race::start(setup(Handling::default()));
+    race.set_boost_fov_kick(BoostFovKick::OFFERED[3]);
+    let aspect = 16.0 / 9.0;
+    let before = race.projection(aspect, 1000.0, Fov::AUTHORED);
+    race.force_boost_kick(0.15);
+    let after = race.projection(aspect, 1000.0, Fov::AUTHORED);
+    assert_ne!(before, after, "the forced kick did not widen the field");
+    let view = race.view();
+    let map = race.lens_screen_motion(after, before, Mat4::IDENTITY);
+    let ndc = |clip: oag_core::math::Vec4| clip.truncate() / clip.w;
+    let body = &race.ship().physics.body;
+    let ahead = body.position + body.forward() * 6.0;
+    let side = body.right() * 4.0;
+    for point in [
+        ahead + side,
+        ahead - side - Vec3::Y * 1.5,
+        body.position + body.forward() * 300.0,
+    ] {
+        let now = ndc(after * view * point.extend(1.0));
+        let then = ndc(before * view * point.extend(1.0));
+        let velocity = now.truncate() - then.truncate();
+        let mapped = ndc(map * now.extend(1.0));
+        let predicted = now.truncate() - mapped.truncate();
+        assert!(
+            velocity.length() > 1e-4,
+            "no zoom motion to take out at {point}"
+        );
+        assert!(
+            (velocity - predicted).length() < 1e-5,
+            "velocity {velocity} against the map's {predicted} at {point}"
+        );
+    }
 }

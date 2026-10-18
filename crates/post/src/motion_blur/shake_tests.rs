@@ -35,9 +35,9 @@ fn velocity_under(map: Mat4, x: u32, y: u32) -> [f32; 2] {
     [v.x, v.y]
 }
 
-/// The red channel after the chain ran with `camera_shake`, `None` when the
+/// The red channel after the chain ran with `lens_motion`, `None` when the
 /// machine has no adapter.
-fn blurred_red(camera_shake: Mat4) -> Option<impl Fn(u32, u32) -> u8> {
+fn blurred_red(lens_motion: Mat4) -> Option<impl Fn(u32, u32) -> u8> {
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
     let (device, queue) =
@@ -150,7 +150,7 @@ fn blurred_red(camera_shake: Mat4) -> Option<impl Fn(u32, u32) -> u8> {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 1.0,
-            camera_shake,
+            lens_motion,
         },
         None,
     );

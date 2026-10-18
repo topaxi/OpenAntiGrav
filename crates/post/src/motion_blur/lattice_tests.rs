@@ -149,7 +149,7 @@ fn render_once(
             size: (W, H),
             viewport: (0.0, 0.0, W as f32, H as f32),
             strength,
-            camera_shake: Mat4::IDENTITY,
+            lens_motion: Mat4::IDENTITY,
         },
         None,
     );

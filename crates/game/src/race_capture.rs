@@ -75,6 +75,9 @@ pub struct CaptureOptions {
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
     /// See [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
+    /// `--force-boost-kick TICK:OPEN`: open the boost's field-of-view kick
+    /// with no boost. See [`Race::force_boost_kick`].
+    pub force_boost_kick: Option<(u32, f32)>,
     /// Play this many ticks of the pre-race flyby first, held to the grid's first
     /// tick. See `race::intro_camera`.
     pub intro_ticks: u32,

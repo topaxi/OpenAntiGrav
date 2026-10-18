@@ -112,8 +112,9 @@ pub(super) struct ViewPass<'a> {
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
     pub(super) stats: SceneStats,
-    /// The camera shake's own screen motion, for the blur after the pass.
-    pub(super) blur_shake: Mat4,
+    /// The camera lens's own screen motion (its shake and its field of view), for the blur
+    /// after the pass - see `Race::lens_screen_motion`.
+    pub(super) blur_lens: Mat4,
 }
 
 impl Scene {

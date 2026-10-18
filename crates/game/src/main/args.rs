@@ -237,16 +237,25 @@ pub(crate) fn parse_size(text: &str) -> Result<(u32, u32)> {
 
 /// Parses `--force-shake`'s `TICK:SEVERITY`.
 pub(crate) fn force_shake(text: Option<&str>) -> Result<Option<(u32, f32)>> {
+    tick_and_fraction(text, "shake", "TICK:SEVERITY, e.g. 120:1.0")
+}
+
+/// Parses `--force-boost-kick`'s `TICK:OPEN`.
+pub(crate) fn force_boost_kick(text: Option<&str>) -> Result<Option<(u32, f32)>> {
+    tick_and_fraction(text, "boost kick", "TICK:OPEN, e.g. 120:0.15")
+}
+
+/// Parses a forced `TICK:FRACTION`, the fraction in `0..=1`; `what` and `form`
+/// name the flag's meaning and spelling in the error.
+fn tick_and_fraction(text: Option<&str>, what: &str, form: &str) -> Result<Option<(u32, f32)>> {
     let Some(text) = text else { return Ok(None) };
-    let bad = || {
-        anyhow::anyhow!("{text:?} is not a forced shake; write it as TICK:SEVERITY, e.g. 120:1.0")
-    };
-    let (tick, severity) = text.split_once(':').ok_or_else(bad)?;
-    let severity: f32 = severity.trim().parse().map_err(|_| bad())?;
-    if !(0.0..=1.0).contains(&severity) {
+    let bad = || anyhow::anyhow!("{text:?} is not a forced {what}; write it as {form}");
+    let (tick, fraction) = text.split_once(':').ok_or_else(bad)?;
+    let fraction: f32 = fraction.trim().parse().map_err(|_| bad())?;
+    if !(0.0..=1.0).contains(&fraction) {
         return Err(bad());
     }
-    Ok(Some((tick.trim().parse().map_err(|_| bad())?, severity)))
+    Ok(Some((tick.trim().parse().map_err(|_| bad())?, fraction)))
 }
 
 /// Parses every `--force-shield TICK:PERCENT`.

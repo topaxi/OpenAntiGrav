@@ -65,10 +65,11 @@ pub(super) struct History {
     /// The camera view and player respawn count as of the last recorded frame, for
     /// detecting a camera cut mid-race - see [`CutWatch`].
     pub(super) cut_watch: std::cell::Cell<CutWatch>,
-    /// The impact shake's own screen motion as of the last [`Scene::render`] on this history,
-    /// which the blur takes out of its velocities ([`Race::shake_screen_motion`]). Kept here
-    /// because a split's blur runs after every view is drawn, from this view's own value.
-    pub(super) blur_shake: std::cell::Cell<Mat4>,
+    /// The lens's own screen motion (the impact shake and the field of view) as of the last
+    /// [`Scene::render`] on this history, which the blur takes out of its velocities
+    /// ([`Race::lens_screen_motion`]). Kept here because a split's blur runs after every view
+    /// is drawn, from this view's own value.
+    pub(super) blur_lens: std::cell::Cell<Mat4>,
 }
 
 impl History {
@@ -86,9 +87,12 @@ impl History {
 #[derive(Clone, Debug)]
 pub(super) struct Snapshot {
     pub(super) view_projection: Mat4,
+    /// The unjittered projection alone, whose field of view the boost kick and
+    /// the speed widen move from tick to tick - for the blur to take that zoom
+    /// out of its velocities. See [`Race::lens_screen_motion`].
+    pub(super) projection: Mat4,
     /// The impact shake as a view-space rotation that tick - identity with
-    /// none - for the blur to take out of its velocities. See
-    /// [`Race::shake_screen_motion`].
+    /// none - for the blur to take out of its velocities, the same way.
     pub(super) shake: Mat4,
     /// The camera's translation alone, for the sky's own `prev_mvp` - see
     /// the sky write in [`Scene::render`].
@@ -109,9 +113,16 @@ pub(super) struct Snapshot {
 }
 
 impl Snapshot {
-    fn take(race: &Race, cannon: &CannonDraw, view_projection: Mat4, drawn: usize) -> Self {
+    fn take(
+        race: &Race,
+        cannon: &CannonDraw,
+        projection: Mat4,
+        view_projection: Mat4,
+        drawn: usize,
+    ) -> Self {
         Self {
             view_projection,
+            projection,
             shake: race.view_shake_rotation(),
             camera_translation: Mat4::from_translation(race.camera_position()),
             ships: (0..drawn)
@@ -160,6 +171,7 @@ impl MotionState {
         cell: &std::cell::RefCell<Option<Self>>,
         race: &Race,
         cannon: &CannonDraw,
+        projection: Mat4,
         view_projection: Mat4,
         drawn: usize,
     ) -> Snapshot {
@@ -168,7 +180,7 @@ impl MotionState {
             // A scene's first frame measures against itself: zero velocity,
             // not a smear from an uninitialised matrix.
             None => {
-                let now = Snapshot::take(race, cannon, view_projection, drawn);
+                let now = Snapshot::take(race, cannon, projection, view_projection, drawn);
                 *state = Some(Self {
                     key: FrameKey::of(race),
                     cuts: race.viewed_camera_cuts(),
@@ -178,7 +190,7 @@ impl MotionState {
                 now
             }
             Some(state) if state.key != FrameKey::of(race) => {
-                let now = Snapshot::take(race, cannon, view_projection, drawn);
+                let now = Snapshot::take(race, cannon, projection, view_projection, drawn);
                 state.prev = std::mem::replace(&mut state.cur, now);
                 state.key = FrameKey::of(race);
                 // **A cut is not motion.** On the tick the picture jumps to another shot - a
@@ -190,6 +202,7 @@ impl MotionState {
                 if cuts != state.cuts {
                     state.cuts = cuts;
                     state.prev.view_projection = state.cur.view_projection;
+                    state.prev.projection = state.cur.projection;
                     state.prev.shake = state.cur.shake;
                     state.prev.camera_translation = state.cur.camera_translation;
                 }
@@ -536,8 +549,8 @@ impl super::Scene {
 
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
-    /// and the depth attachment. `camera_shake` is
-    /// [`Race::shake_screen_motion`], which the pass takes out of every
+    /// and the depth attachment. `lens_motion` is
+    /// [`Race::lens_screen_motion`], which the pass takes out of every
     /// velocity it reads.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn encode_motion_blur(
@@ -548,7 +561,7 @@ impl super::Scene {
         views: [&wgpu::TextureView; 3],
         viewport: (f32, f32, f32, f32),
         strength: f32,
-        camera_shake: Mat4,
+        lens_motion: Mat4,
         timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
     ) -> bool {
         let Some(pass) = &self.motion_blur else {
@@ -570,7 +583,7 @@ impl super::Scene {
                 size: (size.width, size.height),
                 viewport,
                 strength,
-                camera_shake,
+                lens_motion,
             },
             timestamps,
         )
@@ -615,14 +628,21 @@ mod advance_tests {
     /// One frame at `x` after the world has ticked once more.
     fn frame(cell: &std::cell::RefCell<Option<MotionState>>, race: &mut Race, x: f32) -> Snapshot {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        MotionState::advance(cell, race, &CannonDraw::default(), at(x), 1)
+        MotionState::advance(cell, race, &CannonDraw::default(), Mat4::IDENTITY, at(x), 1)
     }
 
     #[test]
     fn the_camera_of_the_previous_tick_is_what_the_blur_measures_against() {
         let cell = std::cell::RefCell::new(None);
         let mut race = race();
-        let first = MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        let first = MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(0.0),
+            1,
+        );
         assert_eq!(
             first.view_projection,
             at(0.0),
@@ -638,7 +658,14 @@ mod advance_tests {
     fn a_cut_measures_no_camera_travel() {
         let cell = std::cell::RefCell::new(None);
         let mut race = race();
-        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(0.0),
+            1,
+        );
         frame(&cell, &mut race, 1.0);
         // The shot changes: the camera jumps a hundred units, and the picture says so.
         race.sim.respawns[0] += 1;
@@ -659,8 +686,22 @@ mod advance_tests {
         let race = race();
         // Without a flyby the key is the world's tick.
         assert_eq!(race.motion_tick(), race.sim.world.tick);
-        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
-        let same = MotionState::advance(&cell, &race, &CannonDraw::default(), at(5.0), 1);
+        MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(0.0),
+            1,
+        );
+        let same = MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(5.0),
+            1,
+        );
         assert_eq!(
             same.view_projection,
             at(0.0),
@@ -674,16 +715,37 @@ mod advance_tests {
         let mut race = race();
         race.tick(&oag_gameplay::PlayerInputs::none());
         race.set_draw_alpha(0.25);
-        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(0.0),
+            1,
+        );
         race.set_draw_alpha(0.5);
-        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), at(1.0), 1);
+        let prev = MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(1.0),
+            1,
+        );
         assert_eq!(
             prev.view_projection,
             at(0.0),
             "a new alpha inside one tick is a new frame to measure from"
         );
         race.set_draw_alpha(0.75);
-        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), at(2.0), 1);
+        let prev = MotionState::advance(
+            &cell,
+            &race,
+            &CannonDraw::default(),
+            Mat4::IDENTITY,
+            at(2.0),
+            1,
+        );
         assert_eq!(prev.view_projection, at(1.0));
     }
 }

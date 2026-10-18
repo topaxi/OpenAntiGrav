@@ -64,6 +64,13 @@ pub(super) fn advance_one_tick(
     {
         race.force_shake(severity);
     }
+    // After the tick too, so the frame this tick ends on is the first drawn
+    // through the wider field.
+    if let Some((at, open)) = options.force_boost_kick
+        && at == tick
+    {
+        race.force_boost_kick(open);
+    }
     for &(at, percent) in &options.force_shield {
         if at == tick {
             let ship = &mut race.sim.world.ships[0];

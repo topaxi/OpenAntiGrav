@@ -11,7 +11,7 @@ use super::*;
 
 #[test]
 fn the_uniform_is_112_bytes_with_no_implicit_padding() {
-    // Three vec2s, two floats, another vec2, a u32 row and then the shake's
+    // Three vec2s, two floats, another vec2, a u32 row and then the lens map's
     // mat4 on its own 16-byte boundary: WGSL and `repr(C)` agree on this
     // layout exactly, which is what the assertion pins - the previous
     // layout's vec3 padding disagreement reached a player as a validation
@@ -249,7 +249,7 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
-            camera_shake: Mat4::IDENTITY,
+            lens_motion: Mat4::IDENTITY,
         },
         None,
     );
@@ -499,7 +499,7 @@ fn still_block_over_a_moving_background(
             size: (size, size),
             viewport: (0.0, 0.0, size as f32, size as f32),
             strength: 0.5,
-            camera_shake: Mat4::IDENTITY,
+            lens_motion: Mat4::IDENTITY,
         },
         None,
     );
@@ -657,7 +657,7 @@ fn the_tile_reduction_finds_motion_in_the_tile_it_belongs_to() {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
-            camera_shake: Mat4::IDENTITY,
+            lens_motion: Mat4::IDENTITY,
         },
         None,
     );
@@ -859,7 +859,7 @@ fn multisampled_chain(half: bool) {
             size: (SIZE, SIZE),
             viewport: (0.0, 0.0, SIZE as f32, SIZE as f32),
             strength: 0.5,
-            camera_shake: Mat4::IDENTITY,
+            lens_motion: Mat4::IDENTITY,
         },
         None,
     );

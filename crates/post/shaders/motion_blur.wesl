@@ -42,9 +42,10 @@ struct Constants {
     // The tile edge in pixels, as an integer for the reduction loops.
     tile: u32,
     _pad: f32,
-    // The camera's impact shake as a clip-space map from a pixel to where the
-    // same direction sat a tick ago under the shake alone; identity for none.
-    shake: mat4x4<f32>,
+    // The camera's lens - its impact shake and its field of view - as a
+    // clip-space map from a pixel to where the same direction sat a frame ago
+    // under the lens alone; identity for none.
+    lens: mat4x4<f32>,
 }
 
 @group(0) @binding(0) var colour_tex: texture_2d<f32>;
@@ -88,16 +89,17 @@ fn target_uv(position: vec4<f32>) -> vec2<f32> {
     return position.xy * constants.inv_size;
 }
 
-// The camera shake's own screen motion at this pixel, in the buffer's uv
-// units, to be taken out of the velocity read there. The shake turns the view
-// about the eye, so where a pixel's direction sat a tick ago depends on the
-// pixel and not its depth: the depth sample only has to be a valid one for the
-// homogeneous point. Exactly zero for the identity matrix, so a frame with no
-// shake reads the buffer unchanged.
-fn shake_motion(position: vec4<f32>, depth: f32) -> vec2<f32> {
+// The lens's own screen motion at this pixel, in the buffer's uv units, to be
+// taken out of the velocity read there. The shake turns the view about the eye
+// and the field of view scales the picture about its centre, so where a pixel's
+// direction sat a frame ago depends on the pixel and not its depth: the depth
+// sample only has to be a valid one for the homogeneous point. Exactly zero for
+// the identity matrix, so a frame with no shake and a steady field reads the
+// buffer unchanged.
+fn lens_motion(position: vec4<f32>, depth: f32) -> vec2<f32> {
     let uv = (target_uv(position) - constants.rect_offset) / constants.rect_size;
     let ndc = vec2<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-    let before = constants.shake * vec4<f32>(ndc, depth, 1.0);
+    let before = constants.lens * vec4<f32>(ndc, depth, 1.0);
     if before.w <= 0.0 {
         return vec2<f32>(0.0);
     }
@@ -109,13 +111,14 @@ fn shake_motion(position: vec4<f32>, depth: f32) -> vec2<f32> {
 // reads sample 0 - resolving would average velocity across silhouette edges
 // into a vector that describes neither surface.
 //
-// The velocity leaves with the camera's impact shake taken out of it - the
-// buffer is true screen motion, and the shake is not motion to blur.
+// The velocity leaves with the camera's lens taken out of it - the buffer is
+// true screen motion, and neither the impact shake nor a widening field of
+// view is motion to blur.
 @fragment
 fn fs_prepare(in: VertexOutput) -> @location(0) vec4<f32> {
     let p = vec2<i32>(in.position.xy);
     let z = textureLoad(depth_tex, p, 0).x;
-    let v = textureLoad(velocity_tex, p, 0).xy - shake_motion(in.position, z);
+    let v = textureLoad(velocity_tex, p, 0).xy - lens_motion(in.position, z);
     return vec4<f32>(v, z, 0.0);
 }
 
@@ -123,7 +126,7 @@ fn fs_prepare(in: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_prepare_ms(in: VertexOutput) -> @location(0) vec4<f32> {
     let p = vec2<i32>(in.position.xy);
     let z = textureLoad(depth_ms_tex, p, 0).x;
-    let v = textureLoad(velocity_ms_tex, p, 0).xy - shake_motion(in.position, z);
+    let v = textureLoad(velocity_ms_tex, p, 0).xy - lens_motion(in.position, z);
     return vec4<f32>(v, z, 0.0);
 }
 
