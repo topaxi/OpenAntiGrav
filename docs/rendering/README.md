@@ -59,6 +59,10 @@
   per-piece costs at 1080p, one cut landed (craft outside the frustum are no longer drawn,
   byte-identical), the velocity attachment's "10 %" measured as noise, and three suspects cleared -
   see [`hd-gpu-cost.md`](hd-gpu-cost.md)
+- **4K and 8K cost, per pass and per title** (2026-10-19, RX 7800 XT): everything scales
+  linearly with the pixels and defaults stay under 8 ms at 8K; the one outlier, Omega's circuit
+  shading 3.7 fragments a pixel with no depth prepass, now has one (pipelined 8K 9.4 to 4.9 ms,
+  byte-identical) - see [`high-resolution-cost.md`](high-resolution-cost.md)
 - **Blended glow batches stamp the mask** (2026-10-01): the arch lights, the start-line laser
   and the tunnel's rim light are blended batches with the glow bits, which the original's stencil
   stamps and ours did not, so they had no bloom; now drawn through a second alpha-only pass and
