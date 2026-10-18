@@ -366,7 +366,7 @@ pub(super) fn place_card(
             return None;
         }
     };
-    if spec.unlit_slots.contains(&8) {
+    if spec.unlit {
         unlit(&mut card.model);
     }
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();

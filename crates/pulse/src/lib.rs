@@ -128,7 +128,7 @@ pub const TITLE: &Title = &Title {
         // crisp digits (2026-10-18, Talon's Junction), where standing the model on the
         // mount drew it translucent over the scene.
         gantry_card: true,
-        unlit_slots: &[],
+        unlit: false,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,
     }),

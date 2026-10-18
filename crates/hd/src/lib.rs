@@ -219,7 +219,7 @@ pub const TITLE: &Title = &Title {
         wrap: true,
         zone_shares_one_texture: true,
         gantry_card: true,
-        unlit_slots: &[7, 8],
+        unlit: true,
         zone_gantry: Some(oag_title::adverts::ZoneGantry {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",
             assembly_ticks: 210,

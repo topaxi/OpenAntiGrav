@@ -176,7 +176,7 @@ fn load_card(
 ) -> Result<Card> {
     let (model, blob) = super::gantry::load_with_blob(archives, name, report)?;
     let mut card = card_from(slot, model, &blob, spec)?;
-    if spec.unlit_slots.contains(&slot) {
+    if spec.unlit {
         super::gantry::unlit(&mut card.model);
     }
     Ok(card)

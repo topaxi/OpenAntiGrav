@@ -380,11 +380,11 @@ fn hd_builds_a_512_by_256_card_for_each_slot_with_a_quad() {
     );
 }
 
-/// The original's slot 7 and slot 8 card passes are unlit `TEX * 1` (RPCS3, 2026-10-18); slots
-/// 2, 3 and 5 were never drawn as cards in a hooked frame, so they keep the stand-in rig.
+/// Every HD card pass the original draws is unlit `TEX * 1` (RPCS3, 2026-10-18): slots 2, 3, 5,
+/// 7 and 8 take no vertex through the stand-in rig. Pulse's cards are not read and stay lit.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_draws_slots_7_and_8_unlit_and_leaves_the_unmeasured_slots_lit() {
+fn hd_draws_every_card_unlit() {
     let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
         return;
     };
@@ -394,9 +394,13 @@ fn hd_draws_slots_7_and_8_unlit_and_leaves_the_unmeasured_slots_lit() {
         ..crate::Options::default()
     })
     .expect("loading the race");
+    assert!(loaded.billboards.adverts.len() >= 5, "slots 2, 3, 5, 7, 8");
     for card in &loaded.billboards.adverts {
-        let any_lit = card.model.vertices.iter().any(|v| v.lit != 0.0);
-        assert_eq!(any_lit, !matches!(card.slot, 7 | 8), "slot {}", card.slot);
+        assert!(
+            card.model.vertices.iter().all(|v| v.lit == 0.0),
+            "slot {} takes the stand-in rig",
+            card.slot
+        );
     }
 }
 
