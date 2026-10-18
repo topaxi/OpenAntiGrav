@@ -16,6 +16,7 @@ mod in_parallel;
 mod pickup_icon_ground_truth;
 mod pilot_assist_ground_truth;
 mod pilot_assist_levels_ground_truth;
+mod pulse_gantry_circuits_ground_truth;
 mod plasma_ground_truth;
 mod portuguese_br_ground_truth;
 mod post_finish_ground_truth;

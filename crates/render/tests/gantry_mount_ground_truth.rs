@@ -279,12 +279,11 @@ fn every_circuit_authors_the_same_gantry_mount() {
             mount.thickness,
             mount.width
         );
-        // **What `gantry::mount` must return, and the invariant a reversed
-        // preference would break.** `14_Track` puts its `billboard8` stub 354
-        // units and 54 degrees away from the backplate, so the two are not
-        // interchangeable and the stub is not a safe fallback: a build that
-        // reached for it first would stand that circuit's gantry somewhere
-        // else entirely.
+        // `gantry::mount` returns the backplate when a circuit has one. Until
+        // 2026-10-18 the preference was load-bearing: `14_Track`'s stub fit was
+        // 354 units and 54 degrees off the backplate because it spanned two
+        // quads. `surface` now fits the board's cluster alone, so the two agree
+        // (asserted below) and the preference is only a tie-break.
         if let Some(backplate) = backplate {
             let chosen = gantry::mount(&track).expect("a mount was found above");
             assert!(
@@ -301,14 +300,11 @@ fn every_circuit_authors_the_same_gantry_mount() {
         found > 2,
         "only {found} circuit(s) author a mount - the two it was discovered on are not a convention"
     );
-    // **The two co-located surfaces are not interchangeable, and the disc
-    // says which.** On eleven circuits the stub sits a unit or two from the
-    // backplate on the same plane, so the choice would be noise; on
-    // `14_Track` the two are hundreds of units and tens of degrees apart, so
-    // a build that reached for `billboard8.tga` first would put that
-    // circuit's gantry somewhere else entirely. `gantry::mount` prefers the
-    // backplate for this reason, and this loop is what would catch that
-    // preference being reversed.
+    // **The two co-located surfaces now agree on every circuit.** `14_Track`
+    // binds `billboard8` on a second quad 880 units from the board (81
+    // indices; the board is 108, 164 units ahead of the Start Position), and
+    // fitting one plane across both put the stub 354 units and 54 degrees off
+    // the backplate. `gantry::surface` fits the largest draw's cluster only.
     let disagreeing: Vec<&(String, f32, f32)> = agreements
         .iter()
         .filter(|(_, _, tilt)| *tilt > 5.0)
@@ -321,10 +317,9 @@ fn every_circuit_authors_the_same_gantry_mount() {
         disagreeing.iter().map(|(id, ..)| id).collect::<Vec<_>>(),
     );
     assert!(
-        !disagreeing.is_empty(),
-        "the stub agrees with the backplate everywhere - `gantry::mount`'s preference \
-         for the backplate is then untested by this sweep, and the reason it exists \
-         (`14_Track`) has gone missing from the disc or from the measurement",
+        disagreeing.is_empty(),
+        "the stub fit spans quads again on {:?}: the cluster rule in `gantry::surface` broke",
+        disagreeing.iter().map(|(id, ..)| id).collect::<Vec<_>>(),
     );
 }
 
