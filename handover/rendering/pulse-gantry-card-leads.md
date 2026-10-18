@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Pulse's gantry is a card now; its wrap mode and fifteen circuits are not checked against the original
+# Pulse's gantry is a card now; its wrap mode and fourteen circuits are not checked against the original
 
 2026-10-18, `gantry-pulse`: slot 8 on Pulse (PSP and PS2) draws through the model's own camera into the 128 x 128
 target the track's `billboard8` quad samples, and Pulse's cards wrap in U and V. Account and evidence in
@@ -11,7 +11,7 @@ target the track's `billboard8` quad samples, and Pulse's cards wrap in U and V.
 ## Open
 
 - **The original's wrap mode is inferred.** Repeat in both axes follows from the authored UVs (U 0.875..2.0, V
-  0.5..2.0 on 12 of the 16 circuits, V negated) but no GE dump read `TEXWRAP`. Dump one of those circuits (not
+  0.5..2.0 on 12 of the 16 circuits, V negated) and the picture agrees with PPSSPP on one such circuit, but no GE dump read `TEXWRAP`. Dump one of those circuits (not
   Talon's Junction, whose quad is 0..1) and read it.
 - **Talon's Junction and Moa Therma White (`03_Track`) were laid against the original.** The other 14 read
   `3 2 1` on an opaque panel in ours; none was captured on PPSSPP.
