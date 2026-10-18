@@ -28,14 +28,16 @@ categories: [rendering]
 2. If the drawn blocks are chain-free for a whole family, gate `NO_SPECULAR` on that family
    and regenerate any HD golden in its own commit.
 
-## Open from `gantry-finish` (2026-10-18, final lap and finish states)
+## Open from `gantry-finish` and `hd-cards-unlit` (2026-10-18)
 
-The gantry card is now drawn unlit (`oag_raceplay::gantry::unlit`; `docs/rendering/start-gantry.md`, "the card was lit
-twice"). What is left:
+Landed: every HD card (slots 2, 3, 5, 7, 8) is drawn unlit (`Adverts::unlit`; `docs/rendering/start-gantry.md`, "every card is
+unlit"). What is left:
 
-- The FINAL LAP panel is still about 2x darker on screen than the original's (`27 57 62` against `65 120 118`), not
-  pose-matched. Needs a way to force the gantry window on ours (the original's `lapboard --window` has no counterpart),
-  then a grid-pose frame against `rpcs3-drive.py lapboard --window 9.5,9.9`.
-- The other HD cards (slot 7 `fx350`, adverts 2/3/5) are drawn through the same stand-in rig; the original's programs are
-  the same unlit `TEX * 1`. Measure per slot before clearing `lit` there.
-- Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer: not started, waits for `gantry-pulse` to merge.
+- **FINAL LAP panel residual.** Pose-matched (`--pose=-132.15,-49.6,-175.36 --anim-seconds 9.75`), the panel reads 0.53 to
+  0.56 of the original against 0.63 to 0.66 for the whole frame: a whole-frame HD brightness gap plus a panel-only ~0.8. Needs
+  the quad's draw state (`billboard8` program constants, N.L, fog) read on both sides at this pose.
+- **The finish.** Static reading says the flag persists; no RPCS3 capture (the lap counter cannot be forced, branch `lap == 0`
+  wins). A real three-lap finish on RPCS3 would settle it.
+- Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer, and Pulse's `Adverts::unlit` (`false`, unread): with
+  `gantry-pulse` / `pulse-card-verify`.
+- The advert slots on the posts: Campaign slot 7 is `Blitzed_board.vex` in the original and `fx350` in ours.
