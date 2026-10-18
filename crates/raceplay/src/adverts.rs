@@ -50,6 +50,9 @@ pub struct Card {
     pub view_projection: Mat4,
     /// The target's size in pixels, the title's [`oag_title::adverts::Adverts::target`].
     pub size: (u32, u32),
+    /// Whether the track's quads sample this card with V wrapping: a title whose
+    /// draws negate V ([`oag_title::adverts::Adverts::flip_v`]).
+    pub repeat_v: bool,
     /// The gantry's clock and board-window cull, on the card that is slot 8 of
     /// a title that draws it as one; `None` for an advert, which runs on the
     /// scenery clock.
@@ -195,12 +198,14 @@ pub(super) fn card_from(
         model,
         view_projection,
         size: spec.target,
+        repeat_v: spec.flip_v,
         timeline: None,
     })
 }
 
 struct CardGpu {
     slot: u32,
+    repeat_v: bool,
     timeline: Option<crate::gantry::CardTimeline>,
     drawable: Drawable,
     view_projection: Mat4,
@@ -328,6 +333,7 @@ impl Cards {
             );
             gpu.push(CardGpu {
                 slot: card.slot,
+                repeat_v: card.repeat_v,
                 timeline: card.timeline,
                 drawable,
                 view_projection: card.view_projection,
@@ -359,7 +365,7 @@ impl Cards {
     ) {
         for &(texture_slot, number) in placeholders {
             if let Some(card) = self.cards.iter().find(|c| c.slot == number) {
-                track.set_albedo(device, queue, texture_slot, &card.colour);
+                track.set_albedo(device, queue, texture_slot, &card.colour, card.repeat_v);
                 #[cfg(test)]
                 {
                     self.rebound += 1;

@@ -119,7 +119,11 @@ pub const TITLE: &Title = &Title {
         colour_pool: true,
         flip_v: true,
         zone_shares_one_texture: false,
-        gantry_card: false,
+        // Measured: the same dump shows the gantry as pass B into the 128 x 128 target,
+        // and the PPSSPP software renderer draws the board as an opaque panel with
+        // crisp digits (2026-10-18, Talon's Junction), where standing the model on the
+        // mount drew it translucent over the scene.
+        gantry_card: true,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,
     }),

@@ -390,6 +390,7 @@ impl Drawable {
         queue: &wgpu::Queue,
         texture_slot: usize,
         view: &wgpu::TextureView,
+        repeat_v: bool,
     ) {
         // Slot 0 is the white fallback, so a texture slot n binds group n + 1.
         let slot = texture_slot + 1;
@@ -398,7 +399,7 @@ impl Drawable {
         };
         let card = self
             .card
-            .get_or_insert_with(|| mesh_render::card_material(device, queue, view));
+            .get_or_insert_with(|| mesh_render::card_material(device, queue, view, repeat_v));
         let material = mesh_render::bindless::Material {
             albedo: view.clone(),
             ..card.clone()

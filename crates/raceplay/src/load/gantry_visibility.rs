@@ -140,6 +140,13 @@ pub(super) fn build(
         // another gets that one drawn rather than Pulse's substituted for it.
         if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
             named_slot_8 = true;
+            // Pulse's clock is measured; the PS3 titles run HD's own
+            // race-manager window off their asset's `GO` edge (`gantry::clock`).
+            let clock = if has_ps3_geometry {
+                super::super::gantry::ClockRule::HdRaceManager
+            } else {
+                super::super::gantry::ClockRule::Measured
+            };
             if let Some(spec) = gantry_card {
                 // The mode picks the board (measured on HD, `GetMode()` 6).
                 let zone_board = spec.zone_gantry.filter(|_| mode == Mode::Zone);
@@ -149,16 +156,10 @@ pub(super) fn build(
                     track_model,
                     spec,
                     zone_board,
+                    clock,
                     report,
                 ));
             } else {
-                // Pulse's clock is measured; the PS3 titles run HD's own
-                // race-manager window off their asset's `GO` edge (`gantry::clock`).
-                let clock = if has_ps3_geometry {
-                    super::super::gantry::ClockRule::HdRaceManager
-                } else {
-                    super::super::gantry::ClockRule::Measured
-                };
                 gantry = super::super::gantry::place(
                     archives,
                     model,

@@ -48,6 +48,10 @@ pub struct Adverts {
     /// Whether slot 8 - the start gantry - is drawn as a card like the other
     /// slots instead of as a model stood on the track's mount.
     ///
+    /// Wipeout Pulse (both pressings): **measured on PPSSPP** - the 2026-10-06 GE dump
+    /// draws the gantry as pass B into the 128 x 128 target, and the software
+    /// renderer shows the board opaque (2026-10-18).
+    ///
     /// Wipeout HD: **measured on RPCS3 (2026-10-08, Talon's Junction, one hooked
     /// boot)**: the frame's second 512 x 256 colour target is drawn with
     /// `321_go_64.gtf` (64 x 128 DXT5, 8 mips, trilinear) through a

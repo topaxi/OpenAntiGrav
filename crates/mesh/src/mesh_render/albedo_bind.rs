@@ -11,9 +11,16 @@ use super::texture;
 ///
 /// Everything besides the albedo is what a slot with no lightmap, no pad mask
 /// and no wave map binds in [`super::build`]: black with alpha 1, a flat tangent
-/// normal with zero alpha, and white. The sampler clamps, because the picture is
+/// normal with zero alpha, and white. The sampler clamps in U, because the picture is
 /// one whole frame and not a tiling surface, and filters linearly with no mip
 /// chain to choose from.
+///
+/// `repeat_v` makes V wrap instead. **Pulse's draws sample a card with V negated**
+/// (`TEXSCALE` V = -1, a live PPSSPP dump) over quads whose authored V runs 0 to 1 or
+/// 1.5 to 2.0, so every coordinate lands at or below zero and only wraps back into the
+/// picture; a clamp pins them all to the first row and the advert reads as one flat
+/// colour (2026-10-18: Talon's Junction slot 7 drew plain blue under a clamp and its
+/// stripes under a wrap, and the start gantry's `3` never showed).
 ///
 /// # Panics
 ///
@@ -23,6 +30,7 @@ pub fn card_material(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     albedo: &wgpu::TextureView,
+    repeat_v: bool,
 ) -> Material {
     let flat = |rgba: [u8; 4], what: &str| {
         texture::upload_rgba(device, queue, 1, 1, &rgba, what, None)
@@ -33,8 +41,16 @@ pub fn card_material(
         albedo: albedo.clone(),
         sampler: device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("card albedo"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: if repeat_v {
+                wgpu::AddressMode::Repeat
+            } else {
+                wgpu::AddressMode::ClampToEdge
+            },
+            address_mode_v: if repeat_v {
+                wgpu::AddressMode::Repeat
+            } else {
+                wgpu::AddressMode::ClampToEdge
+            },
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
