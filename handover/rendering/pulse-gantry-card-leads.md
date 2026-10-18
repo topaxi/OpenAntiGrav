@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Pulse's gantry card: sampler measured; three leads left
+# Pulse's gantry card: sampler measured; leads left
 
 2026-10-18, `gantry-pulse` then `pulse-card-verify`: slot 8 on Pulse (PSP and PS2) draws through the model's own
 camera into the 128 x 128 target the track's `billboard8` quad samples, wrapping in U and V. The wrap is **measured**
@@ -14,15 +14,13 @@ original".
 
 - **A framed shot of a two-tile advert quad** (raw V 0..2, e.g. `13`'s 32-vertex prim) on the original and ours: the
   register says it tiles, the picture was not framed (the countdown camera does not reach it).
-- **The second `billboard8` draw on `14`** (81 indices at 378.8, 90.5, -273.9): a dump taken with the craft near it
-  decides board versus debris; `psp-drive.py place` did not hold the pose on `14` (back at the grid). Circuit `11` is
-  not offered by the original's Track Select.
-- **`11` in ours** loads with a "44.6 x 643.7" panel extent and the board hangs over the grid; unreachable on the
-  original, so a look-only item.
+- **The second `billboard8` quads** (`14`: 81 indices at 378.8, 90.5, -273.9; `11`: 75 indices) are decided from the asset
+  as repeater panels (`docs/rendering/start-gantry.md`, 2026-10-18 `pulse-mount-11`); a framed shot beside one on the
+  original is still open (`place` respawns the craft off the track).
 - **PS2 is by analogy**: not captured on PCSX2, its `TEXWRAP` equivalent unread.
 - **Final lap / chequered** on a second circuit.
 
 ## Next Steps
 
-1. `14`: reach a pose near the second quad (a `place` along `14`'s own forward spline, or a save state mid-lap) and `census` the dump.
+1. A framed shot of a second quad on `14`: a `place` on a spline point (`Spline::nearest` gives one) or a save state mid-lap.
 2. PCSX2 on one circuit, reading the GS sampler state of the card draw.

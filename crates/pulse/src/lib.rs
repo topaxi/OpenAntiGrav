@@ -129,7 +129,10 @@ pub const TITLE: &Title = &Title {
         // crisp digits (2026-10-18, Talon's Junction), where standing the model on the
         // mount drew it translucent over the scene.
         gantry_card: true,
-        adverts_unlit: false,
+        // Measured (2026-10-18, PPSSPP software GE dumps, `01_Track` and `16_Track`): the
+        // advert passes share the gantry's 128 x 128 target and every prim of every run has
+        // `LIGHTINGENABLE` 0, as the gantry's own pass does.
+        adverts_unlit: true,
         card_unlit: true,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,

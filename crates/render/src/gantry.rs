@@ -538,24 +538,36 @@ pub fn surface(model: &Model, texture: &str) -> Option<Mount> {
         return None;
     }
 
-    let mut positions = Vec::new();
-    let mut normals = Vec::new();
-    let mut node = None;
-    for draws in [
+    let bound: Vec<&oag_mesh::mesh::DrawCall> = [
         &model.draws,
         &model.alpha_tested_draws,
         &model.transparent_draws,
-    ] {
-        for draw in draws {
-            if !draw.texture.is_some_and(|slot| slots.contains(&slot)) {
-                continue;
-            }
-            node = node.or(draw.node);
-            for i in draw.range.clone() {
-                let v = model.vertices[model.indices[i as usize] as usize];
-                positions.push(Vec3::from(v.position));
-                normals.push(Vec3::from(v.normal));
-            }
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|d| d.texture.is_some_and(|slot| slots.contains(&slot)))
+    .collect();
+    // A texture can be bound on quads that stand far apart: circuit `11` binds
+    // `billboard8` on the board (164 units ahead of the Start Position) and on a
+    // 75-index quad 795 units away, and one plane fitted across both is a
+    // 44.6 x 643.7 sliver hung over the grid. The board is the draw with the
+    // most indices (chosen, not measured; on `11` and `14` it is also the one
+    // ahead of the Start Position), and a draw joins it only when the two
+    // bounding spheres touch, so a board built of adjacent draws stays whole.
+    let anchor = bound.iter().max_by_key(|d| d.range.len())?;
+    let anchor_centre = Vec3::from(anchor.bounds.centre);
+    let mut positions = Vec::new();
+    let mut normals = Vec::new();
+    let mut node = None;
+    for draw in bound.iter().filter(|d| {
+        (Vec3::from(d.bounds.centre) - anchor_centre).length()
+            <= anchor.bounds.radius + d.bounds.radius
+    }) {
+        node = node.or(draw.node);
+        for i in draw.range.clone() {
+            let v = model.vertices[model.indices[i as usize] as usize];
+            positions.push(Vec3::from(v.position));
+            normals.push(Vec3::from(v.normal));
         }
     }
     let mut mount = plane(node, &positions)?;
