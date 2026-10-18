@@ -219,8 +219,8 @@ impl ZoneClassAnnouncer {
 /// 2.48 s in `speech_zone.bnk`; `go` is 0.80 s in all three.
 ///
 /// The default bank is [`super::SoundBanks::speech`]; this holds the two that
-/// replace it. `None` on a title whose start-of-race voice has not been
-/// measured, which is every title but Pulse: Pure's and HD's own
+/// replace it. Every title but Pulse lends Pulse's timing (chosen, not
+/// measured): Pure's and HD's own
 /// `speech_zone.bnk` also carry `ready` and `go`, but nothing here says when
 /// or from where those titles play them.
 ///

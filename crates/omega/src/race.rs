@@ -92,7 +92,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,
-    countdown_voice: None,
+    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
+    // its mode's speech bank. Unverified against the original.
+    countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
@@ -392,3 +394,10 @@ mod team_identity_tests {
         assert_eq!(of("Tigron_x"), of("Tigron"));
     }
 }
+
+/// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
+/// reads the ordinary speech bank. Chosen, not measured - see `oag_title::CountdownVoice`.
+pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
+    eliminator_bank: r"Data\audio\sound\speech.bnk",
+    zone_bank: r"Data\audio\sound\speech.bnk",
+};

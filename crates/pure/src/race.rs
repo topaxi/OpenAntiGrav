@@ -77,7 +77,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
-    countdown_voice: None,
+    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
+    // its mode's speech bank. Unverified against the original.
+    countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
@@ -498,6 +500,13 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Triakis", "triakis"),
     oag_title::team::team("Medievil", "medievil"),
 ];
+
+/// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
+/// reads the ordinary speech bank. Chosen, not measured - see `oag_title::CountdownVoice`.
+pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
+    eliminator_bank: r"Data\Sound\speech.bnk",
+    zone_bank: ZONE_ANNOUNCER.bank,
+};
 
 #[cfg(test)]
 mod tests {
