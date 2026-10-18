@@ -473,6 +473,14 @@ pub struct Scene {
 /// One scene build's pipeline cache: `(asked for, reused, distinct built)`.
 type BuildCacheCounts = (u32, u32, usize);
 
+/// Whether the circuit's opaque list is drawn through the depth prepass: the titles whose
+/// circuit shades several fragments a pixel, the ones with the HD bloom chain or Omega's
+/// tonemap. A function of the two chains rather than of a title, the way the bloom choice
+/// below is made.
+pub(super) fn circuit_prepass(hd_chain: bool, omega_chain: bool) -> bool {
+    hd_chain || omega_chain
+}
+
 impl Scene {
     /// Builds both pipelines and a depth buffer for a viewport of `size`.
     ///
@@ -650,9 +658,10 @@ impl Scene {
             // tier's depth map too, hence `Both`.
             mesh_render::ShadowReceiver::Both,
             mesh_render::Texcoords::Interleaved,
-            // HD's circuit alone: its opaque list shades about two fragments
-            // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
-            hd.is_some(),
+            // HD's and Omega's circuits: their opaque lists shade about two
+            // and 3.7 fragments a pixel, where Pulse's shades 1.2 - see
+            // `mesh_render::Prepass`.
+            circuit_prepass(hd.is_some(), omega.is_some()),
             false,
             mesh_render::Velocity::Write,
             true,
