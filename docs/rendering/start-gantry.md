@@ -2165,3 +2165,48 @@ anything is authored:
 Neither has been checked. Whoever picks this up should parse the backplate
 first and only then look at the blend state - the cheaper answer is that the
 asset already says what to draw.
+
+## HD: "the gantry is blurry, it has transparent edges" - measured on all twelve circuits (2026-10-18, `gantry-hd`)
+
+**Reported from play by the maintainer, all titles.** This section is the HD half; a negative result on the hypotheses
+that could be tested here, with what is still open.
+
+**What was run.** `oag-game --race --track /data/environments/<env>/track.vex --ticks 273` (and 150, 215, 245, 330 on
+`02_track`) with the default camera and `--camera-view far`, 1280x720 and 1920x1080, on the twelve circuits the
+carousel lists (`amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra`, `01_vineta_k`, `02_track`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `12_sol_2`, `15_anulpha_pass`).
+
+- **(d) falsified.** All twelve take the card route: the loader (`RUST_LOG=debug`) prints `start gantry ...: drawn through
+  its own camera into a 512x256 target shown on the circuit's billboard8 quad(s)` on every one. The same run lists
+  `billboard slot 7: .../fx350.vex drawn through its own camera ...` on every circuit and slots 2, 3, 5 on Talon's
+  Junction. (Report lines are `debug`; at the default level none prints.)
+- **(a) falsified for the composite.** The card is cleared `Color::TRANSPARENT` but its model draw is
+  `GlowMask::Protected` (`ColorWrites::COLOR`), so its alpha is 0 over the whole card. Clearing to opaque black instead
+  (the R5G6B5 card has no alpha) changed **0 pixels** on `10_sebenco_climb` and `12_sol_2` (`magick compare -metric AE`).
+  It did change `02_track`: the centre board turned flat white, so **something in the scene does read a card's alpha**
+  and an alpha of 1 is wrong there. The edit was reverted; the clear stays transparent. Open: what reads it.
+- **(c) not seen.** The card, read back through the existing `adverts::tests` dump (`OAG_ADVERT_DUMP`, now with
+  `OAG_ADVERT_TRACK` to pick a circuit), is the same 512x256 picture on Talon's Junction and `02_track`: slot 7 the teal
+  FX-350 banner, slot 8 `3 2 1` then `GO`, slot 2 the EGX advert. The quad UVs show the whole card on every circuit
+  looked at.
+- **(b) not a difference.** The card target has one mip level; the original's card is a render target too (surface `0x123`,
+  one level) so a missing mip chain on the card is not a difference. (Whether the card's own sampler on the track quad matches the original's was not read.)
+- **What a player sees.** The `GO` strokes are soft at the far camera because the 512x256 card is minified onto a quad
+  that is small on screen; the original does the same ("The countdown is very blurry" above). On `10_sebenco_climb`
+  (white snow level) the three panels read with a white rim: the surroundings are blown out to white there, and the rim
+  is the board frame against it. `02_track` shows thin dark outlines around the side panels.
+
+**The original, tried and not usable for pixels.** `rpcs3-drive.py countdown --load 40 --drive 25 --nav "Main Menu=right"
+--nav "Track Creation=right,right"` ran to the grid and recorded 35 MiB (`Moa Therma` loads: that is `03_track`, not
+`10_sebenco_climb`; the carousel order is not the model order above). Under Xvfb the frame is washed out to near white
+and the video has decode damage, the failure `Not captured` above names; the player's grid slot differs too (POS 8
+there, slot 1 here) so the board is far ahead in the original and overhead in ours. No pose-matched frame pair was
+obtained, so no claim of "matches the original" or "differs from it" is made about edge or blur.
+
+**Per title.** HD: above. Omega: no PS4 capture path and the `--race` run on the extracted tree did not start here;
+not checkable. 2048: `no start gantry: this circuit's track authors no 321backplate/billboard8 surface`, so the board
+is not drawn at all on the default circuit (checked, differs; unchanged by this lane). Pulse: out of lane.
+
+**Open.** (1) A pose-matched RPCS3 pair on a host where RPCS3 renders (`scripts/rpcs3_draw_hook.py`, the billboard8 draw's
+sampler and blend), on `10_sebenco_climb` and `02_track`. (2) What reads the card's alpha on `02_track`. No code
+behaviour changed.
