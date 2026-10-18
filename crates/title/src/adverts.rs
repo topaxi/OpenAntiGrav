@@ -96,7 +96,10 @@ pub struct Adverts {
     /// not named per slot). Every one of those 120 passes and the grid frame's 42 has one of two fragment
     /// programs: `TEX H0.xyz; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, 0` (opaque) or
     /// `TEX H0; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, H0` (blended), with the
-    /// constant patched to one per draw. Pulse: not read, `false`.
+    /// constant patched to one per draw. Wipeout Pulse: **measured on PPSSPP (2026-10-18,
+    /// `pulse-mount-11`)**: the advert passes run into the same 128 x 128 target as slot 8, and
+    /// every prim of every run (slot 7 on `16_Track`'s home straight, four adverts near `01_Track`'s
+    /// grid) has `LIGHTINGENABLE` 0.
     pub adverts_unlit: bool,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.

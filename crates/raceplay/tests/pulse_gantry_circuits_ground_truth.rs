@@ -31,7 +31,11 @@ fn circuit_11_mounts_on_its_board_quad_not_a_fit_across_two() {
     let model = &loaded.track_model;
     let mount = oag_render::gantry::mount(model).expect("11 authors a billboard8 surface");
 
-    let start = loaded.setup.start_position.as_ref().expect("a Start Position");
+    let start = loaded
+        .setup
+        .start_position
+        .as_ref()
+        .expect("a Start Position");
     let from_start = (mount.centre - Vec3::from(start.position)).length();
     assert!(
         (150.0..180.0).contains(&from_start),
