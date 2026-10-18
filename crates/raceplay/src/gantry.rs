@@ -366,7 +366,9 @@ pub(super) fn place_card(
             return None;
         }
     };
-    unlit(&mut card.model);
+    if !pulse {
+        unlit(&mut card.model);
+    }
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
     let evidence = if pulse {
         format!(
