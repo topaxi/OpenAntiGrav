@@ -21,6 +21,7 @@ mod camera;
 mod cannon_draw;
 mod correction;
 mod countdown;
+mod circuit_prepass;
 mod craft_cull;
 mod craft_flash;
 mod craft_shadows;
