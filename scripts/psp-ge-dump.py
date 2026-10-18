@@ -24,6 +24,13 @@ vertex count is the batch's own. Against this project's own draws that signature
 matched 88 % of the static batches of one frame (135 of 153) and 97 % of a
 second (151 of 157); a batch it misses is one the two sides split differently.
 
+Each record also carries the texture and target state in force at the PRIM, raw
+24-bit payloads: `fbptr` (the target being drawn into), `texsize0`, `texmode`
+(max mip level in bits 16..18), `texfilter` (min bits 0..2, mag bits 8..10),
+`texwrap` (bit 0 U clamp, bit 8 V clamp, 0 = repeat), `texscale_*`, `blendenable`,
+and the vertex UV range `uv_mn`/`uv_mx` (before TEXSCALE). A draw that samples
+a render target is one whose `tex` equals an `fbptr` other draws used.
+
 The output is **derived game data**: keep it under `data/`, never commit it.
 
 The `.ppdmp` layout (version 6) as read here: a 21-byte header (`PPSSPPGE`, a
@@ -45,6 +52,27 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 FLOAT24 = 0xFFFFFF
+
+
+TEX_STATE_OPS = {
+    0x9C: "fbptr",  # FRAMEBUFPTR: which target the pass draws into
+    0x9D: "fbwidth",  # FRAMEBUFWIDTH (high address bits in 16..23)
+    0x1E: "texen",  # TEXTUREMAPENABLE
+    0xB8: "texsize0",  # TEXSIZE0: width log2 bits 0..3, height log2 bits 8..11
+    0xC2: "texmode",  # TEXMODE: bits 16..18 = max mip level
+    0xC3: "texformat",
+    0xC6: "texfilter",  # min filter bits 0..2, mag filter bits 8..10
+    0xC7: "texwrap",  # bit 0 = U clamp, bit 8 = V clamp (0 = repeat)
+    0xC0: "texmapmode",
+    0xC8: "texlevel",
+    0xC9: "texfunc",
+    0x48: "texscale_u",
+    0x49: "texscale_v",
+    0x4A: "texoffset_u",
+    0x4B: "texoffset_v",
+    0x21: "blendenable",  # ALPHABLENDENABLE
+    0xDF: "blendmode",
+}
 
 
 def _f(word):
@@ -90,6 +118,28 @@ def _layout(vtype):
     offset += psz
     stride = align(offset, max(size[pos], size[nrm], size[tex], csz, 1))
     return stride, pos_offset, pos
+
+
+def _read_uvs(vtype, buf, stride, count):
+    """The (u, v) of every vertex, in texels-over-size units, or [] when untextured.
+
+    u8 and u16 coordinates are normalised the way the GE does (/128, /32768);
+    floats are read as is. The TEXSCALE/TEXOFFSET in force are not applied.
+    """
+    tex = vtype & 3
+    if not tex:
+        return []
+    wgt = (vtype >> 9) & 3
+    wcount = ((vtype >> 14) & 7) + 1
+    size = {1: 1, 2: 2, 3: 4}
+    offset = size[wgt] * wcount if wgt else 0
+    unit = {1: 1, 2: 2, 3: 4}[tex]
+    offset = (offset + unit - 1) // unit * unit
+    fmt, div = {1: ("<BB", 128.0), 2: ("<HH", 32768.0), 3: ("<ff", 1.0)}[tex]
+    return [
+        tuple(c / div for c in struct.unpack_from(fmt, buf, i * stride + offset))
+        for i in range(count)
+    ]
 
 
 def _read_pos(buf, at, fmt):
@@ -164,12 +214,15 @@ def census(path):
                     state["vtype"] = word & FLOAT24
                 elif op == 0xA0:
                     state["tex"] = word & FLOAT24
+                elif op in TEX_STATE_OPS:
+                    state[TEX_STATE_OPS[op]] = word & FLOAT24
                 elif op == 0x04 and vertices:
                     vtype = state.get("vtype", 0)
                     stride, pos_offset, fmt = _layout(vtype)
                     if not stride:
                         continue
                     count = len(vertices) // stride
+                    uvs = _read_uvs(vtype, vertices, stride, count)
                     pts = []
                     for i in range(count):
                         x, y, z = _read_pos(vertices, i * stride + pos_offset, fmt)
@@ -188,9 +241,14 @@ def census(path):
                                 "nv": count,
                                 "vt": vtype,
                                 "tex": state.get("tex", 0),
+                                # Texture and target state in force at the PRIM, raw
+                                # 24-bit command payloads (see TEX_STATE_OPS).
+                                **{k: state.get(k) for k in TEX_STATE_OPS.values()},
                                 "mn": [min(p[k] for p in pts) for k in range(3)],
                                 "mx": [max(p[k] for p in pts) for k in range(3)],
                                 "diam": diameter(pts),
+                                "uv_mn": [min(c) for c in zip(*uvs)] if uvs else None,
+                                "uv_mx": [max(c) for c in zip(*uvs)] if uvs else None,
                                 # The matrices in force, for the clip-space test of
                                 # `scripts/pvs-cull-check.py`: world and view are
                                 # 4x3 (rows x, y, z, translation), proj 4x4, all

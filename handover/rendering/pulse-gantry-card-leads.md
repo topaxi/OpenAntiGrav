@@ -2,28 +2,27 @@
 categories: [rendering]
 ---
 
-# Pulse's gantry is a card now; its wrap mode and fourteen circuits are not checked against the original
+# Pulse's gantry card: sampler measured; three leads left
 
-2026-10-18, `gantry-pulse`: slot 8 on Pulse (PSP and PS2) draws through the model's own camera into the 128 x 128
-target the track's `billboard8` quad samples, and Pulse's cards wrap in U and V. Account and evidence in
-`docs/rendering/start-gantry.md`, "Pulse: the gantry is a card too".
+2026-10-18, `gantry-pulse` then `pulse-card-verify`: slot 8 on Pulse (PSP and PS2) draws through the model's own
+camera into the 128 x 128 target the track's `billboard8` quad samples, wrapping in U and V. The wrap is **measured**
+(`TEXWRAP 0`, filter `0x107`, one level, on ten PSP circuit loads and two boots) and nine circuits were laid
+against ours with no defect found. Account in `docs/rendering/start-gantry.md`, "Pulse's gantry card against the
+original".
 
 ## Open
 
-- **The original's wrap mode is inferred.** Repeat in both axes follows from the authored UVs (U 0.875..2.0, V
-  0.5..2.0 on 12 of the 16 circuits, V negated) and the picture agrees with PPSSPP on one such circuit, but no GE dump read `TEXWRAP`. Dump one of those circuits (not
-  Talon's Junction, whose quad is 0..1) and read it.
-- **Talon's Junction and Moa Therma White (`03_Track`) were laid against the original.** The other 14 read
-  `3 2 1` on an opaque panel in ours; none was captured on PPSSPP.
-- **Every Pulse advert's sampling changed** (the card sampler wraps): slot 1's quad (V -2..0) now draws two
-  tiles of its card. Not compared against the original; a framed shot of slot 1 was not obtained.
-- **PS2 is by analogy**: not captured on PCSX2.
-- **A second `billboard8` quad** on circuit `11` (75 vertices) and `14` (81 vertices, U 0..2) is drawn with the
-  same card; whether it is a second board or authored debris is unread.
-- **The card's alpha is 0 everywhere** (clear 0, blend writes no alpha) and the quad ignores it; if a later
-  title's quad alpha-blends, that is the first place to look.
+- **A framed shot of a two-tile advert quad** (raw V 0..2, e.g. `13`'s 32-vertex prim) on the original and ours: the
+  register says it tiles, the picture was not framed (the countdown camera does not reach it).
+- **The second `billboard8` draw on `14`** (81 indices at 378.8, 90.5, -273.9): a dump taken with the craft near it
+  decides board versus debris; `psp-drive.py place` did not hold the pose on `14` (back at the grid). Circuit `11` is
+  not offered by the original's Track Select.
+- **`11` in ours** loads with a "44.6 x 643.7" panel extent and the board hangs over the grid; unreachable on the
+  original, so a look-only item.
+- **PS2 is by analogy**: not captured on PCSX2, its `TEXWRAP` equivalent unread.
+- **Final lap / chequered** on a second circuit.
 
 ## Next Steps
 
-1. `scripts/psp-ge-dump.py` on a `01_Track` countdown frame: read `TEXWRAP` on the prims that sample the card.
-2. Capture each remaining circuit's `3` frame on PPSSPP software and lay it against `--ticks 150`.
+1. `14`: reach a pose near the second quad (a `place` along `14`'s own forward spline, or a save state mid-lap) and `census` the dump.
+2. PCSX2 on one circuit, reading the GS sampler state of the card draw.

@@ -139,6 +139,36 @@ fn every_circuit_authors_the_same_gantry_mount() {
         };
         found += 1;
 
+        let slots: Vec<usize> = track
+            .textures
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| {
+                t.as_ref()
+                    .is_some_and(|t| t.label.to_ascii_lowercase().ends_with(SLOT8_TEXTURE))
+            })
+            .map(|(slot, _)| slot)
+            .collect();
+        for draws in [
+            &track.draws,
+            &track.alpha_tested_draws,
+            &track.transparent_draws,
+        ] {
+            for draw in draws
+                .iter()
+                .filter(|d| d.texture.is_some_and(|t| slots.contains(&t)))
+            {
+                println!(
+                    "  {id} billboard8-bound draw: {} indices, bounds centre {:.1},{:.1},{:.1} radius {:.1}",
+                    draw.range.len(),
+                    draw.bounds.centre[0],
+                    draw.bounds.centre[1],
+                    draw.bounds.centre[2],
+                    draw.bounds.radius,
+                );
+            }
+        }
+
         let start = start_position(&blob);
         let (distance, above, bearing) = match &start {
             Some(s) => {
@@ -193,6 +223,12 @@ fn every_circuit_authors_the_same_gantry_mount() {
             println!(
                 "  backplate vs billboard8: centres {gap:.2} apart, planes {tilt:.2} deg apart"
             );
+            if gap > 5.0 {
+                println!(
+                    "  billboard8 stub: centre {:.1},{:.1},{:.1}  {} verts  {:.1} wide x {:.1} tall",
+                    b.centre.x, b.centre.y, b.centre.z, b.vertices, b.width, b.height,
+                );
+            }
             agreements.push((id.to_string(), gap, tilt));
         }
         // **The claim `race::gantry` makes about scale.** The gantry is drawn

@@ -48,8 +48,9 @@ pub struct Adverts {
     /// level, LOD bias 0), with no anisotropy in the control word. A track quad
     /// whose coordinates run past 0..1 (a side panel tiling the banner) shows
     /// the picture repeated, where a clamp shows the edge texel smeared. Pulse
-    /// is `false`: its sampler state is unread, and a clamp is what it drew
-    /// before this field.
+    /// is `true`, **measured on PPSSPP (2026-10-18)**: every draw that samples
+    /// its 128 x 128 target has `TEXWRAP` 0 (repeat on U and V) and filter
+    /// `0x107` (linear, one level) in the GE list.
     pub wrap: bool,
     /// Whether a Zone race swaps the per-slot adverts for one shared texture.
     ///
