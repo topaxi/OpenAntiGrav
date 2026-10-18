@@ -11,8 +11,8 @@ use super::texture;
 ///
 /// Everything besides the albedo is what a slot with no lightmap, no pad mask
 /// and no wave map binds in [`super::build`]: black with alpha 1, a flat tangent
-/// normal with zero alpha, and white. The sampler clamps, because the picture is
-/// one whole frame and not a tiling surface, and filters linearly with no mip
+/// normal with zero alpha, and white. The sampler repeats where `wrap` says the
+/// title's own does (HD, measured), else clamps, and filters linearly with no mip
 /// chain to choose from.
 ///
 /// # Panics
@@ -23,7 +23,13 @@ pub fn card_material(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     albedo: &wgpu::TextureView,
+    wrap: bool,
 ) -> Material {
+    let address = if wrap {
+        wgpu::AddressMode::Repeat
+    } else {
+        wgpu::AddressMode::ClampToEdge
+    };
     let flat = |rgba: [u8; 4], what: &str| {
         texture::upload_rgba(device, queue, 1, 1, &rgba, what, None)
             .expect("a 1x1 texture fits every device")
@@ -33,8 +39,8 @@ pub fn card_material(
         albedo: albedo.clone(),
         sampler: device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("card albedo"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: address,
+            address_mode_v: address,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()

@@ -118,6 +118,7 @@ pub const TITLE: &Title = &Title {
         far: 2017.7,
         colour_pool: true,
         flip_v: true,
+        wrap: false,
         zone_shares_one_texture: false,
         gantry_card: false,
         zone_gantry: None,

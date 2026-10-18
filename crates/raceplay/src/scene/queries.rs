@@ -23,6 +23,14 @@ impl Scene {
             .map_or(0, crate::adverts::Cards::rebound)
     }
 
+    /// How many of those were bound with a wrapping sampler.
+    #[cfg(test)]
+    pub(crate) fn adverts_wrapped(&self) -> usize {
+        self.adverts
+            .as_ref()
+            .map_or(0, crate::adverts::Cards::wrapped)
+    }
+
     /// This scene's pipeline cache, as `(asked for, reused, distinct built)`.
     #[must_use]
     pub fn build_cache(&self) -> (u32, u32, usize) {

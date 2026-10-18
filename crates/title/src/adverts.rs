@@ -38,6 +38,19 @@ pub struct Adverts {
     /// its billboard quads with V running down (read off the track's vertices), so
     /// it needs none.
     pub flip_v: bool,
+    /// Whether the track draws that show a target sample it with its texture
+    /// coordinates wrapping, rather than clamped to the target's edge.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-18, `03_track`, one hooked
+    /// boot)**: both draws that read a 512 x 256 `R5G6B5` target carry texture
+    /// address `0x60010101` (wrap on U, V and W) and filter `0x02062000` (linear
+    /// magnification, `LINEAR_MIPMAP_LINEAR` minification over the target's one
+    /// level, LOD bias 0), with no anisotropy in the control word. A track quad
+    /// whose coordinates run past 0..1 (a side panel tiling the banner) shows
+    /// the picture repeated, where a clamp shows the edge texel smeared. Pulse
+    /// is `false`: its sampler state is unread, and a clamp is what it drew
+    /// before this field.
+    pub wrap: bool,
     /// Whether a Zone race swaps the per-slot adverts for one shared texture.
     ///
     /// Wipeout HD's `Billboard_LoadModelAndBind` takes a second branch while the

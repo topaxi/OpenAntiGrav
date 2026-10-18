@@ -235,7 +235,7 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
 /// materials `Scene::new` pointed at a card. Drop the rebinding and every
 /// placeholder shows its 8x8 digit stub (or, once stripped, nothing), and this
 /// reads zero.
-fn adverts_rebound(source: &str) -> Option<(usize, usize)> {
+fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
@@ -297,35 +297,42 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize)> {
         Default::default(),
     )
     .expect("the scene builds");
-    Some((wanted, scene.adverts_rebound()))
+    Some((wanted, scene.adverts_rebound(), scene.adverts_wrapped()))
 }
 
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
 fn pulse_psp_points_every_served_placeholder_at_its_card() {
-    let Some((wanted, rebound)) = adverts_rebound("data/images/pulse-psp-usa.chd") else {
+    let Some((wanted, rebound, wrapped)) = adverts_rebound("data/images/pulse-psp-usa.chd") else {
         return;
     };
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
+    assert_eq!(wrapped, 0, "Pulse's card sampler is unmeasured and clamps");
 }
 
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
 fn pulse_ps2_points_every_served_placeholder_at_its_card() {
-    let Some((wanted, rebound)) = adverts_rebound("data/images/pulse-ps2-eu.chd") else {
+    let Some((wanted, rebound, wrapped)) = adverts_rebound("data/images/pulse-ps2-eu.chd") else {
         return;
     };
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
+    assert_eq!(wrapped, 0, "Pulse's card sampler is unmeasured and clamps");
 }
 
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
 fn hd_points_every_served_placeholder_at_its_card() {
-    let Some((wanted, rebound)) = adverts_rebound("data/images/hdfury-ps3-eu-dec.iso") else {
+    let Some((wanted, rebound, wrapped)) = adverts_rebound("data/images/hdfury-ps3-eu-dec.iso")
+    else {
         return;
     };
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
+    assert_eq!(
+        wrapped, wanted,
+        "RPCS3 2026-10-18: HD's track quads sample the card with address 0x60010101 (wrap)"
+    );
 }
