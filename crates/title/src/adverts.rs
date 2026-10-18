@@ -74,6 +74,16 @@ pub struct Adverts {
     /// 255 on screen against a full white from the model route, whose white sits
     /// above the bloom gate's knee and smears into a halo.
     pub gantry_card: bool,
+    /// Whether the pass that draws slot 8's model into its card takes no light.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-18)**: the card passes are
+    /// `TEX; MUL H0.xyz, H0, {1,1,1,1}` with no lighting term; the track's
+    /// `billboard8` quad lights the card once, afterwards. Wipeout Pulse:
+    /// **measured on PPSSPP (2026-10-18, `pulse-card-verify`)**: `LIGHTINGENABLE`
+    /// is 0 on every prim drawn into the 128 x 128 target in four dumps (three
+    /// circuits and a second boot), with `TEXFUNC` modulate, while the same
+    /// frames' main pass has it set on part of its prims.
+    pub card_unlit: bool,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,
