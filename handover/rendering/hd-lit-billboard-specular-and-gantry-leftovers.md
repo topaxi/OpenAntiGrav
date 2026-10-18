@@ -27,3 +27,15 @@ categories: [rendering]
 1. `rg -c LG2` per drawn block over the HD materials that report `specular_exponent_unresolved`.
 2. If the drawn blocks are chain-free for a whole family, gate `NO_SPECULAR` on that family
    and regenerate any HD golden in its own commit.
+
+## Open from `gantry-finish` (2026-10-18, final lap and finish states)
+
+The gantry card is now drawn unlit (`oag_raceplay::gantry::unlit`; `docs/rendering/start-gantry.md`, "the card was lit
+twice"). What is left:
+
+- The FINAL LAP panel is still about 2x darker on screen than the original's (`27 57 62` against `65 120 118`), not
+  pose-matched. Needs a way to force the gantry window on ours (the original's `lapboard --window` has no counterpart),
+  then a grid-pose frame against `rpcs3-drive.py lapboard --window 9.5,9.9`.
+- The other HD cards (slot 7 `fx350`, adverts 2/3/5) are drawn through the same stand-in rig; the original's programs are
+  the same unlit `TEX * 1`. Measure per slot before clearing `lit` there.
+- Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer: not started, waits for `gantry-pulse` to merge.

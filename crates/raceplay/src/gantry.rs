@@ -366,6 +366,9 @@ pub(super) fn place_card(
             return None;
         }
     };
+    if !pulse {
+        unlit(&mut card.model);
+    }
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
     let evidence = if pulse {
         format!(
@@ -397,6 +400,20 @@ pub(super) fn place_card(
         tracker: std::cell::Cell::default(),
     });
     Some(card)
+}
+
+/// Takes the card's model out of the stand-in rig.
+///
+/// The original's slot 8 card passes are `TEX; MUL H0.xyz, H0, {1,1,1,1}` with no
+/// lighting term (RPCS3, 2026-10-18, final-lap and chequered windows, fragment
+/// programs `0xb45941`, `0xb459c1`, `0xb45a41`): the track's `billboard8` quad
+/// lights the card once, afterwards. A model vertex with no colour set is `lit`
+/// and takes the stand-in key and fill rig, which left a white texel at 131 on the
+/// card (0.514) where the original's reads 255.
+fn unlit(model: &mut Model) {
+    for vertex in &mut model.vertices {
+        vertex.lit = 0.0;
+    }
 }
 
 fn place_hd(

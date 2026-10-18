@@ -166,3 +166,70 @@ fn each_lap_window_draws_the_board_the_original_shows() {
         assert_eq!(shown(cull, &fx350, seconds), 0, "{seconds}");
     }
 }
+
+/// A scratch sweep: which list each gantry draw lands in, and the texels the
+/// flag and the panel sample. `OAG_SWEEP=1 cargo nextest run ... --run-ignored all`.
+#[test]
+#[ignore = "sweep: needs data/images/hdfury-ps3-eu-dec.iso and OAG_SWEEP"]
+fn survey_gantry_draw_lists() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(placed) = placed() else { return };
+    let model = &placed.model;
+    for (list, calls) in [
+        ("opaque", &model.draws),
+        ("alpha_tested", &model.alpha_tested_draws),
+        ("transparent", &model.transparent_draws),
+    ] {
+        for d in calls {
+            let tex = d.texture.and_then(|t| model.textures.get(t)?.as_ref());
+            let label = tex.map_or("-".to_string(), |t| t.label.clone());
+            let (mut lo, mut hi, mut amin, mut amax) = (255u8, 0u8, 255u8, 0u8);
+            if let Some(rgba) = tex.and_then(|t| t.to_rgba()) {
+                for p in rgba.chunks(4) {
+                    lo = lo.min(p[0]);
+                    hi = hi.max(p[0]);
+                    amin = amin.min(p[3]);
+                    amax = amax.max(p[3]);
+                }
+            }
+            if label.ends_with("checkered.gtf") || label.ends_with("honeyblue_noalpha.gtf") {
+                let t = tex.unwrap();
+                let rgba = t.to_rgba().unwrap();
+                let (w, h) = (t.width as usize, t.height as usize);
+                println!("  {label} {w}x{h}");
+                for y in (0..h).step_by((h / 8).max(1)) {
+                    let row: Vec<u8> = (0..w)
+                        .step_by((w / 8).max(1))
+                        .map(|x| rgba[(y * w + x) * 4])
+                        .collect();
+                    println!("   y{y}: {row:?}");
+                }
+                let uv: Vec<[f32; 2]> = model.indices[d.range.start as usize..d.range.end as usize]
+                    .iter()
+                    .take(8)
+                    .map(|i| model.vertices[*i as usize].texcoord)
+                    .collect();
+                println!("   uv {uv:?}");
+            }
+            println!(
+                "{list:13} key {:#010x} idx {:4} blend {:?} culled {} tex {label} r {lo}..{hi} a {amin}..{amax}",
+                gantry_key(d),
+                d.range.len(),
+                d.blend,
+                d.culled
+            );
+        }
+    }
+}
+
+/// The original's slot 8 card passes are unlit `TEX * 1` (RPCS3 final-lap and
+/// chequered windows): no vertex of the card's model takes the stand-in rig.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_card_is_drawn_unlit() {
+    let Some(card) = placed() else { return };
+    assert!(!card.model.vertices.is_empty());
+    assert!(card.model.vertices.iter().all(|v| v.lit == 0.0));
+}
