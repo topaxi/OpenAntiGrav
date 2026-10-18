@@ -137,7 +137,7 @@ fn start_during_the_countdown_pauses_again_without_a_tick() {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_start_voice_cues_are_raised_where_the_title_has_them() {
+fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     let Some(mut pulse) = loaded("data/images/pulse-psp-usa.chd") else {
         return;
     };
@@ -173,9 +173,14 @@ fn the_start_voice_cues_are_raised_where_the_title_has_them() {
     let Some(mut pure) = loaded("data/images/pure-psp-usa.chd") else {
         return;
     };
+    // Pulse's start voice is measured; Pure is lent it (chosen, not measured, commit 7d4a89814),
+    // so a resume on Pure voices GO too.
+    pure.raise_start_cue(Cue::Ready);
     pure.raise_start_cue(Cue::Go);
-    assert!(
-        pure.pending_cues().is_empty(),
-        "Pure voices no start, so a resume voices none"
+    let raised: Vec<Cue> = pure.pending_cues().iter().map(|event| event.cue).collect();
+    assert_eq!(
+        raised,
+        vec![Cue::Ready, Cue::Go],
+        "Pure voices the start with the cues Pulse's timing lends it"
     );
 }

@@ -503,7 +503,7 @@ pub enum Cue {
     /// `speech.bnk` (cue 11, six waveforms, 3.73 s), `speech_elim.bnk`
     /// (Eliminator, cue 19, 3.00 s) or `speech_zone.bnk` (Zone, cue 15, 2.48 s).
     /// Not in [`Self::ALL`]: it loads only on a title whose
-    /// `oag_title::RaceDefaults::countdown_voice` is measured, through
+    /// `oag_title::RaceDefaults::countdown_voice` is set (measured on Pulse, lent elsewhere), through
     /// `oag_sound::sfx::Banks::load_countdown`.
     /// `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
     Ready,
