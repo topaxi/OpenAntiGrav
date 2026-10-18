@@ -1678,6 +1678,65 @@ def cmd_capture(args):
     return 0
 
 
+def dump_frame(gdb, out, stem, args):
+    """Dump the paused frame: the `--dump` regions, then the `--hook` rounds.
+
+    A hook that returns `None` asks for a retry on a later frame (the paused
+    one was incomplete): the files are removed, the target runs
+    `--dump-gap` seconds and pauses again, up to `--dump-attempts` times.
+    """
+    for attempt in range(args.dump_attempts):
+        for text_region in args.dump:
+            chain, size = parse_region(text_region)
+            at = resolve_chain(gdb, chain)
+            if at:
+                try:
+                    blob = gdb.read(at, size)
+                except Exception as error:
+                    print("  %s: dump %#x+%#x failed: %s"
+                          % (stem, at, size, error), flush=True)
+                    continue
+                (out / ("%s-%08x.bin" % (stem, at))
+                 ).write_bytes(blob)
+                print("  %s: dumped %#x+%#x" % (stem, at, size),
+                      flush=True)
+        if not args.hook:
+            break
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "place_hook", args.hook)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        retry = False
+        for round_no in range(24):
+            extra = hook.regions(out, stem, round_no)
+            if extra is None:
+                retry = True
+                break
+            if not extra:
+                break
+            for addr, size in extra:
+                try:
+                    blob = gdb.read(addr, size)
+                except Exception as error:
+                    print("  %s: hook dump %#x+%#x failed: %s"
+                          % (stem, addr, size, error), flush=True)
+                    continue
+                (out / ("%s-%08x.bin" % (stem, addr))
+                 ).write_bytes(blob)
+            print("  %s: hook round %d dumped %d span(s)"
+                  % (stem, round_no, len(extra)), flush=True)
+        if not retry:
+            break
+        print("  %s: hook asked for a retry (attempt %d)"
+              % (stem, attempt), flush=True)
+        for old in out.glob("%s-*.bin" % stem):
+            old.unlink()
+        gdb.resume()
+        time.sleep(args.dump_gap)
+        gdb.pause()
+
+
 def cmd_place(args):
     """One boot, many placements: teleport the craft, settle, photograph.
 
@@ -1740,56 +1799,7 @@ def cmd_place(args):
                 gdb.pause()
                 kept = rpcs3_place.read_pose(gdb, body)
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
-                for attempt in range(args.dump_attempts):
-                    for text_region in args.dump:
-                        chain, size = parse_region(text_region)
-                        at = resolve_chain(gdb, chain)
-                        if at:
-                            try:
-                                blob = gdb.read(at, size)
-                            except Exception as error:
-                                print("  %s: dump %#x+%#x failed: %s"
-                                      % (stem, at, size, error), flush=True)
-                                continue
-                            (out / ("%s-%08x.bin" % (stem, at))
-                             ).write_bytes(blob)
-                            print("  %s: dumped %#x+%#x" % (stem, at, size),
-                                  flush=True)
-                    if not args.hook:
-                        break
-                    import importlib.util
-                    spec = importlib.util.spec_from_file_location(
-                        "place_hook", args.hook)
-                    hook = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(hook)
-                    retry = False
-                    for round_no in range(24):
-                        extra = hook.regions(out, stem, round_no)
-                        if extra is None:
-                            retry = True
-                            break
-                        if not extra:
-                            break
-                        for addr, size in extra:
-                            try:
-                                blob = gdb.read(addr, size)
-                            except Exception as error:
-                                print("  %s: hook dump %#x+%#x failed: %s"
-                                      % (stem, addr, size, error), flush=True)
-                                continue
-                            (out / ("%s-%08x.bin" % (stem, addr))
-                             ).write_bytes(blob)
-                        print("  %s: hook round %d dumped %d span(s)"
-                              % (stem, round_no, len(extra)), flush=True)
-                    if not retry:
-                        break
-                    print("  %s: hook asked for a retry (attempt %d)"
-                          % (stem, attempt), flush=True)
-                    for old in out.glob("%s-*.bin" % stem):
-                        old.unlink()
-                    gdb.resume()
-                    time.sleep(args.dump_gap)
-                    gdb.pause()
+                dump_frame(gdb, out, stem, args)
                 candidate_sets = []
                 for k in range(args.camera_shots):
                     if k:
@@ -2250,6 +2260,10 @@ def cmd_lapboard(args):
                     time.sleep(args.interval)
                     path = out / ("w%g-%02d.png" % (low, shot))
                     screenshot(path, trim=True)
+                    if (args.hook or args.dump) and shot < args.hook_shots:
+                        gdb.pause()
+                        dump_frame(gdb, out, "w%g-%02d" % (low, shot), args)
+                        gdb.resume()
             for lap in [int(v) for v in args.laps.split(",") if v]:
                 lap = {-1: total - 1, -2: total}.get(lap, lap)
                 gdb.pause()
@@ -2266,6 +2280,8 @@ def cmd_lapboard(args):
                     path = out / ("lap%d-%02d.png" % (lap, shot))
                     screenshot(path, trim=True)
                     gdb.pause()
+                    if (args.hook or args.dump) and shot < args.hook_shots:
+                        dump_frame(gdb, out, "lap%d-%02d" % (lap, shot), args)
                     note("  %s: lap %d crossings %d total %d phase %d gantry %.3f s"
                          % ((path.name,) + _board_state(gdb)[2:]))
                     gdb.resume()
@@ -2542,6 +2558,14 @@ def main(argv=None):
                          "photograph; repeatable, run before --laps")
     lb.add_argument("--crossings", action="store_true",
                     help="also write the crossing count at +0x7814 as lap + 2")
+    lb.add_argument("--hook", default=None, metavar="PY",
+                    help="as `place --hook`: dump the paused frame's draws "
+                         "after each of the first --hook-shots shots")
+    lb.add_argument("--hook-shots", type=int, default=1)
+    lb.add_argument("--dump", action="append", default=[],
+                    metavar="CHAIN:LEN", help="as `place --dump`")
+    lb.add_argument("--dump-attempts", type=int, default=12)
+    lb.add_argument("--dump-gap", type=float, default=0.7)
     lb.set_defaults(run=cmd_lapboard)
 
     args = parser.parse_args(argv)

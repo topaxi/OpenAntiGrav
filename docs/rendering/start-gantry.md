@@ -2269,3 +2269,58 @@ for Omega, whose `billboard8` the shared lineage would put on the same quads; 20
 lit HD material whose program resolves none: switching it off for all of them (`no_specular` without `colour_factor`) moved
 `10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) `tv_glow.gtf`
 on `02_track`'s `cf_vex_billboard` is not bound (no `ADD_SECOND`).
+
+## HD: the FINAL LAP and chequered states - the card was lit twice (2026-10-18, `gantry-finish`)
+
+Follow-up to "the gantry is sometimes blurry with transparent edges ... on the final lap or finish". The countdown
+state was already fixed; this section covers the two later states. Result: **a real difference found and fixed - our
+card was drawn through the stand-in key and fill rig, so every card texel was multiplied by 0.514; the original's card
+passes are unlit.**
+
+**Tooling (no code needed).** Ours reaches both states at player size with the default chase camera: `oag-game --race
+--mode single_race --autopilot --track data/environments/talons_junction/track.vex --ticks N --screenshot out.png`
+(5 s a frame). With 3 laps the line crossings are at about tick 2,900 (lap 2: FX-350 art), 5,340 (lap 3: the `FINAL LAP`
+window ends and the flag begins) and 7,760 (finish). The board is ahead of the craft for the 20 ticks before each
+crossing: `--ticks 5322 ... 5342`, FINAL LAP strobes at 5334-5338 and the flag is on the board at 5342-5380. The previous
+lane's blocker was `--camera-pose`, not the lap count. `rpcs3-drive.py lapboard` now takes `--hook` (see
+`docs/reverse-engineering/rpcs3-capture.md`).
+
+**The original, hooked (RPCS3, Talon's Junction from the Campaign path, lap-0 window bounds overwritten with
+`[9.5, 9.9)` and `[12.35, 13.3)`, one boot, `HOOK_LIGHT=1`; confidence 85, one boot):**
+
+| | final lap `[9.5, 9.9)` | chequered `[12.35, 13.3)` |
+| --- | --- | --- |
+| draws | 711 | 680 |
+| slot 8 card, surface `0x123` 512 x 256, offset `0x02ae0000` | 19: two opaque (`blend 0`, depth write, colour mask all) then 17 blended (`SRC_ALPHA, 1-SRC_ALPHA`, depth write off, alpha not written) | the same 19 |
+| quad draws sampling a card | `fmt 0x1a429` R5G6B5, address `0x60010101` (wrap), filter `0x02062000`, **blend off**, alpha test off | identical |
+| card fragment programs | `TEX H0.xyz; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, 0` (opaque) / `... MOV H0.w, H0` (blended) | identical |
+
+So the states change the card's content only; the quad's sampler and opaque state are the countdown's. The draw list is
+the same in both windows (the model draws every piece and the clock moves the unwanted ones off the card), and ours has
+the same structure: `survey_gantry_draw_lists` finds two opaque draws (`honeyblue_noalpha.gtf`, `checkered.gtf`, alpha
+255 everywhere) and 17 transparent ones (`321_go_64.gtf`, `fx350_nomip.gtf`). **The opaque flag, the card sampler and
+the alpha are all as the original's: nothing alpha-related shows in the final-lap or finish states.**
+
+**The difference.** The card's own pixels cannot be read from the original (the target reads back all zeros), but its
+fragment programs are `TEX * 1` with no light, so a white texel is 255 on the card. Ours: a model vertex with no colour
+set is `lit`, the card model is drawn with the stand-in rig (`0.15 + 0.75 key + 0.25 fill`), and `checkered.gtf`'s white
+squares came out **131 (0.514)** across every channel; the dark panel (`honeyblue_noalpha.gtf`, red 21-58) came out half
+as bright again. On the board: the original FINAL LAP panel is teal (median `65 120 118` in both the lit and the dim phase)
+with white letters and the flag is crisp black and white (median `206`, 95th percentile `255`); ours was a near-black
+panel (`15 29 29`) with grey letters and a grey and black flag (95th percentile `178`). That is the "dim, washed out"
+final-lap and finish board.
+
+**Fixed:** `oag_raceplay::gantry::unlit` clears `lit` on the gantry card's model vertices (HD slot 8 only; the other
+cards and Pulse are untouched). Ours at the same ticks afterwards: FINAL LAP letters bright cream on a teal panel (median
+`27 57 62` dim phase, 95th percentile `235`), flag whites `255`, black squares `21`. The countdown `GO` reads `160` (was
+`82`; the original read `132 131 112` on `01_vineta_k`). Test: `the_card_is_drawn_unlit`.
+
+**Open.** (1) The panel is still about 2x darker on screen than the original's (`27 57 62` against `65 120 118`): the two
+frames are not pose-matched (the original is on the grid looking at the board from behind it, ours from under it), and
+the quad's lighting factor `(ambient + sun * N.L)` depends on the angle, so this is not called a difference. A pose-matched
+pair needs the gantry window forced on ours, which no flag does. (2) The same lit-twice reading applies to the other
+cards (`fx350` slot 7 and the adverts) whose original programs are the same `TEX * 1`; not measured per slot here, so left
+alone. (3) The card's R5G6B5 format is still RGBA8 here (chosen). (4) The final lap state's strobe phases (lit, dim,
+dark) were compared only by eye. **Per title:** Omega, 2048: **checked, applies, not wired** for Omega (no card route),
+**checked, differs** for 2048 (no `billboard8` on its default circuit). Pulse's FINAL LAP mesh: not done, waits on
+`gantry-pulse` merging.

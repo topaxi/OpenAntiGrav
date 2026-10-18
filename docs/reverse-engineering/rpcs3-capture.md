@@ -894,6 +894,13 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
         --oag-game <abs>/target/release/oag-game --out <dir> --pose=-839.8,-146.6,215.0 --countdown 35 \
         --dump 0x40000000:0x20000 --dump-attempts 12 --hook scripts/rpcs3_draw_hook.py
 
+`lapboard` takes the same `--hook`, `--hook-shots N` (the first N shots of each window or lap), `--dump` and
+`--dump-attempts`, so one boot can hook a frame in the gantry's FINAL LAP window (`--window 9.5,9.9`) and its chequered
+window (`--window 12.35,13.3`): `HOOK_LIGHT=1 HOOK_NEED_SCREEN=1 ... lapboard --window 9.5,9.9 --window 12.35,13.3 --hook
+scripts/rpcs3_draw_hook.py --hook-shots 1 --dump 0x40000000:0x20000 --laps ""` (464 s on 2026-10-18). **A render
+target's pixels are not readable this way**: `--dump 0xC2AE0000:0x40000` (a 512 x 256 card) returns all zeros, the RSX keeps
+the target on the host side.
+
 **What measured here (confidence 90 unless stated):**
 
 - **The guest address of IO offset `X` is `0x40000000 + X`** for the command stream, index arrays and main-memory vertex
