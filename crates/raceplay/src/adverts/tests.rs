@@ -380,6 +380,26 @@ fn hd_builds_a_512_by_256_card_for_each_slot_with_a_quad() {
     );
 }
 
+/// The original's slot 7 and slot 8 card passes are unlit `TEX * 1` (RPCS3, 2026-10-18); slots
+/// 2, 3 and 5 were never drawn as cards in a hooked frame, so they keep the stand-in rig.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_slots_7_and_8_unlit_and_leaves_the_unmeasured_slots_lit() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    for card in &loaded.billboards.adverts {
+        let any_lit = card.model.vertices.iter().any(|v| v.lit != 0.0);
+        assert_eq!(any_lit, !matches!(card.slot, 7 | 8), "slot {}", card.slot);
+    }
+}
+
 /// Pulse's cards stay 128 x 128 next to HD's.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]

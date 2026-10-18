@@ -73,6 +73,18 @@ pub struct Adverts {
     /// 255 on screen against a full white from the model route, whose white sits
     /// above the bloom gate's knee and smears into a halo.
     pub gantry_card: bool,
+    /// The slots whose card is drawn with no lighting of its own, because the
+    /// original's card passes for that slot are `TEX; MUL H0.xyz, H0, {1,1,1,1}`
+    /// and nothing else: the track quad that shows the card lights it once. Any
+    /// other slot is drawn through the stand-in key and fill rig.
+    ///
+    /// Wipeout HD: **slots 7 and 8, measured on RPCS3** (2026-10-18, Talon's
+    /// Junction, four hooked frames over three boots): every fragment program of
+    /// the two 512 x 256 card targets the frame draws, 23 passes for slot 7
+    /// (`fx350`) and 19 for slot 8, is that program. The frame draws no other
+    /// card target, so slots 2, 3 and 5 are **not measured** and stay lit.
+    /// Pulse: empty, not read.
+    pub unlit_slots: &'static [u32],
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,
