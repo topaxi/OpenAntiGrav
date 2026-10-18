@@ -567,13 +567,14 @@ moves a pixel by an amount that depends on where it is on screen and not on how
 deep it is, so one clip-space matrix describes the whole frame:
 `projection * previous * current^-1 * projection^-1`, with `current` and
 `previous` the view-space shake rotations of this and the last tick
-(`Race::view_shake_rotation`, `Race::shake_screen_motion`; the previous one
-rides in `MotionState`'s snapshot). It reaches the pass as
-`motion_blur::Frame::camera_shake` and `fs_prepare` subtracts the pixel's own
-shake motion from the velocity it reads; identity, with no shake in either
-tick, subtracts exactly nothing. A first attempt that built the velocity from
-the unshaken camera instead was dropped because it also removed the shake from
-what the upscaler sees, for the whole 0.6 s decay.
+(`Race::view_shake_rotation`; the previous one rides in `MotionState`'s
+snapshot). It reaches the pass as `motion_blur::Frame::lens_motion` and
+`fs_prepare` subtracts the pixel's own shake motion from the velocity it reads;
+identity, with no shake in either tick, subtracts exactly nothing. A first
+attempt that built the velocity from the unshaken camera instead was dropped
+because it also removed the shake from what the upscaler sees, for the whole
+0.6 s decay. Since 2026-10-18 the same map also carries the field of view's
+change, below, and is built by `Race::lens_screen_motion`.
 
 Evidence: `--force-shake 120:1.0 --ticks 121` on the grid, a still craft, so
 the blur has nothing to blur and a frame with it on must equal the frame with
@@ -583,6 +584,72 @@ byte-identical, at 480x272 and 1440x816, severity 0.3 and 1.0, ticks 120 to
 fails if `Scene::render` drops the map), `the_blur_is_given_the_shakes_own_screen_motion`
 (the matrices, from a cold shake and mid-decay) and `post::motion_blur::shake_tests`
 (the shader, on a device).
+
+**The field of view (solved 2026-10-18). Chosen, not measured**: the originals
+have no motion blur. Reported from play on Pulse PS2 and HD with Piranha: on a
+speed boost, a smear of the craft's own red and yellow trailed behind it. The
+cause is the boost's field-of-view kick (`[graphics] boost_fov_kick`, this
+project's own effect). On a pad it opens at `BOOST_FOV_OPEN_RATE`, widening the
+projection's tangent by `0.15 * gain` in the first tick - 4.8 % at the
+strongest tier, 32, which the reporting player runs - and the velocity buffer
+read that zoom as everything rushing toward the middle of the screen. The
+player's own craft is the one thing under the chase camera that otherwise
+holds still, and its wings sit nearest the screen's lower corners, where a zoom
+moves a pixel furthest, so its hull smeared back over the track for the first
+three or four ticks of every boost. Every craft smears the same; Piranha shows
+it most because its swept wings reach further toward the corners and its
+saturated red and yellow stand out against the cool track. Feisar under the same
+capture (HD, its own pad plus four ticks) smears its dark grey wings by the same
+mechanism and reads far less.
+
+A change of field moves a pixel by its screen position and not its depth, the
+same property the shake has, so the shake's map was generalised rather than a
+second mechanism added: `previous_projection * previous_shake * shake^-1 *
+projection^-1`, with the unjittered projection kept in `MotionState`'s
+snapshot beside the shake (and copied across a cut with it). It is exactly the
+identity when neither tick shook and the projection did not change. The
+velocity buffer stays true screen motion for the temporal upscaler, as it does
+for the shake. It also takes out the original's own speed widen
+(`SPEED_FOV_GAIN_DEG`, about 2 degrees across a pad) and a change of the
+player's fov setting mid-race. The trade, chosen: the radial streak a widening
+field would draw over the track is gone with it, since the prepare pass cannot
+tell craft pixels from world pixels; the track keeps the blur of the camera's
+real travel.
+
+Evidence, `--race --team piranha --class flash --autopilot --size 1280x720
+--motion-blur high` (and `off`) against the reporting player's settings
+(`camera_view = "far"`, `msaa = "4x"`), the craft reaching its first pad
+between ticks 553 and 556 on both Pulse PS2 (`pulse-ps2-eu.chd`) and HD
+(`hdfury-ps3-eu-dec.iso`); "before" is the same tree with the map built from
+the current projection twice, which is what the shake-only map was.
+Mean `|high - off|` over the hull, 0-255 per channel, inside the `off` frame's
+red-and-yellow mask eroded by 2 px:
+
+| Title, `boost_fov_kick` | tick 553 | 556 | 559 | 562 |
+| --- | --- | --- | --- | --- |
+| PS2, 32, before | 0.00 | **14.29** | 3.22 | 0.03 |
+| PS2, 32, after | 0.00 | 0.00 | 0.00 | 0.00 |
+| PS2, 16 (the default), before | 0.00 | **6.52** | 0.18 | 0.00 |
+| PS2, 16, after | 0.00 | 0.00 | 0.00 | 0.00 |
+| PS2, 0 | 0.00 | 0.00 | 0.00 | 0.00 |
+| HD, 32, before | 0.54 | **2.41** | 1.32 | 0.59 |
+| HD, 32, after | 0.54 | 0.21 | 0.34 | 0.53 |
+| HD, 16, before | 0.54 | **1.53** | 0.84 | 0.31 |
+| HD, 16, after | 0.54 | 0.23 | 0.34 | 0.34 |
+| HD, 0 | 0.54 | 0.22 | 0.31 | 0.23 |
+
+After the change both titles read as the kick-off row does. HD's interior mean
+is small because its hull's mask is a third of the size and the smear sits at
+the wing edges; the crops show the wings dragged downward and outward before
+and sharp after, at the size a player sees them. The track and the speed pad
+under the craft keep their smear.
+
+Pinned by `crates/game/tests/shake_blur_ground_truth.rs`: `--force-boost-kick
+120:1.0 --ticks 121` opens the kick on a still craft on the grid (16 % of the
+tangent in one tick at the default tier) and the frame must be byte-identical
+with the blur on and off. Before the change the blurred frame smeared whole.
+`the_blur_is_given_the_boost_kicks_own_screen_motion` pins the matrix at three
+depths and fails for a map built from the current projection twice.
 
 [`MAX_STRETCH`]: ../../crates/post/src/motion_blur.rs
 
