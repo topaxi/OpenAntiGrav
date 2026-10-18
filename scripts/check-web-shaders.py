@@ -22,7 +22,9 @@ the five built-in screen filters, which `oag-post` joins at run time
 the web build and is left out. The text a build script writes is what wgpu hands
 the browser unchanged, on every target. A variant that enables
 `wgpu_binding_array` is native only (no WebGPU device has binding arrays) and is
-skipped by name.
+skipped by name. A variant that enables `f16` is compiled when the adapter offers
+`shader-f16` (the device is created with it) and skipped by name when it does not,
+as swiftshader does not.
 
 What this does not catch: a module is created alone, so a pipeline layout that
 disagrees with its bindings, an `override` given a bad value, or a limit the
@@ -84,9 +86,14 @@ COMPILE_JS = """async (modules) => {
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) return { adapter: null, results: [] };
   const info = adapter.info || {};
-  const device = await adapter.requestDevice();
+  const f16 = adapter.features.has("shader-f16");
+  const device = await adapter.requestDevice(f16 ? { requiredFeatures: ["shader-f16"] } : {});
   const results = [];
   for (const [name, code] of modules) {
+    if (!f16 && /^\\s*enable\\s+f16\\s*;/m.test(code)) {
+      results.push([name, null]);
+      continue;
+    }
     const module = device.createShaderModule({ label: name, code });
     const compilation = await module.getCompilationInfo();
     results.push([name, compilation.messages.map(
@@ -219,7 +226,12 @@ def run_browser(label: str, launch, modules: dict[str, str], url: str) -> tuple[
         f"{description} (fallback: {fallback})".replace("  ", " ")
     )
     errors = 0
+    skipped = 0
     for name, messages in reply["results"]:
+        if messages is None:
+            skipped += 1
+            print(f"check-web-shaders: {label}: {name} needs shader-f16, which this adapter lacks, skipped")
+            continue
         failing = [m for m in messages if m[0] == "error"]
         notes = [m for m in messages if m[0] != "error"]
         if failing:
@@ -229,8 +241,12 @@ def run_browser(label: str, launch, modules: dict[str, str], url: str) -> tuple[
         else:
             for message in messages:
                 print(f"check-web-shaders: {label}: {name}:{message[1]}: {message[0]}: {message[3]}")
-    clean = len(reply["results"]) - sum(1 for _, m in reply["results"] if any(x[0] == "error" for x in m))
-    print(f"check-web-shaders: {label}: {clean} of {len(reply['results'])} modules compile, {errors} errors")
+    checked = [m for _, m in reply["results"] if m is not None]
+    clean = sum(1 for m in checked if not any(x[0] == "error" for x in m))
+    print(
+        f"check-web-shaders: {label}: {clean} of {len(checked)} modules compile, {errors} errors"
+        + (f", {skipped} skipped for shader-f16" if skipped else "")
+    )
     return errors, True
 
 
