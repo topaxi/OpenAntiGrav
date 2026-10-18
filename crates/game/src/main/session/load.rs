@@ -230,10 +230,10 @@ impl Session {
         // A no-op on every title but 2048: `campaign_events()` is empty
         // everywhere else. See `oag_ui::frontend::campaign_map`'s own
         // "Progression" section.
-        let title_name = loaded.title.name;
+        let title_name = records::campaign_title(loaded.title, loaded.platform);
         loaded.frontend.refresh_campaign_progress(|name| {
             self.records
-                .campaign_medal(title_name, name)
+                .campaign_medal(&title_name, name)
                 .and_then(|row| row.best_medal)
                 .map(|medal| match medal {
                     records::Medal::Gold => EarnedTier::Elite,

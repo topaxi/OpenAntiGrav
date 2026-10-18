@@ -247,11 +247,13 @@ pub fn offered_on(
     kind: oag_ui_screens::picker::Kind,
     archives: Option<&mut oag_assets::Archives>,
     title: &oag_title::Title,
+    platform: oag_disc::Platform,
     tracks: &[Track],
 ) -> Vec<Track> {
     match archives {
         Some(archives) if kind == oag_ui_screens::picker::Kind::Track => {
-            Gate::read(title, archives).offered(tracks, &records::load(), title.name)
+            let campaign_title = records::campaign_title(title, platform);
+            Gate::read(title, archives).offered(tracks, &records::load(), &campaign_title)
         }
         _ => tracks.to_vec(),
     }

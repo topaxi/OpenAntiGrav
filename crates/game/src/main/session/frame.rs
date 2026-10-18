@@ -909,6 +909,7 @@ impl Session {
             {
                 crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
             }
+            let campaign_title = self.campaign_title();
             if let Stage::Race(stage) = &mut self.stage
                 && stage.race.finished()
                 && !stage.result_saved
@@ -946,7 +947,7 @@ impl Session {
                     .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
                 {
                     self.records.record_campaign(
-                        &key.title,
+                        campaign_title.as_deref().unwrap_or(&key.title),
                         &cell.name,
                         observation.campaign_medal,
                         observation.campaign_difficulty,
@@ -954,7 +955,7 @@ impl Session {
                 }
                 if let Some(progress) = stage.campaign_2048_event.as_ref() {
                     self.records.record_campaign(
-                        &key.title,
+                        campaign_title.as_deref().unwrap_or(&key.title),
                         &progress.name,
                         observation.campaign_medal,
                         None,

@@ -206,6 +206,7 @@ impl Session {
         if let Stage::Race(stage) = &mut self.stage {
             crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
         }
+        let campaign_title = self.campaign_title();
         if let Stage::Race(stage) = &mut self.stage
             && !stage.result_saved
             // Not a split screen's: see the finish site in `Session::frame`.
@@ -216,7 +217,7 @@ impl Session {
             let observation = stage.observation();
             if let Some(cell) = stage.campaign_cell.as_ref() {
                 self.records.record_campaign(
-                    &key.title,
+                    campaign_title.as_deref().unwrap_or(&key.title),
                     &cell.name,
                     observation.campaign_medal,
                     observation.campaign_difficulty,
@@ -224,7 +225,7 @@ impl Session {
             }
             if let Some(progress) = stage.campaign_2048_event.as_ref() {
                 self.records.record_campaign(
-                    &key.title,
+                    campaign_title.as_deref().unwrap_or(&key.title),
                     &progress.name,
                     observation.campaign_medal,
                     None,

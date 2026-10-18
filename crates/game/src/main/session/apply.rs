@@ -128,6 +128,16 @@ impl Session {
         Some(self.settings.render_profiles.entry(key).or_default())
     }
 
+    /// What this session's campaign rows are filed under - see
+    /// [`oag_game::records::campaign_title`]. `None` before any source is open.
+    pub(crate) fn campaign_title(&self) -> Option<String> {
+        self.shell
+            .as_ref()
+            .map(|shell| (shell.title, shell.platform))
+            .or(self.race_title.zip(self.race_platform))
+            .map(|(title, platform)| oag_game::records::campaign_title(title, platform))
+    }
+
     /// [`Self::render_profile_mut`]'s read-only sibling, for the frame loop
     /// and every other reader that only needs a value rather than a place to
     /// write one back.

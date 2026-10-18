@@ -168,6 +168,7 @@ pub(super) fn campaign_page(
     // own doc for why a still needs this too, not only the live session.
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
+    platform: oag_disc::Platform,
     tracks: &[oag_raceplay::catalogue::Track],
     // The `Confirm`/`Back` fit-to-gap shrink's own text-width function.
     measure: &dyn Fn(&str) -> f32,
@@ -201,9 +202,10 @@ pub(super) fn campaign_page(
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
+    let campaign_title = crate::records::campaign_title(title, platform);
     let medal_of = |cell_name: &str| {
         records
-            .campaign_medal(title.name, cell_name)?
+            .campaign_medal(&campaign_title, cell_name)?
             .best_medal
             .map(to_campaign_medal)
     };
@@ -213,7 +215,7 @@ pub(super) fn campaign_page(
     // row regardless.
     let difficulty_of = |cell_name: &str| {
         records
-            .campaign_medal(title.name, cell_name)?
+            .campaign_medal(&campaign_title, cell_name)?
             .best_difficulty
             .map(to_campaign_difficulty)
     };

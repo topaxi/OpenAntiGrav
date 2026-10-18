@@ -854,3 +854,31 @@ fn every_roster_covers_its_race_ids_under_lower_case_identities() {
         oag_omega::TITLE.team_identity("ag_systems")
     );
 }
+
+/// Pulse's PSP and PS2 pressings author different campaign grids, so their
+/// rows must not meet; the PSP keeps the bare name every older file holds.
+#[test]
+fn campaign_progress_is_filed_per_pressing() {
+    use oag_disc::Platform;
+
+    let psp = campaign_title(oag_pulse::TITLE, Platform::Psp);
+    let ps2 = campaign_title(oag_pulse::TITLE, Platform::Ps2);
+    assert_eq!(
+        psp,
+        oag_pulse::TITLE.name,
+        "the first pressing is the bare name"
+    );
+    assert_ne!(psp, ps2);
+
+    let mut store = Store::default();
+    store.record_campaign(&ps2, "Grid0_Cell0", Some(Medal::Gold), None);
+    assert!(store.campaign_medal(&ps2, "Grid0_Cell0").is_some());
+    assert!(store.campaign_medal(&psp, "Grid0_Cell0").is_none());
+
+    let (_, only) = oag_2048::TITLE.archives.data[0];
+    assert_eq!(
+        campaign_title(oag_2048::TITLE, only),
+        oag_2048::TITLE.name,
+        "a single-platform title is filed under its bare name"
+    );
+}

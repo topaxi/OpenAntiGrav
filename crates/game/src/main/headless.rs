@@ -78,11 +78,11 @@ pub(crate) fn run_windowless(
     // player's own `records.toml`, only reflect what is already in it. A
     // no-op on every title but 2048, whose `campaign_events()` is the only
     // one ever non-empty.
-    let title_name = loaded.title.name;
+    let title_name = records::campaign_title(loaded.title, loaded.platform);
     let saved = records::load();
     loaded.frontend.refresh_campaign_progress(|name| {
         saved
-            .campaign_medal(title_name, name)
+            .campaign_medal(&title_name, name)
             .and_then(|row| row.best_medal)
             .map(|medal| match medal {
                 records::Medal::Gold => EarnedTier::Elite,

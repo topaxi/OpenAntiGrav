@@ -837,6 +837,24 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     ))
 }
 
+/// The title string campaign rows are filed under for `title` on `platform`.
+///
+/// A title that ships on two consoles can author a different campaign on each
+/// (Pulse's PSP and PS2 grids differ), so progress is kept per pressing. The
+/// first platform in the title's archive candidates is filed under the bare
+/// `title.name`, so a single-platform title is unaffected; any other gets
+/// `"<name> (<platform>)"`, the shape [`crate::settings::profile_key`] uses. Only campaign rows are keyed this way: lap records and ghosts stay on
+/// `title.name`, as a circuit is the same circuit on both.
+#[must_use]
+pub fn campaign_title(title: &oag_title::Title, platform: oag_disc::Platform) -> String {
+    let first = title.archives.data.first().map(|&(_, first)| first);
+    if first.is_none_or(|first| first == platform) {
+        title.name.to_string()
+    } else {
+        format!("{} ({platform})", title.name)
+    }
+}
+
 /// Where the records file lives: `<config dir>/oag/records.toml`, beside
 /// `settings.toml` and the `pilots/` directory.
 #[must_use]

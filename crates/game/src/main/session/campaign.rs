@@ -73,6 +73,7 @@ impl Session {
         // itself cannot survive `self.renderer_set_sprites`, the same reason
         // `strings` above is already a clone rather than a borrow.
         let title_ref = shell.title;
+        let platform = shell.platform;
         let circuit_names = shell.circuit_names.clone();
         let tracks: Vec<oag_raceplay::catalogue::Track> =
             shell.tracks.iter().map(|(track, _)| track.clone()).collect();
@@ -115,6 +116,7 @@ impl Session {
                         strings,
                         campaign.sprites,
                         title_ref,
+                        platform,
                         circuit_names,
                         records,
                         campaign.flyers,

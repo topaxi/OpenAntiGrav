@@ -609,7 +609,8 @@ pub fn run(
                     None => None,
                 };
                 // The live screen's list: locked circuits are absent.
-                let tracks = crate::unlock::offered_on(kind, archives.as_mut(), title, &tracks);
+                let tracks =
+                    crate::unlock::offered_on(kind, archives.as_mut(), title, platform, &tracks);
                 let selected = tracks
                     .iter()
                     .find(|track| track.id == options.settings.race.track);
@@ -789,6 +790,7 @@ pub fn run(
                     &mut sprites,
                     &globals,
                     title,
+                    platform,
                     &tracks,
                     // `Default`-role, not `menu_font.unwrap_or(&font)`: this
                     // measures `FE_CONFIRM`'s own shrink-to-fit, and

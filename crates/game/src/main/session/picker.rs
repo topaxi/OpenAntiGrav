@@ -51,9 +51,10 @@ impl Session {
         let zone = mode == oag_race::Mode::Zone;
         let offered: Vec<_> = shell.tracks_for(mode).to_vec();
         let gate = self.unlock_gate();
+        let campaign_title = records::campaign_title(title, shell.platform);
         let offered: Vec<_> = offered
             .into_iter()
-            .filter(|(track, _)| gate.offers(track, &self.records, title.name))
+            .filter(|(track, _)| gate.offers(track, &self.records, &campaign_title))
             .collect();
         let (listed, columns) = if hd {
             catalogue::direction_rows(title, mode, &offered)

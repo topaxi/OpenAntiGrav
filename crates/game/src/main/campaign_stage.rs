@@ -177,6 +177,10 @@ pub(crate) struct CampaignStage {
     /// pick between Pulse's draw/pointer functions and
     /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
     title: String,
+    /// [`oag_game::records::campaign_title`]: what the campaign rows of
+    /// [`Self::records`] are filed under, which differs from [`Self::title`]
+    /// on a title's second pressing.
+    campaign_title: String,
     /// [`oag_title::Campaign::dialect`] of the title, the draw list's choice.
     dialect: oag_title::CampaignDialect,
     /// **HD only** - Pulse's own `Track Line` never needs this fold (see
@@ -218,6 +222,7 @@ impl CampaignStage {
         strings: oag_ui::language::StringTable,
         sprites: oag_hud::sprite::Sheet,
         title_ref: &'static oag_title::Title,
+        platform: oag_disc::Platform,
         circuit_names: oag_ui::language::CircuitNames,
         records: oag_game::records::Store,
         flyers: Option<oag_game::flyer::Flyers>,
@@ -225,6 +230,7 @@ impl CampaignStage {
         cell_cursor: CellCursor,
     ) -> Self {
         let title = title_ref.name.to_string();
+        let campaign_title = oag_game::records::campaign_title(title_ref, platform);
         let grid_range = 0..grids.len();
         // `Campaign Selection` is HD's own screen ahead of `Grid
         // Selection` - only opened on it when both halves of the pair
@@ -238,7 +244,7 @@ impl CampaignStage {
             let model = oag_ui_screens::campaign::GridSelection::new(
                 grids
                     .iter()
-                    .map(|grid| Self::grid_summary(grid, &title, &records))
+                    .map(|grid| Self::grid_summary(grid, &campaign_title, &records))
                     .collect(),
             );
             Screen::Grid(model)
@@ -260,6 +266,7 @@ impl CampaignStage {
             screen,
             notice: None,
             title,
+            campaign_title,
             dialect: title_ref.campaign.dialect,
             circuit_names,
             records,
@@ -444,7 +451,7 @@ impl CampaignStage {
         let Some(grid) = self.grids.get(which) else {
             return false;
         };
-        let medal_of = campaign_medal_of(&self.records, &self.title);
+        let medal_of = campaign_medal_of(&self.records, &self.campaign_title);
         if !grid.locked || grid.points_earned(&medal_of) > 0 {
             return true;
         }
@@ -479,7 +486,7 @@ impl CampaignStage {
             let grids = self.grids.get(range).unwrap_or(&[]);
             let earned = grids
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.title, &self.records).gold_medals)
+                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records).gold_medals)
                 .sum();
             let total = grids
                 .iter()
@@ -527,7 +534,7 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
+                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
                 .collect(),
         )
         .with_per_page(1);
@@ -589,13 +596,14 @@ impl CampaignStage {
         }
         let cells = grid.cells.clone();
         let title = &self.title;
+        let campaign_title = &self.campaign_title;
         let records = &self.records;
         let by_name = cells.clone();
         let mut model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
             cells,
             &|name| {
                 records
-                    .campaign_medal(title, name)?
+                    .campaign_medal(campaign_title, name)?
                     .best_medal
                     .map(to_campaign_medal)
             },
@@ -603,7 +611,7 @@ impl CampaignStage {
         )
         .with_difficulty(&|name| {
             records
-                .campaign_medal(title, name)?
+                .campaign_medal(campaign_title, name)?
                 .best_difficulty
                 .map(to_campaign_difficulty)
         });
@@ -694,7 +702,7 @@ impl CampaignStage {
         Some((
             which.saturating_sub(self.grid_range.start),
             self.grid_range.len(),
-            Self::grid_summary(grid, &self.title, &self.records),
+            Self::grid_summary(grid, &self.campaign_title, &self.records),
             self.cell_art(next),
         ))
     }
@@ -747,7 +755,7 @@ impl CampaignStage {
                 .get(self.grid_range.clone())
                 .unwrap_or(&[])
                 .iter()
-                .map(|grid| Self::grid_summary(grid, &self.title, &self.records))
+                .map(|grid| Self::grid_summary(grid, &self.campaign_title, &self.records))
                 .collect(),
         );
         if self.has_selection() {
