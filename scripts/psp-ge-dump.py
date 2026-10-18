@@ -70,6 +70,13 @@ TEX_STATE_OPS = {
     0x49: "texscale_v",
     0x4A: "texoffset_u",
     0x4B: "texoffset_v",
+    0x17: "lighting",  # LIGHTINGENABLE
+    0x18: "light0",
+    0x19: "light1",
+    0x1A: "light2",
+    0x1B: "light3",
+    0x53: "materialupdate",
+    0x55: "materialdiffuse",
     0x21: "blendenable",  # ALPHABLENDENABLE
     0xDF: "blendmode",
 }
