@@ -409,7 +409,11 @@ impl Cards {
                         view: &card.colour,
                         depth_slice: None,
                         resolve_target: None,
-                        // The captured pass clears with a sprite of colour 0.
+                        // The captured pass clears with a sprite of colour 0. Alpha stays 0 on
+                        // purpose: a lit billboard material (`billboarddiffuse`,
+                        // `cf_vex_billboard`) gates the shader's stand-in specular by the texel's
+                        // alpha, so an opaque clear blows the board out to white on those
+                        // circuits (2026-10-18, docs/rendering/start-gantry.md).
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,
