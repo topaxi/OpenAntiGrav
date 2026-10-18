@@ -84,6 +84,20 @@ pub struct Adverts {
     /// circuits and a second boot), with `TEXFUNC` modulate, while the same
     /// frames' main pass has it set on part of its prims.
     pub card_unlit: bool,
+    /// Whether every advert card (slots other than 8, which is `card_unlit`) is drawn with no lighting of its own, because the
+    /// original's card passes are `TEX; MUL H0.xyz, H0, {1,1,1,1}` and nothing
+    /// else: the track quad that shows the card lights it once. `false` draws a
+    /// card through the stand-in key and fill rig.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-18, Talon's Junction, four
+    /// hooked frames over two boots)**. The frame next to the grid draws two
+    /// 512 x 256 card targets (slots 7 and 8, 23 and 19 passes); two frames
+    /// with the craft among the hoardings draw four (10, 22, 42 and 46 passes,
+    /// not named per slot). Every one of those 120 passes and the grid frame's 42 has one of two fragment
+    /// programs: `TEX H0.xyz; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, 0` (opaque) or
+    /// `TEX H0; MUL H0.xyz, H0, {1,1,1,1}; MOV H0.w, H0` (blended), with the
+    /// constant patched to one per draw. Pulse: not read, `false`.
+    pub adverts_unlit: bool,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,

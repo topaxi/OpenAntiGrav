@@ -2502,3 +2502,78 @@ a title field with provenance, `oag_title::adverts::Adverts::card_unlit` (HD and
 is pixel-identical before and after (0 differing pixels, the digit reads `(238,238,255)` in both), so Pulse's model
 vertices already carried no stand-in light; the field records the measurement and keeps the two titles on one rule.
 PS2: not read (no PCSX2 capture).
+
+## HD: every card is unlit, a pose-matched FINAL LAP pair, and the finish (2026-10-18, `hd-cards-unlit`)
+
+Follow-up to "the card was lit twice". Four results: **the other cards are unlit too (fixed)**, the FINAL LAP panel's gap
+split into a whole-frame factor and a smaller panel factor, the finish is the same board by the static reading, and the
+Omega check.
+
+**1. Every HD card pass is `TEX * 1` (RPCS3, Talon's Junction; confidence 85, two boots).** Reused the two frames
+`gantry-finish` hooked (grid pose, FINAL LAP and chequered windows) and took two more on a fresh boot with the craft
+placed among the hoardings (`rpcs3-drive.py place --pose ... --dump 0x40000000:0x20000 --hook scripts/rpcs3_draw_hook.py`,
+`HOOK_LIGHT=1 HOOK_NEED_SCREEN=1`; the craft landed at `-264,-50,-676` and `-159,-39,-800`, not where asked, which is
+where those hoardings are). A card target is a surface with a 512 x 256 clip (`0x200`/`0x204` words `0x02000000`/`0x01000000`);
+the fragment programs are read from each draw's own `SET_SHADER_PROGRAM` address with `ps3-fp-live.py`:
+
+| Frame | card targets | passes | fragment programs |
+| --- | --- | --- | --- |
+| grid, FINAL LAP window | 2 (slot 7 = 23, slot 8 = 19) | 42 | all `TEX; MUL H0.xyz, H0, {1,1,1,1}` |
+| placed, two frames | 4 (10, 22, 42, 46) | 120 per frame | 2 shapes only: `TEX H0.xyz; MUL ...; MOV H0.w, 0` (opaque) and `TEX H0; MUL ...; MOV H0.w, H0` (blended) |
+
+No pass has a light term (no `DP3`, no second unit, no varying colour multiply) and the constant patched per draw is
+`{1,1,1,1}` on every one. **The falsifier** (any card program with a light term or another constant) did not fire in 162
+passes. Which slot each of the four targets in the placed frames is was not named by texture (the grid frame's two are
+slots 7 and 8 per the earlier section); all four are adverts or the gantry, so all five slots ours draws are covered by the
+claim, but a pass-per-slot table is not claimed.
+
+*The adverts are drawn only when near.* The grid frame draws two cards, not the five Talon's has quads for: the engine
+runs a slot only when its proximity bit is set (`billboards.md`, "Proximity gate"), which is why the earlier dumps had no
+slot 2, 3 or 5. Ours still draws every card every frame (unchanged).
+
+**Fixed:** `oag_title::adverts::Adverts::adverts_unlit` (HD `true`, measured; Pulse `false`, unread) sits beside main's `card_unlit` (slot 8) and replaces the `!pulse` test
+`place_card` had, and `adverts::load_card` clears `lit` on every card's vertices through `gantry::unlit` when it is set.
+Shared-code edits are the one field and one line in Pulse's `Adverts` literal (`adverts_unlit: false`, no behaviour change; the
+Pulse lane can set it when it measures the same programs). Test: `hd_draws_every_card_unlit`. Card pixels before and after
+(`OAG_ADVERT_DUMP`, mean over RGBA at 2.5 s): slot 7 on Talon's and `03_track` `90 -> 115`; slots 2, 3, 5 and 8 unchanged in
+that reading (slot 8 was already unlit; the adverts' mean is dominated by their alpha-255 background, so the visible change
+is in the lit texels). On screen at player size (`--pose` among the hoardings): the banner above the track at `-455,-4,-540`
+goes from near black to bright blue and white, and the board at `-640,-4,-640` from grey to bright cream; the FX-350 teal
+beside the grid's `3` at tick 150 goes from `70 79 79` to `74 101 98`. No HD golden hash moved (see the gate).
+
+**2. FINAL LAP, pose-matched.** Ours can be forced into the window with `--anim-seconds 9.75` (it pins the gantry's clock, so
+no new flag is needed). Original: the grid frame `w9.5-00` (the `place` run's own start pose `-132.15,-49.6,-175.36`, the
+same grid slot POS 8 as the `lapboard` run). Ours `--pose=-132.15,-49.6,-175.36 --ticks 280 --anim-seconds 9.55..9.85`, default
+camera: the board is in the same place at the same size. Medians over the panel (original 1760 wide, ours 1440):
+
+| | panel | whole frame (median) | whole frame (mean) |
+| --- | --- | --- | --- |
+| original (4 phases) | `63..66, 118..122, 119..128` | `117 169 175` | `126 168 166` |
+| ours (4 phases) | `34..41, 61..64, 61..65` | `74 104 115` | `84 108 118` |
+| ratio | 0.53 to 0.56 | 0.63 to 0.66 | 0.66 to 0.71 |
+
+So the "2x darker" of the earlier section is two factors. **A whole-frame factor of about 0.65** (sky, tubes, road all read the
+same ratio, so it is not the card) matches the HD scene brightness gap already recorded (1.56 to 1.71x, `rpcs3-capture.md`,
+"Write Color Buffers"; whether this boot had the option on was not read). **A panel-only residual of about 0.8** (0.53 / 0.65)
+is left: the card is now `TEX * 1` on both sides, so it is the quad's lighting term `(TC0 + ambient + sun * sat(N.L)) * card`,
+fog, or the 8-bit-versus-R5G6B5 card format; which of them was not separated (it needs the quad's draw state on both sides at
+this pose, the next measurement). The glyphs' phases agree with the earlier by-eye comparison: dim phase `121` at the 95th
+percentile, lit `232` on ours; the original reads `255` on every one of its four frames.
+**Also visible, not a gantry fault:** the original's posts carry two red advert boxes beside the board where ours has dark grey
+ones. The original boot is a Campaign race, where slot 7 is `Blitzed_board.vex` and not `fx350` (`billboards.md`, "Slot 7 is not
+`fx350` in a campaign race"); ours is a single race. Known, open there.
+
+**3. After the finish.** The race manager's third branch is `lap == total` **or** `ship+0x7814 - 2 >= total`, so the flag window
+persists once the finish is counted (`gantry-clock.md`, read from the EBOOT, 85). Ours already does this
+(`BoardWindow::select(4, 3, true) == Chequered`, `a_three_lap_race_walks_the_windows_in_order`), and `--autopilot --ticks 7740`
+shows the flag at the top of the frame; from the finish at about tick 7760 the headless `--race` run puts the RACE COMPLETE
+table over the picture, so no later frame of the board exists to compare. **On the original this is not reachable from the
+tools here:** `lapboard --laps -1,-2 --crossings` (two boots, 4 shots each) writes `ship+0x7810` and `+0x7814` (the HUD's `LAP`
+reads 3, then 4 and the crossing count sticks at 5) but the board stays on the lap-0 `GO` window, because the lap counter is
+rewritten from elsewhere every frame and branch 1 (`lap == 0`) is tested first. So the post-finish board is the static
+reading, not a capture; a real finish on RPCS3 (three laps, about 7,760 ticks of driving) would settle it.
+
+**4. Per title.** **Omega: checked, applies, not wired** - `adverts` is `None`, `Billboard_ConstructResource` carries HD's two
+magic constants and the lineage is HD's, so the same unlit cards are expected once a card route exists; not checkable on a
+sampler (no PS4 capture path). **2048: checked, differs** - no `billboard8`/`321backplate` surface on its default circuit, so there
+is no card to light. **Pulse:** `unlit` stays `false` (not measured), `gantry-pulse` / `pulse-card-verify` own it.

@@ -380,6 +380,30 @@ fn hd_builds_a_512_by_256_card_for_each_slot_with_a_quad() {
     );
 }
 
+/// Every HD card pass the original draws is unlit `TEX * 1` (RPCS3, 2026-10-18): slots 2, 3, 5,
+/// 7 and 8 take no vertex through the stand-in rig. Pulse's cards are not read and stay lit.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_every_card_unlit() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    assert!(loaded.billboards.adverts.len() >= 5, "slots 2, 3, 5, 7, 8");
+    for card in &loaded.billboards.adverts {
+        assert!(
+            card.model.vertices.iter().all(|v| v.lit == 0.0),
+            "slot {} takes the stand-in rig",
+            card.slot
+        );
+    }
+}
+
 /// Pulse's cards stay 128 x 128 next to HD's.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]

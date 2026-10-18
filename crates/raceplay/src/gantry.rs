@@ -411,7 +411,7 @@ pub(super) fn place_card(
 /// once, afterwards. See [`oag_title::adverts::Adverts::card_unlit`]. A model vertex with no colour set is `lit`
 /// and takes the stand-in key and fill rig, which left a white texel at 131 on the
 /// card (0.514) where the original's reads 255.
-fn unlit(model: &mut Model) {
+pub(super) fn unlit(model: &mut Model) {
     for vertex in &mut model.vertices {
         vertex.lit = 0.0;
     }

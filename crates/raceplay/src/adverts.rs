@@ -175,7 +175,11 @@ fn load_card(
     report: &mut Vec<String>,
 ) -> Result<Card> {
     let (model, blob) = super::gantry::load_with_blob(archives, name, report)?;
-    card_from(slot, model, &blob, spec)
+    let mut card = card_from(slot, model, &blob, spec)?;
+    if spec.adverts_unlit {
+        super::gantry::unlit(&mut card.model);
+    }
+    Ok(card)
 }
 
 /// A card for `slot` from an already-loaded model and the file's own bytes,
