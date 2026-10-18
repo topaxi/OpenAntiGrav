@@ -183,7 +183,8 @@ fn distinct_colours(rgba: &[u8]) -> usize {
 }
 
 /// Loads `source`'s default circuit, draws its cards at two clock readings and
-/// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set.
+/// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set, and
+/// `$OAG_ADVERT_TRACK` names another circuit.
 fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
@@ -195,6 +196,7 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
+        track: std::env::var("OAG_ADVERT_TRACK").ok(),
         ..crate::Options::default()
     })
     .expect("loading the race");
