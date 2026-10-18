@@ -2577,3 +2577,56 @@ reading, not a capture; a real finish on RPCS3 (three laps, about 7,760 ticks of
 magic constants and the lineage is HD's, so the same unlit cards are expected once a card route exists; not checkable on a
 sampler (no PS4 capture path). **2048: checked, differs** - no `billboard8`/`321backplate` surface on its default circuit, so there
 is no card to light. **Pulse:** `unlit` stays `false` (not measured), `gantry-pulse` / `pulse-card-verify` own it.
+
+## Pulse: circuit 11's mount, the second `billboard8` quads, and the adverts' lighting (2026-10-18, `pulse-mount-11`)
+
+Three results: **a mount fix (circuit `11`, fixed)**, **the second quads decided from the asset**, and **Pulse's adverts
+measured unlit**.
+
+**1. Circuit `11`: the mount fitted one plane across two quads (fixed).** `11` arrives with a pack (`data/dlc`, loaded with
+`race::Options::dlc`). It binds `billboard8.tga` on two draws and has no `321backplate` to prefer, so `gantry::surface`
+fitted a plane across both:
+
+| Draw | Indices | Node | Bounds centre | Radius | From the Start Position | Ahead-ness |
+| --- | --- | --- | --- | --- | --- | --- |
+| board | 171 | 250 | -368.5, 20.3, -367.1 | 23.2 | 164.5 units, 14.7 above | +1.00 |
+| second | 75 | 413 | 255.2, 41.5, -465.1 | 16.3 | 795.4 units, 35.8 above | +1.00 |
+
+The board draw is the same 171-index quad and the same 164-165 units / 14-15 above that `01`-`05`, `07`, `09` and `10`
+author. The second is a flat panel (30.2 x 16.4, 0.06 deep). The fit read "44.6 x 643.7". **Fix:** `surface` now fits the
+draw with the most indices and the draws whose bounding spheres touch it (`oag_render::gantry::surface`; the choice of
+"most indices" is **chosen, not measured**, backed by the two numbers above). Result on all twelve base circuits: every
+mount line (centre, width, height) is byte-identical to before, and `14_Track`'s stub now sits on its backplate's plane
+(12 of 12, was 11 of 12 with `14` 354 units and 54 degrees off), so `every_circuit_authors_the_same_gantry_mount` asserts
+agreement where it used to require one disagreement. Test: `pulse_gantry_circuits_ground_truth::circuit_11_mounts_on_its_board_quad_not_a_fit_across_two`
+(board-sized extent, 150-180 units from the Start Position, under 200 vertices); it fails with the old `surface`.
+
+**What the picture does and does not show.** The overhead board in `11`'s start frame (tick 150, 215: the `3` then `32`)
+is the track's own `billboard8` quad, so it is pixel-identical before and after: the extent only feeds the mount's
+`PanelCull` half-width (322 before, 22 now) and the report's "surface" figures. The defect that moved is the cull: with a
+322-unit half-width nothing parked beside the aperture would have been dropped from the card pass. The board itself hangs
+without the support frame the other circuits' backplate authors, close over the grid (the chase camera sits under it); that
+is authored, not our mount. `11` is not offered by the original's Track Select, so no capture was possible.
+
+**2. The second `billboard8` quads (`11`: 75 indices, `14`: 81 indices): repeater panels by the asset, not seen drawn on the
+original.** Both are flat or near-flat panels (`11`: 30.2 x 16.4 x 0.06; `14`'s node: 16.1 x 10.2), 795 and 880 units from
+the Start Position (`14`'s is +0.31 ahead-ness, 22.5 below), bound by the track to the same `billboard8` material as the
+board; the shape is a scenery panel and not debris, and a draw's texture is its binding, so the original would show the
+card on it. **Not confirmed by a picture or a dump**: the original's start frames do not reach it (out of view at 650-880
+units), and a pose beside it was not reached (`psp-drive.py place` on `16` respawned the craft off the track twice; `14`
+was not retried in the time box). Ours draws the card on every `billboard8` draw. Reading, not measured: no confidence score.
+
+**3. Pulse's adverts are unlit (PPSSPP software GE dumps; census records `LIGHTINGENABLE`).** The adverts share slot 8's
+128 x 128 target (`0x154000`): each advert is a separate run of prims into it, followed by the main-pass quad that samples
+it. Re-reading the 41 dumps already taken plus two placed on `16`'s home straight beside slot 7 (billboard7 at
+-249, -8, -252; the main-pass draw sampling the target is at -254..-243, -15..0, -271..-234): runs of 14, 8, 7, 10 and 9
+prims, **all `LIGHTINGENABLE` 0** (the clear sprite reads none). On `01` four advert quads beside the grid
+(-746..-738, 34..65, 300; -682..-675; -676, 42..58, -14..9; -671, 16..31, -84..-61) each have a run with 0. The two
+other targets in the frames (`0x110000`, `0x132000`) are the bloom ping-pong (a 1320-vertex blur, 256 x 136), not cards.
+**Fixed:** `Adverts::adverts_unlit` is `true` for Pulse. **Picture effect: none** (`16_Track` at tick 150 is pixel-identical;
+Pulse's advert model vertices already carry `lit` 0 on the default circuit, so `pulse_draws_every_card_unlit` passes with
+the field either way and `pulse_declares_its_adverts_unlit` pins the field). PS2: not read.
+
+**Per title.** HD unchanged. Omega: checked, applies, not wired (no card route). 2048: checked, differs (no
+`billboard8`/`321backplate` surface). The `surface` cluster rule is title-agnostic and HD's mounts are unchanged
+(`gantry_mount_hd_circuits_ground_truth`, `start_gantry_hd_mount_ground_truth` in the gate).
