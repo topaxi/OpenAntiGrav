@@ -1675,6 +1675,16 @@ after the transform). A batch is then recognised by **(vertex count, sorted box
 extents)**, taken off this project's own draws in the same way, which survives the
 matrix and needs no address. The layout the script reads is in its docstring.
 
+**Texture state per draw (2026-10-18, `pulse-card-verify`).** `census` also records the
+texture and target state in force at each PRIM (`fbptr`, `texsize0`, `texmode`, `texfilter`,
+`texwrap`, `texscale_*`, `blendenable`) and each draw's vertex UV range. A draw that samples
+a render target is one whose texture address equals a framebuffer address other draws used;
+`TEXWRAP` bit 0 / bit 8 are U / V clamp (0 = repeat), and the bloom targets' `0x101` shows
+the decode does report clamp when it is set. Timing a countdown dump: `gpu.record.dump` costs
+1-2 s of wall clock a call, and the `3` shows 6-9 s after the description is dismissed, so
+take screenshots first and one dump late (the board's prims are drawn through the dark phase
+too).
+
 Two traps:
 
 - **A pose placed at speed is not the pose dumped.** `psp-drive.py place --speed 41
