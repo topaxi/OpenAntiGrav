@@ -667,13 +667,23 @@ mod advance_tests {
             1,
         );
         frame(&cell, &mut race, 1.0);
-        // The shot changes: the camera jumps a hundred units, and the picture says so.
+        // The shot changes: the camera jumps a hundred units and brings a field
+        // of view of its own, as the destroy camera's zoom does, and the
+        // picture says so.
         race.sim.respawns[0] += 1;
-        let prev = frame(&cell, &mut race, 101.0);
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        let zoomed = Mat4::from_scale(Vec3::new(2.0, 2.0, 1.0));
+        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), zoomed, at(101.0), 1);
         assert_eq!(
             prev.view_projection,
             at(101.0),
             "the blur's previous view is the post-cut camera"
+        );
+        // Its field too: the lens map would otherwise take the cut's zoom out
+        // of a velocity the camera half already reads as still.
+        assert_eq!(
+            prev.projection, zoomed,
+            "the blur's previous field is the post-cut one"
         );
         // And the tick after it is ordinary again.
         let prev = frame(&cell, &mut race, 102.0);
