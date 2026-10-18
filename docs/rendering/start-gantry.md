@@ -2630,3 +2630,48 @@ the field either way and `pulse_declares_its_adverts_unlit` pins the field). PS2
 **Per title.** HD unchanged. Omega: checked, applies, not wired (no card route). 2048: checked, differs (no
 `billboard8`/`321backplate` surface). The `surface` cluster rule is title-agnostic and HD's mounts are unchanged
 (`gantry_mount_hd_circuits_ground_truth`, `start_gantry_hd_mount_ground_truth` in the gate).
+
+## PS2 Pulse's gantry card on PCSX2: measured, no defect (2026-10-19, `ps2-gantry-pcsx2`)
+
+**Method.** PCSX2 v2.9.39 (`pcsx2-qt`, OpenGL, own Xvfb and data path through `OAG_PCSX2_DISPLAY` / `OAG_PCSX2_DATA`),
+`pulse-ps2-eu.chd` (`SCES-54748`), Single Race, Assegai, Venom. Two circuits: Moa Therma White (`03_Track`, the profile's
+own grid cell) and Talon's Junction White (`16_Track`, reached by overwriting the 16 in-RAM `03_Track\0` strings with
+`16_Track\0` at the ship-select screen; the game then loads and announces Talon's Junction). The countdown was
+reached from a save state taken in the fly-through, then paused and stepped with verified frames; a single-frame GS
+dump (`scripts/pcsx2-drive.py gsdump`, new) was taken on the `3` of Moa Therma and the `2` of Talon's, read with
+`scripts/pcsx2-gsdump.py`. Ours: `oag-game pulse-ps2-eu.chd --race --track ... --team Assegai --ticks 111/156` on the same
+two circuits, read as whole frames.
+
+**The route is measured on PS2, not by analogy (confidence 85: two circuits, two dumps, one emulator).** In both dumps
+the frame first draws into a **128 x 128 PSMCT32 target** (`FRAME_1` fbw 2, block `0x3480`): two sprites clear it
+(colour 0,0,0 alpha 255, so opaque black; the first only touches the Z buffer), then one 208-prim strip draws the digit
+glyph from the 32 x 32 palette texture (`321go_NOMIP`'s PS2 copy) with vertex colour (127,127,119,127). The main frame
+then draws a **32-prim subdivided board mesh sampling that target**: `TEX0` 128 x 128 PSMCT32, `TCC` 1, `TFX` 1
+(**DECAL: unlit, texture colour as is, vertex colour not applied**), `ALPHA` `0x44` (source alpha over destination),
+`TEX1` `0x61` (linear magnification and minification, one level), `CLAMP` `0x5` (**clamp** on U and V). UVs span
+U 0.000..0.994, V 0.000..1.000 on both circuits.
+
+**Differences from PSP, and what they mean for ours.**
+
+- The sampler is **clamp, not repeat**, but the PS2 board mesh never leaves 0..1 (the card is sampled whole), so
+  clamp and repeat draw the same picture. PSP's U 0.875..2.0 quads are a PSP asset property; the PS2 data was not
+  surveyed for other advert quads, so `Adverts::wrap: true` stays one shared definition and is **unmeasured for PS2 advert
+  quads past 0..1** (open).
+- The card is unlit (`TFX` decal), as on PSP (`card_unlit`): checked, same.
+- The card's alpha is opaque black behind the glyph: the board is opaque, as ours draws it.
+
+**Laid against ours (whole frame, player size).** Moa Therma `3`, `2`, `1` and `GO`, Talon's Junction `3` and `2`:
+original shows an opaque dark-red panel, the digit on the left and black to its right, rounded corners, nothing showing
+through, a soft digit (the 128-wide card minified); ours shows the same on both circuits at ticks 111 and 156, and the
+`GO` banner holds green after the start on both. No see-through edge, no wrong tile, no extra bloom halo found. The
+cameras differ (the original's countdown camera sits further back than our chase camera), so digit size is not compared.
+During Talon's fly-through the original also shows an orange animated advert board ("harim u") with crisp edges.
+
+**Not done.** FINAL LAP and chequered states on PS2 (a race to the last lap was not reached in the time box); a framed
+advert quad beside ours; the PS2 advert quads' UV extents (`wrap` for them). **Per title:** PSP unchanged; HD unchanged;
+2048 and Omega: not applicable (no card). **No code change**: the evidence supports the existing PS2 path, so
+`ps2_skin` and the shared `Adverts` data stay as they were.
+
+**Tooling added.** `scripts/pcsx2-drive.py`: `OAG_PCSX2_DISPLAY`, `OAG_PCSX2_DATA` (own display, data path, log, pid file;
+`stop` kills only the recorded pid there), `GSDumpSingleFrame` bound to `F9` and a `gsdump` subcommand. Trap: a save
+state loaded while the VM is paused leaves it paused; `press pause` resumes.

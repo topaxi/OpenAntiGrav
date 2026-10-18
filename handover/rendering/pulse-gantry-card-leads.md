@@ -17,10 +17,10 @@ original".
 - **The second `billboard8` quads** (`14`: 81 indices at 378.8, 90.5, -273.9; `11`: 75 indices) are decided from the asset
   as repeater panels (`docs/rendering/start-gantry.md`, 2026-10-18 `pulse-mount-11`); a framed shot beside one on the
   original is still open (`place` respawns the craft off the track).
-- **PS2 is by analogy**: not captured on PCSX2, its `TEXWRAP` equivalent unread.
+- **PS2 advert quads past 0..1**: PS2 gantry card measured on PCSX2 (2026-10-19; offscreen 128 x 128, CLAMP, linear, decal, no defect), but the sampler is clamp and the PS2 advert quads' UV extents were not surveyed.
 - **Final lap / chequered** on a second circuit.
 
 ## Next Steps
 
 1. A framed shot of a second quad on `14`: a `place` on a spline point (`Spline::nearest` gives one) or a save state mid-lap.
-2. PCSX2 on one circuit, reading the GS sampler state of the card draw.
+2. PCSX2 (`OAG_PCSX2_DISPLAY`, `gsdump`): FINAL LAP/chequered on PS2, and a circuit with advert quads to read their UV and clamp.

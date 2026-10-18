@@ -71,11 +71,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pcsx2_pine import Pine, PineError, STATUS_NAMES  # noqa: E402
 import xvfb_display  # noqa: E402
 
-DISPLAY_NUMBER = 78
+#: `OAG_PCSX2_DISPLAY` / `OAG_PCSX2_DATA` give a drive member its own display and
+#: data path (own ini, memory card, savestates); unset keeps the shared defaults.
+DISPLAY_NUMBER = int(os.environ.get("OAG_PCSX2_DISPLAY", "78"))
 DISPLAY = "127.0.0.1:%d" % DISPLAY_NUMBER
 DISPLAY_GEOMETRY = "1600x1200x24"
 
-DATA_PATH = os.path.expanduser("~/.cache/oag-pcsx2")
+DATA_PATH = os.path.expanduser(os.environ.get("OAG_PCSX2_DATA", "~/.cache/oag-pcsx2"))
+PID_FILE = os.path.join(DATA_PATH, "pcsx2.pid")
 
 #: Records the pid of the `Xvfb` *this tooling* started, so a later `stop` -
 #: in a different process - can tell it apart from a display that was already
@@ -85,7 +88,7 @@ DISPLAY_MARKER = os.path.join(DATA_PATH, "xvfb.owner.json")
 INI_DIR = os.path.join(DATA_PATH, "PCSX2", "inis")
 SNAP_DIR = os.path.join(DATA_PATH, "PCSX2", "snaps")
 STATE_DIR = os.path.join(DATA_PATH, "PCSX2", "sstates")
-LOG_FILE = "/tmp/oag-pcsx2.log"
+LOG_FILE = os.path.join(DATA_PATH, "oag-pcsx2.log") if "OAG_PCSX2_DATA" in os.environ else "/tmp/oag-pcsx2.log"
 
 DEFAULT_IMAGE = "data/images/pulse-ps2-eu.chd"
 BIOS_DIR = os.path.expanduser("~/.config/PCSX2/bios")
@@ -228,6 +231,7 @@ EnableIOPConsole = true
 [Hotkeys]
 Screenshot = Keyboard/F8
 FrameAdvance = Keyboard/F7
+GSDumpSingleFrame = Keyboard/F9
 TogglePause = Keyboard/Space
 ToggleTurbo = Keyboard/Tab
 
@@ -304,7 +308,20 @@ def write_config(slot, renderer=12, screenshot_size=SCREENSHOT_INTERNAL,
     return target
 
 
+def _recorded_pid():
+    """The pid `start_emulator` recorded, if it is still a pcsx2-qt."""
+    try:
+        pid = int(open(PID_FILE).read().strip())
+        if open("/proc/%d/comm" % pid).read().strip().startswith("pcsx2"):
+            return pid
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def emulator_running():
+    if "OAG_PCSX2_DATA" in os.environ:
+        return _recorded_pid() is not None
     return subprocess.run(["pgrep", "-x", "pcsx2-qt"],
                           capture_output=True).returncode == 0
 
@@ -314,14 +331,26 @@ def stop_emulator(quiet=False):
         if not quiet:
             log("no pcsx2-qt running")
         return False
-    subprocess.run(["pkill", "-x", "pcsx2-qt"], capture_output=True)
+    own = _recorded_pid() if "OAG_PCSX2_DATA" in os.environ else None
+
+    def kill(sig):
+        if own is not None:
+            try:
+                os.kill(own, sig)
+            except ProcessLookupError:
+                pass
+        else:
+            subprocess.run(["pkill"] + (["-9"] if sig == 9 else []) +
+                           ["-x", "pcsx2-qt"], capture_output=True)
+
+    kill(15)
     for _ in range(20):
         time.sleep(0.5)
         if not emulator_running():
             if not quiet:
                 log("pcsx2-qt stopped")
             return True
-    subprocess.run(["pkill", "-9", "-x", "pcsx2-qt"], capture_output=True)
+    kill(9)
     return True
 
 
@@ -334,8 +363,10 @@ def start_emulator(image, binary="pcsx2-qt", extra=()):
                "-earlyconsolelog", "-logfile", LOG_FILE]
     command.extend(extra)
     command.extend(["--", os.path.abspath(image)])
-    subprocess.Popen(command, env=env, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, start_new_session=True)
+    child = subprocess.Popen(command, env=env, stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+    with open(PID_FILE, "w") as handle:
+        handle.write("%d\n" % child.pid)
     return command
 
 
@@ -661,6 +692,18 @@ def cmd_shot(args):
     return 0 if path else 1
 
 
+def cmd_gsdump(args):
+    """Tap the single-frame GS dump hotkey, then step so the file is closed."""
+    keyboard = Keyboard()
+    keyboard.focus()
+    keyboard.tap("F9", hold=ADVANCE_HOLD, after=ADVANCE_AFTER)
+    pine = Pine(slot=args.slot)
+    advance_frames(pine, keyboard, args.settle_frames)
+    time.sleep(4.0)
+    log("dump written under %s" % SNAP_DIR)
+    return 0
+
+
 def cmd_input(args):
     pine = Pine(slot=args.slot)
     connected, held, pressed = read_pad(pine, args.pad)
@@ -838,6 +881,10 @@ def main(argv=None):
                         help="grab the whole virtual display instead of the "
                              "GS output")
     p_shot.set_defaults(func=cmd_shot)
+
+    p_gsdump = sub.add_parser("gsdump", help="dump the current frame's GS packets")
+    p_gsdump.add_argument("--settle-frames", type=int, default=8)
+    p_gsdump.set_defaults(func=cmd_gsdump)
 
     p_input = sub.add_parser("input")
     p_input.add_argument("--pad", type=int, default=0)
