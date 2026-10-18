@@ -50,6 +50,9 @@ pub struct Card {
     pub view_projection: Mat4,
     /// The target's size in pixels, the title's [`oag_title::adverts::Adverts::target`].
     pub size: (u32, u32),
+    /// Whether a track quad samples the target wrapping, the title's
+    /// [`oag_title::adverts::Adverts::wrap`].
+    pub wrap: bool,
     /// The gantry's clock and board-window cull, on the card that is slot 8 of
     /// a title that draws it as one; `None` for an advert, which runs on the
     /// scenery clock.
@@ -195,6 +198,7 @@ pub(super) fn card_from(
         model,
         view_projection,
         size: spec.target,
+        wrap: spec.wrap,
         timeline: None,
     })
 }
@@ -205,6 +209,7 @@ struct CardGpu {
     drawable: Drawable,
     view_projection: Mat4,
     colour: wgpu::TextureView,
+    wrap: bool,
     #[cfg(test)]
     target: wgpu::Texture,
     #[cfg(test)]
@@ -219,6 +224,8 @@ pub(super) struct Cards {
     /// pointed at a card.
     #[cfg(test)]
     rebound: usize,
+    #[cfg(test)]
+    wrapped: usize,
     depth: wgpu::TextureView,
     velocity: wgpu::TextureView,
 }
@@ -332,6 +339,7 @@ impl Cards {
                 drawable,
                 view_projection: card.view_projection,
                 colour: target.create_view(&wgpu::TextureViewDescriptor::default()),
+                wrap: card.wrap,
                 #[cfg(test)]
                 target,
                 #[cfg(test)]
@@ -342,6 +350,8 @@ impl Cards {
             cards: gpu,
             #[cfg(test)]
             rebound: 0,
+            #[cfg(test)]
+            wrapped: 0,
             depth,
             velocity,
         })
@@ -359,10 +369,11 @@ impl Cards {
     ) {
         for &(texture_slot, number) in placeholders {
             if let Some(card) = self.cards.iter().find(|c| c.slot == number) {
-                track.set_albedo(device, queue, texture_slot, &card.colour);
+                track.set_albedo(device, queue, texture_slot, &card.colour, card.wrap);
                 #[cfg(test)]
                 {
                     self.rebound += 1;
+                    self.wrapped += usize::from(card.wrap);
                 }
             }
         }
@@ -377,6 +388,12 @@ impl Cards {
     #[cfg(test)]
     pub(super) fn rebound(&self) -> usize {
         self.rebound
+    }
+
+    /// How many of those were bound with a wrapping sampler.
+    #[cfg(test)]
+    pub(super) fn wrapped(&self) -> usize {
+        self.wrapped
     }
 
     /// Draws every card into its target at `seconds` on the scenery clock.
@@ -409,7 +426,11 @@ impl Cards {
                         view: &card.colour,
                         depth_slice: None,
                         resolve_target: None,
-                        // The captured pass clears with a sprite of colour 0.
+                        // The captured pass clears with a sprite of colour 0. Alpha stays 0 on
+                        // purpose: a lit billboard material (`billboarddiffuse`,
+                        // `cf_vex_billboard`) gates the shader's stand-in specular by the texel's
+                        // alpha, so an opaque clear blows the board out to white on those
+                        // circuits (2026-10-18, docs/rendering/start-gantry.md).
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                             store: wgpu::StoreOp::Store,

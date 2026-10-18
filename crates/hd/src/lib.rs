@@ -216,6 +216,7 @@ pub const TITLE: &Title = &Title {
         // `Billboard_CreateFromColour_q`'s pool order is not read on HD.
         colour_pool: false,
         flip_v: false,
+        wrap: true,
         zone_shares_one_texture: true,
         gantry_card: true,
         zone_gantry: Some(oag_title::adverts::ZoneGantry {

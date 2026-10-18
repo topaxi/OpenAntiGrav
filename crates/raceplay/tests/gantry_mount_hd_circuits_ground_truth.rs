@@ -132,3 +132,135 @@ circuit_test!(ubermall_authors_a_gantry_mount, "05_ubermall");
 circuit_test!(sebenco_climb_authors_a_gantry_mount, "10_sebenco_climb");
 circuit_test!(sol_2_authors_a_gantry_mount, "12_sol_2");
 circuit_test!(anulpha_pass_authors_a_gantry_mount, "15_anulpha_pass");
+
+/// Sweep: every draw bound to a `billboard8` texture, per pass, with blend,
+/// vertex colour alpha and the UV rectangle. Prints only when `OAG_SWEEP` is set.
+#[test]
+#[ignore = "sweep: prints the billboard8 materials of the twelve circuits"]
+fn survey_billboard8_materials() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    for env in [
+        "amphiseum",
+        "modesto_heights",
+        "talons_junction",
+        "tech_de_ra",
+        "01_vineta_k",
+        "02_track",
+        "03_track",
+        "04_chenghou_project",
+        "05_ubermall",
+        "10_sebenco_climb",
+        "12_sol_2",
+        "15_anulpha_pass",
+    ] {
+        let model = track_model(&image, env);
+        for (pass, draws) in [
+            ("opaque", &model.draws),
+            ("alpha_test", &model.alpha_tested_draws),
+            ("transparent", &model.transparent_draws),
+        ] {
+            for d in draws.iter() {
+                let Some(t) = d.texture else { continue };
+                let Some(tex) = model.textures[t].as_ref() else {
+                    continue;
+                };
+                if !tex.label.contains("billboard8") {
+                    continue;
+                }
+                let (mut lo, mut hi) = ([f32::MAX; 2], [f32::MIN; 2]);
+                let (mut amin, mut amax) = (f32::MAX, f32::MIN);
+                let mut words = std::collections::BTreeSet::new();
+                let mut spec = std::collections::BTreeSet::new();
+                for i in d.range.clone() {
+                    let v = &model.vertices[model.indices[i as usize] as usize];
+                    for k in 0..2 {
+                        lo[k] = lo[k].min(v.texcoord[k]);
+                        hi[k] = hi[k].max(v.texcoord[k]);
+                    }
+                    words.insert(v.slots);
+                    spec.insert(format!("{:.1}/lit{:.1}", v.specular_exponent, v.lit));
+                    amin = amin.min(v.colour[3]);
+                    amax = amax.max(v.colour[3]);
+                }
+                println!(
+                    "SURVEY {env} {pass} tex={} {}x{} idx={} blend={:?} state={:?} culled={} uv=({:.3},{:.3})-({:.3},{:.3}) vcol_a={amin:.2}..{amax:.2} spec={spec:?} slots={:?} glow={:?}",
+                    tex.label,
+                    tex.width,
+                    tex.height,
+                    d.range.len(),
+                    d.blend,
+                    d.blend_state,
+                    d.culled,
+                    lo[0],
+                    lo[1],
+                    hi[0],
+                    hi[1],
+                    words
+                        .iter()
+                        .map(|w| format!("{:#010x}", w))
+                        .collect::<Vec<_>>(),
+                    words
+                        .iter()
+                        .map(|w| (*w >> 24) as usize)
+                        .filter(|&i| i > 0)
+                        .map(|i| model.emissive.get(i - 1).copied())
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+}
+
+/// Sweep: the `.rcsmodel` material record behind every `billboard8` texture.
+#[test]
+#[ignore = "sweep: prints the billboard8 material records of the twelve circuits"]
+fn survey_billboard8_records() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("opening the disc");
+    for env in [
+        "amphiseum",
+        "modesto_heights",
+        "talons_junction",
+        "tech_de_ra",
+        "01_vineta_k",
+        "02_track",
+        "03_track",
+        "04_chenghou_project",
+        "05_ubermall",
+        "10_sebenco_climb",
+        "12_sol_2",
+        "15_anulpha_pass",
+    ] {
+        let track = oag_hd::names::track(env);
+        let sibling = oag_mesh::mesh::rcs::sibling_name(&track).unwrap();
+        let blob = archives.read_name(&sibling).unwrap();
+        let model = oag_rcs::rcsmodel::Model::parse(&blob).unwrap();
+        for m in model.materials.iter().filter(|m| {
+            m.texture.contains("billboard8")
+                || m.second_texture
+                    .as_deref()
+                    .is_some_and(|t| t.contains("billboard8"))
+        }) {
+            println!(
+                "REC {env} name={} state={:#x} blend={:#x}/{:#x} alpha={:#x}/{} tex={} second={:?} samp={:#x} second_samp={:?} samplers={:?}",
+                m.name,
+                m.state,
+                m.src_factor,
+                m.dst_factor,
+                m.alpha_func,
+                m.alpha_ref,
+                m.texture,
+                m.second_texture,
+                m.texture_sampler,
+                m.second_texture_sampler,
+                m.samplers
+            );
+        }
+    }
+}
