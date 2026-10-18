@@ -325,6 +325,7 @@ pub(super) fn place_card(
     track_model: &Model,
     spec: &oag_title::adverts::Adverts,
     zone_board: Option<oag_title::adverts::ZoneGantry>,
+    clock: ClockRule,
     report: &mut Vec<String>,
 ) -> Option<crate::adverts::Card> {
     let Some(mount) = oag_render::gantry::mount(track_model) else {
@@ -344,10 +345,17 @@ pub(super) fn place_card(
         }
     };
     let countdown = oag_render::gantry::panel::fx350_draws(&model);
-    let (cull, parked) = panel_cull(&model, countdown, &mount, &HD_LAP_WINDOWS);
-    let clock = match zone_board {
-        Some(zone) => zone_clock(zone, name, report),
-        None => hd_clock(&model, name, report),
+    let pulse = clock != ClockRule::HdRaceManager;
+    let windows = if pulse {
+        &PULSE_LAP_WINDOWS
+    } else {
+        &HD_LAP_WINDOWS
+    };
+    let (cull, parked) = panel_cull(&model, countdown, &mount, windows);
+    let clock = match (zone_board, pulse) {
+        (Some(zone), _) => zone_clock(zone, name, report),
+        (None, true) => Clock::PULSE,
+        (None, false) => hd_clock(&model, name, report),
     };
     let mut card = match crate::adverts::card_from(8, model, &blob, spec) {
         Ok(card) => card,
@@ -360,14 +368,28 @@ pub(super) fn place_card(
     };
     unlit(&mut card.model);
     let fx350 = oag_render::gantry::panel::fx350_draws(&card.model).len();
+    let evidence = if pulse {
+        format!(
+            "as the original does (a live PPSSPP GE dump of Talon's Junction, 2026-10-06; the \
+             board reads opaque on a PPSSPP software-renderer capture). Before the first line \
+             crossing {parked} draw(s) parked outside the panel and {fx350} bound to slot 7's own \
+             fx350_nomip.gtf art are not drawn; after it, Pulse's race manager (0x08829778) \
+             plays the Board, FINAL LAP and the chequered flag by lap (read from BOOT.BIN, \
+             confidence 85)"
+        )
+    } else {
+        format!(
+            "as the original does (RPCS3, 2026-10-08). Before the first line crossing {parked} \
+             draw(s) parked outside the panel and {fx350} bound to slot 7's own fx350_nomip.gtf \
+             art are not drawn; after it, HD's race manager plays the FX-350 board, FINAL LAP and \
+             the chequered flag, and each frame draws only what stands on the panel (measured on \
+             RPCS3, 2026-10-04)"
+        )
+    };
     report.push(format!(
         "start gantry {name}: drawn through its own camera into a {}x{} target shown on the \
-         circuit's billboard8 quad(s), as the original does (RPCS3, 2026-10-08). The panel's \
-         {:.1} x {:.1} extent is measured off this circuit's own geometry \
-         (docs/rendering/start-gantry.md). Before the first line crossing {parked} draw(s) parked \
-         outside the panel and {fx350} bound to slot 7's own fx350_nomip.gtf art are not drawn; \
-         after it, HD's race manager plays the FX-350 board, FINAL LAP and the chequered flag, and \
-         each frame draws only what stands on the panel (measured on RPCS3, 2026-10-04)",
+         circuit's billboard8 quad(s), {evidence}. The panel's {:.1} x {:.1} extent is measured \
+         off this circuit's own geometry (docs/rendering/start-gantry.md)",
         spec.target.0, spec.target.1, mount.width, mount.height,
     ));
     card.timeline = Some(CardTimeline {

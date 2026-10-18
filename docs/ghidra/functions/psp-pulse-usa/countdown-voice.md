@@ -168,7 +168,8 @@ read of its body.
   race-type list) and the forced route hung.
 - **Pure, HD, 2048.** Their `speech_zone.bnk` carries `ready` and `go`, and HD's
   a longer `321_GO`; nothing says when or from where those titles play them, so
-  `RaceDefaults::countdown_voice` is `None` for all three and they play nothing.
+  they are lent Pulse's `ready`/`go` timing and the mode's speech bank (`RaceDefaults::countdown_voice`
+  is `Some`, chosen, not measured, no confidence score; Omega is lent it the same way).
 - **The PS2 pressing** is the same title package and is lent the PSP's ticks.
 - What `FUN_089385b4(g_music_player_ptr, 0, 1)` does beside the `ready` cue (it
   is in the same branch) - the race music's start, by its argument shape, unread.

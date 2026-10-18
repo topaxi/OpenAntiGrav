@@ -308,7 +308,10 @@ fn pulse_psp_points_every_served_placeholder_at_its_card() {
     };
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
-    assert_eq!(wrapped, 0, "Pulse's card sampler is unmeasured and clamps");
+    assert_eq!(
+        wrapped, wanted,
+        "Pulse's card sampler wraps (chosen, not measured): its quads author UVs past 1 and negate V"
+    );
 }
 
 #[test]
@@ -319,7 +322,10 @@ fn pulse_ps2_points_every_served_placeholder_at_its_card() {
     };
     assert!(wanted > 0, "the circuit authors no placeholder with a card");
     assert_eq!(rebound, wanted, "placeholders rebound to a card");
-    assert_eq!(wrapped, 0, "Pulse's card sampler is unmeasured and clamps");
+    assert_eq!(
+        wrapped, wanted,
+        "Pulse's card sampler wraps (chosen, not measured): its quads author UVs past 1 and negate V"
+    );
 }
 
 #[test]

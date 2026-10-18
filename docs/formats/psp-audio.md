@@ -542,7 +542,7 @@ this port's render; the other two banks' `ready` speaks from the cue's own start
 
 `oag_gameplay::cue::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
-`RaceDefaults::countdown_voice` is measured (Pulse only), and raised by
+`RaceDefaults::countdown_voice` is measured on Pulse; Pure, HD, 2048 and Omega are lent Pulse's timing and their mode's speech bank (chosen, not measured, no confidence score), and it is raised by
 `oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
 `crates/game/tests/countdown_voice_ground_truth.rs`.
 

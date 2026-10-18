@@ -404,7 +404,7 @@ fn pulse_psp_cards_stay_128_square() {
 }
 
 #[test]
-fn hd_draws_its_gantry_as_a_card_and_pulse_does_not() {
+fn hd_and_pulse_draw_their_gantry_as_a_card() {
     let hd = oag_hd::TITLE.adverts.expect("HD measured its advert pass");
     let pulse = oag_pulse::TITLE
         .adverts
@@ -414,9 +414,130 @@ fn hd_draws_its_gantry_as_a_card_and_pulse_does_not() {
         "RPCS3 2026-10-08: slot 8 is a 512x256 card on HD"
     );
     assert!(
-        !pulse.gantry_card,
-        "Pulse's gantry stands on the mount, byte-identical"
+        pulse.gantry_card,
+        "PPSSPP 2026-10-06/18: slot 8 is a 128x128 card on Pulse, the board opaque"
     );
+}
+
+/// A Pulse race loaded from `source`, for the gantry card tests below.
+fn pulse_race(source: &str) -> Option<crate::Loaded> {
+    let image = oag_testdata::image(source)?;
+    Some(
+        crate::load(&crate::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            ..crate::Options::default()
+        })
+        .expect("loading the race"),
+    )
+}
+
+fn assert_slot_8_is_a_pulse_card(loaded: &crate::Loaded) {
+    assert!(loaded.billboards.gantry.is_none(), "no placed gantry model");
+    let card = loaded
+        .billboards
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("slot 8 is a card");
+    assert!(card.timeline.is_some(), "the gantry card carries its clock");
+    assert_eq!(card.size, (128, 128));
+    assert!(
+        loaded.billboards.adverts.iter().all(|card| card.wrap),
+        "Pulse's quads author UVs past 1 and negate V, so every card wraps"
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn pulse_psp_loads_slot_8_as_a_clocked_card() {
+    if let Some(loaded) = pulse_race("data/images/pulse-psp-usa.chd") {
+        assert_slot_8_is_a_pulse_card(&loaded);
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_loads_slot_8_as_a_clocked_card() {
+    if let Some(loaded) = pulse_race("data/images/pulse-ps2-eu.chd") {
+        assert_slot_8_is_a_pulse_card(&loaded);
+    }
+}
+
+/// What Pulse's gantry card holds across its countdown, drawn on the GPU: the
+/// digit board is a red panel with a white `3` at 1.0 s, and a green panel with a white
+/// `GO` at 4.5 s. A card that draws only its backdrop, or nothing, has no white pixel.
+fn gantry_card_at(source: &str, seconds: &[f32]) -> Option<Vec<Vec<u8>>> {
+    let loaded = pulse_race(source)?;
+    let instance = wgpu::Instance::default();
+    let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+    let (device, queue) = pollster::block_on(adapter.request_device(
+        &mesh_render::device_descriptor("gantry card test", &adapter),
+    ))
+    .ok()?;
+    let cards: Vec<_> = loaded
+        .billboards
+        .adverts
+        .into_iter()
+        .filter(|card| card.slot == 8)
+        .collect();
+    let cards = Cards::new(&device, &queue, cards, Anisotropy::Off).expect("building the card");
+    Some(
+        seconds
+            .iter()
+            .map(|&at| {
+                cards
+                    .read_back(&device, &queue, at)
+                    .into_iter()
+                    .next()
+                    .expect("one card")
+                    .2
+            })
+            .collect(),
+    )
+}
+
+fn count(rgba: &[u8], is: impl Fn([u8; 3]) -> bool) -> usize {
+    rgba.as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| is([p[0], p[1], p[2]]))
+        .count()
+}
+
+fn assert_the_gantry_card_counts_down(source: &str) {
+    // `GO` strobes (the asset's own alternating column), so it is asked for over the
+    // span it owns, up to the digit panel's exit at 5.85 s, rather than at one instant.
+    let go_span: Vec<f32> = (0..19).map(|step| 3.7 + step as f32 * 0.1).collect();
+    let mut at = vec![1.0];
+    at.extend(&go_span);
+    let Some(frames) = gantry_card_at(source, &at) else {
+        return;
+    };
+    let white = |p: [u8; 3]| p.iter().all(|&c| c > 235);
+    let green = |p: [u8; 3]| p[1] > 60 && p[0] < 30 && p[2] < 30;
+    assert!(count(&frames[0], white) > 500, "the `3` is lit at 1.0 s");
+    assert!(count(&frames[0], green) == 0, "the board is red before GO");
+    assert!(
+        frames[1..].iter().all(|f| count(f, green) > 5_000),
+        "the board is green for the whole of GO's span"
+    );
+    assert!(
+        frames[1..].iter().any(|f| count(f, white) > 500),
+        "`GO` is lit somewhere in its span"
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU"]
+fn pulse_psp_gantry_card_counts_down() {
+    assert_the_gantry_card_counts_down("data/images/pulse-psp-usa.chd");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_gantry_card_counts_down() {
+    assert_the_gantry_card_counts_down("data/images/pulse-ps2-eu.chd");
 }
 
 #[test]

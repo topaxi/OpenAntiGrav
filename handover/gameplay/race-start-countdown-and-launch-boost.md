@@ -867,7 +867,7 @@ three names (`RaceMode_UpdateCountdown` 80, `Sound_PlayNamedInSlot` 75,
   intro before `ready` is unmeasured on any other circuit.
 - **`ready` is 1-2 ticks before the gantry's derived start (92)**, probably one
   event seen through screenshot lag. Not measured further; `gantry.rs` untouched.
-- The Pure, HD and 2048 start voices are unmeasured (`countdown_voice: None`).
+- The Pure, HD, 2048 and Omega start voices are unmeasured: lent Pulse's timing (`countdown_voice: Some`, chosen, not measured).
   HD's `321_GO` is a longer cue than Pulse's `go`.
 - `zone-mode.md`'s "sound cue at tick 40" starts no cue; the call
   (`FUN_0893a958`, 0.02f) is unread.

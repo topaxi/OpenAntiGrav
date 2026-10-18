@@ -88,20 +88,21 @@ fn the_report_names_the_start_gantry_and_the_mount_it_stands_on() {
         report.contains("/Data/Environments/321_Go/321Go_StartFinish.vex"),
         "the gantry line names no file: {report}"
     );
-    // **The placement, not just the file.** Naming the model without saying
-    // where it went would be as uninformative as the old "not loaded" line was
-    // once the placement existed - and it is exactly what a regression to a
-    // hardcoded coordinate would still print. `16_Track`'s mount is mesh node
-    // 74, measured off its own geometry; see `docs/rendering/start-gantry.md`.
+    // **How it is drawn, not just the file.** Pulse draws slot 8 as a card, through the
+    // model's own camera into the 128 x 128 target the circuit's `billboard8` quad
+    // shows (2026-10-18); the line says so, and that the panel it is framed for is
+    // measured off the circuit's own geometry rather than assumed.
     assert!(
-        report.contains("on node Some(74)"),
-        "the gantry line does not say which node it measured its mount from: {report}"
+        report.contains(
+            "drawn through its own camera into a 128x128 target shown on the circuit's billboard8"
+        ),
+        "the gantry line does not say it is a card on the billboard8 quad: {report}"
     );
     assert!(
         report.contains("measured off this circuit's own geometry"),
-        "the gantry line does not say the mount is measured rather than assumed: {report}"
+        "the gantry line does not say the panel is measured rather than assumed: {report}"
     );
-    // And that it did *not* silently fall back. `place` pushes a line starting
+    // And that it did *not* silently fall back. `place_card` pushes a line starting
     // "no start gantry" for every link it could not follow, so any of them
     // appearing here means this circuit did not get the gantry it claims to.
     assert!(
@@ -122,17 +123,17 @@ fn the_report_still_names_everything_about_the_gantry_that_is_not_drawn() {
     // crossing; after it Pulse's own race manager picks them by lap
     // (`0x08829778`, read from BOOT.BIN). The report says both.
     assert!(
-        report.contains("parked outside the panel are not drawn"),
+        report.contains("draw(s) parked outside the panel"),
         "the report does not say the later states are kept off the countdown: {report}"
     );
     assert!(
         report.contains("Pulse's race manager (0x08829778) plays the Board, FINAL LAP"),
         "the report does not say what triggers the later states: {report}"
     );
-    // Slot 8's placeholder quad is the gantry's, and the report says the gantry
-    // stands where it was rather than dropping it unmentioned.
+    // Slot 8's quad is not stripped: it is the surface the card is shown on, and the
+    // report says the gantry is on it rather than that it replaced it.
     assert!(
-        report.contains("billboard8 placeholder draw(s) replaced by the start gantry"),
-        "the report does not say slot 8's placeholder is replaced by the gantry: {report}"
+        !report.contains("billboard8 placeholder draw(s) replaced by the start gantry"),
+        "the quad the card is shown on was replaced: {report}"
     );
 }
