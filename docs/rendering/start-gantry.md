@@ -2244,3 +2244,20 @@ by a test: a sampler descriptor cannot be read back.
 **Open.** The wrap mode in the original (`TEXWRAP`); the other 14 circuits against PPSSPP; the
 adverts' two-tile slots (slot 1) against the original; PS2 against PCSX2; whether the second `billboard8` quad on circuits `11` (75 vertices) and `14` (81
 vertices, U 0..2) is a second board or debris.
+
+### The final-lap and finish boards (2026-10-18, maintainer's narrowing: "sometimes on the final lap or finish display")
+
+**Original** (PPSSPP software renderer, Talon's Junction, the crossing count forced with
+`scripts/psp-gantry-clock.py --force-n LAPS-1,LAPS`, 10 fps video, one run): the lap-before-last
+board is `FINAL LAP` on a dark brick-textured panel that strobes between a bright and a dim, ghosted
+state (the asset's own alternating alpha column); the last lap shows a chequered board. Both sit
+inside the aperture.
+
+**Old route (model on the mount), same two states** (`--anim-seconds 10.9`, `12.65`): the panel and
+its lettering overhang the gantry frame at both ends, and the lettering carries the bloom halo.
+**Card route:** the board is clipped to the quad, opaque, and reads like the original's at
+10.2..11.25 s (bright and dim phases) and 12.65..13.0 s (chequered), by eye on matched states,
+not by clock-matched frames. The dim `FINAL LAP` phase looks blurry and see-through on the
+original as well: it is authored, not a defect of ours. The chequered board's rows lean slightly
+more in ours than in the original's frames; the asset scrolls it (`polySurfaceShape7`, V 0 to -2),
+and the phase was not matched, so that is open. Only Talon's Junction was captured.
