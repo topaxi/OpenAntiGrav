@@ -18,6 +18,9 @@ Track startup row).
 > `oag_raceplay::gantry` still stands the model on it directly - a placement measured
 > against the original and kept; the render-to-texture path the other six slots now use
 > (`oag_raceplay::adverts`) was not applied to slot 8. Checked, applies, not wired.
+>
+> **Wired on Pulse 2026-10-18**, see [the Pulse card
+> section](#pulse-the-gantry-is-a-card-too-2026-10-18-gantry-pulse).
 
 **Read on Wipeout Pulse (`pulse-psp-usa.chd`, `UCUS-98712`; and
 `pulse-ps2-eu.chd`, `SCES-54748`), Wipeout Pure (`pure-psp-usa.chd`,
@@ -2146,6 +2149,9 @@ confirmed correct against the original, which shows nothing in those slots
 either. The background is a separate question about the board's *own*
 surface.
 
+**Resolved 2026-10-18**: the card route draws the board opaque, see
+[the Pulse card section](#pulse-the-gantry-is-a-card-too-2026-10-18-gantry-pulse).
+
 **Do not paint it black to make it match.** The rule that governed the
 placeholder fix governs this one: suppressing an unbound slot is faithful,
 choosing a colour is an invention. Two candidates are worth checking before
@@ -2165,6 +2171,97 @@ anything is authored:
 Neither has been checked. Whoever picks this up should parse the backplate
 first and only then look at the blend state - the cheaper answer is that the
 asset already says what to draw.
+
+## Pulse: the gantry is a card too (2026-10-18, `gantry-pulse`)
+
+**Reported from play, all titles: "on some tracks the gantry is blurry, it has transparent
+edges".** Reproduced on Pulse PSP (USA and EU) and PS2 (EU) before any change, and fixed on
+both pressings with one definition (`oag_pulse::TITLE.adverts.gantry_card = true`).
+
+**What the player saw, measured on ours (model stood on the mount, tick 150, Talon's
+Junction).** The board is translucent: the environment shows through it (pink, the structure
+behind it readable), and the `3` carries a soft halo. Three runs of the same frame with the
+model route (`--msaa off --motion-blur off --reconstruction off`, and `--anisotropy off`) leave
+both unchanged. So the halo is not the sampler, the mip chain or the resolve (hypothesis (a) of
+the lane brief is out: every glyph vertex carries one constant `(u, v)`, so no filter can give a
+glyph a soft rim); it is the bloom on a pure-white glyph that HD's "very blurry" section above
+already found. The translucency is the model drawn alpha-over straight into the scene.
+
+**What the original does (PPSSPP v1.20.4, software renderer, `pulse-psp-usa.chd`, Talon's
+Junction, Time Trial, VENOM, restart race, one run, ffmpeg x11grab at 15 fps).** The board is an
+opaque dark-red panel, black to the right, with rounded corners; the `3`, `2` and `1` read crisp
+white with the 128-wide card's own softness and nothing shows through; it turns green with `GO`
+on the release and strobes, as the clock section above records. Laid side by side at the `3 2`
+frame the two pictures agree in layout, digit art, panel shape and phase.
+
+**Cause and fix.** Pulse's own 2026-10-06 GE dump (billboards.md) already says pass B draws
+the gantry into a 128 x 128 target that the track's `billboard8` quad samples; this page left it
+"checked, applies, not wired". Wired now: `oag_raceplay::gantry::place_card` takes a `ClockRule`,
+so Pulse plays `Clock::PULSE` and `PULSE_LAP_WINDOWS` through the same card HD plays its own
+clock through (`place_card` and the card target are gantry-hd's; the change is that one
+parameter and the report line). The card is cleared to 0 and the quad is opaque, which is where
+the original's black panel comes from: with the board draw hidden the quad is plain black.
+
+**A second bug, found on the way, that also changed every Pulse advert.** With the card route
+the board was a red/black gradient with **no digits at all**, although a read-back of the card
+showed the `3` in it. The track's quads sample the card with V negated (`flip_v`,
+TEXSCALE V = -1) and `mesh_render::card_material`'s sampler clamped: every negated V is at or
+below 0, so the whole quad read the card's first row. The authored UVs say why that is wrong:
+slot 8's quad runs V 0..1 on Talon's Junction but **U 0.875..2.0, V 0.5..2.0 on 12 of the 16
+circuits that author one** (`01`-`05`, `07`-`12`, `15`; `13` and `14` have windows of their
+own), and the other slots' V is -2..-0.5 once negated. Those only mean something under a
+wrapping sampler. Pulse's cards now sample with both axes wrapping through the one knob,
+`oag_title::adverts::Adverts::wrap` (Pulse `true`, chosen, not measured; HD `true`, measured on
+RPCS3 by the HD lane's section below; Omega has no adverts table). Before: Talon's Junction
+slot 7 at tick 150 drew plain dark blue; after, its two white stripes. **Every Pulse advert's
+sampling changed with this, not only the gantry's** (slots 1, 2, 6 and 7 have V -2..0 once negated,
+so a wrapping sampler draws slot 1's quad as two tiles of its card: unverified against the original,
+no framed shot of it was obtained). The wrap needed for the U window was checked by picture
+against the original on Moa Therma White (PPSSPP, `3 2` frame, one run), which is our `03_Track`
+(matched by its scenery and the sign on its left; the quad's U is 0.875..2.0 there): same panel,
+digit size and vertical position, no seam and no tiling inside the aperture
+(`fin/compare03.png` in the lane's scratch, not kept). **Chosen, not measured:** that the
+original's wrap *mode* is repeat in both axes: the picture agrees, the `TEXWRAP` register was not
+read from a GE dump.
+
+**Shown across the circuits.** All 16 Pulse PSP circuits that author slot 8 (`01`-`16`) at
+tick 222 read `3 2 1` on an opaque panel; Talon's Junction and Moa Therma White (`03_Track`)
+were compared against the original, the other 14 were not. The old route was only reproduced on
+Talon's Junction, so which circuits "blur" under it was not surveyed.
+
+**PS2.** Same asset, same card route, same wrap (PS2 EU, tick 150/222/290: `3`, `321`, `GO`).
+Not compared against PCSX2: the PS2 route is by analogy with the PSP capture and the earlier
+PS2 note; the PS2 screenshots of the carded board show no halo (looked at, not A/B'd against
+[`ps2-bloom.md`](ps2-bloom.md)'s bloom).
+2048 and Omega place no gantry, so there is nothing to carry across (checked, not
+applicable); HD already drew a card.
+
+**Tests.** `adverts::tests::pulse_psp_loads_slot_8_as_a_clocked_card` and its PS2 twin (card,
+clock, 128 x 128, wrapping), `pulse_psp_gantry_card_counts_down`
+and its PS2 twin (a GPU read-back: a white `3` on a red panel at 1.0 s, green with a lit `GO`
+somewhere in 3.7..5.5 s). The sampler's wrap itself is covered by the screenshot A/B above, not
+by a test: a sampler descriptor cannot be read back.
+
+**Open.** The wrap mode in the original (`TEXWRAP`); the other 14 circuits against PPSSPP; the
+adverts' two-tile slots (slot 1) against the original; PS2 against PCSX2; whether the second `billboard8` quad on circuits `11` (75 vertices) and `14` (81
+vertices, U 0..2) is a second board or debris.
+
+### The final-lap and finish boards (2026-10-18, maintainer's narrowing: "sometimes on the final lap or finish display")
+
+**Original** (PPSSPP software renderer, Talon's Junction, the crossing count forced with
+`scripts/psp-gantry-clock.py --force-n LAPS-1,LAPS`, 10 fps video, one run): the lap-before-last
+board is `FINAL LAP` on a dark brick-textured panel that strobes between a bright and a dim, ghosted
+state (the asset's own alternating alpha column); the last lap shows a chequered board. Both sit
+inside the aperture.
+
+**Old route (model on the mount), same two states** (`--anim-seconds 10.9`, `12.65`): the panel and
+its lettering overhang the gantry frame at both ends, and the lettering carries the bloom halo.
+**Card route:** the board is clipped to the quad, opaque, and reads like the original's at
+10.2..11.25 s (bright and dim phases) and 12.65..13.0 s (chequered), by eye on matched states,
+not by clock-matched frames. The dim `FINAL LAP` phase looks blurry and see-through on the
+original as well: it is authored, not a defect of ours. The chequered board's rows lean slightly
+more in ours than in the original's frames; the asset scrolls it (`polySurfaceShape7`, V 0 to -2),
+and the phase was not matched, so that is open. Only Talon's Junction was captured.
 
 ## HD: "the gantry is blurry, it has transparent edges" - measured on all twelve circuits (2026-10-18, `gantry-hd`)
 
@@ -2252,7 +2349,7 @@ under clamp and shows the banner's hexagon pattern under wrap (2,611 px of the f
 `05_ubermall` 120-563, `talons_junction` 388, the rest 0). That is a "blurry on some tracks" a player can see, and it is
 per-circuit because only some circuits' quads tile.
 
-**Implemented:** `oag_title::adverts::Adverts::wrap` (HD `true`, measured; Pulse `false`, unmeasured, clamp as before),
+**Implemented:** `oag_title::adverts::Adverts::wrap` (HD `true`, measured; Pulse `true` since the Pulse gantry-card lane, chosen, not measured; was `false`),
 carried on `Card`, `set_albedo` and `oag_mesh::mesh_render::card_material`. Tests: `hd_points_every_served_placeholder_at_its_card`
 asserts every served placeholder is bound wrapping, the two Pulse variants assert none is.
 
