@@ -2531,9 +2531,9 @@ claim, but a pass-per-slot table is not claimed.
 runs a slot only when its proximity bit is set (`billboards.md`, "Proximity gate"), which is why the earlier dumps had no
 slot 2, 3 or 5. Ours still draws every card every frame (unchanged).
 
-**Fixed:** `oag_title::adverts::Adverts::unlit` (HD `true`, measured; Pulse `false`, unread) replaces the `!pulse` test
+**Fixed:** `oag_title::adverts::Adverts::adverts_unlit` (HD `true`, measured; Pulse `false`, unread) sits beside main's `card_unlit` (slot 8) and replaces the `!pulse` test
 `place_card` had, and `adverts::load_card` clears `lit` on every card's vertices through `gantry::unlit` when it is set.
-Shared-code edits are the one field and one line in Pulse's `Adverts` literal (`unlit: false`, no behaviour change; the
+Shared-code edits are the one field and one line in Pulse's `Adverts` literal (`adverts_unlit: false`, no behaviour change; the
 Pulse lane can set it when it measures the same programs). Test: `hd_draws_every_card_unlit`. Card pixels before and after
 (`OAG_ADVERT_DUMP`, mean over RGBA at 2.5 s): slot 7 on Talon's and `03_track` `90 -> 115`; slots 2, 3, 5 and 8 unchanged in
 that reading (slot 8 was already unlit; the adverts' mean is dominated by their alpha-255 background, so the visible change

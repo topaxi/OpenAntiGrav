@@ -30,7 +30,7 @@ categories: [rendering]
 
 ## Open from `gantry-finish` and `hd-cards-unlit` (2026-10-18)
 
-Landed: every HD card (slots 2, 3, 5, 7, 8) is drawn unlit (`Adverts::unlit`; `docs/rendering/start-gantry.md`, "every card is
+Landed: every HD card (slots 2, 3, 5, 7, 8) is drawn unlit (`Adverts::adverts_unlit`; `docs/rendering/start-gantry.md`, "every card is
 unlit"). What is left:
 
 - **FINAL LAP panel residual.** Pose-matched (`--pose=-132.15,-49.6,-175.36 --anim-seconds 9.75`), the panel reads 0.53 to
@@ -38,6 +38,6 @@ unlit"). What is left:
   the quad's draw state (`billboard8` program constants, N.L, fog) read on both sides at this pose.
 - **The finish.** Static reading says the flag persists; no RPCS3 capture (the lap counter cannot be forced, branch `lap == 0`
   wins). A real three-lap finish on RPCS3 would settle it.
-- Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer, and Pulse's `Adverts::unlit` (`false`, unread): with
+- Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer, and Pulse's `Adverts::adverts_unlit` (`false`, unread): with
   `gantry-pulse` / `pulse-card-verify`.
 - The advert slots on the posts: Campaign slot 7 is `Blitzed_board.vex` in the original and `fx350` in ours.
