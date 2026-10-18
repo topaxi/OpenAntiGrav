@@ -183,7 +183,8 @@ fn distinct_colours(rgba: &[u8]) -> usize {
 }
 
 /// Loads `source`'s default circuit, draws its cards at two clock readings and
-/// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set.
+/// returns each card's pixels; also writes PNGs to `$OAG_ADVERT_DUMP` when set, and
+/// `$OAG_ADVERT_TRACK` names another circuit.
 fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let image = oag_testdata::image(source)?;
     let instance = wgpu::Instance::default();
@@ -195,6 +196,7 @@ fn drawn_cards(source: &str, tag: &str) -> Option<Vec<(u32, usize)>> {
     let loaded = crate::load(&crate::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
+        track: std::env::var("OAG_ADVERT_TRACK").ok(),
         ..crate::Options::default()
     })
     .expect("loading the race");
@@ -441,8 +443,8 @@ fn assert_slot_8_is_a_pulse_card(loaded: &crate::Loaded) {
     assert!(card.timeline.is_some(), "the gantry card carries its clock");
     assert_eq!(card.size, (128, 128));
     assert!(
-        loaded.billboards.adverts.iter().all(|card| card.repeat_v),
-        "Pulse's quads author V past 1 and negate it, so every card wraps"
+        loaded.billboards.adverts.iter().all(|card| card.wrap),
+        "Pulse's quads author UVs past 1 and negate V, so every card wraps"
     );
 }
 
@@ -460,21 +462,6 @@ fn pulse_ps2_loads_slot_8_as_a_clocked_card() {
     if let Some(loaded) = pulse_race("data/images/pulse-ps2-eu.chd") {
         assert_slot_8_is_a_pulse_card(&loaded);
     }
-}
-
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_cards_keep_their_clamp() {
-    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let loaded = crate::load(&crate::Options {
-        source: image.display().to_string(),
-        class: "VENOM".to_string(),
-        ..crate::Options::default()
-    })
-    .expect("loading the race");
-    assert!(loaded.billboards.adverts.iter().all(|card| !card.repeat_v));
 }
 
 /// What Pulse's gantry card holds across its countdown, drawn on the GPU: the

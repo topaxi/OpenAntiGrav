@@ -2210,8 +2210,9 @@ below 0, so the whole quad read the card's first row. The authored UVs say why t
 slot 8's quad runs V 0..1 on Talon's Junction but **U 0.875..2.0, V 0.5..2.0 on 12 of the 16
 circuits that author one** (`01`-`05`, `07`-`12`, `15`; `13` and `14` have windows of their
 own), and the other slots' V is -2..-0.5 once negated. Those only mean something under a
-wrapping sampler. Pulse's cards now sample with both axes wrapping (`Card::repeat_v`, from
-`flip_v`); HD and Omega keep their clamp (their V is authored in 0..1). Before: Talon's Junction
+wrapping sampler. Pulse's cards now sample with both axes wrapping through the one knob,
+`oag_title::adverts::Adverts::wrap` (Pulse `true`, chosen, not measured; HD `true`, measured on
+RPCS3 by the HD lane's section below; Omega has no adverts table). Before: Talon's Junction
 slot 7 at tick 150 drew plain dark blue; after, its two white stripes. **Every Pulse advert's
 sampling changed with this, not only the gantry's** (slots 1, 2, 6 and 7 have V -2..0 once negated,
 so a wrapping sampler draws slot 1's quad as two tiles of its card: unverified against the original,
@@ -2236,7 +2237,7 @@ PS2 note; the PS2 screenshots of the carded board show no halo (looked at, not A
 applicable); HD already drew a card.
 
 **Tests.** `adverts::tests::pulse_psp_loads_slot_8_as_a_clocked_card` and its PS2 twin (card,
-clock, 128 x 128, wrapping), `hd_cards_keep_their_clamp`, `pulse_psp_gantry_card_counts_down`
+clock, 128 x 128, wrapping), `pulse_psp_gantry_card_counts_down`
 and its PS2 twin (a GPU read-back: a white `3` on a red panel at 1.0 s, green with a lit `GO`
 somewhere in 3.7..5.5 s). The sampler's wrap itself is covered by the screenshot A/B above, not
 by a test: a sampler descriptor cannot be read back.
@@ -2261,3 +2262,107 @@ not by clock-matched frames. The dim `FINAL LAP` phase looks blurry and see-thro
 original as well: it is authored, not a defect of ours. The chequered board's rows lean slightly
 more in ours than in the original's frames; the asset scrolls it (`polySurfaceShape7`, V 0 to -2),
 and the phase was not matched, so that is open. Only Talon's Junction was captured.
+
+## HD: "the gantry is blurry, it has transparent edges" - measured on all twelve circuits (2026-10-18, `gantry-hd`)
+
+**Reported from play by the maintainer, all titles.** This section is the HD half; a negative result on the hypotheses
+that could be tested here, with what is still open.
+
+**What was run.** `oag-game --race --track /data/environments/<env>/track.vex --ticks 273` (and 150, 215, 245, 330 on
+`02_track`) with the default camera and `--camera-view far`, 1280x720 and 1920x1080, on the twelve circuits the
+carousel lists (`amphiseum`, `modesto_heights`, `talons_junction`, `tech_de_ra`, `01_vineta_k`, `02_track`, `03_track`,
+`04_chenghou_project`, `05_ubermall`, `10_sebenco_climb`, `12_sol_2`, `15_anulpha_pass`).
+
+- **(d) falsified.** All twelve take the card route: the loader (`RUST_LOG=debug`) prints `start gantry ...: drawn through
+  its own camera into a 512x256 target shown on the circuit's billboard8 quad(s)` on every one. The same run lists
+  `billboard slot 7: .../fx350.vex drawn through its own camera ...` on every circuit and slots 2, 3, 5 on Talon's
+  Junction. (Report lines are `debug`; at the default level none prints.)
+- **(a) falsified for the composite.** The card is cleared `Color::TRANSPARENT` but its model draw is
+  `GlowMask::Protected` (`ColorWrites::COLOR`), so its alpha is 0 over the whole card. Clearing to opaque black instead
+  (the R5G6B5 card has no alpha) changed **0 pixels** on `10_sebenco_climb` and `12_sol_2` (`magick compare -metric AE`).
+  It did change `02_track`: the centre board turned flat white, so **something in the scene does read a card's alpha**
+  and an alpha of 1 is wrong there. The edit was reverted; the clear stays transparent. Open: what reads it.
+- **(c) not seen.** The card, read back through the existing `adverts::tests` dump (`OAG_ADVERT_DUMP`, now with
+  `OAG_ADVERT_TRACK` to pick a circuit), is the same 512x256 picture on Talon's Junction and `02_track`: slot 7 the teal
+  FX-350 banner, slot 8 `3 2 1` then `GO`, slot 2 the EGX advert. The quad UVs show the whole card on every circuit
+  looked at.
+- **(b) not a difference.** The card target has one mip level; the original's card is a render target too (surface `0x123`,
+  one level) so a missing mip chain on the card is not a difference. (Whether the card's own sampler on the track quad matches the original's was not read.)
+- **What a player sees.** The `GO` strokes are soft at the far camera because the 512x256 card is minified onto a quad
+  that is small on screen; the original does the same ("The countdown is very blurry" above). On `10_sebenco_climb`
+  (white snow level) the three panels read with a white rim: the surroundings are blown out to white there, and the rim
+  is the board frame against it. `02_track` shows thin dark outlines around the side panels.
+
+**The original, tried and not usable for pixels.** `rpcs3-drive.py countdown --load 40 --drive 25 --nav "Main Menu=right"
+--nav "Track Creation=right,right"` ran to the grid and recorded 35 MiB (`Moa Therma` loads: that is `03_track`, not
+`10_sebenco_climb`; the carousel order is not the model order above). Under Xvfb the frame is washed out to near white
+and the video has decode damage, the failure `Not captured` above names; the player's grid slot differs too (POS 8
+there, slot 1 here) so the board is far ahead in the original and overhead in ours. No pose-matched frame pair was
+obtained, so no claim of "matches the original" or "differs from it" is made about edge or blur.
+
+**Per title.** HD: above. Omega: no PS4 capture path and the `--race` run on the extracted tree did not start here;
+not checkable. 2048: `no start gantry: this circuit's track authors no 321backplate/billboard8 surface`, so the board
+is not drawn at all on the default circuit (checked, differs; unchanged by this lane). Pulse: out of lane.
+
+**Open.** (1) A pose-matched RPCS3 pair on a host where RPCS3 renders (`scripts/rpcs3_draw_hook.py`, the billboard8 draw's
+sampler and blend), on `10_sebenco_climb` and `02_track`. (2) What reads the card's alpha on `02_track`. No code
+behaviour changed.
+
+## HD: "the gantry is blurry, it has transparent edges" - the card sampler wraps, and the alpha reader is found (2026-10-18, `gantry-hd-alpha`)
+
+Follow-up to the section above. Four results: the alpha reader is the stand-in specular (not a player-visible bug), the
+twelve circuits' `billboard8` materials fall into three families, the original's card sampler was read off RPCS3 and
+**wraps** where ours clamped (fixed), and the blur is the original's own minification.
+
+**What reads the card's alpha.** `shade.wesl`'s specular term is gated by `texel.a` ("gloss lives in the diffuse alpha").
+The card is cleared `Color::TRANSPARENT` and drawn colour-only, so its alpha is 0 and the gate is shut; clearing it opaque
+opens the gate, and the stand-in specular (exponent `32`, because the program has no `pow` chain to resolve one from) blows
+a lit board out to white. Measured, opaque clear at `--ticks 273`: `02_track` 13,071 px change (centre board flat white),
+`talons_junction` 2,483, `amphiseum` 2,750, `10_sebenco_climb` 0 (an emissive material: `slots::EMISSIVE` zeroes specular).
+**The original never reads it:** `billboarddiffuse` (fragment blocks #2-#4, the ones that bind sampler `0x3bdc0403` alone)
+and `cf_vex_billboard` (#2-#6) sample `TEX H0.xyz` only and carry no `LG2`; `LG2` appears only in the larger blocks (#5-#8
+and #7-#9), which this race's draw does not use. So the transparent clear is **right** and stays, with a comment. A base frame
+shows no white board, so this is not the player's "transparent edges".
+
+**The twelve `billboard8` materials** (`.rcsmodel` record, `crates/raceplay/tests/gantry_mount_hd_circuits_ground_truth.rs`
+`survey_billboard8_records` / `survey_billboard8_materials`, `OAG_SWEEP=1 ... --run-ignored all`):
+
+| circuit | material | slots word | indices | UV rect |
+| --- | --- | --- | --- | --- |
+| amphiseum, modesto_heights, talons_junction, tech_de_ra | `billboarddiffuse` (lit) | `0x18` | 228 | 0..1 |
+| 02_track | `cf_vex_billboard` (lit, second texture `tv_glow.gtf`, not wired: no `ADD_SECOND`) | `0x18` | 6 | 0..1 |
+| 01_vineta_k, 05_ubermall | `sign_emissive_glow` | `0xd8` | 276 | -0.003..0.997 x 0.003..1.003 |
+| 03_track, 12_sol_2, 15_anulpha_pass | `sign_emissive_glow` | `0xd8` | 276 | 0..1 |
+| 04_chenghou_project, 10_sebenco_climb | `sign_emissive_glow` | `0xd8` | 6 | 0..1 |
+
+All twelve: blend `0x302/0x303`, state `0x7c` (transparency bits clear, so the draw is **opaque** and the blend and the alpha
+func, `0x204` or `0x201` on `02_track`, are inert), vertex alpha 1.0, one `texture_sampler` hash `0x3bdc0403`. `0x18` is lit,
+`0xd8` is `NO_AMBIENT | NO_SUN`.
+
+**The original's card sampler (RPCS3, 2026-10-18, one hooked boot of `03_track`, `rpcs3_draw_hook.py`).** The frame has two
+draws reading a 512 x 256 `R5G6B5` target (format byte `0x84`, one mip level, `0x1a429`): texture address `0x60010101`
+(wrap on U, V and W), filter `0x02062000` (linear magnification, `LINEAR_MIPMAP_LINEAR` minification, LOD bias 0), control
+`0x80078000` (max anisotropy field 0). The disc's own DXT1 advert textures on the same draws carry the same address, with a
+`-1.5` LOD bias. Ours was `ClampToEdge`, bilinear, one level. **A track quad whose coordinates run past 0..1 therefore showed
+the card's edge texel smeared where the original repeats the picture**: on `01_vineta_k` a side panel is a flat dark teal
+under clamp and shows the banner's hexagon pattern under wrap (2,611 px of the far view, 1,722 at the player camera;
+`05_ubermall` 120-563, `talons_junction` 388, the rest 0). That is a "blurry on some tracks" a player can see, and it is
+per-circuit because only some circuits' quads tile.
+
+**Implemented:** `oag_title::adverts::Adverts::wrap` (HD `true`, measured; Pulse `true` since the Pulse gantry-card lane, chosen, not measured; was `false`),
+carried on `Card`, `set_albedo` and `oag_mesh::mesh_render::card_material`. Tests: `hd_points_every_served_placeholder_at_its_card`
+asserts every served placeholder is bound wrapping, the two Pulse variants assert none is.
+
+**Blur from minification, not fixed (and not a difference).** The centre board is about 290-385 px wide for 512 texels at the far
+camera (1.3-1.8 texels per pixel across, about 2.2 down). The card has one level, the original's has one, and the sampler
+above has no anisotropy: the original softens and shimmers exactly as ours does. No mip chain or anisotropy was added, since
+that would be invented.
+
+**Per title.** Omega and 2048: `adverts: None` today, so the card route is not wired there (**checked, applies, not wired**
+for Omega, whose `billboard8` the shared lineage would put on the same quads; 2048's default circuit has no `billboard8`,
+**checked, differs**). Omega's own sampler is **not checkable** (no PS4 capture path).
+
+**Open.** (1) `billboarddiffuse` and `cf_vex_billboard` have no specular chain, but the stand-in `32` still applies to every
+lit HD material whose program resolves none: switching it off for all of them (`no_specular` without `colour_factor`) moved
+`10_sebenco_climb` by 2,197 px beyond the board, so it is an HD-wide picture change that was not measured here. (2) `tv_glow.gtf`
+on `02_track`'s `cf_vex_billboard` is not bound (no `ADD_SECOND`).

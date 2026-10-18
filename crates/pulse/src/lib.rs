@@ -118,6 +118,10 @@ pub const TITLE: &Title = &Title {
         far: 2017.7,
         colour_pool: true,
         flip_v: true,
+        // Chosen, not measured: Pulse's quads negate V over authored UVs up to 2.0, which only
+        // mean something wrapped. The picture agrees with PPSSPP on Talon's Junction and
+        // Moa Therma White (03_Track); `TEXWRAP` was not read from a GE dump.
+        wrap: true,
         zone_shares_one_texture: false,
         // Measured: the same dump shows the gantry as pass B into the 128 x 128 target,
         // and the PPSSPP software renderer draws the board as an opaque panel with
