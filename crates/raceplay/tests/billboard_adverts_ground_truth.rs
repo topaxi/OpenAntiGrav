@@ -106,8 +106,9 @@ fn assert_talons_junction_draws_its_adverts(report: &str) {
         );
     }
     assert!(
-        report.contains("billboard8 placeholder draw(s) replaced by the start gantry"),
-        "slot 8's placeholder is neither replaced nor reported: {report}"
+        report.contains("start gantry")
+            && report.contains("into a 128x128 target shown on the circuit's billboard8"),
+        "slot 8 is not drawn as a card on its quad: {report}"
     );
     assert!(
         !report.contains("placeholder draw(s) suppressed"),
