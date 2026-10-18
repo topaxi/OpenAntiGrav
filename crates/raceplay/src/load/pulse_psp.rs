@@ -1,8 +1,8 @@
 //! What Pulse on the PSP draws differently from every other source, measured
-//! live on PPSSPP: the hull's GE lights and the bloom's stencil-stamped glow
-//! mask. Neither has been measured on the PS2 port, Pure or any later title,
-//! so both stay behind [`is_pulse_psp`]. The Quake's road ripple is read off the
-//! PSP executable and carried to the PS2 by the `road_ripple` rule.
+//! live on PPSSPP: the bloom's stencil-stamped glow mask, unmeasured on the PS2
+//! port, Pure or any later title, so it stays behind [`is_pulse_psp`]. The hull's
+//! GE lights and the Quake's road ripple are read off the PSP executable and
+//! carried to the PS2 by the `hull_lights` and `road_ripple` rules.
 //!
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
@@ -19,13 +19,13 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 }
 
 #[cfg(feature = "view")]
-/// Lights the hulls with the circuit's own `AmbientLight`/`DirectionalLight`
-/// nodes and marks every `.vex` model the race draws as stamping the glow
-/// mask. The circuit's own placed effects and weather follow `circuit_fx`, which
-/// the PS2 shares; everything else is a no-op when `pulse_psp` is false.
+/// Marks every `.vex` model the race draws as stamping the glow mask. The
+/// circuit's own placed effects, weather, road ripple and hull lights follow
+/// their own rules, which the PS2 shares; everything else is a no-op when
+/// `pulse_psp` is false.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (pulse_psp, circuit_fx, road_ripple): (bool, bool, bool),
+    (pulse_psp, circuit_fx, road_ripple, hull_lights): (bool, bool, bool, bool),
     track_blob: &[u8],
     (archives, track): (&mut oag_assets::Archives, &str),
 ) {
@@ -47,22 +47,12 @@ pub(super) fn finish(
             &mut loaded.report,
         );
     }
+    if hull_lights {
+        light_hulls(loaded, track_blob, &nodes);
+    }
     if !pulse_psp {
         return;
     }
-    match mesh_render::HullLights::from_track(track_blob, &nodes, 256) {
-        Some(hull) => {
-            loaded.report.push(format!(
-                "hull lights: the circuit's own, ambient {:?}, diffuse {:?}",
-                hull.ambient, hull.diffuse
-            ));
-            loaded.light.hull = hull;
-        }
-        None => loaded
-            .report
-            .push("hull lights: the circuit authors none; hulls keep the stand-in rig".into()),
-    }
-
     super::glow_mask::stamp_models(loaded, false);
     loaded
         .report
@@ -87,6 +77,25 @@ pub(super) fn finish(
          original's stencil does, a blended batch with the glow bits through a second draw"
             .into(),
     );
+}
+
+#[cfg(feature = "view")]
+/// Lights the hulls with the circuit's own light nodes, built at the bare
+/// colour bytes: the craft's own scale is applied in the shader. See
+/// `oag_mesh::mesh_render::HullLights`.
+fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::Node]) {
+    match mesh_render::HullLights::from_track(track_blob, nodes, 256) {
+        Some(hull) => {
+            loaded.report.push(format!(
+                "hull lights: the circuit's own, ambient {:?}, diffuse {:?}",
+                hull.ambient, hull.diffuse
+            ));
+            loaded.light.hull = hull;
+        }
+        None => loaded
+            .report
+            .push("hull lights: the circuit authors none; hulls keep the stand-in rig".into()),
+    }
 }
 
 #[cfg(feature = "view")]

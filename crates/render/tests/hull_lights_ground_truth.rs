@@ -55,3 +55,30 @@ fn talons_junction_builds_the_list_the_ge_was_handed_for_the_players_hull() {
     }
     assert_eq!(lights.direction[3][3], 0.0, "LIGHT3 is off live");
 }
+
+/// The `hull_lights` rule carries the PSP's law to the PS2 because the PS2
+/// circuits author the same light nodes: every circuit builds a list, and
+/// Talon's Junction builds the PSP's own.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and pulse-psp-usa.chd"]
+fn pulse_ps2_circuits_author_the_psps_hull_lights() {
+    let (Some(ps2), Some(psp)) = (
+        oag_testdata::image("pulse-ps2-eu.chd"),
+        oag_testdata::image("pulse-psp-usa.chd"),
+    ) else {
+        return;
+    };
+    let lights = |image: &std::path::Path, circuit: &str| {
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+        let blob = archives
+            .read_name(&format!(r"Data\Environments\{circuit}\track.vex"))
+            .ok()?;
+        let nodes = vex::nodes(&blob).expect("nodes");
+        HullLights::from_track(&blob, &nodes, 250)
+    };
+    let ps2_talons = lights(&ps2, "16_Track").expect("PS2 16_Track authors lights");
+    let psp_talons = lights(&psp, "16_Track").expect("PSP 16_Track authors lights");
+    assert_eq!(bytes(ps2_talons.ambient), bytes(psp_talons.ambient));
+    assert_eq!(ps2_talons.diffuse, psp_talons.diffuse);
+    assert_eq!(ps2_talons.direction, psp_talons.direction);
+}

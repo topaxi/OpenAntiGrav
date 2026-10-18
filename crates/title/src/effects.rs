@@ -719,6 +719,10 @@ pub struct Looks {
     /// The Quake's road ripple: the circuit's `Quake` span table moving the
     /// road's vertices under the wave. Keyed on the race's own archive.
     pub road_ripple: Rule,
+    /// The circuit's own `AmbientLight`/`DirectionalLight` nodes lighting a
+    /// craft's hull, scaled per craft by the spline's light scale (so it
+    /// darkens in a tunnel). Keyed on the race's own archive.
+    pub hull_lights: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// The front end never waits at its language picker on a fresh run: the
@@ -755,6 +759,7 @@ impl Looks {
             ps2_glow_mask: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
+            hull_lights: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
