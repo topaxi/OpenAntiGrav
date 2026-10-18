@@ -13,8 +13,10 @@ target the track's `billboard8` quad samples, and Pulse's cards wrap in U and V.
 - **The original's wrap mode is inferred.** Repeat in both axes follows from the authored UVs (U 0.875..2.0, V
   0.5..2.0 on 12 of the 16 circuits, V negated) but no GE dump read `TEXWRAP`. Dump one of those circuits (not
   Talon's Junction, whose quad is 0..1) and read it.
-- **Only Talon's Junction was laid against the original.** The other 15 read `3 2 1` on an opaque panel in
-  ours; none was captured on PPSSPP.
+- **Talon's Junction and Moa Therma White (`03_Track`) were laid against the original.** The other 14 read
+  `3 2 1` on an opaque panel in ours; none was captured on PPSSPP.
+- **Every Pulse advert's sampling changed** (the card sampler wraps): slot 1's quad (V -2..0) now draws two
+  tiles of its card. Not compared against the original; a framed shot of slot 1 was not obtained.
 - **PS2 is by analogy**: not captured on PCSX2.
 - **A second `billboard8` quad** on circuit `11` (75 vertices) and `14` (81 vertices, U 0..2) is drawn with the
   same card; whether it is a second board or authored debris is unread.

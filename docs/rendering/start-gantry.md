@@ -2212,18 +2212,26 @@ circuits that author one** (`01`-`05`, `07`-`12`, `15`; `13` and `14` have windo
 own), and the other slots' V is -2..-0.5 once negated. Those only mean something under a
 wrapping sampler. Pulse's cards now sample with both axes wrapping (`Card::repeat_v`, from
 `flip_v`); HD and Omega keep their clamp (their V is authored in 0..1). Before: Talon's Junction
-slot 7 at tick 150 drew plain dark blue; after, its two white stripes. **Chosen, not measured:**
-that the original's wrap mode is repeat in both axes - inferred from the authored UVs and the
-negated V, not read from a GE dump's `TEXWRAP`; a dump of one of the 0.875..2.0 circuits would
-settle it.
+slot 7 at tick 150 drew plain dark blue; after, its two white stripes. **Every Pulse advert's
+sampling changed with this, not only the gantry's** (slots 1, 2, 6 and 7 have V -2..0 once negated,
+so a wrapping sampler draws slot 1's quad as two tiles of its card: unverified against the original,
+no framed shot of it was obtained). The wrap needed for the U window was checked by picture
+against the original on Moa Therma White (PPSSPP, `3 2` frame, one run), which is our `03_Track`
+(matched by its scenery and the sign on its left; the quad's U is 0.875..2.0 there): same panel,
+digit size and vertical position, no seam and no tiling inside the aperture
+(`fin/compare03.png` in the lane's scratch, not kept). **Chosen, not measured:** that the
+original's wrap *mode* is repeat in both axes: the picture agrees, the `TEXWRAP` register was not
+read from a GE dump.
 
 **Shown across the circuits.** All 16 Pulse PSP circuits that author slot 8 (`01`-`16`) at
-tick 222 read `3 2 1` on an opaque panel; only Talon's Junction was compared against the
-original.
+tick 222 read `3 2 1` on an opaque panel; Talon's Junction and Moa Therma White (`03_Track`)
+were compared against the original, the other 14 were not. The old route was only reproduced on
+Talon's Junction, so which circuits "blur" under it was not surveyed.
 
 **PS2.** Same asset, same card route, same wrap (PS2 EU, tick 150/222/290: `3`, `321`, `GO`).
 Not compared against PCSX2: the PS2 route is by analogy with the PSP capture and the earlier
-PS2 note, and PS2 bloom ([`ps2-bloom.md`](ps2-bloom.md)) shows no halo on the carded board.
+PS2 note; the PS2 screenshots of the carded board show no halo (looked at, not A/B'd against
+[`ps2-bloom.md`](ps2-bloom.md)'s bloom).
 2048 and Omega place no gantry, so there is nothing to carry across (checked, not
 applicable); HD already drew a card.
 
@@ -2233,6 +2241,6 @@ and its PS2 twin (a GPU read-back: a white `3` on a red panel at 1.0 s, green wi
 somewhere in 3.7..5.5 s). The sampler's wrap itself is covered by the screenshot A/B above, not
 by a test: a sampler descriptor cannot be read back.
 
-**Open.** The wrap mode in the original; the other 15 circuits against PPSSPP; PS2 against
-PCSX2; whether the second `billboard8` quad on circuits `11` (75 vertices) and `14` (81
+**Open.** The wrap mode in the original (`TEXWRAP`); the other 14 circuits against PPSSPP; the
+adverts' two-tile slots (slot 1) against the original; PS2 against PCSX2; whether the second `billboard8` quad on circuits `11` (75 vertices) and `14` (81
 vertices, U 0..2) is a second board or debris.
