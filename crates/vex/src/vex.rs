@@ -793,7 +793,7 @@ pub use external::geometry_is_external;
 mod mesh_header;
 pub use mesh_header::{
     LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,
-    mesh_first_vertex_type, mesh_layer, mesh_materials,
+    list_b_layer, mesh_box_centre, mesh_first_vertex_type, mesh_layer, mesh_materials,
 };
 
 mod attributes;

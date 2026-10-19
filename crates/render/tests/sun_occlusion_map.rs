@@ -61,6 +61,7 @@ fn draw(range: std::ops::Range<u32>, centre: [f32; 3], radius: f32, moving: bool
         culled: false,
         blend: None,
         blend_state: None,
+        depth_point: None,
         layer: 0,
         alpha_test_ref: None,
         node: None,

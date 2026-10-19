@@ -298,6 +298,7 @@ pub fn reflect(model: &mut Model, fade: Fade) {
                 range: first..end,
                 blend: Some(oag_vex::vex::BlendClass::AlphaOver),
                 blend_state: None,
+                depth_point: None,
                 ..draw
             });
         }

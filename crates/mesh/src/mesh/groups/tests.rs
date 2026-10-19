@@ -84,6 +84,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
             culled: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: 0,
             node: Some(n),
         });

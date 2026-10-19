@@ -73,6 +73,7 @@ fn one_triangle_model(label: &str) -> Model {
         culled: false,
         blend: None,
         blend_state: None,
+        depth_point: None,
         layer: oag_vex::vex::LAYER_DEFAULT,
         node: None,
         chunk: None,

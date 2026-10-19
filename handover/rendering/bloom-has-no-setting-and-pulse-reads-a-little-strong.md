@@ -37,11 +37,8 @@ matched captures.
 
 **Open.** (1) The bright pass sampling phase: the model lands within 0.2-5 % of
 the original's A and the leftover is at lit edges and the craft. (2) The
-original's bright pass reads the HUD's pixels; ours does not. (3) Moa Therma, mostly posing 2026-10-19 (see below): ours' glow surfaces read 8-50 % brighter under the mask in
-motion (six of six frames, still so with a 4-tick lag correction) and equal at a
-static pose (`0.99-1.01`); needs an unposed run or a pose that starts the
-animated emissives at the trace's clock, and a look at what the original does
-to the picture at speed (its foreground reads smeared at 300 km/h).
+original's bright pass reads the HUD's pixels; ours does not. (3) Moa Therma: closed 2026-10-19 (see below), posing plus the shine pass's order;
+what remains is the craft flare's shape and a `4-5 %` strip colour excess.
 (4) The ribbon shows segment 2 in ours at the chase framing and the original
 only segments 0 and 1: the screen length of the ribbon. (5) Whether a racing
 frame on a second circuit has any full-screen pass after the composite (one
@@ -78,12 +75,12 @@ strip was not reached (see `bloom.md`).
 Numbers in `bloom.md`, "Moa Therma's excess at a matched glow clock". `--anim-seconds`
 sets the glow clock render-only; the phase is `(tick + 4 +- 1) mod 60` ticks. Whole-frame
 ratio with default shadows (already `original` on Pulse): `1.103` at the default clock,
-`1.045` matched; no code changed. **Open, small:** at ticks 120-160 `1.10-1.14`
-(`0.15-0.27` luma absolute): the chevron strip's colour under the mask `+4-13 %` and
-mask `+5-8 %` (the falsifier fails there), a pale band of its transparent texels over
-the trees that the original lacks (the state making the original's strip yield to the
-trees is not found; first read which GE prims are the trees, candidates `413 422 423`
-of a recorded frame), and the craft flare's shape. Metropia, Talon's and PS2 not re-run.
+`1.045` matched; no code changed. **Closed 2026-10-19 (`moa-strip-band`):** the pale band over the trees was the track
+shine pass drawn after the blended list; it is now drawn before it, and list-B meshes
+go far to near by view depth (`mesh-draw.md`). Ticks 120-160 whole frame `1.09-1.14`
+to `1.06-1.11`, the strip's colour under the mask `1.08-1.11` to `1.03-1.05`. Left:
+the craft flare's shape (about `0.1` luma at tick 160) and a `4-5 %` colour excess on
+the strip. PS2 is untouched (no shine pass, VIF batches).
 
 ## Measured first
 

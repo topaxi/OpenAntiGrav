@@ -79,11 +79,34 @@ Ascending order, so **lower layer draws first**:
 | `0x40000000` | an extra batch set, **distance-gated** | `Mesh_BuildLayerBatchSets` |
 | `0x45000000` | batch `pass_mask & 0x1000`, narrowly | [`vex::mesh_layer`] |
 | `0x4a000000` | every other mesh - the default | [`vex::mesh_layer`] |
-| `0x4d000000` \| depth | the exhaust flare | `ExhaustFlare_Submit` |
+| `0x4d000000` \| depth | the exhaust flare, **and every list-B mesh** (2026-10-19) | `ExhaustFlare_Submit`, `Mesh_SubmitNode` |
 
-### Mesh geometry carries no depth at all
+### List-A mesh geometry carries no depth at all, list B does (corrected 2026-10-19)
 
-This is the part that overturns the obvious guess. A mesh does not enqueue
+**List B is the exception, found 2026-10-19 (`moa-strip-band`).** The
+paragraph below is true of the batch-set path, which is list A only. A mesh's
+**list-B** batches - every blended batch of a PSP circuit, trees and arrow strips
+among them - are queued by `Mesh_SubmitNode` (`0x0890cc80`) at `mesh+0xc8` OR-ed
+with `0xfffff - trunc(-z * 349.525)`, `z` being the view depth of the centre of the
+mesh's own box (`ViewCull_ViewDepth`, `0x08902b24`; the `0x4d` flare formula
+below, taken per mesh). `mesh+0xc8` is derived at the end of `Mesh_InitFromPayload`
+from the model's key *before* the per-mesh re-derivation: `0x4d000000` for the
+ordinary scene key `0x45000000` (a branch-likely delay slot at `0x0890ed28`; the
+page read the last two rows of the mapping swapped until now), so **list B is one
+layer, far to near**, and a `0x45` tree nearer than a `0x4a` strip draws after it.
+Measured: the order this key predicts for nodes 261, 267, 878, 258, 875, 293 and
+294 of `03_Track` is the order of GE prims 413-425 of a recorded Moa frame, and
+that frame is not in layer order (`0x45` and `0x4a` meshes alternate).
+Implemented as `Model::blended_order`, per view, from the unjittered
+view-projection's `w`; the units are the model's own (**chosen, not measured**:
+the original multiplies `z` by `display+0x4310 / 65`, unread, which moves only the
+3,000-unit clamp). Of `03_Track`'s 131 transparent draws all 131 carry the key and
+5 sit under an `Anim Transform`: those are keyed from the **time-zero** pose of their
+anchor (**chosen, not measured**: whether the original refreshes `mesh+0xb0` as the
+node moves turns on the `0x40000` flag, whose setter was not read). The order is held
+by `glow_mask_ground_truth.rs`. Confidence 85.
+
+This is the part that overturns the obvious guess for list A. A mesh does not enqueue
 itself; `Mesh_BuildLayerBatchSets` (`0x0892eda4`) groups a model's meshes into
 **batch sets**, one per layer, each built by `Mesh_CompileBatchSet`
 (`0x0892f35c`) with its layer key stored at `set+0xbc`. The set's own submit
@@ -127,6 +150,22 @@ Larger distance gives a smaller key, so ascending order draws the furthest
 first: **this is a back-to-front sort, and it is why the transparent pipeline
 can leave depth write off** rather than that being a stylistic choice.
 
+### The shine pass is in the solid half of the queue
+
+The `0x2000` extra pass (a circuit's `*_shinemap` second texture) is drawn from the
+mesh's own list-A compiled lists, which are queued at the mesh's list-A key
+(`0x45`/`0x4a`), so it draws **before** every list-B mesh (`0x4d`, depth-keyed).
+**Measured on one recorded Moa frame (`psp-ge-dump.py`, 469 prims): all 59
+environment-mapped circuit prims (`TEXMAPMODE` 2) are at indices 1 to 288, ahead of
+the list-B block that starts at 411**; the two environment-mapped prims after it
+are a blended batch's own second pass (node `530`, which ours does not draw, see
+`mesh-draw.md`) and a hull's. Confidence 85 (one frame, one circuit).
+Ours drew it after the blended list, which put an additive veil over every tree
+that stands in front of a shine-mapped wall: the pale band over Moa Therma's trees
+(tick 160, a crown over the grandstand: `122,141,134` against the original's
+`49,50,38`; without the pass `46,48,37`, with the pass moved `52,52,40`). It now
+draws between the sky and the blended list (`Scene::draw_track`, `TRACK_STAGES`).
+
 ## What `oag-render` implements, and what it does not
 
 `DrawCall::layer` carries the recovered layer and `Model::sort_by_layer` puts all
@@ -161,7 +200,8 @@ Four ways this is not the original, all of them ours:
 2. **Three lists rather than one queue.** `oag-render` draws opaque, then
    cutout, then transparent, each sorted; the original interleaves them within a
    batch set. The layer ordering is right *within* each list.
-3. **No depth term anywhere.** Correct for mesh geometry, and the exhaust's own
-   key is not implemented - `oag_fx::exhaust` draws in its own pass.
+3. **A depth term for list B only, and the exhaust's own key is not
+   implemented** - `oag_fx::exhaust` draws in its own pass. The batch-set path
+   (list A) has no depth term, which is right.
 4. **No `0x40000000` set and no reflection layers.** Neither is built, so
    neither is ordered.

@@ -32,6 +32,7 @@ fn draw(range: std::ops::Range<u32>, texture: usize) -> DrawCall {
         culled: true,
         blend: None,
         blend_state: None,
+        depth_point: None,
         alpha_test_ref: None,
         layer: oag_vex::vex::LAYER_DEFAULT,
         node: Some(3),

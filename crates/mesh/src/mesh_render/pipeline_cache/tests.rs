@@ -52,6 +52,7 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
             moving: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: oag_vex::vex::LAYER_DEFAULT,
             culled: false,
             range: 0..3,

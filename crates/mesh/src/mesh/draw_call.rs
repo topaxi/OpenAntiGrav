@@ -91,6 +91,18 @@ pub struct DrawCall {
     /// carries [`oag_vex::vex::LAYER_DEFAULT`], which is uniform and so
     /// leaves the stable sort holding its list in the order it was built.
     pub layer: u32,
+    /// The world-space point the original orders this draw's mesh by, back to
+    /// front, when the draw is in **list B**: the centre of the mesh's own box
+    /// through the node's matrix.
+    ///
+    /// `Mesh_SubmitNode` (`0x0890cc80`) queues a mesh's list-B batches at
+    /// [`oag_vex::vex::list_b_layer`] OR-ed with a 20-bit view depth of this
+    /// point, so within that layer the order is far to near and **depends on the
+    /// camera**; [`Model::blended_order`] applies it per frame. `None` for list A
+    /// (a batch set, queued with its bare layer), for PS2 batches (another
+    /// executable, not read) and for every draw with no mesh behind it.
+    /// Shared by every batch of one mesh, so a mesh stays together.
+    pub depth_point: Option<[f32; 3]>,
     /// The alpha-test reference this batch's own file authors, normalised to
     /// `0.0..=1.0`, or `None` for a draw whose file authors none.
     ///

@@ -152,6 +152,62 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
     Some(LAYER_DEFAULT)
 }
 
+/// The layer a mesh's **list-B** batches are queued in, from the key its model
+/// was loaded with: `mesh+0xc8`, derived at the end of `Mesh_InitFromPayload`
+/// (`0x0890e998`) from the model's key *before* the per-mesh re-derivation of
+/// [`mesh_layer`] replaces `mesh+0x4c`.
+///
+/// ```text
+/// < 0x30000000          -> key + 0x100000
+/// 0x66 / 0x53 / 0x61 / 0x58 / 0x6b (in the top byte) -> 0x68 / 0x55 / 0x63 / 0x5a / 0x6c
+/// 0x4b                  -> 0x4c000000
+/// anything else         -> 0x4d000000   (0x45 included: every ordinary scene mesh)
+/// ```
+///
+/// **The last two rows were swapped in `docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`
+/// until 2026-10-19**: the final `lui` is in the delay slot of a branch-likely
+/// (`beql` at `0x0890ed24`), so `0x4c` is written only when the key is `0x4b`.
+/// `Mesh_SubmitNode` (`0x0890cc80`) enqueues list B with this key OR-ed with a
+/// back-to-front view depth, which is why list B is not in [`mesh_layer`] order.
+#[must_use]
+pub fn list_b_layer(model_layer: u32) -> u32 {
+    if model_layer < 0x3000_0000 {
+        return model_layer + 0x0010_0000;
+    }
+    match model_layer {
+        0x6600_0000 => 0x6800_0000,
+        0x5300_0000 => 0x5500_0000,
+        0x6100_0000 => 0x6300_0000,
+        0x5800_0000 => 0x5a00_0000,
+        0x6b00_0000 => 0x6c00_0000,
+        0x4b00_0000 => 0x4c00_0000,
+        _ => 0x4d00_0000,
+    }
+}
+
+/// The centre of a mesh's own bounding box, in the payload's local space: the
+/// point `Mesh_InitFromPayload` stores at `mesh+0xa0` and `Mesh_SubmitNode`
+/// carries through the node's world matrix to order a list-B mesh by view depth.
+/// `None` when the payload is too short to hold the box.
+///
+/// The box is the `{x, y, z, _}` minimum at `+0x10` and maximum at `+0x20`
+/// (`pads.rs` reads the same pair on a pad). Whether it is in the units of a
+/// batch's decoded positions or in the normalised ones the original divides the
+/// batch scale out of is checked against the disc by
+/// `crates/vex/tests/mesh_depth_point_ground_truth.rs`.
+#[must_use]
+pub fn mesh_box_centre(payload: &[u8]) -> Option<[f32; 3]> {
+    if payload.len() < 0x2c {
+        return None;
+    }
+    let f = |at: usize| f32::from_bits(u32_at(payload, at));
+    Some([
+        (f(0x10) + f(0x20)) * 0.5,
+        (f(0x14) + f(0x24)) * 0.5,
+        (f(0x18) + f(0x28)) * 0.5,
+    ])
+}
+
 /// The GU vertex type of a mesh payload's first batch, in either list.
 ///
 /// **`Some(0)` is the answer that matters**: a batch declaring no vertex format

@@ -599,6 +599,7 @@ fn emit(
         // Which list a draw is in, above, is what says it is transparent.
         blend: None,
         blend_state: surface.blend,
+        depth_point: None,
         // A PS3 chunk has no `.vex` mesh payload and so no derived layer; the
         // uniform value leaves `Model::sort_by_layer` holding chunk order.
         layer: vex::LAYER_DEFAULT,

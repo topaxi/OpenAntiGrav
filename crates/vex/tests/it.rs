@@ -20,6 +20,7 @@ mod kdcol_ground_truth;
 mod lane_band_census_ground_truth;
 mod light_scale_ground_truth;
 mod lighting_ground_truth;
+mod mesh_depth_point_ground_truth;
 mod pads_ground_truth;
 mod payload_coverage_ground_truth;
 mod placed_psys_ground_truth;

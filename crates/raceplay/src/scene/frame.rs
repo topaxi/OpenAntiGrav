@@ -1096,6 +1096,12 @@ impl Scene {
             block,
             viewport,
             eye: race.camera_position(),
+            depth_plane: [
+                section_view.x_axis.w,
+                section_view.y_axis.w,
+                section_view.z_axis.w,
+                section_view.w_axis.w,
+            ],
             frustum,
             visible_set,
             chunk_set,

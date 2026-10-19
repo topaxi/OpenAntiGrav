@@ -11,7 +11,7 @@ impl Drawable {
     /// its texture's byte wherever it passes the alpha and depth tests. This
     /// is the second submission that stands in for that - see
     /// `mesh_render::GlowMask::Stamped` - and it walks the transparent list
-    /// the way [`Self::draw`] just did, through the same LOD, section and
+    /// in the order [`Self::draw`] just did (`order`), through the same LOD, section and
     /// frustum tests, so a batch the colour pass dropped stamps nothing.
     ///
     /// Every draw is submitted, not only the glow ones: `Model` carries no
@@ -23,16 +23,18 @@ impl Drawable {
         pass: &mut wgpu::RenderPass<'_>,
         shows: &super::Shows<'_>,
         transparent: &[u64],
-        set: Option<&VisibleSet>,
-        chunks: Option<&ChunkSet>,
-        frustum: Option<&Frustum>,
+        order: Option<&[u32]>,
+        (set, chunks, frustum): (Option<&VisibleSet>, Option<&ChunkSet>, Option<&Frustum>),
     ) {
         let Some(stamp) = &self.stamp_pipeline else {
             return;
         };
         let mut current: Option<&wgpu::RenderPipeline> = None;
         let mut last_bound: Option<usize> = None;
-        for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+        for index in (0..self.model.transparent_draws.len())
+            .map(|at| order.map_or(at, |order| order[at] as usize))
+        {
+            let draw = &self.model.transparent_draws[index];
             if !shows.draw(draw)
                 || !visible(
                     draw,

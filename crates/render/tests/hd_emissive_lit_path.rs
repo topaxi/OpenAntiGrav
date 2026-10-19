@@ -110,6 +110,7 @@ fn model(lit: f32) -> Model {
             moving: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: oag_vex::vex::LAYER_DEFAULT,
             culled: false,
             range: 0..3,
