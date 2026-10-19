@@ -114,6 +114,10 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     `Ai_ComputeControls` (`0x08855dc4`) on the player's driver over that
     crest, logging the lookahead sample, the target and the error, against
     `steer::steer`'s at the same position.
+  - **HD Ubermall (`05_ubermall`) at PHANTOM under the inherited law**: our
+    autopilot goes from 1 rescue, 5 wall ticks and 78.3 end shield to 2
+    rescues, 143 wall ticks in 27 episodes and 6.3 end shield (weapons off,
+    seed 1). HD's own law is unread, so read it before tuning anything.
   - HD's player-status function (the engine bits and the blend) was not
     found: the `"%1.2f"` string's TOC slot resolves into `libm`. HD, Pure,
     2048 and Omega inherit Pulse's law.

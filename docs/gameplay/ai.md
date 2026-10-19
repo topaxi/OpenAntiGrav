@@ -991,6 +991,23 @@ So the difference is our driver's airborne steering (`Ai_ComputeControls`
 with its height term), which has no live leg. No class gate or tuning was added
 to hide it.
 
+**The inherited titles, before and after the port** (same sweep, weapons off,
+whole race, seed 1). HD and Pure run the Pulse law unmeasured:
+
+| Title, circuit, class | Before: rescues, wall ticks (episodes), end shield | After |
+| --- | --- | --- |
+| HD 12_sol_2, VENOM / PHANTOM | 0, 0, 95.0 / 0, 0, 95.0 | 0, 0, 95.0 / 0, 0, 95.0 |
+| HD talons_junction, VENOM / PHANTOM | 0, 0, 95.0 / 0, 0, 95.0 | 0, 0, 95.0 / 0, 0, 95.0 |
+| HD 05_ubermall, VENOM | 0, 0, 95.0 | 0, 0, 95.0 |
+| **HD 05_ubermall, PHANTOM** | 1, 5 (3), 78.3 | **2, 143 (27), 6.3** |
+| HD amphiseum, VENOM / PHANTOM | 0, 0, 95.0 / 0, 2 (2), 94.1 | 0, 0, 95.0 / 0, 0, 95.0 |
+| Pure 01_Vineta_K, VENOM / PHANTOM | 0, 0, 100.0 / 0, 0, 44.0 | 0, 0, 92.0 / 0, 0, 68.0 |
+
+Mean speed rises about 9 % at VENOM (127 to 139 on HD) and 8 to 12 % at
+PHANTOM. **HD's Ubermall at PHANTOM is open, beside Fort Gale Black:** under a
+law HD was never read for, its autopilot scrapes 27 times and ends a race on
+6.3 shield.
+
 **The opponent stint, re-run with the port** (`opponent_autopilot_sweep`, Ace,
 8 seeds, 64 forks a cell, as before). The engine bits are the local player's
 alone, so an opponent's stint law does not change. What moves is the field the

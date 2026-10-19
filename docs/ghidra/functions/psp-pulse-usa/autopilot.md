@@ -303,10 +303,11 @@ forces blend `1.0` and uncapped; what sets that byte is not read.
 (`0x08849690..0x0884969c`): non-zero copies the driver's whole record over the
 pad's (`0x088496b8..0x08849768`). `FUN_088418e0` also only zero-tests it
 (`0x088419bc`): it picks which of two per-profile distance counters the frame's
-distance goes into. No reader of the magnitude was found among the
-`0x1d4(` loads on a craft base. The fade over the last second therefore changes
-nothing a racer feels: the original hands over in one tick, both ways, and ours
-already matches. Confidence 85.
+distance goes into. No handling reader uses the magnitude: the controls switch on
+zero against non-zero. One load is unchecked: `Hud_UpdateEnergyBar` loads
+`0x1d4(s0)` (`0x0881c8d0`), and its base was not traced, so a HUD element may
+read the fade. The original hands over the controls in one tick, both ways, and
+ours already matches. Confidence 85 for the controls.
 
 **Nothing that reads the running bit touches the walls.** `psp-relocate.py
 masked 0x1b8 0x800` finds five readers, the complete set for a `lw`/`andi`
