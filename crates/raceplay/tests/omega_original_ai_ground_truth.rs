@@ -181,9 +181,10 @@ fn seconds(race: &oag_raceplay::Race) -> f32 {
 }
 
 /// The race with the player parked: every opponent finishes inside 300 s
-/// with no respawn. The skill is the race's ambient one. Shield is read at
+/// with at most `respawns` respawns (none, except where a circuit names its
+/// cause). The skill is the race's ambient one. Shield is read at
 /// each opponent's lap crossings (per lap) and at the end, reported apart.
-fn fly(track: &str, class: &str) {
+fn fly(track: &str, class: &str, respawns: u32) {
     let Some(loaded) = loaded(track, class) else {
         return;
     };
@@ -221,16 +222,23 @@ fn fly(track: &str, class: &str) {
             race.sim.world.ships[slot].standing.finished(),
             "{track}: slot {slot} did not finish"
         );
-        assert_eq!(race.respawns_of(slot), 0, "{track}: slot {slot} respawned");
+        assert!(
+            race.respawns_of(slot) <= respawns,
+            "{track}: slot {slot} respawned {} times",
+            race.respawns_of(slot)
+        );
     }
 }
 
 macro_rules! circuit {
     ($name:ident, $track:literal, $class:literal) => {
+        circuit!($name, $track, $class, 0);
+    };
+    ($name:ident, $track:literal, $class:literal, $respawns:literal) => {
         #[test]
         #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
         fn $name() {
-            fly($track, $class);
+            fly($track, $class, $respawns);
         }
     };
 }
@@ -251,8 +259,13 @@ circuit!(
     r"Data\Environments\05_Ubermall\track.vex",
     "Phantom"
 );
+// **One respawn, caused by a weapon** (2026-10-19, once the field fires):
+// slot 3 takes a hit at tick 5439 (shield 100 to 85), slows from 313 to 220
+// over the next 30 ticks, meets the wall at tick 5472 and comes off. Every
+// other circuit stays at none.
 circuit!(
     the_field_finishes_amphiseum_reversed,
     r"Data\Environments\amphiseum\track_reversed.vex",
-    "Flash"
+    "Flash",
+    1
 );
