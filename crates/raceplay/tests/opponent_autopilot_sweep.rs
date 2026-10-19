@@ -49,13 +49,14 @@ fn load(
         track: track.map(str::to_string),
         seed: Some(seed),
         difficulty,
+        weapons_override: std::env::var_os("OAG_SWEEP_NO_WEAPONS").map(|_| false),
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
     Some(oag_raceplay::Race::start(loaded.setup))
 }
 
-fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64) -> Branch {
+fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64, trace: bool) -> Branch {
     let d0 = race.race_distance_of(slot).unwrap_or(0.0);
     let w0 = race.wall_contact_ticks_of(slot);
     let r0 = race.respawns_of(slot);
@@ -63,6 +64,23 @@ fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64) -> Branch 
     let mut out = Branch::default();
     for t in 0..stint + TAIL {
         race.tick_sim_only(&PlayerInputs::none());
+        if trace {
+            let ship = &race.sim.world.ships[slot];
+            let body = &ship.physics.body;
+            println!(
+                "  t {t} pos [{:.0} {:.0} {:.0}] v {:.1} thrust {:.1} grounded {} air {:.2} idx {} wall {} timer {:.2}",
+                body.position.x,
+                body.position.y,
+                body.position.z,
+                body.linear_velocity.dot(body.forward()),
+                ship.physics.thrust,
+                ship.physics.grounded,
+                ship.physics.time_airborne,
+                ship.driver.index,
+                race.wall_contact_ticks_of(slot) - w0,
+                ship.autopilot_timer,
+            );
+        }
         if out.first_wall.is_none() && race.wall_contact_ticks_of(slot) > w0 {
             out.first_wall = Some(t);
         }
@@ -136,6 +154,7 @@ fn sweep(
             .weapon_stats()
             .and_then(|w| w.simple(oag_tables::weapons::Weapon::Autopilot))
             .map(|s| s.time)
+            .or(std::env::var_os("OAG_SWEEP_NO_WEAPONS").map(|_| 5.0))
         else {
             println!("{image}: no Autopilot authored");
             return pairs;
@@ -175,10 +194,17 @@ fn sweep(
             }
             let snapshot = race.snapshot_sim();
             race.set_opponent_autopilot(true);
-            assert!(race.engage_opponent_autopilot(slot));
-            let b = run_branch(&mut race, slot, stint);
+            if !race.engage_opponent_autopilot(slot) {
+                // Weapons off: no table to read the time from.
+                race.sim.world.ships[slot].autopilot_timer = time;
+            }
+            let trace = std::env::var("OAG_SWEEP_TRACE").ok() == Some(format!("{seed},{tick}"));
+            let b = run_branch(&mut race, slot, stint, trace);
             race.restore_sim(&snapshot);
-            let a = run_branch(&mut race, slot, stint);
+            if trace {
+                println!("  -- A");
+            }
+            let a = run_branch(&mut race, slot, stint, trace);
             tick += stint + TAIL;
             println!(
                 "seed {seed} tick {tick} slot {slot} A stint {:.0} window {:.0} wall {} resp {} shield {:+.1} | B stint {:.0} window {:.0} wall {} resp {} shield {:+.1}",

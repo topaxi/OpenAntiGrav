@@ -315,7 +315,7 @@ impl Race {
     /// rail kept through contact. See `oag_ai::original::Autopilot`.
     pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
         if !self.sim.autopilot_ours
-            && let Some(controls) = self.original_autopilot_controls(slot)
+            && let Some(controls) = self.original_autopilot_controls(slot, true)
         {
             return controls;
         }
@@ -325,7 +325,15 @@ impl Race {
     /// The original's autopilot for `slot`, its rail write queued for the
     /// step; `None` where the race has no original tables or the craft cannot
     /// place itself on the track.
-    fn original_autopilot_controls(&mut self, slot: usize) -> Option<oag_physics::ShipControls> {
+    ///
+    /// `relocate` searches the whole line for a cold stint, for a person's
+    /// craft whose driver was not following it. An opponent's driver already
+    /// is, and on a branch the whole-line search lands it on the ring.
+    fn original_autopilot_controls(
+        &mut self,
+        slot: usize,
+        relocate: bool,
+    ) -> Option<oag_physics::ShipControls> {
         if self.sim.original_tables.is_none() || self.sim.racing_line.is_empty() {
             return None;
         }
@@ -335,9 +343,10 @@ impl Race {
         }
         // A stint that starts mid-race finds the craft wherever it is, for
         // the windowed-search reason `Self::set_autopilot` gives.
-        if self.sim.autopilots[slot]
-            .as_ref()
-            .is_none_or(|autopilot| autopilot.is_cold())
+        if relocate
+            && self.sim.autopilots[slot]
+                .as_ref()
+                .is_none_or(|autopilot| autopilot.is_cold())
         {
             self.locate_player_driver(slot);
         }
@@ -409,11 +418,17 @@ impl Race {
         if !self.sim.opponent_autopilot {
             return None;
         }
-        if self.sim.world.ships[slot].autopilot_timer <= 0.0 {
+        let route = self.sim.world.ships[slot].driver.branching.route;
+        let line = super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route);
+        // A jump's run-up is flown by this project's driver, which takes it
+        // at the plan's clearing speed: chosen, `docs/gameplay/ai.md`.
+        if self.sim.world.ships[slot].autopilot_timer <= 0.0
+            || self.sim.world.ships[slot].driver.on_run_up(line)
+        {
             self.release_autopilot(slot);
             return None;
         }
-        let controls = self.original_autopilot_controls(slot)?;
+        let controls = self.original_autopilot_controls(slot, false)?;
         Some((controls, self.sim.autopilot_rail[slot].take()))
     }
 
@@ -589,6 +604,16 @@ impl Race {
             };
             let ship = &mut self.sim.world.ships[slot];
             let mut controls = if let Some((controls, flown_rail)) = flown {
+                // Kept warm for the handover and for the weapon rolls, as
+                // under the original field below.
+                ship.driver.attend(&oag_ai::Context {
+                    line: super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
+                    tuning: &self.sim.ai_tuning,
+                    pilot: &pilot,
+                    field: &field,
+                    yaw_ceiling: None,
+                    plan: None,
+                });
                 rail = flown_rail;
                 controls
             } else if was_racing && let Some(lane_slot) = lane_slot {
