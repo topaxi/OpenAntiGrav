@@ -738,7 +738,7 @@ fn seed() -> u64 {
 
 /// The race a LAN host offers, from the pages' options: the title's own name (what a joiner's
 /// disc is checked against), the circuit and ship picked, a Single Race whatever the mode row
-/// said, weapons off, the host alone until START fixes the head count.
+/// said, weapons on, the host alone until START fixes the head count.
 fn lan_params(
     title: &str,
     options: &oag_raceplay::Options,
@@ -757,7 +757,7 @@ fn lan_params(
         seed,
         people: 1,
         opponents: options.opponents,
-        weapons: false,
+        weapons: true,
         laps: options
             .laps_override
             .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
@@ -773,7 +773,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_hosted_race_is_a_single_race_with_weapons_off_named_for_the_title() {
+    fn a_hosted_race_is_a_single_race_with_weapons_on_named_for_the_title() {
         let options = oag_raceplay::Options {
             mode: oag_race::Mode::TimeTrial,
             track: Some("circuit".into()),
@@ -783,7 +783,7 @@ mod tests {
         let params = lan_params("Wipeout Pulse", &options, oag_gameplay::ControlScheme::Veteran, 9);
         assert_eq!(params.title, "Wipeout Pulse");
         assert_eq!(params.mode, "single_race", "the pages' Time Trial becomes a Single Race");
-        assert!(!params.weapons);
+        assert!(params.weapons);
         assert_eq!((params.track.as_str(), params.team.as_str()), ("circuit", "assegai"));
         assert_eq!((params.people, params.seed), (1, 9));
     }

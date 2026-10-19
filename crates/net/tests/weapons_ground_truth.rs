@@ -13,11 +13,11 @@ use crate::loopback::{Pilot, drive_observed};
 
 const IMAGE: &str = "pulse-psp-eu.chd";
 
-fn params(people: u8) -> RaceParams {
+fn params(people: u8, mode: &str) -> RaceParams {
     RaceParams {
         track: "Data\\Environments\\01_Track\\track.vex".into(),
         class: "VENOM".into(),
-        mode: "single_race".into(),
+        mode: mode.into(),
         difficulty: "elite".into(),
         scheme: "veteran".into(),
         seed: 0x5EED,
@@ -34,14 +34,25 @@ struct Activity {
     peak_in_air: usize,
     fires: u32,
     hits: u32,
+    finished: bool,
 }
 
 fn race_with_weapons(people: u8, one_way_ms: u64, ticks: u32, weapon_trigger: bool) -> Activity {
+    race_in_mode("single_race", people, one_way_ms, ticks, weapon_trigger)
+}
+
+fn race_in_mode(
+    mode: &str,
+    people: u8,
+    one_way_ms: u64,
+    ticks: u32,
+    weapon_trigger: bool,
+) -> Activity {
     let Some(image) = oag_testdata::image(IMAGE) else {
         return Activity::default();
     };
     let source = image.display().to_string();
-    let mut params = params(people);
+    let mut params = params(people, mode);
     let (race, title) = oag_net::race::load(&params, &source).expect("loads");
     params.title = title.to_string();
     let mut host = Host::new(race, params.clone());
@@ -86,6 +97,7 @@ fn race_with_weapons(people: u8, one_way_ms: u64, ticks: u32, weapon_trigger: bo
     );
     println!("server, per seat: {:?}", host.take_counts());
     println!("server weapons: {activity:?}");
+    activity.finished = host.race().finished();
     for (n, total) in totals.iter().enumerate() {
         println!("trigger={weapon_trigger} client {n}: {total:?}");
         assert_eq!(total.hash_mismatches, 0, "client {n}");
@@ -95,7 +107,10 @@ fn race_with_weapons(people: u8, one_way_ms: u64, ticks: u32, weapon_trigger: bo
 }
 
 fn assert_weapons_were_used(activity: &Activity) {
-    assert!(activity.peak_in_air > 0, "nothing was ever in the air: {activity:?}");
+    assert!(
+        activity.peak_in_air > 0,
+        "nothing was ever in the air: {activity:?}"
+    );
     assert!(activity.fires > 0, "nobody ever fired: {activity:?}");
 }
 
@@ -121,4 +136,14 @@ fn four_firing_clients_agree_with_the_server_at_100_ms() {
 #[ignore = "needs a disc image"]
 fn four_firing_clients_position_trigger_only_at_100_ms() {
     assert_weapons_were_used(&race_with_weapons(4, 50, 5400, false));
+}
+
+/// Eliminator needs weapons: two people race one over the wire, the ends agree, and the kills
+/// that decide it happen on the server.
+#[test]
+#[ignore = "needs a disc image"]
+fn an_eliminator_race_is_flown_over_the_wire_by_two() {
+    let activity = race_in_mode("eliminator", 2, 50, 5400, true);
+    assert_weapons_were_used(&activity);
+    assert!(activity.finished, "the kills ended the race: {activity:?}");
 }

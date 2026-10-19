@@ -106,13 +106,14 @@ OAG_ONLINE_LAPS_OWN = { text = "CELUI DU MODE", human = false }
 OAG_ONLINE_BARREL_ROLLS = { text = "TONNEAUX", human = false }
 OAG_ONLINE_PILOT_ASSIST = { text = "ASSISTANCE DE PILOTAGE AUTORISÉE", human = false }
 OAG_ONLINE_ZONE_TARGET = { text = "OBJECTIF DE ZONE", human = false }
+OAG_ONLINE_WEAPONS = { text = "ARMES", human = false }
 OAG_ONLINE_ON = { text = "OUI", human = false }
 OAG_ONLINE_OFF = { text = "NON", human = false }
 OAG_ONLINE_ZONE_NONE = { text = "AUCUN", human = false }
 OAG_ONLINE_QUEUED = { text = "UNE AUTRE PARTIE COURT : VOUS ÊTES N° %d DANS LA FILE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "LA COURSE COMMENCE DANS %d", human = false }
 OAG_ONLINE_RACING = { text = "LA COURSE VA COMMENCER", human = false }
-OAG_ONLINE_MODE_NO_WEAPONS = { text = "Les armes sont désactivées en course en ligne", human = false }
+OAG_ONLINE_MODE_TWO_ONLY = { text = "Le face-à-face est pour deux personnes", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Héberger une course sur votre réseau ou en rejoindre une", human = false }
 OAG_LAN_HOST = { text = "HÉBERGER", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choisir la course, puis attendre les autres", human = false }

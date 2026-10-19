@@ -93,6 +93,7 @@ pub(super) fn capture_online(
         laps: 0,
         no_barrel_rolls: false,
         pilot_assist: true,
+        weapons: true,
         zone_target: 0,
     };
     let screen = if room {

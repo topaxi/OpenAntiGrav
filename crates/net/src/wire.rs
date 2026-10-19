@@ -127,8 +127,7 @@ pub struct RaceParams {
     pub people: u8,
     /// Whether the AI fills the rest of the grid.
     pub opponents: bool,
-    /// Whether weapons are on. Version 1 servers always say no: weapons are not
-    /// server events yet (ADR-0069, condition 2).
+    /// Whether weapons are on: the room's setting. They are predicted simulation (ADR-0071).
     pub weapons: bool,
     /// Laps the race runs, or 0 for the mode's own (`Options::laps_override`). Chosen: only
     /// the modes that end on laps read it.

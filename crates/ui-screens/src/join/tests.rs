@@ -24,6 +24,7 @@ fn labels() -> Labels {
         barrel_rolls: "ROLLS".into(),
         pilot_assist: "ASSIST".into(),
         zone_target: "ZONE".into(),
+        weapons: "WEAPONS".into(),
         start: "START".into(),
         back: "BACK".into(),
     }

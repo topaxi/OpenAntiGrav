@@ -20,7 +20,7 @@ pub const SHIELD_STEP: f32 = 1.0;
 
 /// A fingerprint of the discrete weapon state of `sim`, blind to where things are: the
 /// projectiles in the air (kind, owner, target, as a set, so the slot a shot landed in does not
-/// matter), the Quake, the LeachBeam, the Repulsers, each craft's held pickup and its shield in
+/// matter), the Quake, the LeachBeam, the Repulsers, which craft hold a lock, each craft's held pickup and its shield in
 /// whole steps of [`SHIELD_STEP`]. Not the hash: a position never enters it.
 #[must_use]
 pub fn digest(sim: &RaceSim) -> u64 {
@@ -40,8 +40,13 @@ pub fn digest(sim: &RaceSim) -> u64 {
         h.write_u8(1 + beam.owner);
         h.write_u8(beam.target);
     }
+    h.write_u8(sim.locked_mask());
     h.write_u8(u8::try_from(world.repulsers.iter().flatten().count()).unwrap_or(255));
-    for ship in world.ships.iter().take(usize::from(world.ship_count).min(MAX_SHIPS)) {
+    for ship in world
+        .ships
+        .iter()
+        .take(usize::from(world.ship_count).min(MAX_SHIPS))
+    {
         h.write_u8(ship.pickup.weapon.map_or(0, |w| w as u8 + 1));
         h.write_i32((ship.physics.shield / SHIELD_STEP).floor() as i32);
     }

@@ -376,9 +376,9 @@ impl Session {
             title: shell.title.name.to_string(),
             track: options.track.clone().unwrap_or_default(),
             class: options.class.clone(),
-            // A stored Eliminator or Head to Head (weapons, two people) is a Single Race here.
+            // A stored Head to Head (two people) is a Single Race here.
             mode: match options.mode {
-                oag_race::Mode::Eliminator | oag_race::Mode::Head2Head => {
+                oag_race::Mode::Head2Head => {
                     oag_race::Mode::SingleRace.name().to_string()
                 }
                 other => other.name().to_string(),
@@ -393,6 +393,8 @@ impl Session {
             // own default zone target in Zone.
             no_barrel_rolls: false,
             pilot_assist: true,
+            // Omega's `Weapons` row defaults to On.
+            weapons: true,
             zone_target: if options.mode == oag_race::Mode::Zone {
                 oag_game::online_screen::DEFAULT_ZONE_TARGET
             } else {
@@ -430,6 +432,7 @@ impl Session {
             settings.laps = room.settings.laps;
             settings.no_barrel_rolls = room.settings.no_barrel_rolls;
             settings.pilot_assist = room.settings.pilot_assist;
+            settings.weapons = room.settings.weapons;
             // Changing the mode to Zone starts from Omega's default; Zone to Zone keeps the
             // room's choice, including none.
             if room.settings.mode == settings.mode {

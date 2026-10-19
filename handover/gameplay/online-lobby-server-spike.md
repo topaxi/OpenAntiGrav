@@ -10,12 +10,14 @@ tested locally; nothing has been deployed or tried over a real network.
 1. ~~The remote test~~ (done 2026-10-16, "Measured over the internet" in the doc): UDP 60000-60010 reach the host with nothing to open, two clients raced a lean Pulse over the internet with 0 bad hashes and returned to the room. Open still: only Pulse and only `--max-ticks` endings were run remotely (HD/Omega/2048 and their memory on a 1 GB host are not; the finish line and all six titles ran on localhost, part 7), and the host was IPv6-only, so a v4-only player path is untested.
 2. ~~**The menu screens.**~~ Landed 2026-10-16 (`docs/networking/online-lobby.md` part 8). Landed 2026-10-16 (`online-menus-titles`): the owner's ROOM SETTINGS and MAX PLAYERS, a typed port and IPv6 literal, a live walk on Pure, HD, 2048 and Omega, the pointer on Pure and HD. Open: kick, the Omega sub-pages that are not settings (friends, invite-only; the settings rows landed, item 4).
 3. ~~The build at join~~ (landed 2026-10-16, part 6 of the doc): a hello of another build is refused by name. Open still: `--online-create` hardcodes AI fill off, which only matters in modes without opponents.
-4. ~~**Settings Omega has and `RaceParams` lacks**~~ Landed 2026-10-19 (`docs/networking/online-lobby.md` part 9): laps, barrel rolls, Pilot Assist allowed (a level per seat) and the zone target travel through the wire, the lobby, `race::prepare` and the room screen on every title. Open: the eliminations target (not a kill count, and Eliminator waits on weapons online), and a live pointer click on the new rows on each title.
+4. ~~**Settings Omega has and `RaceParams` lacks**~~ Landed 2026-10-19 (`docs/networking/online-lobby.md` part 9): laps, barrel rolls, Pilot Assist allowed (a level per seat) and the zone target travel through the wire, the lobby, `race::prepare` and the room screen on every title. Open: the eliminations target (not a kill count; an Eliminator room uses the mode's own), and a live pointer click on the new rows on each title.
 5. **Session takeover re-sending a pending hand-off.** (The killed-lobby orphan is fixed, part 7.)
    Also open: the lobby's room note carries the reason of a race, not the places; carrying the board in `End` would let the room screen show it.
 6. **Kick, spectate, chat, invite-only, quick match**: not built, Omega has some of them.
 7. **Containers**: the `Runner` seam (`online::race_proc`) is where a spawner per room on its own
    port goes; the hand-off already carries a port and a hash.
+
+8. **Weapons landed 2026-10-19** (ADR-0071, `docs/networking/online-lobby.md` part 10): predicted simulation plus a discrete-state correction trigger, the room's Weapons row, Eliminator open online. Open: a replayed fire or hit has no flash, blast or sound (`tick_sim_only` drops them); real packet loss and an analog human stream with weapons; a live pointer click on the Weapons row; Head to Head online (two seats in a room of eight).
 
 ## Next Steps
 

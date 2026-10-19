@@ -53,6 +53,8 @@ pub struct Labels {
     pub pilot_assist: String,
     /// The row that sets the zone a Zone race ends at.
     pub zone_target: String,
+    /// The weapons row.
+    pub weapons: String,
     /// The row that begins the race.
     pub start: String,
     /// The row that leaves the screen.
@@ -89,6 +91,7 @@ impl Labels {
                 "OAG_ONLINE_PILOT_ASSIST",
                 "PILOT ASSIST ALLOWED",
             ),
+            weapons: disc_or("RB_WEAP", "OAG_ONLINE_WEAPONS", "WEAPONS"),
             zone_target: disc_or("FE_ZONE_TARGET", "OAG_ONLINE_ZONE_TARGET", "ZONE TARGET"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
@@ -188,6 +191,8 @@ pub enum Setting {
     BarrelRolls,
     /// Whether Pilot Assist is allowed.
     PilotAssist,
+    /// Whether weapons are on.
+    Weapons,
     /// The zone a Zone race ends at.
     ZoneTarget,
 }
@@ -701,6 +706,7 @@ impl Join {
                         Setting::Laps => self.labels.laps.clone(),
                         Setting::BarrelRolls => self.labels.barrel_rolls.clone(),
                         Setting::PilotAssist => self.labels.pilot_assist.clone(),
+                        Setting::Weapons => self.labels.weapons.clone(),
                         Setting::ZoneTarget => self.labels.zone_target.clone(),
                     },
                     self.owner_settings

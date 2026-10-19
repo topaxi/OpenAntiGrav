@@ -610,6 +610,10 @@ pub(crate) struct NetArgs {
     #[arg(long, requires = "online")]
     pub(crate) online_no_pilot_assist: bool,
 
+    /// A room made with `--online-create` switches weapons off (Eliminator keeps them).
+    #[arg(long, requires = "online")]
+    pub(crate) online_no_weapons: bool,
+
     /// The zone a Zone room made with `--online-create` ends at (15 to 55); 0 never ends.
     #[arg(long, requires = "online", default_value_t = 0)]
     pub(crate) online_zone_target: u8,
@@ -701,6 +705,7 @@ impl NetArgs {
                 laps: self.online_laps,
                 no_barrel_rolls: self.online_no_barrel_rolls,
                 pilot_assist: !self.online_no_pilot_assist,
+                weapons: !self.online_no_weapons,
                 zone_target: self.online_zone_target,
             })
         } else {

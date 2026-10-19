@@ -286,6 +286,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             laps: 1,
             no_barrel_rolls: false,
             pilot_assist: false,
+            weapons: false,
             zone_target: 0,
         });
         pump(&mut people, &|p| p[0].room.is_some());

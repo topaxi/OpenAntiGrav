@@ -553,17 +553,15 @@ impl Client {
             return;
         }
         let front = self.predicted.front().filter(|(t, _, _)| *t == now);
-        let weapons_differ = front.is_some_and(|(_, _, digest)| *digest != weapon_sync::digest(&confirmed));
-        let error = front.map_or(
-            f32::INFINITY,
-            |(_, predicted, _)| {
-                let real = positions(&confirmed);
-                let ships = usize::from(confirmed.world.ship_count).min(MAX_SHIPS);
-                (0..ships)
-                    .map(|slot| (predicted[slot] - real[slot]).length())
-                    .fold(0.0, f32::max)
-            },
-        );
+        let weapons_differ =
+            front.is_some_and(|(_, _, digest)| *digest != weapon_sync::digest(&confirmed));
+        let error = front.map_or(f32::INFINITY, |(_, predicted, _)| {
+            let real = positions(&confirmed);
+            let ships = usize::from(confirmed.world.ship_count).min(MAX_SHIPS);
+            (0..ships)
+                .map(|slot| (predicted[slot] - real[slot]).length())
+                .fold(0.0, f32::max)
+        });
         if error.is_finite() {
             self.stats.largest_error = self.stats.largest_error.max(error);
         }

@@ -31,6 +31,7 @@ fn settings(title: &str) -> RoomSettings {
         laps: 0,
         no_barrel_rolls: false,
         pilot_assist: false,
+        weapons: false,
         zone_target: 0,
     }
 }
@@ -621,6 +622,7 @@ fn the_launch_carries_rolls_assist_and_the_zone_target() {
     let p = launch_of(
         RoomSettings {
             pilot_assist: false,
+            weapons: false,
             zone_target: 3,
             ..zone.clone()
         },
@@ -636,4 +638,41 @@ fn the_launch_carries_rolls_assist_and_the_zone_target() {
         [0, 0],
     );
     assert_eq!(p.zone_target, 0, "only Zone has one");
+}
+
+/// The room's weapons switch reaches the race, and an Eliminator room cannot turn weapons off.
+#[test]
+fn a_rooms_weapons_setting_reaches_the_race_and_eliminator_keeps_them() {
+    let launched = |mode: &str, weapons: bool| {
+        let mut rooms = lobby();
+        person(&mut rooms, 1, "ann", &[PULSE]);
+        person(&mut rooms, 2, "bob", &[PULSE]);
+        rooms.handle(
+            1,
+            Message::CreateRoom(RoomSettings {
+                mode: mode.into(),
+                weapons,
+                max_players: 2,
+                ..settings(PULSE)
+            }),
+        );
+        rooms.handle(2, Message::JoinRoom { room: 1 });
+        for (who, team) in [(1, "Feisar"), (2, "Qirex")] {
+            rooms.handle(
+                who,
+                Message::Ready {
+                    team: team.into(),
+                    ready: true,
+                    assist: 0,
+                },
+            );
+        }
+        rooms.handle(1, Message::Start);
+        rooms.tick(0);
+        rooms.tick(1000);
+        rooms.take_launch().expect("launched").params.weapons
+    };
+    assert!(launched("single_race", true));
+    assert!(!launched("single_race", false));
+    assert!(launched("eliminator", false), "Eliminator is about weapons");
 }
