@@ -14,21 +14,24 @@ feature needs an `unsafe` token under a workspace that denies `unsafe_code`.
 
 ## Open
 
-- Steam Deck, NVIDIA, the notebook's Intel iGPU and the Galaxy S24 (Xclipse 940) have not run the probe. The Deck and S24
-  rows are inferred.
-- Triangle counts per circuit, BLAS size and per-frame TLAS cost are unmeasured; memory figures are orders of magnitude.
-- Whether draws can be separated per `AnimNode` so animated scenery is one instance per node, not a rebuild.
-- The Deck cost of a traced shadow (estimate 2 to 4 ms at 800p) against `mapped`, which has never been measured on the
-  Deck; the case for the tier is quality and split scaling.
-- Pure has no measured sun; whether `mapped` borrows Pulse's axis there is unchecked.
-- Alpha-tested geometry (cutout fences) casts solid in an opaque-only first spike.
+Built on the branch 2026-10-19 (lane A and spike 1, numbers in the docs page): the structures, `--ray-debug`, `--ray`,
+`graphics.shadows = traced`, ADR-0072 for the one scoped `unsafe`.
+
+- `traced` costs +1.0 ms p50 and a +5 ms p99 over `mapped` on the 7800 XT and about +11 ms p50 (57 ms p99) on the Deck.
+  Open views look worst; testing that, and whether a shorter `TRACED_REACH` or a half-resolution ray with a bilateral
+  upsample fixes the tail, is the next thing to try.
+- An acceleration structure's size is unmeasured (no safe wgpu query; needs a hal `get_acceleration_structure_build_sizes`
+  call, one more scoped `unsafe`). Compaction (`ALLOW_COMPACTION`) is not used.
+- 2048 was not run (PFS-encrypted `.pkg`); Omega builds but its `traced` frames were not judged. Pure's sun is unchecked.
+- The notebook (Intel, NVIDIA) and the Galaxy S24 have not run it.
+- The menu offers `traced` everywhere and falls back to `mapped` with a log line; greying it by adapter, and applying on
+  restart with the RENDERER row's note, are not done. Cutout fences cast solid. Hull flaps and wrecks are not in the
+  structures (hulls at rest pose).
+- Branch only: not merged to main. Merging needs the ADR re-read and a decision on the `unsafe` exception.
 
 ## Next Steps
 
-1. Lane A (about a day): request the features behind the settings-off path with a scoped `unsafe` token, `BLAS_INPUT`
-   on the vertex and index buffers when the tier is on, build the track BLAS and craft TLAS, draw a `--ray-debug`
-   picture, print triangle counts and BLAS size per circuit per title. Decide on an ADR for the token.
-2. `graphics.shadows = traced` on HD, Omega and 2048 (one ray per pixel in `mesh.wesl`, multiplied with the lightmap
-   alpha), measured with `just bench-render hd --tag base|rt --views 1,2h,2v` against `--shadows mapped`.
-3. Measure `mapped` on the Deck, and run `cargo run -q -p oag-gpu --example ray_query_probe` on the Deck (under `deck.lock`), the notebook and an APK build.
-4. Only then glass reflections (HD Vineta K, Talon's Junction floor), after the original's own glass paths are done.
+1. Look at the traced tail: time a view looking at open sky against a tunnel, then try a shorter reach or a lower
+   resolution ray.
+2. Glass reflections (HD Vineta K, Talon's Junction floor), after the original's own glass paths are done.
+3. The notebook and APK probes.

@@ -1436,3 +1436,9 @@ the same grid ("The floor rays ask the road once per point").
 - **`shadows.rs` is a new file under the 1,000-line rule** and its
   `#[cfg(test)]` block belongs in `display/tests.rs`, since `TEST_BASELINE` is
   empty and rule 2 has no exemptions.
+
+## Traced (2026-10-19, `raytrace-spikes`, not on main)
+
+`graphics.shadows = traced` is one hardware shadow ray per pixel toward the sun `mapped` fits. It is built, and measured on
+HD: about +1 ms p50 over `mapped` on a 7800 XT with a long tail, and 15 ms p50 / 57 ms p99 on the Steam Deck, so it is
+not a Deck tier. Numbers and the design are in [ray-tracing.md](ray-tracing.md#built-and-measured-lane-a-and-spike-1-2026-10-19).

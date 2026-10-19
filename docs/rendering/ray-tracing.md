@@ -1,8 +1,9 @@
 # Ray tracing: where a first spike fits
 
-> **Feasibility and a ranked spike list, 2026-10-19 (`raytrace-spikes`). Nothing is built.** The only code is a
-> read-only adapter probe, `crates/gpu/examples/ray_query_probe.rs`. Every cost figure here is an **estimate** unless a
-> row says it was run. The one thing run is the probe, on this machine.
+> **Feasibility and a ranked spike list, 2026-10-19 (`raytrace-spikes`, not merged to main).** Lane A (the structures,
+> `--ray-debug`) and spike 1 (`graphics.shadows = traced`) are **built and measured**, see
+> ["Built and measured"](#built-and-measured-lane-a-and-spike-1-2026-10-19) below; the rest is still design. Every cost
+> figure outside that section is an **estimate**.
 
 The question: where could ray or path tracing first appear in the renderer - craft lights, glass reflections of craft
 and environment, weapons and explosions, shadows? The short answer: **an opt-in, native-only, per-effect tier whose
@@ -160,6 +161,86 @@ Not before 1 to 3 have shown the structures are cheap.
 **8. Hardware-RT rendered `original` look for HD's sea and dunes (paraboloid probe).** The dual-paraboloid
 `paraboloidReflectionTex` the sea sheet wants is undrawn. A traced probe would be one way to produce it, but it
 is an original effect with a raster answer, so build the raster one first. Listed so nobody reads it as a gap.
+
+## Built and measured (lane A and spike 1, 2026-10-19)
+
+**What exists.** `oag_mesh::mesh_render::ray` (features, limits and the one `unsafe` token, [ADR-0072](../architecture/adr/0072-the-ray-tier-takes-wgpus-experimental-features-token.md)),
+`ray/accel.rs` (BLAS per model and per animated node, TLAS per frame), `ray/debug.rs` (the `--ray-debug` compute
+picture), a `ray` variant of the mesh shader (scene binding 16) and `Shadows::Traced`. Asked for with `--ray`,
+`OAG_RAY=1`, `--shadows traced` or a render profile that says `traced`; a device without it runs as before and `traced`
+draws `mapped`, said once in the log. With the tier off no buffer, layout, shader or limit changes
+(`a_device_that_never_asked_for_the_tier_is_left_exactly_as_it_was`).
+
+**Answers to the open questions.**
+- *`AnimNode` per instance:* `GpuVertex::xform` is a per-vertex attribute, but every vertex of a draw carries the same
+  one, so draws partition by the first vertex of their index range. One BLAS per node (vertices baked in node space, as
+  the vertex shader receives them) and a TLAS instance per node with `Model::sample_anim_nodes`. A hull's parts sit under
+  its own nodes, placed at their rest pose (airbrake flaps are not animated in the structures).
+- *Fragment-stage ray queries* validate in naga and run on RADV (Raphael and 7800 XT) and on the Deck's VANGOGH.
+- *Transform convention:* `TlasInstance::transform` is the column-vector 3x4; the engine's row-vector 4x4 and glam's
+  column-major array are the same bytes, so `affine` takes element `(r, c)` from `m[c * 4 + r]`. A test pins the craft
+  matrix and the `--ray-debug` silhouettes line up with the raster craft on all five titles.
+- *What the structures hold:* opaque and alpha-tested draws, all flagged opaque (naga has no candidate intersections, so a
+  non-opaque geometry returns no hit). Cutouts therefore cast and receive as solids. Blended draws are left out.
+
+**Census** (`--race --ray-debug`, each title's default circuit; triangles in the structures, blended left out, BLASes):
+
+| Title / circuit | Triangles | Moving triangles (nodes) | Blended left out | BLAS build | Hull (one craft) |
+| --- | --- | --- | --- | --- | --- |
+| Pulse PSP (EU) | 144,351 | 8,659 (69) | 18,827 | 49 ms | 1,445 |
+| Pure PSP (EU) | 139,046 | 3,648 (25) | 19,058 | 32 ms | 1,156 |
+| Pulse PS2 (EU) | 160,192 | 8,897 (58) | 17,692 | 71 ms | 4,916 |
+| HD, Talon's Junction | 772,067 | 80,406 (37) | 32,653 | 52 to 58 ms | 19,680 to 29,804 |
+| Omega | 2,337,608 | 99,187 (81) | 41,432 | 34 ms | 22,558 |
+| 2048 | not run: the `.pkg` is PFS-encrypted, needs a NoNpDrm `.vpk` or folder | | | | |
+
+Build times are submit-and-wait on the 7800 XT, once per load. **An acceleration structure's size is not measured**:
+wgpu 30.0.1 has no safe size query, and wgpu's allocator report and the kernel's per-process DRM VRAM showed no change
+across a build. What is known exactly is the tier's own index copy (HD circuit 8.8 MiB). The 30 to 100 bytes a
+triangle estimate below stands, unmeasured.
+
+**Measured cost, HD Talon's Junction full race, GPU time of the scene pass (`gpu_us`) and frame time, microseconds.**
+7800 XT, release, 1280x720 (`just bench-render hd --views 1,2h,2v`, load 2 to 3):
+
+| Tier | 1 view gpu p50 / p99 | frame p50 | 2h gpu p50 / p99 | 2v gpu p50 / p99 |
+| --- | --- | --- | --- | --- |
+| `original` (HD default; re-run warm: 717/1035, 724/1055) | 707 / 974 | 1870 | 825 / 1174 | 860 / 1167 |
+| `off` | 624 / 852 | 1291 | 811 / 1126 | 812 / 1111 |
+| `mapped` | 563 / 792 | 1313 | 702 / 945 | 710 / 901 |
+| structures only (`--ray`, shadows off) | 523 / 744 | 1385 | 729 / 970 | 746 / 973 |
+| **`traced`** | **1624 / 6014** | 1982 | 2044 / 7234 | 2056 / 7073 |
+
+- Building and rebuilding the structures costs nothing measurable. `traced` costs about **+1.0 ms p50** over `mapped` on
+  a 7800 XT and its tail is long: p99 +5.3 ms, max +11 ms. The spikes are **not periodic** and not the TLAS (the
+  structures-only run has none): they come in bursts of 10 to 50 frames across all three laps, follow what the camera
+  sees (correlation with triangle count 0.36) and are worst in open views, where rays miss and walk the whole BVH
+  (probable, untested). The tier does not scale with split-screen the way `mapped` is meant to: two views cost 2.0 ms
+  p50 against one view's 1.6.
+- Steam Deck (VANGOGH, Mesa 26.2.0-devel, the dist AppImage with `znver2`, headless, 1280x800, full race, under
+  `deck.lock`, directory removed afterwards). **Ray queries are supported there.** gpu p50 / p99, frame p50 / p99:
+
+| Tier | gpu p50 / p99 | frame p50 / p99 | about fps (p50) |
+| --- | --- | --- | --- |
+| `original` | 3788 / 7059 | 6466 / 10130 | 155 |
+| `off` | 3503 / 6757 | 4748 / 8243 | 211 |
+| `mapped` | 3601 / 7068 | 5630 / 9677 | 178 |
+| **`traced`** | **14919 / 57493** | 16500 / 59019 | **61** |
+| `mapped`, 2 views cut horizontally | 4423 / 6037 | 8425 / 10227 | 119 |
+| `traced`, 2 views cut horizontally | 15410 / 53948 | 17456 / 56129 | 57 |
+
+  **`traced` is not usable on the Deck for HD**: +11 ms p50 over `mapped` (the estimate was 2 to 4 ms) and a 57 ms
+  worst case. The ray cost, not the structures, is the whole of it. Headless frame times are not what a display would
+  show; read the GPU column. This is the answer the earlier estimates asked for: the Deck keeps `mapped`.
+- The notebook (Intel and NVIDIA) and the Galaxy S24 were not run: out of scope for this lane.
+
+**Look.** `traced` against `mapped` on HD at tick 900 differs in 11 % of pixels by more than 8/255 (max 60): crisp
+shadow edges, and everything beyond `mapped`'s 70-unit box now shadows (the tunnel ceilings), because there is no cascade
+to fit. The picture is a sun-shadow multiply like `mapped`'s, over the lightmap, never replacing it. Chosen, not
+measured: `TRACED_START` 0.12 and `TRACED_REACH` 2000 world units, strength the `mapped` 0.4.
+
+**Open after this lane.** Omega and 2048 `traced` frames were not judged separately (Omega builds and its debug picture
+matches the raster; 2048 could not be opened here). Pure's sun is still unchecked. The menu offers `traced` on every
+device (it falls back to `mapped` with a log line and applies at the next launch); greying it by adapter is not done.
 
 ## Building it
 
