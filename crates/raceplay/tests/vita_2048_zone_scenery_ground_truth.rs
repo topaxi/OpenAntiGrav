@@ -11,8 +11,8 @@
 //!
 //! What it holds: `altima`'s `trackZone` is 6,349 submeshes over 966 skeleton
 //! nodes and 7 clip tracks at 30 Hz, against the race model's 2,817; 1,716 of
-//! the Zone model's submeshes are on the `fc01_dummy` placeholder and are not
-//! drawn; 1,587 take a `Zone_ColourN` uniform as their colour. Drop the Zone
+//! the Zone model's submeshes are on the `fc01_dummy` placeholder and are drawn as
+//! the circuit's fog colour (its program's whole output); 1,587 take a `Zone_ColourN` uniform as their colour. Drop the Zone
 //! branch in `race::load::geometry::sibling_model` and every line here goes.
 
 use oag_raceplay as race;
@@ -71,8 +71,14 @@ fn a_zone_race_on_altima_draws_its_zone_model_through_its_zone_skeleton() {
     let track = track_line(&lines);
     assert!(track.contains("over 6349 submesh(es)"), "{track}");
     assert!(
-        track.contains("1716 submesh(es) on the placeholder shader fc01_dummy not drawn"),
+        track.contains("1716 submesh(es) on fc01_dummy drawn as the circuit's fog colour"),
         "{track}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("fc01_dummy:") && l.contains("vertices drawn as fogColour")),
+        "the placeholder's vertices were not marked: {lines:#?}"
     );
     assert!(
         track.contains("1587 submesh(es) take a Zone_ColourN"),

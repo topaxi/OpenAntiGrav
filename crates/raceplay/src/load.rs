@@ -426,6 +426,29 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    // `fc01_dummy`'s pixel is the circuit's fog colour, which only the staging
+    // knows: write it into the vertices that carry the placeholder.
+    #[cfg(feature = "view")]
+    {
+        let flat = authored_fog.map_or([0.0; 3], |fog| fog.colour.map(|c| c * light.output_scale));
+        let mut filled = 0usize;
+        for v in &mut track_model.vertices {
+            if v.colour == mesh::rcs::psp2::FOG_FLAT {
+                v.colour = [flat[0], flat[1], flat[2], 1.0];
+                filled += 1;
+            }
+        }
+        if filled > 0 {
+            report.push(format!(
+                "fc01_dummy: {filled} vertices drawn as fogColour {flat:?} ({})",
+                if authored_fog.is_some() {
+                    "the circuit's authored fog colour, fixed at load and not moved by the Zone grade; which value the engine binds is chosen, not measured"
+                } else {
+                    "the circuit authors no fog, so black"
+                }
+            ));
+        }
+    }
     #[cfg(feature = "view")]
     let spu_vertex_lights = engine_light::spu_vertex_lights_enabled(
         &mut archives,

@@ -68,17 +68,47 @@ and probes. Its 6,349 submeshes:
 | Materials | Submeshes | What the file says |
 | --- | ---: | --- |
 | `zonefc07_cube_animation_1` | 2,406 | node-bound, 2,302 hidden at bind; nothing in the 7-track clip shows them |
-| `fc01_dummy` | 1,716 | the road and walls; a fragment program with one uniform (`fogColour`) and no sampler |
+| `fc01_dummy` | 1,716 | the road and walls; a fragment program with one uniform (`fogColour`) and no sampler; draws that colour flat |
 | `zonefc06_colour_emissive_scalar_01..08` | 1,587 | `Zone_ColourN` (rgb) and `Zone_ColourN_Emissive` (`0.5` on every one) |
 | `zonefc09_eq_gradient`, `_pixelated` | 371 | textured |
 
 **What is drawn, and what is chosen, not measured:**
 
-- **`fc01_dummy` is not drawn.** What its program outputs is GPU bytecode no
-  one here has decoded; a white or a black stand-in would be invented. The
-  report says `1716 submesh(es) on the placeholder shader fc01_dummy not drawn
-  (its output is unread)`. **This removes the Zone circuit's road from the
-  picture.** No Vita3K capture of a Zone race exists in this tree to compare.
+- **`fc01_dummy` draws a flat fog colour (2026-10-19).** Its fragment program is a
+  phase marker, two arithmetic instructions and a closing scale, in two
+  variants that differ in one swizzle (which component of the interpolant
+  multiplies; 1 and 8 copies per package, byte-identical across `data`,
+  `data1` and `data2`, absent from DLC1/DLC2). In plain terms: the setup block
+  clamps the negated `fogColour` at zero, which is zero for any non-negative
+  colour; the one multiply-add is that clamped value times the interpolant's
+  component plus `fogColour`, so the colour is `fogColour` whatever the
+  interpolant holds; the closing scale (taken as 1.0, the constant every
+  fragment program ends with) writes alpha 0. **The pixel is `fogColour`**:
+  no texture, no light, no fog lerp. Method: the operand fields of those words
+  were matched by eye against a few hundred labelled words from two Vita3K
+  shader logs (an emulator's own disassembly was read for behaviour on the
+  maintainer's 2026-10-19 allowance; nothing of its text or tables is copied
+  here, and the instruction set is still not named). Confidence 70 on the
+  arithmetic: no frame of Altima's Zone was captured (the HD campaign's Zone
+  event on Vineta K runs DLC `zone_N` circuits and never this program; 2048's
+  own Zone event needs campaign progress the capture recipe cannot reach).
+  **Which value the engine binds as `fogColour` is chosen, not measured**: the
+  circuit's `Lighting.Fog colour` (Altima `0.129 0.110 0.165`), fixed at load.
+  Two known divergences: (1) the Zone grade replaces the scene fog per stage
+  and this colour does not follow it (a road pixel stays `34 29 43` at 960x544
+  while distant geometry fogs toward the graded colour); (2) our pipeline
+  fogs these draws like any other, where the original's program has no fog
+  lerp. The Vita3K reference frame of a Zone race (Vineta K, zone 0 and 5)
+  shows a near-black road, which the authored colour matches and the graded
+  scene fog (light grey in our Altima Zone 0) does not; that picture is the
+  only evidence for the choice. Open lead: the binding is CPU-side in
+  `/vita-2048-eu-v104` (Ghidra) and would settle both. `oag_mesh` marks the
+  vertices (`psp2::FOG_FLAT`), `oag_raceplay::load` writes the colour in and
+  reports `fc01_dummy: N vertices drawn as fogColour`; the game's Zone race
+  now draws `trackZone.rcsmodel` (`Options::zone_model`, a reversal of the
+  2026-10-05 off-by-default decision, for the lead). **Omega: checked,
+  differs** - 0 `fc01_dummy` submeshes over Omega's 1,150 models
+  (`the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models`).
 - **`Zone_ColourN` is drawn as the surface's colour, unlit.** The fragment
   program also declares a lightmap and `liveLighting0`, so lit is the other
   candidate. Both were drawn on `altima`: lit, the colour is multiplied by a sun
@@ -217,7 +247,7 @@ circuit material (weapons and muzzle flash only), as on HD.
 
 - **Bytecode.** No fragment or vertex program was decoded: how a Zone colour,
   the light and the emissive scalar combine, where `TimeScaler` enters the
-  coordinate, which sign a plain scroll takes, what `fc01_dummy` outputs. Only
+  coordinate, which sign a plain scroll takes, (`fc01_dummy`'s output is read, above). Only
   the parameter tables (`gxp.md`) were read, for which stage declares which name.
   [gxp.md](gxp.md) has the container; the instruction set is not read.
 - **The other scroll shapes** in the table above, and the flipbook's 5 by 5

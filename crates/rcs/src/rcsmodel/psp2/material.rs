@@ -305,8 +305,8 @@ impl Material {
 
     /// Whether this is `fc01_dummy`, the placeholder shader: its fragment
     /// program has one uniform (`fogColour`) and no sampler, so its picture is
-    /// a constant the engine fogs - and what constant is in undecoded GPU
-    /// bytecode. Used by 1,716 of `altima`'s `trackZone` submeshes, which is
+    /// the constant `fogColour` (read off its three instructions, see
+    /// `2048-material-params.md`). Used by 1,716 of `altima`'s `trackZone` submeshes, which is
     /// its road and walls.
     #[must_use]
     pub fn is_placeholder(&self) -> bool {
