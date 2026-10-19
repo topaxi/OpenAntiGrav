@@ -37,6 +37,13 @@ at `0.9985` of the disc's `grip_ground`, closes the yaw accumulator term by term
 `avel = -I * omega` on the pitch and roll axes while confirming it on yaw. It is
 the authority on the lateral axis and on the airbrake terms' magnitudes.
 
+**Ramps and the air are measured too (2026-10-19).**
+[Ramps and the air](airborne-ground-truth.md) steps the force law from every
+frame of the original's autopilot over Fort Gale Black's first jump: the linear
+law holds to `0.05` units/s a tick; Pulse applies its inertia diagonal in world
+axes (measured, not yet ported); the pitch-input gate is read live and ported,
+and the in-air `weight_distribution` torque is read live.
+
 **A second part is measured rather than read**, and it is the rotational half of
 the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the
 sign and the frame of the recorded angular-velocity column against five captures'

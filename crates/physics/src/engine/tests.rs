@@ -432,11 +432,11 @@ fn the_pitch_axis_uses_a_different_gain_on_the_ground_than_in_the_air() {
     let scale = crate::controls::CONTROL_RANGE;
 
     assert_eq!(
-        pitch(&nose_up, &handling, true),
+        pitch(&nose_up, &handling, true, true),
         scale * handling.pitch.pitch_ground
     );
     assert_eq!(
-        pitch(&nose_up, &handling, false),
+        pitch(&nose_up, &handling, false, true),
         scale * handling.pitch.pitch_air
     );
 }
@@ -455,10 +455,10 @@ fn a_nose_up_request_pitches_the_nose_up() {
     };
 
     assert!(
-        pitch(&nose_up, &handling, false) > 0.0,
+        pitch(&nose_up, &handling, false, true) > 0.0,
         "steer_y is documented positive nose up, so this must be a positive \
          body-local pitch torque; got {}",
-        pitch(&nose_up, &handling, false)
+        pitch(&nose_up, &handling, false, true)
     );
 }
 
@@ -475,10 +475,45 @@ fn pitch_is_a_plain_gain_with_no_state_and_is_symmetric() {
     };
 
     assert_eq!(
-        pitch(&up, &handling, false),
-        -pitch(&down, &handling, false)
+        pitch(&up, &handling, false, true),
+        -pitch(&down, &handling, false, true)
     );
-    assert_eq!(pitch(&ShipControls::default(), &handling, false), 0.0);
+    assert_eq!(pitch(&ShipControls::default(), &handling, false, true), 0.0);
+}
+
+/// `Ship_UpdatePitch`: a closed gate drops the input on the ground and in the air.
+#[test]
+fn a_closed_gate_drops_the_pitch_input() {
+    let handling = test_handling();
+    let nose_up = ShipControls {
+        steer_y: 1.0,
+        ..ShipControls::default()
+    };
+    let scale = crate::controls::CONTROL_RANGE;
+    assert_eq!(
+        pitch(&nose_up, &handling, false, true),
+        scale * handling.pitch.pitch_air
+    );
+    assert_eq!(pitch(&nose_up, &handling, false, false), 0.0);
+    assert_eq!(pitch(&nose_up, &handling, true, false), 0.0);
+}
+
+/// `dot(hull_up, -down) > 0.9`, strict, and open with no located sample.
+#[test]
+fn the_pitch_gate_opens_within_its_cone_of_the_track_up() {
+    let sample = |down: Vec3| crate::maglock::TrackSample {
+        position: Vec3::ZERO,
+        down,
+    };
+    let level = sample(Vec3::new(0.0, -1.0, 0.0));
+    assert!(pitch_aligned(Vec3::Y, Some(&level)));
+    assert!(
+        !pitch_aligned(Vec3::new(0.0, 0.9, 0.0), Some(&level)),
+        "0.9 is closed"
+    );
+    assert!(pitch_aligned(Vec3::new(0.0, 0.9001, 0.0), Some(&level)));
+    assert!(!pitch_aligned(Vec3::X, Some(&level)));
+    assert!(pitch_aligned(Vec3::X, None));
 }
 
 /// `pitch_damping` is consumed by the angular damping term, not by the pitch
@@ -490,9 +525,9 @@ fn pitch_damping_does_not_affect_the_pitch_input() {
         ..ShipControls::default()
     };
     let mut handling = test_handling();
-    let before = pitch(&controls, &handling, true);
+    let before = pitch(&controls, &handling, true, true);
     handling.pitch.pitch_damping *= 10.0;
-    assert_eq!(pitch(&controls, &handling, true), before);
+    assert_eq!(pitch(&controls, &handling, true, true), before);
 }
 
 /// `if (craft+0x31c < 1.0) T *= craft+0x31c`: a beam's `slowShipFactor` cuts
