@@ -831,6 +831,22 @@ summed. The disc-backed test `net_ground_truth` (`crates/net/tests/`) runs a ser
 and two bot clients in one process at a 100 ms round trip and asserts every hash
 agrees and that corrections happen.
 
+**The loopback harness runs on a virtual clock (2026-10-19).** The disc-backed
+`weapons_ground_truth` and `net_ground_truth` races used to delay packets with a `Shim` on
+the wall clock while the harness slept 16.7 ms a round, so a 100 ms round trip was a different
+number of ticks on a loaded machine and the Eliminator race (`an_eliminator_race_is_flown_over_the_wire_by_two`)
+ended differently: it failed 4 of 6 full `just test-data` runs. Measured with the sleep alone
+changed (`finished` is read after the run): sleep 0 gave `fires: 0` and failed the weapons
+assertion in 6 s, 16.7 ms gave `fires: 3, hits: 64`, 40 ms gave `fires: 1, hits: 106`, all on
+one tree with `hash_mismatches: 0` - the ends agreed in every case, because the difference was
+which inputs reached the server on which tick. `Shim::with_clock` reads its delays off a
+shared `oag_net::link::Clock` the harness advances one tick per round (`Pace::Virtual`), no
+sleeping anywhere: the same race (`fires: 4, hits: 46`, peak 23 in the air) comes out on
+a quiet machine and under 48 busy loops, in 5.5 s against 98 s. The server's
+`SeatCounts` (`repeated`, `late`) are now fixed numbers of the harness too. The
+`confirm_sum_ms` stat still reads the wall clock, so in these runs it is the harness's
+own speed and not a round trip.
+
 **Not covered here** (weapons, loss, jitter, four clients and the own craft's correction
 are measured in ADR-0071's follow-up and "An analog stick, 2026-10-19" below): the
 Galaxy S24 (deferred by the maintainer), a recorded human analog hand, a client joining

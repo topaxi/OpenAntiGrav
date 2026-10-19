@@ -4,13 +4,43 @@
 
 use oag_net::client::{Client, Phase, Stats};
 use oag_net::host::Host;
-use oag_net::link::{Conditions, Link, Loopback, Shim};
+use oag_net::link::{Clock, Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
 use oag_raceplay::{Race, Setup};
 
 /// What a test client flies with: a function of the tick, so every run is the
 /// same and the two clients differ.
 pub(crate) type Pilot = Box<dyn FnMut(&mut Client, &mut Race) -> oag_gameplay::InputSnapshot>;
+
+/// How a harness lets time pass between rounds.
+#[derive(Clone)]
+pub(crate) enum Pace {
+    /// By sleeping, so a [`Shim`] on the wall clock delays by a number of ticks that depends on
+    /// how loaded the machine is.
+    Wall(std::time::Duration),
+    /// By advancing a [`Clock`] the shims read, a round a `tick` long and never a sleep: the same
+    /// inputs arrive on the same tick on any machine, and the run is as fast as the machine is.
+    Virtual(Clock, std::time::Duration),
+}
+
+impl Pace {
+    /// Lets `wait` pass: a handshake step or a drain, not a round.
+    fn idle(&self, wait: std::time::Duration) {
+        match self {
+            Self::Wall(_) => std::thread::sleep(wait),
+            Self::Virtual(clock, _) => clock.advance(wait),
+        }
+    }
+
+    /// Lets one round of the race pass.
+    fn round(&self) {
+        match self {
+            Self::Wall(sleep) if sleep.is_zero() => {}
+            Self::Wall(sleep) => std::thread::sleep(*sleep),
+            Self::Virtual(clock, tick) => clock.advance(*tick),
+        }
+    }
+}
 
 /// Ticks the host and every client in lockstep with the wall clock left out:
 /// each round the host reads its links and runs one tick once racing, and every
@@ -19,9 +49,9 @@ pub(crate) fn drive(
     host: &mut Host,
     clients: &mut [(Client, Box<Race>, Pilot)],
     ticks: u32,
-    sleep: std::time::Duration,
+    pace: &Pace,
 ) -> Vec<Stats> {
-    drive_observed(host, clients, ticks, sleep, |_| {})
+    drive_observed(host, clients, ticks, pace, |_| {})
 }
 
 /// [`drive`], showing `observe` the host after each of its ticks.
@@ -29,11 +59,11 @@ pub(crate) fn drive_observed(
     host: &mut Host,
     clients: &mut [(Client, Box<Race>, Pilot)],
     ticks: u32,
-    sleep: std::time::Duration,
+    pace: &Pace,
     mut observe: impl FnMut(&Host),
 ) -> Vec<Stats> {
     let mut totals = vec![Stats::default(); clients.len()];
-    ready_all(host, clients);
+    ready_all(host, clients, pace);
     host.start(0);
     while host.tick_number() < ticks {
         host.poll();
@@ -73,9 +103,7 @@ pub(crate) fn drive_observed(
             total.own_hit_removed += s.own_hit_removed;
             total.confirm_sum_ms += s.confirm_sum_ms;
         }
-        if !sleep.is_zero() {
-            std::thread::sleep(sleep);
-        }
+        pace.round();
     }
     host.end("the test is over");
     // Let the last confirmed ticks arrive.
@@ -93,20 +121,20 @@ pub(crate) fn drive_observed(
             break;
         }
         host.poll();
-        std::thread::sleep(std::time::Duration::from_millis(2));
+        pace.idle(std::time::Duration::from_millis(2));
     }
     totals
 }
 
 /// Welcomes every client and waits until the host has them all ready.
-pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilot)]) {
+pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilot)], pace: &Pace) {
     for (client, race, _) in clients.iter_mut() {
         loop {
             host.poll();
             if client.poll_welcome().expect("welcomed").is_some() {
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(1));
+            pace.idle(std::time::Duration::from_millis(1));
         }
         client.ready(race).expect("same start state");
     }
@@ -117,7 +145,7 @@ pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilo
             client.poll();
         }
         assert!(asked.elapsed().as_secs() < 5, "{:?}", host.seat_names());
-        std::thread::sleep(std::time::Duration::from_millis(1));
+        pace.idle(std::time::Duration::from_millis(1));
     }
 }
 
@@ -184,7 +212,12 @@ fn two_clients_agree_with_the_server_on_every_confirmed_tick() {
     let params = params(2);
     let mut host = Host::new(headless(&params), params);
     let mut clients = seated(&mut host, 2, 0.0);
-    let totals = drive(&mut host, &mut clients, 300, std::time::Duration::ZERO);
+    let totals = drive(
+        &mut host,
+        &mut clients,
+        300,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     for (n, total) in totals.iter().enumerate() {
         assert_eq!(total.hash_mismatches, 0, "client {n}: {total:?}");
         assert_eq!(total.hash_matches, 300, "client {n}: {total:?}");
@@ -209,7 +242,12 @@ fn half_the_datagrams_lost_and_the_hashes_still_agree() {
     let params = params(1);
     let mut host = Host::new(headless(&params), params);
     let mut clients = seated(&mut host, 1, 0.5);
-    let totals = drive(&mut host, &mut clients, 400, std::time::Duration::ZERO);
+    let totals = drive(
+        &mut host,
+        &mut clients,
+        400,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     let total = totals[0];
     assert_eq!(total.hash_mismatches, 0, "{total:?}");
     assert_eq!(total.hash_matches, 400, "{total:?}");
@@ -253,7 +291,11 @@ fn a_person_who_leaves_is_retired_on_both_ends_and_the_hashes_agree() {
     let params = params(2);
     let mut host = Host::new(headless(&params), params);
     let mut clients = seated(&mut host, 2, 0.0);
-    ready_all(&mut host, &mut clients);
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     let mut survivor_mismatches = 0;
     let mut survivor_matches = 0;
@@ -306,7 +348,11 @@ fn a_silent_seat_is_dropped_and_told() {
     let params = params(2);
     let mut host = Host::new(headless(&params), params);
     let mut clients = seated(&mut host, 2, 0.0);
-    ready_all(&mut host, &mut clients);
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
     host.start(0);
     host.poll();
     host.tick();

@@ -200,11 +200,33 @@ impl Conditions {
     }
 }
 
+/// A clock a test advances by hand, shared between the [`Shim`]s that read it. A delay on the wall
+/// clock is a different number of ticks on a loaded machine, and a race flown through it ends
+/// differently; on this one the same inputs arrive on the same tick on any machine.
+#[derive(Debug, Clone, Default)]
+pub struct Clock(std::sync::Arc<std::sync::atomic::AtomicU64>);
+
+impl Clock {
+    /// Moves the clock on by `by`.
+    pub fn advance(&self, by: Duration) {
+        let micros = u64::try_from(by.as_micros()).unwrap_or(u64::MAX);
+        self.0
+            .fetch_add(micros, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// How far the clock has been advanced.
+    #[must_use]
+    pub fn elapsed(&self) -> Duration {
+        Duration::from_micros(self.0.load(std::sync::atomic::Ordering::Relaxed))
+    }
+}
+
 /// A link with a round trip and a loss rate added on this end, in both
 /// directions. A verification aid for running on localhost.
 pub struct Shim<L: Link> {
     inner: L,
     conditions: Conditions,
+    clock: Option<(Clock, Instant)>,
     outgoing: VecDeque<(Instant, bool, Vec<u8>)>,
     incoming_datagrams: VecDeque<(Instant, Vec<u8>)>,
     incoming_reliable: VecDeque<(Instant, Vec<u8>)>,
@@ -220,11 +242,28 @@ impl<L: Link> Shim<L> {
         Self {
             inner,
             conditions,
+            clock: None,
             outgoing: VecDeque::new(),
             incoming_datagrams: VecDeque::new(),
             incoming_reliable: VecDeque::new(),
             dice: 0x9E37_79B9_7F4A_7C15,
             drops: 0,
+        }
+    }
+
+    /// `inner` with `conditions` on it, its delays read off `clock` and never the wall clock:
+    /// a message is due when the clock has advanced by its delay, however long the machine took.
+    pub fn with_clock(inner: L, conditions: Conditions, clock: Clock) -> Self {
+        let mut shim = Self::new(inner, conditions);
+        shim.clock = Some((clock, Instant::now()));
+        shim
+    }
+
+    /// Now: the wall clock, or the virtual clock's reading on the instant it started from.
+    fn now(&self) -> Instant {
+        match &self.clock {
+            Some((clock, base)) => *base + clock.elapsed(),
+            None => Instant::now(),
         }
     }
 
@@ -264,7 +303,7 @@ impl<L: Link> Shim<L> {
     /// Moves what is due across: sends whose delay has passed, and receives from
     /// the inner link into the delay queues.
     fn pump(&mut self) {
-        let now = Instant::now();
+        let now = self.now();
         while self.outgoing.front().is_some_and(|(due, _, _)| *due <= now) {
             if let Some((_, reliable, bytes)) = self.outgoing.pop_front() {
                 if reliable {
@@ -292,7 +331,7 @@ impl<L: Link> Shim<L> {
 impl<L: Link> Link for Shim<L> {
     fn send_datagram(&mut self, bytes: Vec<u8>) {
         if !self.dropped() {
-            let due = self.due(Instant::now());
+            let due = self.due(self.now());
             let at = self.outgoing.partition_point(|(d, _, _)| *d <= due);
             self.outgoing.insert(at, (due, false, bytes));
         }
@@ -300,7 +339,7 @@ impl<L: Link> Link for Shim<L> {
     }
     fn recv_datagram(&mut self) -> Option<Vec<u8>> {
         self.pump();
-        let now = Instant::now();
+        let now = self.now();
         if self
             .incoming_datagrams
             .front()
@@ -317,7 +356,7 @@ impl<L: Link> Link for Shim<L> {
             .rev()
             .find(|(_, reliable, _)| *reliable)
             .map(|(d, _, _)| *d);
-        let now = Instant::now();
+        let now = self.now();
         let due = self.due(now).max(behind.unwrap_or(now));
         let at = self.outgoing.partition_point(|(d, _, _)| *d <= due);
         self.outgoing.insert(at, (due, true, bytes));
@@ -325,7 +364,7 @@ impl<L: Link> Link for Shim<L> {
     }
     fn recv_reliable(&mut self) -> Option<Vec<u8>> {
         self.pump();
-        let now = Instant::now();
+        let now = self.now();
         if self
             .incoming_reliable
             .front()
@@ -433,6 +472,30 @@ mod tests {
         assert_eq!(path.shim.map(|s| s.conditions), Some(conditions));
         let (plain, _) = Loopback::pair();
         assert!(plain.path().is_none(), "a link with no counters says so");
+    }
+
+    /// A delay on the virtual clock is met by advancing it and by nothing else: the wall clock
+    /// passing does not deliver the message, and no wall time is needed once the clock is on.
+    #[test]
+    fn a_shim_on_a_clock_delivers_when_the_clock_has_advanced_and_not_before() {
+        let clock = Clock::default();
+        let (a, b) = Loopback::pair();
+        let mut a = Shim::with_clock(
+            a,
+            Conditions {
+                one_way: Duration::from_millis(50),
+                ..Conditions::default()
+            },
+            clock.clone(),
+        );
+        let mut b = b;
+        b.send_datagram(vec![7]);
+        std::thread::sleep(Duration::from_millis(80));
+        assert_eq!(a.recv_datagram(), None, "the wall clock does not deliver");
+        clock.advance(Duration::from_millis(49));
+        assert_eq!(a.recv_datagram(), None, "one millisecond early");
+        clock.advance(Duration::from_millis(1));
+        assert_eq!(a.recv_datagram(), Some(vec![7]), "on the clock's 50 ms");
     }
 
     #[test]

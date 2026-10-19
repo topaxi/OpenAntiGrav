@@ -13,7 +13,7 @@ use oag_net::host::Host;
 use oag_net::link::{Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
 
-use crate::loopback::{Pilot, drive};
+use crate::loopback::{Pace, Pilot, drive};
 
 const IMAGE: &str = "pulse-psp-eu.chd";
 
@@ -49,17 +49,19 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
     let (race, title) = oag_net::race::load(&params, &source).expect("loads");
     params.title = title.to_string();
     let mut host = Host::new(race, params.clone());
+    let clock = oag_net::link::Clock::default();
     let mut clients: Vec<_> = (0..2)
         .map(|n| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
-            let link: Box<dyn Link> = Box::new(Shim::new(
+            let link: Box<dyn Link> = Box::new(Shim::with_clock(
                 client_end,
                 Conditions {
                     one_way: web_time::Duration::from_millis(50),
                     loss: 0.0,
                     ..Conditions::default()
                 },
+                clock.clone(),
             ));
             let client = Client::connect(link, &format!("bot {n}"));
             let (race, _) = oag_net::race::load(&params, &source).expect("loads");
@@ -72,7 +74,7 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
         &mut host,
         &mut clients,
         ticks,
-        std::time::Duration::from_micros(16_667),
+        &Pace::Virtual(clock, std::time::Duration::from_micros(16_667)),
     );
     println!("server, per seat: {:?}", host.take_counts());
     for (n, total) in totals.iter().enumerate() {

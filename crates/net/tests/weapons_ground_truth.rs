@@ -6,10 +6,10 @@
 
 use oag_net::client::Client;
 use oag_net::host::Host;
-use oag_net::link::{Conditions, Link, Loopback, Shim};
+use oag_net::link::{Clock, Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
 
-use crate::loopback::{Pilot, drive_observed};
+use crate::loopback::{Pace, Pilot, drive_observed};
 
 const IMAGE: &str = "pulse-psp-eu.chd";
 
@@ -78,11 +78,15 @@ fn race_in_mode(
     let (race, title) = oag_net::race::load(&params, &source).expect("loads");
     params.title = title.to_string();
     let mut host = Host::new(race, params.clone());
+    // The round trip is counted in ticks on a clock the harness advances, not in milliseconds of
+    // whatever machine this runs on: under load the same race was a different one.
+    let clock = Clock::default();
     let mut clients: Vec<_> = (0..people)
         .map(|n| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
-            let link: Box<dyn Link> = Box::new(Shim::new(client_end, conditions));
+            let link: Box<dyn Link> =
+                Box::new(Shim::with_clock(client_end, conditions, clock.clone()));
             let mut client = Client::connect(link, &format!("bot {n}"));
             client.set_weapon_trigger(weapon_trigger);
             client.set_bot_hand(hand.then_some(0x4841_4E44 + u64::from(n)));
@@ -98,7 +102,7 @@ fn race_in_mode(
         &mut host,
         &mut clients,
         ticks,
-        std::time::Duration::from_micros(16_667),
+        &Pace::Virtual(clock, std::time::Duration::from_micros(16_667)),
         |host| {
             let world = &host.race().sim.world;
             activity.peak_in_air = activity.peak_in_air.max(world.projectiles.live());
