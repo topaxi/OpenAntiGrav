@@ -542,7 +542,7 @@ this port's render; the other two banks' `ready` speaks from the cue's own start
 
 `oag_gameplay::cue::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
-`RaceDefaults::countdown_voice` is measured on Pulse; Pure, HD, 2048 and Omega are lent Pulse's timing and their mode's speech bank (chosen, not measured, no confidence score), and it is raised by
+`RaceDefaults::countdown_voice` (its `origin` is `Measured` on Pulse and Pure, `Chosen` on HD, 2048 and Omega, which are lent Pulse's timing and their mode's speech bank, no confidence score), and it is raised by
 `oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
 `crates/game/tests/countdown_voice_ground_truth.rs`.
 
@@ -556,7 +556,7 @@ on, which HD's speech needs: its speech bus rides the effects slider); list a ba
 | Title | Port plays now | Original authors | Trigger and timing |
 | --- | --- | --- | --- |
 | Pulse (PSP, PS2) | `ready` at tick 91, `go` at 271, from the mode's speech bank | the same | measured (above) |
-| Pure | `ready` (1 waveform, 0.51 s) at 91, `go` (0.43 s) at 271, `speech.bnk` | the same two cues | **lent from Pulse, chosen, not measured**; no Pure executable read for the start |
+| Pure (PSP, USA) | `ready` (cue 12, 1.25 s) at 91, `go` (cue 13, 1.12 s) at 271, `speech.bnk` | the same two cues | **measured 2026-10-19**: `Scream_StartSound` (`0x0883defc`) logs `SPEECH` 12 then 13, 180.0 frames apart, three runs; the craft's launch gate flips in the first update after `go`; [countdown-voice.md](../ghidra/functions/psp-pure-usa/countdown-voice.md), confidence 85 (cues, spacing), 70 (`go` at the release, 2 frame resolution at Pure's 30 Hz update). Zone, Eliminator and the EU pressing not run |
 | HD / Fury | `ready` at 91 (**now** the authored 3.0 s tail of `321_GO`, was one random flat clip of 0.8-3.0 s, peak a quarter of `go`'s), `go` at 271 (5.1 s) | `speech.bnk` `ready` is a lone `0x08` into child `321_GO`; `go`; `INIT_GO`; `launch.bnk` `LAUNCHSEQ`, `LAUNCHBEEP2/3`; `RS_1_READY`/`RS_2_GO` in `speech_zone.bnk` and `speech_elim.bnk` | **lent from Pulse, chosen, not measured.** No literal `321_GO`, `go`, `INIT_GO` or `LAUNCHSEQ` is in HD's executable (`search_strings`), so the trigger is not located; `launch.bnk` is named nowhere in the repo or the loader |
 | 2048 | nothing (a hashed bank; the countdown loader looks names up plain) | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; timing assumed Pulse's whole-seconds test, not measured; not wired |
 | Omega | nothing | not readable (SBlk parse fails) | not checkable here |

@@ -8,6 +8,7 @@
 // scope, but nothing here calls them.
 #[allow(unused_imports)]
 use super::{ZoneCircuit, ZoneCraft, ZonePalette, ZoneStages};
+use crate::Origin;
 
 /// A title's Zone-mode announcer: the milestone numbers it names a voice line
 /// for, and the bank that line is in.
@@ -219,10 +220,9 @@ impl ZoneClassAnnouncer {
 /// 2.48 s in `speech_zone.bnk`; `go` is 0.80 s in all three.
 ///
 /// The default bank is [`super::SoundBanks::speech`]; this holds the two that
-/// replace it. Every title but Pulse lends Pulse's timing (chosen, not
-/// measured): Pure's and HD's own
-/// `speech_zone.bnk` also carry `ready` and `go`, but nothing here says when
-/// or from where those titles play them.
+/// replace it. [`Self::origin`] says whose timing a title plays: Pulse's and
+/// Pure's (PSP USA) is measured, HD, 2048 and Omega lend Pulse's (chosen, not
+/// measured).
 ///
 /// See `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md` and
 /// `docs/formats/psp-audio.md`.
@@ -232,6 +232,10 @@ pub struct CountdownVoice {
     pub eliminator_bank: &'static str,
     /// The Zone bank, `Data\Sound\speech_zone.bnk` on Pulse.
     pub zone_bank: &'static str,
+    /// Where this title's `ready` and `go` (which cues, in which bank, 180 ticks
+    /// apart, `go` on the last gated tick) came from: [`Origin::Measured`] when
+    /// the title's own cue-start log shows it.
+    pub origin: Origin,
 }
 
 #[cfg(test)]

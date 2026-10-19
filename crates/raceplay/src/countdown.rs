@@ -44,8 +44,10 @@
 //! reads `zone_vo`, but was **not** captured live: its ticks rest on the shared code
 //! and that constant, not on a measurement. Only the PSP pressing was
 //! measured: the PS2 pressing is the same title data and is lent these ticks.
-//! Pure, HD, 2048 and Omega carry Pulse's timing and banks lent to them for
-//! [`oag_title::RaceDefaults::countdown_voice`] (chosen, not measured). See
+//! Pure (PSP, USA) was measured to play the same two cues on the same spacing
+//! (2026-10-19); HD, 2048 and Omega carry Pulse's timing and banks lent to them for
+//! [`oag_title::RaceDefaults::countdown_voice`] (chosen, not measured), as that
+//! field's `origin` says. See
 //! `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
 
 use oag_race::COUNTDOWN_TICKS;

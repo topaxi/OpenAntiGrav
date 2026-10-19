@@ -503,15 +503,29 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
 ];
 
 /// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Chosen, not measured - see `oag_title::CountdownVoice`.
+/// reads the ordinary speech bank.
+///
+/// **Measured on Pure PSP (USA), Time Trial**, 2026-10-19: `Scream_StartSound` (`0x0883defc`)
+/// starts `SPEECH` cue 12 (`ready`) and, 180.0 frames later, cue 13 (`go`), in two runs, and no
+/// other cue of the start is a countdown voice; the craft's launch gate flips in the first update
+/// after `go`. The same law as Pulse's. Zone and Eliminator were not captured on Pure, so their
+/// banks are the title's own names for them. See `docs/ghidra/functions/psp-pure-usa/countdown-voice.md`.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\Sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
+    origin: oag_title::Origin::Measured,
 };
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_TEAM, DEFAULT_TRACK};
+    use super::{COUNTDOWN_VOICE, DEFAULT_TEAM, DEFAULT_TRACK};
+
+    /// Pure's start voice is its own measurement, not Pulse's lent: a regression to `Chosen` would
+    /// put the "lent" label back on a measured title.
+    #[test]
+    fn the_start_voice_is_measured_on_pure() {
+        assert_eq!(COUNTDOWN_VOICE.origin, oag_title::Origin::Measured);
+    }
 
     /// The circuit is this title's own; the team deliberately is not.
     ///

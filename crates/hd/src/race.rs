@@ -852,10 +852,12 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
 ];
 
 /// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Chosen, not measured - see `oag_title::CountdownVoice`.
+/// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
+/// `oag_title::CountdownVoice`.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\Sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
+    origin: oag_title::Origin::Chosen,
 };
 
 #[cfg(test)]
