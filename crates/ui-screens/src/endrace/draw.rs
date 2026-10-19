@@ -608,7 +608,7 @@ fn tournament_lap_cell_text(
 /// is `campaign`'s own lane; this is a second, correct formatter rather
 /// than a shared one - see this module's own doc for why the small helpers
 /// here duplicate rather than share.
-pub(super) fn format_ticks(ticks: u64) -> String {
+pub fn format_ticks(ticks: u64) -> String {
     let centiseconds = ticks.saturating_mul(100) / 60;
     let minutes = centiseconds / 6000;
     let seconds = (centiseconds / 100) % 60;

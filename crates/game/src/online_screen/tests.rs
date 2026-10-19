@@ -1,4 +1,5 @@
 use super::*;
+use oag_net::wire::board::Board;
 use oag_net::wire::online::RoomSettings;
 use oag_ui_screens::join::{Event, Labels};
 
@@ -109,6 +110,7 @@ fn the_room_says_who_is_ready_and_where_the_room_is() {
         members: members.clone(),
         phase,
         note: note.into(),
+        board: Board::default(),
     };
     assert_eq!(member_line(&members[0], &strings()), "ADA (HOST)  READY");
     assert_eq!(member_line(&members[1], &strings()), "BOB  PICKING");
@@ -161,6 +163,7 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
         members,
         phase: Phase::Open,
         note: String::new(),
+        board: Board::default(),
     };
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
     fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
@@ -206,6 +209,7 @@ fn snapshot_of(people: usize, max_players: u8, phase: Phase) -> Snapshot {
             .collect(),
         phase,
         note: String::new(),
+        board: Board::default(),
     }
 }
 
@@ -388,4 +392,63 @@ fn the_room_line_says_the_laps_only_when_the_owner_set_some() {
     assert!(!room_line(&r, &strings(), &|_| None).contains("LAPS"));
     r.settings.laps = 5;
     assert!(room_line(&r, &strings(), &|_| None).ends_with("SINGLE RACE / 5 LAPS"));
+}
+
+#[test]
+fn a_seat_says_where_its_person_came_in_the_last_race() {
+    use oag_net::wire::board::BoardRow;
+    let member = |name: &str, owner| Member {
+        name: name.into(),
+        team: String::new(),
+        ready: true,
+        owner,
+    };
+    let board = Board {
+        rows: vec![
+            BoardRow {
+                place: 1,
+                slot: 1,
+                name: "Bob".into(),
+                laps: 3,
+                finish_ticks: Some(60 * 83 + 30),
+                best_lap_ticks: None,
+                eliminations: 0,
+            },
+            BoardRow {
+                place: 5,
+                slot: 0,
+                name: "ada".into(),
+                laps: 2,
+                finish_ticks: None,
+                best_lap_ticks: None,
+                eliminations: 0,
+            },
+        ],
+    };
+    assert_eq!(
+        seat_line(&member("bob", false), &board, &strings()),
+        "BOB  READY  #1 1.23.50"
+    );
+    assert_eq!(
+        seat_line(&member("ada", true), &board, &strings()),
+        "ADA (HOST)  READY  #5"
+    );
+    assert_eq!(
+        seat_line(&member("cyd", false), &board, &strings()),
+        "CYD  READY",
+        "somebody who did not race has no place"
+    );
+}
+
+#[test]
+fn only_the_owner_is_told_a_confirm_removes_somebody() {
+    let mut snapshot = snapshot_of(3, 8, Phase::Open);
+    snapshot.members[0].name = "ada".into();
+    let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
+    fill_room(&mut screen, &snapshot, true, &strings(), &|_| None);
+    assert!(screen.note(1).is_some_and(|n| n.contains("REMOVE")));
+    assert!(screen.note(2).is_some_and(|n| n.contains("REMOVE")));
+    assert!(screen.note(0).is_some_and(|n| !n.contains("REMOVE")));
+    fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
+    assert!((0..3).all(|seat| screen.note(seat).is_some_and(|n| !n.contains("REMOVE"))));
 }

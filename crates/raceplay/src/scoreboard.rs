@@ -50,6 +50,8 @@ pub struct Row {
     /// Whether this is a player's row: a person flew this craft. Every
     /// person-flown slot has one, so a two-person race marks two.
     pub player: bool,
+    /// The name the person raced under (a network race), `None` where the race knows none.
+    pub name: Option<String>,
 }
 
 impl Row {
@@ -123,6 +125,7 @@ pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
             finish_tick: craft.finish_tick,
             best_lap_ticks: craft.best_lap_ticks,
             player: craft.person,
+            name: None,
         })
         .collect();
     rows.sort_by_key(|row| (row.place, row.slot));

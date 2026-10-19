@@ -30,6 +30,7 @@ pub fn field_rows(board: Option<&Board>) -> Vec<FieldRow> {
                     time_ticks: row.finish_tick,
                     player: row.player,
                     seat: (row.player && board.persons() > 1).then_some(row.slot + 1),
+                    name: row.name.clone(),
                 })
                 .collect()
         })
@@ -50,7 +51,9 @@ pub fn people_rows(board: Option<&Board>, roster: &[String]) -> Option<PeopleRes
             .map(|row| PersonRow {
                 place: row.place,
                 name: if row.player {
-                    PersonName::Player(row.slot + 1)
+                    row.name
+                        .clone()
+                        .map_or(PersonName::Player(row.slot + 1), PersonName::Named)
                 } else {
                     PersonName::Team(roster.get(usize::from(row.slot)).cloned())
                 },
@@ -178,6 +181,29 @@ mod tests {
     }
 
     #[test]
+    fn a_network_race_names_every_person_by_the_name_they_raced_under() {
+        let mut board = two_people();
+        let people: Vec<usize> = (0..board.rows.len())
+            .filter(|&i| board.rows[i].player)
+            .collect();
+        board.rows[people[0]].name = Some("Ada".into());
+        let table = people_rows(Some(&board), &[]).expect("a board");
+        let named: Vec<_> = table.rows.iter().filter(|row| row.person).collect();
+        assert_eq!(named[0].name, PersonName::Named("Ada".into()));
+        assert!(
+            matches!(named[1].name, PersonName::Player(_)),
+            "a person the race has no name for keeps the seat"
+        );
+        let rows = field_rows(Some(&board));
+        assert_eq!(
+            rows.iter()
+                .filter_map(|row| row.name.as_deref())
+                .collect::<Vec<_>>(),
+            ["Ada"]
+        );
+    }
+
+    #[test]
     fn hd_rows_name_a_person_only_when_there_are_several() {
         let rows = field_rows(Some(&two_people()));
         let seats: Vec<_> = rows.iter().filter_map(|row| row.seat).collect();
@@ -227,6 +253,7 @@ mod tests {
                     finish_tick: Some(1234),
                     best_lap_ticks: Some(400),
                     player: false,
+                    name: None,
                 },
                 Row {
                     place: 2,
@@ -235,6 +262,7 @@ mod tests {
                     finish_tick: None,
                     best_lap_ticks: Some(410),
                     player: true,
+                    name: None,
                 },
             ],
             laps_target: Some(3),

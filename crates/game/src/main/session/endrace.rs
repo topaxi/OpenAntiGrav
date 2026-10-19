@@ -73,8 +73,11 @@ impl Session {
         // nothing is announced; the table names every person. Chosen, not
         // measured - the original's split screen is not read beyond the PS2's
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
-        let split = stage.race.viewport_count() > 1;
         let board = stage.race.results().cloned();
+        // A network race is the same: the people in it are the room's, the results are
+        // nobody's record, and the table names every person (by the name they raced under).
+        let split = stage.race.viewport_count() > 1
+            || (self.net.is_some() && board.as_ref().is_some_and(|board| board.persons() > 1));
         // The roster this race drew, slot 0 the player's - read off the race
         // rather than rebuilt, because the draw is seeded and only the race
         // knows its seed (`race::load::roster`).
@@ -518,6 +521,9 @@ impl Session {
             MenuOption::RaceAgain => {
                 // A LAN race ended on its server; a rematch is the lobby's, so the menus come back.
                 if self.net.is_some() {
+                    // An online race also tells its room this person wants another; the
+                    // menus come back to the room either way.
+                    self.online_rematch();
                     self.leave_finished_race();
                     return;
                 }

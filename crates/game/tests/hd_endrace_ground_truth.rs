@@ -232,6 +232,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
             time_ticks: Some(1000),
             player: true,
             seat: None,
+            name: None,
         }],
     };
     let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
@@ -542,6 +543,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
             time_ticks: Some(6000 + u64::from(place) * 60),
             player: place == 5,
             seat: None,
+            name: None,
         })
         .collect();
     let model = oag_ui_screens::endrace::FieldResults {

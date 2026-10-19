@@ -5,6 +5,7 @@
 //! **Ours, chosen, not measured** (Omega's own `Game List` and `GameLobby` are the model for
 //! what is on them, `docs/networking/online-lobby.md`, part 1).
 
+use oag_net::wire::board::Board;
 use oag_net::wire::online::{Member, Phase, RoomInfo, RoomSettings, Snapshot};
 use oag_ui::language::StringTable;
 use oag_ui_screens::join::{Join, Setting};
@@ -142,6 +143,28 @@ pub fn member_line(member: &Member, strings: &StringTable) -> String {
     line
 }
 
+/// A member's line in the room after a race: [`member_line`], then where they came in the room's
+/// last race and in what time (`#2 1.23.45`, or the place alone for a craft that had not
+/// finished). **Chosen, not measured.**
+#[must_use]
+pub fn seat_line(member: &Member, board: &Board, strings: &StringTable) -> String {
+    let mut line = member_line(member, strings);
+    if let Some(row) = board
+        .rows
+        .iter()
+        .find(|row| row.name.eq_ignore_ascii_case(&member.name))
+    {
+        line.push_str(&format!("  #{}", row.place));
+        if let Some(ticks) = row.finish_ticks {
+            line.push_str(&format!(
+                " {}",
+                oag_ui_screens::endrace::draw::format_ticks(u64::from(ticks))
+            ));
+        }
+    }
+    line
+}
+
 /// The most glyphs the line under a room's title holds on the widest face.
 const HINT_GLYPHS: usize = 60;
 
@@ -203,12 +226,28 @@ pub fn fill_room(
     screen.set_seats(
         room.members
             .iter()
-            .map(|m| member_line(m, strings))
+            .map(|m| seat_line(m, &room.board, strings))
             .collect(),
     );
     let info = room_info(&room.settings, strings, track_name);
+    // The owner's cursor on another person says what a confirm does there.
+    let kick = say(
+        strings,
+        "OAG_ONLINE_KICK_HINT",
+        "CONFIRM TO REMOVE THIS PERSON FROM THE GAME",
+    );
     screen.set_notes(
-        room.members.iter().map(|_| Some(info.clone())).collect(),
+        room.members
+            .iter()
+            .enumerate()
+            .map(|(seat, _)| {
+                Some(if open && seat > 0 {
+                    kick.clone()
+                } else {
+                    info.clone()
+                })
+            })
+            .collect(),
         Vec::new(),
     );
     screen.set_hint(room_hint(room, owner, strings));

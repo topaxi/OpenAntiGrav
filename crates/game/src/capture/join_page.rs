@@ -81,6 +81,7 @@ pub(super) fn capture_online(
         &oag_ui::font::Atlas,
     ),
 ) -> (Vec<oag_ui::frontend::Draw>, TickerClip) {
+    use oag_net::wire::board::Board;
     use oag_net::wire::online::{Member, Phase, RoomInfo, RoomSettings, Snapshot};
     const NAMES: [&str; 8] = ["ADA", "BOB", "CYD", "DEE", "EVE", "FAY", "GUS", "HAL"];
     let settings = RoomSettings {
@@ -111,6 +112,7 @@ pub(super) fn capture_online(
                 .collect(),
             phase: Phase::Open,
             note: String::new(),
+            board: Board::default(),
         };
         crate::online_screen::fill_room(&mut screen, &snapshot, true, strings, &|_| None);
         screen

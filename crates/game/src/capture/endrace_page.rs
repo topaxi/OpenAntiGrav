@@ -643,12 +643,14 @@ fn hd_endrace_page(
                         time_ticks: Some(u64::from(seconds_to_ticks(191.76))),
                         player: true,
                         seat: None,
+                        name: None,
                     },
                     oag_ui_screens::endrace::FieldRow {
                         place: 2,
                         time_ticks: Some(u64::from(seconds_to_ticks(203.11))),
                         player: false,
                         seat: None,
+                        name: None,
                     },
                 ],
             };

@@ -497,9 +497,11 @@ fn race_cell_text(
     let entry = model.rows.get(row)?;
     match col {
         0 => Some(entry.place.to_string()),
-        1 => entry
-            .seat
-            .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER"))),
+        1 => entry.name.clone().or_else(|| {
+            entry
+                .seat
+                .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
+        }),
         2 => Some(
             entry
                 .time_ticks
