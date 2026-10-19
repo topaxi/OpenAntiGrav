@@ -423,26 +423,43 @@ hull off its own camera's centre) cannot come back. `reconcile` now accumulates 
 offset for the seat's own craft too and decays it on the same half-life of 6 ticks
 (**chosen**), with the same 20-unit snap: a correction past it (a respawn, a wreck) is
 drawn where it lands, so a real knock-out is never glided. The hash is identical with
-smoothing on and off. A hit is not hidden: the glide moves the *picture* of a position
-the client already predicted and simulated, and contact shake, cues, shield bulges and
-blasts are raised by the simulation, not by this offset. **Left open**: a hit that is
-first seen inside a correction's replay arms no camera shake (the replay is quiet, and
-`settle_presentation` covers cues, blasts and bulges only).
+smoothing on and off.
+
+**A hit is not softened.** The own craft's input is known exactly, so what moves it in a
+correction is an interaction (a contact the guess missed, a weapon), and a hit first
+shown by the correction must not glide. A correction that takes more than 1 shield unit
+off the seat's own craft (`correction::HIT_SHIELD`, ADR-0071's `SHIELD_STEP`,
+**chosen**) draws the craft where it lands, and a smaller loss (contact wear) glides
+(`a_hit_that_first_shows_in_a_correction_is_not_softened`). In the wire runs below such
+corrections are rare: `own hit added` was 2 in 16 client runs of 4 clients (and 0 in the
+four 2-client runs), against 1 to 27 own-craft moves per client. **Left open**: a hit first
+seen inside a correction's replay arms no camera shake (the replay is quiet, and
+`settle_presentation` covers cues, blasts and bulges only), so such a hit is drawn where it
+lands but without the shake it would have had on the predicted timeline.
+
+**What follows the drawn pose.** Read in the view modules, then looked at in the frames:
+the hull (`drawn_model`), the shadow (`body_between`), the exhaust nozzle and its trail
+(`nozzle_of` reads the drawn model matrix) and the camera. `hull_reach` is now measured on
+the drawn pose too. **Still on the simulation's pose, listed rather than fixed**:
+`craft_flash`'s and `damage_fx`'s positions (the smoke following a damaged hull, the
+leach spark), which are discrete events and fire on a hit, where the craft is not gliding.
+The frames at ticks 501 and 504 (read at 960x540) show the hull, its shadow and its engine
+bloom together with no visible separation; a 3-unit offset is a quarter of a craft's width.
 
 **A bug found on the way, fixed in the same change.** The chase camera was advanced
 toward `ships[0]` (and snapped to it) whatever seat the client had, while its view was
 built from the seat's craft. A client in seat 1 had its camera spring toward slot 0.
 On the test grid the eye stood 555 units from seat 1's craft before and 4.5 units after
-(`a_seat_one_camera_follows_seat_one`); `set_seat` now snaps the camera to the seat. View
-only, no hash moves. Whether a real online client in seat 1 showed it is not
+(`a_seat_one_camera_follows_seat_one`); `set_seat` now snaps the camera to the seat when the craft it follows changes (a seat that
+names the craft already followed is no cut). View only, no hash moves. Whether a real online client in seat 1 showed it is not
 established: the 2-person tests ran their screenshots on seat 0.
 
 Frames: `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
 --ticks N --force-remote-correction 480:7:20:own=3 [--no-correction-smoothing]
 --screenshot out.png`, with `own[=UNITS]` new: the server's copy of the player's craft
-is that many units to its right when the correction arrives (the older `contact` scene
-no longer moves the own craft on current `main`: 0.00 units at windows 16 and 20, where
-this page recorded 2.1 and 3.6). The correction is drawn at tick 501. Ticks 500 to 504,
+is that many units to its right when the correction arrives (on this branch the older `contact` scene
+no longer moves the own craft: 0.00 units at windows 16 and 20, where this page recorded
+2.1 and 3.6; the cause was not chased). The correction is drawn at tick 501. Ticks 500 to 504,
 smoothing off (top row) against on (bottom row): off, the view lurches at 501 (the track
 edge, the horizon and the hull all jump sideways and the rival appears at the left edge);
 on, the four frames are one continuous sweep and the hull stays centred. No reference
@@ -538,7 +555,7 @@ remote people's last-input guess, and a smooth hand has fewer big pops (largest 
 to 4.4 against 4.1 to 7.0 with four clean clients) where it replays fewer ticks (1,019 to
 1,101 against 1,186 to 1,242). **Cost per correction** is the replayed ticks over the
 corrections: 7 to 11 ticks, a 100 ms round trip plus the 2 to 5 ticks the server holds.
-**Outliers**: one client saw a missile first appear **137 ticks** (2.3 s) into its flight
+**Outliers**: one client saw a shot (the counter does not say which weapon) first appear **137 ticks** (2.3 s) into its flight
 with the hand at 5 percent loss and 30 ms jitter (2 clients), **152** (4 clients, the
 driver) and **62** (4 clients, the hand): resend waits, the 63 of ADR-0071's table seen
 again and larger. They are the worst late presentations measured: 3 of the 12 client runs
@@ -548,7 +565,8 @@ at 5 percent loss and 30 ms jitter, none at 0 percent loss (30 once, clean), so 
 **Own craft.** "Own craft moved" counts corrections that moved the player's own craft by
 more than 0.05 units: 1 to 25 of 100 to 180 corrections per client, so about one in ten,
 by up to 2.7 units in clean runs and **8.7 units** at 5 percent loss and 30 ms jitter
-with four clients (`own pop max`, twice). Those are the ones the smoothing above is for:
+with four clients (`own pop max`, twice; a second run of the same cells, wall clock and so
+not identical, gave 5.5 clean and 4.4 lossy at most, with 1 to 27 own moves per client). Those are the ones the smoothing above is for:
 3 units is a 12-degree swing without it, and 8.7 is under the 20-unit snap, so it glides.
 
 **What this does not answer.** Whether a real hand on a real pad needs more or fewer

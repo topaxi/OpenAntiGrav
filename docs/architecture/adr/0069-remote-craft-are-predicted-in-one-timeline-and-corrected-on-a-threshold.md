@@ -98,15 +98,17 @@ Where each condition stands. The measurements are in `docs/networking/README.md`
    for seven remote craft (the driver 1.4 / 1.6 / 1.8), 1.08 / 1.22 / 1.50 times the
    simulation, remote error p95 0.7 to 1.9 units. Over the wire the corrections are about
    1.1 to 1.4 a second at 2 clients and 1.7 to 2.0 at 4, whoever flies. The decision's
-   threshold stands. A tail ADR-0071 did not show: a missile first seen 62, 137 and 152
+   threshold stands. A tail ADR-0071 did not show: a shot first seen 62, 137 and 152
    ticks into its flight in 3 of 12 client runs under loss and jitter. A recording of a real
    pad is still the better answer.
 4. **The own craft's correction: answered.** It swung the camera's aim 12 degrees for a
    3-unit correction in one frame. The own craft now takes the correction as a decaying
    offset (half-life 6 ticks, the same snap at 20 units) shared by the hull and the chase
-   camera (`Race::camera_target`); the hash does not know. Own-craft pops are about one
-   correction in ten, up to 2.7 units clean and 8.7 under loss and jitter. A hit first
-   seen inside a replay still arms no camera shake. Found on the way and fixed: the camera
+   camera (`Race::camera_target`); the hash does not know. A correction that takes more
+   than 1 shield unit off the own craft is drawn where it lands, so a hit is not softened.
+   Own-craft pops are about one correction in ten, up to 2.7 units clean and 4 to 9 under
+   loss and jitter. **Except** a hit first seen inside a replay, which still arms no camera
+   shake. Found on the way and fixed: the camera
    of a client seated in slot 1 sprang toward slot 0.
 
 Conditions 2 to 4 are answered with numbers and condition 1 is not, so this ADR stays

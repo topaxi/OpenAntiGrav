@@ -126,7 +126,7 @@ fn race_in_mode(
         "TABLE hand={hand} people={people} loss={} jitter_ms={} rtt_ms={}: \
          corrections {:?}, replayed {:?}, wrong-weapon-state ticks {:?}, \
          pop-in age max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}, \
-         mean error {:?}, largest error {:?}, largest pop {:?}, own craft moved {:?}, own pop max {:?}",
+         mean error {:?}, largest error {:?}, largest pop {:?}, own craft moved {:?}, own pop max {:?}, own hit added {:?}, own hit removed {:?}",
         conditions.loss,
         conditions.jitter.as_millis(),
         conditions.one_way.as_millis() * 2,
@@ -146,6 +146,8 @@ fn race_in_mode(
         totals.iter().map(|t| t.largest_pop).collect::<Vec<_>>(),
         per(|t| t.own_moved),
         totals.iter().map(|t| t.own_pop_max).collect::<Vec<_>>(),
+        per(|t| t.own_hit_added),
+        per(|t| t.own_hit_removed),
     );
     activity
 }

@@ -345,10 +345,12 @@ impl Race {
     /// glide, which carries the camera and its craft together. View-only: nothing
     /// the simulation reads changes.
     pub fn set_seat(&mut self, slot: Option<usize>) {
+        let followed = self.player_slot();
         self.view.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
-        // The camera starts settled on the craft it now follows, as a race start's does.
+        // The camera starts settled on the craft it now follows, as a race start's does; a
+        // seat that names the craft it already follows is no cut.
         #[cfg(feature = "view")]
-        {
+        if self.player_slot() != followed {
             self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
         }
     }

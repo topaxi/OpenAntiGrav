@@ -267,3 +267,30 @@ fn the_own_glide_is_view_only_and_a_snap_is_not_glided() {
     assert_eq!(far.correction_offset_of(0), Vec3::ZERO);
     assert!(turned > 1.0, "a snap is drawn where it lands: {turned}");
 }
+
+/// A hit the client had not predicted is drawn where it lands, however small the move: the
+/// own craft in a correction that took shield off it is not glided, and contact wear (under
+/// [`crate::correction::HIT_SHIELD`]) is.
+#[test]
+fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
+    let drawn_after = |lost: f32| {
+        let Scene {
+            sc,
+            mut client,
+            authoritative,
+        } = scene();
+        client.set_seat(Some(0));
+        // The fixture's craft have no shield pool; give this one a pool of 100.
+        client.sim.world.ships[0].handling.dimensions.shield = 100.0;
+        client.sim.world.ships[0].physics.shield = 90.0;
+        let mut shifted = authoritative;
+        shifted.world.ships[0].handling.dimensions.shield = 100.0;
+        let right = shifted.world.ships[0].physics.body.right();
+        shifted.world.ships[0].physics.body.position += right * 3.0;
+        shifted.world.ships[0].physics.shield = 90.0 - lost;
+        client.reconcile(&shifted, (START..START + WINDOW).map(|t| sc.truth(t)));
+        client.correction_offset_of(0).length()
+    };
+    assert!(drawn_after(0.2) > 2.0, "wear glides");
+    assert_eq!(drawn_after(20.0), 0.0, "a hit is drawn where it lands");
+}
