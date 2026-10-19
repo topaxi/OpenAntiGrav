@@ -25,6 +25,7 @@
 //! [`ClassRace`]: oag_tables::ai_race_stats::ClassRace
 //! [`Controller`]: oag_tables::ai_control_stats::Controller
 
+mod autopilot;
 mod cruise;
 mod field;
 mod lane;
@@ -36,6 +37,7 @@ mod steer;
 mod thrust;
 mod track;
 
+pub use autopilot::{AUTOPILOT_THRUST, Autopilot};
 pub use cruise::{
     CruiseDraws, CruiseState, cruise_thrust, finish_thrust, gap_along_track, zone_multiplier,
     zone_speed,

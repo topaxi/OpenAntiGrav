@@ -6,6 +6,7 @@ fn input(own_lane: f32, lane_tick: bool) -> PlanInput {
         lane_tick,
         contact_sides: 0,
         band: None,
+        player: false,
     }
 }
 

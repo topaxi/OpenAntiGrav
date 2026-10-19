@@ -90,6 +90,27 @@ impl SingleLane {
             let u = rand_unit(rng) * 2.0 - 1.0;
             self.preferred = if u < 0.0 { u * u - 1.0 } else { 1.0 - u * u };
         }
+        self.step(velocity, forward, dt60)
+    }
+
+    /// The player's own driver (the autopilot) on Pure: the lane held at
+    /// the racing line, `0`, and moved there by the same bang-bang. That the
+    /// player's target is `0` is **inherited from Pulse** (`Ai_PlanLane`,
+    /// `0x08855658..0x08855674`), not read on Pure's `0x08919b6c`. The first
+    /// call locates the craft on lane `0`, the state a player driver that has
+    /// held `0` all race is in.
+    pub fn plan_player(&mut self, velocity: Vec3, forward: Vec3, dt60: f32) -> f32 {
+        if !self.located {
+            self.located = true;
+            self.lane = 0.0;
+            self.velocity = 0.0;
+        }
+        self.target = 0.0;
+        self.step(velocity, forward, dt60)
+    }
+
+    /// The bang-bang toward [`Self::target`] and the speed scale on its step.
+    fn step(&mut self, velocity: Vec3, forward: Vec3, dt60: f32) -> f32 {
         let e = self.target - self.lane;
         let v = self.velocity;
         let (a, b) = if 0.0 < e {
