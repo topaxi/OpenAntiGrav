@@ -556,14 +556,14 @@ From here the round trip is about 10 ms.
 
 - **Menu screens: landed** (part 8), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
   lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
-  and size. Open there: kick and the other
+  and size. Kick landed in part 11; open there: the other
   sub-pages Omega has beyond the list (part 9 lists which of them are settings and are done).
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
   race's loading and reconnects to the lobby misses it; it times out at the child and returns.
 - ~~A SIGKILLed lobby orphans its running race child~~ (fixed, part 7).
-- **No kick, no spectators, no chat, no quick match, no invite-only**; Omega has some of them.
+- **No spectators, no chat, no quick match, no invite-only**; Omega has some of them (kick is part 11).
 - **One race slot is per server**, so a second title waits behind the first. The containers shape
   (a game per room on its own port) is the same `Runner` seam with a spawner behind it.
 - **AI fill** (`RaceParams.opponents`) only matters in modes without opponents: the grid is
@@ -719,9 +719,8 @@ rows with the two people marked P1 and P2, laps, best lap, time, "x or escape le
 the one a `--race`-style launch shows (no EndRace screens are built on this path, which has no
 front end); `--net-bot` headless prints the board. The 1280x720 window clips the table's last
 column, which is the results table's own layout. Returning to the room is the
-menus lane's (the `--online` flag path prints `back in the room: REASON`). The lobby's room note
-carries only the reason ("every person has finished"), not the places; carrying the rows in `End` so
-the room screen can show them is open.
+menus lane's (the `--online` flag path prints `back in the room: REASON`). The room note carries
+the reason; the places travel too since part 11 (`End` carries the board, the room screen shows it).
 
 ### The orphaned race child
 
@@ -775,7 +774,7 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 ### Open
 
 - Session takeover still does not re-send a pending hand-off (part 5).
-- The room note carries the reason only; the places are not sent to the lobby.
+- ~~The room note carries the reason only~~ (part 11: the board travels in `End` and the room).
 - The windowed client's return from the results table to the room is the menus lane's: the table
   says "x or escape leaves the race" and the `--online` flag path has no room screen to go back to.
 - Omega's laps slider is 3 to 20; a room here may ask for 1 (chosen, for a short race).
@@ -1091,3 +1090,36 @@ time). **Not in Omega, so ours, chosen.**
   arrives under the same settings.
 - `online_screen/tests.rs`: the seat line, the kick hint for the owner only. `results_tables` and the HD draw list: the
   name in place of `PLAYER n`.
+
+### Walked live (2026-10-19)
+
+Two windowed `oag-game --net-bot` clients (Ada owns the room, Bob joins) on Xvfb `:97` with software Vulkan, a real
+`oag-server lobby` on loopback (lobby 60510, race 60511), one lap each, over the menus as a player sees them: connect (the
+remembered address, certificate and name), CREATE GAME, Track Select, Ship Select, the room (LAPS stepped to 1 with a click),
+JOIN GAME and the room list, START RACE, the race, the end screens, the room again. **Pulse PSP EU** and **HD (PS3 EU)**.
+
+- **The board.** Both clients logged `net: the server's board matches this client's (8 rows)` after every race (Pulse 3 races,
+  HD 3 races), 0 bad hashes. Pulse's end screen after the line is the named table (`RESULTS`, `POS`, `NAME`, `TOTAL RACE TIME`,
+  ADA and BOB on the two highlighted rows, the AI craft by team); HD's is the field grid with `Ada` and `Bob` on the two
+  highlighted rows and the headline `7TH PLACE`. The first Pulse walk showed the PS2's stacked split tables (`4TH PLACE`,
+  `8TH PLACE`, nobody named), which is why a network race no longer takes that route.
+- **A bug the walk found, fixed:** a person who **joined** a room read the end screen's mode (and the team their loyalty is
+  banked for) from their own RACE page instead of the server's race, so on HD the joiner's end screen was
+  `TIME TRIAL COMPLETE!` over a broken table while the owner's was `7TH PLACE`; the room's owner never saw it because their page
+  is the room's. `build_endrace` now reads a network race's mode from the world and its team from the race's roster. The
+  same joiner on the rebuilt binary: `7TH PLACE`, `Ada`, `Bob`.
+- **The room afterwards**: the seats say `#3`, `#6 0.42.73`; the owner's
+  note is `EVERY PERSON HAS FINISHED`, then `... - REMATCH, WAITING FOR: BOB` once the owner asked. The first Pulse still put
+  the time into the `PLAYER n` label on a guest's room screen (the widest face); the line now drops the time first
+  (`SEAT_GLYPHS`).
+- **Rematch**: Ada's RACE AGAIN took her to the room with the rematch armed; Bob's return to the room (RETURN TO MENUS, which
+  is a ready by the rule above) started the second race by itself under the same settings, on Pulse and on HD (a third race
+  after a second joiner). Both clients matched the server's board each time.
+- **Kick**: the cursor on Bob's seat read `CONFIRM TO REMOVE THIS PERSON FROM THE GAME`, a click on it sent the kick, Bob's
+  client showed `THE HOST REMOVED YOU FROM THIS GAME` with BACK, and in JOIN GAME the room was listed dimmed (not joinable)
+  and could not be chosen.
+- **Not walked:** a pad-only kick (the confirm path is the same `Event::Leave` as the click and is read by the pad's
+  `confirm()`, covered by the room form's own tests), Omega and 2048 (the board, the names and the lobby code are title-blind;
+  their end screens read the same `FieldRow`s as HD's, `crates/ui-screens/src/endrace/hd.rs`, **ported, not walked**), Pure
+  (shares Pulse's `PeopleResults`, **ported, not walked**).
+

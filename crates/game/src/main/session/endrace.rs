@@ -55,10 +55,22 @@ impl Session {
             return;
         }
 
-        let mode = race_options.mode;
+        // A network race is the server's: its mode and the team this seat flew are the race's
+        // own, not whatever this machine's RACE page last held (a person who joined a room never
+        // touched the page the room's owner set).
+        let net = self.net.is_some();
+        let mode = if net {
+            stage.race.sim.world.mode()
+        } else {
+            race_options.mode
+        };
         let source = race_options.source.clone();
         let dlc = race_options.dlc.clone();
-        let team = race_options.team.clone();
+        let team = if net {
+            stage.race.slot_teams().get(stage.race.player_slot()).cloned()
+        } else {
+            race_options.team.clone()
+        };
         let campaign = stage.campaign_cell.is_some();
         // The actual title package, not the display name above - what
         // `oag_game::endrace::load`'s own title dispatch needs, and what

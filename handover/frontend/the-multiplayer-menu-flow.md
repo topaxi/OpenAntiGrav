@@ -44,7 +44,8 @@ and SPLIT SCREEN rows) with one flow on every title.
 7. **Track Select**, then **Ship Select** per seat, then the race.
 
 **Quick paths**: race again and change track from the end screens skip 3 to 5. A fresh entry
-pre-fills every step, so it is OK, OK, OK.
+pre-fills every step, so it is OK, OK, OK. **Online (2026-10-19):** RACE AGAIN on a network race's end screen asks the room for a
+rematch (`docs/networking/online-lobby.md` part 11); changing the track is the room's own ROOM SETTINGS row, not a second path.
 
 ## Landed (`mp-menu-flow`, 2026-10-14)
 
@@ -89,8 +90,8 @@ the room list, the room), the race, and back to the room. Walk-through, notices 
 
 - **LAN, open** (`lan-menu`): two physical
   machines on a real network (broadcast, a firewall, UDP 4434 and 4435); split screen on a LAN client (the address keyboard now has the colon and brackets, untried against a real LAN host);
-  the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen (it returns to the
-  menus today); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
+  the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen on a LAN race (it returns to the
+  menus today; online has one, part 11); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
 
 - ~~**A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).~~ **Done on X11 and
   Windows** (`Device::Keys`, a row per keyboard); **open on Wayland and macOS**, which name no keyboard, so a join *row* is
