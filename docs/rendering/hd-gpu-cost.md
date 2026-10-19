@@ -232,9 +232,13 @@ in the profile. That is a separate, smaller cost and was left alone.
 only, Xwayland 1280x800), so the docked case was not re-run. The removed read is CPU work
 that does not depend on the resolution, so the 4K start window should lose the same frame. In
 the 2026-10-14 first line, about 490 ms of the first second sat outside `cpu_ms`, against
-about 210 ms on the panel. Part of that is not accounted for, so expect the 4K start to
-read about 60 fps (the third line's level), not the 78 fps mean.
+about 210 to 240 ms on the panel. That leaves about 250 ms unattributed. If it is a second
+one-off, the 4K first line reads about 45 fps after the fix (about 45 frames of 16.7 ms in
+the 750 ms left), and only if it also goes does it reach about 60 (the third line's level).
+A first line in the 40s on a TV run is that remainder, not a failed fix.
 
-**The scout's two small CPU items were not in the profile.** Bind groups rebuilt each frame in
-the post passes, and the empty shadow clears: the steady race's main thread was about 43 % busy
-and waiting on vsync, and neither showed among its samples. Both are left open.
+**The scout's two small CPU items could not be judged from this profile.** Bind groups rebuilt
+each frame in the post passes, and the empty shadow clears. The steady race's main thread was
+about 43 % busy and waiting on vsync at 90 fps, so neither limits the panel. But only 64 of the
+1,613 main-thread samples from 5.6 to 15 s unwound past 8 frames at `-F 400`, so the absence of
+`create_bind_group` in those stacks proves nothing. Both are left open.

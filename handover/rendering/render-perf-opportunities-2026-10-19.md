@@ -27,8 +27,9 @@ Worth a lane now, in order:
    synchronous soundtrack listing read on the first audio tick on `--race` and on a race
    resumed from the menus, held for two lines by the frame log's 120-frame mean. Fixed in
    `oag-sound` (`MusicDiscs` keeps listings). Numbers and evidence:
-   [hd-gpu-cost.md](../../docs/rendering/hd-gpu-cost.md), last section. Items 2 and 3 did not
-   show in that Deck profile (main thread about 43 % busy, vsync bound at 90 fps on the panel).
+   [hd-gpu-cost.md](../../docs/rendering/hd-gpu-cost.md), last section. Items 2 and 3 could not
+   be judged from that profile (64 of 1,613 steady samples unwound deeply); the panel is vsync
+   bound at 90 fps with the main thread about 43 % busy, so neither limits it there.
 
 2. **Default-path post passes create a bind group every frame.** The perf probe counts these
    (`crates/gpu/src/perfprobe.rs:153` `bind_group`), so the count is available with no new code.
