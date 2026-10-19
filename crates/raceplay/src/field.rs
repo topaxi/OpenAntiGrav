@@ -264,7 +264,11 @@ impl Race {
         }
         let now = timer - self.sim.dt;
         self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
-        if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
+        // The announcer speaks to a person; an opponent's stint is silent.
+        if now < AUTOPILOT_WARNING_SECONDS
+            && timer > AUTOPILOT_WARNING_SECONDS
+            && self.sim.world.person_flown(slot)
+        {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Disengaging,
                 slot,

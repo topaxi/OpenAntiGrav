@@ -143,6 +143,8 @@ fn sweep(
 ) -> Vec<(Branch, Branch)> {
     let mut pairs = Vec::new();
     let mut natural = 0u32;
+    let mut absorb = 0.0;
+    let mut window_ticks = 0;
     for seed in seeds {
         let Some(mut race) = load(image, track, class, difficulty, seed) else {
             return pairs;
@@ -160,6 +162,11 @@ fn sweep(
             return pairs;
         };
         let stint = (time * 60.0).round() as u64;
+        window_ticks = stint + TAIL;
+        absorb = race
+            .weapon_stats()
+            .and_then(|w| w.absorb(oag_tables::weapons::Weapon::Autopilot))
+            .unwrap_or(0.0);
         race.set_autopilot(true);
         let count = race.sim.world.ship_count as usize;
         let mut held = [false; 8];
@@ -246,15 +253,18 @@ fn sweep(
     let n = pairs.len();
     let window_mean_a: f32 = pairs.iter().map(|(a, _)| a.window).sum::<f32>() / n as f32;
     let ms = median(&mut stint);
+    let speed = window_mean_a / (window_ticks as f32 / 60.0);
     let mw = median(&mut window);
     println!(
-        "SUMMARY {image} {track:?} {class} {difficulty} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} | wall A {wall_a} B {wall_b} | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} B {shield_b:+.1}",
+        "SUMMARY {image} {track:?} {class} {difficulty} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} = {:+.2} s | wall A {wall_a} B {wall_b} | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} (absorbing {:+.1}) B {shield_b:+.1}",
         stint[0],
         stint[n - 1],
         window[0],
         window[n - 1],
         window[n / 4],
         window[3 * n / 4],
+        mw / speed,
+        shield_a + absorb,
     );
     pairs
 }
@@ -300,15 +310,14 @@ fn title(image: &str, tracks: &[Option<&str>]) {
 #[test]
 #[ignore = "a scratch sweep: set OAG_SWEEP=1"]
 fn pulse() {
-    title(
-        "pulse-psp-usa.chd",
-        &[
-            Some(r"Data\Environments\01_Track\track.vex"),
-            Some(r"Data\Environments\05_Track\track.vex"),
-            Some(r"Data\Environments\10_Track\track.vex"),
-            Some(r"Data\Environments\14_Track\track.vex"),
-        ],
-    );
+    let tracks: Vec<String> = [
+        "01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16",
+    ]
+    .iter()
+    .map(|id| format!(r"Data\Environments\{id}_Track\track.vex"))
+    .collect();
+    let tracks: Vec<Option<&str>> = tracks.iter().map(|t| Some(t.as_str())).collect();
+    title("pulse-psp-usa.chd", &tracks);
 }
 
 #[test]
@@ -320,7 +329,15 @@ fn pure() {
 #[test]
 #[ignore = "a scratch sweep: set OAG_SWEEP=1"]
 fn hd() {
-    title("hdfury-ps3-eu-dec.iso", &[None]);
+    title(
+        "hdfury-ps3-eu-dec.iso",
+        &[
+            Some("/data/environments/12_sol_2/track.vex"),
+            Some("/data/environments/talons_junction/track.vex"),
+            Some("/data/environments/05_ubermall/track.vex"),
+            Some("/data/environments/amphiseum/track.vex"),
+        ],
+    );
 }
 
 #[test]
@@ -333,4 +350,172 @@ fn omega() {
 #[ignore = "a scratch sweep: set OAG_SWEEP=1"]
 fn vita_2048() {
     title("data/test-vpk/2048-PCSF00007-dlc1.vpk", &[None]);
+}
+
+/// One whole race's field, opponents only.
+#[derive(Debug, Default)]
+struct Field {
+    /// Mean finishing tick of the opponents that finished.
+    finish: f32,
+    /// Opponents that finished.
+    finished: u32,
+    /// Mean lap time in ticks over every completed opponent lap.
+    lap: f32,
+    /// Wall-contact ticks, respawns and wrecks over the field.
+    wall: u32,
+    respawns: u32,
+    wrecked: u32,
+    /// Mean field shield at each lap's start (lap 2 on), and at the end.
+    shield_per_lap: Vec<f32>,
+    shield_end: f32,
+    /// Autopilot stints flown (rising edges of an opponent's timer).
+    stints: u32,
+}
+
+fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
+    race.set_opponent_autopilot(on);
+    race.set_autopilot(true);
+    let count = race.sim.world.ship_count as usize;
+    let mut out = Field::default();
+    let mut timer = [0.0f32; 8];
+    let mut lap = [0u32; 8];
+    let mut lap_started = [0u64; 8];
+    let mut laps: Vec<u64> = Vec::new();
+    let mut finish = [None; 8];
+    let mut shield_sum: Vec<(f32, u32)> = Vec::new();
+    for tick in 1..=16_000u64 {
+        race.tick_sim_only(&PlayerInputs::none());
+        for slot in 1..count {
+            let ship = &race.sim.world.ships[slot];
+            if ship.autopilot_timer > timer[slot] {
+                out.stints += 1;
+            }
+            timer[slot] = ship.autopilot_timer;
+            let now = ship.standing.lap;
+            if now != lap[slot] {
+                if lap[slot] > 0 {
+                    laps.push(tick - lap_started[slot]);
+                    let k = lap[slot] as usize - 1;
+                    if shield_sum.len() <= k {
+                        shield_sum.resize(k + 1, (0.0, 0));
+                    }
+                    shield_sum[k].0 += ship.physics.shield;
+                    shield_sum[k].1 += 1;
+                }
+                lap[slot] = now;
+                lap_started[slot] = tick;
+            }
+            if finish[slot].is_none() && ship.standing.finished() {
+                finish[slot] = Some(tick);
+            }
+        }
+        if (1..count).all(|s| {
+            finish[s].is_some()
+                || race.sim.world.ships[s].physics.craft_state != oag_physics::CraftState::Racing
+        }) {
+            break;
+        }
+    }
+    for slot in 1..count {
+        out.wall += race.wall_contact_ticks_of(slot);
+        out.respawns += race.respawns_of(slot);
+        let ship = &race.sim.world.ships[slot];
+        if ship.physics.craft_state != oag_physics::CraftState::Racing && finish[slot].is_none() {
+            out.wrecked += 1;
+        }
+        out.shield_end += ship.physics.shield / (count - 1) as f32;
+    }
+    let done: Vec<u64> = finish[1..count].iter().flatten().copied().collect();
+    out.finished = done.len() as u32;
+    out.finish = done.iter().sum::<u64>() as f32 / done.len().max(1) as f32;
+    out.lap = laps.iter().sum::<u64>() as f32 / laps.len().max(1) as f32;
+    out.shield_per_lap = shield_sum.iter().map(|(s, n)| s / (*n).max(1) as f32).collect();
+    out
+}
+
+/// Whole races, switch off then on, same seed: the field's lap and finish
+/// times, walls, respawns, wrecks and shield.
+fn races(image: &str, tracks: &[Option<&str>]) {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string());
+    for difficulty in difficulties() {
+        for track in tracks {
+            let mut lap_delta = Vec::new();
+            let mut finish_delta = Vec::new();
+            for seed in 1..=seeds() {
+                let Some(mut off) = load(image, *track, &class, difficulty, seed) else {
+                    return;
+                };
+                let Some(mut on) = load(image, *track, &class, difficulty, seed) else {
+                    return;
+                };
+                let a = whole_race(&mut off, false);
+                let b = whole_race(&mut on, true);
+                println!(
+                    "RACE {image} {track:?} {difficulty} seed {seed} | off lap {:.1}s finish {:.1}s ({}) wall {} resp {} wrecked {} shield/lap {:.1?} end {:.1} | on lap {:.1}s finish {:.1}s ({}) wall {} resp {} wrecked {} shield/lap {:.1?} end {:.1} stints {}",
+                    a.lap / 60.0,
+                    a.finish / 60.0,
+                    a.finished,
+                    a.wall,
+                    a.respawns,
+                    a.wrecked,
+                    a.shield_per_lap,
+                    a.shield_end,
+                    b.lap / 60.0,
+                    b.finish / 60.0,
+                    b.finished,
+                    b.wall,
+                    b.respawns,
+                    b.wrecked,
+                    b.shield_per_lap,
+                    b.shield_end,
+                    b.stints,
+                );
+                lap_delta.push((b.lap - a.lap) / 60.0);
+                finish_delta.push((b.finish - a.finish) / 60.0);
+            }
+            let n = lap_delta.len();
+            let ml = median(&mut lap_delta);
+            let mf = median(&mut finish_delta);
+            println!(
+                "RACESUM {image} {track:?} {difficulty} n {n} lap on-off median {ml:+.2}s [{:+.2}, {:+.2}] finish median {mf:+.2}s [{:+.2}, {:+.2}]",
+                lap_delta[0],
+                lap_delta[n - 1],
+                finish_delta[0],
+                finish_delta[n - 1]
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn races_pulse() {
+    let tracks: Vec<String> = [
+        "01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16",
+    ]
+    .iter()
+    .map(|id| format!(r"Data\Environments\{id}_Track\track.vex"))
+    .collect();
+    let tracks: Vec<Option<&str>> = tracks.iter().map(|t| Some(t.as_str())).collect();
+    races("pulse-psp-usa.chd", &tracks);
+}
+
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn races_others() {
+    races("pure-psp-usa.chd", &[None]);
+    races(
+        "hdfury-ps3-eu-dec.iso",
+        &[
+            Some("/data/environments/12_sol_2/track.vex"),
+            Some("/data/environments/talons_junction/track.vex"),
+            Some("/data/environments/05_ubermall/track.vex"),
+            Some("/data/environments/amphiseum/track.vex"),
+        ],
+    );
+    races("omega-ps4-eu.pkg", &[None]);
+    races("data/test-vpk/2048-PCSF00007-dlc1.vpk", &[None]);
 }
