@@ -360,7 +360,9 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
         seed: Some(1),
-        weapons_override: std::env::var_os("OAG_SWEEP_WEAPONS").is_none().then_some(false),
+        weapons_override: std::env::var_os("OAG_SWEEP_WEAPONS")
+            .is_none()
+            .then_some(false),
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
@@ -386,12 +388,41 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         {
             out.lateral.push(autopilot.driver.rail.lateral.abs());
             out.blend.push(autopilot.driver.rail.blend);
-            out.speed
-                .push(race.sim.world.ships[0].physics.body.linear_velocity.length());
+            out.speed.push(
+                race.sim.world.ships[0]
+                    .physics
+                    .body
+                    .linear_velocity
+                    .length(),
+            );
+        }
+        if std::env::var_os("OAG_SWEEP_TRACE").is_some() {
+            let ship = &race.sim.world.ships[0];
+            let rail = race.original_autopilot(0).map(|a| a.driver.rail);
+            if race.sim.world.tick % 2 == 0 || race.respawns_of(0) != out.respawns {
+                println!(
+                    "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}]",
+                    race.sim.world.tick,
+                    ship.physics.body.position,
+                    ship.physics.body.linear_velocity.length(),
+                    ship.physics.grounded,
+                    rail.map(|r| r.lateral),
+                    rail.map(|r| r.blend),
+                    race.respawns_of(0),
+                    race.last_respawn_cause_of(0),
+                    ship.physics.thrust,
+                    ship.physics.brake,
+                    ship.physics.steer,
+                    ship.physics.airbrake_left,
+                    ship.physics.airbrake_right
+                );
+            }
+            out.respawns = race.respawns_of(0);
         }
         if race.sim.world.ships[0].standing.lap != lap {
             lap = race.sim.world.ships[0].standing.lap;
-            out.shield_per_lap.push(race.sim.world.ships[0].physics.shield);
+            out.shield_per_lap
+                .push(race.sim.world.ships[0].physics.shield);
         }
         if race.sim.world.ships[0].standing.finished() {
             out.finish = Some(race.sim.world.tick);

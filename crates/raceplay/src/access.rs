@@ -303,11 +303,9 @@ impl Race {
         self.sim.rolls_spent.get(slot).copied().unwrap_or(0.0)
     }
 
-    /// How many ticks an **opponent** has spent touching a wall this race.
-    ///
-    /// Slot 0 is structurally always zero, the same way
-    /// [`Self::rolls_armed_of`] is: the player's craft is stepped by
-    /// `Race::tick` and only `Race::step_opponents` counts. See
+    /// How many ticks a craft has spent touching a wall this race: an opponent's
+    /// from `Race::step_opponents`, a person's (the autopilot's included) from
+    /// `Race::step_player`. See
     /// [`oag_raceplay::RaceSim::wall_contact_ticks`] for why this counts
     /// contacts rather than inbound impacts, and why a contact here is a wall
     /// by construction rather than by a geometric test on the normal.
@@ -325,7 +323,7 @@ impl Race {
         self.sim.wall_inbound_ticks.get(slot).copied().unwrap_or(0)
     }
 
-    /// What those contacts **charged** an opponent, in shield-pool units.
+    /// What those contacts **charged** a craft, in shield-pool units.
     ///
     /// Charged, not lost: a craft already at zero is charged the same and loses
     /// nothing. Read it beside the end-of-run pool.
@@ -334,7 +332,7 @@ impl Race {
         self.sim.wall_damage.get(slot).copied().unwrap_or(0.0)
     }
 
-    /// How many ticks an opponent was still racing - the denominator
+    /// How many ticks a craft was still racing - the denominator
     /// [`Self::wall_contact_ticks_of`] and [`Self::wall_shield_charged_of`] are
     /// counted over. A wrecked craft is released and keeps being integrated, so
     /// a row that died early covers fewer ticks than one that finished.

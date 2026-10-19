@@ -12,6 +12,9 @@ frame inside `Ai_SnapToLane` (`0x088542e4`) for the player's driver, right after
   racer's position copy (`racer+0x260+0x30`, what the rail reads);
 - the rail's blend and time (`driver+0x48`, `+0x4c`) and the smoothed speed
   (`driver+0x170`);
+- the driver's control record (`driver+0x08`: steer, thrust, left and right
+  airbrake, pitch), the craft's ground fraction (`craft+0x2b0`) and the
+  controls the craft consumed (`craft+0x2b8..`);
 - the body's contact count (`body+0x370`, the previous world step's) and each
   contact's 64-byte record (`body+0x170 + i * 0x40`), the records
   `FUN_088418e0`'s contact loop walks.
@@ -195,7 +198,10 @@ def main():
                        "flags1c0": dbg.read_u32(p["craft"] + 0x1C0),
                        "blend_1d4": f32s(dbg, p["craft"] + 0x1D4, 1)[0],
                        "timer": f32s(dbg, p["record"] + AUTO_TIMER, 1)[0],
-                       "contacts": contacts}
+                       "contacts": contacts,
+                       "controls": f32s(dbg, p["driver"] + 0x08, 5),
+                       "grounded": f32s(dbg, p["craft"] + 0x2B0, 1)[0],
+                       "craft_controls": f32s(dbg, p["craft"] + 0x2B8, 5)}
                 if 0 < contacts <= 8:
                     raw = dbg.read(p["body"] + 0x170, 0x40 * contacts)
                     row["contact_records"] = [
