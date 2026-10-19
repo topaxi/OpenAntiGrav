@@ -217,7 +217,7 @@ are in [weapon-stats.md](../formats/weapon-stats.md#the-race-tables-compared-acr
 ### AI use and fire law
 
 Every title's opponents fire the **same code**: `oag_ai::weapon_ai`, which is
-Pulse's `WeaponAi_DecideFireOrAbsorb` fire half (`0x088518b4`, confidence 85,
+Pulse's `WeaponAi_DecideFireOrAbsorb`, fire and absorb halves (`0x088518b4`, confidence 85,
 [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)), on the title's
 own `WeaponAIstats.xml` odds. HD's loader for that file is read (85,
 [weapon-ai-stats.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-stats.md)); **no
@@ -227,12 +227,12 @@ whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Law that decides to fire | M: fire half ported; absorb half read, taken back out (decision cadence unconfirmed) | I:Pulse; own odds | I:Pulse; own odds, an `AllWeapons` row and an `EliminatorAIStats` row parsed and not consumed | I:Pulse; own odds | I:Pulse; own odds |
-| Rocket, Missile, Plasma, Shuriken, Repulser, LeachBeam | M: aimed, fired on the law's roll | I:Pulse (those it has) | I:Pulse | I:Pulse | I:Pulse |
-| Quake | M: rolled, not aimed | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
+| Law that decides to fire | M: both halves ported, fire and absorb, once a tick (the cadence read 2026-10-19: `AiManager_Update` calls every `WeaponAi_Update` once a world step, [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-decision-cadence-every-call-confidence-85)) | I:Pulse; own odds | I:Pulse; own odds, an `AllWeapons` row and an `EliminatorAIStats` row parsed and not consumed | I:Pulse; own odds | I:Pulse; own odds |
+| Rocket, Missile, Plasma, Shuriken, Repulser, LeachBeam | M: aimed, fired or absorbed on the law's rolls | I:Pulse (those it has) | I:Pulse | I:Pulse | I:Pulse |
+| Quake | M: rolled, not aimed; absorbed on the same law | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Cannon | ?: the original flags it a forward weapon, the port does not aim it (`opponent_fires`; see `Driver::holds_fire`) | A | ? | ? | ? |
 | Mine, Bomb | C: laid by `Driver::wants_to_drop`, not the original's law | C | C | C | C |
-| Turbo | C: fired on a clear straight | C | C | C | C |
+| Turbo | C: fired when the plan and the corner model allow `speed + 220` over the boost (`Driver::affords_boost`); the original fires it on the roll alone, no gate ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-turbo-has-no-gate-in-the-original)). The 220 is chosen on Pulse physics only | C: Pulse's gate, unmeasured on Pure physics | C: same | C: same | C: same |
 | Shield | C: absorbed, never raised | C | C | C | C |
 | Autopilot | M: never fired in a race: `WeaponAi_Update`'s default arm leaves the fire index at `0` and `g_weapon_ai_rate[0]` is `0` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)); in an Eliminator the index becomes `1` and the authored row (`useAgainstAI 1.2`) gives `0.012` a decision, its effect on an opponent unread. The port absorbs it at once (C) | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Disruptor | A | C: opponents never fire it (not in `opponent_fires`' forward list) | A | A | A |

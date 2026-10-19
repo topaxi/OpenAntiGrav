@@ -77,7 +77,7 @@ zeroes. The object is `0x68` bytes from the non-zeroing `operator new`.
 **Superseded heading**: this section was "It decides four times a second, not
 every frame". The 2026-10-03 pass found the second instruction-level fact that
 settles which way the paragraphs below lean - see
-[the decision cadence](#the-decision-cadence-every-call-confidence-65) - and the
+[the decision cadence](#the-decision-cadence-every-call-confidence-85) - and the
 port runs every tick. The original text is kept for its evidence.
 
 `WeaponAi_Update` accumulates `dt` into `+0x30` and does nothing until it
@@ -235,14 +235,42 @@ and every craft fires or absorbs at random. Dead on any real machine; recorded
 because it is a second, simpler code path a future capture could mistake for the
 real one.
 
-## The absorb half, tried and reverted (2026-10-19)
+## The absorb half, re-landed (2026-10-19)
 
-The absorb half of [the decision](#the-decision) was ported (absorb index from
-the `FUN_088509e4` shield tiers, the 15 s hold and nobody inside 300 ahead;
-`rate[+0x34] * absorb` after 0.2 s held) and reverted the same day. It moved
-11 lone-craft cells of `ai_clean_lap_gate` by freeing a craft's pickup slot
-for a Turbo that this project's own Turbo policy fires into walls, and the
-cadence it rolls at is not settled (see the section above). Still open.
+The absorb half of [the decision](#the-decision) is ported for the forward
+weapons (`oag_ai::weapon_ai::Decision::Absorb`): absorb index from the
+`WeaponAi_BiasAbsorbByShield` shield tiers, the 15 s hold and nobody inside
+300 ahead; `rate[+0x34] * absorb` after 0.2 s held, on a failed fire roll. It
+was ported and reverted the same day once (commits `3b631f07a`, `4963adbfa`):
+it moved 11 lone-craft cells of `ai_clean_lap_gate` and the de Konstruct
+gates by freeing a craft's slot for a Turbo this project's Turbo gate fired
+into walls, and its cadence was open. Both are settled: the cadence is
+[every call](#the-decision-cadence-every-call-confidence-85), and the Turbo
+gate is fixed ([below](#the-turbo-has-no-gate-in-the-original)). What still
+moves, and why, is on [`ai.md`](../../../gameplay/ai.md#the-absorb-half-re-landed).
+
+## The Turbo has no gate in the original
+
+Read 2026-10-19 (lane `ai-absorb-turbo`), decompile, confidence **85**: the
+whole path from the decision to the boost tests nothing about the track.
+
+- `WeaponAi_ScoreTurbo` (`0x08850c6c`) calls `WeaponAi_BiasAbsorbByShield`
+  and sets the fire index `+0x38` to `3`, or `2` when `+0x5c` is between 0
+  and 300. `+0x5c` is dead (above), so `3`.
+- The Turbo is flagged ahead and behind and is not aimed (`+0x58` clear), so
+  [the decision](#the-decision) fires it on `rate[3] * use` after 0.8 s held,
+  `use` being `useAgainstPlayer` with the player within 150 ahead or 200
+  behind and `useAgainstAI` otherwise. No predicted-path test.
+- `Weapon_RequestFire` (`0x08862d9c`) case 4 sets bit `0x400` and nothing
+  else.
+- `Turbo_Fire` (`0x088614c4`) sets `0x200`, stores the class `time`
+  (`WeaponStats+0x84`) at `craft+0x14c`, clears the held weapon and calls the
+  exhaust flare. No test.
+
+So this project's Turbo gate (`oag_ai::Driver::affords_boost`, its peak
+`speed + 220`) is **chosen, not measured**. It exists because this project's
+own driver cannot lift off a boost it fired into a corner. Not read: whether
+the original driver's own thrust law compensates during a boost.
 
 ## What is still open
 
@@ -297,7 +325,7 @@ a craft sits on a pickup. **Corrected 2026-10-03:** it gains the frame's
 `dt` per decision, not `0.25` - the page said "four steps of roughly `0.25` a
 second", which the listing does not support (`param_1 = +0x2c + param_1`, with
 `param_1` the frame time). Read with the never-reset `+0x30`, that makes it
-real held seconds; see [the decision cadence](#the-decision-cadence-every-call-confidence-65). The `> 0.8`
+real held seconds; see [the decision cadence](#the-decision-cadence-every-call-confidence-85). The `> 0.8`
 and `> 0.2` comparisons in the decision are therefore **hold-times in
 seconds**, not thresholds on a normalised scale: an opponent will not even
 roll to fire until it has held the weapon for about 0.8 s, and not roll to
@@ -596,7 +624,7 @@ So:
 - **`+0x5c` is dead.** The scan writes `0.0` before every setup, so Turbo's
   `+0x38` is always `3` after the first decision. Confidence 80.
 
-### The decision cadence: every call, confidence 65
+### The decision cadence: every call, confidence 85
 
 Two instruction-level facts agree:
 
@@ -607,11 +635,26 @@ Two instruction-level facts agree:
    225 s of real holding.
 
 So the decision runs on **every call** after the first quarter-second,
-confidence 80. That the call is once a frame rests on the stored vtable slot
-(`0x08aca29c`, its walker not located) and on racing presenting at about
-59.94 Hz ([ADR-0007](../../../architecture/adr/0007-fixed-timestep-vs-original.md)),
-so **65** combined. A live hit count on `0x088518b4` against frames in a
-Single Race on PPSSPP would settle it.
+confidence 80.
+
+**The caller, read 2026-10-19** (lane `ai-absorb-turbo`), at instruction level:
+
+- `FUN_08834d58`, called from `FUN_0883e820` for every AI craft (`"AI input
+  %d"`), allocates the `0x68`-byte object, runs `WeaponAi_Construct` and
+  appends it to the AI manager `DAT_08b34358` at `mgr+0x78[mgr+0x74++]`.
+- `WeaponAi_Construct` stores `0x08aca288` at `+0x64` (`param_1[0x19]`). In
+  the image, `0x08aca298` holds a `0` adjust and `0x08aca29c` holds
+  `0x08851550`, `WeaponAi_Update`.
+- `AiManager_Update` (`0x08834b14`) ends with a loop at
+  `0x08834bf0..0x08834c34` over `mgr+0x74` objects: `lw a1,0x64(a0)`,
+  `addiu a1,a1,0x10`, `lh a2,0x0(a1)`, `lw a1,0x4(a1)`, `jalr a1` with `f12`
+  the frame's `dt`. Nothing gates it: every `WeaponAi_Update`, once per
+  `AiManager_Update`.
+- `AiManager_Update` runs once per world step, measured live on PPSSPP
+  (confidence 90, [ai-controls.md](ai-controls.md#where-aimanager_update-sits-in-the-frame-measured-2026-10-12)).
+
+So a decision every world step after the first quarter-second: confidence
+**85**, the lower of the `+0x30` read and the live step count.
 
 ### What is ported, and what is chosen
 
@@ -621,16 +664,18 @@ odds out of `WeaponAIstats.xml` (`oag_tables::weapons::ai`, through
 `oag_title::weapons::Weapons::ai`). Everything above is read; these are
 **chosen, not measured**:
 
-- one decision a tick from the first tick, the clocks in 60 Hz ticks (`0.8` s
-  is 48);
+- one decision a tick **from the first tick**, not from 0.25 s after the
+  object is built (the cadence itself is read, above), the clocks in 60 Hz
+  ticks (`0.8` s is 48);
 - `+0x44` and `+0x4c` taken as `0`;
 - a craft not in `CraftState::Racing` does not fire (the original's guard,
   `entity + 0xae4`, is not read);
 - the gaps from `Standing::distance`, folded by the course length, over every
   active craft;
 - two `oag_ai` noise streams for the two draws;
-- the Cannon (its fire byte reaches nothing), Mine, Bomb, Turbo and the absorb
-  half stay on this project's own rules.
+- the Cannon (its fire byte reaches nothing), Mine, Bomb and Turbo stay on
+  this project's own rules; the absorb half is ported since 2026-10-19, see
+  [below](#the-absorb-half-re-landed-2026-10-19).
 
 **Measured** (parked player, `16_Track`, seeds 1 to 240, Venom): time to five
 kills median **108 s -> 75 s** (17 to 232 s -> 17 to 154 s), field kill rate
