@@ -468,16 +468,29 @@ not seen), the three audio levels (`shield_is_up`, `craft_is_exploding`, `autopi
 reading slot 0, and the view-only readers of `primary_slot` (the first person, which is slot 0 on every
 network client): the weapon-hit shake, the destroyed-craft shake cancel and blast shake, the
 PLAYER_DESTROYED flash, the reset flash, the destroy camera (a seat-1 client's wreck camera never
-started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seat_one_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
-**Still on slot 0 on a seat-1 client, open**: the wall-contact effects of `Race::tick`
-(`advance_contact_fx`: the collision sparks, the wall shake and the contact sounds) run on the
-`evaluated` step of `primary_slot`, so a seat-1 client shakes on slot 0's wall hits and not its own.
-The sparks and the shake there are view state and could move to the seat on their own; the contact
-sound goes through `raise_contact_cue`, whose cooldown is hashed per-slot state (the quiet path
-advances slot 0's), so that part needs a hash check. Also still on `primary_slot` and unlooked-at:
-the countdown cue's slot, the weapon reticle, and `sight_screen_of`. Split screen and local multi-window seats do not take
-this path: `player_slot` is the primary slot there and every other seat is an extra viewpoint
-(`set_viewpoint`), which reads its own slot throughout.
+started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seated_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
+**The wall-contact effects follow the seat too** (2026-10-19, `seat1-contact-fx`). `advance_contact_fx`
+(collision sparks, wall shake, the shield-up edge) ran on `primary_slot`'s step and read `ships[0]`, a literal
+`ship_model_matrix()` and a literal slot 0 in its cues; it now takes the seat's slot and step
+(`player_slot`, falling back to the primary when the seat is not person-flown). The contact *sound* is
+raised for every person-flown slot in slot order, drawn tick or replayed tick alike
+(`raise_contact_cue(slot, ..)`, each with its own `shielded`), so which seat a machine holds cannot change
+which cooldowns tick; `contact_cue_cooldown` is **not** in `state_hash` (`RaceSim::contact_cue_cooldown`'s
+doc comment, and `hash.rs` does not name it), so no hash can move, and a one-person race flies slot 0 alone
+and runs as before. A second local person (split screen, multi-window) now also sounds their own wall hits,
+which they did not before; their sparks and shake stay unwired (local seats draw through `set_viewpoint`
+and the contact fx there still follow the primary view, open). Also moved to the seat: the countdown voice's
+cue slot, the Missile and Leach reticle (`update_sight`, `sight_screen_of`, the sight screen fit; a seated
+client skips the per-slot split-screen reticles), the zone announcements and run statistics gate
+(`advance_player_rules`), the wreck-ended tick, the boost FOV kick, the airbrake flaps, and the engine
+crossfade's throttle in `oag_game::sound::race_tick` (it read `ships.first()`). Tests, each failing with its
+read put back: `a_seated_client_gets_its_own_wall_sparks_shake_and_sound` (seats 1 to 3 of four people),
+`a_seated_client_is_not_shaken_by_another_slots_wall`, `the_contact_cue_cadence_does_not_depend_on_the_seat`,
+`the_start_voice_is_the_seats`, `a_seated_reticle_is_drawn_for_the_seats_weapon`,
+`the_boost_kick_and_the_flaps_follow_the_seats_craft` (`tests/seat_view.rs`). Not tested: the zone
+announcement gate, the wreck-ended tick and the engine throttle. On a real `--people 2` loopback run the
+seat-1 client's still two ticks after its own wall hit shows the sparks at its own craft's wing, the view
+tilted by the shake and the shield bar red; the tick before shows neither. Every seat, not only 1: the seat tests run seats 1 to 3 of four people, the camera test all four seats against every other craft, and on an `oag-server --people 4` loopback run with four `--net-bot` clients the seat-2 client's still eight ticks after its own wall hit shows the sparks trailing its own craft and the shaken view.
 
 Frames: `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
 --ticks N --force-remote-correction 480:7:20:own=3 [--no-correction-smoothing]

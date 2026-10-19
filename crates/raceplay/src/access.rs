@@ -111,7 +111,7 @@ impl Race {
     /// grid (`fit_sights`).
     #[must_use]
     pub fn sight_screen_of(&self, slot: usize) -> [f32; 2] {
-        if slot == self.sim.world.primary_slot() {
+        if slot == self.player_slot() {
             self.view.sight.screen()
         } else {
             self.view.huds[slot].sight.screen()

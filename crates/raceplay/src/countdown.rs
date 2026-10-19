@@ -75,7 +75,7 @@ impl Race {
         if !self.sim.countdown_voice {
             return;
         }
-        let player = self.sim.world.primary_slot();
+        let player = self.player_slot();
         self.sim.cues.push(CueEvent::new(cue, player));
     }
 
@@ -93,7 +93,7 @@ impl Race {
             GO_TICK => Cue::Go,
             _ => return,
         };
-        let player = self.sim.world.primary_slot();
+        let player = self.player_slot();
         self.sim.cues.push(CueEvent::new(cue, player));
     }
 }

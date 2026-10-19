@@ -159,7 +159,7 @@ pub fn race_tick_keeping(
             .sim
             .world
             .ships
-            .first()
+            .get(race.player_slot())
             .map_or(0.0, |ship| ship.physics.thrust),
         // An owned snapshot - `Projectile` is `Copy` and the array is small.
         // Read after `Race::tick` has already run, so a bolt that ended this

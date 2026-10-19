@@ -190,10 +190,10 @@ impl Race {
             }
         }
         let primary = self.sim.world.primary_slot();
-        let evaluated = steps[primary]
-            .as_ref()
-            .expect("the primary slot is always stepped as a player")
-            .evaluated;
+        assert!(
+            steps[primary].is_some(),
+            "the primary slot is always stepped as a player"
+        );
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in
         // `spend_pickup`, so flying it here gives it a full tick of travel from
@@ -466,7 +466,7 @@ impl Race {
             // An *opponent* in a single race never reaches it, because the branch
             // reads a person-flown craft's state alone; an opponent's wreck stays
             // down (the original's state 6, measured live) and ends nothing.
-            if self.eliminate_if_wrecked(slot) && slot == primary {
+            if self.eliminate_if_wrecked(slot) && slot == self.player_slot() {
                 self.view.wreck_ended_tick = Some(self.sim.world.tick);
                 // The original plays `~BLOWUP`, hides the HUD and swings the camera
                 // into its mode 5 on the way here. **The sound is built** and is
@@ -571,7 +571,7 @@ impl Race {
             // is a `max` that other things may one day also arm and this must follow
             // the pad specifically.
             if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
-                let boosting = self.sim.world.ships[0].physics.pad_timer > 0.0;
+                let boosting = self.sim.world.ships[self.player_slot()].physics.pad_timer > 0.0;
                 let (target, rate) = if boosting {
                     (1.0, BOOST_FOV_OPEN_RATE)
                 } else {
@@ -609,7 +609,7 @@ impl Race {
             // two milliseconds and the parameter would not be worth authoring.
             // It is also the convention `<Airbrake gain/falloff>` already uses on
             // the same scale, one element away.
-            let ship = &self.sim.world.ships[0].physics;
+            let ship = &self.sim.world.ships[self.player_slot()].physics;
             for (flap, level) in self
                 .view
                 .flaps
@@ -655,14 +655,32 @@ impl Race {
             self.advance_slot_huds();
         }
 
-        // Lean (no `view` feature): `draws()` is false, so the cooldown branch.
+        // Every person-flown craft's wall-contact cue, in slot order, drawn tick
+        // or not: the cooldown (`contact_cue_cooldown`) is sim-side bookkeeping
+        // that a replayed tick has to keep running, and which craft this
+        // machine's person flies must not decide which cooldowns tick, or a
+        // client's cue cadence would drift after every correction. A one-person
+        // race flies slot 0 alone, so it runs exactly as before.
+        for (slot, evaluated) in steps
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, step)| step.as_ref().map(|step| (slot, step.evaluated)))
+        {
+            let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
+            self.raise_contact_cue(slot, evaluated.wall.impact, shielded);
+        }
+        // The sparks, the shake and the shield edge are the seat's own: the
+        // craft this machine's person flies, which is `primary_slot` except on a
+        // network client seated elsewhere. Lean (no `view` feature): `draws()` is
+        // false and there is nothing to draw.
+        #[cfg(feature = "view")]
         if self.draws() {
-            #[cfg(feature = "view")]
-            self.advance_contact_fx(&evaluated);
-        } else {
-            // Its cooldown is sim state; the cue it would push is dropped.
-            let shielded = self.sim.world.ships[0].physics.shield_pickup_timer > 0.0;
-            self.raise_contact_cue(0, evaluated.wall.impact, shielded);
+            let seat = self.player_slot();
+            let seat = if steps[seat].is_some() { seat } else { primary };
+            if let Some(step) = &steps[seat] {
+                let evaluated = step.evaluated;
+                self.advance_contact_fx(seat, &evaluated);
+            }
         }
 
         // Last, after every write this tick makes: the recording stores the
@@ -678,13 +696,13 @@ impl Race {
 
     #[cfg(feature = "view")]
     /// The collision sparks, the shake a hit arms, and the two contact sounds,
-    /// for the primary craft's wall contact this tick.
+    /// for the seat's wall contact this tick (`slot`, `evaluated`).
     ///
     /// Everything [`Race::tick`] draws or sounds on a wall contact, in one place
     /// so [`Race::tick_sim_only`] can skip it whole. The one piece of
     /// simulation state in it is `contact_cue_cooldown`, which the sim-only
     /// path advances itself.
-    fn advance_contact_fx(&mut self, evaluated: &Evaluated) {
+    fn advance_contact_fx(&mut self, slot: usize, evaluated: &Evaluated) {
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
@@ -707,7 +725,7 @@ impl Race {
         // shell's own bulge is what a shielded contact shows instead, which is
         // the whole design: sparks are the hull being hurt and the hull is not
         // being hurt. See `docs/.../shield-pickup.md`.
-        let shielded = self.sim.world.ships[0].physics.shield_pickup_timer > 0.0;
+        let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
         // The announcer, on the shield coming up and not on it being up.
         // `Shield_Activate` plays `"shieldactive"` one line above the
         // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
@@ -717,7 +735,7 @@ impl Race {
         if shielded && !self.view.shield_was_up {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::ShieldActive,
-                0,
+                slot,
             ));
         }
         self.view.shield_was_up = shielded;
@@ -731,10 +749,8 @@ impl Race {
             } else {
                 evaluated.wall.impact && self.view.sparks_cooldown <= 0.0
             };
-        // The two contact sounds; the reasoning is on the helper, which the
-        // opponents' own step calls with their slots.
-        self.raise_contact_cue(0, evaluated.wall.impact, shielded);
-        let model_matrix = self.ship_model_matrix();
+        // The two contact sounds are raised for every flown slot in `tick`.
+        let model_matrix = self.ship_model_matrix_of(slot);
         if can_fire && let Some(contact) = evaluated.wall.resolved {
             // `contact.point` is deliberately the *penetrating* hull sample
             // point, not the wall surface - see its doc comment on
@@ -790,7 +806,7 @@ impl Race {
             // contact, which this project's own contact evaluation does not
             // expose as a separate edge, and pairing the shake's cadence with
             // the visible spark burst is the natural substitute.
-            let ship = self.ship();
+            let ship = &self.sim.world.ships[slot];
             let ahead =
                 (contact.point - ship.physics.body.position).dot(ship.physics.body.forward()) > 0.0;
             let side = if ahead {
@@ -833,7 +849,7 @@ impl Race {
         let anchor = self
             .view
             .sparks_anchor
-            .map_or(self.ship().physics.body.position, |local| {
+            .map_or(self.sim.world.ships[slot].physics.body.position, |local| {
                 model_matrix.transform_point3(local)
             });
         let up = self
