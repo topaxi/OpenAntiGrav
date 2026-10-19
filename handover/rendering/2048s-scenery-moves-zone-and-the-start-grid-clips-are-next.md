@@ -81,7 +81,7 @@ every submesh record reachable from exactly one mesh object.
   Vita3K capture of a Zone race exists in this tree and none was taken. What is
   drawn: the eight `Zone_ColourN` colours unlit (**chosen, not measured**: lit
   blows every surface out to white), `fc01_dummy` - the road and walls, 1,716 of
-  6,349 submeshes - **not drawn** because its output is unread bytecode, and
+  6,349 submeshes - drawn flat as the circuit's fog colour since 2026-10-19 (program read, value bound chosen), and
   2,302 `zonefc07_cube_animation_1` nodes hidden. The race has no visible road
   in Zone mode here. A capture of 2048's Zone mode from the original settles
   every one of those choices at once; so would decoding `fc01_dummy`'s
@@ -117,8 +117,9 @@ every submesh record reachable from exactly one mesh object.
 - A muted Vita3K capture of an `altima` Zone race (see
   `docs/reverse-engineering/vita3k-capture.md`) to judge the Zone circuit;
   then decide the road and the lit-or-unlit colours from it.
-- Decode the 3-instruction `fc01_dummy` fragment program and one
-  `fc01_Effects_VScroll_Emissive` vertex program: the road and the scroll sign.
+- `fc01_dummy` is read (flat `fogColour`). Still open: one
+  `fc01_Effects_VScroll_Emissive` vertex program for the scroll sign, and a
+  Vita3K capture of 2048's own Altima Zone (campaign progress needed) to confirm the fog colour is what the engine binds. `BloomFactor`/`BloomGate`/`Exposure*` authored in every `track.EnvSettings` stay unread: their consumer is the composite (`wo_composite_zone_fp`, USSE), whose arithmetic is unread.
 - Find the start-grid animation's trigger in the race-intro code in Ghidra
   (`/vita-2048-eu-v104`), starting from the `trackpart_startgridanims` string.
 - Find the skeleton and clip loaders off the `"PSP2/Psp2.Rcs*Loader.cpp"`

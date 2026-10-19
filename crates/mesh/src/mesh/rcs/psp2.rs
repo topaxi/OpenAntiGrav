@@ -128,7 +128,7 @@ pub struct Report {
     /// Of those, the ones admitted without a readable shader program to
     /// confirm the vertex stage declares `time` (every Omega one: GCN).
     pub inherited_unread: usize,
-    /// Submeshes on a placeholder shader (`fc01_dummy`) not drawn - see
+    /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
     /// Submeshes whose albedo is their material's `Zone_ColourN` uniform - see
@@ -163,6 +163,11 @@ pub struct Report {
     pub gnf: crate::mesh::GnfCounts,
 }
 
+/// The vertex colour of a `fc01_dummy` submesh before the loader knows the
+/// fog: negative components no authored colour has. `oag_raceplay` replaces it
+/// with the circuit's `fogColour`; one left in place is drawn black.
+pub const FOG_FLAT: [f32; 4] = [-1.0, -1.0, -1.0, 1.0];
+
 impl Report {
     /// One line for a load report.
     #[must_use]
@@ -180,7 +185,7 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} submesh(es) on the placeholder shader fc01_dummy not drawn (its output is unread)",
+                "; {} submesh(es) on fc01_dummy drawn as the circuit's fog colour (its three-instruction program outputs `fogColour` and nothing else)",
                 self.placeholder_submeshes
             )
         };
@@ -470,22 +475,17 @@ fn build_planned(
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.hidden += usize::from(place.hidden && !place.unplaced);
-        // `fc01_dummy`'s fragment program samples nothing and its output is
-        // GPU bytecode nobody here has decoded, so what it draws is unknown:
-        // nothing is drawn rather than a white stand-in.
+        // `fc01_dummy`'s fragment program samples nothing and declares one
+        // uniform, `fogColour`; its three instructions leave the circuit's fog
+        // colour as the pixel (docs/formats/2048-material-params.md, "What
+        // `fc01_dummy` outputs"). The colour is the scene's, not the model's,
+        // so these vertices carry [`FOG_FLAT`] and the loader that knows the
+        // fog writes it in.
         let placeholder = submesh
             .material
             .and_then(|m| decoded.materials.get(m))
             .is_some_and(|m| m.is_placeholder());
         report.placeholder_submeshes += usize::from(placeholder && !place.hidden);
-        let place = if placeholder {
-            placement::Placement {
-                hidden: true,
-                ..place
-            }
-        } else {
-            place
-        };
         report.unplaced += usize::from(place.unplaced);
         // The second texture is this material's lightmap, where its submesh's
         // own declaration carries a `lightmapUV` - which is the same set of
@@ -509,6 +509,11 @@ fn build_planned(
             .and_then(|m| m.zone_colour());
         report.zone_colour_submeshes += usize::from(zone.is_some());
         let (colour, lit, role) = match zone {
+            None if placeholder => (
+                FOG_FLAT,
+                0.0,
+                role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
+            ),
             Some([r, g, b]) => (
                 [r, g, b, 1.0],
                 0.0,

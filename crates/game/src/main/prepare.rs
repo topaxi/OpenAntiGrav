@@ -227,8 +227,8 @@ impl Pending {
                     },
                 })
                 .collect(),
-            // See `race::Options::zone_model`: off until the Zone road shader is read.
-            zone_model: false,
+            // See `race::Options::zone_model`: on since `fc01_dummy`'s road was read.
+            zone_model: true,
             hull_shine: !self.cli.no_hull_shine,
             hull_wreck: !self.cli.wreck.no_hull_wreck,
             track_shine: !self.cli.no_track_shine,

@@ -68,17 +68,44 @@ and probes. Its 6,349 submeshes:
 | Materials | Submeshes | What the file says |
 | --- | ---: | --- |
 | `zonefc07_cube_animation_1` | 2,406 | node-bound, 2,302 hidden at bind; nothing in the 7-track clip shows them |
-| `fc01_dummy` | 1,716 | the road and walls; a fragment program with one uniform (`fogColour`) and no sampler |
+| `fc01_dummy` | 1,716 | the road and walls; a fragment program with one uniform (`fogColour`) and no sampler; draws that colour flat |
 | `zonefc06_colour_emissive_scalar_01..08` | 1,587 | `Zone_ColourN` (rgb) and `Zone_ColourN_Emissive` (`0.5` on every one) |
 | `zonefc09_eq_gradient`, `_pixelated` | 371 | textured |
 
 **What is drawn, and what is chosen, not measured:**
 
-- **`fc01_dummy` is not drawn.** What its program outputs is GPU bytecode no
-  one here has decoded; a white or a black stand-in would be invented. The
-  report says `1716 submesh(es) on the placeholder shader fc01_dummy not drawn
-  (its output is unread)`. **This removes the Zone circuit's road from the
-  picture.** No Vita3K capture of a Zone race exists in this tree to compare.
+- **`fc01_dummy` draws the circuit's fog colour, flat (2026-10-19).** Its fragment
+  program is two instructions of arithmetic plus a phase marker, in two
+  variants that differ in one swizzle (`pa0.x` against `pa0.w` as the
+  multiplier; 1 and 8 copies in each package, byte-identical across `data`,
+  `data1` and `data2`, absent from DLC1/DLC2). Read from the words and from
+  Vita3K's own disassembly of neighbouring programs (the instruction set is
+  not named here; handwritten account): the setup block computes
+  `s2.rgb = max(-fogColour.rgb, 0)`, which is zero for any non-negative
+  colour; the one arithmetic instruction is `out = w * s2 + fogColour`, so
+  `rgb = fogColour`; the closing multiply scales by the constant every
+  fragment program ends with (taken as 1.0) and writes alpha 0. **The pixel is
+  `fogColour` and nothing else**, no texture, no light, no fog lerp. Method:
+  the fields of the multiply-add word were read by eye off a few hundred
+  labelled words of two Vita3K shader logs (1,912 and 360 programs) (`src1`/`src2` bank in the top byte, index in
+  the low byte, swizzle in byte 2), which puts `fc01_dummy`'s as
+  `pa0.wwww * sa2 + sa0`; the setup word matches the family
+  `max(-src, c0.xxx)` with source `sa0` and destination `sa2`. Confidence 70
+  on the arithmetic (no frame of Altima's Zone was captured: the HD campaign's
+  Zone event on Vineta K uses DLC `zone_N` circuits, not `trackZone`, and
+  never runs this program; the 2048 campaign's own Zone event needs progress
+  the capture recipe cannot reach). **What the engine binds as `fogColour` is
+  chosen, not measured**: `Lighting.Fog colour` of the circuit's
+  `.envsettings` (Altima `0.129 0.110 0.165`, a dark purple), which agrees
+  with the Vita3K reference frame of a Zone race (`68-zone-5`, Vineta K: the
+  road is near-black purple with bright lines, not Altima). `oag_mesh` marks
+  these vertices (`psp2::FOG_FLAT`) and `oag_raceplay::load` writes the
+  fog colour in; the loader report says
+  `fc01_dummy: N vertices drawn as fogColour`. A Zone race on 2048 now draws
+  `trackZone.rcsmodel` by default (`Options::zone_model`). **Omega: checked,
+  differs** - 0 `fc01_dummy` submeshes over Omega's 1,150 models
+  (`the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models`), so
+  nothing to port.
 - **`Zone_ColourN` is drawn as the surface's colour, unlit.** The fragment
   program also declares a lightmap and `liveLighting0`, so lit is the other
   candidate. Both were drawn on `altima`: lit, the colour is multiplied by a sun

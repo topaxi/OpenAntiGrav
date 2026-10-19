@@ -131,10 +131,9 @@ pub struct Options {
     pub seat_picks: Vec<SeatPick>,
     /// Whether a Wipeout 2048 Zone race draws its own `trackZone.rcsmodel`.
     ///
-    /// Off by default: that model's road shader (`fc01_dummy`) is unread, so
-    /// a Zone race on it draws no road at all. Until the shader is read, Zone
-    /// races the ordinary circuit model; the Zone ground-truth test turns
-    /// this on to keep the loader honest.
+    /// The game turns it on (2026-10-19, when `fc01_dummy`'s road was read as
+    /// the circuit's fog colour); [`Options::default`] keeps it off so a
+    /// library caller that names no Zone model gets the ordinary circuit.
     pub zone_model: bool,
     /// Whether a Pulse hull's `0x2000` extra pass is built at all
     /// ([`oag_render::shine`]). `true` is the game; `false` is `--no-hull-shine`,

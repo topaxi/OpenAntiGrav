@@ -11,7 +11,7 @@ use oag_mesh::mesh::{self, Model};
 ///
 /// Tried in this order: **`trackZone.rcsmodel` in a Zone race on Wipeout
 /// 2048, only when [`super::Options::zone_model`] asks for it** (its road
-/// shader is unread, so it draws no road yet), then `track.rcsmodel`, then the Omega Collection's
+/// is `fc01_dummy`, drawn as the fog colour), then `track.rcsmodel`, then the Omega Collection's
 /// `track.final.rcsmodel` (see `mesh::rcs::sibling_name_cooked`). The Zone
 /// model is its own circuit art with its own skeleton, clip and PVS, found
 /// by the same stem rule, so everything downstream that follows
