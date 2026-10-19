@@ -114,13 +114,10 @@ impl Race {
     /// [`Self::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
-    /// **Not the Autopilot pickup**, and the distinction is worth keeping.
-    /// `Ai_Construct` names the local player's input source the literal
-    /// `"autopilot input"`, which says the original hands the player's craft to
-    /// a driver the same way this does - but *what* the pickup then does, how
-    /// long it lasts and how it ends are all unread, and nothing here claims
-    /// them. This is a switch a test and a `--screenshot` can flip, not a
-    /// weapon. See `HANDOVER.md`.
+    /// **Not the Autopilot pickup**, and the distinction is worth keeping:
+    /// this is a switch a test and a `--screenshot` can flip, not a weapon
+    /// with a timer. Both fly the same driver, the original's own player
+    /// driver where the race's tables read ([`Self::autopilot_controls`]).
     ///
     /// # Turning it on seeds slot 0's driver, and has to
     ///

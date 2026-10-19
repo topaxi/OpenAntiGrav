@@ -74,9 +74,11 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
    (labelled chosen, not measured).
 2. Decide what offers a route to the original field without the plan gate, then
    skip the plans on forked circuits too.
-3. Add a round-the-lap ground truth over every Pulse circuit for the original
-   field with a Skilled `--autopilot` player, next to
-   `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`;
-   `13_Track` will fail it until 1 is settled.
+3. ~~Add a round-the-lap ground truth over every Pulse circuit for the original
+   field with an `--autopilot` player.~~ Done 2026-10-19 with weapons off
+   (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`,
+   12 of 12, no rescue); the autopilot now flies the original's player driver.
+   With weapons on, `02_Track` wrecks the player on lap 3 (docs/gameplay/ai.md,
+   "The autopilot flies the original's player driver").
 4. Read the original field with several humans (slot, place, rubber band), then
    lift `Reason::MultipleHumans`.

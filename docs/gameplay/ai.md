@@ -839,6 +839,76 @@ port).**
   number includes ground-clamp transients and no grounded fraction. A capture
   of `craft+0x2b0` with body `vy` over a whole flight is what would settle it.
 
+### The autopilot flies the original's player driver (2026-10-19)
+
+The maintainer asked for the autopilot to fly the original AI whatever the
+opponents fly, and whether the original gives it a speed-up ("it feels like
+autopilot can easily overtake AI opponents"). The read is on
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#the-players-own-driver-the-autopilot):
+
+- **Who drives:** the original's own opponent driver, on the player's own
+  record (`"autopilot input"`), with four player branches: the lane is `0` (the
+  racing line), the throttle is a flat `100` (the thrust law runs only for an
+  opponent or a finished racer), the rail is kept through contact, and the
+  authority is already `1`. Confidence 88 to 90, instruction level, HD and Pure
+  agreeing on the throttle.
+- **The speed-up is the law, not a constant.** There is no pace multiplier to
+  port. The autopilot flies `100` where an opponent flies `AIThrust` at the
+  player's place plus its formation term; that alone is why it pulls through a
+  field holding formation around it. Nothing is added here.
+- **An opponent holding the Autopilot never fires it** outside an Eliminator
+  (fire index `0`, `g_weapon_ai_rate[0] = 0`); this port absorbs it, as before.
+  So nothing changes for an opponent flying this project's driver: the
+  original has no "AI under autopilot" behaviour to switch to.
+
+**Built.** `oag_ai::original::Autopilot` is that driver; `Race::autopilot_controls`
+flies it on every title whose original tables read (Pulse, Pure, HD, 2048,
+Omega), under `--ai ours` too, for every route that hands the player's craft to
+a driver: the Autopilot pickup, `--autopilot`, a Disruptor's autopilot effects
+and the craft past the finish (still capped by `finished_thrust`). Its rail
+write is applied right before the player's step, as an opponent's is.
+Chosen, not measured: the driver starts each stint warm (authority `1`,
+smoothed speed current, ring on lane `0`, one discarded steering call), where
+the original's is warm because it runs every tick; it draws from its own
+generator; the handover from the pad is one tick (what sets the original's
+blend `craft+0x1d4` is unread). Pure's player lane `0` is inherited from Pulse.
+**2048 and Omega: checked, differs.** Their player's driver steers with the
+pilot assist's gains (airbrake gains `1`/`0`, a `1.73 |x|` lookahead floor and a
+`libm` call, [2048](../ghidra/functions/vita-2048-eu-v104/ai-controls.md),
+[Omega](../ghidra/functions/ps4-omega-eu/ai-controls.md)); that steering is not
+read whole, so the opponents' controller flies it here.
+
+Still this project's driver: a race whose title and class have no original
+tables, `--autopilot-skill` and `--autopilot-pilot` (developer flags that tune
+ours, logged), and the network bot (`Race::autopilot_wants`), whose restore of
+the whole simulation every call would reset a driver kept outside the world.
+
+Measured, Pulse PSP USA, VENOM, seed 1, the original field at level 1, slot 0
+on `--autopilot` for the whole race, 15,000-tick cap
+(`autopilot_original_ground_truth::sweep`). Shield is the player's at each lap
+counter change and at the end of the run, both labelled:
+
+| Circuit | Before: place, finish tick | After: place, finish tick | Shield per lap before -> after | Shield at end before -> after |
+| --- | --- | --- | --- | --- |
+| 01 | 3, 6453 | 5, 6477 | 84, 67, 31 -> 95, 80, 63 | 30.7 -> 63.0 |
+| 02 | 4, 6909 | 8, not finished (wrecked on lap 3) | 63, 46, 46 -> 50, 29 | 46.1 -> 0.0 |
+| 03 | 3, 7770 | 1, 7646 | 95, 69, 28 -> 71, 64, 34 | 28.4 -> 34.0 |
+| 04 | 3, 7483 | 2, 7205 | 72, 72, 55 -> 90, 88, 73 | 55.4 -> 73.0 |
+| 05 | 1, 6693 | 7, 6958 | 80, 72, 72 -> 70, 59, 41 | 72.0 -> 40.7 |
+| 06 | 8, 7064 | 4, 6507 | 95, 95, 95 -> 80, 71, 71 | 95.0 -> 71.0 |
+| 07 | 8, 9123 | 1, 6811 | 95, 95, 78 -> 95, 71, 41 | 78.1 -> 41.0 |
+| 09 | 8, 8965 | 5, 8728 | 95, 62, 45 -> 95, 72, 57 | 44.6 -> 57.0 |
+| 10 | 8, 7781 | 4, 7389 | 95, 79, 79 -> 95, 76, 61 | 78.5 -> 61.0 |
+| 13 | 8, 7431 | 6, 6842 | 95, 95, 95 -> 72, 72, 44 | 95.0 -> 44.1 |
+| 14 | 3, 8269 | 1, 8220 | 61, 61, 44 -> 75, 75, 45 | 43.6 -> 45.0 |
+| 16 | 7, 7682 | 5, 7552 | 75, 55, 39 -> 65, 65, 12 | 38.6 -> 12.1 |
+
+Nine of the eleven circuits both runs finish come home sooner, `07_Track` by
+38 s. No respawn either side. The craft now runs in the pack instead of behind
+it and takes more weapon fire: with weapons off (`OAG_SWEEP_NO_WEAPONS`) all
+twelve finish with no rescue (`the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
+and `02_Track` places 3rd at tick 6801.
+
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 
 `the_jump_flown_tick_by_tick` in `crates/raceplay/tests/novice_jump_ground_truth.rs`

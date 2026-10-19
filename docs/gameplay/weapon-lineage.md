@@ -160,7 +160,7 @@ has it; only its table moves.
 | Cannon | `projectile::cannon` | the table; `WeaponModels.cannon`, `.cannon_look` (`CannonLook`, `CannonBody`); `Effects` `CannonSparks`, `WeaponSpark` |
 | Turbo | `oag_weapons::pickup`, then `oag_physics::engine` | the table only |
 | Shield | `oag_weapons::pickup`, then `oag_physics::damage` | the table; `Looks` (`ShieldPalettes`, hull overlay rule) |
-| Autopilot | `oag_weapons::pickup`, then the AI takeover in `oag_raceplay::player_step` | the table only |
+| Autopilot | `oag_weapons::pickup`, then `oag_ai::original::Autopilot` (the player's own original driver) through `Race::autopilot_controls` | the table; the title's original AI tables (controller row, `Laws`); this project's driver where none read |
 | Plasma | `projectile::plasma` on the `flight` follower | the table; `WeaponModels.plasma_ball`, `.plasma_blast_pulse`, `.plasma_blast_hd`; `Effects` `PlasmaFlare`, `PlasmaBlast`, `PlasmaLightning*` |
 | Bomb | `projectile::mine` (shared with Mine), `oag_raceplay::bomb_blast` | the table; `WeaponModels.bomb`, `.bomb_blast_pulse` (`shockwave_fades`), `.bomb_blast_hd`; `Effects` `BombSmokering`, `BombRays` |
 | Mine | `projectile::mine` | the table; `WeaponModels.mine`; `Effects` `MineExplo` |
@@ -185,7 +185,7 @@ has it; only its table moves.
 | Cannon | M: [cannon_ground_truth.rs](../../crates/raceplay/tests/cannon_ground_truth.rs) | I:Pulse PSP | A: not in Pure's roster ([weapon-stats.md](../formats/weapon-stats.md)) | I:Pulse; `CannonManager_Construct` read; `recharge_time` authored, unread | I:Pulse; unread | ?: read, not ported |
 | Turbo | M: [pickups.md](pickups.md#what-a-fired-turbo-does) | I:Pulse PSP | I:Pulse | I:Pulse; no manager class located | I:Pulse; unread | ?: no manager located |
 | Shield | M: [shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md) | M: same law, own model ([ps2 page](../ghidra/functions/ps2-pulse-eu/shield-pickup.md), [ps2_shield_ground_truth.rs](../../crates/raceplay/tests/ps2_shield_ground_truth.rs)) | I:Pulse | M: same law as Pulse, two colours moved ([shield.md](../ghidra/functions/ps3-hdfury-eu/shield.md)) | I:Pulse; unread | ?: HD's `Shield` table applies, law unread |
-| Autopilot | M: the AI takes the craft ([pickups.md](pickups.md)) | I:Pulse PSP | I:Pulse | I:Pulse; no manager located | I:Pulse; unread | ?: unread |
+| Autopilot | M: the player's own original driver takes the craft: lane `0`, throttle `100`, the rail kept through contact ([ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#the-players-own-driver-the-autopilot), [ai.md](ai.md#the-autopilot-flies-the-originals-player-driver-2026-10-19)) | I:Pulse PSP | M: throttle `100` (the cruise law skipped); lane `0` I:Pulse, Pure's planner unread for the player | M: the same three branches read (thrust `0x00100d7c..0x00100d9c`, planner `0x00102554..0x00102574`, rail `table+0x08`) | checked, differs: the player's driver steers with the pilot assist's gains ([ai-controls.md](../ghidra/functions/vita-2048-eu-v104/ai-controls.md)); the opponents' controller flies it here | checked, differs: as 2048 ([ai-controls.md](../ghidra/functions/ps4-omega-eu/ai-controls.md)) |
 | Plasma | M: [plasma_ground_truth.rs](../../crates/raceplay/tests/plasma_ground_truth.rs) | I:Pulse PSP | M: hardcodes the same 1 s charge ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md)) | M: blast mechanics read ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)); flight law I:Pulse | I:Pulse; unread | M: read ([plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md)), not ported |
 | Bomb | M: [mine_ground_truth.rs](../../crates/raceplay/tests/mine_ground_truth.rs); `damageradius` has no consumer | I:Pulse PSP | M: fuse-less dialect, [weapons.md](../ghidra/functions/psp-pure-usa/weapons.md#pures-bomb-has-no-fuse-and-damageradius-has-no-reader) | M: own blast object read (`NormalBomb`); `number_of_shots_to_destroy` authored, unread | I:Pulse; `WeaponType` splits Mine from Bomb ([weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md)) | ?: read, not ported |
 | Mine | M: [mine_ground_truth.rs](../../crates/raceplay/tests/mine_ground_truth.rs) | I:Pulse PSP | I:Pulse | I:Pulse; `MineManager_Construct` read | I:Pulse; unread | ?: shares one composite with LeachBeam, no own constructor |
@@ -234,7 +234,7 @@ whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
 | Mine, Bomb | C: laid by `Driver::wants_to_drop`, not the original's law | C | C | C | C |
 | Turbo | C: fired on a clear straight | C | C | C | C |
 | Shield | C: absorbed, never raised | C | C | C | C |
-| Autopilot | M: it is the AI, `Ai_Construct` | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
+| Autopilot | M: never fired in a race: `WeaponAi_Update`'s default arm leaves the fire index at `0` and `g_weapon_ai_rate[0]` is `0` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)); in an Eliminator the index becomes `1` and it can fire, its effect on an opponent unread. The port absorbs it at once (C) | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Disruptor | A | C: opponents never fire it (not in `opponent_fires`' forward list) | A | A | A |
 
 The 240 s single-race census in [`ai.md`](ai.md) (opponent projectiles

@@ -257,6 +257,10 @@ left as a loose end rather than chased further.
 
 ## Not determined
 
+**What flies the craft is now read** (2026-10-19): the player's own driver, the
+opponents' `Ai_Update` with lane `0`, throttle `100` and the rail kept through
+contact ([ai-controls.md](ai-controls.md#the-players-own-driver-the-autopilot)).
+
 - **Where the control source is actually swapped. Found 2026-10-11**
   ([ai-controls.md](ai-controls.md#who-drives-whom-the-control-record)):
   `Ship_UpdateCraft` reads the craft's controls through `craft+0x78`, which is

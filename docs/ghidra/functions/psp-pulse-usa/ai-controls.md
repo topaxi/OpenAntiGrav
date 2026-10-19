@@ -580,3 +580,78 @@ consecutive hits in a Single Race (VENOM, `psp-drive.py menu --single-race`):
 per world step**, so `Ai_SnapToLane`'s body write, made inside the AI update,
 lands between the controls it accompanies and the next `Body_StepWorld`.
 Confidence 90. `oag-raceplay` applies the rail there.
+
+## The player's own driver: the autopilot
+
+Read 2026-10-19 by the `autopilot-original-ai` lane. **No new names**: every
+function below is already in the cast. The question was whether the autopilot
+(the Autopilot pickup, and the craft past the finish) flies the opponents'
+driver or steering of its own, and whether it carries a pace rule that would
+explain it overtaking opponents.
+
+**It is the opponents' `Ai_Update` on the player's own driver**, the record
+`Ai_Construct` registers as `"autopilot input"` and `Ship_UpdateCraft` reads
+through `craft+0x40` (above, "Who drives whom"). That driver is updated every
+tick like any other; four branches on "this is the player's craft" set it apart:
+
+1. **Lane `0`.** `Ai_PlanLane` (`0x08854e7c`), after the contact push is added,
+   clamped and decayed: `lw a0,0x4(s0)` (the driver's craft), `lw a1,0x8(s1)`
+   with `s1 = 0x08b34410` (so `0x08b34418`, the player's craft),
+   `bnel a0,a1` at `0x08855664`, then `swc1 f28,0x1b0(s0)`,
+   `swc1 f28,0x1c0(s0)`, `swc1 f28,0x44(s0)` at `0x0885566c..0x08855674`, with
+   `f28` set by `mtc1 zero,f28` at `0x08854ecc`. The chosen lane and the target
+   are `0`: the racing line. The authored band test after it still runs, and the
+   ring fills toward `0` at the usual rate. A second, earlier zeroing on
+   `driver+0xa8` (`lbu a0,0xa8(s0)` at `0x088555f8`) clears the same fields
+   before the push is added. Confidence **88**: instruction level, and HD's
+   planner does the same at `0x00102554..0x00102574`
+   ([ps3-hdfury-eu/ai-controls.md](../ps3-hdfury-eu/ai-controls.md)).
+2. **Throttle `100`, no thrust law.** `Ai_ComputeControls` (`0x08855dc4`) loads
+   `f26 = 100.0` at entry (`lui a0,0x42c8; mtc1 a0,f26`, `0x08855dd0..0x08855dd8`)
+   and stores `f26` as the output thrust (`swc1 f26,0x4(s4)`, `0x088568d8`). It
+   calls `AI_ComputeOpponentThrust` only on the round-robin tick and only when
+   `driver+0xa8` is clear (`0x0885689c..0x088568b4`) or the racer has finished
+   (`lbu a0,0x12(racer+0x70)`, `0x088568b8..0x088568d4`). So a racing player's
+   driver flies a flat `100`: no `AIThrust[place - 1]`, no formation, no rubber
+   band, no `100` cap within `350` units after `20` s. `Ai_Update`'s speed floor
+   is skipped for the player too (`RM+0x2c0`). Confidence **90**: instruction
+   level, and two other binaries agree (HD `0x00100d7c..0x00100d9c`, Pure's
+   cruise path "keeps the output default `100`",
+   [psp-pure-usa/ai-controls.md](../psp-pure-usa/ai-controls.md)).
+3. **The rail through contact.** `Ai_SnapToLane` zeroes the rail on a contact
+   only for a craft that is not the player's (above, "the rail"); the player's
+   rail holds through a wall or a craft. Confidence 80, as the rail's read.
+4. **Authority.** `Ai_PlanLane`'s head ramps `driver+0x64` by `0.025` a tick
+   toward `1`, and toward `0` only for a finished player whose controls are not
+   consumed (`driver+0x21 == 0`). So a racing player's driver sits at authority
+   `1` all race and is warm whenever the autopilot takes over.
+
+**No pace rule exists to port.** Nothing in these three functions scales the
+player's driver's throttle, steer gain or lookahead; the only difference in pace
+is the one above: the autopilot holds `100` where an opponent flies
+`AIThrust[player.place - 1]` plus a formation term, capped at `100` near the
+player after 20 s ([the thrust law](#ai_computeopponentthrust-0x08855904-the-thrust-law-whole)).
+The opponents' throttle the captures above logged ran from `34.6` (Easy, the
+lower stop) to `101.7` (Hard, the upper stop), with the reference racer at `75.0`
+on Hard, and the autopilot also holds the racing line through contact, so an
+autopiloted craft gains on a field that sits in formation around it. That is the
+explanation for "the autopilot overtakes", and it is the law, not a bonus.
+
+**An opponent holding the Autopilot never fires it in a race.**
+`WeaponAi_Update`'s switch has no case for id 6, so its default arm sets the
+absorb index `+0x34 = 3` and leaves the fire index `+0x38` at `0`, and
+`g_weapon_ai_rate[0]` is `0.0`: fire chance `0` per decision
+([weapon-ai.md](weapon-ai.md)). In an Eliminator (`g_game_mode == 8`) the fire
+index becomes `1` and `rate_eliminator[1] * use * 5` can fire it; what
+`Autopilot_Fire`'s running bit then does to a craft already flown by its driver
+is not read. An opponent is flown by its driver anyway, so outside that case
+there is nothing for the pickup to change.
+
+**Not read:** what sets `craft+0x1d4`, the blend that switches the player's
+control source (so the shape of the handover from the pad), and whether the
+`"autopilot input"` driver is flown in a split-screen race (HD scales its `100`
+by `SplitScreenMultiplier` when more than one person races).
+
+**Wired** in `oag_ai::original::Autopilot`, flown by
+`oag_raceplay`'s `Race::autopilot_controls` on every title whose original tables
+read, whatever the opponents fly; see [gameplay/ai.md](../../../gameplay/ai.md#the-autopilot-flies-the-originals-player-driver-2026-10-19).
