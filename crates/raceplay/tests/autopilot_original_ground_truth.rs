@@ -199,3 +199,124 @@ fn omega_flies_the_original_autopilot() {
 fn vita_2048_flies_the_original_autopilot() {
     flies_the_original_autopilot("data/test-vpk/2048-PCSF00007-dlc1.vpk");
 }
+
+/// An opponent on this project's driver handed an Autopilot, against the
+/// same tick with the absorb: Pulse PSP USA, VENOM, one fork at `trigger` on
+/// `slot`, weapons off unless `weapons`. Returns (distance, rescues) for the
+/// absorb and for the original's player driver over the 5 s stint and 3 s
+/// after it, and whether the original driver flew it at full throttle.
+fn opponent_fork(
+    track: &str,
+    difficulty: oag_ai::Difficulty,
+    seed: u64,
+    trigger: u64,
+    slot: usize,
+) -> Option<((f32, u32), (f32, u32), bool)> {
+    let image = oag_testdata::image("pulse-psp-usa.chd")?;
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(format!(r"Data\Environments\{track}_Track\track.vex")),
+        seed: Some(seed),
+        difficulty,
+        weapons_override: Some(false),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the track");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    race.set_opponent_autopilot(false);
+    for _ in 0..trigger {
+        race.tick_sim_only(&PlayerInputs::none());
+    }
+    let snapshot = race.snapshot_sim();
+    let mut branch = |race: &mut oag_raceplay::Race, on: bool| {
+        race.restore_sim(&snapshot);
+        race.set_opponent_autopilot(on);
+        if on {
+            // Weapons off, so no table: the Pulse table's `time`, 5 s.
+            race.sim.world.ships[slot].autopilot_timer = 5.0;
+        }
+        let d0 = race.race_distance_of(slot).unwrap_or(0.0);
+        let mut flown = false;
+        for _ in 0..480 {
+            race.tick_sim_only(&PlayerInputs::none());
+            flown |= race
+                .original_autopilot(slot)
+                .is_some_and(|a| a.driver.held_thrust == oag_ai::original::AUTOPILOT_THRUST)
+                && race.sim.world.ships[slot].physics.thrust == 100.0;
+        }
+        (
+            (
+                race.race_distance_of(slot).unwrap_or(0.0) - d0,
+                race.respawns_of(slot),
+            ),
+            flown,
+        )
+    };
+    let (absorbed, _) = branch(&mut race, false);
+    let (autopilot, flown) = branch(&mut race, true);
+    Some((absorbed, autopilot, flown))
+}
+
+/// The Autopilot speeds an opponent up (`docs/gameplay/ai.md`, "An opponent
+/// flies its Autopilot"): one Pulse 01 fork at Novice, where the paired
+/// sweep's median gain is 72 units over the window. Fails if an opponent goes
+/// back to absorbing it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_flies_its_autopilot_on_the_original_driver_and_gains() {
+    let Some((absorbed, autopilot, flown)) =
+        opponent_fork("01", oag_ai::Difficulty::Novice, 1, 1_200, 1)
+    else {
+        return;
+    };
+    assert!(flown, "the original's player driver never flew slot 1");
+    assert!(
+        autopilot.0 > absorbed.0 + 20.0,
+        "autopilot {autopilot:?} against absorb {absorbed:?}"
+    );
+    assert_eq!(autopilot.1, 0);
+}
+
+/// Two Pulse 05 forks at Ace (weapons off) that the opponent's Autopilot
+/// once lost: engaged at `[-860, 41, -445]` a whole-line search put the
+/// driver on another deck (rescued 89 ticks in); engaged at
+/// `[-125, -10, -477]` the original driver took the jump short of its
+/// landing (rescued 407 ticks in). Fails if the stint re-searches the line or
+/// flies the run-up.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponents_autopilot_keeps_its_place_and_leaves_the_jump_to_its_driver() {
+    for (seed, trigger, slot) in [(2, 3_000, 4), (6, 4_800, 7)] {
+        let Some((absorbed, autopilot, flown)) =
+            opponent_fork("05", oag_ai::Difficulty::Ace, seed, trigger, slot)
+        else {
+            return;
+        };
+        assert!(flown, "seed {seed}: not flown");
+        assert_eq!(
+            autopilot.1, absorbed.1,
+            "seed {seed}: autopilot {autopilot:?} against absorb {absorbed:?}"
+        );
+    }
+}
+
+/// The original's own field keeps absorbing it: `WeaponAi_Update` never
+/// fires the Autopilot outside an Eliminator.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_original_field_opponent_is_not_handed_an_autopilot() {
+    let Some(mut race) = race(
+        "pulse-psp-usa.chd",
+        r"Data\Environments\01_Track\track.vex",
+        None,
+    ) else {
+        return;
+    };
+    assert!(race.engage_opponent_autopilot(1), "ours flies it");
+    race.sim.world.ships[1].autopilot_timer = 0.0;
+    assert!(race.use_original_ai(None, 1));
+    assert!(!race.engage_opponent_autopilot(1), "the original's absorbs it");
+}

@@ -393,7 +393,12 @@ impl Race {
     /// Returns whether it did: the switch is on, the table authors an
     /// Autopilot, and the slot is an opponent.
     pub fn engage_opponent_autopilot(&mut self, slot: usize) -> bool {
-        if !self.sim.opponent_autopilot || self.sim.world.person_flown(slot) {
+        // The original's own field never fires it outside an Eliminator
+        // (`WeaponAi_Update`'s default arm): it keeps the absorb.
+        if !self.sim.opponent_autopilot
+            || self.sim.world.person_flown(slot)
+            || self.original_ai_active()
+        {
             return false;
         }
         let Some(time) = self

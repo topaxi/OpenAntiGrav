@@ -168,6 +168,8 @@ fn sweep(
             .and_then(|w| w.absorb(oag_tables::weapons::Weapon::Autopilot))
             .unwrap_or(0.0);
         race.set_autopilot(true);
+        // The main path is the absorb, whatever the race's default.
+        race.set_opponent_autopilot(false);
         let count = race.sim.world.ship_count as usize;
         let mut held = [false; 8];
         let mut next_slot = 1;
@@ -208,6 +210,7 @@ fn sweep(
             let trace = std::env::var("OAG_SWEEP_TRACE").ok() == Some(format!("{seed},{tick}"));
             let b = run_branch(&mut race, slot, stint, trace);
             race.restore_sim(&snapshot);
+            race.set_opponent_autopilot(false);
             if trace {
                 println!("  -- A");
             }
@@ -383,6 +386,8 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
     let mut laps: Vec<u64> = Vec::new();
     let mut finish = [None; 8];
     let mut shield_sum: Vec<(f32, u32)> = Vec::new();
+    let mut last_stint_end = [None::<u64>; 8];
+    let mut racing = [true; 8];
     for tick in 1..=16_000u64 {
         race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..count {
@@ -390,6 +395,18 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
             if ship.autopilot_timer > timer[slot] {
                 out.stints += 1;
             }
+            if ship.autopilot_timer > 0.0 {
+                last_stint_end[slot] = Some(tick);
+            }
+            let now_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
+            if racing[slot] && !now_racing && !ship.standing.finished() {
+                println!(
+                    "  WRECK on {on} slot {slot} tick {tick} last stint end {:?} ago {:?}",
+                    last_stint_end[slot],
+                    last_stint_end[slot].map(|t| tick - t)
+                );
+            }
+            racing[slot] = now_racing;
             timer[slot] = ship.autopilot_timer;
             let now = ship.standing.lap;
             if now != lap[slot] {
@@ -436,7 +453,9 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
 /// Whole races, switch off then on, same seed: the field's lap and finish
 /// times, walls, respawns, wrecks and shield.
 fn races(image: &str, tracks: &[Option<&str>]) {
-    if std::env::var_os("OAG_SWEEP").is_none() {
+    if std::env::var_os("OAG_SWEEP").is_none()
+        || std::env::var("OAG_SWEEP_IMAGE").is_ok_and(|only| !image.contains(only.as_str()))
+    {
         return;
     }
     let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string());
