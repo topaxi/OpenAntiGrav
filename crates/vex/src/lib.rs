@@ -34,6 +34,7 @@ pub mod lighting;
 pub mod mesh_coverage;
 pub mod pads;
 pub mod placed_psys;
+pub mod probes;
 pub mod pvs;
 pub mod quake;
 pub mod shadow_occluder;
