@@ -42,11 +42,9 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         // Pure has no LeachBeam at all (`PURE_ABSENT`), so it names none of the
         // beam's effects, the energy one included.
         let pure = !PURE_ABSENT.contains(&trigger);
-        assert_eq!(
-            has(trigger),
-            [true, pure, true, false, false],
-            "{trigger:?}"
-        );
+        // HD drops the PS2 engine-flare particle too (`HD_ABSENT`).
+        let hd = !HD_ABSENT.contains(&trigger);
+        assert_eq!(has(trigger), [true, pure, hd, false, false], "{trigger:?}");
     }
     for trigger in [Trigger::MagstripSparks, Trigger::MagstripZone] {
         // Pulse reads neither (`PULSE_ABSENT`) and neither does HD (`HD_ABSENT`);
@@ -137,14 +135,22 @@ const PURE_ABSENT: [Trigger; 3] = [
 
 /// The 2048-lineage magstrip pair, which no archive of HD's disc carries and
 /// which HD replaces with the arc wake (`docs/formats/pob.md`, "Which names HD
-/// does not author").
-const HD_ABSENT: [Trigger; 2] = [Trigger::MagstripSparks, Trigger::MagstripZone];
+/// does not author"), and the PS2 engine-flare particle, which the disc ships
+/// but nothing plays (`engine-trail.md`, "The flare's draw state, read live").
+const HD_ABSENT: [Trigger; 3] = [
+    Trigger::MagstripSparks,
+    Trigger::MagstripZone,
+    Trigger::EngineFlare,
+];
 
 #[test]
 fn hd_asks_for_none_of_the_effects_its_disc_does_not_author() {
     for trigger in HD_ABSENT {
         assert!(oag_hd::TITLE.effect_on(trigger).is_none(), "{trigger:?}");
         for title in [oag_pure::TITLE, oag_2048::TITLE] {
+            if trigger == Trigger::EngineFlare && title.name == oag_2048::TITLE.name {
+                continue;
+            }
             assert!(
                 title.effect_on(trigger).is_some(),
                 "{} {trigger:?}",

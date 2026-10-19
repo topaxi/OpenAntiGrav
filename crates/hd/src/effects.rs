@@ -72,6 +72,7 @@ pub const EFFECTS: &Effects = &{
             Trigger::BombRays,
             EffectSpec::new(engine_effects::BOMB_RAYS_EFFECT, Origin::Measured),
         )
+        .without(Trigger::EngineFlare)
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
@@ -163,5 +164,21 @@ mod tests {
         }
         assert!(names.contains(&engine_effects::MODESTO_STEAM_EFFECT));
         assert!(names.contains(&engine_effects::ROCKET_FLARE_EFFECT));
+    }
+
+    /// The disc ships `wo_ship_engineflare.pob`, but no string or call of
+    /// `EBOOT.elf` plays it, and the original's nozzle at rest shows none of
+    /// its glare (three RPCS3 frames, `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`,
+    /// "The engine flare is not the Pulse particle effect"). HD's flare is the
+    /// `engineflare.rcsmodel` shapes and the sprite, so the trigger the PS2
+    /// port's engine table carries is not asked for.
+    #[test]
+    fn hd_does_not_play_the_ps2_engine_flare_particle() {
+        assert!(EFFECTS.on(Trigger::EngineFlare).is_none());
+        assert!(
+            !EFFECTS
+                .names()
+                .contains(&engine_effects::ENGINE_FLARE_EFFECT)
+        );
     }
 }

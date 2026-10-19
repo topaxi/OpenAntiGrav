@@ -896,10 +896,16 @@ impl Scene {
                 break;
             };
             let exhaust = race.exhaust_of(slot);
+            // HD never gets the quad: its flare is the authored shapes and
+            // the sprite, and `Race::engine_flare_effect` is false there
+            // because HD does not play the PS2 particle either.
             // The flare quad only where the source authors no effect for it
             // - see `Race::engine_flare_effect` - and not on a wreck, which
             // shows none on a running original (`scene::wreck`). The ribbon always.
-            if !race.engine_flare_effect() && !self.is_wrecked(race, slot) {
+            if !race.hd_trail_active()
+                && !race.engine_flare_effect()
+                && !self.is_wrecked(race, slot)
+            {
                 vertices.extend(exhaust.vertices(nozzle, right, up));
             }
             // HD's sprite flare - Engine_Flare_Rich.gtf, enabled by the
@@ -1052,7 +1058,7 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_active(slot) || race.hd_flame_resting(slot) {
                 continue;
             }
             // `draw`, not `draw_additive`: every batch of this model already
@@ -1062,7 +1068,7 @@ impl Scene {
             draws.mesh(flare);
         }
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_active(slot) || race.hd_flame_resting(slot) {
                 continue;
             }
             for spike in spikes {

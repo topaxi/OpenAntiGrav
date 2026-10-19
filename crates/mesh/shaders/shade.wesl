@@ -805,7 +805,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
         );
-        let flame_rgb = flame_texel.rgb * flame_colour_scale;
+        let flame_rgb = flame_texel.rgb * flame_colour_scale * scene.light.output_scale;
         // **Not decoded on the linear target, on purpose - and this is a change
         // of mind recorded in place.** The decode used to sit here on the "what a
         // sampler hands back is authored-space" argument, but the flame's own
