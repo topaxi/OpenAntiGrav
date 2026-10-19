@@ -31,7 +31,7 @@ Worth a lane now, in order:
    be judged from that profile (64 of 1,613 steady samples unwound deeply); the panel is vsync
    bound at 90 fps with the main thread about 43 % busy, so neither limits it there.
 
-2. **Default-path post passes create a bind group every frame.** The perf probe counts these
+2. ~~**Default-path post passes create a bind group every frame.**~~ Closed 2026-10-19 (`render-bindgroups`), **no measurable win**. `bloom` (the bright group, kept per lane), `hd_zoom` (per history buffer) and `omega_tonemap` (the distortion group) now keep their group in `oag-post`'s `group_cache::ViewGroup`, keyed on the scene view's identity (a resize or a swapped view rebuilds; a lane or pass rebuilt for a new extent drops its cache with it). Probe (`perf-probe`, `OAG_RENDER_BENCH=120`, 1280x800): Pulse `bind_groups` 2 to 0 over the run (1 to 0 a render; 4 to 0 split), HD and Omega 0 before and after: neither default path reaches `hd_zoom` (a borrowed ring, Pulse and Pure only) or a distortion source in this harness. Whole-race bench at load 3 to 6, base against fix, Pulse CPU p50 1,086 to 1,078 us (-0.7 %), p99 1,828 to 1,703; Omega CPU p50 -5 % one view, but `tick_us` moved -2 % too, so that is machine noise, and Pulse split moved +4 %, the other way. Every delta is inside the run-to-run noise. The fix stays for the count; the estimate (tens of us a view) was right and is below what a bench resolves. `--screenshot` frames byte-identical (`cmp`) on Pulse, HD and Omega, one view and split. Original text:  The perf probe counts these
    (`crates/gpu/src/perfprobe.rs:153` `bind_group`), so the count is available with no new code.
    - `crates/post/src/bloom.rs:551` `prepare_in`: the bright group, built on every call.
    - `crates/post/src/hd_zoom.rs:665` (in `history_from`, line 655, called from `crates/post/src/hd_zoom/host.rs:87` each frame the zoom chain is built) calls `group_for` (line 677), which creates the group each call.
@@ -50,7 +50,7 @@ Worth a lane now, in order:
    - Risk: none to the picture or the simulation. The risk is a stale group after a resize or a
      source swap; a test should cover both.
 
-3. **Two empty shadow clears every frame on the hull and blob tiers.** When the tier is not
+3. ~~**Two empty shadow clears every frame on the hull and blob tiers.**~~ Closed 2026-10-19 (`render-bindgroups`), **no measurable win**. `shadow::map::Map` tracks whether each target is known clear: an empty `render`/`render_depth` over a clear target records no pass, and the frame that stops drawing still clears once (the transition), so no reader samples stale texels. Tests: `shadow_map_coverage` (a second empty pass records none and the atlas stays zero; the depth map clears once, skips, and draws again). Same bench numbers as item 2 (one lane, one A/B): no resolvable change. Original text:  When the tier is not
    `Original` with casters, or `Mapped`, `render_shadow_map` still runs
    `map.render(queue, encoder, &[])` (`crates/raceplay/src/scene/frame/shadow.rs:252`) and
    `map.render_depth(queue, encoder, &default_fit(), &[])`. Both begin a pass that clears the

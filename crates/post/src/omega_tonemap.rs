@@ -268,6 +268,9 @@ pub struct Chain {
     /// fills it on a frame that drew no distortion.
     distortion_layout: wgpu::BindGroupLayout,
     no_distortion: wgpu::BindGroup,
+    /// The group over the distortion texture the last frame read; the layout it
+    /// binds is fixed, so the view is the whole key.
+    distortion_group: super::group_cache::ViewGroup,
     sized: Sized,
     written: std::cell::Cell<Option<Drawn>>,
 }
@@ -492,6 +495,7 @@ impl Chain {
             state_ro,
             distortion_layout,
             no_distortion,
+            distortion_group: Default::default(),
             sized,
             written: std::cell::Cell::new(None),
         })
@@ -663,8 +667,11 @@ impl Chain {
             pass.set_bind_group(1, &seat.coefficients, &[]);
             pass.dispatch_workgroups(1, 1, 1);
         }
-        let drawn =
-            distortion.map(|view| Self::distortion_group(device, &self.distortion_layout, view));
+        let drawn = distortion.map(|view| {
+            self.distortion_group.get(view, || {
+                Self::distortion_group(device, &self.distortion_layout, view)
+            })
+        });
         draw(
             encoder,
             "omega tonemap apply",

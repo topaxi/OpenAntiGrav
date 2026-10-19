@@ -355,6 +355,10 @@ pub struct Zoom {
     current: std::cell::Cell<usize>,
     /// The tick the last history draw ran for.
     last_tick: std::cell::Cell<Option<u64>>,
+    /// The standalone history group per buffer written (it reads the other one),
+    /// over the scene view it last read. Everything else it binds is this pass's
+    /// own, so a resize, which rebuilds the pass, drops these with it.
+    scene_groups: [super::group_cache::ViewGroup; 2],
 }
 
 impl Zoom {
@@ -623,6 +627,7 @@ impl Zoom {
             quarter: (quarter_size.0.max(1), quarter_size.1.max(1)),
             current: std::cell::Cell::new(0),
             last_tick: std::cell::Cell::new(None),
+            scene_groups: Default::default(),
         })
     }
 
@@ -662,7 +667,7 @@ impl Zoom {
         source: SourceMap,
     ) {
         let next = 1 - self.current.get();
-        let group = self.group_for(device, scene, next);
+        let group = self.scene_groups[next].get(scene, || self.group_for(device, scene, next));
         self.history_pass(
             queue,
             encoder,

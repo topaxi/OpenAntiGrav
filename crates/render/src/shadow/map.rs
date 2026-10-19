@@ -363,6 +363,13 @@ pub struct Map {
     depth_matrix: Mat4,
     /// How many casters that pass drew.
     depth_drawn: usize,
+    /// Whether the atlas is known to hold nothing: the last pass that touched it
+    /// was a clear with no craft. A second empty pass over it is skipped.
+    atlas_clear: bool,
+    /// The same for the depth map (everything at the far plane).
+    depth_clear: bool,
+    /// Passes recorded over both targets, so a test can tell a skipped clear from a recorded one.
+    passes: u64,
 }
 
 /// The most casters one pass holds: a full grid.
@@ -581,6 +588,9 @@ impl Map {
             depth_pipeline,
             depth_matrix: Mat4::IDENTITY,
             depth_drawn: 0,
+            atlas_clear: false,
+            depth_clear: false,
+            passes: 0,
         }
     }
 
@@ -619,7 +629,8 @@ impl Map {
     /// exists.
     ///
     /// Cleared to the far plane every frame, for the reason [`Self::render`]
-    /// clears its own target: a stale depth is a shadow that stays behind.
+    /// clears its own target: a stale depth is a shadow that stays behind. An empty
+    /// `casters` over a map already known clear records nothing.
     pub fn render_depth(
         &mut self,
         queue: &dyn oag_gpu::writes::Writes,
@@ -629,6 +640,11 @@ impl Map {
     ) {
         self.depth_matrix = fit.matrix();
         self.depth_drawn = casters.len().min(MAX_CASTERS);
+        if casters.is_empty() && self.depth_clear {
+            return;
+        }
+        self.depth_clear = casters.is_empty();
+        self.passes += 1;
         for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
             let mvp = self.depth_matrix * caster.model;
             queue.write_buffer(
@@ -661,6 +677,13 @@ impl Map {
                 pass.draw_indexed(range.clone(), 0, 0..1);
             }
         }
+    }
+
+    /// How many atlas and depth passes have been recorded; an empty one over a
+    /// target already known clear records none.
+    #[must_use]
+    pub fn passes_recorded(&self) -> u64 {
+        self.passes
     }
 
     /// The view every lit pipeline samples.
@@ -696,7 +719,9 @@ impl Map {
     ///
     /// Cleared to zero every frame: an unwritten texel is unshadowed ground,
     /// and leaving the previous frame's coverage would drag a shadow behind
-    /// every craft. An empty `crafts` is a clear and nothing else.
+    /// every craft. An empty `crafts` is a clear and nothing else - and none at
+    /// all when the atlas is already known to be clear, since nothing else
+    /// writes it.
     pub fn render(
         &mut self,
         queue: &dyn oag_gpu::writes::Writes,
@@ -706,6 +731,11 @@ impl Map {
         let crafts = &crafts[..crafts.len().min(MAX_CASTERS)];
         self.crafts = [CraftShadow::NONE; MAX_CASTERS];
         self.drawn = crafts.len();
+        if crafts.is_empty() && self.atlas_clear {
+            return;
+        }
+        self.atlas_clear = crafts.is_empty();
+        self.passes += 1;
         for (index, craft) in crafts.iter().enumerate() {
             let record = craft_shadow(&craft.fit, craft.rank);
             if let Some(slot) = self.crafts.get_mut(craft.slot) {

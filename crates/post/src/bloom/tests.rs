@@ -354,3 +354,73 @@ fn a_lane_is_the_original_size_for_a_whole_picture() {
     assert_eq!(lane_extent(base, (100.0, 0.0001)), (960, 8));
     assert_eq!(lane_extent(base, (f32::NAN, f32::INFINITY)), base);
 }
+
+/// The bright pass's group is built once for a scene view however many frames
+/// read it, again for a different view (a resized or swapped scene), and a lane
+/// rebuilt for a new extent starts with none - so a stale group is never bound.
+#[test]
+fn the_bright_group_is_kept_until_the_scene_view_or_the_extent_changes() {
+    let Some((device, queue)) = crate::split_fixture::device() else {
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let make = |side: u32| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("bloom group test scene"),
+                size: wgpu::Extent3d {
+                    width: side,
+                    height: side,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    };
+    let bloom = Bloom::new(&device, format).expect("the pipelines build");
+    let frame = |scene, side: u32| Frame {
+        scene,
+        size: (side, side),
+        origin: (0.0, 0.0),
+        viewport: (side, side),
+    };
+    let (a, b) = (make(64), make(128));
+    let mut encoder = device.create_command_encoder(&Default::default());
+    for _ in 0..3 {
+        bloom.prepare(&device, &queue, &mut encoder, frame(&a, 64));
+    }
+    assert_eq!(
+        bloom.base.bright_group.builds(),
+        1,
+        "three frames, one group"
+    );
+    bloom.prepare(&device, &queue, &mut encoder, frame(&b, 128));
+    assert_eq!(
+        bloom.base.bright_group.builds(),
+        2,
+        "a resized scene rebuilds it"
+    );
+
+    for _ in 0..2 {
+        bloom
+            .prepare_view(&device, &queue, &mut encoder, 1, (64, 64), frame(&a, 64))
+            .expect("a lane");
+    }
+    let lane_builds = || bloom.views.borrow()[1].bright_group.builds();
+    assert_eq!(lane_builds(), 1, "a view's lane keeps its own");
+    bloom
+        .prepare_view(&device, &queue, &mut encoder, 1, (32, 32), frame(&a, 64))
+        .expect("a lane");
+    assert_eq!(
+        lane_builds(),
+        1,
+        "a new extent is a new lane with one build, not a stale group"
+    );
+    drop(encoder);
+}

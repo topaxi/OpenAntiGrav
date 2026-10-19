@@ -177,6 +177,76 @@ fn a_craft_covers_the_middle_of_its_square_and_leaves_the_rest_of_the_atlas_clea
     assert!(cleared.iter().all(|texel| *texel == 0), "the atlas cleared");
     assert_eq!(map.casters(), 0);
     assert_eq!(map.craft_shadows()[3].rect, [0.0; 4], "and the records");
+
+    // A second empty pass over a map that is already clear records nothing, and
+    // the map is still clear: the clear above was the one that mattered.
+    let before = map.passes_recorded();
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    map.render(&queue, &mut encoder, &[]);
+    queue.submit([encoder.finish()]);
+    assert_eq!(
+        map.passes_recorded(),
+        before,
+        "an empty pass over a clear atlas is skipped"
+    );
+    assert!(
+        map.read_back(&device, &queue)
+            .iter()
+            .all(|texel| *texel == 0)
+    );
+}
+
+/// The depth map keeps one clear on the frame it stops drawing, skips the empty
+/// passes after it, and records again the moment a caster arrives.
+#[test]
+fn an_empty_depth_pass_over_a_clear_map_is_skipped_and_a_caster_still_draws() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let mut map = Map::new(&device);
+    let (vertex_buffer, index_buffer, index_count) = quad_buffers(&device, &queue);
+    let fit = Fit {
+        centre: Vec3::ZERO,
+        radius: 2.0,
+        towards_light: Vec3::Y,
+    };
+    let whole = 0..index_count;
+    let ranges = std::slice::from_ref(&whole);
+    let run = |map: &mut Map, casters: &[Caster<'_>]| {
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+        map.render_depth(&queue, &mut encoder, &fit, casters);
+        queue.submit([encoder.finish()]);
+    };
+    let caster = || Caster {
+        vertices: &vertex_buffer,
+        indices: &index_buffer,
+        ranges,
+        model: Mat4::IDENTITY,
+    };
+    run(&mut map, &[caster()]);
+    let drawn = map.passes_recorded();
+    run(&mut map, &[]);
+    assert_eq!(
+        map.passes_recorded(),
+        drawn + 1,
+        "the transition clears once"
+    );
+    let depth = read_back_depth(&device, &queue, &map);
+    assert!(
+        depth.iter().all(|d| *d == 1.0),
+        "and the map is at the far plane"
+    );
+    run(&mut map, &[]);
+    run(&mut map, &[]);
+    assert_eq!(
+        map.passes_recorded(),
+        drawn + 1,
+        "empty passes after it are skipped"
+    );
+    run(&mut map, &[caster()]);
+    assert_eq!(map.passes_recorded(), drawn + 2, "a caster records again");
+    let depth = read_back_depth(&device, &queue, &map);
+    assert!(depth.iter().any(|d| *d < 1.0), "and is drawn");
 }
 
 /// **The check that fails if the per-craft maps are dropped.** Two craft 500
