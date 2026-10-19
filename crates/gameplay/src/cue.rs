@@ -503,7 +503,7 @@ pub enum Cue {
     /// `speech.bnk` (cue 11, six waveforms, 3.73 s), `speech_elim.bnk`
     /// (Eliminator, cue 19, 3.00 s) or `speech_zone.bnk` (Zone, cue 15, 2.48 s).
     /// Not in [`Self::ALL`]: it loads only on a title whose
-    /// `oag_title::RaceDefaults::countdown_voice` is set (measured on Pulse, lent elsewhere), through
+    /// `oag_title::RaceDefaults::countdown_voice` is set (measured on Pulse and Pure, lent to the rest), through
     /// `oag_sound::sfx::Banks::load_countdown`.
     /// `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md`.
     Ready,
@@ -641,6 +641,17 @@ pub enum Cue {
     MedalSilver,
     /// `"bronze_med"`. See [`Self::MedalGold`].
     MedalBronze,
+    /// The start beat: `"HBEAT"`, three groups of key-ons on delays of 125, 205 and 205
+    /// master ticks, played **with** [`Self::Ready`].
+    ///
+    /// Wipeout HD's `RaceManager_SetPhase` phase 1 (`0x0005673c`) queues `ready` and then
+    /// calls `Sound_PlayBankCue(..., "HBEAT", 0x400)`, and a live cue-start log on RPCS3 shows
+    /// the two 8 audio ticks apart with nothing else between them and `go`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/countdown-voice.md`). Wipeout 2048 plays it in a
+    /// named mode the same way. Not in [`Self::ALL`] or [`Self::COUNTDOWN`]: it loads only
+    /// where `oag_title::CountdownVoice::beat` names it, through
+    /// `oag_sound::sfx::Banks::load_countdown`.
+    StartBeat,
 }
 
 impl Cue {

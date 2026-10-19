@@ -26,9 +26,9 @@ fn ready_follows_its_child_cue_to_a_timeline() {
         return;
     };
     let race = opened.title.race;
-    let tick = race.zone_announcer.expect("HD's tick").tick;
+    let voice = race.countdown_voice.expect("HD voices its start");
     let mut banks = Banks::default();
-    banks.load_countdown(&mut opened.archives, race.sounds.speech, tick);
+    banks.load_countdown(&mut opened.archives, race.sounds.speech, voice);
     let line = |cue: &str| {
         banks
             .report
@@ -50,4 +50,24 @@ fn ready_follows_its_child_cue_to_a_timeline() {
         "ready is 321_GO's tail: one stereo pair, {}",
         line("ready")
     );
+
+    // `HBEAT` plays beside `ready` (`RaceManager_SetPhase` phase 1): three groups of voices on
+    // delays of 125, 205 and 205 master ticks of the 240 Hz tick, which end on a `0x1a`
+    // wait that nothing follows.
+    assert!(
+        line("HBEAT").contains("1 variant(s) of 10 voice(s)"),
+        "the start beat is three groups of 3, 3 and 4 voices: {}",
+        line("HBEAT")
+    );
+    let mut rng = oag_core::Rng::new(1);
+    let voices = banks
+        .voices(oag_gameplay::cue::Cue::StartBeat, &mut rng)
+        .expect("HBEAT loaded");
+    let mut onsets: Vec<f64> = voices.iter().map(|v| v.delay).collect();
+    onsets.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    let want = [125.0 / 240.0, 330.0 / 240.0, 535.0 / 240.0];
+    assert_eq!(onsets.len(), 3, "three groups: {onsets:?}");
+    for (got, want) in onsets.iter().zip(want) {
+        assert!((got - want).abs() < 0.001, "{onsets:?} against {want}");
+    }
 }

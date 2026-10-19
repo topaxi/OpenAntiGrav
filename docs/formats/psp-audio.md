@@ -542,7 +542,7 @@ this port's render; the other two banks' `ready` speaks from the cue's own start
 
 `oag_gameplay::cue::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
-`RaceDefaults::countdown_voice` is measured on Pulse; Pure, HD, 2048 and Omega are lent Pulse's timing and their mode's speech bank (chosen, not measured, no confidence score), and it is raised by
+`RaceDefaults::countdown_voice` (its `origin` is `Measured` on Pulse and Pure, `Chosen` on HD, 2048 and Omega, which are lent Pulse's timing and their mode's speech bank, no confidence score), and it is raised by
 `oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
 `crates/game/tests/countdown_voice_ground_truth.rs`.
 
@@ -556,14 +556,14 @@ on, which HD's speech needs: its speech bus rides the effects slider); list a ba
 | Title | Port plays now | Original authors | Trigger and timing |
 | --- | --- | --- | --- |
 | Pulse (PSP, PS2) | `ready` at tick 91, `go` at 271, from the mode's speech bank | the same | measured (above) |
-| Pure | `ready` (1 waveform, 0.51 s) at 91, `go` (0.43 s) at 271, `speech.bnk` | the same two cues | **lent from Pulse, chosen, not measured**; no Pure executable read for the start |
-| HD / Fury | `ready` at 91 (**now** the authored 3.0 s tail of `321_GO`, was one random flat clip of 0.8-3.0 s, peak a quarter of `go`'s), `go` at 271 (5.1 s) | `speech.bnk` `ready` is a lone `0x08` into child `321_GO`; `go`; `INIT_GO`; `launch.bnk` `LAUNCHSEQ`, `LAUNCHBEEP2/3`; `RS_1_READY`/`RS_2_GO` in `speech_zone.bnk` and `speech_elim.bnk` | **lent from Pulse, chosen, not measured.** No literal `321_GO`, `go`, `INIT_GO` or `LAUNCHSEQ` is in HD's executable (`search_strings`), so the trigger is not located; `launch.bnk` is named nowhere in the repo or the loader |
-| 2048 | nothing (a hashed bank; the countdown loader looks names up plain) | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; timing assumed Pulse's whole-seconds test, not measured; not wired |
-| Omega | nothing | not readable (SBlk parse fails) | not checkable here |
+| Pure (PSP, USA) | `ready` (cue 12, 1.25 s) at 91, `go` (cue 13, 1.12 s) at 271, `speech.bnk` | the same two cues | **measured 2026-10-19**: `Scream_StartSound` (`0x0883defc`) logs `SPEECH` 12 then 13, 180.0 frames apart, three runs; the craft's launch gate flips in the first update after `go`; [countdown-voice.md](../ghidra/functions/psp-pure-usa/countdown-voice.md), confidence 85 (cues, spacing, and `go` at the release: the throttle field `craft+0x270` first reads non-zero 2 to 4 frames after `go`, at Pure's 30 Hz update). Zone, Eliminator and the EU pressing not run |
+| HD / Fury | `ready` at 91 (the authored 3.0 s tail of `321_GO`), **`HBEAT` with it (now: three groups of voices at 0.52, 1.375 and 2.23 s)**, `go` at 271 (5.1 s), `speech.bnk` | `ready`, `HBEAT`, `go` and nothing else of the start | **triggers read and the order captured 2026-10-19** (RPCS3 cue-start log on `Sound_QueueAnnouncerCue` and `Sound_PlayBankCue`): `RaceManager_SetPhase` phase 1 queues `ready` and plays `HBEAT`, `RaceManager_UpdateCountdown` queues `go` after entering phase 2, [countdown-voice.md](../ghidra/functions/ps3-hdfury-eu/countdown-voice.md), 85; `321_GO`, `INIT_GO` and `LAUNCHSEQ` start no cue. The ready-to-go spacing (the countdown timer `+0x1958`) is **inherited from Pulse, not measured** (the audio clock the capture counted is not game time) |
+| 2048 (Vita) | a named mode: `ready`, `HBEAT` at 91 and `go` (1.15 s) at 271, `speech.bnk`, timelines on the 240 Hz tick (**now**, was nothing); a campaign event: `Go_NGP` at 271 alone (**now**), `321_NGP` authored and not played | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; tick 240 Hz read, 85; `321_NGP` is two looping voices keyed off after 3.75 s under a +-180 degree pan sweep at 1 Hz, which the mixer cannot play; ready-to-go spacing is Pulse's, **chosen, not measured** |
+| Omega | nothing | Wwise events (`BKHD` v118, `speech.bnk` is a 32-byte header): `_321_NGP`, `Go_NGP`, `Ship_Gear_up_PirProto`, `RACE_Combat_Start` | **checked, differs**: the executable posts `_321_NGP` at state 1 and `Go_NGP` at the countdown's end on every non-demo mode, no `< 0x17` split (decompile, 80); not playable, no Wwise event path |
 
 HD's `ready` is the change of this lane: the countdown loader walks opcode `0x08` as a child (the
 reading Pulse's front end measured, `WalkModel::globals`), so `ready` plays `321_GO` after its goto, the
-3.0 s stereo pair. Whether HD's own `0x08` handler does the same was **not read** (chosen, not measured).
+3.0 s stereo pair. HD's own `0x08` handler is read (`Scream_DoGrainBranch`, `0x00625fc0`, 85, [sound.md](../ghidra/functions/ps3-hdfury-eu/sound.md)): it resolves a child cue by index or name and replaces the voice's own playback state with it, so a lone `0x08` plays its child exactly as the walk has it; the cue's start time and what plays `go` are not read.
 Pulse's and Pure's renders are byte-identical before and after. Pinned by
 `crates/raceplay/tests/countdown_voice_hd_ground_truth.rs`, which fails without the walk.
 
@@ -1649,7 +1649,7 @@ Pulse disc carries the identical bank (checked, applies: same counts). A headles
 | --- | --- |
 | Pulse PSP, PS2 | ported |
 | Pure | ported, triggers unread on Pure's executable (the same six names less `PAUSE` are in it): a bet like HD's |
-| HD / Fury | checked, differs: `frontend.bnk` carries 27 cues (`navUp`, `navDown`, `navLeft`, `navRight`, `accept`, `reject`, `accept_fury`, `reject_fury`, `pause`, `whoosh*`, `TextBox0*`, `wipe_*`, `unlockcell`...) and none of Pulse's names; wiring is its own reading of HD's front end |
+| HD / Fury | `ready` at 91 (the authored 3.0 s tail of `321_GO`), **`HBEAT` with it (now: three groups of voices at 0.52, 1.375 and 2.23 s)**, `go` at 271 (5.1 s), `speech.bnk` | `ready`, `HBEAT`, `go` and nothing else of the start | **triggers read and the order captured 2026-10-19** (RPCS3 cue-start log on `Sound_QueueAnnouncerCue` and `Sound_PlayBankCue`): `RaceManager_SetPhase` phase 1 queues `ready` and plays `HBEAT`, `RaceManager_UpdateCountdown` queues `go` after entering phase 2, [countdown-voice.md](../ghidra/functions/ps3-hdfury-eu/countdown-voice.md), 85; `321_GO`, `INIT_GO` and `LAUNCHSEQ` start no cue. The ready-to-go spacing (the countdown timer `+0x1958`) is **inherited from Pulse, not measured** (the audio clock the capture counted is not game time) |
 | 2048 | checked, differs: `frontend.bnk` is a v5 bank with no name table (`docs/formats/2048-frontend.md`) |
 | Omega | not checkable: Wwise banks, no event mapping (`docs/formats/wwise.md`) |
 

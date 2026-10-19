@@ -195,3 +195,4 @@
 # 2026-10-14 (mp-collision-re): the MPTimeTrial constructor and the craft-pair dispatch. See mp-time-trial-collision.md.
 0x08815e1c	function	MPTimeTrial_Construct	82	mp-time-trial-collision.md
 0x08824e34	function	Collision_DispatchPair	80	mp-time-trial-collision.md
+0x0883defc	function	Scream_StartSound	88	countdown-voice.md

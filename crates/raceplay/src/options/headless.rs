@@ -173,6 +173,7 @@ impl Setup {
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
             zone_stages: None,
             countdown_voice: false,
+            countdown_beat: false,
             launch_hover: None,
             hover_rig: None,
             craft_laws: None,

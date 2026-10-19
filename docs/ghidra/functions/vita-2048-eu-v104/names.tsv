@@ -179,3 +179,9 @@
 0x8102d9e8	function	ShipShadow_DrawCasters	60	ship-shadows.md
 0x8102d92a	function	ShipEnvShadow_DrawAll	62	ship-shadows.md
 0x8102d748	function	ShipEnvShadow_RenderForShip	62	ship-shadows.md
+0x8134ee78	function	Scream_OpLfo	85	countdown-voice.md
+0x8134fc16	function	Scream_OpMarker	85	countdown-voice.md
+0x8134fc58	function	Scream_OpGoto	88	countdown-voice.md
+0x813502fa	function	Scream_OpKeyOffVoices	88	countdown-voice.md
+0x8134fe5c	function	Scream_OpGotoRandomMarker	88	countdown-voice.md
+0x81354b74	function	Scream_RunMasterTicks	82	countdown-voice.md

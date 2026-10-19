@@ -339,6 +339,8 @@ pub struct RaceSim {
     pub(super) zone_stages: Option<&'static oag_title::ZoneStages>,
     /// Whether the race voices its start - see [`Setup::countdown_voice`].
     pub(super) countdown_voice: bool,
+    /// Whether the start also raises the start beat - see [`Setup::countdown_beat`].
+    pub(super) countdown_beat: bool,
     /// The grid hover the craft carries - see [`Setup::launch_hover`].
     pub(super) launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
     /// The hover probe set every craft flies - see [`Setup::hover_rig`].

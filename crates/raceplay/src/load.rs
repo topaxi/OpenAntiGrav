@@ -1015,6 +1015,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class_announcer,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
+            countdown_beat: title
+                .race
+                .countdown_voice
+                .is_some_and(|voice| voice.beat.is_some()),
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,

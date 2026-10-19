@@ -38,8 +38,8 @@ pub(super) fn banks_and_announcers(
         },
         None => race.sounds.speech,
     };
-    if race.countdown_voice.is_some() {
-        sounds.load_countdown(archives, speech, tick);
+    if let Some(voice) = race.countdown_voice {
+        sounds.load_countdown(archives, speech, voice);
     }
     // The lap announcer shares the mode's speech slot on Pulse
     // (`DAT_08ac1dfc`, `FUN_08829778`) and is the title's `speech.bnk` on HD.

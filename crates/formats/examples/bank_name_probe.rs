@@ -37,6 +37,14 @@ fn main() {
                             word & 0xff_ffff,
                             arg
                         );
+                        if matches!(word >> 24, 0x04 | 0x2e) {
+                            let at = bank.parameter_offset as usize + (word & 0xff_ffff) as usize;
+                            if let Some(record) = bank.block.get(at..at + 32) {
+                                let hex: Vec<String> =
+                                    record.iter().map(|b| format!("{b:02x}")).collect();
+                                println!("      record {}", hex.join(" "));
+                            }
+                        }
                     }
                 }
             }

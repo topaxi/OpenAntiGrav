@@ -686,6 +686,9 @@ pub struct Setup {
     /// rather than the banks: which bank plays rides [`Self::sounds`]; whether the simulation asks
     /// for the cue at all is title data, and must not change with whether a bank decoded.
     pub countdown_voice: bool,
+    /// Whether the start also plays the start beat, [`oag_gameplay::cue::Cue::StartBeat`], with
+    /// `ready`: `oag_title::CountdownVoice::beat` being `Some`.
+    pub countdown_beat: bool,
     /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
     /// The title's hover probe set, `oag_title::RaceDefaults::hover_rig` ([`crate::launch_hover`]).

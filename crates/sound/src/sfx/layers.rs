@@ -137,8 +137,9 @@ impl Timeline {
 ///
 /// `replace_with_child` walks opcode `0x08` as a child cue (and so reads the guard
 /// registers as zero): the countdown loader sets it, because HD's `ready` is a lone
-/// `0x08` into `321_GO`. Nothing else asks for it. Chosen, not measured: Pulse's
-/// `0x08` is the measured reading, HD's handler was not read.
+/// `0x08` into `321_GO`. Nothing else asks for it. Pulse's `0x08` is the measured
+/// reading and HD's handler (`Scream_DoGrainBranch`) reads the same, read and not run: it
+/// replaces the voice's own playback state with the child cue.
 ///
 /// `Ok(None)` keeps the flat pick: unknown tick, an incompletely modelled walk,
 /// a grain angle in the rear half the pan law does not model, or a cue a flat
@@ -153,17 +154,25 @@ pub(super) fn timelines(
     tick: SequenceTick,
     front_end: bool,
     replace_with_child: bool,
+    hashed: bool,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
     };
-    let Some(cue) = bank.cue_named(name) else {
+    let found = if hashed {
+        bank.cue_named_or_hashed(name)
+    } else {
+        bank.cue_named(name)
+    };
+    let Some(cue) = found else {
         return Ok(None);
     };
     let model = WalkModel {
         goto_markers: tick.follows_gotos(),
         hd_alternates: front_end && tick.alternates_in_high_byte(),
         globals: replace_with_child.then_some([0; oag_formats::sblk::timeline::GLOBAL_SLOTS]),
+        vita: tick.vita_handlers(),
+        tail_waits: replace_with_child,
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);

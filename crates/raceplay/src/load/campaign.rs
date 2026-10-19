@@ -248,6 +248,15 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
             )
         })
     };
+    // A campaign event is one of the original's CRC-id modes, whose start is
+    // `321_NGP` and `Go_NGP` where a named mode's is `ready` and `go`
+    // (`docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`).
+    #[cfg(feature = "view")]
+    if loaded.setup.sounds.use_event_start() {
+        loaded
+            .report
+            .push("sfx: this race is a campaign event: its start plays the event pair".to_string());
+    }
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
         objectives: oag_2048::campaign::event_objectives(&doc, &event),
