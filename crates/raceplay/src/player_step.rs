@@ -241,6 +241,7 @@ impl Race {
             // `oag_gameplay::damage_rules`.
             damage_rules: env_damage_rules,
             pilot_assist,
+            barrel_rolls: self.sim.barrel_rolls,
             ..Environment::default()
         };
         let evaluated = oag_physics::step(

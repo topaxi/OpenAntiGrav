@@ -44,6 +44,8 @@ pub struct Plan {
     pub action: Action,
     /// The team to fly, `--team`'s spelling.
     pub team: String,
+    /// The Pilot Assist level to fly with, where the room allows it.
+    pub assist: oag_physics::pilot_assist::Level,
     /// The owner presses START when this many are ready.
     pub start_at: usize,
 }
@@ -140,7 +142,7 @@ pub fn run(plan: &Plan) -> Result<Connect> {
                 seen = line;
             }
             if !pick_sent {
-                lobby.ready(&plan.team, true);
+                lobby.ready(&plan.team, true, plan.assist);
                 pick_sent = true;
             }
             let ready = room.members.iter().filter(|m| m.ready).count();

@@ -91,6 +91,9 @@ pub(super) fn capture_online(
         max_players: 8,
         opponents: false,
         laps: 0,
+        no_barrel_rolls: false,
+        pilot_assist: true,
+        zone_target: 0,
     };
     let screen = if room {
         let mut screen = Join::new(Labels::read_online_room(strings), oag_gameplay::MAX_PLAYERS);

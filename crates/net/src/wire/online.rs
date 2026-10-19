@@ -54,6 +54,15 @@ pub struct RoomSettings {
     /// Laps the race runs, `0` for the mode's own, else `1..=20` (Omega's slider is 3 to 20;
     /// fewer is chosen, for a short test race).
     pub laps: u8,
+    /// Whether barrel rolls are off (Omega's `Barrel rolls` row, inverted so the default is the
+    /// originals' race).
+    pub no_barrel_rolls: bool,
+    /// Whether people may fly with Pilot Assist (Omega's `Pilot assist allowed`). Off, every
+    /// seat flies without it whatever its owner has set.
+    pub pilot_assist: bool,
+    /// Zone's ending in zones: `0` for none, else `15..=55` in fives (Omega's `NitroTarget`
+    /// slider, default 30). Zeroed outside Zone.
+    pub zone_target: u8,
 }
 
 /// One person in a room.
@@ -212,6 +221,9 @@ pub enum Message {
         team: String,
         /// Ready or not.
         ready: bool,
+        /// The Pilot Assist level this person flies with if the room allows it, as the index
+        /// into `oag_physics::pilot_assist::Level::ALL`.
+        assist: u8,
     },
     /// Owner to lobby: press START.
     Start,
@@ -352,6 +364,9 @@ fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
     out.push(s.max_players);
     out.push(u8::from(s.opponents));
     out.push(s.laps);
+    out.push(u8::from(s.no_barrel_rolls));
+    out.push(u8::from(s.pilot_assist));
+    out.push(s.zone_target);
 }
 
 fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
@@ -363,6 +378,9 @@ fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
         max_players: r.u8()?,
         opponents: r.u8()? != 0,
         laps: r.u8()?,
+        no_barrel_rolls: r.u8()? != 0,
+        pilot_assist: r.u8()? != 0,
+        zone_target: r.u8()?,
     })
 }
 
@@ -435,10 +453,15 @@ impl Message {
                 out.push(0x24);
                 put_settings(&mut out, settings);
             }
-            Self::Ready { team, ready } => {
+            Self::Ready {
+                team,
+                ready,
+                assist,
+            } => {
                 out.push(0x25);
                 put_string(&mut out, team);
                 out.push(u8::from(*ready));
+                out.push(*assist);
             }
             Self::Start => out.push(0x26),
             Self::Leave => out.push(0x27),
@@ -531,6 +554,7 @@ impl Message {
             0x25 => Self::Ready {
                 team: r.string()?,
                 ready: r.u8()? != 0,
+                assist: r.u8()?,
             },
             0x26 => Self::Start,
             0x27 => Self::Leave,
@@ -623,6 +647,9 @@ mod tests {
             max_players: 4,
             opponents: true,
             laps: 3,
+            no_barrel_rolls: true,
+            pilot_assist: true,
+            zone_target: 30,
         }
     }
 
@@ -649,6 +676,7 @@ mod tests {
             Message::Ready {
                 team: "Feisar".into(),
                 ready: true,
+                assist: 0,
             },
             Message::Start,
             Message::Leave,
@@ -729,6 +757,9 @@ mod tests {
                 opponents: false,
                 weapons: false,
                 laps: 3,
+                no_barrel_rolls: true,
+                assists: vec![0, 2],
+                zone_target: 30,
             },
             seats: vec![("ann".into(), "t0".into()), ("bob".into(), "t1".into())],
         };

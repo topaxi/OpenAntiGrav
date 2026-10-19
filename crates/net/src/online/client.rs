@@ -150,10 +150,13 @@ impl LobbyClient {
     }
 
     /// Picks a team and says ready, or takes it back.
-    pub fn ready(&mut self, team: &str, ready: bool) {
+    ///
+    /// `assist` is the Pilot Assist level this person flies with if the room allows it.
+    pub fn ready(&mut self, team: &str, ready: bool, assist: oag_physics::pilot_assist::Level) {
         self.link.send_lobby(&Message::Ready {
             team: team.to_string(),
             ready,
+            assist: assist_index(assist),
         });
     }
 
@@ -174,4 +177,13 @@ impl std::fmt::Debug for LobbyClient {
             .field("name", &self.name)
             .finish_non_exhaustive()
     }
+}
+
+/// The wire's spelling of a Pilot Assist level: its index in `Level::ALL`.
+#[must_use]
+pub fn assist_index(level: oag_physics::pilot_assist::Level) -> u8 {
+    oag_physics::pilot_assist::Level::ALL
+        .iter()
+        .position(|&l| l == level)
+        .map_or(0, |i| u8::try_from(i).unwrap_or(0))
 }

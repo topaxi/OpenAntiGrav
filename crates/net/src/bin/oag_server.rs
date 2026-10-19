@@ -96,6 +96,16 @@ struct Cli {
     /// Laps the race runs; 0 is the mode's own count.
     #[arg(long, default_value_t = 0)]
     laps: u8,
+    /// Switch barrel rolls off for every craft.
+    #[arg(long)]
+    no_barrel_rolls: bool,
+    /// A Zone race ends at this zone; 0 is the original's Zone, which never ends but on destruction.
+    #[arg(long, default_value_t = 0)]
+    zone_target: u8,
+    /// Each person's Pilot Assist level in seat order (`off`, `normal`, `extreme`); a seat
+    /// left out flies without it.
+    #[arg(long, value_delimiter = ',')]
+    assists: Vec<String>,
     /// No AI on the grid, only the people.
     #[arg(long)]
     no_opponents: bool,
@@ -142,6 +152,17 @@ fn main() -> Result<()> {
         // Weapons are not server events yet (ADR-0069, condition 2).
         weapons: false,
         laps: cli.laps,
+        no_barrel_rolls: cli.no_barrel_rolls,
+        assists: cli
+            .assists
+            .iter()
+            .map(|name| {
+                oag_physics::pilot_assist::Level::from_name(name)
+                    .map(oag_net::online::client::assist_index)
+                    .ok_or_else(|| anyhow::anyhow!("unknown pilot assist level {name:?}"))
+            })
+            .collect::<anyhow::Result<_>>()?,
+        zone_target: cli.zone_target,
     };
     let (race, title) = oag_net::race::load(&params, &source)?;
     params.title = title.to_string();

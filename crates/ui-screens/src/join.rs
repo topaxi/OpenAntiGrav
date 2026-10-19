@@ -47,8 +47,12 @@ pub struct Labels {
     pub max_players: String,
     /// The room owner's row that sets the laps, in a mode that ends on them.
     pub laps: String,
-    /// What the laps row says for `0`: the mode's own count.
-    pub laps_own: String,
+    /// The row that switches barrel rolls on or off for the room.
+    pub barrel_rolls: String,
+    /// The row that says whether the room allows Pilot Assist.
+    pub pilot_assist: String,
+    /// The row that sets the zone a Zone race ends at.
+    pub zone_target: String,
     /// The row that begins the race.
     pub start: String,
     /// The row that leaves the screen.
@@ -61,6 +65,11 @@ impl Labels {
     #[must_use]
     pub fn read(strings: &oag_ui::language::StringTable) -> Self {
         let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let disc_or = |disc: &str, ours: &str, english: &str| {
+            strings
+                .get(disc)
+                .map_or_else(|| say(ours, english), str::to_uppercase)
+        };
         Self {
             title: say("OAG_MP_LOCAL", "LOCAL MULTIPLAYER"),
             hint: say("OAG_JOIN_HINT", "EACH PLAYER PRESSES A BUTTON TO JOIN"),
@@ -72,7 +81,15 @@ impl Labels {
             settings: say("OAG_ONLINE_ROOM_SETTINGS", "ROOM SETTINGS"),
             max_players: say("OAG_ONLINE_MAX_PLAYERS", "MAX PLAYERS"),
             laps: say("OAG_ONLINE_LAPS", "LAPS"),
-            laps_own: say("OAG_ONLINE_LAPS_OWN", "MODE'S OWN"),
+            // Omega's own words where this title's disc has them (`MAN_2_BR`, `FE_PILOT_ASSIST_ALLOWED`,
+            // `FE_ZONE_TARGET`), else this project's.
+            barrel_rolls: disc_or("MAN_2_BR", "OAG_ONLINE_BARREL_ROLLS", "BARREL ROLLS"),
+            pilot_assist: disc_or(
+                "FE_PILOT_ASSIST_ALLOWED",
+                "OAG_ONLINE_PILOT_ASSIST",
+                "PILOT ASSIST ALLOWED",
+            ),
+            zone_target: disc_or("FE_ZONE_TARGET", "OAG_ONLINE_ZONE_TARGET", "ZONE TARGET"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
         }
@@ -154,12 +171,25 @@ pub enum Row {
     Settings,
     /// The room owner's row that shows, and steps, how many people the room seats.
     MaxPlayers,
-    /// The room owner's row that shows, and steps, the laps (`0` is the mode's own).
-    Laps,
+    /// One of the owner's room settings, shown with its value and stepped in place.
+    Setting(Setting),
     /// Begin the race.
     Start,
     /// Leave the screen.
     Back,
+}
+
+/// A room setting the owner steps on the room screen, after Omega's `MP Select` rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Setting {
+    /// Laps (`0` is the mode's own).
+    Laps,
+    /// Barrel rolls on or off.
+    BarrelRolls,
+    /// Whether Pilot Assist is allowed.
+    PilotAssist,
+    /// The zone a Zone race ends at.
+    ZoneTarget,
 }
 
 /// What the pointer asked for.
@@ -176,8 +206,8 @@ pub enum Event {
     /// The owner's click on MAX PLAYERS (`1`, one more, wrapping round to the fewest), or a pad's
     /// left and right on it (`-1`, `1`).
     MaxPlayers(i32),
-    /// The owner's click on LAPS (`1`), or left and right on it (`-1`, `1`).
-    Laps(i32),
+    /// The owner's click on one of the room's settings (`1`), or left and right on it (`-1`, `1`).
+    Setting(Setting, i32),
     /// A click on START with somebody seated.
     Start,
     /// A click on BACK, or the secondary button.
@@ -210,8 +240,8 @@ pub struct Join {
     /// The room owner's rows: ROOM SETTINGS, and MAX PLAYERS showing this number. `None` for
     /// everybody else, who sees neither row.
     owner_max: Option<u8>,
-    /// The laps row, shown with this count (`0` the mode's own) in a mode that ends on laps.
-    owner_laps: Option<u8>,
+    /// The owner's other settings rows, each with the value it says on the right.
+    owner_settings: Vec<(Setting, String)>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -361,7 +391,7 @@ impl Join {
             notes: Vec::new(),
             blocked: Vec::new(),
             owner_max: None,
-            owner_laps: None,
+            owner_settings: Vec::new(),
         }
     }
 
@@ -374,10 +404,12 @@ impl Join {
         }
     }
 
-    /// Shows the owner's LAPS row saying `laps` (`0` the mode's own); `None` hides it.
-    pub fn set_laps(&mut self, laps: Option<u8>) {
-        self.owner_laps = laps;
-        if laps.is_none() && self.hover == Some(Row::Laps) {
+    /// Shows the owner's settings rows, each with its value; an empty list hides them all.
+    pub fn set_settings(&mut self, settings: Vec<(Setting, String)>) {
+        self.owner_settings = settings;
+        if let Some(Row::Setting(on)) = self.hover
+            && !self.owner_settings.iter().any(|(s, _)| *s == on)
+        {
             self.hover = None;
         }
     }
@@ -397,7 +429,7 @@ impl Join {
     pub fn adjust(&self, by: i32) -> Option<Event> {
         match self.hover {
             Some(Row::MaxPlayers) => Some(Event::MaxPlayers(by)),
-            Some(Row::Laps) => Some(Event::Laps(by)),
+            Some(Row::Setting(setting)) => Some(Event::Setting(setting, by)),
             _ => None,
         }
     }
@@ -469,7 +501,7 @@ impl Join {
             Row::Empty => Some(Event::Join),
             Row::Settings => Some(Event::Settings),
             Row::MaxPlayers => Some(Event::MaxPlayers(1)),
-            Row::Laps => Some(Event::Laps(1)),
+            Row::Setting(setting) => Some(Event::Setting(setting, 1)),
             Row::Start if self.can_start() => Some(Event::Start),
             Row::Start => None,
             Row::Back => Some(Event::Back),
@@ -510,9 +542,7 @@ impl Join {
         if self.owner_max.is_some() && !self.listing {
             rows.push(Row::Settings);
             rows.push(Row::MaxPlayers);
-            if self.owner_laps.is_some() {
-                rows.push(Row::Laps);
-            }
+            rows.extend(self.owner_settings.iter().map(|(s, _)| Row::Setting(*s)));
         }
         if !self.listing {
             rows.push(Row::Start);
@@ -666,12 +696,18 @@ impl Join {
                     }
                 }
                 Row::Settings => (self.labels.settings.clone(), String::new()),
-                Row::Laps => (
-                    self.labels.laps.clone(),
-                    match self.owner_laps.unwrap_or_default() {
-                        0 => self.labels.laps_own.clone(),
-                        n => n.to_string(),
+                Row::Setting(setting) => (
+                    match setting {
+                        Setting::Laps => self.labels.laps.clone(),
+                        Setting::BarrelRolls => self.labels.barrel_rolls.clone(),
+                        Setting::PilotAssist => self.labels.pilot_assist.clone(),
+                        Setting::ZoneTarget => self.labels.zone_target.clone(),
                     },
+                    self.owner_settings
+                        .iter()
+                        .find(|(s, _)| *s == setting)
+                        .map(|(_, value)| value.clone())
+                        .unwrap_or_default(),
                 ),
                 Row::MaxPlayers => (
                     self.labels.max_players.clone(),

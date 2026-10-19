@@ -21,7 +21,9 @@ fn labels() -> Labels {
         settings: "ROOM SETTINGS".into(),
         max_players: "MAX PLAYERS".into(),
         laps: "LAPS".into(),
-        laps_own: "OWN".into(),
+        barrel_rolls: "ROLLS".into(),
+        pilot_assist: "ASSIST".into(),
+        zone_target: "ZONE".into(),
         start: "START".into(),
         back: "BACK".into(),
     }
@@ -554,21 +556,38 @@ fn the_owner_of_a_full_room_still_sees_and_can_click_start_and_back() {
 }
 
 #[test]
-fn the_laps_row_is_the_owners_and_only_while_the_mode_ends_on_laps() {
+fn the_settings_rows_are_the_owners_and_come_and_go_with_the_mode() {
     let mut join = screen(2);
     join.set_owner(Some(8));
-    assert!(!join.rows().contains(&Row::Laps));
-    join.set_laps(Some(0));
+    assert!(!join.rows().contains(&Row::Setting(Setting::Laps)));
+    join.set_settings(vec![
+        (Setting::Laps, "OWN".into()),
+        (Setting::BarrelRolls, "ON".into()),
+    ]);
     let rows = join.rows();
-    let at = rows.iter().position(|r| *r == Row::Laps).expect("laps row");
+    let at = rows
+        .iter()
+        .position(|r| *r == Row::Setting(Setting::Laps))
+        .expect("laps row");
     assert_eq!(rows[at - 1], Row::MaxPlayers, "right under MAX PLAYERS");
+    assert_eq!(
+        rows[at + 1],
+        Row::Setting(Setting::BarrelRolls),
+        "in the order given"
+    );
     join.step(1);
-    while join.hover() != Some(Row::Laps) {
+    while join.hover() != Some(Row::Setting(Setting::BarrelRolls)) {
         join.step(1);
     }
-    assert_eq!(join.confirm(), Some(Event::Laps(1)));
-    assert_eq!(join.adjust(-1), Some(Event::Laps(-1)));
-    join.set_laps(None);
-    assert!(!join.rows().contains(&Row::Laps));
+    assert_eq!(
+        join.confirm(),
+        Some(Event::Setting(Setting::BarrelRolls, 1))
+    );
+    assert_eq!(
+        join.adjust(-1),
+        Some(Event::Setting(Setting::BarrelRolls, -1))
+    );
+    join.set_settings(Vec::new());
+    assert!(!join.rows().contains(&Row::Setting(Setting::BarrelRolls)));
     assert_eq!(join.hover(), None, "the cursor was on the row that went");
 }

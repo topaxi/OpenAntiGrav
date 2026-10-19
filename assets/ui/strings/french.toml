@@ -103,6 +103,12 @@ OAG_ONLINE_ROOM_SETTINGS = { text = "PARAMÈTRES DU SALON", human = false }
 OAG_ONLINE_MAX_PLAYERS = { text = "JOUEURS MAX.", human = false }
 OAG_ONLINE_LAPS = { text = "TOURS", human = false }
 OAG_ONLINE_LAPS_OWN = { text = "CELUI DU MODE", human = false }
+OAG_ONLINE_BARREL_ROLLS = { text = "TONNEAUX", human = false }
+OAG_ONLINE_PILOT_ASSIST = { text = "ASSISTANCE DE PILOTAGE AUTORISÉE", human = false }
+OAG_ONLINE_ZONE_TARGET = { text = "OBJECTIF DE ZONE", human = false }
+OAG_ONLINE_ON = { text = "OUI", human = false }
+OAG_ONLINE_OFF = { text = "NON", human = false }
+OAG_ONLINE_ZONE_NONE = { text = "AUCUN", human = false }
 OAG_ONLINE_QUEUED = { text = "UNE AUTRE PARTIE COURT : VOUS ÊTES N° %d DANS LA FILE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "LA COURSE COMMENCE DANS %d", human = false }
 OAG_ONLINE_RACING = { text = "LA COURSE VA COMMENCER", human = false }

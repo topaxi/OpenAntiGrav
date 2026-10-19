@@ -219,6 +219,7 @@ impl Race {
             env: Environment {
                 class_gravity_scale: sim.class_gravity_scale,
                 damage_rules: sim.damage_rules(),
+                barrel_rolls: sim.barrel_rolls,
                 ..Environment::default()
             },
             dt: sim.dt,

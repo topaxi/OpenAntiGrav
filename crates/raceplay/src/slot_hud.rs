@@ -145,7 +145,7 @@ impl Race {
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
             let acting = ship.physics.pilot_assist.acting;
-            let (shown, dt) = (self.pilot_assist_shown(), self.sim.dt);
+            let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, dt);
             hud.assist_indicator.advance(shown, acting, dt);

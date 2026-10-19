@@ -133,6 +133,16 @@ pub struct RaceParams {
     /// Laps the race runs, or 0 for the mode's own (`Options::laps_override`). Chosen: only
     /// the modes that end on laps read it.
     pub laps: u8,
+    /// Whether barrel rolls are off for every craft (a room's `Barrel rolls` row). A flag that
+    /// reads "off" so the default is the originals' race.
+    pub no_barrel_rolls: bool,
+    /// The Pilot Assist level each seat flies with, in seat order, as the index into
+    /// `oag_physics::pilot_assist::Level::ALL` (`0` off); a missing entry is off. The room
+    /// fills it only when it allows the assist.
+    pub assists: Vec<u8>,
+    /// The Zone race's ending, in zones, or `0` for none (the original's Zone never ends but
+    /// on destruction). Only a Zone race reads it.
+    pub zone_target: u8,
 }
 
 /// The reliable, ordered stream's messages.
@@ -375,6 +385,10 @@ impl RaceParams {
         out.push(u8::from(self.opponents));
         out.push(u8::from(self.weapons));
         out.push(self.laps);
+        out.push(u8::from(self.no_barrel_rolls));
+        out.push(u8::try_from(self.assists.len()).unwrap_or(u8::MAX));
+        out.extend(self.assists.iter().take(usize::from(u8::MAX)));
+        out.push(self.zone_target);
     }
 
     fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
@@ -389,6 +403,16 @@ impl RaceParams {
         let teams = (0..count)
             .map(|_| reader.string())
             .collect::<Result<Vec<_>, _>>()?;
+        let seed = reader.u64()?;
+        let people = reader.u8()?;
+        let opponents = reader.u8()? != 0;
+        let weapons = reader.u8()? != 0;
+        let laps = reader.u8()?;
+        let no_barrel_rolls = reader.u8()? != 0;
+        let assist_count = reader.u8()?;
+        let assists = (0..assist_count)
+            .map(|_| reader.u8())
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             title,
             track,
@@ -398,11 +422,14 @@ impl RaceParams {
             mode,
             difficulty,
             scheme,
-            seed: reader.u64()?,
-            people: reader.u8()?,
-            opponents: reader.u8()? != 0,
-            weapons: reader.u8()? != 0,
-            laps: reader.u8()?,
+            seed,
+            people,
+            opponents,
+            weapons,
+            laps,
+            no_barrel_rolls,
+            assists,
+            zone_target: reader.u8()?,
         })
     }
 }

@@ -23,13 +23,39 @@ impl Race {
     /// Sets the player's Pilot Assist level, from the settings. A level this race has
     /// no law for does nothing.
     pub fn set_pilot_assist(&mut self, level: Level) {
-        self.sim.pilot_assist_level = level;
+        self.sim.pilot_assist_levels = [level; oag_gameplay::MAX_PLAYERS];
     }
 
-    /// The level the player has chosen.
+    /// Sets one seat's level, for a network room where every person chose their own. A slot
+    /// past the person-flown ones does nothing.
+    pub fn set_pilot_assist_seat(&mut self, slot: usize, level: Level) {
+        if let Some(own) = self.sim.pilot_assist_levels.get_mut(slot) {
+            *own = level;
+        }
+    }
+
+    /// Switches barrel rolls on or off for every craft (a network room's setting); the
+    /// originals' races always have them.
+    pub fn set_barrel_rolls(&mut self, on: bool) {
+        self.sim.barrel_rolls = on;
+    }
+
+    /// The level slot 0 flies with.
     #[must_use]
     pub fn pilot_assist_level(&self) -> Level {
-        self.sim.pilot_assist_level
+        self.sim.pilot_assist_levels[0]
+    }
+
+    /// The level `slot` flies with.
+    #[must_use]
+    pub fn pilot_assist_level_of(&self, slot: usize) -> Level {
+        self.sim.pilot_assist_levels[slot]
+    }
+
+    /// Whether craft may barrel roll in this race.
+    #[must_use]
+    pub fn barrel_rolls(&self) -> bool {
+        self.sim.barrel_rolls
     }
 
     /// The laws this race loaded for its two levels, and so what the load report said
@@ -50,14 +76,15 @@ impl Race {
     /// 2048 ties its background and icon to the Extreme byte alone; Normal, which
     /// runs on a state object the indicator never reads, draws none.
     #[must_use]
-    pub fn pilot_assist_shown(&self) -> bool {
-        self.sim.pilot_assist_level == Level::Extreme && self.sim.pilot_assist.extreme.is_some()
+    pub fn pilot_assist_shown(&self, slot: usize) -> bool {
+        self.sim.pilot_assist_levels[slot] == Level::Extreme
+            && self.sim.pilot_assist.extreme.is_some()
     }
 
     /// The player's assist input for this tick, or `None` when the race has no law
     /// for the chosen level, which leaves the step bit-for-bit as it was.
     pub(crate) fn pilot_assist_input(&self, player: usize) -> Option<Input> {
-        let level = self.sim.pilot_assist_level;
+        let level = self.sim.pilot_assist_levels[player];
         let law = self.sim.pilot_assist.get(level)?;
         let physics = &self.sim.world.ships[player].physics;
         let body = &physics.body;

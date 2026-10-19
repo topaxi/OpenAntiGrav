@@ -602,6 +602,23 @@ pub(crate) struct NetArgs {
     #[arg(long, requires = "online", default_value_t = 0)]
     pub(crate) online_laps: u8,
 
+    /// A room made with `--online-create` switches barrel rolls off.
+    #[arg(long, requires = "online")]
+    pub(crate) online_no_barrel_rolls: bool,
+
+    /// A room made with `--online-create` disallows Pilot Assist (it allows it otherwise).
+    #[arg(long, requires = "online")]
+    pub(crate) online_no_pilot_assist: bool,
+
+    /// The zone a Zone room made with `--online-create` ends at (15 to 55); 0 never ends.
+    #[arg(long, requires = "online", default_value_t = 0)]
+    pub(crate) online_zone_target: u8,
+
+    /// The Pilot Assist level this client flies with where the room allows it
+    /// (`off`, `normal`, `extreme`).
+    #[arg(long, requires = "online", default_value = "off")]
+    pub(crate) online_assist: String,
+
     /// A room made with `--online-create` presses START when this many are ready.
     #[arg(long, requires = "online", default_value_t = 2)]
     pub(crate) online_start_at: usize,
@@ -682,6 +699,9 @@ impl NetArgs {
                 max_players: self.online_max,
                 opponents: false,
                 laps: self.online_laps,
+                no_barrel_rolls: self.online_no_barrel_rolls,
+                pilot_assist: !self.online_no_pilot_assist,
+                zone_target: self.online_zone_target,
             })
         } else {
             Action::Join(self.online_room)
@@ -700,6 +720,8 @@ impl NetArgs {
                 .clone()
                 .filter(|team| !team.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("--online needs --online-team (the ship to pick)"))?,
+            assist: oag_physics::pilot_assist::Level::from_name(&self.online_assist)
+                .ok_or_else(|| anyhow::anyhow!("--online-assist is off, normal or extreme"))?,
             start_at: self.online_start_at,
         }))
     }

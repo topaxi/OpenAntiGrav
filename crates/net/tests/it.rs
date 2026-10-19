@@ -14,6 +14,7 @@ mod lobby;
 mod loopback;
 mod net_ground_truth;
 mod online;
+mod room_settings_ground_truth;
 mod server_libs;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

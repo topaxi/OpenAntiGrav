@@ -36,6 +36,9 @@ fn settings() -> RoomSettings {
         max_players: 4,
         opponents: false,
         laps: 0,
+        no_barrel_rolls: false,
+        pilot_assist: false,
+        zone_target: 0,
     }
 }
 
@@ -128,8 +131,8 @@ impl Lab {
                 .as_ref()
                 .is_some_and(|r| r.members.len() == 2)
         });
-        self.people[owner].ready(teams[0], true);
-        self.people[guest].ready(teams[1], true);
+        self.people[owner].ready(teams[0], true, oag_physics::pilot_assist::Level::Off);
+        self.people[guest].ready(teams[1], true, oag_physics::pilot_assist::Level::Off);
         self.until("both ready", |lab| {
             lab.people[owner]
                 .room

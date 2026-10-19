@@ -175,6 +175,11 @@ pub struct RaceState {
     /// A `u16` because that is what the original stores it as, and it is
     /// **assigned** into the craft rather than incremented there.
     pub zone: u16,
+    /// The zone number that ends a Zone race, or `None` for the original's own: Zone never
+    /// ends but on destruction. **Chosen, not measured**: set only by a network room's `Zone
+    /// target` (Omega's `NitroTarget`, 15 to 55), the one place a Zone race has a target; a
+    /// campaign cell's target is a medal threshold, not an ending (`docs/gameplay/race-modes.md`).
+    pub zone_target: Option<u16>,
     /// Seconds accumulated toward the next zone step.
     pub zone_timer: f32,
     /// Zone mode's score.
@@ -268,6 +273,7 @@ impl RaceState {
             best_lap_ticks: None,
             lap_splits: [None; MAX_RECORDED_LAPS],
             zone: 0,
+            zone_target: None,
             zone_timer: 0.0,
             score: 0,
             lap_gate: LapGate::NeedsNearHalf,
@@ -510,6 +516,10 @@ impl RaceState {
         // artefact to be tidied up. See `docs/gameplay/race-modes.md`.
         self.zone_timer = 0.0;
         outcome.zone_advanced = true;
+        if self.zone_target.is_some_and(|target| self.zone >= target) {
+            self.finished = true;
+            outcome.finished = true;
+        }
     }
 
     /// Crosses the line forwards.

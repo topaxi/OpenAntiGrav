@@ -7,7 +7,7 @@
 
 use oag_net::wire::online::{Member, Phase, RoomInfo, RoomSettings, Snapshot};
 use oag_ui::language::StringTable;
-use oag_ui_screens::join::Join;
+use oag_ui_screens::join::{Join, Setting};
 
 /// The lobby's port when an address names none: `oag-server lobby`'s own.
 pub const DEFAULT_PORT: u16 = 60000;
@@ -195,10 +195,11 @@ pub fn fill_room(
     screen.set_capacity(usize::from(room.settings.max_players));
     let open = owner && room.phase == Phase::Open;
     screen.set_owner(open.then_some(room.settings.max_players));
-    // Laps are the owner's to set where the mode ends on them.
-    let has_laps =
-        oag_race::Mode::from_name(&room.settings.mode).is_some_and(oag_net::race::mode_has_laps);
-    screen.set_laps((open && has_laps).then_some(room.settings.laps));
+    screen.set_settings(if open {
+        setting_rows(&room.settings, strings)
+    } else {
+        Vec::new()
+    });
     screen.set_seats(
         room.members
             .iter()
@@ -212,6 +213,84 @@ pub fn fill_room(
     );
     screen.set_hint(room_hint(room, owner, strings));
 }
+
+/// The owner's settings rows for `settings`, with the values they say: laps where the mode ends
+/// on them, barrel rolls, whether Pilot Assist is allowed, and in Zone the zone it ends at.
+/// Omega's `MP Select` has each of them (`docs/networking/online-lobby.md`, part 1).
+#[must_use]
+pub fn setting_rows(settings: &RoomSettings, strings: &StringTable) -> Vec<(Setting, String)> {
+    let mode = oag_race::Mode::from_name(&settings.mode);
+    let on_off = |on: bool| {
+        if on {
+            strings
+                .get("FE_ON")
+                .map_or_else(|| say(strings, "OAG_ONLINE_ON", "ON"), str::to_uppercase)
+        } else {
+            strings
+                .get("FE_OFF")
+                .map_or_else(|| say(strings, "OAG_ONLINE_OFF", "OFF"), str::to_uppercase)
+        }
+    };
+    let mut rows = Vec::new();
+    if mode.is_some_and(oag_net::race::mode_has_laps) {
+        rows.push((
+            Setting::Laps,
+            match settings.laps {
+                0 => say(strings, "OAG_ONLINE_LAPS_OWN", "MODE'S OWN"),
+                n => n.to_string(),
+            },
+        ));
+    }
+    rows.push((Setting::BarrelRolls, on_off(!settings.no_barrel_rolls)));
+    rows.push((Setting::PilotAssist, on_off(settings.pilot_assist)));
+    if mode == Some(oag_race::Mode::Zone) {
+        rows.push((
+            Setting::ZoneTarget,
+            match settings.zone_target {
+                0 => say(strings, "OAG_ONLINE_ZONE_NONE", "NONE"),
+                n => n.to_string(),
+            },
+        ));
+    }
+    rows
+}
+
+/// Steps one setting of `settings` by `by` (`1` is a click, `-1` the pad's left), as the room
+/// screen's row does.
+pub fn step_setting(settings: &mut RoomSettings, setting: Setting, by: i32) {
+    match setting {
+        Setting::Laps => {
+            let next = step_max_players(i32::from(settings.laps), by, 0, i32::from(MAX_LAPS));
+            settings.laps = u8::try_from(next).unwrap_or(settings.laps);
+        }
+        Setting::BarrelRolls => settings.no_barrel_rolls = !settings.no_barrel_rolls,
+        Setting::PilotAssist => settings.pilot_assist = !settings.pilot_assist,
+        Setting::ZoneTarget => settings.zone_target = step_zone_target(settings.zone_target, by),
+    }
+}
+
+/// The zone target after `by` steps: none (`0`), then Omega's slider, 15 to 55 in fives, and
+/// round again.
+#[must_use]
+pub fn step_zone_target(current: u8, by: i32) -> u8 {
+    use oag_net::online::rooms::{MAX_ZONE_TARGET, MIN_ZONE_TARGET};
+    let steps = i32::from((MAX_ZONE_TARGET - MIN_ZONE_TARGET) / ZONE_TARGET_STEP) + 2;
+    let at = if current == 0 {
+        0
+    } else {
+        i32::from(current.saturating_sub(MIN_ZONE_TARGET) / ZONE_TARGET_STEP) + 1
+    };
+    match (at + by).rem_euclid(steps) {
+        0 => 0,
+        n => MIN_ZONE_TARGET + u8::try_from(n - 1).unwrap_or(0) * ZONE_TARGET_STEP,
+    }
+}
+
+/// The zone slider's step (Omega's `incSlide`).
+const ZONE_TARGET_STEP: u8 = 5;
+
+/// Omega's default zone target (`NitroTarget`'s `default="30"`).
+pub const DEFAULT_ZONE_TARGET: u8 = 30;
 
 /// A room's circuit, class and mode on one line.
 #[must_use]

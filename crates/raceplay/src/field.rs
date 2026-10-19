@@ -551,6 +551,7 @@ impl Race {
                 class_gravity_scale: self.sim.class_gravity_scale,
                 start_boost: self.sim.start_boost,
                 damage_rules,
+                barrel_rolls: self.sim.barrel_rolls,
                 ..Environment::default()
             };
             // `Ai_SnapToLane`'s body write: inside the AI update, one of which

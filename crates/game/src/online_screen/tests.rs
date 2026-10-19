@@ -18,6 +18,9 @@ fn room(id: u32, owner: &str, members: u8, joinable: bool) -> RoomInfo {
             max_players: 8,
             opponents: false,
             laps: 0,
+            no_barrel_rolls: false,
+            pilot_assist: true,
+            zone_target: 0,
         },
         members,
         joinable,
@@ -325,21 +328,47 @@ fn a_long_note_is_never_dropped_for_the_start_instruction() {
 }
 
 #[test]
-fn the_laps_row_follows_the_mode_and_the_owner() {
-    use oag_ui_screens::join::Row;
+fn the_settings_rows_follow_the_mode_and_the_owner() {
+    use oag_ui_screens::join::{Row, Setting};
+    let has = |screen: &Join, setting| screen.rows().contains(&Row::Setting(setting));
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
     let mut room = snapshot_of(2, 8, Phase::Open);
     room.settings.mode = "single_race".into();
     fill_room(&mut screen, &room, true, &strings(), &|_| None);
-    assert!(screen.rows().contains(&Row::Laps));
+    assert!(has(&screen, Setting::Laps));
+    assert!(has(&screen, Setting::BarrelRolls) && has(&screen, Setting::PilotAssist));
+    assert!(
+        !has(&screen, Setting::ZoneTarget),
+        "only Zone has a zone target"
+    );
     fill_room(&mut screen, &room, false, &strings(), &|_| None);
-    assert!(!screen.rows().contains(&Row::Laps), "a guest has none");
+    assert!(!has(&screen, Setting::Laps), "a guest has none");
+    assert!(!has(&screen, Setting::BarrelRolls));
     room.settings.mode = "zone".into();
     fill_room(&mut screen, &room, true, &strings(), &|_| None);
-    assert!(
-        !screen.rows().contains(&Row::Laps),
-        "Zone does not end on laps"
-    );
+    assert!(!has(&screen, Setting::Laps), "Zone does not end on laps");
+    assert!(has(&screen, Setting::ZoneTarget));
+}
+
+/// Each row's click changes the room's own settings, and the zone target walks Omega's slider
+/// (15 to 55 in fives) with none before it.
+#[test]
+fn stepping_a_setting_edits_the_rooms_settings() {
+    use oag_ui_screens::join::Setting;
+    let mut s = room(1, "ada", 1, true).settings;
+    step_setting(&mut s, Setting::BarrelRolls, 1);
+    assert!(s.no_barrel_rolls);
+    step_setting(&mut s, Setting::PilotAssist, 1);
+    assert!(!s.pilot_assist);
+    step_setting(&mut s, Setting::Laps, -1);
+    assert_eq!(s.laps, MAX_LAPS, "wraps from the mode's own to the most");
+    let walk: Vec<u8> = std::iter::successors(Some(0u8), |&z| {
+        Some(step_zone_target(z, 1)).filter(|&n| n != 0)
+    })
+    .collect();
+    assert_eq!(walk, [0, 15, 20, 25, 30, 35, 40, 45, 50, 55]);
+    assert_eq!(step_zone_target(0, -1), 55);
+    assert_eq!(step_zone_target(55, 1), 0);
 }
 
 #[test]
