@@ -111,6 +111,7 @@ fn the_room_says_who_is_ready_and_where_the_room_is() {
         phase,
         note: note.into(),
         board: Board::default(),
+        rematch: false,
     };
     assert_eq!(member_line(&members[0], &strings()), "ADA (HOST)  READY");
     assert_eq!(member_line(&members[1], &strings()), "BOB  PICKING");
@@ -164,6 +165,7 @@ fn the_room_screen_seats_everyone_in_the_room_and_leaves_the_rest_waiting() {
         phase: Phase::Open,
         note: String::new(),
         board: Board::default(),
+        rematch: false,
     };
     let mut screen = Join::new(Labels::read_online_room(&strings()), 8);
     fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
@@ -210,6 +212,7 @@ fn snapshot_of(people: usize, max_players: u8, phase: Phase) -> Snapshot {
         phase,
         note: String::new(),
         board: Board::default(),
+        rematch: false,
     }
 }
 
@@ -451,4 +454,27 @@ fn only_the_owner_is_told_a_confirm_removes_somebody() {
     assert!(screen.note(0).is_some_and(|n| !n.contains("REMOVE")));
     fill_room(&mut screen, &snapshot, false, &strings(), &|_| None);
     assert!((0..3).all(|seat| screen.note(seat).is_some_and(|n| !n.contains("REMOVE"))));
+}
+
+#[test]
+fn a_guest_is_told_the_host_asked_for_a_rematch_in_the_discs_words_where_it_has_them() {
+    let mut snapshot = snapshot_of(2, 8, Phase::Open);
+    snapshot.rematch = true;
+    assert_eq!(
+        room_hint(&snapshot, false, &strings()),
+        "THE HOST WANTS TO RACE AGAIN",
+        "ours where the table has none"
+    );
+    let disc = StringTable::from_xml(
+        r#"<Strings><Entry ID="ER_HOST_RACE_AGAIN" String="The host has decided to race again."></Entry></Strings>"#,
+    );
+    assert_eq!(
+        room_hint(&snapshot, false, &disc),
+        "THE HOST HAS DECIDED TO RACE AGAIN."
+    );
+    snapshot.rematch = false;
+    assert_eq!(
+        room_hint(&snapshot, false, &strings()),
+        "THE HOST STARTS THE RACE"
+    );
 }

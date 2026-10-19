@@ -79,11 +79,13 @@ fn a_rematch_from_the_owner_starts_once_everyone_is_ready_with_the_same_settings
         now.note
     );
     assert!(now.members[0].ready && !now.members[1].ready);
+    assert!(now.rematch, "the guest is told the host asked");
     assert_eq!(now.settings, before, "the settings are untouched");
     // Bob agrees: the start fires by itself.
     rooms.handle(2, Message::Rematch);
     let queued = snapshot(last(&mut rooms, 1));
     assert!(matches!(queued.phase, Phase::Queued { .. }));
+    assert!(!queued.rematch, "the request is spent once the start fires");
     rooms.tick(10_000);
     rooms.tick(11_000);
     let launch = rooms.take_launch().expect("a second race launched");

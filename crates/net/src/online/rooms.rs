@@ -344,6 +344,7 @@ impl Rooms {
             phase,
             note: room.note.clone(),
             board: room.board.clone(),
+            rematch: room.armed,
         }
     }
 
@@ -647,8 +648,10 @@ impl Rooms {
         if owner {
             self.rooms[index].armed = true;
         }
-        let name = self.name(id).unwrap_or_default().to_string();
-        self.rooms[index].note = format!("{name} wants to race again");
+        if !owner {
+            let name = self.name(id).unwrap_or_default().to_string();
+            self.rooms[index].note = format!("{name} wants to race again");
+        }
         self.push_room(index);
         self.try_rematch(index);
         Ok(())

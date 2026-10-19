@@ -38,7 +38,7 @@ pub struct Board {
 const NONE: u32 = u32::MAX;
 
 fn opt(value: Option<u32>) -> u32 {
-    value.unwrap_or(NONE).min(NONE)
+    value.unwrap_or(NONE)
 }
 
 fn some(value: u32) -> Option<u32> {

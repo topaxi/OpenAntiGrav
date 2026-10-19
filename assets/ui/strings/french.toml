@@ -114,6 +114,7 @@ OAG_ONLINE_QUEUED = { text = "UNE AUTRE PARTIE COURT : VOUS ÊTES N° %d DANS LA
 OAG_ONLINE_COUNTDOWN = { text = "LA COURSE COMMENCE DANS %d", human = false }
 OAG_ONLINE_RACING = { text = "LA COURSE VA COMMENCER", human = false }
 OAG_ONLINE_KICK_HINT = { text = "CONFIRMER POUR RETIRER CE JOUEUR DE LA PARTIE", human = false }
+OAG_ONLINE_HOST_RACE_AGAIN = { text = "L'HÔTE VEUT FAIRE UNE AUTRE COURSE", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "Le face-à-face est pour deux personnes", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Héberger une course sur votre réseau ou en rejoindre une", human = false }
 OAG_LAN_HOST = { text = "HÉBERGER", human = false }

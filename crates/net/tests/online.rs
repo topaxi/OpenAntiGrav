@@ -582,10 +582,7 @@ fn the_races_board_reaches_every_member_and_a_rematch_races_again_with_the_same_
     // The owner asks for a rematch while the race still runs; the guest has not.
     lab.people[a1].rematch();
     lab.until("the owner's ask is in", |lab| {
-        lab.people[a1]
-            .room
-            .as_ref()
-            .is_some_and(|r| r.note.contains("a1 wants to race again"))
+        lab.people[a2].room.as_ref().is_some_and(|r| r.rematch)
     });
     std::fs::write(&first, b"").expect("the race may end now");
     lab.until("the board in both rooms", |lab| {

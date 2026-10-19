@@ -136,6 +136,7 @@ pub(super) fn capture_online(
                     })
                     .collect(),
             },
+            rematch: false,
         };
         crate::online_screen::fill_room(&mut screen, &snapshot, true, strings, &|_| None);
         // No row is under the cursor unless the page asks for one.

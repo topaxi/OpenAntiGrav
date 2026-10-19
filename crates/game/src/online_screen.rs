@@ -177,6 +177,18 @@ pub fn room_hint(room: &Snapshot, owner: bool, strings: &StringTable) -> String 
             "OAG_ONLINE_ROOM_HINT_OWNER",
             "PRESS START WHEN EVERYONE IS READY",
         ),
+        // The owner has asked for another race: the disc's own line where its table has one
+        // (HD's and Omega's `ER_HOST_RACE_AGAIN`), ours elsewhere.
+        Phase::Open if room.rematch => strings.get("ER_HOST_RACE_AGAIN").map_or_else(
+            || {
+                say(
+                    strings,
+                    "OAG_ONLINE_HOST_RACE_AGAIN",
+                    "THE HOST WANTS TO RACE AGAIN",
+                )
+            },
+            str::to_uppercase,
+        ),
         Phase::Open => say(strings, "OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),
         Phase::Queued { position } => say(
             strings,

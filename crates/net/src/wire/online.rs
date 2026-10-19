@@ -116,6 +116,8 @@ pub struct Snapshot {
     pub note: String,
     /// The last race's final board, empty until the room has raced.
     pub board: Board,
+    /// The owner has asked for a rematch and the room is waiting for the rest to be ready.
+    pub rematch: bool,
 }
 
 /// A room as the list shows it.
@@ -518,6 +520,7 @@ impl Message {
                 put_phase(&mut out, room.phase);
                 put_string(&mut out, &room.note);
                 room.board.put(&mut out);
+                out.push(u8::from(room.rematch));
             }
             Self::Left { reason } => {
                 out.push(0x33);
@@ -616,6 +619,7 @@ impl Message {
                     phase: take_phase(&mut r)?,
                     note: r.string()?,
                     board: Board::take(&mut r)?,
+                    rematch: r.u8()? != 0,
                 })
             }
             0x33 => Self::Left {
@@ -737,6 +741,7 @@ mod tests {
                         eliminations: 1,
                     }],
                 },
+                rematch: true,
             }),
             Message::Left {
                 reason: "race over".into(),
@@ -763,6 +768,7 @@ mod tests {
                 phase,
                 note: String::new(),
                 board: Board::default(),
+                rematch: false,
             });
             assert_eq!(Message::decode(&room.encode()), Ok(room));
         }
