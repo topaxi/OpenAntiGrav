@@ -59,7 +59,7 @@ impl Race {
     pub(crate) fn update_sight(&mut self) {
         // The reticle is the primary person's; every other person-flown slot
         // reads the same lock through [`Race::sight_target`] without one.
-        let primary = self.sim.world.primary_slot();
+        let primary = self.player_slot();
         if let Some(held) = self.sight_held(primary) {
             self.view.sight.set_held(held);
         }
@@ -108,7 +108,12 @@ impl Race {
     /// (`fit_vertical_fov`), so on a tall quadrant the brackets sit a little off
     /// the craft. **Chosen, not measured.**
     fn update_viewed_sights(&mut self) {
-        let primary = self.sim.world.primary_slot();
+        // A network client draws its seat's one view through `self.view.sight`;
+        // the per-slot reticles are for local split screen and windows.
+        if self.view.seat.is_some() {
+            return;
+        }
+        let primary = self.player_slot();
         for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
             if let Some(held) = self.sight_held(slot) {
                 self.view.huds[slot].sight.set_held(held);

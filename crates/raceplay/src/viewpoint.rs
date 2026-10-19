@@ -232,7 +232,7 @@ impl Race {
             };
             cut.for_views(seats) == oag_render::viewport::Cut::Vertical
         };
-        let primary = self.sim.world.primary_slot();
+        let primary = self.player_slot();
         let pick = |vertical: bool| if vertical { columns } else { rows };
         let screen = pick(vertical(self, primary));
         self.view.sight.set_screen(screen);

@@ -60,6 +60,7 @@ mod run_stats;
 mod scene;
 mod scene_blocks;
 mod scene_build;
+mod seat_view;
 mod second_person;
 mod shield_flash;
 mod slot_hud;

@@ -337,7 +337,7 @@ impl Race {
     /// non-primary slot's rules run on `race[slot]` all the same, so its lap
     /// clock, its zone counter and its finish are the simulation's.
     pub(super) fn advance_player_rules(&mut self, slot: usize, evaluated: &Evaluated) {
-        let primary = slot == self.sim.world.primary_slot();
+        let primary = slot == self.player_slot();
         if primary && self.draws() {
             let body = &self.sim.world.ships[slot].physics.body;
             self.view
