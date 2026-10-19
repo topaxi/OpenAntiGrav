@@ -2,8 +2,7 @@
 
 > **A first server and client exist (2026-10-14)**: `oag-server` and
 > `oag-game --connect`, over WebTransport, on localhost (below, "Running a local
-> server"). Milestone M8 is otherwise ahead: no menu entry, no web client, no
-> weapons over the network, no discovery. The transport is
+> server"). Milestone M8 is otherwise ahead: no web client. Weapons are predicted simulation (ADR-0071). The transport is
 > [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md); the
 > prediction is [ADR-0069](../architecture/adr/0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md),
 > still Proposed.
@@ -552,7 +551,7 @@ headless `--screenshot` client with `--overlay` (details in
 
 **Held fixed in a network race** (`oag_net::race`, all **chosen**): this project's AI
 driver flies the opponents (the original driver with several people is unread),
-pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot
+pilot assist is off, weapons are the room's (on by default; predicted simulation, [ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md)), and every person's slot
 is `Controller::Remote` on every peer, the client's own included, because the
 controllers are hashed; which craft is this machine's is view-side
 (`Race::set_seat`). The menus' ONLINE row opens the online lobby flow ([online lobby](online-lobby.md#8-the-online-menus-2026-10-16); LAN is [LAN play](#lan-play-2026-10-14) below). Start and focus loss
@@ -692,7 +691,7 @@ default), and `oag_net::race::options` maps seat 0 to `Options::team` and seats 
 on both ends, so the tick-0 hash still agrees. A joiner picks in Ship Select **before** the host list (JOIN GAME opens
 it first); the host picks in its own Ship Select. `oag-server --team a --team b` fills the seats in order (a seat past the
 list flies the last one); `--team a` alone is the old behaviour. Held fixed as in any network race:
-weapons off, our AI flies the opponents, pilot assist off, no ghost, no record. The host's race is a Single Race
+weapons on (ADR-0071), our AI flies the opponents, pilot assist off, no ghost, no record. The host's race is a Single Race
 whatever the pages say. Race again is not offered on a network race (the end screen's RACE AGAIN returns
 to the menus; a rematch is a new lobby).
 

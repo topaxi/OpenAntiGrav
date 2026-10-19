@@ -80,6 +80,7 @@ out to be wrong.
 | [0068](0068-a-window-holds-a-list-of-seats.md) | A window holds a list of seats | Accepted; amends 0067: a window is one seat or a split of several, `--windows` deals people, `--window-seats` spells them |
 | [0069](0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md) | Remote craft are predicted in one timeline and corrected on a threshold | **Proposed**, not accepted: the S24 cost, weapons and an analog human stream are open |
 | [0070](0070-the-network-transport-is-webtransport.md) | The network transport is WebTransport | Accepted for the maintainer's decision (WebTransport, UDP only if it fails); the crate, certificate pinning and inputs-not-state wire are **Proposed** |
+| [0071](0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md) | Weapons are predicted simulation, with a discrete-state correction trigger | **Proposed** (2026-10-19); answers ADR-0069 condition 2 |
 
 ## Format
 

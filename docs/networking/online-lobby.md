@@ -413,9 +413,9 @@ Named refusals (`Refusal`): `Full`, `Started`, `Content`, `Version`, `NoSuchRoom
 `NeedPlayers`, `NotReady`, `BadName`, `NotInRoom`, `InRoom`, `BadSettings`.
 
 Room settings (`RoomSettings`): title, track, class, mode, max players (2 to 8), AI fill, laps,
-barrel rolls, Pilot Assist allowed and the zone target (part 9). Weapons are not a setting: a
-network race holds them off (ADR-0069, condition 2). Omega's eliminations target is not carried
-(part 9).
+weapons, barrel rolls, Pilot Assist allowed and the zone target (part 9). Weapons are Omega's
+`Weapons` row (`RB_WEAP`, default on) and are predicted simulation ([ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md)).
+Omega's eliminations target is not carried (part 9).
 
 A game client that dials the lobby (`--connect`) is refused by name ("this is the online
 lobby, not a race"); a lobby client that dials a race port gets the race host's own malformed
@@ -600,7 +600,7 @@ was swept and every file with its length, kept bytes and SHA-256. `oag_source::t
 reads the title out of it: a Pure extraction would otherwise open as Pulse, the two ship archives of
 identical names and a folder has no serial.
 
-**What it loads.** The lobby fixes difficulty (`elite`), scheme (`veteran`) and weapons (off) of
+**What it loads.** The lobby fixes difficulty (`elite`), scheme (`veteran`) and, by default, weapons (on) of
 every race, so the axes are a room's circuit, class and mode, the number of people and each seat's
 team. `oag_net::extract::plan` walks each once with the rest at defaults (every circuit, every Zone
 circuit, every team alone and as a full grid of eight in rotation, no opponents), then crosses every
@@ -797,7 +797,7 @@ the two is ever live), the pages in `assets/ui/menu.toml` (`online`).
 | connecting | CONNECTING... on the list screen with only BACK | the dial runs off the frame thread (`oag_thread::Task`) |
 | refused or unreachable | the address keyboard again, a line under the text | the server's own text, e.g. the refused build with both builds named; `Rejected` is read before the closing link so it is never lost to "the lobby closed" |
 | ONLINE page | CREATE GAME, JOIN GAME, BACK | pushed on the welcome; BACK drops the connection |
-| CREATE GAME | the RACE page, Track Select, Ship Select, then the room | Eliminator and Head to Head are dimmed (a network race holds weapons off, and Head to Head is two people in a room of up to eight); a stored one becomes a Single Race. A new room seats 8; its owner changes that in the room. AI fill follows the RACE page. A title with no Ship Select (2048) has the pick on the RACE page, and a joiner who never saw one sends the title's own default team (`oag_title::RaceDefaults::team`) |
+| CREATE GAME | the RACE page, Track Select, Ship Select, then the room | Head to Head is dimmed (two people in a room of up to eight) and a stored one becomes a Single Race; Eliminator is open since weapons are online (2026-10-19). A new room seats 8; its owner changes that in the room. AI fill follows the RACE page. A title with no Ship Select (2048) has the pick on the RACE page, and a joiner who never saw one sends the title's own default team (`oag_title::RaceDefaults::team`) |
 | JOIN GAME | Ship Select, then the list: owner left, title and head count right, the circuit, class and mode (the title's own circuit name) under the title while the cursor is on it | rows the server marks not joinable are dimmed with the reason; the empty row makes a room instead; the list is asked for again every second |
 | the room | one seat per person up to the room's size, `NAME (HOST)  READY` or `PICKING`, START RACE for the host, BACK leaves; a seat says the room's circuit, class and mode while the cursor is on it. **The owner also has ROOM SETTINGS** (the RACE page, Track Select and Ship Select again, seeded with the room's own mode, class and circuit; START sends `Edit` and the room is back; BACK leaves it as it was) **and MAX PLAYERS** (confirm or a click one more, left and right one either way, wrapping between the people already seated and 8; the server holds the number and asks the latest to join to go if it ever shrinks below the head count). An edit clears every ready and the pick is sent again by itself | the pick is the ready (sent once in the room, and again if an edit clears it); the line under the title is the room's note, then where the room is: the host's prompt, "number N in line" while another game races (`Phase::Queued`), the countdown |
 | the race | the ordinary network race (`Pending`, tick-0 check, `launch_race`) with the seat token | the lobby link is polled in every stage and kept open for the whole race |
@@ -813,8 +813,7 @@ mid-flow (the same), the race child failing to come up (the room's note after th
 with LAN's address keyboard), so `host:60500`, `[::1]:60500` and a bare `::1` (bracketed for the
 dial) are typed on the pad; no port means 60000. **Chosen, not measured:** the room's size is
 2 to 8 for every title (`oag_net::wire::online::MAX_PLAYERS`, Omega's eight rows); no title
-crate carries a measured grid size, so none is capped lower. Weapons are not a room
-setting (a network race holds them off, ADR-0069); laps, barrel rolls, Pilot Assist and the zone
+crate carries a measured grid size, so none is capped lower. Weapons, laps, barrel rolls, Pilot Assist and the zone
 target are rows on the room screen (part 9).
 A 64-digit certificate is drawn on two lines, readable on every face, where it ran off the panel
 on every title. `--online` stays the headless command-line flow of part 5 (it does not open the
@@ -864,8 +863,9 @@ race to measure.
 | Barrel rolls (`MAN_2_BR`, "BARREL ROLL") | On, Off; no default authored | **Carried** as `RoomSettings.no_barrel_rolls`; a new room has rolls on |
 | Pilot assist allowed (`FE_PILOT_ASSIST_ALLOWED`) | On, Off; no default authored | **Carried** as `RoomSettings.pilot_assist`; a new room allows it (chosen: the list names On first) |
 | Zone target (`FE_ZONE_TARGET`, `NumberOfNitroLevels`) | 15 to 55 step 5, default 30 | **Carried** as `RoomSettings.zone_target`, Zone rooms only |
-| Eliminations (`IG_HUD_TARGET`, `NumberOfEliminations`) | 50 to 600 step 25, default 200 | **Not carried, checked, differs**: the unit is not a kill count (Pulse's kill target is 5 to 10, `Options::eliminator_kill_target`) and Eliminator needs weapons, which a network race holds off (ADR-0069); the room screen already dims it. Open until weapons are server events |
-| Weapons, Weapon hints, Pure racing | On/Off | Held off (ADR-0069, condition 2); not rows |
+| Eliminations (`IG_HUD_TARGET`, `NumberOfEliminations`) | 50 to 600 step 25, default 200 | **Not carried, checked, differs**: the unit is not a kill count (Pulse's kill target is 5 to 10, `Options::eliminator_kill_target`); an Eliminator room uses the mode's own target |
+| Weapons (`RB_WEAP`) | On/Off, default On | **Carried** as `RoomSettings.weapons` (2026-10-19, ADR-0071); an Eliminator room is always on and shows no row. Label read from the title's own `RB_WEAP` where its disc has it (Omega, HD), else `OAG_ONLINE_WEAPONS` |
+| Weapon hints, Pure racing | On/Off | Not rows |
 | Availability (PUBLIC, INVITE ONLY) | 0, 1 | Not built (no invite-only, item 6) |
 | Respawns | `aList`, disabled in the XML | Not a setting in Omega either |
 | Max players | `aList`, disabled, 8 | Ours is the room's `max_players` (part 8) |
@@ -940,7 +940,7 @@ proven absent). A replay of a networked race would need the room's settings in i
 
 **Open.** The room screen's new rows are walked as stills, not clicked live on every title (the
 pointer is covered by the row tests); Omega's remaining sub-pages (kick, friends, invite-only) and
-the Eliminations target wait on weapons online; LAN keeps the originals' race (rolls on, no assist,
+the Eliminations target is not carried; LAN keeps the originals' race (rolls on, no assist,
 Zone's own ending); a Zone room cannot be given a target above 55 or between the fives (the slider's
 own steps).
 
@@ -953,3 +953,19 @@ own steps).
   compatibility issue 487 (linked above).
 - Omega `eboot.bin` v1.00 in Ghidra (`/omega/eboot-ps4-omega-eu.bin`), string searches only:
   no function was read, no name was recovered, `names.tsv` is unchanged.
+## 10. Weapons (2026-10-19)
+
+Weapons are predicted simulation, not server events: the client already simulates the whole
+`RaceSim`, a fire is a button edge in the wire's input, and the one thing missing was a correction
+trigger for discrete state. Decision, tables and the 2 and 4 client numbers are in
+[ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md);
+the code is `oag_net::weapon_sync`, the test `crates/net/tests/weapons_ground_truth.rs`.
+
+- The room's `weapons` byte reaches `RaceParams::weapons` at launch (`launch_for`); Eliminator forces
+  it on (`Rooms::validate`). `oag-server` takes `--no-weapons`; `oag-game --online-create` takes
+  `--online-no-weapons`. A bot (`--net-bot`) fires what it holds.
+- The room screen has a `Setting::Weapons` row (not in an Eliminator room). Eliminator is no longer
+  dimmed on the ONLINE RACE page; Head to Head still is (`OAG_ONLINE_MODE_TWO_ONLY`).
+- **Checked against the other titles' rows:** the label id `RB_WEAP` is Omega's and HD's `MP Select`
+  (read from `network_definition.xml`); 2048 and Pure/Pulse show this project's own words. The
+  weapon rules themselves are each title's (Pulse's law where unmeasured, per the project's rule).

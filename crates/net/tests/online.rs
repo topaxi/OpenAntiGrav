@@ -38,6 +38,7 @@ fn settings() -> RoomSettings {
         laps: 0,
         no_barrel_rolls: false,
         pilot_assist: false,
+        weapons: false,
         zone_target: 0,
     }
 }

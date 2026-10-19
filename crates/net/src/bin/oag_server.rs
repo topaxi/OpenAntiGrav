@@ -96,6 +96,9 @@ struct Cli {
     /// Laps the race runs; 0 is the mode's own count.
     #[arg(long, default_value_t = 0)]
     laps: u8,
+    /// Switch weapons off (Eliminator keeps them).
+    #[arg(long)]
+    no_weapons: bool,
     /// Switch barrel rolls off for every craft.
     #[arg(long)]
     no_barrel_rolls: bool,
@@ -149,8 +152,8 @@ fn main() -> Result<()> {
         seed: cli.seed,
         people: cli.people.clamp(1, 8),
         opponents: !cli.no_opponents,
-        // Weapons are not server events yet (ADR-0069, condition 2).
-        weapons: false,
+        weapons: !cli.no_weapons
+            || oag_race::Mode::from_name(&cli.mode) == Some(oag_race::Mode::Eliminator),
         laps: cli.laps,
         no_barrel_rolls: cli.no_barrel_rolls,
         assists: cli
@@ -167,8 +170,11 @@ fn main() -> Result<()> {
     let (race, title) = oag_net::race::load(&params, &source)?;
     params.title = title.to_string();
     println!(
-        "racing {title} from {source}: {} craft, {} people, weapons off, seed {}",
-        race.sim.world.ship_count, params.people, params.seed
+        "racing {title} from {source}: {} craft, {} people, weapons {}, seed {}",
+        race.sim.world.ship_count,
+        params.people,
+        if params.weapons { "on" } else { "off" },
+        params.seed
     );
     let mut host = Host::new(race, params);
     println!("fingerprint {:#018x}", host.fingerprint());

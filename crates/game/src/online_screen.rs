@@ -215,7 +215,7 @@ pub fn fill_room(
 }
 
 /// The owner's settings rows for `settings`, with the values they say: laps where the mode ends
-/// on them, barrel rolls, whether Pilot Assist is allowed, and in Zone the zone it ends at.
+/// on them, weapons, barrel rolls, whether Pilot Assist is allowed, and in Zone the zone it ends at.
 /// Omega's `MP Select` has each of them (`docs/networking/online-lobby.md`, part 1).
 #[must_use]
 pub fn setting_rows(settings: &RoomSettings, strings: &StringTable) -> Vec<(Setting, String)> {
@@ -241,6 +241,10 @@ pub fn setting_rows(settings: &RoomSettings, strings: &StringTable) -> Vec<(Sett
             },
         ));
     }
+    // An Eliminator room always has them: no row to turn them off.
+    if mode != Some(oag_race::Mode::Eliminator) {
+        rows.push((Setting::Weapons, on_off(settings.weapons)));
+    }
     rows.push((Setting::BarrelRolls, on_off(!settings.no_barrel_rolls)));
     rows.push((Setting::PilotAssist, on_off(settings.pilot_assist)));
     if mode == Some(oag_race::Mode::Zone) {
@@ -265,6 +269,7 @@ pub fn step_setting(settings: &mut RoomSettings, setting: Setting, by: i32) {
         }
         Setting::BarrelRolls => settings.no_barrel_rolls = !settings.no_barrel_rolls,
         Setting::PilotAssist => settings.pilot_assist = !settings.pilot_assist,
+        Setting::Weapons => settings.weapons = !settings.weapons,
         Setting::ZoneTarget => settings.zone_target = step_zone_target(settings.zone_target, by),
     }
 }

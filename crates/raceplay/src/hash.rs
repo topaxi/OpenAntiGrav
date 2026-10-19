@@ -8,6 +8,19 @@
 use super::*;
 
 impl RaceSim {
+    /// Which craft's sight holds a lock, one bit per slot. Simulation state a client compares
+    /// with the server's (`oag_net::weapon_sync`): a lock decides whom a fired missile follows.
+    #[must_use]
+    pub fn locked_mask(&self) -> u8 {
+        self.locks
+            .iter()
+            .take(8)
+            .enumerate()
+            .fold(0, |mask, (slot, sight)| {
+                mask | u8::from(sight.locked()) << slot
+            })
+    }
+
     /// One 64-bit fingerprint of everything this race carries from tick to tick.
     ///
     /// [`oag_gameplay::hash::hash_world`] plus the pad state, which lives here

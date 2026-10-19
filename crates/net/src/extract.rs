@@ -10,7 +10,7 @@
 //!
 //! # What "every race the server can offer" is
 //!
-//! The lobby fixes the difficulty (`elite`), control scheme and weapons (off) of every race
+//! The lobby fixes the difficulty (`elite`), control scheme and weapons (on, the room's to change) of every race
 //! (`online::rooms`), so the only axes are a room's settings and each seat's team: the
 //! circuit, the speed class, the mode, how many people race and with what. The plan walks
 //! each axis once with the others at their defaults, then crosses classes with modes on two
@@ -193,7 +193,7 @@ pub fn plan(offer: &Offer) -> Vec<Planned> {
         seed: 1,
         people: 1,
         opponents: true,
-        weapons: false,
+        weapons: true,
         ..RaceParams::default()
     };
     let with = |label: String, edit: &dyn Fn(&mut RaceParams)| {

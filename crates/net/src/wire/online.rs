@@ -35,8 +35,7 @@ pub struct Edition {
     pub build: String,
 }
 
-/// What the owner of a room decides, after Omega's `MP Select` table. Weapons are not here:
-/// a network race holds them off (ADR-0069, condition 2).
+/// What the owner of a room decides, after Omega's `MP Select` table.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RoomSettings {
     /// The title (`oag_title::Title::name`): the server loads this title's image for the race.
@@ -60,6 +59,9 @@ pub struct RoomSettings {
     /// Whether people may fly with Pilot Assist (Omega's `Pilot assist allowed`). Off, every
     /// seat flies without it whatever its owner has set.
     pub pilot_assist: bool,
+    /// Whether weapons are on (Omega's `Weapons` row, `RB_WEAP`, default on). An Eliminator room
+    /// is always on: the mode is about them.
+    pub weapons: bool,
     /// Zone's ending in zones: `0` for none, else `15..=55` in fives (Omega's `NitroTarget`
     /// slider, default 30). Zeroed outside Zone.
     pub zone_target: u8,
@@ -366,6 +368,7 @@ fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
     out.push(s.laps);
     out.push(u8::from(s.no_barrel_rolls));
     out.push(u8::from(s.pilot_assist));
+    out.push(u8::from(s.weapons));
     out.push(s.zone_target);
 }
 
@@ -380,6 +383,7 @@ fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
         laps: r.u8()?,
         no_barrel_rolls: r.u8()? != 0,
         pilot_assist: r.u8()? != 0,
+        weapons: r.u8()? != 0,
         zone_target: r.u8()?,
     })
 }
@@ -649,6 +653,7 @@ mod tests {
             laps: 3,
             no_barrel_rolls: true,
             pilot_assist: true,
+            weapons: true,
             zone_target: 30,
         }
     }

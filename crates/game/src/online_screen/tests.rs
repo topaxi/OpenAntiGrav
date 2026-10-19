@@ -20,6 +20,7 @@ fn room(id: u32, owner: &str, members: u8, joinable: bool) -> RoomInfo {
             laps: 0,
             no_barrel_rolls: false,
             pilot_assist: true,
+            weapons: true,
             zone_target: 0,
         },
         members,
@@ -337,6 +338,7 @@ fn the_settings_rows_follow_the_mode_and_the_owner() {
     fill_room(&mut screen, &room, true, &strings(), &|_| None);
     assert!(has(&screen, Setting::Laps));
     assert!(has(&screen, Setting::BarrelRolls) && has(&screen, Setting::PilotAssist));
+    assert!(has(&screen, Setting::Weapons));
     assert!(
         !has(&screen, Setting::ZoneTarget),
         "only Zone has a zone target"
@@ -344,6 +346,12 @@ fn the_settings_rows_follow_the_mode_and_the_owner() {
     fill_room(&mut screen, &room, false, &strings(), &|_| None);
     assert!(!has(&screen, Setting::Laps), "a guest has none");
     assert!(!has(&screen, Setting::BarrelRolls));
+    room.settings.mode = "eliminator".into();
+    fill_room(&mut screen, &room, true, &strings(), &|_| None);
+    assert!(
+        !has(&screen, Setting::Weapons),
+        "Eliminator always has them"
+    );
     room.settings.mode = "zone".into();
     fill_room(&mut screen, &room, true, &strings(), &|_| None);
     assert!(!has(&screen, Setting::Laps), "Zone does not end on laps");
@@ -360,6 +368,9 @@ fn stepping_a_setting_edits_the_rooms_settings() {
     assert!(s.no_barrel_rolls);
     step_setting(&mut s, Setting::PilotAssist, 1);
     assert!(!s.pilot_assist);
+    let weapons = s.weapons;
+    step_setting(&mut s, Setting::Weapons, 1);
+    assert_eq!(s.weapons, !weapons);
     step_setting(&mut s, Setting::Laps, -1);
     assert_eq!(s.laps, MAX_LAPS, "wraps from the mode's own to the most");
     let walk: Vec<u8> = std::iter::successors(Some(0u8), |&z| {

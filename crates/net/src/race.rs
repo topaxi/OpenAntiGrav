@@ -17,7 +17,9 @@
 //!   `MultipleHumans`), and one rule for every network race keeps the server and
 //!   the client on one path.
 //! - **Pilot assist off** for every person (a per-seat assist is open work).
-//! - **Weapons off**: weapons are not server events yet (ADR-0069, condition 2).
+//! - **Weapons are the room's**, and they are predicted simulation, not server events
+//!   (ADR-0071): a client compares the discrete weapon state at every confirmed tick
+//!   ([`crate::weapon_sync`]).
 //! - **Every person's slot is [`Controller::Remote`] on every peer**, the client's
 //!   own included, because the controllers are hashed. Which slot is this machine's
 //!   is view-side: `Race::set_seat`.

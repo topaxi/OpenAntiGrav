@@ -368,6 +368,8 @@ impl Rooms {
         } else {
             0
         };
+        // Eliminator is about weapons: a room cannot take them away.
+        settings.weapons |= mode == Some(oag_race::Mode::Eliminator);
         settings.zone_target = if mode == Some(oag_race::Mode::Zone) && settings.zone_target > 0 {
             settings.zone_target.clamp(MIN_ZONE_TARGET, MAX_ZONE_TARGET)
         } else {
@@ -811,7 +813,7 @@ impl Rooms {
             seed: self.config.seed ^ (u64::from(room.id) << 32) ^ self.launches,
             people: u8::try_from(seats.len()).unwrap_or(MAX_PLAYERS),
             opponents: room.settings.opponents,
-            weapons: false,
+            weapons: room.settings.weapons,
             laps: room.settings.laps,
             no_barrel_rolls: room.settings.no_barrel_rolls,
             // A seat's own level only where the room allows the assist, and never past the
