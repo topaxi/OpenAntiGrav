@@ -32,13 +32,20 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   does"), which changed the field state; `pure_original_ai_ground_truth`'s
   Chenghou walk now allows 1 respawn a craft and names this cause.
 - **The absorb half of `WeaponAi_DecideFireOrAbsorb`** (Pulse, recovered on
-  `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`) was ported and reverted
-  on 2026-10-19 (lane `campaign-ai-weapons`): it moved 11 lone-craft cells of
-  `ai_clean_lap_gate` and the de Konstruct gates through this project's Turbo
-  policy (a craft that absorbs a held weapon picks up a Turbo and fires it
-  into a wall), did not reduce wrecks, and its decision cadence (every tick or
-  four a second) is unconfirmed. Port it with the cadence settled and those
-  gates rebaselined on purpose.
+  `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`) was ported in commit
+  `3b631f07a` and reverted in `4963adbfa` on 2026-10-19 (lane
+  `campaign-ai-weapons`). It moved 11 lone-craft cells: `ai_clean_lap_gate`'s
+  `track_01_phantom`, `track_02_flash`, `track_06_phantom`, `track_06_rapier`
+  (CleanLap to NoCleanLap), `track_07_flash`, `track_07_phantom`,
+  `track_14_rapier`, `track_14_phantom` (Eliminated to CleanLap), and
+  `ai_dekonstruct_black_ground_truth::phantom_seed_1` (2 of 7 destroyed),
+  `ai_dekonstruct_symptoms_ground_truth::de_konstruct_symptoms_phantom`, plus
+  Omega's Amphiseum walk. **The cause is this project's Turbo policy**: a lone
+  craft holding a forward weapon used to keep it forever; absorbing it frees
+  the slot for the next pad's Turbo, which `spend_opponent_pickup` fires into
+  walls. With absorb off all 51 cells pass. It did not reduce wrecks, and its
+  decision cadence (every tick or four a second) is unconfirmed. Maintainer's
+  decision: its own AI follow-up lane, with the Turbo policy fixed first.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.
