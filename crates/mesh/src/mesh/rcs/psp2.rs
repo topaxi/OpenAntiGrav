@@ -843,19 +843,24 @@ fn lighting_rule<'m>(
     cache: &mut std::collections::HashMap<&'m str, Option<LightingRule>>,
     textures: &mut dyn FnMut(&str) -> Option<Vec<u8>>,
 ) -> Option<LightingRule> {
+    if ps4 {
+        // Judged per instance: two materials may share a `.rcsmaterial` path
+        // and differ in their record, and the answer is the record's.
+        let row = lighting_only::inherited(material)?;
+        return Some(LightingRule {
+            refused: row.lighting_only.to_vec(),
+            colour: Some(row.colour),
+            inherited: true,
+        });
+    }
     cache
         .entry(material.name.as_str())
         .or_insert_with(|| {
-            if ps4 {
-                let row = lighting_only::inherited(material)?;
-                return Some(LightingRule {
-                    refused: row.lighting_only.to_vec(),
-                    colour: Some(row.colour),
-                    inherited: true,
-                });
-            }
             let uses = sampler_use::sampler_use(&textures(&material.name)?)?;
-            Some(LightingRule {
+            // Only where the ambient-only program samples nothing: the case
+            // `psp2_sampler_use_ground_truth` pins. A lit-only sampler beside
+            // a picture the program does sample is left as it was.
+            uses.colourless().then(|| LightingRule {
                 refused: uses.lighting_only.iter().map(|n| name_hash(n)).collect(),
                 colour: uses.colour_uniform.as_deref().map(name_hash),
                 inherited: false,

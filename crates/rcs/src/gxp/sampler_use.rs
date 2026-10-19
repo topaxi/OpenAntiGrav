@@ -6,15 +6,18 @@
 //! only in a permutation that reads it. The smallest permutation declares the
 //! constant ambient colour and the fog colour and no light
 //! (`constantAmbientColour` without any `liveLighting*` uniform): the surface
-//! with the lights off. A sampler that every lit permutation declares and that
-//! one never does is therefore not part of the surface's colour: switching
-//! the lights off removes it. Over `data.psarc`'s 311 families that have the
-//! ambient-only permutation, 301 declare their sampler in it; nine do not
-//! (`constantdiffuse_specular_normal` and its `New`, `ds_booth_glass`, the
-//! `fc15`/`fc17` water, the three `dc_seawater` ones and
-//! `glass_colour_spec_trans`), and those nine are exactly constant-colour
-//! shaders whose texture is a normal, a specular or a reflection lookup. See
-//! `docs/formats/gxp.md`, "Which sampler carries the colour".
+//! with the lights off. A sampler that a lit permutation declares and that one
+//! never does is not part of the surface's colour: switching the lights off
+//! removes it. Over `data.psarc`'s 204 material families that have both
+//! permutations, **eight declare no material sampler in the ambient-only one
+//! at all** ([`SamplerUse::colourless`]): `constantdiffuse_specular_normal` and
+//! its `New`, `ds_booth_glass`, the `fc15`/`fc17` water and the three
+//! `dc_seawater` ones. Those eight are constant-colour shaders whose texture is
+//! a lookup, and they are the only ones the build acts on. Many more families
+//! carry an extra lit-only sampler beside a picture they do sample
+//! (`NormalMap`, `Specular_Texture`, ...): that is recorded in
+//! [`SamplerUse::lighting_only`] and left unwired. See `docs/formats/gxp.md`,
+//! "Which sampler carries the colour".
 
 use super::{Category, Program};
 
@@ -44,6 +47,16 @@ fn names(p: &Program, category: Category) -> Vec<&str> {
         .filter(|q| q.category == category)
         .map(|q| q.name.as_str())
         .collect()
+}
+
+impl SamplerUse {
+    /// Whether the ambient-only permutation declares no material sampler while
+    /// a lit one does: the surface's colour is a constant uniform, and every
+    /// sampler the lit permutations add is a lighting lookup.
+    #[must_use]
+    pub fn colourless(&self) -> bool {
+        self.ambient_samplers.is_empty() && !self.lighting_only.is_empty()
+    }
 }
 
 /// What the programs of one material file say about its samplers.

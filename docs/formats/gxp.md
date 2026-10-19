@@ -401,7 +401,7 @@ Two smaller things are also left unread on purpose:
 permutation of one shader source, and the compiler declares a sampler only in a permutation
 that reads it. The smallest permutation declares `constantAmbientColour` and `fogColour` and
 no `liveLighting*` uniform: the surface with the lights off. Over `data.psarc`'s 204 material
-files that have both that permutation and a lit one, **eight families' ambient-only program
+families that have both that permutation and a lit one, **eight families' ambient-only program
 declares no sampler at all while their lit ones do**: `constantdiffuse_specular_normal` and
 `New` (`Texture1`, `norm`), `ds_booth_glass` (`Texture1`), `fc15`/`fc17_effects_vscroll_water`
 (`NormalMap`), `dc_seawater`, `dc_seawater_cheap` and `reflectplane_dc_seawater`
@@ -421,6 +421,14 @@ seawater shaders call their wave normal map `DiffuseTexture` (`dc_waternormalmap
 rule refuses it where a name rule (`Material::diffuse_texture`'s `DIFFUSE_SAMPLER_NAMES`)
 bound it. Engine samplers (`lightmap`, `occlusionMap`, `shadowMap`, the reflection
 captures) are lit-only by construction and left out.
+
+**Only these eight are acted on.** The build refuses a sampler and draws the constant only where
+`SamplerUse::colourless` holds (no material sampler in the ambient-only permutation). Many other
+families carry an extra lit-only sampler beside a picture they do sample (`NormalMap`,
+`Specular_Texture`, `NormalTexture` and so on, with colour uniforms that are not colours such as
+`time` or `Bloom`): recorded here, **not wired**. The state word of `ds_booth_glass` (2048 and Omega) and Omega's
+`reflectplane_dc_seawater` is `124`, mode 0, opaque, so the constant's alpha turns no see-through
+draw opaque there; the other 2048 water files' words were not read.
 
 **A permutation that does sample in the ambient-only case is a colour or a mask, not a
 lookup, and the rule leaves it alone**: `m_diffuse_normal_constantspecular` declares
