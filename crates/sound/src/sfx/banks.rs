@@ -200,22 +200,28 @@ impl Banks {
         voice: &oag_title::CountdownVoice,
     ) {
         let mut report = Vec::new();
-        let cues: &[Cue] = if voice.hashed {
-            &[Cue::Ready, Cue::Go]
+        let mut named: Vec<(Cue, &str)> = if voice.hashed {
+            vec![(Cue::Ready, "ready"), (Cue::Go, "go")]
         } else {
-            &Cue::COUNTDOWN
+            Cue::COUNTDOWN
+                .iter()
+                .map(|&cue| (cue, cue.name()))
+                .collect()
         };
-        self.load_start_pair(archives, entry, voice, cues, None, &mut report);
+        if let Some(beat) = voice.beat {
+            named.push((Cue::StartBeat, beat));
+        }
+        self.load_start_cues(archives, entry, voice, &named, None, &mut report);
         if let Some(event) = voice.event {
             let mut staged = StagedStart::default();
             for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
                 match event_cue {
-                    oag_title::StartCue::Plays(name) => self.load_start_pair(
+                    oag_title::StartCue::Plays(name) => self.load_start_cues(
                         archives,
                         event.bank,
                         voice,
-                        &[cue],
-                        Some((&mut staged, name)),
+                        &[(cue, name)],
+                        Some(&mut staged),
                         &mut report,
                     ),
                     oag_title::StartCue::Unplayed { name, why } => {
@@ -228,16 +234,17 @@ impl Banks {
         self.report.extend(report);
     }
 
-    /// Swaps the title's event start in for `ready` and `go`, when it has one:
-    /// the race is one of the title's own events, not a named mode. A cue the
-    /// event start does not play ([`oag_title::StartCue::Unplayed`]) is silent
-    /// there, not the named mode's. `false` (and nothing changes) when the title
-    /// has no event start.
+    /// Swaps the title's event start in for `ready`, `go` and the start beat,
+    /// when it has one: the race is one of the title's own events, not a named
+    /// mode. A cue the event start does not play
+    /// ([`oag_title::StartCue::Unplayed`]) is silent there, not the named mode's,
+    /// and an event plays no start beat. `false` (and nothing changes) when the
+    /// title has no event start.
     pub fn use_event_start(&mut self) -> bool {
         let Some(staged) = self.event_start.take() else {
             return false;
         };
-        for cue in [Cue::Ready, Cue::Go] {
+        for cue in [Cue::Ready, Cue::Go, Cue::StartBeat] {
             self.sounds.remove(&cue);
             self.timelines.remove(&cue);
             self.programs.remove(&cue);
@@ -248,16 +255,15 @@ impl Banks {
         true
     }
 
-    /// One bank blob, read once, and the countdown cues `cues` out of it: into
-    /// `self` when `staged` is `None`, else under the cue's event name into the
-    /// staging area.
-    fn load_start_pair(
+    /// One bank blob, read once, and the start cues `cues` (each with the name
+    /// it is looked up under) out of it: into `self`, or into `staged`.
+    fn load_start_cues(
         &mut self,
         archives: &mut Archives,
         entry: &str,
         voice: &oag_title::CountdownVoice,
-        cues: &[Cue],
-        mut staged: Option<(&mut StagedStart, &str)>,
+        cues: &[(Cue, &str)],
+        mut staged: Option<&mut StagedStart>,
         report: &mut Vec<String>,
     ) {
         let blob = match archives.read_name(entry) {
@@ -269,25 +275,15 @@ impl Banks {
                 return;
             }
         };
-        for &cue in cues {
-            let (sounds, timelines, programs, name) = match staged.as_mut() {
-                Some((area, name)) => (
-                    &mut area.sounds,
-                    &mut area.timelines,
-                    &mut area.programs,
-                    *name,
-                ),
-                None => (
-                    &mut self.sounds,
-                    &mut self.timelines,
-                    &mut self.programs,
-                    cue.name(),
-                ),
+        for &pair in cues {
+            let (sounds, timelines, programs) = match staged.as_deref_mut() {
+                Some(area) => (&mut area.sounds, &mut area.timelines, &mut area.programs),
+                None => (&mut self.sounds, &mut self.timelines, &mut self.programs),
             };
             load_one(
                 &blob,
                 entry,
-                (cue, name),
+                pair,
                 Reading {
                     tick: voice.tick,
                     hashed: voice.hashed,
@@ -630,7 +626,7 @@ fn load_cue(
             name,
             tick,
             cue.bank() == BankName::Frontend,
-            Cue::COUNTDOWN.contains(&cue),
+            Cue::COUNTDOWN.contains(&cue) || cue == Cue::StartBeat,
             hashed,
         )
     };

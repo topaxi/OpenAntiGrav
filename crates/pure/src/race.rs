@@ -77,8 +77,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
-    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
-    // its mode's speech bank. Unverified against the original.
+    // Measured on PSP USA, Time Trial (2026-10-19): see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
@@ -517,6 +516,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Unknown,
     hashed: false,
     event: None,
+    beat: None,
 };
 
 #[cfg(test)]

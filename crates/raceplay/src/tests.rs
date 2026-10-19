@@ -314,6 +314,7 @@ fn setup(handling: Handling) -> Setup {
         // above is `None`.
         zone_stages: None,
         countdown_voice: false,
+        countdown_beat: false,
         launch_hover: None,
         hover_rig: None,
         craft_laws: None,

@@ -48,8 +48,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
-    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
-    // its mode's speech bank. Unverified against the original.
+    // The cues and triggers are measured (`ready`, `HBEAT`, `go`); the 180 tick spacing is Pulse's,
+    // inherited: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
     // Read in the craft update and measured on three RPCS3 boots (2026-10-08): the hover target is
     // clamped low through the flyby and countdown and released after the green light. See
@@ -852,15 +852,21 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
 ];
 
 /// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
-/// `oag_title::CountdownVoice`.
+/// reads the ordinary speech bank.
+///
+/// **The cues and their triggers are measured** (2026-10-19): `RaceManager_SetPhase` phase 1 queues
+/// `ready` and plays `HBEAT`, `RaceManager_UpdateCountdown` queues `go` right after entering phase
+/// 2, and a live cue-start log on RPCS3 shows exactly those three
+/// (`docs/ghidra/functions/ps3-hdfury-eu/countdown-voice.md`). The 180 tick spacing and the thrust
+/// gate are Pulse's, **inherited, not measured**, which is what `origin` says.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\Sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
-    origin: oag_title::Origin::Chosen,
+    origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     tick: oag_title::SequenceTick::Ps3,
     hashed: false,
     event: None,
+    beat: Some("HBEAT"),
 };
 
 #[cfg(test)]

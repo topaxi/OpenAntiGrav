@@ -59,8 +59,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
-    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
-    // its mode's speech bank. Unverified against the original.
+    // A named mode plays `ready`, `HBEAT` and `go`, an event `Go_NGP`; the spacing is Pulse's lent,
+    // chosen, not measured: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
@@ -714,7 +714,7 @@ mod team_identity_tests {
     }
 }
 
-/// The start-of-race voice. A named mode (the race box, free play) plays `ready` and `go` from
+/// The start-of-race voice. A named mode (the race box, free play) plays `ready`, `HBEAT` and `go` from
 /// the speech bank, a campaign event plays `321_NGP` and `Go_NGP` from `Weapons_NGP.bnk`: the
 /// original picks on the mode id, read statically (confidence 80,
 /// `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`). The 240 Hz tick is read from the
@@ -740,4 +740,5 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
         // Four arms picked uniformly (opcode 0x2e, mode 0), each one waveform: the flat pick.
         go: oag_title::StartCue::Plays("Go_NGP"),
     }),
+    beat: Some("HBEAT"),
 };

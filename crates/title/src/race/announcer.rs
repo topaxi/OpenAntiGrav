@@ -237,7 +237,8 @@ impl ZoneClassAnnouncer {
 ///
 /// The default bank is [`super::SoundBanks::speech`]; this holds the two that
 /// replace it. [`Self::origin`] says whose timing a title plays: Pulse's and
-/// Pure's (PSP USA) is measured, HD, 2048 and Omega lend Pulse's (chosen, not
+/// Pure's (PSP USA) is measured; HD's cues and triggers are measured and its
+/// spacing is Pulse's (inherited); 2048 and Omega lend Pulse's (chosen, not
 /// measured).
 ///
 /// See `docs/ghidra/functions/psp-pulse-usa/countdown-voice.md` and
@@ -261,6 +262,10 @@ pub struct CountdownVoice {
     /// The start a title's **own events** play instead of `ready` and `go`, or
     /// `None` when every race plays the named pair.
     pub event: Option<CountdownEvent>,
+    /// The cue played with `ready` in a named mode (`HBEAT` on HD and 2048): the
+    /// start beat, three groups of voices on the master tick. `None` where the
+    /// title's start has none (Pulse's measured log shows none).
+    pub beat: Option<&'static str>,
 }
 
 /// The start a race built from a title's own event (not a named mode) plays.

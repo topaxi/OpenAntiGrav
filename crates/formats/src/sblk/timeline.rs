@@ -53,6 +53,9 @@
 //!   `byte0..=byte1` of its parameter record (mode `0`: uniform, no history),
 //!   walked as an alternate group. Its `0x29` (key off) and `0x04` (modulator)
 //!   are read but not modelled, so they stay in [`Timeline::unread`].
+//! - `0x1a` is a **random wait** that delays the commands after it. With
+//!   [`WalkModel::tail_waits`] one that no key-on or child follows is passed
+//!   (it delays nothing audible); any other is unread.
 //! - Every other opcode is reported in [`Timeline::unread`], not skipped
 //!   silently: `0x1a` adds a random wait, `0x08` replaces the voice's playback
 //!   state, `0x04` starts an LFO. A timeline that met any is not the whole cue.
@@ -86,6 +89,8 @@ const GOTO: u8 = 0x24;
 const MARKER: u8 = 0x23;
 /// Gotos one tick may run before `Scream_DoGrainGoto` refuses (its depth guard).
 const MAX_GOTOS_PER_TICK: u32 = 8;
+/// The opcode that waits a random time before the next command.
+const RANDOM_WAIT: u8 = 0x1a;
 /// Wipeout 2048's random marker goto (`FUN_8134fe5c`, "Goto Random Marker Ex").
 const RANDOM_GOTO: u8 = 0x2e;
 /// The opcode that skips the next command unless a variable holds
@@ -149,6 +154,9 @@ pub struct WalkModel {
     ///
     /// Off by default: Pulse, Pure and HD keep the walk they were measured with.
     pub vita: bool,
+    /// Pass a `0x1a` random wait that nothing audible follows. Off by default so
+    /// no other cue's census moves; the countdown's `HBEAT` ends on one.
+    pub tail_waits: bool,
 }
 
 /// One waveform started at one moment.
@@ -411,6 +419,11 @@ impl Bank<'_> {
                     // No marker is an error return: the cue ends.
                     None => return,
                 }
+            } else if walk.model.tail_waits
+                && opcode == RANDOM_WAIT
+                && self.nothing_audible_after(cue, pc)
+            {
+                walk.out.passed.push(opcode);
             } else if walk.model.vita && opcode == RANDOM_GOTO {
                 gotos_this_tick += 1;
                 let Some(r) = self.record(word & 0x00ff_ffff, 4) else {
@@ -507,6 +520,19 @@ impl Bank<'_> {
         } else {
             ((word >> 16) & 0xff) as u8
         }
+    }
+
+    /// Whether no command of `cue` after index `pc` keys a voice on or starts a child.
+    fn nothing_audible_after(&self, cue: &Cue, pc: i32) -> bool {
+        (pc + 1..cue.commands as i32).all(|k| {
+            let at = (cue.first_command + k as usize) * COMMAND_LEN;
+            self.commands
+                .get(at..at + COMMAND_LEN)
+                .map(|g| (self.order.u32(g, 0) >> 24) as u8)
+                .is_some_and(|op| {
+                    !KEY_ON_OPCODES.contains(&op) && op != PLAY_CHILD && op != REPLACE_WITH_CHILD
+                })
+        })
     }
 
     /// The `len` bytes of the parameter record an operand names.

@@ -97,5 +97,9 @@ impl Race {
         };
         let player = self.player_slot();
         self.sim.cues.push(CueEvent::new(cue, player));
+        // HD plays `HBEAT` beside `ready`, 8 audio ticks (33 ms) after it: the same tick here.
+        if cue == Cue::Ready && self.sim.countdown_beat {
+            self.sim.cues.push(CueEvent::new(Cue::StartBeat, player));
+        }
     }
 }

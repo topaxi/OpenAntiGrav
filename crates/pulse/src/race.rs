@@ -153,6 +153,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Psp,
     hashed: false,
     event: None,
+    beat: None,
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

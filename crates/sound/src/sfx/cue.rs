@@ -158,6 +158,7 @@ impl CueTables for Cue {
             | Self::Disengaging
             | Self::Ready
             | Self::Go
+            | Self::StartBeat
             | Self::ContElim
             | Self::PerfectLap
             | Self::NewLapRecord => BankName::Speech,
@@ -204,6 +205,7 @@ impl CueTables for Cue {
             Self::Disengaging => "disengaging",
             Self::Ready => "ready",
             Self::Go => "go",
+            Self::StartBeat => "HBEAT",
             Self::ContElim => "cont_elim",
             Self::PerfectLap => "PERFECT_LAP",
             Self::NewLapRecord => "NEW_LAP_REC",
@@ -333,6 +335,8 @@ impl CueTables for Cue {
             // `RaceMode_SetState` and `RaceMode_UpdateCountdown` call
             // `Sound_PlayNamedInSlot` with no emitter and `0x400`, as `Disengaging`.
             Self::Ready | Self::Go | Self::ContElim => Placement::Unplaced,
+            // `RaceManager_SetPhase` plays it through `Sound_PlayBankCue` at `0x400`, dry.
+            Self::StartBeat => Placement::Unplaced,
             // `FUN_08829778` plays `PERFECT_LAP` through `Sound_PlayNamedInSlot` at
             // `0x400` with no emitter, as the start voice does.
             Self::PerfectLap | Self::NewLapRecord => Placement::Unplaced,

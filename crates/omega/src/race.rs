@@ -92,8 +92,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,
-    // Chosen, not measured: Pulse's start voice (`ready`, then `go` 180 ticks later) lent to this title, from
-    // its mode's speech bank. Unverified against the original.
+    // Chosen, not measured: Pulse's start voice lent to this title, from its mode's speech bank.
+    // Omega's own start is Wwise events (`_321_NGP`, `Go_NGP`) this loader cannot play.
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
@@ -406,4 +406,5 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     tick: oag_title::SequenceTick::Unknown,
     hashed: false,
     event: None,
+    beat: None,
 };

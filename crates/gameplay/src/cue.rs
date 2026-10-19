@@ -641,6 +641,17 @@ pub enum Cue {
     MedalSilver,
     /// `"bronze_med"`. See [`Self::MedalGold`].
     MedalBronze,
+    /// The start beat: `"HBEAT"`, three groups of key-ons on delays of 125, 205 and 205
+    /// master ticks, played **with** [`Self::Ready`].
+    ///
+    /// Wipeout HD's `RaceManager_SetPhase` phase 1 (`0x0005673c`) queues `ready` and then
+    /// calls `Sound_PlayBankCue(..., "HBEAT", 0x400)`, and a live cue-start log on RPCS3 shows
+    /// the two 8 audio ticks apart with nothing else between them and `go`
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/countdown-voice.md`). Wipeout 2048 plays it in a
+    /// named mode the same way. Not in [`Self::ALL`] or [`Self::COUNTDOWN`]: it loads only
+    /// where `oag_title::CountdownVoice::beat` names it, through
+    /// `oag_sound::sfx::Banks::load_countdown`.
+    StartBeat,
 }
 
 impl Cue {

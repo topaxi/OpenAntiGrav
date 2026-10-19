@@ -172,6 +172,7 @@ pub(super) fn timelines(
         hd_alternates: front_end && tick.alternates_in_high_byte(),
         globals: replace_with_child.then_some([0; oag_formats::sblk::timeline::GLOBAL_SLOTS]),
         vita: tick.vita_handlers(),
+        tail_waits: replace_with_child,
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);

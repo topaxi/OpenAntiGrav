@@ -433,6 +433,7 @@ const GOTO_MODEL: WalkModel = WalkModel {
     hd_alternates: false,
     globals: None,
     vita: false,
+    tail_waits: false,
 };
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
@@ -614,6 +615,7 @@ const VITA_MODEL: WalkModel = WalkModel {
     hd_alternates: false,
     globals: None,
     vita: true,
+    tail_waits: false,
 };
 
 /// 2048's marker id is the operand's low byte: a goto to marker 2 lands on the

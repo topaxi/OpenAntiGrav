@@ -73,7 +73,7 @@ which names them.
 
 | Race | Before | Now |
 | --- | --- | --- |
-| a named mode (race box, free play) | nothing: `ready names no cue in SPEECH` (a hashed bank looked up plain) | `ready` (`speech.bnk` cue 21, a stereo pair, 0.89 s) at tick 91 and `go` (cue 24, a goto into its marker, a pair, 1.15 s) at tick 271, as timelines on the 240 Hz tick; `HBEAT` is not played (unread) |
+| a named mode (race box, free play) | nothing: `ready names no cue in SPEECH` (a hashed bank looked up plain) | `ready` (`speech.bnk` cue 21, a stereo pair), `HBEAT` (the start beat, with `ready`, as on HD) at tick 91 and `go` (cue 24, a goto into its marker, a pair, 1.15 s) at tick 271, as timelines on the 240 Hz tick |
 | a campaign event (`load_event`) | nothing | `Go_NGP` at tick 271, one of its four arms; **no `ready`**; `321_NGP` is authored and **not played** (loader report: `sfx: 321_NGP not played: ...`) |
 
 - **Why `321_NGP` is not played.** It needs two looping voices stopped 3.75 s later and a pan swept through the
