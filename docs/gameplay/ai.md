@@ -1083,13 +1083,13 @@ opponents not using weapons. A race box race flies the same driver
 (`oag_game::ai_choice`, "Which AI flies"), so it was the same there. Single
 race, seed 1, player parked, 240 s, weapons on:
 
-| Title | Original driver before: pickups / spends / opponent projectiles | After the fix | This project's driver |
+| Title | Original driver before: pickups / spends / opponent projectiles | After (fix, absorb, LeachBeam held on HD lineage) | This project's driver, same tree |
 | --- | --- | --- | --- |
-| Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 34 / 27 / 140 |
-| Pure | 8 / 1 / 0 | 33 / 26 / 38 | 21 / 14 / 20 |
-| HD | 7 / 0 / 0 | 24 / 18 / 131 | 29 / 22 / 152 |
-| 2048 | 8 / 1 / 0 | 27 / 22 / 171 | 24 / 18 / 104 |
-| Omega | 8 / 1 / 0 | 29 / 23 / 143 | 17 / 10 / 43 |
+| Pulse | 7 / 0 / 0 | 38 / 31 / 233 | 42 / 35 / 226 |
+| Pure | 8 / 1 / 0 | 45 / 38 / 48 | 26 / 19 / 21 |
+| HD | 7 / 0 / 0 | 39 / 32 / 151 | 29 / 23 / 132 |
+| 2048 | 8 / 1 / 0 | 48 / 43 / 239 | 38 / 33 / 184 |
+| Omega | 8 / 1 / 0 | 36 / 31 / 189 | 26 / 20 / 70 |
 
 The one spend in the "before" column is a Turbo, whose gate reads the
 throttle and not the driver's noise. **Cause:** the original branch of
@@ -1113,6 +1113,18 @@ campaign field fires.
 is ported: `oag_ai::weapon_ai::Decision::Absorb`, on the shield tier, the 15 s
 hold and nobody inside 300 ahead. It did not change how many craft are
 wrecked.
+
+**What wrecked them was the LeachBeam on HD, 2048 and Omega.** Fired by an
+opponent, it emptied a shield of 93 to 130 in 94 to 119 ticks. This engine
+drains at Pulse's per-tick rate, and those titles author `damage` 1.5 against
+Pulse's 0.1. With the opponent beam off, the measured HD and 2048 readings
+(`54.51`, `63`, `74`) held again. Until HD's drain is read
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)), opponents on
+those three titles hold the beam: `oag_title::weapons::Weapons::opponents_fire_leach_beam`,
+**chosen, not measured** (maintainer, 2026-10-19). Wrecks in the 240 s run
+above: 0 on every title. A craft another opponent's Plasma destroys still
+happens (2048 Event 4-1), and the 2048 event walks accept a wreck in place of
+a finish.
 
 ### Still open, with the next address
 

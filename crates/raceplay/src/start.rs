@@ -89,6 +89,7 @@ impl Race {
             #[cfg(feature = "view")]
             zoom_borrowed,
             weapon_pad_glow,
+            opponents_fire_leach_beam,
             speedup_pads,
             weapon_pads,
             weapons,
@@ -632,6 +633,7 @@ impl Race {
                 hover_rig: rig,
                 steer_ramp_clamped,
                 weapon_pad_glow,
+                opponents_fire_leach_beam,
                 autopilot: false,
                 cues: Vec::new(),
                 announcements: Vec::new(),

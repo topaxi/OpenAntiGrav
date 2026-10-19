@@ -48,6 +48,16 @@ pub struct Weapons {
     /// `oag_raceplay::FireLaw` - which is what a title with no table would
     /// get, and none of the five does.
     pub ai: Option<&'static str>,
+    /// Whether an opponent fires a LeachBeam it holds, or holds it.
+    ///
+    /// **`false` is chosen, not measured** (maintainer, 2026-10-19). On HD,
+    /// 2048 and Omega this engine drains a beam at Pulse's per-tick rate with
+    /// the title's own `damage` (1.5 against Pulse's 0.1). An opponent's beam
+    /// then empties a full shield in under two seconds, and a field that
+    /// fires them wrecks itself. HD's drain is not fully read (see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`), so those titles'
+    /// opponents keep the beam until it is. The player's beam is unchanged.
+    pub opponents_fire_leach_beam: bool,
 }
 
 /// Where a title keeps each weapon's own body model - the projectile itself,

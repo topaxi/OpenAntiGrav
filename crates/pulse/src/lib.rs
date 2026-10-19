@@ -85,6 +85,7 @@ pub const TITLE: &Title = &Title {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
+        opponents_fire_leach_beam: true,
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

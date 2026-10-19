@@ -330,6 +330,8 @@ pub struct RaceSim {
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
     #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
+    /// Whether an opponent fires a LeachBeam - see [`Setup::opponents_fire_leach_beam`].
+    pub(super) opponents_fire_leach_beam: bool,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// The launch boost's parameters - see [`Setup::start_boost`].

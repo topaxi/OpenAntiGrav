@@ -212,8 +212,8 @@ fn the_2048_table_set_equals_the_base_set() {
     );
 }
 
-/// The event's whole race with the player parked: every opponent finishes
-/// inside 300 s with at most `respawns` respawns each. Shield is read at each
+/// The event's whole race with the player parked: every opponent finishes,
+/// or is destroyed by another's weapon, inside 300 s with at most `respawns` respawns each. Shield is read at each
 /// opponent's lap crossings (per lap) and at the end of the run, reported
 /// apart. The parked player is behind the whole field, so `WhenBehind` holds
 /// every opponent back: a race takes 160 to 280 s.
@@ -275,8 +275,15 @@ fn fly(event: &str, respawns: u32) {
     );
     for slot in 1..8 {
         let ship = &race.sim.world.ships[slot];
+        // **Or destroyed**: since 2026-10-19 the field fires, and a craft
+        // another opponent wrecks stays a wreck (`Destroyed`, then `Eliminated`),
+        // as the original's state 6 does (`oag_physics::CraftState`). Every other craft still finishes.
         assert!(
-            ship.standing.finished(),
+            ship.standing.finished()
+                || matches!(
+                    ship.physics.craft_state,
+                    oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated
+                ),
             "{event}: slot {slot} on lap {}",
             ship.standing.lap
         );
