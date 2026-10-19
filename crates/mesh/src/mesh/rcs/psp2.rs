@@ -649,6 +649,7 @@ fn build_planned(
             culled: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: oag_vex::vex::LAYER_DEFAULT,
             node: None,
             // The mesh object this submesh belongs to: the join key for the

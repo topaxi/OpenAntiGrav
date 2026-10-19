@@ -360,7 +360,7 @@ impl Target {
                 set,
                 chunks,
                 frustum,
-                Lists::Blended,
+                Lists::Blended { depth_plane: None },
             ));
         }
         stats

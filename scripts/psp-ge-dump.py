@@ -79,6 +79,18 @@ TEX_STATE_OPS = {
     0x55: "materialdiffuse",
     0x21: "blendenable",  # ALPHABLENDENABLE
     0xDF: "blendmode",
+    0x1D: "cullenable",  # CULLFACEENABLE
+    0x22: "atestenable",  # ALPHATESTENABLE
+    0x23: "ztestenable",  # ZTESTENABLE
+    0x24: "stenciltestenable",  # STENCILTESTENABLE
+    0x9B: "cullmode",  # FACE: 0 clockwise, 1 counter-clockwise
+    0xDB: "alphatest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
+    0xDC: "stenciltest",  # func bits 0..2, reference bits 8..15, mask bits 16..23
+    0xDD: "stencilop",  # fail bits 0..2, zfail 8..10, zpass 16..18
+    0xDE: "ztest",  # function, 0 never .. 7 always
+    0xE7: "zmask",  # bit 0 set = depth writes off
+    0xE8: "pmsk1",  # colour write mask, RGB
+    0xE9: "pmsk2",  # colour write mask, alpha
 }
 
 

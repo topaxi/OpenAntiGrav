@@ -126,6 +126,7 @@ fn tri(points: [[f32; 2]; 3]) -> Model {
         culled: false,
         blend: None,
         blend_state: None,
+        depth_point: None,
         layer: 0,
         alpha_test_ref: None,
         node: None,

@@ -15,9 +15,15 @@ pub(crate) enum Lists<'a> {
     /// shading always keeps the model's own order, which is what keeps the
     /// picture the original's; without a prepass `order` is ignored.
     Solid { order: Option<&'a [(f32, u32)]> },
-    /// The blended list and the glow stamps over it.
-    Blended,
+    /// The blended list and the glow stamps over it. `depth_plane`, when given, is
+    /// the fourth row of the view's view-projection matrix and puts list-B meshes
+    /// in the original's back-to-front order ([`oag_mesh::mesh::Model::blended_order`]);
+    /// without it the list keeps its build order.
+    Blended { depth_plane: Option<[f32; 4]> },
 }
+
+/// [`Lists::Solid`]'s `order`.
+type SolidOrder<'a> = Option<&'a [(f32, u32)]>;
 
 /// The scratch [`Drawable::draw_lists`] gathers its opaque draws into, one per thread: the
 /// views of a split record on threads of their own, and two of them can draw one drawable at
@@ -109,18 +115,30 @@ impl Drawable {
         frustum: Option<&Frustum>,
         lists: Lists<'_>,
     ) -> SceneStats {
-        let solid = !matches!(lists, Lists::Blended);
+        let solid = !matches!(lists, Lists::Blended { .. });
         let blended = !matches!(lists, Lists::Solid { .. });
+        let depth_plane = match lists {
+            Lists::Blended { depth_plane } => depth_plane,
+            Lists::All | Lists::Solid { .. } => None,
+        };
         let order = match lists {
             Lists::Solid { order } => order,
-            Lists::All | Lists::Blended => None,
+            Lists::All | Lists::Blended { .. } => None,
         };
         if self.model.indices.is_empty() {
             return SceneStats::default();
         }
         SHOWN.with_borrow_mut(|shown| {
             self.draw_lists_into(
-                pass, block, sections, set, chunks, frustum, order, solid, blended, shown,
+                pass,
+                block,
+                sections,
+                set,
+                chunks,
+                frustum,
+                (order, depth_plane),
+                (solid, blended),
+                shown,
             )
         })
     }
@@ -135,9 +153,8 @@ impl Drawable {
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
-        order: Option<&[(f32, u32)]>,
-        solid: bool,
-        blended: bool,
+        (order, depth_plane): (SolidOrder<'_>, Option<[f32; 4]>),
+        (solid, blended): (bool, bool),
         shown: &mut Shown,
     ) -> SceneStats {
         let mut stats = SceneStats::default();
@@ -370,7 +387,14 @@ impl Drawable {
         if !blended {
             return stats;
         }
-        for (index, draw) in self.model.transparent_draws.iter().enumerate() {
+        // The original's order for list B: far to near by the mesh's view depth,
+        // which depends on this view - `Model::blended_order`.
+        let blend_order = depth_plane.and_then(|plane| self.model.blended_order(plane));
+        let blend_order = blend_order.as_deref();
+        for index in (0..self.model.transparent_draws.len())
+            .map(|at| blend_order.map_or(at, |order| order[at] as usize))
+        {
+            let draw = &self.model.transparent_draws[index];
             if !shows.draw(draw) {
                 continue;
             }
@@ -405,7 +429,13 @@ impl Drawable {
             self.bind_slot(pass, &mut last_bound, slot);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        self.draw_stamps(pass, &shows, transparent, set, chunks, frustum);
+        self.draw_stamps(
+            pass,
+            &shows,
+            transparent,
+            blend_order,
+            (set, chunks, frustum),
+        );
         stats
     }
 }

@@ -68,6 +68,7 @@ fn moving_quad(xform: u32) -> Model {
             culled: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: vex::LAYER_DEFAULT,
             node: None,
             chunk: None,

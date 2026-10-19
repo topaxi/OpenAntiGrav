@@ -221,6 +221,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
             culled: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: vex::LAYER_DEFAULT,
             node: None,
             chunk: None,

@@ -100,6 +100,9 @@ pub(super) struct ViewPass<'a> {
     pub(super) viewport: (f32, f32, f32, f32),
     /// Where the camera is: the depth prepass's order is sorted from it.
     pub(super) eye: Vec3,
+    /// The fourth row of the unjittered view-projection matrix: `clip.w`, the view
+    /// depth the blended list's list-B meshes are put in order by.
+    pub(super) depth_plane: [f32; 4],
     pub(super) frustum: Option<Frustum>,
     pub(super) visible_set: Option<VisibleSet>,
     pub(super) chunk_set: Option<ChunkSet>,
@@ -376,7 +379,9 @@ impl Recorder<'_> {
             set,
             chunks,
             frustum,
-            Lists::Blended,
+            Lists::Blended {
+                depth_plane: Some(pass.depth_plane),
+            },
         ));
         oag_gpu::perfprobe::marks::mark(render, "track shine");
         if let Some((shine, sources)) = self.track_shine {

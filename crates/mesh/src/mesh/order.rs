@@ -5,7 +5,7 @@
 //! longer than the code: the whole of it is one stable sort on one field, and
 //! all of the value is in knowing which field and why.
 
-use super::Model;
+use super::{DrawCall, Model};
 
 impl Model {
     /// Puts all three draw lists into the order the original's render queue
@@ -50,4 +50,65 @@ impl Model {
             list.sort_by_key(|draw| draw.layer);
         }
     }
+
+    /// The order this frame draws [`Self::transparent_draws`] in, as indices
+    /// into it, or `None` when no draw carries a [`DrawCall::depth_point`] and
+    /// the list's own order stands.
+    ///
+    /// **List B is queued with a view depth.** `Mesh_SubmitNode` (`0x0890cc80`)
+    /// enqueues a mesh's list-B batches at `mesh+0xc8` OR-ed with
+    /// `0xfffff - trunc(-z * 349.525)`, `z` being the view-space depth of the
+    /// mesh's box centre (clamped to zero past 3,000 units and for a point behind
+    /// the eye), and `Gfx_FlushRenderManager` sorts the whole queue ascending: the
+    /// far meshes first. Both `0x45` trees and `0x4a` arrow strips land on the
+    /// same `0x4d000000` layer, so a nearer tree is drawn after the strip that a
+    /// layer-only order put over it. The sort is stable here, so the batches of
+    /// one mesh (one key) and meshes of equal key keep the list's order; the
+    /// original's `qsort` is not stable, so equal keys are our choice.
+    ///
+    /// `depth_plane` is the fourth row of the view-projection matrix
+    /// (`clip.w = -z_view` for a perspective projection), as `[x, y, z, w]`.
+    /// **Chosen, not measured:** the key is taken in the units of the model's own
+    /// positions; the original multiplies the transformed `z` by
+    /// `display+0x4310 / 65`, a scale not read, which moves only where the
+    /// 3,000-unit clamp falls.
+    #[must_use]
+    pub fn blended_order(&self, depth_plane: [f32; 4]) -> Option<Vec<u32>> {
+        order_blended(&self.transparent_draws, depth_plane)
+    }
 }
+
+/// [`Model::blended_order`] over a draw list.
+fn order_blended(draws: &[DrawCall], depth_plane: [f32; 4]) -> Option<Vec<u32>> {
+    if !draws.iter().any(|d| d.depth_point.is_some()) {
+        return None;
+    }
+    let mut keyed: Vec<(u32, u32)> = draws
+        .iter()
+        .zip(0u32..)
+        .map(|(draw, index)| {
+            let depth = draw
+                .depth_point
+                .map_or(0, |p| view_depth_key(depth_plane, p));
+            (draw.layer | depth, index)
+        })
+        .collect();
+    keyed.sort_unstable();
+    Some(keyed.into_iter().map(|(_, index)| index).collect())
+}
+
+/// The low twenty bits of a list-B key: `0xfffff - trunc(-z * 349.525)`, so a
+/// nearer point has the larger key and draws later. `0` for a point behind the
+/// eye or past 3,000 units (`0xfffff / 349.525`).
+fn view_depth_key(plane: [f32; 4], point: [f32; 3]) -> u32 {
+    let distance = plane[0] * point[0] + plane[1] * point[1] + plane[2] * point[2] + plane[3];
+    let t = distance * 349.525;
+    if t > 0.0 && t <= 1_048_575.0 {
+        0xfffff - (t as u32 & 0xfffff)
+    } else {
+        0
+    }
+}
+
+#[cfg(test)]
+mod tests;

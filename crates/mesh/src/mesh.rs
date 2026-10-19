@@ -637,6 +637,11 @@ fn build_class(
         // here rather than per batch because several batches share a material.
         let transforms = vex::mesh_tex_transforms(payload);
         let mesh_flags = u16::from_le_bytes([payload[0], payload[1]]);
+        // List B is queued apart from list A: `Mesh_SubmitNode` enqueues it at
+        // `mesh+0xc8` with a view depth, not at the bare layer a batch set
+        // takes - see `vex::list_b_layer`. The point the depth is taken from
+        // is the mesh's box centre, lifted like the draws' bounds below.
+        let box_centre = vex::mesh_box_centre(payload);
 
         for batch_list in [0u8, 1u8] {
             for batch in vex::mesh_batches(payload, batch_list).context("decoding batches")? {
@@ -752,6 +757,16 @@ fn build_class(
                     // one instant - which is all it can ever be, and why
                     // `moving` turns the tests off rather than trusting it.
                     let centre = bounds_matrix.map_or(centre, |m| vex::transform_point(&m, centre));
+                    // PSP batches only: the PS2 executable's submit was not read.
+                    // Transparent ones only: the depth key reorders list B, but
+                    // an opaque or cutout batch is depth-tested with depth
+                    // written and lands the same picture in any order.
+                    let depth_point = (batch_list == 1
+                        && batch.is_transparent()
+                        && !vex::is_vif_batch(batch.vertex_type))
+                    .then_some(box_centre)
+                    .flatten()
+                    .map(|c| vex::transform_point(&to_world, c));
                     let draw = DrawCall {
                         range: first_index..last_index,
                         texture,
@@ -769,7 +784,12 @@ fn build_class(
                         // original draws with the test off; the cutout
                         // pipeline is the only one that reads it.
                         alpha_test_ref: batch.alpha_test_reference().map(|r| f32::from(r) / 255.0),
-                        layer,
+                        layer: if depth_point.is_some() {
+                            vex::list_b_layer(vex::LAYER_SCENE)
+                        } else {
+                            layer
+                        },
+                        depth_point,
                         node: Some(index as u32),
                         // Not a `.rcsmodel` chunk - see `DrawCall::chunk`.
                         chunk: None,

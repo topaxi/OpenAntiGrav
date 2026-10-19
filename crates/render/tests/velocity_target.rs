@@ -42,6 +42,7 @@ fn triangle_model(blended: bool, alpha: f32) -> Model {
         moving: false,
         blend: None,
         blend_state: None,
+        depth_point: None,
         layer: oag_vex::vex::LAYER_DEFAULT,
         culled: false,
         range: 0..3,

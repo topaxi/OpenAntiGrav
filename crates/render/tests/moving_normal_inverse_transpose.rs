@@ -71,6 +71,7 @@ fn model(vertices: Vec<GpuVertex>, moving: bool) -> Model {
             moving,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: oag_vex::vex::LAYER_DEFAULT,
             culled: false,
             range: 0..3,

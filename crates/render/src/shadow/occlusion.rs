@@ -528,6 +528,7 @@ mod tests {
             culled: false,
             blend: None,
             blend_state: None,
+            depth_point: None,
             layer: 0,
             alpha_test_ref: None,
             node: None,
