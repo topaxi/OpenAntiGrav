@@ -605,6 +605,10 @@ pub(crate) fn run_race(
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
                 force_hit: crate::args::force_at_slot(cli.wreck.force_hit.as_deref(), "hit")?,
+                force_wall_slide: crate::args::force_at_slot(
+                    cli.wreck.force_wall_slide.as_deref(),
+                    "wall slide",
+                )?,
                 force_leach_lock: crate::args::force_at_slot(
                     cli.wreck.force_leach_lock.as_deref(),
                     "LeachBeam lock",

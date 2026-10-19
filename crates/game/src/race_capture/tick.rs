@@ -98,6 +98,11 @@ pub(super) fn advance_one_tick(
     {
         race.force_weapon_hit(slot);
     }
+    if let Some((at, slot)) = options.force_wall_slide
+        && at == tick
+    {
+        race.force_wall_slide(slot);
+    }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick
         && !race.force_bomb_trip(slot)

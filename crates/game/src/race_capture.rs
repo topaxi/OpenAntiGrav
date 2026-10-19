@@ -86,6 +86,8 @@ pub struct CaptureOptions {
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
+    /// `--force-wall-slide TICK:SLOT`: see [`Race::force_wall_slide`].
+    pub force_wall_slide: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].

@@ -465,6 +465,7 @@ pub fn run(
                 intro_ticks: 0,
                 force_wreck: None,
                 force_hit: None,
+                force_wall_slide: None,
                 force_leach_lock: None,
                 leach_path: None,
                 force_bomb_trip: None,
