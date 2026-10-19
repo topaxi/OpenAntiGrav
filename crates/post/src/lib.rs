@@ -34,6 +34,7 @@ pub mod bloom;
 pub mod fsr1;
 pub mod fsr3;
 pub mod fxaa;
+mod group_cache;
 pub mod hd_bloom;
 pub mod hd_zoom;
 pub mod jitter;

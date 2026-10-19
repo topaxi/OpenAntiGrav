@@ -187,6 +187,10 @@ struct Lane {
     /// What was last written into `constants_bright`, so a frame that moved
     /// nothing writes nothing.
     written: std::cell::Cell<Option<Constants>>,
+    /// The bright pass's group over the scene view it last read. The lane owns
+    /// `constants_bright`, and a new extent builds a new lane, so the scene view is
+    /// the only thing that can change under it.
+    bright_group: super::group_cache::ViewGroup,
 }
 
 impl Lane {
@@ -280,6 +284,7 @@ impl Lane {
             constants_bright,
             fixed: [constants_x, constants_y, constants_composite],
             written: std::cell::Cell::new(Some(whole)),
+            bright_group: super::group_cache::ViewGroup::default(),
         })
     }
 }
@@ -548,27 +553,29 @@ impl Bloom {
             lane.written.set(Some(wanted));
         }
 
-        let bright_group = oag_gpu::perfprobe::bind_group(
-            device,
-            &wgpu::BindGroupDescriptor {
-                label: Some("bloom bright"),
-                layout: &self.layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(scene),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: lane.constants_bright.as_entire_binding(),
-                    },
-                ],
-            },
-        );
+        let bright_group = lane.bright_group.get(scene, || {
+            oag_gpu::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some("bloom bright"),
+                    layout: &self.layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(scene),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: lane.constants_bright.as_entire_binding(),
+                        },
+                    ],
+                },
+            )
+        });
 
         // The three scratch passes fill their whole buffer, which is the lane's own
         // size - the fixed 240x136 for a whole picture - always at that buffer's own
