@@ -1137,3 +1137,7 @@ Deliberately last. Multiplayer built on an unverified simulation inherits every
 one of its bugs and adds desync on top. The state hash of `oag-core` and the
 input-stream replays of M7 are what a desync check and a record check are built
 from.
+
+**Android needs the `INTERNET` permission** (`scripts/build-apk.sh`'s manifest; a test guards it): without it the host
+browser's UDP socket is refused, JOIN GAME's Ship Select was followed by no host list and the player was back on the LAN
+page (maintainer, Android joiner against a Steam Deck host, 2026-10-19). Not yet confirmed on a device.

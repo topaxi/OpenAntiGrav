@@ -93,13 +93,13 @@ the room list, the room), the race, and back to the room. Walk-through, notices 
   the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen on a LAN race (it returns to the
   menus today; online has one, part 11); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
 
-- **"JOIN GAME, choose a craft, back on the LAN menu" (maintainer, HD, 2026-10-19), not reproduced** (`lan-join-hd`).
-  HD EU at `main` 5ce812a08, fresh profile, `unlock_everything` on and off, confirm by key and by pointer, after BACK,
-  after HOST GAME then RACE then BACK, with and without a host on the network: every run logs `lan: flying ...` and opens the
-  host list. Needs a leftover-state or timing cause (60 fps against the 5 fps lavapipe walk); ask what was done earlier in
-  that session. What did turn up and is fixed: BACK on JOIN GAME's Ship Select opened a stray Track Select (LAN and online),
-  two BACKs from the page. A `Session` needs a GPU and a window, so no test drives the flow without one.
-
+- **"JOIN GAME, choose a craft, back on the LAN menu" (maintainer, 2026-10-19): the joiner was the Android build** (Deck hosted).
+  Not reproducible on desktop HD (`lan-join-hd`: every path reaches the list). Cause found by reading: `scripts/build-apk.sh`'s
+  manifest declared no `INTERNET` permission, Android refuses the socket, `Browser::new()` fails in `open_lan_browse`, no
+  list screen opens and the step is dropped. Fixed (INTERNET and ACCESS_NETWORK_STATE; the failure now ends the step with a
+  decline sound), **unverified on the device**: rebuild with `just apk`, install, JOIN GAME on the phone against the Deck host.
+  Online has the same dependency (its WebTransport connect). BACK on JOIN GAME's Ship Select also used to open a stray Track
+  Select (fixed). A `Session` needs a GPU and window, so no test walks the flow.
 - ~~**A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).~~ **Done on X11 and
   Windows** (`Device::Keys`, a row per keyboard); **open on Wayland and macOS**, which name no keyboard, so a join *row* is
   impossible there (the windows open only after the layout): a second Wayland keyboard still claims a seat by a

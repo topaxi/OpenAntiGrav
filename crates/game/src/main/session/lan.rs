@@ -279,7 +279,10 @@ impl Session {
         let browser = match Browser::new() {
             Ok(browser) => browser,
             Err(e) => {
+                // Android without the INTERNET permission refuses the socket here.
                 error!("lan: cannot look for games: {e}");
+                self.lan = None;
+                self.play_navs(Some(Nav::Decline));
                 return;
             }
         };
