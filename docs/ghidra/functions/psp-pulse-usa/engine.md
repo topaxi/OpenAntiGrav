@@ -708,7 +708,7 @@ T = T * grounded + T * 0.2 * (1 - grounded) // 20 % thrust with no contact
 if (normal mode) {
     cap = 0.5 * speed + Engine.accelcap
     if (throttle > 100.0)  cap = throttle * 0.01 * cap
-    if (flags & 0x0008)    cap = 1e10                   // uncapped
+    if (flags & 0x0008)    cap = 1e10                   // uncapped: the Autopilot, or finished
     T = min(T, cap)
 } else {                                                // four-corner mode = Zone
     if ((flags & 1) && !(flags & 2))
@@ -717,7 +717,7 @@ if (normal mode) {
         T = 0.0                                         // branch-likely delay slot
 }
 
-if (flags & 0x0004)  T *= craft+0x2a0                   // the speed-up pickup, 1.2
+if (flags & 0x0004)  T *= craft+0x2a0                   // the Autopilot, 1.2
 lift = 0
 if ((flags & 0x0200) || (flags & 0x0400)) and craft+0x2a4 == 1 {
     T += Engine.turbo
@@ -820,7 +820,7 @@ three writers agree, the constructor identification is corroborated by seven
 other offsets this page already reads, and the XML attribute names are literal
 strings compared by `Xml_AttributeNameIs`.
 
-#### `craft+0x2a0` is the speed-up pickup, and it is 1.2
+#### `craft+0x2a0` is the Autopilot's, and it is 1.2
 
 `0x0883b3b8` (a per-frame player/HUD update) is the only writer of `craft+0x2a0`
 that uses a craft base, and it writes exactly two values, in the same branch that
@@ -839,12 +839,16 @@ if ((pickup->0x1b8 & 0x800) == 0) {          // no speed-up pickup held
 The flag and the value are written together, so the `0` case is never read:
 `Ship_UpdateEngine` only loads `+0x2a0` when bit `0x0004` is set, and that bit is
 set only on the branch that stores `1.2`. **The multiplier is a flat +20 % on
-thrust while a speed-up pickup is active**, and it contributes nothing at all
-otherwise. Confidence **85** - the constant is read straight out of the
-instruction stream; what is slightly weaker is the identification of the `0x800`
-pickup-flag bit as "speed-up" specifically, which comes from the surrounding
-code (it also feeds `FUN_08848664` with the pickup's `+0x148` timer and forces
-the HUD icon id to 6) rather than from a string.
+thrust while the Autopilot runs**, and contributes nothing otherwise.
+
+**Correction, 2026-10-19: the pickup is the Autopilot, and the same branch also
+lifts the cap.** `0x800` is `Autopilot_Fire`'s running bit
+([autopilot.md](autopilot.md#what-the-running-bit-does-to-the-craft-2026-10-19-autopilot-rail)).
+This page used to call it "speed-up" and guess. The branch also calls
+`Craft_SetUncappedThrust(craft, 1)` (`0x0884866c`), which sets bit `0x0008`, so
+`cap = 1e10` as well. A finished player gets `0x0008` alone. Read live as
+`craft+0x1c0 = 0xd` on every frame of two whole races under the pickup.
+Confidence **90**. Wired as `oag_physics::engine::EngineFlags`.
 
 #### What this closes, and what it does not
 
