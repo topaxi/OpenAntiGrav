@@ -84,10 +84,13 @@ impl Race {
             let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
-            if slot == player && was != CraftState::Destroyed && state == CraftState::Destroyed {
+            if was != CraftState::Destroyed
+                && state == CraftState::Destroyed
+                && let Some(fx) = self.seat_contact_mut(slot)
+            {
                 // `Ship_SetState` case 4, the local player's half: it zeroes
                 // the camera's shake duration, cancelling a running one.
-                self.view.shake.cancel();
+                fx.shake.cancel();
             }
             if out_of_the_race_now {
                 // Kind 0 falls off with distance from the *active* camera,
@@ -102,9 +105,7 @@ impl Race {
                 // included: the finished race steps its cosmetics
                 // ([`Race::tick_cosmetics`]), so the shake decays under the
                 // results as the original's does.
-                if slot == player {
-                    self.arm_player_blast_shake(STATE_5_SHAKE);
-                }
+                self.arm_player_blast_shake(slot, STATE_5_SHAKE);
             }
             if let Some((left, at, model)) = &mut self.view.craft_flashes.blowup[slot] {
                 // The edge tick's own `dt` is not counted: the timer is armed
@@ -124,19 +125,24 @@ impl Race {
                     self.throw_wreck_explosion(slot, model);
                     if slot == player {
                         self.hold_destroy_camera();
-                        self.arm_player_blast_shake(STATE_6_SHAKE);
                     }
+                    self.arm_player_blast_shake(slot, STATE_6_SHAKE);
                 }
             }
         }
     }
 
     /// `Camera_ArmShake(magnitude, duration, camera, mode)` as the craft's two
-    /// explosions call it, for the local player only.
-    fn arm_player_blast_shake(&mut self, (magnitude, duration, side): (f32, f32, Side)) {
-        self.view
-            .shake
-            .arm_with(magnitude, duration, side, &mut self.view.shake_rng);
+    /// explosions call it, for a person's own craft: the player's and every other local seat's.
+    fn arm_player_blast_shake(
+        &mut self,
+        slot: usize,
+        (magnitude, duration, side): (f32, f32, Side),
+    ) {
+        if let Some(fx) = self.seat_contact_mut(slot) {
+            fx.shake
+                .arm_with(magnitude, duration, side, &mut fx.shake_rng);
+        }
     }
 
     /// The local player was put back on the track: `Ship_SetState` case 3 and

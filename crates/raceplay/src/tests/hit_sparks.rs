@@ -153,12 +153,15 @@ fn a_weapon_hit_shakes_the_players_camera_and_nobody_elses() {
     let mut on_rival = [WeaponHit::default(); MAX_SHIPS];
     on_rival[3].landed = true;
     race.throw_hit_sparks(&on_rival, false);
-    assert!(!race.view.shake.active(), "a rival's hit shook our camera");
+    assert!(
+        !race.view.contact.shake.active(),
+        "a rival's hit shook our camera"
+    );
 
     race.throw_hit_sparks(&landed_on_player(), false);
-    assert!(race.view.shake.active());
+    assert!(race.view.contact.shake.active());
     // Magnitude 0.6, as authored: the wall path's `severity * 0.3` at 2.0.
-    assert!((race.view.shake.magnitude() - 0.6).abs() < 1e-5);
+    assert!((race.view.contact.shake.magnitude() - 0.6).abs() < 1e-5);
 }
 
 /// A Cannon round striking a second craft, ticked through `Race::tick`, with

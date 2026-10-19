@@ -59,14 +59,9 @@ pub struct RaceView {
     /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
     /// controllers are hashed, so "which craft is mine" cannot live in the world.
     pub(super) seat: Option<usize>,
-    /// The player's camera shake, armed by a hard wall hit. Render-only, for
-    /// the same reason [`Self::camera`] is - see
-    /// `oag_render::camera::shake`'s module doc comment for what is confirmed
-    /// against the original and what this module chose on its own.
-    pub(super) shake: oag_render::camera::shake::Shake,
-    /// The shake's phase draw, deliberately **not** `world.rng` - see
-    /// [`Self::exhaust_rng`].
-    pub(super) shake_rng: Rng,
+    /// The seat's wall-contact effects: the camera shake, the collision sparks and
+    /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
+    pub(super) contact: super::contact_fx::ContactFx,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
     /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
@@ -230,11 +225,6 @@ pub struct RaceView {
     /// The `Ship Collision Fx` locators in model space - see
     /// [`Setup::collision_fx`].
     pub(super) collision_fx: Vec<oag_livery::SparkAnchor>,
-    /// Collision sparks' particle pool, advanced on the simulation tick.
-    ///
-    /// Here rather than in `World`, for the same reason [`Self::exhaust`] is -
-    /// see `oag_fx::psys`'s module doc comment.
-    pub(super) sparks: psys::System,
     /// Every `.pob` this race loaded - see [`Setup::effects`].
     pub(super) effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load.
@@ -357,71 +347,6 @@ pub struct RaceView {
     /// The stage's generator, deliberately **not** `world.rng` - see
     /// [`Self::exhaust_rng`].
     pub(super) stage_rng: Rng,
-    /// How many bursts the *trigger* has fired, whether or not an effect
-    /// was loaded to play them.
-    ///
-    /// Counted here rather than read off the pool because the two answer
-    /// different questions: the pool knows how many times it was ignited,
-    /// this knows how many times the contact rule said to - and only the
-    /// second is [`Race`]'s to get right.
-    pub(super) sparks_ignitions: u32,
-    /// The sparks' generator, deliberately **not** `world.rng` - see
-    /// [`Self::exhaust_rng`].
-    pub(super) sparks_rng: Rng,
-    /// Seconds remaining before another spark burst is allowed.
-    ///
-    /// Counts down every tick regardless of contact, and gates a burst
-    /// alongside `oag_physics::wall::WallResponse::impact` - see
-    /// `oag_gameplay::cue::COLLISION_COOLDOWN`'s doc comment for why this is
-    /// a cooldown timer and not a one-shot edge latch: `impact` stays `true`
-    /// for every tick of a sustained scrape, and spawning a burst on every
-    /// one of those ticks is the per-frame-instead-of-per-impact bug
-    /// `oag_physics::wall::STUN_PER_CONTACT`'s doc comment already records
-    /// costing a session of play-testing, but the recovered original itself
-    /// re-fires periodically rather than going silent for the rest of the
-    /// scrape.
-    pub(super) sparks_cooldown: f32,
-    /// The burst's emitter anchor, **model space**: the `Ship Collision Fx`
-    /// locator nearest the last impact, or the contact point itself mapped
-    /// into model space when the model authors no locators. Transformed
-    /// through the ship's current matrix every tick, so the burst rides the
-    /// hull - position and spawn direction both - the way the original's
-    /// scene-graph node does. See [`Self::sparks_anchor_up`] for the other
-    /// half of that transform.
-    pub(super) sparks_anchor: Option<Vec3>,
-    /// The chosen locator's own authored `+Y`, **model space** - paired with
-    /// [`Self::sparks_anchor`] and read the same tick. `None` alongside it.
-    ///
-    /// `oag_fx::psys::System::advance` takes the *world*-space direction
-    /// this maps to, every tick, the same way [`Self::sparks_anchor`]'s
-    /// position is re-transformed every tick rather than baked once: a craft
-    /// banking mid-scrape tilts the spray with it, not just the point it
-    /// comes from.
-    pub(super) sparks_anchor_up: Option<Vec3>,
-    /// Whether the sparks are currently *attached* to a wall contact, for the
-    /// effects that author [`oag_pob::flags::LOOPING`].
-    ///
-    /// A looping emitter has no countdown -
-    /// `oag_fx::psys::EmitterSpec::run_ticks` is infinite and
-    /// `psys::System::stop` is the only thing that ends it. Pulse authors
-    /// `WO_SHIP_COLL_SPARK_DAMAGE` as a 32-tick burst and needs no owner, so
-    /// this stays `false` there and the cooldown rule below is the whole
-    /// trigger. Wipeout HD authors the same four emitters **looping** with a
-    /// 4-tick duration, so something has to own them, and this latch is what
-    /// holds the attachment across the ticks of one contact.
-    ///
-    /// **Confidence 55 on the owner, and reading HD's own dispatch
-    /// complicated rather than confirmed it (2026-08-31, see
-    /// `docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`).** That a
-    /// looping effect needs one is the flag's own contract - not in
-    /// question. That the owner is *wall contact* specifically still is:
-    /// HD's `ShipCollisionFx_Trigger_q` names two of its four `kind`
-    /// branches from literal strings, and neither is
-    /// `WO_SHIP_COLL_SPARK_DAMAGE` - one is a previously-unrecorded
-    /// `WO_SHIP_SPARK_DAMAGE_WEAPON`, the other is the no-damage variant.
-    /// What actually fires the plain damage variant this field models is
-    /// still unread; do not treat that page as having settled this.
-    pub(super) sparks_attached: bool,
     /// The decoded sound cues, straight out of [`Setup::sounds`]. Data, not a
     /// device - the mixer and the held voices are [`oag_sound::Audio`]'s.
     pub(super) sounds: oag_sound::sfx::Banks,
@@ -447,7 +372,7 @@ pub struct RaceView {
     ///
     /// The airbrake's own scale rather than an angle, because that is the
     /// scale `up_speed`/`down_speed` ramp on - see the tick that advances it.
-    /// [`Race::airbrake_flaps`] is what turns it into radians.
+    /// [`Race::airbrake_flaps_of`] is what turns it into radians.
     ///
     /// **Render-only state**, on `Race` rather than in `World` for the same
     /// reason [`Self::boost_kick`] is - and here the separation is the
@@ -457,7 +382,10 @@ pub struct RaceView {
     /// sees and the airbrake the force law applies ramp at different rates.
     /// Putting these two floats in `ShipState` would move the determinism
     /// hashes every time somebody adjusted an animation.
-    pub(super) flaps: [f32; 2],
+    ///
+    /// One pair per slot, advanced for every craft a person flies, so a second local
+    /// person's hull swings its own flaps; an AI craft stays stowed.
+    pub(super) flaps: [[f32; 2]; MAX_SHIPS],
     /// The authored deflection and the two rates, from `<AirbrakeGraphics>`.
     ///
     /// `amount` is already radians here: `oag_gameplay::airbrake_graphics_for`

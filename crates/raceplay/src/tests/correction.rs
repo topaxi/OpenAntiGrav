@@ -324,7 +324,7 @@ fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
         // The fixture's craft have no shield pool; give this one a pool of 100.
         client.sim.world.ships[0].handling.dimensions.shield = 100.0;
         client.sim.world.ships[0].physics.shield = 90.0;
-        client.view.shake.cancel();
+        client.view.contact.shake.cancel();
         let mut shifted = authoritative;
         shifted.world.ships[0].handling.dimensions.shield = 100.0;
         let right = shifted.world.ships[0].physics.body.right();
@@ -335,14 +335,17 @@ fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
     };
     let wear = corrected(0.2);
     assert!(wear.correction_offset_of(0).length() > 2.0, "wear glides");
-    assert!(!wear.view.shake.active(), "wear shakes nothing");
+    assert!(!wear.view.contact.shake.active(), "wear shakes nothing");
     let hit = corrected(20.0);
     assert_eq!(
         hit.correction_offset_of(0),
         Vec3::ZERO,
         "a hit is drawn where it lands"
     );
-    assert!(hit.view.shake.active(), "and shakes the camera there");
+    assert!(
+        hit.view.contact.shake.active(),
+        "and shakes the camera there"
+    );
 }
 
 /// The shake fires once per hit: a second correction that takes nothing more off the shield
@@ -360,14 +363,14 @@ fn a_hit_seen_in_a_correction_shakes_once() {
     let mut hit = authoritative;
     hit.world.ships[0].handling.dimensions.shield = 100.0;
     hit.world.ships[0].physics.shield = 60.0;
-    client.view.shake.cancel();
+    client.view.contact.shake.cancel();
     let replay = || (START..START + WINDOW).map(|t| sc.truth(t));
     client.reconcile(&hit, replay());
-    assert!(client.view.shake.active());
-    client.view.shake.cancel();
+    assert!(client.view.contact.shake.active());
+    client.view.contact.shake.cancel();
     client.reconcile(&hit, replay());
     assert!(
-        !client.view.shake.active(),
+        !client.view.contact.shake.active(),
         "the same loss is not a new hit"
     );
 }

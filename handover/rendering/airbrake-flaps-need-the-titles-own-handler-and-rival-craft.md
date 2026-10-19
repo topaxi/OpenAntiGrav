@@ -9,8 +9,9 @@
 - Auricom's HD flap swings out sideways (world `y` delta 0.000) and `qirex2048/2`'s
   flaps sit at the nose and do not flare; both are authored frames, neither
   confirmed against the original running.
-- Rival craft keep stowed flaps on every title (Pulse included): only
-  `ships.first()` is deflected.
+- AI craft keep stowed flaps on every title (Pulse included). Since 2026-10-19 (`local-seat-contact-fx`)
+  every craft a *person* flies swings its own flaps (`RaceView::flaps` is per slot, `Race::airbrake_flaps_of`),
+  not slot 0's drawable: a second local seat, and a network seat's own hull, deflect.
 - HD's default craft hides its flaps under a blown-out hull glow in the close
   camera; the default chase camera shows them.
 

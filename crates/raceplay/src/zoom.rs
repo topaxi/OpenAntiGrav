@@ -23,7 +23,8 @@
 //! - **Damage `P`.** The pass draws it and the tint is the live one, but the unit
 //!   `Ship_ApplyDamage` hands `Hud_RaiseDamagePulse` (`1.8 * damage`) is not
 //!   related to a hit of ours anywhere a page establishes, so nothing raises it.
-//! - **An opponent's boost.** The original's pulse is the viewing craft's.
+//! - **An opponent's boost.** The original's pulse is the viewing craft's: a local person's
+//!   other seat fires its own pulse for its own view, and nobody else's draws in it.
 
 use oag_post::hd_zoom::{Frame, Tuning};
 
@@ -61,7 +62,15 @@ impl Race {
     /// draw runs once per tick however fast frames render.
     #[must_use]
     pub fn hd_zoom_frame(&self) -> Option<Frame> {
-        self.view.zoom.as_ref().map(oag_post::hd_zoom::Pulse::frame)
+        self.viewed_zoom().map(oag_post::hd_zoom::Pulse::frame)
+    }
+
+    /// The pulse of the view being drawn: the player's, or the extra seat's own.
+    fn viewed_zoom(&self) -> Option<&oag_post::hd_zoom::Pulse> {
+        match self.extra_viewpoint() {
+            Some(slot) => self.view.viewpoints.zoom[slot].as_ref(),
+            None => self.view.zoom.as_ref(),
+        }
     }
 
     /// The tuning of a ring borrowed from HD, or `None` for a title with its own
@@ -79,20 +88,33 @@ impl Race {
             .flatten()
     }
 
-    /// The boost pulse, for the player's own speed pad or Turbo only.
+    /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat
+    /// flying `slot` in a split or a window. A pulse is a view's own, so it only draws in the
+    /// view that follows the craft that fired it.
     pub(super) fn fire_zoom_boost(&mut self, slot: usize) {
-        if self.draws()
-            && slot == self.player_slot()
-            && let Some(pulse) = &mut self.view.zoom
-        {
+        if !self.draws() {
+            return;
+        }
+        let pulse = if slot == self.player_slot() {
+            self.view.zoom.as_mut()
+        } else if self.sim.world.person_flown(slot) {
+            self.view.viewpoints.zoom[slot].as_mut()
+        } else {
+            None
+        };
+        if let Some(pulse) = pulse {
             pulse.fire_boost();
         }
     }
 
     /// One tick of the pulses.
     pub(super) fn advance_zoom(&mut self) {
-        if let Some(pulse) = &mut self.view.zoom {
-            pulse.advance(self.sim.dt);
+        let dt = self.sim.dt;
+        for pulse in std::iter::once(&mut self.view.zoom)
+            .chain(self.view.viewpoints.zoom.iter_mut())
+            .flatten()
+        {
+            pulse.advance(dt);
         }
     }
 }

@@ -34,7 +34,7 @@ impl super::super::Scene {
         let mut distort = Vec::new();
         race.extend_distort_vertices(&mut distort, right, up);
         pipeline.upload_distort(queue, &distort);
-        let flash = race.view.screen_flash.as_ref().and_then(|f| f.colour());
+        let flash = race.screen_wash();
         pipeline.upload_flash(queue, flash);
     }
 }

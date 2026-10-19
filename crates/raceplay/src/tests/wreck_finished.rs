@@ -60,7 +60,10 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
         race.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
     );
-    assert!(race.view.shake.active(), "the state 5 shake is armed");
+    assert!(
+        race.view.contact.shake.active(),
+        "the state 5 shake is armed"
+    );
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
     let hash = race.sim.state_hash();
     let tick = race.sim.world.tick;
@@ -69,10 +72,10 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
     let mut shaken = 0;
     for _ in 0..30 {
         race.tick_finished();
-        shaken += u32::from(race.view.shake.active());
+        shaken += u32::from(race.view.contact.shake.active());
     }
     assert!(
-        shaken > 0 && !race.view.shake.active(),
+        shaken > 0 && !race.view.contact.shake.active(),
         "the shake plays out"
     );
     assert_eq!(
@@ -87,7 +90,10 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
         race.wreck_explosion_at_for_tests().is_some(),
         "the big explosion goes off under the results"
     );
-    assert!(race.view.shake.active(), "and shakes the camera again");
+    assert!(
+        race.view.contact.shake.active(),
+        "and shakes the camera again"
+    );
     assert_ne!(
         race.vertical_fov(16.0 / 9.0, oag_display::display::Fov::AUTHORED),
         fov,

@@ -35,9 +35,15 @@ impl Race {
     /// scale, and note the rates driving it are **not** the force law's.
     #[must_use]
     pub fn airbrake_flaps(&self) -> [f32; 2] {
-        self.view
-            .flaps
-            .map(|level| self.view.flap_graphics.amount * level / 100.0)
+        self.airbrake_flaps_of(self.player_slot())
+    }
+
+    #[cfg(feature = "view")]
+    /// [`Self::airbrake_flaps`] for the craft in `slot`: swung for a craft a person flies,
+    /// zero for every other.
+    #[must_use]
+    pub fn airbrake_flaps_of(&self, slot: usize) -> [f32; 2] {
+        self.view.flaps[slot].map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
 
     /// The team id the craft in `slot` flies, when the grid named one.

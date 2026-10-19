@@ -489,7 +489,7 @@ fn an_active_shake_never_moves_the_camera_eye() {
     let mut race = Race::start(setup(Handling::default()));
     let before = race.camera_position();
 
-    race.view.shake.arm(
+    race.view.contact.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Ahead,
         &mut Rng::new(1),
@@ -502,7 +502,7 @@ fn an_active_shake_never_moves_the_camera_eye() {
 
     // And through the decay, not only at the moment of arming.
     for _ in 0..20 {
-        race.view.shake.advance(1.0 / 60.0);
+        race.view.contact.shake.advance(1.0 / 60.0);
         let during = race.camera_position();
         assert!(
             (before - during).length() < 1e-4,
@@ -519,7 +519,7 @@ fn an_active_shake_does_rotate_the_view() {
     let mut race = Race::start(setup(Handling::default()));
     let level = race.view();
 
-    race.view.shake.arm(
+    race.view.contact.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Elsewhere,
         &mut Rng::new(1),
@@ -549,7 +549,7 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
     let ndc = |clip: oag_core::math::Vec4| clip.truncate().truncate() / clip.w;
     let mut previous_shake = race.view_shake_rotation();
     assert_eq!(previous_shake, Mat4::IDENTITY);
-    race.view.shake.arm(
+    race.view.contact.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Elsewhere,
         &mut Rng::new(1),
@@ -578,7 +578,7 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
             );
         }
         previous_shake = race.view_shake_rotation();
-        race.view.shake.advance(1.0 / 60.0);
+        race.view.contact.shake.advance(1.0 / 60.0);
     }
 }
 

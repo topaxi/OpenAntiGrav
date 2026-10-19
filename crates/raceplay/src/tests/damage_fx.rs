@@ -105,16 +105,16 @@ fn a_seated_hit_shakes_the_seats_camera() {
         let mut race = race_with_smoke(true);
         race.set_seat(Some(seat));
         for other in (0..4).filter(|&o| o != seat) {
-            race.view.shake.cancel();
+            race.view.contact.shake.cancel();
             race.force_weapon_hit(other);
             assert!(
-                !race.view.shake.active(),
+                !race.view.contact.shake.active(),
                 "a hit on slot {other} is not seat {seat}'s"
             );
         }
         race.force_weapon_hit(seat);
         assert!(
-            race.view.shake.active(),
+            race.view.contact.shake.active(),
             "a hit on seat {seat} shakes its camera"
         );
     }

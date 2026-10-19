@@ -153,11 +153,10 @@ impl Scene {
         //
         // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
         // target's origin and fills it, which is what the chains sample from, so it
-        // runs them as an unsplit race does. The boost pulse is the player's own, so
-        // only the window that follows the player's craft draws it.
+        // runs them as an unsplit race does. The boost pulse is the seat's own
+        // ([`Race::hd_zoom_frame`] reads the view being drawn).
         let layer = self.layer.get();
         let whole = matches!(layer, Layer::Whole | Layer::Window);
-        let own_pulse = layer != Layer::Window || race.viewed_slot() == race.player_slot();
         if self.hd.is_some() {
             if whole {
                 self.run_hd(
@@ -165,7 +164,7 @@ impl Scene {
                     encoder,
                     view,
                     viewport,
-                    race.hd_zoom_frame().filter(|_| own_pulse),
+                    race.hd_zoom_frame(),
                     hd_bloom_timestamps,
                 );
                 hd_bloom_encoded = true;
@@ -204,9 +203,7 @@ impl Scene {
             self.bloom_pending.set(true);
         }
         // The borrowed zoom-streak ring (`BoostZoom`): after the bloom's prepare, before the HUD.
-        if own_pulse {
-            self.run_boost_zoom(device, queue, encoder, view, viewport, race);
-        }
+        self.run_boost_zoom(device, queue, encoder, view, viewport, race);
         // Motion blur, last: it smears the finished frame - but not the
         // Pulse glow, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the
@@ -607,10 +604,18 @@ impl Scene {
         // change-gated: two kilobytes a frame is cheaper than the state needed
         // to know they have not moved, and a gate would have to be invalidated
         // by anything that ever rebuilds the buffer.
-        let [left, right] = race.airbrake_flaps();
-        if let Some(player) = self.ships.first() {
-            player.deflect_airbrakes(queue, left, right, recoloured);
+        let mut stowed = self.flaps_stowed.get();
+        for (slot, ship) in self.ships.iter().enumerate().take(drawn) {
+            let [left, right] = race.airbrake_flaps_of(slot);
+            let swung = left != 0.0 || right != 0.0;
+            // A person's craft every frame; any other craft only to fold a flap that was
+            // left deflected (its seat went to the AI) back to rest, once.
+            if race.sim.world.person_flown(slot) || swung || !stowed[slot] {
+                ship.deflect_airbrakes(queue, left, right, recoloured);
+                stowed[slot] = !race.sim.world.person_flown(slot) && !swung;
+            }
         }
+        self.flaps_stowed.set(stowed);
         // The shield shell: the craft's own matrix with a uniform swell on top,
         // and its colour written into the vertex buffer.
         //

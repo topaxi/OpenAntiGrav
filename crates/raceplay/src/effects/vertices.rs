@@ -21,9 +21,19 @@ impl Race {
         let Some(effect) = self.view.handles.get(Trigger::CollisionSpark) else {
             return;
         };
-        self.view
-            .sparks
-            .extend_vertices(additive, alpha_over, effect, right, up, None);
+        // The player's pool and every other local seat's: world-space particles, drawn in
+        // every view.
+        let seats = self
+            .view
+            .viewpoints
+            .contact
+            .iter()
+            .flatten()
+            .map(|fx| &**fx);
+        for fx in std::iter::once(&self.view.contact).chain(seats) {
+            fx.sparks
+                .extend_vertices(additive, alpha_over, effect, right, up, None);
+        }
     }
 
     /// Everything the [`psys::Stage`] is playing this frame, split by blend

@@ -198,6 +198,15 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_hit: Option<String>,
 
+    /// With `--race --screenshot`, throw one craft sideways to its right at
+    /// 600 units a second at the end of a tick: `TICK:SLOT`, e.g. `60:1`. A verification aid
+    /// for a seat's wall sparks, shake and contact sound, there because a
+    /// headless run flies no person into a wall (it meets one where the circuit has a wall on
+    /// that side). The wall contact that follows
+    /// is the simulation's own. See [`oag_raceplay::Race::force_wall_slide`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_wall_slide: Option<String>,
+
     /// With `--race --screenshot`, put a locked LeachBeam from the player onto
     /// a rival at the end of a tick: `TICK:SLOT`, e.g. `300:1`. A verification
     /// aid for the LeachBall's own draw, there because a headless run has no

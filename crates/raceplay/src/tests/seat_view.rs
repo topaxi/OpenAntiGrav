@@ -66,7 +66,7 @@ fn a_seated_client_gets_its_own_wall_sparks_shake_and_sound() {
             "the fixture never put slot {seat} on the wall"
         );
         assert_eq!(race.spark_ignitions(), 1, "seat {seat}: no sparks");
-        assert!(race.view.shake.active(), "seat {seat}: no shake");
+        assert!(race.view.contact.shake.active(), "seat {seat}: no shake");
         assert_eq!(collisions(&race), vec![seat]);
     }
 }
@@ -85,7 +85,7 @@ fn a_seated_client_is_not_shaken_by_another_slots_wall() {
                 "slot {other}'s wall threw seat {seat}'s sparks"
             );
             assert!(
-                !race.view.shake.active(),
+                !race.view.contact.shake.active(),
                 "slot {other}'s wall shook seat {seat}"
             );
         }
@@ -99,7 +99,7 @@ fn a_seat_zero_client_is_not_shaken_by_another_slots_wall() {
         push_toward_wall(&mut race, other);
         race.tick(&PlayerInputs::none());
         assert_eq!(race.spark_ignitions(), 0);
-        assert!(!race.view.shake.active());
+        assert!(!race.view.contact.shake.active());
     }
 }
 

@@ -73,7 +73,8 @@ impl Race {
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.view.shake.advance(self.sim.dt);
+            self.view.contact.shake.advance(self.sim.dt);
+            self.advance_seat_shakes(self.sim.dt);
             let mut shown = false;
             for slot in 0..MAX_SHIPS {
                 if self.sim.world.person_flown(slot) {
@@ -572,18 +573,7 @@ impl Race {
             // the pad specifically.
             if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
                 let boosting = self.sim.world.ships[self.player_slot()].physics.pad_timer > 0.0;
-                let (target, rate) = if boosting {
-                    (1.0, BOOST_FOV_OPEN_RATE)
-                } else {
-                    (0.0, BOOST_FOV_CLOSE_RATE)
-                };
-                self.view.boost_kick += (target - self.view.boost_kick) * rate * self.sim.dt;
-                // Snapped, so a closed kick is *exactly* zero and `projection` takes
-                // its bit-identical path rather than an `atan(tan(x))` round trip
-                // that never quite settles.
-                if !boosting && self.view.boost_kick < 1.0e-3 {
-                    self.view.boost_kick = 0.0;
-                }
+                self.view.boost_kick = step_boost_kick(self.view.boost_kick, boosting, self.sim.dt);
             }
 
             // The flaps, on the fixed tick beside the camera and the exhaust, and
@@ -609,25 +599,29 @@ impl Race {
             // two milliseconds and the parameter would not be worth authoring.
             // It is also the convention `<Airbrake gain/falloff>` already uses on
             // the same scale, one element away.
-            let ship = &self.sim.world.ships[self.player_slot()].physics;
-            for (flap, level) in self
-                .view
-                .flaps
-                .iter_mut()
-                .zip([ship.airbrake_left, ship.airbrake_right])
-            {
-                let target = level.clamp(0.0, 100.0);
-                let (rate, rising) = if target > *flap {
-                    (self.view.flap_graphics.up_speed, true)
-                } else {
-                    (self.view.flap_graphics.down_speed, false)
-                };
-                let step = rate * self.sim.dt;
-                *flap = if rising {
-                    (*flap + step).min(target)
-                } else {
-                    (*flap - step).max(target)
-                };
+            for slot in 0..MAX_SHIPS {
+                // A craft nobody flies folds its flaps back, so a seat handed to the AI
+                // does not keep its last deflection.
+                let flown = self.sim.world.person_flown(slot);
+                let ship = &self.sim.world.ships[slot].physics;
+                for (flap, level) in self.view.flaps[slot]
+                    .iter_mut()
+                    .zip([ship.airbrake_left, ship.airbrake_right])
+                {
+                    let level = if flown { level } else { 0.0 };
+                    let target = level.clamp(0.0, 100.0);
+                    let (rate, rising) = if target > *flap {
+                        (self.view.flap_graphics.up_speed, true)
+                    } else {
+                        (self.view.flap_graphics.down_speed, false)
+                    };
+                    let step = rate * self.sim.dt;
+                    *flap = if rising {
+                        (*flap + step).min(target)
+                    } else {
+                        (*flap - step).max(target)
+                    };
+                }
             }
         }
         // The lock-on, simulation state advanced from the world alone
@@ -671,8 +665,10 @@ impl Race {
         }
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a
-        // network client seated elsewhere. Lean (no `view` feature): `draws()` is
-        // false and there is nothing to draw.
+        // network client seated elsewhere. Every other local person has their own
+        // view (a split or a window) and their own sparks and shake, stepped from
+        // their craft's wall contact the same way. Lean (no `view` feature):
+        // `draws()` is false and there is nothing to draw.
         #[cfg(feature = "view")]
         if self.draws() {
             let seat = self.player_slot();
@@ -681,6 +677,7 @@ impl Race {
                 let evaluated = step.evaluated;
                 self.advance_contact_fx(seat, &evaluated);
             }
+            self.advance_seat_contact_fx(&steps, seat);
         }
 
         // Last, after every write this tick makes: the recording stores the
@@ -695,36 +692,15 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
-    /// The collision sparks, the shake a hit arms, and the two contact sounds,
-    /// for the seat's wall contact this tick (`slot`, `evaluated`).
+    /// The seat's collision sparks, the shake a hit arms and the shield edge, for its wall
+    /// contact this tick (`slot`, `evaluated`). The two contact sounds are raised for every
+    /// flown slot in [`Race::tick`].
     ///
-    /// Everything [`Race::tick`] draws or sounds on a wall contact, in one place
-    /// so [`Race::tick_sim_only`] can skip it whole. The one piece of
+    /// Everything [`Race::tick`] draws on a wall contact, in one place so
+    /// [`Race::tick_sim_only`] can skip it whole. The one piece of
     /// simulation state in it is `contact_cue_cooldown`, which the sim-only
     /// path advances itself.
     fn advance_contact_fx(&mut self, slot: usize, evaluated: &Evaluated) {
-        // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
-        // doc comment for why a sustained scrape must re-fire periodically
-        // rather than spawn once and go silent.
-        self.view.sparks_cooldown = (self.view.sparks_cooldown - self.sim.dt).max(0.0);
-        // The trigger rule runs whether or not the disc's own effect
-        // loaded - see `Setup::effects`. Only the pool needs it.
-        let effect = self.view.handles.get(Trigger::CollisionSpark).cloned();
-        // Two trigger modes, chosen by the effect's own flag and never by the
-        // platform. A `LOOPING` emitter has no countdown, so an owner must let
-        // go of it; a burst ends itself and the cooldown is only there to
-        // space the next one. Pulse authors this effect as a burst and HD
-        // authors it looping - see `Race::sparks_attached`.
-        let attached_effect = effect
-            .as_deref()
-            .is_some_and(|effect| effect.roots().iter().any(|&r| effect.emitters[r].looping));
-        // **A raised shield throws no hull sparks**, and that is recovered:
-        // the contact loop's third `craft+0x1b8 & 0x10` gate (`0x0884255c`)
-        // branches past `Ship_DispatchCollisionFx` (`0x0883de90`) entirely -
-        // reaction #1 on `docs/.../contact-response.md`, the spark spawn. The
-        // shell's own bulge is what a shielded contact shows instead, which is
-        // the whole design: sparks are the hull being hurt and the hull is not
-        // being hurt. See `docs/.../shield-pickup.md`.
         let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
         // The announcer, on the shield coming up and not on it being up.
         // `Shield_Activate` plays `"shieldactive"` one line above the
@@ -739,127 +715,60 @@ impl Race {
             ));
         }
         self.view.shield_was_up = shielded;
-        let can_fire = !shielded
-            && if attached_effect {
-                // Ignite once per contact, not once per cooldown: re-arming
-                // would leave a chattering scrape with no sparks for up to
-                // `COLLISION_COOLDOWN` at a time, which a burst never suffers
-                // because it has already finished by then.
-                evaluated.wall.impact && !self.view.sparks_attached
-            } else {
-                evaluated.wall.impact && self.view.sparks_cooldown <= 0.0
-            };
-        // The two contact sounds are raised for every flown slot in `tick`.
         let model_matrix = self.ship_model_matrix_of(slot);
-        if can_fire && let Some(contact) = evaluated.wall.resolved {
-            // `contact.point` is deliberately the *penetrating* hull sample
-            // point, not the wall surface - see its doc comment on
-            // `oag_physics::wall::WallContact`, which matches the original's
-            // own `Collision_AddContact` exactly. Correct for physics, wrong
-            // for a visual: that point sits up to `depth` units inside the
-            // opaque wall, so a spark quad centred there is depth-tested away
-            // by the wall's own geometry almost every time and reads as
-            // nothing spawning. `point + normal * depth` is the same
-            // correction `resolve_contact`'s `escape` vector already applies
-            // to push the hull back out to the surface.
-            let surface = contact.point + contact.normal * contact.depth;
-            // The original triggers the `Ship Collision Fx` locator nearest
-            // the contact and the burst emits from that node - and along its
-            // authored `+Y` - from then on (`Ship_DispatchCollisionFx`); with
-            // no locators authored, the surface point itself is mapped into
-            // model space, aimed along world up, so it still rides the hull
-            // with rotation.
-            let (anchor_model, up_model) = self
-                .view
-                .collision_fx
-                .iter()
-                .min_by(|a, b| {
-                    let da = (model_matrix.transform_point3(a.position) - surface).length_squared();
-                    let db = (model_matrix.transform_point3(b.position) - surface).length_squared();
-                    da.total_cmp(&db)
-                })
-                .map_or_else(
-                    || (model_matrix.inverse().transform_point3(surface), Vec3::Y),
-                    |anchor| (anchor.position, anchor.up),
-                );
-            self.view.sparks_anchor = Some(anchor_model);
-            self.view.sparks_anchor_up = Some(up_model);
-            if let Some(effect) = effect.as_deref() {
-                self.view.sparks.ignite(
-                    effect,
-                    surface,
-                    sparks::severity(evaluated.wall.impact_speed),
+        self.view.contact.advance(
+            &self.view.handles,
+            &self.view.collision_fx,
+            &self.sim.world.ships[slot],
+            model_matrix,
+            self.sim.dt,
+            evaluated,
+        );
+    }
+
+    #[cfg(feature = "view")]
+    /// Every other local person's sparks and shake, from their own craft's wall contact.
+    /// A split screen's or a window's extra seat has a [`ContactFx`](super::contact_fx::ContactFx)
+    /// beside its camera; the seat `own` is the one [`Self::advance_contact_fx`] ran.
+    fn advance_seat_contact_fx(&mut self, steps: &[Option<PlayerStep>], own: usize) {
+        for (slot, step) in steps.iter().enumerate() {
+            let Some(step) = step else { continue };
+            if slot == own || self.view.viewpoints.contact[slot].is_none() {
+                continue;
+            }
+            let model_matrix = self.ship_model_matrix_of(slot);
+            if let Some(fx) = self.view.viewpoints.contact[slot].as_mut() {
+                fx.advance(
+                    &self.view.handles,
+                    &self.view.collision_fx,
+                    &self.sim.world.ships[slot],
+                    model_matrix,
+                    self.sim.dt,
+                    &step.evaluated,
                 );
             }
-            // `Camera_ArmShake`'s own severity is the *raw* clamp
-            // `Ship_DispatchCollisionFx` passes it, not the spark's
-            // slope-and-floor-reshaped one - see
-            // `oag_fx::sparks::clamped_intensity`. `mode = 3` (ahead) vs
-            // `mode = 1` (elsewhere) is a dot product of the contact point
-            // against the craft's forward, exactly as
-            // `docs/ghidra/functions/ps2-pulse-eu/collision-shake.md`
-            // records it.
-            //
-            // Re-armed on the same cooldown gate as the spark burst
-            // (`can_fire`) rather than every tick a contact is live: the
-            // original re-arms once per collision-function call on a fresh
-            // contact, which this project's own contact evaluation does not
-            // expose as a separate edge, and pairing the shake's cadence with
-            // the visible spark burst is the natural substitute.
-            let ship = &self.sim.world.ships[slot];
-            let ahead =
-                (contact.point - ship.physics.body.position).dot(ship.physics.body.forward()) > 0.0;
-            let side = if ahead {
-                oag_render::camera::shake::Side::Ahead
-            } else {
-                oag_render::camera::shake::Side::Elsewhere
-            };
-            let shake_severity = sparks::clamped_intensity(evaluated.wall.impact_speed);
-            self.view
-                .shake
-                .arm(shake_severity, side, &mut self.view.shake_rng);
-            self.view.sparks_ignitions += 1;
-            self.view.sparks_cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
-            self.view.sparks_attached = attached_effect;
         }
-        // Releasing on "no contact at all" rather than on `impact` going false
-        // keeps the fountain alive through a gentle slide after the hit -
-        // `impact` is the *inbound* test and a scrape stops being inbound long
-        // before it stops being a scrape. `stop` takes the emission and leaves
-        // the live particles to finish their own lives, so the trail outlasts
-        // the contact the way it does when a rocket detonates.
-        //
-        // Limit worth knowing: `stop` is all-or-nothing across a tree, so this
-        // rule does not generalise to the four HD effects that mix `LOOPING`
-        // with clear siblings - it would truncate the siblings. None of the
-        // four is wired to this trigger.
-        if self.view.sparks_attached && evaluated.wall.resolved.is_none() {
-            self.view.sparks.stop();
-            self.view.sparks_attached = false;
-        }
-        // Unconditional, like the exhaust: the emitters keep trickling and
-        // already-live particles keep ageing even on a tick with no fresh
-        // impact. The anchor is the chosen hull locator under the ship's
-        // *current* transform, the way the original's scene-graph node rides
-        // the craft - and so is the direction its authored `+Y` maps to: a
-        // craft banking mid-scrape tilts the spray with it rather than
-        // spraying along a fixed world up. `transform_vector3` rather than
-        // `transform_point3`: it is a direction, not a point, so only the
-        // matrix's rotation applies and not its translation.
-        let anchor = self
-            .view
-            .sparks_anchor
-            .map_or(self.sim.world.ships[slot].physics.body.position, |local| {
-                model_matrix.transform_point3(local)
-            });
-        let up = self
-            .view
-            .sparks_anchor_up
-            .map_or(Vec3::Y, |local| model_matrix.transform_vector3(local));
-        if let Some(effect) = effect.as_deref() {
-            self.view
-                .sparks
-                .advance(effect, self.sim.dt, anchor, up, &mut self.view.sparks_rng);
-        }
+    }
+}
+
+/// One tick of the boost's field-of-view kick: open while the boost's own timer runs, close once
+/// it has expired, both as an exponential approach so neither edge is a step. The player's
+/// ([`RaceView::boost_kick`](super::view::RaceView::boost_kick)) and every other local seat's
+/// (`Cam::boost_kick`) are this one rule.
+#[cfg(feature = "view")]
+pub(super) fn step_boost_kick(kick: f32, boosting: bool, dt: f32) -> f32 {
+    let (target, rate) = if boosting {
+        (1.0, BOOST_FOV_OPEN_RATE)
+    } else {
+        (0.0, BOOST_FOV_CLOSE_RATE)
+    };
+    let kick = kick + (target - kick) * rate * dt;
+    // Snapped, so a closed kick is *exactly* zero and `projection` takes
+    // its bit-identical path rather than an `atan(tan(x))` round trip
+    // that never quite settles.
+    if !boosting && kick < 1.0e-3 {
+        0.0
+    } else {
+        kick
     }
 }

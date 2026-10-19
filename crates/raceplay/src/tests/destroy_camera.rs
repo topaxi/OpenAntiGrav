@@ -104,19 +104,19 @@ fn the_players_explosions_shake_their_camera() {
     let mut race =
         race_with_weapon_table(Mode::Eliminator, enveloping_pad(), 1.0, one_mine_table());
     race.advance_craft_flashes();
-    assert!(!race.view.shake.active());
+    assert!(!race.view.contact.shake.active());
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();
     race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
     race.advance_craft_flashes();
-    assert!(race.view.shake.active());
-    assert!((race.view.shake.magnitude() - 0.3).abs() < 1e-6);
+    assert!(race.view.contact.shake.active());
+    assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
     for _ in 0..92 {
-        race.view.shake.advance(1.0 / 60.0);
+        race.view.contact.shake.advance(1.0 / 60.0);
         race.advance_craft_flashes();
     }
     assert!(
-        (race.view.shake.magnitude() - 0.8).abs() < 1e-6,
+        (race.view.contact.shake.magnitude() - 0.8).abs() < 1e-6,
         "state 6's own"
     );
 
@@ -126,7 +126,7 @@ fn the_players_explosions_shake_their_camera() {
     other.sim.world.ships[3].physics.craft_state = CraftState::Eliminated;
     other.advance_craft_flashes();
     assert!(
-        !other.view.shake.active(),
+        !other.view.contact.shake.active(),
         "an opponent's blast shakes nobody"
     );
 }
@@ -142,7 +142,7 @@ fn a_race_that_ends_on_the_edge_is_shaken_like_any_other() {
     race.advance_craft_flashes();
     race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
     race.advance_craft_flashes();
-    assert!((race.view.shake.magnitude() - 0.3).abs() < 1e-6);
+    assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
 }
 
 /// State 4 cancels a shake already running, as `Ship_SetState` case 4 does.
@@ -150,11 +150,11 @@ fn a_race_that_ends_on_the_edge_is_shaken_like_any_other() {
 fn destruction_cancels_a_running_shake() {
     let mut race = with_a_station();
     race.force_shake(1.0);
-    assert!(race.view.shake.active());
+    assert!(race.view.contact.shake.active());
     race.advance_craft_flashes();
     race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
     race.advance_craft_flashes();
-    assert!(!race.view.shake.active());
+    assert!(!race.view.contact.shake.active());
 }
 
 /// The cut counter the temporal upscaler watches moves when the camera takes

@@ -201,12 +201,9 @@ impl Race {
         hits: &[oag_weapons::projectile::WeaponHit],
         leach: bool,
     ) {
-        let player = self.player_slot();
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
-                if slot == player {
-                    self.arm_weapon_hit_shake();
-                }
+                self.arm_weapon_hit_shake(slot);
                 self.throw_hit_spark(slot, leach);
                 if !leach {
                     self.throw_damage_smoke(slot);
@@ -236,13 +233,15 @@ impl Race {
     /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read
     /// 2026-09-30, confidence 85. **The game-mode gate** (not mode 2 or 12) is
     /// not applied: neither mode is one this port races in.
-    pub(super) fn arm_weapon_hit_shake(&mut self) {
+    pub(super) fn arm_weapon_hit_shake(&mut self, slot: usize) {
         use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
-        self.view.shake.arm(
-            WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,
-            Side::Elsewhere,
-            &mut self.view.shake_rng,
-        );
+        if let Some(fx) = self.seat_contact_mut(slot) {
+            fx.shake.arm(
+                WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,
+                Side::Elsewhere,
+                &mut fx.shake_rng,
+            );
+        }
     }
 
     /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls
