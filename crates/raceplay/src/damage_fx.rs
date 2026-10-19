@@ -204,6 +204,18 @@ impl Race {
         self.view.damage_fx.riding = riding;
     }
 
+    /// Where every smoke riding a craft sits now, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn damage_smoke_anchors_for_tests(&self) -> Vec<Vec3> {
+        self.view
+            .damage_fx
+            .riding
+            .iter()
+            .filter_map(|smoke| self.view.stage.anchor_of(smoke.playing))
+            .collect()
+    }
+
     /// How many smokes have ever started, for tests.
     #[doc(hidden)]
     #[must_use]

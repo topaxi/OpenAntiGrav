@@ -376,7 +376,7 @@ camera's centre for the length of the glide in the first render). The hash is id
 smoothing on or off (`tests::correction`), and a replay is not a drawn tick.
 
 **The scene.** `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
---mode single_race --ticks N --force-remote-correction TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]] [--no-correction-smoothing]
+--ticks N --force-remote-correction TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]] [--no-correction-smoothing]
 --screenshot out.png`. At `TICK` craft `SLOT` is handed to a scripted remote person
 who double-taps its airbrake toward the player (a **sideshift**, the input a last-input
 guess cannot see coming: a pressed edge, two within a quarter second); the client
@@ -444,7 +444,9 @@ the hull (`drawn_model`), the shadow (`body_between`), the exhaust nozzle and it
 (`nozzle_of` reads the drawn model matrix) and the camera. `hull_reach` is now measured on
 the drawn pose too. **Still on the simulation's pose, listed rather than fixed**:
 nothing now: `craft_flash`'s and `damage_fx`'s positions (the smoke following a damaged hull, the
-leach spark, the wreck flash and blast) moved to the drawn pose on 2026-10-19.
+leach spark, the wreck flash and blast) moved to the drawn pose on 2026-10-19
+(`the_smoke_rides_the_drawn_pose` fails with the sim pose put back; the wreck flash has no test of
+its own).
 The frames at ticks 501 and 504 (read at 960x540) show the hull, its shadow and its engine
 bloom together with no visible separation; a 3-unit offset is a quarter of a craft's width.
 
@@ -462,14 +464,18 @@ and small on the grid; `every_seat_camera_follows_its_own_craft` (both seats, cl
 cockpit views) and `a_seat_one_camera_follows_seat_one` fail if the camera follows another slot.
 The same sweep found `visibility_sections` placing the camera by slot 0's respawn (a seat-1 shot
 went to "draw everything" while a rival recovered in slot 0, and a seat-1 craft's own recovery was
-not seen) and the three audio levels (`shield_is_up`, `craft_is_exploding`, `autopilot_is_active`)
-reading slot 0; all three now read the seat (`a_seated_view_is_placed_by_its_own_respawn`).
-**Still on slot 0 on a seat-1 client, not fixed because it is a simulation-adjacent change**:
-the wall-contact effects of `Race::tick` (`advance_contact_fx`: the collision sparks, the wall
-shake and the contact sounds) are driven by `primary_slot`, the first person, so a seat-1 client
-shakes on slot 0's wall hits and not its own. The contact cue's cooldown is hashed state per
-slot, so moving the call to the seat changes which slot's cooldown a drawn tick advances; it
-needs its own lane with a hash check. Split screen and local multi-window seats do not take
+not seen), the three audio levels (`shield_is_up`, `craft_is_exploding`, `autopilot_is_active`)
+reading slot 0, and the view-only readers of `primary_slot` (the first person, which is slot 0 on every
+network client): the weapon-hit shake, the destroyed-craft shake cancel and blast shake, the
+PLAYER_DESTROYED flash, the reset flash, the destroy camera (a seat-1 client's wreck camera never
+started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seat_one_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
+**Still on slot 0 on a seat-1 client, open**: the wall-contact effects of `Race::tick`
+(`advance_contact_fx`: the collision sparks, the wall shake and the contact sounds) run on the
+`evaluated` step of `primary_slot`, so a seat-1 client shakes on slot 0's wall hits and not its own.
+The sparks and the shake there are view state and could move to the seat on their own; the contact
+sound goes through `raise_contact_cue`, whose cooldown is hashed per-slot state (the quiet path
+advances slot 0's), so that part needs a hash check. Also still on `primary_slot` and unlooked-at:
+the countdown cue's slot, the weapon reticle, and `sight_screen_of`. Split screen and local multi-window seats do not take
 this path: `player_slot` is the primary slot there and every other seat is an extra viewpoint
 (`set_viewpoint`), which reads its own slot throughout.
 

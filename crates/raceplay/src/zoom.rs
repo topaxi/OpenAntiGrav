@@ -82,7 +82,7 @@ impl Race {
     /// The boost pulse, for the player's own speed pad or Turbo only.
     pub(super) fn fire_zoom_boost(&mut self, slot: usize) {
         if self.draws()
-            && slot == self.sim.world.primary_slot()
+            && slot == self.player_slot()
             && let Some(pulse) = &mut self.view.zoom
         {
             pulse.fire_boost();

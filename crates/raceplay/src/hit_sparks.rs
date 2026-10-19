@@ -201,7 +201,7 @@ impl Race {
         hits: &[oag_weapons::projectile::WeaponHit],
         leach: bool,
     ) {
-        let player = self.sim.world.primary_slot();
+        let player = self.player_slot();
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 if slot == player {

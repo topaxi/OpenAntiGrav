@@ -351,6 +351,7 @@ fn a_hit_seen_in_a_correction_shakes_once() {
     let mut hit = authoritative;
     hit.world.ships[0].handling.dimensions.shield = 100.0;
     hit.world.ships[0].physics.shield = 60.0;
+    client.view.shake.cancel();
     let replay = || (START..START + WINDOW).map(|t| sc.truth(t));
     client.reconcile(&hit, replay());
     assert!(client.view.shake.active());
