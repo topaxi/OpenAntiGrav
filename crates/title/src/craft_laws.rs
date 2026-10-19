@@ -16,7 +16,8 @@ pub struct CraftLaws {
     /// The steering ramp stops at its target rather than overshooting by a step.
     pub steer_ramp_clamped: Sourced<bool>,
     /// `Ship_UpdatePitch` adds the team's `<Misc weight_distribution>` as a pitch torque while
-    /// airborne (`oag_physics::engine::pitch`). Pulse's law, measured.
+    /// airborne (`oag_physics::engine::pitch`). Measured on Pulse and HD and held off for now;
+    /// a title with no `CraftLaws` flies without it too.
     pub air_pitch_bias: Sourced<bool>,
     /// The per-class `<GravityMul>` scale multiplies `flight_gravity` (the airborne term), as
     /// Wipeout HD's `Craft_Update` does, rather than Pulse's `normal_gravity`

@@ -162,7 +162,8 @@ impl Race {
         // the speed plan is built below, before any tick, and simulates this very state.
         let rig = crate::launch_hover::physics_rig(hover_rig);
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
-        let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
+        // Held off on a title with no `CraftLaws` (Pulse) as well, until our AI flies with it.
+        let air_pitch_bias = craft_laws.is_some_and(|laws| laws.air_pitch_bias.value);
         let class_gravity_term =
             if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
                 oag_physics::passive::ClassGravityTerm::Airborne

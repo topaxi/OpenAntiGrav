@@ -102,15 +102,40 @@ rotates its tensor (`body+0x50` read live as `R I R^T`,
 [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md)), so the frame is a
 per-title law.
 
-**Measured, not ported (held, maintainer 2026-10-19).** Ported as a per-title craft law
-(Pulse and PS2 world axes, Pure inherited from Pulse and unmeasured; HD rotated, Omega and 2048 inheriting HD's), the lone
-craft's regression gate stayed twelve of twelve clean, but the player's whole-race
-autopilot in `opponent_autopilot_sweep` (4 seeds, 48 races per Pulse difficulty) gained
-rescues: novice `62 -> 106` with the switch off and `68 -> 91` on, mostly `05_Track` and
-`06_Track`, and new ones on Ace's `04_Track`, `07_Track` and `10_Track` (Ace totals
-`29 -> 25` and `34 -> 32`). HD, Omega and 2048 were unchanged bit for bit. The law waits
-until this engine's own driver and pace plan fly the world-axis craft as well as the
-body-axis one; the measured law is not to be tuned to get there.
+**Measured, held (2026-10-20).** Ported twice as a per-title craft law (Pulse and PS2 world
+axes; HD rotated, measured; Omega and 2048 inheriting HD's; Pure chosen rotated, unchanged until
+it is measured) and reverted twice; the second port is commit `9a2c5b017` with its references
+in `3ee2b2bae`, reverted by `c6116853b` and `9d4c1fb45`, so a follow-up re-applies it by
+reverting the reverts.
+
+- On the tree before the pitch gate and the bias, the player's whole-race autopilot in
+  `opponent_autopilot_sweep` (4 seeds, 48 races per Pulse difficulty) gained rescues: novice
+  `62 -> 106` with the switch off and `68 -> 91` on.
+- On the tree with the gate, the bias and HD's gravity law it lowered them: novice
+  `24 -> 14` and `16 -> 7`, Ace `24 -> 22` and `24 -> 25`, opponent stint rescues `6 -> 1`
+  and `3 -> 2`; Pure's opponent stint walls rose `69 -> 541` (why Pure stays rotated). The
+  lone craft's `race_ground_truth` stayed twelve of twelve clean.
+- **But `just test-data` regressed four of this engine's own AI gates under it** (the table
+  below), and that is what holds it: the fix belongs in our driver and speed plan, not in the
+  measured law or the gates.
+
+## Held: what the two Pulse laws break in our AI's disc-backed gates
+
+Found by `just test-data-affected` (full suite, 9,097 tests) on the tree with both laws on.
+Causes separated by rerunning the eight tests with the inertia frame forced to `Body` (six
+pass, so the tensor breaks them), then also with the bias forced off (the last two pass, so
+the bias breaks them). The tensor alone with the bias off was not run.
+
+| test (`oag-raceplay`) | under the bias | under the tensor |
+| --- | --- | --- |
+| `ai_clean_lap_gate::track_01_phantom` | **regresses**: `NoCleanLap`, baseline `CleanLap` | not separated (fails with both on) |
+| `speed_plan_ground_truth::speed_plan_flash_forward` | **regresses**: `06_Track FLASH` no longer clean (unresolved walls at samples 1236, 1237) | not separated (fails with both on) |
+| `ai_clean_lap_gate::track_07_flash` | passes | **regresses**: 20 contact ticks, baseline 2 + 10 |
+| `ai_clean_lap_gate::track_07_venom` | passes | **regresses**: clean lap 51.4 s, baseline 49.3 s + 1.5 s |
+| `ai_clean_lap_gate::track_14_phantom` | passes | **regresses**: 532 contact ticks, baseline 521 + 10 |
+| `quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack` | passes | **regresses**: slot 0's Missile never carries a lock in the pack |
+| `speed_plan_ground_truth::speed_plan_rapier_reversed` | passes | **improves**: `29_Track RAPIER` now clean (remove from `NOT_CLEAN`) |
+| `speed_plan_ground_truth::speed_plan_venom_forward` | passes | **improves**: `06_Track VENOM` now clean (remove from `NOT_CLEAN`) |
 
 ## The pitch-input gate, live
 
@@ -156,13 +181,16 @@ on both captures. A regression of the residual on pitch rate, yaw rate and input
 puts the remaining constant at `+0.009` (capture 2) and `+0.226` (capture 3) with
 the bias: a pitch-rate term the bias does not explain is still in the air.
 **Confidence 85** for the bias (static read, the live register on every airborne
-frame, and the residual). Ported in `oag_physics::engine::pitch` from
-`Dimensions::weight_distribution`, behind the per-title craft law
-`oag_title::craft_laws::CraftLaws::air_pitch_bias`:
+frame, and the residual). **Measured, held (2026-10-20)** on every title: the mechanism is in
+`oag_physics::engine::pitch` (`Dimensions::weight_distribution`, behind
+`oag_title::craft_laws::CraftLaws::air_pitch_bias` and `ShipState::air_pitch_bias`), and it
+is off by default; on, it regresses two of our AI's gates (the table above). Committed on as
+`34639304f` (references `91b5112dd`, reverted by `7e1743a9e`); the hold is one commit that
+switches the default off, so a follow-up reverts that to put it back:
 
 | title | bias | origin |
 | --- | --- | --- |
-| Pulse (PSP, PS2) | on | measured (this page) |
+| Pulse (PSP, PS2) | off | **measured, held**: on, our AI's gates regress (above) |
 | Wipeout HD | off | **measured, not yet on: our driver regresses.** Read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below); on, HD's autopilot rescues rise by a net 4 over 32 races (twice, before and after HD's gravity law), so it waits for this engine's driver to fly HD with it |
 | Omega, 2048 | off | inherited from HD |
 | Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
@@ -170,8 +198,7 @@ frame, and the residual). Ported in `oag_physics::engine::pitch` from
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
 capture path).
 
-On Pulse it is the biggest single change to the autopilot's survival measured in this
-lane: `opponent_autopilot_sweep`'s whole-race player autopilot (4 seeds, 48 races per
+On Pulse, with it on, the autopilot survived far better: `opponent_autopilot_sweep`'s whole-race player autopilot (4 seeds, 48 races per
 difficulty) went from 62 to 24 rescues on Novice with the switch off and 68 to 16 with it
 on, and from 29 to 24 and 34 to 24 on Ace; the opponents' paired-fork stints went from
 5,317 to 4,570 wall ticks.
