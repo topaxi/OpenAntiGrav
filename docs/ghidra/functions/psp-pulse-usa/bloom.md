@@ -1172,8 +1172,9 @@ shine pass drawn after the blended list, not the strip.** The strip's own batche
 were never it: with node `267` taken out of every list the pale area over the left
 tree stayed. The `0x2000` extra pass (`*_shinemap` second textures, additive) was
 drawn by ours after the blended list, so it veiled every tree standing in front of a
-shine-mapped wall; the original queues it with the `0x45`/`0x4a` batch sets and
-every list-B mesh after them at `0x4d`, so a tree covers it. Ours' colour in the
+shine-mapped wall; the original queues it at the mesh's list-A key (`0x45`/`0x4a`) and
+every list-B mesh after it at `0x4d`, so a tree covers it (59 of 59
+environment-mapped circuit prims of a recorded frame precede its list-B block). Ours' colour in the
 crown of the left tree at tick 160 was `122,141,134` against the original's
 `49,50,38`; with the pass off `46,48,37`, with it moved ahead of the blended list
 `52,52,40`. Two experiments of the earlier reading stay rejected. A second finding

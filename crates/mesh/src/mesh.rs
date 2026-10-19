@@ -766,7 +766,13 @@ fn build_class(
                         && !vex::is_vif_batch(batch.vertex_type))
                     .then_some(box_centre)
                     .flatten()
-                    .map(|c| vex::transform_point(&to_world, c));
+                    .map(|c| vex::transform_point(&to_world, c))
+                    // Lifted like `centre` above: under an `Anim Transform` the
+                    // point is in anchor space. The time-zero pose, **chosen,
+                    // not measured**: whether the original refreshes `mesh+0xb0`
+                    // as the node moves turns on the `0x40000` flag, whose
+                    // setter was not read.
+                    .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
                     let draw = DrawCall {
                         range: first_index..last_index,
                         texture,

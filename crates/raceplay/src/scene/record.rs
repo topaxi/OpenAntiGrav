@@ -323,7 +323,7 @@ impl Recorder<'_> {
     /// Draws the circuit's solid lists, the sky, the circuit's extra pass, then its
     /// blended list ([`TRACK_STAGES`]): the extra pass is tested against the circuit's
     /// depth, so it follows the solid lists, and it precedes the blended list because
-    /// the original queues it with the `0x45`/`0x4a` sets and every list-B mesh after
+    /// the original queues it at the mesh's list-A key (`0x45`/`0x4a`) and every list-B mesh after
     /// them (`0x4d`) - a tree drawn after it is not veiled by it.
     ///
     /// **The sky goes behind the solid circuit rather than first.** It writes
@@ -449,8 +449,8 @@ impl Recorder<'_> {
 /// What [`Scene::draw_track`] runs, in this order.
 ///
 /// The order is the original's queue order and a test holds it
-/// (`tests/track_stages.rs`): the `0x2000` extra pass is a list-A group of the
-/// `0x45`/`0x4a` batch sets and every list-B mesh is `0x4d`, so the shine is drawn
+/// (`tests/track_stages.rs`): the `0x2000` extra pass is queued at the mesh's list-A key
+/// (`0x45`/`0x4a`) and every list-B mesh is `0x4d`, so the shine is drawn
 /// before the blended list, never after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrackStage {

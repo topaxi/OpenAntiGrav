@@ -13,8 +13,9 @@ fn at(stage: TrackStage) -> usize {
 /// Ours drew the shine after the blended list, which put an additive veil over every
 /// tree standing in front of a shine-mapped wall (Moa Therma, tick 160: a crown over
 /// the grandstand read `122,141,134` against the original's `49,50,38`). The original
-/// queues the `0x2000` pass with the `0x45`/`0x4a` sets and every list-B mesh at
-/// `0x4d`, after them.
+/// queues the `0x2000` pass at the mesh's list-A key (`0x45`/`0x4a`) and every list-B
+/// mesh at `0x4d`, after it (59 of 59 environment-mapped circuit prims of a recorded
+/// frame precede the list-B block).
 #[test]
 fn the_shine_pass_is_drawn_before_the_blended_list() {
     assert!(at(TrackStage::Shine) < at(TrackStage::Blended));

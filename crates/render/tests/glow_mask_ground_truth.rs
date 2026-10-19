@@ -52,3 +52,54 @@ fn talons_junction_stamps_the_values_the_original_s_mask_holds() {
         .count();
     assert!(decals > 0, "no decal-reference cutouts on 16_Track");
 }
+
+/// Moa Therma's blended meshes come out in the order a recorded frame of the original
+/// drew them: far to near by view depth, **not** in layer order.
+///
+/// The plane is the view of a recorded Moa frame (`psp-ge-dump.py`, 469 prims, GE
+/// prims 413 to 425): `clip.w` is `-z_view`, with `z_view = m[2] x + m[5] y + m[8] z +
+/// m[11]` over the frame's `{0.99893, -0.04363, -0.01516, ..., 405.703, -43.212,
+/// 161.344}` matrix. The original drew the meshes of nodes 261, 267, 878, 258, 875, 293
+/// and 294 in that order (`mesh-draw.md`, "The list-B queue key"), alternating layers
+/// `0x45` and `0x4a`; a layer-only order puts every tree before the strip.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn moa_therma_blended_meshes_are_ordered_by_view_depth_as_the_original_drew_them() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let name = r"Data\Environments\03_Track\track.vex";
+    let blob = archives.read_name(name).expect("track.vex");
+    let model = mesh::build(name, &blob).expect("build");
+
+    let plane = [0.015_162_944, -0.107_353_21, -0.994_094_85, -161.343_75];
+    let order = model
+        .blended_order(plane)
+        .expect("a circuit's list-B meshes carry a depth point");
+    let recorded = [261u32, 267, 878, 258, 875, 293, 294];
+    let mut seen: Vec<u32> = Vec::new();
+    for &index in &order {
+        let Some(node) = model.transparent_draws[index as usize].node else {
+            continue;
+        };
+        if recorded.contains(&node) && seen.last() != Some(&node) {
+            seen.push(node);
+        }
+    }
+    assert_eq!(
+        seen, recorded,
+        "the blended list is not in the original's view-depth order"
+    );
+    let moving = model
+        .transparent_draws
+        .iter()
+        .filter(|d| d.depth_point.is_some() && d.moving)
+        .count();
+    let keyed = model
+        .transparent_draws
+        .iter()
+        .filter(|d| d.depth_point.is_some())
+        .count();
+    println!("03_Track: {keyed} depth-keyed transparent draws, {moving} of them moving");
+}

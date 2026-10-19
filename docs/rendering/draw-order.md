@@ -100,7 +100,11 @@ that frame is not in layer order (`0x45` and `0x4a` meshes alternate).
 Implemented as `Model::blended_order`, per view, from the unjittered
 view-projection's `w`; the units are the model's own (**chosen, not measured**:
 the original multiplies `z` by `display+0x4310 / 65`, unread, which moves only the
-3,000-unit clamp). Confidence 85.
+3,000-unit clamp). Of `03_Track`'s 131 transparent draws all 131 carry the key and
+5 sit under an `Anim Transform`: those are keyed from the **time-zero** pose of their
+anchor (**chosen, not measured**: whether the original refreshes `mesh+0xb0` as the
+node moves turns on the `0x40000` flag, whose setter was not read). The order is held
+by `glow_mask_ground_truth.rs`. Confidence 85.
 
 This is the part that overturns the obvious guess for list A. A mesh does not enqueue
 itself; `Mesh_BuildLayerBatchSets` (`0x0892eda4`) groups a model's meshes into
@@ -148,13 +152,19 @@ can leave depth write off** rather than that being a stylistic choice.
 
 ### The shine pass is in the solid half of the queue
 
-The `0x2000` extra pass (a circuit's `*_shinemap` second texture) is a list-A
-group of the `0x45`/`0x4a` batch sets, so it draws **before** every list-B mesh.
+The `0x2000` extra pass (a circuit's `*_shinemap` second texture) is drawn from the
+mesh's own list-A compiled lists, which are queued at the mesh's list-A key
+(`0x45`/`0x4a`), so it draws **before** every list-B mesh (`0x4d`, depth-keyed).
+**Measured on one recorded Moa frame (`psp-ge-dump.py`, 469 prims): all 59
+environment-mapped circuit prims (`TEXMAPMODE` 2) are at indices 1 to 288, ahead of
+the list-B block that starts at 411**; the two environment-mapped prims after it
+are a blended batch's own second pass (node `530`, which ours does not draw, see
+`mesh-draw.md`) and a hull's. Confidence 85 (one frame, one circuit).
 Ours drew it after the blended list, which put an additive veil over every tree
 that stands in front of a shine-mapped wall: the pale band over Moa Therma's trees
 (tick 160, a crown over the grandstand: `122,141,134` against the original's
 `49,50,38`; without the pass `46,48,37`, with the pass moved `52,52,40`). It now
-draws between the sky and the blended list (`Scene::draw_track`).
+draws between the sky and the blended list (`Scene::draw_track`, `TRACK_STAGES`).
 
 ## What `oag-render` implements, and what it does not
 
