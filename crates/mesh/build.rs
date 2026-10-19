@@ -10,5 +10,8 @@ fn main() {
     // The same shader with group 1 as binding arrays, for a device with
     // `mesh_render::BINDLESS_FEATURES` - see `shaders/bindings.wesl`.
     oag_shader_check::link("shaders", "mesh_bindless", "package::mesh", &["bindless"]);
+    // The ray-query debug picture, for a device with `EXPERIMENTAL_RAY_QUERY` only -
+    // see `mesh_render::ray`.
+    oag_shader_check::link("shaders", "ray_debug", "package::ray_debug", &[]);
     println!("cargo::rerun-if-changed=build.rs");
 }

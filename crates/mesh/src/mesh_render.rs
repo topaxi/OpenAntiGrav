@@ -890,7 +890,8 @@ pub fn build_with(
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("vertices"),
         size: std::mem::size_of_val(&model.vertices[..]) as u64,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        // `BLAS_INPUT` only on a device with the ray tier, so any other creates today's buffer.
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST | ray::blas_input(device),
         mapped_at_creation: false,
     });
     let deferred = defer_uploads && oag_gpu::deferred_upload::active();
@@ -1103,6 +1104,7 @@ pub fn build_with(
 }
 
 pub mod bindless;
+pub mod ray;
 mod material_layout;
 pub use material_layout::material_bind_group_layout;
 

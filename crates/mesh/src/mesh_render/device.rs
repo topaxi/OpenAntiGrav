@@ -79,12 +79,17 @@ pub fn device_descriptor<'a>(
     label: &'a str,
     adapter: &wgpu::Adapter,
 ) -> wgpu::DeviceDescriptor<'a> {
-    wgpu::DeviceDescriptor {
-        label: Some(label),
-        required_features: optional_features(adapter),
-        required_limits: required_limits(adapter),
-        ..Default::default()
-    }
+    // The ray tier, when it was asked for and the adapter has it: the one place it
+    // reaches a device, so the window, the captures and the viewer agree.
+    super::ray::apply(
+        wgpu::DeviceDescriptor {
+            label: Some(label),
+            required_features: optional_features(adapter),
+            required_limits: required_limits(adapter),
+            ..Default::default()
+        },
+        adapter,
+    )
 }
 
 /// wgpu's default limits with the **texture-dimension limits raised to the

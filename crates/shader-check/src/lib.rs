@@ -306,8 +306,10 @@ fn is_binding_array_element(
 /// so an index that is not (one read from a varying, which costs every
 /// fragment on some drivers) fails the build. `enable f16;` grants
 /// `SHADER_FLOAT16`, for the half-precision builds of a pass a device with
-/// `wgpu::Features::SHADER_F16` selects. Every other shader still fails on any
-/// capability at all.
+/// `wgpu::Features::SHADER_F16` selects. `enable wgpu_ray_query;` grants
+/// `RAY_QUERY`, for the shaders only a device with
+/// `wgpu::Features::EXPERIMENTAL_RAY_QUERY` may be handed (`oag_mesh`'s `ray`).
+/// Every other shader still fails on any capability at all.
 fn capabilities(source: &str) -> Capabilities {
     let mut capabilities = Capabilities::empty();
     if source.contains("enable wgpu_binding_array;") {
@@ -315,6 +317,9 @@ fn capabilities(source: &str) -> Capabilities {
     }
     if source.contains("enable f16;") {
         capabilities |= Capabilities::SHADER_FLOAT16;
+    }
+    if source.contains("enable wgpu_ray_query;") {
+        capabilities |= Capabilities::RAY_QUERY;
     }
     capabilities
 }
