@@ -24,13 +24,13 @@ section) is the current, authoritative state.
   [`crates/fx/src/exhaust/hd.rs:571`](../../crates/fx/src/exhaust/hd.rs)
   says so at the type it would apply to. Stays undrawn until boost-banking
   itself is built; not a gap in this thread.
-- **The spikes' per-shape flicker is measured and still genuinely
-  undrawn**, and it is a feature gap, not a wiring step: each of the five
-  spike shapes flickers at `RandRange(0.65, 0.85)` per frame
-  (`EngineFlare_PlaceShapes`), but the renderer draws the flare as two
-  groups (`EF_Main`, `EF_Boost`), not the disc's ten shapes - there is no
-  per-spike geometry to flicker yet. See `engine-trail.md`'s
-  `EngineFlare_PlaceShapes` bullet.
+- **The spikes' flicker is drawn (2026-10-19, `hd-flare-spikes`).** Each
+  spike is split out of its group and scaled uniformly, about the nozzle, by
+  its own `RandRange(0.65, 0.85)` draw per frame on its own group law; the
+  draw is a render-side hash, chosen, not measured. See `engine-trail.md`'s
+  `EngineFlare_PlaceShapes` bullet. Still open: a live RPCS3 frame to check
+  the 2.0-at-rest spike base scale and the visible amplitude, and the
+  2048/Omega tuning values (same names, not compared).
 - **What arms the boost timer - reframed 2026-09-05, not yet closed.**
   `engine-trail.md`'s "What arms the boost timer stays open, minus two
   wrong answers" section (2026-09-05 entry) has the full account. The
@@ -69,14 +69,12 @@ section) is the current, authoritative state.
   still no setter. Full account: `engine-trail.md`, the 2026-09-15 entry
   under "What arms the boost timer".
 
-- **2026-10-19 (`hd-exhaust-trail-boost`): the spike flicker is a per-shape
-  shader factor, not a scale** (engine-trail.md, `EngineFlare_PlaceShapes`
-  bullet, confidence 40). Wiring needs the flare split per shape and a
-  per-draw factor in the flame material, and what the factor multiplies is
-  unread. The sprite flare's spin is never loaded by the draw, so there is
-  none to wire; its dispersion and occluder query stay read-not-drawn. The
-  boost timer's arm is Zone-only (race mode 10) and still needs a live trace.
-  Neither is a quick wiring step.
+- **2026-10-19 (`hd-exhaust-trail-boost`): the sprite flare's spin is never
+  loaded by the draw, so there is none to wire; its dispersion and occluder
+  query stay read-not-drawn. The boost timer's arm is Zone-only (race mode
+  10) and still needs a live trace.** The spike flicker that bullet called a
+  shader factor is a uniform geometric scale and is wired (above).
+
 
 ## Next Steps
 
@@ -103,7 +101,4 @@ section) is the current, authoritative state.
   it properly (1,006 stores, 770 on `r1`, the rest classified by whether
   the function touches a craft-sized offset) and it need not be repeated -
   the next evidence is live, not static.
-- Separately, and explicitly not the next step here: implementing the five
-  spike shapes (their own geometry, not just the flicker constant) is a
-  renderer feature of its own size, tracked by this bullet rather than
-  scoped into a quick fix.
+- The five spike shapes landed 2026-10-19 (see above); nothing left of this bullet.

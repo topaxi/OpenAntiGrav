@@ -746,3 +746,4 @@
 0x000ed5e0	function	Craft_SetAutopilotBlend	90	autopilot.md
 0x00129b40	function	Autopilot_Fire	85	autopilot.md
 0x00129988	function	Autopilot_Update	85	autopilot.md
+0x002e15f0	function	Rand_FloatRange	90	engine-trail.md
