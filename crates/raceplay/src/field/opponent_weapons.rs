@@ -20,13 +20,13 @@
 use super::*;
 
 impl Race {
-    /// Fires an opponent's Missile, once `Race::opponent_fires` has decided to.
+    /// Fires an opponent's Missile, once `Race::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
     ///
     /// **Two gates rather than one**, and they answer different questions.
-    /// `Race::opponent_fires` is the *driver's*: has the roll come up, with
+    /// `Race::opponent_decides` is the *driver's*: has the roll come up, with
     /// something in the shot's path. `Race::fire_missile` then runs the
     /// *weapon's* - `Ship_AcquireLock`'s recovered window, cone and along-track
     /// screen - and declines if nothing is lockable.
@@ -42,7 +42,7 @@ impl Race {
         self.fire_missile(slot, &stats)
     }
 
-    /// Fires an opponent's Rocket, once `Race::opponent_fires` has decided to.
+    /// Fires an opponent's Rocket, once `Race::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
@@ -89,7 +89,7 @@ impl Race {
     /// only one Quake can be in flight in the whole race, so a driver that
     /// wants to fire into an already-travelling wave simply keeps the
     /// pickup, the same as a full projectile pool would. Whether to fire is
-    /// `Race::opponent_fires`'s, as for every forward weapon; under the
+    /// `Race::opponent_decides`'s, as for every forward weapon; under the
     /// original's law the Quake is the one that needs nothing in its path.
     fn fire_opponent_quake(&mut self, slot: usize) -> bool {
         if self.sim.world.quake.is_some() {
@@ -199,7 +199,7 @@ impl Race {
     /// craft's hands rather than cashing it in - the `&&`-chain bug
     /// `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup` covers.
     ///
-    /// Whether to fire is `Race::opponent_fires`'s. Under the original's law
+    /// Whether to fire is `Race::opponent_decides`'s. Under the original's law
     /// the Plasma differs from the Rocket in two read places only: its own
     /// `WeaponAIstats.xml` row and its own shot speed in the path test.
     fn fire_opponent_plasma(&mut self, slot: usize) -> bool {
@@ -236,7 +236,7 @@ impl Race {
     /// Throws an opponent's blade, if its driver wants a shot now.
     ///
     /// Returns whether anything left, for [`Race::fire_opponent_plasma`]'s
-    /// reason; whether to throw is `Race::opponent_fires`'s.
+    /// reason; whether to throw is `Race::opponent_decides`'s.
     ///
     /// **The coin is drawn from the world's generator here exactly as it is on
     /// the player's path**, and only once there is room in the array - see
@@ -283,7 +283,7 @@ impl Race {
     /// # When a forward weapon fires is the original's; the rest is policy
     ///
     /// **The fire half of `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is
-    /// ported** (2026-10-03): `Race::opponent_fires` asks `oag_ai::weapon_ai`
+    /// ported** (2026-10-03): `Race::opponent_decides` asks `oag_ai::weapon_ai`
     /// for the Rocket, Missile, Plasma, Shuriken, LeachBeam and Quake, on the
     /// odds out of the title's `WeaponAIstats.xml`, and falls back to
     /// `oag_ai::Driver::wants_to_fire` where that file was not read. See
@@ -295,7 +295,7 @@ impl Race {
     ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
     ///   It arms that craft's own boost plume, the same reuse the player's Turbo
     ///   makes of the speed pad's visual.
-    /// - **A forward weapon is fired when `Race::opponent_fires` says so**, and
+    /// - **A forward weapon is fired when `Race::opponent_decides` says so**, and
     ///   kept rather than spent when it does not, or when the weapon itself
     ///   declines (no lock, no authored stats, no free slot).
     /// - **An Autopilot is absorbed**, and for once that is not a policy but
@@ -328,7 +328,8 @@ impl Race {
         field: &oag_ai::Field,
     ) {
         // Before anything returns: it advances this craft's weapon-AI clocks.
-        let fires = self.opponent_fires(slot, field);
+        let decision = self.opponent_decides(slot, field);
+        let fires = decision == oag_ai::weapon_ai::Decision::Fire;
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
             return;
         };
@@ -343,6 +344,12 @@ impl Race {
         else {
             return;
         };
+        // **The original's absorb half** (`WeaponAi_DecideFireOrAbsorb`): only
+        // a forward weapon under `FireLaw::Original` is ever answered with it.
+        if decision == oag_ai::weapon_ai::Decision::Absorb {
+            self.absorb_opponent_pickup(slot, absorb);
+            return;
+        }
 
         if weapon == oag_tables::weapons::Weapon::Turbo {
             // Full throttle means the speed target is not asking it to slow for
@@ -488,26 +495,35 @@ impl Race {
             // `IMPLEMENTED` and this chain have to grow together, and
             // `every_implemented_weapon_has_a_fire_arm_on_both_paths` is what
             // makes that fail loudly.
-            // **In the Eliminator an opponent keeps the weapon.** An absorb
-            // there pays no energy and spends the weapon on a one-second Shield
-            // (`Race::eliminator_absorb`, the player's path), and the original's
-            // AI takes that branch at about `0.001` a quarter-second decision
-            // (`WeaponAi_DecideFireOrAbsorb` forces `+0x34` to `0` in mode 8;
-            // `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`). Not ported:
-            // it measured as no change in the time to five kills.
-            if !self.sim.world.mode().pickups_absorb() {
-                return;
-            }
-            let Some(amount) = absorb else {
-                return;
-            };
-            let dimensions = self.sim.world.ships[slot].handling.dimensions;
-            oag_physics::damage::add(&mut self.sim.world.ships[slot].physics, &dimensions, amount);
+            // **In the Eliminator an opponent keeps the weapon**: see
+            // `Race::absorb_opponent_pickup`.
+            self.absorb_opponent_pickup(slot, absorb);
+            return;
         }
         // `Held::take` for the same reason `Race::spend_pickup` uses it: the
         // Mine/Bomb arm above always returns before here, so this is
         // defensive rather than reachable today, but a direct field write
         // would silently stop being safe the day that stops being true.
+        self.sim.world.ships[slot].pickup.take();
+    }
+
+    /// Absorbs `slot`'s held pickup, paying `absorb` energy into its pool.
+    ///
+    /// **In the Eliminator an opponent keeps the weapon.** An absorb there
+    /// pays no energy and spends the weapon on a one-second Shield
+    /// (`Race::eliminator_absorb`, the player's path), and the original's AI
+    /// takes that branch at about `0.001` a decision (`WeaponAi_DecideFireOrAbsorb`
+    /// forces `+0x34` to `0` in mode 8; `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`).
+    /// Not ported: it measured as no change in the time to five kills.
+    fn absorb_opponent_pickup(&mut self, slot: usize, absorb: Option<f32>) {
+        if !self.sim.world.mode().pickups_absorb() {
+            return;
+        }
+        let Some(amount) = absorb else {
+            return;
+        };
+        let dimensions = self.sim.world.ships[slot].handling.dimensions;
+        oag_physics::damage::add(&mut self.sim.world.ships[slot].physics, &dimensions, amount);
         self.sim.world.ships[slot].pickup.take();
     }
 }
