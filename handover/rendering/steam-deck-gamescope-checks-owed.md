@@ -26,7 +26,9 @@ reports 1016x572 mm and scale 1) still need a run there. Evidence:
   cost did not move (22.17 -> 22.27 fps), so no Deck change is expected.
 - **Deck leftovers.** `~/oag-perf/borderless-6x` is still on the Deck; remove it.
 - **HD at 4K on the Deck** still drops to 28 fps on its worst stretch under the
-  pixel budget. The budget is not tuned per title.
+  pixel budget. The budget is not tuned per title. 2026-10-19 (`docs/rendering/high-resolution-cost.md`,
+  "Steam Deck, 4K"): scene only, HD at the 1080p budget is 8.5 / 11.7 ms p50 / p99, so the 28 fps is
+  HUD, bloom and compositor on top; the budget itself was judged right and left as it is.
 - **RENDER SCALE row** shows no "auto" label while the gamescope budget is in
   effect.
 
