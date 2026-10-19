@@ -462,8 +462,14 @@ fn a_race_process_that_comes_up_then_crashes_hands_off_then_returns_the_room_wit
     std::fs::write(&gate, b"").expect("opens the gate: the child may crash now");
     assert_eq!(handoff.port, 45678, "the port the child printed");
     assert_eq!(handoff.cert_hash, [1; 32], "the hash the child printed");
-    lab.until("the room back open", |lab| {
-        lab.phase(a1) == Some(RoomPhase::Open)
+    lab.until("the room back open for both, with the reason", |lab| {
+        [a1, a2].into_iter().all(|who| {
+            lab.phase(who) == Some(RoomPhase::Open)
+                && lab.people[who]
+                    .room
+                    .as_ref()
+                    .is_some_and(|r| r.note.contains("would not load"))
+        })
     });
     let note = lab.people[a2].room.as_ref().expect("room").note.clone();
     assert!(
