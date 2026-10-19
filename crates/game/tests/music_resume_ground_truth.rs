@@ -12,13 +12,54 @@
 //!
 //! A title whose race music cannot be listed or decoded here reports that and
 //! passes nothing: the test names which of the five reach the playlist.
+//!
+//! The same walk checks that **a race's first tick opens no disc on the
+//! calling thread**. It used to re-read the booted soundtrack's listing there
+//! (`Audio::race_soundtrack_len`), which on HD decompresses every track whole:
+//! a 248 to 264 ms frame at race start on the Steam Deck (2026-10-19,
+//! `docs/rendering/hd-gpu-cost.md`). `oag_sound::MusicDiscs` now keeps a
+//! listing once read.
 
+use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use oag_game::music_state::{self, Saver};
 use oag_game::sound::GameLibrary;
+use oag_sound::library::{Library, Opened};
 use oag_sound::{self as audio, Audio, MusicSource};
+
+thread_local! {
+    /// Sources opened on this thread. A fetch worker's opens land on its own
+    /// thread's counter, so this counts only what would stall a frame.
+    static OPENED_HERE: Cell<usize> = const { Cell::new(0) };
+}
+
+/// [`GameLibrary`], counting each open on the thread that asked.
+#[derive(Debug)]
+struct Counting;
+
+impl Library for Counting {
+    fn open(&self, source: &str) -> Option<Opened> {
+        OPENED_HERE.with(|n| n.set(n.get() + 1));
+        GameLibrary.open(source)
+    }
+
+    fn containers(&self) -> Vec<PathBuf> {
+        GameLibrary.containers()
+    }
+}
+
+/// Plays one tick, the race's first, and fails if it opened a source here.
+fn first_tick_opens_nothing(audio: &mut Audio, label: &str) {
+    let before = OPENED_HERE.with(Cell::get);
+    audio.tick();
+    let opened = OPENED_HERE.with(Cell::get) - before;
+    assert_eq!(
+        opened, 0,
+        "{label}: the race's first tick opened {opened} source(s) on the calling thread"
+    );
+}
 
 const SECONDS: u32 = 20;
 
@@ -64,7 +105,7 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     let Some(image) = image else {
         return;
     };
-    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
+    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &Counting);
     let scratch = scratch(label);
     let cache = scratch.0.clone();
     let file = cache.join("music.toml");
@@ -76,7 +117,9 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
         first.playhead_race().is_some(),
         "{label}: no race music started"
     );
-    // The playlist reads its track count on the first tick of a race.
+    // The playlist needs its track count on the first tick of a race, and has
+    // it without reading the disc again.
+    first_tick_opens_nothing(&mut first, label);
     play(&mut first, SECONDS);
     let saved = first
         .race_music_state()
@@ -92,6 +135,7 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     let mut second = open_audio(&cache);
     music_state::resume_from(&file, &mut second, &discs, &title);
     second.start_race_music(&discs, MusicSource::Auto, &cache);
+    first_tick_opens_nothing(&mut second, label);
     let again = second
         .race_music_state()
         .expect("the resumed race has a place");

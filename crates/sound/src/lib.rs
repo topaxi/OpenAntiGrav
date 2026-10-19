@@ -45,9 +45,11 @@ pub mod library;
 pub mod settings;
 pub mod sfx;
 
+mod listings;
 mod race_music;
 mod resume;
 use library::{Library, NoLibrary, listing, load_entry, load_front_end};
+use listings::Listings;
 pub use race_music::MusicFetchWorker;
 use race_music::{PendingSwitch, locate};
 pub use resume::{RaceMusicState, Unusable};
@@ -221,6 +223,8 @@ pub struct MusicDiscs {
     booted: Option<Platform>,
     /// How a source string becomes an opened title. See [`Library`].
     library: &'static dyn Library,
+    /// The listings already read, shared by every clone. See [`Listings`].
+    listings: Listings,
 }
 
 impl Default for MusicDiscs {
@@ -233,6 +237,7 @@ impl Default for MusicDiscs {
             ps4: None,
             booted: None,
             library: &NoLibrary,
+            listings: Listings::default(),
         }
     }
 }
@@ -280,7 +285,7 @@ impl MusicDiscs {
 
         // A source with no soundtrack (a partial extract) leaves nothing to
         // confirm a counterpart against, so the row is not offered.
-        let Ok(Some(mine)) = Soundtrack::read(library, booted, layout.platform) else {
+        let Ok(Some(mine)) = discs.listings.read(library, booted, layout.platform) else {
             return discs;
         };
 
@@ -739,7 +744,9 @@ impl Audio {
         let Some((source, platform)) = discs.pick(MusicSource::Auto) else {
             return 0;
         };
-        Soundtrack::read(discs.library, source, platform)
+        discs
+            .listings
+            .read(discs.library, source, platform)
             .ok()
             .flatten()
             .map_or(0, |soundtrack| soundtrack.tracks.len())

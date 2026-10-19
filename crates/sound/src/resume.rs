@@ -194,7 +194,9 @@ impl Audio {
         let Some((source, platform)) = discs.pick(MusicSource::Auto) else {
             return Vec::new();
         };
-        Soundtrack::read(discs.library, source, platform)
+        discs
+            .listings
+            .read(discs.library, source, platform)
             .ok()
             .flatten()
             .map_or_else(Vec::new, |soundtrack| {
