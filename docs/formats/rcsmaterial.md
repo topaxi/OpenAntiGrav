@@ -2670,6 +2670,15 @@ on a `.w` term), `ds_booth_glass`, `metallic`, `dc_constantglow`, `cf_constantco
 `martin_inflatable2` and `glass_2uv_rgb_reflect_normal_glow` moved to their real
 pictures.
 
+**Against the original (2026-10-19).** `data/reference/hd-capture/talons-grid-wcb-on-s150/00.png`
+(RPCS3, `feisar_c1`, eye `-143.57, -48.45, -175.11`) rendered by this build at the same
+pose (`--camera-pose`, fov 60): the original's pit-lane lines across the road are thin
+dark grey; ours with the constant diffuse are thin and darker (no specular or normal
+sheen is applied, so black rather than grey), and the same surface bound white drew
+glowing cream bars, plainly wrong. The constant diffuse is therefore kept. Three
+weapon-scene proxies in `oag-game` sit on this strip and were re-baselined for it
+(`hd_weapon_scene_ground_truth`, `hd_plasma_ball_ground_truth`).
+
 **Disc-wide effect**, every HD circuit model before and after
 (`crates/render/examples/hd_albedo_dump.rs`, 14,373 material slots): 173 slots changed.
 Normal maps no longer bound as colour: `ds_pipe_nc` (51), `ds_sfblend_ns` (25),

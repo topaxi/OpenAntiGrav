@@ -27,9 +27,13 @@ non-lightmap texture) and so still draw it.
   `cf_constantcolourglow`, `dc_metallic`, `mesh_colour_constant`, `emissive`,
   `dc_glowlightband`. Modesto's `nr_holobowlparallax` picture changed with the rule and is
   unchecked against the original.
-- **Original comparison:** the HD start line was judged on its program (dark constant
-  diffuse) and not against an RPCS3 frame at the same pose; a pose-matched capture of the
-  grid at Talon's would confirm the dark band.
+- **Original comparison:** done for Talon's start line at the committed grid pose
+  (dark thin lines in both, ours darker: the specular/normal term is not applied); not
+  done for Modesto's bowl or the other circuits' start lines.
+- **The weapon-scene proxies lost margin:** the rocket (`black < 2300`) and cannon
+  (`white > 1000`) bounds were re-set from one measured frame each on the dark start
+  line; a flat-black rocket may now pass. A control frame needs a pose with no start line
+  under the weapon.
 
 ## Next Steps
 
