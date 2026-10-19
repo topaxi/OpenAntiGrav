@@ -80,14 +80,35 @@ pub const DRAW_RANGE: f32 = 250.0;
 /// So a lock is not a property of geometry alone. Two craft in identical
 /// positions differ by how long one of them has been held there.
 ///
-/// **Not HD's own hold time.** `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`
-/// reads HD's shared hold constant directly out of memory as `0.5`, not the
-/// PSP's `0.8` above - a real, measured divergence this project has not
-/// adopted: it is shared, title-blind engine code judged against the PSP's
-/// own recovered law, and changing it for HD alone is a simulation-behaviour
-/// change and a determinism-hash move, out of scope for a presentation-only
-/// lane. Left at `0.8` on every title, deliberately.
+/// **HD's is the same number, 2026-10-19.** `Hud_UpdateMissileSight`
+/// (`0x0008a5b8`) sets its lock byte when its hold accumulator (`hud+0xec`)
+/// exceeds the literal at `0x008a777c`, `0x3f4ccccd` = `0.8`. The `0.5` that
+/// `hud-sight.md` once read as HD's hold (`0x008a764c`) is a pooled literal:
+/// the same function halves the split-screen offsets with it, and the
+/// LeachBeam's accumulator wraps at it (see [`LEACH_CYCLE_SECONDS`]). So no
+/// title carries a hold of its own, and the constant stays shared.
 pub const HOLD_SECONDS: f32 = 0.8;
+
+/// How fast the concentric dialect's rings turn while seeking, radians a second.
+///
+/// **Recovered, confidence 80** from `Hud_UpdateMissileSight`'s `dt * 4.0`
+/// (`0x008a7770`).
+pub const RING_SPIN: f32 = 4.0;
+
+/// The period of the concentric LeachBeam reveal's loop, seconds.
+///
+/// **Recovered, confidence 88**: `0x008a764c` = `0.5`, the wrap of
+/// `Hud_UpdateLeachBeamSight`'s own accumulator. It is *not* a lock hold; see
+/// [`HOLD_SECONDS`].
+pub const LEACH_CYCLE_SECONDS: f32 = 0.5;
+
+/// The angle the locked concentric reticle's `Outer` ring rests at, radians;
+/// `Inner` takes its negative.
+///
+/// **Recovered, confidence 80**: `0xbf060aa6` and `0x3f060aa6`
+/// (`0x008a7798`, `0x008a779c`), written to `Outer+0x12c` and `Inner+0x12c` in
+/// place of the spinning phase once the lock is taken.
+pub const RING_LOCKED_ANGLE: f32 = std::f32::consts::FRAC_PI_6;
 
 /// The reticle's half-extent when it has nothing, in screen pixels.
 ///
@@ -388,6 +409,12 @@ pub struct Sight {
     /// widgets in a 512x512 buffer. `None` is the PSP's (and everyone else's)
     /// own, where the law runs in the grid itself. See [`Self::in_span`].
     span: Option<[f32; 2]>,
+    /// The concentric dialect's free-running ring angle, radians (`hud+0x634`).
+    /// Draw-only, never hashed. See [`Self::ring_phase`].
+    ring_phase: f32,
+    /// The concentric LeachBeam's looping reveal clock, seconds (`hud+0x604`).
+    /// Draw-only, never hashed. See [`Self::leach_cycle`].
+    leach_cycle: f32,
 }
 
 impl Default for Sight {
@@ -417,6 +444,8 @@ impl Sight {
             leach_seen: false,
             leach_law: false,
             span: None,
+            ring_phase: 0.0,
+            leach_cycle: 0.0,
         }
     }
 
@@ -561,6 +590,14 @@ impl Sight {
     /// [`Self::update`] and [`Self::follow`]: the one law, with the lock either
     /// decided here (`None`) or handed in.
     fn step(&mut self, dt: f32, target: Option<Projected>, lock: Option<bool>) -> State {
+        self.ring_phase += dt * RING_SPIN;
+        if self.ring_phase >= std::f32::consts::TAU {
+            self.ring_phase = 0.0;
+        }
+        self.leach_cycle += dt;
+        if self.leach_cycle >= LEACH_CYCLE_SECONDS {
+            self.leach_cycle = 0.0;
+        }
         if self.runs_leach_law() {
             return self.update_leach(dt, target, lock);
         }
@@ -754,22 +791,29 @@ impl Sight {
         (self.alpha / 255.0).clamp(0.0, 1.0)
     }
 
-    /// How far into the hold window the target has been continuously visible,
-    /// 0..1 - `0` the moment a target is (re)acquired, `1` once held past
-    /// [`HOLD_SECONDS`].
+    /// The angle the concentric dialect's `Outer` ring turns through while the
+    /// reticle is seeking, radians; the `Inner` ring takes its negative.
     ///
-    /// **For Wipeout HD's progressive LeachBeam reveal.** HD's own
-    /// `Hud_UpdateLeachBeamSight` shows one of its three outer rings at a time,
-    /// switching at exact quarters of *its own* `0.5` s hold constant - see
-    /// `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md#the-leachbeams-four-reveal-one-at-a-time-gated-by-hold-time-not-distance`.
-    /// This engine keeps the PSP's shared [`HOLD_SECONDS`] (`0.8`) rather than
-    /// adopting HD's `0.5` - a separate, unadopted divergence recorded on
-    /// [`HOLD_SECONDS`]'s own doc - so what this exposes is the *shape*, a
-    /// hold window divided into quarters, scaled onto whichever hold constant
-    /// is active rather than HD's own absolute second marks.
+    /// **Wipeout HD's `Hud_UpdateMissileSight`** (`0x0008a5b8`) adds
+    /// `dt * 4.0` to `hud+0x634` every frame, resets it to zero at `2 pi`, and
+    /// writes it to `Outer+0x12c` and its negative to `Inner+0x12c`. That the
+    /// field is a rotation is read from its neighbours (`+0xac`/`+0xb0` are the
+    /// width and height) and not proven: see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`. Draw-only.
     #[must_use]
-    pub fn hold_progress(&self) -> f32 {
-        (self.hold / HOLD_SECONDS).clamp(0.0, 1.0)
+    pub fn ring_phase(&self) -> f32 {
+        self.ring_phase
+    }
+
+    /// Seconds into the concentric LeachBeam reveal's loop, `0..0.5`.
+    ///
+    /// **A free-running clock and not lock progress.** HD's
+    /// `Hud_UpdateLeachBeamSight` (`0x00090d30`) adds the raw frame time to
+    /// `hud+0x604` and zeroes it at `0.5`; the three rings show in turn at the
+    /// `0.125`, `0.25` and `0.375` marks of that loop. Draw-only.
+    #[must_use]
+    pub fn leach_cycle(&self) -> f32 {
+        self.leach_cycle
     }
 
     /// What the reticle's colour is multiplied by this frame, as a brightness

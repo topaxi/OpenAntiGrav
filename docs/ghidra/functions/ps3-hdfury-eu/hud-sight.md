@@ -1,4 +1,43 @@
-# HD's own lock-on sight: two per-tick updates, one shared bind, and a hold time that is not the PSP's
+# HD's own lock-on sight: two per-tick updates, one shared bind
+
+## Correction, 2026-10-19: there is no 0.5 s hold, and the Missile has a real locked state
+
+Disassembling both functions end to end (`disassemble_function`, the decompile
+of `0x0008a5b8` stops at `halt_baddata`) overturns two readings below:
+
+- **`0x008a764c` = 0.5 is a pooled literal, not a hold time.** `Hud_UpdateMissileSight`
+  multiplies the split-screen offsets by it, and `Hud_UpdateLeachBeamSight`
+  adds the raw frame time to `hud+0x604` and **zeroes it at 0.5** (`0x00090fac`
+  to `0x000910b8`): a looping animation clock, not a lock accumulator. The
+  Missile sets its lock byte (`hud+0xdc`, `0x0008b7ec`) when `hud+0xec`
+  exceeds the literal at `0x008a777c` = `0x3f4ccccd` = **0.8**, the PSP's hold.
+  (Where `hud+0xec` is accumulated is not in this function; it is zeroed on
+  the no-target path.) So HD holds for the same 0.8 s and no per-title hold
+  axis is warranted. Confidence 85.
+- **The LeachBeam's three-ring reveal is that 0.5 s loop**, so it cycles
+  whether or not a lock is building. Shown: Outer to 0.125, Middle to 0.25,
+  Inner to 0.375, backdrop alone to 0.5, then again. Confidence 88.
+- **The Missile's locked state is not additive.** Seeking (`hud+0xdc` = 0):
+  `LockedOnLines`/`LockedOnMiddle` hidden (bit `0x4` of `+0x34` cleared),
+  `Middle` shown; `Outer` and `Inner` get `+0x12c` = `hud+0x634` and its
+  negative, `hud+0x634` growing by `dt * 4.0` (`0x008a7770`) and wrapping at
+  `2 pi` (`0x008a778c`). Locked: a one-shot cue call latched by `hud+0x6b8`
+  (`FUN_00677518(..., 0x38)`, not wired here), `Middle` shrinks then hides,
+  `LockedOnLines`/`LockedOnMiddle` shown, `Outer`/`Inner` written the
+  literals `0xbf060aa6`/`0x3f060aa6` (minus and plus 30 degrees,
+  `0x008a7798`/`0x008a779c`). `+0x12c` being a rotation is inferred (`+0xac`
+  and `+0xb0` are width and height, `+0x5c`/`+0x60` their getters), not
+  proven: confidence 65. Wired in `oag_hud::sight_draw`; the Middle ring's
+  shrink-before-hide is not ported (it hides at once).
+- Checked on 2048 and Omega: both author the identical four-seeking, two-locked
+  widget names, so the same drawing applies (**ported**, no per-title code);
+  neither executable's own update was read (**not checkable** for Omega, 2048
+  has no HD-style sight function located).
+
+The sections below are the 2026-09-15 reading, kept for its evidence; where
+they say "hold" for `0x008a764c` or "progress", read the correction above.
+
+# (original page)
 
 2026-09-15. Located from the widget-name strings themselves (`search_strings`
 on `"Sight"`), TOC-resolved with `scripts/ps3-toc.py` and decompiled through

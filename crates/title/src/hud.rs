@@ -257,15 +257,16 @@ pub enum Sights {
     Concentric {
         /// Drawn whenever the reticle has anything, seeking or locked.
         seeking: &'static [&'static str],
-        /// Drawn in addition once the lock is taken.
+        /// Shown once the lock is taken, in place of `MissileSightMiddle`.
         ///
-        /// Read off the widget names rather than out of HD's own code, which
-        /// nothing here has disassembled - `MissileSightLockedOnLines` and
-        /// `MissileSightLockedOnMiddle` say what they are. Confidence **70**:
-        /// the names are unambiguous about *what* these are and not about
-        /// whether the seeking set stays up underneath them. Drawn additively
-        /// here, which is the reading that shows every authored widget rather
-        /// than hiding some on a guess.
+        /// **Read from `Hud_UpdateMissileSight` (`0x0008a5b8`, 2026-10-19), no
+        /// longer from the names.** Seeking clears these two widgets' visible
+        /// bit and sets `MissileSightMiddle`'s; locked sets these two and
+        /// hides the Middle ring, and `Outer`/`Inner` stop turning and rest at
+        /// minus and plus thirty degrees. Confidence 75: the visible-bit
+        /// writes and the angle literals are read directly; the short shrink
+        /// the Middle ring does before it hides is not ported (it is keyed to
+        /// a free-running phase, see `hud-sight.md`).
         locked: &'static [&'static str],
         /// The LeachBeam's own reticle on this dialect, or `None` for a title
         /// that authors none.
@@ -283,25 +284,12 @@ pub enum Sights {
         /// shape at 88/88/64/40 px, corroborating it in a second title on
         /// the same dialect.
         ///
-        /// **Which of the four is up when is now ported, at reduced
-        /// confidence relative to the widget existence question above.**
-        /// [`hud-sight.md`]'s own `Hud_UpdateLeachBeamSight` (`0x00090d30`)
-        /// reading (2026-09-15, confidence 88) found the four are not "all
-        /// four, always": Outer, Middle and Inner each get one exclusive
-        /// quarter of HD's own `0.5` s hold window (`t <= 0.125`s shows
-        /// Outer, `0.125 < t <= 0.25` shows Middle, `0.25 < t <= 0.375` shows
-        /// Inner, past that only BG shows until the lock completes), read off
-        /// three literal TOC-relative float constants - not a distance table
-        /// as an earlier pass of that page guessed. `oag_hud::sight_draw`
-        /// (`leach_reveal_draws`) drives this off
-        /// [`oag_race::sight::Sight::hold_progress`] - a 0..1 fraction of
-        /// *this engine's own* `HOLD_SECONDS` (the PSP's `0.8`, not HD's
-        /// `0.5` - see that constant's own doc), scaled onto the same
-        /// quarters HD's own code uses rather than HD's absolute second
-        /// marks. So the shape is measured and ported; the exact second at
-        /// which each ring changes on this title is not HD's own.
-        ///
-        /// [`hud-sight.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md
+        /// **Which of the four is up when** is a free-running loop, not lock
+        /// progress. `Hud_UpdateLeachBeamSight` (`0x00090d30`) adds the raw
+        /// frame time to an accumulator and zeroes it at `0.5` s; Outer shows
+        /// to `0.125`, Middle to `0.25`, Inner to `0.375`, the backdrop alone
+        /// after (three TOC-resolved literals, confidence 88). Drawn off
+        /// [`oag_race::sight::Sight::leach_cycle`]. See `hud-sight.md`.
         leach: Option<[&'static str; 4]>,
     },
     /// This title's reticle has not been read.

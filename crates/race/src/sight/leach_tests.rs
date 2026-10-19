@@ -165,7 +165,7 @@ fn a_held_missile_and_an_unflagged_leachbeam_keep_the_missiles_law() {
     hd.set_held(Held::LeachBeam);
     hd.update(DT, aim);
     assert_eq!(hd.spin, 0.0, "HD's LeachBeam keeps the Missile's law");
-    assert!(hd.hold_progress() > 0.0);
+    assert!(hd.leach_cycle() > 0.0);
 }
 
 /// The opening steps as the original's own frames show them: off a locked `6.0`

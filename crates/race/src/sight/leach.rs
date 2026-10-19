@@ -62,7 +62,7 @@ impl Sight {
     ///
     /// **Off by default, and on for the PSP dialect only.** Wipeout HD's own
     /// LeachBeam reticle has its own update (`Hud_UpdateLeachBeamSight`), unread
-    /// as a law here, and keeps the Missile's - see [`Sight::hold_progress`].
+    /// as a law here, and keeps the Missile's - see [`Sight::leach_cycle`].
     pub fn set_leach_law(&mut self, on: bool) {
         self.leach_law = on;
     }

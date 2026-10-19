@@ -89,6 +89,19 @@ title showing the reticle over a craft ahead.
   rather than HD's absolute seconds - see `lock-sight.md`'s own
   "Colour and blink, resolved" pass for the sibling colour finding from the
   same session.
+- **2026-10-19, `hd-lock-on-hud`: the `0.5` s "HD hold" does not exist.** Both
+  HD sight updates were disassembled end to end (see `hud-sight.md`'s
+  correction): `0x008a764c` is a pooled literal, the Missile locks on
+  `hud+0xec > 0.8` (the PSP's number), the LeachBeam's three-ring reveal is a
+  free-running 0.5 s loop (`Sight::leach_cycle`, replacing `hold_progress`),
+  and the Missile's locked state hides the Middle ring, shows the `LockedOn`
+  pair and parks the rings at plus and minus 30 degrees (ring spin while
+  seeking at `dt * 4` rad/s), all wired in `oag_hud::sight_draw` for HD, 2048
+  and Omega. Alignment checked at 1920x1080 and, with `--presented`, 1440x1080
+  and 2560x1080: the reticle sits on the craft. Open: where `hud+0xec` is
+  accumulated, the Middle ring's shrink-before-hide, the lock cue
+  (`FUN_00677518(..., 0x38)`, latched by `hud+0x6b8`, `oag-sound`'s), and that
+  `+0x12c` is a rotation (inferred).
 - **Pure's Eliminator tuning is one file, and nothing reads the axis's second
   row.** `oag_title::weapons::Weapons::elimination` is carried and unread:
   `Race::load` opens the race table for every mode on every title.
