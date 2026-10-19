@@ -462,7 +462,11 @@ fn a_race_that_ends_returns_its_people_to_the_open_room_with_the_reason() {
     rooms.tick(1000);
     rooms.take_launch().expect("launched");
     rooms.take_outbox();
-    rooms.race_over(room, "the race process exited with status 1", Board::default());
+    rooms.race_over(
+        room,
+        "the race process exited with status 1",
+        Board::default(),
+    );
     let seen = snapshot(last(&mut rooms, 2));
     assert_eq!(seen.phase, Phase::Open);
     assert!(seen.members.iter().all(|m| !m.ready), "picks are cleared");

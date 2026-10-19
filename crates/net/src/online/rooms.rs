@@ -15,11 +15,11 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use crate::discovery::{Compat, Local, differs};
+use crate::wire::board::Board;
 use crate::wire::online::{
     Edition, MAX_PLAYERS, MIN_PLAYERS, Member, Message, Phase, Refusal, RoomInfo, RoomSettings,
     Snapshot,
 };
-use crate::wire::board::Board;
 use crate::wire::{PROTOCOL, RaceParams};
 
 /// The fewest zones a Zone room may ask for (Omega's `NitroTarget` slider starts at 15).
@@ -28,6 +28,9 @@ pub const MIN_ZONE_TARGET: u8 = 15;
 pub const MAX_ZONE_TARGET: u8 = 55;
 /// The most laps a room may ask for (Omega's slider ends at 20).
 const MAX_LAPS: u8 = 20;
+
+/// Joins a room's note to what its armed rematch waits for.
+const REMATCH_WAIT: &str = " - rematch, ";
 
 /// One connected person, as the lobby knows them.
 pub type ClientId = u32;
@@ -662,7 +665,10 @@ impl Rooms {
         match self.start(owner) {
             Ok(()) => self.rooms[index].armed = false,
             Err((_, text)) if text.starts_with("waiting for") => {
-                self.rooms[index].note = format!("rematch: {text}");
+                // The reason the last race ended stays; the wait follows it.
+                let note = &self.rooms[index].note;
+                let base = note.split(REMATCH_WAIT).next().unwrap_or_default();
+                self.rooms[index].note = format!("{base}{REMATCH_WAIT}{text}");
                 self.push_room(index);
             }
             Err((_, text)) => {
@@ -695,7 +701,10 @@ impl Rooms {
                     .is_some_and(|n| n.to_lowercase() == wanted)
             });
         let Some(target) = target else {
-            return Err(refuse(Refusal::NotInRoom, "nobody of that name is in the room"));
+            return Err(refuse(
+                Refusal::NotInRoom,
+                "nobody of that name is in the room",
+            ));
         };
         if target == id {
             return Err(refuse(

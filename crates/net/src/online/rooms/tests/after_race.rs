@@ -73,7 +73,11 @@ fn a_rematch_from_the_owner_starts_once_everyone_is_ready_with_the_same_settings
     rooms.race_over(room, "every person has finished", board());
     let now = snapshot(last(&mut rooms, 2));
     assert_eq!(now.phase, Phase::Open, "Bob is not ready, so it waits");
-    assert!(now.note.contains("bob"), "it says who: {}", now.note);
+    assert!(
+        now.note.starts_with("every person has finished") && now.note.contains("waiting for: bob"),
+        "it keeps the reason and says who: {}",
+        now.note
+    );
     assert!(now.members[0].ready && !now.members[1].ready);
     assert_eq!(now.settings, before, "the settings are untouched");
     // Bob agrees: the start fires by itself.
@@ -87,7 +91,11 @@ fn a_rematch_from_the_owner_starts_once_everyone_is_ready_with_the_same_settings
     assert_eq!(launch.params.track, before.track);
     assert_eq!(launch.params.class, before.class);
     assert_eq!(launch.params.mode, before.mode);
-    assert_eq!(launch.params.teams, ["Feisar", "Qirex"], "the picks were kept");
+    assert_eq!(
+        launch.params.teams,
+        ["Feisar", "Qirex"],
+        "the picks were kept"
+    );
 }
 
 #[test]
@@ -98,7 +106,11 @@ fn a_member_who_asked_while_racing_is_ready_when_it_ends() {
     rooms.race_over(room, "every person has finished", board());
     let now = snapshot(last(&mut rooms, 1));
     assert!(!now.members[0].ready && now.members[1].ready);
-    assert_eq!(now.phase, Phase::Open, "no owner request, so nothing starts");
+    assert_eq!(
+        now.phase,
+        Phase::Open,
+        "no owner request, so nothing starts"
+    );
 }
 
 #[test]
@@ -121,7 +133,11 @@ fn a_rematch_dies_when_too_few_people_are_left() {
         },
     );
     let now = snapshot(last(&mut rooms, 1));
-    assert_eq!(now.phase, Phase::Open, "the owner's request was dropped with bob");
+    assert_eq!(
+        now.phase,
+        Phase::Open,
+        "the owner's request was dropped with bob"
+    );
 }
 
 #[test]
@@ -162,7 +178,12 @@ fn only_the_owner_can_remove_someone_and_they_are_refused_back() {
     assert_eq!(refusal(last(&mut rooms, 2)), Refusal::NotOwner);
     rooms.handle(1, Message::Kick { name: "ann".into() });
     assert_eq!(refusal(last(&mut rooms, 1)), Refusal::BadSettings);
-    rooms.handle(1, Message::Kick { name: "nobody".into() });
+    rooms.handle(
+        1,
+        Message::Kick {
+            name: "nobody".into(),
+        },
+    );
     assert_eq!(refusal(last(&mut rooms, 1)), Refusal::NotInRoom);
     rooms.handle(1, Message::Kick { name: "CY".into() });
     let out = rooms.take_outbox();

@@ -273,11 +273,13 @@ pub fn final_board(race: &Race, names: &[Option<String>]) -> Board {
                         String::new()
                     },
                     laps: u16::try_from(row.laps_completed).unwrap_or(u16::MAX),
-                    finish_ticks: row.finish_tick.map(|t| u32::try_from(t).unwrap_or(u32::MAX - 1)),
+                    finish_ticks: row
+                        .finish_tick
+                        .map(|t| u32::try_from(t).unwrap_or(u32::MAX - 1)),
                     best_lap_ticks: row.best_lap_ticks,
-                    eliminations: ships
-                        .get(slot)
-                        .map_or(0, |ship| u16::try_from(ship.standing.kills).unwrap_or(u16::MAX)),
+                    eliminations: ships.get(slot).map_or(0, |ship| {
+                        u16::try_from(ship.standing.kills).unwrap_or(u16::MAX)
+                    }),
                 }
             })
             .collect(),

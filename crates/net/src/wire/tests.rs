@@ -1,5 +1,5 @@
-use super::*;
 use super::board::Board;
+use super::*;
 use oag_gameplay::input::Button;
 
 fn held(buttons: u32, x: f32) -> Held {
@@ -217,6 +217,9 @@ fn a_board_round_trips_on_the_wire_and_as_a_hex_line() {
     assert_eq!(Board::from_line(&board.to_line()), Ok(board.clone()));
     assert!(Board::from_line("zz").is_err());
     assert!(Board::from_line("0").is_err());
-    assert_eq!(Board::from_line(&Board::default().to_line()), Ok(Board::default()));
+    assert_eq!(
+        Board::from_line(&Board::default().to_line()),
+        Ok(Board::default())
+    );
     assert!(board.same_race_as(&board));
 }
