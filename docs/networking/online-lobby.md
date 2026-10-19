@@ -71,11 +71,11 @@ sends the player back to `OnlineMainMenu`.
 | Weapon hints | on / off | |
 | Pure racing (`GreenMode`) | on / off | off |
 | Availability (`GameAvailability`) | PUBLIC (0), INVITE ONLY (1); a PARTY-only variant (2) is a separate list | PUBLIC |
-| Barrel rolls | on / off | |
-| Pilot assist allowed | on / off | |
-| Laps | slider 3 to 20 | |
-| Eliminations (target) | slider 50 to 600 step 25 | 200 |
-| Zone target (`NitroTarget`) | slider 15 to 55 step 5 | 30 |
+| Barrel rolls (`OnlineBarrelRolls`, label `MAN_2_BR`) | `FE_ON` / `FE_OFF`, On listed first, no `default` attribute | not authored |
+| Pilot assist allowed (`OnlinePilotAssist`, label `FE_PILOT_ASSIST_ALLOWED`) | `FE_ON` / `FE_OFF`, On listed first, no `default` | not authored |
+| Laps (`NumberOfOnlineLaps`, `RC_LAPS`) | slider 3 to 20 step 1 | HD's `MP Select` says 3, Omega's does not say |
+| Eliminations (target) (`NumberOfEliminations`, label `IG_HUD_TARGET`) | slider 50 to 600 step 25 | 200 |
+| Zone target (`NitroTarget`, global `NumberOfNitroLevels`, label `FE_ZONE_TARGET`) | slider 15 to 55 step 5 | 30 |
 | Max players | the list is `<aList>`, **disabled**: the room size is fixed in code | 8 (the lobby draws `playerList0..7`, `RankIcon0..7`) |
 | Respawns | `<aList>`, disabled | |
 
@@ -139,6 +139,12 @@ project) for `Frontend\Items\*.cpp` source-path strings:
   inference stands).
 
 ### Checked against HD and 2048 (the project rule for Omega front-end findings)
+
+- **HD's `MP Select` rows, read 2026-10-19** (`DATA00.PSARC`, `DATA05.PSARC`, `DATA06.PSARC` of the
+  EU disc): the same `OnlineBarrelRolls`, `OnlinePilotAssist`, `OnlineRespawns` (disabled
+  `aList`) and `NumberOfOnlineLaps` rows with the same ids and values; `DATA00` also holds
+  `Eliminations` and `NitroTarget` (50 to 600 step 25, 15 to 55 step 5 default 30, the same as
+  Omega's), `DATA05` and `DATA06` do not. **Checked, same rows**: Omega's room settings are HD's.
 
 - **HD: differs.** HD's `network_definition.xml` has 50 screens against Omega's 30
   (26 shared), `online_definition.xml` 31 against 20 (17 shared). HD has its own
@@ -395,8 +401,9 @@ dependency is `ring`'s random source, already linked.
 ### The wire messages
 
 Client to lobby: `Hello { protocol, name, titles, token }` (magic `OAGL`), `ListRooms`,
-`CreateRoom(settings)`, `JoinRoom { room }`, `Edit(settings)` (owner), `Ready { team, ready }`
-(a pick is the ready, as Omega's ship choice is), `Start` (owner), `Leave`.
+`CreateRoom(settings)`, `JoinRoom { room }`, `Edit(settings)` (owner), `Ready { team, ready, assist }`
+(a pick is the ready, as Omega's ship choice is; `assist` is the Pilot Assist level this person flies
+with, an index into `Level::ALL`), `Start` (owner), `Leave`.
 
 Lobby to client: `Welcome { token, name, titles }`, `Rooms(list)`, `Room(snapshot)` (pushed on
 every change, owner first), `Left { reason }`, `Handoff { port, cert_hash, token, name }`,
@@ -405,10 +412,10 @@ every change, owner first), `Left { reason }`, `Handoff { port, cert_hash, token
 Named refusals (`Refusal`): `Full`, `Started`, `Content`, `Version`, `NoSuchRoom`, `NotOwner`,
 `NeedPlayers`, `NotReady`, `BadName`, `NotInRoom`, `InRoom`, `BadSettings`.
 
-Room settings (`RoomSettings`): title, track, class, mode, max players (2 to 8), AI fill.
-Weapons are not a setting: a network race holds them off (ADR-0069, condition 2). Omega's laps,
-barrel rolls, pilot-assist-allowed, eliminations and zone targets are not carried: `RaceParams`
-has no field for them yet.
+Room settings (`RoomSettings`): title, track, class, mode, max players (2 to 8), AI fill, laps,
+barrel rolls, Pilot Assist allowed and the zone target (part 9). Weapons are not a setting: a
+network race holds them off (ADR-0069, condition 2). Omega's eliminations target is not carried
+(part 9).
 
 A game client that dials the lobby (`--connect`) is refused by name ("this is the online
 lobby, not a race"); a lobby client that dials a race port gets the race host's own malformed
@@ -547,7 +554,7 @@ From here the round trip is about 10 ms.
 - **Menu screens: landed** (part 8), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
   lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
   and size. Open there: kick and the other
-  sub-pages Omega has beyond the list.
+  sub-pages Omega has beyond the list (part 9 lists which of them are settings and are done).
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
@@ -773,8 +780,6 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
   ran on both (**ported**, with the table above as the ground truth); the track-stats fix concerns
   Pulse PSP's `FEData.wad` only (`track_stats::read` reads nothing on any other title,
   **checked, differs**).
-||||||| 9f3afc3b2
-
 
 ## 8. The online menus (2026-10-16)
 
@@ -808,8 +813,9 @@ mid-flow (the same), the race child failing to come up (the room's note after th
 with LAN's address keyboard), so `host:60500`, `[::1]:60500` and a bare `::1` (bracketed for the
 dial) are typed on the pad; no port means 60000. **Chosen, not measured:** the room's size is
 2 to 8 for every title (`oag_net::wire::online::MAX_PLAYERS`, Omega's eight rows); no title
-crate carries a measured grid size, so none is capped lower. Laps and weapons are not room
-settings: `RoomSettings` has no laps field and a network race holds weapons off (ADR-0069).
+crate carries a measured grid size, so none is capped lower. Weapons are not a room
+setting (a network race holds them off, ADR-0069); laps, barrel rolls, Pilot Assist and the zone
+target are rows on the room screen (part 9).
 A 64-digit certificate is drawn on two lines, readable on every face, where it ran off the panel
 on every title. `--online` stays the headless command-line flow of part 5 (it does not open the
 screens).
@@ -842,6 +848,81 @@ the hub, CREATE (RACE page, Track Select, Ship Select), JOIN (Ship Select, the l
 and its circuit line, the room), the host's START, the hand-off, the race to `--max-ticks 300`,
 and both clients back in the room with "--max-ticks reached". Stills of the room and the list on
 Pulse and HD (`--menu-page online-room:3`, `online-list:3:0`): HD draws its own strip look.
+
+## 9. Omega's room settings, on every title (2026-10-19)
+
+Omega's `MP Select` (the create page, and `Edit Settings` in the lobby) is HD's, carried forward
+(part 1, "Checked against HD"). Each row below was read from `data09.psarc`'s
+`network_definition.xml` and `languages/english/entries.xml`; HD's rows from `DATA00`, `DATA05`
+and `DATA06`. **What is carried is Omega's (the rows, ranges and labels); that the settings behave
+as the engine implements them online is ours, chosen, not measured**: the original has no network
+race to measure.
+
+| Omega row | Values and default | Verdict |
+| --- | --- | --- |
+| Laps | 3 to 20 (HD default 3) | **Carried** (part 7); a room may ask for 1 (chosen) and `0` is the mode's own |
+| Barrel rolls (`MAN_2_BR`, "BARREL ROLL") | On, Off; no default authored | **Carried** as `RoomSettings.no_barrel_rolls`; a new room has rolls on |
+| Pilot assist allowed (`FE_PILOT_ASSIST_ALLOWED`) | On, Off; no default authored | **Carried** as `RoomSettings.pilot_assist`; a new room allows it (chosen: the list names On first) |
+| Zone target (`FE_ZONE_TARGET`, `NumberOfNitroLevels`) | 15 to 55 step 5, default 30 | **Carried** as `RoomSettings.zone_target`, Zone rooms only |
+| Eliminations (`IG_HUD_TARGET`, `NumberOfEliminations`) | 50 to 600 step 25, default 200 | **Not carried, checked, differs**: the unit is not a kill count (Pulse's kill target is 5 to 10, `Options::eliminator_kill_target`) and Eliminator needs weapons, which a network race holds off (ADR-0069); the room screen already dims it. Open until weapons are server events |
+| Weapons, Weapon hints, Pure racing | On/Off | Held off (ADR-0069, condition 2); not rows |
+| Availability (PUBLIC, INVITE ONLY) | 0, 1 | Not built (no invite-only, item 6) |
+| Respawns | `aList`, disabled in the XML | Not a setting in Omega either |
+| Max players | `aList`, disabled, 8 | Ours is the room's `max_players` (part 8) |
+
+**How each reaches the race.** `RoomSettings` (the owner's) grew `no_barrel_rolls`, `pilot_assist`
+and `zone_target`; `RaceParams` (what both ends load) grew `no_barrel_rolls`, `assists` (one Pilot
+Assist level per seat, an index into `oag_physics::pilot_assist::Level::ALL`) and `zone_target`.
+Wire v1 was edited in place. The lobby validates (`Rooms::validate`: a zone target only in Zone,
+raised or lowered into 15 to 55) and builds the params at launch (`launch_for`). Both ends then
+call `oag_net::race::prepare`, the one function that already forced Pilot Assist off, which now:
+
+- sets each seat's level from `assists` (`Race::set_pilot_assist_seat`; the level is per slot in the
+  sim now, `Sim::pilot_assist_levels`), which is the lobby's gate: with the room's assist off,
+  every entry is `0`;
+- turns barrel rolls off for every craft, the AI included (`Race::set_barrel_rolls`, read as
+  `Environment::barrel_rolls` in `oag_physics::forces`; the gesture is never read, so no roll arms
+  and no shield is spent);
+- gives a Zone race its ending (`Race::set_zone_target`, `RaceState::zone_target`: the race ends
+  on the step that reaches the target zone; a zone is 600 ticks). **Chosen, not measured**:
+  Omega's slider is the only zone target a race ever has, and the original's own Zone ends only on
+  destruction. `RaceState::zone_target` is hashed only while set, so every race without one keeps
+  its committed hash and two ends that disagree about it differ at tick 0.
+
+A person's own level (`controls.pilot_assist` in their settings, or `--online-assist`) travels in
+their `Ready` (a pick is the ready, so it is sent with the pick and again after every edit).
+`oag-server` (`--no-barrel-rolls`, `--zone-target`, `--assists off,normal`) and `oag-game`
+(`--online-no-barrel-rolls`, `--online-no-pilot-assist`, `--online-zone-target`, `--online-assist`)
+set them from the command line.
+
+**The room screen.** The owner's LAPS row became a generic `Setting` row
+(`oag_ui_screens::join::Setting`: Laps, BarrelRolls, PilotAssist, ZoneTarget), so one mechanism
+holds all four: a click or the pad's left and right steps it, it is a pointer row like MAX PLAYERS,
+and the rows that do not apply (laps outside a lap mode, the zone target outside Zone) are not
+there. An edit clears every ready as before. Labels read the title's own string first
+(`MAN_2_BR` on HD, 2048 and Omega; `FE_PILOT_ASSIST_ALLOWED` and `FE_ZONE_TARGET` on 2048 and Omega;
+`FE_ON`, `FE_OFF`), else this project's own (`OAG_ONLINE_BARREL_ROLLS`, `OAG_ONLINE_PILOT_ASSIST`,
+`OAG_ONLINE_ZONE_TARGET`, `OAG_ONLINE_ON`, `OAG_ONLINE_OFF`, `OAG_ONLINE_ZONE_NONE`, in all four
+language files, machine translations `human = false`), which is what Pulse and Pure show. The zone
+row says NONE for `0`, the original's Zone, which is a choice Omega's slider does not offer. The
+mirror rule needed nothing of its own: the screen is shared, Pure shows Pulse's strings and 2048
+shows HD's via Omega (`MAN_2_BR`) or its own.
+
+**Walked, 2026-10-19.** Stills (`--menu-page online-room:8`) of the full room (eight seats, the
+five owner rows, START, BACK: fourteen rows, all on the picture) on Pulse and HD (HD draws its own
+"BARREL ROLL"). Localhost two-client races, the real `oag-server lobby` forking the race child,
+`--net-bot` clients, debug builds:
+
+| Setting | Title | Result |
+| --- | --- | --- |
+| Zone target 15 | Pulse PSP EU | both clients and the server ended the race on tick 9271 (15 zones of 600 ticks plus the countdown), `every person has finished`, 0 bad hashes |
+| Rolls off, assists `[extreme, normal]`, zone target 20 | Pulse PSP EU (900 ticks), Pure PSP EU, HD (PS3 EU), 2048 (Vita folder), Omega (PS4 folder) (600 or 400 ticks) | the lobby's `RaceParams` line carried every field; every client's last per-second counter read `bad 0` |
+
+**Open.** The room screen's new rows are walked as stills, not clicked live on every title (the
+pointer is covered by the row tests); Omega's remaining sub-pages (kick, friends, invite-only) and
+the Eliminations target wait on weapons online; LAN keeps the originals' race (rolls on, no assist,
+Zone's own ending); a Zone room cannot be given a target above 55 or between the fives (the slider's
+own steps).
 
 ## Sources
 
