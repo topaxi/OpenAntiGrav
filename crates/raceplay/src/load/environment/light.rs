@@ -55,9 +55,9 @@ pub(in crate::load) fn envsettings_light(
         }
     };
     use oag_tables::envsettings::{
-        AMBIENT_COLOUR, NOVA_PRELIT, NOVA_PRELIT_DEFAULT, PRELIT_POWER, PRELIT_SCALE,
-        PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR, SUN_DIRECTION,
-        SUN_SPECULAR_SCALE,
+        AMBIENT_COLOUR, NOVA_PRELIT, NOVA_PRELIT_DEFAULT, OMEGA_SUN_DIFFUSE_INTENSITY,
+        PRELIT_POWER, PRELIT_SCALE, PSP2_AMBIENT_COLOUR, PSP2_SUN_DIFFUSE_COLOUR, SUN_COLOUR,
+        SUN_DIRECTION, SUN_SPECULAR_SCALE,
     };
     let ambient_key = if psp2 {
         PSP2_AMBIENT_COLOUR
@@ -87,6 +87,15 @@ pub(in crate::load) fn envsettings_light(
     // why that is left unwired rather than reduced to a scalar), so both
     // terms take the identity there, same as a file missing one of them: the
     // sun and ambient above are still the circuit's.
+    // Omega's diffuse sun is its colour times an authored scalar (default 1.0,
+    // read off the executable: see `OMEGA_SUN_DIFFUSE_INTENSITY`). Absent from
+    // 2048's files, so only the PS4 path reads it.
+    let intensity = if ps4 {
+        env.scalar(OMEGA_SUN_DIFFUSE_INTENSITY).unwrap_or(1.0)
+    } else {
+        1.0
+    };
+    let colour = colour.map(|c| c * intensity);
     let prelit_scale = env.vec3(PRELIT_SCALE).unwrap_or([1.0; 3]);
     let prelit_power = env.vec3(PRELIT_POWER).unwrap_or([1.0; 3]);
     let specular_scale = env.scalar(SUN_SPECULAR_SCALE).unwrap_or(0.0);

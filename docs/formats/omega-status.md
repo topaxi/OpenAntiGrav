@@ -1231,9 +1231,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
 
   Read by eye: Tech De Ra's blown ship hull, banner and upper walls carry their
   detail. **Altima's road is a flat colour in both frames**: before, it clipped
-  to white; after, it is a flat pink with no texture. That is a defect the clip
-  was hiding (a road surface lit far past 1.0, or drawn without its texture), not
-  the curve, and it is open.
+  to white; after, it is a flat pink with no texture. That was a defect the clip
+  was hiding, not the curve: **closed 2026-10-19 (`omega-pink-road-sun`), see
+  "Altima's road" below**.
 
 - **`track.final.pvs` is read and culls** (`omega-pvs-sound`, 2026-09-30). It is
   [HD's `track.pvs`](hd-pvs.md) in the 2048 lineage's dialect: little-endian,
@@ -1281,10 +1281,33 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
 - **Sky turn and fog are ported from 2048** (2026-10-06): the six-face sky
   cube is turned by `Sky rotation` and the circuit's `Lighting.Fog colour`
   draws, the curve inherited from HD ([envsettings.md](envsettings.md)).
-  Omega's altima road still draws flat pink in a start frame (pre-existing,
-  not part of that change).
-- **`.EnvSettings` is read through 2048's reader** and its sun (`[4.00, 2.33,
-  0.82]` over an ambient of `1.0`) is not checked against PS4's schema. The
+  Omega's altima road drew flat pink in a start frame (pre-existing, not part
+  of that change; closed 2026-10-19, below).
+- **Altima's road drew flat pink because it bound the wrong sampler**
+  (`omega-pink-road-sun`, 2026-10-19). `road_alphaspec_normal_emissive_panelmap1`
+  (79 sampler entries over Omega's circuit models, all of Altima's road) lists
+  `track_a_floor_panel_df` ahead of its `DiffuseMap`; that file is a 1024x256
+  single-channel `R16F` panel map, which `ModelTexture::from_gnf_form` does not
+  decode, so every road draw was unresolved and drew the lit colour alone. **It
+  was not a normal map** (the lead from `hd-finish-line-purple`): the road is not
+  in the `track_albedo` census at all, and the census counts did not move.
+  `Material::diffuse_texture` now takes the sampler named `DiffuseTexture`,
+  `DiffuseAlphaMap` or `DiffuseMap` (names read off the hashes, `0x38c2e35a` is
+  `DiffuseMap`) and only then the first texture in file order; `glow.rs` shares
+  the list. Altima unresolved draws 690 to 449
+  (`omega_altimas_road_binds_its_diffuse_map`, ratcheted); the 449 left are other
+  causes, not taken apart. Altima, Mall and Tower join the census at 0 faults.
+  2048: **checked, differs** - the Vita road is `fc16_phong_alphaspec_normal_emissive`
+  with `track_a_floor_ds` as its `DiffuseMap` first, so its binding is unchanged.
+- **Omega's diffuse sun is its colour times `Lighting.Sun diffuse intensity`**
+  ([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md),
+  2026-10-19, confidence 80): authored 0.3 to 20, ignored until then. The
+  earlier note here, "its sun (`[4.00, 2.33, 0.82]`...)", was Tech De Ra's colour
+  alone; the sun is `[10.1, 5.9, 2.1]`. 2048 carries no intensity key: checked,
+  differs. **Omega's `original` shadow tier does not draw on the ground**: see
+  [shadows.md](../rendering/shadows.md) "Omega's `original` was tried".
+- **`.EnvSettings` is read through 2048's reader** and its sun colour was read
+  as the diffuse colour alone (above). The
   patch's copy carries no HDR/bloom block, so the read bloom chain is off.
 - **Music plays** (`omega-music`, 2026-10-05): a race plays 17 of the 29
   `PI_Music` songs, the front end plays its own loop. A song is a Wwise

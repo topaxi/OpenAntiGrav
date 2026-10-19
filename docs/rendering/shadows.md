@@ -696,6 +696,33 @@ authored light direction per circuit, sitting in a text file this project can
 already read - the one title where the shadow's direction requires neither an
 invention nor a decode.
 
+## Omega's `original` was tried with HD's mechanism: it draws, and it is not Omega's own
+
+2026-10-19, `omega-pink-road-sun`. With the circuit's sun now read whole
+([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md)), Altima
+on Omega under `--shadows original` draws HD's coverage map: a craft-shaped
+shadow lands on the road, away from the sun (stills at
+`--camera-pose 345.6,13.9,114.9,-0.62,-0.78,0,0,1,0`, tick 300, against `off`).
+The track is `ShadowReceiver::Both` and the craft cast without any HD material
+flag, because the receiver is the track pipeline and not a per-material
+variant. **That is this project's mechanism on Omega's data, not Omega's own, so
+`Title::original_shadows` stays `Unbuilt` and the default stays `off`.** Why:
+
+- **Omega's executable has none of HD's names.** `Job RenderModelShadowMaps`,
+  `ShadowToAlpha`, `RenderModelShadowsOnTrack` return no string match in
+  `/omega/eboot-ps4-omega-eu.bin`; `Dynamic Shadow Occluder` is there (Pulse's class
+  table, `0x018336e4`) and no Omega craft authors one.
+- **The files author a different set of keys**, 2048's: `Lighting.ShadowLight
+  direction` (Altima `-0.8 0.1 -1`), `ShadowLight specular power scale`, `Ship diffuse
+  brightness (shadow)`, `Debug.Draw Ship Shadows`, `Debug.Draw Ship Env Shadows`.
+  Our tier projects along the circuit's sun, which is HD's law, not read for Omega.
+- 2048's own mechanism (proximity and environment shadows) is the closer lineage and is
+  unread.
+
+Next step, if the maintainer wants it on by default anyway: that is a **chosen**
+default (HD's map along Omega's sun), to be labelled so, not a `Built`. Reading
+what `Debug.Draw Ship Env Shadows` gates in the executable is the measured route.
+
 ## Pushing it further, and what it is actually blocked on
 
 The `mapped` tier - one cascaded shadow map, everything casts, everything

@@ -148,6 +148,22 @@ colour reach no other model (`the_placeholder_and_the_zone_colours_exist_only_in
 Likewise the 355 glow-layer materials' sampler-named diffuse is always the
 diffuse the older scan already picked, so the layer changes no texture.
 
+## The picture is the sampler named `DiffuseMap`, then the first in file order
+
+2026-10-19, `omega-pink-road-sun`. Name hashes of the sampler entries resolve
+(`name_hash`, `~crc32`): `0x38c2e35a` `DiffuseMap`, `0x48f37f5a` `NormalMap`,
+`0x19d166c1` `EmissiveMap`, `0x9ee31012` `Diffuse`, `0xd9d6922d` `Normal`,
+`0x739a786e` `NormalTexture`, `0xb90df195` `RockColour`, `0x37b5db58` `lightmap`.
+`Material::diffuse_texture` takes the first of `DiffuseTexture`, `DiffuseAlphaMap`,
+`DiffuseMap` the material binds, and the first non-lightmap texture otherwise.
+The file-order answer was right for 7,340 of the 7,419 `DiffuseMap` entries over
+Omega's circuit models and wrong for the other 79: `road_alphaspec_normal_emissive_panelmap1`
+lists `track_a_floor_panel_df` (`0x4736b3bf`, a 1024x256 single-channel `R16F` panel
+map the decoder refuses) first, and Altima's whole road drew untextured. Omega: **ported**
+(altima unresolved draws 690 to 449). 2048's Vita road is
+`fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` as `DiffuseMap`: **checked,
+differs**, unchanged. The R16F map's own use (a panel layout the shader reads) is unread.
+
 ## What scrolls, and what is acted on
 
 Census over every race and Zone circuit's model, in submeshes:
