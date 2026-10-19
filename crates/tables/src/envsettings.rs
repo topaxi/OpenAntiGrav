@@ -98,6 +98,14 @@ pub const PSP2_AMBIENT_COLOUR: &str = "Lighting.Constant ambient colour";
 /// docs).
 pub const PSP2_SUN_DIFFUSE_COLOUR: &str = "Lighting.Sun diffuse colour";
 
+/// Omega's scalar the diffuse sun colour is multiplied by (a PS4 file only;
+/// 2048's carries none). **The executable multiplies the two where the light
+/// is built** (`vbroadcastss [0x019404b4]` times `[0x01e3de70]`, at
+/// `015cb49c` in `FUN_015c63a0` and `013c2a5d`), and the static default of
+/// the scalar is `1.0`, so a file that omits it draws the colour as written.
+/// Authored 0.3 to 20 over Omega's 29 circuit files.
+pub const OMEGA_SUN_DIFFUSE_INTENSITY: &str = "Lighting.Sun diffuse intensity";
+
 /// `"Lighting.Prelit ambient colour scale"`. Three numbers: the scale in
 /// `prelit = scale * lightmap.rgb ^ power`, from the circuit's fragment
 /// microcode (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).

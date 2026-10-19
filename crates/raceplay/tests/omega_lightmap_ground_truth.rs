@@ -17,7 +17,9 @@
 //! authors the key too, does not.
 
 use oag_raceplay as race;
-use oag_tables::envsettings::{EnvSettings, NOVA_PRELIT};
+use oag_tables::envsettings::{
+    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
+};
 
 fn source() -> Option<String> {
     let path = match std::env::var_os("OAG_OMEGA_SOURCE") {
@@ -59,6 +61,17 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
     })
     .unwrap_or_else(|e| panic!("loading {source}: {e:#}"));
     let light = loaded.light;
+    // The diffuse sun is the authored colour times the authored intensity
+    // (`vbroadcastss [0x019404b4]` times `[0x01e3de70]` in the executable);
+    // dropping the multiply leaves the bare colour here.
+    let intensity = env
+        .scalar(OMEGA_SUN_DIFFUSE_INTENSITY)
+        .expect("Omega authors an intensity");
+    let colour = env.vec3(PSP2_SUN_DIFFUSE_COLOUR).expect("and a colour");
+    assert!(intensity > 1.5, "a factor that is not the identity");
+    for i in 0..3 {
+        assert_eq!(light.sun[i], colour[i] * intensity, "channel {i}");
+    }
     assert_eq!(light.nova, 1.0, "the Omega rig is flagged");
     assert_eq!(light.prelit_scale, [2.5; 3]);
     assert_eq!(light.prelit_power, [2.0; 3]);
