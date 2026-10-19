@@ -923,8 +923,9 @@ weapon hits, not walls.
 The maintainer's rule for an opponent on this project's driver holding an
 Autopilot: fly the original's player driver for the pickup's `time` "if
 autopilot helps them / speeds them up, otherwise no". The lead's brief added
-"no worse safety". Measured: it is faster on every title and class, and at
-PHANTOM it is less safe, so **nothing is wired**. The switch is
+"no worse safety". Measured: it is faster in every cell run (VENOM on all five titles,
+PHANTOM on Pulse and HD; FLASH and RAPIER not run), and at PHANTOM it is less
+safe, so **nothing is wired**. The switch is
 `Race::set_opponent_autopilot` (off in every race); the result goes to the
 maintainer as a tradeoff, not as a yes.
 
@@ -934,7 +935,7 @@ lower classes and 11.6 % on its Phantom, and 14 % on HD, Omega and 2048. The
 weapon chain in `Race::spend_opponent_pickup` absorbs it on the tick it
 lands; until this change it reached the absorb through the default arm, not
 the named one its doc comment described. Stints a race with the switch on
-(whole races below): Pulse 0.4 Novice, 0.9 Ace; Pure 2.0, 2.8; HD 2.7, 3.6;
+(whole races below): Pulse 0.4 Novice, 0.9 Ace; Pure 2.0, 2.4; HD 2.7, 3.6;
 Omega 3.5, 4.2; 2048 3.5, 7.0.
 
 **Method: paired forks.** `opponent_autopilot_sweep` (`crates/raceplay`)
@@ -965,8 +966,9 @@ pinned by `autopilot_original_ground_truth`:
    own 450-unit reach). The original's player driver took `05_Track`'s jump
    at 125 where ours reaches 133 on the ramp, peaked at y 56 against 73, and
    landed on the deck below. Chosen, not measured. Weapons off, Pulse
-   `05_Track`, 64 forks: rescues Novice 4 -> 1 and Ace 5 -> 0 (absorb
-   branch 1 and 0).
+   `05_Track`, 64 forks, rescues in the stint branch: no fix, Novice 4 and
+   Ace 5; the first fix alone, 5 and 2; both, 1 and 0 (the absorb branch 1
+   and 0).
 
 **The paired forks, after both fixes** (64 forks a cell; walls are
 wall-contact ticks; HD's default circuit is Talon's Junction):
@@ -999,11 +1001,25 @@ median lap-time change is under 0.1 s on 33 of 38 cells, and stints are too
 rare to move a race at this sample. Wrecks went 2 -> 6 on Pulse Ace (48
 races) and 1 -> 4 on Pure Ace (16 races); none of Pure's four falls inside a
 stint or its 3 s tail (the nearest 986 ticks after one), so they are
-divergence, not the stint.
+divergence, not the stint. Shield is each opponent's at the end of each
+lap (field mean) and at the end of the run, both labelled:
 
-**2048 and Omega: checked, differs only in degree.** Both were measured on
-their own tables and physics (rows above): the same direction as HD, the
-same 14 % draw. The original's 2048 and Omega player driver steers with the
+| Title, level | Races | Stints a race | Lap change on - off, median | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks, off -> on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2048 Ace | 4 | 7.0 | -0.00 s | 89.8, 80.8, 82.1 | 90.5, 80.0, 80.2 | 82.9 -> 81.8 | 0 -> 0 |
+| 2048 Novice | 4 | 3.5 | -0.05 s | 107.5, 107.3, 101.9 | 106.4, 106.0, 98.6 | 106.9 -> 105.8 | 0 -> 0 |
+| HD Ace | 16 | 3.6 | -0.10 s | 90.6, 82.5, 78.9 | 90.2, 84.3, 82.2 | 78.1 -> 82.1 | 2 -> 0 |
+| HD Novice | 16 | 2.7 | -0.10 s | 89.9, 83.0, 79.9 | 89.7, 82.8, 78.2 | 79.1 -> 78.6 | 1 -> 0 |
+| Omega Ace | 4 | 4.2 | -0.10 s | 91.0, 84.6, 79.8 | 88.3, 77.7, 75.4 | 78.1 -> 73.2 | 1 -> 1 |
+| Omega Novice | 4 | 3.5 | -0.25 s | 94.4, 90.0, 85.8 | 93.3, 89.0, 84.0 | 85.6 -> 83.9 | 0 -> 0 |
+| Pulse Ace | 48 | 0.9 | +0.00 s | 86.1, 78.1, 74.8 | 86.8, 79.4, 75.6 | 74.4 -> 74.4 | 2 -> 6 |
+| Pulse Novice | 48 | 0.4 | +0.00 s | 86.1, 76.9, 68.2 | 85.8, 76.2, 67.2 | 66.5 -> 65.5 | 2 -> 2 |
+| Pure Ace | 16 | 2.4 | +0.00 s | 82.6, 71.4, 67.2 | 81.2, 69.1, 63.4 | 66.4 -> 60.7 | 1 -> 4 |
+| Pure Novice | 4 | 2.0 | -0.20 s | 95.0, 85.5, 84.7 | 90.2, 90.8, 88.2 | 84.7 -> 88.2 | 0 -> 0 |
+
+**2048 and Omega: checked, applies, not wired.** Both were measured on
+their own tables and physics (rows above), with the same direction as HD
+and the same 14 % draw; the decision is open in the handover thread. The original's 2048 and Omega player driver steers with the
 pilot assist's gains, unread, so the opponents' controller flies it there as
 for the player.
 

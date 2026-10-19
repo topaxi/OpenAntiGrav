@@ -383,7 +383,7 @@ impl Race {
     /// Lets an opponent on this project's driver fly the original's player
     /// driver while it holds an Autopilot ([`Self::engage_opponent_autopilot`]),
     /// where it otherwise absorbs the pickup. A measurement switch, off in
-    /// every race: it speeds an opponent up on every title and class measured,
+    /// every race: it speeds an opponent up in every cell measured,
     /// and at PHANTOM it also hits more walls and, on HD, gets rescued more
     /// (`docs/gameplay/ai.md`, "An opponent's Autopilot, measured and not
     /// wired").

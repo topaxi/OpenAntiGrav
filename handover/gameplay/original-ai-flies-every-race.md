@@ -67,12 +67,13 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     autopilot while holding the pickup.~~ Answered ("yes if it helps them /
     speeds them up") and measured 2026-10-19, lane `ai-opponent-autopilot`
     (docs/gameplay/ai.md, "An opponent's Autopilot, measured and not wired"):
-    faster on every title and class, but at PHANTOM walls rise on 13 of 16
+    faster in every cell run (VENOM on all five titles, PHANTOM on Pulse and
+    HD; FLASH and RAPIER not run), but at PHANTOM walls rise on 13 of 16
     cells and HD rescues go 0 -> 8 of 256 stints, mostly in the 3 s after the
     handback. Not wired; `Race::set_opponent_autopilot` (off) and
     `opponent_autopilot_sweep` reproduce it. **Open for the maintainer:**
-    wire it at VENOM-to-RAPIER only, wire it everywhere and accept the
-    PHANTOM cost, or leave it.
+    wire it below PHANTOM only (that rests on VENOM data alone), wire it
+    everywhere and accept the PHANTOM cost, or leave it.
   - **Lead, the player's own pickup:** a cold stint finds the craft with a
     whole-line search (`Race::locate_player_driver`). On Pulse `05_Track` at
     `[-860, 41, -445]` it chose racing-line index 367 where the craft's own
