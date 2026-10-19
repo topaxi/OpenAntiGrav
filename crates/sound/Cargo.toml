@@ -24,6 +24,7 @@ oag-title.workspace = true
 oag-vex.workspace = true
 anyhow.workspace = true
 log.workspace = true
+web-time = "1.1.0"
 serde.workspace = true
 
 [dev-dependencies]

@@ -46,6 +46,7 @@ pub mod settings;
 pub mod sfx;
 
 mod listings;
+pub mod probe;
 mod race_music;
 mod resume;
 use library::{Library, NoLibrary, listing, load_entry, load_front_end};
@@ -250,6 +251,7 @@ impl MusicDiscs {
     /// counterpart is missing collapses into "there is no counterpart".
     #[must_use]
     pub fn survey(booted: &str, library: &'static dyn Library) -> Self {
+        let _work = probe::work("the music survey");
         let mut discs = Self {
             library,
             ..Self::default()
@@ -1155,6 +1157,7 @@ impl Soundtrack {
     ///
     /// An archive that opens and then will not parse.
     fn read(library: &dyn Library, source: &str, platform: Platform) -> Result<Option<Self>> {
+        let _work = probe::work("a soundtrack listing");
         let tracks = match platform {
             Platform::Ps2 => ps2_soundtrack(source)?,
             Platform::Psp | Platform::Ps3 | Platform::Vita | Platform::Ps4 => {
@@ -1268,6 +1271,7 @@ fn load_track(
     track: Track,
     cache_dir: &Path,
 ) -> Result<Sound> {
+    let _work = probe::work("a soundtrack track's read and decode");
     match platform {
         Platform::Ps2 => load_ps2_track(source, track.at as usize)?
             .with_context(|| format!("{source} carries no {PS2_MUSIC_PATH}")),
@@ -1281,6 +1285,7 @@ fn load_track(
 /// [`Audio::fetch`]: it is not a soundtrack track and has no counterpart, which
 /// the caller records by leaving [`Audio::music_from`] unset.
 fn front_end_music(discs: &MusicDiscs, cache_dir: &Path) -> Result<Option<Loaded>> {
+    let _work = probe::work("the front end's music read and decode");
     let Some((source, _)) = discs.pick(MusicSource::Auto) else {
         return Ok(None);
     };

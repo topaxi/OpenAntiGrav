@@ -291,6 +291,7 @@ impl Audio {
         if self.hd.live.is_some() {
             return;
         }
+        let _work = crate::probe::work("HD's mix tables");
         let Some(mut opened) = library.open(source) else {
             return;
         };
