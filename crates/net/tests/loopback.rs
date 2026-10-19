@@ -21,12 +21,24 @@ pub(crate) fn drive(
     ticks: u32,
     sleep: std::time::Duration,
 ) -> Vec<Stats> {
+    drive_observed(host, clients, ticks, sleep, |_| {})
+}
+
+/// [`drive`], showing `observe` the host after each of its ticks.
+pub(crate) fn drive_observed(
+    host: &mut Host,
+    clients: &mut [(Client, Box<Race>, Pilot)],
+    ticks: u32,
+    sleep: std::time::Duration,
+    mut observe: impl FnMut(&Host),
+) -> Vec<Stats> {
     let mut totals = vec![Stats::default(); clients.len()];
     ready_all(host, clients);
     host.start(0);
     while host.tick_number() < ticks {
         host.poll();
         host.tick();
+        observe(host);
         for ((client, race, pilot), total) in clients.iter_mut().zip(&mut totals) {
             let own = pilot(client, race);
             client.step(race, &own);
@@ -45,6 +57,13 @@ pub(crate) fn drive(
             total.slowed_down += s.slowed_down;
             total.lead = s.lead;
             total.confirm_count += s.confirm_count;
+            total.weapon_mismatches += s.weapon_mismatches;
+            total.weapon_corrections += s.weapon_corrections;
+            total.shots_appeared += s.shots_appeared;
+            total.shots_vanished += s.shots_vanished;
+            total.oldest_appeared = total.oldest_appeared.max(s.oldest_appeared);
+            total.own_hit_added += s.own_hit_added;
+            total.own_hit_removed += s.own_hit_removed;
             total.confirm_sum_ms += s.confirm_sum_ms;
         }
         if !sleep.is_zero() {

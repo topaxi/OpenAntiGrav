@@ -16,6 +16,7 @@ mod net_ground_truth;
 mod online;
 mod room_settings_ground_truth;
 mod server_libs;
+mod weapons_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

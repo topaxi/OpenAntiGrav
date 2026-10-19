@@ -37,6 +37,8 @@ pub mod online;
 pub mod race;
 pub mod serve;
 pub mod stats;
+#[cfg(feature = "client")]
+pub mod weapon_sync;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;

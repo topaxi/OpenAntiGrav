@@ -44,6 +44,7 @@ use web_time::Instant;
 
 use crate::link::Link;
 use crate::stats::PathStats;
+use crate::weapon_sync;
 use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, TickRecord};
 
 /// A craft further than this from where the server has it forces a correction.
@@ -134,6 +135,22 @@ pub struct Stats {
     pub jitter_sum_ms: f32,
     /// See [`Self::jitter_sum_ms`].
     pub jitter_count: u32,
+    /// Confirmed ticks whose weapon digest differed from what was predicted
+    /// (`weapon_sync::digest`), whether or not a correction followed.
+    pub weapon_mismatches: u32,
+    /// Corrections made for a weapon difference alone, the craft within the threshold.
+    pub weapon_corrections: u32,
+    /// Shots a correction put into the present that it did not have: a missile popping
+    /// into view.
+    pub shots_appeared: u32,
+    /// Shots a correction took out of the present: a missile undone.
+    pub shots_vanished: u32,
+    /// The greatest age in ticks of a shot at the correction that first showed it.
+    pub oldest_appeared: u32,
+    /// Corrections that took shield off this client's own craft: a dodge undone.
+    pub own_hit_added: u32,
+    /// Corrections that gave shield back to it: a predicted hit undone.
+    pub own_hit_removed: u32,
 }
 
 /// One person's connection to a server, and the two timelines.
@@ -150,8 +167,9 @@ pub struct Client {
     /// This machine's inputs from the confirmed tick on: (tick, wire, as applied).
     own: VecDeque<(u32, Held, InputSnapshot)>,
     own_edges: Input,
-    /// Where every craft was predicted to be after each tick: (world tick, poses).
-    predicted: VecDeque<(u32, [Vec3; MAX_SHIPS])>,
+    /// Where every craft was predicted to be after each tick, and the digest of its weapon state
+    /// (`weapon_sync::digest`): (world tick, poses, digest).
+    predicted: VecDeque<(u32, [Vec3; MAX_SHIPS], u64)>,
     /// Each person's last confirmed input, what their craft is predicted on.
     remote_last: Vec<Held>,
     lead: Option<i16>,
@@ -170,7 +188,14 @@ pub struct Client {
     sent_at: VecDeque<(u32, Instant)>,
     /// The last confirm time, for the jitter.
     last_confirm_ms: Option<f32>,
+    /// Whether a weapon difference alone corrects the present ([`Self::set_weapon_trigger`]).
+    weapon_trigger: bool,
+    /// Ticks the bot has held its current pickup ([`Self::bot_input`]).
+    bot_held_for: u32,
 }
+
+/// Ticks a bot holds a pickup before it fires it. Chosen, not measured.
+const BOT_FIRE_AFTER: u32 = 20;
 
 fn positions(sim: &RaceSim) -> [Vec3; MAX_SHIPS] {
     std::array::from_fn(|slot| sim.world.ships[slot].physics.body.position)
@@ -225,7 +250,16 @@ impl Client {
             stats: Stats::default(),
             sent_at: VecDeque::new(),
             last_confirm_ms: None,
+            weapon_trigger: true,
+            bot_held_for: 0,
         }
+    }
+
+    /// Whether a difference in weapon state alone corrects the present, with every craft within
+    /// the threshold. On by default; off reproduces the position-only trigger, which is the
+    /// baseline ADR-0071 measures against.
+    pub fn set_weapon_trigger(&mut self, on: bool) {
+        self.weapon_trigger = on;
     }
 
     /// Where the client is.
@@ -422,7 +456,11 @@ impl Client {
         race.tick(&inputs);
         self.own.push_back((tick, held, snapshot));
         self.sent_at.push_back((tick, Instant::now()));
-        self.predicted.push_back((tick + 1, positions(&race.sim)));
+        self.predicted.push_back((
+            tick + 1,
+            positions(&race.sim),
+            weapon_sync::digest(&race.sim),
+        ));
         self.stats.predicted += 1;
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
         let from = self.own.len().saturating_sub(INPUT_REDUNDANCY);
@@ -502,7 +540,7 @@ impl Client {
         while self.own.front().is_some_and(|(t, _, _)| *t < now) {
             self.own.pop_front();
         }
-        while self.predicted.front().is_some_and(|(t, _)| *t < now) {
+        while self.predicted.front().is_some_and(|(t, _, _)| *t < now) {
             self.predicted.pop_front();
         }
         let present_tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
@@ -514,9 +552,11 @@ impl Client {
             self.confirmed = Some(confirmed);
             return;
         }
-        let error = self.predicted.front().filter(|(t, _)| *t == now).map_or(
+        let front = self.predicted.front().filter(|(t, _, _)| *t == now);
+        let weapons_differ = front.is_some_and(|(_, _, digest)| *digest != weapon_sync::digest(&confirmed));
+        let error = front.map_or(
             f32::INFINITY,
-            |(_, predicted)| {
+            |(_, predicted, _)| {
                 let real = positions(&confirmed);
                 let ships = usize::from(confirmed.world.ship_count).min(MAX_SHIPS);
                 (0..ships)
@@ -527,7 +567,12 @@ impl Client {
         if error.is_finite() {
             self.stats.largest_error = self.stats.largest_error.max(error);
         }
-        if error > THRESHOLD {
+        if weapons_differ {
+            self.stats.weapon_mismatches += 1;
+        }
+        let by_weapons = weapons_differ && self.weapon_trigger && error <= THRESHOLD;
+        if error > THRESHOLD || by_weapons {
+            self.stats.weapon_corrections += u32::from(by_weapons);
             self.correct(race, &confirmed);
         }
         self.confirmed = Some(confirmed);
@@ -565,9 +610,21 @@ impl Client {
         let own: Vec<InputSnapshot> = self.own.iter().map(|(_, _, snapshot)| *snapshot).collect();
         let inputs: Vec<PlayerInputs> = own.iter().map(|o| self.inputs_for(*o)).collect();
         let mut replayed = VecDeque::with_capacity(inputs.len());
+        let before = race.sim.clone();
         let reconciled = race.reconcile_observed(confirmed, inputs, |sim| {
-            replayed.push_back((u32::try_from(sim.world.tick).unwrap_or(0), positions(sim)));
+            replayed.push_back((
+                u32::try_from(sim.world.tick).unwrap_or(0),
+                positions(sim),
+                weapon_sync::digest(sim),
+            ));
         });
+        let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
+        let change = weapon_sync::change(&before, &race.sim, seat);
+        self.stats.shots_appeared += change.appeared;
+        self.stats.shots_vanished += change.vanished;
+        self.stats.oldest_appeared = self.stats.oldest_appeared.max(change.oldest_appeared);
+        self.stats.own_hit_added += u32::from(change.own_hit_added);
+        self.stats.own_hit_removed += u32::from(change.own_hit_removed);
         self.predicted = replayed;
         self.stats.corrections += 1;
         self.stats.replayed += u32::try_from(reconciled.ticks).unwrap_or(u32::MAX);
@@ -583,11 +640,22 @@ impl Client {
         let wants = race.autopilot_wants(seat, &mut self.bot);
         let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
         let mut buttons = Input::new();
-        buttons.begin_frame(if gated || wants.thrust > 0.5 {
+        let mut mask = if gated || wants.thrust > 0.5 {
             Button::Cross.bit()
         } else {
             0
-        });
+        };
+        // Fires what it holds after a pause that differs by seat, so the people of a race do
+        // not all fire on one tick.
+        self.bot_held_for = if race.sim.world.ships[seat].pickup.weapon.is_some() {
+            self.bot_held_for + 1
+        } else {
+            0
+        };
+        if self.bot_held_for == BOT_FIRE_AFTER + 7 * u32::try_from(seat).unwrap_or(0) {
+            mask |= Button::Square.bit();
+        }
+        buttons.begin_frame(mask);
         InputSnapshot {
             buttons,
             stick_x: wants.steer_x,
