@@ -1089,9 +1089,11 @@ for `opponent-autopilot-wire` stands as it was.
 ### The autopilot's airborne steering is the original's (2026-10-19)
 
 Lane `autopilot-crest-steering`. The two sections above put Fort Gale Black's
-crest and Ubermall's long jump down to "our driver's airborne steering". **They
-are not: the driver is the original's, verified frame by frame in the air.** The
-gap is the closed loop's state, which the driver only reacts to. Confidence 92.
+crest and Ubermall's long jump down to "our driver's airborne steering". **The
+controller is the original's, verified frame by frame in the air, and the samples
+it reads agree within a few units of steer on the main ring.** The gap is the
+craft's state, which the driver only reacts to. Confidence 92 for the controller,
+75 for the samples (checked by a mimic, not this engine's code).
 Evidence: [psp-pulse-usa/ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#the-airborne-driver-replayed-live-2026-10-19).
 
 - **Static.** Pulse's `Ai_ComputeControls` has no airborne branch beyond the
@@ -1103,7 +1105,10 @@ Evidence: [psp-pulse-usa/ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-co
   Autopilot).** The original's own state goes through `oag_ai::original::steer`
   and `pitch` (`scripts/psp-autopilot-air.py`, `crates/ai/tests/air_replay.rs`).
   Steer: \|diff\| p99 1.36 on 1,649 frames (1.03 on 248 airborne frames).
-  Pitch: identical on 234 of 234 airborne frames.
+  Pitch: identical on 234 of 234 airborne frames. This uses the original's own
+  track samples. Ours (the own-sample projection and the lookahead walk) were
+  checked separately by a mimic on the main ring: the target's across error is
+  p50 0.20 units (1.4 steer units) and 0.07 to 0.30 on the first jump's ramp.
 - **HD, live (`scripts/rpcs3-hd-autopilot.py`'s Ubermall capture).** The
   original holds pitch at `-100` across the jump from x `-243` and swings to
   `+100` for the landing. Ours does the same from x `-240`. No HD replay was run

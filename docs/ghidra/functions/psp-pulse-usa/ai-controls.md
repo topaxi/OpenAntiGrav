@@ -716,12 +716,38 @@ The steer outliers are the first seven frames after the pickup engages (the
 authority ramp) and airbrake jitter at saturation, where the airbrake's `80x`
 gain turns a `1e-4` heading difference into tens of units.
 
-**So the gap is not in the driver.** On the same circuit this engine's autopilot
-and the original's diverge before the first jump (x `-536`): at the ramp lip
-ours carries `vy` 75.5 against the original's 67 at the same speed, and on the
-ramp the original is in a hard left turn (`-98`) where ours is at `-20`. In the
-air both fall at about `-137`. That is the closed loop's state, not the
-controller. The next address is the craft physics on that ramp, below.
+**What the replay covers.** It proves the controller's arithmetic given the
+original's own samples. How this engine builds those samples is a separate
+step (`oag_raceplay`'s own-sample projection and its lookahead walk along the
+sample polyline, against the original's spline evaluated at a progress). It
+was checked separately by `scripts/psp-autopilot-samples.py`, which mimics that
+sampling over the disc's `14_Track` path 2 at every captured position. Main-ring frames only (1,338):
+
+| Sample | Along the track, \|diff\| p50 / p90 | Across, \|diff\| p50 / p90 | Steer equivalent of the target's across error, p50 / p90 |
+| --- | --- | --- | --- |
+| Own | 3.5 / 4.0 (ours ahead) | 0.27 / 0.75 | |
+| Target | 3.6 / 5.7 | 0.20 / 0.89 | 1.4 / 6.6 |
+
+Over the first jump's ramp (x `-514..-540`) the target's across error is
+0.07 to 0.30, at most 2 units of steer. The original's own sample trails the
+craft by about one frame of travel. The outliers (about 45 steer units) sit at
+the fork entry near (-487, 54, -777), where the mimic ignores routes, so they
+are the mimic's limit and not evidence. Confidence 75 for this leg, because it
+is a mimic rather than this engine's own code. The rail (`Ai_SnapToLane`)
+moves the body and is not covered by the replay; it was measured separately
+(above, 90).
+
+**So the ramp gap is the craft's state, not the controller or its samples.**
+On the same circuit this engine's autopilot and the original's diverge before
+the first jump (x `-536`). At the ramp lip ours carries `vy` 75.5 against the
+original's 67 at the same speed. On the ramp the original is in a hard left
+turn (`-98`) where ours steers `-20`. Given equal controllers and samples within
+2 steer units there, that 78-unit gap comes from the pose. In the air both fall
+at about `-137`. The next address is the craft physics on that ramp.
+
+`names.tsv` still carries the earlier confidences for `Ai_ComputeControls`
+(85), `Ai_SampleLookahead` (80) and `Ai_ComputePitch` (75): those rows belong to
+the `orig-ai-pulse` lane's section, and raising them is left to the lead.
 
 **Also read for the next lane: the pitch gate and the in-air bias.**
 `Ship_UpdatePitch` (`0x08848d08`) applies the pitch input only when

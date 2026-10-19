@@ -28,8 +28,11 @@ fn point(c: &[f32], i: usize) -> TrackPoint {
 }
 
 #[test]
-#[ignore = "a scratch replay: set OAG_AIR_REPLAY"]
+#[ignore = "a scratch replay: set OAG_SWEEP and OAG_AIR_REPLAY"]
 fn replay() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(path) = std::env::var_os("OAG_AIR_REPLAY") else {
         return;
     };

@@ -26,7 +26,7 @@ compared with what the original wrote:
 
     uv run --with websocket-client python3 scripts/psp-autopilot-air.py \\
         --port 45697 --out data/scratch/<lane>/air.json --restart --frames 1650
-    OAG_AIR_REPLAY=data/scratch/<lane>/air.replay.txt cargo nextest run -p oag-ai \\
+    OAG_SWEEP=1 OAG_AIR_REPLAY=data/scratch/<lane>/air.replay.txt cargo nextest run -p oag-ai \\
         --test air_replay --run-ignored all --no-capture
 
 `--at pitch` stops at `Ai_ComputePitch`'s return instead, for the pitch replay.

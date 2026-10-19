@@ -106,10 +106,18 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   - **Not the driver (2026-10-19, lane `autopilot-crest-steering`;
     docs/gameplay/ai.md, "The autopilot's airborne steering is the original's").**
     The two bullets below blame our driver's airborne steering. A live open-loop
-    replay clears it: the original's own state through `oag_ai::original::steer`
-    and `pitch` gives steer p99 1.4 on 1,649 frames and pitch identical on 234
-    airborne frames, Fort Gale Black PHANTOM, PPSSPP. The drivers react
-    identically; the states they react to differ, and that is physics.
+    replay clears the controller: the original's own state through
+    `oag_ai::original::steer` and `pitch` gives steer p99 1.4 on 1,649 frames
+    and pitch identical on 234 airborne frames (Fort Gale Black PHANTOM,
+    PPSSPP). Our samples (own projection, lookahead walk), checked by a Python
+    mimic on the main ring, put the target within 0.2 units across (p50), at
+    most 2 steer units on the first ramp. The states the drivers react to
+    differ: physics, or the rail, which the replay does not cover. Not
+    re-checked: our own-sample locate through a fork (the mimic ignores routes).
+    Also unclaimed: the confidence rows in `names.tsv` for
+    `Ai_ComputeControls`, `Ai_SampleLookahead` and `Ai_ComputePitch`. Their page
+    now argues for 92, 85 and 95, but the rows sit in the `orig-ai-pulse`
+    section.
     - **Pulse:** the gap opens before the *first* jump (x `-536`), at launch `vy`
       75.5 against 67. In the air both fall at about `-137`. Next: a
       single-step residual of our physics seeded from the original's frames on
