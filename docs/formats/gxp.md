@@ -368,20 +368,20 @@ source** - see the license note below:
   bit position moves with the instruction format cannot show up as one clean
   bit across every format at once.
 
-**Naming an opcode is still not attempted.** This is the corpus-wide argument
-that would have to hold before any name is trustworthy, the same role the
-container's own region-closure argument played before a single header field
-was named - not a disassembly. **The oracle used, and why it stops here**:
-Vita3K's own USSE decoder is real, independent, and was downloaded and read
-to sanity-check these two findings *after* they were derived from the bytes
-above, never to source them. It is GPL-2.0-or-later; this project's own
-license bar
-([ADR-0024](../architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md))
-accepts a permissive or weak-copyleft dependency linked unmodified and rejects
-a strong copyleft reaching this project's own sources, which rules out landing
-any of Vita3K's opcode tables, bit-field names or instruction-format strings
-here - so nothing past the two bit positions and the histogram above is
-written down, and `scripts/vita-gxp.py` names no opcode.
+**Naming an opcode is still not attempted, and the oracle rule changed
+(maintainer, 2026-10-19).** The two findings above were derived from the bytes
+and checked afterward against Vita3K's USSE decoder. The maintainer has since
+approved reading Vita3K's frames, its behaviour, the `.dsm` shader logs it
+writes and its source code as evidence. Everything that lands here is
+handwritten: no opcode tables, bit-field names, mnemonics or code are pasted,
+ported line by line or translated, and the `.dsm` files stay under
+`data/scratch`, never tracked (Vita3K is GPL-2.0-or-later, and
+[ADR-0024](../architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md)
+still bars a strong copyleft from this project's sources). Each finding names
+where it came from: the bytes, a frame, or a `.dsm`. First use:
+`fc01_dummy`'s fragment program, read from the bytes and from the `.dsm`
+logs of neighbouring programs, in
+[2048-material-params.md](2048-material-params.md).
 
 Two smaller things are also left unread on purpose:
 

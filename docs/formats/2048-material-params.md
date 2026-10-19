@@ -106,9 +106,25 @@ and probes. Its 6,349 submeshes:
   vertices (`psp2::FOG_FLAT`), `oag_raceplay::load` writes the colour in and
   reports `fc01_dummy: N vertices drawn as fogColour`; the game's Zone race
   now draws `trackZone.rcsmodel` (`Options::zone_model`, a reversal of the
-  2026-10-05 off-by-default decision, for the lead). **Omega: checked,
-  differs** - 0 `fc01_dummy` submeshes over Omega's 1,150 models
-  (`the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models`).
+  2026-10-05 off-by-default decision, for the lead). **Omega: checked, applies in part, not
+  wired (2026-10-19).** An earlier line of this page said Omega has no
+  `fc01_dummy`; that was wrong, it only held outside `trackZone`. Census over
+  Omega's psarcs (`data00`, `data04`, patch `data08`): the ten 2048 circuits'
+  `trackZone.rcsmodel` ship re-cooked under `Data/environments2048/`, with
+  `fc01_dummy` on most of their materials (altima 173 of 239, subway 919 of
+  1,037, bridge 612 of 680, sol 148 of 228) beside 22 to 63 `Zone_ColourN`
+  ones each. Omega's own `fc01_Dummy.rcsmaterial` is not Vita's program
+  family: its pixel programs, read off the GCN words by hand (no tool of this
+  project decodes them), are one 24-byte program that exports zero and no
+  constant, seven 216-byte programs reading `fogColour` and `fadeResCoeffs`
+  that export three render targets (a deferred-style pack, not a colour), and
+  two 440 and 532-byte `zoneGrowing*` programs reading ambient, light and the
+  palette textures. So the Vita law (flat `fogColour`) is **not confirmed and
+  not applied on Omega**: the output is packed, has a fade term, and the
+  `zoneGrowing` variants are the runtime Zone look this page lists as unread.
+  Omega's Zone race is not wired (`is_ps4` passes the Zone model over), so
+  nothing draws it; reading the 216-byte program through to its packed
+  channels is the open step.
 - **`Zone_ColourN` is drawn as the surface's colour, unlit.** The fragment
   program also declares a lightmap and `liveLighting0`, so lit is the other
   candidate. Both were drawn on `altima`: lit, the colour is multiplied by a sun
