@@ -81,6 +81,12 @@ fn single_race() -> Option<race::Loaded> {
 fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
     let loaded = single_race()?;
     let mut race = race::Race::start(loaded.setup);
+    // **This project's fire law, which never absorbs.** Since 2026-10-19 the
+    // original's law has its absorb half too (`oag_ai::weapon_ai::Decision`),
+    // so under it a weapon turning into energy is sometimes the law and not
+    // the fall-through this test exists for. The arms it guards are the same
+    // under both laws.
+    race.set_fire_law(race::FireLaw::Ours);
     // A few ticks so the grid settles and the standings take a first fix - the
     // drivers' own gates read `Standing::progress`.
     for _ in 0..60 {

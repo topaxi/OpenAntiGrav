@@ -63,7 +63,9 @@ fn situation() -> Situation {
         odds: Odds {
             use_against_player: 1.1,
             use_against_ai: 1.2,
+            absorb: 1.0,
         },
+        shield: 100.0,
     }
 }
 
@@ -101,10 +103,10 @@ fn nothing_fires_inside_the_hold() {
     let s = situation();
     for _ in 0..HOLD_TICKS {
         ai.tick(true);
-        assert!(!ai.decide(&s, 1.0, 0.0));
+        assert_ne!(ai.decide(&s, 1.0, 0.0, 1.0), Decision::Fire);
     }
     ai.tick(true);
-    assert!(ai.decide(&s, 1.0, 0.0));
+    assert_eq!(ai.decide(&s, 1.0, 0.0, 1.0), Decision::Fire);
 }
 
 #[test]
@@ -115,11 +117,11 @@ fn an_aimed_weapon_with_nothing_in_the_path_opens_the_window_and_keeps_it() {
     };
     let mut s = situation();
     s.target_in_path = false;
-    assert!(!ai.decide(&s, 0.0, 0.0));
+    assert_ne!(ai.decide(&s, 0.0, 0.0, 1.0), Decision::Fire);
     assert_eq!(ai.wait_ticks, WAIT_TICKS);
     // The Quake is not aimed and fires on the roll alone.
     s.aimed = false;
-    assert!(ai.decide(&s, 1.0, 0.0));
+    assert_eq!(ai.decide(&s, 1.0, 0.0, 1.0), Decision::Fire);
 }
 
 #[test]
@@ -130,13 +132,13 @@ fn a_target_inside_the_window_gets_the_top_rate_whatever_the_roll() {
     };
     let s = situation();
     // The fire roll fails and the hold is not met; the window alone fires.
-    assert!(ai.decide(&s, 0.09, 1.0));
+    assert_eq!(ai.decide(&s, 0.09, 1.0, 1.0), Decision::Fire);
     assert_eq!(ai.wait_ticks, 0);
     let mut ai = WeaponAi {
         held_ticks: 0,
         wait_ticks: 30,
     };
-    assert!(!ai.decide(&s, 0.1, 1.0));
+    assert_ne!(ai.decide(&s, 0.1, 1.0, 1.0), Decision::Fire);
 }
 
 #[test]
@@ -161,4 +163,56 @@ fn the_clocks_count_ticks_and_an_empty_slot_resets_the_hold() {
             wait_ticks: 0
         }
     );
+}
+
+#[test]
+fn the_absorb_index_follows_the_shield_the_hold_and_the_road_ahead() {
+    let mut s = situation();
+    s.eliminator = false;
+    s.gap_ahead = Some(200.0);
+    assert_eq!(s.absorb_index(0), 0);
+    // Nobody inside 300 ahead.
+    s.gap_ahead = Some(301.0);
+    assert_eq!(s.absorb_index(0), 1);
+    s.gap_ahead = None;
+    assert_eq!(s.absorb_index(0), 1);
+    // Held past fifteen seconds.
+    assert_eq!(s.absorb_index(ITCHY_TICKS + 1), 2);
+    s.gap_ahead = Some(200.0);
+    // One per shield tier, clamped at four.
+    for (shield, index) in [
+        (81.0, 0),
+        (80.0, 1),
+        (60.0, 2),
+        (40.0, 3),
+        (20.0, 4),
+        (5.0, 4),
+    ] {
+        s.shield = shield;
+        assert_eq!(s.absorb_index(0), index, "shield {shield}");
+    }
+    // An Eliminator forces zero.
+    s.eliminator = true;
+    assert_eq!(s.absorb_index(ITCHY_TICKS + 1), 0);
+}
+
+#[test]
+fn a_failed_fire_roll_absorbs_on_the_absorb_roll_after_the_short_hold() {
+    let mut s = situation();
+    s.eliminator = false;
+    s.shield = 10.0;
+    // rate[4] * absorb 1.0.
+    assert_eq!(s.absorb_chance(0), 1.0 / ((1.0 / 0.05_f32) * (1.0 / 1.0)));
+    let mut ai = WeaponAi {
+        held_ticks: ABSORB_HOLD_TICKS,
+        wait_ticks: 0,
+    };
+    assert_eq!(ai.decide(&s, 1.0, 1.0, 0.0), Decision::Hold);
+    ai.held_ticks += 1;
+    assert_eq!(ai.decide(&s, 1.0, 1.0, 0.0), Decision::Absorb);
+    assert_eq!(ai.decide(&s, 1.0, 1.0, 0.05), Decision::Hold);
+    // A healthy craft with somebody close ahead never absorbs: rate[0] is zero.
+    s.shield = 100.0;
+    s.gap_ahead = Some(50.0);
+    assert_eq!(s.absorb_chance(0), 0.0);
 }
