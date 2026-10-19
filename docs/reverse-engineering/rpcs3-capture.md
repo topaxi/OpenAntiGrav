@@ -1135,6 +1135,21 @@ each worth knowing before the next capture:
   code and `0x008ad4d8` for the HUD and engine-flare code, and a float constant
   loaded with `lfs d(r2)` in one is a different word in the other.
 
+## Flying a whole race on the original's Autopilot (2026-10-19, `hd-autopilot-law`)
+
+`scripts/rpcs3-hd-autopilot.py` attaches to `serve` on Track Select (class, weapons
+and circuit already chosen with `press`), writes Pilot Assist off, enters the race,
+presses START RACE until the craft leaves its grid state, then sets the pickup slot's
+running bit `0x800` (`*(ship+0x5edc)+0x200`) and holds its timer `+0x158` at 10000.
+The original's own player driver then flies the whole race, and every new body
+position is a CSV row: engine flags, multiplier, blend, speed, throttle, grounded,
+pose, shield and the driver's controls at `craft+0x4c`. From the EndRace menu its
+Race Again row restarts it. Two traps: writing held-weapon state `6` before GO
+crashed the game, and `craft+0x308` stands still across a whole jump, so a sampler
+keyed on it misses every airborne frame. Results:
+[ps3-hdfury-eu/autopilot.md](../ghidra/functions/ps3-hdfury-eu/autopilot.md).
+**Omega: not checkable** (no PS4 capture path).
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

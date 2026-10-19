@@ -358,6 +358,13 @@ At `Ai_ComputePitch`'s return (`0x088533b4`, conditional on the player's
 driver), 231 of 231 airborne frames held a non-zero pitch. The controller does
 fly the player's pitch.
 
+### The other titles (2026-10-19, `hd-autopilot-law`)
+
+Every title's executable carries this branch: HD's `PlayerStatus_Update`
+(`0x000cb928`) at `craft+0x264`/`craft+0x2f0`, read live on RPCS3 (`0xd`, `1.2`);
+Pure, Omega and 2048 read off their code. Addresses and the Ubermall comparison:
+[ps3-hdfury-eu/autopilot.md](../ps3-hdfury-eu/autopilot.md).
+
 ## Not determined
 
 **What flies the craft is now read** (2026-10-19): the player's own driver, the

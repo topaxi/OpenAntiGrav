@@ -992,7 +992,7 @@ with its height term), which has no live leg. No class gate or tuning was added
 to hide it.
 
 **The inherited titles, before and after the port** (same sweep, weapons off,
-whole race, seed 1). HD and Pure run the Pulse law unmeasured:
+whole race, seed 1). At the time HD and Pure ran Pulse's law unread; both executables have since been read, and both carry the same law (below):
 
 | Title, circuit, class | Before: rescues, wall ticks (episodes), end shield | After |
 | --- | --- | --- |
@@ -1004,9 +1004,53 @@ whole race, seed 1). HD and Pure run the Pulse law unmeasured:
 | Pure 01_Vineta_K, VENOM / PHANTOM | 0, 0, 100.0 / 0, 0, 44.0 | 0, 0, 92.0 / 0, 0, 68.0 |
 
 Mean speed rises about 9 % at VENOM (127 to 139 on HD) and 8 to 12 % at
-PHANTOM. **HD's Ubermall at PHANTOM is open, beside Fort Gale Black:** under a
-law HD was never read for, its autopilot scrapes 27 times and ends a race on
-6.3 shield.
+PHANTOM. **HD's Ubermall at PHANTOM is open, beside Fort Gale Black:** its
+autopilot scrapes 27 times and ends a race on 6.3 shield.
+
+### Every title carries the same engine law; Ubermall is the airborne steering (2026-10-19, `hd-autopilot-law`)
+
+HD's own law is read and measured
+([ps3-hdfury-eu/autopilot.md](../ghidra/functions/ps3-hdfury-eu/autopilot.md)):
+`PlayerStatus_Update` (`0x000cb928`) lifts the cap and writes `1.2`, and the
+running original read `craft+0x264 = 0xd` and `craft+0x2f0 = 1.2` for the whole of
+two RPCS3 races (Ubermall forward, PHANTOM). Confidence 95. Pure, Omega and 2048
+carry the same code at their own offsets. The law is now a `Title` axis,
+`oag_title::autopilot_engine::AutopilotEngine`, `Origin::Measured` on all five
+titles. That moved nothing: the ten cells above rerun byte-identical. **So HD's
+own law cannot close Ubermall: it is the law that was already running.**
+
+Shield, labelled, before and after the port (unchanged by the axis):
+
+| HD 05_ubermall, PHANTOM | Shield at each lap end | Shield at end of run |
+| --- | --- | --- |
+| Before the port | 80.75, 80.75, 78.3, 78.3, 78.3 | 78.3 |
+| After (port, and the axis) | 79.7, 78.2, 54.0, 30.0, 6.3 | 6.3 |
+| The original (RPCS3, its own scale, starts at 140) | not split per lap | 134.5 (140.0 at GO, about a dozen one-frame scrapes); 1st, 2:21.36 |
+
+Every other HD cell ends every lap on 95.0 after; Pure Vineta K ends VENOM
+92, 92, 92 (end 92.0) and PHANTOM 100, 92, 92, 68, 68 (end 68.0).
+
+**The cause is Ubermall's long jump**, x `-216` to `-600`, about 2.5 s airborne.
+Matched by position against the original:
+- in the air past x `-450` the original steers right (`+43..+85`) and lands on
+  the line (z `334-338`). Ours steers hard left (`-50..-100`, left airbrake) and
+  drifts to z `317`, 17 units off. The ground steer agrees in sign
+  (correlation `0.76` over 2,375 positions);
+- ours also peaks higher (y `117` against `112`) from the same entry speed.
+
+With the engine bits off ours already drifts 17 units here and takes a rescue
+on lap 1. The bits only move the drift into the wall at height. Split (rescues,
+wall ticks (episodes), end shield):
+- none: `1, 5 (3), 78.3`;
+- cap lift alone: `0, 7 (3), 91.6`;
+- `1.2` alone: `1, 78 (10), 43.9`;
+- both: `2, 143 (27), 6.3`.
+
+This is Fort Gale Black's crest gap on a second title: our driver's airborne
+steering. No tuning was added. Next address: HD's `AI_ComputeControls`
+(`0x00100658`) air term and `Ai_ComputePitch` (`0x000fe510`) on this jump's
+airborne frames; `scripts/rpcs3-hd-autopilot.py` logs the original's controls
+there.
 
 **The opponent stint, re-run with the port** (`opponent_autopilot_sweep`, Ace,
 8 seeds, 64 forks a cell, as before). The engine bits are the local player's
