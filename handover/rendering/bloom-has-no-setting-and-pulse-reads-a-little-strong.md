@@ -37,7 +37,7 @@ matched captures.
 
 **Open.** (1) The bright pass sampling phase: the model lands within 0.2-5 % of
 the original's A and the leftover is at lit edges and the craft. (2) The
-original's bright pass reads the HUD's pixels; ours does not. (3) ~~Moa Therma~~ closed 2026-10-19 (see below): ours' glow surfaces read 8-50 % brighter under the mask in
+original's bright pass reads the HUD's pixels; ours does not. (3) Moa Therma, mostly posing 2026-10-19 (see below): ours' glow surfaces read 8-50 % brighter under the mask in
 motion (six of six frames, still so with a 4-tick lag correction) and equal at a
 static pose (`0.99-1.01`); needs an unposed run or a pose that starts the
 animated emissives at the trace's clock, and a look at what the original does
@@ -73,19 +73,17 @@ of ours gives `1,425` at the same speed). The standing `+1.4-2.9 %` scene luma.
 The HUD's read by the original's bright pass is still not isolated. The Zone grid
 strip was not reached (see `bloom.md`).
 
-## 2026-10-19, `pulse-bloom-moa`: the Moa item is closed as a posing artefact
+## 2026-10-19, `pulse-bloom-moa`: Moa mostly posing, a strip remainder is real
 
-Full numbers in `bloom.md`, "Moa Therma's excess, closed as a posing artefact".
-`--anim-seconds` sets the glow clock render-only; the phase is `(tick + 4 +- 1) mod 60`
-ticks on all seven poses, the mask then matches pixel for pixel and the colour under
-the mask is `1.006` at tick 100 (falsifier `0.99-1.01` passes). Whole-frame ratio with
-default shadows (already `original` on Pulse): `1.103` at the default clock, `1.045`
-matched; no code changed. **Still open, small:** at ticks 120-160 `1.10-1.14` (`0.15-0.27`
-luma absolute): the chevron strip's mask `+5-8 %` and colour `+4-9 %`, with a pale band of
-its transparent texels over the trees that the original lacks (the order or state that
-makes the original's strip yield to the trees is not found; a GE record of a frame
-holding both would show it), and the craft flare's shape. Metropia and PS2 not re-run
-(nothing changed).
+Numbers in `bloom.md`, "Moa Therma's excess at a matched glow clock". `--anim-seconds`
+sets the glow clock render-only; the phase is `(tick + 4 +- 1) mod 60` ticks. Whole-frame
+ratio with default shadows (already `original` on Pulse): `1.103` at the default clock,
+`1.045` matched; no code changed. **Open, small:** at ticks 120-160 `1.10-1.14`
+(`0.15-0.27` luma absolute): the chevron strip's colour under the mask `+4-13 %` and
+mask `+5-8 %` (the falsifier fails there), a pale band of its transparent texels over
+the trees that the original lacks (the state making the original's strip yield to the
+trees is not found; first read which GE prims are the trees, candidates `413 422 423`
+of a recorded frame), and the craft flare's shape. Metropia, Talon's and PS2 not re-run.
 
 ## Measured first
 
