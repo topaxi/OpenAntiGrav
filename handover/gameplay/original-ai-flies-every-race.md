@@ -63,13 +63,32 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 - **The autopilot flies the original's player driver (2026-10-19, lane
   `autopilot-original-ai`; docs/gameplay/ai.md, "The autopilot flies the
   original's player driver").** Left open there:
-  - **Maintainer question:** an opponent on this project's driver "switching to
-    the original autopilot" while holding the pickup has no original behaviour
-    behind it: the original never fires the Autopilot outside an Eliminator
-    (fire index `0`, `g_weapon_ai_rate[0] = 0`). Wanted anyway, as chosen?
+  - ~~**Maintainer question:** an opponent switching to the original
+    autopilot while holding the pickup.~~ Answered ("yes if it helps them /
+    speeds them up") and measured 2026-10-19, lane `ai-opponent-autopilot`
+    (docs/gameplay/ai.md, "An opponent's Autopilot, measured and not wired"):
+    faster on every title and class, but at PHANTOM walls rise on 13 of 16
+    cells and HD rescues go 0 -> 8 of 256 stints, mostly in the 3 s after the
+    handback. Not wired; `Race::set_opponent_autopilot` (off) and
+    `opponent_autopilot_sweep` reproduce it. **Open for the maintainer:**
+    wire it at VENOM-to-RAPIER only, wire it everywhere and accept the
+    PHANTOM cost, or leave it.
+  - **Lead, the player's own pickup:** a cold stint finds the craft with a
+    whole-line search (`Race::locate_player_driver`). On Pulse `05_Track` at
+    `[-860, 41, -445]` it chose racing-line index 367 where the craft's own
+    position follows 2312, and an opponent flown from there hit the wall 42
+    ticks in and was rescued onto the deck above. A player collecting an
+    Autopilot there may get the same; not measured for slot 0.
+  - **Lead, PHANTOM handback:** the rescues land 60-170 ticks after the stint
+    ends, our driver taking the craft faster than its plan carries. A
+    plan-based early handback (`affords_boost` over 120 ticks) removed the
+    whole gain; a gentler one is untried. The player's own autopilot at
+    PHANTOM was never measured for the same exposure.
   - In an Eliminator an opponent can fire it (`0.012` a decision); what
     `Autopilot_Fire`'s running bit does to a craft its driver already flies is
-    unread.
+    unread. `Autopilot_Fire` has no player gate; the only direct float store
+    to the blend `craft+0x1d4` is `Ship_InitCraft` (`0x08849564`), so the
+    bit's reader is still the next address to find.
   - 2048 and Omega steer the player's driver with the pilot assist's gains
     (airbrake `1`/`0`, a `1.73 |x|` lookahead floor, a `libm` call); not read
     whole, the opponents' controller flies it.
