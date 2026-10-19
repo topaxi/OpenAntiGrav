@@ -478,8 +478,9 @@ not found. This is where it is not, read statically on this ELF:
   registers it with `Collision_AddObject` (call at `0x000dece4`), and stores it
   at `body+0x4cc`. `0x0003a610` then writes the owning body to the object's
   `+0x80`. `0x0003a3d0`, which collision.md reads as `Collision_TestMeshObb`'s
-  dispatching tail call, is a getter: it returns the object's cached world box
-  at `+0xf0` when the byte at `+0x19c` is set, and recomputes it otherwise.
+  dispatching tail call, returns `object + 0xf0` when the byte at `+0x19c` is
+  set (`0x0003a3d0`-`0x0003a3f4`). The other path was not read: Ghidra's
+  listing stops at `0x0003a3f8`.
 - **Not in vtable slot `+0x40` (`0x00108040`).** `Physics_StepWorld` calls it on
   every body after `Collision_ProcessPairs`. It rebuilds the four hull points
   at `craft+0x120`-`+0x150` and their query points at `+0x160`-`+0x190` from
@@ -508,5 +509,5 @@ player body's velocity quad on a wall-hit frame names the writer.
 
 No names applied: every function above is at or below a single static read,
 and none of them is the resolver. Until it is found, `crates/physics` runs
-Pulse's response on HD, and Omega and 2048 inherit from HD. That is
-**inherited, not measured**.
+Pulse's response on HD, and Omega and 2048 inherit from HD. Pure takes
+Pulse's directly. All four are **inherited, not measured**.

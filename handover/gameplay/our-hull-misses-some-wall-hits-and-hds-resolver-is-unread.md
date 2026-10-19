@@ -14,8 +14,9 @@ Two things around it stay open.
   wall triangle's normal, rotation rate +0.77 rad/s). Our `step` from tick 1583
   makes no contact: no centre-to-sample segment crosses any triangle, even
   with the box scaled 1.33x. Five of the 135 significant angular ticks on the
-  three captures are one-tick onset shifts of the same kind, for example
-  time-trial lap tick 410/411. `wall_contact_ground_truth.rs` already records
+  three captures disagree in direction; the one examined (time-trial lap
+  410/411) is a one-tick onset shift. The other four (time-trial 2458, clean
+  lap 1257, 1681, 2724) are unexamined. `wall_contact_ground_truth.rs` already records
   first contacts 3-5 ticks late. This is probably the same residual.
 - **HD's wall resolver is not found.** It is not in `Collision_ProcessPairs`,
   not on the craft's OBB collision object and not in craft vtable slot `+0x40`.
@@ -35,5 +36,8 @@ Two things around it stay open.
    velocity quad to name HD's response writer. Then read it against Pulse's
    law (restitution, friction, lever arm, `0.1` angular scale) and add a
    `Title` axis only where they differ.
-3. Static fallback for HD: `Craft_IntegrateHull` (`0x000ef450`) past its
+3. The wall-angular test cannot tell the world-axis denominator from the
+   body-frame one (both pass). A capture with a wall contact on a pitched or
+   rolled craft would.
+4. Static fallback for HD: `Craft_IntegrateHull` (`0x000ef450`) past its
    `Collision_MarchSegment` calls, then `0x000f5e20` and `0x000f6870`.

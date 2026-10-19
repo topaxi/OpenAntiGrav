@@ -306,11 +306,11 @@ the wall reading against the actual collision geometry - is unmeasured.
 
 **Measured 2026-10-19: it is a wall, and our hull does not find it.** Two
 corrections to the paragraphs above. First, the event is not near-elastic. The
-`108.6 -> 108.8` is `speed_cached`, written before the contact pass. The
-recorded velocity itself falls from `108.6` to `99.2` on the tick, a `39.3`
-units/s change along a direction 2 degrees from the normal of a `16_Track` wall
-triangle that passes `3.37` units from the craft. The recorded rotation rate
-jumps by `0.77` rad/s on the same tick, as a corner contact's would. Second,
+`108.6 -> 108.8` is the `speed` column, `body+0x398`, which `Body_Integrate`
+writes before the contact pass. The recorded velocity itself falls from `108.61`
+to `99.16` on the tick, a `39.29` units/s change along a direction `1.86`
+degrees from the normal of a `16_Track` wall triangle that passes `3.37` units
+from the craft. The recorded rotation rate jumps by `0.770` rad/s on the same tick, as a corner contact's would. Second,
 `wall::resolve` does not see it: stepped from tick 1583, our ten-point hull
 crosses no triangle at all, even with the box enlarged to `1.33x`. So this is
 a contact-*generation* miss, and the response law is not involved. Evidence and

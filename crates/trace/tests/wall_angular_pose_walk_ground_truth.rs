@@ -18,11 +18,16 @@
 //! share has a median `|measured| / |ours|` of `0.986` (autopilot, 87 ticks),
 //! `0.998` (clean lap, 69), `0.990` (time-trial lap, 65) and `1.035` (standing
 //! start, 1), at a median cosine of `0.965` to `0.999`. Dropping the share
-//! leaves a mean contact-tick residual 4-23 times larger. The few ticks
-//! that disagree are one-tick shifts of the contact itself (time-trial lap
-//! tick 410: ours fires a tick before the original, and both agree at 411),
-//! which is `wall_contact_ground_truth.rs`'s detection residual, not the
-//! response law.
+//! leaves a mean contact-tick residual 2-16 times larger. Five ticks point
+//! the other way; the one examined (time-trial lap tick 410: ours fires a tick
+//! before the original, and both agree at 411) is `wall_contact_ground_truth.rs`'s
+//! detection residual, not the response law. The test asserts medians for that
+//! reason. The residual bound has little room on the time-trial lap (`0.472`
+//! against `0.5`), deliberately: half is the line between explaining the
+//! recorded rate and not.
+//!
+//! The captures do not discriminate the denominator's form: the body-frame
+//! inverse inertia passes too, the craft being near level at every contact.
 //!
 //! A separate file from `wall_contact_ground_truth.rs` although it reads the
 //! same captures: that one resolves a contact on one recorded pose; this one

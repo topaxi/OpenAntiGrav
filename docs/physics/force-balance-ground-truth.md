@@ -490,15 +490,20 @@ flag has not been read). **Nothing below depends on the attribution** - the
 physics conclusion needs only that the velocity is being reduced outside the
 accumulators.
 
-**Raised to 90 on 2026-10-19: the contact is now in the trace.** Stepping
-`oag_physics::step` once from every recorded pose of this capture, our hull finds
-a wall on 114 of the 230 scrape ticks, and on those ticks the angular velocity
-our wall share adds reproduces the original's next recorded rate: a
-least-squares scale of `1.023` against the measured share, and a mean
-contact-tick residual of `0.0009` rad/s with the share against `0.0207` without
-it. A wall reproduced to 2 % in the craft's own rotation is direct evidence of a
-wall, not a signature. The stun timer's zero is explained independently: a
-track contact never arms it (bit `0x10` is the Shield pickup,
+**2026-10-19: this section describes an earlier recording.** The tracked
+`data/traces/talons-junction-standing-start.csv` is not the file measured above.
+Its `speed / |v|` stays at `1.0000` through tick 185 and leaves it at tick 186,
+for 114 contact ticks of 300, and ticks 60-66 read exactly `1.0000`. That is
+the tick-187 first contact `crates/trace/tests/wall_contact_ground_truth.rs`
+pins, not the tick-62 impact and 230-tick scrape in the table. So the
+confidence-75 attribution stays where it is, for a recording that is not here
+to re-check. On the tracked file the contact *is* in the trace: stepping
+`oag_physics::step` from every recorded pose, our hull finds the wall on the
+same 114 ticks, and the angular velocity its share adds reproduces the
+original's next recorded rate at a least-squares scale of `1.023`. The mean
+residual is `0.0009` rad/s with the share against `0.0207` without it. The
+stun timer's zero no longer needs explaining for either recording: a track
+contact never arms it (bit `0x10` is the Shield pickup,
 [shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md), and
 `Ship_ApplyCollisionImpulse` runs only off the weapon and rival pending
 impulse). See
@@ -629,8 +634,8 @@ it multiplies are the two disc literals.
 2. ~~**Close the `0x10` pickup flag.**~~ **Closed 2026-08-19**: bit `0x10` is the
    Shield pickup, armed by `Shield_Fire` (`0x08861568`) and cleared when its
    countdown expires ([shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md)).
-   A trace that never picks one up cannot have it set, and the wall attribution
-   above no longer rests on it.
+   A trace that never picks one up cannot have it set, so the stun timer's zero
+   no longer argues against the wall attribution above.
 3. ~~**Angular response.**~~ **Done, and confirmed against the original's own
    rotation.** `crates/physics/src/wall.rs` carries the lever arm, the
    `cross(r, p)` torque, the inertia term in the resolver denominator and

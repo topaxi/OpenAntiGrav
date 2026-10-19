@@ -2144,18 +2144,26 @@ against.
 On all 114 standing-start wall ticks, the small sustained-scrape shares
 included, the least-squares scale is `1.023`, and the residual is `0.0009`
 with the share against `0.0207` without it. **Confidence 92** that the angular
-half is the original's in size and direction: three tracked captures and one
-untracked one, at every approach the laps hold, against the original's own
-state with no fitted constant. The `0.1` scale and the body-space denominator
-are each refused on their own: setting `ANGULAR_IMPULSE_SCALE` to `0.2` gives a
-median ratio of `0.505`, `0.05` gives `2.07`, and `0` leaves no wall share at
-all. The test is red in all three cases.
+half is the original's in size and direction, and that the application scale is
+`0.1`: three tracked captures and one untracked one, at every approach the laps
+hold, against the original's own state with no fitted constant. The scale is
+refused on its own: setting `ANGULAR_IMPULSE_SCALE` to
+`0.2` gives a median ratio of `0.505`, `0.05` gives `2.07`, and `0` leaves no
+wall share at all, and the test is red in all three cases. **The denominator's
+form is not discriminated by these captures.** Applying the inverse inertia in
+the body frame instead (`body_frame_inverse_inertia` at `wall.rs`'s
+`angular_compliance`) still passes, at `0.994` and `0.991` on the two laps: the
+craft is close to level at every wall contact in them, where the two forms
+nearly agree. The world-axis reading rests on the instruction-level read and
+[rigid-body.md](rigid-body.md#corrected-2026-09-10-the-inverse-inertia-is-a-world-axis-diagonal-and-0x80-is-its-body-space-copy)
+alone.
 
-**The disagreeing ticks are contact timing, not the law.** Five of the 135
-significant ticks point more than 60 degrees away. Each one sits at an impact
-our hull finds a tick early or late. On the time-trial lap at tick 410, ours
+**The one disagreeing tick examined is contact timing, not the law.** Five of
+the 135 significant ticks point more than 60 degrees away (time-trial lap 410
+and 2458, clean lap 1257, 1681 and 2724). On the time-trial lap at tick 410, ours
 fires a `0.61` rad/s share that the original does not show until tick 411,
-where the two then agree to `cos 0.999`. That is the detection residual
+where the two then agree to `cos 0.999`. The other four were not examined.
+Tick 410 is the detection residual
 `crates/trace/tests/wall_contact_ground_truth.rs` already records (3-5 ticks on
 the first contact), seen from the rotation side. A pooled least-squares scale
 is dominated by those ticks (the time-trial lap pools to `0.555`), which is why
@@ -2172,18 +2180,20 @@ left the clean lap's tick-1583 "near-elastic redirect" as most plausibly a wall
 the pose walk could not see. Measured: it **is** a wall, and our hull misses it.
 
 - The recorded velocity goes from `(-65.59, -8.45, -86.15)` (tick 1583) to
-  `(-83.44, 3.96, -53.43)` (tick 1584), so `|v|` falls from `108.6` to `99.2`.
-  The `108.8` the README quoted is `speed_cached`, which `Body_Integrate`
-  writes before the contact pass and so lags the contact by one tick. The
-  change is not elastic.
-- `dv` has a length of `39.3` along `(-0.455, 0.316, 0.832)`. `16_Track`'s
+  `(-83.44, 3.96, -53.43)` (tick 1584), so `|v|` falls from `108.61` to `99.16`.
+  The `108.79` the README quoted is the `speed` column, `body+0x398`, which
+  `Body_Integrate` writes before the contact pass. `speed / |v| = 1.097` on
+  that row is the contact's own signature
+  ([force-balance-ground-truth.md](../../../physics/force-balance-ground-truth.md)).
+  The change is not elastic.
+- `dv` has a length of `39.29` along `(-0.455, 0.316, 0.832)`. `16_Track`'s
   collider 139 (a `Wall`; the index is
   `oag_gameplay::collision_world`'s order) passes `3.37` units from the tick-1583 position, and
-  its nearest triangle's normal is `(-0.458, 0.285, 0.842)`, 2 degrees from
-  `dv`. `vn` goes from `-44.6` to `-5.3`, which with `e = 0.4` puts the
-  resolver denominator at about `1.6`, inside the soft range the angular term
+  its nearest triangle's normal is `(-0.458, 0.285, 0.842)`, `1.86` degrees
+  from `dv`. `vn` goes from `-44.91` to `-5.64`, which with `e = 0.4` puts the
+  resolver denominator at `1.60`, inside the soft range the angular term
   produces on a corner lever.
-- The recorded rate jumps by about `0.77` rad/s on the same tick, as a corner
+- The recorded rate jumps by `0.770` rad/s on the same tick, as a corner
   contact's angular share would.
 - **Our `step` from tick 1583 finds no contact, against any collider.**
   `wall::pre_integration_clip` moves nothing. At the post-integrate pose no
