@@ -41,6 +41,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
+    autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,
     original_driver: None,
     // Pulse's own `speech_zone.bnk` was listed alongside Pure's and HD's -

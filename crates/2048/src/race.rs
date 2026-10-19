@@ -65,6 +65,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
+    autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // The campaign's events fly the original opponent (the maintainer's AI
     // mode 3); race box and remix keep this project's driver.
     original_opponent: true,

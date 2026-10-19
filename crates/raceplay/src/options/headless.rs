@@ -176,6 +176,7 @@ impl Setup {
             launch_hover: None,
             hover_rig: None,
             craft_laws: None,
+            autopilot_engine: oag_title::autopilot_engine::MEASURED,
             #[cfg(feature = "view")]
             zoom_ring: None,
             #[cfg(feature = "view")]

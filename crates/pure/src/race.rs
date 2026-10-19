@@ -83,6 +83,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
+    autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // The campaign's opponents fly Pure's own sibling driver
     // ([`ORIGINAL_DRIVER`]); every other mode keeps this project's.
     original_opponent: true,

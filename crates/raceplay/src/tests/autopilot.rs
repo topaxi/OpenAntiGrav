@@ -173,3 +173,34 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
         "the cancel spent the pickup, which the original's branch never touches"
     );
 }
+
+/// The player's engine bits under the Autopilot come from the title's own law,
+/// `oag_title::autopilot_engine::AutopilotEngine`, not from a constant: a law
+/// unlike any title's (x`1.5`, cap kept) reaches the flags unchanged, and the
+/// measured one gives every title's `0xd` (`docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`).
+#[test]
+fn the_autopilot_engine_bits_follow_the_titles_law() {
+    use oag_title::autopilot_engine::{AutopilotEngine, MEASURED};
+    use oag_title::pre_race::Sourced;
+    let mut race = race_with_a_grid();
+    race.sim.world.ships[0].autopilot_timer = 2.0;
+    assert_eq!(
+        race.sim.autopilot_engine, MEASURED,
+        "the synthetic setup carries the measured law"
+    );
+    let flags = race.autopilot_engine_flags(0);
+    assert_eq!(flags.speedup, Some(1.2));
+    assert!(flags.uncapped);
+
+    race.sim.autopilot_engine = AutopilotEngine {
+        speedup: Sourced::chosen(1.5),
+        uncapped: Sourced::chosen(false),
+    };
+    let flags = race.autopilot_engine_flags(0);
+    assert_eq!(flags.speedup, Some(1.5));
+    assert!(!flags.uncapped);
+
+    race.sim.world.ships[0].autopilot_timer = 0.0;
+    let flags = race.autopilot_engine_flags(0);
+    assert_eq!(flags.speedup, None, "no pickup, no multiplier");
+}

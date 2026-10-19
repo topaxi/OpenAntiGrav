@@ -189,6 +189,9 @@ pub struct RaceDefaults {
     pub hover_rig: Option<&'static crate::hover_rig::HoverRig>,
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
+    /// What the Autopilot pickup does to the player's engine while it runs:
+    /// [`crate::autopilot_engine::AutopilotEngine`].
+    pub autopilot_engine: crate::autopilot_engine::AutopilotEngine,
     /// The campaign's opponents fly the original's own driver
     /// (`oag_ai::original`, the maintainer's AI mode 3). `true` where that
     /// driver was recovered off this title's executable: Pulse, HD, 2048,

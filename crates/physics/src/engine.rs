@@ -80,6 +80,12 @@ pub const ENGINE_OUTPUT_SCALE: f32 = crate::launch::LaunchState::NEUTRAL;
 /// live under the pickup: `craft+0x1c0 = 0xd` every frame of two whole races (Pulse USA,
 /// VENOM, Talon's Junction White and de Konstruct Black). Confidence 90. See
 /// [`EngineFlags`].
+///
+/// Every title's executable writes the same `1.2` (HD read live, `flags 0xd` and
+/// `craft+0x2f0 = 1.2` on RPCS3; Pure, Omega and 2048 read off the code,
+/// `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`). The race takes it from the
+/// title's `oag_title::autopilot_engine::AutopilotEngine`; this is Pulse's value, kept
+/// for the tests here.
 pub const ENGINE_AUTOPILOT_SPEEDUP: f32 = 1.2;
 
 /// The two engine bits of `craft+0x1c0` the local player's status update writes, both
@@ -94,13 +100,15 @@ pub const ENGINE_AUTOPILOT_SPEEDUP: f32 = 1.2;
 ///   it was (`0x0883bde8..0x0883bdf8`).
 ///
 /// Opponents never get either: the function runs for the local player's status alone.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct EngineFlags {
     /// `craft+0x1c0 & 0x8`: the acceleration cap is `1e10`, so the throttle's thrust is
     /// never clamped to `0.5 * speed + accelcap`.
     pub uncapped: bool,
-    /// `craft+0x1c0 & 0x4`: [`ENGINE_AUTOPILOT_SPEEDUP`] multiplies thrust after the cap.
-    pub speedup: bool,
+    /// `craft+0x1c0 & 0x4` set, with the multiplier `craft+0x2a0` holds (the title's
+    /// own, [`ENGINE_AUTOPILOT_SPEEDUP`] on every title read): it multiplies thrust after
+    /// the cap. `None` when the bit is clear.
+    pub speedup: Option<f32>,
 }
 
 /// The fixed doubling on the engine's output, from the same expression.
@@ -243,8 +251,8 @@ pub fn engine(
         }
         thrust = thrust.min(cap);
     }
-    if flags.speedup {
-        thrust *= ENGINE_AUTOPILOT_SPEEDUP;
+    if let Some(speedup) = flags.speedup {
+        thrust *= speedup;
     }
 
     // The turbo add, `T += Engine.turbo`, sits between the cap and the doubling as in the

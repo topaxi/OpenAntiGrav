@@ -848,7 +848,7 @@ This page used to call it "speed-up" and guess. The branch also calls
 `Craft_SetUncappedThrust(craft, 1)` (`0x0884866c`), which sets bit `0x0008`, so
 `cap = 1e10` as well. A finished player gets `0x0008` alone. Read live as
 `craft+0x1c0 = 0xd` on every frame of two whole races under the pickup.
-Confidence **90**. Wired as `oag_physics::engine::EngineFlags`.
+Confidence **90**. Wired as `oag_physics::engine::EngineFlags`, with the multiplier from the title's `oag_title::autopilot_engine::AutopilotEngine`. HD carries the same law at `craft+0x264`/`craft+0x2f0` (live on RPCS3), and Pure, Omega and 2048 at their own offsets: [ps3-hdfury-eu/autopilot.md](../ps3-hdfury-eu/autopilot.md).
 
 #### What this closes, and what it does not
 

@@ -739,3 +739,10 @@
 0x00035760	function	Collision_TestObbObb	82	mp-time-trial-collision.md
 0x0003a320	function	Collision_ConstructObb	80	mp-time-trial-collision.md
 0x0003a1a8	function	Collision_SetObbHalfExtents	78	mp-time-trial-collision.md
+
+# 2026-10-19 (hd-autopilot-law): the Autopilot's engine law, HD's PlayerStatus_Update branch and the pickup. See autopilot.md.
+0x000cb928	function	PlayerStatus_Update	72	autopilot.md
+0x000ed578	function	Craft_SetUncappedThrust	92	autopilot.md
+0x000ed5e0	function	Craft_SetAutopilotBlend	90	autopilot.md
+0x00129b40	function	Autopilot_Fire	85	autopilot.md
+0x00129988	function	Autopilot_Update	85	autopilot.md

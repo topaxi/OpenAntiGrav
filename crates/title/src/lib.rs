@@ -36,6 +36,7 @@
 //! [ADR-0023]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0023-boot-sequence-as-title-data.md
 
 pub mod adverts;
+pub mod autopilot_engine;
 pub mod boot;
 pub mod campaign;
 pub mod craft_laws;
