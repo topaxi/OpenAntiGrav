@@ -28,8 +28,24 @@ section) is the current, authoritative state.
   spike is split out of its group and scaled uniformly, about the nozzle, by
   its own `RandRange(0.65, 0.85)` draw per frame on its own group law; the
   draw is a render-side hash, chosen, not measured. See `engine-trail.md`'s
-  `EngineFlare_PlaceShapes` bullet. Still open: a live RPCS3 frame to check
-  the 2.0-at-rest spike base scale and the visible amplitude, and the
+  `EngineFlare_PlaceShapes` bullet. **Checked live 2026-10-19
+  (`hd-flare-rpcs3-check`): the 2.0-at-rest base scale is what the game
+  submits** (`f0 = 2.0` at `0x002a2824`, Harimau classic). No code changed.
+  Still open: (1) the thrust and boost spike scales and the per-spike draw
+  were not read - the GDB stub gave one stop in four
+  interpreter restores and timed out on the next pause otherwise (it needs about 45 s after
+  `emu-restore-state.sh --interpreter` before the first connect, and a
+  connect that times out kills the proxy), so one sample per restore is what
+  it gives; (2) what the original draws the spikes with (material, blend,
+  alpha): at a matched view the original shows no radial rays at 1.5x while
+  ours glitters, so the difference is in the draw, not the scale - read the
+  spike draw call with `scripts/rpcs3_draw_hook.py`; (3) matched-view
+  exhaust differences seen and **not fixed**: at rest ours has a large white
+  glare where the original has a small cyan-pink jewel (the glare survives
+  with the spikes scaled to zero, so it is the sprite flare or bloom);
+  under thrust the original's flame block is smooth and solid, ours
+  glitters; Feisar Fury's plume reads orange-pink in the original and
+  blue-white in ours (one frame each, no matched pose); (4) the
   2048/Omega tuning values (same names, not compared).
 - **What arms the boost timer - reframed 2026-09-05, not yet closed.**
   `engine-trail.md`'s "What arms the boost timer stays open, minus two

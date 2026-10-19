@@ -1725,9 +1725,34 @@ ramp at `+0x108` and the trail block's brightness:
     load report names each absent one. Base Harimau and every other HD craft
     author `EF_Boost` geometry (the unchecked warning in the brief did not
     hold for this grid).
-  - **Not compared against a live RPCS3 frame** in this change: the 2.0-at-rest
-    base scale and the flicker's visible amplitude are the disassembly's, not a
-    pixel measurement.
+  - **Live check, 2026-10-19 (`hd-flare-rpcs3-check`, RPCS3 under the
+    interpreter, Harimau classic, Talon's Junction, time-trial start).** A `Z0`
+    breakpoint at `0x002a2824` (the `stfs f0,0x320(r1)` that stores the
+    main-spike group scale, so `f0` is the sum) fired once at rest and read
+    `f0 = 2.0000` with `s` (`f31`) `= 0.0` and `b` (`f30`) `= 0.0`, and `f13`
+    (the throttle lerp alone) `= 1.0`. **The sum of the two lerps, 2.0 at rest,
+    is the value the game really submits** (one sample, one boot: confidence
+    88 for the rest value, 85 stays for the rest of the law). Not read live:
+    the thrust and boost values (the stub answered one stop in four
+    interpreter restores and timed out on the next pause or the first one),
+    and the per-spike draw at `0x002a286c` (`f1`). The flicker's amplitude is
+    therefore still the tuning file's range, not a pixel or register read.
+  - **Side by side at a matched view (same craft, track, `far` chase camera,
+    1760x990, 3 frames of the original and 3 of ours per state).** At rest the
+    original's flare is a small cyan-and-pink jewel in the nozzle with a few
+    thin cyan lines trailing straight back; ours is a large white glare with
+    radial glitter around it. Under thrust the original is a smooth, solid
+    cyan block with a straight plume; ours is a glittering blob with ragged
+    edges. Under boost the original keeps the block and adds a long white-cyan
+    streak; ours (`--pose-boost 1`) is a glittering blob and a wide, soft
+    plume. **The scale law is not what differs**: scaling our spikes by 0.001
+    still leaves the large white glare at rest (the sprite flare and bloom),
+    and the original's spikes at 1.5x (2.0 x a 0.65-0.85 draw) are not visible
+    as radial rays in any frame. What the original draws the spikes with (their
+    material, blend and any alpha term) is unread, and is the likely source of
+    ours' glitter. Feisar's Fury skin (`feisar_c1`) authors none of the five
+    spikes, so its rays in the original at rest are the trail or sprite, not
+    spikes.
   - **2048 and Omega: checked, applies, wired through the same `Authored`
     names.** Both executables carry the same five `ef_Spikes*Shape` strings and
     the four `Spikes ... Scale` tuning names; their races now split the spikes
