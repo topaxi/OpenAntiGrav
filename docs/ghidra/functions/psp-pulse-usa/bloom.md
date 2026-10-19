@@ -1085,3 +1085,81 @@ own chain (`ps2-bloom.md`) and was not run.
 
 Scripts and frames: a scratch directory, not kept (`ours.sh`, `cmp.py`, `tab.py`,
 `chk.py`, `inp.py`, `gelist.py`, `e3/`, `em1/`, `ge/moa_rest.ppdmp`, `report.md`).
+
+## Moa Therma's excess, closed as a posing artefact (2026-10-19, `pulse-bloom-moa`)
+
+PPSSPP v1.20.4 software renderer, own profile, Time Trial on Moa Therma White
+(`03_Track`), Assegai, Venom, `--hold cross`, composite poked off (`0x08fb61f8`),
+`psp-trace.py --flare --camera --edram-every 20`, ticks 40-160. Ours:
+`oag-game --race --pose-from ... --pose-boost 0 --pose-intensity/--pose-speed <the
+trace's> --camera-fov 60 + 0.075 * fwd.vel --ticks 0`, bloom on against a local
+(uncommitted) skip of `Scene::composite_bloom` - **note the skip belongs above the
+`bloom_pending` branch, not inside the split-screen loop, or a single view is not
+skipped**. Original's added light: `min(floor(bilinear(A) * 175 / 255), 255 - fb0)`.
+Falsifier written first: the colour under the mask at a matched animation phase
+`0.99-1.01` means a pose artefact, above `1.05` a real scene gap.
+
+**1. The clock is settable without running ticks.** `--anim-seconds` pins the
+animation clock render-only, so the craft stays at its posed place (the 2026-10-11
+`--ticks K` method drifted it). Sweeping it over one second and taking the minimum
+mean absolute difference of the upper-frame mask against the original's alpha gives
+`0.2-0.7` (against `0.4-2.9` at `0`) and a phase of **`(tick + 4 +- 1) mod 60`
+ticks** on all seven poses (`45 3 23 44 5 24 44` for ticks `40 60 80 100 120 140
+160`), one clock for the whole circuit. The mask then agrees pixel for pixel: the
+chevron strip's glyphs, the pillars and the ribbon (ribbon mask area in the craft
+box within `1 %` of the original at ticks 80-160, the "ribbon extent grows with
+speed" lead of 2026-10-11 was the HUD's own mask in a wider box).
+
+**2. The colour under the mask at matched phase, tick 100 (the falsifier):** rgb on
+masked pixels `>= 200` `1.006`, band energy `rgb * mask` `1.026`, mask value ratio
+`0.99`. **Passes: `0.99-1.01`.** The 2026-10-08 "glow surfaces `8-50 %` brighter" was
+phase plus the bloom being left on in the comparison frame.
+
+**3. Whole-frame ratio, mean luma the bloom adds, ours over the original, default
+shadows (`original` is the Pulse default now, the wedge is in every frame):**
+
+| tick | speed km/h | clock at ours' default (`0`) | clock matched |
+| ---: | ---: | ---: | ---: |
+| 40 | 101 | 0.920 | 0.969 |
+| 60 | 176 | 0.991 | 0.985 |
+| 80 | 252 | 1.195 | 1.008 |
+| 100 | 312 | 1.002 | 1.003 |
+| 120 | 357 | 1.123 | 1.095 |
+| 140 | 390 | 1.177 | 1.120 |
+| 160 | 411 | 1.316 | 1.136 |
+| mean | | **1.103** | **1.045** |
+
+The shadow tier is therefore already closed in the product (the 10-11 default was
+`Shadows::Off`; `original` has been the Pulse profile default since), and the clock
+is a posing artefact: a real run carries the clock. **No bloom or render term was
+changed.** Whether a real run's clock phase equals the original's cannot be decided:
+the original's clock is not reset at the race start, so there is no shared origin.
+
+**4. What is left (`1.10-1.14` at ticks 120-160, where the whole add is only
+`1.5-2.0` luma, so `0.15-0.27` luma absolute).** Split by region at tick 160: the
+chevron strip `+0.154` and the craft `+0.117` of the `+0.267`. The craft box swings
+(`-30 %` at tick 100, `+7-12 %` after) with the flare, which is the known hard
+square-quad against round-flare difference. The strip's mask is `+5-8 %` larger and
+its colour `+4-9 %` brighter in ours (`(65,113,139)` against `(71,117,143)` mean at
+tick 160, constant across the animation phase, so not a texture animation); the
+strip is an alpha-over batch (`pass_mask 0x1192`, layer `0x4a`) drawn after the
+trees (`Tree1low`, `0x1122`, layer `0x45`, also alpha-over, depth write off), and
+ours draws a faint pale band of the strip's transparent texels across the trees that
+the original does not. Making the trees depth-writing cutouts (an experiment, not
+kept) hides the arrows behind them and removes the mask under them, which the
+original keeps, and gives hard tree edges the original does not have: **the order or
+state that makes the original's strip yield to the trees is not found** (a GE record
+of a frame holding both would show it: the arrows are prims `416-419`, blend mode
+`50`, after every tree-sized cutout prim in the one frame read). The remaining
+scene-exposure gap elsewhere is `1.0-1.03` on sky, track and stands, and `1.1-1.24`
+on the tall tower's glass (the track shine pass), which carries almost no mask.
+
+**HUD.** The add in the HUD rows is `0.00-0.21` luma in the original and `0.00-0.19`
+in ours, at poses where the HUD content differs (ours reads `0 km/h`): the original's
+bright pass reading the HUD does not show up as bloom at these poses, so it is not
+what moves the whole-frame ratio. Not isolated over a bright glow surface.
+
+**Checked against the other titles.** Pulse PS2: its chain is its own
+(`ps2-bloom.md`), the glow clock and the shadow tier are the same posing and
+default questions, not re-measured (`not checkable` here, no PS2 capture taken).
+Metropia and Talon's were not re-run: nothing in `oag-render` or `oag-post` moved.
