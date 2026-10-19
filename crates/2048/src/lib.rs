@@ -130,8 +130,8 @@ pub const TITLE: &Title = &Title {
     // **2048's own tables, beside the HD-derived ones.** The archive carries
     // five `weaponstats*` documents: HD's three (`_Race`, `_Elimination`,
     // `_Detonator`) and two suffixed `_2048`. The suffixed pair is this
-    // title's, by the only evidence available - the suffix - and nothing has
-    // parsed either.
+    // title's, by the only evidence available - the suffix. Both decode with all
+    // 13 weapons (`docs/formats/weapon-stats.md`).
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\weaponstats_Race_2048.xml",
         elimination: Some(r"Data\XML\weaponstats_Elimination_2048.xml"),

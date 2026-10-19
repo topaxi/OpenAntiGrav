@@ -165,7 +165,8 @@ pub const TITLE: &Title = &Title {
     // resolves in `DATA00.PSARC` through the same path normalisation every other
     // HD entry goes through, and parses with thirteen weapons and four pickup
     // tables - so this is measured rather than inherited. The Eliminator variant
-    // is declared on the same reading and nothing has opened it.
+    // resolves and decodes too (`hd_weapons_ground_truth.rs`), and an HD
+    // Eliminator race reads it.
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
