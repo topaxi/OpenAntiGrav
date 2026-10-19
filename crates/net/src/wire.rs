@@ -198,6 +198,8 @@ pub enum Control {
     End {
         /// Why.
         reason: String,
+        /// The server's final board when the race ran to a result, else empty.
+        board: board::Board,
     },
 }
 
@@ -308,6 +310,24 @@ impl<'a> Reader<'a> {
             Err(Malformed("trailing bytes"))
         }
     }
+}
+
+pub(crate) fn to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+pub(crate) fn from_hex(line: &str) -> Result<Vec<u8>, Malformed> {
+    let line = line.trim();
+    if !line.len().is_multiple_of(2) {
+        return Err(Malformed("job line is not whole bytes"));
+    }
+    (0..line.len() / 2)
+        .map(|i| {
+            line.get(2 * i..2 * i + 2)
+                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+        })
+        .collect::<Option<Vec<u8>>>()
+        .ok_or(Malformed("job line is not hex"))
 }
 
 pub(crate) fn put_string(out: &mut Vec<u8>, text: &str) {
@@ -482,9 +502,10 @@ impl Control {
                 out.push(7);
                 confirmed.put(&mut out);
             }
-            Self::End { reason } => {
+            Self::End { reason, board } => {
                 out.push(8);
                 put_string(&mut out, reason);
+                board.put(&mut out);
             }
         }
         out
@@ -530,6 +551,7 @@ impl Control {
             7 => Self::Ticks(Confirmed::take(&mut reader)?),
             8 => Self::End {
                 reason: reader.string()?,
+                board: board::Board::take(&mut reader)?,
             },
             _ => return Err(Malformed("unknown control message")),
         };
@@ -601,6 +623,7 @@ impl Datagram {
     }
 }
 
+pub mod board;
 pub mod online;
 
 #[cfg(test)]

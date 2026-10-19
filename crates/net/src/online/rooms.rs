@@ -19,6 +19,7 @@ use crate::wire::online::{
     Edition, MAX_PLAYERS, MIN_PLAYERS, Member, Message, Phase, Refusal, RoomInfo, RoomSettings,
     Snapshot,
 };
+use crate::wire::board::Board;
 use crate::wire::{PROTOCOL, RaceParams};
 
 /// The fewest zones a Zone room may ask for (Omega's `NitroTarget` slider starts at 15).
@@ -85,6 +86,8 @@ struct Occupant {
     ready: bool,
     /// The Pilot Assist level index this person asked for ([`Message::Ready`]).
     assist: u8,
+    /// They asked for a rematch while the race was still running: ready when it ends.
+    again: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -95,6 +98,12 @@ struct Room {
     members: Vec<Occupant>,
     stage: Stage,
     note: String,
+    /// The last race's final board.
+    board: Board,
+    /// The owner asked for a rematch: the start fires once everyone is ready.
+    armed: bool,
+    /// Names (lower case) the owner removed: refused back while the room exists.
+    banned: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +299,11 @@ impl Rooms {
         }
     }
 
+    fn is_banned(&self, room: &Room, id: ClientId) -> bool {
+        self.name(id)
+            .is_some_and(|name| room.banned.contains(&name.to_lowercase()))
+    }
+
     fn snapshot(&self, index: usize) -> Snapshot {
         let room = &self.rooms[index];
         let phase = match room.stage {
@@ -326,6 +340,7 @@ impl Rooms {
                 .collect(),
             phase,
             note: room.note.clone(),
+            board: room.board.clone(),
         }
     }
 
@@ -395,7 +410,8 @@ impl Rooms {
                 settings: r.settings.clone(),
                 members: u8::try_from(r.members.len()).unwrap_or(u8::MAX),
                 joinable: r.stage == Stage::Open
-                    && r.members.len() < usize::from(r.settings.max_players),
+                    && r.members.len() < usize::from(r.settings.max_players)
+                    && !self.is_banned(r, id),
             })
             .collect()
     }
@@ -420,6 +436,8 @@ impl Rooms {
                 assist,
             } => self.ready(id, &team, ready, assist),
             Message::Start => self.start(id),
+            Message::Rematch => self.rematch(id),
+            Message::Kick { name } => self.kick(id, &name),
             Message::Leave => {
                 if self.room_of(id).is_some() {
                     self.leave(id, "you left the room");
@@ -451,9 +469,13 @@ impl Rooms {
                 team: String::new(),
                 ready: false,
                 assist: 0,
+                again: false,
             }],
             stage: Stage::Open,
             note: String::new(),
+            board: Board::default(),
+            armed: false,
+            banned: Vec::new(),
         };
         self.next_room += 1;
         if let Some(person) = self.people.get_mut(&id) {
@@ -475,6 +497,12 @@ impl Rooms {
         if !self.can_race(id, &title) {
             return Err(self.content_refusal(id, &title));
         }
+        if self.is_banned(&self.rooms[index], id) {
+            return Err(refuse(
+                Refusal::Kicked,
+                "the host removed you from this game",
+            ));
+        }
         if self.rooms[index].stage != Stage::Open {
             return Err(refuse(Refusal::Started, "this game has already started"));
         }
@@ -486,6 +514,7 @@ impl Rooms {
             team: String::new(),
             ready: false,
             assist: 0,
+            again: false,
         });
         self.rooms[index].note = format!("{} joined", self.name(id).unwrap_or_default());
         if let Some(person) = self.people.get_mut(&id) {
@@ -522,6 +551,7 @@ impl Rooms {
         let changed = room.settings != settings;
         room.settings = settings.clone();
         if changed {
+            room.armed = false;
             for member in &mut room.members {
                 member.ready = false;
             }
@@ -580,6 +610,106 @@ impl Rooms {
             member.assist = assist;
         }
         self.push_room(index);
+        self.try_rematch(index);
+        Ok(())
+    }
+
+    /// A person wants to race again with the room's settings: ready with the team last
+    /// picked, now, or when the race still running ends. From the owner it also arms the
+    /// start, which fires once everyone is ready and enough people remain.
+    fn rematch(&mut self, id: ClientId) -> Result<(), Fail> {
+        let Some(room) = self.room_of(id) else {
+            return Err(refuse(Refusal::NotInRoom, "you are not in a room"));
+        };
+        let index = self
+            .room_index(room)
+            .ok_or_else(|| refuse(Refusal::NotInRoom, "no room"))?;
+        let racing = self.rooms[index].stage == Stage::Racing;
+        let owner = self.rooms[index].members.first().map(|m| m.client) == Some(id);
+        let Some(member) = self.rooms[index]
+            .members
+            .iter_mut()
+            .find(|m| m.client == id)
+        else {
+            return Err(refuse(Refusal::NotInRoom, "no room"));
+        };
+        if member.team.is_empty() {
+            return Err(refuse(Refusal::NotReady, "pick a ship first"));
+        }
+        if racing {
+            member.again = true;
+        } else {
+            member.ready = true;
+        }
+        if owner {
+            self.rooms[index].armed = true;
+        }
+        let name = self.name(id).unwrap_or_default().to_string();
+        self.rooms[index].note = format!("{name} wants to race again");
+        self.push_room(index);
+        self.try_rematch(index);
+        Ok(())
+    }
+
+    /// Starts an armed rematch once the room is open, full enough and everyone is ready;
+    /// otherwise says who it is waiting for.
+    fn try_rematch(&mut self, index: usize) {
+        let room = &self.rooms[index];
+        if !room.armed || room.stage != Stage::Open {
+            return;
+        }
+        let owner = room.members[0].client;
+        match self.start(owner) {
+            Ok(()) => self.rooms[index].armed = false,
+            Err((_, text)) if text.starts_with("waiting for") => {
+                self.rooms[index].note = format!("rematch: {text}");
+                self.push_room(index);
+            }
+            Err((_, text)) => {
+                self.rooms[index].armed = false;
+                self.rooms[index].note = text;
+                self.push_room(index);
+            }
+        }
+    }
+
+    /// The owner removes `name` from the room. Refused back while the room exists.
+    fn kick(&mut self, id: ClientId, name: &str) -> Result<(), Fail> {
+        let index = self.owned(id)?;
+        if matches!(
+            self.rooms[index].stage,
+            Stage::Racing | Stage::Countdown { .. }
+        ) {
+            return Err(refuse(
+                Refusal::Started,
+                "nobody can be removed once the race is starting",
+            ));
+        }
+        let wanted = name.to_lowercase();
+        let target = self.rooms[index]
+            .members
+            .iter()
+            .map(|m| m.client)
+            .find(|&client| {
+                self.name(client)
+                    .is_some_and(|n| n.to_lowercase() == wanted)
+            });
+        let Some(target) = target else {
+            return Err(refuse(Refusal::NotInRoom, "nobody of that name is in the room"));
+        };
+        if target == id {
+            return Err(refuse(
+                Refusal::BadSettings,
+                "you cannot remove yourself: leave instead",
+            ));
+        }
+        let shown = self.name(target).unwrap_or_default().to_string();
+        self.rooms[index].banned.push(wanted);
+        self.leave(target, "the host removed you from this game");
+        if let Some(index) = self.room_index(self.room_of(id).unwrap_or(0)) {
+            self.rooms[index].note = format!("{shown} was removed by the host");
+            self.push_room(index);
+        }
         Ok(())
     }
 
@@ -611,6 +741,7 @@ impl Rooms {
             ));
         }
         self.rooms[index].stage = Stage::Queued;
+        self.rooms[index].armed = false;
         let room_id = self.rooms[index].id;
         self.queue.push_back(room_id);
         self.rooms[index].note = String::new();
@@ -657,6 +788,10 @@ impl Rooms {
             }
             return;
         }
+        if owner_left || self.rooms[index].members.len() < usize::from(self.config.min_players) {
+            // A rematch the owner asked for dies with the owner, or with the people for it.
+            self.rooms[index].armed = false;
+        }
         self.rooms[index].note = if owner_left {
             let next = self.rooms[index].members[0].client;
             let next_name = self.name(next).unwrap_or_default().to_string();
@@ -695,7 +830,7 @@ impl Rooms {
 
     /// The race of `room` ended (finished, crashed, timed out). The slot is free; the
     /// room is `Open` again with its people in it, picks cleared, and `reason` in its note.
-    pub fn race_over(&mut self, room: u32, reason: &str) {
+    pub fn race_over(&mut self, room: u32, reason: &str, board: Board) {
         if self.active == Some(room) {
             self.active = None;
         }
@@ -708,15 +843,23 @@ impl Rooms {
         }
         self.rooms[index].stage = Stage::Open;
         self.rooms[index].note = reason.to_string();
+        self.rooms[index].board = board;
+        // A person who asked to race again while it ran is ready for it; the rest pick again.
         for member in &mut self.rooms[index].members {
-            member.ready = false;
+            member.ready = member.again;
+            member.again = false;
         }
         self.push_room(index);
+        self.try_rematch(index);
     }
 
     /// The race for `room` could not be brought up (the runner failed): same as it ending.
     pub fn launch_failed(&mut self, room: u32, reason: &str) {
-        self.race_over(room, &format!("the race could not start: {reason}"));
+        self.race_over(
+            room,
+            &format!("the race could not start: {reason}"),
+            Board::default(),
+        );
     }
 
     /// Whether the room's race is up (the hand-off was sent): its members read `Racing`.

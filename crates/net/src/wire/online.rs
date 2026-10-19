@@ -7,6 +7,7 @@
 //! dials the wrong port is refused by name by either end. Chosen, not measured: the
 //! shapes follow Omega's lobby (`docs/networking/online-lobby.md`), the bytes are ours.
 
+use super::board::Board;
 use super::{Malformed, PROTOCOL, RaceParams, Reader, put_string};
 
 /// The first four bytes of a lobby hello, so a race client dialling a lobby is refused by name.
@@ -113,6 +114,8 @@ pub struct Snapshot {
     pub phase: Phase,
     /// A line for the screen (why a start was refused, who was made owner), possibly empty.
     pub note: String,
+    /// The last race's final board, empty until the room has raced.
+    pub board: Board,
 }
 
 /// A room as the list shows it.
@@ -157,10 +160,12 @@ pub enum Refusal {
     InRoom,
     /// The settings name something this server cannot race.
     BadSettings,
+    /// The room's owner removed this person from it, and the room remembers.
+    Kicked,
 }
 
 impl Refusal {
-    const ALL: [Self; 12] = [
+    const ALL: [Self; 13] = [
         Self::Full,
         Self::Started,
         Self::Content,
@@ -173,6 +178,7 @@ impl Refusal {
         Self::NotInRoom,
         Self::InRoom,
         Self::BadSettings,
+        Self::Kicked,
     ];
 
     fn from_byte(byte: u8) -> Result<Self, Malformed> {
@@ -231,6 +237,15 @@ pub enum Message {
     Start,
     /// Client to lobby: leave the room.
     Leave,
+    /// Client to lobby: race again with the same settings. The sender is ready with the team
+    /// last picked (also while the race is still running, taking effect when it ends); from
+    /// the owner it also arms the start, which fires once everyone is ready.
+    Rematch,
+    /// Owner to lobby: remove the named person from the room. The room refuses them back.
+    Kick {
+        /// The person's name.
+        name: String,
+    },
     /// Lobby to client: the session, with the token that takes it over after a dropped link.
     Welcome {
         /// The session token.
@@ -314,7 +329,7 @@ impl RaceJob {
     /// The job as one line of hex.
     #[must_use]
     pub fn to_line(&self) -> String {
-        self.encode().iter().map(|b| format!("{b:02x}")).collect()
+        super::to_hex(&self.encode())
     }
 
     /// Parses [`Self::to_line`].
@@ -323,15 +338,7 @@ impl RaceJob {
     ///
     /// [`Malformed`] for odd or non-hex text, or bytes that are not a job.
     pub fn from_line(line: &str) -> Result<Self, Malformed> {
-        let line = line.trim();
-        if !line.len().is_multiple_of(2) {
-            return Err(Malformed("job line is not whole bytes"));
-        }
-        let bytes = (0..line.len() / 2)
-            .map(|i| u8::from_str_radix(&line[2 * i..2 * i + 2], 16))
-            .collect::<Result<Vec<u8>, _>>()
-            .map_err(|_| Malformed("job line is not hex"))?;
-        Self::decode(&bytes)
+        Self::decode(&super::from_hex(line)?)
     }
 }
 
@@ -469,6 +476,11 @@ impl Message {
             }
             Self::Start => out.push(0x26),
             Self::Leave => out.push(0x27),
+            Self::Rematch => out.push(0x28),
+            Self::Kick { name } => {
+                out.push(0x29);
+                put_string(&mut out, name);
+            }
             Self::Welcome {
                 token,
                 name,
@@ -505,6 +517,7 @@ impl Message {
                 }
                 put_phase(&mut out, room.phase);
                 put_string(&mut out, &room.note);
+                room.board.put(&mut out);
             }
             Self::Left { reason } => {
                 out.push(0x33);
@@ -562,6 +575,8 @@ impl Message {
             },
             0x26 => Self::Start,
             0x27 => Self::Leave,
+            0x28 => Self::Rematch,
+            0x29 => Self::Kick { name: r.string()? },
             0x30 => Self::Welcome {
                 token: r.string()?,
                 name: r.string()?,
@@ -600,6 +615,7 @@ impl Message {
                     members,
                     phase: take_phase(&mut r)?,
                     note: r.string()?,
+                    board: Board::take(&mut r)?,
                 })
             }
             0x33 => Self::Left {
@@ -685,6 +701,8 @@ mod tests {
             },
             Message::Start,
             Message::Leave,
+            Message::Rematch,
+            Message::Kick { name: "bob".into() },
             Message::Welcome {
                 token: "abc".into(),
                 name: "ann".into(),
@@ -708,6 +726,17 @@ mod tests {
                 }],
                 phase: Phase::Queued { position: 2 },
                 note: "bob is the owner".into(),
+                board: Board {
+                    rows: vec![crate::wire::board::BoardRow {
+                        place: 1,
+                        slot: 0,
+                        name: "bob".into(),
+                        laps: 3,
+                        finish_ticks: Some(100),
+                        best_lap_ticks: None,
+                        eliminations: 1,
+                    }],
+                },
             }),
             Message::Left {
                 reason: "race over".into(),
@@ -733,6 +762,7 @@ mod tests {
                 members: Vec::new(),
                 phase,
                 note: String::new(),
+                board: Board::default(),
             });
             assert_eq!(Message::decode(&room.encode()), Ok(room));
         }

@@ -26,6 +26,7 @@ use oag_gameplay::{MAX_PLAYERS, PlayerInputs};
 use oag_raceplay::Race;
 
 use crate::link::Link;
+use crate::wire::board::Board;
 use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, TickRecord};
 
 /// The newest confirmed ticks each server datagram carries, at most (fewer when
@@ -220,7 +221,7 @@ impl Host {
                             }));
                         }
                     }
-                    Ok(Control::End { reason }) => {
+                    Ok(Control::End { reason, .. }) => {
                         log::info!("net: seat {slot} ({}) left: {reason}", seat.name);
                         seat.left = Some(reason);
                     }
@@ -468,6 +469,7 @@ impl Host {
                 // watching a race that no longer moves for them.
                 seat.link.send_control(&Control::End {
                     reason: format!("you were dropped from the race: {why}"),
+                    board: Board::default(),
                 });
                 seat.left = Some(why);
                 dropped += 1;
@@ -505,13 +507,21 @@ impl Host {
             first: u32::try_from(first).unwrap_or(u32::MAX),
             ticks: self.history[first..].to_vec(),
         };
+        let board = self.board();
         for seat in self.seats.iter_mut().flatten() {
             seat.link.send_control(&Control::Ticks(tail.clone()));
             seat.link.send_control(&Control::End {
                 reason: reason.to_string(),
+                board: board.clone(),
             });
         }
         self.phase = Phase::Over;
+    }
+
+    /// The race's final board with the people's names, empty before the race has a result.
+    #[must_use]
+    pub fn board(&self) -> Board {
+        crate::race::final_board(&self.race, &self.seat_names())
     }
 
     /// Each seat's counts since the last call, and resets them.

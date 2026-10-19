@@ -29,6 +29,7 @@ use oag_gameplay::Controller;
 use oag_raceplay::{Options, Race};
 
 use crate::wire::RaceParams;
+use crate::wire::board::{Board, BoardRow};
 
 /// The race options `params` names, opened from `source` (this machine's own copy
 /// of the title).
@@ -244,5 +245,41 @@ mod tests {
         };
         let options = super::options(&alone, "x").expect("options");
         assert!(options.seat_picks.is_empty() && options.team.is_none());
+    }
+}
+
+/// The race's final board in the wire's shape: the rows of `race.results()` with each person's
+/// name from `names` (by slot, `None` or empty for a craft the AI flew). Empty before the
+/// race has a result. The server sends this; a client builds its own the same way from its
+/// confirmed state, and [`Board::same_race_as`] compares the two.
+#[must_use]
+pub fn final_board(race: &Race, names: &[Option<String>]) -> Board {
+    let Some(board) = race.results() else {
+        return Board::default();
+    };
+    let ships = &race.sim.world.ships;
+    Board {
+        rows: board
+            .rows
+            .iter()
+            .map(|row| {
+                let slot = usize::from(row.slot);
+                BoardRow {
+                    place: row.place,
+                    slot: row.slot,
+                    name: if row.player {
+                        names.get(slot).cloned().flatten().unwrap_or_default()
+                    } else {
+                        String::new()
+                    },
+                    laps: u16::try_from(row.laps_completed).unwrap_or(u16::MAX),
+                    finish_ticks: row.finish_tick.map(|t| u32::try_from(t).unwrap_or(u32::MAX - 1)),
+                    best_lap_ticks: row.best_lap_ticks,
+                    eliminations: ships
+                        .get(slot)
+                        .map_or(0, |ship| u16::try_from(ship.standing.kills).unwrap_or(u16::MAX)),
+                }
+            })
+            .collect(),
     }
 }

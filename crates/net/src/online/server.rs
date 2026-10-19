@@ -339,11 +339,11 @@ impl Server {
                     }
                 }
             }
-            Status::Over(reason) => {
+            Status::Over(ended) => {
                 let room = running.room;
-                log::info!("lobby: room {room}'s race is over: {reason}");
+                log::info!("lobby: room {room}'s race is over: {}", ended.reason);
                 self.race = None;
-                self.rooms.race_over(room, &reason);
+                self.rooms.race_over(room, &ended.reason, ended.board);
             }
         }
     }

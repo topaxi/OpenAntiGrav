@@ -76,7 +76,8 @@ fn race(args: &Args) -> Result<()> {
         &mut |line| println!("{line}"),
     )
     .map_err(|e| anyhow!("{e}"))?;
-    println!("race-over {ended}");
+    println!("race-board {}", ended.board.to_line());
+    println!("race-over {}", ended.reason);
     Ok(())
 }
 
