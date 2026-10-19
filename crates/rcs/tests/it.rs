@@ -28,6 +28,7 @@ mod psp2_material_param_ground_truth;
 mod psp2_pvs_ground_truth;
 mod psp2_rcsmodel_ground_truth;
 mod psp2_rcsmodel_material_ground_truth;
+mod psp2_sampler_use_ground_truth;
 mod rcsmaterial_ground_truth;
 mod rcsmodel_decl_ground_truth;
 mod rcsmodel_ground_truth;

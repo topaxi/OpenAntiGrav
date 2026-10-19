@@ -90,6 +90,8 @@
 //!
 //! Header fields absent from the table above are unread rather than guessed.
 
+pub mod sampler_use;
+
 use core::fmt;
 
 /// `"GXP\0"`, read as a little-endian `u32`.

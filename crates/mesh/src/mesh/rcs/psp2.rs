@@ -38,6 +38,8 @@ use oag_texture::gxt;
 
 use super::Textures;
 use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
+use oag_rcs::gxp::sampler_use;
+use oag_rcs::rcsmaterial::name_hash;
 
 mod glow;
 pub mod placement;
@@ -161,6 +163,13 @@ pub struct Report {
     /// [`ModelTexture::from_gnf_form`]. Counted per decode, so a texture two
     /// materials name is counted once for each.
     pub gnf: crate::mesh::GnfCounts,
+    /// Materials whose picture the build refused because the material's own
+    /// fragment programs declare it only in their lit permutations
+    /// (`oag_rcs::gxp::sampler_use`): a normal, specular or reflection lookup.
+    pub lighting_only_materials: usize,
+    /// Of those, the materials that drew the constant colour their ambient-only
+    /// program names, as a one-texel picture.
+    pub constant_colour_materials: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -271,9 +280,17 @@ impl Report {
             )
         };
         let gnf = self.gnf.describe();
+        let lighting_only = if self.lighting_only_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} material(s) bind no picture from a sampler their own programs read only for lighting ({} drew the constant colour the unlit program names)",
+                self.lighting_only_materials, self.constant_colour_materials
+            )
+        };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{see_through}{nodes}{gnf}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -700,6 +717,10 @@ fn bind_textures(
     // the one outcome `psp2::parse` already refuses to allow.
     debug_assert_eq!(model.draws.len(), decoded.submeshes.len());
     let mut cache: Vec<Option<Option<usize>>> = vec![None; decoded.materials.len()];
+    // A material file's programs say which of its samplers feed only the
+    // lighting; read once per distinct file.
+    let mut sampler_uses: std::collections::HashMap<&str, Option<sampler_use::SamplerUse>> =
+        std::collections::HashMap::new();
     // A lightmap is shared by however many materials name the same file, and a
     // 2,048-square atlas is 16 MiB decoded, so decode each path once.
     let mut atlases: std::collections::HashMap<&str, Option<std::sync::Arc<ModelTexture>>> =
@@ -717,19 +738,47 @@ fn bind_textures(
         };
         let resolved = *slot.get_or_insert_with(|| {
             let layer = glow.layers.get(index).and_then(Option::as_ref);
-            let path = match layer {
-                Some(layer) => layer.diffuse.as_str(),
-                None => decoded.materials[index].diffuse_texture()?,
-            };
-            let (texture, form) = diffuses
-                .entry(path)
+            let material = &decoded.materials[index];
+            let uses = sampler_uses
+                .entry(material.name.as_str())
                 .or_insert_with(|| {
-                    let blob = textures(path)?;
-                    let (texture, form) = decode_texture_form(path, &blob)?;
-                    let texture = crate::mesh_render::offer_to_texture_sink(texture);
-                    Some((std::sync::Arc::new(texture), form))
+                    textures(&material.name).and_then(|blob| sampler_use::sampler_use(&blob))
                 })
-                .clone()?;
+                .clone();
+            let refused: Vec<u32> = uses
+                .iter()
+                .flat_map(|u| &u.lighting_only)
+                .map(|name| name_hash(name))
+                .collect();
+            let path = match layer {
+                Some(layer) => Some(layer.diffuse.as_str()),
+                None => material.diffuse_texture_without(&refused),
+            };
+            let refused_here = layer.is_none()
+                && material
+                    .samplers
+                    .iter()
+                    .any(|(hash, _)| refused.contains(hash));
+            report.lighting_only_materials += usize::from(refused_here && path.is_none());
+            let (texture, form) = match path {
+                Some(path) => diffuses
+                    .entry(path)
+                    .or_insert_with(|| {
+                        let blob = textures(path)?;
+                        let (texture, form) = decode_texture_form(path, &blob)?;
+                        let texture = crate::mesh_render::offer_to_texture_sink(texture);
+                        Some((std::sync::Arc::new(texture), form))
+                    })
+                    .clone()?,
+                None => {
+                    let colour = refused_here
+                        .then(|| constant_colour(material, uses.as_ref()?))
+                        .flatten()?;
+                    report.constant_colour_materials += 1;
+                    (std::sync::Arc::new(colour), None)
+                }
+            };
+            let path = path.unwrap_or("constant colour");
             if let Some(form) = form {
                 report.gnf.record(form);
             }
@@ -772,6 +821,32 @@ fn bind_textures(
             None => report.unresolved_draws += 1,
         }
     }
+}
+
+/// The constant a lighting-only material takes its colour from: the one
+/// uniform its ambient-only program declares besides the ambient and fog
+/// colours, read from the material's own value, as a one-texel picture.
+///
+/// Unorm bytes, no sRGB step, the way `skin::constant_diffuse` binds HD's.
+/// `None` where the program names no single colour or the material carries no
+/// value for it, which leaves the draw unresolved and counted as such.
+fn constant_colour(
+    material: &psp2::material::Material,
+    uses: &sampler_use::SamplerUse,
+) -> Option<ModelTexture> {
+    let name = uses.colour_uniform.as_deref()?;
+    let value = material.param(name_hash(name))?;
+    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let channel = |i: usize| byte(value.get(i).copied().unwrap_or(1.0));
+    Some(crate::mesh_render::offer_to_texture_sink(
+        ModelTexture::rgba8(
+            format!("constant colour {name}"),
+            1,
+            1,
+            vec![channel(0), channel(1), channel(2), 255],
+            None,
+        ),
+    ))
 }
 
 /// The model's own centre and radius, from every vertex it ended up with.
