@@ -39,7 +39,7 @@ pub(super) enum Albedo {
 /// ([`rcsmaterial::fragment::Program::samples_as_normal`]), and a resolved
 /// program with no picture left is [`Albedo::Unsampled`] rather than entry 0.
 /// `constantdiffuse_specular_normal` (its `ds_sfblend_ns` is the start line on
-/// seven circuits) names only a normal-and-specular map at `0x3bdc0403` and the
+/// twelve circuits) names only a normal-and-specular map at `0x3bdc0403` and the
 /// lightmap; entry 0 drew that map as the colour, a purple ridged strip across
 /// the road.
 pub(super) fn albedo(
