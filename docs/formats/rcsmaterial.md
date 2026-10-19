@@ -2680,7 +2680,11 @@ weapon-scene proxies in `oag-game` sit on this strip and were re-baselined for i
 (`hd_weapon_scene_ground_truth`, `hd_plasma_ball_ground_truth`).
 
 **Disc-wide effect**, every HD circuit model before and after
-(`crates/render/examples/hd_albedo_dump.rs`, 14,373 material slots): 173 slots changed.
+(`crates/render/examples/hd_albedo_dump.rs`, 14,373 material slots): 173 slots changed,
+and the constant diffuse is bound on 46 of them (42 `constantdiffuse_specular_normal`, 4
+`diffuse_spec_constant`; no other family carries `diffuse`). Start frames of 02, 03,
+05, Amphiseum, Modesto, Tech De Ra and Vineta K show no blown-out or dark strip; no
+pre-fix frame exists per changed family.
 Normal maps no longer bound as colour: `ds_pipe_nc` (51), `ds_sfblend_ns` (25),
 `ds_glass_panels_ns` (16), `ds_mesh_n`, `j_window9_n`, `bumpycones_normal`.
 Lightmap atlases that were also the albedo (so lit twice): `metallic` (38),
@@ -2700,7 +2704,7 @@ grey picture is a unit vector too, hence the z test; two-channel DXT5 packings r
 and are **not** caught). It runs inside walks that already build every circuit:
 `hd_water_ground_truth` (HD, all 16 circuit directories, both ways),
 `pvs_placement_ground_truth` (Pulse PSP and PS2, every track variant),
-`lod_switch_ground_truth` (Pure, the five circuits whose directory names resolve),
+`lod_switch_ground_truth` (Pure, all 16 `PI_Track` circuits of its own definition),
 `omega_transparency_ground_truth` (Omega per circuit, 2048's Vita package). Before the
 fix Talon's alone failed with `ds_sfblend_ns`, `ds_pipe_nc` (x2), `ds_glass_panels_ns`
 and the `diffuse_spec_constant` lightmap; after it HD is clean on every circuit.
@@ -2716,10 +2720,13 @@ maps: Omega 223 over 34 circuit models, 2048 66 over 18 (ratchets in
 water, rock (`rocks_01_normal_alpha`), glass and `jd_*_n` families are in the same list.
 Not wired because the GXP/GNM programs are not read for it; HD's rule is the model for it.
 Pulse, Pure: **not applicable**, the PSP/PS2 games ship no normal maps (the oracle is off
-there; the walks still check the lightmap and undecoded clauses). Pure's census reaches
-five circuits (`01_Vineta_K`, `03_Modesto_Heights`, `04_Chenghou_Project`,
-`10_Sebenco_Climb`, `12_Sol_2`); the other circuit directories' names are not recovered,
-so they cannot be walked by name.
+there; the walks still check the lightmap and undecoded clauses). They also have no shader
+variant table (fixed-function GE), so the census's "a shader variant resolves" clause is
+HD's alone: `hd_water_ground_truth` freezes the per-circuit counts of materials and chunks
+with no variant (Modesto 21 and 176, Talon's 16 and 54, Tech De Ra 17-18 and 103, every
+other circuit zero; may shrink, never grow). 2048 and Omega read no program either, so
+that clause does not exist there; `psp2::Report::unresolved_draws` is not ratcheted
+(about 2,100 on Amphiseum alone, not taken apart).
 
 ## Water family: `water_test_2`, `water_noref` and `sebenco_ice` (2026-10-07, `hd-water`)
 

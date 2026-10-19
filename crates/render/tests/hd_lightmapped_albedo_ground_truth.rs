@@ -203,7 +203,7 @@ fn vinetas_backdrop_terrain_binds_sand_and_rock_not_its_blend_mask() {
 /// program unpacks with `MAD 2, -1` and never samples as colour, so the
 /// surface is its authored constant diffuse (`0x7611a2d8`, a dark
 /// `0.037, 0.054, 0.077`) times the light. Binding the map as the picture drew
-/// a purple ridged strip across the road on seven circuits. Dropping
+/// a purple ridged strip across the road on twelve circuits. Dropping
 /// `Program::samples_as_normal` from `skin::lightmapped` fails this.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]

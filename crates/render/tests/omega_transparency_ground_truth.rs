@@ -111,7 +111,10 @@ fn altimas_glass_and_cutouts_leave_the_opaque_list_on_the_vita_too() {
 
 /// Builds every circuit model in `archives` whose path matches `is_track` and
 /// returns how many there were and how many drawn colour slots are not
-/// pictures (`track_albedo`).
+/// pictures (`track_albedo`). psp2 resolves no shader variant (the Vita and PS4
+/// programs are unread), so there is no variant clause on these two titles, and
+/// its `unresolved_draws` is not ratcheted: Amphiseum alone reports about 2,100,
+/// which this census did not take apart.
 fn every_circuit_binds_pictures(
     archives: &mut [oag_assets::psarc::Archive],
     is_track: impl Fn(&str) -> bool,
