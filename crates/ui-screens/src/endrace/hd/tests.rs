@@ -124,12 +124,14 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
                 time_ticks: Some(180),
                 player: true,
                 seat: None,
+                name: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: None,
                 player: false,
                 seat: None,
+                name: None,
             },
         ],
     };
@@ -164,6 +166,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
             time_ticks: Some(180),
             player: true,
             seat: None,
+            name: None,
         }],
     };
     let strings = strings();
@@ -214,12 +217,14 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
                 time_ticks: Some(60),
                 player: false,
                 seat: None,
+                name: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: Some(90),
                 player: true,
                 seat: None,
+                name: None,
             },
         ],
     };
@@ -287,6 +292,7 @@ fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_pla
             time_ticks: Some(60),
             player: true,
             seat: None,
+            name: None,
         }],
     };
     let strings = strings();
@@ -566,6 +572,7 @@ fn a_two_person_race_names_and_highlights_each_person() {
         time_ticks: Some(u64::from(place) * 600),
         player: seat.is_some(),
         seat,
+        name: None,
     };
     let model = FieldResults {
         loyalty: None,
@@ -603,4 +610,38 @@ fn a_two_person_race_names_and_highlights_each_person() {
         .filter(|draw| matches!(draw, Draw::Fill { color, .. } if *color == highlight))
         .count();
     assert_eq!(rows, 2, "one highlight per person's row");
+}
+
+/// A network race's people are called by the name they raced under, not their seat.
+#[test]
+fn a_named_person_is_drawn_by_name() {
+    let row = |place, seat: u8, name: Option<&str>| FieldRow {
+        place,
+        time_ticks: Some(u64::from(place) * 600),
+        player: true,
+        seat: Some(seat),
+        name: name.map(str::to_string),
+    };
+    let model = FieldResults {
+        loyalty: None,
+        headline: Headline::Several,
+        rows: vec![row(1, 1, Some("Ada")), row(2, 2, None)],
+    };
+    let strings = StringTable::from_xml(
+        r#"<Strings><Entry ID="OAG_JOIN_PLAYER" String="PLAYER"></Entry></Strings>"#,
+    );
+    let layers = hd_results_draw_list(
+        &model,
+        &results_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let texts = texts(&layers);
+    assert!(texts.contains(&"Ada".to_string()), "{texts:?}");
+    assert!(texts.contains(&"PLAYER 2".to_string()), "{texts:?}");
+    assert!(!texts.contains(&"PLAYER 1".to_string()), "{texts:?}");
 }

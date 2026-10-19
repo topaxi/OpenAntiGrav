@@ -31,9 +31,17 @@ impl Session {
         // The pages summarise one racer (their place, medal and records), so for a
         // race several people flew they would be slot 0's alone: the built-in
         // table, which names every person, stays instead. Chosen, not measured -
-        // 2048's own split screen is not read.
-        if stage.race.viewport_count() > 1 {
-            log::info!("split screen: keeping the built-in results table over the touch pages");
+        // 2048's own split screen is not read. A network race several people flew is the same:
+        // each person is named on that table by the name they raced under.
+        let several_over_the_network = self.net.is_some()
+            && stage
+                .race
+                .results()
+                .is_some_and(|board| board.persons() > 1);
+        if stage.race.viewport_count() > 1 || several_over_the_network {
+            log::info!(
+                "several people: keeping the built-in results table over the touch pages"
+            );
             self.mark_endrace_unavailable();
             return;
         }

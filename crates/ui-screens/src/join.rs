@@ -465,7 +465,9 @@ impl Join {
         self.blocked = blocked;
     }
 
-    fn note(&self, n: usize) -> Option<&str> {
+    /// The line seat `n` says under the title while it is highlighted, if it says one.
+    #[must_use]
+    pub fn note(&self, n: usize) -> Option<&str> {
         self.notes.get(n).and_then(Option::as_deref)
     }
 

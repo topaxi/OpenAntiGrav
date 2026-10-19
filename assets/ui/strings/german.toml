@@ -75,6 +75,8 @@ OAG_ONLINE_ZONE_NONE = { text = "KEINES", human = false }
 OAG_ONLINE_QUEUED = { text = "EIN ANDERES SPIEL LÄUFT: DU BIST NUMMER %d IN DER WARTESCHLANGE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "DAS RENNEN STARTET IN %d", human = false }
 OAG_ONLINE_RACING = { text = "DAS RENNEN WIRD GESTARTET", human = false }
+OAG_ONLINE_KICK_HINT = { text = "BESTÄTIGEN, UM DIESEN SPIELER AUS DEM SPIEL ZU ENTFERNEN", human = false }
+OAG_ONLINE_HOST_RACE_AGAIN = { text = "DER GASTGEBER MÖCHTE NOCH EINMAL FAHREN", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "Head to Head ist für zwei Personen", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Ein Rennen im Netzwerk ausrichten oder beitreten", human = false }
 OAG_LAN_HOST = { text = "SPIEL AUSRICHTEN", human = false }

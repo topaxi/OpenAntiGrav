@@ -388,7 +388,30 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                 "both people are on the board as finishers"
             );
         }
-        // The room is open again with the reason, and the slot is free.
+        // The server's own board came in `End`: it is the same race as each client's own
+        // (names are the server's alone), names both people, and is what the room holds.
+        let mut boards = Vec::new();
+        for (client, race, who) in &racers {
+            let race = race.as_ref().expect("loaded");
+            let theirs = client
+                .final_board()
+                .unwrap_or_else(|| panic!("person {who}: End carried no board"));
+            assert!(
+                oag_net::race::final_board(race, &[]).same_race_as(theirs),
+                "person {who}: the server's board is this client's board"
+            );
+            let mut named: Vec<(u8, String)> = theirs
+                .rows
+                .iter()
+                .filter(|row| !row.name.is_empty())
+                .map(|row| (row.slot, row.name.clone()))
+                .collect();
+            named.sort();
+            assert_eq!(named, [(0, "Ada".to_string()), (1, "Bob".to_string())]);
+            boards.push(theirs.clone());
+        }
+        assert_eq!(boards[0], boards[1], "every person got the one board");
+        // The room is open again with the reason and the board, and the slot is free.
         pump(&mut people, &|p| {
             p.iter().all(|c| {
                 c.room.as_ref().is_some_and(|r| {
@@ -396,6 +419,21 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                 })
             })
         });
+        for person in &people {
+            let room = person.room.as_ref().expect("room");
+            assert_eq!(
+                room.board, boards[0],
+                "the room screen shows the race's board"
+            );
+        }
+        // A rematch from both: a second race starts under the same settings, without leaving.
+        let settings = people[0].room.as_ref().expect("room").settings.clone();
+        people[0].rematch();
+        people[1].rematch();
+        pump(&mut people, &|p| p.iter().all(LobbyClient::has_handoff));
+        for person in &people {
+            assert_eq!(person.room.as_ref().expect("room").settings, settings);
+        }
     });
     let _ = lobby.kill();
     let _ = lobby.wait();

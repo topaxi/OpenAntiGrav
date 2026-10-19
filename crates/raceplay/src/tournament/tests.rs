@@ -12,6 +12,7 @@ fn board(places: &[(u8, u8, bool)]) -> Board {
                 finish_tick: finished.then_some(1000),
                 best_lap_ticks: None,
                 player: slot == 0,
+                name: None,
             })
             .collect(),
         laps_target: Some(3),

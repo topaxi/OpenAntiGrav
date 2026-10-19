@@ -11,7 +11,8 @@ use oag_net::online::client::{Handoff, LobbyClient};
 use oag_net::online::race_proc::{ChildRunner, Limits, ThreadRunner};
 use oag_net::online::rooms::Config as RoomsConfig;
 use oag_net::online::server::{Config, Server};
-use oag_net::wire::online::{Edition, Phase as RoomPhase, RoomSettings};
+use oag_net::wire::board::{Board, BoardRow};
+use oag_net::wire::online::{Edition, Phase as RoomPhase, Refusal, RoomSettings};
 use web_time::Duration;
 
 use crate::loopback::headless;
@@ -512,4 +513,151 @@ fn a_title_with_no_image_cannot_start_and_says_so() {
                 .as_ref()
                 .is_some_and(|r| r.note.contains("no image for"))
     });
+}
+
+fn board() -> Board {
+    Board {
+        rows: vec![
+            BoardRow {
+                place: 1,
+                slot: 1,
+                name: "a2".into(),
+                laps: 3,
+                finish_ticks: Some(4_000),
+                best_lap_ticks: Some(1_300),
+                eliminations: 0,
+            },
+            BoardRow {
+                place: 2,
+                slot: 0,
+                name: "a1".into(),
+                laps: 3,
+                finish_ticks: Some(4_100),
+                best_lap_ticks: None,
+                eliminations: 0,
+            },
+        ],
+    }
+}
+
+/// A race process that comes up, waits at `first` (or, when an earlier run has been through, at
+/// `later`), reports `board` and ends as a finished race.
+fn finishing_race(
+    name: &str,
+    first: &std::path::Path,
+    later: &std::path::Path,
+    board: &Board,
+) -> Box<ChildRunner> {
+    let ran = fake_race_dir().join(format!("{name}.ran"));
+    let _ = std::fs::remove_file(&ran);
+    child_runner(fake_race(
+        name,
+        &format!(
+            "echo 'listening on [::]:45679'\n\
+             echo 'cert-hash 0202020202020202020202020202020202020202020202020202020202020202'\n\
+             if [ -e '{ran}' ]; then {later}; else {first}; touch '{ran}'; fi\n\
+             echo 'race-board {board}'\n\
+             echo 'race-over every person has finished'\n\
+             exit 0",
+            ran = ran.display(),
+            first = wait_at(first),
+            later = wait_at(later),
+            board = board.to_line()
+        ),
+    ))
+}
+
+#[test]
+fn the_races_board_reaches_every_member_and_a_rematch_races_again_with_the_same_settings() {
+    let (first, second) = (gate("board-1"), gate("board-2"));
+    let mut lab = Lab::new(finishing_race("board", &first, &second, &board()));
+    let (a1, a2) = (lab.join("a1"), lab.join("a2"));
+    lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
+    lab.until("the hand-off", |lab| {
+        lab.people[a1].has_handoff() && lab.people[a2].has_handoff()
+    });
+    lab.people[a1].take_handoff();
+    lab.people[a2].take_handoff();
+    let settings = lab.people[a1].room.as_ref().expect("room").settings.clone();
+    // The owner asks for a rematch while the race still runs; the guest has not.
+    lab.people[a1].rematch();
+    lab.until("the owner's ask is in", |lab| {
+        lab.people[a2].room.as_ref().is_some_and(|r| r.rematch)
+    });
+    std::fs::write(&first, b"").expect("the race may end now");
+    lab.until("the board in both rooms", |lab| {
+        [a1, a2].into_iter().all(|who| {
+            lab.people[who]
+                .room
+                .as_ref()
+                .is_some_and(|r| !r.board.is_empty() && r.phase == RoomPhase::Open)
+        })
+    });
+    for who in [a1, a2] {
+        let room = lab.people[who].room.as_ref().expect("room");
+        assert_eq!(room.board, board(), "member {who} holds the server's board");
+        assert!(
+            room.note.starts_with("every person has finished"),
+            "{}",
+            room.note
+        );
+    }
+    // The guest agrees: the room starts again by itself, under the same settings.
+    lab.people[a2].rematch();
+    lab.until("a second hand-off for both", |lab| {
+        lab.people[a1].has_handoff() && lab.people[a2].has_handoff()
+    });
+    for who in [a1, a2] {
+        assert_eq!(
+            lab.people[who].room.as_ref().expect("room").settings,
+            settings,
+            "the second race has the first race's settings"
+        );
+        assert!(lab.people[who].take_handoff().is_some());
+    }
+    std::fs::write(&second, b"").expect("the second race may end");
+    lab.until("the second race over", |lab| {
+        lab.phase(a1) == Some(RoomPhase::Open) && lab.server.racing_room().is_none()
+    });
+}
+
+#[test]
+fn a_removed_member_is_told_why_and_refused_back() {
+    let mut lab = Lab::new(thread_runner(60));
+    let (a1, a2) = (lab.join("a1"), lab.join("a2"));
+    lab.people[a1].create(settings());
+    lab.until("the room", |lab| lab.people[a1].room.is_some());
+    let room = lab.people[a1].room.as_ref().expect("room").id;
+    lab.people[a2].join(room);
+    lab.until("both in", |lab| {
+        lab.people[a1]
+            .room
+            .as_ref()
+            .is_some_and(|r| r.members.len() == 2)
+    });
+    // A guest cannot remove the owner; the owner can remove the guest.
+    lab.people[a2].kick("a1");
+    lab.until("the refusal", |lab| lab.people[a2].refused.is_some());
+    assert_eq!(
+        lab.people[a2].refused.take().map(|(c, _)| c),
+        Some(Refusal::NotOwner)
+    );
+    lab.people[a1].kick("a2");
+    lab.until("a2 told", |lab| lab.people[a2].left.is_some());
+    let why = lab.people[a2].left.clone().expect("a reason");
+    assert!(why.contains("removed"), "{why}");
+    lab.until("a1 sees the room alone", |lab| {
+        lab.people[a1]
+            .room
+            .as_ref()
+            .is_some_and(|r| r.members.len() == 1 && r.note.contains("a2 was removed"))
+    });
+    lab.people[a2].join(room);
+    lab.until("the refusal on rejoin", |lab| {
+        lab.people[a2].refused.is_some()
+    });
+    assert_eq!(
+        lab.people[a2].refused.take().map(|(c, _)| c),
+        Some(Refusal::Kicked)
+    );
 }

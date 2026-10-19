@@ -18,6 +18,7 @@ use web_time::{Duration, Instant};
 
 use crate::host::Host;
 use crate::serve::Pace;
+use crate::wire::board::Board;
 use crate::wire::online::RaceJob;
 use crate::wt::{Identity, Listener};
 
@@ -34,7 +35,27 @@ pub enum Status {
         cert_hash: [u8; 32],
     },
     /// Over, and why: finished, crashed, timed out.
-    Over(String),
+    Over(Ended),
+}
+
+/// How a race ended: the reason, and the server's final board when it ran to a result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ended {
+    /// Why: finished, crashed, timed out.
+    pub reason: String,
+    /// The final board, empty when the race ended without placing anyone.
+    pub board: Board,
+}
+
+impl Ended {
+    /// An ending with no board.
+    #[must_use]
+    pub fn without_board(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            board: Board::default(),
+        }
+    }
 }
 
 /// A race that was brought up. Dropping it ends the race.
@@ -84,7 +105,7 @@ pub fn run_race(
     limits: Limits,
     stop: &dyn Fn() -> bool,
     say: &mut dyn FnMut(&str),
-) -> Result<String, String> {
+) -> Result<Ended, String> {
     host.expect_seats(seats.to_vec());
     let asked = Instant::now();
     while !host.all_ready() {
@@ -144,7 +165,10 @@ pub fn run_race(
             say(line);
         },
     );
-    Ok(ended)
+    Ok(Ended {
+        reason: ended,
+        board: host.board(),
+    })
 }
 
 /// Builds the race for a job's params.
@@ -201,7 +225,7 @@ impl Runner for ThreadRunner {
         std::thread::Builder::new()
             .name("oag-race".into())
             .spawn(move || {
-                let outcome = (|| -> Result<String, String> {
+                let outcome = (|| -> Result<Ended, String> {
                     let race = load(&job.params).map_err(|e| format!("{e:#}"))?;
                     let mut host = Host::new(race, job.params.clone());
                     let identity = Identity::self_signed(&[]).map_err(|e| format!("{e:#}"))?;
@@ -221,7 +245,8 @@ impl Runner for ThreadRunner {
                     )
                 })();
                 let _ = tx.send(Status::Over(match outcome {
-                    Ok(why) | Err(why) => why,
+                    Ok(ended) => ended,
+                    Err(why) => Ended::without_board(why),
                 }));
             })
             .map_err(|e| format!("starting the race thread: {e}"))?;
@@ -265,11 +290,11 @@ struct ChildHandle {
     load_timeout: Duration,
     /// The child's last lines of output, for a failure's reason.
     tail: Arc<Mutex<Vec<String>>>,
-    over: Option<String>,
+    over: Option<Ended>,
 }
 
 impl ChildHandle {
-    fn reason(&self, status: &std::process::ExitStatus) -> String {
+    fn reason(&self, status: &std::process::ExitStatus) -> Ended {
         let tail = self.tail.lock().map(|t| t.clone()).unwrap_or_default();
         let last = |prefix: &str| {
             tail.iter()
@@ -277,18 +302,23 @@ impl ChildHandle {
                 .find_map(|l| l.strip_prefix(prefix).map(str::to_string))
         };
         if status.success() {
-            last("race-over ").unwrap_or_else(|| "the race ended".into())
+            Ended {
+                reason: last("race-over ").unwrap_or_else(|| "the race ended".into()),
+                board: last("race-board ")
+                    .and_then(|line| Board::from_line(&line).ok())
+                    .unwrap_or_default(),
+            }
         } else {
             let detail = last("error: ").unwrap_or_default();
-            format!("the race process exited with {status}: {detail}")
+            Ended::without_board(format!("the race process exited with {status}: {detail}"))
         }
     }
 }
 
 impl Handle for ChildHandle {
     fn poll(&mut self) -> Status {
-        if let Some(why) = &self.over {
-            return Status::Over(why.clone());
+        if let Some(ended) = &self.over {
+            return Status::Over(ended.clone());
         }
         while let Ok(line) = self.lines.try_recv() {
             if let Some(addr) = line.strip_prefix("listening on ") {
@@ -308,15 +338,15 @@ impl Handle for ChildHandle {
                 {
                     std::thread::sleep(Duration::from_millis(5));
                 }
-                let why = self.reason(&status);
-                self.over = Some(why.clone());
-                return Status::Over(why);
+                let ended = self.reason(&status);
+                self.over = Some(ended.clone());
+                return Status::Over(ended);
             }
             Ok(None) => {}
             Err(e) => {
-                let why = format!("lost the race process: {e}");
-                self.over = Some(why.clone());
-                return Status::Over(why);
+                let ended = Ended::without_board(format!("lost the race process: {e}"));
+                self.over = Some(ended.clone());
+                return Status::Over(ended);
             }
         }
         if let (Some(port), Some(cert_hash)) = (self.port, self.hash) {
@@ -324,12 +354,12 @@ impl Handle for ChildHandle {
         }
         if self.started.elapsed() > self.load_timeout {
             let _ = self.child.kill();
-            let why = format!(
+            let ended = Ended::without_board(format!(
                 "the race did not come up within {}s",
                 self.load_timeout.as_secs()
-            );
-            self.over = Some(why.clone());
-            return Status::Over(why);
+            ));
+            self.over = Some(ended.clone());
+            return Status::Over(ended);
         }
         Status::Starting
     }

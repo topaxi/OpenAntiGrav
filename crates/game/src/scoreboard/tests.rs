@@ -528,3 +528,19 @@ mod records_table_tests {
         );
     }
 }
+
+/// A network race's people are called by the name they raced under on the built-in table (the one
+/// Pure, Omega and 2048 draw), in place of `P1`/`YOU`; an opponent keeps its slot.
+#[test]
+fn a_named_person_is_drawn_by_name_on_the_built_in_table() {
+    let mut board = board();
+    let person = board
+        .rows
+        .iter()
+        .position(|row| row.player)
+        .expect("a person");
+    board.rows[person].name = Some("Ada".into());
+    let texts = texts(&draw_list(&board, 8.0, None));
+    assert!(texts.contains(&"ADA".to_string()), "{texts:?}");
+    assert!(!texts.contains(&"YOU".to_string()), "{texts:?}");
+}

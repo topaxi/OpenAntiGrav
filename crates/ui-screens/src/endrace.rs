@@ -294,7 +294,7 @@ impl TournamentResults {
 /// One craft's own row on Wipeout HD/Fury's `EndRace Results` - the whole
 /// field's finishing order, not Pulse's own per-lap table. See [`hd`] for
 /// what draws it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldRow {
     /// Race position, 1-based.
     pub place: u8,
@@ -310,6 +310,8 @@ pub struct FieldRow {
     /// name column. `None` for an opponent and for the one person of a
     /// single-person race, whose row is only highlighted.
     pub seat: Option<u8>,
+    /// The name a person raced under (a network race), drawn in place of `PLAYER n`.
+    pub name: Option<String>,
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the headline (the same

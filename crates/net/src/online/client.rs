@@ -165,6 +165,18 @@ impl LobbyClient {
         self.link.send_lobby(&Message::Start);
     }
 
+    /// Asks the room for another race with the same settings (see [`Message::Rematch`]).
+    pub fn rematch(&mut self) {
+        self.link.send_lobby(&Message::Rematch);
+    }
+
+    /// Removes the named person from the room (the owner).
+    pub fn kick(&mut self, name: &str) {
+        self.link.send_lobby(&Message::Kick {
+            name: name.to_string(),
+        });
+    }
+
     /// Leaves the room.
     pub fn leave(&mut self) {
         self.link.send_lobby(&Message::Leave);

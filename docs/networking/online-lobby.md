@@ -556,14 +556,14 @@ From here the round trip is about 10 ms.
 
 - **Menu screens: landed** (part 8), walked live on Pure, HD, 2048 and Omega (Pulse by the earlier
   lane, plus its certificate keyboard and room stills on this build), with the owner's room settings
-  and size. Open there: kick and the other
+  and size. Kick landed in part 11; open there: the other
   sub-pages Omega has beyond the list (part 9 lists which of them are settings and are done).
 - **EU and USA pressings of one platform's title are not told apart before the race** (the
   same rule as LAN); the tick-0 hash catches them, as a join timeout.
 - **A session takeover does not re-send a pending hand-off**, so a client that drops during the
   race's loading and reconnects to the lobby misses it; it times out at the child and returns.
 - ~~A SIGKILLed lobby orphans its running race child~~ (fixed, part 7).
-- **No kick, no spectators, no chat, no quick match, no invite-only**; Omega has some of them.
+- **No spectators, no chat, no quick match, no invite-only**; Omega has some of them (kick is part 11).
 - **One race slot is per server**, so a second title waits behind the first. The containers shape
   (a game per room on its own port) is the same `Runner` seam with a spawner behind it.
 - **AI fill** (`RaceParams.opponents`) only matters in modes without opponents: the grid is
@@ -719,9 +719,8 @@ rows with the two people marked P1 and P2, laps, best lap, time, "x or escape le
 the one a `--race`-style launch shows (no EndRace screens are built on this path, which has no
 front end); `--net-bot` headless prints the board. The 1280x720 window clips the table's last
 column, which is the results table's own layout. Returning to the room is the
-menus lane's (the `--online` flag path prints `back in the room: REASON`). The lobby's room note
-carries only the reason ("every person has finished"), not the places; carrying the rows in `End` so
-the room screen can show them is open.
+menus lane's (the `--online` flag path prints `back in the room: REASON`). The room note carries
+the reason; the places travel too since part 11 (`End` carries the board, the room screen shows it).
 
 ### The orphaned race child
 
@@ -775,7 +774,7 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 ### Open
 
 - Session takeover still does not re-send a pending hand-off (part 5).
-- The room note carries the reason only; the places are not sent to the lobby.
+- ~~The room note carries the reason only~~ (part 11: the board travels in `End` and the room).
 - The windowed client's return from the results table to the room is the menus lane's: the table
   says "x or escape leaves the race" and the `--online` flag path has no room screen to go back to.
 - Omega's laps slider is 3 to 20; a room here may ask for 1 (chosen, for a short race).
@@ -972,3 +971,161 @@ the code is `oag_net::weapon_sync`, the test `crates/net/tests/weapons_ground_tr
 - **Checked against the other titles' rows:** the label id `RB_WEAP` is Omega's and HD's `MP Select`
   (read from `network_definition.xml`); 2048 and Pure/Pulse show this project's own words. The
   weapon rules themselves are each title's (Pulse's law where unmeasured, per the project's rule).
+
+## 11. The end screen, a rematch and kick (2026-10-19)
+
+**Ours, chosen, not measured**, except where Omega's own strings are named. Code: `crates/net/src/wire/board.rs`,
+`online/rooms.rs` (`rematch`, `kick`, `race_over`), `crates/game/src/net_play.rs`,
+`crates/game/src/main/session/online.rs`, `crates/game/src/online_screen.rs`; tests in `rooms/tests/after_race.rs`,
+`tests/online.rs` and `tests/net_ground_truth.rs`.
+
+### The board
+
+The server's own final board (`wire::board::Board`: per craft the place, slot, the person's name or empty for an AI
+craft, laps, finish ticks, best lap and the Eliminator's eliminations) travels three ways:
+
+1. **Race child to lobby.** `oag-server race` prints `race-board <hex>` (the same hex-line shape as the job) before
+   `race-over`. `ChildHandle` reads it from the tail of the child's output with the reason; `Status::Over` carries an
+   `Ended { reason, board }`. A child that crashed, timed out or never came up has no board line and the board is empty.
+2. **Race child to every client.** `Control::End { reason, board }`. The board is `Host::board()`, built by
+   `oag_net::race::final_board` from `race.results()`. It is empty when the race ended with nobody placed (everyone left,
+   a limit before a finish, a dropped seat's `End`).
+3. **Lobby to every member, through the room.** `Rooms::race_over(room, reason, board)` stores it on the room and
+   `Snapshot.board` carries it on every later push, so a member who joins after the race also sees it.
+
+The clients still derive their own board from their confirmed state (the tick hash proves it equal), and **both agree**:
+`NetPlay::check_server_board` compares the two (`Board::same_race_as`, ignoring names, which only the server knows)
+once the race is over and logs `net: the server's board matches this client's`, or an error naming both.
+`net_ground_truth::the_lobby_forks_a_real_race_...` asserts on a real Pulse race that each client's `End` board is the
+client's own board, names both people (slot 0 Ada, slot 1 Bob), is the same on both, and is what the room holds
+afterwards.
+
+**What a client's end screen shows.** The title's own EndRace screens (`session/endrace.rs`): on Pulse and Pure the
+multiplayer table (`PRO_POS`, `PRO_NAME`, `PRO_TOT_TIME`, the same `PeopleResults` a local split screen on a PSP pressing
+gets), on HD and Omega the field grid, in Eliminator and Zone the mode's own tables. **A network race is not a split screen
+for anything else**: the loyalty, the medal and the menu rows are what they were before, and the PS2's two stacked
+`EndRace Results Split` tables stay a local split screen's (they say only a place, not who). **The name column is a
+person's name** where the race knows one (`Race::set_person_names`, set from the room's members in seat order at the hand-off;
+`scoreboard::Row.name`), else `PLAYER n`. That the original's multiplayer table prints the person's name in `PRO_NAME` is
+what `endrace/people.rs` already records for Pulse's network-play branch; HD's `PI001` fills its name cell the same way, so the
+name is the authored behaviour, the seat fallback is ours. Opponents are not named by the HD grid (its authored column).
+The built-in results table (no `EndRace_Definition.xml`) prints the name upper-cased in the craft column. **Which route each title takes** (read from the code, `oag_game::endrace::dialect` and `endrace_entry`): Pulse (its own
+`EndRace_Definition.xml`, the `PeopleResults` table) and HD (the field grid) were walked; **Pure and Omega name no
+`EndRace_Definition.xml` (`endrace_entry: None`)**, so a network race there draws the built-in results table, which now
+names each person (`scoreboard::craft_label`, tested); **2048 is the touch dialect**, whose pages summarise one racer, so a
+network race of several people keeps the built-in table over them, as a split screen already did (`build_endrace_touch`,
+**checked, differs**: 2048 and Omega do not use HD's grid). None of Pure, Omega or 2048 was walked live. The mode/team fix
+below is in `build_endrace` only: the touch route reads neither. Walked live on Pulse
+PSP: the first two screens a person sees after the line were the two stacked split tables before this choice (4TH PLACE and
+8TH PLACE, nobody named), which is why the table is the named one.
+
+**The room screen after a race** says where each person came in, on their seat: `ADA (HOST)  READY  #2 3.03.00` (the place,
+and the time for a craft that finished), `online_screen::seat_line`. Stills: `--menu-page online-room-raced:4:2`.
+
+### Rematch
+
+`Message::Rematch` (client to lobby, `LobbyClient::rematch`). RACE AGAIN on an online end screen sends it and then leaves
+the finished race for the room, which is where the menus always come back to (`MenuOption::RaceAgain` on a network race).
+Server rule (`Rooms::rematch`, `try_rematch`):
+
+- The sender is ready with the team they last picked, **now** if the room is open, or **when the race ends** if it is
+  still running (`Occupant.again`; a person who finishes first presses RACE AGAIN while the others are still racing).
+  Picks are otherwise cleared at the end of a race as before.
+- From the **owner** it also arms the room's start (`Room.armed`): the start fires by itself, as the owner's `Start`, the
+  moment the room is open, has enough people and everybody is ready. Until then the room's note keeps the last race's
+  reason and appends the wait (`every person has finished - rematch, waiting for: bob`), and `Snapshot.rematch` is set. A guest's
+  ask puts "NAME wants to race again" in the note.
+- **The same settings**: a rematch never touches `RoomSettings`; the launch is the room's own (a new seed, `launches` is
+  mixed in on purpose). Changing the track is the owner's ROOM SETTINGS row, which the room already has and which clears
+  every ready and disarms the rematch; there is no second change-track path.
+- **Someone leaves meanwhile**: through `leave()`. If the owner leaves, the request dies with them (the new owner presses
+  RACE AGAIN themselves); if the room drops below `MIN_PLAYERS` the request is disarmed with the room's note saying who
+  left; a leaver who was ready simply is not seated. A person who is back in the room is ready again by the existing rule
+  (the pick is the ready, sent by itself once the room is open), so **returning to the room by any route means ready**; BACK
+  leaves it.
+- A pick sent while the room is still racing was refused and never resent; the client now sends the pick only when the
+  room is open.
+
+**Omega's own words** (`endrace_definition.xml` in `data09.psarc`, and HD's `DATA02.PSARC` copy): the multiplayer end menu
+is two blocks, `return_to_lobby` (label `IG_PAUSE_QUIT`, goes to `Kill Game Multiplayer`) and `view_MP_again`
+(`ER_VIEW_AGAIN`); the single-player block `race_again` is not in it. The string tables of HD and Omega also hold
+`ER_HOST_RACE_AGAIN` ("THE HOST HAS DECIDED TO RACE AGAIN."), `ER_GOTO_NEW_LOBBY` ("GO TO NEW LOBBY"),
+`ER_RETURN_L` ("RETURN TO LOBBY") and `FE_RETURNING_TO_LOBBY`, `ONL_IGM_RTL_COUNTDOWN` ("You will be returned to the lobby in
+%d second(s)"). So **Omega's rematch is the host's decision**, announced to the others; ours keeps the owner as the one who
+starts it and a guest asking is a ready-up, and the room tells a guest the owner has asked (`Snapshot.rematch`) with
+`ER_HOST_RACE_AGAIN` (the disc's own text where its table has it, which HD's and Omega's do; ours, `OAG_ONLINE_HOST_RACE_AGAIN`,
+elsewhere). **Not wired from the disc:** the menu rows (our RACE AGAIN
+row is the title's own `ER_RACE_AGAIN`, which the MP block does not author), the 'GO TO NEW LOBBY' flow (a host who
+changes the settings) and the countdown to the return.
+
+### Kick
+
+`Message::Kick { name }`, owner only (`Rooms::kick` goes through `owned()`), in an open or queued room (not once the
+countdown or the race is running: refused `Started`). The kicked person is sent `Left` with the reason ("the host removed
+you from this game", shown as a screen of its own with BACK, the existing `Left` handling), the others see the room without
+them and the note "NAME was removed by the host".
+
+**Rejoin rule (chosen):** the room remembers the name (case-blind) for as long as the room exists. A join into that room is
+refused `Refusal::Kicked` ("the host removed you from this game"), the room list shows the room as not joinable to that
+person, and a new session under the same name is refused the same way (the name is the identity here: names are unique per
+session, ADR trust model). Any other room is open to them. When the room closes the ban goes with it; the owner leaving
+does not lift it. Not a ban of the person's address (online is server-authoritative with a trust model that has no client
+anti-cheat; a determined person rejoins under another name).
+
+On the screen the owner's cursor on another person's seat says `CONFIRM TO REMOVE THIS PERSON FROM THE GAME`
+(`OAG_ONLINE_KICK_HINT`, with its German, French and Brazilian Portuguese text) and a confirm or a click on that seat
+(`Event::Leave(seat)` in the room form, the same event the room list reads as "chosen") sends the kick; the owner's own seat
+does nothing. **Pointer: the click is the confirm, the same hit-test as every row.** Omega authors no host kick: its
+`KickFromGame` screen is reached from code (`LobbyCommand mode="kick"`, ranked game end and server errors, one dialog with
+`TRC_ONL_SERVER`) and the `ONL_KICK_*` strings are the compatibility kicks (content, started, blocked list, no ship picked in
+time). **Not in Omega, so ours, chosen.**
+
+### Tests
+
+- Disc-free: `wire` round trips (the board in `End` and the room snapshot, `Rematch`, `Kick`, `Refusal::Kicked`);
+  `rooms/tests/after_race.rs` (the board reaches every member; a rematch from the owner fires once everyone is ready under
+  the same settings, taking its picks from the last race; a member who asks while racing is ready at the end; a rematch dies
+  with its owner or below the minimum; only the owner kicks, by case-blind name, never themselves, never during a start,
+  and the kicked person is refused back by the join and in the list, also under a new session); `tests/online.rs` over real
+  sockets with a fake race child that prints `race-board` (the board arrives at both members, a second hand-off arrives
+  after both rematch and the settings are equal, a guest cannot kick, the owner can, the kicked person is told and refused
+  on rejoin). The fake child waits at a gate file (the `online-crash-flake` pattern), with a marker file so a second run waits
+  at its own gate.
+- Disc-backed: `net_ground_truth::the_lobby_forks_a_real_race_...` (Pulse PSP, a real child, one lap): both clients'
+  `End` board equals their own, names both people and equals the room's, then both ask for a rematch and a second hand-off
+  arrives under the same settings.
+- `online_screen/tests.rs`: the seat line, the kick hint for the owner only. `results_tables` and the HD draw list: the
+  name in place of `PLAYER n`.
+
+### Walked live (2026-10-19)
+
+Two windowed `oag-game --net-bot` clients (Ada owns the room, Bob joins) on Xvfb `:97` with software Vulkan, a real
+`oag-server lobby` on loopback (lobby 60510, race 60511), one lap each, over the menus as a player sees them: connect (the
+remembered address, certificate and name), CREATE GAME, Track Select, Ship Select, the room (LAPS stepped to 1 with a click),
+JOIN GAME and the room list, START RACE, the race, the end screens, the room again. **Pulse PSP EU** and **HD (PS3 EU)**.
+
+- **The board.** Both clients logged `net: the server's board matches this client's (8 rows)` after every race (Pulse 3 races,
+  HD 3 races), 0 bad hashes. Pulse's end screen after the line is the named table (`RESULTS`, `POS`, `NAME`, `TOTAL RACE TIME`,
+  ADA and BOB on the two highlighted rows, the AI craft by team); HD's is the field grid with `Ada` and `Bob` on the two
+  highlighted rows and the headline `7TH PLACE`. The first Pulse walk showed the PS2's stacked split tables (`4TH PLACE`,
+  `8TH PLACE`, nobody named), which is why a network race no longer takes that route.
+- **A bug the walk found, fixed:** a person who **joined** a room read the end screen's mode (and the team their loyalty is
+  banked for) from their own RACE page instead of the server's race, so on HD the joiner's end screen was
+  `TIME TRIAL COMPLETE!` over a broken table while the owner's was `7TH PLACE`; the room's owner never saw it because their page
+  is the room's. `build_endrace` now reads a network race's mode from the world and its team from the race's roster. The
+  same joiner on the rebuilt binary: `7TH PLACE`, `Ada`, `Bob`.
+- **The room afterwards**: the seats say `#3`, `#6 0.42.73`; the owner's
+  note is `EVERY PERSON HAS FINISHED`, then `... - REMATCH, WAITING FOR: BOB` once the owner asked. The first Pulse still put
+  the time into the `PLAYER n` label on a guest's room screen (the widest face); the line now drops the time first
+  (`SEAT_GLYPHS`).
+- **Rematch**: Ada's RACE AGAIN took her to the room with the rematch armed; Bob's return to the room (RETURN TO MENUS, which
+  is a ready by the rule above) started the second race by itself under the same settings, on Pulse and on HD (a third race
+  after a second joiner). Both clients matched the server's board each time.
+- **Kick**: the cursor on Bob's seat read `CONFIRM TO REMOVE THIS PERSON FROM THE GAME`, a click on it sent the kick, Bob's
+  client showed `THE HOST REMOVED YOU FROM THIS GAME` with BACK, and in JOIN GAME the room was listed dimmed (not joinable)
+  and could not be chosen.
+- **Not walked:** a pad-only kick (the confirm path is the same `Event::Leave` as the click and is read by the pad's
+  `confirm()`, covered by the room form's own tests), and Pure, Omega, 2048 and the PS2 pressing: their routes are above
+  (**checked, differs** from HD's grid: Pure and Omega the built-in table, 2048 the built-in table over its touch pages);
+  the board, the names and all the lobby code are title-blind.
+

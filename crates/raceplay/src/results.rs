@@ -224,6 +224,19 @@ impl Race {
         &self.view.slot_teams
     }
 
+    /// Names the person flying each slot, by slot (empty for a slot with none): what the end
+    /// screens of a network race call the people. View-only; the simulation never reads it.
+    pub fn set_person_names(&mut self, names: Vec<String>) {
+        self.view.person_names = names;
+    }
+
+    /// The name of the person who flew each slot ([`Self::set_person_names`]), empty where
+    /// the race knows none.
+    #[must_use]
+    pub fn person_names(&self) -> &[String] {
+        &self.view.person_names
+    }
+
     /// The results, once there are any.
     ///
     /// `None` for the whole race and `Some` from the finishing tick on. The
@@ -283,11 +296,21 @@ impl Race {
                 }
             })
             .collect();
-        self.view.results = Some(scoreboard::build(
+        let mut board = scoreboard::build(
             &crafts,
             self.sim.world.laps_target(),
             oag_race::race_clock_ticks(self.sim.world.tick),
-        ));
+        );
+        // A network race names its people; every other race has no names to give.
+        for row in board.rows.iter_mut().filter(|row| row.player) {
+            row.name = self
+                .view
+                .person_names
+                .get(usize::from(row.slot))
+                .filter(|name| !name.is_empty())
+                .cloned();
+        }
+        self.view.results = Some(board);
     }
 }
 

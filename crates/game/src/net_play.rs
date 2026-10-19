@@ -65,6 +65,11 @@ pub struct NetPlay {
     log: RefCell<(Stats, Instant)>,
     /// Whether the board has been printed at the end.
     board_printed: Cell<bool>,
+    /// Whether this client's board has been compared with the server's.
+    board_checked: Cell<bool>,
+    /// The name of the person in each seat (an online lobby's room), given to the race so its
+    /// end screens call people by name; empty for a plain `--connect`.
+    names: RefCell<Vec<String>>,
     /// The sparkline and hash totals, and the last whole second the overlay reads.
     /// See [`oag_net::stats`].
     overlay: RefCell<(Collector, Option<NetStats>)>,
@@ -133,6 +138,8 @@ impl Pending {
             due: Cell::new(None),
             log: RefCell::new((Stats::default(), Instant::now())),
             board_printed: Cell::new(false),
+            board_checked: Cell::new(false),
+            names: RefCell::new(Vec::new()),
             overlay: RefCell::new((Collector::new(), None)),
         }))
     }
@@ -269,6 +276,7 @@ impl NetPlay {
     pub fn begin_join(&self, race: &mut Race, title: &str) -> Result<()> {
         oag_net::race::check_title(&self.welcome.params, title)?;
         oag_net::race::prepare(race, &self.welcome.params)?;
+        race.set_person_names(self.names.borrow().clone());
         let mut client = self.client.borrow_mut();
         client.ready(race)?;
         println!(
@@ -312,7 +320,43 @@ impl NetPlay {
         if self.over().is_some() && !self.board_printed.replace(true) {
             print_board(race);
         }
+        self.check_server_board(race);
         ticks
+    }
+
+    /// Names the person in each seat, by seat, before [`Self::begin_join`].
+    pub fn set_names(&self, names: Vec<String>) {
+        *self.names.borrow_mut() = names;
+    }
+
+    /// The server's final board, once its `End` carried one.
+    #[must_use]
+    pub fn server_board(&self) -> Option<oag_net::wire::board::Board> {
+        self.client.borrow().final_board().cloned()
+    }
+
+    /// Compares this client's board with the server's, once both exist, and says which. They
+    /// are the same race (the tick hash proves the state), so a difference is a bug.
+    fn check_server_board(&self, race: &Race) {
+        if self.board_checked.get() || !race.finished() || race.results().is_none() {
+            return;
+        }
+        let Some(theirs) = self.server_board() else {
+            return;
+        };
+        self.board_checked.set(true);
+        let ours = oag_net::race::final_board(race, &[]);
+        if ours.same_race_as(&theirs) {
+            println!(
+                "net: the server's board matches this client's ({} rows)",
+                ours.rows.len()
+            );
+        } else {
+            log::error!(
+                "net: the server's board differs from this client's: {theirs:?} against {ours:?}"
+            );
+            println!("net: the server's board DIFFERS from this client's");
+        }
     }
 
     /// Steps on the wall clock, one step per tick of time, until the race reaches

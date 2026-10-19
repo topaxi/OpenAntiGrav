@@ -1,3 +1,4 @@
+use super::board::Board;
 use super::*;
 use oag_gameplay::input::Button;
 
@@ -69,6 +70,11 @@ fn every_control_message_round_trips() {
         }),
         Control::End {
             reason: "finished".into(),
+            board: Board::default(),
+        },
+        Control::End {
+            reason: "every person has finished".into(),
+            board: sample_board(),
         },
     ];
     for message in messages {
@@ -168,4 +174,52 @@ fn a_full_pack_of_confirmed_ticks_fits_a_datagram() {
     // 1,413 bytes is what both QUIC stacks offered on localhost in the spike.
     let per_tick = Confirmed::record_bytes(8);
     assert!(per_tick * 7 + 16 <= 1_413, "{per_tick}");
+}
+
+fn sample_board() -> Board {
+    use super::board::BoardRow;
+    Board {
+        rows: vec![
+            BoardRow {
+                place: 1,
+                slot: 1,
+                name: "Bob".into(),
+                laps: 3,
+                finish_ticks: Some(9_001),
+                best_lap_ticks: Some(2_900),
+                eliminations: 2,
+            },
+            BoardRow {
+                place: 2,
+                slot: 0,
+                name: "Ada".into(),
+                laps: 2,
+                finish_ticks: None,
+                best_lap_ticks: None,
+                eliminations: 0,
+            },
+            BoardRow {
+                place: 3,
+                slot: 2,
+                name: String::new(),
+                laps: 0,
+                finish_ticks: None,
+                best_lap_ticks: Some(1),
+                eliminations: 0,
+            },
+        ],
+    }
+}
+
+#[test]
+fn a_board_round_trips_on_the_wire_and_as_a_hex_line() {
+    let board = sample_board();
+    assert_eq!(Board::from_line(&board.to_line()), Ok(board.clone()));
+    assert!(Board::from_line("zz").is_err());
+    assert!(Board::from_line("0").is_err());
+    assert_eq!(
+        Board::from_line(&Board::default().to_line()),
+        Ok(Board::default())
+    );
+    assert!(board.same_race_as(&board));
 }

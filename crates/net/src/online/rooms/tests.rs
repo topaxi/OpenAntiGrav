@@ -375,7 +375,7 @@ fn one_game_slot_and_a_fifo_of_rooms_waiting_for_it() {
     rooms.take_outbox();
     assert_eq!(rooms.active(), Some(a));
     assert!(rooms.take_launch().is_none(), "b and c wait for the slot");
-    rooms.race_over(a, "every person has finished");
+    rooms.race_over(a, "every person has finished", Board::default());
     rooms.take_outbox();
     // b lost its owner and is below the minimum now: skipped, and c gets the slot.
     rooms.tick(6000);
@@ -462,7 +462,11 @@ fn a_race_that_ends_returns_its_people_to_the_open_room_with_the_reason() {
     rooms.tick(1000);
     rooms.take_launch().expect("launched");
     rooms.take_outbox();
-    rooms.race_over(room, "the race process exited with status 1");
+    rooms.race_over(
+        room,
+        "the race process exited with status 1",
+        Board::default(),
+    );
     let seen = snapshot(last(&mut rooms, 2));
     assert_eq!(seen.phase, Phase::Open);
     assert!(seen.members.iter().all(|m| !m.ready), "picks are cleared");
@@ -676,3 +680,5 @@ fn a_rooms_weapons_setting_reaches_the_race_and_eliminator_keeps_them() {
     assert!(!launched("single_race", false));
     assert!(launched("eliminator", false), "Eliminator is about weapons");
 }
+
+mod after_race;

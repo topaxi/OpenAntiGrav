@@ -29,6 +29,9 @@ use super::table::{LapCell, Shown, lap_cell, table_layers};
 pub enum PersonName {
     /// A person, by the seat they flew, 1-based: `PLAYER 1`.
     Player(u8),
+    /// A person by the name they raced under (a network race): what the original's
+    /// network-play table prints in `PRO_NAME`.
+    Named(String),
     /// An opponent's team, by string-table id (its folder name), which the draw
     /// resolves to the display name as the Eliminator and Tournament tables do.
     /// `None` draws the cell absent: no team is known for the slot.
@@ -60,6 +63,7 @@ impl PeopleResults {
             PersonName::Player(seat) => {
                 Some(format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER")))
             }
+            PersonName::Named(name) => Some(name.clone()),
             PersonName::Team(id) => id.as_deref().map(|id| strings.get_or_id(id).to_string()),
         }
     }

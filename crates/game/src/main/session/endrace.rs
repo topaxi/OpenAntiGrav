@@ -55,10 +55,22 @@ impl Session {
             return;
         }
 
-        let mode = race_options.mode;
+        // A network race is the server's: its mode and the team this seat flew are the race's
+        // own, not whatever this machine's RACE page last held (a person who joined a room never
+        // touched the page the room's owner set).
+        let net = self.net.is_some();
+        let mode = if net {
+            stage.race.sim.world.mode()
+        } else {
+            race_options.mode
+        };
         let source = race_options.source.clone();
         let dlc = race_options.dlc.clone();
-        let team = race_options.team.clone();
+        let team = if net {
+            stage.race.slot_teams().get(stage.race.player_slot()).cloned()
+        } else {
+            race_options.team.clone()
+        };
         let campaign = stage.campaign_cell.is_some();
         // The actual title package, not the display name above - what
         // `oag_game::endrace::load`'s own title dispatch needs, and what
@@ -75,6 +87,11 @@ impl Session {
         // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
         let split = stage.race.viewport_count() > 1;
         let board = stage.race.results().cloned();
+        // A network race several people flew names every person in its table (by the name
+        // they raced under), as a split screen's does, but is otherwise this machine's own
+        // race: loyalty, the medal and the menu rows are as for any other.
+        let net_people = self.net.is_some()
+            && board.as_ref().is_some_and(|board| board.persons() > 1);
         // The roster this race drew, slot 0 the player's - read off the race
         // rather than rebuilt, because the draw is seeded and only the race
         // knows its seed (`race::load::roster`).
@@ -268,6 +285,10 @@ impl Session {
         // Two people on a pressing that has `EndRace Results Split` (the disc's own on
         // the PS2, borrowed on the PSP): a lap table and a rewards panel each. Any other
         // count, or a title with no such screen, keeps the one table that names everyone.
+        //
+        // **Only a local split screen.** A network race's table is the multiplayer one that
+        // names each person (`PRO_NAME`), which the original's own network-play branch
+        // fills: two stacked tables that say only a place would leave the two people unnamed.
         let two_people = board.as_ref().filter(|board| {
             split
                 && !is_hd
@@ -319,7 +340,13 @@ impl Session {
             warn!("could not save the loyalty totals: {e:#}");
         }
 
-        let people = (split && !is_hd && split_results.is_none())
+        // Only where the mode has no table of its own (Eliminator's and Zone's keep theirs).
+        let net_people = net_people
+            && !matches!(
+                mode,
+                oag_race::Mode::Tournament | oag_race::Mode::Eliminator | oag_race::Mode::Zone
+            );
+        let people = ((split || net_people) && !is_hd && split_results.is_none())
             .then(|| oag_game::results_tables::people_rows(board.as_ref(), stage.race.slot_teams()))
             .flatten();
         let results = if let Some(split_results) = split_results {
@@ -518,6 +545,9 @@ impl Session {
             MenuOption::RaceAgain => {
                 // A LAN race ended on its server; a rematch is the lobby's, so the menus come back.
                 if self.net.is_some() {
+                    // An online race also tells its room this person wants another; the
+                    // menus come back to the room either way.
+                    self.online_rematch();
                     self.leave_finished_race();
                     return;
                 }

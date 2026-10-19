@@ -45,6 +45,7 @@ use web_time::Instant;
 use crate::link::Link;
 use crate::stats::PathStats;
 use crate::weapon_sync;
+use crate::wire::board::Board;
 use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, TickRecord};
 
 /// A craft further than this from where the server has it forces a correction.
@@ -182,6 +183,8 @@ pub struct Client {
     confirmed: Option<RaceSim>,
     /// The world tick the confirmed state is at.
     confirmed_tick: u32,
+    /// The server's final board, once its `End` carried one.
+    final_board: Option<Board>,
     confirmed_edges: Vec<Input>,
     pending: BTreeMap<u32, TickRecord>,
     /// This machine's inputs from the confirmed tick on: (tick, wire, as applied).
@@ -256,6 +259,7 @@ impl Client {
             welcome: None,
             confirmed: None,
             confirmed_tick: 0,
+            final_board: None,
             confirmed_edges: Vec::new(),
             pending: BTreeMap::new(),
             own: VecDeque::new(),
@@ -351,6 +355,7 @@ impl Client {
             );
             self.link.send_control(&Control::End {
                 reason: reason.clone(),
+                board: Board::default(),
             });
             return Err(anyhow::anyhow!(reason));
         }
@@ -375,7 +380,12 @@ impl Client {
                     self.phase = Phase::Racing;
                 }
                 Ok(Control::Ticks(confirmed)) => self.stash(confirmed),
-                Ok(Control::End { reason }) | Ok(Control::Reject { reason }) => {
+                Ok(Control::End { reason, board }) => {
+                    log::info!("net: the server ended the race: {reason}");
+                    self.final_board = Some(board).filter(|board| !board.is_empty());
+                    self.phase = Phase::Over(reason);
+                }
+                Ok(Control::Reject { reason }) => {
                     log::info!("net: the server ended the race: {reason}");
                     self.phase = Phase::Over(reason);
                 }
@@ -723,6 +733,7 @@ impl Client {
     pub fn leave(&mut self, reason: &str) {
         self.link.send_control(&Control::End {
             reason: reason.to_string(),
+            board: Board::default(),
         });
     }
 
@@ -735,6 +746,12 @@ impl Client {
             ..Stats::default()
         };
         stats
+    }
+
+    /// The server's final board, once the race ended with a result.
+    #[must_use]
+    pub fn final_board(&self) -> Option<&Board> {
+        self.final_board.as_ref()
     }
 
     /// The tick the confirmed state is at.

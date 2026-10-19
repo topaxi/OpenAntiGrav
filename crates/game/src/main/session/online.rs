@@ -68,6 +68,9 @@ pub(crate) struct Online {
     asked_list: Option<Instant>,
     /// A message for the screen, shown until the next step replaces it.
     notice: Option<(String, Instant)>,
+    /// The people in the room when the race was handed off, by seat: the race's end screens
+    /// call them by these names.
+    seat_names: Vec<String>,
 }
 
 enum Step {
@@ -129,6 +132,7 @@ impl Session {
             pick_sent: false,
             asked_list: None,
             notice: None,
+            seat_names: Vec::new(),
         });
         self.open_online_prompt(Field::Address);
     }
@@ -673,8 +677,39 @@ impl Session {
             Event::Leave(chosen) => {
                 if matches!(&self.online, Some(Online { step: Step::List, .. })) {
                     self.online_join_room(chosen);
+                } else if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
+                    self.online_kick(chosen);
                 }
             }
+        }
+    }
+
+    /// RACE AGAIN on an online race's end screen: asks the room for another race with the same
+    /// settings (see `oag_net::wire::online::Message::Rematch`). The room is where the menus come
+    /// back to either way; this is what tells it this person wants another.
+    pub(crate) fn online_rematch(&mut self) {
+        if let Some(lobby) = self.online.as_mut().and_then(|online| online.lobby.as_mut()) {
+            lobby.rematch();
+        }
+    }
+
+    /// The owner's confirm or click on another person's seat removes them from the room. The
+    /// server checks the owner again; a seat that is not another person's does nothing.
+    fn online_kick(&mut self, seat: usize) {
+        let Some(online) = &mut self.online else {
+            return;
+        };
+        let Some(lobby) = &mut online.lobby else {
+            return;
+        };
+        let Some(room) = &lobby.room else {
+            return;
+        };
+        let owner = room.members.first().map(|m| &m.name) == lobby.name.as_ref();
+        let target = room.members.get(seat).map(|m| m.name.clone());
+        if owner && room.phase == oag_net::wire::online::Phase::Open && seat > 0 && let Some(name) = target {
+            lobby.kick(&name);
+            self.play_navs(Some(Nav::Accept));
         }
     }
 
@@ -864,6 +899,12 @@ impl Session {
             dial = Some(handoff);
         }
         if let Some(handoff) = dial {
+            online.seat_names = online
+                .lobby
+                .as_ref()
+                .and_then(|lobby| lobby.room.as_ref())
+                .map(|room| room.members.iter().map(|m| m.name.clone()).collect())
+                .unwrap_or_default();
             let host = with_port(&online.address);
             let host = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h).to_string();
             let addr = format!("{host}:{}", handoff.port);
@@ -877,6 +918,7 @@ impl Session {
         if let Step::Waiting(pending) = &mut online.step {
             match pending.poll() {
                 Ok(Some(net)) => {
+                    net.set_names(online.seat_names.clone());
                     let mine = self.shell.as_ref().map_or("", |shell| shell.title.name);
                     match oag_net::race::check_title(net.params(), mine) {
                         Ok(()) => launch = Some(net),
@@ -905,7 +947,16 @@ impl Session {
                 .as_ref()
                 .and_then(|room| room.members.iter().find(|m| Some(&m.name) == me.as_ref()))
                 .map(|m| m.ready);
-            if mine_ready == Some(false) && !online.team.is_empty() && !online.pick_sent {
+            // A pick is only taken while the room is open: one sent into a room whose race is
+            // still running is refused, and would never be sent again.
+            let open = lobby
+                .room
+                .as_ref()
+                .is_some_and(|room| room.phase == oag_net::wire::online::Phase::Open);
+            if !open {
+                online.pick_sent = false;
+            }
+            if open && mine_ready == Some(false) && !online.team.is_empty() && !online.pick_sent {
                 lobby.ready(&online.team, true, assist);
                 online.pick_sent = true;
             }

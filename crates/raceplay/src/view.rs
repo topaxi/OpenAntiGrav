@@ -59,6 +59,9 @@ pub struct RaceView {
     /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
     /// controllers are hashed, so "which craft is mine" cannot live in the world.
     pub(super) seat: Option<usize>,
+    /// The name of the person flying each slot in a network race, by slot, empty for a slot
+    /// with none ([`super::Race::set_person_names`]). View-only: the end screens name people.
+    pub(super) person_names: Vec<String>,
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
     pub(super) contact: super::contact_fx::ContactFx,
@@ -449,6 +452,7 @@ pub struct RaceView {
 #[derive(Debug, Default)]
 pub struct RaceView {
     pub(super) seat: Option<usize>,
+    pub(super) person_names: Vec<String>,
     pub(super) wreck_ended_tick: Option<u64>,
     pub(super) slot_teams: Vec<String>,
     pub(super) results: Option<crate::scoreboard::Board>,

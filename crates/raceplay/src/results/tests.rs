@@ -243,3 +243,29 @@ fn the_operators_autopilot_flies_every_local_seat_and_no_other() {
     race.sim.world.controllers[1] = oag_gameplay::Controller::Remote;
     assert!(!race.flown_for_the_player(1), "somebody else's craft");
 }
+
+/// A network race names its people on the board it leaves: the name each seat raced under, on a
+/// person's row and nowhere else (a name given for a craft the AI flies is not a person's).
+#[test]
+fn a_person_s_row_carries_the_name_they_raced_under() {
+    let mut race = race_with_a_grid();
+    race.set_person_names(vec!["Ada".into(), String::new(), "Eve".into()]);
+    finish(&mut race, 0, 5_000);
+    race.sim.world.primary_race_mut().finished = true;
+    race.capture_results();
+    let board = race.results().expect("a board");
+    let name = |slot| {
+        board
+            .rows
+            .iter()
+            .find(|row| row.slot == slot)
+            .and_then(|row| row.name.as_deref())
+    };
+    assert_eq!(name(0), Some("Ada"));
+    assert_eq!(name(1), None, "no name given");
+    assert_eq!(
+        name(2),
+        None,
+        "slot 2 is flown by the AI, so it is nobody's row"
+    );
+}

@@ -461,7 +461,9 @@ pub fn draw_list(
 /// **With several people** on the board `YOU` would name all of them, so each is
 /// `P1`, `P2`... by the seat (the grid slot) they fly. Chosen, not measured.
 fn craft_label(row: &Row, several_people: bool) -> String {
-    if row.player && several_people {
+    if let Some(name) = row.name.as_deref().filter(|_| row.player) {
+        name.to_uppercase()
+    } else if row.player && several_people {
         format!("P{}", row.slot + 1)
     } else if row.player {
         "YOU".to_string()

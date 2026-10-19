@@ -934,7 +934,7 @@ it first); the host picks in its own Ship Select. `oag-server --team a --team b`
 list flies the last one); `--team a` alone is the old behaviour. Held fixed as in any network race:
 weapons on (ADR-0071), our AI flies the opponents, pilot assist off, no ghost, no record. The host's race is a Single Race
 whatever the pages say. Race again is not offered on a network race (the end screen's RACE AGAIN returns
-to the menus; a rematch is a new lobby).
+to the menus; a LAN rematch is a new lobby; an online race has one, `online-lobby.md` part 11).
 
 ### The join list says whether you can join (maintainer's requirement)
 

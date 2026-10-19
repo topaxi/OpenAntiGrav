@@ -698,6 +698,7 @@ impl Race {
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,
                 seat: None,
+                person_names: Vec::new(),
                 contact: super::contact_fx::ContactFx::new(),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())

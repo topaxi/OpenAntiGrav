@@ -73,6 +73,8 @@ OAG_ONLINE_ZONE_NONE = { text = "NENHUM", human = false }
 OAG_ONLINE_QUEUED = { text = "OUTRO JOGO ESTÁ CORRENDO: VOCÊ É O Nº %d NA FILA", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "A CORRIDA COMEÇA EM %d", human = false }
 OAG_ONLINE_RACING = { text = "A CORRIDA ESTÁ COMEÇANDO", human = false }
+OAG_ONLINE_KICK_HINT = { text = "CONFIRME PARA REMOVER ESTE JOGADOR DA PARTIDA", human = false }
+OAG_ONLINE_HOST_RACE_AGAIN = { text = "O ANFITRIÃO QUER CORRER DE NOVO", human = false }
 OAG_ONLINE_MODE_TWO_ONLY = { text = "O frente a frente é para duas pessoas", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Hospede uma corrida na sua rede ou entre em uma", human = false }
 OAG_LAN_HOST = { text = "CRIAR JOGO", human = false }
