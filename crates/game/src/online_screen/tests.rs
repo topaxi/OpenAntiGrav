@@ -436,6 +436,16 @@ fn a_seat_says_where_its_person_came_in_the_last_race() {
         seat_line(&member("ada", true), &board, &strings()),
         "ADA (HOST)  READY  #5"
     );
+    // The time is the first thing to go when the line would run into the seat's label.
+    let mut host = member("ada", true);
+    host.name = "ada".into();
+    let mut raced = board.clone();
+    raced.rows[1].finish_ticks = Some(60 * 83);
+    assert_eq!(
+        seat_line(&host, &raced, &strings()),
+        "ADA (HOST)  READY  #5",
+        "29 glyphs with the time, 21 without"
+    );
     assert_eq!(
         seat_line(&member("cyd", false), &board, &strings()),
         "CYD  READY",

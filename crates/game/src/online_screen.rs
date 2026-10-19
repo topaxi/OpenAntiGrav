@@ -143,26 +143,39 @@ pub fn member_line(member: &Member, strings: &StringTable) -> String {
     line
 }
 
+/// The most glyphs a seat's right-hand text holds before it runs into the `PLAYER n` label on
+/// the widest face (a guest's room screen, where the rows are drawn largest).
+const SEAT_GLYPHS: usize = 26;
+
 /// A member's line in the room after a race: [`member_line`], then where they came in the room's
 /// last race and in what time (`#2 1.23.45`, or the place alone for a craft that had not
-/// finished). **Chosen, not measured.**
+/// finished). The time goes first when the line would run into the label, then the place.
+/// **Chosen, not measured.**
 #[must_use]
 pub fn seat_line(member: &Member, board: &Board, strings: &StringTable) -> String {
-    let mut line = member_line(member, strings);
-    if let Some(row) = board
+    let line = member_line(member, strings);
+    let Some(row) = board
         .rows
         .iter()
         .find(|row| row.name.eq_ignore_ascii_case(&member.name))
-    {
-        line.push_str(&format!("  #{}", row.place));
-        if let Some(ticks) = row.finish_ticks {
-            line.push_str(&format!(
-                " {}",
-                oag_ui_screens::endrace::draw::format_ticks(u64::from(ticks))
-            ));
-        }
+    else {
+        return line;
+    };
+    let placed = format!("{line}  #{}", row.place);
+    let Some(ticks) = row.finish_ticks else {
+        return placed;
+    };
+    let timed = format!(
+        "{placed} {}",
+        oag_ui_screens::endrace::draw::format_ticks(u64::from(ticks))
+    );
+    if timed.chars().count() <= SEAT_GLYPHS {
+        timed
+    } else if placed.chars().count() <= SEAT_GLYPHS {
+        placed
+    } else {
+        line
     }
-    line
 }
 
 /// The most glyphs the line under a room's title holds on the widest face.

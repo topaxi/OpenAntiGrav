@@ -1001,16 +1001,18 @@ once the race is over and logs `net: the server's board matches this client's`, 
 client's own board, names both people (slot 0 Ada, slot 1 Bob), is the same on both, and is what the room holds
 afterwards.
 
-**What a client's end screen shows.** The title's own EndRace screens, exactly as a split screen's, because a race several
-people flew is one flag: `split = viewport_count() > 1 || (net race with more than one person on the board)`
-(`session/endrace.rs`). So a network race banks no loyalty, offers no tournament leg and no campaign medal, and names every
-person. On a pressing that has `EndRace Results Split` (the PS2's own) it shows the two-person tables; elsewhere Pulse's
-multiplayer table (`PRO_POS`, `PRO_NAME`, `PRO_TOT_TIME`) and HD's field grid. **The name column is a person's name** where
-the race knows one (`Race::set_person_names`, set from the room's members in seat order at the hand-off; `scoreboard::Row.name`),
-else `PLAYER n`. That the original's multiplayer table prints the person's name in `PRO_NAME` is what
-`endrace/people.rs` already records for Pulse's network-play branch; HD's `PI001` fills its name cell the same way, so the
+**What a client's end screen shows.** The title's own EndRace screens (`session/endrace.rs`): on Pulse and Pure the
+multiplayer table (`PRO_POS`, `PRO_NAME`, `PRO_TOT_TIME`, the same `PeopleResults` a local split screen on a PSP pressing
+gets), on HD and Omega the field grid, in Eliminator and Zone the mode's own tables. **A network race is not a split screen
+for anything else**: the loyalty, the medal and the menu rows are what they were before, and the PS2's two stacked
+`EndRace Results Split` tables stay a local split screen's (they say only a place, not who). **The name column is a
+person's name** where the race knows one (`Race::set_person_names`, set from the room's members in seat order at the hand-off;
+`scoreboard::Row.name`), else `PLAYER n`. That the original's multiplayer table prints the person's name in `PRO_NAME` is
+what `endrace/people.rs` already records for Pulse's network-play branch; HD's `PI001` fills its name cell the same way, so the
 name is the authored behaviour, the seat fallback is ours. Opponents are not named by the HD grid (its authored column).
-The built-in results table (no `EndRace_Definition.xml`) prints the name upper-cased in the craft column.
+The built-in results table (no `EndRace_Definition.xml`) prints the name upper-cased in the craft column. Walked live on Pulse
+PSP: the first two screens a person sees after the line were the two stacked split tables before this choice (4TH PLACE and
+8TH PLACE, nobody named), which is why the table is the named one.
 
 **The room screen after a race** says where each person came in, on their seat: `ADA (HOST)  READY  #2 3.03.00` (the place,
 and the time for a craft that finished), `online_screen::seat_line`. Stills: `--menu-page online-room-raced:4:2`.
