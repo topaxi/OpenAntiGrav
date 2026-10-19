@@ -409,6 +409,62 @@ first four classes are equal to `DATA00`'s. The fifth class is unread: the
 handling reader's class list stops at four. Omega racing is out of scope, so
 nothing is wired. The two `_2048` files decode with all 13 weapons.
 
+## The race tables compared across titles (2026-10-19)
+
+Lane `weapon-lineage`. Every weapon's `<Stats>` block, value for value, across
+Pulse's `WeaponStats_Race.xml` (EU PSP and EU PS2), Fury's `DATA00`
+`weaponstats_race.xml`, 2048's HD-named `weaponstats_Race.xml` and its own
+`weaponstats_Race_2048.xml`, and Omega's `data00.psarc` pair. Matrix of what
+it means: [weapon-lineage.md](../gameplay/weapon-lineage.md).
+
+How to read the files again:
+
+```sh
+# Pulse PSP/PS2: compressed tag form; <a> is Weapon, <c> is Stats, and the
+# attributes h, i, j are absorb, slowdown_time and damage (the <code> header
+# at the top of the blob maps every short name)
+oag-wad cat data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/Data.wad 'Data\XML\WeaponStats_Race.xml'
+oag-wad cat data/images/pulse-ps2-eu.chd:54748/WADS2.WAD 'Data\XML\WeaponStats_Race.xml'   # plain XML
+# HD / Fury
+just psarc cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC /data/xml/weaponstats_race.xml
+# 2048 (EU)
+just psarc cat data/extracted/vita/PCSF00007/base/PSP2/data.psarc /data/xml/weaponstats_Race_2048.xml
+# Omega
+just psarc cat data/extracted/ps4/omega-eu/uroot/data00.psarc /Data/xml/weaponstats_race.xml
+```
+
+What differs from Pulse (everything not listed is equal, value for value):
+
+| Field | Pulse | HD / Fury (Omega's HD-named copy equals it but for the `superphantomspeed` row) | 2048 `_2048` and Omega's `_2048` copy |
+| --- | --- | --- | --- |
+| `LeachBeam.repair` | 0.1 | 2.0 | **30.0** |
+| `LeachBeam.damage` | 0.1 | 1.5 | 1.5 |
+| `LeachBeam.energy_multiplier` | 50.0 | 2.0 | 2.0 |
+| `LeachBeam.slowShipFactor` | 0.8 | 0.4 | 0.4 |
+| `Mine.slowdown_time` | 0.16 | 0.10 | 0.05 |
+| every other weapon's `slowdown_time` | Rocket 0.8, Missile 1.0, Plasma 1.3, Quake 1.3, Bomb 1.0, Repulser 0.8, Shuriken 0.8, Cannon 0.1 | equal to Pulse's | **half** (Rocket 0.4, Plasma 0.7, Cannon 0.05, ...) |
+| `Quake` per-class `venom/flash/rapier/phantomspeed` | none | 1.0, 1.1, 1.3, 1.5 | the same, plus `superphantomspeed` 1.5 |
+| `superphantomspeed` on Rocket (1100), Missile (1100), Plasma (1150), Shuriken (1100) | none | none in Fury; Omega's HD-named copy and the HD-named copy 2048 carries have it | yes |
+| `Cannon.recharge_time` | none | 0.5 | none |
+| `Bomb.number_of_shots_to_destroy` | none | 1 | 1 |
+| `screen_shake_amount`, `screen_shake_time` on Rocket, Missile, Plasma, Quake, Mine, Bomb, Cannon | none | none | 0.2 to 0.3, 0.3 to 0.6 s |
+| `GiftCannon` block | none | none | yes |
+| `LightBarrier` block | none | yes | yes |
+
+The PS2 EU table equals the PSP EU table in all fourteen blocks. HD and Omega's
+HD-named copy differ only in `superphantomspeed`.
+
+**What reads them** (a grep of `crates/` on 2026-10-19): `QuakeStats` decodes
+`absorb`, `damage`, `radius` and `slowdown_time` only; no crate reads
+`superphantomspeed`, `screen_shake_*`, `GiftCannon`, `recharge_time` or
+`number_of_shots_to_destroy`. So the per-class Quake speeds and the SuperPhantom
+weapon speeds are authored and spent by nothing.
+
+**Confidence**: the field values and the equality of the PS2 table are direct
+reads of the shipped files, reproducible with the commands above: 90 (data
+agreement, no runtime trace; capped below 95 by the rubric). That nothing reads
+the unread fields is a grep, not a trace: 80.
+
 ## What this does not answer
 
 - **What the original does on a pickup.** The *trigger* is recovered -

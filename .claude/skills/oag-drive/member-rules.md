@@ -240,6 +240,14 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   parse, draw or play nothing and say so in the loader report. Anything
   genuinely chosen is labelled **chosen, not measured**, with no confidence
   score; a score means measured off the original.
+- **A weapon change updates `docs/gameplay/weapon-lineage.md` in the same
+  change.** A lane that changes a weapon's law, tuning, AI use, visuals or
+  sound moves the matching cell there (measured with its evidence link,
+  inherited from X, chosen, absent, or not investigated), and a new
+  `Weapons`/`WeaponModels` field or effect trigger gets its row in "Checked
+  axes". `just check-weapon-lineage` (in the gate) fails on the checked part;
+  the aspect tables rely on you (maintainer, 2026-10-19: a Pulse law ran on HD
+  with HD's numbers and wrecked the field).
 - **A 2048 finding is checked against Omega, and the reverse, in the same
   change** (CLAUDE.md, "A 2048 finding is checked against Omega"). Record
   `ported`, `checked, applies, not wired`, `checked, differs` or `not

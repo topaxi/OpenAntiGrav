@@ -1,0 +1,309 @@
+# Weapon lineage
+
+Where each weapon's behaviour, numbers, AI use, look and sound come from, per
+title, and how this engine adjusts or shares the code that plays it.
+[`overview/status.md`](../overview/status.md) says how *far along* a cell is;
+this page says **whose law it is**. The two were conflated once: Pulse's per-tick LeachBeam drain ran on HD
+with HD's damage value (1.5, against Pulse's 0.1), emptied the target's shield
+in 94 to 119 ticks and wrecked the field, so opponents were made to hold the
+beam for a few hours until HD's own once-per-trip drain was read
+([`ps3-hdfury-eu/weapons.md`](../ghidra/functions/ps3-hdfury-eu/weapons.md),
+confidence 80; [`ai.md`](ai.md), "An original opponent never fired, and now
+does"). A cell that reads "inherited" here is a cell where that can happen
+again.
+
+The rule behind it (maintainer, 2026-10-19): **always measure**, and track
+explicitly how a weapon's behaviour carries through titles and generations, how
+it is implemented, and where the engine adjusts it per title.
+
+## How to read a cell
+
+Every cell opens with one source tag:
+
+| Tag | Meaning | Score |
+| --- | --- | --- |
+| **M** | measured on this title: its own executable, its own data, or watched running. The page that holds the evidence is linked. | the page's own score; restated here only where it decides the cell |
+| **I:X** | inherited from title X: the engine runs X's law (or X's name for a thing) and this title's own has not been read. Checked, not measured. | none |
+| **C** | chosen by this project, not measured. Nothing in the original says so. | none |
+| **A** | absent: the title does not have it. The evidence is linked, because "absent" needs evidence. | the page's own score |
+| **?** | not investigated. It is neither inherited nor absent until someone looks; the cell says what would settle it. | none |
+
+`unread` in the checked table below means the same as `?` here: a title with
+no such thing recovered, as opposed to `absent`, a title that does not have it.
+
+Pulse PSP and Pulse PS2 share **one** `oag_title::Title` (`oag_pulse::TITLE`:
+one definition, two archive candidates), so everything this engine decides for
+one it decides for the other. The PS2 column therefore says only what was
+measured on the PS2 separately. PSP is the implementation target; a PS2
+divergence implements the PSP.
+
+Scores are not repeated per cell. They live on the linked page, next to the
+instruction-level evidence. A tag with no link is a claim to distrust.
+
+## Where the code adjusts a weapon per title
+
+Four mechanisms, from most shared to most title-specific:
+
+1. **One code path, no title input.** `oag_weapons` (pickup draw, projectiles,
+   blasts, beams, slowdown) and `oag_raceplay`'s weapon glue run the same on every
+   title. A weapon whose law is "inherited" runs here.
+2. **A table the title names.** `oag_title::weapons::Weapons` picks the
+   `WeaponStats_*.xml` (race and Eliminator) and the `WeaponAIstats.xml`
+   the shared code reads its numbers from. The numbers are the title's own
+   whenever the file is.
+3. **A law the title selects.** `Weapons::leach_drain` is the one: Pulse
+   drains every tick, HD once per ball trip. A new per-title law is a new field
+   here, with provenance, not a `title.name` branch (ADR-0058, `just
+   check-title-branching`).
+4. **What a title draws.** `oag_title::weapons::WeaponModels` names each
+   weapon's own body, blast, trail and strip, and `oag_title::Effects` its
+   particle triggers. A field that is `None` draws nothing; it never falls back to
+   another title's model.
+
+## Checked axes
+
+The table below is machine-checked by `scripts/check-weapon-lineage.py`
+(`just check-weapon-lineage`, part of the gate). Each cell is
+`` `value` - provenance ``. The script compares the value with the Rust source of
+the five title crates, and the provenance word where the code carries an
+`Origin` (`ghost_static`, and the effect rows). It also fails when a public
+field of `Weapons` or `WeaponModels` has no row here, so a new axis cannot land
+unrecorded.
+
+**Not checked**, and therefore only as good as the last person who looked: the
+provenance of a `Weapons` axis (it lives in `//` comments, not in a field), the
+provenance of a `WeaponModels` field other than `ghost_static`, every cell of
+the aspect tables further down, and the confidence scores on the linked pages.
+Values: a path is the exact string in the source; `set` is `Some(..)` (or
+`true`); `none` is `None` (or `false`).
+
+| Axis | Pulse (PSP, PS2) | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- |
+| `weapons.race` | `Data\XML\WeaponStats_Race.xml` - measured | `Data\XML\weaponstats.xml` - measured | `Data\XML\WeaponStats_Race.xml` - measured | `Data\XML\weaponstats_Race_2048.xml` - chosen | `Data\XML\WeaponStats_Race.xml` - chosen |
+| `weapons.elimination` | `Data\XML\WeaponStats_Elimination.xml` - measured | `none` - measured | `Data\XML\WeaponStats_Elimination.xml` - measured | `Data\XML\weaponstats_Elimination_2048.xml` - chosen | `Data\XML\WeaponStats_Elimination.xml` - chosen |
+| `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
+| `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
+| `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.bomb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.cannon` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.plasma_ball` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.plasma_blast_pulse` | `set` - measured | `none` - unread | `none` - absent | `none` - unread | `none` - unread |
+| `weapon_models.plasma_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.bomb_blast_pulse` | `set` - measured | `set` - measured | `none` - absent | `none` - unread | `none` - unread |
+| `weapon_models.bomb_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.missile_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.repulser_field` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
+| `weapon_models.mag_floor` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
+| `weapon_models.magstrip_wake` | `none` - absent | `none` - absent | `set` - measured | `none` - absent | `none` - unread |
+| `weapon_models.magstrip_pob` | `none` - absent | `none` - absent | `none` - absent | `set` - measured | `none` - unread |
+| `weapon_models.rocket_trail` | `none` - unread | `none` - unread | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.leach_strip` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.leachbeam_ball` | `none` - unread | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.shuriken` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
+| `weapon_models.cannon_look` | `none` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.ghost_static` | `set` - measured | `set` - measured | `none` - measured | `set` - inherited | `set` - inherited |
+| `effects.hit_spark` | `set` - measured | `none` - unread | `none` - unread | `none` - unread | `none` - unread |
+| `effects.leach_hit_spark` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `effects.weapon_spark` | `none` - unread | `none` - unread | `set` - measured | `none` - unread | `none` - unread |
+| `effects.shield_absorb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
+| `effects.bomb_rays` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+
+Notes on the cells the code does not explain by itself:
+
+- **`weapons.race` on 2048 and Omega is chosen.** 2048 ships HD's three tables
+  and two suffixed `_2048` ones; the suffix is the only evidence the race reads
+  the latter, and no executable read says which file the race opens. Omega
+  names HD's unsuffixed file for the same reason in reverse. Both decode
+  (`docs/formats/weapon-stats.md`, "Omega checks against HD").
+- **`weapons.elimination` is read.** `Weapons::elimination`'s own doc comment,
+  and the HD and Pure comments in their `lib.rs`, still say nothing opens it;
+  that was true until 2026-09-08. `oag_raceplay`'s `load_weapons` opens it for
+  `Mode::Eliminator` and falls back to the race table, with a report line, on a
+  title whose field is `None`. The comments are stale (a `.rs` change, so not
+  fixed here).
+- **`weapons.leach_drain` on Pure is `absent`**: Pure ships no LeachBeam
+  (`psp-pure-usa/weapons.md`, confidence 90), so `PerTick` is an inert value
+  the field needs, not a law Pure runs.
+- **`weapons.ai` is a table, not a law.** Each title ships a file (searched
+  2026-10-03, so the file is measured data); the decision code that reads it is
+  Pulse's on every title, inherited, see "AI use" below. 2048 and Omega are
+  chosen because two byte-identical copies ship and nothing says which the race
+  opens. Pure's entry is the same name's hash, the spelling Pulse's.
+- **Effect rows**: `set` means the title answers that trigger itself in its
+  `effects.rs` (or 2048's and Omega's `EFFECTS`). A title that shares
+  `Effects::engine`'s defaults for every other trigger inherits those names
+  from Pulse; the rows above are the triggers each title has to answer for itself.
+- **`ghost_static`**: `none` on HD is a measurement (no `staticglow` string in
+  its EBOOT); 2048's and Omega's entry is Pulse's name for a file they ship as
+  `.gxt` and `.gnf`.
+
+## The aspect tables
+
+Rows are the weapons and pickup effects each title has, columns the titles.
+Cells are short on purpose: the page behind the link is the evidence. Where
+the Pulse PSP and PS2 columns are merged into one, PS2 equals PSP except the
+named exceptions (the PS2 `extrashield.vex` shell, its engine flare as a particle
+effect, and its tuning table, which is equal to the PSP's, see below).
+
+### Implementation: the shared path and what adjusts it per title
+
+Each row is the code every title runs, and the fields that make a title
+differ. A weapon with no per-title field runs identically on every title that
+has it; only its table moves.
+
+| Weapon | Shared code | Per-title data that adjusts it |
+| --- | --- | --- |
+| Rocket | `oag_weapons::projectile::rocket` on the `flight` floor follower; player glue `oag_raceplay::weapons`, opponents `field/opponent_weapons.rs` | `Weapons.race`/`.elimination` (numbers); `WeaponModels.rocket`, `.rocket_trail`; `Effects` `RocketFlare`, `TrackBlast`, `CraftBlast` |
+| Missile | `projectile::missile` (lock, guidance, five bounces); `oag_raceplay::weapons::reticle` | the table; `WeaponModels.missile_blast_hd`; `Effects` `MissileFlare`, `MissileExplo`, `MissileBounce` |
+| Quake | `projectile::quake`; the road ripple in `oag_render::ripple` | the table; `Effects.quake_look` (`QuakeLook`: up, lift, wash), `.extents`, `.sprites`; `Effects` `Quake` |
+| Cannon | `projectile::cannon` | the table; `WeaponModels.cannon`, `.cannon_look` (`CannonLook`, `CannonBody`); `Effects` `CannonSparks`, `WeaponSpark` |
+| Turbo | `oag_weapons::pickup`, then `oag_physics::engine` | the table only |
+| Shield | `oag_weapons::pickup`, then `oag_physics::damage` | the table; `Looks` (`ShieldPalettes`, hull overlay rule) |
+| Autopilot | `oag_weapons::pickup`, then the AI takeover in `oag_raceplay::player_step` | the table only |
+| Plasma | `projectile::plasma` on the `flight` follower | the table; `WeaponModels.plasma_ball`, `.plasma_blast_pulse`, `.plasma_blast_hd`; `Effects` `PlasmaFlare`, `PlasmaBlast`, `PlasmaLightning*` |
+| Bomb | `projectile::mine` (shared with Mine), `oag_raceplay::bomb_blast` | the table; `WeaponModels.bomb`, `.bomb_blast_pulse` (`shockwave_fades`), `.bomb_blast_hd`; `Effects` `BombSmokering`, `BombRays` |
+| Mine | `projectile::mine` | the table; `WeaponModels.mine`; `Effects` `MineExplo` |
+| LeachBeam | `projectile::leach_beam` (`Beam`, `Beam::per_trip`, `trip`); `oag_raceplay::leach_strip` | **`Weapons.leach_drain`** (`PerTick`, `PerTrip`); the table; `WeaponModels.leach_strip`, `.leachbeam_ball`; `Effects` `Leachbeam*`, `LeachHitSpark` |
+| Repulser | `projectile::repulser` (+ `fork`); `oag_raceplay::repulser_field` | the table; `WeaponModels.repulser_field`; `Effects` `RepulserBlast`, `Repulser` |
+| Shuriken | `projectile::shuriken` on the `flight` follower | the table; `WeaponModels.shuriken`; `Effects` `Shuriken*` |
+| Disruptor | `projectile::disruptor`, `oag_weapons::disruption`; `oag_raceplay::weapons::disruptor` | the table (Pure ships the only one); no field of its own |
+| Pickup draw | `oag_weapons::pickup` | the table's `<Pickupodds>`; `Title.weapon_pad_glow` for the pad's look |
+| Absorb | `oag_physics::damage` absorb branch | the table's `absorb`; `Effects` `ShieldAbsorb` with its burst |
+| Slowdown stacking | `oag_weapons::slowdown`, clamped to the table's `Global slowdown_limit` | the table's `slowdown_time` per weapon |
+| Fire law | `oag_ai::weapon_ai`, `oag_raceplay::field::fire_law` (`FireLaw`) | **`Weapons.ai`** (the odds file); `FireLaw::Ours` when it is missing |
+| Sound | `oag_sound::sfx::cue`, push sites in `oag_raceplay::weapons` and `field/opponent_weapons.rs` | the title's `weapons.bnk` path (`SOUND_BANKS` in its `race.rs`) |
+| EMP, Light Barrier, GiftCannon | none | none: authored, nothing reads them |
+
+### Behaviour law
+
+| Weapon | Pulse PSP | Pulse PS2 | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- | --- |
+| Rocket | M: ground truth, [rocket_floor_trace.rs](../../crates/raceplay/tests/rocket_floor_trace.rs), [pickups.md](pickups.md) | I:Pulse PSP | I:Pulse; same code, Pure's table | I:Pulse; `Rocket_Construct` read, law unread ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | I:Pulse; unread | ?: constructors read ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)), law unread |
+| Missile | M: [missile.md](../ghidra/functions/psp-pulse-usa/missile.md), [missile_ground_truth.rs](../../crates/raceplay/tests/missile_ground_truth.rs) | I:Pulse PSP | I:Pulse; same code, no Pure test | I:Pulse; `MissileManager_Construct` read | I:Pulse; unread | ?: read, not ported |
+| Quake | M: the travelling instance and the road ripple, [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) | I:Pulse PSP | M: its own wave extent, frame and wash, [quake.md](../ghidra/functions/psp-pure-usa/quake.md); road ripple open | I:Pulse; `QuakeManager_Construct` read | I:Pulse; unread | ?: read, not ported |
+| Cannon | M: [cannon_ground_truth.rs](../../crates/raceplay/tests/cannon_ground_truth.rs) | I:Pulse PSP | A: not in Pure's roster ([weapon-stats.md](../formats/weapon-stats.md)) | I:Pulse; `CannonManager_Construct` read; `recharge_time` authored, unread | I:Pulse; unread | ?: read, not ported |
+| Turbo | M: [pickups.md](pickups.md#what-a-fired-turbo-does) | I:Pulse PSP | I:Pulse | I:Pulse; no manager class located | I:Pulse; unread | ?: no manager located |
+| Shield | M: [shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md) | M: same law, own model ([ps2 page](../ghidra/functions/ps2-pulse-eu/shield-pickup.md), [ps2_shield_ground_truth.rs](../../crates/raceplay/tests/ps2_shield_ground_truth.rs)) | I:Pulse | M: same law as Pulse, two colours moved ([shield.md](../ghidra/functions/ps3-hdfury-eu/shield.md)) | I:Pulse; unread | ?: HD's `Shield` table applies, law unread |
+| Autopilot | M: the AI takes the craft ([pickups.md](pickups.md)) | I:Pulse PSP | I:Pulse | I:Pulse; no manager located | I:Pulse; unread | ?: unread |
+| Plasma | M: [plasma_ground_truth.rs](../../crates/raceplay/tests/plasma_ground_truth.rs) | I:Pulse PSP | M: hardcodes the same 1 s charge ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md)) | M: blast mechanics read ([plasma.md](../ghidra/functions/ps3-hdfury-eu/plasma.md)); flight law I:Pulse | I:Pulse; unread | M: read ([plasma.md](../ghidra/functions/ps4-omega-eu/plasma.md)), not ported |
+| Bomb | M: [mine_ground_truth.rs](../../crates/raceplay/tests/mine_ground_truth.rs); `damageradius` has no consumer | I:Pulse PSP | M: fuse-less dialect, [weapons.md](../ghidra/functions/psp-pure-usa/weapons.md#pures-bomb-has-no-fuse-and-damageradius-has-no-reader) | M: own blast object read (`NormalBomb`); `number_of_shots_to_destroy` authored, unread | I:Pulse; `WeaponType` splits Mine from Bomb ([weapon-type-bits.md](../ghidra/functions/vita-2048-eu-v104/weapon-type-bits.md)) | ?: read, not ported |
+| Mine | M: [mine_ground_truth.rs](../../crates/raceplay/tests/mine_ground_truth.rs) | I:Pulse PSP | I:Pulse | I:Pulse; `MineManager_Construct` read | I:Pulse; unread | ?: shares one composite with LeachBeam, no own constructor |
+| LeachBeam | M: link, drain, repair, `slowShipFactor`; no disc-backed test | I:Pulse PSP | A: ships none ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md#pure-ships-no-leachbeam-checked-2026-10-12-lane-pure-leach-quake-confidence-90), 90) | M: once per ball trip (80, [weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | I:HD via Omega; own `repair` is 30.0, law unread | I:HD; built inline with Mine, no own constructor, the drain not read |
+| Repulser | M: [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md); not runtime verified | I:Pulse PSP | A: not in Pure's roster | I:Pulse; `Repulser_Construct` read; HD's Eliminator odds weight it | I:Pulse; unread | ?: no `Repulser.cpp` tag found, absent or unnamed |
+| Shuriken | M: [shuriken_ground_truth.rs](../../crates/raceplay/tests/shuriken_ground_truth.rs) | I:Pulse PSP | A: not in Pure's roster | I:Pulse; no manager located | I:Pulse; unread | ?: unread |
+| Disruptor | A | A | M: whole law, grant to victim ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md)) | A | A | A |
+| EMP, Light Barrier | A | A | A | M: authored (`EMP` in the Detonator table, `LightBarrier` in Fury's race table), not wired, `Weapon::from_type` drops both; read, gated to Detonator and Zone Battle ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)); not built | ?: both ship in the 2048-named tables, unread | M: `EMPManager_Construct`, `LightBarrierManager_Construct` read |
+| GiftCannon | A | A | A | A | ?: authored only in `weaponstats_*_2048.xml`, nothing reads it | ?: authored in the `_2048` copies, Omega reads HD-named files |
+| Pickup draw (`<Pickupodds>`) | M: [pickups.md](pickups.md), 92 | I:Pulse PSP | I:Pulse: Pure's own odds, Pulse's draw | I:Pulse draw, HD's own odds | I:Pulse draw, 2048's own odds | I:Pulse draw; a fifth `SuperPhantom` class is unread |
+| Absorb (energy paid back) | M: [shield.md](../ghidra/functions/psp-pulse-usa/shield.md) | I:Pulse PSP | I:Pulse | I:Pulse | I:Pulse | ?: unread |
+| Slowdown stacking | M: `Ship_AddSlowdown` clamped to `slowdown_limit`, [engine.md](../ghidra/functions/psp-pulse-usa/engine.md) | I:Pulse PSP | I:Pulse | I:Pulse | I:Pulse; its own `slowdown_time`s are half Pulse's | ?: unread |
+
+### Tuning table
+
+The numbers each title authors. Compared by reading Pulse's table out of its
+WAD (EU PSP, and EU PS2 for the second column) and HD, 2048 and Omega's out of
+their archives, 2026-10-19; the commands, the differing fields and the scores
+are in [weapon-stats.md](../formats/weapon-stats.md#the-race-tables-compared-across-titles-2026-10-19).
+
+| Weapon | Pulse PSP | Pulse PS2 | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- | --- |
+| Rocket, Missile, Plasma, Bomb, Mine, Cannon, Quake, Repulser, Shuriken, Turbo, Shield, Autopilot | M: `WeaponStats_Race.xml`, [weapon-stats.md](../formats/weapon-stats.md) | M: the same 14 blocks, equal value for value to the PSP's EU copy | M: its own 10-weapon `weaponstats.xml`, one `speed` per weapon ([pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs)) | M: HD's own file. Equal to Pulse's on every field of these weapons except `Mine.slowdown_time` (0.10 against 0.16), a per-class `Quake` speed, `Cannon.recharge_time` and `Bomb.number_of_shots_to_destroy` ([hd_weapons_ground_truth.rs](../../crates/tables/tests/hd_weapons_ground_truth.rs)) | M: its own `_2048` file, chosen by suffix. `slowdown_time` halved on every weapon; adds `screen_shake_*` (unread), `superphantomspeed` (unread) | M: HD-named files decode equal to Fury's apart from `superphantomspeed`; which copy a race reads is C; the `_2048` pair also ships and is unread |
+| LeachBeam | M: `repair` 0.1, `damage` 0.1, `energy_multiplier` 50, `slowShipFactor` 0.8 | M: equal to the PSP's | A | M: `repair` 2.0, `damage` 1.5, `energy_multiplier` 2.0, `slowShipFactor` 0.4. **Every figure moved**, the three race copies disagree, `DATA00` is read | M: `repair` **30.0**, `damage` 1.5, `energy_multiplier` 2.0, `slowShipFactor` 0.4 | I:HD; Omega's HD-named copy is equal |
+| Pure's Disruptor | A | A | M: [pure_weapons_ground_truth.rs](../../crates/tables/tests/pure_weapons_ground_truth.rs) | A | A | A |
+| LightBarrier, EMP | A | A | A | M: authored, unread | M: authored, unread | M: authored, unread |
+| GiftCannon | A | A | A | A | M: authored, unread | M: authored, unread (`_2048` copy) |
+
+### AI use and fire law
+
+Every title's opponents fire the **same code**: `oag_ai::weapon_ai`, which is
+Pulse's `WeaponAi_DecideFireOrAbsorb` fire half (`0x088518b4`, confidence 85,
+[weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)), on the title's
+own `WeaponAIstats.xml` odds. HD's loader for that file is read (85,
+[weapon-ai-stats.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-stats.md)); **no
+other title's decision code is read**. A race whose title names no table, or
+whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
+(`crates/raceplay/src/field/fire_law.rs`).
+
+| Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- |
+| Law that decides to fire | M: fire half ported; absorb half read, taken back out (decision cadence unconfirmed) | I:Pulse; own odds | I:Pulse; own odds, an `AllWeapons` row and an `EliminatorAIStats` row parsed and not consumed | I:Pulse; own odds | I:Pulse; own odds |
+| Rocket, Missile, Plasma, Shuriken, Repulser, LeachBeam | M: aimed, fired on the law's roll | I:Pulse (those it has) | I:Pulse | I:Pulse | I:Pulse |
+| Quake | M: rolled, not aimed | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
+| Cannon | ?: the original flags it a forward weapon, the port does not aim it (`opponent_fires`; see `Driver::holds_fire`) | A | ? | ? | ? |
+| Mine, Bomb | C: laid by `Driver::wants_to_drop`, not the original's law | C | C | C | C |
+| Turbo | C: fired on a clear straight | C | C | C | C |
+| Shield | C: absorbed, never raised | C | C | C | C |
+| Autopilot | M: it is the AI, `Ai_Construct` | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
+| Disruptor | A | C: opponents never fire it (not in `opponent_fires`' forward list) | A | A | A |
+
+The 240 s single-race census in [`ai.md`](ai.md) (opponent projectiles
+fired: Pulse 244, Pure 38, HD 168, 2048 288, Omega 156) is the only place the
+inherited fire law is measured **across** titles, and what it measures is that
+it fires, not that the rate matches any original's.
+
+### Visuals
+
+| Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- |
+| Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO` | M: `Rocket.vex`, its own spelling | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's | ?: same |
+| Missile | M: `WO_MISSILE_HEAD` at both anchors; twin trails not built | I:Pulse (effect names) | M: `HD_missile_explosion.vex` on its own keys | ?: effect names only | ?: effect names only |
+| Quake | M: `WO_QUAKE`, road ripple, orange tint | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
+| Cannon | M: `pulse_muzzleflash.vex` on the round, bolt and flash quads | A | M: `hd_muzzleflash.vex` at the muzzle, own textures and size range | ?: not drawn | ?: not drawn |
+| Plasma | M: charge glow, three-model blast with a baked track | ?: the three-model blast is in the executable, its key tables are unread, nothing is wired | M: `HD_plasma_ball`, ring, sphere and halo on eased scale ramps | ?: `WO_PLASMA_FLASH` is not authored there; nothing drawn | ?: same |
+| Bomb | M: hemisphere, shockwave, smoke ring | M: same pair, no alpha fade | M: fireball, white core, bloom disc, eight rings, rays | ?: not drawn | ?: not drawn |
+| Mine | M: `Pulse_Mine.vex`, spin | M: `Mine.vex` | M: `HD_Mine.vex` | ?: not drawn | ?: not drawn |
+| LeachBeam | M: ribbon, `WO_LEACHBEAM_ENERGY`, hull overlay | A | M: strip, ball (named, placement partly read), `WO_LEACHBEAM_*` | ?: `WO_LEACHBEAM_ENERGY` not authored; strip unread | ?: not drawn |
+| Repulser | M: field model, `WO_REPULSER_BLAST`, matched to the PSP | A | ?: no field model recovered | ?: not drawn | ?: not drawn |
+| Shuriken | M: `pulse_shuriken.vex`, `WO_SHURIKEN_*` | A | ?: no blade model recovered | ?: not drawn | ?: not drawn |
+| Shield | M: three colours, shell and sphere; PS2 draws `extrashield.vex` | ?: not investigated | M: two of three colours read | I:Pulse | I:Pulse |
+| Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: unread |
+| Disruptor | A | ?: effect blocks authored, four have no parser branch | A | A | A |
+
+### Sound
+
+Cue names are Pulse's, looked up in whichever bank the title ships
+(`weapons.bnk` on HD and 2048). HD also has its own authored mix
+([audio-mix.md](../ghidra/functions/ps3-hdfury-eu/audio-mix.md)). The weapon cue **sites** are Pulse's reading
+applied to the other titles: confirmed on Pure for eight of nine race cues
+(78 to 82, by decompilation only, `psp-pure-usa/rocket-and-collision-fx.md`,
+`shield-sound.md`, `lockon-sound.md`), not located on HD, 2048 or Omega. Which
+individual weapon cue a title plays, and whether it plays it at the same
+simulation edge, has not been compared weapon by weapon.
+
+| Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
+| --- | --- | --- | --- | --- | --- |
+| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired | I:Pulse; sites confirmed for the cues listed above | I:Pulse; sites not located | I:Pulse; sites not located | ?: not investigated |
+
+## 2048 and Omega: the cross-check
+
+CLAUDE.md asks that a 2048 finding be checked against Omega and the reverse.
+For weapons, as of 2026-10-19:
+
+- **Tables**: checked, applies, not wired. Omega's HD-named tables equal HD's
+  field for field apart from `superphantomspeed`; its `_2048` pair equals 2048's
+  own. Racing on Omega is incomplete, so the only title that reads a `_2048`
+  table in a race is 2048.
+- **LeachBeam**: 2048's `repair` is 30.0 against HD's and Omega's 2.0. The
+  per-trip law is HD's, carried to both by inheritance, so the 30.0 meets a law
+  nobody has read on 2048.
+- **Models and effects**: not checkable on Omega, which has no recovered model
+  names and no PS4 emulator in this toolchain; unread on 2048 outright.
+
+## Keeping it honest
+
+A lane that changes a weapon's law, tuning, AI use, visuals or sound updates
+the matching table above **in the same change**, and `just
+check-weapon-lineage` has to pass. The rule is in
+`.claude/skills/oag-drive/member-rules.md`.
+
+What gets recorded and how:
+
+- **Measured something that was inherited**: change the cell to **M**, link the
+  page and, if the engine gained a per-title field, add its row to "Checked
+  axes".
+- **Added a `Weapons` or `WeaponModels` field**: the script fails until its row
+  exists. Give each title's value and provenance.
+- **Found a title lacks the weapon**: **A**, with the evidence, not `?`.
+- **Never raise a confidence score here.** The score lives on the evidence page;
+  a cell that cites one cites it as the page states it.

@@ -29,9 +29,9 @@ pub struct Weapons {
     /// `weaponstats.xml` is the whole of its tuning, so there is no second file
     /// for a mode to reach for rather than one this build has not found.
     ///
-    /// Nothing reads it yet: `oag_raceplay::load` opens [`Self::race`] for
-    /// every mode. It is carried because the axis is about which files exist,
-    /// and recording that Pure has one is the point of the axis.
+    /// `oag_raceplay`'s `load_weapons` opens it for `Mode::Eliminator` (since
+    /// 2026-09-08) and falls back to [`Self::race`], with a report line, on a
+    /// title where it is `None`.
     pub elimination: Option<&'static str>,
     /// The table an opponent's fire odds are read from - `useAgainstPlayer`,
     /// `useAgainstAI` and `absorb` a weapon, `oag_tables::weapons::ai` - or
@@ -109,8 +109,8 @@ pub struct WeaponModels {
     pub plasma_blast_hd: Option<HdPlasmaBlast>,
     /// Pulse's own Bomb detonation: a hemisphere and a shockwave, each eased
     /// by a per-tick `cur += (target - cur) * rate` scale ramp of its own -
-    /// see `oag_raceplay::bomb_blast`. `None` on every other title: HD's
-    /// own Bomb detonation is unread and Pure's Bomb authors no fuse at all.
+    /// see `oag_raceplay::bomb_blast`. `None` on HD, which has its own
+    /// [`Self::bomb_blast_hd`], and on titles whose Bomb is unread.
     pub bomb_blast_pulse: Option<PulseBombBlast>,
     /// Wipeout HD's Bomb detonation: a fireball, its white core, a camera-
     /// facing bloom disc and eight shockwave rings, driven by one blast
