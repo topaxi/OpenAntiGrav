@@ -1379,3 +1379,5 @@
 0x088a34c8	function	GridController_HideAllTiles	82	race-campaign.md
 # 2026-10-19 autopilot-rail: the uncapped-thrust bit the Autopilot and the finish set (autopilot.md)
 0x0884866c	function	Craft_SetUncappedThrust	88	autopilot.md
+# 2026-10-19 moa-strip-band: the list-B queue key (mesh-draw.md)
+0x08902b24	function	ViewCull_ViewDepth	80	mesh-draw.md

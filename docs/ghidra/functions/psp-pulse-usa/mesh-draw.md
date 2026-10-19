@@ -1517,8 +1517,9 @@ neither is diverted, and `mesh+0x4c` stays `0x4d000000`.
 
 `mesh+0xc8` gets a second, derived key through a small fixed mapping
 (`< 0x30000000` adds `0x100000`; `0x66`->`0x68`, `0x53`->`0x55`, `0x61`->`0x63`,
-`0x58`->`0x5a`, `0x6b`->`0x6c`, `0x4b`->`0x4d`, otherwise `0x4c000000`). Its
-consumer was not traced.
+`0x58`->`0x5a`, `0x6b`->`0x6c`, **`0x4b`->`0x4c`, otherwise `0x4d000000`** -
+corrected 2026-10-19, the page had the last two swapped; the final `lui` sits in a
+branch-likely delay slot at `0x0890ed28`). Its consumer is `Mesh_SubmitNode`, below.
 
 ### Live-database name drift found on the way, beyond the three already known
 
@@ -2419,3 +2420,52 @@ Runtime trace; one title, one team, one circuit.
 | --- | --- | --- |
 | `0x0890db54` | `Mesh_DrawExtraPassBatches` | 85 |
 | `0x0890d508` | `Mesh_CompileExtraPass` | 85 |
+
+## The list-B queue key: `Mesh_SubmitNode` orders a mesh by view depth (2026-10-19)
+
+Lane `moa-strip-band`. Static reading of `psp-pulse-usa/BOOT.BIN`, checked against a
+GE record of a Moa Therma frame (`psp-ge-dump.py`, 469 prims, v1.20.4 software
+renderer). Confidence 85 on the key, 80 on the point it is taken at (the box
+centre, checked against all 4,686 list-B meshes on the disc,
+`mesh_depth_point_ground_truth.rs`).
+
+`Mesh_SubmitNode` (`0x0890cc80`, `section-view-cull.md`) enqueues twice:
+
+```c
+if (mesh_flags & 1 && !mesh->hidden)            // +0xd4
+    Gfx_Enqueue(g_display, mesh, mesh->layer);  // +0x4c, bare, list A
+if (mesh_flags & 2) {                           // list B
+    if (mesh->dirty & 0x40000) world = node_world * mesh->box_centre;   // +0xa0 -> +0xb0
+    float z = ViewCull_ViewDepth(&mesh->world_point);   // 0x08902b24
+    u32 depth = 0;
+    if (z < 0.0f) { float t = -(z * 349.525f);
+        depth = t > 1048575.0f ? 0 : 0xfffff - ((u32)t & 0xfffff); }
+    Gfx_Enqueue(g_display, mesh, mesh->list_b_layer | depth);   // +0xc8
+}
+```
+
+`ViewCull_ViewDepth` (`0x08902b24`) transforms the point by the matrix
+`ViewCull_BuildViewProjection` (`0x0890296c`) caches at `0x08af2540` (the display's
+current view matrix) and returns `z * DAT_08b62380 * 0.015384615`, the global
+being that function's argument (`65.0` from `VexCamera_Submit`; the race
+camera passes `display+0x4310`, not read). `mesh+0xa0` is the centre of the
+payload's `+0x10`/`+0x20` box over the last batch's position scale, set at the end
+of `Mesh_InitFromPayload`. `mesh+0xc8` is `0x4d000000` for a scene mesh.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x08902b24` | `ViewCull_ViewDepth` | 80 |
+
+**Checked against the recorded frame**: the camera-space depth of each list-B
+prim's box, `-611 -475 -376 -211 [arrow strip] -168 -157 -152 -91 -37 -77`, rises
+monotonically, 0x45 and 0x4a meshes alternate, and the nodes the key predicts in
+that order (261, 267, 878, 258, 875, 293, 294) are the prims 413 to 425 in that
+order. A frame's cull, depth and stencil state is now in the census
+(`psp-ge-dump.py`): trees draw with alpha test `GREATER 0`, depth writes off, no
+stencil; the strip's blended batches stamp stencil. 
+
+**Checked against the other titles.** Pulse PS2: its own executable and its
+batches are VIF packets, not read, so the key is not applied to them
+(`checked, not wired`). Pure PSP: the same `.vex` v6 reader, the mesh classes are
+the same code on the same engine lineage; applied as inherited, not measured.
+2048 and Omega: `.rcsmodel`, not this path (`checked, differs`).

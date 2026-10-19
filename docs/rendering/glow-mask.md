@@ -383,6 +383,16 @@ through `result - base` of a saturated pixel reads 0.37 of the truth** - the
 first measurement here did exactly that on green and blue and briefly pointed
 at a missing 2.7 x of gain; red, which stays under 255, is the honest channel.
 
+## The chevron strip and the trees (2026-10-19)
+
+The arrow strip on Moa Therma (`03_Track`, node `267`) is three list-A batches (cutout
+`0x1891`, opaque `0x1011`, the same geometry stamped twice with different glow bytes)
+and four list-B batches (`0x1192`, alpha-over, depth writes off, stencil on); the trees
+are list-B alone (`0x1122`, no stencil), so the original's mask under a tree is the
+strip's, as measured. The strip never veiled the trees: that was the track shine pass
+drawn after them, now drawn before (`docs/rendering/draw-order.md`). The strip's mask
+area against the original's is `1.000` at ticks 100-160 on the same measure as bloom.md.
+
 ## The tunnel rim's neon strip (2026-10-01)
 
 The strip on `07_Track` that the original draws at `(134, 246, 248)` and ours

@@ -1167,6 +1167,47 @@ in ours, at poses where the HUD content differs (ours reads `0 km/h`): the origi
 bright pass reading the HUD does not show as bloom at these poses and does not move
 the whole-frame ratio. Not isolated over a bright glow surface.
 
+**Resolved 2026-10-19 (`moa-strip-band`): the pale band over the trees was the track's
+shine pass drawn after the blended list, not the strip.** The strip's own batches
+were never it: with node `267` taken out of every list the pale area over the left
+tree stayed. The `0x2000` extra pass (`*_shinemap` second textures, additive) was
+drawn by ours after the blended list, so it veiled every tree standing in front of a
+shine-mapped wall; the original queues it with the `0x45`/`0x4a` batch sets and
+every list-B mesh after them at `0x4d`, so a tree covers it. Ours' colour in the
+crown of the left tree at tick 160 was `122,141,134` against the original's
+`49,50,38`; with the pass off `46,48,37`, with it moved ahead of the blended list
+`52,52,40`. Two experiments of the earlier reading stay rejected. A second finding
+on the way, which moves little here: **list-B meshes are not in layer order but far
+to near by view depth** (`mesh-draw.md`, "The list-B queue key"; the order it
+predicts for seven Moa nodes equals GE prims 413-425), implemented as
+`Model::blended_order`.
+
+Re-measured, Moa Therma, `--anim-seconds` at the matched phases `45 3 23 44 5 24 44`,
+ticks 40-160, the same method, before this change then after:
+
+| tick | whole frame, before | after | strip colour under mask (rgb), before | after |
+| ---: | ---: | ---: | ---: | ---: |
+| 40 | 0.969 | 0.968 | | |
+| 60 | 0.985 | 0.983 | | |
+| 80 | 1.007 | 1.001 | | |
+| 100 | 1.003 | 1.000 | 1.030 | 1.027 |
+| 120 | 1.092 | 1.062 | 1.100 | 1.032 |
+| 140 | 1.110 | 1.059 | 1.106 | 1.040 |
+| 160 | 1.135 | 1.105 | 1.077 | 1.045 |
+
+The strip's `rgb * mask` energy at ticks 120-160 went `1.078 1.082 1.077` to `1.054
+1.055 1.058`; the mean over the seven poses `1.044` to `1.025`. What is left at tick
+160 is the craft's flare (about `0.1` luma of the `0.27`) and a `4-5 %` colour
+excess on the strip itself, no longer a falsifier failure (the bar was `1.05`).
+Elsewhere: the craft box is pixel-identical before and after at all seven poses;
+`01_Track` to `12_Track` at autopilot ticks 300, 900 and 1500 move `0` to `5,800`
+of `130,560` pixels, the largest a faint haze layer re-ordered under the depth key
+(`04_Track`, tick 1500, at most `19` levels a channel), and Pulse PS2 EU is `0` px
+different at both ticks (no shine pass and VIF batches, so neither change
+applies); Pure PSP EU `192` and `19` px, inherited, not measured against a Pure
+capture. A player-size side-by-side at ticks 120, 140, 160 shows the trees dark and
+solid as in the original where they were pale and ghostly.
+
 **Checked against the other titles.** Pulse PS2: its own chain (`ps2-bloom.md`); the
 clock and shadow questions are posing and default questions, not re-measured (`not
 checkable` here, no PS2 capture taken). Metropia and Talon's were not re-run: nothing

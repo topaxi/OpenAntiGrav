@@ -320,10 +320,11 @@ impl Recorder<'_> {
         stats
     }
 
-    /// Draws the circuit's solid lists, the sky, the circuit's blended list,
-    /// then the circuit's extra pass over it: the pass is tested against the
-    /// circuit's depth, so it follows the circuit and precedes everything
-    /// drawn after it.
+    /// Draws the circuit's solid lists, the sky, the circuit's extra pass, then its
+    /// blended list ([`TRACK_STAGES`]): the extra pass is tested against the circuit's
+    /// depth, so it follows the solid lists, and it precedes the blended list because
+    /// the original queues it with the `0x45`/`0x4a` sets and every list-B mesh after
+    /// them (`0x4d`) - a tree drawn after it is not veiled by it.
     ///
     /// **The sky goes behind the solid circuit rather than first.** It writes
     /// no depth, so it used to be drawn first comparing `Always`, filling the
@@ -349,52 +350,63 @@ impl Recorder<'_> {
             pass.chunk_set.as_ref(),
             pass.frustum.as_ref(),
         );
-        oag_gpu::perfprobe::marks::mark(render, "track solid");
-        let order = self
-            .sorts_opaque
-            .then(|| opaque_order(self.track, pass.eye));
-        let mut stats = self.track.draw_lists(
-            render,
-            block,
-            self.sections,
-            set,
-            chunks,
-            frustum,
-            Lists::Solid {
-                order: order.as_deref(),
-            },
-        );
-        oag_gpu::perfprobe::marks::mark(render, "sky");
-        if let Some(sky) = self.sky {
-            let (x, y, w, h) = pass.viewport;
-            render.set_viewport(x, y, w, h, 1.0, 1.0);
-            let _ = sky.draw(render, block, None, None, None, None);
-            render.set_viewport(x, y, w, h, 0.0, 1.0);
-        }
-        oag_gpu::perfprobe::marks::mark(render, "track blended");
-        stats.add(self.track.draw_lists(
-            render,
-            block,
-            self.sections,
-            set,
-            chunks,
-            frustum,
-            Lists::Blended {
-                depth_plane: Some(pass.depth_plane),
-            },
-        ));
-        oag_gpu::perfprobe::marks::mark(render, "track shine");
-        if let Some((shine, sources)) = self.track_shine {
-            stats.add(shine.draw_track_shine(
-                render,
-                block,
-                self.track,
-                sources,
-                self.sections,
-                set,
-                chunks,
-                frustum,
-            ));
+        let mut stats = SceneStats::default();
+        for stage in TRACK_STAGES {
+            match stage {
+                TrackStage::Solid => {
+                    oag_gpu::perfprobe::marks::mark(render, "track solid");
+                    let order = self
+                        .sorts_opaque
+                        .then(|| opaque_order(self.track, pass.eye));
+                    stats.add(self.track.draw_lists(
+                        render,
+                        block,
+                        self.sections,
+                        set,
+                        chunks,
+                        frustum,
+                        Lists::Solid {
+                            order: order.as_deref(),
+                        },
+                    ));
+                }
+                TrackStage::Sky => {
+                    oag_gpu::perfprobe::marks::mark(render, "sky");
+                    if let Some(sky) = self.sky {
+                        let (x, y, w, h) = pass.viewport;
+                        render.set_viewport(x, y, w, h, 1.0, 1.0);
+                        let _ = sky.draw(render, block, None, None, None, None);
+                        render.set_viewport(x, y, w, h, 0.0, 1.0);
+                    }
+                }
+                TrackStage::Shine => {
+                    oag_gpu::perfprobe::marks::mark(render, "track shine");
+                    if let Some((shine, sources)) = self.track_shine {
+                        stats.add(shine.draw_track_shine(
+                            render,
+                            block,
+                            self.track,
+                            sources,
+                            self.sections,
+                            set,
+                            chunks,
+                            frustum,
+                        ));
+                    }
+                }
+                TrackStage::Blended => {
+                    oag_gpu::perfprobe::marks::mark(render, "track blended");
+                    stats.add(self.track.draw_lists(
+                        render,
+                        block,
+                        self.sections,
+                        set,
+                        chunks,
+                        frustum,
+                        track_blended(pass.depth_plane),
+                    ));
+                }
+            }
         }
         stats
     }
@@ -431,6 +443,37 @@ impl Recorder<'_> {
         }
         effects.sparks.0.draw_flash(render, effects.sparks.1);
         oag_gpu::perfprobe::marks::mark(render, "end");
+    }
+}
+
+/// What [`Scene::draw_track`] runs, in this order.
+///
+/// The order is the original's queue order and a test holds it
+/// (`tests/track_stages.rs`): the `0x2000` extra pass is a list-A group of the
+/// `0x45`/`0x4a` batch sets and every list-B mesh is `0x4d`, so the shine is drawn
+/// before the blended list, never after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TrackStage {
+    Solid,
+    Sky,
+    Shine,
+    Blended,
+}
+
+/// [`TrackStage`] in draw order.
+pub(crate) const TRACK_STAGES: [TrackStage; 4] = [
+    TrackStage::Solid,
+    TrackStage::Sky,
+    TrackStage::Shine,
+    TrackStage::Blended,
+];
+
+/// The circuit's blended list for a view whose `depth_plane` is the fourth row of its
+/// view-projection matrix: list-B meshes far to near by view depth
+/// ([`oag_mesh::mesh::Model::blended_order`]).
+pub(crate) fn track_blended<'a>(depth_plane: [f32; 4]) -> Lists<'a> {
+    Lists::Blended {
+        depth_plane: Some(depth_plane),
     }
 }
 

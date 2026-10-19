@@ -25,6 +25,8 @@ mod motion;
 mod per_slot;
 mod queries;
 mod record;
+#[cfg(test)]
+pub(crate) use record::{TRACK_STAGES, TrackStage, track_blended};
 mod ribbons;
 mod scene_blocks;
 mod scratch;
