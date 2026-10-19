@@ -70,6 +70,11 @@ enum Pick {
     Exact(usize),
     /// The track after this one, wrapping at the listing's length.
     After(usize),
+    /// A run's first race: one past the menu's [`MUSIC_TRACK`] when the menu
+    /// plays a soundtrack track (a PS2 boot), so the race does not restart the
+    /// recording the menu was playing; else [`MUSIC_TRACK`]. Decided by the
+    /// booted platform, not by whether the menu's loop has landed yet.
+    FirstRace,
 }
 
 impl RacePick {
@@ -93,19 +98,34 @@ impl RacePick {
     }
 
     /// The index this names when it needs no listing, which is what lets an
-    /// already decoded track start on the spot.
-    pub(super) fn known(&self) -> Option<usize> {
+    /// already decoded track start on the spot. Never reads or waits.
+    pub(super) fn known(&self, discs: &MusicDiscs) -> Option<usize> {
         match (self.index, self.saved) {
             (Pick::Exact(index), None) => Some(index),
+            (Pick::FirstRace, None) => match discs.booted()? {
+                Platform::Ps2 => None,
+                _ => Some(MUSIC_TRACK),
+            },
             _ => None,
         }
+    }
+
+    /// [`Self::resolve`]'s index, for a unit test.
+    #[cfg(test)]
+    pub(super) fn resolve_for_test(self, discs: &MusicDiscs, len: usize) -> usize {
+        self.resolve(discs, len).index
     }
 
     /// The track, the seek and the restore verdict, on the worker's thread.
     fn resolve(self, discs: &MusicDiscs, len: usize) -> Resolved {
         let normal = match self.index {
             Pick::Exact(index) => index,
-            Pick::After(index) => {
+            Pick::FirstRace if discs.booted() != Some(Platform::Ps2) => MUSIC_TRACK,
+            Pick::After(_) | Pick::FirstRace => {
+                let index = match self.index {
+                    Pick::After(index) => index,
+                    _ => MUSIC_TRACK,
+                };
                 if len == 0 {
                     warn!(
                         "audio: could not list the booted disc's soundtrack, so the race \
@@ -242,7 +262,10 @@ impl RacePick {
     /// What a pick means when the fetch never ran: its known index, or the
     /// track it counts from.
     fn resolve_without_listing(&self) -> Resolved {
-        let (Pick::Exact(index) | Pick::After(index)) = self.index;
+        let index = match self.index {
+            Pick::Exact(index) | Pick::After(index) => index,
+            Pick::FirstRace => MUSIC_TRACK,
+        };
         Resolved {
             index,
             seek: self.seek,
@@ -342,7 +365,7 @@ impl Audio {
     ///
     /// The track the playlist is on once one has played (with the place
     /// [`Self::pause_race_music`] saved). Before that, one past the menu's
-    /// track when the menu plays one of the sixteen (a PS2 boot), so the first
+    /// track on a PS2 boot, whose menu plays one of the sixteen, so the first
     /// race does not restart the recording the menu was playing, else
     /// [`MUSIC_TRACK`]; plus a saved place [`Self::restore_race_music`] could
     /// not check yet, which the worker checks first. A saved place is handed
@@ -354,14 +377,10 @@ impl Audio {
                 ..RacePick::exact(index)
             };
         }
-        let base = if self.music_from.is_none() {
-            RacePick::exact(MUSIC_TRACK)
-        } else {
-            RacePick::after(MUSIC_TRACK)
-        };
         RacePick {
+            index: Pick::FirstRace,
+            seek: None,
             saved: self.pending_restore.take(),
-            ..base
         }
     }
 
@@ -385,7 +404,7 @@ impl Audio {
         choice: MusicSource,
         pick: &RacePick,
     ) -> Option<(usize, Loaded)> {
-        let index = pick.known()?;
+        let index = pick.known(discs)?;
         let (_, platform) = discs.pick(choice)?;
         let (cached_platform, cached_index, sound) = self.race_cache.as_ref()?;
         (*cached_platform == platform && *cached_index == index).then(|| {

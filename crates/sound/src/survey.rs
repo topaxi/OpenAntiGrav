@@ -46,8 +46,10 @@ impl MusicDiscs {
             ..Self::default()
         };
         let booted = booted.to_string();
+        let (in_place, kept) = (booted.clone(), listings.clone());
+        let filled = Arc::clone(&cell);
         // Detached: the answer lands in `cell`, which every clone holds.
-        drop(oag_thread::Task::spawn("music-survey", move || {
+        let task = oag_thread::Task::spawn("music-survey", move || {
             // A survey that panics still answers, with nothing found, so a
             // worker waiting on it is not left waiting.
             let found = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -59,8 +61,13 @@ impl MusicDiscs {
                 ..Self::default()
             });
             log::debug!("audio: music discs, {}", found.describe());
-            let _ = cell.set(found);
-        }));
+            let _ = filled.set(found);
+        });
+        // A thread that would not start reads as finished with the cell still
+        // empty, and every music worker would wait on it forever: survey here.
+        if task.is_finished() && cell.get().is_none() {
+            let _ = cell.set(Self::survey_into(&in_place, library, kept));
+        }
         discs
     }
 

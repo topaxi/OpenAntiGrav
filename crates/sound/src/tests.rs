@@ -12,6 +12,7 @@
 use super::*;
 
 mod no_audio;
+mod race_pick;
 mod race_switch;
 mod resume;
 mod source_switch;
@@ -793,7 +794,7 @@ fn silence(seconds: f64, channels: u16, rate: u32) -> Arc<Sound> {
 /// (`music_from: None`) and a race track is already decoded and cached, so
 /// [`Audio::start_race_music`] never touches a disc (the technique of
 /// [`changing_the_music_source_seeks_rather_than_restarting`]).
-fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
+pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
     let menu_sound = silence(28.0, 2, 44_100);
     let race_sound = silence(180.0, 2, 44_100);
     let mut audio = Audio {
