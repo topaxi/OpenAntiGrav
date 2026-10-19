@@ -83,13 +83,13 @@ impl Race {
         for (slot, pop) in pops.iter_mut().enumerate() {
             let moved = before[slot] - self.sim.world.ships[slot].physics.body.position;
             *pop = moved.length();
-            // **Only a remote person's craft glides.** The craft the camera follows
-            // is drawn where the camera puts it: offsetting the hull alone would
-            // draw it off its own chase camera for the length of the glide.
-            // In a network race every person is remote on every peer; this
-            // machine's own seat is the one the camera follows.
+            // **A person's craft glides, this machine's own included.** In a network
+            // race every person is remote on every peer. The craft the camera follows
+            // glides with the camera: `camera_target` carries the same offset, so the
+            // hull stays where its own chase camera frames it (offsetting the hull
+            // alone drew it off the camera's centre for the length of the glide).
             let remote = self.sim.world.controllers[slot] == oag_gameplay::Controller::Remote
-                && self.view.seat != Some(slot);
+                || self.view.seat == Some(slot);
             if self.view.correction_smoothing && remote && *pop <= SNAP_DISTANCE {
                 self.view.correction[slot] += moved;
             } else {
@@ -171,6 +171,11 @@ pub struct Scene {
     /// Whether the player dashes toward the craft too, so the two touch on the true
     /// timeline and not on the guessed one.
     pub contact: bool,
+    /// The server's copy of the player's own craft is `own` units to its right of the
+    /// client's when the correction arrives: a contact the guess missed, or one that
+    /// landed differently, on the craft the camera follows. The player is seated, as on a
+    /// network, so the correction glides with the camera ([`Race::set_seat`]).
+    pub own: Option<f32>,
     /// A weapon the remote person holds and fires on the second tick after `at` instead of
     /// the sideshift, a fire the client's guess carries no edge for: the correction's replay
     /// is where the client first meets it ([`Race::settle_presentation`]).
@@ -190,9 +195,17 @@ impl Scene {
             window,
             smooth,
             contact,
+            own: None,
             fire: None,
             server: std::cell::RefCell::default(),
         }
+    }
+
+    /// The player's own craft is `units` to the right on the server's side of the correction.
+    #[must_use]
+    pub fn with_own(mut self, units: f32) -> Self {
+        self.own = Some(units);
+        self
     }
 
     /// The remote person fires `weapon` on the second tick after `at`, and does not sideshift.
@@ -287,13 +300,23 @@ impl Scene {
         if k == 0 {
             race.set_correction_smoothing(self.smooth);
             race.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
+            if self.contact || self.own.is_some() {
+                // Seated, as on a network, so its own correction glides with its camera.
+                // (The controller stays a person here: on a network it is `Remote`.)
+                race.set_seat(Some(0));
+            }
             if let Some(weapon) = self.fire {
                 race.sim.world.ships[self.slot].pickup.weapon = Some(weapon);
             }
             let base = race.snapshot_sim();
             let side = Self::side(race, self.slot, 0);
             race.tick_sim_only(&self.inputs(0, side, Self::truth(0, side, self.fire.is_some())));
-            *self.server.borrow_mut() = Some((race.snapshot_sim(), side));
+            let mut authoritative = race.snapshot_sim();
+            if let Some(units) = self.own {
+                let right = authoritative.world.ships[0].physics.body.right();
+                authoritative.world.ships[0].physics.body.position += right * units;
+            }
+            *self.server.borrow_mut() = Some((authoritative, side));
             race.restore_sim(&base);
         }
         let Some(side) = self.server.borrow().as_ref().map(|(_, side)| *side) else {

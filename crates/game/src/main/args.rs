@@ -314,7 +314,7 @@ pub(crate) fn force_at_slot(text: Option<&str>, what: &str) -> Result<Option<(u3
     )))
 }
 
-/// Parses `--force-remote-correction`'s `TICK:SLOT[:WINDOW[:contact][:fire]]`.
+/// Parses `--force-remote-correction`'s `TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]]`.
 pub(crate) fn remote_correction(
     text: Option<&str>,
     smooth: bool,
@@ -322,7 +322,7 @@ pub(crate) fn remote_correction(
     let Some(text) = text else { return Ok(None) };
     let bad = || {
         anyhow::anyhow!(
-            "{text:?} is not a remote correction; write it as TICK:SLOT[:WINDOW[:contact][:fire]], e.g. 480:7:20:contact"
+            "{text:?} is not a remote correction; write it as TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]], e.g. 480:7:20:contact"
         )
     };
     let mut parts = text.split(':');
@@ -333,18 +333,26 @@ pub(crate) fn remote_correction(
         Some(window) => window.map_err(|_| bad())?,
         None => 6,
     };
-    let (mut contact, mut fire) = (false, None);
+    let (mut contact, mut fire, mut own) = (false, None, None);
     for flag in parts {
         match flag {
             "contact" => contact = true,
             "fire" => fire = Some(oag_tables::weapons::Weapon::Rocket),
-            _ => return Err(bad()),
+            "own" => own = Some(3.0),
+            _ => match flag.strip_prefix("own=").map(str::parse::<f32>) {
+                Some(Ok(units)) => own = Some(units),
+                _ => return Err(bad()),
+            },
         }
     }
 
     let scene = oag_raceplay::correction::Scene::new(at, slot as usize, window, smooth, contact);
-    Ok(Some(match fire {
+    let scene = match fire {
         Some(weapon) => scene.with_fire(weapon),
+        None => scene,
+    };
+    Ok(Some(match own {
+        Some(units) => scene.with_own(units),
         None => scene,
     }))
 }

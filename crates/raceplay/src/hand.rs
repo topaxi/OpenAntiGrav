@@ -164,8 +164,14 @@ mod tests {
             .collect();
         assert!(outs[0] < 0.2, "the stick does not jump: {}", outs[0]);
         let peak = outs.iter().copied().fold(0.0, f32::max);
-        assert!(peak > 0.56 && peak < 0.7, "overshoot but no runaway: {peak}");
-        assert!((outs[89] - 0.56).abs() < 0.06, "settles on the rescaled target");
+        assert!(
+            peak > 0.56 && peak < 0.7,
+            "overshoot but no runaway: {peak}"
+        );
+        assert!(
+            (outs[89] - 0.56).abs() < 0.06,
+            "settles on the rescaled target"
+        );
     }
 
     #[test]
@@ -182,7 +188,11 @@ mod tests {
         let mut distinct = run(7);
         distinct.sort_unstable();
         distinct.dedup();
-        assert!(distinct.len() > 20, "a hand is not three-valued: {}", distinct.len());
+        assert!(
+            distinct.len() > 20,
+            "a hand is not three-valued: {}",
+            distinct.len()
+        );
     }
 
     #[test]

@@ -172,3 +172,98 @@ fn a_large_correction_is_drawn_where_it_lands() {
     client.reconcile(&far, (START..START + WINDOW).map(|t| sc.truth(t)));
     assert_eq!(client.correction_offset_of(1), Vec3::ZERO);
 }
+
+/// The camera of a client seated in slot 1 follows slot 1: the spring is advanced toward the
+/// craft the view is built from, not toward slot 0.
+#[test]
+fn a_seat_one_camera_follows_seat_one() {
+    let Scene { sc, mut client, .. } = scene();
+    client.set_seat(Some(1));
+    for t in 0..120 {
+        client.tick(&sc.truth(START + t.min(59)));
+    }
+    let eye = client.tick_view().inverse().w_axis.truncate();
+    let own = client.sim.world.ships[1].physics.body.position;
+    let other = client.sim.world.ships[0].physics.body.position;
+    println!(
+        "eye to seat 1: {}, eye to slot 0: {}",
+        (eye - own).length(),
+        (eye - other).length()
+    );
+    assert!((eye - own).length() < (eye - other).length());
+    assert!((eye - own).length() < 40.0, "{}", (eye - own).length());
+}
+
+/// The way the chase camera points, as a unit vector in the world.
+fn aim(race: &Race) -> Vec3 {
+    (race.tick_view().inverse().z_axis.truncate()).normalize()
+}
+
+/// Shifts the server's copy of the client's own craft by `by` units sideways and corrects
+/// onto it: what a contact the client guessed wrong looks like on its own craft. Returns the
+/// degrees the camera turned at the correction (the eye is the spring's point and stays; the
+/// camera swings to look at the craft where it now is), the pop, and the race.
+fn own_craft_corrected(smooth: bool, by: f32) -> (f32, f32, Box<Race>) {
+    let Scene {
+        sc,
+        mut client,
+        authoritative,
+    } = scene();
+    client.set_seat(Some(0));
+    client.set_correction_smoothing(smooth);
+    let mut shifted = authoritative;
+    let right = shifted.world.ships[0].physics.body.right();
+    shifted.world.ships[0].physics.body.position += right * by;
+    let before = aim(&client);
+    let reconciled = client.reconcile(&shifted, (START..START + WINDOW).map(|t| sc.truth(t)));
+    let turned = before
+        .dot(aim(&client))
+        .clamp(-1.0, 1.0)
+        .acos()
+        .to_degrees();
+    (turned, reconciled.pops[0], Box::new(client))
+}
+
+/// The craft the camera follows glides onto its corrected place with the camera: with
+/// smoothing the camera does not swing at the correction, and without it it turns by the pop.
+#[test]
+fn the_own_craft_and_its_camera_glide_together() {
+    let (turned, pop, client) = own_craft_corrected(true, 3.0);
+    assert!(pop > 2.0, "the scene must move the own craft: {pop}");
+    assert!(
+        turned < 0.1,
+        "the camera turned {turned} degrees at the correction"
+    );
+    let offset = client.correction_offset_of(0);
+    assert!(
+        offset.length() > 2.0,
+        "the own craft carries the offset: {offset:?}"
+    );
+    let drawn_at = client.ship_tick_body(0).position;
+    let sim_at = client.sim.world.ships[0].physics.body.position;
+    assert!(
+        ((drawn_at - sim_at) - offset).length() < 1.0e-4,
+        "the hull is drawn with the offset"
+    );
+
+    let (turned, _, _) = own_craft_corrected(false, 3.0);
+    println!("camera swing without smoothing: {turned} degrees");
+    assert!(
+        turned > 1.0,
+        "without smoothing the camera swings: {turned}"
+    );
+}
+
+/// Glides, and the hash does not know: on and off agree to the bit while the own craft is
+/// drawn elsewhere. A correction past the snap distance (a respawn, a wreck) is drawn where
+/// it lands even for the own craft.
+#[test]
+fn the_own_glide_is_view_only_and_a_snap_is_not_glided() {
+    let (_, _, on) = own_craft_corrected(true, 3.0);
+    let (_, _, off) = own_craft_corrected(false, 3.0);
+    assert_eq!(on.sim.state_hash(), off.sim.state_hash());
+    assert_eq!(off.correction_offset_of(0), Vec3::ZERO);
+    let (turned, _, far) = own_craft_corrected(true, crate::correction::SNAP_DISTANCE + 5.0);
+    assert_eq!(far.correction_offset_of(0), Vec3::ZERO);
+    assert!(turned > 1.0, "a snap is drawn where it lands: {turned}");
+}

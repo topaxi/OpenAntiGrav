@@ -535,7 +535,7 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
-            let target = target_of(&self.sim.world.ships[0]);
+            let target = self.camera_target();
             self.view
                 .camera
                 .advance(target, &self.view.chase_params, self.sim.dt);

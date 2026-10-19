@@ -51,7 +51,14 @@ fn race_with_weapons(
     ticks: u32,
     weapon_trigger: bool,
 ) -> Activity {
-    race_in_mode("single_race", people, conditions, ticks, weapon_trigger, false)
+    race_in_mode(
+        "single_race",
+        people,
+        conditions,
+        ticks,
+        weapon_trigger,
+        false,
+    )
 }
 
 /// `hand`: the clients fly through a `Hand`, an analog stick, instead of the driver's raw wants.

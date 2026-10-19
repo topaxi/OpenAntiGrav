@@ -642,11 +642,17 @@ fn hand_pack_census() {
             let (streams, lap, travelled) = record_hand_pack_measured(&setup, ticks, straight);
             let slots = streams.len();
             let sc = Scenario {
-                name: format!("{id} {}", if straight { "unfiltered wants" } else { "hand" }),
+                name: format!(
+                    "{id} {}",
+                    if straight { "unfiltered wants" } else { "hand" }
+                ),
                 streams,
                 remote: (1..slots).collect(),
             };
-            println!("{}: lap {lap}, craft 0 travelled {travelled:.0} units", sc.name);
+            println!(
+                "{}: lap {lap}, craft 0 travelled {travelled:.0} units",
+                sc.name
+            );
             stream_report(&sc);
         }
     }

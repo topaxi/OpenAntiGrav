@@ -141,6 +141,17 @@ pub(super) fn target_of(ship: &Ship) -> Target {
 
 #[cfg(feature = "view")]
 impl Race {
+    /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
+    /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
+    /// move together. The camera follows this machine's seat ([`Self::player_slot`]), not
+    /// slot 0.
+    pub(super) fn camera_target(&self) -> Target {
+        let slot = self.player_slot();
+        let mut target = target_of(&self.sim.world.ships[slot]);
+        target.position = self.drawn_position(slot);
+        target
+    }
+
     /// Where the camera is and what it is aimed at, as a view matrix.
     ///
     /// This is the one place a [`CameraOverride`] takes effect: everything else
@@ -208,7 +219,7 @@ impl Race {
         if let Some(destroyed) = self.destroy_camera_now() {
             return destroyed.view();
         }
-        let target = target_of(self.ship());
+        let target = self.camera_target();
         if self.view.camera_view == oag_display::display::CameraView::Internal {
             // Rigid, so there is no per-tick state to advance and nothing to
             // snap: the cockpit is bolted to the hull. The roll phase rides
