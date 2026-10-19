@@ -53,14 +53,22 @@ fn started(source: String, mode: oag_race::Mode) -> race::Race {
 const SECONDS: u64 = 120;
 
 /// Flies `race` under the original driver with the player parked and returns
-/// how many projectiles opponents launched.
-fn opponents_fire_under_the_original_driver(mut race: race::Race) -> u32 {
+/// how many projectiles opponents launched, and whether an opponent's
+/// LeachBeam was ever up.
+fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, bool) {
     assert!(race.use_original_ai(None, 1), "the original driver flies");
     let count = usize::from(race.ship_count());
     let mut held = vec![0usize; count];
     let mut fired = 0;
+    let mut leach = false;
     while race.sim.world.tick < oag_race::COUNTDOWN_TICKS + SECONDS * 60 {
         race.tick(&PlayerInputs::none());
+        leach |= race
+            .sim
+            .world
+            .leach_beam
+            .as_ref()
+            .is_some_and(|beam| beam.owner != 0);
         let mut owned = vec![0usize; count];
         for projectile in &race.sim.world.projectiles.slots {
             let owner = usize::from(projectile.owner);
@@ -73,18 +81,26 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> u32 {
             held[slot] = owned[slot];
         }
     }
-    fired
+    (fired, leach)
 }
 
 /// One title, one mode: a race load each, which is most of a 2048 test's time, so the
 /// modes are the test axis rather than a loop. A single race also flies.
+///
+/// On HD, 2048 and Omega an opponent holds the LeachBeam
+/// (`oag_title::weapons::Weapons::opponents_fire_leach_beam`, chosen until HD's
+/// drain is read), so none may be up there.
 fn fires_original(source: String, mode: oag_race::Mode) {
+    let hd_lineage = !source.contains("pulse") && !source.contains("pure");
     let race = started(source, mode);
     assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace {
-        let fired = opponents_fire_under_the_original_driver(race);
-        println!("opponent projectiles in {SECONDS} s: {fired}");
+        let (fired, leach) = opponents_fire_under_the_original_driver(race);
+        println!("opponent projectiles in {SECONDS} s: {fired}, an opponent's beam up: {leach}");
         assert!(fired > 0, "no opponent fired in {SECONDS} s");
+        if hd_lineage {
+            assert!(!leach, "an opponent fired the LeachBeam it should hold");
+        }
     }
 }
 
