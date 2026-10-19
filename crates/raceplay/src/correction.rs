@@ -171,6 +171,10 @@ pub struct Scene {
     /// Whether the player dashes toward the craft too, so the two touch on the true
     /// timeline and not on the guessed one.
     pub contact: bool,
+    /// A weapon the remote person holds and fires on the second tick after `at` instead of
+    /// the sideshift, a fire the client's guess carries no edge for: the correction's replay
+    /// is where the client first meets it ([`Race::settle_presentation`]).
+    pub fire: Option<oag_tables::weapons::Weapon>,
     /// The server's state after tick `at`, and which way the rival dashes (`+1.0`
     /// right), once `at` has come.
     server: std::cell::RefCell<Option<(RaceSim, f32)>>,
@@ -186,9 +190,20 @@ impl Scene {
             window,
             smooth,
             contact,
+            fire: None,
             server: std::cell::RefCell::default(),
         }
     }
+
+    /// The remote person fires `weapon` on the second tick after `at`, and does not sideshift.
+    #[must_use]
+    pub fn with_fire(mut self, weapon: oag_tables::weapons::Weapon) -> Self {
+        self.fire = Some(weapon);
+        self
+    }
+
+    /// The tick after `at` the remote person presses fire on.
+    const FIRE_AT: u32 = 2;
 
     /// Which way craft `b` lies from craft `a`: `+1.0` to its right.
     fn side(race: &Race, a: usize, b: usize) -> f32 {
@@ -204,18 +219,25 @@ impl Scene {
     /// What the remote person holds `k` ticks after `at`: Cross throughout, and the
     /// airbrake on `side` pressed at 0 and 2, so the second press lands inside the
     /// tap window. `None` for `k` before `at`.
-    fn held(k: Option<u32>, side: f32) -> u32 {
+    fn held(k: Option<u32>, side: f32, fires: bool) -> u32 {
         use oag_gameplay::input::Button;
         let brake = if side > 0.0 { Button::R } else { Button::L }.bit();
-        Button::Cross.bit() | if matches!(k, Some(0 | 2)) { brake } else { 0 }
+        let extra = match (fires, k) {
+            (true, Some(Self::FIRE_AT)) => Button::Square.bit(),
+            (true, _) => 0,
+            (false, Some(0 | 2)) => brake,
+            (false, _) => 0,
+        };
+        Button::Cross.bit() | extra
     }
 
     /// The remote person's true input on the tick `k` after `at`.
-    fn truth(k: u32, side: f32) -> oag_gameplay::InputSnapshot {
+    fn truth(k: u32, side: f32, fires: bool) -> oag_gameplay::InputSnapshot {
         let mut buttons = oag_gameplay::input::Input::new();
-        buttons.begin_frame(Self::held(k.checked_sub(1), side));
-        buttons.begin_frame(Self::held(Some(k), side));
-        let pressed = Self::held(Some(k), side) != oag_gameplay::input::Button::Cross.bit();
+        buttons.begin_frame(Self::held(k.checked_sub(1), side, fires));
+        buttons.begin_frame(Self::held(Some(k), side, fires));
+        let pressed =
+            !fires && Self::held(Some(k), side, false) != oag_gameplay::input::Button::Cross.bit();
         oag_gameplay::InputSnapshot {
             buttons,
             airbrake_left: if pressed && side < 0.0 { 1.0 } else { 0.0 },
@@ -246,7 +268,7 @@ impl Scene {
         remote: oag_gameplay::InputSnapshot,
     ) -> oag_gameplay::PlayerInputs {
         let own = if self.contact {
-            Self::truth(k, -side)
+            Self::truth(k, -side, false)
         } else {
             Self::guess()
         };
@@ -265,9 +287,12 @@ impl Scene {
         if k == 0 {
             race.set_correction_smoothing(self.smooth);
             race.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
+            if let Some(weapon) = self.fire {
+                race.sim.world.ships[self.slot].pickup.weapon = Some(weapon);
+            }
             let base = race.snapshot_sim();
             let side = Self::side(race, self.slot, 0);
-            race.tick_sim_only(&self.inputs(0, side, Self::truth(0, side)));
+            race.tick_sim_only(&self.inputs(0, side, Self::truth(0, side, self.fire.is_some())));
             *self.server.borrow_mut() = Some((race.snapshot_sim(), side));
             race.restore_sim(&base);
         }
@@ -278,14 +303,14 @@ impl Scene {
         let remote = if k <= self.window {
             Self::guess()
         } else {
-            Self::truth(k, side)
+            Self::truth(k, side, self.fire.is_some())
         };
         race.tick(&self.inputs(k, side, remote));
         if k == self.window
             && let Some((authoritative, _)) = self.server.borrow().as_ref()
         {
             let replay: Vec<_> = (1..=self.window)
-                .map(|j| self.inputs(j, side, Self::truth(j, side)))
+                .map(|j| self.inputs(j, side, Self::truth(j, side, self.fire.is_some())))
                 .collect();
             let reconciled = race.reconcile(authoritative, replay);
             println!(
@@ -296,6 +321,13 @@ impl Scene {
                 reconciled.pops[0],
                 if self.smooth { "on" } else { "off" }
             );
+            #[cfg(feature = "view")]
+            if self.fire.is_some() {
+                println!(
+                    "late presentation at tick {tick}: {:?}",
+                    race.take_late_report()
+                );
+            }
         }
     }
 }

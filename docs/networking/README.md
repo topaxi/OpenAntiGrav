@@ -376,7 +376,7 @@ in the first render, which is why the rule exists). The hash is identical with
 smoothing on or off (`tests::correction`), and a replay is not a drawn tick.
 
 **The scene.** `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
---ticks N --force-remote-correction TICK:SLOT[:WINDOW[:contact]] [--no-correction-smoothing]
+--ticks N --force-remote-correction TICK:SLOT[:WINDOW[:contact][:fire]] [--no-correction-smoothing]
 --screenshot out.png`. At `TICK` craft `SLOT` is handed to a scripted remote person
 who double-taps its airbrake toward the player (a **sideshift**, the input a last-input
 guess cannot see coming: a pressed edge, two within a quarter second); the client
