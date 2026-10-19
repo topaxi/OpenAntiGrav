@@ -2111,3 +2111,99 @@ point velocity is built by the same idiom (`vtfm4.q E100` at `0x0884ea58`,
 `vcrsp.t` with `r` on the left at `0x0884ea9c`), and `crates/physics/src/wall.rs`
 computes the textbook `omega x r` there - **which is the same thing**. The
 section below is the read and the measurement.
+
+## Live, 2026-10-19: the angular half against the original's own rotation
+
+The instruction-level read above put the lever arm, the `cross(r, p)` torque, the
+inertia term in the denominator and the `0.1` application scale into
+`crates/physics/src/wall.rs`. Until this pass the only end-to-end check on the
+angular half was indirect: `race_ground_truth` moving when the point velocity's
+sign was wrong. This pass measures it directly against the original.
+
+**Method.** `crates/trace/tests/wall_angular_pose_walk_ground_truth.rs` seeds
+`oag_physics::step` from every recorded pose of a capture (position, basis,
+velocity and the `NegatedLocal` reading of `+0x150`), steps once with the
+recorded controls, and compares the resulting angular velocity with the
+original's recorded rate on the next tick. `step` reports the share its wall
+constraint contributed (`WallResponse::angular_velocity_delta`), so on a tick
+where our hull touches a wall the original's own wall share is the recorded
+rate minus what our step produced without it. Away from walls the step
+reproduces the next rate to `0.0001` rad/s on the standing start and
+`0.02`-`0.04` on the laps, which is the noise floor everything below is read
+against.
+
+**Result**, over the wall ticks where our share exceeds `0.05` rad/s:
+
+| Capture | ticks | median `\|measured\| / \|ours\|` | median cos | mean residual with / without |
+| --- | ---: | ---: | ---: | --- |
+| `talons-junction-standing-start` | 1 | 1.035 | 0.999 | 0.008 / 0.128 |
+| `talons-junction-time-trial-lap` | 65 | 0.990 | 0.965 | 0.073 / 0.155 |
+| `talons-junction-clean-lap` | 69 | 0.998 | 0.994 | 0.057 / 0.255 |
+| `talons-junction-autopilot` (untracked) | 87 | 0.986 | 0.996 | |
+
+On all 114 standing-start wall ticks, the small sustained-scrape shares
+included, the least-squares scale is `1.023`, and the residual is `0.0009`
+with the share against `0.0207` without it. **Confidence 92** that the angular
+half is the original's in size and direction: three tracked captures and one
+untracked one, at every approach the laps hold, against the original's own
+state with no fitted constant. The `0.1` scale and the body-space denominator
+are each refused on their own: setting `ANGULAR_IMPULSE_SCALE` to `0.2` gives a
+median ratio of `0.505`, `0.05` gives `2.07`, and `0` leaves no wall share at
+all. The test is red in all three cases.
+
+**The disagreeing ticks are contact timing, not the law.** Five of the 135
+significant ticks point more than 60 degrees away. Each one sits at an impact
+our hull finds a tick early or late. On the time-trial lap at tick 410, ours
+fires a `0.61` rad/s share that the original does not show until tick 411,
+where the two then agree to `cos 0.999`. That is the detection residual
+`crates/trace/tests/wall_contact_ground_truth.rs` already records (3-5 ticks on
+the first contact), seen from the rotation side. A pooled least-squares scale
+is dominated by those ticks (the time-trial lap pools to `0.555`), which is why
+the test asserts medians.
+
+**Not a craft-to-craft check.** All four captures are solo runs. The pair path
+applies its impulse at each body's centre and spins neither craft (the 2026-09-10
+section above), and nothing here exercises it.
+
+### One wall hit our hull does not find: clean lap, tick 1584
+
+[`docs/physics/README.md`](../../../physics/README.md#the-crest-phase-drift-traces-to-a-wall-event-not-a-force-term-2026-09-10)
+left the clean lap's tick-1583 "near-elastic redirect" as most plausibly a wall
+the pose walk could not see. Measured: it **is** a wall, and our hull misses it.
+
+- The recorded velocity goes from `(-65.59, -8.45, -86.15)` (tick 1583) to
+  `(-83.44, 3.96, -53.43)` (tick 1584), so `|v|` falls from `108.6` to `99.2`.
+  The `108.8` the README quoted is `speed_cached`, which `Body_Integrate`
+  writes before the contact pass and so lags the contact by one tick. The
+  change is not elastic.
+- `dv` has a length of `39.3` along `(-0.455, 0.316, 0.832)`. `16_Track`'s
+  collider 139 (a `Wall`; the index is
+  `oag_gameplay::collision_world`'s order) passes `3.37` units from the tick-1583 position, and
+  its nearest triangle's normal is `(-0.458, 0.285, 0.842)`, 2 degrees from
+  `dv`. `vn` goes from `-44.6` to `-5.3`, which with `e = 0.4` puts the
+  resolver denominator at about `1.6`, inside the soft range the angular term
+  produces on a corner lever.
+- The recorded rate jumps by about `0.77` rad/s on the same tick, as a corner
+  contact's angular share would.
+- **Our `step` from tick 1583 finds no contact, against any collider.**
+  `wall::pre_integration_clip` moves nothing. At the post-integrate pose no
+  centre-to-sample segment of the ten-point hull crosses any triangle, and
+  that still holds with the box scaled to `1.33x` (the unscaled `<Misc>`
+  dimensions).
+
+So the miss is in contact *generation*, upstream of every gate
+`Collision_AddContact` applies: no segment reaches the wall. The response law
+is not involved. **Not determined:** what the original's hull reaches there.
+The next step is a PPSSPP breakpoint on `Collision_AddContact` (`0x08816864`)
+on that tick of an `oag-trace drive` replay of the clean lap's inputs, reading
+the sample point and the triangle it crossed. The scratch sweep
+`gates_at_the_clean_lap_redirect` in the same test file prints our side of it
+at any tick (`OAG_SWEEP=1 OAG_GATE_TICK=<n> OAG_GATE_SCALE=<s>`).
+
+### HD: the resolver is not where Pulse's is
+
+Checked against `EBOOT-ps3-hdfury-eu.elf`. The answer is **not determined**, as
+a clean negative; details on
+[ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md#the-wall-response-is-not-in-the-pair-narrowphase-2026-10-19).
+HD keeps Pulse's response in `crates/physics` (`docs/physics/README.md`,
+inherited, not measured).

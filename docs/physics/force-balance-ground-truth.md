@@ -490,6 +490,21 @@ flag has not been read). **Nothing below depends on the attribution** - the
 physics conclusion needs only that the velocity is being reduced outside the
 accumulators.
 
+**Raised to 90 on 2026-10-19: the contact is now in the trace.** Stepping
+`oag_physics::step` once from every recorded pose of this capture, our hull finds
+a wall on 114 of the 230 scrape ticks, and on those ticks the angular velocity
+our wall share adds reproduces the original's next recorded rate: a
+least-squares scale of `1.023` against the measured share, and a mean
+contact-tick residual of `0.0009` rad/s with the share against `0.0207` without
+it. A wall reproduced to 2 % in the craft's own rotation is direct evidence of a
+wall, not a signature. The stun timer's zero is explained independently: a
+track contact never arms it (bit `0x10` is the Shield pickup,
+[shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md), and
+`Ship_ApplyCollisionImpulse` runs only off the weapon and rival pending
+impulse). See
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#live-2026-10-19-the-angular-half-against-the-originals-own-rotation)
+and `crates/trace/tests/wall_angular_pose_walk_ground_truth.rs`.
+
 ## The deficit is a velocity scale, not a force, and the trace already recorded it
 
 This is the finding, and it is why enumerating the force path could never have
@@ -611,15 +626,17 @@ it multiplies are the two disc literals.
    possible is [cornering-ground-truth.md](cornering-ground-truth.md), which
    confirms the forward law at a slip angle and settles the lateral axis and the
    yaw accumulator.
-2. **Close the `0x10` pickup flag.** The wall attribution above is capped at
-   confidence 75 because the stun timer stays at `0` across the tick-62 impact.
-   The gate is narrowed but not closed: the flag word is `*(entity+0x4c) + 0x1b8`
-   and bit `0x10` suppresses both the impulse and the `+= 0.5`; what sets it is
-   unread.
-3. **Angular response.** `crates/physics` resolves contacts at the centre of mass,
-   so the original's `cross(r, impulse)` torque and its contribution to the
-   resolver's denominator are both absent. That is the largest remaining gap
-   between this crate's contact response and the original's.
+2. ~~**Close the `0x10` pickup flag.**~~ **Closed 2026-08-19**: bit `0x10` is the
+   Shield pickup, armed by `Shield_Fire` (`0x08861568`) and cleared when its
+   countdown expires ([shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md)).
+   A trace that never picks one up cannot have it set, and the wall attribution
+   above no longer rests on it.
+3. ~~**Angular response.**~~ **Done, and confirmed against the original's own
+   rotation.** `crates/physics/src/wall.rs` carries the lever arm, the
+   `cross(r, p)` torque, the inertia term in the resolver denominator and
+   `body+0x394 = 0.1` (`ANGULAR_IMPULSE_SCALE`); a pose walk of three captures
+   matches the original's angular response per impact at a median
+   `|measured| / |ours|` of `0.990`-`1.035` (contact-response.md, 2026-10-19).
 
 ## What not to do
 

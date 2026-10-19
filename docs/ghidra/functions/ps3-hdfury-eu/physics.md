@@ -459,3 +459,54 @@ points in world space; in the body's frame they sit at `(+/-1.5, -1.125, +/-4.5)
 with a 4.125 reach. Same fore-aft arm, same drop, same reach, and four springs instead
 of two. The spring law behind them, and why it pitches shallower, is on
 [hover-four-point.md](hover-four-point.md) (2026-10-09).
+
+## The wall response is not in the pair narrowphase (2026-10-19)
+
+`contact-angular-term` lane, looking for HD's equivalent of Pulse's
+`Body_ResolveContact` (`0x0884e968`: lever arm, `cross(r, p)` torque, inertia
+in the denominator, restitution `0.4`, friction `0.035` against a wall). It was
+not found. This is where it is not, read statically on this ELF:
+
+- **Not in `Collision_ProcessPairs` or its callees.** `0x00077330`,
+  `0x00077410`, `0x00077860`, `0x00078450`, `0x00079b30` and `0x0007a3e0` are
+  broadphase bookkeeping: pair lists of `u16` indices and box updates. The
+  narrowphase cases are inlined, or hand triangles to an object's callback
+  ([collision.md](collision.md#collision_processpairs)).
+- **Not on the craft's own collision object.** `Ship_Construct` (`0x000ddd58`)
+  allocates a `0x1a0`-byte type-5 object (`0x0003a320` with the hull box in
+  `f1`-`f3`; `0x0003a1a8` stores the half-extents at `+0x190`/`+0x194`/`+0x198`),
+  registers it with `Collision_AddObject` (call at `0x000dece4`), and stores it
+  at `body+0x4cc`. `0x0003a610` then writes the owning body to the object's
+  `+0x80`. `0x0003a3d0`, which collision.md reads as `Collision_TestMeshObb`'s
+  dispatching tail call, is a getter: it returns the object's cached world box
+  at `+0xf0` when the byte at `+0x19c` is set, and recomputes it otherwise.
+- **Not in vtable slot `+0x40` (`0x00108040`).** `Physics_StepWorld` calls it on
+  every body after `Collision_ProcessPairs`. It rebuilds the four hull points
+  at `craft+0x120`-`+0x150` and their query points at `+0x160`-`+0x190` from
+  the body's basis, then queues one ray per point through `0x0005fa28`.
+- **`0x0005fa28` queues an SPU job; it does not answer a query.** It fills a
+  job descriptor from the collision mesh's tables and kicks it, lazily
+  building the job set on first use under the string
+  `"RayMeshIntersectSpu pre-baking j..."` (TOC slot `0x008a6ab0`). The jobs
+  live at `PTR_DAT_008a6aa4 + 0x19c80`, the same base `0x00060410` waits on.
+  `Physics_StepWorld` calls `0x00060410` right after `Collision_ProcessPairs`.
+  So HD's hull queries return asynchronously, and whatever responds to a wall
+  consumes the SPU results in a later pass, most likely next frame's
+  `Craft_IntegrateHull` (slot `+0x3c`, `0x000ef450`) through the per-point hit
+  flags at `craft+0x2b4`.
+- `0x000f5810` (called per body after slot `+0x38`) only clears four quads at
+  `body+0x150`-`+0x180`. `0x000f10d8` (from the force update `0x000f1958`)
+  ramps `craft+0x2c0` between two globals.
+
+**Next addresses**, in order: `Craft_IntegrateHull` (`0x000ef450`) past the
+four `Collision_MarchSegment` calls, for what it does with a set hit flag; then
+`0x000f5e20` and `0x000f6870`, the two per-body calls in `Physics_StepWorld`'s
+third loop; then the unnamed callees of `0x000f1958` (`0x000ed700`,
+`0x000eeb70`, `0x000f5668`, `0x000f56a0`, `0x000f5860`, `0x000f6568`). A live
+check is cheaper than reading all of them: an RPCS3 write breakpoint on the
+player body's velocity quad on a wall-hit frame names the writer.
+
+No names applied: every function above is at or below a single static read,
+and none of them is the resolver. Until it is found, `crates/physics` runs
+Pulse's response on HD, and Omega and 2048 inherit from HD. That is
+**inherited, not measured**.
