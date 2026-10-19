@@ -125,6 +125,18 @@ pub struct RaceSim {
     /// field's own. See [`Race::set_autopilot_tuning`] for why this is a
     /// second field rather than a call to [`Race::set_ai_tuning`].
     pub(super) autopilot_tuning: Option<oag_ai::Tuning>,
+    /// Each person's own original driver, the autopilot
+    /// ([`Race::drive_original_autopilot`]), made the first time it flies.
+    /// Outside [`Self::state_hash`] as [`Self::original_ai`] is.
+    pub(super) autopilots: [Option<Box<oag_ai::original::Autopilot>>; oag_gameplay::MAX_PLAYERS],
+    /// The rail write each person's autopilot asked for this tick, applied
+    /// right before that craft's step as an opponent's is.
+    pub(super) autopilot_rail:
+        [Option<oag_ai::original::RailCorrection>; oag_gameplay::MAX_PLAYERS],
+    /// The autopilot flies this project's driver rather than the original's:
+    /// set by the developer flags that tune ours (`--autopilot-skill`,
+    /// `--autopilot-pilot`), which would otherwise do nothing.
+    pub(super) autopilot_ours: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     pub(super) course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on

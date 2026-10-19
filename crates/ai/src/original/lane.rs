@@ -164,6 +164,11 @@ pub struct PlanInput {
     pub contact_sides: i32,
     /// The current point's `unk_0x5c`/`unk_0x5d`, the lane exclusion band.
     pub band: Option<(u8, u8)>,
+    /// This is the player's own driver, the autopilot: its chosen lane and
+    /// target are zeroed after the contact push (`0x0885566c..0x08855674`,
+    /// the craft compared with the player's at `0x08855664`), so it follows
+    /// the racing line, the band aside.
+    pub player: bool,
 }
 
 /// `Ai_PlanLane`'s own state on the driver.
@@ -225,7 +230,19 @@ pub(super) fn rand_unit(rng: &mut Rng) -> f32 {
 }
 
 impl Planner {
-    /// `Ai_PlanLane` for an opponent, after `AiLane_Advance`. The authority
+    /// The state a player's driver that has held lane `0` all race is in:
+    /// located, nothing chosen, and a ring that [`Self::plan`]'s fill tops up
+    /// with `0`. For an autopilot taken mid-race (`crate::original::Autopilot`).
+    pub fn warm_on_line(&mut self) {
+        self.located = true;
+        self.ring.reset(0.0);
+        self.chosen = 0.0;
+        self.target = 0.0;
+        self.lane_velocity = 0.0;
+        self.push = 0.0;
+    }
+
+    /// `Ai_PlanLane`, after `AiLane_Advance`. The authority
     /// ramp at its head lives on [`super::OriginalDriver`].
     pub fn plan(&mut self, input: &PlanInput, rng: &mut Rng) {
         if !self.located {
@@ -274,6 +291,10 @@ impl Planner {
             self.target = -1.0;
         }
         self.push *= 0.95;
+        if input.player {
+            self.chosen = 0.0;
+            self.target = 0.0;
+        }
         self.keep_out_of_band(input.band);
         self.fill();
     }

@@ -110,38 +110,34 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
 ///
 /// Before [`oag_render::shadow::conform_to_floor`] existed this measured the
 /// polygon up to 0.6 units under the road in Zone late in a lap, on several
-/// ticks in a minute; `docs/rendering/shadows.md` has the table.
+/// ticks in a minute; `docs/rendering/shadows.md` has the table. On the
+/// original's autopilot the unconformed polygon reaches 0.69 in the single race.
 #[test]
 #[ignore = "needs a real disc image under data/images/"]
 fn the_shadow_polygon_is_not_buried_under_the_road() {
     let mut raw_worst = 0.0f32;
-    for warm in WARM {
-        let Some(raw) = measure(oag_race::Mode::Zone, warm, false) else {
-            return;
-        };
-        let fit = measure(oag_race::Mode::Zone, warm, true).expect("same image");
-        println!(
-            "zone @{warm}: raw deepest {:.3} buried on {}/{} ticks; conformed deepest {:.3} buried on {}/{}",
-            raw.deepest, raw.ticks_buried, raw.ticks, fit.deepest, fit.ticks_buried, fit.ticks
-        );
-        raw_worst = raw_worst.max(raw.deepest);
-        assert!(fit.ticks > 0, "no shadow in the window at {warm}");
-        assert!(
-            fit.deepest <= CLEAR_ENOUGH,
-            "zone @{warm}: the conformed polygon is {:.3} under the road, past {CLEAR_ENOUGH}",
-            fit.deepest,
-        );
-    }
-    // For contrast only, nothing asserted: the same circuit as an ordinary
-    // race, whose craft is slower over the same stretches.
-    for warm in WARM {
-        let Some(raw) = measure(oag_race::Mode::SingleRace, warm, false) else {
-            return;
-        };
-        println!(
-            "single race @{warm}: raw deepest {:.3} buried on {}/{} ticks",
-            raw.deepest, raw.ticks_buried, raw.ticks
-        );
+    // Zone and an ordinary race over the same circuit: since the autopilot
+    // flies the original's player driver (2026-10-19) the deep raw windows are
+    // in the single race rather than in Zone, so the sensitivity check reads
+    // both and the conformed polygon is held clear in both.
+    for mode in [oag_race::Mode::Zone, oag_race::Mode::SingleRace] {
+        for warm in WARM {
+            let Some(raw) = measure(mode, warm, false) else {
+                return;
+            };
+            let fit = measure(mode, warm, true).expect("same image");
+            println!(
+                "{mode:?} @{warm}: raw deepest {:.3} buried on {}/{} ticks; conformed deepest {:.3} buried on {}/{}",
+                raw.deepest, raw.ticks_buried, raw.ticks, fit.deepest, fit.ticks_buried, fit.ticks
+            );
+            raw_worst = raw_worst.max(raw.deepest);
+            assert!(fit.ticks > 0, "{mode:?}: no shadow in the window at {warm}");
+            assert!(
+                fit.deepest <= CLEAR_ENOUGH,
+                "{mode:?} @{warm}: the conformed polygon is {:.3} under the road, past {CLEAR_ENOUGH}",
+                fit.deepest,
+            );
+        }
     }
     assert!(
         raw_worst > 0.3,

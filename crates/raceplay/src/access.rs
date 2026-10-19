@@ -236,6 +236,14 @@ impl Race {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
+    /// Person `slot`'s original autopilot driver, once it has flown
+    /// ([`Race::autopilot_controls`]); `None` before, on a title with no
+    /// original tables, or under `--autopilot-skill`/`--autopilot-pilot`.
+    #[must_use]
+    pub fn original_autopilot(&self, slot: usize) -> Option<&oag_ai::original::Autopilot> {
+        self.sim.autopilots.get(slot).and_then(Option::as_deref)
+    }
+
     /// Which trigger fired this craft's most recent respawn, `None` if it has
     /// not had one. See [`respawn::RespawnCause`](super::respawn::RespawnCause).
     #[must_use]

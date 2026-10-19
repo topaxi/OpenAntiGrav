@@ -331,6 +331,7 @@ impl Field {
                 lane_tick,
                 contact_sides: tick.contact_sides,
                 band: tick.band,
+                player: false,
             },
             &mut self.rng,
         );

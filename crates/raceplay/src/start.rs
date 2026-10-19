@@ -590,6 +590,9 @@ impl Race {
                 // `Self::set_autopilot_tuning`. Every race starts with the two
                 // tunings agreeing.
                 autopilot_tuning: None,
+                autopilots: std::array::from_fn(|_| None),
+                autopilot_rail: [None; oag_gameplay::MAX_PLAYERS],
+                autopilot_ours: false,
                 world,
                 collision,
                 spline,

@@ -69,6 +69,19 @@ impl Race {
     /// [`Self::set_autopilot_tuning`] for the other half of that flag.
     pub fn set_autopilot_pilot(&mut self, pilot: oag_ai::Pilot, skill: oag_ai::Difficulty) {
         self.set_ai_pilot(0, skill.temper(&pilot));
+        self.fly_our_autopilot("--autopilot-pilot");
+    }
+
+    /// Flies the player's autopilot on this project's driver
+    /// ([`oag_ai::Driver`]) instead of the original's: the developer route
+    /// the two flags that tune ours take, since the original's driver reads
+    /// neither. Logged, because the autopilot otherwise flies the original
+    /// on every title ([`Self::autopilot_controls`]).
+    fn fly_our_autopilot(&mut self, flag: &str) {
+        if !self.sim.autopilot_ours {
+            log::info!("autopilot: {flag} flies this project's driver, not the original's");
+        }
+        self.sim.autopilot_ours = true;
     }
 
     /// Overrides the tuning [`Self::autopilot_controls`] flies with, for
@@ -82,6 +95,7 @@ impl Race {
     /// field's own setting mid-race.
     pub fn set_autopilot_tuning(&mut self, tuning: oag_ai::Tuning) {
         self.sim.autopilot_tuning = Some(tuning);
+        self.fly_our_autopilot("--autopilot-skill");
     }
 
     /// Hands the player's craft to an opponent's driver, or takes it back.
@@ -100,13 +114,10 @@ impl Race {
     /// [`Self::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
-    /// **Not the Autopilot pickup**, and the distinction is worth keeping.
-    /// `Ai_Construct` names the local player's input source the literal
-    /// `"autopilot input"`, which says the original hands the player's craft to
-    /// a driver the same way this does - but *what* the pickup then does, how
-    /// long it lasts and how it ends are all unread, and nothing here claims
-    /// them. This is a switch a test and a `--screenshot` can flip, not a
-    /// weapon. See `HANDOVER.md`.
+    /// **Not the Autopilot pickup**, and the distinction is worth keeping:
+    /// this is a switch a test and a `--screenshot` can flip, not a weapon
+    /// with a timer. Both fly the same driver, the original's own player
+    /// driver where the race's tables read ([`Self::autopilot_controls`]).
     ///
     /// # Turning it on seeds slot 0's driver, and has to
     ///
@@ -287,13 +298,76 @@ impl Race {
             Some(own) => self.sim.world.ships[slot].driver = *own,
             None => self.locate_player_driver(slot),
         }
-        let wants = self.autopilot_controls(slot);
+        // This project's driver: the original's keeps state outside the
+        // world, which the restore below would reset every call.
+        let wants = self.our_autopilot_controls(slot);
         *driver = Some(self.sim.world.ships[slot].driver);
         self.sim = kept;
         wants
     }
 
-    /// What the player's own driver wants this tick.
+    /// What the player's own driver wants this tick: the original's
+    /// ([`Self::original_autopilot_controls`]) on every title whose AI tables
+    /// read, whatever the opponents fly, else this project's
+    /// ([`Self::our_autopilot_controls`]). The original hands the player's
+    /// craft to an AI driver of its own (`"autopilot input"`), the opponents'
+    /// `Ai_Update` with the player's branches: lane `0`, thrust `100`, the
+    /// rail kept through contact. See `oag_ai::original::Autopilot`.
+    pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
+        if !self.sim.autopilot_ours
+            && let Some(controls) = self.original_autopilot_controls(slot)
+        {
+            return controls;
+        }
+        self.our_autopilot_controls(slot)
+    }
+
+    /// The original's autopilot for `slot`, its rail write queued for the
+    /// step; `None` where the race has no original tables or the craft cannot
+    /// place itself on the track.
+    fn original_autopilot_controls(&mut self, slot: usize) -> Option<oag_physics::ShipControls> {
+        if self.sim.original_tables.is_none() || self.sim.racing_line.is_empty() {
+            return None;
+        }
+        if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
+            self.release_autopilot(slot);
+            return Some(oag_physics::ShipControls::default());
+        }
+        // A stint that starts mid-race finds the craft wherever it is, for
+        // the windowed-search reason `Self::set_autopilot` gives.
+        if self.sim.autopilots[slot]
+            .as_ref()
+            .is_none_or(|autopilot| autopilot.is_cold())
+        {
+            self.locate_player_driver(slot);
+        }
+        self.steer_branching(slot);
+        let ship = &mut self.sim.world.ships[slot];
+        let position = ship.physics.body.position;
+        let route = ship.driver.branching.route;
+        // This project's driver only locates the craft on the line, as for an
+        // original opponent: the original's reads its own sample through it.
+        ship.driver.locate(
+            super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
+            position,
+        );
+        let output = self.drive_original_autopilot(slot)?;
+        self.sim.autopilot_rail[slot] = output.rail;
+        Some(output.controls)
+    }
+
+    /// The craft went back to its pilot: the next autopilot stint starts
+    /// warm again, and no rail write is left queued.
+    pub(super) fn release_autopilot(&mut self, slot: usize) {
+        if let Some(autopilot) = self.sim.autopilots.get_mut(slot).and_then(Option::as_mut) {
+            autopilot.release();
+        }
+        if let Some(rail) = self.sim.autopilot_rail.get_mut(slot) {
+            *rail = None;
+        }
+    }
+
+    /// What this project's driver wants of the player's craft this tick.
     ///
     /// The opponents' path exactly - the same line, the same pilot slot and
     /// the same view of the field - through slot 0's own [`oag_ai::Driver`],
@@ -304,7 +378,7 @@ impl Race {
     /// **The tuning is the one exception.** [`RaceSim::autopilot_tuning`], not
     /// [`RaceSim::ai_tuning`], when `--autopilot-skill` set it - see
     /// [`Self::set_autopilot_tuning`] for why the two stay apart.
-    pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
+    pub(super) fn our_autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
         self.steer_branching(slot);
         let places = self.places();
         let field = self.field_for(slot, &places);
