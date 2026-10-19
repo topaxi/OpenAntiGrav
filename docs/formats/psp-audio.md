@@ -546,6 +546,27 @@ loaded by `Banks::load_countdown` from the mode's bank on a title whose
 `oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
 `crates/game/tests/countdown_voice_ground_truth.rs`.
 
+#### The countdown census, every title (2026-10-19, `race-countdown-audio`)
+
+What the port plays at the start, and what each title's own banks author. Render with
+`cargo run -p oag-game --example countdown_census -- <image> <out.wav>` (`CENSUS_SFX=1` keeps the effects bus
+on, which HD's speech needs: its speech bus rides the effects slider); list a bank's cues with
+`crates/formats/examples/bank_name_probe.rs`.
+
+| Title | Port plays now | Original authors | Trigger and timing |
+| --- | --- | --- | --- |
+| Pulse (PSP, PS2) | `ready` at tick 91, `go` at 271, from the mode's speech bank | the same | measured (above) |
+| Pure | `ready` (1 waveform, 0.51 s) at 91, `go` (0.43 s) at 271, `speech.bnk` | the same two cues | **lent from Pulse, chosen, not measured**; no Pure executable read for the start |
+| HD / Fury | `ready` at 91 (**now** the authored 3.0 s tail of `321_GO`, was one random flat clip of 0.8-3.0 s, peak a quarter of `go`'s), `go` at 271 (5.1 s) | `speech.bnk` `ready` is a lone `0x08` into child `321_GO`; `go`; `INIT_GO`; `launch.bnk` `LAUNCHSEQ`, `LAUNCHBEEP2/3`; `RS_1_READY`/`RS_2_GO` in `speech_zone.bnk` and `speech_elim.bnk` | **lent from Pulse, chosen, not measured.** No literal `321_GO`, `go`, `INIT_GO` or `LAUNCHSEQ` is in HD's executable (`search_strings`), so the trigger is not located; `launch.bnk` is named nowhere in the repo or the loader |
+| 2048 | nothing (a hashed bank; the countdown loader looks names up plain) | native events: `321_NGP`, `Go_NGP` (`Weapons_NGP.bnk`); named modes: `ready`, `go`, `HBEAT` (`speech.bnk`) | trigger read statically, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md), confidence 80; timing assumed Pulse's whole-seconds test, not measured; not wired |
+| Omega | nothing | not readable (SBlk parse fails) | not checkable here |
+
+HD's `ready` is the change of this lane: the countdown loader walks opcode `0x08` as a child (the
+reading Pulse's front end measured, `WalkModel::globals`), so `ready` plays `321_GO` after its goto, the
+3.0 s stereo pair. Whether HD's own `0x08` handler does the same was **not read** (chosen, not measured).
+Pulse's and Pure's renders are byte-identical before and after. Pinned by
+`crates/raceplay/tests/countdown_voice_hd_ground_truth.rs`, which fails without the walk.
+
 **Chosen, not measured (no confidence score).** A placed cue's emitter pan and
 a voice's authored angle are combined as `sin(asin(pan) + angle)`, which
 assumes a front-half emitter; a dry cue with any off-centre voice pans every

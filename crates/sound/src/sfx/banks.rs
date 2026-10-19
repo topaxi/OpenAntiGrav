@@ -510,7 +510,13 @@ fn load_cue(
     let timeline = if cue == Cue::Engine {
         Ok(None)
     } else {
-        layers::timelines(&bank, name, tick, cue.bank() == BankName::Frontend)
+        layers::timelines(
+            &bank,
+            name,
+            tick,
+            cue.bank() == BankName::Frontend,
+            Cue::COUNTDOWN.contains(&cue),
+        )
     };
     let program = if cue.repeats() {
         layers::program(&bank, name, tick)
