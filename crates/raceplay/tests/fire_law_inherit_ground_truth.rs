@@ -93,8 +93,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
 /// Every opponent LeachBeam drains on its title's cadence
 /// (`oag_title::weapons::Weapons::leach_drain`): once a ball trip on HD, 2048
 /// and Omega, every tick on Pulse.
-fn fires_original(source: String, mode: oag_race::Mode) {
-    let hd_lineage = !source.contains("pulse") && !source.contains("pure");
+fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool) {
     let race = started(source, mode);
     assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace {
@@ -104,7 +103,7 @@ fn fires_original(source: String, mode: oag_race::Mode) {
         );
         assert!(fired > 0, "no opponent fired in {SECONDS} s");
         assert!(
-            beams.iter().all(|&per_trip| per_trip == hd_lineage),
+            beams.iter().all(|&beam| beam == per_trip),
             "a LeachBeam on the wrong cadence: {beams:?}"
         );
     }
@@ -116,7 +115,11 @@ fn a_pulse_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        false,
+    );
 }
 
 #[test]
@@ -125,7 +128,11 @@ fn a_pure_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        false,
+    );
 }
 
 #[test]
@@ -134,7 +141,11 @@ fn a_hd_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        true,
+    );
 }
 
 #[test]
@@ -143,7 +154,11 @@ fn a_hd_eliminator_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::Eliminator,
+        true,
+    );
 }
 
 #[test]
@@ -152,7 +167,7 @@ fn a_2048_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
 }
 
 #[test]
@@ -161,7 +176,7 @@ fn a_2048_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
 }
 
 #[test]
@@ -170,7 +185,7 @@ fn an_omega_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
 }
 
 #[test]
@@ -179,5 +194,5 @@ fn an_omega_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
 }

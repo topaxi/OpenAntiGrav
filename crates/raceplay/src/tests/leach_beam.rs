@@ -385,3 +385,40 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     );
     assert_eq!(beam.target, 0, "the beam locked on the wrong craft");
 }
+
+/// **The player's own beam drains on the title's cadence**, as an opponent's
+/// does: once a ball trip where the title says `PerTrip` (HD, and the titles
+/// that inherit its law), every tick where it says `PerTick` (Pulse). See
+/// `oag_title::weapons::LeachDrain` and `Race::locked_leach_beam`.
+#[test]
+fn the_players_locked_beam_takes_the_titles_drain_cadence() {
+    let fire = |drain: oag_title::weapons::LeachDrain| {
+        let mut race = race_with_a_grid_sighted(title_sighting(false));
+        race.sim.weapons = Some(one_leach_beam_table());
+        race.sim.leach_drain = drain;
+        let forward = race.sim.world.ships[0].physics.body.forward();
+        let ahead = race.sim.world.ships[0].physics.body.position + forward * 60.0;
+        race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        for tick in 0..=5 {
+            race.sim.world.ships[1].physics.body.position = ahead;
+            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            let input = buttons.tick(if tick == 5 { SQUARE } else { 0 });
+            race.tick(&PlayerInputs::single(input));
+        }
+        race.sim.world.leach_beam.expect("the press must fire")
+    };
+    let per_trip = fire(oag_title::weapons::LeachDrain::PerTrip);
+    assert_eq!(
+        per_trip.kind,
+        oag_weapons::projectile::leach_beam::Kind::Locked
+    );
+    assert!(per_trip.trip.is_some(), "HD's beam must carry a trip clock");
+    let per_tick = fire(oag_title::weapons::LeachDrain::PerTick);
+    assert_eq!(
+        per_tick.kind,
+        oag_weapons::projectile::leach_beam::Kind::Locked
+    );
+    assert!(per_tick.trip.is_none(), "Pulse's beam drains every tick");
+}

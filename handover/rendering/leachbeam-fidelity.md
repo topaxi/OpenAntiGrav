@@ -10,6 +10,17 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
 
 ## Open
 
+- **HD's per-trip drain is a static read, not yet seen live** (2026-10-19,
+  lane `campaign-ai-weapons`; `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`,
+  "Both found the same day", confidence 80). The RPCS3 check that would
+  confirm it: a locked beam's target loses shield in steps of `damage` (1.5
+  on HD's Race table) every 0.3 to 1.0 s, 3.0 on the first step, with nothing
+  between. Still open on the same page: the length the trip period reads
+  (`strip+0x10`, taken as the craft-to-craft distance, chosen), whether
+  `Ship_ApplyDamage_q`'s TOC scale is the weapons-off factor, and whether
+  HD's `+0x378` slow factor persists between arrivals (this engine applies
+  `slowShipFactor` on arrival ticks only).
+
 - **The track-tube bend is measured, and the port stands.** 2026-10-01: six
   PPSSPP captures at Talon's Junction (585 chain transitions, all three plane
   tests, floor-then-wall in one call) reproduce `LeachBeam_KeepInTrack`/

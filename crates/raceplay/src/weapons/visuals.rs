@@ -155,19 +155,25 @@ impl Race {
     /// [`Self::leach_ball_model_matrix`] - since a draw call needs this
     /// frame's position whether or not this tick happened to wrap.
     ///
-    /// On a title that drains per trip the simulation carries the same
-    /// accumulator (`Beam::trip`), and its value replaces this one, so the
-    /// burst lands on the tick the drain does.
+    /// On a title that drains per trip the simulation carries the
+    /// accumulator (`Beam::trip`) and this reads it, so the burst lands on the
+    /// tick the drain does; elsewhere the view keeps its own on the same law.
     fn advance_leach_ball_hd(&mut self, trip: Option<f32>, owner: Vec3, target: Vec3, dt: f32) {
         let length = (target - owner).length();
-        let wrapped = oag_weapons::projectile::leach_beam::trip::advance(
-            &mut self.view.leach_ball_elapsed,
-            dt,
-            length,
-        );
-        if let Some(elapsed) = trip {
-            self.view.leach_ball_elapsed = elapsed;
-        }
+        let wrapped = match trip {
+            // The simulation's clock wrapped this tick (the drain landed):
+            // it went down since the last frame read it.
+            Some(elapsed) => {
+                let wrapped = elapsed < self.view.leach_ball_elapsed;
+                self.view.leach_ball_elapsed = elapsed;
+                wrapped
+            }
+            None => oag_weapons::projectile::leach_beam::trip::advance(
+                &mut self.view.leach_ball_elapsed,
+                dt,
+                length,
+            ),
+        };
         if !wrapped {
             return;
         }

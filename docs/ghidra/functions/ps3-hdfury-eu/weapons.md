@@ -489,10 +489,14 @@ craft.
 **Wired 2026-10-19:** `oag_title::weapons::LeachDrain::PerTrip` on HD;
 `oag_weapons::projectile::leach_beam::trip` holds the period and `Beam::trip`
 the accumulator, for the player's beam and every opponent's, and the HD ball
-visual reads the same accumulator. 2048 and Omega run it too, **inherited
-from HD, unmeasured there**: 2048's executable was not read for it, and
-Omega's has no capture or decompile path here. Opponents fire the beam again
-on all three titles.
+visual reads the same accumulator. Opponents fire the beam again on all
+three titles. The 2048/Omega check: **ported** to both, each pinned by
+`fire_law_inherit_ground_truth.rs` (every opponent beam there carries a trip
+clock), as a law inherited from HD; 2048's own executable was not read for
+it, and Omega's is **not checkable** here (no PS4 capture or decompile path in
+this project's toolchain). Not yet seen live: an RPCS3 capture would show the
+target's shield falling in steps of `damage` every 0.3 to 1.0 s, twice that
+on the first.
 
 **The beam object holds four balls and two strips.** `0x00153218` (called
 from `LeachBeamManager_Construct`) initialises two `0x63d0`-byte strip
