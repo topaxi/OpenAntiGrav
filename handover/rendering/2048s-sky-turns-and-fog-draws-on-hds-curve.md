@@ -1,4 +1,4 @@
-# 2048's sky turns and its fog draws on HD's curve; the 2048 law, two sky keys and Omega's pink road are open
+# 2048's sky turns and its fog draws on HD's curve; the 2048 law and two sky keys are open
 
 2026-10-06. 2048 (Vita) and Omega (PS4) circuits now turn their sky dome by the
 authored `Lighting.Sky rotation` and draw fog from the authored
@@ -25,13 +25,15 @@ own six-face sky cube and rotation.
   the fog is a faint haze on sol and bridge and nothing on altima, and the dome
   is rarely in view from the grid, so the rotation does not show in start
   frames.
-- **Omega's altima road draws flat pink at the grid.** Found during this lane
-  and not caused by it (it was there before). Not investigated.
+- ~~**Omega's altima road draws flat pink at the grid.**~~ **Closed 2026-10-19
+  (`omega-pink-road-sun`)**: the road's first listed sampler was an `R16F` panel
+  map that does not decode; the material is now drawn by its named `DiffuseMap`
+  (`docs/formats/2048-material-params.md`, "The picture is the sampler named
+  `DiffuseMap`").
 
 ## Next Steps
 
 1. Read 2048's fog term out of a circuit material's GXP program
    (`handover/tooling/2048s-gxp-containers-decode-the-usse-stream.md` has the
    decoder state).
-2. Look into Omega altima's pink road: a missing texture or a material family
-   no reader handles is the first guess, unverified.
+2. ~~Omega altima's pink road~~ Done, above.

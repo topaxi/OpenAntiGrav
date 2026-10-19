@@ -12,6 +12,13 @@ non-lightmap texture) and so still draw it.
 
 ## Open
 
+- **Not the cause of Omega's pink road** (`omega-pink-road-sun`, 2026-10-19): that road
+  bound an undecodable `R16F` panel map ahead of its `DiffuseMap`, and its circuit was
+  not in this census. Naming the diffuse sampler (`Material::diffuse_texture`) did not
+  move the counts below; Altima, Mall and Tower now join at 0. Where a family below
+  binds a sampler named `NormalMap`/`Normal` ahead of a named diffuse, the new rule is
+  already right; the counts are materials where no `Diffuse*` name exists.
+
 - **Counts, drawn colour slots that are normal maps:** Omega 223 over 34 models (Vineta K
   34, Ubermall 33, Metropia 28, Tech De Ra 22 and so on), 2048's Vita package 66 over 18.
   Frozen per circuit in `omega_transparency_ground_truth.rs` (2048 as one constant).

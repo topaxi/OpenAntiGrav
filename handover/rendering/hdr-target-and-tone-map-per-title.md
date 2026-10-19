@@ -34,13 +34,10 @@ What is already established, do not re-derive:
   and wired as `oag_post::omega_tonemap`; see
   `docs/ghidra/functions/ps4-omega-eu/tonemap.md` and `docs/formats/omega-status.md`.
   Left open from it:
-  - **Altima's road is a flat colour** with the curve on (pink, untextured; it
-    clipped to white before). Some road surface on that 2048-heritage circuit is
-    lit far past 1.0 or drawn without its texture. Check its material and
-    lightmap binding before blaming the curve:
-    `altima-t300-before-after.png`. The 3.08 %
-    still clipped at tick 600 (`altima-t600-before-after.png`) is that same
-    road, not a hot light.
+  - ~~**Altima's road is a flat colour**~~ **Closed 2026-10-19
+    (`omega-pink-road-sun`)**: not the curve and not the light, an undecodable
+    first sampler (`omega-status.md`, "Altima's road drew flat pink"). The 3.08 %
+    still clipped at tick 600 was that road.
   - The scanout format (sRGB or UNORM) is unread, so the final `pow(1/2.2)` is
     chosen. Next address: the SDR copy `FUN_0122d760` called from `FUN_01629ce0`,
     and the display buffer's creation.

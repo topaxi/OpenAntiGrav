@@ -131,6 +131,11 @@ unnamed rather than forced.
   (`EnvSettings_RegisterKeys`, the `(1.4, 0.2, 1.5)` default, the per-frame
   upload and the slot-32 binding) and a negative on the `Tonemap.*` consumer.
 
+- [sun-intensity.md](sun-intensity.md) - `Lighting.Sun diffuse intensity`
+  (`0x019404b4`, default 1.0) is multiplied into the diffuse sun colour where the
+  light is built, at two consumers. Authored 0.3 to 20 over Omega's circuits;
+  2048's files carry none.
+
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be

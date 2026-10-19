@@ -300,6 +300,13 @@ specular x0.00 - 2048 authors no equivalent prelit or specular keys, so both sta
 at the identity
 ```
 
+**Omega's files add `"Lighting.Sun diffuse intensity"`** (and `Sun specular
+intensity`), which 2048's carry none of: **checked, differs**. The executable
+multiplies the diffuse one into the diffuse colour where the light is built (default
+1.0), so Omega's sun is the product, now read
+([sun-intensity.md](../ghidra/functions/ps4-omega-eu/sun-intensity.md)). The specular
+pair stays unwired for the RGB-against-scalar reason below.
+
 **2048 additionally authors a literal `"Lighting.Sun color"` key, spelled
 exactly like HD's, and it is deliberately not wired as the diffuse term.**
 The registrar binds it to its own field, distinct from `Sun diffuse
