@@ -33,9 +33,7 @@ categories: [rendering]
 Landed: every HD card (slots 2, 3, 5, 7, 8) is drawn unlit (`Adverts::adverts_unlit`; `docs/rendering/start-gantry.md`, "every card is
 unlit"). What is left:
 
-- **FINAL LAP panel residual.** Pose-matched (`--pose=-132.15,-49.6,-175.36 --anim-seconds 9.75`), the panel reads 0.53 to
-  0.56 of the original against 0.63 to 0.66 for the whole frame: a whole-frame HD brightness gap plus a panel-only ~0.8. Needs
-  the quad's draw state (`billboard8` program constants, N.L, fog) read on both sides at this pose.
+- ~~**FINAL LAP panel residual.**~~ Closed 2026-10-19 (`hd-frame-brightness`): the 0.63-0.66 frame and 0.53-0.56 panel ratios were a `Write Color Buffers`-off reference. WCB-on re-shot: whole frame 1.06, panel within glyph flicker; no code change (`docs/rendering/start-gantry.md`, closing note in item 2).
 - **The finish.** Static reading says the flag persists; no RPCS3 capture (the lap counter cannot be forced, branch `lap == 0`
   wins). A real three-lap finish on RPCS3 would settle it.
 - Pulse's `JonsFinalLap:Final_Lap` against the PPSSPP software renderer, and Pulse's `Adverts::adverts_unlit` (`false`, unread): with

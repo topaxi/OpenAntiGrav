@@ -2552,9 +2552,22 @@ camera: the board is in the same place at the same size. Medians over the panel 
 | ours (4 phases) | `34..41, 61..64, 61..65` | `74 104 115` | `84 108 118` |
 | ratio | 0.53 to 0.56 | 0.63 to 0.66 | 0.66 to 0.71 |
 
+**Closed 2026-10-19 (`hd-frame-brightness`): both factors were the reference, not the renderer.** The original frame above
+(`w9.5-00`) was shot with RPCS3's `Write Color Buffers` **off** (the lane's config read `false`; no `Used configuration:` dump was
+kept, so "inferred off"). Re-shot on the same boot recipe with it **on** (`Used configuration:` reads `Write Color Buffers:
+true`, `Resolution Scale: 150`; six frames kept in `data/reference/hd-capture/talons-finallap-wcb-on-s150/`), the original
+reads whole frame median `62 93 96` (luma 84) against `118 172 179` (luma 157) off: 1.87x darker, the exposure artefact of
+`rpcs3-capture.md`, "A screenshot's brightness depends on `Write Color Buffers` too". Ours at the same pose reads luma 88.9, so
+the whole-frame ratio is **1.06**, not 0.63 to 0.66. The panel (upper teal band, interior of the board) reads median
+`32..37 70..76 68..73` on the WCB-on original across six frames against `45 93 89` on ours (`45 80 79` over the whole interior
+at the 5th/50th/95th percentile `50/70/165` against the original's `49-51 / 54-78 / 140-209`, which flickers with the glyph
+phase), so there is **no panel-only residual** to chase within the measurement: the card is `TEX * 1` and the lit-twice fix
+was the whole of it. No code changed. Omega: not checkable (no PS4 capture path), and the artefact is an RPCS3 option, not an
+engine property.
+
 So the "2x darker" of the earlier section is two factors. **A whole-frame factor of about 0.65** (sky, tubes, road all read the
-same ratio, so it is not the card) matches the HD scene brightness gap already recorded (1.56 to 1.71x, `rpcs3-capture.md`,
-"Write Color Buffers"; whether this boot had the option on was not read). **A panel-only residual of about 0.8** (0.53 / 0.65)
+same ratio, so it is not the card) is the HD scene brightness gap recorded as 1.56 to 1.71x (`rpcs3-capture.md`,
+"Write Color Buffers"); this boot had the option off, see the closing note above. **A panel-only residual of about 0.8** (0.53 / 0.65)
 is left: the card is now `TEX * 1` on both sides, so it is the quad's lighting term `(TC0 + ambient + sun * sat(N.L)) * card`,
 fog, or the 8-bit-versus-R5G6B5 card format; which of them was not separated (it needs the quad's draw state on both sides at
 this pose, the next measurement). The glyphs' phases agree with the earlier by-eye comparison: dim phase `121` at the 95th
