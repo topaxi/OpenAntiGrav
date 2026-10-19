@@ -81,7 +81,7 @@ out to be wrong.
 | [0069](0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md) | Remote craft are predicted in one timeline and corrected on a threshold | **Proposed**, not accepted: the S24 cost, weapons and an analog human stream are open |
 | [0070](0070-the-network-transport-is-webtransport.md) | The network transport is WebTransport | Accepted for the maintainer's decision (WebTransport, UDP only if it fails); the crate, certificate pinning and inputs-not-state wire are **Proposed** |
 | [0071](0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md) | Weapons are predicted simulation, with a discrete-state correction trigger | **Proposed** (2026-10-19); answers ADR-0069 condition 2 |
-| [0072](0072-an-unreachable-resolution-target-falls-to-the-floor.md) | An unreachable resolution target falls to the floor | **Proposed** (2026-10-19); supersedes ADR-0042's hold-when-unreachable half |
+| [0073](0073-an-unreachable-resolution-target-falls-to-the-floor.md) | An unreachable resolution target falls to the floor | **Proposed** (2026-10-19); supersedes ADR-0042's hold-when-unreachable half |
 
 ## Format
 

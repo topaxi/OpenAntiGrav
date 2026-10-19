@@ -533,7 +533,7 @@ made the true scalable cost visible for the first time:**
   still over budget, no render scale can deliver the target - and the
   controller must not walk toward the floor chasing a rate that will never
   arrive, the same failure `Target::at_most` already guards from the clamping
-  side. **Superseded for the fixed-cost half (2026-10-19, ADR-0072):** holding
+  side. **Superseded for the fixed-cost half (2026-10-19, ADR-0073):** holding
   there left a 4K FSR 3.1 profile at full resolution whatever its minimum said;
   the controller now falls to the floor and still reports it (next section). `Controller::unreachable()` requires `RISE_PATIENCE` consecutive frames
   of "nothing left to decide" before it reports true, for the same reason a
@@ -660,7 +660,7 @@ a private XDG dir (`render=` is the scene target):
 | PSP, fsr3, target 60, min 25 | 960x540 (25 %) | 41 |
 
 Static `--render-scale 50` already gave 720x408 on PS2 and PSP alike (Xvfb, lavapipe), so
-the fixed-scale path was never broken; only the controller held. ADR-0072 makes it fall
+the fixed-scale path was never broken; only the controller held. ADR-0073 makes it fall
 to the floor. Pins: `oag_present::drs::tests::an_unreachable_target_falls_to_the_floor_and_says_so`,
 `a_fixed_cost_over_the_period_still_honours_the_minimum_resolution` (floors 25, 33 and 50),
 and `oag_game::settings::tests::a_render_scale_below_100_shrinks_every_title_and_platforms_scene_target`

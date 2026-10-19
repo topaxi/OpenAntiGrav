@@ -1,4 +1,4 @@
-# ADR-0072: An unreachable resolution target falls to the floor
+# ADR-0073: An unreachable resolution target falls to the floor
 
 ## Status
 
@@ -38,3 +38,7 @@ profile's floor and no further. `Controller::unreachable` still reports it, so t
   climbs back only through the normal earned rise once a budget returns. Loads are
   already kept out by `frame_seconds = None`.
 - The `Target::at_most` guard against a target above the limiter is untouched.
+- The reason is said in the log once per spell, naming the reconstruction and the output
+  size ("fixed cost ... (fsr3 resolving a 3840x2160 output) ... held at its minimum").
+  A menu note is not built: the menu's `warn_when` conditions compare settings values
+  and nothing in it reads a measurement.
