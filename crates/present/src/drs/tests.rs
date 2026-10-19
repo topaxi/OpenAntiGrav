@@ -480,14 +480,15 @@ fn a_measured_fixed_cost_shrinks_the_budget_by_exactly_itself() {
     );
 }
 
-/// A target the fixed cost alone cannot fit is reported and **not** chased.
+/// A target the fixed cost alone cannot fit is reported **and** answered with the floor.
 ///
-/// The failure this prevents is the one `Target::at_most` names from the other
-/// direction: giving up every pixel to buy frames that never arrive. No GPU is
-/// needed to drive it, which matters - Xvfb cannot size a pass, so this
-/// branch has no other way to be covered.
+/// The fixed half fills the period, so no scale meets the rate, but the scalable half is
+/// still frames: holding at the ceiling left a 4K FSR 3.1 profile at full resolution
+/// whatever its minimum said (Deck, 2026-10-19: 15 fps at the ceiling, 41 at the floor).
+/// No GPU is needed to drive it, which matters - Xvfb cannot size a pass, so this branch
+/// has no other way to be covered.
 #[test]
-fn an_unreachable_target_parks_rather_than_grinding_to_the_floor() {
+fn an_unreachable_target_falls_to_the_floor_and_says_so() {
     let target = Target::OFFERED[4];
     let period = target.period().expect("on");
     let limits = limits(target);
@@ -501,17 +502,13 @@ fn an_unreachable_target_parks_rather_than_grinding_to_the_floor() {
         fixed: period * 1.1,
     };
     for _ in 0..64 {
-        assert_eq!(
-            drs.record(cost, None, limits),
-            None,
-            "there is nothing to decide"
-        );
+        drs.record(cost, None, limits);
     }
     assert!(drs.unreachable(), "and it has to say so");
-    assert_eq!(
-        drs.scale(),
-        1.0,
-        "the scale must not have moved: shrinking buys frames that never arrive"
+    assert!(
+        drs.scale() <= 0.5 + f32::EPSILON && drs.scale() >= 0.5 - f32::EPSILON,
+        "the 50 % floor is where it parks, not the ceiling and not below: {}",
+        drs.scale()
     );
 
     // A budget that comes back clears it, so a spell that ends is reported as
@@ -522,6 +519,38 @@ fn an_unreachable_target_parks_rather_than_grinding_to_the_floor() {
     };
     drs.record(affordable, None, limits);
     assert!(!drs.unreachable());
+}
+
+/// The maintainer's shape: Pulse (PS2) with `reconstruction = "fsr3"`, `target_fps = "90"` at
+/// a 4K output - FSR 3.1's presented half measured 11.99 ms there against an 11.11 ms
+/// period - falls to whatever floor the profile names, 50 and the new 25 alike.
+#[test]
+fn a_fixed_cost_over_the_period_still_honours_the_minimum_resolution() {
+    let target = Target::OFFERED
+        .into_iter()
+        .find(|t| t.hz() == Some(90))
+        .expect("90 is offered");
+    let cost = Cost {
+        scalable: 0.044,
+        fixed: 0.011_99,
+    };
+    for floor in [0.25, 0.33, 0.5] {
+        let limits = Limits::new(
+            (3840, 2160),
+            ((3840.0 * floor) as u32, (2160.0 * floor) as u32),
+            target,
+        );
+        let mut drs = Controller::new();
+        for _ in 0..256 {
+            drs.record(cost, Some(0.0656), limits);
+        }
+        assert!(
+            drs.scale() < 1.0 && (drs.scale() - floor).abs() < 0.051,
+            "floor {floor}: the scale stayed at {}",
+            drs.scale()
+        );
+        assert!(drs.unreachable());
+    }
 }
 
 /// Parked at the floor and still over budget is unreachable too.

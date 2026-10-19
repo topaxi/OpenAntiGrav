@@ -660,14 +660,19 @@ impl Session {
         // Said once per spell rather than per frame - see
         // `drs::Controller::unreachable`.
         if self.drs.unreachable() && !self.drs_unreachable_said {
+            let output = self.gpu.output.size();
             warn!(
                 "dynamic resolution: {} fps is out of reach here - {:.3} ms of this \
-                 frame is fixed cost the render scale cannot shrink and {:.3} ms is \
-                 held back for work nothing times, against a {:.3} ms budget. Lower \
-                 the target, or the rows that feed the fixed cost (reconstruction, \
-                 msaa)",
+                 frame is fixed cost the render scale cannot shrink ({} resolving a \
+                 {}x{} output) and {:.3} ms is held back for work nothing times, \
+                 against a {:.3} ms budget, so the scale is held at its minimum and \
+                 the frame rate stays below the target. Lower the target, or the rows \
+                 that feed the fixed cost (reconstruction, msaa)",
                 drs_limits.target(),
                 cost.fixed * 1000.0,
+                self.render_profile().reconstruction,
+                output.0,
+                output.1,
                 reserved_ms(&self.drs, drs_limits),
                 drs_limits.target().period().unwrap_or(0.0) * 1000.0
             );

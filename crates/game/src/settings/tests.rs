@@ -977,3 +977,49 @@ fn the_dev_table_defaults_on_in_a_debug_build_and_round_trips_in_every_build() {
     );
     assert_eq!(on.dev.unlock_everything, Some(true));
 }
+
+/// Every `(title, platform)` pair's render scale below 100 gives a smaller scene target, and a
+/// settings file in the shape that was reported - Pulse (PS2) at `fsr3`, `target_fps = "90"`,
+/// a floor of 25, beside a PSP row on `smaa` - reads each row back as written. A pair that
+/// stayed at full resolution (2026-10-19, Pulse PS2) was the controller's, not the row's: see
+/// `oag_present::drs::tests::a_fixed_cost_over_the_period_still_honours_the_minimum_resolution`.
+#[test]
+fn a_render_scale_below_100_shrinks_every_title_and_platforms_scene_target() {
+    let rect = (0.0, 0.0, 2560.0, 1440.0);
+    let full = web::render_target(rect, oag_display::display::Scale::default(), 16384);
+    let mut settings = Settings::default();
+    ensure_known_titles(&mut settings);
+    for (title, platform) in known_profiles() {
+        let key = profile_key(title, platform);
+        let profile = settings.render_profiles.get_mut(&key).expect("a known row");
+        profile.render_scale = "50".parse().expect("offered");
+        profile.render_scale_chosen = true;
+        let scale = profile.scale_for((rect.2, rect.3), false);
+        let target = web::render_target(rect, scale, 16384);
+        assert!(
+            target.0 < full.0 && target.1 < full.1,
+            "{key}: {target:?} against {full:?}"
+        );
+    }
+
+    let reported = r#"
+[render_profiles."Wipeout Pulse (PS2)"]
+render_scale = 50
+render_scale_chosen = true
+target_fps = "90"
+minimum_resolution = 25
+reconstruction = "fsr3"
+
+[render_profiles."Wipeout Pulse (PSP)"]
+render_scale = 100
+render_scale_chosen = true
+target_fps = "60"
+minimum_resolution = 25
+reconstruction = "smaa"
+"#;
+    let parsed: Settings = toml::from_str(reported).expect("parse");
+    let ps2 = &parsed.render_profiles[&profile_key(oag_pulse::TITLE, oag_disc::Platform::Ps2)];
+    assert_eq!(ps2.scale_for((2560.0, 1440.0), false).percent(), 50);
+    assert_eq!(ps2.minimum_resolution.percent(), 25);
+    assert_eq!(ps2.target_fps.hz(), Some(90));
+}

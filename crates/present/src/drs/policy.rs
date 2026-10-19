@@ -153,8 +153,8 @@ impl Controller {
     ///
     /// A returned `None` covers five quiet cases - the target is off, the reading is
     /// inside [`DEADBAND`], a [`COOLDOWN`] is still running, the correction
-    /// quantised back onto the scale already in force, or the target is out of
-    /// reach at any resolution. The fourth is deliberately not a step: burning
+    /// quantised back onto the scale already in force, or the scale is already at
+    /// the floor of a target nothing can meet. The fourth is deliberately not a step: burning
     /// a cooldown on a no-op would halve how often the controller could
     /// respond to a real overrun.
     ///
@@ -164,10 +164,10 @@ impl Controller {
     ///
     /// **The unreachable branch is not an error path.** When the measured
     /// fixed cost alone fills the target frame period, no render scale exists
-    /// that would deliver the rate - so the controller holds where it is
-    /// rather than walking to the floor to buy frames that will never arrive.
-    /// That is the same failure [`super::Target::at_most`] was written to
-    /// prevent, reached from the other direction, and it is reported through
+    /// that would deliver the rate, but a lower one still delivers more frames,
+    /// so the controller falls to the player's floor and holds there. Holding
+    /// at the ceiling instead left an FSR 3.1 profile at 4K at full resolution
+    /// whatever its minimum said. It is reported through
     /// [`Self::unreachable`] so the caller can say so once.
     pub fn record(
         &mut self,
@@ -193,15 +193,26 @@ impl Controller {
         // reported on the frame it happens rather than up to `COOLDOWN` frames
         // later - and so the cooldown cannot be spent on a frame there was
         // never a decision to make.
-        if budget <= 0.0 {
+        let fixed_fills_period = budget <= 0.0;
+        if fixed_fills_period {
             self.unreachable = self.unreachable.saturating_add(1);
-            return None;
         }
         if self.cooldown > 0 {
             self.cooldown -= 1;
             return None;
         }
-        let ratio = scalable / budget;
+        // **No budget is an infinitely late frame, not a frame to ignore.** The
+        // fixed cost alone fills the period, so the target cannot be met, but the
+        // scalable cost is still most of the frame and every pixel given up buys
+        // frames toward it (a 4K FSR 3.1 frame measured 15 fps at the ceiling and
+        // 41 fps at the floor). So the controller falls as it does for any
+        // overrun, to the floor and no further, and says so through
+        // [`Self::unreachable`].
+        let ratio = if fixed_fills_period {
+            f32::INFINITY
+        } else {
+            scalable / budget
+        };
         if DEADBAND.contains(&ratio) {
             // Comfortable, and comfortable is not headroom: a frame in the
             // band breaks the run a rise has to earn.
@@ -277,8 +288,11 @@ impl Controller {
         self.cooldown = COOLDOWN;
         self.under = 0;
         // A step taken is a decision made, so whatever run of "nowhere left to
-        // go" was building is over.
-        self.unreachable = 0;
+        // go" was building is over - unless the step was only the fall toward a
+        // floor that cannot meet the target either.
+        if !fixed_fills_period {
+            self.unreachable = 0;
+        }
         Some(limits.pixels(self.scale()))
     }
 
