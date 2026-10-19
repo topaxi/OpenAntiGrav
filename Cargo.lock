@@ -3363,6 +3363,7 @@ dependencies = [
  "oag-hd",
  "oag-mod",
  "oag-pulse",
+ "oag-rcs",
  "oag-tables",
  "oag-texture",
  "semver",

@@ -1472,6 +1472,167 @@ blend is chosen, not measured. The SPU engine light is off, chosen, not
 measured. Checked in a headless race (Feisar, `--autopilot`, ticks 420 and
 900): the nozzle glows and every rival's trail draws.
 
+## Re-cooked, measured (2026-10-19, `asset-lineage-census`)
+
+CLAUDE.md says Omega re-cooks 2048's and HD's content rather than shipping it
+identical. This section measures how far. It is a census, not a reader change.
+Every number comes from one command over the archives, and the tables are
+counts and dimensions only:
+
+```sh
+cargo run -p oag-tools --example recook_census -- vita environment <PCSA00015 base data.psarc> <dlc1.psarc> <patch data1.psarc> <patch data2.psarc>
+cargo run -p oag-tools --example recook_census -- ps4 environment <omega base data00..04.psarc> <patch data05,07,08,09.psarc>
+cargo run -p oag-tools --example recook_census -- ps3 environment <hdfury DATA00..06.PSARC>
+cargo run -p oag-tools --example recook_census -- {vita,ps4,ps3} hdships/ (or /ships/ on HD) <same archives>
+```
+
+Vita is EU `PCSA00015` (base, DLC1, patch v1.04); later archives override
+earlier ones at the same path. Omega is EU `omega-eu` with patch `1.07`. Every
+path read parsed, none refused. Circuit and hull names are matched by directory
+name, with a leading `NN_` stripped on the HD-numbered circuits.
+
+**Summary.** Textures are **re-encoded**, not just re-sized: 2048's `.gxt` is
+PVRTC 4bpp, Omega's `.gnf` is BC7 (5,256 of 5,291 paired track textures), and
+HD's are DXT. Track models are **re-cooked to a different triangle count**:
+Omega's track has 3.0-8.7x the triangles of Vita's on the ten base circuits,
+3.5-14.2x on the DLC circuits, and 1.3-2.9x HD's. Zone
+models keep their triangles to 0.2% and re-weld their vertices. Hulls keep their
+triangles, but not their vertices.
+
+### Track: 2048-era circuits, Vita against Omega `Data/environments2048`
+
+Vertices / triangles / materials (submeshes in brackets). Omega's main model is
+`track.final.rcsmodel`; 2048 ships `track.rcsmodel`.
+
+| circuit | Vita `track` | Omega `track.final` | tri Omega/Vita |
+| --- | --- | --- | --- |
+| altima | 531,735 / 419,023 / 527 [2,817] | 1,928,152 / 1,912,623 / 575 [3,379] | 4.56 |
+| arena | 537,492 / 383,816 / 1,142 [3,668] | 3,080,162 / 3,331,753 / 1,140 [4,111] | 8.68 |
+| bridge | 857,841 / 580,679 / 1,339 [5,753] | 1,840,112 / 1,740,321 / 1,344 [5,775] | 3.00 |
+| cathedral | 630,193 / 434,299 / 1,194 [4,836] | 2,237,715 / 2,285,771 / 1,260 [4,864] | 5.26 |
+| mall | 688,771 / 491,228 / 1,413 [7,357] | 2,164,322 / 2,240,855 / 1,436 [6,486] | 4.56 |
+| park | 520,134 / 365,249 / 675 [4,829] | 2,507,290 / 2,475,557 / 689 [4,751] | 6.78 |
+| sol | 386,724 / 257,477 / 490 [2,690] | 826,788 / 781,421 / 376 [2,822] | 3.03 |
+| square | 760,538 / 495,222 / 1,832 [5,700] | 3,102,957 / 3,027,697 / 1,616 [5,999] | 6.11 |
+| subway | 954,520 / 647,569 / 1,737 [7,221] | 2,476,429 / 2,413,478 / 1,690 [7,212] | 3.73 |
+| tower | 688,628 / 470,840 / 1,311 [4,957] | 2,391,247 / 2,462,729 / 1,032 [4,936] | 5.23 |
+
+The eight Vita DLC1 circuits are in the HD table below. Vita's DLC copies also
+differ from the base package's own copies (Anulpha 352,012 against 351,727
+vertices). Measured, not
+explained: the triangle counts are the census, and why Omega's `track.final`
+carries 3-14x Vita's is **open**. Candidate causes are a merge of pieces Vita
+ships as separate `trackpart_*`/`track_overlay` files, or a re-tessellation;
+neither is tested here.
+
+### Track: HD-numbered circuits, PS3 against Omega `Data/environments`
+
+Triangles only. Omega is `track.final.rcsmodel`, HD is `track.rcsmodel`.
+
+| circuit | HD tri | Omega tri | Omega/HD | Vita DLC1 tri / HD |
+| --- | --- | --- | --- | --- |
+| 01 Vineta K | 953,467 | 2,169,965 | 2.28 | 0.16 |
+| 04 Chenghou Project | 433,557 | 1,048,618 | 2.42 | 0.36 |
+| 05 Ubermall | 812,523 | 2,128,580 | 2.62 | 0.32 |
+| 10 Sebenco Climb | 451,174 | 1,006,192 | 2.23 | 0.23 |
+| 12 Sol 2 | 750,855 | 979,714 | 1.30 | 0.26 |
+| 15 Anulpha Pass | 599,607 | 779,064 | 1.30 | 0.37 |
+| amphiseum | 773,890 | 1,696,658 | 2.19 | - |
+| modesto_heights | 904,463 | 1,966,253 | 2.17 | - |
+| talons_junction | 809,247 | 1,067,844 | 1.32 | - |
+| tech_de_ra | 820,441 | 2,379,040 | 2.90 | - |
+
+HD's `02_track` and `03_track` are not matched to Omega's `02_metropia` and
+`03_moa_therma`; the names are unresolved and Omega's two have no HD row. The
+Vita DLC1 copy of each circuit carries a sixth to a third of HD's triangles.
+
+**Zone models** (`zone_1..4`, `Data/environments/zone_N/track.rcsmodel`): triangle
+counts match HD to 0.2% (zone_1 455,747 on both; zone_2 602,817 against 602,953),
+and vertices differ by under 2.5%.
+
+### TrackZone: 2048 Vita against Omega `environments2048`
+
+| circuit | sub | tri Vita / Omega | verts Omega/Vita |
+| --- | --- | --- | --- |
+| altima | 6,349 | 857,701 / 857,701 | 1.0032 |
+| arena | 6,797 | 617,816 / 617,816 | 1.0049 |
+| bridge | 11,795 | 1,130,566 / 1,130,566 | 1.0035 |
+| cathedral | 6,067 | 499,266 / 499,266 | 1.0046 |
+| mall | 11,687 | 854,189 / 854,189 | 1.0027 |
+| park | 7,644 | 757,580 / 757,580 | 1.0047 |
+| sol | 9,530 | 573,323 / 573,323 | 1.0041 |
+| square | 8,460 | 807,816 / 807,816 | 1.0201 |
+| subway | 11,269 | 1,130,759 / 1,130,759 | 1.0030 |
+| tower | 10,386 | 981,368 / 981,368 | 1.0041 |
+
+Every submesh count and material count is equal. Triangles are identical on
+all ten: **re-welded, not re-cut**, which is the same finding the hulls give.
+
+### Textures: stem-matched pairs, same circuit
+
+Pairs are the textures whose stem appears on both titles inside the same circuit.
+`same dims` is equal width and height; `second larger` is the second title's
+area bigger. Ratio is the median width ratio, second title over first.
+
+| circuit | pairs | Vita -> Omega same / Omega larger | median ratio | mips equal |
+| --- | --- | --- | --- | --- |
+| altima | 131 | 118 / 13 | 1.00 | 1 |
+| arena | 320 | 285 / 35 | 1.00 | 1 |
+| bridge | 317 | 295 / 21 | 1.00 | 5 |
+| cathedral | 390 | 372 / 18 | 1.00 | 5 |
+| mall | 353 | 296 / 57 | 1.00 | 1 |
+| park | 315 | 261 / 53 | 1.00 | 0 |
+| square | 557 | 483 / 74 | 1.00 | 9 |
+| subway | 484 | 433 / 50 | 1.00 | 6 |
+| sol / tower / shared | 105 / 351 / 128 | 76 / 302 / 95 | 1.00 | 1 / 1 / 3 |
+| Vita DLC1 circuits (vineta_k, chenghou, metropia, moa_therma, sebenco, sol_2, ubermall, anulpha) | 139 to 287 each | 0 to 10 same | **2.00** (moa_therma 4.00) | 0 to 6 |
+
+So the 2048 base circuits keep their dimensions on Omega for 83-95% of pairs
+(a larger Omega texture is 10-16% of pairs on altima, mall and park). The DLC circuits
+are half the width on Vita and the same as HD on Omega, for every pair. Omega
+against HD on the same HD circuits: 1,828 of 2,699 pairs equal, 26 HD larger,
+1,722 mip counts equal.
+
+### Craft: hulls against Omega and HD
+
+Main parts only (`ship`, `ship_lod`, `ship_lod1..3`, `shipwreck`, `shipshield`),
+skin variants `_c1`/`_n1` excluded. Tallies over the parts both titles ship:
+
+| pair | parts | triangles equal | vertices equal | submeshes equal | materials equal |
+| --- | --- | --- | --- | --- | --- |
+| Vita 2048 against Omega | 94 | 86 | 23 | 90 | 91 |
+| Omega against HD | 70 | 27 | 5 | - | 44 |
+
+Feisar's `ship.rcsmodel` on all three: 22,527 triangles and 5 materials each;
+vertices 25,976 (Vita), 26,017 (Omega), 25,968 (HD). Detonator's `ship` is the
+one part whose triangle count moved: Vita 15,666, Omega 13,867 (64 submeshes
+against 62). Assegai `ship_lod` moved too: 7,918 to 8,038. Tigron and
+Detonator VR exist only on Omega.
+
+Hull textures are stem-matched on Vita and Omega: 1,025 pairs. 775 keep their
+dimensions and 250 are larger on Omega; the `_c1` livery set (egx, harimau,
+mirage) is twice as wide on Omega in the rows it shares with Vita. Every paired
+hull texture is PVRTC 4bpp on Vita and BC7 on Omega.
+
+### What this says, and what it does not
+
+- **Textures**: re-encoded on every title (PVRTC on Vita, BC7 on Omega, DXT on
+  HD). Dimensions are kept for the 2048 base circuits and the hulls. The DLC
+  circuits are re-sized up to HD's on Omega. Mip counts differ on most pairs.
+- **Track models**: Omega's `track.final` is a different triangle count on every
+  circuit it shares with 2048 or HD, not a re-weld. Cause open.
+- **TrackZone and Zone**: re-welded, triangles kept. Zone is also HD's model.
+- **Hulls**: triangles kept on most parts, vertices re-welded on all of them.
+- **Not checked**: Vita USA (`PCSF00007`), and the HD names `02_track` and
+  `03_track` (unresolved against Omega's `02_metropia` and `03_moa_therma`).
+  Mip counts are read as `mip_levels` on `.gxt` and `last_mip_level + 1` on
+  `.gnf`, assuming base level 0.
+
+Check per CLAUDE.md, "A 2048 finding is checked against Omega": track and
+trackZone counts are **checked, differs** (track) and **checked, applies**
+(trackZone triangles); hull triangles are **checked, applies** with vertices
+**checked, differs**.
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's

@@ -35,6 +35,8 @@ anyhow.workspace = true
 clap.workspace = true
 
 [dev-dependencies]
+# `examples/recook_census.rs` reads the `.rcsmodel` model family.
+oag-rcs.workspace = true
 # `examples/hd_buttons_font_probe.rs` only - reads through the same
 # `Archives::open`/`read_font` path production uses, rather than a raw
 # `psarc::Archive::read_path` over an unfiltered path match (which that
