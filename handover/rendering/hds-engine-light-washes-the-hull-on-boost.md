@@ -27,27 +27,31 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Open
 
-- **The Harimau livery - re-read 2026-10-19, probably not a skin choice.**
-  `ship.vex` names `textures_dlc/livery1/harimau_livery.gtf` (the only livery
-  its materials name) and our hull wears exactly that: orange, white and blue.
-  Livery 2 is white and yellow, livery 3 white, light blue and orange, livery 4
-  a grey mask. At the `hd-timetrial-talons-harimau-classic-start` state the
-  original's hull shows livery 1's orange outer wings, blue wing tips and
-  yellow underside, washed pale by a strong sky and floor reflection
-  (by eye, at 2000x1200, not measured). So the visible gap is the hull's
-  environment and specular response, the same bright-scene umbrella as the
-  scene calibration, not a texture choice. Unread: whether the original binds a
-  different livery number for the carousel row. Not wired.
+- **The pale, washed hull is the original's IBL variant, and ours lacks the environment map it reads
+  (`hd-hull-reflection`, 2026-10-20, confidence 85 for the variant, 80 for what the maps are).** The livery is right
+  (`harimau_livery.gtf` matched byte for byte on the live hull draws). The original draws the hull with
+  `HalfBrightIBLSunShadowMapSpot0SVC1` (word `0x847`) where we resolve `HalfBrightAmbientSunSpot0SVC0` (`0x001`):
+  its ambient is `4 * paraboloidIblTex[n]`, a 64x32 dual paraboloid of the surroundings, and a 128x64 sharper one
+  (`paraboloidReflectionTex`) for the specular-from-alpha chunks. Both maps are rebuilt at runtime, in main memory,
+  with no draw into them in the frames caught. Law, units, numbers, the matching recipe and the cross-title answers:
+  [hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "Finding 4". Nothing is wired: the variant
+  switch and a probe have to land together (an IBL variant with no probe draws a black ambient), and a probe pasted
+  from the RPCS3 dump would be a stand-in. The nozzle "jewel" is the `emissive_bloom` chunk drawn with a texel of
+  `colours_flashing_glow.gtf` (ours draws that material and shows black; the `TC4` coordinate is unread).
 - **The white wing rims on the `_n1` skins** are not the SPU term: they stay
   with the craft binding removed. Whether the original shows them is unread.
 
 ## Next Steps
 
-1. Harimau livery: list the textures that `Data\Ships\Harimau`'s
-   `ship.rcsmodel` materials name, and the ones our hull loader binds for
-   `harimau`. Check which skin `PI_ModelSkin`/`PI_TeamModel` selects for the
-   classic row. The state `hd-timetrial-talons-harimau-classic-start` shows
-   the original's livery at rest, on screen in about 20 s.
-2. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
+1. **Environment probe (the big one, a renderer lane).** Build a dual-paraboloid 128x64 of our scene at the craft
+   (cube or two hemispheres, every frame or every few: the original's maps match 83-87 % of their bytes after 0.4-0.8 s
+   and 50 % after 3-7 s), a convolved 64x32 copy, bind them as `0x9edd3243`/`0x872ed3bd`, resolve the `IBL` words
+   (`0x007`/`0x047`, `0x807`/`0x847` for the craft light) in `skin::variants` for ships, scale by 4. Find the producer
+   first: break on a write into `0x4348b000` or draw-capture a frame that holds `liveRsxPanXForm_CubemapToDualParaboloide_fp`
+   (`rsx-fp-names.py` names it) to read what the original puts in the cube. Compare at the rest state (original hull
+   luma 0.60-0.74, saturation 0.21-0.31; ours 0.24-0.29 and 0.67-0.79 before any change).
+2. **Nozzle jewel.** Read the vertex program the live `emissive_bloom` draws (521, 522 of the Harimau rest frame) use,
+   find what `TC4` is, and compare with ours.
+3. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
    emulator-recipes.md, and read whether the wing rims are white at rest in
    the original.

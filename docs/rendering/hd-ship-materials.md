@@ -425,6 +425,103 @@ classification has nothing to read; the same `VertexColour1` factor shape is a
 question for their own shader reads. Pulse, Pure: untouched (race screenshots
 byte-identical, see the thread).
 
+## Finding 4 (2026-10-20, `hd-hull-reflection`): the original draws the hull with an IBL, shadowed, SVC1 variant, and the IBL is a live environment map
+
+**Why the original's hull is pale and ours is dark and saturated.** Read live on RPCS3 (Harimau classic on Talon's
+Junction, `hd-timetrial-talons-harimau-classic-start`, Write Color Buffers on, one frame at rest, one after 10 s of
+thrust, and the Assegai classic start as the second craft). Hull-wing regions of the same framing, original against ours
+(`data/reference/hd-flare-material/rest-sheet.png`, top row against the middle row, boxes picked by eye): mean luma
+0.60-0.74 against 0.24-0.29, mean saturation 0.21-0.31 against 0.67-0.79. Single frame, not pixel matched: the size of
+the gap, not a law.
+
+| | permutation word | name | lit by |
+| --- | --- | --- | --- |
+| ours, every hull material | `0x001` | `HalfBrightAmbientSunSpot0SVC0` | `constantAmbientColour` + sun |
+| the original's live hull draw | **`0x847`** | **`HalfBrightIBLSunShadowMapSpot0SVC1`** | `paraboloidIblTex` + sun x shadow + `f[TC2]` light |
+
+**How the variant was named (confidence 90).** The hull draws are draws 487-504 of the captured frame. Their first
+texture is `0x0a76ee80`, and five 64-byte samples (at 0, 0x400, 0x1000, 0x4000, 0x10000) equal
+`harimau_livery.gtf`'s payload byte for byte, so these are Harimau's hull chunks. The live fragment program of the
+`diffuse_vcol` chunks (37 instructions) equals, after the constants are dropped, fragment block 17 at `0x87c0` of
+`diffuse_vcol.rcsmaterial`, and `hd_material_variants` (new, `crates/render/examples/`) names that block: variant 17
+(and 43 for `RigidBody`), word `0x847`. The `diffuse_with_specular_from_alpha_n` chunks (draws 487-488 and 493-495)
+share the first 12 instructions with its block 17 at `0xdae0` and are the same family (the live dump is cut at 70
+instructions, so the whole stream was not compared). Re-run: `python3 scripts/rsx-fp-match-material.py <dir> <stem> <material.rcsmaterial>... -- <fp>...`
+after a `rpcs3_draw_hook.py` capture and `just psarc cat` of the three ship materials.
+
+**What the `diffuse_vcol` variant computes (block 17 of `diffuse_vcol`, read off the live microcode, confidence 85).**
+
+```text
+ibl   = tex(unit 3 here, (u, v)) * 4        u = 0.25 + (n.x > 0 ? 0.5 + n.z / 4 : -n.z / 4),  v = 0.5 - 0.5 n.y
+light = ibl + sunColour * sat(N.L) * shadow(unit 1, unit 2, both TXP of f[TC0]) + f[TC2]
+out   = fog(albedo * f[TC1] * light) / 2
+```
+
+Unit numbers depend on the variant (the `diffuse_with_specular_from_alpha_n` one reads the livery at unit 0, the
+normal map at 1, two shadow maps at 2 and 3, the IBL at 4 and a 128x64 reflection at 5, and scales both by 4). `f[TC1]`
+is the `VertexColour1` factor of Finding 3. So the ambient the hull gets is **a texture lookup by the normal into an
+environment map**, `x4`, where ours adds one constant. The mean texel of the 64x32 map at the rest frame is
+`(0.21, 0.31, 0.36)`, so the ambient is about `(0.85, 1.23, 1.43)` before the final `/2`, brightest for normals that face the
+sky. That is the "pale, washed" look, and it is what we lack. The `hd-hull-wash-2` engine-light wash on boost (confidence 85) is a different
+term and is unchanged.
+
+**What the two environment maps are (confidence 80 for what, 70 for the cadence).**
+
+- Unit 4 is a 64x32 `A8R8G8B8` linear texture and unit 5 a 128x64 one, `CLAMP`, in **main memory** (the texture format
+  word's low two bits are 2, not VRAM: reading them through `0xC0000000` returns another buffer's bytes, reading
+  `0x40000000 + offset` returns the image). Harimau's rest frame binds `0x03493000` and `0x0348b000`; Assegai's binds
+  `0x03498100` and `0x03490100`: a pool of slots, not one address.
+- Decoded (`data/reference/hd-hull-reflection/harimau-rest-*.png`): a **dual paraboloid** of the surroundings. Two
+  discs side by side, sky with clouds and the green slopes beside the track above the middle row, the track and its
+  walls below, the 64x32 one a blurred version of the 128x64 one. The row split at `v = 0.5` is the same coordinate law
+  `rcsmaterial.md` read for the Vineta K sea (`v = 0.5 - 0.5 d.y`).
+- **They are runtime data.** No draw in the frame renders into either address (the render-target list holds none of
+  them, the command stream names them only as texture sources), and their content changes while the game runs:
+  against the rest read, 26 % of the bytes match after 10 s of thrust; five reads at 0.4 s, 0.8 s, 3.8 s and 6.8 s
+  match 83 %, 87 %, 50 % and 51 % of the previous read. So the original rebuilds its environment map from the scene
+  as the craft moves. HD's executable carries `liveRsxPanXForm_CubemapToDualParaboloide_fp` and
+  `liveRsxPanXForm_CubemapConvolve_fp` (`renderer.md`), which is the likely producer: a cubemap rendered at the craft,
+  folded into the 128x64 map and convolved into the 64x32 one. The producer's own draws were not in the frames
+  caught (confidence 40 that they run on a slower cadence than the hull draw).
+- **Many draws read them, not only the hull.** The Assegai frame has 60 draws with unit 4 at `0x03498100`: the hull,
+  other craft and props. It is an engine resource, not a ship material.
+- **`.probes` is not it (confidence 75).** `Pvs_LoadForTrack` (`0x003f5550`) calls `0x003c4d78`, which reads
+  `<track>.probes` as `u32` count (`0x35e` = 862 for Talon's Junction), `u32 16`, then 862 records of 32 bytes (two
+  `vec3` boxes, 12 units apart along the track) and builds a cell tree from them with `Pvs_BuildCellTree`; the ~6.6 MB
+  that follow are about 7.7 KB per record at 7.6 bits of entropy per byte, with no zlib stream and no image in them.
+  That is a visibility structure. The same function does allocate 8 pairs of 128x64 and 64x32 textures (format word
+  `0x500aae4`, the very format unit 4 and 5 carry), so it also **creates the probe pool**; it does not fill it from the file.
+  Not renamed: the pool allocation and the PVS tree sit in one function and the evidence for a name is below 50 for the split.
+
+**What would make ours match, and why it is not in this change.** The variant switch and the probe have to land
+together: resolving `0x847` without a probe samples nothing (flat black ambient on the whole hull), and a probe pasted from the
+RPCS3 dump would be a stand-in for data this project did not decode. A faithful port is a renderer feature: build a
+cube (or two paraboloid hemispheres) of our scene at the craft each frame or every few, fold it into a 128x64 dual
+paraboloid, convolve a 64x32 copy, bind both at the units the resolved variant declares (`paraboloidReflectionTex`
+`0x9edd3243`, `paraboloidIblTex` `0x872ed3bd`), pick the `IBL` word (`0x007`/`0x047`, plus `0x800` for the craft light) in
+`skin::variants`, and scale by 4 as the program does. Nothing here was built.
+The sub-terms that stay ours until then are labelled as before: the constant ambient and the shared specular
+exponent. The variants for `Spot1`/`Spot2` and `SVC1` are read, not exercised.
+
+**Nozzle interior.** The cyan-pink "jewel" in the rest nozzle is not a flame and not a lit material. Draws 521 and 522
+(258 and 24 indices, blended, 32x32 `DXT1` at unit 0) are Harimau's two `emissive_bloom` chunks: the program is
+`fog(tex(unit 0, f[TC4])) / 2` and nothing else (14 instructions, no light), and the texture is
+`colours_flashing_glow.gtf`, a strip atlas of vertical gradients (cyan, white, red, olive, blue, black columns on a
+purple band). The pink and cyan pixels are texels of those columns. Ours draws the same material as an unlit texture
+and shows a black rectangle, so what differs is which texel the chunk's own `TC4` picks: that coordinate comes out of the
+material's vertex program, which was not read (the `.rcsmaterial`'s first vertex block is position-only and the
+programs of the rest were not matched to the live vertex programs). Confidence 70 that this material is the jewel, no
+score for why ours is black. Left open.
+
+**Other titles.**
+
+- 2048: checked, differs. `Environment_Load` loads an authored `skyParaboloid.gxt` per circuit (14 of them, 699,072
+  bytes each, `2048-sky.md`, `rcsmaterial.md`), so there the probe is disc data and decoding the `.gxt` would supply it;
+  HD's is built live. Whether 2048's hull materials sample it is unread.
+- Omega: checked, applies, not wired. It carries HD's engine, its fragment programs are a different, unread
+  container, and the PS4 has no emulator here, so whether its hull draws an IBL variant is not checkable.
+- Pulse, Pure: untouched, they do not use `.rcsmaterial`.
+
 ## What has not moved
 
 `mesh::rcs::skin::roles`'s existing per-material reads
