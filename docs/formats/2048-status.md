@@ -397,3 +397,11 @@ The 18 per-craft `ship_zone.vex` files are unreferenced as far as found (no
 [omega-status.md](omega-status.md) (its Definition authors the same `zone`
 model per HD team; the key differs, `zoneship_team`). Evidence:
 [zone-craft.md](../ghidra/functions/vita-2048-eu-v104/zone-craft.md).
+
+## Re-cooked on Omega, measured (2026-10-19)
+
+Omega re-encodes this title's textures (PVRTC 4bpp to BC7 on 5,256 of 5,291
+paired track textures), keeps the trackZone triangle count exactly and re-welds
+its vertices, and ships its main track model with 3.0-14.2x the triangles. The
+base circuits keep their texture dimensions; the DLC textures are half the width. The table is in
+[omega-status.md](omega-status.md#re-cooked-measured-2026-10-19-asset-lineage-census).
