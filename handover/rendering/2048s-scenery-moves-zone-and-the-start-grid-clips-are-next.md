@@ -1,4 +1,4 @@
-# 2048's scenery moves and the glow-layer scrolls play; the Zone circuit loads behind an off-by-default option and the start-grid clip is unwired
+# 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws (road = fog colour, chosen) and the start-grid clip is unwired
 
 2026-09-16. Started from "nothing on 2048 is animated at all" and found the
 reason first: `track.vex` authors **no `Anim Transform`** (1,834 `Transform`s,
@@ -82,10 +82,9 @@ every submesh record reachable from exactly one mesh object.
   drawn: the eight `Zone_ColourN` colours unlit (**chosen, not measured**: lit
   blows every surface out to white), `fc01_dummy` - the road and walls, 1,716 of
   6,349 submeshes - drawn flat as the circuit's fog colour since 2026-10-19 (program read, value bound chosen), and
-  2,302 `zonefc07_cube_animation_1` nodes hidden. The race has no visible road
-  in Zone mode here. A capture of 2048's Zone mode from the original settles
-  every one of those choices at once; so would decoding `fc01_dummy`'s
-  3-instruction fragment program.
+  2,302 `zonefc07_cube_animation_1` nodes hidden. The road is the authored fog
+  colour, fixed at load (not following the Zone grade). A capture of 2048's Zone mode from the original settles
+  every one of those choices at once; the fogColour binding is a CPU-side Ghidra lead in `/vita-2048-eu-v104`.
 - **2048's Zone look has a runtime term nothing authors**: every material
   declares `zoneGrowingPaletteScene`/`Track`, `zoneGrowingTexture` samplers and
   `zoneGrowingTextureFactors`/`zoneShipPos` uniforms. Not read.

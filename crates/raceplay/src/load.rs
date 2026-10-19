@@ -442,7 +442,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             report.push(format!(
                 "fc01_dummy: {filled} vertices drawn as fogColour {flat:?} ({})",
                 if authored_fog.is_some() {
-                    "the circuit's authored fog colour; which value the engine binds is chosen, not measured"
+                    "the circuit's authored fog colour, fixed at load and not moved by the Zone grade; which value the engine binds is chosen, not measured"
                 } else {
                     "the circuit authors no fog, so black"
                 }

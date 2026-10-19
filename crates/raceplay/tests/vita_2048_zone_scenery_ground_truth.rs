@@ -75,6 +75,12 @@ fn a_zone_race_on_altima_draws_its_zone_model_through_its_zone_skeleton() {
         "{track}"
     );
     assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("fc01_dummy:") && l.contains("vertices drawn as fogColour")),
+        "the placeholder's vertices were not marked: {lines:#?}"
+    );
+    assert!(
         track.contains("1587 submesh(es) take a Zone_ColourN"),
         "{track}"
     );

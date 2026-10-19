@@ -240,7 +240,7 @@ fn every_sampler_entry_is_a_declared_sampler_and_a_texture_the_scan_finds() {
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
 fn the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models() {
-    // `build` skips `fc01_dummy` and draws `Zone_ColourN` unlit for every 2048
+    // `build` draws `fc01_dummy` as the fog colour and `Zone_ColourN` unlit for every 2048
     // model it builds, so a model outside a Zone circuit that used either would
     // silently change. Measured 2026-10-05 over 983 Vita models and Omega's 1,150: none
     // does outside `trackZone` (355 layered Vita materials, all with a diffuse the scan agrees on).
