@@ -87,6 +87,12 @@ impl Autopilot {
         self.cold = true;
     }
 
+    /// Whether the next [`Self::drive`] starts a stint.
+    #[must_use]
+    pub fn is_cold(&self) -> bool {
+        self.cold
+    }
+
     /// One tick of the player's `Ai_Update`. `ahead` samples the track a
     /// distance further along the craft's route, as for an opponent.
     pub fn drive(

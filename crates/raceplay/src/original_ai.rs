@@ -248,22 +248,13 @@ impl Race {
         None
     }
 
-    /// One opponent's tick on the original driver: its controls and the
-    /// rail's body write, or `None` when it cannot place itself on the track.
-    pub(super) fn drive_original(
-        &mut self,
-        slot: usize,
-        lane_slot: usize,
-        places: &[u8; MAX_SHIPS],
-    ) -> Option<Output> {
+    /// What slot `slot`'s original driver reads of its own craft this tick,
+    /// with `contacts` the last step's contact summary; and the craft's lap
+    /// fraction, its fraction along its own segment and the lap's length,
+    /// for the lookahead. `None` off a closed lap or off the track.
+    fn original_tick(&self, slot: usize, contacts: (i32, bool)) -> Option<(Tick, f32, f32, f32)> {
         let course = self.sim.course.as_ref()?;
         let lap_length = course.length();
-        let count = self.sim.world.ship_count as usize;
-        // Lap-length units: `Standing::distance`, laps included.
-        let racers: [(f32, u8); MAX_SHIPS] = std::array::from_fn(|k| {
-            let ship = &self.sim.world.ships[k];
-            (ship.standing.distance(course), places[k])
-        });
         let ship = &self.sim.world.ships[slot];
         let progress = (ship.standing.progress.unwrap_or(0.0) / lap_length).rem_euclid(1.0);
         // HD's `racer+0x90`, measured: the distance into the current lap.
@@ -276,21 +267,12 @@ impl Race {
         let body = ship.physics.body;
         let finished = ship.standing.finished();
         let grounded = ship.physics.grounded;
-        let player = self.rubber_band_reference(places);
-        let player_rubber_band_off =
-            self.sim.world.ships[player].physics.craft_state != oag_physics::CraftState::Racing;
-        let race_time = self
-            .sim
-            .world
-            .tick
-            .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
-            * self.sim.dt;
         let (own, fraction) = self.original_own(slot, progress)?;
         let sample_index = self.sample_index_of(self.sim.world.ships[slot].driver.index as usize);
         let point_ai = sample_index
             .map(|i| self.sim.spline.point_ai(i))
             .unwrap_or_default();
-        let (contact_sides, touching) = self.sim.original_ai.as_ref()?.contacts[slot];
+        let (contact_sides, touching) = contacts;
         let tick = Tick {
             pose: Pose {
                 position: body.position,
@@ -310,6 +292,35 @@ impl Race {
             race_fraction,
             lap_distance,
         };
+        Some((tick, progress, fraction, lap_length))
+    }
+
+    /// One opponent's tick on the original driver: its controls and the
+    /// rail's body write, or `None` when it cannot place itself on the track.
+    pub(super) fn drive_original(
+        &mut self,
+        slot: usize,
+        lane_slot: usize,
+        places: &[u8; MAX_SHIPS],
+    ) -> Option<Output> {
+        let contacts = self.sim.original_ai.as_ref()?.contacts[slot];
+        let (tick, progress, fraction, lap_length) = self.original_tick(slot, contacts)?;
+        let course = self.sim.course.as_ref()?;
+        let count = self.sim.world.ship_count as usize;
+        // Lap-length units: `Standing::distance`, laps included.
+        let racers: [(f32, u8); MAX_SHIPS] = std::array::from_fn(|k| {
+            let ship = &self.sim.world.ships[k];
+            (ship.standing.distance(course), places[k])
+        });
+        let player = self.rubber_band_reference(places);
+        let player_rubber_band_off =
+            self.sim.world.ships[player].physics.craft_state != oag_physics::CraftState::Racing;
+        let race_time = self
+            .sim
+            .world
+            .tick
+            .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
+            * self.sim.dt;
         let dt = self.sim.dt;
         let standings = Standings {
             racers: &racers[..count],
@@ -329,6 +340,36 @@ impl Race {
                 self.original_ahead(slot, fraction, distance, ahead_progress)
             });
         self.sim.original_ai = Some(ai);
+        Some(output)
+    }
+
+    /// The player's own original driver for slot `slot` this tick
+    /// ([`oag_ai::original::Autopilot`]), made on the first call from the
+    /// race's original tables. `None` when the title has none for this class
+    /// or the craft cannot place itself, and the caller flies this project's
+    /// driver instead. Its contact summary is empty: the player's planner
+    /// zeroes what the push feeds, and the player's rail ignores contact.
+    pub(super) fn drive_original_autopilot(&mut self, slot: usize) -> Option<Output> {
+        let tables = self.sim.original_tables?;
+        let (tick, progress, fraction, lap_length) = self.original_tick(slot, (0, false))?;
+        let seat = self.sim.autopilots.get_mut(slot)?;
+        let mut autopilot = seat.take().unwrap_or_else(|| {
+            Box::new(oag_ai::original::Autopilot::new(
+                tables.controller,
+                tables.laws,
+                matches!(
+                    tables.throttle,
+                    super::original_tables::Throttle::Cruise { .. }
+                ),
+                self.sim.race_seed ^ slot as u64,
+            ))
+        });
+        let dt = self.sim.dt;
+        let output = autopilot.drive(&tick, dt, |distance| {
+            let ahead_progress = (progress + distance / lap_length).rem_euclid(1.0);
+            self.original_ahead(slot, fraction, distance, ahead_progress)
+        });
+        self.sim.autopilots[slot] = Some(autopilot);
         Some(output)
     }
 

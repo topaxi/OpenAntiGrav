@@ -105,6 +105,7 @@ impl Race {
         let mut controls = if flown {
             self.autopilot_controls(slot)
         } else {
+            self.release_autopilot(slot);
             ship_controls(snapshot, self.sim.scheme)
         };
         // Past the line the original's own law sets the pace - see
@@ -244,6 +245,11 @@ impl Race {
             barrel_rolls: self.sim.barrel_rolls,
             ..Environment::default()
         };
+        // The autopilot's `Ai_SnapToLane` write, between its controls and
+        // the step, as an opponent's (`Race::step_opponents`).
+        if let Some(rail) = self.sim.autopilot_rail.get_mut(slot).and_then(Option::take) {
+            oag_physics::rail::apply(&mut ship.physics.body, rail.velocity, rail.position);
+        }
         let evaluated = oag_physics::step(
             &mut ship.physics,
             controls,
