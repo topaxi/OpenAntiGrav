@@ -490,7 +490,7 @@ read put back: `a_seated_client_gets_its_own_wall_sparks_shake_and_sound` (seats
 `the_boost_kick_and_the_flaps_follow_the_seats_craft` (`tests/seat_view.rs`). Not tested: the zone
 announcement gate, the wreck-ended tick and the engine throttle. On a real `--people 2` loopback run the
 seat-1 client's still two ticks after its own wall hit shows the sparks at its own craft's wing, the view
-tilted by the shake and the shield bar red; the tick before shows neither.
+tilted by the shake and the shield bar red; the tick before shows neither. Every seat, not only 1: the seat tests run seats 1 to 3 of four people, the camera test all four seats against every other craft, and on an `oag-server --people 4` loopback run with four `--net-bot` clients the seat-2 client's still eight ticks after its own wall hit shows the sparks trailing its own craft and the shaken view.
 
 Frames: `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
 --ticks N --force-remote-correction 480:7:20:own=3 [--no-correction-smoothing]
