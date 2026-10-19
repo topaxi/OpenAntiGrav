@@ -82,7 +82,7 @@ ADR (`Client::set_weapon_trigger(false)`).
   no sound; the missile simply exists mid-flight. Smoothing covers only craft. Showing the effect
   late would be a view-side change (an event queue of what the replay newly raised); chosen not
   to be done here.
-- An analog human stream with weapons (ADR-0069 condition 3) is as open as before; loss and jitter are measured above.
+- An analog human stream with weapons (ADR-0069 condition 3) was open here; a chosen analog proxy is measured with weapons on in `docs/networking/README.md`, "An analog stick" (a recorded pad stream is still owed); loss and jitter are measured above.
 - The 100 ms shim is the only latency measured with weapons.
 
 ## Follow-up (2026-10-19, still Proposed)

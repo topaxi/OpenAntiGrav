@@ -212,6 +212,8 @@ pub mod foreign;
 #[cfg(feature = "view")]
 pub mod gantry;
 #[cfg(feature = "view")]
+pub mod hand;
+#[cfg(feature = "view")]
 mod handles;
 mod hash;
 #[cfg(feature = "view")]

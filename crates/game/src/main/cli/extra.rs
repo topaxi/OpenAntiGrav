@@ -231,14 +231,14 @@ pub(crate) struct WreckArgs {
     pub(crate) no_weapon_lights: bool,
 
     /// With `--race --screenshot`, hand craft `SLOT` to a scripted remote person
-    /// at a tick: `TICK:SLOT[:WINDOW[:contact][:fire]]`, e.g. `480:7:20:contact`. The client guesses its
+    /// at a tick: `TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]]`, e.g. `480:7:20:contact`. The client guesses its
     /// input straight on for `WINDOW` ticks (default 6, 100 ms) while the true
     /// taps its airbrake twice toward the player (a sideshift; with `contact` the player dashes at it too), then the server's state arrives and the
     /// client reconciles; the frame at `--ticks` is drawn on the client. A
     /// verification aid for what a correction looks like. With `fire` the true
-    /// person instead fires a Rocket on the second tick, which the guess never sees. See
+    /// person instead fires a Rocket on the second tick, which the guess never sees. With `own[=UNITS]` (3 units by default) the server's copy of the player's own craft is that far to its right, a contact the guess missed on the craft the camera follows. See
     /// [`oag_raceplay::correction::Scene`].
-    #[arg(long, value_name = "TICK:SLOT[:WINDOW[:contact][:fire]]", requires = "race")]
+    #[arg(long, value_name = "TICK:SLOT[:WINDOW[:contact][:fire][:own[=UNITS]]]", requires = "race")]
     pub(crate) force_remote_correction: Option<String>,
 
     /// With `--force-remote-correction`, draw the correction where it lands

@@ -157,7 +157,9 @@ impl Race {
                 continue;
             }
             let ship = &self.sim.world.ships[slot].physics;
-            let position = ship.body.position;
+            // Where the craft is drawn, so the reach below measures the nozzle against the
+            // hull on the same pose while a correction glides out.
+            let position = self.drawn_position(slot);
             let thrust = if self.sim.zone.is_some() && ship.grounded > 0.0 {
                 oag_physics::controls::CONTROL_MAX
             } else {

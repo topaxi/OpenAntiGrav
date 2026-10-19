@@ -76,6 +76,45 @@ The ADR stays Proposed until these are answered:
 4. **The own craft's correction.** It moves the camera and is not smoothed; smoothing
    it needs a camera offset too.
 
+## Follow-up (2026-10-19, still Proposed)
+
+Where each condition stands. The measurements are in `docs/networking/README.md`
+("An analog stick", "The own craft's correction", "Replay cost on this machine").
+
+1. **The Galaxy S24 cost: open, deferred by the maintainer on 2026-10-19.** Measured
+   instead on the desktop: a tick is 59 us (`tick_sim_only`), a correction replays 7 to 11
+   ticks, so 0.4 to 0.65 ms a correction and under 1.2 ms a second of replay at 4 clients
+   with 5 percent loss and 30 ms jitter. The pass condition (a 100 ms round trip at most 25
+   percent of a frame) holds on a phone up to 10 times slower than this desktop. No APK or
+   phone steps were prepared.
+2. **Weapons: answered** by ADR-0071 (predicted simulation, a discrete-state trigger),
+   unchanged here.
+3. **An analog human stream: answered by a proxy, not by a recording.** A closed-loop
+   thumb model (second-order stick, tremor, deadzone, 8-bit axes; **chosen, not
+   measured**) flew all 12 circuits and a weapons race over the wire at 2 and 4 clients,
+   100 ms, with and without 5 percent loss and 30 ms jitter. Strict policy: 52 corrections
+   a second, the same as the driver's 53, so the strict policy is still a storm for any
+   continuous stick. Threshold 1: 1.7 / 2.2 / 2.5 corrections a second at 50 / 100 / 200 ms
+   for seven remote craft (the driver 1.4 / 1.6 / 1.8), 1.08 / 1.22 / 1.50 times the
+   simulation, remote error p95 0.7 to 1.9 units. Over the wire the corrections are about
+   1.1 to 1.4 a second at 2 clients and 1.7 to 2.0 at 4, whoever flies. The decision's
+   threshold stands. A tail ADR-0071 did not show: a shot first seen 62, 137 and 152
+   ticks into its flight in 3 of 12 client runs under loss and jitter. A recording of a real
+   pad is still the better answer.
+4. **The own craft's correction: answered.** It swung the camera's aim 12 degrees for a
+   3-unit correction in one frame. The own craft now takes the correction as a decaying
+   offset (half-life 6 ticks, the same snap at 20 units) shared by the hull and the chase
+   camera (`Race::camera_target`); the hash does not know. A correction that takes more
+   than 1 shield unit off the own craft is drawn where it lands, so a hit is not softened.
+   Own-craft pops are about one correction in ten, up to 2.7 units clean and 4 to 9 under
+   loss and jitter. **Except** a hit first seen inside a replay, which still arms no camera
+   shake. Found on the way and fixed: the camera
+   of a client seated in slot 1 sprang toward slot 0.
+
+Conditions 2 to 4 are answered with numbers and condition 1 is not, so this ADR stays
+Proposed. Moving it (and ADR-0071) to Accepted waits on the maintainer's decision and
+on the phone.
+
 ## Consequences
 
 - The simulation must be bit-exact on every client including modded rules; the

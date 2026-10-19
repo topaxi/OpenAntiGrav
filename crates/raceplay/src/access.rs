@@ -166,7 +166,7 @@ impl Race {
         }
         self.view.camera_view = view;
         self.view.chase_params = chase_block_for(view, self.view.chase_far, self.view.chase_close);
-        self.view.camera = Chase::snapped(target_of(self.ship()), &self.view.chase_params);
+        self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
     }
 
     #[cfg(feature = "view")]
@@ -342,10 +342,18 @@ impl Race {
 
     /// Names the slot this machine's person flies in a network race, for every
     /// presentation-side reader ([`Self::player_slot`]) and for the correction
-    /// glide, which never moves the craft the camera follows. View-only: nothing
+    /// glide, which carries the camera and its craft together. View-only: nothing
     /// the simulation reads changes.
     pub fn set_seat(&mut self, slot: Option<usize>) {
+        #[cfg(feature = "view")]
+        let followed = self.player_slot();
         self.view.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
+        // The camera starts settled on the craft it now follows, as a race start's does; a
+        // seat that names the craft it already follows is no cut.
+        #[cfg(feature = "view")]
+        if self.player_slot() != followed {
+            self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
+        }
     }
 
     /// The player's ship.
