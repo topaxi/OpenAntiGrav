@@ -44,19 +44,22 @@ pub(super) fn lan(page: &str) -> Option<(bool, usize, usize)> {
 /// What `online-room[:N]` or `online-list[:N[:K]]` asks for, as [`lan`] does for LAN: whether
 /// it is the room, the people in it or the rooms listed, and the row the cursor is on.
 #[must_use]
-pub(super) fn online(page: &str) -> Option<(bool, usize, usize)> {
-    let (room, rest) = if let Some(rest) = page.strip_prefix("online-room") {
-        (true, rest)
+pub(super) fn online(page: &str) -> Option<(bool, usize, usize, bool)> {
+    // `online-room-raced` is the room after a race: the last race's places on the seats.
+    let (room, raced, rest) = if let Some(rest) = page.strip_prefix("online-room-raced") {
+        (true, true, rest)
+    } else if let Some(rest) = page.strip_prefix("online-room") {
+        (true, false, rest)
     } else {
-        (false, page.strip_prefix("online-list")?)
+        (false, false, page.strip_prefix("online-list")?)
     };
     if rest.is_empty() {
-        return Some((room, 2, 0));
+        return Some((room, 2, 0, raced));
     }
     let mut parts = rest.strip_prefix(':')?.split(':');
     let people = parts.next()?.parse::<usize>().ok()?;
     let focus = parts.next().map_or(Some(0), |k| k.parse::<usize>().ok())?;
-    Some((room, people.min(oag_gameplay::MAX_PLAYERS), focus))
+    Some((room, people.min(oag_gameplay::MAX_PLAYERS), focus, raced))
 }
 
 /// The online lobby's room (`people` in it, the first the host, the second still picking) or
@@ -68,6 +71,7 @@ pub(super) fn online(page: &str) -> Option<(bool, usize, usize)> {
 )]
 pub(super) fn capture_online(
     room: bool,
+    raced: bool,
     people: usize,
     focus: usize,
     title: &str,
@@ -111,10 +115,35 @@ pub(super) fn capture_online(
                 })
                 .collect(),
             phase: Phase::Open,
-            note: String::new(),
-            board: Board::default(),
+            note: if raced {
+                "every person has finished".into()
+            } else {
+                String::new()
+            },
+            // Stated, like the rest of the page: the places the first people finished in,
+            // best lap left out.
+            board: Board {
+                rows: (0..people.min(8))
+                    .filter(|_| raced)
+                    .map(|n| oag_net::wire::board::BoardRow {
+                        place: [2, 1, 3, 4, 5, 6, 7, 8][n],
+                        slot: u8::try_from(n).unwrap_or(0),
+                        name: NAMES[n].into(),
+                        laps: 3,
+                        finish_ticks: Some(u32::try_from(3 * 60 * 61 + n * 97).unwrap_or(0)),
+                        best_lap_ticks: None,
+                        eliminations: 0,
+                    })
+                    .collect(),
+            },
         };
         crate::online_screen::fill_room(&mut screen, &snapshot, true, strings, &|_| None);
+        // No row is under the cursor unless the page asks for one.
+        if focus > 0 {
+            for _ in 0..=focus {
+                screen.step(1);
+            }
+        }
         screen
     } else {
         let mut screen = Join::new(Labels::read_online_list(strings), 16).as_list();
