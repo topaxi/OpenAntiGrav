@@ -345,6 +345,8 @@ pub struct RaceSim {
     pub(super) hover_rig: oag_physics::hover::Rig,
     /// Whether every craft's steering ramp stops at its target - see [`Setup::craft_laws`].
     pub(super) steer_ramp_clamped: bool,
+    /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].
+    pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
     #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,

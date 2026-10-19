@@ -595,7 +595,7 @@ fn the_autopilot_speedup_multiplies_thrust_by_one_point_two() {
         EngineFlags::default(),
     );
     let flags = EngineFlags {
-        speedup: true,
+        speedup: Some(ENGINE_AUTOPILOT_SPEEDUP),
         ..EngineFlags::default()
     };
     let sped = engine(&state, &handling, 1.0, 100.0, None, 1.0, flags);
@@ -622,13 +622,13 @@ fn the_uncapped_bit_lifts_the_acceleration_cap() {
     .thrust;
     let uncapped = EngineFlags {
         uncapped: true,
-        speedup: false,
+        speedup: None,
     };
     let free = engine(&state, &handling, 1.0, 0.0, None, 1.0, uncapped).thrust;
     assert_eq!(free, capped * 2.0, "40 against a cap of 20");
     let both = EngineFlags {
         uncapped: true,
-        speedup: true,
+        speedup: Some(ENGINE_AUTOPILOT_SPEEDUP),
     };
     let autopilot = engine(&state, &handling, 1.0, 0.0, None, 1.0, both).thrust;
     assert_eq!(autopilot, free * ENGINE_AUTOPILOT_SPEEDUP);

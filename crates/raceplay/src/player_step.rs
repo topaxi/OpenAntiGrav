@@ -289,12 +289,13 @@ impl Race {
     /// wrote it; this takes it from whether the autopilot still flies the craft,
     /// which differs only for a pickup that runs out after the finish (chosen,
     /// not measured, and capped by the finished craft's own thrust law anyway).
-    fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
+    pub(crate) fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
         let ship = &self.sim.world.ships[slot];
         let autopilot = ship.autopilot_timer > 0.0 || self.autopilot_flies(slot);
+        let law = self.sim.autopilot_engine;
         oag_physics::engine::EngineFlags {
-            uncapped: autopilot || ship.standing.finished(),
-            speedup: autopilot,
+            uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),
+            speedup: autopilot.then_some(law.speedup.value),
         }
     }
 

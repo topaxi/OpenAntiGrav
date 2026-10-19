@@ -98,6 +98,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
+    autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: None,

@@ -84,6 +84,7 @@ impl Race {
             launch_hover,
             hover_rig,
             craft_laws,
+            autopilot_engine,
             #[cfg(feature = "view")]
             zoom_ring,
             #[cfg(feature = "view")]
@@ -636,6 +637,7 @@ impl Race {
                 launch_hover,
                 hover_rig: rig,
                 steer_ramp_clamped,
+                autopilot_engine,
                 weapon_pad_glow,
                 leach_drain,
                 autopilot: false,

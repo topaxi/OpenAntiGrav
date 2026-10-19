@@ -1018,6 +1018,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,
+            autopilot_engine: title.race.autopilot_engine,
             #[cfg(feature = "view")]
             zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
             #[cfg(feature = "view")]

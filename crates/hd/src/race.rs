@@ -57,6 +57,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
     craft_laws: Some(&CRAFT_LAWS),
+    autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // HD's own driver, Pulse's with five gated branches, flown in the
     // campaign: read off the executable and its thrust law reproduced on 83
     // live samples, `docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`.
