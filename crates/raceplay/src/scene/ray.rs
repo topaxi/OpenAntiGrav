@@ -9,6 +9,9 @@ use oag_mesh::mesh_render::ray;
 
 use super::*;
 
+/// A frame's TLAS inputs: animated node matrices, then each craft's slot and model matrix.
+type Instances = (Vec<[f32; 16]>, Vec<(usize, [f32; 16])>);
+
 /// What a race holds when the tier is on.
 #[derive(Debug)]
 pub(super) struct RayTier {
@@ -66,7 +69,7 @@ impl RayTier {
 impl Scene {
     /// What the TLAS holds this frame: the circuit's animated nodes at the frame's clock
     /// and each craft the raster draws, at the matrix it draws with.
-    fn ray_instances(&self, race: &Race) -> (Vec<[f32; 16]>, Vec<(usize, [f32; 16])>) {
+    fn ray_instances(&self, race: &Race) -> Instances {
         let nodes = self.track.model().sample_anim_nodes(self.anim_clock.get());
         let craft = (0..usize::from(race.ship_count()))
             .filter(|&slot| !self.hull_skipped(race, slot))
@@ -139,8 +142,10 @@ impl Scene {
             device,
             queue,
             scene,
-            &nodes,
-            &craft,
+            &ray::Frame {
+                nodes: &nodes,
+                craft: &craft,
+            },
             view_projection.inverse().to_cols_array(),
             (width, height),
         ))

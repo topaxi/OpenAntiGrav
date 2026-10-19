@@ -269,6 +269,7 @@ fn run(cli: Cli) -> Result<()> {
     // counts, since the title is not known yet and a device is made once.
     if cli.ray
         || cli.ray_debug
+        || cli.shadows == Some(oag_display::display::Shadows::Traced)
         || settings
             .render_profiles
             .values()

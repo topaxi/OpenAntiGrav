@@ -159,8 +159,10 @@ fn a_ray_finds_the_track_where_the_raster_draws_it_and_a_craft_where_its_matrix_
         &device,
         &queue,
         &mut scene,
-        &[],
-        &[(0, moved)],
+        &Frame {
+            nodes: &[],
+            craft: &[(0, moved)],
+        },
         IDENTITY_MATRIX,
         size,
     );

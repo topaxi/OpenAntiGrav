@@ -14,6 +14,14 @@ pub const MAX_RAY_LENGTH: f32 = 20_000.0;
 
 const SHADER: &str = include_str!(concat!(env!("OUT_DIR"), "/ray_debug.wgsl"));
 
+/// What the TLAS holds this frame: the circuit's animated node matrices and each craft's
+/// hull index and model matrix (see [`Scene::update`]).
+#[derive(Clone, Copy, Debug)]
+pub struct Frame<'a> {
+    pub nodes: &'a [[f32; 16]],
+    pub craft: &'a [(usize, [f32; 16])],
+}
+
 /// The pipeline. Created only on a device with the tier: the module declares `ray_query`.
 #[derive(Debug)]
 pub struct Debug {
@@ -55,11 +63,11 @@ impl Debug {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         scene: &mut Scene,
-        nodes: &[[f32; 16]],
-        craft: &[(usize, [f32; 16])],
+        frame: &Frame<'_>,
         inverse_view_projection: [f32; 16],
         (width, height): (u32, u32),
     ) -> Vec<u8> {
+        let Frame { nodes, craft } = *frame;
         let mut params = [0.0f32; 20];
         params[..16].copy_from_slice(&inverse_view_projection);
         params[16] = MAX_RAY_LENGTH;
