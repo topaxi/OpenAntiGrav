@@ -159,24 +159,22 @@ fn a_blast_first_seen_in_the_replay_is_started_at_its_age_and_a_played_one_is_no
         race.quiet = false;
     };
     let mut race = Box::new(armed_pair());
-    let start = u32::try_from(race.sim.world.tick).unwrap();
     race.tick_sim_only(&PlayerInputs::none());
     blast(&mut race, true);
     for _ in 0..5 {
         race.tick_sim_only(&PlayerInputs::none());
     }
-    race.catch_up(start);
+    race.settle_presentation();
     let late = race.take_late_report();
     assert_eq!((late.blasts, late.oldest_age), (1, 5), "{late:?}");
 
     // Presented on a drawn tick, then replayed: matched, not started again.
     let mut race = Box::new(armed_pair());
-    let start = u32::try_from(race.sim.world.tick).unwrap();
     race.tick(&PlayerInputs::none());
     blast(&mut race, false);
     race.tick_sim_only(&PlayerInputs::none());
     blast(&mut race, true);
-    race.catch_up(start);
+    race.settle_presentation();
     let late = race.take_late_report();
     assert_eq!((late.blasts, late.already_presented), (0, 1), "{late:?}");
 }

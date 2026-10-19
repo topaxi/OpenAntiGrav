@@ -729,7 +729,7 @@ pub struct Race {
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
     /// The weapon events a replay raised and a drawn tick presented, matched by
-    /// [`Race::catch_up`]. Neither half's state: no hash reads it.
+    /// [`Race::settle_presentation`]. Neither half's state: no hash reads it.
     #[cfg(feature = "view")]
     journal: catch_up::Journal,
     /// What each person-flown slot's controls were on the last tick, so a test can

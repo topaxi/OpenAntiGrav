@@ -9,7 +9,7 @@
 //!
 //! The replay therefore *journals* the weapon events it raises instead of discarding them
 //! ([`Race::note_cues`], [`Race::note_blast`], [`Race::note_shield_hit`]), a drawn tick logs the
-//! same events as presented, and [`Race::catch_up`] matches the two after the replay. An event the
+//! same events as presented, and [`Race::settle_presentation`] matches the two after the replay. An event the
 //! replay raised that the client had not presented is started now, at its current age. One it
 //! had presented is left alone, so nothing fires twice.
 //!
@@ -194,30 +194,39 @@ impl Race {
         self.record(What::ShieldHit(slot));
     }
 
-    /// After a replay from `start`: starts now whatever the replay raised that the client had not
-    /// presented, at its age, and leaves what it had.
-    pub(super) fn catch_up(&mut self, start: u32) {
+    /// Matches what the quiet ticks since the last call raised against what drawn ticks
+    /// presented, starts now what had not been presented, at its age, and leaves what had.
+    ///
+    /// The quiet ticks are a client's confirmed-state advance as well as a correction's replay:
+    /// a remote fire first shows in the confirmed step, which the replay then starts after.
+    /// Called once per confirmed batch ([`Race::reconcile_observed`] does it for a correction;
+    /// a client with nothing to correct calls it itself), after the present is back in place,
+    /// because the cues it raises go on the present's queue.
+    pub fn settle_presentation(&mut self) {
         let now = u32::try_from(self.sim.world.tick).unwrap_or(0);
-        let missed = std::mem::take(&mut self.journal.missed);
-        let mut earlier: Vec<Entry> = Vec::new();
-        self.journal.presented.retain(|entry| {
-            let kept = entry.tick < start;
-            if !kept {
-                earlier.push(*entry);
-            }
-            kept
-        });
-        for entry in missed {
-            let seen = earlier.iter().position(|e| {
-                e.tick.abs_diff(entry.tick) <= MATCH_TICKS && e.what.same(&entry.what)
+        let mut missed = std::mem::take(&mut self.journal.missed);
+        missed.sort_by_key(|e| e.tick);
+        if let Some(from) = missed.first().map(|e| e.tick) {
+            let mut earlier: Vec<Entry> = Vec::new();
+            self.journal.presented.retain(|entry| {
+                let kept = entry.tick + MATCH_TICKS < from;
+                if !kept {
+                    earlier.push(*entry);
+                }
+                kept
             });
-            if let Some(index) = seen {
-                earlier.swap_remove(index);
-                self.journal.late.already_presented += 1;
-            } else {
-                self.present_late(entry, now.saturating_sub(entry.tick));
+            for entry in missed {
+                let seen = earlier.iter().position(|e| {
+                    e.tick.abs_diff(entry.tick) <= MATCH_TICKS && e.what.same(&entry.what)
+                });
+                if let Some(index) = seen {
+                    earlier.swap_remove(index);
+                    self.journal.late.already_presented += 1;
+                } else {
+                    self.present_late(entry, now.saturating_sub(entry.tick));
+                }
+                self.journal.presented.push_back(entry);
             }
-            self.journal.presented.push_back(entry);
         }
         while self
             .journal

@@ -71,8 +71,6 @@ impl Race {
         let before: [Vec3; MAX_SHIPS] =
             std::array::from_fn(|slot| self.sim.world.ships[slot].physics.body.position);
         self.restore_sim(authoritative);
-        #[cfg(feature = "view")]
-        let start = u32::try_from(self.sim.world.tick).unwrap_or(0);
         let mut ticks = 0;
         for tick in inputs {
             self.tick_sim_only(&tick);
@@ -80,7 +78,7 @@ impl Race {
             ticks += 1;
         }
         #[cfg(feature = "view")]
-        self.catch_up(start);
+        self.settle_presentation();
         let mut pops = [0.0; MAX_SHIPS];
         for (slot, pop) in pops.iter_mut().enumerate() {
             let moved = before[slot] - self.sim.world.ships[slot].physics.body.position;

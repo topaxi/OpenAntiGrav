@@ -59,6 +59,9 @@ pub(crate) fn drive_observed(
             total.confirm_count += s.confirm_count;
             total.weapon_mismatches += s.weapon_mismatches;
             total.weapon_corrections += s.weapon_corrections;
+            total.late_cues += s.late_cues;
+            total.late_blasts += s.late_blasts;
+            total.late_oldest = total.late_oldest.max(s.late_oldest);
             total.shots_appeared += s.shots_appeared;
             total.shots_vanished += s.shots_vanished;
             total.oldest_appeared = total.oldest_appeared.max(s.oldest_appeared);
@@ -160,6 +163,7 @@ fn seated(host: &mut Host, people: u8, loss: f32) -> Vec<(Client, Box<Race>, Pil
                     Conditions {
                         one_way: web_time::Duration::ZERO,
                         loss,
+                        ..Conditions::default()
                     },
                 ))
             } else {

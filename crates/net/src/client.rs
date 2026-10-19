@@ -120,6 +120,12 @@ pub struct Stats {
     pub slowed_down: u32,
     /// The lead the server last reported.
     pub lead: i16,
+    /// Weapon sounds a correction started late, because its replay was where they first showed.
+    pub late_cues: u32,
+    /// Blasts a correction started late, at their age.
+    pub late_blasts: u32,
+    /// The greatest age, in ticks, of anything started late.
+    pub late_oldest: u32,
     /// Present tick less confirmed tick, at the last step.
     pub window: u32,
     /// Datagrams lost in a row past the redundancy, recovered by a resend.
@@ -572,7 +578,13 @@ impl Client {
         if error > THRESHOLD || by_weapons {
             self.stats.weapon_corrections += u32::from(by_weapons);
             self.correct(race, &confirmed);
+        } else {
+            race.settle_presentation();
         }
+        let late = race.take_late_report();
+        self.stats.late_cues += late.cues;
+        self.stats.late_blasts += late.blasts + late.shield_hits;
+        self.stats.late_oldest = self.stats.late_oldest.max(late.oldest_age);
         self.confirmed = Some(confirmed);
     }
 

@@ -58,6 +58,7 @@ fn two_bot_clients_race_a_real_circuit_at_100_ms_and_agree_with_the_server() {
                 Conditions {
                     one_way: web_time::Duration::from_millis(50),
                     loss: 0.0,
+                    ..Conditions::default()
                 },
             ));
             let client = Client::connect(link, &format!("bot {n}"));
