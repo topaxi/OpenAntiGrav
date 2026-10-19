@@ -2544,7 +2544,7 @@ beside the grid's `3` at tick 150 goes from `70 79 79` to `74 101 98`. No HD gol
 **2. FINAL LAP, pose-matched.** Ours can be forced into the window with `--anim-seconds 9.75` (it pins the gantry's clock, so
 no new flag is needed). Original: the grid frame `w9.5-00` (the `place` run's own start pose `-132.15,-49.6,-175.36`, the
 same grid slot POS 8 as the `lapboard` run). Ours `--pose=-132.15,-49.6,-175.36 --ticks 280 --anim-seconds 9.55..9.85`, default
-camera: the board is in the same place at the same size. Medians over the panel (original 1760 wide, ours 1440):
+camera: the board is in the same place at the same size. Medians over the panel (original 1760 wide, ours 1440; **the original here is a WCB-off capture, so the ratios below are an artefact, see the closing note after the table**):
 
 | | panel | whole frame (median) | whole frame (mean) |
 | --- | --- | --- | --- |
