@@ -16,10 +16,9 @@ nothing left in the profile is a loop it would pay for.
   dependency in `oag-formats`. Block-parallel inflate (PSARC blocks are
   independent 64 KiB streams) was not tried: it would add load threads on top
   of the CHD split, unmeasured on the Deck.
-- **HD's race music start decodes all fifteen MP3s whole to measure them**
-  (`oag_music::measure`), 14% of the headless HD load; on the player's path
-  it is the `race-music` thread. The function's own doc names the fix: a
-  first-block read on `oag_assets::psarc::Archive`.
+- ~~**HD's race music start decodes all fifteen MP3s whole to measure them**~~
+  - closed 2026-10-19: `oag_music::measure` reads each track's first PSARC
+  block (`psarc::Archive::peek`), 305 ms to 23 ms on the Deck.
 - **2048's PVRTC decode and `.gxt` twiddle, Omega's GNF untile**: 28% and 12%
   of their loads, one texture at a time. A parallel decode needs the reads
   (serial, `&mut Archives`) split from the decodes, and the texture sink's

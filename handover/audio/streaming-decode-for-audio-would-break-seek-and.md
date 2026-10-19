@@ -151,20 +151,17 @@ Verified two ways:
   stays a `Vec`) or drop it to checkpoint-based seek (memory win, breaks
   `race_position` scrubbing and pause/resume as currently built) - rather
   than let a half-considered ring buffer answer it by accident.
-- `Audio::start_music`'s own first-boot fetch is the same shape of
-  synchronous decode `set_music_source` used to be, unfixed - likely lower
-  priority since it runs once per boot rather than on a repeatable player
-  action, and is plausibly already masked by a loading screen, but that is
-  an assumption nobody has checked against a real boot.
+- ~~`Audio::start_music`'s own first-boot fetch is the same shape of
+  synchronous decode~~ - moved to a worker on 2026-10-19 (231 ms on HD on the
+  Deck, on a frame the stall guard hid), with every other music path;
+  `docs/architecture/music-threads.md`.
 
 ## Next Steps
 
-1. Cover `advance_race_track`'s fallback path the same way if a skip
-   control is ever added - right now it is unreachable by a player, so this
-   is scoping for later, not a bug to fix today.
+1. ~~Cover `advance_race_track`'s fallback path~~ - done 2026-10-19: a
+   boundary hands the prefetch over and never joins or fetches inline.
 2. Do not build progressive/streaming decode without a stated handheld
    memory budget to measure against - the desktop number above already
    answers "is this a problem today" (no).
-3. Check whether `Audio::start_music`'s first-boot decode is actually
-   masked by a loading screen or genuinely visible as a stall - if the
-   latter, it is the same fix shape as `set_music_source`'s, not a new one.
+3. ~~Check whether `Audio::start_music`'s first-boot decode is masked~~ -
+   it was not masked, and it is on a worker now (2026-10-19).

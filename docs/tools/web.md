@@ -117,7 +117,9 @@ makes no request after loading itself.
   ("Threads"), which is what keeps the page responsive while a race loads.
 - **Workers for the race load, the race music and the mix.** The race load
   (`oag_raceplay::LoadWorker`) and the soundtrack fetch
-  (`oag_sound::MusicFetchWorker`) are `oag_thread::Task`s, each a Web Worker
+  (`oag_sound::MusicFetchWorker`, and the front-end music's `menu-music`
+  job since 2026-10-19, [music threads](../architecture/music-threads.md)) are
+  `oag_thread::Task`s, each a Web Worker
   here; the mixer's render-ahead loop is a third, for as long as the page
   lives ("Sound", "Threads"). The other
   places the desktop build moves work onto a thread still run it inline on
@@ -689,8 +691,10 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
   thread idle.
 - **The boot**: about 1 s between the pick and the first frame (Chromium), of
   which about 0.5 s is synchronous disc reads, 0.16 to 0.24 s the front-end
-  music's MP3 decode (`Audio::start_music`, inline), and the rest inflate and
-  sprite sheets.
+  music's MP3 decode (`Audio::start_music`, inline then; on a worker since
+  2026-10-19, not re-measured in a browser), and the rest inflate and sprite
+  sheets. The music survey stays inline in the browser
+  (`MusicDiscs::survey_in_background` surveys in place there).
 - **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
 
 ### Freezes after the threads

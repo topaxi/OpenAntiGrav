@@ -239,10 +239,10 @@ After the five changes, on the headless path:
 | Pulse PS2 | race music 58%, before the CHD split; `race::load` 21% |
 
 Inflate of distinct data is still 42% of HD's samples and 36% of 2048's.
-HD's race music start decodes all fifteen MP3 tracks whole to measure their
-lengths (`oag_music::measure`, whose own doc comment predicted the fix: a
-first-block read on `psarc::Archive`); on the player's path that runs on the
-`race-music` thread, not the frame.
+HD's race music start used to inflate all fifteen MP3 tracks whole to measure
+their lengths (`oag_music::measure`). It reads each track's first PSARC block
+since 2026-10-19 (`psarc::Archive::peek`): 305 ms became 23 ms on the Steam
+Deck, on the `race-music` thread ([music threads](music-threads.md)).
 
 ## The player's path, and per-frame CPU
 
