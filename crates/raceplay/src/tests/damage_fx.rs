@@ -98,19 +98,26 @@ fn the_smoke_rides_the_drawn_pose() {
 }
 
 /// A seated client's weapon-hit shake is its own craft's: a hit on the seat shakes the camera,
-/// a hit on slot 0 does not.
+/// a hit on any other slot does not.
 #[test]
-fn a_seat_one_hit_shakes_the_seats_camera() {
-    let mut race = race_with_smoke(true);
-    race.set_seat(Some(1));
-    race.view.shake.cancel();
-    race.force_weapon_hit(0);
-    assert!(!race.view.shake.active(), "a hit on slot 0 is not seat 1's");
-    race.force_weapon_hit(1);
-    assert!(
-        race.view.shake.active(),
-        "a hit on the seat shakes its camera"
-    );
+fn a_seated_hit_shakes_the_seats_camera() {
+    for seat in 1..4 {
+        let mut race = race_with_smoke(true);
+        race.set_seat(Some(seat));
+        for other in (0..4).filter(|&o| o != seat) {
+            race.view.shake.cancel();
+            race.force_weapon_hit(other);
+            assert!(
+                !race.view.shake.active(),
+                "a hit on slot {other} is not seat {seat}'s"
+            );
+        }
+        race.force_weapon_hit(seat);
+        assert!(
+            race.view.shake.active(),
+            "a hit on seat {seat} shakes its camera"
+        );
+    }
 }
 
 #[test]

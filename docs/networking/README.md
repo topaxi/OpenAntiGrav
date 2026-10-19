@@ -468,7 +468,7 @@ not seen), the three audio levels (`shield_is_up`, `craft_is_exploding`, `autopi
 reading slot 0, and the view-only readers of `primary_slot` (the first person, which is slot 0 on every
 network client): the weapon-hit shake, the destroyed-craft shake cancel and blast shake, the
 PLAYER_DESTROYED flash, the reset flash, the destroy camera (a seat-1 client's wreck camera never
-started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seat_one_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
+started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seated_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
 **The wall-contact effects follow the seat too** (2026-10-19, `seat1-contact-fx`). `advance_contact_fx`
 (collision sparks, wall shake, the shield-up edge) ran on `primary_slot`'s step and read `ships[0]`, a literal
 `ship_model_matrix()` and a literal slot 0 in its cues; it now takes the seat's slot and step
@@ -484,9 +484,9 @@ cue slot, the Missile and Leach reticle (`update_sight`, `sight_screen_of`, the 
 client skips the per-slot split-screen reticles), the zone announcements and run statistics gate
 (`advance_player_rules`), the wreck-ended tick, the boost FOV kick, the airbrake flaps, and the engine
 crossfade's throttle in `oag_game::sound::race_tick` (it read `ships.first()`). Tests, each failing with its
-read put back: `a_seat_one_client_gets_its_own_wall_sparks_shake_and_sound`,
-`a_seat_one_client_is_not_shaken_by_slot_zeros_wall`, `the_contact_cue_cadence_does_not_depend_on_the_seat`,
-`the_start_voice_is_the_seats`, `a_seat_one_reticle_is_drawn_for_seat_ones_weapon`,
+read put back: `a_seated_client_gets_its_own_wall_sparks_shake_and_sound` (seats 1 to 3 of four people),
+`a_seated_client_is_not_shaken_by_another_slots_wall`, `the_contact_cue_cadence_does_not_depend_on_the_seat`,
+`the_start_voice_is_the_seats`, `a_seated_reticle_is_drawn_for_the_seats_weapon`,
 `the_boost_kick_and_the_flaps_follow_the_seats_craft` (`tests/seat_view.rs`). Not tested: the zone
 announcement gate, the wreck-ended tick and the engine throttle. On a real `--people 2` loopback run the
 seat-1 client's still two ticks after its own wall hit shows the sparks at its own craft's wing, the view

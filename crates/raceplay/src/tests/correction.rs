@@ -195,34 +195,43 @@ fn a_seat_one_camera_follows_seat_one() {
 }
 
 /// Whichever seat a client holds, and whichever view it flies, the camera is built from that
-/// seat's craft and from nothing else: seat 0 and seat 1 of one race frame two different
-/// craft, each within the chase distance of its own.
+/// seat's craft and from nothing else: each of the first four seats of one race frames a
+/// different craft, each within the chase distance of its own and nearer it than to any other.
 #[test]
 fn every_seat_camera_follows_its_own_craft() {
     use oag_display::display::CameraView;
     for view in [CameraView::Close, CameraView::Far, CameraView::Internal] {
         let mut eyes = Vec::new();
-        for seat in 0..2 {
+        for seat in 0..4 {
             let Scene { sc, mut client, .. } = scene();
             client.set_camera_view(view);
             client.set_seat(Some(seat));
+            // The grid packs the craft within a hull's length of each other, closer than
+            // the far chase view stands off; spread them so "nearest craft" is the question.
+            for (slot, ship) in client.sim.world.ships.iter_mut().enumerate() {
+                ship.physics.body.position.z += 300.0 * slot as f32;
+            }
             for t in 0..120 {
                 client.tick(&sc.truth(START + t.min(59)));
             }
             let eye = client.camera_position();
             let ships = &client.sim.world.ships;
             let own = (eye - ships[seat].physics.body.position).length();
-            let other = (eye - ships[1 - seat].physics.body.position).length();
-            assert!(
-                own < 40.0 && own < other,
-                "{view:?} seat {seat}: eye {own} from its craft, {other} from the other"
-            );
+            for other in (0..ships.len()).filter(|&o| o != seat) {
+                let away = (eye - ships[other].physics.body.position).length();
+                assert!(
+                    own < 40.0 && own < away,
+                    "{view:?} seat {seat}: eye {own} from its craft, {away} from slot {other}"
+                );
+            }
             eyes.push(eye);
         }
-        assert!(
-            (eyes[0] - eyes[1]).length() > 1.0,
-            "{view:?}: one eye for two seats"
-        );
+        for (a, b) in [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)] {
+            assert!(
+                (eyes[a] - eyes[b]).length() > 1.0,
+                "{view:?}: one eye for seats {a} and {b}"
+            );
+        }
     }
 }
 

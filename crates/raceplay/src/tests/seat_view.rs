@@ -1,15 +1,19 @@
-//! A network client seated in slot 1 hears, sees and is announced to for its
+//! A network client seated in any slot N hears, sees and is announced to for its
 //! own craft: wall sparks and shake, the contact sound, the countdown voice
 //! and the reticle all read the seat, not slot 0 nor `primary_slot`.
 //!
-//! Both slots are person-flown, as on a client; only `set_seat` is the view's.
+//! Four people are person-flown, as on a four-seat client; only `set_seat` is the view's. Every
+//! test runs seats 1, 2 and 3 (slot 0 is the case the code used to assume).
 
 use super::*;
+
+/// The seats a client may hold besides slot 0.
+const SEATS: [usize; 3] = [1, 2, 3];
 use oag_gameplay::cue::Cue;
 use oag_gameplay::{Controller, PlayerInputs};
 use oag_tables::weapons::Weapon;
 
-fn two_people_against_a_wall(seat: Option<usize>) -> Race {
+fn four_people_against_a_wall(seat: Option<usize>) -> Race {
     let mut setup = setup_with(
         hulled_handling(),
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
@@ -22,11 +26,13 @@ fn two_people_against_a_wall(seat: Option<usize>) -> Race {
         forward: [1.0, 0.0, 0.0],
     });
     let mut race = Race::start(setup);
-    race.sim.world.controllers[1] = Controller::Local;
-    assert!(
-        race.sim.world.person_flown(1),
-        "slot 1 must be person-flown"
-    );
+    for slot in 1..4 {
+        race.sim.world.controllers[slot] = Controller::Local;
+        assert!(
+            race.sim.world.person_flown(slot),
+            "slot {slot} person-flown"
+        );
+    }
     race.set_seat(seat);
     race
 }
@@ -50,47 +56,51 @@ fn collisions(race: &Race) -> Vec<usize> {
 }
 
 #[test]
-fn a_seat_one_client_gets_its_own_wall_sparks_shake_and_sound() {
-    let mut race = two_people_against_a_wall(Some(1));
-    push_toward_wall(&mut race, 1);
-    let evaluations = race.tick(&PlayerInputs::none());
-    assert!(
-        evaluations.get(1).is_some_and(|e| e.wall.impact),
-        "the fixture never put slot 1 on the wall"
-    );
-    assert_eq!(
-        race.spark_ignitions(),
-        1,
-        "seat 1's own contact threw no sparks"
-    );
-    assert!(
-        race.view.shake.active(),
-        "seat 1's own contact shook nothing"
-    );
-    assert_eq!(collisions(&race), vec![1]);
+fn a_seated_client_gets_its_own_wall_sparks_shake_and_sound() {
+    for seat in SEATS {
+        let mut race = four_people_against_a_wall(Some(seat));
+        push_toward_wall(&mut race, seat);
+        let evaluations = race.tick(&PlayerInputs::none());
+        assert!(
+            evaluations.get(seat).is_some_and(|e| e.wall.impact),
+            "the fixture never put slot {seat} on the wall"
+        );
+        assert_eq!(race.spark_ignitions(), 1, "seat {seat}: no sparks");
+        assert!(race.view.shake.active(), "seat {seat}: no shake");
+        assert_eq!(collisions(&race), vec![seat]);
+    }
 }
 
 #[test]
-fn a_seat_one_client_is_not_shaken_by_slot_zeros_wall() {
-    let mut race = two_people_against_a_wall(Some(1));
-    push_toward_wall(&mut race, 0);
-    let evaluations = race.tick(&PlayerInputs::none());
-    assert!(evaluations.get(0).is_some_and(|e| e.wall.impact));
-    assert_eq!(
-        race.spark_ignitions(),
-        0,
-        "slot 0's wall threw seat 1's sparks"
-    );
-    assert!(!race.view.shake.active(), "slot 0's wall shook seat 1");
+fn a_seated_client_is_not_shaken_by_another_slots_wall() {
+    for seat in SEATS {
+        for other in (0..4).filter(|&o| o != seat) {
+            let mut race = four_people_against_a_wall(Some(seat));
+            push_toward_wall(&mut race, other);
+            let evaluations = race.tick(&PlayerInputs::none());
+            assert!(evaluations.get(other).is_some_and(|e| e.wall.impact));
+            assert_eq!(
+                race.spark_ignitions(),
+                0,
+                "slot {other}'s wall threw seat {seat}'s sparks"
+            );
+            assert!(
+                !race.view.shake.active(),
+                "slot {other}'s wall shook seat {seat}"
+            );
+        }
+    }
 }
 
 #[test]
-fn a_seat_zero_client_is_not_shaken_by_slot_ones_wall() {
-    let mut race = two_people_against_a_wall(None);
-    push_toward_wall(&mut race, 1);
-    race.tick(&PlayerInputs::none());
-    assert_eq!(race.spark_ignitions(), 0);
-    assert!(!race.view.shake.active());
+fn a_seat_zero_client_is_not_shaken_by_another_slots_wall() {
+    for other in SEATS {
+        let mut race = four_people_against_a_wall(None);
+        push_toward_wall(&mut race, other);
+        race.tick(&PlayerInputs::none());
+        assert_eq!(race.spark_ignitions(), 0);
+        assert!(!race.view.shake.active());
+    }
 }
 
 /// The cooldown is per slot and ticks for every person flown, so which seat a
@@ -98,59 +108,63 @@ fn a_seat_zero_client_is_not_shaken_by_slot_ones_wall() {
 #[test]
 fn the_contact_cue_cadence_does_not_depend_on_the_seat() {
     let cadence = |seat| {
-        let mut race = two_people_against_a_wall(seat);
+        let mut race = four_people_against_a_wall(seat);
         let mut heard = Vec::new();
         for _ in 0..90 {
-            push_toward_wall(&mut race, 1);
+            push_toward_wall(&mut race, 3);
             race.tick(&PlayerInputs::none());
             heard.push(collisions(&race).len());
             race.drain_cues();
         }
         (heard, race.sim.contact_cue_cooldown)
     };
-    let (heard, cooldowns) = cadence(Some(1));
+    let (heard, cooldowns) = cadence(Some(3));
     assert!(
         heard.iter().sum::<usize>() >= 2,
         "the scrape never re-sounded"
     );
-    assert_eq!(cadence(None), (heard, cooldowns));
+    for seat in [None, Some(1), Some(2)] {
+        assert_eq!(cadence(seat), (heard.clone(), cooldowns));
+    }
 }
 
 #[test]
 fn the_start_voice_is_the_seats() {
-    let mut race = two_people_against_a_wall(Some(1));
-    race.sim.countdown_voice = true;
-    race.raise_start_cue(Cue::Ready);
-    assert_eq!(race.pending_cues()[0].slot, 1);
+    for seat in SEATS {
+        let mut race = four_people_against_a_wall(Some(seat));
+        race.sim.countdown_voice = true;
+        race.raise_start_cue(Cue::Ready);
+        assert_eq!(usize::from(race.pending_cues()[0].slot), seat);
+    }
 }
 
 #[test]
-fn a_seat_one_reticle_is_drawn_for_seat_ones_weapon() {
-    let mut race = two_people_against_a_wall(Some(1));
-    race.sim.weapons = Some(one_leach_beam_table());
-    race.sim.world.ships[1].pickup.weapon = Some(Weapon::LeachBeam);
-    race.sim.world.ships[0].pickup.weapon = None;
-    race.tick(&PlayerInputs::none());
-    assert_eq!(
-        race.sight().held(),
-        oag_race::sight::Held::LeachBeam,
-        "the seat's reticle ignored its own Leach Beam"
-    );
+fn a_seated_reticle_is_drawn_for_the_seats_weapon() {
+    for seat in SEATS {
+        let mut race = four_people_against_a_wall(Some(seat));
+        race.sim.weapons = Some(one_leach_beam_table());
+        for slot in 0..4 {
+            race.sim.world.ships[slot].pickup.weapon = None;
+        }
+        race.sim.world.ships[seat].pickup.weapon = Some(Weapon::LeachBeam);
+        race.tick(&PlayerInputs::none());
+        assert_eq!(
+            race.sight().held(),
+            oag_race::sight::Held::LeachBeam,
+            "seat {seat}: the reticle ignored its own Leach Beam"
+        );
+    }
 }
 
 #[test]
 fn the_boost_kick_and_the_flaps_follow_the_seats_craft() {
-    let mut race = two_people_against_a_wall(Some(1));
-    race.view.boost_fov_kick = oag_display::display::BoostFovKick::DEFAULT;
-    race.sim.world.ships[1].physics.pad_timer = 1.0;
-    race.sim.world.ships[1].physics.airbrake_left = 100.0;
-    race.tick(&PlayerInputs::none());
-    assert!(
-        race.view.boost_kick > 0.0,
-        "slot 1's boost did not open the kick"
-    );
-    assert!(
-        race.airbrake_flaps()[0] > 0.0,
-        "slot 1's airbrake did not open the flap"
-    );
+    for seat in SEATS {
+        let mut race = four_people_against_a_wall(Some(seat));
+        race.view.boost_fov_kick = oag_display::display::BoostFovKick::DEFAULT;
+        race.sim.world.ships[seat].physics.pad_timer = 1.0;
+        race.sim.world.ships[seat].physics.airbrake_left = 100.0;
+        race.tick(&PlayerInputs::none());
+        assert!(race.view.boost_kick > 0.0, "seat {seat}: no boost kick");
+        assert!(race.airbrake_flaps()[0] > 0.0, "seat {seat}: no flap");
+    }
 }
