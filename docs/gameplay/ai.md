@@ -1075,6 +1075,60 @@ player parked and no respawn, and a cell's skill comes off its circuit's
 `stats.xml` as HD's does. PS4 `rand()`'s width is chosen (HD's 30 bits), not
 measured.
 
+### An original opponent never fired, and now does (2026-10-19)
+
+**Measured, all five titles: an opponent flown by the original driver picked up
+one weapon and held it to the flag.** The maintainer reported campaign
+opponents not using weapons. A race box race flies the same driver
+(`oag_game::ai_choice`, "Which AI flies"), so it was the same there. Single
+race, seed 1, player parked, 240 s, weapons on:
+
+| Title | Original driver before: pickups / spends / opponent projectiles | After (fix, LeachBeam held on HD lineage) | This project's driver, same tree |
+| --- | --- | --- | --- |
+| Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 34 / 27 / 140 |
+| Pure | 8 / 1 / 0 | 33 / 26 / 38 | 21 / 14 / 20 |
+| HD | 7 / 0 / 0 | 32 / 26 / 186 | 28 / 21 / 152 |
+| 2048 | 8 / 1 / 0 | 46 / 39 / 264 | 32 / 27 / 187 |
+| Omega | 8 / 1 / 0 | 24 / 17 / 138 | 17 / 10 / 43 |
+
+The one spend in the "before" column is a Turbo, whose gate reads the
+throttle and not the driver's noise. **Cause:** the original branch of
+`Race::step_opponents` only called `oag_ai::Driver::locate`. `Driver::phase`
+and the reflex advance in `Driver::drive` alone, so `phase` read `0` all race
+on every opponent. Every weapon gate draws its roll from
+`noise::roll(seed, phase, stream)`: `weapon_ai::WeaponAi::decide_for` for the
+forward weapons, and `wants_to_drop` and `holds_fire`, which also read the
+reflex. So each craft rolled one constant number all race, and that number
+almost never came in under the fire chance. **Fix:** `Driver::attend`, called
+after `locate`, advances the reflex, the phase and the provocation as `drive`
+does. That the per-craft noise is the roll's source is this project's choice,
+not measured; the fire law it feeds is the original's. Pinned by
+`fire_law_inherit_ground_truth.rs` (each title's single race flown two minutes
+under the original driver, 36 to 221 opponent projectiles) and by
+`vita_2048_original_ai_ground_truth.rs`'s event walks, which now count what a
+campaign field fires.
+
+**The absorb half was ported and taken back out the same day.** Porting
+`WeaponAi_DecideFireOrAbsorb`'s absorb half
+([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)) did not change
+how many craft are wrecked. It did move 11 lone-craft cells of
+`ai_clean_lap_gate` and the de Konstruct gates: a lone craft that absorbs a
+held weapon is free to pick up a Turbo, which this project's own Turbo policy
+fires into walls. Its decision cadence is also unconfirmed (every tick against
+four times a second, `weapon-ai.md`). It stays open.
+
+**What wrecked them was the LeachBeam on HD, 2048 and Omega.** Fired by an
+opponent, it emptied a shield of 93 to 130 in 94 to 119 ticks. This engine
+drains at Pulse's per-tick rate, and those titles author `damage` 1.5 against
+Pulse's 0.1. With the opponent beam off, the measured HD and 2048 readings
+(`54.51`, `63`, `74`) held again. Until HD's drain is read
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)), opponents on
+those three titles hold the beam: `oag_title::weapons::Weapons::opponents_fire_leach_beam`,
+**chosen, not measured** (maintainer, 2026-10-19). Wrecks in the 240 s run
+above: 1 on HD (original driver), 0 elsewhere. A craft another opponent's
+weapons destroy still happens (2048 Event 4-1, two Plasma hits), and the 2048 event walks accept a wreck in place of
+a finish.
+
 ### Still open, with the next address
 
 - **Why our field closes into formation slower** than the original's, above:

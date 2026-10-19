@@ -87,6 +87,7 @@ pub const TITLE: &Title = &Title {
         race: r"Data\XML\weaponstats.xml",
         elimination: None,
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
+        opponents_fire_leach_beam: true,
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
     // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,

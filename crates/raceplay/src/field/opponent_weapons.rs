@@ -151,6 +151,11 @@ impl Race {
     /// to it until it can actually use it makes it a threat instead of a
     /// nuisance. No confidence score, because nothing was measured.
     fn fire_opponent_leach_beam(&mut self, slot: usize) -> bool {
+        // A title whose drain is unmeasured keeps it: chosen, not measured,
+        // see `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
+        if !self.sim.opponents_fire_leach_beam {
+            return false;
+        }
         if self.sim.world.leach_beam.is_some() {
             return false;
         }
@@ -280,7 +285,7 @@ impl Race {
 
     /// What an opponent does with a pickup it is holding.
     ///
-    /// # When a forward weapon fires is the original's; the rest is policy
+    /// # When a forward weapon fires or is absorbed is the original's; the rest is policy
     ///
     /// **The fire half of `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is
     /// ported** (2026-10-03): `Race::opponent_fires` asks `oag_ai::weapon_ai`

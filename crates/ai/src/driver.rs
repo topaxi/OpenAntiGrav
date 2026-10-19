@@ -253,6 +253,32 @@ impl Driver {
         }
     }
 
+    /// Advances what [`Self::drive`] advances besides the controls: what the
+    /// driver has noticed of `ctx.field`, its noise phase and its provocation.
+    /// For a craft another driver steers (the original's, `crate::original`):
+    /// the weapon gates (`wants_to_fire`, `wants_to_drop`, `holds_fire`, and
+    /// `weapon_ai`'s rolls, which draw on this driver's noise) read all three.
+    /// Without it they read a frozen phase, so each craft rolled one constant
+    /// number for a whole race, and an opponent flown by the original driver
+    /// never spent the weapon it picked up (measured on all five titles,
+    /// `docs/gameplay/ai.md`). Call it once a tick, after [`Self::locate`].
+    pub fn attend(&mut self, ctx: &Context<'_>) {
+        if ctx.line.is_empty() {
+            return;
+        }
+        self.reflex.advance(ctx.field, ctx.tuning.reaction_ticks);
+        let noticed = self.reflex.filter(ctx.field);
+        let personality = self.personality(ctx.pilot);
+        self.phase = self.phase.wrapping_add(1);
+        self.stew(
+            &Context {
+                field: &noticed,
+                ..*ctx
+            },
+            &personality,
+        );
+    }
+
     /// Chooses this tick's controls and advances the driver's place on the line.
     ///
     /// Returns released controls when there is no line, which leaves opponents

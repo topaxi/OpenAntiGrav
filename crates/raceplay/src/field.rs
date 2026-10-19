@@ -462,10 +462,18 @@ impl Race {
                 // The original's own opponent (`crate::original_ai`): this
                 // project's driver only locates the craft on the line, which
                 // still decides its hover surface below and its respawn.
-                ship.driver.locate(
-                    super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
-                    position,
-                );
+                let line = super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route);
+                ship.driver.locate(line, position);
+                // The weapon gates still read this driver's noise and what
+                // it noticed; `Driver::attend` keeps them moving.
+                ship.driver.attend(&oag_ai::Context {
+                    line,
+                    tuning: &self.sim.ai_tuning,
+                    pilot: &pilot,
+                    field: &field,
+                    yaw_ceiling: None,
+                    plan: None,
+                });
                 let output = self.drive_original(slot, lane_slot, &places);
                 rail = output.and_then(|output| output.rail);
                 output.map_or_else(oag_physics::ShipControls::default, |output| output.controls)

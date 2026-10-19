@@ -1023,6 +1023,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             zoom_borrowed: borrowed_zoom.is_some(),
             weapon_pad_glow: title.weapon_pad_glow,
+            opponents_fire_leach_beam: title.weapons.opponents_fire_leach_beam,
             speedup_pads,
             weapon_pads,
             weapons,

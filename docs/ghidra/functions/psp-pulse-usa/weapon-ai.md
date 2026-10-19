@@ -235,6 +235,15 @@ and every craft fires or absorbs at random. Dead on any real machine; recorded
 because it is a second, simpler code path a future capture could mistake for the
 real one.
 
+## The absorb half, tried and reverted (2026-10-19)
+
+The absorb half of [the decision](#the-decision) was ported (absorb index from
+the `FUN_088509e4` shield tiers, the 15 s hold and nobody inside 300 ahead;
+`rate[+0x34] * absorb` after 0.2 s held) and reverted the same day. It moved
+11 lone-craft cells of `ai_clean_lap_gate` by freeing a craft's pickup slot
+for a Turbo that this project's own Turbo policy fires into walls, and the
+cadence it rolls at is not settled (see the section above). Still open.
+
 ## What is still open
 
 - **`FUN_088504f4`**, which returns the held weapon id - not read, so not named.

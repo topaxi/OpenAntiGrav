@@ -134,6 +134,9 @@ pub const TITLE: &Title = &Title {
         // for the reason the stats above are unsuffixed. Opponents run Pulse's
         // fire law on it: **inherited from Pulse, unmeasured on Omega**.
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
+        // Opponents hold the LeachBeam until the title's drain is read:
+        // `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
+        opponents_fire_leach_beam: false,
     },
     weapon_models: &oag_title::weapons::WeaponModels {
         // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.

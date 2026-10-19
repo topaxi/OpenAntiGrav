@@ -21,6 +21,16 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   pad's off side. Not measured here: our signed lateral at the pad and whether
   our pad test boosts an AI craft there. `05_Track` (4 resets parked, 1 with the
   default-skill autopilot, a reset volume on lap 4) was not captured on the original.
+- **A second reproduction of an original-driver jump fall: Pure, Chenghou
+  Project** (2026-10-19, lane `campaign-ai-weapons`). Single race, VENOM, seed
+  1, player parked, `use_original_ai(None, 1)`. Slot 2 climbs the ramp at line
+  index ~1694-1719 on lap 3 at speed 169-191 (held thrust 44), goes airborne
+  around tick 8031 and never lands: it falls (speed up to 324), strikes at tick
+  8098 (shield 63 to 55) and is rescued at tick 8139 after 1.75 s airborne.
+  Nothing hit it in the 3,100 ticks before. It surfaced once opponents started
+  firing (`docs/gameplay/ai.md`, "An original opponent never fired, and now
+  does"), which changed the field state; `pure_original_ai_ground_truth`'s
+  Chenghou walk now allows 1 respawn a craft and names this cause.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.
