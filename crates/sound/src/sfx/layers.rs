@@ -135,6 +135,11 @@ impl Timeline {
 
 /// Every alternate combination of `name` as a timeline, when it is worth one.
 ///
+/// `replace_with_child` walks opcode `0x08` as a child cue (and so reads the guard
+/// registers as zero): the countdown loader sets it, because HD's `ready` is a lone
+/// `0x08` into `321_GO`. Nothing else asks for it. Chosen, not measured: Pulse's
+/// `0x08` is the measured reading, HD's handler was not read.
+///
 /// `Ok(None)` keeps the flat pick: unknown tick, an incompletely modelled walk,
 /// a grain angle in the rear half the pan law does not model, or a cue a flat
 /// pick already plays (one centred grain at tick zero, no audible bend).
@@ -147,6 +152,7 @@ pub(super) fn timelines(
     name: &str,
     tick: SequenceTick,
     front_end: bool,
+    replace_with_child: bool,
 ) -> anyhow::Result<Option<Vec<Timeline>>> {
     let Some(ticks_per_second) = tick.ticks_per_second() else {
         return Ok(None);
@@ -157,7 +163,7 @@ pub(super) fn timelines(
     let model = WalkModel {
         goto_markers: tick.follows_gotos(),
         hd_alternates: front_end && tick.alternates_in_high_byte(),
-        globals: None,
+        globals: replace_with_child.then_some([0; oag_formats::sblk::timeline::GLOBAL_SLOTS]),
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);
