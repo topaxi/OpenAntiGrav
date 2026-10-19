@@ -33,6 +33,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()), // does not exist
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -99,6 +100,7 @@ fn a_race_source_switch_does_not_block_the_caller() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()), // does not exist
         ps3: None,
@@ -138,6 +140,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()), // does not exist
         ps2: Some("ps2.chd".into()),
         ps3: None,

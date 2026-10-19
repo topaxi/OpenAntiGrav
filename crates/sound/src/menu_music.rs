@@ -31,6 +31,7 @@ impl MenuJob {
     /// Reads the mix tables and the menu's music for `discs` in the background.
     fn spawn(discs: MusicDiscs, choice: MusicSource, cache_dir: PathBuf) -> Self {
         Self(oag_thread::Task::spawn("menu-music", move || {
+            discs.wait_surveyed();
             let maps = match discs.booted() {
                 Some(Platform::Ps3) => discs
                     .pick(MusicSource::Auto)

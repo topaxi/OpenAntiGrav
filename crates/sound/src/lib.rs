@@ -50,6 +50,7 @@ mod menu_music;
 pub mod probe;
 mod race_music;
 mod resume;
+mod survey;
 use library::{Library, NoLibrary, listing, load_entry, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
@@ -227,6 +228,9 @@ pub struct MusicDiscs {
     library: &'static dyn Library,
     /// The listings already read, shared by every clone. See [`Listings`].
     listings: Listings,
+    /// The answer of a survey still running, shared by every clone. See
+    /// [`MusicDiscs::survey_in_background`].
+    later: survey::Later,
 }
 
 impl Default for MusicDiscs {
@@ -240,6 +244,7 @@ impl Default for MusicDiscs {
             booted: None,
             library: &NoLibrary,
             listings: Listings::default(),
+            later: survey::Later::default(),
         }
     }
 }
@@ -252,9 +257,15 @@ impl MusicDiscs {
     /// counterpart is missing collapses into "there is no counterpart".
     #[must_use]
     pub fn survey(booted: &str, library: &'static dyn Library) -> Self {
+        Self::survey_into(booted, library, Listings::default())
+    }
+
+    /// [`Self::survey`] keeping its listings in `listings`.
+    fn survey_into(booted: &str, library: &'static dyn Library, listings: Listings) -> Self {
         let _work = probe::work("the music survey");
         let mut discs = Self {
             library,
+            listings,
             ..Self::default()
         };
         // Identified as whichever title it is, not as Pulse: Pulse's deny-list
@@ -309,19 +320,24 @@ impl MusicDiscs {
     /// Whether both releases are reachable, which is when the row is offered.
     #[must_use]
     pub fn both(&self) -> bool {
-        self.psp.is_some() && self.ps2.is_some()
+        let discs = self.settled();
+        discs.psp.is_some() && discs.ps2.is_some()
     }
 
     /// The release the game booted from, when it is one this knows.
     #[must_use]
     pub fn booted(&self) -> Option<Platform> {
-        self.booted
+        self.settled().booted
     }
 
     /// One line for a load report: what was found, and where.
     #[must_use]
     pub fn describe(&self) -> String {
-        match (&self.psp, &self.ps2, &self.ps3, &self.vita, &self.ps4) {
+        let discs = self.settled();
+        if self.later.is_running() {
+            return "still surveying".to_string();
+        }
+        match (&discs.psp, &discs.ps2, &discs.ps3, &discs.vita, &discs.ps4) {
             (Some(psp), Some(ps2), ..) => format!("PSP {psp} and PS2 {ps2}"),
             (Some(psp), None, ..) => format!("PSP {psp} only"),
             (None, Some(ps2), ..) => format!("PS2 {ps2} only"),
@@ -337,6 +353,12 @@ impl MusicDiscs {
     /// Falls back to the booted disc rather than silence: a settings file
     /// saying `ps2` carried onto a PSP-only machine should still have music.
     fn pick(&self, choice: MusicSource) -> Option<(&str, Platform)> {
+        let discs = self.settled();
+        discs.pick_here(choice)
+    }
+
+    /// [`Self::pick`] on this value's own fields.
+    fn pick_here(&self, choice: MusicSource) -> Option<(&str, Platform)> {
         let chosen = choice.platform().and_then(|platform| match platform {
             Platform::Psp => self.psp.as_deref().map(|at| (at, platform)),
             _ => self.ps2.as_deref().map(|at| (at, platform)),

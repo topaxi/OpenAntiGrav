@@ -15,7 +15,7 @@
 //!
 //! The same walk checks that **the calling thread does no music work**: no
 //! listing, disc read or decode, counted by `oag_sound::probe`, across the
-//! menu music's start, a race's start, its first tick, a resume from the
+//! music survey, the menu music's start, a race's start, its first tick, a resume from the
 //! menus, a track change and (where both releases are here) a `MUSIC SOURCE`
 //! switch. That thread is the frame thread in the game. On the Steam Deck the
 //! synchronous versions cost 231 ms (HD's menu music), 305 ms (HD's listing,
@@ -27,7 +27,33 @@ use std::time::{Duration, Instant};
 
 use oag_game::music_state::{self, Saver};
 use oag_game::sound::GameLibrary;
+use oag_sound::library::{Library, Opened};
 use oag_sound::{self as audio, Audio, MusicSource, probe};
+
+/// [`GameLibrary`], searching the workspace's `data/images/` for a counterpart
+/// release: the game's search path starts at a relative `data/images`, which
+/// a test (run from its crate's directory) does not reach.
+#[derive(Debug)]
+struct Workspace;
+
+impl Library for Workspace {
+    fn open(&self, source: &str) -> Option<Opened> {
+        GameLibrary.open(source)
+    }
+
+    fn containers(&self) -> Vec<PathBuf> {
+        let images = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/images");
+        let mut found: Vec<PathBuf> = std::fs::read_dir(images)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file() && oag_source::source::is_container(path))
+            .collect();
+        found.sort();
+        found
+    }
+}
 
 /// Runs `step` and fails if it did music work on this thread.
 fn here_does_no_music_work<T>(label: &str, what: &str, step: impl FnOnce() -> T) -> T {
@@ -107,7 +133,7 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     let file = cache.join("music.toml");
     let title = format!("title-{label}");
 
-    a_frame_thread_does_no_music_work(label, &discs, &cache);
+    a_frame_thread_does_no_music_work(label, &image.display().to_string(), &cache);
 
     let mut first = open_audio(&cache);
     here_does_no_music_work(label, "starting the race music", || {
@@ -201,7 +227,13 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
 
 /// The steps a frame loop takes, on a null output with no dump, so every start
 /// takes the route a window does: started, then polled by `tick` until it lands.
-fn a_frame_thread_does_no_music_work(label: &str, discs: &audio::MusicDiscs, cache: &Path) {
+fn a_frame_thread_does_no_music_work(label: &str, image: &str, cache: &Path) {
+    // The game's own survey, which runs on a worker; every start below waits
+    // for its answer there.
+    let discs = here_does_no_music_work(label, "the music survey", || {
+        audio::MusicDiscs::survey_in_background(image, &Workspace)
+    });
+    let discs = &discs;
     let mut audio = Audio::open(
         &audio::settings::Settings::default(),
         None,
@@ -232,6 +264,7 @@ fn a_frame_thread_does_no_music_work(label: &str, discs: &audio::MusicDiscs, cac
         audio.playhead_race().is_some(),
         "{label}: the decoded track resumes at once"
     );
+    discs.wait_surveyed();
     if discs.both() {
         let other = match discs.booted() {
             Some(oag_disc::Platform::Ps2) => MusicSource::Psp,
@@ -244,7 +277,10 @@ fn a_frame_thread_does_no_music_work(label: &str, discs: &audio::MusicDiscs, cac
             });
         });
     }
-    println!("{label}: no music work on the calling thread (menu music: {menu})");
+    println!(
+        "{label}: no music work on the calling thread (menu music: {menu}, source switch: {})",
+        discs.both()
+    );
 }
 
 #[test]

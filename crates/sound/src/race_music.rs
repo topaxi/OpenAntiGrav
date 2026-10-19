@@ -198,6 +198,7 @@ impl MusicFetchWorker {
         label: &str,
     ) -> Self {
         let task = oag_thread::Task::spawn(label, move || {
+            discs.wait_surveyed();
             let len = Audio::booted_soundtrack_len(&discs);
             let resolved = pick.resolve(&discs, len);
             let fetched = fetch_track(&discs, choice, &cache_dir, resolved.index);

@@ -36,6 +36,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let psp_only = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,
@@ -55,6 +56,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let both = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -238,6 +240,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -341,6 +344,7 @@ fn asking_for_the_music_again_never_restarts_it() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -403,6 +407,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let nothing = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: None,
         ps2: None,
         ps3: None,
@@ -443,6 +448,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: None,
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -469,6 +475,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,

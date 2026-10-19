@@ -17,7 +17,6 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use log::debug;
 
 use oag_game::{boot, loading, movie, prefetch, settings};
 use oag_raceplay as race;
@@ -273,9 +272,10 @@ impl Pending {
         if self.cli.dry_run {
             return oag_sound::MusicDiscs::default();
         }
-        let discs = oag_sound::MusicDiscs::survey(source, &oag_game::sound::GameLibrary);
-        debug!("audio: music discs, {}", discs.describe());
-        discs
+        // On a worker: a title picked in the launcher loads inside one frame,
+        // and a PSP survey opens every image on the search path (359 ms on
+        // the Steam Deck). Every music start waits for it on its own worker.
+        oag_sound::MusicDiscs::survey_in_background(source, &oag_game::sound::GameLibrary)
     }
 
     /// The whole windowed load for one source.

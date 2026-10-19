@@ -234,6 +234,8 @@ pub(super) fn menu_page(
     // depends on which discs they own rather than on what they last picked, so
     // a still drawn from the file alone would show a row that is always
     // usable. Empty draws it unusable, which is what most machines would see.
+    // The survey runs on a worker; a still waits for its answer.
+    music_discs.wait_surveyed();
     model.supply(
         oag_ui::menu::ValueSource::MusicSources,
         &if music_discs.both() {
