@@ -714,6 +714,20 @@ outright. Two rules follow, both cheap:
   it after every breakpoint stop, and give it a longer settle than the default
   before any `add_breakpoint`.
 
+### The stub after an interpreter restore (2026-10-19, `hd-flare-rpcs3-check`)
+
+On a restore with `scripts/emu-restore-state.sh ... --interpreter` the stub does not
+answer for the first stretch: connect about **50 s** after the restore (the
+state probe, `scripts/rpcs3-state-probe.py`, answers by then), and a connect that
+times out **kills the proxy**, so the next connect is refused until the
+emulator is restored again. Expect **about one stop per restore**: with one
+`Z0` armed, `resume` / 1 s / `pause` returned the register set at the first
+hit, and every later `pause` or thread query timed out in most tries (hits in 2
+of 4 restores for a lone breakpoint, 0 of 2 with a second breakpoint armed
+and a thread loop). Arm one address, read at the first stop, and exit without a
+further `pause` or `threads()`. Seen on one machine under load 9 to 17; confidence
+60.
+
 ### What a stopped thread's PCs do and do not tell you
 
 Before a race was reachable, all 14 threads `qfThreadInfo` listed sat at

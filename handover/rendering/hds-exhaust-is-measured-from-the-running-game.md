@@ -30,13 +30,13 @@ section) is the current, authoritative state.
   draw is a render-side hash, chosen, not measured. See `engine-trail.md`'s
   `EngineFlare_PlaceShapes` bullet. **Checked live 2026-10-19
   (`hd-flare-rpcs3-check`): the 2.0-at-rest base scale is what the game
-  submits** (`f0 = 2.0` at `0x002a2824`, Harimau classic). No code changed.
+  submits** (`f0 = 2.0` at `0x002a2824`, Harimau classic, two boots; side-by-side and
+  reproduction on `engine-trail.md`, frames in `data/reference/hd-flare-rpcs3-check/`). No code changed.
   Still open: (1) the thrust and boost spike scales and the per-spike draw
-  were not read - the GDB stub gave one stop in four
-  interpreter restores and timed out on the next pause otherwise (it needs about 45 s after
-  `emu-restore-state.sh --interpreter` before the first connect, and a
-  connect that times out kills the proxy), so one sample per restore is what
-  it gives; (2) what the original draws the spikes with (material, blend,
+  were not read - the GDB stub gives about one stop per interpreter restore
+  (trap on `rpcs3-debugger.md`), so each state needs its own restore and one
+  armed address; the original's boost was not matched on Harimau either (no
+  verified boost frame); (2) what the original draws the spikes with (material, blend,
   alpha): at a matched view the original shows no radial rays at 1.5x while
   ours glitters, so the difference is in the draw, not the scale - read the
   spike draw call with `scripts/rpcs3_draw_hook.py`; (3) matched-view
