@@ -25,6 +25,14 @@ impl<T> Sourced<T> {
         }
     }
 
+    /// The named title's law, not re-measured on this one.
+    pub const fn inherited(value: T, from: &'static str) -> Self {
+        Self {
+            value,
+            origin: Origin::InheritedFrom(from),
+        }
+    }
+
     /// A value the project picked. Carries no confidence score.
     pub const fn chosen(value: T) -> Self {
         Self {

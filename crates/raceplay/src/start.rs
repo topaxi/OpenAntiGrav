@@ -163,6 +163,14 @@ impl Race {
         // the speed plan is built below, before any tick, and simulates this very state.
         let rig = crate::launch_hover::physics_rig(hover_rig);
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
+        // Held off on a title with no `CraftLaws` (Pulse) as well, until our AI flies with it.
+        let air_pitch_bias = craft_laws.is_some_and(|laws| laws.air_pitch_bias.value);
+        let class_gravity_term =
+            if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
+                oag_physics::passive::ClassGravityTerm::Airborne
+            } else {
+                oag_physics::passive::ClassGravityTerm::Grounded
+            };
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
         let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
 
@@ -216,6 +224,7 @@ impl Race {
         ship.physics.body.inertia = inertia;
         ship.physics.hover_rig = rig;
         ship.physics.steer_ramp_clamped = steer_ramp_clamped;
+        ship.physics.air_pitch_bias = air_pitch_bias;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
@@ -442,6 +451,7 @@ impl Race {
                 opponent.physics.body.inertia = inertia;
                 opponent.physics.hover_rig = rig;
                 opponent.physics.steer_ramp_clamped = steer_ramp_clamped;
+                opponent.physics.air_pitch_bias = air_pitch_bias;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
                 // the race's own and the craft's slot, so the same race fields
@@ -639,6 +649,7 @@ impl Race {
                 launch_hover,
                 hover_rig: rig,
                 steer_ramp_clamped,
+                air_pitch_bias,
                 autopilot_engine,
                 weapon_pad_glow,
                 leach_drain,
@@ -672,6 +683,7 @@ impl Race {
                 allowed_weapons,
                 class,
                 class_gravity_scale,
+                class_gravity_term,
                 start_boost,
                 pilot_assist,
                 pilot_assist_levels: Default::default(),

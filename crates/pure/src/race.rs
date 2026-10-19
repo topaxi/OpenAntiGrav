@@ -81,7 +81,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
-    craft_laws: None,
+    craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // The campaign's opponents fly Pure's own sibling driver
     // ([`ORIGINAL_DRIVER`]); every other mode keeps this project's.
@@ -517,6 +517,15 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     hashed: false,
     event: None,
     beat: None,
+};
+
+/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
+/// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no `<Misc weight_distribution>`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure).
+pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
+    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
 };
 
 #[cfg(test)]

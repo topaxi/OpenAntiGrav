@@ -97,7 +97,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
-    craft_laws: None,
+    craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
@@ -364,6 +364,15 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
     oag_title::team::team("Tigron", "tigron"),
     oag_title::team::team("Tigron_x", "tigron"),
 ];
+
+/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
+/// table existed; the in-air `weight_distribution` pitch torque is HD's, inherited (Omega and 2048 take HD's laws where unmeasured).
+pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
+    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    air_pitch_bias: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+    class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+};
 
 #[cfg(test)]
 mod effect_dir_tests {

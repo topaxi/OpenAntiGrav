@@ -347,6 +347,8 @@ pub struct RaceSim {
     pub(super) hover_rig: oag_physics::hover::Rig,
     /// Whether every craft's steering ramp stops at its target - see [`Setup::craft_laws`].
     pub(super) steer_ramp_clamped: bool,
+    /// Whether every craft adds the in-air `weight_distribution` torque - see [`Setup::craft_laws`].
+    pub(super) air_pitch_bias: bool,
     /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].
     pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
@@ -356,6 +358,8 @@ pub struct RaceSim {
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
+    /// Which gravity term that scale multiplies, the title's craft law.
+    pub(super) class_gravity_term: oag_physics::passive::ClassGravityTerm,
     /// The launch boost's parameters - see [`Setup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].

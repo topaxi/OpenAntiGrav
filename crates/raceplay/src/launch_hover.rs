@@ -86,6 +86,7 @@ impl Race {
             ship.physics.hover_cap = cap;
             ship.physics.hover_rig = self.sim.hover_rig;
             ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
+            ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
         }
     }
 }

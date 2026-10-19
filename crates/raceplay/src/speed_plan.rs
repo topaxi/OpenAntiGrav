@@ -218,6 +218,7 @@ impl Race {
             raycaster: &sim.collision,
             env: Environment {
                 class_gravity_scale: sim.class_gravity_scale,
+                class_gravity_term: sim.class_gravity_term,
                 damage_rules: sim.damage_rules(),
                 barrel_rolls: sim.barrel_rolls,
                 ..Environment::default()

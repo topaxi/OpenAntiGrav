@@ -110,7 +110,10 @@ def main():
         if getattr(session, "guard", None) is not None:
             session.guard.stage("capture", limit=args.seconds + 120)
         fh = open(out / "samples.csv", "w")
-        fh.write("t,clock,flags,mult,blend,speed,throttle,grounded,px,py,pz,vx,vy,vz,shield,slot_flags,slot_timer,c0,c1,c2,c3,c4,ctlptr_minus_craft\n")
+        fh.write("t,clock,flags,mult,blend,speed,throttle,grounded,px,py,pz,vx,vy,vz,shield,slot_flags,slot_timer,c0,c1,c2,c3,c4,ctlptr_minus_craft,"
+                 "wx,wy,wz,r0x,r0y,r0z,upx,upy,upz,fwx,fwy,fwz,hupx,hupy,hupz,sdx,sdy,sdz,team_wd\n")
+        team = u32(craft + 0x78)
+        print("team block %#x weight_distribution (+0x9c) %.3f" % (team, f32(team + 0x9c)), flush=True)
         t0 = time.time()
         last_pos = None
         last_print = 0
@@ -138,8 +141,16 @@ def main():
             shield = f32(ship + SHIELD)
             sflags = u32(slot + 0x200)
             stimer = f32(slot + 0x158)
+            # `--pose`: angular velocity `body+0x1a0`, the basis rows `+0x1d0..+0x1f0`, the
+            # craft's up `craft+0x200` and the located sample's down `ship+0x7850` (the
+            # pitch gate's two inputs, `Craft_UpdatePitch` `0x000f0980`), and the team
+            # block's `+0x9c` (`<Misc weight_distribution>`, the in-air pitch bias).
+            pose = (struct.unpack_from(">3f", b, 0x10) + struct.unpack_from(">3f", b, 0x40)
+                    + struct.unpack_from(">3f", b, 0x50) + struct.unpack_from(">3f", b, 0x60)
+                    + struct.unpack(">3f", read(craft + 0x200, 12))
+                    + struct.unpack(">3f", read(ship + 0x7850, 12)) + (f32(team + 0x9c),))
             rows.append((time.time() - t0, clock, flags, mult, blend, speed, throttle, grounded,
-                         *pos, *vel, shield, sflags, stimer, *ctl))
+                         *pos, *vel, shield, sflags, stimer, *ctl, *pose))
             fh.write(",".join(str(x) for x in rows[-1]) + "\n")
             if len(rows) % 200 == 0:
                 fh.flush()

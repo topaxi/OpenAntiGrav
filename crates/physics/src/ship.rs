@@ -473,6 +473,12 @@ pub struct ShipState {
     /// ([`crate::controls::ramp_steering_clamped`]); `false` is Pulse's unclamped ramp. Written
     /// by the race from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
     pub steer_ramp_clamped: bool,
+    /// `Ship_UpdatePitch` adds `<Misc weight_distribution>` while airborne
+    /// ([`crate::engine::pitch`]). Measured on Pulse and HD, **held off on every title**
+    /// (2026-10-20) until this engine's AI flies with it: on, Pulse's lone-craft clean-lap gate
+    /// and speed plan regress (`docs/physics/airborne-ground-truth.md`). Written by the race
+    /// from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
+    pub air_pitch_bias: bool,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -641,6 +647,7 @@ impl Default for ShipState {
             hover_cap: None,
             hover_rig: crate::hover::Rig::TWO_POINT,
             steer_ramp_clamped: false,
+            air_pitch_bias: false,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

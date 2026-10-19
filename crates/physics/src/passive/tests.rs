@@ -182,7 +182,7 @@ fn gravity_acts_on_world_down_only() {
         },
         ..Handling::ZERO
     };
-    let force = gravity(&handling, 2.0, 1.0, 1.0);
+    let force = gravity(&handling, 2.0, 1.0, ClassGravityTerm::Grounded, 1.0);
     assert_eq!(force, Vec3::new(0.0, -20.0, 0.0));
 }
 
@@ -192,8 +192,14 @@ fn gravity_acts_on_world_down_only() {
 fn track_gravity_is_not_part_of_the_gravity_force() {
     let mut handling = Handling::ZERO;
     handling.physical.track_gravity = 100.0;
-    assert_eq!(gravity(&handling, 1.0, 1.0, 1.0), Vec3::ZERO);
-    assert_eq!(gravity(&handling, 1.0, 1.0, 0.0), Vec3::ZERO);
+    assert_eq!(
+        gravity(&handling, 1.0, 1.0, ClassGravityTerm::Grounded, 1.0),
+        Vec3::ZERO
+    );
+    assert_eq!(
+        gravity(&handling, 1.0, 1.0, ClassGravityTerm::Grounded, 0.0),
+        Vec3::ZERO
+    );
 }
 
 #[test]
@@ -207,17 +213,53 @@ fn the_two_gravities_blend_by_groundedness_and_only_one_is_class_scaled() {
         ..Handling::ZERO
     };
 
-    assert_eq!(gravity(&handling, 1.0, 1.0, 1.0).y, -10.0);
-    assert_eq!(gravity(&handling, 1.0, 1.0, 0.0).y, -4.0);
-    assert_eq!(gravity(&handling, 1.0, 1.0, 0.5).y, -7.0);
+    assert_eq!(
+        gravity(&handling, 1.0, 1.0, ClassGravityTerm::Grounded, 1.0).y,
+        -10.0
+    );
+    assert_eq!(
+        gravity(&handling, 1.0, 1.0, ClassGravityTerm::Grounded, 0.0).y,
+        -4.0
+    );
+    assert_eq!(
+        gravity(&handling, 1.0, 1.0, ClassGravityTerm::Grounded, 0.5).y,
+        -7.0
+    );
 
     // The per-class scale reaches `normal_gravity` and not `flight_gravity`.
-    assert_eq!(gravity(&handling, 1.0, 2.0, 1.0).y, -20.0);
-    assert_eq!(gravity(&handling, 1.0, 2.0, 0.0).y, -4.0);
+    assert_eq!(
+        gravity(&handling, 1.0, 2.0, ClassGravityTerm::Grounded, 1.0).y,
+        -20.0
+    );
+    assert_eq!(
+        gravity(&handling, 1.0, 2.0, ClassGravityTerm::Grounded, 0.0).y,
+        -4.0
+    );
+}
+
+#[test]
+fn hd_scales_the_airborne_term_instead() {
+    let mut handling = Handling::ZERO;
+    handling.physical.normal_gravity = 10.0;
+    handling.physical.flight_gravity = 4.0;
+    assert_eq!(
+        gravity(&handling, 1.0, 2.0, ClassGravityTerm::Airborne, 1.0).y,
+        -10.0
+    );
+    assert_eq!(
+        gravity(&handling, 1.0, 2.0, ClassGravityTerm::Airborne, 0.0).y,
+        -8.0
+    );
 }
 
 #[test]
 fn a_zero_parameter_set_has_no_gravity() {
-    assert_eq!(gravity(&Handling::ZERO, 1.0, 1.0, 1.0), Vec3::ZERO);
-    assert_eq!(gravity(&Handling::ZERO, 1.0, 1.0, 0.0), Vec3::ZERO);
+    assert_eq!(
+        gravity(&Handling::ZERO, 1.0, 1.0, ClassGravityTerm::Grounded, 1.0),
+        Vec3::ZERO
+    );
+    assert_eq!(
+        gravity(&Handling::ZERO, 1.0, 1.0, ClassGravityTerm::Grounded, 0.0),
+        Vec3::ZERO
+    );
 }

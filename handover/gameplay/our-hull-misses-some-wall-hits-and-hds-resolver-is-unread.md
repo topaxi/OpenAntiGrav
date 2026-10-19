@@ -18,6 +18,19 @@ Two things around it stay open.
   410/411) is a one-tick onset shift. The other four (time-trial 2458, clean
   lap 1257, 1681, 2724) are unexamined. `wall_contact_ground_truth.rs` already records
   first contacts 3-5 ticks late. This is probably the same residual.
+- **A second missed contact, airborne, on a rolled craft (2026-10-19,
+  `airborne-capture`).** Fort Gale Black (`14_Track`) PHANTOM, the original's
+  autopilot, capture 3 of
+  [airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md): over
+  the second jump's crest, between ticks 1341 and 1342 at about
+  `(-296, 127, 691)`, the airborne craft (up.y `0.65`, no stun, rail blend 0)
+  takes a one-tick `dv` of `(-21.4, -15.5, -16.0)`, 31 units/s, then two
+  decaying corrections. One `oag_physics::step` from tick 1341 makes no contact
+  (velocity residual `26` units/s, pitch `-35` rad/s²). This is where our
+  autopilot flies off Fort Gale every lap: without the redirect it carries
+  straight on and is rescued `Airborne`. Seen once: captures 1 and 2 end
+  before it. It is also the rolled-craft wall contact step 3 below wants, once
+  our hull finds it.
 - **HD's wall resolver is not found.** It is not in `Collision_ProcessPairs`,
   not on the craft's OBB collision object and not in craft vtable slot `+0x40`.
   HD's hull queries are SPU ray jobs (`0x0005fa28`), so the response consumes

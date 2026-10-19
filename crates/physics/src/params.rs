@@ -206,7 +206,8 @@ pub struct Dimensions {
     /// maximum as well as the start: `Ship_SetShield` clamps every write to it and never
     /// floors at zero (`shield.md`).
     pub shield: f32,
-    /// Fore/aft mass bias.
+    /// `<Misc weight_distribution>`: the pitch torque `Ship_UpdatePitch` adds every frame the
+    /// craft is not grounded ([`crate::engine::pitch`]), read live as `8.0` on Assegai.
     pub weight_distribution: f32,
 }
 

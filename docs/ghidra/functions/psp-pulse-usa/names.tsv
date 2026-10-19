@@ -1302,7 +1302,7 @@
 0x08931b28	function	CloudCube_Init	90	clouds.md
 0x089322f8	function	CloudGroup_BuildAtlasUvs	90	clouds.md
 0x08a72d1c	function	Vex_CollectNodesOfClass	88	clouds.md
-0x08855dc4	function	Ai_ComputeControls	85	ai-controls.md
+0x08855dc4	function	Ai_ComputeControls	92	ai-controls.md
 0x088807c8	function	Camera_CycleModeForward	90	race-finish.md
 0x08880838	function	Camera_CycleModeBack	90	race-finish.md
 0x08880718	function	Camera_SetSubjectLock	75	race-finish.md
@@ -1352,10 +1352,10 @@
 0x08853534	function	AiLane_Reset	85	ai-controls.md
 0x08852dac	function	Ai_LanePoint	85	ai-controls.md
 0x08852364	function	Ai_LanePointFromCentre	85	ai-controls.md
-0x088530a0	function	Ai_SampleLookahead	80	ai-controls.md
+0x088530a0	function	Ai_SampleLookahead	85	ai-controls.md
 0x08852afc	function	AiTrack_SampleAtProgress	80	ai-controls.md
 0x088542e4	function	Ai_SnapToLane	90	ai-controls.md
-0x08853148	function	Ai_ComputePitch	75	ai-controls.md
+0x08853148	function	Ai_ComputePitch	95	ai-controls.md
 0x08944160	function	SceneNode_SubmitTree	85	clouds.md
 0x0891e908	function	Gfx_GetVisibleSectionMask	80	clouds.md
 0x08922974	function	Section_BindVisibilityRow	78	clouds.md

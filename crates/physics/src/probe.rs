@@ -360,6 +360,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         hover_rig: _,
         // Not hashed: the race writes it from the title every tick.
         steer_ramp_clamped: _,
+        // Not hashed: the race writes it from the title every tick.
+        air_pitch_bias: _,
         launch,
         time_airborne,
         mag_lock_blend,

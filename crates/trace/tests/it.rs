@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod airtime_arc_ground_truth;
+mod autopilot_ramp_pose_walk;
 mod camera_lean_ground_truth;
 mod force_term_pose_walk_ground_truth;
 mod hover_contact_ground_truth;

@@ -371,22 +371,39 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
     }
 }
 
-/// The pitch axis, as a body-local pitch torque.
+/// The pitch axis, as a body-local pitch torque: `Ship_UpdatePitch` (`0x08848d08`).
 ///
 /// ```text
-/// p = controls.pitch * (grounded ? pitch_ground : pitch_air)
+/// p = 0
+/// if aligned: p = controls.pitch * (grounded ? pitch_ground : pitch_air)
+/// if !grounded: p += weight_distribution
 /// ```
 ///
 /// `pitch_air` and `pitch_ground` are plain gains on the input, with no ramp and no state.
-/// The `grounded` test is the **boolean** contact flag, previous frame's.
+/// The `grounded` test is the **boolean** contact flag, previous frame's (`craft+0x1c0 & 1`).
 ///
-/// **Not implemented:** the per-team in-air pitch bias, `<Misc weight_distribution>`
-/// (`Handling::weight_distribution`, added whenever the craft is not grounded), and the
-/// gate `Ship_TestPitchAlignment` (`0x088492bc`): the input applies only while
-/// `dot(hull_up, -spline_down) > 0.9`. Both are decoded in
-/// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "Pitch", and HD carries both. The gate
-/// is open in the ordinary case: a grounded craft on the start line pitches the moment the
-/// axis is held, in `data/traces/talons-junction-pitch-both-ways.csv`.
+/// # The gate: `Ship_TestPitchAlignment` (`0x088492bc`)
+///
+/// `aligned` is `dot(hull_up, -located_down) > 0.9`: the input applies only while the hull is
+/// within about 26 degrees of the track's up under it ([`pitch_aligned`]). Measured live on
+/// three crossings of `0.9` and both input signs: the original drops the whole input from the
+/// tick the product reads `0.8976`-`0.8984` and keeps it at `0.9009`-`0.9022`
+/// (`docs/physics/airborne-ground-truth.md`). Confidence 90.
+///
+/// # The in-air bias: `<Misc weight_distribution>`
+///
+/// Whether a title adds it at all is [`crate::ship::ShipState::air_pitch_bias`] (`air_bias`):
+/// measured on Pulse and HD, held off on every title until this engine's AI flies with it.
+///
+/// Added whenever the craft is not grounded, **whether or not the gate passed**: the gate's
+/// failure branches straight to the bias test (`0x08848d7c`). Read live in the air as
+/// `f13 = 8.0` on every frame (`add.s` at `0x08848d98`), and the airborne pitch residual of the
+/// original's own frames moves by the predicted `8 / I_xx` with it. Confidence 85. Its sign is
+/// the input's: the same accumulator, `+0x340`'s `.x`. Per team on the disc (Pulse: `+8`
+/// Assegai, Qirex, Triakis; `-8` AG Systems, Feisar, Piranha; `0` EGX, Goteki); a title that
+/// authors none reads `0`. Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate and
+/// bias (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
+///
 /// # The scale and the sign, both measured
 ///
 /// Read by probing the control block the original's `Ship_UpdatePitch` reads,
@@ -403,15 +420,53 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 ///   so it lives in `oag_gameplay::ship_controls`: [`ShipControls::steer_y`] stays
 ///   positive-nose-up.
 #[must_use]
-pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool) -> f32 {
+pub fn pitch(
+    controls: &ShipControls,
+    handling: &Handling,
+    grounded: bool,
+    aligned: bool,
+    air_bias: bool,
+) -> f32 {
     let gain = if grounded {
         handling.pitch.pitch_ground
     } else {
         handling.pitch.pitch_air
     };
-
-    controls.steer_y * crate::controls::CONTROL_RANGE * gain
+    let input = if aligned {
+        controls.steer_y * crate::controls::CONTROL_RANGE * gain
+    } else {
+        0.0
+    };
+    if grounded || !air_bias {
+        input
+    } else {
+        input + handling.dimensions.weight_distribution
+    }
 }
+
+/// `Ship_TestPitchAlignment` (`0x088492bc`): `dot(hull_up, -down) > 0.9`, `down` the located
+/// spline sample's (`*(craft+0x1c4) + 0xb10`, the sample [`crate::forces::Environment::track_sample`]
+/// carries), read raw as the original reads it (`vscl.q` by `-1.0`, `vdot.t`, `c.le.s` against
+/// `0x3f666666`).
+///
+/// With no located sample the gate is open: **chosen, not measured** (the original always
+/// has one while racing), so a caller that supplies none keeps the input it had before the gate
+/// was ported.
+#[must_use]
+pub fn pitch_aligned(up: Vec3, track_sample: Option<&crate::maglock::TrackSample>) -> bool {
+    track_sample.is_none_or(|sample| up.dot(-sample.down) > PITCH_ALIGNMENT)
+}
+
+/// Whether [`pitch_aligned`] gates the input in a race. **Held off (2026-10-20)**: measured
+/// (confidence 90), but on, the original's autopilot driver flown through our physics is
+/// rescued twice on Pulse's `05_Track`
+/// (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
+/// so it waits for this engine's AI with the other held air laws
+/// (`docs/physics/airborne-ground-truth.md`).
+pub const PITCH_GATE_ON: bool = false;
+
+/// The gate's threshold, `0x3f666666`.
+pub const PITCH_ALIGNMENT: f32 = 0.9;
 
 /// Below this many seconds left, the boost stops ramping and holds flat: the `0.1` of
 /// `Ship_ApplySpeedupPad`. Its reciprocal is [`PAD_RAMP_RATE`], so the two branches meet
