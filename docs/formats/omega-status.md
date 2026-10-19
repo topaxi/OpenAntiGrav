@@ -1519,11 +1519,9 @@ Vertices / triangles / materials (submeshes in brackets). Omega's main model is
 
 The eight Vita DLC1 circuits are in the HD table below. Vita's DLC copies also
 differ from the base package's own copies (Anulpha 352,012 against 351,727
-vertices). Measured, not
-explained: the triangle counts are the census, and why Omega's `track.final`
-carries 3-14x Vita's is **open**. Candidate causes are a merge of pieces Vita
-ships as separate `trackpart_*`/`track_overlay` files, or a re-tessellation;
-neither is tested here.
+vertices). The triangle counts are the census; why Omega's `track.final`
+carries 3-14x Vita's is answered below, in "Why Omega's track has more
+triangles".
 
 ### Track: HD-numbered circuits, PS3 against Omega `Data/environments`
 
@@ -1620,7 +1618,8 @@ hull texture is PVRTC 4bpp on Vita and BC7 on Omega.
   HD). Dimensions are kept for the 2048 base circuits and the hulls. The DLC
   circuits are re-sized up to HD's on Omega. Mip counts differ on most pairs.
 - **Track models**: Omega's `track.final` is a different triangle count on every
-  circuit it shares with 2048 or HD, not a re-weld. Cause open.
+  circuit it shares with 2048 or HD, not a re-weld. Cause: new material groups,
+  see "Why Omega's track has more triangles" below.
 - **TrackZone and Zone**: re-welded, triangles kept. Zone is also HD's model.
 - **Hulls**: triangles kept on most parts, vertices re-welded on all of them.
 - **Not checked**: Vita USA (`PCSF00007`), and the HD names `02_track` and
@@ -1632,6 +1631,101 @@ Check per CLAUDE.md, "A 2048 finding is checked against Omega": track and
 trackZone counts are **checked, differs** (track) and **checked, applies**
 (trackZone triangles); hull triangles are **checked, applies** with vertices
 **checked, differs**.
+
+### Why Omega's track has more triangles (2026-10-19, `recook-triangles`)
+
+Answer: **remodelled geometry under new material groups** (confidence 65,
+Plausible: the counts are measured, the reason for the new groups is inferred).
+Not packing of Vita's sibling files, and subdivision is a minority. Checked on
+three circuits: altima, arena and Anulpha Pass (DLC1 against Omega's
+`15_anulpha_pass`).
+
+The same example as the census, with the per-submesh and per-50 m cell rows
+(`--submeshes` and `--cells` are the 2026-10-19 additions):
+
+```sh
+cargo run -p oag-tools --example recook_census -- --submeshes --cells 50 vita altima/ <PCSA00015 base data.psarc>
+cargo run -p oag-tools --example recook_census -- --submeshes --cells 50 ps4 environments2048/altima/ <omega data04.psarc> <omega data00.psarc>
+```
+
+Node-bound submeshes are carried to world space by their node's bind matrix
+(`psp2::nodes`); the pivot caveat in that module applies to those rows only.
+Every number below is from the rows, not from the census table above.
+
+**Where the triangles are (altima, `track.rcsmodel` against `track.final`).**
+
+| part | Vita | Omega |
+| --- | --- | --- |
+| world-space submeshes: triangles / area m2 | 2,593 subs, 390,096 / 27.6 M | 2,591 subs, 1,379,536 / 34.8 M |
+| node-bound submeshes: triangles | 224 subs, 28,927 | 788 subs, 533,087 |
+| nodes carrying submeshes | 131 | 695 |
+
+Omega's extra 1.49 M triangles are 66% world-space and 34% node-bound. Area
+grows 26% in world space, while triangles grow 3.5x: the triangles are smaller
+(mean 71 m2 down to 25 m2).
+
+**Material groups (the main finding).** Joined on the material's basename,
+since the folder differs by title. Omega triangles on basenames Vita never
+uses:
+
+| circuit | Vita tris | Omega tris | Omega on basenames absent from Vita |
+| --- | --- | --- | --- |
+| altima | 419,023 | 1,912,623 | 1,601,826 (84%), 24 basenames |
+| arena | 383,816 | 3,331,753 | 3,082,785 (93%), 22 basenames |
+| Anulpha Pass (DLC1) | 222,448 | 779,064 | 580,122 (74%), 27 basenames |
+
+The largest of them on altima: `fc07_blend_vertred_lambert_2diff_new` (189
+submeshes, 71,105 tris, 13.5 M m2; Vita has `fc07_blend_vertred_lambert_2diff`
+on 203 submeshes, 75,597 tris), `dc_rocks` (32 submeshes, 308,818 tris),
+`crowd_diffuse_normal` (28 submeshes, 624,228 tris), `tree_wind_new` (139
+submeshes, 220,870 tris), `flag_new` and `crowd_diffuse_normal_shadow`. The
+`_new` suffix is the same material re-authored. On the shared basenames Omega
+has fewer triangles than Vita (310,797 against 407,345 on altima), so this is
+not one material given more detail.
+
+None of the five names above appears in any Vita environment: the census walked
+the base, DLC1 and patch-v1.04 `environments/` paths of PCSA00015 (248 distinct
+material basenames) and found no submesh using them.
+
+**Cells (50 m square of the x/z plane, all submeshes, altima).** Each occupied
+cell classed by Vita's and Omega's triangles and area:
+
+| class | cells | Vita tris | Omega tris | Omega area minus Vita, m2 |
+| --- | --- | --- | --- | --- |
+| identical (same triangles, same area) | 1,402 | 69,582 | 69,582 | 0 |
+| same area, more triangles (subdivision) | 173 | 42,135 | 178,701 | 0 |
+| more area | 1,220 | 264,803 | 1,553,523 | +9.5 M |
+| less area | 223 | 39,240 | 106,282 | -0.95 M |
+| Omega only / Vita only | 101 / 53 | 0 / 3,263 | 4,535 / 0 | |
+
+Subdivision accounts for 136k of the 1.49 M extra triangles (9%). The rest sits
+in cells where Omega has more surface, not more triangles on the same surface.
+
+**Packing (refuted for these three circuits).**
+
+- No Vita sibling file holds the Omega-only groups (above). The altima Vita
+  siblings are `trackZone` (858 k triangles, identical to Omega's own
+  `trackZone`) and `trackpart_startgridanims*` (14 k). Omega `track.final`
+  (1.91 M) is not Vita `track` plus `trackZone` (1.28 M).
+- The Zone overlap is inherited, not packed. By triangles and bounds, 62% of
+  Vita's own `track` (260,796 of 419,023) matches a Vita `trackZone`
+  submesh. Omega's `track.final` matches Zone on 10% of its triangles
+  (198,103), a smaller share.
+- No LOD stacking. Submeshes sharing a material and bounds: 26 groups in Vita's
+  `track`, 14 in Omega's.
+
+**Submesh correspondence.** By triangles and bounds, 1,801 of Omega's 3,379
+`track.final` submeshes (16.5% of its triangles) match a Vita `track` submesh,
+and 1,578 (1.60 M triangles) do not. The first 92 world-space submeshes of the
+two files are identical; from there the order diverges, so index pairing is
+meaningless past that point.
+
+**Open.** HD's circuits are not in this measurement: the example reads HD
+triangles only, not positions or material names, so HD's share of the picture
+is unmeasured. The bind-matrix placement of node-bound meshes is taken from
+`psp2::nodes` and not separately checked here. Whether Omega's new material
+groups are reused from another Omega circuit, such as `dc_rocks` on several,
+was not counted.
 
 ## See also
 
