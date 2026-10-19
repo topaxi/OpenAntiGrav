@@ -1170,6 +1170,12 @@ check-unused-deps:
 check-determinism:
     python3 scripts/check-transcendentals.py
 
+# Size and alignment of every struct/enum a workspace crate lays out, largest
+# first, into data/type-sizes.tsv. Needs nightly (`-Zprint-type-sizes`); only
+# instantiated types appear. `just type-sizes oag-gameplay` for one crate
+type-sizes *CRATES:
+    python3 scripts/type-sizes.py {{CRATES}}
+
 # A ratchet on file length: nothing new over 1,500 lines, and nothing already
 # over it grows. race.rs reached 11,294 lines before anything measured it
 check-size:

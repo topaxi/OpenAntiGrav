@@ -528,6 +528,22 @@ impl World {
 mod tests {
     use super::*;
 
+    /// A ratchet on the snapshot's size: the whole `World` is copied for every
+    /// replay frame and golden test, so it may shrink but not grow unnoticed.
+    /// Lower the limit when it shrinks; raise it only on purpose, with the
+    /// reason in the commit. `just type-sizes oag-gameplay` lists the fields'
+    /// types. 64-bit only: pointer-sized fields change the layout elsewhere.
+    #[cfg(target_pointer_width = "64")]
+    #[test]
+    fn the_world_snapshot_does_not_grow() {
+        const LIMIT: usize = 18_808;
+        let size = std::mem::size_of::<World>();
+        assert!(
+            size <= LIMIT,
+            "World is {size} bytes, over the {LIMIT} limit"
+        );
+    }
+
     /// The recovered table, pinned per mode rather than per rule, because the
     /// two flags come from two different sets in `Race_ReadSetupOptions` and a
     /// test that only checked "weapons implies damage" would pass on a table
