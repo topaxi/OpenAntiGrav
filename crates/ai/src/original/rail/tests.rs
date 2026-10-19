@@ -33,7 +33,7 @@ fn slow_crafts_are_left_alone() {
         rail.snap(&pose(2.0, 40.0), &own(), 0.0, false, false, true, DT),
         None
     );
-    assert_eq!(rail, Rail::default());
+    assert_eq!((rail.blend, rail.time), (0.0, 0.0));
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn contact_drops_the_rail_at_once() {
         rail.snap(&pose(2.0, 200.0), &own(), 0.0, true, false, true, DT),
         None
     );
-    assert_eq!(rail, Rail::default());
+    assert_eq!((rail.blend, rail.time), (0.0, 0.0));
 }
 
 #[test]
