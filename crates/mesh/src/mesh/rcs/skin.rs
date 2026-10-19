@@ -159,12 +159,14 @@ fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
         .unwrap_or(DIFFUSE);
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
     let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
-    Some(ModelTexture::rgba8(
-        format!("constant diffuse {hash:08x}"),
-        1,
-        1,
-        vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
-        None,
+    Some(crate::mesh_render::offer_to_texture_sink(
+        ModelTexture::rgba8(
+            format!("constant diffuse {hash:08x}"),
+            1,
+            1,
+            vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
+            None,
+        ),
     ))
 }
 
