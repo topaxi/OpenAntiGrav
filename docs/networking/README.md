@@ -478,8 +478,8 @@ raised for every person-flown slot in slot order, drawn tick or replayed tick al
 which cooldowns tick; `contact_cue_cooldown` is **not** in `state_hash` (`RaceSim::contact_cue_cooldown`'s
 doc comment, and `hash.rs` does not name it), so no hash can move, and a one-person race flies slot 0 alone
 and runs as before. A second local person (split screen, multi-window) now also sounds their own wall hits,
-which they did not before; their sparks and shake stay unwired (local seats draw through `set_viewpoint`
-and the contact fx there still follow the primary view, open). Also moved to the seat: the countdown voice's
+which they did not before; their sparks and shake are the local-seat lane's (2026-10-19, `ContactFx` per
+extra view, `docs/rendering/split-screen.md`, "Cameras"). Also moved to the seat: the countdown voice's
 cue slot, the Missile and Leach reticle (`update_sight`, `sight_screen_of`, the sight screen fit; a seated
 client skips the per-slot split-screen reticles), the zone announcements and run statistics gate
 (`advance_player_rules`), the wreck-ended tick, the boost FOV kick, the airbrake flaps, and the engine

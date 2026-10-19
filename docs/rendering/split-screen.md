@@ -75,9 +75,31 @@ puts the player's back. Chosen, not measured:
 
 - Every extra view flies the **player's own `<ExternalCameraFar>` rig**, whatever
   team its craft is: the load keeps one team's camera blocks.
-- An extra view has **no impact shake**, no intro flyby, no finish or destroy camera
-  and no cockpit view. The speed widen of its field follows the viewed craft; the
-  boost kick does not.
+- An extra view has no intro flyby, no finish or destroy camera and no cockpit view.
+- **Every local person's seat has its own effects** (2026-10-19, lane `local-seat-contact-fx`;
+  before, the player's alone were stepped and a second person's wall hit threw no sparks and
+  shook nothing). `crates/raceplay/src/contact_fx.rs`'s `ContactFx` is the seat's wall-contact
+  effects (the shake and its phase draw, the spark pool, the cooldown and the hull anchor): the
+  player's is `RaceView::contact`, an extra view's sits beside its chase camera in
+  `Viewpoints::contact` and is stepped by the same `ContactFx::advance` from that seat's craft
+  and wall contact. The seat's camera takes its shake when drawn (`Race::extra_view`,
+  `view_shake_rotation`, so the blur takes it out of its velocities); every spark pool is drawn
+  in every view, as particles in the world. Routed to the seat by `Race::seat_contact_mut`:
+  the weapon-hit shake, the explosion shakes and the shake cancel on the seat's own craft.
+  The field of view's speed widen **and the boost kick** follow the viewed craft (`Cam::boost_kick`,
+  the player's rule from that craft's `pad_timer`), the borrowed boost zoom pulse is the seat's
+  own (`Viewpoints::zoom`, drawn in that view alone; before, the player's pulse drew in every
+  view), and a person's craft swings its own airbrake flaps (`RaceView::flaps` is per slot, so a
+  rival stays stowed and every person, not the first slot only, deflects).
+  Chosen, not measured, like the rest: a person with no view (more people than views) throws
+  nothing; the explosion flash and the destroy camera stay the player's alone; the announcer's
+  shield-up cue stays the player's (an audio change, not a view one).
+  Checked by `tests/local_seat_fx.rs` (2 and 4 views, each seat against every other; each test
+  fails with its fix put back), by `just bench-render pulse --views 1,2h,2v --size 1280x800` before and after (frame p50 one view 1166 and 1145 us, 2h 1713 and 1715, 2v 1664 and 1678, load 7-14 on an RX 7800 XT: unmoved), and by stills 2h and 4-way with
+  `--force-wall-slide TICK:SLOT` (a verification aid that throws one craft into the nearest
+  wall): the hit seat's view shows its sparks and the shake, the same frame without the change
+  shows neither, and with no hit the frames are `cmp`-identical to before for one, two and
+  four views.
 - **The flyby plays full screen and the split starts when it ends**
   (`Race::views_drawn` is one while `Race::in_intro`), with the track panel over the
   whole screen as in a one-player race. The extra cameras keep stepping through the
@@ -254,8 +276,9 @@ things make that more than a loop:
      Each view reads its rectangle where it was drawn now.
    2048 draws through HD's `hd_bloom::Chain` and so **ported**, with its own still looked at
    (2h and 2v, one view `cmp`-identical); **Omega ported** (`omega_tonemap::Chain::run_view`,
-   a `split_tests` case, one view `cmp`-identical, 2h and 2v looked at). HD's boost zoom
-   streak is not drawn (it holds the primary craft's pulse) and Omega's distortion offsets are
+   a `split_tests` case, one view `cmp`-identical, 2h and 2v looked at). HD's own boost zoom
+   streak, drawn inside its chain, is not drawn under a split (the borrowed ring of Pulse and
+   Pure draws in each view from that seat's own pulse) and Omega's distortion offsets are
    not drawn (the pass reads a depth attachment only the last view still has). Both open.
    Checked by `oag_post`'s `hd_bloom::split_tests` and `omega_tonemap::split_tests` (a dark
    and a bright view of one size in one scene target each resolve as the same brightness

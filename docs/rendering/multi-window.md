@@ -830,6 +830,13 @@ here, so they stand.
   refactored `render_viewports` into `render_slots` and `hud_views::draw` to read a window): the same
   twelve against `main`'s `201dae2ab` PNGs, merged with the later `main`: twelve of twelve identical.
   A `--windows 2` capture (one seat per window) is byte-identical to the first cut's.
+- **A seat's own effects in a window** (2026-10-19, lane `local-seat-contact-fx`): each seat's wall
+  sparks, shake, boost kick, boost pulse and flaps are its own (`docs/rendering/split-screen.md`,
+  "Cameras"). `--window-seats 2,2 --screenshot shot.png --ticks 810 --force-wall-slide 800:3`
+  against `main`'s build with the same flag: window 2's lower view (seat 3) shows the sparks at its
+  craft and the shaken view, `main`'s the same wall hit with neither. One live `--windows 2` run on
+  an Xvfb with software Vulkan opened both windows and drew both seats (the hit itself needs a
+  keyboard seat, so the hit is the headless frames').
 - **Headless per-window frames**: `--windows 2 --screenshot shot.png` writes `shot-window1.png` and
   `shot-window2.png`, each through `Scene::render_view` and the HUD of its slot. Read at 1440x816 on
   Pulse and HD at ticks 300 and 1200: each window shows its own craft from behind and its own times,
