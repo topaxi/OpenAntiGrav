@@ -115,6 +115,8 @@ impl Race {
     #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_hit(&mut self, slot: usize) {
         #[cfg(feature = "view")]
+        self.note_shield_hit(slot);
+        #[cfg(feature = "view")]
         if self.draws()
             && let Some(shell) = self.view.shield.get_mut(slot)
         {

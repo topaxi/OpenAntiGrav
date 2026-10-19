@@ -839,6 +839,8 @@ impl Race {
             #[cfg(feature = "view")]
             replay: replay::ReplayState::default(),
             quiet: false,
+            #[cfg(feature = "view")]
+            journal: Default::default(),
             #[cfg(test)]
             last_controls: Default::default(),
             #[cfg(test)]

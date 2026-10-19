@@ -309,10 +309,8 @@ impl Race {
         point: Vec3,
         struck: Option<usize>,
         orientation: Quat,
-    ) {
-        let Some((trigger, at)) = self.blast_for(kind, point, struck) else {
-            return;
-        };
+    ) -> Option<psys::Playing> {
+        let (trigger, at) = self.blast_for(kind, point, struck)?;
         // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
         // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
         // halo and two hemispheres are their own `.vex` models with their
@@ -344,13 +342,11 @@ impl Race {
         ) {
             flash.start(kind, at);
         }
-        let Some(effect) = self.view.handles.get(trigger).cloned() else {
-            return;
-        };
+        let effect = self.view.handles.get(trigger).cloned()?;
         // Neutral severity: the field the collision sparks derive from an
         // impulse is the *hull's*, and nothing on the rocket path has been
         // read as feeding it. See `oag_fx::sparks::severity`.
-        self.view.stage.play(&effect, at, 1.0);
+        self.view.stage.play(&effect, at, 1.0)
     }
 
     /// Which explosion a hit plays and where, or `None` for a weapon with no

@@ -180,6 +180,8 @@ mod bomb_blast;
 mod breadcrumbs;
 mod camera;
 pub mod catalogue;
+#[cfg(feature = "view")]
+pub mod catch_up;
 
 /// Whether this build draws (the `view` feature): the load then reads textures, meshes,
 /// animation clips and sound banks the simulation never uses. The server extractor refuses to
@@ -726,6 +728,10 @@ pub struct Race {
     /// half's state: it is the caller's statement that this tick is a replay
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
+    /// The weapon events a replay raised and a drawn tick presented, matched by
+    /// [`Race::catch_up`]. Neither half's state: no hash reads it.
+    #[cfg(feature = "view")]
+    journal: catch_up::Journal,
     /// What each person-flown slot's controls were on the last tick, so a test can
     /// record a driver's output as an input stream (`tests::reconcile_predict`).
     #[cfg(test)]

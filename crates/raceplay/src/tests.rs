@@ -19,6 +19,7 @@ mod between_ticks;
 mod bindless;
 mod camera;
 mod cannon_draw;
+mod catch_up;
 mod circuit_prepass;
 mod correction;
 mod countdown;
