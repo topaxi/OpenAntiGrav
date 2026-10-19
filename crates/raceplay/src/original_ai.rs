@@ -354,6 +354,7 @@ impl Race {
         let (tick, progress, fraction, lap_length) = self.original_tick(slot, (0, false))?;
         let seat = self.sim.autopilots.get_mut(slot)?;
         let mut autopilot = seat.take().unwrap_or_else(|| {
+            log::info!("autopilot: the original's player driver flies slot {slot}");
             Box::new(oag_ai::original::Autopilot::new(
                 tables.controller,
                 tables.laws,

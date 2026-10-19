@@ -234,7 +234,7 @@ whose table fails to read, runs `FireLaw::Ours`, which is chosen, not measured
 | Mine, Bomb | C: laid by `Driver::wants_to_drop`, not the original's law | C | C | C | C |
 | Turbo | C: fired on a clear straight | C | C | C | C |
 | Shield | C: absorbed, never raised | C | C | C | C |
-| Autopilot | M: never fired in a race: `WeaponAi_Update`'s default arm leaves the fire index at `0` and `g_weapon_ai_rate[0]` is `0` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)); in an Eliminator the index becomes `1` and it can fire, its effect on an opponent unread. The port absorbs it at once (C) | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
+| Autopilot | M: never fired in a race: `WeaponAi_Update`'s default arm leaves the fire index at `0` and `g_weapon_ai_rate[0]` is `0` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)); in an Eliminator the index becomes `1` and the authored row (`useAgainstAI 1.2`) gives `0.012` a decision, its effect on an opponent unread. The port absorbs it at once (C) | I:Pulse | I:Pulse | I:Pulse | I:Pulse |
 | Disruptor | A | C: opponents never fire it (not in `opponent_fires`' forward list) | A | A | A |
 
 The 240 s single-race census in [`ai.md`](ai.md) (opponent projectiles

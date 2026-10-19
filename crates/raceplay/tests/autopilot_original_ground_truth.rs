@@ -147,43 +147,55 @@ fn sweep() {
 /// each title's default circuit, 1,800 ticks of autopilot. Omega's and
 /// 2048's autopilot steering is the opponents' controller, not the pilot
 /// assist those two executables give the player's driver (`docs/gameplay/ai.md`,
-/// "The autopilot").
-#[test]
-#[ignore = "needs the other titles' images"]
-fn every_title_with_original_tables_flies_the_original_autopilot() {
-    let mut flown = Vec::new();
-    for image in [
-        "data/images/pure-psp-usa.chd",
-        "data/images/hdfury-ps3-eu-dec.iso",
-        "data/images/omega-ps4-eu.pkg",
-        "data/test-vpk/2048-PCSF00007-dlc1.vpk",
-    ] {
-        let Some(path) = oag_testdata::exact(image) else {
-            continue;
-        };
-        let loaded = oag_raceplay::load(&oag_raceplay::Options {
-            source: path.display().to_string(),
-            class: "VENOM".to_string(),
-            mode: oag_race::Mode::SingleRace,
-            seed: Some(1),
-            ..oag_raceplay::Options::default()
-        })
-        .unwrap_or_else(|e| panic!("{image}: {e}"));
-        let mut race = oag_raceplay::Race::start(loaded.setup);
-        race.set_autopilot(true);
-        for _ in 0..1_800 {
-            race.tick(&PlayerInputs::none());
-        }
-        let autopilot = race
-            .original_autopilot(0)
-            .unwrap_or_else(|| panic!("{image}: the original driver flies the autopilot"));
-        assert_eq!(
-            autopilot.driver.held_thrust,
-            oag_ai::original::AUTOPILOT_THRUST,
-            "{image}"
-        );
-        assert_eq!(race.respawns_of(0), 0, "{image}");
-        flown.push(image);
+/// "The autopilot flies the original's player driver").
+fn flies_the_original_autopilot(image: &str) {
+    let Some(path) = oag_testdata::exact(image) else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("{image}: {e}"));
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.set_autopilot(true);
+    for _ in 0..1_800 {
+        race.tick(&PlayerInputs::none());
     }
-    println!("flown: {flown:?}");
+    let autopilot = race
+        .original_autopilot(0)
+        .unwrap_or_else(|| panic!("{image}: the original driver flies the autopilot"));
+    assert_eq!(
+        autopilot.driver.held_thrust,
+        oag_ai::original::AUTOPILOT_THRUST,
+        "{image}"
+    );
+    assert_eq!(race.respawns_of(0), 0, "{image}");
+}
+
+#[test]
+#[ignore = "needs a Pure image"]
+fn pure_flies_the_original_autopilot() {
+    flies_the_original_autopilot("data/images/pure-psp-usa.chd");
+}
+
+#[test]
+#[ignore = "needs an HD image"]
+fn hd_flies_the_original_autopilot() {
+    flies_the_original_autopilot("data/images/hdfury-ps3-eu-dec.iso");
+}
+
+#[test]
+#[ignore = "needs an Omega image"]
+fn omega_flies_the_original_autopilot() {
+    flies_the_original_autopilot("data/images/omega-ps4-eu.pkg");
+}
+
+#[test]
+#[ignore = "needs a 2048 package"]
+fn vita_2048_flies_the_original_autopilot() {
+    flies_the_original_autopilot("data/test-vpk/2048-PCSF00007-dlc1.vpk");
 }

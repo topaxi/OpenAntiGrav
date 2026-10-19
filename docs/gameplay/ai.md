@@ -858,6 +858,11 @@ autopilot can easily overtake AI opponents"). The read is on
   field holding formation around it. Nothing is added here.
 - **An opponent holding the Autopilot never fires it** outside an Eliminator
   (fire index `0`, `g_weapon_ai_rate[0] = 0`); this port absorbs it, as before.
+  In an Eliminator the index is `1` and Pulse's `WeaponAIstats.xml` authors the
+  Autopilot row nonzero (`useAgainstPlayer 1.1`, `useAgainstAI 1.2`, `absorb 1`),
+  so with no target the chance is `0.002 * 1.2 * 5 = 0.012` a decision after
+  `0.8` s held: it can fire there, and what that does to a craft already flown
+  by its driver is unread.
   So nothing changes for an opponent flying this project's driver: the
   original has no "AI under autopilot" behaviour to switch to.
 
@@ -905,9 +910,12 @@ counter change and at the end of the run, both labelled:
 
 Nine of the eleven circuits both runs finish come home sooner, `07_Track` by
 38 s. No respawn either side. The craft now runs in the pack instead of behind
-it and takes more weapon fire: with weapons off (`OAG_SWEEP_NO_WEAPONS`) all
-twelve finish with no rescue (`the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
-and `02_Track` places 3rd at tick 6801.
+it and takes more weapon fire. With weapons off (`OAG_SWEEP_NO_WEAPONS`; damage
+stays on, it follows the mode, `RaceSim::damage_rules`) all twelve finish with no
+rescue (`the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
+the shield ends at 95 on eleven of them and 91.1 on `05_Track`, and `02_Track`
+places 3rd at tick 6801: the 95 points `02_Track` lost with weapons on were
+weapon hits, not walls.
 
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 

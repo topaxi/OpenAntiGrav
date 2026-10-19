@@ -61,6 +61,25 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 - Ghosts recorded before this change raced opponents flown by our driver; they
   still play as poses.
 
+- **The autopilot flies the original's player driver (2026-10-19, lane
+  `autopilot-original-ai`; docs/gameplay/ai.md, "The autopilot flies the
+  original's player driver").** Left open there:
+  - **Maintainer question:** an opponent on this project's driver "switching to
+    the original autopilot" while holding the pickup has no original behaviour
+    behind it: the original never fires the Autopilot outside an Eliminator
+    (fire index `0`, `g_weapon_ai_rate[0] = 0`). Wanted anyway, as chosen?
+  - In an Eliminator an opponent can fire it (`0.012` a decision); what
+    `Autopilot_Fire`'s running bit does to a craft its driver already flies is
+    unread.
+  - 2048 and Omega steer the player's driver with the pilot assist's gains
+    (airbrake `1`/`0`, a `1.73 |x|` lookahead floor, a `libm` call); not read
+    whole, the opponents' controller flies it.
+  - What sets `craft+0x1d4` (the pad-to-driver blend) is unread; the handover is
+    one tick here.
+  - HD scales the player's `100` by `SplitScreenMultiplier` with more than one
+    person; not applied.
+  - Pure's player lane `0` is inherited from Pulse (`0x08919b6c` unread for it).
+
 ## Next Steps
 
 1. Compare this engine with the capture: log the signed lateral (the `lat`

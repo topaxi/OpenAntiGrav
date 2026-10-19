@@ -642,7 +642,10 @@ explanation for "the autopilot overtakes", and it is the law, not a bonus.
 absorb index `+0x34 = 3` and leaves the fire index `+0x38` at `0`, and
 `g_weapon_ai_rate[0]` is `0.0`: fire chance `0` per decision
 ([weapon-ai.md](weapon-ai.md)). In an Eliminator (`g_game_mode == 8`) the fire
-index becomes `1` and `rate_eliminator[1] * use * 5` can fire it; what
+index becomes `1` and `rate_eliminator[1] * use * 5` can fire it (Pulse's
+`WeaponAIstats.xml` authors the row `useAgainstPlayer 1.1`, `useAgainstAI 1.2`,
+`absorb 1`, read 2026-10-19 through `oag_tables::weapons::ai`, so `0.012` a
+decision with no target in range); what
 `Autopilot_Fire`'s running bit then does to a craft already flown by its driver
 is not read. An opponent is flown by its driver anyway, so outside that case
 there is nothing for the pickup to change.
