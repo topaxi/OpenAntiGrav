@@ -529,7 +529,13 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // 4. Steering and 5. pitch, both body-local angular.
     let steering = engine::steering(state, handling);
     let aligned = engine::pitch_aligned(state.body.up(), env.track_sample.as_ref());
-    let pitch = engine::pitch(input, handling, control_contact, aligned);
+    let pitch = engine::pitch(
+        input,
+        handling,
+        control_contact,
+        aligned,
+        state.air_pitch_bias,
+    );
     acc.local_angular.y += steering;
     acc.local_angular.x += pitch;
 

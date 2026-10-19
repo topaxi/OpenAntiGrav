@@ -103,7 +103,7 @@ rotates its tensor (`body+0x50` read live as `R I R^T`,
 per-title law.
 
 **Measured, not ported (held, maintainer 2026-10-19).** Ported as a per-title craft law
-(Pulse, Pure and PS2 world axes; HD rotated, Omega and 2048 inheriting HD's), the lone
+(Pulse and PS2 world axes, Pure inherited from Pulse and unmeasured; HD rotated, Omega and 2048 inheriting HD's), the lone
 craft's regression gate stayed twelve of twelve clean, but the player's whole-race
 autopilot in `opponent_autopilot_sweep` (4 seeds, 48 races per Pulse difficulty) gained
 rescues: novice `62 -> 106` with the switch off and `68 -> 91` on, mostly `05_Track` and
@@ -133,8 +133,8 @@ So the original drops the whole input exactly where the dot product crosses
 reading the located sample `Environment::track_sample` carries (the entity's `+0xaf0`,
 whose `down` is `+0xb10`); with no sample the gate is open, chosen. Every title runs it:
 Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate, read statically, not
-measured live ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); Pure and the PS2
-inherit Pulse's, Omega and 2048 inherit HD's. 2048/Omega: **not checkable** here, no executable read of
+measured live ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); The PS2 inherits Pulse's; Pure is **inherited from Pulse,
+unmeasured** (a `pure-physics` lane is to measure it); Omega and 2048 inherit HD's. 2048/Omega: **not checkable** here, no executable read of
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
 every committed reference were unchanged by it: no scripted or lone-craft run pitches
 past the cone.
@@ -156,4 +156,22 @@ on both captures. A regression of the residual on pitch rate, yaw rate and input
 puts the remaining constant at `+0.009` (capture 2) and `+0.226` (capture 3) with
 the bias: a pitch-rate term the bias does not explain is still in the air.
 **Confidence 85** for the bias (static read, the live register on every airborne
-frame, and the residual).
+frame, and the residual). Ported in `oag_physics::engine::pitch` from
+`Dimensions::weight_distribution`, behind the per-title craft law
+`oag_title::craft_laws::CraftLaws::air_pitch_bias`:
+
+| title | bias | origin |
+| --- | --- | --- |
+| Pulse (PSP, PS2) | on | measured (this page) |
+| Wipeout HD | off | chosen: `Craft_UpdatePitch` reads the same per-team bias statically (HD Feisar authors `-4`), but on it raised HD's autopilot rescues on `12_sol_2` from 1 to 5 over 32 races; off until measured live |
+| Omega, 2048 | off | inherited from HD |
+| Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
+
+2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
+capture path).
+
+On Pulse it is the biggest single change to the autopilot's survival measured in this
+lane: `opponent_autopilot_sweep`'s whole-race player autopilot (4 seeds, 48 races per
+difficulty) went from 62 to 24 rescues on Novice with the switch off and 68 to 16 with it
+on, and from 29 to 24 and 34 to 24 on Ace; the opponents' paired-fork stints went from
+5,317 to 4,570 wall ticks.

@@ -832,6 +832,10 @@ const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
+    // `Craft_UpdatePitch` reads the same per-team bias statically, but switching it on raised
+    // this title's autopilot rescues (`docs/physics/airborne-ground-truth.md`); off until it is
+    // measured live. Chosen, not measured.
+    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

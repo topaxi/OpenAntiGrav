@@ -432,11 +432,11 @@ fn the_pitch_axis_uses_a_different_gain_on_the_ground_than_in_the_air() {
     let scale = crate::controls::CONTROL_RANGE;
 
     assert_eq!(
-        pitch(&nose_up, &handling, true, true),
+        pitch(&nose_up, &handling, true, true, true),
         scale * handling.pitch.pitch_ground
     );
     assert_eq!(
-        pitch(&nose_up, &handling, false, true),
+        pitch(&nose_up, &handling, false, true, true),
         scale * handling.pitch.pitch_air
     );
 }
@@ -455,10 +455,10 @@ fn a_nose_up_request_pitches_the_nose_up() {
     };
 
     assert!(
-        pitch(&nose_up, &handling, false, true) > 0.0,
+        pitch(&nose_up, &handling, false, true, true) > 0.0,
         "steer_y is documented positive nose up, so this must be a positive \
          body-local pitch torque; got {}",
-        pitch(&nose_up, &handling, false, true)
+        pitch(&nose_up, &handling, false, true, true)
     );
 }
 
@@ -475,10 +475,13 @@ fn pitch_is_a_plain_gain_with_no_state_and_is_symmetric() {
     };
 
     assert_eq!(
-        pitch(&up, &handling, false, true),
-        -pitch(&down, &handling, false, true)
+        pitch(&up, &handling, false, true, true),
+        -pitch(&down, &handling, false, true, true)
     );
-    assert_eq!(pitch(&ShipControls::default(), &handling, false, true), 0.0);
+    assert_eq!(
+        pitch(&ShipControls::default(), &handling, false, true, true),
+        0.0
+    );
 }
 
 /// `Ship_UpdatePitch`: a closed gate drops the input on the ground and in the air.
@@ -491,11 +494,43 @@ fn a_closed_gate_drops_the_pitch_input() {
     };
     let scale = crate::controls::CONTROL_RANGE;
     assert_eq!(
-        pitch(&nose_up, &handling, false, true),
+        pitch(&nose_up, &handling, false, true, true),
         scale * handling.pitch.pitch_air
     );
-    assert_eq!(pitch(&nose_up, &handling, false, false), 0.0);
-    assert_eq!(pitch(&nose_up, &handling, true, false), 0.0);
+    assert_eq!(pitch(&nose_up, &handling, false, false, true), 0.0);
+    assert_eq!(pitch(&nose_up, &handling, true, false, true), 0.0);
+    assert_eq!(
+        pitch(&nose_up, &handling, false, false, false),
+        0.0,
+        "a title without it"
+    );
+}
+
+/// The in-air bias is added whether or not the gate passed, and never on the ground.
+#[test]
+fn the_weight_distribution_bias_is_added_in_the_air_only() {
+    let mut handling = test_handling();
+    handling.dimensions.weight_distribution = 8.0;
+    let nose_up = ShipControls {
+        steer_y: 1.0,
+        ..ShipControls::default()
+    };
+    let scale = crate::controls::CONTROL_RANGE;
+    assert_eq!(
+        pitch(&nose_up, &handling, false, true, true),
+        scale * handling.pitch.pitch_air + 8.0
+    );
+    assert_eq!(pitch(&nose_up, &handling, false, false, true), 8.0);
+    assert_eq!(
+        pitch(&nose_up, &handling, true, true, true),
+        scale * handling.pitch.pitch_ground
+    );
+    assert_eq!(pitch(&nose_up, &handling, true, false, true), 0.0);
+    assert_eq!(
+        pitch(&nose_up, &handling, false, false, false),
+        0.0,
+        "a title without the law adds nothing"
+    );
 }
 
 /// `dot(hull_up, -down) > 0.9`, strict, and open with no located sample.
@@ -525,9 +560,9 @@ fn pitch_damping_does_not_affect_the_pitch_input() {
         ..ShipControls::default()
     };
     let mut handling = test_handling();
-    let before = pitch(&controls, &handling, true, true);
+    let before = pitch(&controls, &handling, true, true, true);
     handling.pitch.pitch_damping *= 10.0;
-    assert_eq!(pitch(&controls, &handling, true, true), before);
+    assert_eq!(pitch(&controls, &handling, true, true, true), before);
 }
 
 /// `if (craft+0x31c < 1.0) T *= craft+0x31c`: a beam's `slowShipFactor` cuts

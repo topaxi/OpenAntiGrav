@@ -64,7 +64,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
-    craft_laws: None,
+    craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // The campaign's events fly the original opponent (the maintainer's AI
     // mode 3); race box and remix keep this project's driver.
@@ -504,6 +504,14 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         ship_zone: r"Data\audio\sound\Ship_NGP_Zone.bnk",
         zone_infix: Some("ZONE_"),
     }),
+};
+
+/// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
+/// table existed; the in-air `weight_distribution` pitch torque is HD's, inherited (Omega and 2048 take HD's laws where unmeasured).
+pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
+    inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
+    steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    air_pitch_bias: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
 };
 
 #[cfg(test)]

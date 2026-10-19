@@ -376,6 +376,7 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// ```text
 /// p = 0
 /// if aligned: p = controls.pitch * (grounded ? pitch_ground : pitch_air)
+/// if !grounded: p += weight_distribution
 /// ```
 ///
 /// `pitch_air` and `pitch_ground` are plain gains on the input, with no ramp and no state.
@@ -389,9 +390,19 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// tick the product reads `0.8976`-`0.8984` and keeps it at `0.9009`-`0.9022`
 /// (`docs/physics/airborne-ground-truth.md`). Confidence 90.
 ///
-/// **Not implemented:** the per-team in-air bias, `<Misc weight_distribution>`
-/// (`Dimensions::weight_distribution`, added whenever the craft is not grounded, whether or
-/// not the gate passed), decoded in `docs/ghidra/functions/psp-pulse-usa/engine.md`, "Pitch".
+/// # The in-air bias: `<Misc weight_distribution>`
+///
+/// Whether a title adds it at all is [`crate::ship::ShipState::air_pitch_bias`] (`air_bias`):
+/// measured on Pulse, off on the titles where it is not yet measured live.
+///
+/// Added whenever the craft is not grounded, **whether or not the gate passed**: the gate's
+/// failure branches straight to the bias test (`0x08848d7c`). Read live in the air as
+/// `f13 = 8.0` on every frame (`add.s` at `0x08848d98`), and the airborne pitch residual of the
+/// original's own frames moves by the predicted `8 / I_xx` with it. Confidence 85. Its sign is
+/// the input's: the same accumulator, `+0x340`'s `.x`. Per team on the disc (Pulse: `+8`
+/// Assegai, Qirex, Triakis; `-8` AG Systems, Feisar, Piranha; `0` EGX, Goteki); a title that
+/// authors none reads `0`. Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate and
+/// bias (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
 ///
 /// # The scale and the sign, both measured
 ///
@@ -409,16 +420,27 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 ///   so it lives in `oag_gameplay::ship_controls`: [`ShipControls::steer_y`] stays
 ///   positive-nose-up.
 #[must_use]
-pub fn pitch(controls: &ShipControls, handling: &Handling, grounded: bool, aligned: bool) -> f32 {
+pub fn pitch(
+    controls: &ShipControls,
+    handling: &Handling,
+    grounded: bool,
+    aligned: bool,
+    air_bias: bool,
+) -> f32 {
     let gain = if grounded {
         handling.pitch.pitch_ground
     } else {
         handling.pitch.pitch_air
     };
-    if aligned {
+    let input = if aligned {
         controls.steer_y * crate::controls::CONTROL_RANGE * gain
     } else {
         0.0
+    };
+    if grounded || !air_bias {
+        input
+    } else {
+        input + handling.dimensions.weight_distribution
     }
 }
 

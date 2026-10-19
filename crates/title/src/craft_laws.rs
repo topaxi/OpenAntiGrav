@@ -15,4 +15,7 @@ pub struct CraftLaws {
     pub inertia_mass: Sourced<f32>,
     /// The steering ramp stops at its target rather than overshooting by a step.
     pub steer_ramp_clamped: Sourced<bool>,
+    /// `Ship_UpdatePitch` adds the team's `<Misc weight_distribution>` as a pitch torque while
+    /// airborne (`oag_physics::engine::pitch`). Pulse's law, measured.
+    pub air_pitch_bias: Sourced<bool>,
 }

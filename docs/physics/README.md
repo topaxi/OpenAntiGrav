@@ -41,8 +41,8 @@ the authority on the lateral axis and on the airbrake terms' magnitudes.
 [Ramps and the air](airborne-ground-truth.md) steps the force law from every
 frame of the original's autopilot over Fort Gale Black's first jump: the linear
 law holds to `0.05` units/s a tick; Pulse applies its inertia diagonal in world
-axes (measured, not yet ported); the pitch-input gate is read live and ported,
-and the in-air `weight_distribution` torque is read live.
+axes (measured, not yet ported); the pitch-input gate and the in-air
+`weight_distribution` torque are read live and ported.
 
 **A second part is measured rather than read**, and it is the rotational half of
 the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the

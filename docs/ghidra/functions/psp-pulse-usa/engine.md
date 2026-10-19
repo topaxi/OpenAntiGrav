@@ -1773,7 +1773,8 @@ and bias ([ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md)). The bias is
 (PPSSPP, 2026-10-19). **The gate is ported** (`oag_physics::engine::pitch_aligned`,
 measured live on three crossings, confidence 90,
 [airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-pitch-input-gate-live));
-the bias is not yet.
+the bias is ported too (`oag_physics::engine::pitch`, `Dimensions::weight_distribution`,
+confidence 85, [the same page](../../../physics/airborne-ground-truth.md#the-in-air-weight_distribution-torque-live)).
 
 Confidence **82**. `pitch_air` and `pitch_ground` are plain gains on the input
 axis, not rates: there is no ramp and no state. `pitch_damping` is consumed
