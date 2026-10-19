@@ -1161,13 +1161,19 @@ values = ["full", "half"]
 # its own mechanism it ignores what the disc would have drawn, which is why
 # `original` stays the one to prefer where it exists.
 #
+# `traced` is ours too, and one shadow ray per pixel against hardware ray-tracing
+# structures: crisp, every surface casts and receives. It needs a GPU with ray queries
+# and is chosen at launch (a device's features are fixed when it is made), so it
+# applies on the next start; on a device without them the frame draws `mapped` and the
+# load report says so.
+#
 # Applies live: `Scene::render` reads the tier fresh each frame.
 [[page.entry]]
 kind = "choice"
 label = "SHADOWS"
 string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
-values = ["off", "blob", "original", "mapped"]
+values = ["off", "blob", "original", "mapped", "traced"]
 
 # How far out an authored `LodGroup` switches to its coarser tiers. `original`
 # is the recovered rule - `LodGroup_SelectChild`'s per-frame switch at the

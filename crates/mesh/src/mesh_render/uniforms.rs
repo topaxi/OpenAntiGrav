@@ -700,6 +700,11 @@ impl ShadowMap {
     /// [`Self::mode`] for the `mapped` tier's depth map, read by everything.
     pub const DEPTH: f32 = 2.0;
 
+    /// [`Self::mode`] for the `traced` tier: the sun is read from [`Self::matrix`]'s depth
+    /// row and the shadow is a ray query, not a map read. Set only where the scene group
+    /// has an acceleration structure ([`super::ShadowMaps::sun_tlas`]).
+    pub const TRACED: f32 = 3.0;
+
     /// No shadow at all: the identity matrix and zero strength, which is what
     /// every title but the one being shadowed binds.
     ///
@@ -796,6 +801,11 @@ pub struct ShadowMaps<'a> {
     /// `Rgba8UnormSrgb`), a `D2` view: Wipeout HD's `paraboloidReflectionTex`, which its glass and
     /// water programs read by a reflection vector. Not a shadow either.
     pub sky_probe: Option<&'a wgpu::TextureView>,
+    /// The ray tier's acceleration structure over the circuit and the craft
+    /// ([`super::ray`]), bound at scene binding 18 and traced by the `traced` shadow
+    /// tier. `Some` selects the `ray` shader variant and a layout with the binding; `None`
+    /// is every other device and drawable, which keep the layout and shader they had.
+    pub sun_tlas: Option<&'a wgpu::Tlas>,
 }
 
 impl ShadowMaps<'_> {
@@ -808,6 +818,7 @@ impl ShadowMaps<'_> {
         behind_glass: None,
         env_probes: None,
         sky_probe: None,
+        sun_tlas: None,
     };
 }
 

@@ -610,6 +610,10 @@ impl Scene {
             .as_ref()
             .and_then(mesh::sky_paraboloid::from_sky)
             .map(|map| mesh_render::upload_sky_probe(device, queue, &map));
+        // The ray tier's acceleration structure, on a device that has it: created now so every
+        // drawable's scene group names it, built into once the BLASes exist (`ray::RayTier`).
+        let ray_tlas =
+            mesh_render::ray::enabled(device).then(|| mesh_render::ray::create_tlas(device));
         let shadow_maps = mesh_render::ShadowMaps {
             coverage: Some(shadow_map.view()),
             depth: Some(shadow_map.depth_view()),
@@ -618,6 +622,7 @@ impl Scene {
             behind_glass: None,
             env_probes: env_probes.as_ref().map(crate::env_probes::EnvProbes::view),
             sky_probe: sky_probe.as_ref(),
+            sun_tlas: ray_tlas.as_ref(),
         };
         let behind_glass = behind_glass::Target::build(
             device,
@@ -1140,7 +1145,7 @@ impl Scene {
         };
         scene.share_scene_blocks(device);
         scene.share_uniform_blocks(device);
-        scene.ray = ray::RayTier::build(device, queue, &scene.track, &scene.ships)
+        scene.ray = ray::RayTier::build(device, queue, ray_tlas, &scene.track, &scene.ships)
             .map(std::cell::RefCell::new);
         Ok(scene)
     }

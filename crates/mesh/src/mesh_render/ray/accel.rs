@@ -45,10 +45,11 @@ pub struct Stats {
     pub skipped_triangles: u32,
     /// Wall clock of the builds, submitted and waited on.
     pub build: Duration,
-    /// Device memory the build added, from the allocator report: what was allocated, and
-    /// what the allocator reserved to hold it. `None` where the backend reports none.
-    /// Includes the index buffers the BLASes were built from.
-    pub bytes: Option<(u64, u64)>,
+    /// Bytes of the index buffers the BLASes were built from: the tier's own copy, exactly.
+    /// **An acceleration structure's size is not here**: wgpu 30.0.1 has no safe query for
+    /// it, wgpu's allocator report and the kernel's per-process DRM VRAM both showed no
+    /// change across a build, so none is claimed.
+    pub index_bytes: u64,
 }
 
 impl std::fmt::Display for Stats {
@@ -63,15 +64,11 @@ impl std::fmt::Display for Stats {
             self.skipped_triangles,
             self.build.as_secs_f64() * 1000.0
         )?;
-        if let Some((allocated, reserved)) = self.bytes {
-            const MIB: f64 = 1024.0 * 1024.0;
-            write!(
-                f,
-                ", {:.1} MiB allocated ({:.1} MiB reserved)",
-                allocated as f64 / MIB,
-                reserved as f64 / MIB
-            )?;
-        }
+        write!(
+            f,
+            ", {:.1} MiB of index copy",
+            self.index_bytes as f64 / (1024.0 * 1024.0)
+        )?;
         Ok(())
     }
 }
@@ -113,12 +110,6 @@ pub fn affine(m: &[f32; 16]) -> [f32; 12] {
 /// [`affine`] of the identity.
 pub const IDENTITY: [f32; 12] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
 
-fn allocated(device: &wgpu::Device) -> Option<(u64, u64)> {
-    device
-        .generate_allocator_report()
-        .map(|r| (r.total_allocated_bytes, r.total_reserved_bytes))
-}
-
 fn xform_of(model: &Model, draw: &DrawCall) -> u32 {
     model
         .indices
@@ -142,7 +133,6 @@ impl ModelAccel {
         model: &Model,
         vertex_buffer: &wgpu::Buffer,
     ) -> Option<Self> {
-        let before = allocated(device);
         let started = Instant::now();
 
         let mut by_node: std::collections::BTreeMap<u32, Vec<u32>> = Default::default();
@@ -202,6 +192,7 @@ impl ModelAccel {
                 },
             );
             stats.triangles += triangles;
+            stats.index_bytes += indices.len() as u64 * 4;
             if *xform != 0 {
                 stats.moving_triangles += triangles;
                 stats.moving_blases += 1;
@@ -242,9 +233,6 @@ impl ModelAccel {
             });
         }
         stats.build = started.elapsed();
-        stats.bytes = before.zip(allocated(device)).map(|((a0, r0), (a1, r1))| {
-            (a1.saturating_sub(a0), r1.saturating_sub(r0))
-        });
         log::info!("ray: {label}: {stats}");
         Some(Self {
             parts,
@@ -256,6 +244,24 @@ impl ModelAccel {
 
 /// Craft hulls: the BLASes of each distinct hull model.
 pub type Hulls = Vec<ModelAccel>;
+
+/// The most instances a race's TLAS holds: the circuit's parts (a few dozen) and each craft's
+/// hull parts, far below this. Chosen, not measured.
+pub const MAX_INSTANCES: u32 = 1024;
+
+/// The race's TLAS, created **before** the drawables so their scene bind group can name it
+/// (`ShadowMaps::sun_tlas`); [`Scene::new`] takes it back and builds into it. wgpu's `Tlas`
+/// clones share the underlying structure and not the instance list, so the bind group's copy
+/// and the [`Scene`]'s are one acceleration structure.
+#[must_use]
+pub fn create_tlas(device: &wgpu::Device) -> wgpu::Tlas {
+    device.create_tlas(&wgpu::CreateTlasDescriptor {
+        label: Some("ray scene"),
+        max_instances: MAX_INSTANCES,
+        flags: wgpu::AccelerationStructureFlags::PREFER_FAST_BUILD,
+        update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+    })
+}
 
 /// The TLAS over a circuit and its craft.
 #[derive(Debug)]
@@ -270,17 +276,25 @@ pub struct Scene {
 }
 
 impl Scene {
-    /// A TLAS able to hold the circuit's parts and `craft_capacity` craft.
+    /// The scene over `tlas` ([`create_tlas`]), able to hold the circuit's parts and
+    /// `craft_capacity` craft.
+    ///
+    /// # Panics
+    ///
+    /// If that is more instances than [`MAX_INSTANCES`].
     #[must_use]
-    pub fn new(device: &wgpu::Device, track: ModelAccel, hulls: Hulls, craft_capacity: u32) -> Self {
-        let max_instances = track.parts.len() as u32
-            + craft_capacity * hulls.iter().map(|h| h.parts.len() as u32).max().unwrap_or(1);
-        let tlas = device.create_tlas(&wgpu::CreateTlasDescriptor {
-            label: Some("ray scene"),
-            max_instances,
-            flags: wgpu::AccelerationStructureFlags::PREFER_FAST_BUILD,
-            update_mode: wgpu::AccelerationStructureUpdateMode::Build,
-        });
+    pub fn new(tlas: wgpu::Tlas, track: ModelAccel, hulls: Hulls, craft_capacity: u32) -> Self {
+        let most = track.parts.len() as u32
+            + craft_capacity
+                * hulls
+                    .iter()
+                    .map(|h| h.parts.len() as u32)
+                    .max()
+                    .unwrap_or(1);
+        assert!(
+            most <= MAX_INSTANCES,
+            "{most} instances over {MAX_INSTANCES}"
+        );
         Self {
             tlas,
             track,

@@ -88,6 +88,7 @@ impl super::super::Scene {
         race: &Race,
         shadows: oag_display::display::Shadows,
     ) {
+        let shadows = self.resolve_shadows(shadows);
         if !self.does_frame_work() {
             // The `mapped` tier's map is fitted on the craft the view follows, so
             // it is the one pass a later view does itself. Each view is its own
@@ -104,6 +105,7 @@ impl super::super::Scene {
             shadow_maps: w.shadow_maps + 1,
             ..w
         });
+        self.update_ray_scene(encoder, race);
         self.render_shadow_map(queue, encoder, race, shadows);
         self.render_sun_occlusion(queue, encoder, race, shadows);
     }
@@ -138,6 +140,7 @@ impl super::super::Scene {
         race: &Race,
         shadows: oag_display::display::Shadows,
     ) {
+        let shadows = self.resolve_shadows(shadows);
         let mut gathered = self.shadow_gathered.borrow_mut();
         if self.does_frame_work() {
             *gathered = self.shadow_geometry(race, shadows);
@@ -207,8 +210,19 @@ impl super::super::Scene {
         &self,
         shadows: oag_display::display::Shadows,
     ) -> oag_mesh::mesh_render::ShadowMap {
+        let shadows = self.resolve_shadows(shadows);
         let map = self.shadow_map.borrow();
         match shadows {
+            // The sun is the one `mapped` fits (`mapped_light`), carried in the matrix's
+            // depth row for the shader to read; there is no map and no bias.
+            oag_display::display::Shadows::Traced => oag_mesh::mesh_render::ShadowMap {
+                matrix: mapped_fit(Mat4::IDENTITY, mapped_light(&self.light))
+                    .matrix()
+                    .to_cols_array_2d(),
+                strength: MAPPED_STRENGTH,
+                mode: oag_mesh::mesh_render::ShadowMap::TRACED,
+                ..oag_mesh::mesh_render::ShadowMap::off()
+            },
             oag_display::display::Shadows::Original if map.casters() > 0 => {
                 oag_mesh::mesh_render::ShadowMap {
                     // Each craft's own matrix is in `craft_shadow`; this

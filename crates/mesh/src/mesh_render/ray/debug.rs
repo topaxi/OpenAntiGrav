@@ -27,7 +27,10 @@ impl Debug {
     /// [`super::enabled`] first.
     #[must_use]
     pub fn new(device: &wgpu::Device) -> Self {
-        assert!(super::enabled(device), "the ray tier needs its device feature");
+        assert!(
+            super::enabled(device),
+            "the ray tier needs its device feature"
+        );
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ray debug"),
             source: wgpu::ShaderSource::Wgsl(SHADER.into()),

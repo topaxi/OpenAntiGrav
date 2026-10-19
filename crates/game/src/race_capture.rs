@@ -1436,14 +1436,17 @@ pub fn capture(
                     let png = oag_texture::png::encode_rgba(width, height, &pixels);
                     let name = format!(
                         "{}-ray.png",
-                        path.file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned())
+                        path.file_stem()
+                            .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
                     );
                     let ray_path = path.with_file_name(name);
                     std::fs::write(&ray_path, png)
                         .with_context(|| format!("writing {}", ray_path.display()))?;
                     println!("wrote {} ({width}x{height})", ray_path.display());
                 }
-                None => warn!("--ray-debug: this device has no ray tier (is the adapter's EXPERIMENTAL_RAY_QUERY missing?); no picture"),
+                None => warn!(
+                    "--ray-debug: this device has no ray tier (is the adapter's EXPERIMENTAL_RAY_QUERY missing?); no picture"
+                ),
             }
         }
     }

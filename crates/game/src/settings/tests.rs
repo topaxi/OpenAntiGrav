@@ -1080,7 +1080,7 @@ fn load_text(text: &str) -> (Settings, String) {
 #[test]
 fn an_unknown_value_falls_back_alone_and_leaves_the_file() {
     let text = "[graphics]\nanisotropy = \"4x\"\nhud_scale = \"crisp\"\n\n\
-                [render_profiles.\"Wipeout Pulse (PSP)\"]\nshadows = \"traced\"\nmsaa = \"4x\"\n";
+                [render_profiles.\"Wipeout Pulse (PSP)\"]\nshadows = \"pathtraced\"\nmsaa = \"4x\"\n";
     let (loaded, after) = load_text(text);
     assert_eq!(
         loaded.graphics.hud_scale,

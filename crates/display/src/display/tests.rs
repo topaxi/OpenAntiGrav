@@ -634,7 +634,7 @@ fn a_shadow_tier_round_trips_and_refuses_what_it_does_not_offer() {
     assert_eq!("mapped".parse::<Shadows>(), Ok(Shadows::Mapped));
     // Nothing is designed-but-unbuilt any more, so what is pinned instead is
     // that the list has not grown a value nobody wrote a tier for.
-    assert_eq!(Shadows::ALL.len(), 4);
+    assert_eq!(Shadows::ALL.len(), 5);
     assert!("raytraced".parse::<Shadows>().is_err());
 }
 

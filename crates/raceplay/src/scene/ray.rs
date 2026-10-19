@@ -22,12 +22,11 @@ impl RayTier {
     pub(super) fn build(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        tlas: Option<wgpu::Tlas>,
         track: &Drawable,
         ships: &[Drawable],
     ) -> Option<Self> {
-        if !ray::enabled(device) {
-            return None;
-        }
+        let tlas = tlas?;
         let circuit = ray::ModelAccel::build(
             device,
             queue,
@@ -49,9 +48,13 @@ impl RayTier {
             })
             .collect();
         if hulls.len() != ships.len() {
-            log::warn!("ray: {} of {} hulls had nothing to trace", ships.len() - hulls.len(), ships.len());
+            log::warn!(
+                "ray: {} of {} hulls had nothing to trace",
+                ships.len() - hulls.len(),
+                ships.len()
+            );
         }
-        let scene = ray::Scene::new(device, circuit, hulls, ships.len() as u32);
+        let scene = ray::Scene::new(tlas, circuit, hulls, ships.len() as u32);
         log::info!("ray: circuit {}", scene.track_stats());
         Some(Self {
             scene,
@@ -61,6 +64,53 @@ impl RayTier {
 }
 
 impl Scene {
+    /// What the TLAS holds this frame: the circuit's animated nodes at the frame's clock
+    /// and each craft the raster draws, at the matrix it draws with.
+    fn ray_instances(&self, race: &Race) -> (Vec<[f32; 16]>, Vec<(usize, [f32; 16])>) {
+        let nodes = self.track.model().sample_anim_nodes(self.anim_clock.get());
+        let craft = (0..usize::from(race.ship_count()))
+            .filter(|&slot| !self.hull_skipped(race, slot))
+            .map(|slot| (slot, race.ship_model_matrix_of(slot).to_cols_array()))
+            .collect();
+        (nodes, craft)
+    }
+
+    /// Rebuilds the TLAS for this frame into `encoder`, ahead of the scene pass. A no-op
+    /// without the tier.
+    ///
+    /// **Every frame the tier is on, whatever the shadow setting**: every drawable's scene
+    /// group names the TLAS, and wgpu refuses a draw whose bind group holds one that was
+    /// never built.
+    pub(super) fn update_ray_scene(&self, encoder: &mut wgpu::CommandEncoder, race: &Race) {
+        let Some(tier) = &self.ray else {
+            return;
+        };
+        let (nodes, craft) = self.ray_instances(race);
+        tier.borrow_mut().scene.update(encoder, &nodes, &craft);
+    }
+
+    /// The shadow tier this frame draws: `shadows`, except that `traced` on a race without
+    /// acceleration structures is `mapped`, said once. Never an error, and never silent: a
+    /// tier that quietly becomes another is how a missing feature stops being noticed.
+    pub(super) fn resolve_shadows(
+        &self,
+        shadows: oag_display::display::Shadows,
+    ) -> oag_display::display::Shadows {
+        use oag_display::display::Shadows;
+        if shadows == Shadows::Traced && self.ray.is_none() {
+            static SAID: std::sync::Once = std::sync::Once::new();
+            SAID.call_once(|| {
+                log::warn!(
+                    "shadows traced: this device was not created with ray queries (the adapter \
+                     lacks them, or the tier was not requested at launch: --ray, OAG_RAY=1 or \
+                     --shadows traced); drawing mapped"
+                );
+            });
+            return Shadows::Mapped;
+        }
+        shadows
+    }
+
     /// Whether this race has acceleration structures.
     #[must_use]
     pub fn has_ray_tier(&self) -> bool {
@@ -69,8 +119,7 @@ impl Scene {
 
     /// The `--ray-debug` picture of `race` as the raster frames it: one primary ray per
     /// pixel from the camera `Scene::render` would use for a `width` by `height`
-    /// viewport, RGBA8 with row 0 on top. The craft are the ones the raster draws, at the
-    /// matrices it draws them with. `None` without the tier.
+    /// viewport, RGBA8 with row 0 on top. `None` without the tier.
     #[must_use]
     pub fn ray_debug(
         &self,
@@ -83,11 +132,7 @@ impl Scene {
         let tier = self.ray.as_ref()?;
         let aspect = width.max(1) as f32 / height.max(1) as f32;
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
-        let nodes = self.track.model().sample_anim_nodes(self.anim_clock.get());
-        let craft: Vec<(usize, [f32; 16])> = (0..usize::from(race.ship_count()))
-            .filter(|&slot| !self.hull_skipped(race, slot))
-            .map(|slot| (slot, race.ship_model_matrix_of(slot).to_cols_array()))
-            .collect();
+        let (nodes, craft) = self.ray_instances(race);
         let mut tier = tier.borrow_mut();
         let RayTier { scene, debug } = &mut *tier;
         Some(debug.render(

@@ -325,7 +325,8 @@ pub fn build_with(
     // see `pipeline_cache` for why and by how much. A caller with no scope
     // open (the viewer, every test but the cache's own) gets exactly the
     // fresh module this always created.
-    let shader = pipeline_cache::shared_shader_module(device, bindless);
+    let shader =
+        pipeline_cache::shared_shader_module(device, bindless, shadow_maps.sun_tlas.is_some());
     let shader = &shader;
     // The target format is the statement about colour space - see
     // [`is_linear_target`] - and it reaches the shader as a pipeline
@@ -1104,8 +1105,8 @@ pub fn build_with(
 }
 
 pub mod bindless;
-pub mod ray;
 mod material_layout;
+pub mod ray;
 pub use material_layout::material_bind_group_layout;
 
 mod albedo_bind;

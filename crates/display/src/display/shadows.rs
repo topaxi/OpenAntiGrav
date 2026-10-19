@@ -87,6 +87,19 @@ pub enum Shadows {
     /// Two cascades around the player, near and far, so a craft's shadow does
     /// not pop in at a distance - see `docs/rendering/shadows.md`.
     Mapped,
+    /// One shadow ray per pixel toward the sun, against hardware acceleration structures
+    /// built from the circuit and the craft.
+    ///
+    /// **This project's own, an enhancement no original draws, and offered only on a
+    /// device whose adapter reports ray queries** (`oag_mesh::mesh_render::ray`). The tier
+    /// is chosen at launch, because a device's features are fixed when it is made; asked
+    /// for on a device without it, the frame draws [`Self::Mapped`] and the load says
+    /// so. It takes the sun `mapped` fits - a circuit's authored sun, or Pulse's borrowed
+    /// axis - so the two agree on where the sun is. Hard-edged, every surface casts and
+    /// receives, no cascade and no resolution; cutout geometry casts as a solid. Never
+    /// replaces authored data: it multiplies the shadowed pixel like `mapped` does, over
+    /// whatever lighting (HD's lightmap alpha included) the pixel already carries.
+    Traced,
 }
 
 impl Shadows {
@@ -98,11 +111,18 @@ impl Shadows {
             Self::Blob => "blob",
             Self::Original => "original",
             Self::Mapped => "mapped",
+            Self::Traced => "traced",
         }
     }
 
     /// Every choice, for the menus and for error messages.
-    pub const ALL: [Self; 4] = [Self::Off, Self::Blob, Self::Original, Self::Mapped];
+    pub const ALL: [Self; 5] = [
+        Self::Off,
+        Self::Blob,
+        Self::Original,
+        Self::Mapped,
+        Self::Traced,
+    ];
 
     /// Whether anything is drawn at all - the one question the frame asks
     /// before building a shadow pass.
@@ -124,7 +144,9 @@ impl std::str::FromStr for Shadows {
             .into_iter()
             .find(|mode| mode.name().eq_ignore_ascii_case(text))
             .ok_or_else(|| {
-                format!("{text:?} is not a shadow setting; try off, blob, original or mapped")
+                format!(
+                    "{text:?} is not a shadow setting; try off, blob, original, mapped or traced"
+                )
             })
     }
 }

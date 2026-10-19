@@ -103,7 +103,11 @@ fn the_affine_is_the_column_vector_form_of_the_row_matrix() {
     m[0..3].copy_from_slice(&[0.0, 1.0, 0.0]);
     let a = accel::affine(&m);
     assert_eq!([a[3], a[7], a[11]], [3.0, 4.0, 5.0]);
-    assert_eq!([a[0], a[4], a[8]], [0.0, 1.0, 0.0], "column 0 is the x axis");
+    assert_eq!(
+        [a[0], a[4], a[8]],
+        [0.0, 1.0, 0.0],
+        "column 0 is the x axis"
+    );
 }
 
 #[test]
@@ -122,7 +126,10 @@ fn a_device_that_never_asked_for_the_tier_is_left_exactly_as_it_was() {
     assert!(!applied.experimental_features.is_enabled());
     let (device, _queue) = pollster::block_on(adapter.request_device(&applied)).expect("a device");
     assert!(!enabled(&device));
-    assert!(blas_input(&device).is_empty(), "today's buffers, byte for byte");
+    assert!(
+        blas_input(&device).is_empty(),
+        "today's buffers, byte for byte"
+    );
 }
 
 #[test]
@@ -140,7 +147,7 @@ fn a_ray_finds_the_track_where_the_raster_draws_it_and_a_craft_where_its_matrix_
     let track = ModelAccel::build(&device, &queue, "track", &model, &vertices).expect("a BLAS");
     assert_eq!(track.stats.triangles, 1);
     let hull = ModelAccel::build(&device, &queue, "hull", &model, &vertices).expect("a BLAS");
-    let mut scene = Scene::new(&device, track, vec![hull], 2);
+    let mut scene = Scene::new(create_tlas(&device), track, vec![hull], 2);
 
     // The hull is nearer the camera and moved right by 0.8: a transposed matrix would put it
     // somewhere else.

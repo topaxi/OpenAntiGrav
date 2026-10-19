@@ -431,81 +431,88 @@ fn bind_group(
     scene_tex: &wgpu::TextureView,
     kept: &RebindResources,
 ) -> wgpu::BindGroup {
+    let mut entries = vec![
+        wgpu::BindGroupEntry {
+            binding: 0,
+            // One block of the buffer, not all of it: the offset a draw names
+            // picks which.
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: fog_buffer,
+                offset: 0,
+                size: std::num::NonZeroU64::new(super::SCENE_SIZE),
+            }),
+        },
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: wgpu::BindingResource::TextureView(track),
+        },
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: wgpu::BindingResource::Sampler(&kept.sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 3,
+            resource: wgpu::BindingResource::Sampler(&kept.nearest_sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 4,
+            resource: wgpu::BindingResource::TextureView(&kept.vis_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 5,
+            resource: wgpu::BindingResource::Sampler(&kept.vis_sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 6,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 7,
+            resource: wgpu::BindingResource::Sampler(&kept.shadow.sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 8,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.depth_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 9,
+            resource: wgpu::BindingResource::Sampler(&kept.shadow.depth_sampler),
+        },
+        wgpu::BindGroupEntry {
+            binding: 10,
+            resource: wgpu::BindingResource::TextureView(scene_tex),
+        },
+        wgpu::BindGroupEntry {
+            binding: 13,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.occlusion_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 14,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.self_shadow_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 15,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.behind_glass_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 16,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.env_probe_view),
+        },
+        wgpu::BindGroupEntry {
+            binding: 17,
+            resource: wgpu::BindingResource::TextureView(&kept.shadow.sky_probe_view),
+        },
+    ];
+    if let Some(tlas) = &kept.shadow.tlas {
+        entries.push(wgpu::BindGroupEntry {
+            binding: 18,
+            resource: tlas.as_binding(),
+        });
+    }
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("scene"),
         layout: &kept.layout,
-        entries: &[
-            wgpu::BindGroupEntry {
-                binding: 0,
-                // One block of the buffer, not all of it: the offset a draw names
-                // picks which.
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: fog_buffer,
-                    offset: 0,
-                    size: std::num::NonZeroU64::new(super::SCENE_SIZE),
-                }),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: wgpu::BindingResource::TextureView(track),
-            },
-            wgpu::BindGroupEntry {
-                binding: 2,
-                resource: wgpu::BindingResource::Sampler(&kept.sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 3,
-                resource: wgpu::BindingResource::Sampler(&kept.nearest_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 4,
-                resource: wgpu::BindingResource::TextureView(&kept.vis_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 5,
-                resource: wgpu::BindingResource::Sampler(&kept.vis_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 6,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 7,
-                resource: wgpu::BindingResource::Sampler(&kept.shadow.sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 8,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.depth_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 9,
-                resource: wgpu::BindingResource::Sampler(&kept.shadow.depth_sampler),
-            },
-            wgpu::BindGroupEntry {
-                binding: 10,
-                resource: wgpu::BindingResource::TextureView(scene_tex),
-            },
-            wgpu::BindGroupEntry {
-                binding: 13,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.occlusion_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 14,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.self_shadow_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 15,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.behind_glass_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 16,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.env_probe_view),
-            },
-            wgpu::BindGroupEntry {
-                binding: 17,
-                resource: wgpu::BindingResource::TextureView(&kept.shadow.sky_probe_view),
-            },
-        ],
+        entries: &entries,
     })
 }
 
@@ -537,70 +544,77 @@ pub(super) fn scene_bind_group(
 ) {
     let zone_entries = layout_entries();
     let shadow_entries = super::shadow_map::layout_entries();
-    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    let mut entries = vec![
         // Labelled for what the buffer holds, which is `Scene` - fog *and*
         // the light rig. The three "fog" labels here predated `Light`
         // joining it.
-        label: Some("scene"),
-        entries: &[
-            // Both stages: the fragment stage reads the fog, the rig, the
-            // Zone grade and the shadow map; the vertex stage reads the SPU
-            // vertex-light list (`spu_light_sum`), per vertex as the original
-            // does.
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                // **A dynamic offset**, so a race can keep one block per view and
-                // per kind of scene in a single buffer and bind every drawable of
-                // a kind to it ([`super::SCENE_STRIDE`]); a caller with one block
-                // binds offset `0`.
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: true,
-                    min_binding_size: std::num::NonZeroU64::new(super::SCENE_SIZE),
-                },
-                count: None,
+        // Both stages: the fragment stage reads the fog, the rig, the
+        // Zone grade and the shadow map; the vertex stage reads the SPU
+        // vertex-light list (`spu_light_sum`), per vertex as the original
+        // does.
+        wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            // **A dynamic offset**, so a race can keep one block per view and
+            // per kind of scene in a single buffer and bind every drawable of
+            // a kind to it ([`super::SCENE_STRIDE`]); a caller with one block
+            // binds offset `0`.
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: true,
+                min_binding_size: std::num::NonZeroU64::new(super::SCENE_SIZE),
             },
-            // The Zone stage's four textures, their two samplers and the
-            // visualiser lookup, in the *scene* group rather than the
-            // per-material one: they are a property of the race, not of a
-            // material slot, so binding them here uploads them once per
-            // model instead of once per slot naming a material. See
-            // [`layout_entries`].
-            zone_entries[0],
-            zone_entries[1],
-            zone_entries[2],
-            zone_entries[3],
-            zone_entries[4],
-            zone_entries[5],
-            // The shadow map, in the scene group for the same reason the
-            // Zone stage's textures are: it is a property of the frame, not
-            // of a material slot. Bound on every pipeline whether or not
-            // anything shadows - `Scene::shadow.strength` at zero is what
-            // makes it inert, so a title with no map still binds a
-            // placeholder rather than needing a second layout.
-            shadow_entries[0],
-            shadow_entries[1],
-            shadow_entries[2],
-            shadow_entries[3],
-            // The per-craft sun-occlusion array, binding 13 - past everything
-            // above for the same reason, and in this group because a hull
-            // picks its layer by a uniform field rather than by a bind group.
-            // The self-shadow depth array, binding 14, beside it for the same
-            // reason: the same hull compares against the same layer.
-            shadow_entries[4],
-            shadow_entries[5],
-            // The behind-the-glass target, binding 15: a picture of the frame
-            // like the maps above, read by Vineta K's tunnel glass alone.
-            shadow_entries[6],
-            // The per-craft environment probes, binding 16: the circuit's baked
-            // `.probes` blended at each craft, read by a hull whose uniform
-            // names a layer.
-            shadow_entries[7],
-            // The circuit's sky reflection map, binding 17: the engine's
-            // `paraboloidReflectionTex`, read by scenery glass.
-            shadow_entries[8],
-        ],
+            count: None,
+        },
+        // The Zone stage's four textures, their two samplers and the
+        // visualiser lookup, in the *scene* group rather than the
+        // per-material one: they are a property of the race, not of a
+        // material slot, so binding them here uploads them once per
+        // model instead of once per slot naming a material. See
+        // [`layout_entries`].
+        zone_entries[0],
+        zone_entries[1],
+        zone_entries[2],
+        zone_entries[3],
+        zone_entries[4],
+        zone_entries[5],
+        // The shadow map, in the scene group for the same reason the
+        // Zone stage's textures are: it is a property of the frame, not
+        // of a material slot. Bound on every pipeline whether or not
+        // anything shadows - `Scene::shadow.strength` at zero is what
+        // makes it inert, so a title with no map still binds a
+        // placeholder rather than needing a second layout.
+        shadow_entries[0],
+        shadow_entries[1],
+        shadow_entries[2],
+        shadow_entries[3],
+        // The per-craft sun-occlusion array, binding 13 - past everything
+        // above for the same reason, and in this group because a hull
+        // picks its layer by a uniform field rather than by a bind group.
+        // The self-shadow depth array, binding 14, beside it for the same
+        // reason: the same hull compares against the same layer.
+        shadow_entries[4],
+        shadow_entries[5],
+        // The behind-the-glass target, binding 15: a picture of the frame
+        // like the maps above, read by Vineta K's tunnel glass alone.
+        shadow_entries[6],
+        // The per-craft environment probes, binding 16: the circuit's baked
+        // `.probes` blended at each craft, read by a hull whose uniform
+        // names a layer.
+        shadow_entries[7],
+        // The circuit's sky reflection map, binding 17: the engine's
+        // `paraboloidReflectionTex`, read by scenery glass.
+        shadow_entries[8],
+    ];
+    // The ray tier's acceleration structure, binding 18, only when a race built one.
+    if shadow_maps.sun_tlas.is_some() {
+        entries.push(super::shadow_map::tlas_layout_entry());
+    }
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        // Labelled for what the buffer holds, which is `Scene` - fog *and*
+        // the light rig.
+        label: Some("scene"),
+        entries: &entries,
     });
 
     // Every pipeline gets a fog buffer, initialised to `Fog::off`. A caller

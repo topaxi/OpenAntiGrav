@@ -21,6 +21,9 @@ import oag_shaders::target::{target_out};
 // Binding arrays, for the `bindless` variant's group 1 - see `bindings.wesl`.
 @if(bindless) enable wgpu_binding_array;
 
+// Ray queries, for the `ray` variant's traced shadow tier - see `shadow.wesl`.
+@if(ray) enable wgpu_ray_query;
+
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;

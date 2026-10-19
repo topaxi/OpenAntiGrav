@@ -19,7 +19,7 @@ mod debug;
 #[cfg(test)]
 mod tests;
 
-pub use accel::{Hulls, ModelAccel, Scene, Stats};
+pub use accel::{Hulls, MAX_INSTANCES, ModelAccel, Scene, Stats, create_tlas};
 pub use debug::{Debug, MAX_RAY_LENGTH};
 
 use std::sync::atomic::{AtomicBool, Ordering};

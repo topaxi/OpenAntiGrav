@@ -219,10 +219,6 @@ fn new_event_loop() -> Result<EventLoop<()>> {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    // Before any device: the ray tier is part of what a device is created with.
-    if cli.ray || cli.ray_debug {
-        oag_mesh::mesh_render::ray::request(true);
-    }
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no
@@ -267,6 +263,18 @@ fn run(cli: Cli) -> Result<()> {
     };
     for profile in settings.render_profiles.values_mut() {
         cli.apply_render_overrides(profile, render_scale);
+    }
+    // The ray tier is part of what a device is created with, so it is decided here, before
+    // any device: asked for outright, or by a shadow tier that traces. Any title's profile
+    // counts, since the title is not known yet and a device is made once.
+    if cli.ray
+        || cli.ray_debug
+        || settings
+            .render_profiles
+            .values()
+            .any(|profile| profile.shadows == oag_display::display::Shadows::Traced)
+    {
+        oag_mesh::mesh_render::ray::request(true);
     }
 
     // Parsed before anything is loaded, and for both ways in: the front end can

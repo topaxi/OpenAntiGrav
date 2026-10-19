@@ -1,5 +1,6 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
+@if(ray) import package::bindings::{sun_tlas};
 import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
@@ -112,6 +113,42 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
     return 1.0 - open;
 }
 
+// How far along the sun a traced shadow ray starts, in world units, so a surface does not
+// shadow itself through its own triangle. **Ours, chosen, not measured**: a sixth of a
+// craft-height is above any coplanar-surface noise on the circuits tried.
+const TRACED_START: f32 = 0.12;
+
+// How far a traced shadow ray looks for an occluder. The sun is at infinity and a bridge's
+// shadow can fall from far above, so this is past any circuit's height rather than a
+// cascade's box. **Ours.**
+const TRACED_REACH: f32 = 2000.0;
+
+// How much of this point the `traced` tier says is in shadow: `1.0` if anything opaque is
+// between it and the sun, else `0.0`. **One ray per pixel, hard-edged**: no cascade, no
+// resolution, no bias slope, and everything casts and everything receives.
+//
+// The direction is read out of the same matrix the `mapped` tier fits, so the two tiers
+// agree on where the sun is by construction (a circuit's authored sun, or Pulse's borrowed
+// axis): depth in that orthographic matrix grows away from the light, so its z row is the
+// direction *from* the light and the sun is the other way.
+@if(ray) fn traced_coverage(world: vec3<f32>) -> f32 {
+    let m = scene.shadow.matrix;
+    let away = vec3<f32>(m[0][2], m[1][2], m[2][2]);
+    if dot(away, away) <= 0.0 {
+        return 0.0;
+    }
+    let towards = -normalize(away);
+    var query: ray_query;
+    rayQueryInitialize(
+        &query,
+        sun_tlas,
+        RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, TRACED_START, TRACED_REACH, world, towards)
+    );
+    while rayQueryProceed(&query) {}
+    let hit = rayQueryGetCommittedIntersection(&query);
+    return select(0.0, 1.0, hit.kind != RAY_QUERY_INTERSECTION_NONE);
+}
+
 // How much of this surface point the shadow map covers, `0.0` to `1.0`: the
 // craft maps' union in the coverage mode, the `mapped` tier's single compared
 // depth map in the depth mode.
@@ -130,6 +167,13 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     let allowed = select(1.0, 2.0, coverage_mode);
     if receives_shadow < allowed {
         return 0.0;
+    }
+    // The `traced` tier (mode 3) asks the acceleration structure instead of a map. Only
+    // the `ray` variant has one; the scene block is shared, so a drawable built without
+    // it can still be handed mode 3 and reads no shadow rather than a map nobody drew.
+    if scene.shadow.mode > 2.5 {
+        @if(ray) { return traced_coverage(world); }
+        @if(!ray) { return 0.0; }
     }
     if coverage_mode {
         return craft_shadow_coverage(world);

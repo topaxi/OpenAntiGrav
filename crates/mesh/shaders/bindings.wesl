@@ -129,6 +129,10 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // - see `mesh::sky_paraboloid` and `sky_probe`. A black placeholder where there is none.
 @group(2) @binding(17) var sky_probe_tex: texture_2d<f32>;
 
+// The ray tier's acceleration structure over the circuit and the craft, in the `ray`
+// variant only - see `mesh_render::ray` and the `traced` shadow tier in `shadow.wesl`.
+@if(ray) @group(2) @binding(18) var sun_tlas: acceleration_structure;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;

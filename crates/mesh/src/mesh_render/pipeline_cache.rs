@@ -69,8 +69,8 @@ impl Key {
 
 #[derive(Default)]
 struct Cache {
-    /// `[default, bindless]`.
-    shader: [Option<wgpu::ShaderModule>; 2],
+    /// Indexed by [`variant`]: `[default, bindless, ray, bindless + ray]`.
+    shader: [Option<wgpu::ShaderModule>; 4],
     pipelines: HashMap<Key, wgpu::RenderPipeline>,
     /// One upload per distinct decoded texture across the whole scene, keyed
     /// by the `Arc`'s address. The `Weak` is what makes the address a safe
@@ -196,34 +196,52 @@ pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {
     })
 }
 
+/// Which of the four shader artifacts: bit 0 the `bindless` variant, bit 1 the `ray` one
+/// (`super::ray`, which adds the acceleration structure at scene binding 18).
+fn variant(bindless: bool, ray: bool) -> usize {
+    usize::from(bindless) | usize::from(ray) << 1
+}
+
 /// `build`'s shader module, the default or the `bindless` variant
-/// (`super::bindless`): shared for the life of an open [`Scope`], freshly
-/// created and uncached with none open.
-pub(crate) fn shared_shader_module(device: &wgpu::Device, bindless: bool) -> wgpu::ShaderModule {
+/// (`super::bindless`), with the `ray` variant's acceleration structure when the
+/// scene group has one: shared for the life of an open [`Scope`], freshly created and
+/// uncached with none open.
+pub(crate) fn shared_shader_module(
+    device: &wgpu::Device,
+    bindless: bool,
+    ray: bool,
+) -> wgpu::ShaderModule {
     CACHE.with(|cell| match cell.borrow_mut().as_mut() {
-        None => create_shader_module(device, bindless),
+        None => create_shader_module(device, bindless, ray),
         Some(cache) => {
             cache.shader_calls += 1;
-            let slot = &mut cache.shader[usize::from(bindless)];
+            let slot = &mut cache.shader[variant(bindless, ray)];
             if let Some(shader) = slot {
                 cache.shader_hits += 1;
                 return shader.clone();
             }
-            let shader = create_shader_module(device, bindless);
+            let shader = create_shader_module(device, bindless, ray);
             *slot = Some(shader.clone());
             shader
         }
     })
 }
 
-fn create_shader_module(device: &wgpu::Device, bindless: bool) -> wgpu::ShaderModule {
-    let (label, source) = if bindless {
-        (
+fn create_shader_module(device: &wgpu::Device, bindless: bool, ray: bool) -> wgpu::ShaderModule {
+    let (label, source) = match (bindless, ray) {
+        (false, false) => ("mesh", include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl"))),
+        (true, false) => (
             "mesh bindless",
             include_str!(concat!(env!("OUT_DIR"), "/mesh_bindless.wgsl")),
-        )
-    } else {
-        ("mesh", include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl")))
+        ),
+        (false, true) => (
+            "mesh ray",
+            include_str!(concat!(env!("OUT_DIR"), "/mesh_ray.wgsl")),
+        ),
+        (true, true) => (
+            "mesh bindless ray",
+            include_str!(concat!(env!("OUT_DIR"), "/mesh_bindless_ray.wgsl")),
+        ),
     };
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),

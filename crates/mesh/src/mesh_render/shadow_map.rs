@@ -225,6 +225,21 @@ pub(super) struct Resources {
     pub env_probe_view: wgpu::TextureView,
     /// The circuit's sky reflection map, or a black placeholder.
     pub sky_probe_view: wgpu::TextureView,
+    /// The ray tier's acceleration structure, bound at binding 18 when there is one.
+    pub tlas: Option<wgpu::Tlas>,
+}
+
+/// Binding 18: the ray tier's acceleration structure, in the layout only when
+/// [`super::ShadowMaps::sun_tlas`] is set.
+pub(super) fn tlas_layout_entry() -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding: 18,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::AccelerationStructure {
+            vertex_return: false,
+        },
+        count: None,
+    }
 }
 
 /// The view and sampler to bind, given the caller's map or none.
@@ -252,6 +267,7 @@ pub(super) fn resources(
         behind_glass,
         env_probes,
         sky_probe,
+        sun_tlas,
     } = maps;
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("shadow map"),
@@ -522,5 +538,6 @@ pub(super) fn resources(
         behind_glass_view,
         env_probe_view,
         sky_probe_view,
+        tlas: sun_tlas.cloned(),
     }
 }
