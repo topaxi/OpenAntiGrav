@@ -553,6 +553,9 @@ impl Session {
 
     pub(crate) fn handle_picker(&mut self, event: Event) {
         self.play_navs([event.nav()]);
+        // JOIN GAME's Ship Select (LAN or online) comes from the join row, not from a Track
+        // Select, so BACK has no Track Select to return to either.
+        let joining = self.lan_picking_ship() || self.online_picking_ship();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -683,6 +686,11 @@ impl Session {
                 // `Cell Selection`, on the same cell and rung. Pulse keeps
                 // its earlier `Grid Selection` - nothing measured there.
                 let hd = layout_is_hd;
+                if joining {
+                    // The LAN or online step is dropped by its `sync_*` once the page shows.
+                    self.campaign_cell = None;
+                    return;
+                }
                 match self.campaign_cell.take() {
                     Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty, false),
                     // Pure's chain: Back is the screen before `Team Selection`,
