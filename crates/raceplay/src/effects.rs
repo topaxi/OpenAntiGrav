@@ -523,6 +523,27 @@ impl Race {
         &self.view.hd_flame[slot]
     }
 
+    /// Whether one craft's flare shapes (the flame and its spikes) are held
+    /// back: the throttle and boost blends are at zero **and** the speedometer
+    /// reads 0 km/h.
+    ///
+    /// **Observed on the original, gate unread.** Its frames at the Talon's
+    /// start line draw no `flame_test` draw at 0 km/h (a grid frame and one
+    /// 0.5 s after the GO, two boots) and draw all five of Harimau classic's
+    /// shapes at speed, with the throttle held and with it just released
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, "The flare
+    /// shapes are not drawn at a standstill"). Only that measured corner is
+    /// gated; the threshold between 0 and the lowest speed seen drawn is not
+    /// known, so the speedometer's own rounding is used.
+    #[must_use]
+    pub fn hd_flame_resting(&self, slot: usize) -> bool {
+        if !self.view.hd_trail_active || !self.view.hd_flame[slot].at_rest() {
+            return false;
+        }
+        let body = &self.sim.world.ships[slot].physics.body;
+        body.linear_velocity.dot(body.forward()).abs() * 3.6 < 0.5
+    }
+
     /// One craft's sprite-flare quad: `Engine_Flare_Rich.gtf` at the nozzle,
     /// a 4:1 streak sized and faded by `EngineFlare_RenderTick`'s own law
     /// (`oag_fx::exhaust::hd::Sprite`). Empty off HD, where no locator

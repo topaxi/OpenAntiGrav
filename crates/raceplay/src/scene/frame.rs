@@ -1058,7 +1058,7 @@ impl Scene {
             let Some(flare) = flare else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.ship_active(slot) || race.hd_flame_resting(slot) {
                 continue;
             }
             // `draw`, not `draw_additive`: every batch of this model already
@@ -1068,7 +1068,7 @@ impl Scene {
             draws.mesh(flare);
         }
         for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
-            if !race.ship_active(slot) {
+            if !race.ship_active(slot) || race.hd_flame_resting(slot) {
                 continue;
             }
             for spike in spikes {

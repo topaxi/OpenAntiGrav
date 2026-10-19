@@ -135,6 +135,9 @@ pub(super) fn per_team(
     } else {
         alpha_ramp(&mut model);
         shading(&mut model, &geometry, report);
+        if authored.front_faces_only {
+            front_faces_only(&mut model);
+        }
     }
     translate(&mut model, nozzle);
     let spike_names: Vec<&str> = authored
@@ -344,6 +347,25 @@ pub(super) fn alpha_ramp(model: &mut Model) {
         // colour set - the value it would carry if the sun term were the only
         // reader. See `mesh.wgsl`.
         vertex.sun_mask = 1.0;
+    }
+}
+
+/// Marks every draw of the flare back-face culled.
+///
+/// The original's flare draws carry no GPU cull (`cull_face` disabled) and
+/// still show one side: the shapes' vertices and indices are rebuilt every
+/// frame and only the camera-facing triangles are submitted. Drawing both
+/// sides of an additive shell, as the authored material's state says, doubles
+/// every layer and is what made the blob glitter. See
+/// [`oag_title::flare::Authored::front_faces_only`].
+fn front_faces_only(model: &mut Model) {
+    for call in model
+        .draws
+        .iter_mut()
+        .chain(&mut model.alpha_tested_draws)
+        .chain(&mut model.transparent_draws)
+    {
+        call.culled = true;
     }
 }
 

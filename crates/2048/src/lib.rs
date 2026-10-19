@@ -115,6 +115,9 @@ pub const TITLE: &Title = &Title {
         sprite: "/data/tex/engineflare/engine_flare_rich.gxt",
         // **Off, chosen, not measured.** See `Authored::engine_light`.
         engine_light: false,
+        // **Off, unmeasured**: HD's single-sided flare shapes (`Authored::front_faces_only`)
+        // are checked against this title's file, not assumed - no Vita capture reads it.
+        front_faces_only: false,
     }),
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,

@@ -104,6 +104,7 @@ pub const TITLE: &Title = &Title {
         sprite: "/data/tex/engineflare/engine_flare_rich.gnf",
         // **Off, chosen, not measured**, as on 2048.
         engine_light: false,
+        front_faces_only: false,
     }),
     // **Split into three files, like 2048's, not combined like HD's or
     // Pulse's/Pure's.** `data09.psarc` carries `data/plugins/teams/

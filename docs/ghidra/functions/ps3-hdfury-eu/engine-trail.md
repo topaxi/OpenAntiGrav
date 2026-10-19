@@ -2202,6 +2202,43 @@ meshes with a previous-tick matrix, write their own motion instead (the follow-u
 that closed the rest of the flame ghost); see `docs/rendering/motion-blur.md`,
 "What an alpha-blended effect writes to velocity".
 
+## The flare's draw state, read live: why ours glared and glittered (2026-10-19, `hd-flare-material`)
+
+RPCS3 (recompiler, Write Color Buffers on, Harimau classic, Talon's start state),
+`rpcs3_draw_hook.py` frames: a grid frame and a frame 0.5 s after the GO at 0 km/h (two
+boots), a thrust frame (two boots), and a frame about 1-3 s after the throttle was released
+at 177 km/h. Draws found by their live fragment program text (`ps3-fp-live.py`, the flame
+program with its fog tail), not by address. Tools: `scripts/rsx-draw-list.py`,
+`scripts/rsx-flare-shapes.py`; frames and draw lists in `data/reference/hd-flare-material/`.
+
+Bisect on a captured frame of ours (temporary toggles per layer, bloom, hull, particles):
+the large white rest glare was **not** a flare layer. It was the stage particle effect
+`WO_SHIP_ENGINEFLARE`, which HD inherited from Pulse's engine effect table (the PS2 port's
+"on while the craft is" trigger). The glitter was the flare shapes drawn double-sided.
+
+| Finding | Evidence | Confidence |
+| --- | --- | --- |
+| HD plays no `WO_SHIP_ENGINEFLARE` at the nozzle (the file ships, no string or call plays it) | no particle glare in 3 original rest frames; removing it from ours at rest gives the dark-blue nozzle of the original | 80 |
+| The `flame_test` draws exist only while the craft moves: **none** at 0 km/h (grid frame, and post-GO 0.5 s, 2 boots); **five** (EF_Main as 2 material draws plus three spikes) at thrust (2 boots) and while coasting at 177 km/h | live draw lists; the gate's own condition is **unread** (`EngineFlare_Update` `+0x10c` is thrust > 0 or the boost gate and is not it: shapes stay drawn after release) | 75 observed, gate unread |
+| Draw state: blend `SrcAlpha`/`One`, depth test on and write off, colour mask `0x00010101` (alpha unwritten), cull off, alpha test off, unit 0 = `flame_01` DXT45 64x64, 4 mips, repeat, trilinear | draw registers | 90 |
+| The flame fragment program ends on the fog lerp and a **`/2` output scale** on rgb (`MAD /2 H0.xyz`), alpha unscaled; constants `power1` 10, `min1` 0.45, `scale1` 0.3, alpha scale 2.0 as the file | live program text | 90 |
+| Each shape is **single-sided**: the vertices are world-space and the indices rebuilt per frame, only camera-facing triangles submitted. 498 of 499 triangles of a thrust frame face the eye by their authored winding (columns reading of `c256-c258`; the rows reading gives 255) and a frame submits 48-57 % of the model's 961 triangles | `rsx-flare-shapes.py` | 85 |
+| **Spike and body scale law, live at thrust and coasting:** model matrix uniform scale per draw. s = 1: body 1.125 = 0.75 x 1.5 (both axes), spikes 1.578, 1.460, 1.260 = 0.75 x 2.5 x {0.84, 0.78, 0.67}. Coasting (s about 0.09): body 0.806 x 0.806 x 0.272, spikes 1.106, 1.235, 1.185 = 0.75 x 2.045 x {0.72, 0.805, 0.77}. All six flicker draws sit inside 0.65-0.85 | `c256-c258` row lengths | thrust and flicker range 90 (was 85); the 2.0-at-rest term stays 90 |
+
+Wired: HD's title table drops `Trigger::EngineFlare`, the procedural quad stays off on HD,
+the flare model's draws are back-face culled (`Authored::front_faces_only`, HD only), the
+flame rgb takes the `/2` output scale like every other scene program (`scene.light.output_scale`),
+and flame and spikes are not drawn while the throttle and boost blends are zero and the
+speedometer reads 0 km/h (`Race::hd_flame_resting`; **only the measured corner is gated**).
+
+Open: the rest "jewel" of the original (small cyan-pink light in the nozzle) is not a
+`flame_test` draw, so it is hull or nozzle interior, which is `hd-hull-reflection`'s; at thrust
+the original's block sits inside the nozzle opening and ours extends further back (length or
+camera, not separated); the gate's true condition; Fury plume hue (not read).
+Cross-title: Omega and 2048 `front_faces_only` **checked, not measured** (no capture path
+for PS4; no Vita capture), left `false`; the particle trigger was already dropped on both.
+Reproduce: `OAG_RPCS3_ATTACH=1 HOOKPY=<keep wrapper> ... place --hook`; `python3 scripts/rsx-flare-shapes.py <dir> <stem>`.
+
 ## Reproducing this
 
 ```sh

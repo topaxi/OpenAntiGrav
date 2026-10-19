@@ -96,4 +96,12 @@ pub struct Authored {
     /// hull of the same length (13.8 against 13.8 units), which floods the
     /// circuit white when drawn on HD's law.
     pub engine_light: bool,
+    /// Whether the original submits only the camera-facing triangles of the
+    /// flare's shapes, so a draw is single-sided although its material
+    /// disables culling. HD: **measured** (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`,
+    /// "The flare shapes are single-sided"): of the 5 shapes of a live
+    /// thrust frame, 498 of 499 submitted triangles face the eye by their
+    /// authored winding, and the frame submits 49-57 % of the model's
+    /// triangles. 2048 and Omega: unmeasured, so `false`.
+    pub front_faces_only: bool,
 }

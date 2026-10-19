@@ -149,6 +149,7 @@ pub const TITLE: &Title = &Title {
         // The literal at `0x0079bdd8` in `EBOOT.elf`.
         sprite: "/data/tex/engineflare/engine_flare_rich.gtf",
         engine_light: true,
+        front_faces_only: true,
     }),
     // **The same file the soundtrack is declared in**, because on this title the
     // front-end plugin *is* the game plugin - it carries the `PI_Team` and

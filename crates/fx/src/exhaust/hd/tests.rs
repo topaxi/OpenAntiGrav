@@ -397,3 +397,14 @@ fn the_spikes_scale_uniformly_from_their_own_law_not_the_groups() {
     assert!((flame.main_spike_scale() - (SPIKES_THRUST_MAX + SPIKES_BOOST_MAX)).abs() < 1e-3);
     assert_eq!(flame.boost_spike_scale(), BOOST_EXTRA_Z);
 }
+
+#[test]
+fn a_flame_is_at_rest_until_the_throttle_or_boost_moves_it() {
+    let mut flame = Flame::new();
+    assert!(flame.at_rest());
+    flame.advance(true, false);
+    assert!(!flame.at_rest());
+    let mut flame = Flame::new();
+    flame.advance(false, true);
+    assert!(!flame.at_rest());
+}
