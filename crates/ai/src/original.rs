@@ -48,6 +48,6 @@ pub use laws::{Laws, RING_RATE, event_ring_rate};
 pub use pack::{Wander, race_fraction, shuffle};
 pub use rail::{Rail, RailCorrection};
 pub use sibling::SingleLane;
-pub use steer::{Controller, Steering, airborne, lookahead_distance, pitch, steer};
+pub use steer::{Controller, SteerInput, Steering, airborne, lookahead_distance, pitch, steer};
 pub use thrust::{Racer, Thrust, ThrustInput, opponent_thrust};
 pub use track::{Pose, TrackPoint};

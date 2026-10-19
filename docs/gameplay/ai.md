@@ -1086,6 +1086,55 @@ for `opponent-autopilot-wire` stands as it was.
 | Pulse 14 | 57 -> 55 | +0.91 -> +1.07 | 736 -> 270 | 600 -> 207 | 0 -> 0 | 0 -> 0 |
 | Pulse 16 | 51 -> 49 | +0.55 -> +0.58 | 241 -> 350 | 137 -> 379 | 0 -> 0 | 0 -> 0 |
 
+### The autopilot's airborne steering is the original's (2026-10-19)
+
+Lane `autopilot-crest-steering`. The two sections above put Fort Gale Black's
+crest and Ubermall's long jump down to "our driver's airborne steering". **They
+are not: the driver is the original's, verified frame by frame in the air.** The
+gap is the closed loop's state, which the driver only reacts to. Confidence 92.
+Evidence: [psp-pulse-usa/ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#the-airborne-driver-replayed-live-2026-10-19).
+
+- **Static.** Pulse's `Ai_ComputeControls` has no airborne branch beyond the
+  height fraction: no grounded gate, no held or rate-limited steer, no other
+  lane. `Ai_ComputePitch` is the ported law; its height and distance terms are
+  computed and never used on Pulse. HD's `AI_ComputeControls` (`0x00100658`) has
+  the same air term ([ps3-hdfury-eu/ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md)).
+- **Live, open loop (Pulse, PPSSPP, Fort Gale Black, PHANTOM, the player's
+  Autopilot).** The original's own state goes through `oag_ai::original::steer`
+  and `pitch` (`scripts/psp-autopilot-air.py`, `crates/ai/tests/air_replay.rs`).
+  Steer: \|diff\| p99 1.36 on 1,649 frames (1.03 on 248 airborne frames).
+  Pitch: identical on 234 of 234 airborne frames.
+- **HD, live (`scripts/rpcs3-hd-autopilot.py`'s Ubermall capture).** The
+  original holds pitch at `-100` across the jump from x `-243` and swings to
+  `+100` for the landing. Ours does the same from x `-240`. No HD replay was run
+  (the capture holds no orientation).
+
+**Where ours actually leaves the original:**
+
+| | Pulse Fort Gale Black, first jump (x `-536`) | HD Ubermall, long jump |
+| --- | --- | --- |
+| Launch | ours `vy` 75.5 against 67 at the same speed (about 227) and place; on the ramp the original steers `-98` where ours steers `-20` | similar: `vy` 89.5 against 86.9 |
+| Air | both fall at about `-137` | ours falls about 20 units/s² less: `-98 - 0.46 vy` against `-117 - 0.51 vy`, peak y 117.7 against 112.6 |
+| Then | ours lands 30 units later and 15 slower, reaches the crest steering `-100` with the airbrake against the original's `-13`, and the crest fall follows | ours flies longer; the cross-track term fades with height (`air` reaches `1.0`), and the steer swings right, left, right |
+
+Our air forces on HD (instrumented, not committed): gravity `-115`, engine `+7`
+to `+17` (the nose is up), drag, vertical damping `+2` to `+8`, lateral grip
+about `0`. **Next address: the craft physics, not the driver.**
+- Pulse: the ramp before x `-536`. Run a single-step residual seeded from the
+  original's per-frame state; `scripts/psp-autopilot-air.py` logs it.
+- HD: air vertical acceleration. It needs an RPCS3 capture with orientation.
+- Both titles also carry an unported pitch-input gate and an in-air
+  `<Misc weight_distribution>` torque (Pulse `Ship_UpdatePitch` `0x08848d08`,
+  HD `Craft_UpdatePitch` `0x000f0980`); whether that is the cause is not shown.
+
+Nothing changed in `oag-ai`, so the sweep numbers above stand. Re-measured on
+this lane's tree, weapons off, seed 1:
+- Fort Gale Black PHANTOM on `assegai`: 5 rescues, shield at each lap end
+  87.4, 87.4, 79.8, 72.2, 64.6, at end of run 64.6;
+- the same on Feisar: 4 rescues, 100, 92, 84, 76, 68, end 68.0;
+- HD Ubermall PHANTOM: 2 rescues, 143 wall ticks, lap ends 79.7, 78.2, 54.0,
+  30.0, 6.3, end 6.3.
+
 ### An opponent's Autopilot, measured and not wired (2026-10-19)
 
 The maintainer's rule for an opponent on this project's driver holding an

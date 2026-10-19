@@ -714,10 +714,13 @@ Three consequences, and the first is the interesting one:
   The other arm, `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump`, **is now
   implemented**: both of its unknowns were closed live - `craft+0x160` is the hull up axis
   and the gate is d-pad Up - so it is no longer a guess.
-- **The per-team in-air pitch bias** at `stats_base + 0x90`, which is outside every class
-  block and whose XML element is unknown, so there is no field to read it from.
-- **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies
-  unconditionally.
+- **The per-team in-air pitch bias** at `stats_base + 0x90`: `<Misc weight_distribution>`
+  (the PS2 parser; read live as `8.0` on the PSP, 2026-10-19), added to the pitch torque
+  whenever the craft is not grounded. `Handling::weight_distribution` carries it and
+  nothing reads it.
+- **The gate on pitch input**, `Ship_TestPitchAlignment` (`0x088492bc`), decoded
+  2026-10-19: input applies only while `dot(hull_up, -spline_down) > 0.9`. HD has the same
+  gate and bias. See [engine.md](../ghidra/functions/psp-pulse-usa/engine.md#pitch).
 - **The sweep-and-prune broadphase.** Not mirrored: `TriangleSoup` walks a bounding-volume
   hierarchy (2026-10-12) that reports the same candidates in the same ascending index order
   as the linear scan it replaced (a unit test holds it to that), because the scan had become

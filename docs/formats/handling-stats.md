@@ -671,5 +671,10 @@ Located alongside, same naming pattern, not yet decoded:
   not reopened when the PS2 side was read. Deliberately carries **no confidence
   score**, because it is a hypothesis from the consumer rather than an observation
   of a parser. Finding the PSP writer of `0x78` settles it, and finding that there
-  is none would be a genuine divergence between the builds.
+  is none would be a genuine divergence between the builds. **Consumer side read
+  live (2026-10-19, `autopilot-crest-steering`):** `*(craft+0x6c) + 0x90` held
+  `8.0` on a running craft (PPSSPP, Fort Gale, Time Trial), one of the values
+  the disc authors (`8.0` Assegai, Qirex, Triakis; `-8.0` AG Systems, Feisar,
+  Piranha; `0.0` EGX, Goteki). So the PSP fills it; the writer is still not
+  located.
 - Whether tracks carry handling modifiers of their own.
