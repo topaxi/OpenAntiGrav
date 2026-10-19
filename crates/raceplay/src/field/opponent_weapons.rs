@@ -289,10 +289,12 @@ impl Race {
     /// not ported, and everything below that is not a forward weapon is still
     /// this project's own:
     ///
-    /// - **Turbo is fired at once**, but only on a stretch the driver is not
-    ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
-    ///   It arms that craft's own boost plume, the same reuse the player's Turbo
-    ///   makes of the speed pad's visual.
+    /// - **Turbo is fired once the stretch its boost covers is clear**: the
+    ///   driver not braking, nobody close ahead, and `Driver::affords_boost`
+    ///   on the plan and the corner model. A turbo spent into a corner is a
+    ///   turbo spent into a wall. The original fires it on the roll alone;
+    ///   this gate is chosen. It arms that craft's own boost plume, the same
+    ///   reuse the player's Turbo makes of the speed pad's visual.
     /// - **A forward weapon is fired when `Race::opponent_fires` says so**, and
     ///   kept rather than spent when it does not, or when the weapon itself
     ///   declines (no lock, no authored stats, no free slot).
@@ -387,19 +389,30 @@ impl Race {
                 .linear_velocity
                 .dot(ship.physics.body.forward())
                 .max(0.0);
-            let boosted = speed * TURBO_SPEED_RATIO;
+            // **Additive**: the boost is thrust on top of the cap, so fired slow
+            // it still ends fast (`TURBO_GAIN`).
+            let boosted = speed + TURBO_GAIN;
+            // **Against the plan the driver follows, on this hull**, as
+            // `Race::step_opponents` builds its context. Until 2026-10-19 this
+            // asked the corner model with no plan and no yaw ceiling, and it
+            // passed five of eight Turbos that put a lone Ace into a wall
+            // (`docs/gameplay/ai.md`, "The Turbo gate reads the plan").
+            let route = ship.driver.branching.route;
             let context = oag_ai::Context {
                 line: self.line_of(slot),
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
                 field,
-                yaw_ceiling: None,
-                plan: None,
+                yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)),
+                plan: super::routes::plan_for(
+                    &self.sim.routes,
+                    self.sim.speed_plan.as_ref(),
+                    super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
+                    route,
+                ),
             };
-            if !ship
-                .driver
-                .allows_speed(&context, boosted, boosted * simple.time)
-            {
+            let ticks = simple.time * 60.0;
+            if !ship.driver.affords_boost(&context, boosted, ticks) {
                 return;
             }
             self.sim.world.ships[slot].physics.turbo_timer = simple.time;

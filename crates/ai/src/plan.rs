@@ -314,6 +314,14 @@ impl SpeedPlan {
         self
     }
 
+    /// This plan with sample `index`'s target set to `target`, for a test of
+    /// what a driver asks of a braking zone ahead.
+    #[cfg(test)]
+    pub(crate) fn with_target(mut self, index: usize, target: f32) -> Self {
+        self.target[index] = target;
+        self
+    }
+
     /// How many samples [`Self::tight_within`] can find, for a loader report.
     #[must_use]
     pub fn tight_samples(&self) -> usize {
