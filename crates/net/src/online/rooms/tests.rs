@@ -29,6 +29,9 @@ fn settings(title: &str) -> RoomSettings {
         max_players: 3,
         opponents: true,
         laps: 0,
+        no_barrel_rolls: false,
+        pilot_assist: false,
+        zone_target: 0,
     }
 }
 
@@ -73,6 +76,7 @@ fn ready_room(rooms: &mut Rooms, owner: ClientId, guest: ClientId, title: &str) 
             Message::Ready {
                 team: team.into(),
                 ready: true,
+                assist: 0,
             },
         );
     }
@@ -223,6 +227,7 @@ fn join_refuses_full_started_and_unknown_rooms_by_name() {
             Message::Ready {
                 team: "Feisar".into(),
                 ready: true,
+                assist: 0,
             },
         );
     }
@@ -250,6 +255,7 @@ fn the_start_gate_wants_people_then_picks_then_the_owner() {
         Message::Ready {
             team: String::new(),
             ready: true,
+            assist: 0,
         },
     );
     assert_eq!(
@@ -263,6 +269,7 @@ fn the_start_gate_wants_people_then_picks_then_the_owner() {
             Message::Ready {
                 team: team.into(),
                 ready: true,
+                assist: 0,
             },
         );
     }
@@ -405,6 +412,7 @@ fn the_queue_tells_each_room_its_place() {
         Message::Ready {
             team: "Qirex".into(),
             ready: false,
+            assist: 0,
         },
     );
     rooms.take_outbox();
@@ -413,6 +421,7 @@ fn the_queue_tells_each_room_its_place() {
         Message::Ready {
             team: "Qirex".into(),
             ready: true,
+            assist: 0,
         },
     );
     rooms.handle(5, Message::Start);
@@ -485,6 +494,7 @@ fn the_launch_carries_every_setting_and_seat_into_the_race_params() {
             Message::Ready {
                 team: team.into(),
                 ready: true,
+                assist: 0,
             },
         );
     }
@@ -570,4 +580,60 @@ fn laps_are_kept_only_for_a_mode_that_ends_on_laps() {
         0,
         "speed lap never ends on laps"
     );
+}
+
+/// Omega's room rows reach the race: rolls off, each seat's own Pilot Assist level only while
+/// the room allows it, and a Zone room's target clamped to the slider and dropped elsewhere.
+#[test]
+fn the_launch_carries_rolls_assist_and_the_zone_target() {
+    let launch_of = |settings: RoomSettings, picks: [u8; 2]| {
+        let mut rooms = lobby();
+        person(&mut rooms, 1, "ann", &[PULSE]);
+        person(&mut rooms, 2, "bob", &[PULSE]);
+        rooms.handle(1, Message::CreateRoom(settings));
+        rooms.handle(2, Message::JoinRoom { room: 1 });
+        for ((who, team), assist) in [(1, "Feisar"), (2, "Qirex")].into_iter().zip(picks) {
+            rooms.handle(
+                who,
+                Message::Ready {
+                    team: team.into(),
+                    ready: true,
+                    assist,
+                },
+            );
+        }
+        rooms.handle(1, Message::Start);
+        rooms.tick(0);
+        rooms.tick(1000);
+        rooms.take_launch().expect("launched").params
+    };
+    let zone = RoomSettings {
+        mode: "zone".into(),
+        no_barrel_rolls: true,
+        pilot_assist: true,
+        zone_target: 200,
+        ..settings(PULSE)
+    };
+    let p = launch_of(zone.clone(), [2, 9]);
+    assert!(p.no_barrel_rolls);
+    assert_eq!(p.assists, [2, 2], "a level past the last is the last");
+    assert_eq!(p.zone_target, 55, "capped at the slider's end");
+    let p = launch_of(
+        RoomSettings {
+            pilot_assist: false,
+            zone_target: 3,
+            ..zone.clone()
+        },
+        [2, 1],
+    );
+    assert_eq!(p.assists, [0, 0], "not allowed, nobody flies with it");
+    assert_eq!(p.zone_target, 15, "raised to the slider's start");
+    let p = launch_of(
+        RoomSettings {
+            mode: "single_race".into(),
+            ..zone
+        },
+        [0, 0],
+    );
+    assert_eq!(p.zone_target, 0, "only Zone has one");
 }

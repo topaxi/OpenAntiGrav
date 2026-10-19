@@ -65,6 +65,12 @@ OAG_ONLINE_ROOM_SETTINGS = { text = "RAUMEINSTELLUNGEN", human = false }
 OAG_ONLINE_MAX_PLAYERS = { text = "MAX. SPIELER", human = false }
 OAG_ONLINE_LAPS = { text = "RUNDEN", human = false }
 OAG_ONLINE_LAPS_OWN = { text = "STANDARD DES MODUS", human = false }
+OAG_ONLINE_BARREL_ROLLS = { text = "FASSROLLEN", human = false }
+OAG_ONLINE_PILOT_ASSIST = { text = "PILOTENASSISTENT ERLAUBT", human = false }
+OAG_ONLINE_ZONE_TARGET = { text = "ZONENZIEL", human = false }
+OAG_ONLINE_ON = { text = "AN", human = false }
+OAG_ONLINE_OFF = { text = "AUS", human = false }
+OAG_ONLINE_ZONE_NONE = { text = "KEINES", human = false }
 OAG_ONLINE_QUEUED = { text = "EIN ANDERES SPIEL LÄUFT: DU BIST NUMMER %d IN DER WARTESCHLANGE", human = false }
 OAG_ONLINE_COUNTDOWN = { text = "DAS RENNEN STARTET IN %d", human = false }
 OAG_ONLINE_RACING = { text = "DAS RENNEN WIRD GESTARTET", human = false }

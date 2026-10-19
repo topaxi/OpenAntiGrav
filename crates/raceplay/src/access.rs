@@ -19,6 +19,14 @@ impl Race {
         self.sim.scheme = scheme;
     }
 
+    /// Ends a Zone race at zone `target` (a network room's setting), or leaves the original's
+    /// ending alone for `None`. Does nothing in another mode: only Zone counts zones.
+    pub fn set_zone_target(&mut self, target: Option<u16>) {
+        for race in &mut self.sim.world.race {
+            race.zone_target = target;
+        }
+    }
+
     #[cfg(feature = "view")]
     /// How far each airbrake flap has swung, left then right, in **radians**.
     ///

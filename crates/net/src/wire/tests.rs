@@ -26,6 +26,9 @@ fn params() -> RaceParams {
         opponents: true,
         weapons: false,
         laps: 3,
+        no_barrel_rolls: true,
+        assists: vec![0, 2],
+        zone_target: 30,
     }
 }
 

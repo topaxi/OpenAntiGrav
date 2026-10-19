@@ -442,6 +442,7 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         best_lap_ticks,
         lap_splits,
         zone,
+        zone_target,
         zone_timer,
         score,
         lap_gate,
@@ -478,6 +479,12 @@ fn write_race(hasher: &mut StateHasher, race: &RaceState) {
         write_option_u32(hasher, *split);
     }
     hasher.write_u32(u32::from(*zone));
+    // Hashed only while set, so a race with no target (every one the originals run) keeps the
+    // bytes it always had; a room's zone target is in the fingerprint, and two ends that
+    // disagree about it differ at tick 0.
+    if let Some(target) = zone_target {
+        hasher.write_u32(u32::from(*target) | 0x1_0000);
+    }
     hasher.write_f32(*zone_timer);
     hasher.write_i32(*score);
     hasher.write_u8(match lap_gate {

@@ -329,6 +329,32 @@ fn a_zone_steps_every_ten_seconds_and_the_timer_resets_to_zero() {
     assert_eq!(state.zone_timer, 0.0);
 }
 
+/// A room's zone target ends the race on the step that reaches it, and without one the
+/// original's Zone never ends on its own.
+#[test]
+fn a_zone_target_ends_the_race_on_the_zone_that_reaches_it() {
+    let course = course();
+    let position = course.position(0).expect("in range");
+    let run = |target: Option<u16>| {
+        let mut state = RaceState::new(Mode::Zone, SpeedClass::VENOM);
+        state.zone_target = target;
+        let mut ended = None;
+        for tick in COUNTDOWN..COUNTDOWN + 3_000 {
+            if state.update(&course, position, tick, DT, false).finished {
+                ended = Some((tick - COUNTDOWN + 1, state.zone));
+                break;
+            }
+        }
+        (ended, state.finished)
+    };
+    assert_eq!(
+        run(Some(2)),
+        (Some((1_200, 2)), true),
+        "two zones of 600 ticks"
+    );
+    assert_eq!(run(None), (None, false), "no target, no ending");
+}
+
 #[test]
 fn only_zone_mode_scores_or_steps() {
     let course = course();

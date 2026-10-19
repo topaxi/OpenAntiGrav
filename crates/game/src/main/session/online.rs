@@ -388,6 +388,16 @@ impl Session {
             laps: options
                 .laps_override
                 .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
+            // The room-only rows (`oag_game::online_screen::setting_rows`): a new room has
+            // rolls on, the assist allowed (chosen: Omega's list names On first) and Omega's
+            // own default zone target in Zone.
+            no_barrel_rolls: false,
+            pilot_assist: true,
+            zone_target: if options.mode == oag_race::Mode::Zone {
+                oag_game::online_screen::DEFAULT_ZONE_TARGET
+            } else {
+                0
+            },
         })
     }
 
@@ -408,8 +418,8 @@ impl Session {
         let Some(mut settings) = self.room_settings_from(&options, max_players) else {
             return;
         };
-        // The RACE page has no lap count: an edit keeps the room's own, which LAPS on the room
-        // screen sets.
+        // The RACE page has none of the room-only rows (laps, barrel rolls, Pilot Assist, the
+        // zone target): an edit keeps the room's own, which the room screen's rows set.
         if editing
             && let Some(room) = self
                 .online
@@ -418,6 +428,13 @@ impl Session {
                 .and_then(|lobby| lobby.room.as_ref())
         {
             settings.laps = room.settings.laps;
+            settings.no_barrel_rolls = room.settings.no_barrel_rolls;
+            settings.pilot_assist = room.settings.pilot_assist;
+            // Changing the mode to Zone starts from Omega's default; Zone to Zone keeps the
+            // room's choice, including none.
+            if room.settings.mode == settings.mode {
+                settings.zone_target = room.settings.zone_target;
+            }
         }
         let team = self.online_team(&options);
         let Some(online) = &mut self.online else {
@@ -489,23 +506,17 @@ impl Session {
         self.resupply_race_modes();
     }
 
-    /// LAPS on the room screen: one more or fewer lap (`by`) from `0`, the mode's own, up to
-    /// 20, wrapping. Sent as an edit like MAX PLAYERS.
-    fn online_step_laps(&mut self, by: i32) {
+    /// One of the owner's rows on the room screen (laps, barrel rolls, Pilot Assist, the zone
+    /// target) stepped by `by`, sent as an edit like MAX PLAYERS.
+    fn online_step_setting(&mut self, setting: oag_ui_screens::join::Setting, by: i32) {
         let Some(lobby) = self.online.as_mut().and_then(|online| online.lobby.as_mut()) else {
             return;
         };
         let Some(room) = lobby.room.as_ref() else {
             return;
         };
-        let next = oag_game::online_screen::step_max_players(
-            i32::from(room.settings.laps),
-            by,
-            0,
-            i32::from(oag_game::online_screen::MAX_LAPS),
-        );
         let mut settings = room.settings.clone();
-        settings.laps = u8::try_from(next).unwrap_or(settings.laps);
+        oag_game::online_screen::step_setting(&mut settings, setting, by);
         lobby.edit(settings);
     }
 
@@ -638,9 +649,9 @@ impl Session {
                     self.play_navs(Some(Nav::Accept));
                 }
             }
-            Event::Laps(by) => {
+            Event::Setting(setting, by) => {
                 if matches!(&self.online, Some(Online { step: Step::Room, .. })) {
-                    self.online_step_laps(by);
+                    self.online_step_setting(setting, by);
                     self.play_navs(Some(Nav::Accept));
                 }
             }
@@ -879,7 +890,9 @@ impl Session {
                 }
             }
         }
-        // The pick is the ready, once in the room; an edit clears it and it goes again.
+        // The pick is the ready, once in the room; an edit clears it and it goes again. It
+        // carries the Pilot Assist level this person flies with if the room allows it.
+        let assist = self.settings.controls.pilot_assist;
         if matches!(online.step, Step::Room)
             && let Some(lobby) = &mut online.lobby
         {
@@ -890,7 +903,7 @@ impl Session {
                 .and_then(|room| room.members.iter().find(|m| Some(&m.name) == me.as_ref()))
                 .map(|m| m.ready);
             if mine_ready == Some(false) && !online.team.is_empty() && !online.pick_sent {
-                lobby.ready(&online.team, true);
+                lobby.ready(&online.team, true, assist);
                 online.pick_sent = true;
             }
             if mine_ready == Some(true) {

@@ -1260,3 +1260,36 @@ fn a_pitched_craft_stops_ringing_within_two_swings() {
         );
     }
 }
+
+/// A room that switched barrel rolls off (`Environment::barrel_rolls`) never arms one and never
+/// spends shield on it, where the same craft in the same air rolls and pays when they are on.
+#[test]
+fn a_room_with_barrel_rolls_off_never_arms_one() {
+    let mut handling = fixture();
+    handling.dimensions.shield = 100.0;
+    handling.roll_cost = 8.0;
+    let world = flat_floor(Surface::Floor);
+    let controls = ShipControls {
+        roll_request: Some(oag_physics::barrel_roll::TapDirection::Right),
+        ..ShipControls::default()
+    };
+    let run = |barrel_rolls: bool| {
+        let mut state = ship_at(60.0, &handling);
+        state.shield = handling.dimensions.shield;
+        let env = Environment {
+            barrel_rolls,
+            ..Environment::default()
+        };
+        let mut armed = false;
+        for _ in 0..30 {
+            armed |= step(&mut state, &controls, &handling, &env, &world, TICK).roll_armed;
+        }
+        (armed, state.shield)
+    };
+    let (on, paid) = run(true);
+    assert!(on, "the fixture must roll when rolls are on");
+    assert!(paid < handling.dimensions.shield);
+    let (off, kept) = run(false);
+    assert!(!off);
+    assert_eq!(kept, handling.dimensions.shield, "and nothing was charged");
+}

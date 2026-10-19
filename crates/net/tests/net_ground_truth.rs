@@ -32,6 +32,9 @@ fn params() -> RaceParams {
         opponents: true,
         weapons: false,
         laps: 0,
+        no_barrel_rolls: false,
+        assists: Vec::new(),
+        zone_target: 0,
     }
 }
 
@@ -281,13 +284,16 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
             max_players: 2,
             opponents: true,
             laps: 1,
+            no_barrel_rolls: false,
+            pilot_assist: false,
+            zone_target: 0,
         });
         pump(&mut people, &|p| p[0].room.is_some());
         let room = people[0].room.as_ref().expect("room").id;
         people[1].join(room);
         pump(&mut people, &|p| p[1].room.is_some());
-        people[0].ready("Feisar", true);
-        people[1].ready("Qirex", true);
+        people[0].ready("Feisar", true, oag_physics::pilot_assist::Level::Off);
+        people[1].ready("Qirex", true, oag_physics::pilot_assist::Level::Off);
         pump(&mut people, &|p| {
             p[0].room
                 .as_ref()

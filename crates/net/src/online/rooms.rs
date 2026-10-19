@@ -21,6 +21,10 @@ use crate::wire::online::{
 };
 use crate::wire::{PROTOCOL, RaceParams};
 
+/// The fewest zones a Zone room may ask for (Omega's `NitroTarget` slider starts at 15).
+pub const MIN_ZONE_TARGET: u8 = 15;
+/// The most zones a Zone room may ask for (the slider ends at 55).
+pub const MAX_ZONE_TARGET: u8 = 55;
 /// The most laps a room may ask for (Omega's slider ends at 20).
 const MAX_LAPS: u8 = 20;
 
@@ -79,6 +83,8 @@ struct Occupant {
     client: ClientId,
     team: String,
     ready: bool,
+    /// The Pilot Assist level index this person asked for ([`Message::Ready`]).
+    assist: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -362,6 +368,11 @@ impl Rooms {
         } else {
             0
         };
+        settings.zone_target = if mode == Some(oag_race::Mode::Zone) && settings.zone_target > 0 {
+            settings.zone_target.clamp(MIN_ZONE_TARGET, MAX_ZONE_TARGET)
+        } else {
+            0
+        };
         Ok(())
     }
 
@@ -401,7 +412,11 @@ impl Rooms {
             Message::CreateRoom(settings) => self.create(id, settings),
             Message::JoinRoom { room } => self.join(id, room),
             Message::Edit(settings) => self.edit(id, settings),
-            Message::Ready { team, ready } => self.ready(id, &team, ready),
+            Message::Ready {
+                team,
+                ready,
+                assist,
+            } => self.ready(id, &team, ready, assist),
             Message::Start => self.start(id),
             Message::Leave => {
                 if self.room_of(id).is_some() {
@@ -433,6 +448,7 @@ impl Rooms {
                 client: id,
                 team: String::new(),
                 ready: false,
+                assist: 0,
             }],
             stage: Stage::Open,
             note: String::new(),
@@ -467,6 +483,7 @@ impl Rooms {
             client: id,
             team: String::new(),
             ready: false,
+            assist: 0,
         });
         self.rooms[index].note = format!("{} joined", self.name(id).unwrap_or_default());
         if let Some(person) = self.people.get_mut(&id) {
@@ -534,7 +551,7 @@ impl Rooms {
         Ok(())
     }
 
-    fn ready(&mut self, id: ClientId, team: &str, ready: bool) -> Result<(), Fail> {
+    fn ready(&mut self, id: ClientId, team: &str, ready: bool, assist: u8) -> Result<(), Fail> {
         let Some(room) = self.room_of(id) else {
             return Err(refuse(Refusal::NotInRoom, "you are not in a room"));
         };
@@ -558,6 +575,7 @@ impl Rooms {
         {
             member.team = team.to_string();
             member.ready = ready;
+            member.assist = assist;
         }
         self.push_room(index);
         Ok(())
@@ -780,6 +798,7 @@ impl Rooms {
             })
             .collect();
         let teams: Vec<String> = room.members.iter().map(|m| m.team.clone()).collect();
+        let max_assist = u8::try_from(oag_physics::pilot_assist::Level::ALL.len() - 1).unwrap_or(0);
         let params = RaceParams {
             title: room.settings.title.clone(),
             track: room.settings.track.clone(),
@@ -794,6 +813,21 @@ impl Rooms {
             opponents: room.settings.opponents,
             weapons: false,
             laps: room.settings.laps,
+            no_barrel_rolls: room.settings.no_barrel_rolls,
+            // A seat's own level only where the room allows the assist, and never past the
+            // levels there are.
+            assists: room
+                .members
+                .iter()
+                .map(|m| {
+                    if room.settings.pilot_assist {
+                        m.assist.min(max_assist)
+                    } else {
+                        0
+                    }
+                })
+                .collect(),
+            zone_target: room.settings.zone_target,
         };
         Launch {
             room: room.id,

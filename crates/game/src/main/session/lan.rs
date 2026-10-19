@@ -385,7 +385,7 @@ impl Session {
 
     fn handle_lan(&mut self, event: Event) {
         match event {
-            Event::Moved | Event::Settings | Event::MaxPlayers(_) | Event::Laps(_) => {}
+            Event::Moved | Event::Settings | Event::MaxPlayers(_) | Event::Setting(..) => {}
             Event::Back => {
                 self.end_lan();
                 self.play_navs(Some(Nav::Decline));
@@ -761,6 +761,10 @@ fn lan_params(
         laps: options
             .laps_override
             .map_or(0, |laps| u8::try_from(laps).unwrap_or(u8::MAX)),
+        // LAN hosts keep the originals' race: rolls on, no assist, Zone's own ending.
+        no_barrel_rolls: false,
+        assists: Vec::new(),
+        zone_target: 0,
     }
 }
 

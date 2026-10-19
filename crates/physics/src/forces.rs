@@ -293,6 +293,10 @@ pub struct Environment {
     /// for a craft it never applies to (every AI craft, a title with no table). `None`
     /// changes nothing, bit for bit.
     pub pilot_assist: Option<crate::pilot_assist::Input>,
+    /// Whether this craft may barrel roll. `false` is a room that switched rolls off (Omega's
+    /// online `Barrel rolls` row): the gesture is never read, so no roll arms and no shield is
+    /// spent. `true` is every race the originals run.
+    pub barrel_rolls: bool,
 }
 
 impl Default for Environment {
@@ -308,6 +312,7 @@ impl Default for Environment {
             thrust_scale: 1.0,
             start_boost: None,
             pilot_assist: None,
+            barrel_rolls: true,
         }
     }
 }
@@ -503,14 +508,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     //
     // `control_contact`, not `contact_grounded`: the original's `craft+0x1c0 & 1` read
     // here is last frame's, as hover has not rebuilt it. Same value the sideshift gets.
-    let roll_armed = barrel_roll::advance_gesture(
-        state,
-        input,
-        &handling.dimensions,
-        handling.roll_cost,
-        control_contact,
-        dt,
-    );
+    let roll_armed = env.barrel_rolls
+        && barrel_roll::advance_gesture(
+            state,
+            input,
+            &handling.dimensions,
+            handling.roll_cost,
+            control_contact,
+            dt,
+        );
     barrel_roll::advance_phase(state, handling.roll_speed, dt);
     state.roll_payout_timer = (state.roll_payout_timer - dt).max(0.0);
 

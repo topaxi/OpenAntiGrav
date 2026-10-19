@@ -115,8 +115,31 @@ pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
     }
     race.set_control_scheme(scheme(params)?);
     race.set_autopilot(false);
+    // Off for everybody unless the room allowed it, in which case each seat flies the level
+    // that person asked for: the same list on both ends, so the physics agrees.
     race.set_pilot_assist(oag_physics::pilot_assist::Level::Off);
+    for slot in 0..usize::from(params.people).min(oag_gameplay::MAX_PLAYERS) {
+        race.set_pilot_assist_seat(slot, seat_assist(params, slot));
+    }
+    race.set_barrel_rolls(!params.no_barrel_rolls);
+    race.set_zone_target(zone_target(params));
     Ok(())
+}
+
+/// The Pilot Assist level seat `seat` flies: its entry in [`RaceParams::assists`], else off.
+fn seat_assist(params: &RaceParams, seat: usize) -> oag_physics::pilot_assist::Level {
+    params
+        .assists
+        .get(seat)
+        .and_then(|&i| oag_physics::pilot_assist::Level::ALL.get(usize::from(i)))
+        .copied()
+        .unwrap_or_default()
+}
+
+/// The zone a Zone race ends at, or `None` for the original's own Zone (and in any other mode).
+fn zone_target(params: &RaceParams) -> Option<u16> {
+    let zone = oag_race::Mode::from_name(&params.mode) == Some(oag_race::Mode::Zone);
+    (zone && params.zone_target > 0).then_some(u16::from(params.zone_target))
 }
 
 /// Hands the craft of every seat in `retired` (a [`crate::wire::TickRecord::retired`] mask) to
