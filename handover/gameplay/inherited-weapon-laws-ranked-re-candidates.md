@@ -6,7 +6,8 @@ thread ranks its **inherited** cells that decide play. The ranking signature is
 the one that cost a day on 2026-10-19: *a number HD, 2048 or Omega authors very
 differently from Pulse, spent by a Pulse law nobody has read on that title*.
 A value diff of the race tables (Pulse EU PSP and PS2, Fury `DATA00`, 2048's
-`_Race_2048`, Omega's two copies, 2026-10-19) found **every weapon block equal
+`_Race_2048`, Omega's two copies, 2026-10-19, confidence 90; the fields and the
+commands are in `docs/formats/weapon-stats.md`, "The race tables compared across titles") found **every weapon block equal
 to Pulse's across Pulse, HD and Omega except the ones below**; so the risk is
 not in the numbers, it is in what spends them.
 
@@ -15,7 +16,7 @@ not in the numbers, it is in what spends them.
 Ranked, most play impact first. Each names what would settle it.
 
 1. **The fire law on Pure, HD, 2048 and Omega.** Inherited from Pulse on four
-   titles and run in every race with weapons on, 36 to 288 opponent projectiles
+   titles and run in every race with weapons on, 38 to 288 opponent projectiles
    per 240 s race (`docs/gameplay/ai.md`, "An original opponent never fired").
    Only HD's table loader is read (`ps3-hdfury-eu/weapon-ai-stats.md`, 85);
    its consumer (`RaceManager + 6240`) is not. Settles it: HD's decision

@@ -3,10 +3,10 @@
 Where each weapon's behaviour, numbers, AI use, look and sound come from, per
 title, and how this engine adjusts or shares the code that plays it.
 [`overview/status.md`](../overview/status.md) says how *far along* a cell is;
-this page says **whose law it is**. The two were conflated once, and it cost a
-day: Pulse's per-tick LeachBeam drain ran on HD with HD's damage value (1.5,
-against Pulse's 0.1), wrecked every opponent that fired it, and was only fixed
-when HD's own once-per-trip drain was read
+this page says **whose law it is**. The two were conflated once: Pulse's per-tick LeachBeam drain ran on HD
+with HD's damage value (1.5, against Pulse's 0.1), emptied the target's shield
+in 94 to 119 ticks and wrecked the field, so opponents were made to hold the
+beam for a few hours until HD's own once-per-trip drain was read
 ([`ps3-hdfury-eu/weapons.md`](../ghidra/functions/ps3-hdfury-eu/weapons.md),
 confidence 80; [`ai.md`](ai.md), "An original opponent never fired, and now
 does"). A cell that reads "inherited" here is a cell where that can happen
@@ -27,6 +27,9 @@ Every cell opens with one source tag:
 | **C** | chosen by this project, not measured. Nothing in the original says so. | none |
 | **A** | absent: the title does not have it. The evidence is linked, because "absent" needs evidence. | the page's own score |
 | **?** | not investigated. It is neither inherited nor absent until someone looks; the cell says what would settle it. | none |
+
+`unread` in the checked table below means the same as `?` here: a title with
+no such thing recovered, as opposed to `absent`, a title that does not have it.
 
 Pulse PSP and Pulse PS2 share **one** `oag_title::Title` (`oag_pulse::TITLE`:
 one definition, two archive candidates), so everything this engine decides for
@@ -138,7 +141,39 @@ Notes on the cells the code does not explain by itself:
 ## The aspect tables
 
 Rows are the weapons and pickup effects each title has, columns the titles.
-Cells are short on purpose: the page behind the link is the evidence.
+Cells are short on purpose: the page behind the link is the evidence. Where
+the Pulse PSP and PS2 columns are merged into one, PS2 equals PSP except the
+named exceptions (the PS2 `extrashield.vex` shell, its engine flare as a particle
+effect, and its tuning table, which is equal to the PSP's, see below).
+
+### Implementation: the shared path and what adjusts it per title
+
+Each row is the code every title runs, and the fields that make a title
+differ. A weapon with no per-title field runs identically on every title that
+has it; only its table moves.
+
+| Weapon | Shared code | Per-title data that adjusts it |
+| --- | --- | --- |
+| Rocket | `oag_weapons::projectile::rocket` on the `flight` floor follower; player glue `oag_raceplay::weapons`, opponents `field/opponent_weapons.rs` | `Weapons.race`/`.elimination` (numbers); `WeaponModels.rocket`, `.rocket_trail`; `Effects` `RocketFlare`, `TrackBlast`, `CraftBlast` |
+| Missile | `projectile::missile` (lock, guidance, five bounces); `oag_raceplay::weapons::reticle` | the table; `WeaponModels.missile_blast_hd`; `Effects` `MissileFlare`, `MissileExplo`, `MissileBounce` |
+| Quake | `projectile::quake`; the road ripple in `oag_render::ripple` | the table; `Effects.quake_look` (`QuakeLook`: up, lift, wash), `.extents`, `.sprites`; `Effects` `Quake` |
+| Cannon | `projectile::cannon` | the table; `WeaponModels.cannon`, `.cannon_look` (`CannonLook`, `CannonBody`); `Effects` `CannonSparks`, `WeaponSpark` |
+| Turbo | `oag_weapons::pickup`, then `oag_physics::engine` | the table only |
+| Shield | `oag_weapons::pickup`, then `oag_physics::damage` | the table; `Looks` (`ShieldPalettes`, hull overlay rule) |
+| Autopilot | `oag_weapons::pickup`, then the AI takeover in `oag_raceplay::player_step` | the table only |
+| Plasma | `projectile::plasma` on the `flight` follower | the table; `WeaponModels.plasma_ball`, `.plasma_blast_pulse`, `.plasma_blast_hd`; `Effects` `PlasmaFlare`, `PlasmaBlast`, `PlasmaLightning*` |
+| Bomb | `projectile::mine` (shared with Mine), `oag_raceplay::bomb_blast` | the table; `WeaponModels.bomb`, `.bomb_blast_pulse` (`shockwave_fades`), `.bomb_blast_hd`; `Effects` `BombSmokering`, `BombRays` |
+| Mine | `projectile::mine` | the table; `WeaponModels.mine`; `Effects` `MineExplo` |
+| LeachBeam | `projectile::leach_beam` (`Beam`, `Beam::per_trip`, `trip`); `oag_raceplay::leach_strip` | **`Weapons.leach_drain`** (`PerTick`, `PerTrip`); the table; `WeaponModels.leach_strip`, `.leachbeam_ball`; `Effects` `Leachbeam*`, `LeachHitSpark` |
+| Repulser | `projectile::repulser` (+ `fork`); `oag_raceplay::repulser_field` | the table; `WeaponModels.repulser_field`; `Effects` `RepulserBlast`, `Repulser` |
+| Shuriken | `projectile::shuriken` on the `flight` follower | the table; `WeaponModels.shuriken`; `Effects` `Shuriken*` |
+| Disruptor | `projectile::disruptor`, `oag_weapons::disruption`; `oag_raceplay::weapons::disruptor` | the table (Pure ships the only one); no field of its own |
+| Pickup draw | `oag_weapons::pickup` | the table's `<Pickupodds>`; `Title.weapon_pad_glow` for the pad's look |
+| Absorb | `oag_physics::damage` absorb branch | the table's `absorb`; `Effects` `ShieldAbsorb` with its burst |
+| Slowdown stacking | `oag_weapons::slowdown`, clamped to the table's `Global slowdown_limit` | the table's `slowdown_time` per weapon |
+| Fire law | `oag_ai::weapon_ai`, `oag_raceplay::field::fire_law` (`FireLaw`) | **`Weapons.ai`** (the odds file); `FireLaw::Ours` when it is missing |
+| Sound | `oag_sound::sfx::cue`, push sites in `oag_raceplay::weapons` and `field/opponent_weapons.rs` | the title's `weapons.bnk` path (`SOUND_BANKS` in its `race.rs`) |
+| EMP, Light Barrier, GiftCannon | none | none: authored, nothing reads them |
 
 ### Behaviour law
 
@@ -158,7 +193,7 @@ Cells are short on purpose: the page behind the link is the evidence.
 | Repulser | M: [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md); not runtime verified | I:Pulse PSP | A: not in Pure's roster | I:Pulse; `Repulser_Construct` read; HD's Eliminator odds weight it | I:Pulse; unread | ?: no `Repulser.cpp` tag found, absent or unnamed |
 | Shuriken | M: [shuriken_ground_truth.rs](../../crates/raceplay/tests/shuriken_ground_truth.rs) | I:Pulse PSP | A: not in Pure's roster | I:Pulse; no manager located | I:Pulse; unread | ?: unread |
 | Disruptor | A | A | M: whole law, grant to victim ([weapons.md](../ghidra/functions/psp-pure-usa/weapons.md)) | A | A | A |
-| EMP, Light Barrier | A | A | A: not wired. Authored (`EMP` in the Detonator table, `LightBarrier` in Fury's race table), `Weapon::from_type` drops both | M: read, gated to Detonator and Zone Battle ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)); not built | ?: both ship in the 2048-named tables, unread | M: `EMPManager_Construct`, `LightBarrierManager_Construct` read |
+| EMP, Light Barrier | A | A | A | M: authored (`EMP` in the Detonator table, `LightBarrier` in Fury's race table), not wired, `Weapon::from_type` drops both; read, gated to Detonator and Zone Battle ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)); not built | ?: both ship in the 2048-named tables, unread | M: `EMPManager_Construct`, `LightBarrierManager_Construct` read |
 | GiftCannon | A | A | A | A | ?: authored only in `weaponstats_*_2048.xml`, nothing reads it | ?: authored in the `_2048` copies, Omega reads HD-named files |
 | Pickup draw (`<Pickupodds>`) | M: [pickups.md](pickups.md), 92 | I:Pulse PSP | I:Pulse: Pure's own odds, Pulse's draw | I:Pulse draw, HD's own odds | I:Pulse draw, 2048's own odds | I:Pulse draw; a fifth `SuperPhantom` class is unread |
 | Absorb (energy paid back) | M: [shield.md](../ghidra/functions/psp-pulse-usa/shield.md) | I:Pulse PSP | I:Pulse | I:Pulse | I:Pulse | ?: unread |
@@ -168,7 +203,8 @@ Cells are short on purpose: the page behind the link is the evidence.
 
 The numbers each title authors. Compared by reading Pulse's table out of its
 WAD (EU PSP, and EU PS2 for the second column) and HD, 2048 and Omega's out of
-their archives, 2026-10-19.
+their archives, 2026-10-19; the commands, the differing fields and the scores
+are in [weapon-stats.md](../formats/weapon-stats.md#the-race-tables-compared-across-titles-2026-10-19).
 
 | Weapon | Pulse PSP | Pulse PS2 | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- | --- |

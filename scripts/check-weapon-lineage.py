@@ -177,6 +177,7 @@ def model_value(value: str | None) -> str:
 def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
     """axis -> title -> (value, origin word or None when the code carries none)."""
     cells: dict[str, dict[str, tuple[str, str | None]]] = {}
+    model_fields = struct_fields(strip_comments(TITLE_SRC.read_text(encoding="utf-8")), "WeaponModels")
     for title in TITLES.values():
         weapons = weapons_block(title)
         for field in ("race", "elimination", "ai"):
@@ -190,10 +191,9 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
                 continue
             origin = origin_word(value) if field == "ghost_static" else None
             cells.setdefault(f"weapon_models.{field}", {})[title] = (model_value(value), origin)
-        # `..EMPTY` fills the rest.
-        for axis in list(cells):
-            if axis.startswith("weapon_models.") and title not in cells[axis]:
-                cells[axis][title] = ("none", None)
+        # `..EMPTY` fills every field the literal does not spell out.
+        for field in model_fields:
+            cells.setdefault(f"weapon_models.{field}", {}).setdefault(title, ("none", None))
 
         text = read(EFFECT_FILES[title])
         for axis, trigger in EFFECT_ROWS.items():
