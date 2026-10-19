@@ -20,7 +20,9 @@ that buffer (progressive decode was turned down for that reason).
 | A saved place (`Audio::restore_race_music`) | the race's `race-music` fetch | checks it on the spot only if the listing is already known; otherwise the fetch checks it and logs the verdict |
 
 Which track a race fetch is for is a `RacePick`: a known index, "the track after this
-one", and optionally a saved place still to check. "After" and a saved place both need
+one", a run's first race (one past the menu's track on a PS2 boot, whose menu plays one of
+the sixteen, decided from the booted platform rather than from whether the menu's loop has
+landed), and optionally a saved place still to check. "After" and a saved place both need
 the booted listing, so the worker resolves them; the frame thread never needs a listing.
 Every worker waits for a background survey before it reads (`MusicDiscs::wait_surveyed`).
 
@@ -38,7 +40,9 @@ which on a PSARC inflates only the leading block (`psarc::Directory::read_entry_
 on a WAD reads a stored or LZSS prefix (`Archive::peek`). A head that does not say falls
 back to the whole entry. HD's listing used to inflate all fifteen tracks (about 75 MiB).
 Omega's plan reads a loose stem's header for its channel count instead of the whole stem.
-Only the track that will play is decoded, one per fetch.
+Only the track that will play is decoded, one per fetch. One at a time is the rule, not a
+guarantee: a prefetch that a `MUSIC SOURCE` switch drops keeps decoding on its detached
+thread beside the switch's own fetch, and its result is thrown away.
 
 `hd_music_ground_truth.rs` and `vita_2048_music_ground_truth.rs` assert, on every track,
 that the head-read length equals the whole entry's, to the bit.
@@ -66,15 +70,15 @@ AppImage container, AC power, Deck load average 0.8 to 1.3. "Before" is main at
 `71805dd91` plus the probe alone. Times are what the probe logged; "frame thread" is work
 that blocked a frame (or the window's start, for `--race`).
 
-| Case | Before: on the frame thread | After: on the frame thread | After: on the worker |
-| --- | --- | --- | --- |
-| HD front-end music start | 231 ms (13 mix tables + 218 MP3 decode) | 0 | 14 + 216 ms |
-| HD menu-launched race with a saved place (`--measure-race-load 2`) | 305 ms listing; worst main-thread frame 328.3 ms, `launch_race` span 325.1 ms | 0; worst frame 22.2 ms, span 17.2 ms | listing 24 ms, track 603 ms |
-| HD `--race` | 308 ms listing + 416 ms track | 0 | listing 23 ms, track 431 ms |
-| HD track change (saved place at 218 of 227.5 s, real audio) | 0 at the change (the prefetch was in) | 0 | next track 441 ms |
-| Pulse PSP front-end music start | 94 ms | 0 | 109 ms |
-| Pulse PSP `--race` | 670 to 687 ms track decode | 0 | 706 ms |
-| Pulse PSP survey (boot, or a launcher pick's load frame) | 359 to 366 ms on `main` | 0 | 359 to 364 ms; HD's 19 ms |
+| Case | Before: on the frame thread | After: on the frame thread | After: on the worker | Frames over 40 ms (worst), before / after |
+| --- | --- | --- | --- | --- |
+| HD front-end music start | 231 ms (13 mix tables + 218 MP3 decode) | 0 | 14 + 216 ms | 0 / 0 (a stalled frame hid it) |
+| HD menu-launched race with a saved place (`--measure-race-load 2`) | 305 ms listing; worst main-thread frame 328.3 ms, `launch_race` span 325.1 ms | 0; worst frame 21.1 to 22.2 ms, span 16.8 to 17.2 ms | listing 24 ms, track 598 to 603 ms | 0 / 0 (a stalled frame hid it) |
+| HD `--race` | 224 to 308 ms listing + 293 to 416 ms track, before the first frame | 0 | listing 23 ms, track 425 to 431 ms | 1 (41.7 to 45.7) per run over 4 runs / 1 or 2 (43.0 to 49.8) over 4 runs |
+| HD track change (saved place at 218 of 227.5 s, real audio) | 0 at the change (the prefetch was in) | 0 | next track 437 to 441 ms | 0 or 1 (42.6) / 0 or 1 (41.9) |
+| Pulse PSP front-end music start | 94 ms | 0 | 109 ms | 1 (96.7) / 0 and 0 |
+| Pulse PSP `--race` | 670 to 687 ms track decode, before the first frame | 0 | 702 to 706 ms | 0 / 0 |
+| Pulse PSP survey (boot, or a launcher pick's load frame) | 359 to 366 ms on `main` | 0 | 359 to 364 ms; HD's 19 ms | not separable from the load |
 
 The 40 ms frame warning cannot show most of this: the blocked frames were either before
 the first window frame (`--race`) or marked as load stalls. What it does count, the first
