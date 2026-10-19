@@ -539,7 +539,10 @@ From here the round trip is about 10 ms.
 - `tests/online.rs`, no disc, over real WebTransport on localhost: two rooms race one after the
   other through one slot (the second is told it is queued, then hands off only after the first
   race is over), reconnecting in the wrong order still seats by token, 0 hash mismatches, the room
-  returns open with the reason; a child that crashes after coming up; a child that never comes up
+  returns open with the reason; a child that crashes after coming up (the fake child waits at a gate file the test opens once it has
+  seen the hand-off, not a `sleep`: a child that exits before the lobby's poll reads it is `Over`, never `Up`, so
+  a pump stalled past the sleep lost the hand-off - it failed once under load on 2026-10-19; with the gate
+  removed the test now fails every time, which is what proves it is wired); a child that never comes up
   is killed; a title with no image refuses; a game client on the lobby port is refused by name.
 - `net_ground_truth::the_lobby_forks_a_real_race_...` (`#[ignore]`, `just test-data`): the real
   `oag-server lobby` forks the real `oag-server race` on a real circuit, one room. **Coverage is

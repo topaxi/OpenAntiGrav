@@ -400,14 +400,34 @@ fn a_refusal_that_arrives_with_the_close_is_still_read() {
 }
 
 /// A shell script standing in for `oag-server race`.
-fn fake_race(body: &str) -> std::path::PathBuf {
+fn fake_race(name: &str, body: &str) -> std::path::PathBuf {
     use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("oag-lobby-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let path = dir.join("race.sh");
+    let dir = fake_race_dir();
+    let path = dir.join(format!("{name}.sh"));
     std::fs::write(&path, format!("#!/bin/sh\nread job\n{body}\n")).expect("script");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     path
+}
+
+fn fake_race_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("oag-lobby-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    dir
+}
+
+/// A script waits at a gate until the test, having seen what it was waiting for, opens it:
+/// a wall-clock `sleep` in the script would race the test's own pump, which a loaded machine
+/// can stall past it (the child would exit before the lobby polled it, and a child that
+/// exited is `Over`, never `Up`).
+fn gate(name: &str) -> std::path::PathBuf {
+    let path = fake_race_dir().join(format!("{name}.gate"));
+    let _ = std::fs::remove_file(&path);
+    path
+}
+
+/// The script's line that blocks until `gate` exists.
+fn wait_at(gate: &std::path::Path) -> String {
+    format!("while [ ! -e '{}' ]; do sleep 0.01; done", gate.display())
 }
 
 fn child_runner(program: std::path::PathBuf) -> Box<ChildRunner> {
@@ -422,18 +442,24 @@ fn child_runner(program: std::path::PathBuf) -> Box<ChildRunner> {
 
 #[test]
 fn a_race_process_that_comes_up_then_crashes_hands_off_then_returns_the_room_with_its_reason() {
+    let gate = gate("crash");
     let script = fake_race(
-        "echo 'listening on [::]:45678'\n\
-         echo 'cert-hash 0101010101010101010101010101010101010101010101010101010101010101'\n\
-         sleep 0.3\n\
-         echo 'error: the circuit would not load' >&2\n\
-         exit 3",
+        "crash",
+        &format!(
+            "echo 'listening on [::]:45678'\n\
+             echo 'cert-hash 0101010101010101010101010101010101010101010101010101010101010101'\n\
+             {}\n\
+             echo 'error: the circuit would not load' >&2\n\
+             exit 3",
+            wait_at(&gate)
+        ),
     );
     let mut lab = Lab::new(child_runner(script));
     let (a1, a2) = (lab.join("a1"), lab.join("a2"));
     lab.room_starts(a1, a2, ["Feisar", "Qirex"]);
     lab.until("the hand-off", |lab| lab.people[a1].has_handoff());
     let handoff = lab.people[a1].take_handoff().expect("handed off");
+    std::fs::write(&gate, b"").expect("opens the gate: the child may crash now");
     assert_eq!(handoff.port, 45678, "the port the child printed");
     assert_eq!(handoff.cert_hash, [1; 32], "the hash the child printed");
     lab.until("the room back open", |lab| {
@@ -449,7 +475,7 @@ fn a_race_process_that_comes_up_then_crashes_hands_off_then_returns_the_room_wit
 
 #[test]
 fn a_race_that_never_comes_up_is_killed_and_the_slot_freed() {
-    let script = fake_race("exec sleep 30");
+    let script = fake_race("never_up", "exec sleep 30");
     let mut lab = Lab::new(Box::new(ChildRunner {
         load_timeout: Duration::from_millis(400),
         ..*child_runner(script)
