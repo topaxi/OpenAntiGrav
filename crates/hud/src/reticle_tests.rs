@@ -170,6 +170,12 @@ const HD_SIGHTS: &str = r#"
 <Image name="MissileSightOuter">
 <Values x="-1024" y="476" width="128" height="128" U="0" V="128" TxtrWidth="128" TxtrHeight="128" Color="0xFFFF0000" Src="missile_reticule.gtf"></Values>
 </Image>
+<Image name="MissileSightInner">
+<Values x="-1024" y="476" width="80" height="80" U="0" V="0" TxtrWidth="128" TxtrHeight="128" Color="0xFF00FF00" Src="missile_reticule.gtf"></Values>
+</Image>
+<Image name="MissileSightMiddle">
+<Values x="-1024" y="476" width="100" height="100" U="0" V="0" TxtrWidth="128" TxtrHeight="128" Color="0xFFFFFFFF" Src="missile_reticule.gtf"></Values>
+</Image>
 <Image name="MissileSightLockedOnLines">
 <Values x="-1024" y="476" width="128" height="128" U="128" V="128" TxtrWidth="128" TxtrHeight="128" Color="0xFFFFFFFF" Src="missile_reticule.gtf"></Values>
 </Image>
@@ -186,7 +192,12 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     always_on: &[],
     raster: false,
     sights: &oag_title::hud::Sights::Concentric {
-        seeking: &["MissileSightBG", "MissileSightOuter"],
+        seeking: &[
+            "MissileSightBG",
+            "MissileSightOuter",
+            "MissileSightInner",
+            "MissileSightMiddle",
+        ],
         locked: &["MissileSightLockedOnLines", "MissileSightLockedOnMiddle"],
         leach: None,
     },
@@ -648,12 +659,12 @@ fn the_bracket_dialect_tints_locked_red_and_seeking_yellow_and_white() {
     );
 }
 
-/// Wipeout HD's dialect: concentric sprites at one centre, no rotation.
+/// Wipeout HD's dialect: concentric sprites at one centre, the two rings turning.
 ///
 /// **The layout carries the geometry here and the law carries the centre.** Each
 /// widget keeps its authored size and its authored colour - HD authors a red
 /// outer where the PSP titles author one white bracket four times - and only the
-/// position is the reticle's.
+/// position and the rings' angle are the reticle's.
 #[test]
 fn the_concentric_dialect_centres_each_sprite_at_its_authored_size() {
     let layout = Layout::from_xml(HD_SIGHTS);
@@ -680,7 +691,8 @@ fn the_concentric_dialect_centres_each_sprite_at_its_authored_size() {
     };
     let frame = draw_list(&context_with(&layout, &strings, &sheet, &HD_ART), &readout);
 
-    // Seeking: the two seeking widgets and neither locked one.
+    // Seeking: backdrop and middle ring as plain sprites, outer and inner turning,
+    // and neither locked widget.
     let drawn = plain(&frame);
     assert_eq!(drawn.len(), 2, "{frame:?}");
     let centre = reticle.centre();
@@ -690,25 +702,26 @@ fn the_concentric_dialect_centres_each_sprite_at_its_authored_size() {
                 && (rect[1] + rect[3] * 0.5 - centre[1]).abs() < 0.01,
             "{rect:?} is not centred on {centre:?}"
         );
-        assert!(
-            (rect[2] - 128.0).abs() < 0.01,
-            "{rect:?} is not the authored 128 wide"
-        );
         assert!(colour[3] > 0.0);
     }
-    // The authored red survives: one of the two is not white.
     assert!(
-        drawn.iter().any(|(_, c)| c[1] < 0.5 && c[0] > 0.5),
-        "HD's authored red outer came out white: {drawn:?}"
+        drawn.iter().any(|(rect, _)| (rect[2] - 100.0).abs() < 0.01),
+        "the Middle ring is up while seeking: {drawn:?}"
     );
-
-    // Nothing rotates in this dialect.
-    assert!(rotated(&frame).is_empty(), "{frame:?}");
+    let turns = rotated(&frame);
+    assert_eq!(turns.len(), 2, "{frame:?}");
+    let phase = reticle.ring_phase();
+    assert!(phase > 0.0, "the rings should have turned by now");
+    assert!((turns[0].2 - phase).abs() < 1e-6, "{turns:?}");
+    assert!((turns[1].2 + phase).abs() < 1e-6, "{turns:?}");
 }
 
-/// And the locked pair is added once the lock is taken.
+/// The lock swaps the Middle ring for the `LockedOn` pair and parks the rings.
+///
+/// `Hud_UpdateMissileSight` hides `MissileSightMiddle`, shows the two `LockedOn`
+/// widgets and writes the fixed `-+30` degree angles to Outer and Inner.
 #[test]
-fn the_concentric_dialect_adds_its_locked_widgets_on_the_lock() {
+fn the_concentric_dialect_swaps_its_middle_ring_for_the_locked_pair_on_the_lock() {
     let layout = Layout::from_xml(HD_SIGHTS);
     let sheet = hd_sheet();
     let strings = strings();
@@ -731,10 +744,25 @@ fn the_concentric_dialect_adds_its_locked_widgets_on_the_lock() {
         ..Readout::blank()
     };
     let frame = draw_list(&context_with(&layout, &strings, &sheet, &HD_ART), &readout);
+    let drawn = plain(&frame);
     assert_eq!(
-        plain(&frame).len(),
-        4,
-        "a locked HD reticle draws the seeking pair and the locked pair: {frame:?}"
+        drawn.len(),
+        3,
+        "a locked HD reticle draws the backdrop and the locked pair: {frame:?}"
+    );
+    assert!(
+        drawn.iter().all(|(rect, _)| (rect[2] - 100.0).abs() > 0.01),
+        "the Middle ring must be gone once locked: {drawn:?}"
+    );
+    let turns = rotated(&frame);
+    assert_eq!(turns.len(), 2, "{frame:?}");
+    assert!(
+        (turns[0].2 - sight::RING_LOCKED_ANGLE).abs() < 1e-6,
+        "{turns:?}"
+    );
+    assert!(
+        (turns[1].2 + sight::RING_LOCKED_ANGLE).abs() < 1e-6,
+        "{turns:?}"
     );
 }
 
@@ -791,30 +819,23 @@ fn the_concentric_dialect_draws_the_leachbeams_own_widgets_not_the_missiles() {
     assert!(rotated(&frame).is_empty(), "{frame:?}");
 }
 
-/// HD's own LeachBeam reticle reveals one ring at a time as the hold
-/// progresses - the backdrop plus whichever of Outer/Middle/Inner owns the
-/// current quarter of [`oag_race::sight::Sight::hold_progress`] - rather than
-/// showing all four together, and shows the backdrop alone for the last
-/// quarter and once locked.
+/// HD's own LeachBeam reticle reveals one ring at a time on a looping half
+/// second - the backdrop plus whichever of Outer/Middle/Inner owns the current
+/// quarter of [`oag_race::sight::Sight::leach_cycle`] - and shows the backdrop
+/// alone for the last quarter of the loop.
 ///
-/// **Recovered mechanism, ported at reduced confidence** -
-/// `docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`'s
-/// `Hud_UpdateLeachBeamSight` reading, scaled onto this engine's own
-/// `HOLD_SECONDS` rather than HD's own `0.5` s. `HD_LEACH_SIGHTS` gives Outer,
-/// Middle and Inner distinct authored widths (176/128/80) so each stage is
-/// identified by its rect rather than by a widget name `plain()` does not
-/// expose.
+/// `HD_LEACH_SIGHTS` gives Outer, Middle and Inner distinct authored widths
+/// (176/128/80) so each stage is identified by its rect.
 #[test]
-fn the_concentric_dialect_reveals_the_leachbeams_rings_one_quarter_at_a_time() {
+fn the_concentric_dialect_loops_the_leachbeams_rings_on_a_half_second_clock() {
     let layout = Layout::from_xml(HD_LEACH_SIGHTS);
     let sheet = hd_leach_sheet();
     let strings = strings();
-    let at = [700.0, 400.0];
 
     let mut reticle = sight::Sight::new([1920.0, 1080.0]);
     reticle.set_held(sight::Held::LeachBeam);
     let target = sight::Projected {
-        screen: at,
+        screen: [700.0, 400.0],
         distance: 60.0,
     };
 
@@ -828,86 +849,53 @@ fn the_concentric_dialect_reveals_the_leachbeams_rings_one_quarter_at_a_time() {
             &readout,
         ))
     };
+    let widths = |drawn: &[([f32; 4], [f32; 4])]| -> Vec<i32> {
+        drawn
+            .iter()
+            .map(|(rect, _)| rect[2].round() as i32)
+            .collect()
+    };
 
-    // The first frame: zero hold is still inside the first quarter, so the
-    // backdrop (176 wide) plus the Outer ring (also 176 wide in this fixture,
-    // so the two are indistinguishable by rect alone - the count is the check).
+    // The first quarter shows the backdrop and the Outer ring, both 176 wide.
     reticle.update(1.0 / 60.0, Some(target));
-    let drawn = draw(&reticle);
-    assert_eq!(
-        drawn.len(),
-        2,
-        "hold_progress {}: {drawn:?}",
-        reticle.hold_progress()
-    );
-    assert!(
-        drawn.iter().all(|(rect, _)| (rect[2] - 176.0).abs() < 0.01),
-        "the backdrop and the Outer ring are both authored at 176 wide: {drawn:?}"
-    );
+    assert_eq!(widths(&draw(&reticle)), vec![176, 176]);
 
-    // Past the first quarter: the Middle ring (128 wide) replaces Outer.
-    while reticle.hold_progress() <= 0.25 {
+    let mut seen = Vec::new();
+    let mut last = reticle.leach_cycle();
+    for _ in 0..120 {
         reticle.update(1.0 / 60.0, Some(target));
+        let drawn = draw(&reticle);
+        let w = widths(&drawn);
+        if seen.last() != Some(&w) {
+            seen.push(w);
+        }
+        assert!(
+            reticle.leach_cycle() < sight::LEACH_CYCLE_SECONDS,
+            "the clock never passes its period"
+        );
+        last = reticle.leach_cycle();
     }
-    let drawn = draw(&reticle);
-    assert_eq!(
-        drawn.len(),
-        2,
-        "hold_progress {}: {drawn:?}",
-        reticle.hold_progress()
-    );
-    assert!(
-        drawn.iter().any(|(rect, _)| (rect[2] - 128.0).abs() < 0.01),
-        "expected the Middle ring (128 wide) at hold_progress {}: {drawn:?}",
-        reticle.hold_progress()
-    );
-
-    // Past the half mark: the Inner ring (80 wide).
-    while reticle.hold_progress() <= 0.5 {
-        reticle.update(1.0 / 60.0, Some(target));
+    assert!(last >= 0.0);
+    for stage in [vec![176, 128], vec![176, 80], vec![176]] {
+        assert!(seen.contains(&stage), "{stage:?} never showed: {seen:?}");
     }
-    let drawn = draw(&reticle);
-    assert_eq!(
-        drawn.len(),
-        2,
-        "hold_progress {}: {drawn:?}",
-        reticle.hold_progress()
-    );
-    assert!(
-        drawn.iter().any(|(rect, _)| (rect[2] - 80.0).abs() < 0.01),
-        "expected the Inner ring (80 wide) at hold_progress {}: {drawn:?}",
-        reticle.hold_progress()
-    );
-
-    // Past three-quarters of the hold, only the backdrop shows - the
-    // original's own table stops there, and this project draws nothing
-    // invented for what (if anything) comes after.
-    while reticle.hold_progress() <= 0.75 {
-        reticle.update(1.0 / 60.0, Some(target));
-    }
-    let drawn = draw(&reticle);
-    assert_eq!(
-        drawn.len(),
-        1,
-        "past three-quarters of the hold only the backdrop should show: {drawn:?}"
-    );
+    // It loops: the Outer ring comes round again.
+    let first_outer = seen.iter().position(|w| w == &vec![176, 176]);
+    assert!(first_outer.is_some(), "{seen:?}");
 }
 
-/// The LeachBeam reticle still shows only the backdrop once the lock is
-/// actually taken - there is no fifth, "locked" widget to add, unlike the
-/// Missile's set, and the last pre-lock quarter already dropped to backdrop
-/// alone (see the test above).
+/// The LeachBeam reticle's reveal does not depend on the lock: there is no fifth,
+/// "locked" widget to add, and the loop runs on whether or not the lock is taken.
 #[test]
-fn the_concentric_dialect_shows_only_the_backdrop_once_the_leachbeam_locks() {
+fn the_concentric_dialect_leachbeam_reveal_is_blind_to_the_lock() {
     let layout = Layout::from_xml(HD_LEACH_SIGHTS);
     let sheet = hd_leach_sheet();
     let strings = strings();
-    let at = [700.0, 400.0];
 
     let mut reticle = sight::Sight::new([1920.0, 1080.0]);
     reticle.set_held(sight::Held::LeachBeam);
     let target = sight::Projected {
-        screen: at,
+        screen: [700.0, 400.0],
         distance: 60.0,
     };
     for _ in 0..600 {
@@ -925,10 +913,10 @@ fn the_concentric_dialect_shows_only_the_backdrop_once_the_leachbeam_locks() {
         &context_with(&layout, &strings, &sheet, &HD_LEACH_ART),
         &readout,
     );
-    assert_eq!(
-        plain(&frame).len(),
-        1,
-        "a locked LeachBeam reticle draws only its backdrop: {frame:?}"
+    let n = plain(&frame).len();
+    assert!(
+        (1..=2).contains(&n),
+        "a locked LeachBeam reticle draws its backdrop and at most one ring: {frame:?}"
     );
 }
 

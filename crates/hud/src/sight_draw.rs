@@ -94,13 +94,32 @@ pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw
         oag_title::hud::Sights::Concentric {
             seeking, locked, ..
         } => {
-            let names = seeking
-                .iter()
-                .chain(locked.iter().take_while(|_| sight.locked()));
-            concentric_draws(cx, sight, names, alpha)
+            let (phase, set) = if sight.locked() {
+                // `Hud_UpdateMissileSight` hides `MissileSightMiddle` and shows
+                // the `LockedOn` pair, parking the two rings at a fixed angle.
+                let set: Vec<&'static str> = seeking
+                    .iter()
+                    .copied()
+                    .filter(|name| *name != MIDDLE)
+                    .chain(locked.iter().copied())
+                    .collect();
+                (oag_race::sight::RING_LOCKED_ANGLE, set)
+            } else {
+                (sight.ring_phase(), seeking.to_vec())
+            };
+            let turn = |name: &str| match name {
+                OUTER => phase,
+                INNER => -phase,
+                _ => 0.0,
+            };
+            concentric_draws(cx, sight, set.iter().map(|name| (*name, turn(name))), alpha)
         }
     }
 }
+
+const OUTER: &str = "MissileSightOuter";
+const INNER: &str = "MissileSightInner";
+const MIDDLE: &str = "MissileSightMiddle";
 
 /// The PSP dialect: four rotated brackets around a box, plus an optional inner.
 ///
@@ -186,28 +205,46 @@ fn bracket_draws(
 fn concentric_draws<'a>(
     cx: &Context<'_>,
     sight: &oag_race::sight::Sight,
-    names: impl Iterator<Item = &'a &'static str>,
+    names: impl Iterator<Item = (&'a str, f32)>,
     alpha: f32,
 ) -> Vec<Draw> {
     let brightness = sight.brightness();
     let [cx_px, cy_px] = sight.centre();
     let mut out = Vec::new();
-    for name in names {
-        let Some(sprite) = cx.layout.sprites.iter().find(|s| s.name == **name) else {
+    for (name, rotation) in names {
+        let Some(sprite) = cx.layout.sprites.iter().find(|s| s.name == name) else {
             continue;
         };
         let Some(placed) = cx.sheet.get(&sprite.src) else {
             continue;
         };
         let (w, h) = (sprite.rect[2], sprite.rect[3]);
+        let rect = [cx_px - w * 0.5, cy_px - h * 0.5, w, h];
+        let uv = [
+            placed.x as f32 + sprite.uv[0],
+            placed.y as f32 + sprite.uv[1],
+            sprite.uv[2],
+            sprite.uv[3],
+        ];
+        let color = [
+            sprite.color[0] * brightness,
+            sprite.color[1] * brightness,
+            sprite.color[2] * brightness,
+            sprite.color[3] * alpha,
+        ];
+        if rotation != 0.0 {
+            out.push(Draw::BlendedSprite {
+                rect,
+                uv,
+                color,
+                rotation,
+                blend: None,
+            });
+            continue;
+        }
         out.push(Draw::Sprite {
-            rect: [cx_px - w * 0.5, cy_px - h * 0.5, w, h],
-            uv: [
-                placed.x as f32 + sprite.uv[0],
-                placed.y as f32 + sprite.uv[1],
-                sprite.uv[2],
-                sprite.uv[3],
-            ],
+            rect,
+            uv,
             // The layout's own colour, dimmed by the reticle's fade and its
             // blink. HD authors these individually - a red outer, a green inner
             // - so overwriting them with white would throw away real data.
@@ -222,40 +259,35 @@ fn concentric_draws<'a>(
     out
 }
 
-/// HD/2048's own LeachBeam reticle: the backdrop plus one of its three outer
-/// rings, revealed in turn as the hold progresses rather than all three
-/// together.
+/// HD/2048's own LeachBeam reticle: the backdrop plus one of its three rings,
+/// each owning one exclusive quarter of a looping half second.
 ///
-/// **Recovered mechanism, ported at reduced confidence.**
 /// `Hud_UpdateLeachBeamSight` (`docs/ghidra/functions/ps3-hdfury-eu/hud-sight.md`)
-/// shows Outer, Middle and Inner each own one exclusive quarter of the hold
-/// window - `names` is `[BG, Outer, Middle, Inner]`, the order
-/// `oag_title::hud::Sights::Concentric::leach` already carries. HD's own
-/// quarter marks are absolute seconds into *its* `0.5` s hold; this engine
-/// scales the same quarters onto [`oag_race::sight::Sight::hold_progress`]
-/// instead of adopting HD's own hold time - see that constant's own doc for
-/// why. Past three-quarters of the hold, or once the lock completes, only the
-/// backdrop is shown: the original's own table stops there, and what (if
-/// anything) replaces the rings on a full lock is not read, so this draws
-/// nothing invented for that span rather than guessing.
+/// adds the raw frame time to an accumulator and zeroes it at `0.5` s - a
+/// free-running animation, **not lock progress** - and shows Outer up to
+/// `0.125` s, Middle up to `0.25` s and Inner up to `0.375` s, the backdrop
+/// alone for the rest of the loop. `names` is `[BG, Outer, Middle, Inner]`, the
+/// order `oag_title::hud::Sights::Concentric::leach` carries, and the clock is
+/// [`oag_race::sight::Sight::leach_cycle`].
 fn leach_reveal_draws(
     cx: &Context<'_>,
     sight: &oag_race::sight::Sight,
     names: [&'static str; 4],
     alpha: f32,
 ) -> Vec<Draw> {
-    let progress = sight.hold_progress();
-    let ring = if progress <= 0.25 {
+    let t = sight.leach_cycle();
+    let quarter = oag_race::sight::LEACH_CYCLE_SECONDS * 0.25;
+    let ring = if t <= quarter {
         Some(names[1])
-    } else if progress <= 0.5 {
+    } else if t <= quarter * 2.0 {
         Some(names[2])
-    } else if progress <= 0.75 {
+    } else if t <= quarter * 3.0 {
         Some(names[3])
     } else {
         None
     };
     let shown = [Some(names[0]), ring];
-    concentric_draws(cx, sight, shown.iter().flatten(), alpha)
+    concentric_draws(cx, sight, shown.iter().flatten().map(|n| (*n, 0.0)), alpha)
 }
 
 /// Where a `<Mode3D><Model>` widget's art sits in the sheet, by widget name.
