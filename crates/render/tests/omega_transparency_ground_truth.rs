@@ -194,8 +194,10 @@ fn omega_altimas_road_binds_its_diffuse_map() {
 /// `m_diffuse_normal_constantspecular` (its ambient-only program does sample
 /// `Norm`/`Texture1`, so the programs do not call it lighting-only), the
 /// Altima water edge (same reason), and `temp_diffuse` on Square and Subway.
-/// Omega's PS4 programs are not read for sampler use, so its counts are
-/// unchanged. The counts may shrink further and must never grow.
+/// Omega's PS4 programs are not read for sampler use, so it takes 2048's answer
+/// only for the three families whose Omega instance record is 2048's exactly
+/// (`oag_rcs::rcsmodel::psp2::lighting_only`): 223 slots fell to 149. The counts
+/// may shrink further and must never grow.
 const VITA_FAULTS: usize = 41;
 
 /// One Omega circuit directory, both directions, against its known gap.
@@ -227,64 +229,64 @@ macro_rules! omega_circuit_test {
 omega_circuit_test!(
     omega_vineta_k_binds_no_more_lookups_than_known,
     "01_vineta_k",
-    34
+    28
 );
 omega_circuit_test!(
     omega_metropia_binds_no_more_lookups_than_known,
     "02_metropia",
-    28
+    20
 );
 omega_circuit_test!(
     omega_moa_therma_binds_no_more_lookups_than_known,
     "03_moa_therma",
-    16
+    10
 );
 omega_circuit_test!(
     omega_chenghou_binds_no_more_lookups_than_known,
     "04_chenghou_project",
-    14
+    8
 );
 omega_circuit_test!(
     omega_ubermall_binds_no_more_lookups_than_known,
     "05_ubermall",
-    33
+    27
 );
 omega_circuit_test!(
     omega_sebenco_binds_no_more_lookups_than_known,
     "10_sebenco_climb",
-    14
+    7
 );
-omega_circuit_test!(omega_sol_2_binds_no_more_lookups_than_known, "12_sol_2", 16);
+omega_circuit_test!(omega_sol_2_binds_no_more_lookups_than_known, "12_sol_2", 10);
 omega_circuit_test!(
     omega_anulpha_binds_no_more_lookups_than_known,
     "15_anulpha_pass",
-    12
+    8
 );
 omega_circuit_test!(
     omega_amphiseum_binds_no_more_lookups_than_known,
     "amphiseum",
-    10
+    4
 );
 omega_circuit_test!(
     omega_modesto_binds_no_more_lookups_than_known,
     "modesto_heights",
-    10
+    4
 );
 omega_circuit_test!(
     omega_talons_binds_no_more_lookups_than_known,
     "talons_junction",
-    10
+    4
 );
 omega_circuit_test!(
     omega_tech_de_ra_binds_no_more_lookups_than_known,
     "tech_de_ra",
-    22
+    16
 );
 omega_circuit_test!(omega_altima_binds_no_more_lookups_than_known, "altima", 0);
 omega_circuit_test!(omega_mall_binds_no_more_lookups_than_known, "mall", 0);
 omega_circuit_test!(omega_tower_binds_no_more_lookups_than_known, "tower", 0);
 omega_circuit_test!(omega_arena_binds_no_more_lookups_than_known, "arena", 1);
-omega_circuit_test!(omega_park_binds_no_more_lookups_than_known, "park", 1);
+omega_circuit_test!(omega_park_binds_no_more_lookups_than_known, "park", 0);
 omega_circuit_test!(omega_square_binds_no_more_lookups_than_known, "square", 1);
 omega_circuit_test!(omega_subway_binds_no_more_lookups_than_known, "subway", 1);
 

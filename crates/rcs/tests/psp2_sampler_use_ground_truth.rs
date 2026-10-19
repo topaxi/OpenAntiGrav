@@ -120,3 +120,120 @@ fn the_samplers_read_for_lighting_alone_are_the_lookups() {
         LIGHTING_ONLY_NAMES
     );
 }
+
+fn root(rel: &str) -> Option<std::path::PathBuf> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel);
+    if path.exists() {
+        return Some(path);
+    }
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+        "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+        path.display()
+    );
+    None
+}
+
+/// What a family's instances look like across a set of archives: how many
+/// match [`INHERITED_FROM_2048`]'s row, and how many do not.
+fn tally(
+    archives: &mut [oag_assets::psarc::Archive],
+    is_model: impl Fn(&str) -> bool,
+) -> BTreeMap<&'static str, (usize, usize)> {
+    use oag_rcs::rcsmodel::psp2::{self, lighting_only};
+    let mut out: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
+    for archive in archives {
+        let paths: Vec<String> = archive
+            .paths()
+            .iter()
+            .filter(|p| is_model(p))
+            .cloned()
+            .collect();
+        for path in paths {
+            let blob = archive.read_path(&path).expect("reads");
+            let model = psp2::parse(&blob).expect("parses");
+            for m in &model.materials {
+                let family = lighting_only::family(m);
+                let Some(row) = lighting_only::INHERITED_FROM_2048
+                    .iter()
+                    .find(|r| r.family == family)
+                else {
+                    continue;
+                };
+                let slot = out.entry(row.family).or_default();
+                if lighting_only::inherited(m).is_some() {
+                    slot.0 += 1;
+                } else {
+                    slot.1 += 1;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The inherited table is 2048's own answer, and Omega matches it where it
+/// says so. Drop `lighting_only::inherited` from the build and Omega's
+/// `omega_*_binds_no_more_lookups_than_known` ratchets fail; change a row and
+/// this fails.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007 and data/extracted/ps4/omega-eu"]
+fn omega_inherits_2048s_answer_only_where_its_record_is_2048s() {
+    use oag_rcs::rcsmaterial::name_hash;
+    use oag_rcs::rcsmodel::psp2::lighting_only;
+    let (Some(vita), Some(omega)) = (
+        root("data/extracted/vita/PCSF00007/base/PSP2/data.psarc"),
+        root("data/extracted/ps4/omega-eu/uroot"),
+    ) else {
+        return;
+    };
+    let mut vita_archive =
+        oag_assets::psarc::Archive::open(vita.to_str().expect("utf-8")).expect("opens");
+    for row in &lighting_only::INHERITED_FROM_2048 {
+        let entry = vita_archive
+            .paths()
+            .iter()
+            .find(|p| {
+                p.to_ascii_lowercase()
+                    .ends_with(&format!("/{}.rcsmaterial", row.family))
+            })
+            .cloned()
+            .unwrap_or_else(|| panic!("{} is in 2048's package", row.family));
+        let uses = sampler_use(&vita_archive.read_path(&entry).expect("reads")).expect("both");
+        let mut hashes: Vec<u32> = uses.lighting_only.iter().map(|n| name_hash(n)).collect();
+        hashes.sort_unstable();
+        assert_eq!(hashes, row.lighting_only, "{}", row.family);
+        assert_eq!(
+            uses.colour_uniform.as_deref().map(name_hash),
+            Some(row.colour),
+            "{}",
+            row.family
+        );
+    }
+    let on_vita = tally(std::slice::from_mut(&mut vita_archive), |p| {
+        p.contains("/environments/")
+            && (p.ends_with("/track.rcsmodel") || p.ends_with("/track_reversed.rcsmodel"))
+    });
+    println!("2048 instances (match, differ): {on_vita:?}");
+    let mut omega_archives: Vec<_> = (0..5)
+        .map(|i| {
+            oag_assets::psarc::Archive::open_file(&omega.join(format!("data0{i}.psarc")))
+                .expect("opens")
+        })
+        .collect();
+    let on_omega = tally(&mut omega_archives, |p| {
+        p.contains("/environments") && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
+    });
+    println!("Omega instances (match, differ): {on_omega:?}");
+    for row in &lighting_only::INHERITED_FROM_2048 {
+        assert_eq!(on_vita[row.family].1, 0, "2048's {} all match", row.family);
+        assert!(on_omega[row.family].0 > 0, "Omega's {}", row.family);
+    }
+    assert_eq!(
+        on_omega.values().map(|v| v.1).sum::<usize>(),
+        0,
+        "no Omega instance of a table family differs from it"
+    );
+}

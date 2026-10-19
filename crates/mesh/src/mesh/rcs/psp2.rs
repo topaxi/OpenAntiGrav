@@ -40,6 +40,7 @@ use super::Textures;
 use crate::mesh::{Bounds, DrawCall, Flap, GnfForm, GpuVertex, Model, ModelTexture};
 use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
+use oag_rcs::rcsmodel::psp2::lighting_only;
 
 mod glow;
 pub mod placement;
@@ -170,6 +171,10 @@ pub struct Report {
     /// Of those, the materials that drew the constant colour their ambient-only
     /// program names, as a one-texel picture.
     pub constant_colour_materials: usize,
+    /// Of those, the ones whose answer is 2048's, carried over because the
+    /// material's record matches it exactly and its own programs (PS4) are
+    /// unread - `oag_rcs::rcsmodel::psp2::lighting_only`.
+    pub inherited_lighting_only: usize,
 }
 
 /// The vertex colour of a `fc01_dummy` submesh before the loader knows the
@@ -284,8 +289,10 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} material(s) bind no picture from a sampler their own programs read only for lighting ({} drew the constant colour the unlit program names)",
-                self.lighting_only_materials, self.constant_colour_materials
+                "; {} material(s) bind no picture from a sampler their own programs read only for lighting ({} drew the constant colour the unlit program names, {} of them 2048's answer carried over where the record matches)",
+                self.lighting_only_materials,
+                self.constant_colour_materials,
+                self.inherited_lighting_only
             )
         };
         format!(
@@ -691,7 +698,8 @@ fn build_planned(
     super::face_normals(&mut model);
     finish_bounds(&mut model);
 
-    bind_textures(&decoded, &glow, &mut model, &mut report, textures);
+    let ps4 = psp2::is_ps4(model_blob);
+    bind_textures(&decoded, &glow, &mut model, &mut report, textures, ps4);
     transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
@@ -710,6 +718,7 @@ fn bind_textures(
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
+    ps4: bool,
 ) {
     // `build` pushes exactly one draw per submesh, in order, which is what
     // makes this zip a binding rather than an off-by-one waiting to happen -
@@ -719,7 +728,7 @@ fn bind_textures(
     let mut cache: Vec<Option<Option<usize>>> = vec![None; decoded.materials.len()];
     // A material file's programs say which of its samplers feed only the
     // lighting; read once per distinct file.
-    let mut sampler_uses: std::collections::HashMap<&str, Option<sampler_use::SamplerUse>> =
+    let mut rules: std::collections::HashMap<&str, Option<LightingRule>> =
         std::collections::HashMap::new();
     // A lightmap is shared by however many materials name the same file, and a
     // 2,048-square atlas is 16 MiB decoded, so decode each path once.
@@ -739,17 +748,8 @@ fn bind_textures(
         let resolved = *slot.get_or_insert_with(|| {
             let layer = glow.layers.get(index).and_then(Option::as_ref);
             let material = &decoded.materials[index];
-            let uses = sampler_uses
-                .entry(material.name.as_str())
-                .or_insert_with(|| {
-                    textures(&material.name).and_then(|blob| sampler_use::sampler_use(&blob))
-                })
-                .clone();
-            let refused: Vec<u32> = uses
-                .iter()
-                .flat_map(|u| &u.lighting_only)
-                .map(|name| name_hash(name))
-                .collect();
+            let rule = lighting_rule(material, ps4, &mut rules, &mut *textures);
+            let refused: Vec<u32> = rule.as_ref().map_or_else(Vec::new, |r| r.refused.clone());
             let path = match layer {
                 Some(layer) => Some(layer.diffuse.as_str()),
                 None => material.diffuse_texture_without(&refused),
@@ -772,9 +772,11 @@ fn bind_textures(
                     .clone()?,
                 None => {
                     let colour = refused_here
-                        .then(|| constant_colour(material, uses.as_ref()?))
+                        .then(|| constant_colour(material, rule.as_ref()?.colour?))
                         .flatten()?;
                     report.constant_colour_materials += 1;
+                    report.inherited_lighting_only +=
+                        usize::from(rule.as_ref().is_some_and(|r| r.inherited));
                     (std::sync::Arc::new(colour), None)
                 }
             };
@@ -823,6 +825,45 @@ fn bind_textures(
     }
 }
 
+/// What decides a material's lighting-only samplers: their name hashes and the
+/// colour parameter's, from its own programs or from 2048's answer.
+#[derive(Debug, Clone)]
+struct LightingRule {
+    refused: Vec<u32>,
+    colour: Option<u32>,
+    inherited: bool,
+}
+
+/// The material's rule, read once per `.rcsmaterial` file. A Vita material
+/// reads its own programs; a PS4 one, whose programs are unread, takes 2048's
+/// answer where its instance record matches it.
+fn lighting_rule<'m>(
+    material: &'m psp2::material::Material,
+    ps4: bool,
+    cache: &mut std::collections::HashMap<&'m str, Option<LightingRule>>,
+    textures: &mut dyn FnMut(&str) -> Option<Vec<u8>>,
+) -> Option<LightingRule> {
+    cache
+        .entry(material.name.as_str())
+        .or_insert_with(|| {
+            if ps4 {
+                let row = lighting_only::inherited(material)?;
+                return Some(LightingRule {
+                    refused: row.lighting_only.to_vec(),
+                    colour: Some(row.colour),
+                    inherited: true,
+                });
+            }
+            let uses = sampler_use::sampler_use(&textures(&material.name)?)?;
+            Some(LightingRule {
+                refused: uses.lighting_only.iter().map(|n| name_hash(n)).collect(),
+                colour: uses.colour_uniform.as_deref().map(name_hash),
+                inherited: false,
+            })
+        })
+        .clone()
+}
+
 /// The constant a lighting-only material takes its colour from: the one
 /// uniform its ambient-only program declares besides the ambient and fog
 /// colours, read from the material's own value, as a one-texel picture.
@@ -830,12 +871,9 @@ fn bind_textures(
 /// Unorm bytes, no sRGB step, the way `skin::constant_diffuse` binds HD's.
 /// `None` where the program names no single colour or the material carries no
 /// value for it, which leaves the draw unresolved and counted as such.
-fn constant_colour(
-    material: &psp2::material::Material,
-    uses: &sampler_use::SamplerUse,
-) -> Option<ModelTexture> {
-    let name = uses.colour_uniform.as_deref()?;
-    let value = material.param(name_hash(name))?;
+fn constant_colour(material: &psp2::material::Material, colour: u32) -> Option<ModelTexture> {
+    let name = format!("{colour:08x}");
+    let value = material.param(colour)?;
     let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
     let channel = |i: usize| byte(value.get(i).copied().unwrap_or(1.0));
     Some(crate::mesh_render::offer_to_texture_sink(
