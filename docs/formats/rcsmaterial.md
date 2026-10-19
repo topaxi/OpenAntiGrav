@@ -2709,23 +2709,53 @@ and are **not** caught). It runs inside walks that already build every circuit:
 fix Talon's alone failed with `ds_sfblend_ns`, `ds_pipe_nc` (x2), `ds_glass_panels_ns`
 and the `diffuse_spec_constant` lightmap; after it HD is clean on every circuit.
 
-### 2048 and Omega: **checked, applies, not wired**
+### 2048 and Omega: **ported in part** (2026-10-19, `normal-maps-as-colour`)
 
 Both ship these same materials and files (`ds_sfblend_ns.gxt`/`.gnf`, `ds_pipe_nc`,
-`ds_glass_panels_ns`). Their builder (`oag_mesh::mesh::rcs::psp2`) binds
-`Material::diffuse_texture`, the first non-lightmap texture, without reading the
-Vita/PS4 program, so the same strip draws. Census, drawn colour slots that are normal
-maps: Omega 223 over 34 circuit models, 2048 66 over 18 (ratchets in
-`omega_transparency_ground_truth`, per circuit, may shrink and never grow). The
-water, rock (`rocks_01_normal_alpha`), glass and `jd_*_n` families are in the same list.
-Not wired because the GXP/GNM programs are not read for it; HD's rule is the model for it.
+`ds_glass_panels_ns`), and their builder (`oag_mesh::mesh::rcs::psp2`) bound the first
+non-lightmap texture, so the same strip drew purple. Census of drawn colour slots that are
+normal maps (ratchets in `omega_transparency_ground_truth`, per circuit, may shrink and
+never grow):
+
+| | before | after |
+| --- | ---: | ---: |
+| 2048 (Vita package, 18 circuit models) | 66 | 41 |
+| Omega (34 circuit models) | 223 | 149 |
+
+**2048: read from the material's own programs, no instruction decoded.** A `.rcsmaterial`
+holds one fragment program per permutation, and a sampler is declared only in a permutation
+that reads it. The ambient-only permutation (no `liveLighting*` uniform) leaves out a
+sampler for eight families, which therefore read it for lighting alone and take their
+colour from one constant uniform: `constantdiffuse_specular_normal` (and `New`), `ds_booth_glass`,
+`fc15`/`fc17_effects_vscroll_water`, `dc_seawater`, `dc_seawater_cheap`,
+`reflectplane_dc_seawater`. The build binds no picture from those samplers and draws the
+constant (`Constant1`, `ColourConstant`, `Watercolour`, named by the program) as a one-texel
+picture, as HD's `constant_diffuse` does. The rule and its numbers are in
+[gxp.md](gxp.md#which-sampler-carries-the-colour-2026-10-19-normal-maps-as-colour);
+`oag_rcs::gxp::sampler_use`. **Not changed, and why:** `m_diffuse_normal_constantspecular`
+(and `New`) samples `Texture1`/`Norm` in its ambient-only program too, so its map feeds the
+colour somehow - open; the Altima water edge (`fc17_..._wateredge_vertexcol`) samples
+`NormalMap` in its ambient-only program (an opacity term, unread) - open; `temp_diffuse` on
+Square and Subway reads as a normal map by texel and has no program evidence.
+
+**Omega: checked, applies, inherited.** Its programs are PS4 GCN in a container nothing
+parses, so the question cannot be asked of them. Its material *instance* is 2048's for
+three families, record for record (same non-lightmap sampler hashes, same parameter hashes
+in the same order): `constantdiffuse_specular_normal` (49 materials), `ds_booth_glass` (24),
+`reflectplane_dc_seawater` (21), no instance of any of them differing
+(`psp2_sampler_use_ground_truth`). Those take 2048's answer
+(`oag_rcs::rcsmodel::psp2::lighting_only`), labelled inherited in the load report. It is not
+measured on Omega: the shader is recompiled, and HD's own program for the first family
+(traced above) agrees with 2048's declared interface, which is the corroboration. Every
+other Omega family stays as it was.
+
 Pulse, Pure: **not applicable**, the PSP/PS2 games ship no normal maps (the oracle is off
 there; the walks still check the lightmap and undecoded clauses). They also have no shader
 variant table (fixed-function GE), so the census's "a shader variant resolves" clause is
 HD's alone: `hd_water_ground_truth` freezes the per-circuit counts of materials and chunks
 with no variant (Modesto 21 and 176, Talon's 16 and 54, Tech De Ra 17-18 and 103, every
-other circuit zero; may shrink, never grow). 2048 and Omega read no program either, so
-that clause does not exist there; `psp2::Report::unresolved_draws` is not ratcheted
+other circuit zero; may shrink, never grow). 2048 reads its programs' declared interface
+only and Omega none, so that clause does not exist there; `psp2::Report::unresolved_draws` is not ratcheted
 (about 2,100 on Amphiseum alone, not taken apart).
 
 ## Water family: `water_test_2`, `water_noref` and `sebenco_ice` (2026-10-07, `hd-water`)
