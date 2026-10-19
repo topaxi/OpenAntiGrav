@@ -660,17 +660,19 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 #[cfg(feature = "view")]
 pub use effects::RACE_EFFECTS;
 
-/// How much faster a craft assumes a Turbo will make it, when deciding whether
-/// it can afford to fire one.
+/// What an opponent assumes a Turbo adds to its speed, when deciding whether
+/// it can afford to fire one: its peak is taken as `speed + TURBO_GAIN`.
 ///
-/// **Ours, and a rule of thumb rather than a measurement.** Nothing derives the
-/// speed a boost settles at - it depends on the class, the craft's own thrust
-/// and where the boost is spent - and the number only has to be roughly right,
-/// because it is used to ask whether the *corner* ahead is a corner. Observed
-/// on `16_Track`: 126 into a Turbo comes out at about 270. Erring high is the
-/// safe direction, since it makes a craft keep the pickup rather than spend it
-/// into a wall. See [`Race::spend_opponent_pickup`].
-const TURBO_SPEED_RATIO: f32 = 2.2;
+/// **Ours, chosen, not measured off the original.** The boost is thrust added
+/// after the cap (`T += Engine.turbo`, `docs/ghidra/functions/psp-pulse-usa/engine.md`),
+/// so it adds rather than multiplies. The 2.2 ratio this replaced checked a
+/// Turbo fired a tick after a respawn, at 8, for 18; it peaked at 226. Fifteen
+/// lone Ace fires on Pulse, from 8 to 222, gained 100 to 230 and peaked at 198
+/// to 358. Chosen over 160 de Konstruct field races (seeds 4-23, four classes,
+/// both layouts) against a gain of 120 with a floor of 220, and against a
+/// one-second tail; see
+/// `docs/gameplay/ai.md`, "The Turbo gate reads the plan".
+const TURBO_GAIN: f32 = 220.0;
 
 /// How much clear road a craft wants in front before it spends a Turbo. Ours.
 ///

@@ -31,21 +31,20 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   firing (`docs/gameplay/ai.md`, "An original opponent never fired, and now
   does"), which changed the field state; `pure_original_ai_ground_truth`'s
   Chenghou walk now allows 1 respawn a craft and names this cause.
-- **The absorb half of `WeaponAi_DecideFireOrAbsorb`** (Pulse, recovered on
-  `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`) was ported in commit
-  `3b631f07a` and reverted in `4963adbfa` on 2026-10-19 (lane
-  `campaign-ai-weapons`). It moved 11 lone-craft cells: `ai_clean_lap_gate`'s
-  `track_01_phantom`, `track_02_flash`, `track_06_phantom`, `track_06_rapier`
-  (CleanLap to NoCleanLap), `track_07_flash`, `track_07_phantom`,
-  `track_14_rapier`, `track_14_phantom` (Eliminated to CleanLap), and
-  `ai_dekonstruct_black_ground_truth::phantom_seed_1` (2 of 7 destroyed),
-  `ai_dekonstruct_symptoms_ground_truth::de_konstruct_symptoms_phantom`, plus
-  Omega's Amphiseum walk. **The cause is this project's Turbo policy**: a lone
-  craft holding a forward weapon used to keep it forever; absorbing it frees
-  the slot for the next pad's Turbo, which `spend_opponent_pickup` fires into
-  walls. With absorb off all 51 cells pass. It did not reduce wrecks, and its
-  decision cadence (every tick or four a second) is unconfirmed. Maintainer's
-  decision: its own AI follow-up lane, with the Turbo policy fixed first.
+- ~~**The absorb half of `WeaponAi_DecideFireOrAbsorb`**, reverted~~ **Re-landed
+  2026-10-19 (lane `ai-absorb-turbo`)** on top of a fixed Turbo gate, its
+  cadence read (every world step, 85). See `docs/gameplay/ai.md`, "The absorb
+  half, re-landed" and "The Turbo gate reads the plan". Still open from it:
+  - **More lip stops on de Konstruct Black with absorb**: forward lip stops
+    per million craft-ticks 42.8 to 51.5 (seeds 4-23). About half follow a
+    barrel roll, which absorbed energy makes more frequent (1,380 to 1,706
+    rolls). Next: `Driver::wants_to_roll` before the first jump (samples
+    ~190-207 of `05_Track`); the other half is not attributed.
+  - **The Turbo gate's 220 is Pulse physics only**; HD, 2048, Omega and Pure
+    run it unmeasured.
+  - **Whether the original driver compensates for a Turbo** (its thrust law
+    during a boost) is unread; an original-driven opponent runs this
+    project's Turbo gate too.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.
@@ -101,3 +100,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
    "The autopilot flies the original's player driver").
 4. Read the original field with several humans (slot, place, rubber band), then
    lift `Reason::MultipleHumans`.
+5. De Konstruct Black's extra lip stops under absorb: count `wants_to_roll`
+   rolls taken between samples ~190 and 207 of `05_Track` over seeds 4-23,
+   then decide (with the maintainer) whether this project's roll policy should
+   hold off before a gap. The original's own roll use by opponents is unread.

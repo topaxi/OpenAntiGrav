@@ -1161,13 +1161,20 @@ opponents not using weapons. A race box race flies the same driver
 (`oag_game::ai_choice`, "Which AI flies"), so it was the same there. Single
 race, seed 1, player parked, 240 s, weapons on:
 
-| Title | Original driver before: pickups / spends / opponent projectiles | After (fix, HD's per-trip LeachBeam drain) | This project's driver, same tree |
-| --- | --- | --- | --- |
-| Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 34 / 27 / 140 |
-| Pure | 8 / 1 / 0 | 33 / 26 / 38 | 21 / 14 / 20 |
-| HD | 7 / 0 / 0 | 40 / 33 / 168 | 29 / 22 / 152 |
-| 2048 | 8 / 1 / 0 | 58 / 52 / 288 | 36 / 30 / 196 |
-| Omega | 8 / 1 / 0 | 31 / 24 / 156 | 17 / 10 / 43 |
+| Title | Original driver before: pickups / spends / opponent projectiles | After the fix and HD's per-trip LeachBeam drain (2026-10-19, morning) | After the absorb half and the Turbo gate (2026-10-19): pickups / spends / projectiles / Turbos | This project's driver, same tree |
+| --- | --- | --- | --- | --- |
+| Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 35 / 28 / 187 / 5 | 32 / 26 / 130 / 4 |
+| Pure | 8 / 1 / 0 | 33 / 26 / 38 | 39 / 32 / 26 / 6 | 23 / 16 / 21 / 2 |
+| HD | 7 / 0 / 0 | 40 / 33 / 168 | 37 / 31 / 175 / 6 | 33 / 27 / 123 / 5 |
+| 2048 | 8 / 1 / 0 | 60 / 54 / 291 | 51 / 46 / 267 / 9 | 36 / 29 / 131 / 7 |
+| Omega | 8 / 1 / 0 | 31 / 24 / 156 | 25 / 18 / 117 / 1 | 18 / 11 / 61 / 0 |
+
+"Turbos" counts rises of a craft's Turbo timer. The morning column was
+re-measured on the same tree as the last two (2026-10-19, after
+`seat1-camera-online`); its 2048 row reads 60 / 54 / 291 where the first
+measurement read 58 / 52 / 288. Wrecks: 0 in every cell. A spend now includes
+an absorb, so fewer projectiles with more spends is the absorb half turning
+held forward weapons into energy.
 
 The one spend in the "before" column is a Turbo, whose gate reads the
 throttle and not the driver's noise. **Cause:** the original branch of
@@ -1186,14 +1193,8 @@ under the original driver, 36 to 221 opponent projectiles) and by
 `vita_2048_original_ai_ground_truth.rs`'s event walks, which now count what a
 campaign field fires.
 
-**The absorb half was ported and taken back out the same day.** Porting
-`WeaponAi_DecideFireOrAbsorb`'s absorb half
-([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md)) did not change
-how many craft are wrecked. It did move 11 lone-craft cells of
-`ai_clean_lap_gate` and the de Konstruct gates: a lone craft that absorbs a
-held weapon is free to pick up a Turbo, which this project's own Turbo policy
-fires into walls. Its decision cadence is also unconfirmed (every tick against
-four times a second, `weapon-ai.md`). It stays open.
+**The absorb half was ported, taken back out, and re-landed the same day**;
+see [below](#the-absorb-half-re-landed).
 
 **What wrecked them was the LeachBeam on HD, 2048 and Omega.** Fired by an
 opponent, it emptied a shield of 93 to 130 in 94 to 119 ticks: this engine
@@ -1208,6 +1209,79 @@ Omega inherited; opponents fire the beam again. Wrecks in the 240 s run above:
 0 on every title. A craft another opponent's weapons destroy still happens
 (2048 Event 4-1, two Plasma hits), and the 2048 event walks accept a wreck in
 place of a finish.
+
+### The absorb half, re-landed
+
+`WeaponAi_DecideFireOrAbsorb`'s absorb half
+([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-absorb-half-re-landed-2026-10-19))
+was ported and reverted on 2026-10-19 because it moved 11 lone-craft cells
+and its cadence was open. The cadence is read (every world step, confidence
+85), and the Turbo gate below is fixed first. Measured with both in, against
+the Turbo gate alone:
+
+- **Lone cells** (`ai_clean_lap_gate`): a lone craft absorbs the Rocket it
+  cannot aim. The noise schedule is one per slot, so the absorb lands on the
+  same tick (1994, 4250 or 4928) on most circuits: the moved cells are one
+  schedule, not independent samples. `14_Track` PHANTOM survives on the
+  energy: per-lap shield at laps 2 and 6 110 and 65 against 99 and 37 without
+  it, end-of-run shield 17.5 against 0. `02_Track` FLASH (contact 266 to 306)
+  and `06_Track` RAPIER (43 to 95) take a Turbo, fire it with no wall for 600
+  and 3,400 ticks, and scrape later in a run that has diverged.
+- **de Konstruct field**, seeds 4-23, four classes, both layouts, 160 races:
+  destroyed 112 (main) to 65; non-Turbo spends 2,097 to 2,737. Forward lip
+  stops (samples 200-212) per million craft-ticks alive: main 45.0, the Turbo
+  gate alone 42.8, with absorb 51.5. Of the extra stops, none follows a Turbo
+  or a weapon blow. **Absorbed energy keeps shields over the roll floor**:
+  barrel rolls 1,380 to 1,706, and lip stops within four seconds of a roll 192
+  to 245, about half the increase. The roll policy is this project's
+  (`Driver::wants_to_roll`). The rest of the increase is not attributed. The
+  05 PHANTOM field bound of `ai_dekonstruct_symptoms_ground_truth` went 4 to 6
+  on it.
+
+### The Turbo gate reads the plan
+
+**The original's AI has no Turbo gate**: `WeaponAi_ScoreTurbo`,
+`Weapon_RequestFire` case 4 and `Turbo_Fire` test nothing about the track, and
+the decision fires the Turbo on its roll alone
+([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-turbo-has-no-gate-in-the-original)).
+This project's driver brakes for what it follows and cannot lift off a boost,
+so ours keeps one, **chosen, not measured**.
+
+**What was wrong with it.** It asked the corner model at `speed * 2.2` with no
+plan and no yaw ceiling. The boost adds thrust after the cap
+(`T += Engine.turbo`, [engine.md](../ghidra/functions/psp-pulse-usa/engine.md)),
+so a ratio says nothing at low speed: a lone Ace fired one a tick after a
+respawn, at 8, checked 18 and peaked at 226. With absorb freeing slots, eight
+lone cells took a Turbo and met a wall 30-100 ticks after firing it; the corner
+model alone passed five of those eight.
+
+**What it is now** (`oag_ai::Driver::affords_boost`): the peak is `speed +
+220` (`TURBO_GAIN`); over the stretch that peak covers in the boost's time,
+the followed plan's targets must all be at least the peak, at this hull's
+share, **and** the corner model on this hull's yaw ceiling must allow it.
+Each alone failed: the plan's targets are unbounded where its search never
+slowed (three Turbos on `03`, `04` and `16_Track` passed it and hit a wall
+25-40 ticks later), and the corner model passed the five above.
+
+**Chosen on 160 de Konstruct field races** (seeds 4-23, four classes, both
+layouts, absorb in), counting a fired Turbo followed by wall contact within
+168 ticks:
+
+| Peak estimate, tail | Turbos fired | Followed by a wall | Craft-ticks holding a Turbo | Destroyed |
+| --- | --- | --- | --- | --- |
+| main (`speed * 2.2`, corner model only, no absorb) | 595 | 62 (10.4 %) | 1.25 M | 112 |
+| `max(2.2 speed, speed + 220)`, +1 s | 49 | 38 | 7.42 M | 65 |
+| `speed + 120`, none | 812 | 62 (7.6 %) | 0.96 M | 56 |
+| `max(speed + 120, 220)`, none | 812 | 57 (7.0 %) | 0.95 M | 57 |
+| `max(speed + 120, 220)`, +0.5 s | 683 | 56 (8.2 %) | 2.13 M | 75 |
+| **`speed + 220`, none** | **619** | **28 (4.5 %)** | **2.54 M** | **65** |
+
+A held Turbo the gate refuses is kept: the original never absorbs a Turbo
+while healthy (`+0x34` stays 0), so the first row starves. The chosen row
+fires as many Turbos as main, under half as many into a wall, and holds
+one about twice as long. The 220 is measured on Pulse physics only; the other
+titles run the same gate (`weapon-lineage.md`). Alone, without absorb: 484
+Turbos, 29 followed by a wall, destroyed 112, and all 48 lone cells unchanged.
 
 ### Still open, with the next address
 
@@ -3568,9 +3642,10 @@ looked at it. On `16_Track` one craft in a field of seven did exactly that and
 left the circuit - **and it never touched a wall on the way**, so nothing in the
 damage model saw a problem. `Driver::allows_speed` is the fix: it asks the same
 cornering limit the throttle brakes against, for the *boosted* speed, over the
-distance the boost covers. `TURBO_SPEED_RATIO` (2.2, in `race.rs`) is the
-assumed speed-up, ours and a rule of thumb - erring high is the safe direction,
-because it makes a craft keep the pickup rather than spend it into a wall.
+distance the boost covers. `TURBO_SPEED_RATIO` (2.2, in `race.rs`) was the
+assumed speed-up, ours and a rule of thumb. **Superseded 2026-10-19**: the gate
+reads the plan and a peak of `speed + 220`, see
+[the Turbo gate reads the plan](#the-turbo-gate-reads-the-plan).
 
 **It does not close the hole**: with the gate in, one craft in 28 craft-minutes
 on `16_Track` still leaves the track after a Turbo. It is no longer gone for the

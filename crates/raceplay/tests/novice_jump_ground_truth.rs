@@ -440,15 +440,18 @@ fn the_parked_field_is_put_back_where_the_original_puts_it() {
         return;
     };
     let mut seen = [0u32; 8];
-    let mut latch = [0.0f32; 8];
     for _ in 0..9_000 {
+        // **The engine's latch, read before the tick**, not rebuilt from the
+        // velocity after it: the craft latches right after its own step, and
+        // the rest of the field and the weapons can still move it before the
+        // tick ends. Rebuilt from outside, a slowed craft read 0.15 u/s short
+        // a tick (2026-10-19, once opponents absorbed). The latch itself is
+        // `breadcrumbs::tests::the_launch_speed_latches_on_every_fully_grounded_tick`'s.
+        let launch: [f32; 8] = std::array::from_fn(|slot| race.reset_launch_speed_of(slot));
         race.tick(&PlayerInputs::none());
         for (slot, seen) in seen.iter_mut().enumerate().skip(1) {
             let ship = &race.sim.world.ships[slot];
             if race.respawns_of(slot) == *seen {
-                if ship.physics.grounded == 1.0 {
-                    latch[slot] = ship.physics.body.linear_velocity.length();
-                }
                 continue;
             }
             *seen = race.respawns_of(slot);
@@ -460,7 +463,7 @@ fn the_parked_field_is_put_back_where_the_original_puts_it() {
             let line = race.racing_line();
             let velocity = ship.physics.body.linear_velocity;
             let along = (line.point(index + 1) - line.point(index)).normalize();
-            let want = 50.0 + 0.25 * latch[slot];
+            let want = launch[slot];
             assert!(
                 (velocity.length() - want).abs() < 1e-3
                     && velocity.dot(along) > 0.9 * velocity.length(),

@@ -78,7 +78,13 @@ const FIELD: &[(&str, &str, u32)] = &[
     ("05_Track", "RAPIER", 2),
     // 2026-10-13, 1 -> 4 (samples 206-207): a
     // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
-    ("05_Track", "PHANTOM", 4),
+    // 2026-10-19, 4 -> 6 (samples 205-208), the absorb half of
+    // `WeaponAi_DecideFireOrAbsorb`: none after a Turbo or a weapon blow.
+    // Absorbed energy keeps shields over the roll floor, so the field rolls
+    // more (seeds 4-23: 1,380 -> 1,706 rolls) and stops at the lip after a
+    // roll more (192 -> 245 of 419 -> 513). See docs/gameplay/ai.md, "The
+    // absorb half, re-landed".
+    ("05_Track", "PHANTOM", 6),
     ("21_Track", "VENOM", 1),
     ("21_Track", "FLASH", 1),
     ("21_Track", "RAPIER", 1),

@@ -433,6 +433,38 @@ impl Driver {
             )
     }
 
+    /// Whether a boost to `peak` lasting `ticks` is safe from where this
+    /// driver is: the gate an opponent's Turbo is fired on.
+    ///
+    /// **Chosen, not measured.** The original's weapon AI has no such gate:
+    /// its Turbo goes on the fire roll alone (`docs/ghidra/functions/
+    /// psp-pulse-usa/weapon-ai.md`, "The Turbo has no gate in the original").
+    /// This driver brakes for what it follows, and a boost is thrust it cannot
+    /// lift off, so it asks first.
+    ///
+    /// Two tests over the stretch `peak` covers in `ticks`, and both must pass:
+    ///
+    /// - **the plan**, when one matches the line: every target at least
+    ///   `peak`, at the share this hull carries
+    ///   ([`crate::SpeedPlan::share_for`]). The targets hold their braking
+    ///   zones, so a stretch that clears leaves room to brake after it;
+    /// - **the corner model** ([`Self::allows_speed`]), because a plan's
+    ///   target where its search never had to slow is unbounded rather than
+    ///   verified. Alone, the plan passed three Turbos on `03`, `04` and
+    ///   `16_Track` that met a wall 25 to 40 ticks later; alone, the corner
+    ///   model passed five of eight that did the same elsewhere.
+    #[must_use]
+    pub fn affords_boost(&self, ctx: &Context<'_>, peak: f32, ticks: f32) -> bool {
+        let plan_allows = ctx
+            .plan
+            .filter(|plan| plan.len() == ctx.line.len())
+            .is_none_or(|plan| {
+                let lowest = plan.target_ahead(self.index as usize, peak, ticks, planned::PLAN_DT);
+                lowest * plan.share_for(ctx.yaw_ceiling) >= peak
+            });
+        plan_allows && self.allows_speed(ctx, peak, peak * ticks * planned::PLAN_DT)
+    }
+
     /// The steering command, as a turn-rate error.
     ///
     /// Pure pursuit: the arc to a point on the line has curvature

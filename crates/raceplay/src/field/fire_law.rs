@@ -7,7 +7,7 @@
 //! `WeaponAIstats.xml` still runs.
 
 use super::*;
-use oag_ai::weapon_ai::{Mover, Odds, Situation, target_in_path};
+use oag_ai::weapon_ai::{Decision, Mover, Odds, Situation, target_in_path};
 use oag_tables::weapons::Weapon;
 
 /// Which rule decides when an opponent fires a forward weapon.
@@ -41,14 +41,16 @@ impl Race {
         }
     }
 
-    /// Advances `slot`'s weapon-AI clocks and answers whether its forward
-    /// weapon fires this tick. **Once a tick per opponent**, holding or not:
-    /// the clocks count ticks, and a second call would count one twice.
-    pub(crate) fn opponent_fires(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
+    /// Advances `slot`'s weapon-AI clocks and answers what it does with its
+    /// forward weapon this tick: fire, absorb or hold. **Once a tick per
+    /// opponent**, holding or not: the clocks count ticks, and a second call
+    /// would count one twice. Anything else held is [`Decision::Hold`] here;
+    /// its own arm in `spend_opponent_pickup` decides.
+    pub(crate) fn opponent_decides(&mut self, slot: usize, field: &oag_ai::Field) -> Decision {
         let weapon = self.sim.world.ships[slot].pickup.weapon;
         self.sim.world.ships[slot].weapon_ai.tick(weapon.is_some());
         let Some(weapon) = weapon else {
-            return false;
+            return Decision::Hold;
         };
         let aimed = match weapon {
             // `+0x58`: the forward weapons that leave the nose as a shot or a
@@ -64,18 +66,22 @@ impl Race {
             | Weapon::Repulser => true,
             // Flagged "ahead" and not aimed: fired on the roll alone.
             Weapon::Quake => false,
-            _ => return false,
+            _ => return Decision::Hold,
         };
         if self.fire_law() == FireLaw::Ours {
-            return self.wants_to_fire(slot, field);
+            return if self.wants_to_fire(slot, field) {
+                Decision::Fire
+            } else {
+                Decision::Hold
+            };
         }
         // **Chosen, not measured**: a craft that is not racing does not fire.
         // The original's own guard is `entity+0xae4`, which is not read.
         if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
-            return false;
+            return Decision::Hold;
         }
         let Some(situation) = self.fire_situation(slot, weapon, aimed) else {
-            return false;
+            return Decision::Hold;
         };
         let ship = &mut self.sim.world.ships[slot];
         let driver = ship.driver;
@@ -158,9 +164,11 @@ impl Race {
             gap_behind,
             player_gap,
             target_in_path,
+            shield: mine.physics.shield,
             odds: Odds {
                 use_against_player: odds.use_against_player,
                 use_against_ai: odds.use_against_ai,
+                absorb: odds.absorb,
             },
         })
     }

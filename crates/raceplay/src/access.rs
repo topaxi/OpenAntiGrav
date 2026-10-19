@@ -236,6 +236,19 @@ impl Race {
         self.sim.respawns.get(slot).copied().unwrap_or(0)
     }
 
+    /// The speed a reset would launch `slot` at now: its speed latched on its
+    /// last fully grounded tick, right after its own step, times a quarter plus
+    /// 50 ([`crate::breadcrumbs`]). A caller reading velocity after
+    /// [`Self::tick`] sees the craft after the rest of the field and the
+    /// weapons have moved it too, so it cannot rebuild this from outside.
+    #[must_use]
+    pub fn reset_launch_speed_of(&self, slot: usize) -> f32 {
+        self.sim
+            .breadcrumbs
+            .get(slot)
+            .map_or(0.0, crate::breadcrumbs::Breadcrumbs::launch_speed)
+    }
+
     /// Person `slot`'s original autopilot driver, once it has flown
     /// ([`Race::autopilot_controls`]); `None` before, on a title with no
     /// original tables, or under `--autopilot-skill`/`--autopilot-pilot`.
