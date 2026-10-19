@@ -231,7 +231,7 @@ fn opponent_fork(
         race.tick_sim_only(&PlayerInputs::none());
     }
     let snapshot = race.snapshot_sim();
-    let mut branch = |race: &mut oag_raceplay::Race, on: bool| {
+    let branch = |race: &mut oag_raceplay::Race, on: bool| {
         race.restore_sim(&snapshot);
         race.set_opponent_autopilot(on);
         if on {
@@ -260,10 +260,11 @@ fn opponent_fork(
     Some((absorbed, autopilot, flown))
 }
 
-/// The Autopilot speeds an opponent up (`docs/gameplay/ai.md`, "An opponent
-/// flies its Autopilot"): one Pulse 01 fork at Novice, where the paired
-/// sweep's median gain is 72 units over the window. Fails if an opponent goes
-/// back to absorbing it.
+/// The Autopilot speeds an opponent up under `Race::set_opponent_autopilot`
+/// (`docs/gameplay/ai.md`, "An opponent's Autopilot, measured and not
+/// wired"): one Pulse 01 fork at Novice, where the paired sweep's median gain
+/// is 72 units over the window. Fails if the switch stops flying the
+/// original's player driver.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_opponent_flies_its_autopilot_on_the_original_driver_and_gains() {
@@ -272,6 +273,7 @@ fn an_opponent_flies_its_autopilot_on_the_original_driver_and_gains() {
     else {
         return;
     };
+    println!("absorbed {absorbed:?} autopilot {autopilot:?}");
     assert!(flown, "the original's player driver never flew slot 1");
     assert!(
         autopilot.0 > absorbed.0 + 20.0,
@@ -303,8 +305,8 @@ fn an_opponents_autopilot_keeps_its_place_and_leaves_the_jump_to_its_driver() {
     }
 }
 
-/// The original's own field keeps absorbing it: `WeaponAi_Update` never
-/// fires the Autopilot outside an Eliminator.
+/// The original's own field keeps absorbing it even with the switch on:
+/// `WeaponAi_Update` never fires the Autopilot outside an Eliminator.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_original_field_opponent_is_not_handed_an_autopilot() {
@@ -315,8 +317,12 @@ fn an_original_field_opponent_is_not_handed_an_autopilot() {
     ) else {
         return;
     };
+    race.set_opponent_autopilot(true);
     assert!(race.engage_opponent_autopilot(1), "ours flies it");
     race.sim.world.ships[1].autopilot_timer = 0.0;
     assert!(race.use_original_ai(None, 1));
-    assert!(!race.engage_opponent_autopilot(1), "the original's absorbs it");
+    assert!(
+        !race.engage_opponent_autopilot(1),
+        "the original's absorbs it"
+    );
 }

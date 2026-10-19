@@ -18,8 +18,9 @@ struct Branch {
     stint: f32,
     /// Distance raced by the end of the window.
     window: f32,
-    /// Wall-contact ticks over the window.
+    /// Wall-contact ticks over the window, and over the stint alone.
     wall: u32,
+    wall_stint: u32,
     /// Rescues over the window.
     respawns: u32,
     /// Shield at the end of the window minus at the trigger.
@@ -89,6 +90,7 @@ fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64, trace: boo
         }
         if t + 1 == stint {
             out.stint = race.race_distance_of(slot).unwrap_or(0.0) - d0;
+            out.wall_stint = race.wall_contact_ticks_of(slot) - w0;
         }
     }
     out.window = race.race_distance_of(slot).unwrap_or(0.0) - d0;
@@ -249,6 +251,8 @@ fn sweep(
     let faster = window.iter().filter(|d| **d > 0.0).count();
     let wall_a: u32 = pairs.iter().map(|(a, _)| a.wall).sum();
     let wall_b: u32 = pairs.iter().map(|(_, b)| b.wall).sum();
+    let wall_stint_a: u32 = pairs.iter().map(|(a, _)| a.wall_stint).sum();
+    let wall_stint_b: u32 = pairs.iter().map(|(_, b)| b.wall_stint).sum();
     let resp_a: u32 = pairs.iter().map(|(a, _)| a.respawns).sum();
     let resp_b: u32 = pairs.iter().map(|(_, b)| b.respawns).sum();
     let shield_a: f32 = pairs.iter().map(|(a, _)| a.shield).sum::<f32>() / pairs.len() as f32;
@@ -259,7 +263,7 @@ fn sweep(
     let speed = window_mean_a / (window_ticks as f32 / 60.0);
     let mw = median(&mut window);
     println!(
-        "SUMMARY {image} {track:?} {class} {difficulty} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} = {:+.2} s | wall A {wall_a} B {wall_b} | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} (absorbing {:+.1}) B {shield_b:+.1}",
+        "SUMMARY {image} {track:?} {class} {difficulty} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} = {:+.2} s | wall A {wall_a} B {wall_b} (stint A {wall_stint_a} B {wall_stint_b}) | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} (absorbing {:+.1}) B {shield_b:+.1}",
         stint[0],
         stint[n - 1],
         window[0],
@@ -446,7 +450,10 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
     out.finished = done.len() as u32;
     out.finish = done.iter().sum::<u64>() as f32 / done.len().max(1) as f32;
     out.lap = laps.iter().sum::<u64>() as f32 / laps.len().max(1) as f32;
-    out.shield_per_lap = shield_sum.iter().map(|(s, n)| s / (*n).max(1) as f32).collect();
+    out.shield_per_lap = shield_sum
+        .iter()
+        .map(|(s, n)| s / (*n).max(1) as f32)
+        .collect();
     out
 }
 
