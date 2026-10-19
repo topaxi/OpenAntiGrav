@@ -37,14 +37,27 @@ struct Activity {
     finished: bool,
 }
 
-fn race_with_weapons(people: u8, one_way_ms: u64, ticks: u32, weapon_trigger: bool) -> Activity {
-    race_in_mode("single_race", people, one_way_ms, ticks, weapon_trigger)
+/// The 100 ms round trip ADR-0071's table was measured at.
+fn hundred_ms() -> Conditions {
+    Conditions {
+        one_way: web_time::Duration::from_millis(50),
+        ..Conditions::default()
+    }
+}
+
+fn race_with_weapons(
+    people: u8,
+    conditions: Conditions,
+    ticks: u32,
+    weapon_trigger: bool,
+) -> Activity {
+    race_in_mode("single_race", people, conditions, ticks, weapon_trigger)
 }
 
 fn race_in_mode(
     mode: &str,
     people: u8,
-    one_way_ms: u64,
+    conditions: Conditions,
     ticks: u32,
     weapon_trigger: bool,
 ) -> Activity {
@@ -60,13 +73,7 @@ fn race_in_mode(
         .map(|n| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
-            let link: Box<dyn Link> = Box::new(Shim::new(
-                client_end,
-                Conditions {
-                    one_way: web_time::Duration::from_millis(one_way_ms),
-                    loss: 0.0,
-                },
-            ));
+            let link: Box<dyn Link> = Box::new(Shim::new(client_end, conditions));
             let mut client = Client::connect(link, &format!("bot {n}"));
             client.set_weapon_trigger(weapon_trigger);
             let (race, _) = oag_net::race::load(&params, &source).expect("loads");
@@ -103,6 +110,24 @@ fn race_in_mode(
         assert_eq!(total.hash_mismatches, 0, "client {n}");
         assert_eq!(total.hash_matches, ticks, "client {n}");
     }
+    let per =
+        |f: fn(&oag_net::client::Stats) -> u32| -> Vec<u32> { totals.iter().map(f).collect() };
+    println!(
+        "TABLE people={people} loss={} jitter_ms={} rtt_ms={}: \
+         corrections {:?}, replayed {:?}, wrong-weapon-state ticks {:?}, \
+         pop-in age max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}",
+        conditions.loss,
+        conditions.jitter.as_millis(),
+        conditions.one_way.as_millis() * 2,
+        per(|t| t.corrections),
+        per(|t| t.replayed),
+        per(|t| t.weapon_mismatches),
+        per(|t| t.oldest_appeared),
+        per(|t| t.hash_mismatches),
+        per(|t| t.late_cues),
+        per(|t| t.late_blasts),
+        per(|t| t.late_oldest),
+    );
     activity
 }
 
@@ -117,25 +142,25 @@ fn assert_weapons_were_used(activity: &Activity) {
 #[test]
 #[ignore = "needs a disc image"]
 fn two_firing_clients_agree_with_the_server_at_100_ms() {
-    assert_weapons_were_used(&race_with_weapons(2, 50, 5400, true));
+    assert_weapons_were_used(&race_with_weapons(2, hundred_ms(), 5400, true));
 }
 
 #[test]
 #[ignore = "needs a disc image"]
 fn two_firing_clients_position_trigger_only_at_100_ms() {
-    assert_weapons_were_used(&race_with_weapons(2, 50, 5400, false));
+    assert_weapons_were_used(&race_with_weapons(2, hundred_ms(), 5400, false));
 }
 
 #[test]
 #[ignore = "needs a disc image"]
 fn four_firing_clients_agree_with_the_server_at_100_ms() {
-    assert_weapons_were_used(&race_with_weapons(4, 50, 5400, true));
+    assert_weapons_were_used(&race_with_weapons(4, hundred_ms(), 5400, true));
 }
 
 #[test]
 #[ignore = "needs a disc image"]
 fn four_firing_clients_position_trigger_only_at_100_ms() {
-    assert_weapons_were_used(&race_with_weapons(4, 50, 5400, false));
+    assert_weapons_were_used(&race_with_weapons(4, hundred_ms(), 5400, false));
 }
 
 /// Eliminator needs weapons: two people race one over the wire, the ends agree, and the kills
@@ -143,7 +168,39 @@ fn four_firing_clients_position_trigger_only_at_100_ms() {
 #[test]
 #[ignore = "needs a disc image"]
 fn an_eliminator_race_is_flown_over_the_wire_by_two() {
-    let activity = race_in_mode("eliminator", 2, 50, 5400, true);
+    let activity = race_in_mode("eliminator", 2, hundred_ms(), 5400, true);
     assert_weapons_were_used(&activity);
     assert!(activity.finished, "the kills ended the race: {activity:?}");
+}
+
+/// 100 ms, 5 % loss and 30 ms jitter, four clients: the worst of the sweep below, run on every
+/// `just test-data` at a shorter length. The hashes must still agree on every confirmed tick.
+#[test]
+#[ignore = "needs a disc image"]
+fn four_firing_clients_agree_through_5_percent_loss_and_jitter() {
+    let conditions = Conditions {
+        loss: 0.05,
+        jitter: web_time::Duration::from_millis(30),
+        ..hundred_ms()
+    };
+    assert_weapons_were_used(&race_with_weapons(4, conditions, 3600, true));
+}
+
+/// The loss and jitter table in ADR-0071's follow-up: a sweep that prints, run with `OAG_SWEEP=1`.
+#[test]
+#[ignore = "sweep: prints the loss and jitter table; set OAG_SWEEP=1"]
+fn loss_and_jitter_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for people in [2, 4] {
+        for (loss, jitter) in [(0.0, 0), (0.01, 0), (0.05, 0), (0.0, 30), (0.05, 30)] {
+            let conditions = Conditions {
+                loss,
+                jitter: web_time::Duration::from_millis(jitter),
+                ..hundred_ms()
+            };
+            assert_weapons_were_used(&race_with_weapons(people, conditions, 5400, true));
+        }
+    }
 }

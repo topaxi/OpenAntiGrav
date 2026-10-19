@@ -82,8 +82,56 @@ ADR (`Client::set_weapon_trigger(false)`).
   no sound; the missile simply exists mid-flight. Smoothing covers only craft. Showing the effect
   late would be a view-side change (an event queue of what the replay newly raised); chosen not
   to be done here.
-- Real packet loss and an analog human stream (ADR-0069 conditions 1, 3, 4) are as open as before.
+- An analog human stream with weapons (ADR-0069 condition 3) is as open as before; loss and jitter are measured above.
 - The 100 ms shim is the only latency measured with weapons.
+
+## Follow-up (2026-10-19, still Proposed)
+
+**The replay window now shows what it reveals.** The quiet steps (a client's confirmed-state
+advance and a correction's replay) journal the weapon cues, blasts and shield bulges they raise
+(`oag_raceplay::catch_up`); drawn ticks log the same keys (what and whose, never where); once per
+confirmed batch `Race::settle_presentation` matches the two and starts what the client had not
+presented, at its age: the cue on the next drain (within 30 ticks, else dropped), a blast's particle
+effect pre-aged by its age (`Stage::pre_age`, within 90 ticks), a shield bulge advanced by its age
+(within 20). Matching tolerates 4 ticks. All of those limits are chosen, not measured. A remote fire
+first shows in the confirmed step, not in the replay after it, which is why the journal spans both.
+Screen flashes and the Plasma and Bomb blast models start fresh, not aged. Pad, lap, countdown and
+magstrip cues stay dropped. A mine-trip blast and its hit sparks no longer play during a replay
+(they were not gated on `draws()`). `--force-remote-correction TICK:SLOT[:WINDOW][:contact][:fire]`
+has the remote person fire a Rocket inside the window: the late report was 3 cues and 3 blasts at
+ages up to 28 ticks on Pulse circuit 01, and 0 with catch-up off. The frames differ by almost
+nothing (an 8 by 108 pixel sliver at the horizon): the blasts were far ahead of the player's camera,
+so the effect is chiefly the sound, which is checked by the unit tests (a fire first seen is started
+once and never twice, an already presented one is not repeated, a second correction over the same window
+adds nothing), not by ear.
+
+**Packet loss and jitter, weapons on.** Pulse circuit 01, `Shim` at a 100 ms round trip, 5,400 ticks,
+digest trigger, same setup as the table above; loss is per datagram each way, jitter is a draw from
+0 to 30 ms added per message (datagrams may overtake, the reliable stream stays ordered). 0 bad
+hashes in every run. Per client ranges:
+
+| Clients | Loss | Jitter | Corrections | Replayed ticks | Wrong-weapon-state ticks | Largest pop-in (ticks) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | 0 | 0 | 106 to 111 | 848 to 888 | 8 to 10 | 9 |
+| 2 | 1 % | 0 | 102 to 111 | 918 to 999 | 4 to 10 | 10 |
+| 2 | 5 % | 0 | 93 to 109 | 935 to 1,094 | 8 to 9 | 11 |
+| 2 | 0 | 30 ms | 86 to 126 | 927 to 1,354 | 8 to 10 | 0 |
+| 2 | 5 % | 30 ms | 114 to 128 | 1,426 to 1,619 | 4 to 11 | 18 |
+| 4 | 0 | 0 | 163 to 176 | 1,304 to 1,408 | 34 to 40 | 9 |
+| 4 | 1 % | 0 | 162 to 177 | 1,458 to 1,593 | 29 to 34 | 10 |
+| 4 | 5 % | 0 | 156 to 173 | 1,568 to 1,737 | 15 to 22 | 11 (63 once) |
+| 4 | 0 | 30 ms | 157 to 182 | 1,670 to 1,937 | 22 to 33 | 12 |
+| 4 | 5 % | 30 ms | 179 to 185 | 2,074 to 2,149 | 21 to 34 | 12 to 18 |
+
+Loss costs little: corrections stay near 1.8 a second, and the redundancy of the input datagrams
+absorbs it. Jitter raises replayed ticks by 20 to 40 percent (a longer window per correction) and the
+pop-in age by a few ticks. One client at 4 people, 5 % loss saw a missile first appear 63 ticks into
+its flight (a resend wait, not seen again); the others stayed at or under 18. Wrong-weapon-state
+ticks fall as loss rises, because a lost confirm delays the compared tick rather than changing it;
+read that column as "ticks compared", not as an improvement. Late presentations in these runs were
+22 to 97 cues and 16 to 62 blasts per client, none older than 15 ticks (63 pop-in aside). The sweep
+is `weapons_ground_truth::loss_and_jitter_sweep` (`OAG_SWEEP=1`); `four_firing_clients_agree_through_5_percent_loss_and_jitter`
+runs in `just test-data`.
 
 ## Consequences
 

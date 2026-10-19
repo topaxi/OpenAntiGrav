@@ -167,25 +167,35 @@ pub struct Conditions {
     /// The fraction of datagrams dropped, each direction, `0.0..=1.0`. The reliable
     /// stream is never dropped (QUIC retransmits it), only delayed.
     pub loss: f32,
+    /// Each message is delayed by a further amount drawn evenly from `0..jitter`, so
+    /// datagrams can overtake one another. The reliable stream keeps its order (QUIC
+    /// delivers it in order), taking the later of its own draw and the one before.
+    pub jitter: Duration,
 }
 
 impl Conditions {
-    /// Parses `--net-shim`'s `RTT_MS[:LOSS_PERCENT]`, e.g. `100` or `100:2`.
+    /// Parses `--net-shim`'s `RTT_MS[:LOSS_PERCENT[:JITTER_MS]]`, e.g. `100`, `100:2` or
+    /// `100:2:30`.
     ///
     /// # Errors
     ///
     /// A message naming the part that is not a number.
     pub fn parse(spec: &str) -> Result<Self, String> {
-        let (rtt, loss) = spec.split_once(':').unwrap_or((spec, "0"));
+        let (rtt, rest) = spec.split_once(':').unwrap_or((spec, "0"));
+        let (loss, jitter) = rest.split_once(':').unwrap_or((rest, "0"));
         let rtt: u64 = rtt
             .parse()
             .map_err(|_| format!("--net-shim: round trip {rtt:?} is not whole milliseconds"))?;
         let loss: f32 = loss
             .parse()
             .map_err(|_| format!("--net-shim: loss {loss:?} is not a percentage"))?;
+        let jitter: u64 = jitter
+            .parse()
+            .map_err(|_| format!("--net-shim: jitter {jitter:?} is not whole milliseconds"))?;
         Ok(Self {
             one_way: Duration::from_micros(rtt * 500),
             loss: (loss / 100.0).clamp(0.0, 1.0),
+            jitter: Duration::from_millis(jitter),
         })
     }
 }
@@ -218,10 +228,8 @@ impl<L: Link> Shim<L> {
         }
     }
 
-    fn dropped(&mut self) -> bool {
-        if self.conditions.loss <= 0.0 {
-            return false;
-        }
+    /// The next roll of the network's dice, `0.0..1.0`.
+    fn roll(&mut self) -> f32 {
         self.dice ^= self.dice << 13;
         self.dice ^= self.dice >> 7;
         self.dice ^= self.dice << 17;
@@ -230,7 +238,25 @@ impl<L: Link> Shim<L> {
             reason = "a probability, not a value the race reads"
         )]
         let roll = (self.dice >> 40) as f32 / (1u64 << 24) as f32;
-        let dropped = roll < self.conditions.loss;
+        roll
+    }
+
+    /// When a message sent or received at `now` is due: the one-way delay and a draw of the
+    /// jitter.
+    fn due(&mut self, now: Instant) -> Instant {
+        let extra = if self.conditions.jitter.is_zero() {
+            Duration::ZERO
+        } else {
+            self.conditions.jitter.mul_f32(self.roll())
+        };
+        now + self.conditions.one_way + extra
+    }
+
+    fn dropped(&mut self) -> bool {
+        if self.conditions.loss <= 0.0 {
+            return false;
+        }
+        let dropped = self.roll() < self.conditions.loss;
         self.drops += u64::from(dropped);
         dropped
     }
@@ -248,13 +274,16 @@ impl<L: Link> Shim<L> {
                 }
             }
         }
-        let due = now + self.conditions.one_way;
         while let Some(bytes) = self.inner.recv_datagram() {
             if !self.dropped() {
-                self.incoming_datagrams.push_back((due, bytes));
+                let due = self.due(now);
+                let at = self.incoming_datagrams.partition_point(|(d, _)| *d <= due);
+                self.incoming_datagrams.insert(at, (due, bytes));
             }
         }
         while let Some(bytes) = self.inner.recv_reliable() {
+            let behind = self.incoming_reliable.back().map(|(d, _)| *d);
+            let due = self.due(now).max(behind.unwrap_or(now));
             self.incoming_reliable.push_back((due, bytes));
         }
     }
@@ -263,8 +292,9 @@ impl<L: Link> Shim<L> {
 impl<L: Link> Link for Shim<L> {
     fn send_datagram(&mut self, bytes: Vec<u8>) {
         if !self.dropped() {
-            let due = Instant::now() + self.conditions.one_way;
-            self.outgoing.push_back((due, false, bytes));
+            let due = self.due(Instant::now());
+            let at = self.outgoing.partition_point(|(d, _, _)| *d <= due);
+            self.outgoing.insert(at, (due, false, bytes));
         }
         self.pump();
     }
@@ -281,8 +311,16 @@ impl<L: Link> Link for Shim<L> {
         None
     }
     fn send_reliable(&mut self, bytes: Vec<u8>) {
-        let due = Instant::now() + self.conditions.one_way;
-        self.outgoing.push_back((due, true, bytes));
+        let behind = self
+            .outgoing
+            .iter()
+            .rev()
+            .find(|(_, reliable, _)| *reliable)
+            .map(|(d, _, _)| *d);
+        let now = Instant::now();
+        let due = self.due(now).max(behind.unwrap_or(now));
+        let at = self.outgoing.partition_point(|(d, _, _)| *d <= due);
+        self.outgoing.insert(at, (due, true, bytes));
         self.pump();
     }
     fn recv_reliable(&mut self) -> Option<Vec<u8>> {
@@ -387,6 +425,7 @@ mod tests {
         let conditions = Conditions {
             one_way: Duration::from_millis(50),
             loss: 0.5,
+            ..Conditions::default()
         };
         let shim = Shim::new(boxed, conditions);
         let path = shim.path().expect("forwarded");
@@ -404,6 +443,7 @@ mod tests {
             Conditions {
                 one_way: Duration::ZERO,
                 loss: 1.0,
+                ..Conditions::default()
             },
         );
         for _ in 0..5 {
@@ -420,6 +460,7 @@ mod tests {
             Conditions {
                 one_way: Duration::from_millis(30),
                 loss: 0.0,
+                ..Conditions::default()
             },
         );
         let sent = Instant::now();
@@ -437,6 +478,7 @@ mod tests {
             Conditions {
                 one_way: Duration::ZERO,
                 loss: 0.5,
+                ..Conditions::default()
             },
         );
         for i in 0..1000u32 {
@@ -458,10 +500,74 @@ mod tests {
             Conditions::parse("100:2"),
             Ok(Conditions {
                 one_way: Duration::from_millis(50),
-                loss: 0.02
+                loss: 0.02,
+                ..Conditions::default()
             })
+        );
+        assert_eq!(
+            Conditions::parse("100:2:30").map(|c| c.jitter),
+            Ok(Duration::from_millis(30))
         );
         assert_eq!(Conditions::parse("0").map(|c| c.loss), Ok(0.0));
         assert!(Conditions::parse("fast").is_err());
+    }
+
+    #[test]
+    fn jitter_lets_datagrams_overtake_and_loses_none() {
+        let (a, mut b) = Loopback::pair();
+        let mut a = Shim::new(
+            a,
+            Conditions {
+                jitter: Duration::from_millis(20),
+                ..Conditions::default()
+            },
+        );
+        for i in 0..200u8 {
+            a.send_datagram(vec![i]);
+        }
+        let sent = Instant::now();
+        let mut order = Vec::new();
+        while order.len() < 200 {
+            a.recv_datagram();
+            while let Some(bytes) = b.recv_datagram() {
+                order.push(bytes[0]);
+            }
+            assert!(
+                sent.elapsed() < Duration::from_secs(2),
+                "{} arrived",
+                order.len()
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut sorted = order.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, (0..200u8).collect::<Vec<_>>(), "none lost");
+        assert_ne!(order, sorted, "some overtook another");
+    }
+
+    #[test]
+    fn jitter_never_reorders_the_reliable_stream() {
+        let (a, mut b) = Loopback::pair();
+        let mut a = Shim::new(
+            a,
+            Conditions {
+                jitter: Duration::from_millis(20),
+                ..Conditions::default()
+            },
+        );
+        for i in 0..100u8 {
+            a.send_reliable(vec![i]);
+        }
+        let sent = Instant::now();
+        let mut order = Vec::new();
+        while order.len() < 100 {
+            a.recv_reliable();
+            while let Some(bytes) = b.recv_reliable() {
+                order.push(bytes[0]);
+            }
+            assert!(sent.elapsed() < Duration::from_secs(2));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(order, (0..100u8).collect::<Vec<_>>());
     }
 }

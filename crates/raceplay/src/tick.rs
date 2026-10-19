@@ -46,6 +46,16 @@ impl Race {
     ///
     /// [`PlayerInputs`]: oag_gameplay::PlayerInputs
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
+        #[cfg(feature = "view")]
+        let queued = self.sim.cues.len();
+        let evaluations = self.tick_body(inputs);
+        #[cfg(feature = "view")]
+        self.note_cues(queued);
+        evaluations
+    }
+
+    /// [`Self::tick`] without the journal around it.
+    fn tick_body(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         self.ensure_speed_plans();
         // Before anything moves: the poses a draw blends from. See `between_ticks`.
         #[cfg(feature = "view")]
@@ -261,14 +271,12 @@ impl Race {
             }
             self.credit_blast(impact, &hits);
             #[cfg(feature = "view")]
-            if self.draws() {
-                self.ignite_blast(
-                    impact.kind,
-                    impact.point,
-                    impact.struck.map(usize::from),
-                    orientations_before[slot],
-                );
-            }
+            self.note_blast(
+                impact.kind,
+                impact.point,
+                impact.struck.map(usize::from),
+                orientations_before[slot],
+            );
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
             // craft hit and clears the bolt's own emitter before
             // `Plasmas_Update`'s pass-two teardown would otherwise play

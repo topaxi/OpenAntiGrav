@@ -17,7 +17,7 @@ tested locally; nothing has been deployed or tried over a real network.
 7. **Containers**: the `Runner` seam (`online::race_proc`) is where a spawner per room on its own
    port goes; the hand-off already carries a port and a hash.
 
-8. **Weapons landed 2026-10-19** (ADR-0071, `docs/networking/online-lobby.md` part 10): predicted simulation plus a discrete-state correction trigger, the room's Weapons row, Eliminator open online. Open: a replayed fire or hit has no flash, blast or sound (`tick_sim_only` drops them); real packet loss and an analog human stream with weapons; a live pointer click on the Weapons row; Head to Head online (two seats in a room of eight).
+8. **Weapons landed 2026-10-19** (ADR-0071, `docs/networking/online-lobby.md` part 10): predicted simulation plus a discrete-state correction trigger, the room's Weapons row, Eliminator open online. Follow-up 2026-10-19 (`online-weapons-polish`): a fire first seen in a quiet step is now shown late (weapon cues, blasts, shield bulges, `oag_raceplay::catch_up`); loss and jitter measured (ADR-0071 follow-up); room stills and a pad and pointer test on the Weapons row. Open: the launch flash and screen flash start fresh rather than aged, the player-visible effect is mostly the sound (no camera-visible blast in the forced scenes), an analog human stream with weapons; Head to Head online (two seats in a room of eight).
 
 ## Next Steps
 

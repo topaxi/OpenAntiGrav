@@ -118,7 +118,7 @@ impl Race {
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
             #[cfg(feature = "view")]
-            self.ignite_blast(
+            self.note_blast(
                 oag_tables::weapons::Weapon::Mine,
                 point,
                 None,
@@ -128,7 +128,9 @@ impl Race {
         // The wave's landed hits spark the struck hulls - see
         // `race::hit_sparks`. Last, once `course`'s borrow has ended.
         #[cfg(feature = "view")]
-        self.throw_hit_sparks(&hits, false);
+        if self.draws() {
+            self.throw_hit_sparks(&hits, false);
+        }
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
                 self.record_pending_hit(slot, wave.owner);

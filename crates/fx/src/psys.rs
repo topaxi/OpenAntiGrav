@@ -55,6 +55,7 @@ pub mod guard;
 mod library;
 mod path;
 pub mod playback;
+mod pre_age;
 pub mod spawn;
 pub mod sprite;
 pub use path::{effect_path, effect_path_in};
