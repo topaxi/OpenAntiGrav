@@ -193,6 +193,65 @@ fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) 
     (streams, fractional)
 }
 
+/// Every craft flown by a [`crate::hand::Hand`] on the driver's wants, closed loop: the
+/// stream is what a thumb on an analog pad would have sent, and the race it drives is the
+/// one it was recorded from. Also returns the laps the first craft completed.
+fn record_hand_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, u32) {
+    let (streams, lap, _) = record_hand_pack_measured(setup, ticks, false);
+    (streams, lap)
+}
+
+/// [`record_hand_pack`], and how far craft 0 travelled over the run, with the hand or
+/// (`straight`) with the driver's wants passed to the sim unfiltered, as a baseline.
+fn record_hand_pack_measured(
+    setup: &Setup,
+    ticks: usize,
+    straight: bool,
+) -> (Vec<Vec<InputSnapshot>>, u32, f32) {
+    let mut race = person_race(setup);
+    let slots = race.sim.world.ship_count as usize;
+    let mut drivers: Vec<Option<oag_ai::Driver>> = vec![None; slots];
+    let mut hands: Vec<crate::hand::Hand> = (0..slots)
+        .map(|slot| crate::hand::Hand::new(0x4841_4E44 + slot as u64))
+        .collect();
+    let mut streams = vec![Vec::with_capacity(ticks); slots];
+    let mut travelled = 0.0;
+    let mut last = race.sim.world.ships[0].physics.body.position;
+    for _ in 0..ticks {
+        let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
+        let mut inputs = PlayerInputs::none();
+        for slot in 0..slots {
+            let wants = race.autopilot_wants(slot, &mut drivers[slot]);
+            let snapshot = if straight {
+                let mut buttons = Input::new();
+                buttons.begin_frame(if gated || wants.thrust > 0.5 {
+                    Button::Cross.bit()
+                } else {
+                    0
+                });
+                InputSnapshot {
+                    buttons,
+                    stick_x: wants.steer_x,
+                    stick_y: -wants.steer_y,
+                    airbrake_left: wants.airbrake_left,
+                    airbrake_right: wants.airbrake_right,
+                }
+                .sanitised()
+            } else {
+                hands[slot].apply(wants, gated)
+            };
+            streams[slot].push(snapshot);
+            inputs.set(slot, snapshot);
+        }
+        race.tick(&inputs);
+        race.drain_cues();
+        let now = race.sim.world.ships[0].physics.body.position;
+        travelled += (now - last).length();
+        last = now;
+    }
+    (streams, race.sim.world.ships[0].standing.lap, travelled)
+}
+
 /// Where every craft is, for comparing two sims.
 type Positions = [Vec3; oag_gameplay::MAX_SHIPS];
 
@@ -343,6 +402,15 @@ fn stream_report(sc: &Scenario) {
         .iter()
         .filter(|&&bits| f32::from_bits(bits).abs() == 1.0)
         .count();
+    let mut deciles = [0usize; 10];
+    for &bits in &sticks {
+        deciles[((f32::from_bits(bits).abs() * 10.0) as usize).min(9)] += 1;
+    }
+    println!(
+        "  {} |stick_x| by tenths: {:?} (percent)",
+        sc.name,
+        deciles.map(|n| (1000.0 * n as f64 / total as f64).round() / 10.0)
+    );
     sticks.sort_unstable();
     sticks.dedup();
     println!(
@@ -518,21 +586,70 @@ fn reconcile_predict_ai_sweep() {
             "{id}: {slots} streams of {ticks} ticks, {fractional} fractional-thrust ticks binarised; load {}",
             loadavg()
         );
-        let seven = Scenario {
-            name: "ai7 (1 own, 7 remote)".to_string(),
-            streams: streams.clone(),
-            remote: (1..slots).collect(),
-        };
-        stream_report(&seven);
-        sweep_scenario(&setup, &seven, &mut pool);
-        let one = Scenario {
-            name: "ai1 (7 own, 1 remote)".to_string(),
-            streams,
-            remote: vec![1],
-        };
-        sweep_scenario(&setup, &one, &mut pool);
+        if std::env::var_os("OAG_SWEEP_HAND").is_none_or(|v| v != "only") {
+            let seven = Scenario {
+                name: "ai7 (1 own, 7 remote)".to_string(),
+                streams: streams.clone(),
+                remote: (1..slots).collect(),
+            };
+            stream_report(&seven);
+            sweep_scenario(&setup, &seven, &mut pool);
+            let one = Scenario {
+                name: "ai1 (7 own, 1 remote)".to_string(),
+                streams,
+                remote: vec![1],
+            };
+            sweep_scenario(&setup, &one, &mut pool);
+        }
+        if std::env::var_os("OAG_SWEEP_HAND").is_some() {
+            let (hand, lap) = record_hand_pack(&setup, ticks);
+            println!("{id}: hand pack, craft 0 on lap {lap} after {ticks} ticks");
+            let seven = Scenario {
+                name: "hand7 (1 own, 7 remote)".to_string(),
+                streams: hand.clone(),
+                remote: (1..slots).collect(),
+            };
+            stream_report(&seven);
+            sweep_scenario(&setup, &seven, &mut pool);
+            let one = Scenario {
+                name: "hand1 (7 own, 1 remote)".to_string(),
+                streams: hand,
+                remote: vec![1],
+            };
+            sweep_scenario(&setup, &one, &mut pool);
+        }
     }
     pool.print();
+}
+
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the census"]
+fn hand_pack_census() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let ticks = oag_race::COUNTDOWN_TICKS as usize + RACED;
+    for (id, entry) in super::reconcile_cost::circuits() {
+        if !wanted(&id) {
+            continue;
+        }
+        let setup = load_circuit(&image, &entry, "VENOM", Mode::SingleRace, None, None)
+            .expect("loading the circuit");
+        for straight in [true, false] {
+            let (streams, lap, travelled) = record_hand_pack_measured(&setup, ticks, straight);
+            let slots = streams.len();
+            let sc = Scenario {
+                name: format!("{id} {}", if straight { "unfiltered wants" } else { "hand" }),
+                streams,
+                remote: (1..slots).collect(),
+            };
+            println!("{}: lap {lap}, craft 0 travelled {travelled:.0} units", sc.name);
+            stream_report(&sc);
+        }
+    }
 }
 
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {

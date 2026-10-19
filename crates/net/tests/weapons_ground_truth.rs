@@ -51,15 +51,17 @@ fn race_with_weapons(
     ticks: u32,
     weapon_trigger: bool,
 ) -> Activity {
-    race_in_mode("single_race", people, conditions, ticks, weapon_trigger)
+    race_in_mode("single_race", people, conditions, ticks, weapon_trigger, false)
 }
 
+/// `hand`: the clients fly through a `Hand`, an analog stick, instead of the driver's raw wants.
 fn race_in_mode(
     mode: &str,
     people: u8,
     conditions: Conditions,
     ticks: u32,
     weapon_trigger: bool,
+    hand: bool,
 ) -> Activity {
     let Some(image) = oag_testdata::image(IMAGE) else {
         return Activity::default();
@@ -76,6 +78,7 @@ fn race_in_mode(
             let link: Box<dyn Link> = Box::new(Shim::new(client_end, conditions));
             let mut client = Client::connect(link, &format!("bot {n}"));
             client.set_weapon_trigger(weapon_trigger);
+            client.set_bot_hand(hand.then_some(0x4841_4E44 + u64::from(n)));
             let (race, _) = oag_net::race::load(&params, &source).expect("loads");
             let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
             (client, race, pilot)
@@ -113,9 +116,10 @@ fn race_in_mode(
     let per =
         |f: fn(&oag_net::client::Stats) -> u32| -> Vec<u32> { totals.iter().map(f).collect() };
     println!(
-        "TABLE people={people} loss={} jitter_ms={} rtt_ms={}: \
+        "TABLE hand={hand} people={people} loss={} jitter_ms={} rtt_ms={}: \
          corrections {:?}, replayed {:?}, wrong-weapon-state ticks {:?}, \
-         pop-in age max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}",
+         pop-in age max {:?}, bad hashes {:?}, late cues {:?}, late blasts {:?}, late oldest {:?}, \
+         mean error {:?}, largest error {:?}, largest pop {:?}, own craft moved {:?}, own pop max {:?}",
         conditions.loss,
         conditions.jitter.as_millis(),
         conditions.one_way.as_millis() * 2,
@@ -127,6 +131,14 @@ fn race_in_mode(
         per(|t| t.late_cues),
         per(|t| t.late_blasts),
         per(|t| t.late_oldest),
+        totals
+            .iter()
+            .map(|t| t.error_sum / t.error_count.max(1) as f32)
+            .collect::<Vec<_>>(),
+        totals.iter().map(|t| t.largest_error).collect::<Vec<_>>(),
+        totals.iter().map(|t| t.largest_pop).collect::<Vec<_>>(),
+        per(|t| t.own_moved),
+        totals.iter().map(|t| t.own_pop_max).collect::<Vec<_>>(),
     );
     activity
 }
@@ -168,7 +180,7 @@ fn four_firing_clients_position_trigger_only_at_100_ms() {
 #[test]
 #[ignore = "needs a disc image"]
 fn an_eliminator_race_is_flown_over_the_wire_by_two() {
-    let activity = race_in_mode("eliminator", 2, hundred_ms(), 5400, true);
+    let activity = race_in_mode("eliminator", 2, hundred_ms(), 5400, true, false);
     assert_weapons_were_used(&activity);
     assert!(activity.finished, "the kills ended the race: {activity:?}");
 }
@@ -203,4 +215,47 @@ fn loss_and_jitter_sweep() {
             assert_weapons_were_used(&race_with_weapons(people, conditions, 5400, true));
         }
     }
+}
+
+/// ADR-0069 condition 3: one cell of the analog-stick table, the driver's raw wants (`hand`
+/// false) and the same driver through a `Hand` (true) in one session so the two are read
+/// against one machine's load. Run with `OAG_SWEEP=1`.
+fn hand_cell(people: u8, loss: f32, jitter_ms: u64, hand: bool) {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let conditions = Conditions {
+        loss,
+        jitter: web_time::Duration::from_millis(jitter_ms),
+        ..hundred_ms()
+    };
+    assert_weapons_were_used(&race_in_mode(
+        "single_race",
+        people,
+        conditions,
+        5400,
+        true,
+        hand,
+    ));
+}
+
+macro_rules! hand_cells {
+    ($($name:ident: $people:expr, $loss:expr, $jitter:expr, $hand:expr;)*) => {$(
+        #[test]
+        #[ignore = "sweep: prints one cell of the analog-stick table; set OAG_SWEEP=1"]
+        fn $name() {
+            hand_cell($people, $loss, $jitter, $hand);
+        }
+    )*};
+}
+
+hand_cells! {
+    sweep_bot_2_clean: 2, 0.0, 0, false;
+    sweep_hand_2_clean: 2, 0.0, 0, true;
+    sweep_bot_2_lossy: 2, 0.05, 30, false;
+    sweep_hand_2_lossy: 2, 0.05, 30, true;
+    sweep_bot_4_clean: 4, 0.0, 0, false;
+    sweep_hand_4_clean: 4, 0.0, 0, true;
+    sweep_bot_4_lossy: 4, 0.05, 30, false;
+    sweep_hand_4_lossy: 4, 0.05, 30, true;
 }

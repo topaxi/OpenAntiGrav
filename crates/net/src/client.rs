@@ -51,6 +51,10 @@ use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, Tick
 /// World units; a craft is about 13 long. Chosen, not measured (ADR-0069).
 pub const THRESHOLD: f32 = 1.0;
 
+/// A correction moved the client's own craft when it moved it more than this many world
+/// units (a hundredth of a craft's width): below it is float noise from the replay.
+pub const OWN_MOVED: f32 = 0.05;
+
 /// The lead the client steers toward: ticks of its input the server holds beyond
 /// the tick it is about to run. Chosen.
 pub const LEAD_TARGET: i16 = 2;
@@ -112,6 +116,16 @@ pub struct Stats {
     pub largest_pop: f32,
     /// The largest prediction error seen at a confirmed tick, corrected or not.
     pub largest_error: f32,
+    /// The prediction error (the farthest any craft was from the server's) summed over
+    /// [`Self::error_count`] confirmed ticks: the mean the largest hides.
+    pub error_sum: f32,
+    /// See [`Self::error_sum`].
+    pub error_count: u32,
+    /// The greatest distance a correction moved this client's own craft, the one its camera
+    /// follows.
+    pub own_pop_max: f32,
+    /// Corrections that moved this client's own craft by more than [`OWN_MOVED`].
+    pub own_moved: u32,
     /// Steps the client waited because the present was [`MAX_WINDOW`] ahead.
     pub stalls: u32,
     /// Extra ticks run and ticks skipped to steer the lead.
@@ -198,6 +212,8 @@ pub struct Client {
     weapon_trigger: bool,
     /// Ticks the bot has held its current pickup ([`Self::bot_input`]).
     bot_held_for: u32,
+    /// The hand the bot's stick goes through (`--net-bot-hand`), when it has one.
+    bot_hand: Option<oag_raceplay::hand::Hand>,
 }
 
 /// Ticks a bot holds a pickup before it fires it. Chosen, not measured.
@@ -258,6 +274,7 @@ impl Client {
             last_confirm_ms: None,
             weapon_trigger: true,
             bot_held_for: 0,
+            bot_hand: None,
         }
     }
 
@@ -570,6 +587,8 @@ impl Client {
         });
         if error.is_finite() {
             self.stats.largest_error = self.stats.largest_error.max(error);
+            self.stats.error_sum += error;
+            self.stats.error_count += 1;
         }
         if weapons_differ {
             self.stats.weapon_mismatches += 1;
@@ -640,6 +659,9 @@ impl Client {
         self.stats.replayed += u32::try_from(reconciled.ticks).unwrap_or(u32::MAX);
         let pop = reconciled.pops.iter().copied().fold(0.0, f32::max);
         self.stats.largest_pop = self.stats.largest_pop.max(pop);
+        let own_pop = reconciled.pops.get(seat).copied().unwrap_or(0.0);
+        self.stats.own_pop_max = self.stats.own_pop_max.max(own_pop);
+        self.stats.own_moved += u32::from(own_pop > OWN_MOVED);
     }
 
     /// This machine's input when it flies itself (`--net-bot`): what the player's
@@ -649,6 +671,20 @@ impl Client {
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
         let wants = race.autopilot_wants(seat, &mut self.bot);
         let gated = oag_race::RaceState::thrust_gated(race.sim.world.tick);
+        if let Some(hand) = &mut self.bot_hand {
+            let mut snapshot = hand.apply(wants, gated);
+            let mut mask = snapshot.buttons.masks()[0];
+            self.bot_held_for = if race.sim.world.ships[seat].pickup.weapon.is_some() {
+                self.bot_held_for + 1
+            } else {
+                0
+            };
+            if self.bot_held_for == BOT_FIRE_AFTER + 7 * u32::try_from(seat).unwrap_or(0) {
+                mask |= Button::Square.bit();
+            }
+            snapshot.buttons.begin_frame(mask);
+            return snapshot;
+        }
         let mut buttons = Input::new();
         let mut mask = if gated || wants.thrust > 0.5 {
             Button::Cross.bit()
@@ -674,6 +710,13 @@ impl Client {
             airbrake_right: wants.airbrake_right,
         }
         .sanitised()
+    }
+
+    /// Flies the bot's stick through a [`oag_raceplay::hand::Hand`] seeded with `seed`: the
+    /// driver's wants as an analog thumb would send them. A verification aid, **chosen, not
+    /// measured** (ADR-0069, condition 3).
+    pub fn set_bot_hand(&mut self, seed: Option<u64>) {
+        self.bot_hand = seed.map(oag_raceplay::hand::Hand::new);
     }
 
     /// Tells the server this client is leaving.

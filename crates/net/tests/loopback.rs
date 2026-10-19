@@ -51,6 +51,10 @@ pub(crate) fn drive_observed(
             total.replayed += s.replayed;
             total.largest_pop = total.largest_pop.max(s.largest_pop);
             total.largest_error = total.largest_error.max(s.largest_error);
+            total.error_sum += s.error_sum;
+            total.error_count += s.error_count;
+            total.own_pop_max = total.own_pop_max.max(s.own_pop_max);
+            total.own_moved += s.own_moved;
             total.resends += s.resends;
             total.stalls += s.stalls;
             total.sped_up += s.sped_up;
