@@ -839,9 +839,6 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table; measured on
     // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),
-    // `body+0x50` holds the tensor rotated into world axes, read live
-    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
-    inertia_rotates: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

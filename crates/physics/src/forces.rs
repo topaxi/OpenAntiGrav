@@ -664,16 +664,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let weathervane = passive::weathervane(forward, velocity, contact);
     // `Ship_ApplyAngularDamping` loads `body+0x160`, angular **momentum**, so it reads
     // `I * omega` in the body frame, not `omega`; that is why the inertia survives to the
-    // observable (`Accumulators::local_angular`). The momentum is built in the title's
-    // `InertiaFrame`: Pulse's `+0x160` is the world-axis `I * omega` rotated into the body.
-    let local_angular_momentum = match state.inertia_frame {
-        crate::ship::InertiaFrame::World => {
-            state.body.orientation.inverse() * (state.body.angular_velocity * state.body.inertia)
-        }
-        crate::ship::InertiaFrame::Body => {
-            (state.body.orientation.inverse() * state.body.angular_velocity) * state.body.inertia
-        }
-    };
+    // observable (`Accumulators::local_angular`).
+    let local_angular_velocity = state.body.orientation.inverse() * state.body.angular_velocity;
+    let local_angular_momentum = local_angular_velocity * state.body.inertia;
     let angular_damping = passive::angular_damping(handling, local_angular_momentum);
     let rolling_resistance = passive::rolling_resistance(velocity, cached_speed);
     let vertical_damping = passive::vertical_damping(up, velocity, contact_grounded);

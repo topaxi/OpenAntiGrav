@@ -253,20 +253,6 @@ pub enum Sideshift {
     Right,
 }
 
-/// Which frame [`Body::inertia`]'s diagonal is applied in when torque becomes angular
-/// acceleration ([`crate::integrate::integrate`]) and angular velocity becomes the momentum
-/// angular damping reads ([`crate::forces::evaluate`]).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum InertiaFrame {
-    /// Fixed in world axes, as Pulse's `Body_Integrate` applies it (confidence 90,
-    /// `docs/physics/airborne-ground-truth.md`).
-    #[default]
-    World,
-    /// Rotated with the craft, `R I R^T`, as Wipeout HD's does
-    /// (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`, confidence 90).
-    Body,
-}
-
 /// Everything the force law carries from one frame to the next.
 ///
 /// Plain data with no allocation and no handles, so a whole race snapshots in one
@@ -492,10 +478,6 @@ pub struct ShipState {
     /// yet measured live. Written by the race from the title every tick, not hashed, for
     /// [`Self::on_grid`]'s reason.
     pub air_pitch_bias: bool,
-    /// The frame the inertia diagonal is applied in ([`InertiaFrame`]): Pulse's world axes
-    /// unless the title measured its own. Written by the race from the title every tick, not
-    /// hashed, for [`Self::on_grid`]'s reason.
-    pub inertia_frame: InertiaFrame,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -665,7 +647,6 @@ impl Default for ShipState {
             hover_rig: crate::hover::Rig::TWO_POINT,
             steer_ramp_clamped: false,
             air_pitch_bias: true,
-            inertia_frame: InertiaFrame::World,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

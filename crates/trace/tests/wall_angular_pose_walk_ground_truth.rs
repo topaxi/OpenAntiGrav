@@ -256,7 +256,7 @@ fn gates_at_the_clean_lap_redirect() {
     let _ =
         oag_physics::forces::evaluate(&mut state, &controls, &handling, &environment, &world, dt);
     let before = state.body.position;
-    oag_physics::integrate(&mut state.body, state.inertia_frame, dt);
+    oag_physics::integrate(&mut state.body, dt);
     if let Some((correction, _)) = oag_physics::hover::sweep(&state, &environment, &world, before) {
         println!("hover sweep correction {}", fmt(correction));
     }

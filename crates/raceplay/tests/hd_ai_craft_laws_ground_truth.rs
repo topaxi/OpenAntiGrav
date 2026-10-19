@@ -61,11 +61,6 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
         let physics = &race.sim.world.ships[slot].physics;
         assert_eq!(physics.body.inertia.y, 24.0, "slot {slot} I_yy");
         assert!(physics.steer_ramp_clamped, "slot {slot} steering ramp");
-        assert_eq!(
-            physics.inertia_frame,
-            oag_physics::InertiaFrame::Body,
-            "slot {slot} inertia frame"
-        );
         let rig = physics.hover_rig;
         assert_eq!(rig.count, 4, "slot {slot} hover probes");
         assert_eq!(rig.spring_share, 0.15, "slot {slot} spring share");
