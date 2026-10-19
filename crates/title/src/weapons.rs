@@ -48,16 +48,21 @@ pub struct Weapons {
     /// `oag_raceplay::FireLaw` - which is what a title with no table would
     /// get, and none of the five does.
     pub ai: Option<&'static str>,
-    /// Whether an opponent fires a LeachBeam it holds, or holds it.
-    ///
-    /// **`false` is chosen, not measured** (maintainer, 2026-10-19). On HD,
-    /// 2048 and Omega this engine drains a beam at Pulse's per-tick rate with
-    /// the title's own `damage` (1.5 against Pulse's 0.1). An opponent's beam
-    /// then empties a full shield in under two seconds, and a field that
-    /// fires them wrecks itself. HD's drain is not fully read (see
-    /// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`), so those titles'
-    /// opponents keep the beam until it is. The player's beam is unchanged.
-    pub opponents_fire_leach_beam: bool,
+    /// When a locked LeachBeam moves energy: every tick, or once a ball trip.
+    pub leach_drain: LeachDrain,
+}
+
+/// When a locked LeachBeam transfers `damage` and `repair`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeachDrain {
+    /// Every tick: Pulse's `LeachBeam_UpdatePool`
+    /// (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`).
+    PerTick,
+    /// Once per ball trip, 0.3 to 1.0 s on the beam's length: HD's
+    /// `LeachBeamManager_Update_q` behind `LeachBall_Advance`'s arrival count
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, confidence 80). See
+    /// `oag_weapons::projectile::leach_beam::trip`.
+    PerTrip,
 }
 
 /// Where a title keeps each weapon's own body model - the projectile itself,

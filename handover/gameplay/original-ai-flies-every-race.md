@@ -31,6 +31,14 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   firing (`docs/gameplay/ai.md`, "An original opponent never fired, and now
   does"), which changed the field state; `pure_original_ai_ground_truth`'s
   Chenghou walk now allows 1 respawn a craft and names this cause.
+- **The absorb half of `WeaponAi_DecideFireOrAbsorb`** (Pulse, recovered on
+  `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`) was ported and reverted
+  on 2026-10-19 (lane `campaign-ai-weapons`): it moved 11 lone-craft cells of
+  `ai_clean_lap_gate` and the de Konstruct gates through this project's Turbo
+  policy (a craft that absorbs a held weapon picks up a Turbo and fires it
+  into a wall), did not reduce wrecks, and its decision cadence (every tick or
+  four a second) is unconfirmed. Port it with the cadence settled and those
+  gates rebaselined on purpose.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.

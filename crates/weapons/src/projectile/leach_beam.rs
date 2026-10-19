@@ -119,6 +119,60 @@ pub struct Beam {
     /// [`LeachBeamStats::slow_ship_factor`], copied at launch: the one-shot
     /// thrust scale [`Self::drain`] arms on the victim each tick it lands.
     pub slow_ship_factor: f32,
+    /// HD's drain trip: seconds since the last arrival, or `None` for Pulse's
+    /// drain every tick. See [`trip`] and [`Self::per_trip`].
+    pub trip: Option<f32>,
+}
+
+/// Wipeout HD's LeachBeam drain cadence: one transfer per ball trip, not one
+/// per tick.
+///
+/// Read off `EBOOT.elf` (`docs/ghidra/functions/ps3-hdfury-eu/weapons.md`,
+/// confidence 80). `LeachBall_Advance` (`0x00114c78`) adds `dt` to its
+/// accumulator and wraps it against [`period`]; it returns `10 * wraps`, which
+/// `LeachBeam_Update` stores at `beam+0xc938`, and
+/// `LeachBeamManager_Update_q` (`0x0013d7a8`) runs the transfer only while that
+/// is above zero. So `damage` and `repair` (times `energy_multiplier` on the
+/// first) move once a trip. HD's pending damage reaches the shield unscaled
+/// (`Ship_ApplyPendingDamage_q`, `0x000e8de0`).
+pub mod trip {
+    /// Beam length at or under which a trip takes [`PERIOD_MIN_SECONDS`]
+    /// (`DAT_008a9c88`). **What the length is, is chosen**: the original reads
+    /// `strip+0x10`, whose writer is unread; this engine passes the straight
+    /// distance between the two craft.
+    pub const PERIOD_MIN_LENGTH: f32 = 20.0;
+    /// Beam length at or over which a trip takes [`PERIOD_MAX_SECONDS`]
+    /// (`DAT_008a9c8c`).
+    pub const PERIOD_MAX_LENGTH: f32 = 100.0;
+    /// The shortest trip, seconds (`DAT_008a9c80`).
+    pub const PERIOD_MIN_SECONDS: f32 = 0.3;
+    /// The longest trip, seconds (`DAT_008a9c90`).
+    pub const PERIOD_MAX_SECONDS: f32 = 1.0;
+
+    /// `LeachBall_Advance`'s remap: `|length|` clamped to
+    /// `[PERIOD_MIN_LENGTH, PERIOD_MAX_LENGTH]` and mapped linearly onto
+    /// `[PERIOD_MIN_SECONDS, PERIOD_MAX_SECONDS]`.
+    #[must_use]
+    pub fn period(length: f32) -> f32 {
+        let t = ((length.abs() - PERIOD_MIN_LENGTH) / (PERIOD_MAX_LENGTH - PERIOD_MIN_LENGTH))
+            .clamp(0.0, 1.0);
+        PERIOD_MIN_SECONDS + t * (PERIOD_MAX_SECONDS - PERIOD_MIN_SECONDS)
+    }
+
+    /// Advances `elapsed` by `dt` and wraps it against [`period`]; returns
+    /// whether the ball arrived this tick. One wrap at most: at 60 Hz a tick is
+    /// under a fifth of the shortest period, and the original transfers once
+    /// per call whatever the count.
+    pub fn advance(elapsed: &mut f32, dt: f32, length: f32) -> bool {
+        *elapsed += dt;
+        let period = period(length);
+        if *elapsed >= period {
+            *elapsed -= period;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// What one tick of a beam did, for the composition root to draw and play: a
@@ -159,6 +213,17 @@ impl Beam {
             active_time: stats.active_time,
             energy_multiplier: stats.energy_multiplier,
             slow_ship_factor: stats.slow_ship_factor,
+            trip: None,
+        }
+    }
+
+    /// This beam on HD's cadence: a transfer per ball trip ([`trip`]), the
+    /// accumulator starting at zero when it locks.
+    #[must_use]
+    pub fn per_trip(self) -> Self {
+        Self {
+            trip: Some(0.0),
+            ..self
         }
     }
 
@@ -211,6 +276,16 @@ impl Beam {
             return report;
         }
 
+        if let Some(elapsed) = self.trip.as_mut() {
+            let length = slot(ships, ship_count, self.owner)
+                .zip(slot(ships, ship_count, self.target))
+                .map_or(0.0, |(owner, target)| {
+                    (owner.physics().body.position - target.physics().body.position).length()
+                });
+            if !trip::advance(elapsed, dt, length) {
+                return report;
+            }
+        }
         let hit = self.drain(ships, rules);
         report.absorbed = hit.absorbed;
         report.landed = hit.landed();

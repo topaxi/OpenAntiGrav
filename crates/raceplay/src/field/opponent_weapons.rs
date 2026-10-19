@@ -151,11 +151,6 @@ impl Race {
     /// to it until it can actually use it makes it a threat instead of a
     /// nuisance. No confidence score, because nothing was measured.
     fn fire_opponent_leach_beam(&mut self, slot: usize) -> bool {
-        // A title whose drain is unmeasured keeps it: chosen, not measured,
-        // see `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
-        if !self.sim.opponents_fire_leach_beam {
-            return false;
-        }
         if self.sim.world.leach_beam.is_some() {
             return false;
         }
@@ -191,9 +186,7 @@ impl Race {
             oag_gameplay::cue::Cue::Leach,
             slot,
         ));
-        self.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
-            slot as u8, target, &stats,
-        ));
+        self.sim.world.leach_beam = Some(self.locked_leach_beam(slot as u8, target, &stats));
         true
     }
 

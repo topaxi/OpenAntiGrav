@@ -316,7 +316,7 @@ fn setup(handling: Handling) -> Setup {
         zoom_ring: None,
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
-        opponents_fire_leach_beam: true,
+        leach_drain: oag_title::weapons::LeachDrain::PerTick,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

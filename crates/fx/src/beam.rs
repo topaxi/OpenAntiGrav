@@ -371,60 +371,11 @@ pub use pipeline::{Drawer, Drawn, Pipeline};
 pub mod hd_ball {
     use super::Vec3;
 
-    /// Beam length at/under which a drain trip takes its shortest period -
-    /// `DAT_008a9c88` = `20.0`, read directly. Confidence 85 for the constant
-    /// and the clamp; **that the clamped input is the beam's own length is
-    /// not confirmed** - `LeachBall_Advance`'s `param_4[4]` traces to
-    /// `strip+0x10`, and what writes that field was not read this pass.
-    /// Chosen, not measured, for what the input represents - only the
-    /// arithmetic on it is recovered.
-    pub const PERIOD_MIN_LENGTH: f32 = 20.0;
-    /// Beam length at/over which a drain trip takes its longest period -
-    /// `DAT_008a9c8c` = `100.0`. See [`PERIOD_MIN_LENGTH`].
-    pub const PERIOD_MAX_LENGTH: f32 = 100.0;
-    /// The period at [`PERIOD_MIN_LENGTH`] - `DAT_008a9c80` = `0.3` seconds,
-    /// read directly. Confidence 85.
-    pub const PERIOD_MIN_SECONDS: f32 = 0.3;
-    /// The period at [`PERIOD_MAX_LENGTH`] - `DAT_008a9c90` = `1.0` second,
-    /// read directly. Confidence 85.
-    pub const PERIOD_MAX_SECONDS: f32 = 1.0;
-
-    /// `LeachBall_Advance`'s own remap: `clamp(length, MIN_LENGTH,
-    /// MAX_LENGTH)` mapped linearly onto `[MIN_SECONDS, MAX_SECONDS]` - a
-    /// direct decompile of the `_opd_FUN_002a3718` call site. Confidence 85
-    /// for the arithmetic; see [`PERIOD_MIN_LENGTH`] for what is chosen about
-    /// the input.
-    #[must_use]
-    pub fn period(length: f32) -> f32 {
-        let t = ((length.abs() - PERIOD_MIN_LENGTH) / (PERIOD_MAX_LENGTH - PERIOD_MIN_LENGTH))
-            .clamp(0.0, 1.0);
-        PERIOD_MIN_SECONDS + t * (PERIOD_MAX_SECONDS - PERIOD_MIN_SECONDS)
-    }
-
-    /// One tick of the render-side accumulator: advances `elapsed` by `dt`
-    /// and wraps it against [`period`] - the drain trip `LeachBall_Advance`
-    /// runs inline every time its own accumulator passes the period,
-    /// spawning `WO_LEACHBEAM_ABSORB` at the wrap. Returns whether this tick
-    /// wrapped.
-    ///
-    /// **Assumes `dt` never exceeds one period**, true at this engine's fixed
-    /// 60 Hz for [`PERIOD_MIN_SECONDS`] (18 ticks) - the same simplification
-    /// [`super::Ribbon::advance`]'s own modulo-based cursor already takes
-    /// over the original's unbounded-timestep `while` loop.
-    pub fn advance(elapsed: &mut f32, dt: f32, length: f32) -> bool {
-        *elapsed += dt;
-        let period = period(length);
-        if *elapsed >= period {
-            *elapsed -= period;
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Where the ball sits along the beam this tick: `target` at fraction
-    /// `0.0` (the trip's start), `owner` at fraction `1.0` (the wrap) - a
-    /// straight lerp, not the strip's own displaced chain.
+    /// Where the ball sits along the beam at `fraction` of its trip: `target`
+    /// at `0.0` (the trip's start), `owner` at `1.0` (the arrival) - a
+    /// straight lerp, not the strip's own displaced chain. The trip's period
+    /// and accumulator are the simulation's,
+    /// `oag_weapons::projectile::leach_beam::trip`.
     ///
     /// **Both halves of this are chosen, not measured.** The original's own
     /// fraction-to-point lookup (`_opd_FUN_00116308`) walks the strip's
@@ -436,9 +387,8 @@ pub mod hd_ball {
     /// `WO_LEACHBEAM_ENERGY`, which arrives at the shooter the same way -
     /// see [`super::Ribbon::energy_point`]) and is not itself confirmed.
     #[must_use]
-    pub fn position(elapsed: f32, length: f32, owner: Vec3, target: Vec3) -> Vec3 {
-        let fraction = (elapsed / period(length)).clamp(0.0, 1.0);
-        target + (owner - target) * fraction
+    pub fn position(fraction: f32, owner: Vec3, target: Vec3) -> Vec3 {
+        target + (owner - target) * fraction.clamp(0.0, 1.0)
     }
 }
 

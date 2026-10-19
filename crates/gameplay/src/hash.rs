@@ -609,6 +609,7 @@ fn write_leach_beam(hasher: &mut StateHasher, leach_beam: &Option<Beam>) {
                 active_time,
                 energy_multiplier,
                 slow_ship_factor,
+                trip,
             } = beam;
             hasher.write_u8(*owner);
             hasher.write_u8(*target);
@@ -632,6 +633,12 @@ fn write_leach_beam(hasher: &mut StateHasher, leach_beam: &Option<Beam>) {
             hasher.write_f32(*active_time);
             hasher.write_f32(*energy_multiplier);
             hasher.write_f32(*slow_ship_factor);
+            // Pulse's beam (`None`) writes nothing more, so its hash is the
+            // one it always had.
+            if let Some(elapsed) = trip {
+                hasher.write_u8(1);
+                hasher.write_f32(*elapsed);
+            }
         }
     }
 }
