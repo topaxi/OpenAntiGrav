@@ -163,7 +163,7 @@ frame, and the residual). Ported in `oag_physics::engine::pitch` from
 | title | bias | origin |
 | --- | --- | --- |
 | Pulse (PSP, PS2) | on | measured (this page) |
-| Wipeout HD | off | chosen: `Craft_UpdatePitch` reads the same per-team bias statically (HD Feisar authors `-4`), but on it raised HD's autopilot rescues on `12_sol_2` from 1 to 5 over 32 races; off until measured live |
+| Wipeout HD | off | **measured, not yet on: our driver regresses.** Read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below); on, HD's autopilot rescues rise by a net 4 over 32 races (twice, before and after HD's gravity law), so it waits for this engine's driver to fly HD with it |
 | Omega, 2048 | off | inherited from HD |
 | Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
 
@@ -228,5 +228,5 @@ tick along the craft's up, the same under either law: open, not this law.
 **The in-air `weight_distribution` torque on HD, live.** The team block reads
 `-4.0` (Feisar). With the bias off, the airborne pitch residual is `+0.205` and
 `+0.176` rad/s² (median, the two jumps) against `4 / 17.33 = 0.231` predicted; on, it
-is `-0.026`. The pitch gate never closed over this jump (the product stayed at or
+is `-0.026`. **Confidence 85**; held off, as the table above says. The pitch gate never closed over this jump (the product stayed at or
 above `0.926`), so HD's gate is still read, not seen.
