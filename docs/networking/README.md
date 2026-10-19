@@ -354,9 +354,9 @@ minutes on a loaded machine; `OAG_SWEEP_TRACKS=09_Track` for one circuit), and t
 with `reconcile_predict_human_sweep` and `OAG_SWEEP_GHOSTS=<a directory of .oagr
 files saved by the game's ghost recording>`.
 
-**Not covered:** an analog human stream (no recording exists; the fix is to record
-one, a controller player flying a pack through the existing `--record-ghost` path),
-weapons, loss and jitter, the S24, and a threshold in effect rather than in units
+**Not covered:** a recorded human analog stream (answered by a proxy, "An analog
+stick, 2026-10-19" below, until one is flown), weapons (ADR-0071), loss and jitter
+(ADR-0071's follow-up), the S24, and a threshold in effect rather than in units
 (section 3a's last question).
 
 ## What a correction looks like (2026-10-14)
@@ -369,10 +369,10 @@ the craft stays drawn where it was (`before - after`) and the offset loses half
 every 6 ticks (100 ms, **chosen, not measured**; the originals have no rollback),
 added where a craft is drawn (`drawn_model`, `drawn_position`) and nowhere the
 simulation reads. A correction over 20 units (**chosen**) is drawn where it lands.
-**Only a remote person's craft glides**: the craft the camera follows is drawn where
-the camera puts it, because offsetting the hull alone draws it off its own chase
-camera (seen: the hull slid left of the camera's centre for the length of the glide
-in the first render, which is why the rule exists). The hash is identical with
+**A person's craft glides, this machine's own included** (since 2026-10-19; see "The
+own craft's correction" below): the camera follows the same offset, because offsetting
+the hull alone draws it off its own chase camera (seen: the hull slid left of the
+camera's centre for the length of the glide in the first render). The hash is identical with
 smoothing on or off (`tests::correction`), and a replay is not a drawn tick.
 
 **The scene.** `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
@@ -404,9 +404,175 @@ correction (it has none); there is no reference frame.**
   case is judged by the numbers (own craft 2 to 5 units) and not the picture.
 
 **Reading.** The smoothing is worth having for a remote craft near the camera and
-costs a `Vec3` per craft; below about 2 units nothing needs it. The own craft is the
-open case: its correction moves the camera, and smoothing it means offsetting the
-camera too (not built).
+costs a `Vec3` per craft; below about 2 units nothing needs it. The own craft was the
+open case: its correction moves the camera. Built 2026-10-19, below.
+
+### The own craft's correction (2026-10-19)
+
+**Condition 4 of ADR-0069.** What was wrong. A correction that moves the player's own
+craft moved the camera's *aim* in one tick: the chase camera's eye is a sprung point
+that stays, and it looks at the craft's new position, so a 3-unit sideways correction
+swung the view **12.1 degrees** in one frame (`tests::correction`, the measure is the
+angle between the camera's forward before and after the correction; the eye itself
+moves by about 1e-6). 12 degrees is a quarter of the screen's width at 960x540.
+
+What was built. `Race::camera_target` is the one place the chase camera reads its craft
+from; it is the craft's **drawn** pose (the simulation's plus the correction glide), so
+the hull and the camera that frames it take the glide together and the old failure (the
+hull off its own camera's centre) cannot come back. `reconcile` now accumulates the
+offset for the seat's own craft too and decays it on the same half-life of 6 ticks
+(**chosen**), with the same 20-unit snap: a correction past it (a respawn, a wreck) is
+drawn where it lands, so a real knock-out is never glided. The hash is identical with
+smoothing on and off. A hit is not hidden: the glide moves the *picture* of a position
+the client already predicted and simulated, and contact shake, cues, shield bulges and
+blasts are raised by the simulation, not by this offset. **Left open**: a hit that is
+first seen inside a correction's replay arms no camera shake (the replay is quiet, and
+`settle_presentation` covers cues, blasts and bulges only).
+
+**A bug found on the way, fixed in the same change.** The chase camera was advanced
+toward `ships[0]` (and snapped to it) whatever seat the client had, while its view was
+built from the seat's craft. A client in seat 1 had its camera spring toward slot 0.
+On the test grid the eye stood 555 units from seat 1's craft before and 4.5 units after
+(`a_seat_one_camera_follows_seat_one`); `set_seat` now snaps the camera to the seat. View
+only, no hash moves. Whether a real online client in seat 1 showed it is not
+established: the 2-person tests ran their screenshots on seat 0.
+
+Frames: `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
+--ticks N --force-remote-correction 480:7:20:own=3 [--no-correction-smoothing]
+--screenshot out.png`, with `own[=UNITS]` new: the server's copy of the player's craft
+is that many units to its right when the correction arrives (the older `contact` scene
+no longer moves the own craft on current `main`: 0.00 units at windows 16 and 20, where
+this page recorded 2.1 and 3.6). The correction is drawn at tick 501. Ticks 500 to 504,
+smoothing off (top row) against on (bottom row): off, the view lurches at 501 (the track
+edge, the horizon and the hull all jump sideways and the rival appears at the left edge);
+on, the four frames are one continuous sweep and the hull stays centred. No reference
+frame exists (the originals have no rollback). 3 units is **chosen**: it is the size of
+the typical own-craft pops measured below (most under 2 units, the largest 8.7).
+
+## An analog stick (2026-10-19)
+
+**Condition 3 of ADR-0069.** The proxy, its shape, what it costs, against the keyboard
+ghosts and the driver-derived streams above. **The stream is chosen, not measured:** no
+recording of an analog stick exists, and no pad is attached to the machine this was run
+on (`/proc/bus/input/devices`, read only), so a recorded one is still owed: a controller
+player flying a pack through `--record-ghost`, replayed by the same sweeps.
+
+**The hand** (`oag_raceplay::hand::Hand`, the one definition both sweeps use). The
+driver's wants through: a **second-order stick** (4 Hz natural frequency, damping 0.6,
+about 10 percent overshoot, the thumb's mass and spring), **tremor** (a seeded 10 Hz sine
+plus white noise, 1.2 percent of the range each), the pad layer's **0.1 deadzone** with
+the rest rescaled, **8-bit axes** (1/127 steps), airbrakes as **analog triggers** (a first
+order lag of 3 ticks) and thrust as Cross held through the countdown. It is closed loop:
+the stream is recorded from a race the filtered stick *flew*, not filtered afterwards, so
+the craft still drives the circuit (craft 0 travelled 3,094 units in 1,500 ticks of
+circuit 01 against 3,097 on the driver's raw wants).
+
+**What was tried and dropped: a reaction delay.** The first model had a pure delay of 8
+ticks (133 ms, the motor loop). Closed around this driver, which is designed with no
+delay, it limit-cycles against the stops: 50 percent of ticks in the top tenth of the
+stick's range at 8 ticks, 35 percent at 4, 19 percent at 2, against 3 percent for the
+driver's own wants and for the shipped model. A person's reaction time is absorbed by
+looking ahead, which the driver already does, so the delay is out; this is a result about
+the driver as much as about hands. Census of the shipped stream, circuit 01, 7 remote:
+256 distinct `stick_x` values over 10,500 ticks (the AI-derived stream: 10,315, the
+keyboard ghosts: 3), 1.3 percent of ticks at full deflection (AI 1.8, keyboard 33 to 39),
+the next input differs from the last on 87 percent of ticks (AI 99, keyboard 4 to 8), mean
+change of the stick per tick 0.046 (AI 0.069, which the hand halves). **So the hand is a
+smoothed driver, smoother than the AI-derived stream and far busier than the keyboard**:
+a stick in a real hand can be calmer than this (long holds in a bend) or busier (jabs),
+and this proxy cannot say which.
+
+**Prediction sweep** (`reconcile_predict_ai_sweep` with `OAG_SWEEP_HAND=only`; the same
+harness as above, all 12 circuits, 1,500 ticks, 8 craft, no weapons, a lossless link).
+Corrections per second, pooled over 12 circuits, windows 3 / 6 / 12 (50, 100, 200 ms);
+the ADR's AI-derived figures beside, from "Remote-input predictability":
+
+| stream | policy | corrections per second | sim cost x | the AI-derived stream |
+| --- | --- | --- | --- | --- |
+| hand7 (7 remote) | every packet | 52.2 / 52.2 / 52.2 | 3.6 / 6.2 / 11.4 | 53 / 53 / 53, 3.7 / 6.3 / 11.6 |
+| | threshold 0.25 | 3.5 / 3.9 / 4.0 | 1.18 / 1.39 / 1.80 | 2.7 / 3.0 / 3.2 |
+| | threshold 1 | 1.7 / 2.2 / 2.5 | 1.08 / 1.22 / 1.50 | 1.4 / 1.6 / 1.8, 1.07 / 1.15 / 1.36 |
+| | threshold 4 | 0.80 / 1.0 / 1.3 | 1.04 / 1.10 / 1.26 | 0.65 / 0.78 / 0.99 |
+| hand1 (1 remote) | every packet | 26 / 26 / 26 | 2.3 / 3.6 / 6.2 | 25 / 25 / 25 |
+| | threshold 1 | 0.87 / 1.1 / 1.4 | 1.04 / 1.11 / 1.27 | 0.59 / 0.67 / 0.82 |
+
+Free-running remote error p95 at threshold 1: 0.73 / 0.95 / 1.9 units (7 remote; AI
+0.66 / 0.82 / 1.5), the correction pop p95 1.6 / 2.5 / 5.4. 0 bad corrections in every
+cell. The own craft's error p95 is 0.08 to 0.26 at threshold 1. Contact ticks are 46
+percent of the scored ticks (the AI pack's 67 percent on circuit 01), because a hand
+bunches the field less than the driver does.
+
+**Reading.** The 53 a second was an upper bound on *strictness*, not on activity: a
+stick that is smoother than the driver still needs 52 corrections a second under the
+strict policy, because a strict policy corrects on any bit of difference. The threshold
+policy is what removes it, and it removes it for the hand as for the driver, by a factor
+of 21 to 31. The hand needs **1.2 to 1.4 times the AI-derived stream's corrections** at a
+threshold of 1 (1.7 to 2.5 a second against 1.4 to 1.8, seven remote craft), because the
+driver's own errors are small and symmetric where a lagging thumb leaves the craft a
+little behind its line for longer. ADR-0069's recommendation (threshold 1) holds: at 200
+ms it is 1.5 times the simulation, at 100 ms 1.22 times, a remote error p95 of 1 unit,
+half a tick of travel.
+
+**Over the wire** (`weapons_ground_truth::sweep_*`, `OAG_SWEEP=1`, the loopback harness
+of ADR-0071's follow-up: Pulse circuit 01, 100 ms round trip, 5,400 ticks, weapons on,
+every client flown by the driver (`bot`) or the driver through the hand (`hand`), both
+in one session on one machine, 0 bad hashes in all 16 client runs). In this harness only
+the *people* are predicted from their last input (the AI is the same on both ends), so
+the 2-client case has one remote craft. Per client ranges:
+
+| Clients | Loss, jitter | Flown by | Corrections | Replayed ticks | Mean error at a confirmed tick | Largest pop | Own craft moved, own pop max | Largest pop-in age (ticks) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | 0, 0 | bot | 103 to 115 | 820 to 913 | 0.23 to 0.24 | 4.1 to 4.8 | 2 to 7, 1.1 to 1.3 | 9 |
+| 2 | 0, 0 | hand | 106 to 108 | 846 to 856 | 0.23 to 0.27 | 3.3 to 4.2 | 7 to 8, 0.7 to 2.0 | 9 |
+| 2 | 5 %, 30 ms | bot | 107 to 127 | 1,214 to 1,424 | 0.22 to 0.25 | 6.9 to 7.2 | 5, 0.4 to 2.7 | 0 |
+| 2 | 5 %, 30 ms | hand | 120 to 122 | 1,322 to 1,335 | 0.21 to 0.25 | 5.9 to 8.3 | 10 to 11, 2.3 to 2.7 | 12 (137 once) |
+| 4 | 0, 0 | bot | 158 to 167 | 1,186 to 1,242 | 0.24 to 0.25 | 4.1 to 7.0 | 1 to 14, 0.2 to 1.8 | 9 |
+| 4 | 0, 0 | hand | 154 to 168 | 1,019 to 1,101 | 0.26 to 0.27 | 3.2 to 4.4 | 2 to 18, 0.2 to 1.7 | 8 (30 once) |
+| 4 | 5 %, 30 ms | bot | 164 to 179 | 1,604 to 1,788 | 0.25 to 0.26 | 6.1 to 7.5 | 6 to 15, 0.7 to 2.5 | 12 (152 once) |
+| 4 | 5 %, 30 ms | hand | 164 to 182 | 1,549 to 1,744 | 0.24 to 0.26 | 8.7 to 11.8 | 4 to 25, 0.8 to 8.7 | 12 (62 once) |
+
+Two things. **The hand barely moves the network numbers** (corrections a second 1.1 to
+1.4 with two clients and 1.7 to 2.0 with four, whoever flies): in this harness the
+corrections are chiefly the discrete events (a weapon, a contact, a sideshift) and the
+remote people's last-input guess, and a smooth hand has fewer big pops (largest pop 3.2
+to 4.4 against 4.1 to 7.0 with four clean clients) where it replays fewer ticks (1,019 to
+1,101 against 1,186 to 1,242). **Cost per correction** is the replayed ticks over the
+corrections: 7 to 11 ticks, a 100 ms round trip plus the 2 to 5 ticks the server holds.
+**Outliers**: one client saw a missile first appear **137 ticks** (2.3 s) into its flight
+with the hand at 5 percent loss and 30 ms jitter (2 clients), **152** (4 clients, the
+driver) and **62** (4 clients, the hand): resend waits, the 63 of ADR-0071's table seen
+again and larger. They are the worst late presentations measured: 3 of the 12 client runs
+at 5 percent loss and 30 ms jitter, none at 0 percent loss (30 once, clean), so ADR-0071's
+"none older than 15 ticks" has a tail that loss and jitter reach; nothing here caps it.
+
+**Own craft.** "Own craft moved" counts corrections that moved the player's own craft by
+more than 0.05 units: 1 to 25 of 100 to 180 corrections per client, so about one in ten,
+by up to 2.7 units in clean runs and **8.7 units** at 5 percent loss and 30 ms jitter
+with four clients (`own pop max`, twice). Those are the ones the smoothing above is for:
+3 units is a 12-degree swing without it, and 8.7 is under the 20-unit snap, so it glides.
+
+**What this does not answer.** Whether a real hand on a real pad needs more or fewer
+corrections than a smoothed driver. The two ends of the range are measured (keyboard
+ghosts 2.6 to 4.8 strict corrections a second, the hand 26 to 52, the driver 22 to 53),
+and the *threshold* policy that the ADR recommends costs 0.4 to 1.8 a second for
+keyboard, 0.9 to 2.5 for the hand and 0.6 to 1.8 for the driver, so the choice of
+policy, not the stream, decides the cost, and any plausible stream lands inside 2.5 a
+second at a 1-unit threshold. A recorded pad stream would pin it.
+
+## Replay cost on this machine (2026-10-19)
+
+The same sweep as "Reconciliation cost" above, one circuit (09_Track), profile `dev`,
+AMD Ryzen 9 7900, 1-minute load average 9.0 (21.97 and 20.47 over five and fifteen
+minutes), so read as inflated: a tick 63 us (`Race::tick`) and 59 us (`tick_sim_only`),
+a 6-tick rollback 0.446 ms, 12 ticks 0.77 ms, 24 ticks 1.48 ms, a snapshot 62 us. The
+2026-10-14 figures (65 / 60 us, 0.42 / 0.77 / 1.50 ms) hold. **Per correction**, the
+network runs above replay 7 to 11 ticks a correction, so about **0.4 to 0.65 ms a
+correction and 0.05 to 0.10 ms of CPU a second** averaged (the 4-client run's 1,019 to
+1,788 replayed ticks over 90 s is 11 to 20 ticks a second, 0.7 to 1.2 ms a second at 59
+us a tick, 0.07 to 0.12 percent of one core). **Condition 1 (the Galaxy S24) stays open:
+the maintainer deferred it on 2026-10-19; no APK or phone steps were prepared.** The
+pass condition (a 100 ms round trip at most 25 percent of a frame) holds on a phone up
+to 10 times slower than this desktop, unmeasured, as before.
 
 ## Transport: WebTransport (2026-10-14)
 
@@ -619,10 +785,10 @@ summed. The disc-backed test `net_ground_truth` (`crates/net/tests/`) runs a ser
 and two bot clients in one process at a 100 ms round trip and asserts every hash
 agrees and that corrections happen.
 
-**Not covered:** the Galaxy S24, an analog human hand, weapons, a client joining
-late, more than two clients, a real network (only the shim's constant delay, no
-jitter), and the own craft's correction moving the camera (ADR-0069, condition 4; the
-runs above did not log which craft each correction moved).
+**Not covered here** (weapons, loss, jitter, four clients and the own craft's correction
+are measured in ADR-0071's follow-up and "An analog stick, 2026-10-19" below): the
+Galaxy S24 (deferred by the maintainer), a recorded human analog hand, a client joining
+late, a real network.
 
 ## LAN play (2026-10-14)
 
