@@ -101,7 +101,7 @@ def collect(session, dbg, breaker, which, address, quiet, budget, out):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--out", type=Path, default=ROOT / "data/scratch/hd-countdown-cues")
+    ap.add_argument("--out", type=Path, required=True, help="a scratch directory")
     ap.add_argument("--which", default="announcer,bank,named")
     ap.add_argument("--quiet", type=float, default=240.0,
                     help="seconds without a hit before a run ends")
