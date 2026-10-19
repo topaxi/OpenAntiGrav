@@ -81,7 +81,7 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   spent.
 /// - **2026-08-10 (second), hash input.** `craft_state`, `state_timer`: defaults every tick
 ///   (no script empties a pool). Removing the two writes reproduced the earlier constants.
-/// - **2026-08-11, hash input.** `turbo_timer` (`engine::ENGINE_PICKUP_SPEEDUP`): no probe script
+/// - **2026-08-11, hash input.** `turbo_timer` (then filed under `engine::ENGINE_PICKUP_SPEEDUP`, now `ENGINE_AUTOPILOT_SPEEDUP`): no probe script
 ///   fires one, and a corridor has no `Weapon Pad`. Removing its write reproduced the six
 ///   2026-08-10 constants.
 /// - **2026-08-11 (second), hash input.** `shield_pickup_timer`. Checked with extra care because

@@ -686,7 +686,7 @@ button, whose `g_boost_lift` global was never read.
 
 Worth keeping because it is an easy mistake and it shipped for a few hours.
 `craft+0x2a0 = 1.2` under flag `0x0004` is real and recovered
-(`oag_physics::engine::ENGINE_PICKUP_SPEEDUP`), and it is **not** the turbo:
+(`oag_physics::engine::ENGINE_AUTOPILOT_SPEEDUP`), and it is **not** the turbo:
 
 - It multiplies a thrust that has *already been clamped*. On Venom the cap is
   `0.5 * speed + accelcap` with `accelcap` in the tens, so `1.2` buys a few
@@ -697,10 +697,11 @@ Worth keeping because it is an easy mistake and it shipped for a few hours.
   it was reported.
 - The branch that arms it lives in the **HUD update** (`0x0883b3b8`), not the
   craft update, and it also forces HUD icon id `6` and drives a fill from the
-  pickup's own `+0x148` timer. So `0x800` is some timed effect the HUD draws a
-  bar for; **which pickup it is remains unidentified**, since id `6` lands on
-  `Shield` or `Autopilot` depending on where the class-name pool starts
-  counting, and neither is obviously a speed effect.
+  pickup's own `+0x148` timer. **It is the Autopilot (2026-10-19)**: `0x800` is
+  `Autopilot_Fire`'s running bit ([autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md)),
+  and the same branch also sets the uncapped bit `0x8`. Read live as
+  `craft+0x1c0 = 0xd` under the pickup on two whole races; wired as
+  `oag_physics::engine::EngineFlags` (see [ai.md](ai.md)).
 
 **The lesson for the tests**, written down because the unit tests all passed:
 asserting the *ratio* between a boosted and an unboosted tick cannot tell a

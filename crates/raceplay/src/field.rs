@@ -234,7 +234,7 @@ impl Race {
     /// aid that flew one of two people would never let the second finish (the
     /// race ends when every person has). A remote slot is somebody else's craft
     /// and is never taken. With one person this is `slot == primary`, as it was.
-    fn autopilot_flies(&self, slot: usize) -> bool {
+    pub(super) fn autopilot_flies(&self, slot: usize) -> bool {
         self.sim.autopilot
             && (slot == self.sim.world.primary_slot()
                 || (slot < oag_gameplay::MAX_PLAYERS
