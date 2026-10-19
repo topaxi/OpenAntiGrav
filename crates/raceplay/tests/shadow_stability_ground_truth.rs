@@ -19,9 +19,12 @@ use oag_raceplay as race;
 /// Ticks past the warm-up each window covers.
 const WINDOW: u64 = 60;
 
-/// Where each window starts, in ticks after the race began: Zone's start, a
-/// lap in at Zone's own pace, and later still.
-const WARM: [u64; 3] = [900, 3000, 6000];
+/// Where each window starts, in ticks after the race began. Moved from
+/// `[900, 3000, 6000]` on 2026-10-19, when the autopilot took the original's
+/// engine bits (x1.2, no acceleration cap) and reached the deep seams at other
+/// ticks: a scan every 300 ticks put the raw polygon at 0.71 (Zone) at 1,200,
+/// 0.69 (single race) at 3,600 and 0.77 (single race) / 0.62 (Zone) at 5,400.
+const WARM: [u64; 3] = [1200, 3600, 5400];
 
 /// How far under the road a conformed polygon may still sit, in world units.
 ///

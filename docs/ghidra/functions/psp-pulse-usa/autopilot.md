@@ -255,6 +255,109 @@ takes and every flat `craft->1bc` elsewhere does not). Nothing here turns on
 which is true - the sound-opening behaviour is read either way - so this is
 left as a loose end rather than chased further.
 
+## What the running bit does to the craft (2026-10-19, `autopilot-rail`)
+
+Read at instruction level in `PlayerStatus_Update` (`0x0883b3b8`, the local
+player's per-frame status), then measured live. The maintainer's question was
+whether the original's autopilot "snaps harder to the spline" than ours, since
+ours still touches walls. **It does not.** The rail is the opponents' rail with
+no player gain, and the original's autopilot touches walls too. What the running
+bit adds is pace, and pace stiffens the rail through its speed gate.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x08848664` | `Craft_SetAutopilotBlend` (already named, [race-finish.md](race-finish.md)) | 90 |
+| `0x0884866c` | `Craft_SetUncappedThrust` | 88 |
+
+`Craft_SetUncappedThrust(craft, on)` is seven instructions: `on & 0xff` set
+ORs `0x8` into `craft+0x1c0`, clear ANDs it out (`0x0884866c..0x0884868c`).
+The only masked read of `craft+0x1c0` against `0x8` in the image is
+`Ship_UpdateEngine`'s at `0x0884c7d0` (`psp-relocate.py masked 0x1c0 0x8`,
+one hit), where it makes the acceleration cap `1e10`
+([engine.md](engine.md#engine)). Against `0x4` the only one is
+`0x0884c874`, the `T *= craft+0x2a0` multiplier.
+
+`PlayerStatus_Update`, for the racing player (`entity+0x912 == 0`, ship state
+not `2`):
+
+```c
+if ((pickup->fire_flags & 0x800) == 0) {           // not running
+    if (!(entity->0x860 & 8) && !(entity->0x860 & 0x10)) {
+        Craft_SetAutopilotBlend(craft, 0.0);
+        Craft_SetUncappedThrust(craft, 0);
+        craft->0x2a0 = 0; craft->flags_1c0 &= ~4;
+    }
+} else {                                           // running
+    // HUD: "%1.2f" of the timer
+    Craft_SetAutopilotBlend(craft, timer > 1.0 ? 1.0 : timer);   // 0x0883be54..0x0883be98
+    Craft_SetUncappedThrust(craft, 1);                           // 0x0883bea4
+    craft->flags_1c0 |= 4;  craft->0x2a0 = 1.2f;                 // 0x0883beb0..0x0883bec0
+}
+```
+
+and for a finished player or ship state `2`: blend `1.0` and uncapped, with
+`0x4` left as it was (`0x0883bdd0..0x0883bdf8`). `entity+0x6c != 0` also
+forces blend `1.0` and uncapped; what sets that byte is not read.
+
+**The handover.** `Ship_UpdateCraft` only tests the blend against zero
+(`0x08849690..0x0884969c`): non-zero copies the driver's whole record over the
+pad's (`0x088496b8..0x08849768`). `FUN_088418e0` also only zero-tests it
+(`0x088419bc`): it picks which of two per-profile distance counters the frame's
+distance goes into. No handling reader uses the magnitude: the controls switch on
+zero against non-zero. One load is unchecked: `Hud_UpdateEnergyBar` loads
+`0x1d4(s0)` (`0x0881c8d0`), and its base was not traced, so a HUD element may
+read the fade. The original hands over the controls in one tick, both ways, and
+ours already matches. Confidence 85 for the controls.
+
+**Nothing that reads the running bit touches the walls.** `psp-relocate.py
+masked 0x1b8 0x800` finds five readers, the complete set for a `lw`/`andi`
+pair:
+- `0x0883be0c`: the branch above;
+- `0x0883f0c0`, in `FUN_0883efb4`: the first call of the per-craft weapon
+  update `FUN_0883f540`, which skips `0x08862bb4` while the bit is set;
+- `0x08844b44`: `Ship_FireHeldWeapon`'s cue;
+- `0x08844fe8`: the fire path's cancel;
+- `0x08861c3c`: `Weapons_DispatchFire`'s call to `Autopilot_Update`.
+
+None reaches the contact ring or the wall response. Confidence 85.
+
+### Measured live
+
+PPSSPP v1.20.4, `pulse-psp-usa`, Single Race, the player's pickup armed 60
+frames after GO with the timer raised (the `psp-postrace.py` method), so the
+original's own player driver flies the whole race.
+`scripts/psp-autopilot-rail.py` stops once a frame in `Ai_SnapToLane` at
+`0x08854340`, after `Ai_LanePoint` has written the lane point to `sp+0x30`, and
+logs the lane point, the body pose, the rail's blend and the contact ring
+(`body+0x170`, count `body+0x370`). A ring record whose kind word is `1` comes
+from `Body_RecordPairContact` (craft against craft), and `0` from
+`Body_RecordContact` (the world).
+[contact-response.md](contact-response.md) has both. Lateral offset is
+`dot(pos - lane_point, body left)` while the rail's blend is above zero.
+
+| Run | Frames | `craft+0x1c0` | Wall-contact frames (episodes) | Pair records | Mean speed | Mean blend | Lateral p50 / p95 / p99 / max |
+| --- | ---: | --- | --- | ---: | ---: | ---: | --- |
+| Talon's Junction White (`16_Track`), VENOM, whole race | 6,583 | `0xd` every frame | **0** (0) | 129, all in the first 315 frames | 139.6 | 0.87 | 0.22 / 1.01 / 1.67 / 5.24 |
+| de Konstruct Black (`05_Track`), VENOM, laps 1-2 and part of 3 | 3,981 | `0xd` | **16** (3, at 0, 16 and 453 frames after arming) | 278 | 132.1 | 0.82 | 0.19 / 1.29 / 8.34 / 20.11 |
+| Fort Gale Black (`14_Track`), PHANTOM (speed class `3`), whole race | 7,698 | `0xd` | **0** (0) | 121 | 211.0 | 0.88 | 0.52 / 2.44 / 5.42 / 10.46 |
+
+The circuit was identified each time by the start position against
+`oag-trace track` (6 and 11 units off a spline row, heading with the forward
+file). Mean speed and blend skip the first 300 frames.
+
+**The live answer: no hard snap, and the original scrapes too.** It touches
+de Konstruct Black's walls about as often as ours does. Lateral offset stays
+around a fifth of a unit, as for an opponent. The `0xd` confirms both engine
+bits on every frame of the pickup.
+
+**A read-order trap, for whoever logs the pitch next.** At `0x08854340` the
+driver's pitch output `driver+0x18` reads `0.0` on every airborne frame. That
+is because `Ai_ComputeControls` writes the record earlier in the same
+`Ai_Update` and `Ai_ComputePitch` (`0x08853148`) runs after `Ai_SnapToLane`.
+At `Ai_ComputePitch`'s return (`0x088533b4`, conditional on the player's
+driver), 231 of 231 airborne frames held a non-zero pitch. The controller does
+fly the player's pitch.
+
 ## Not determined
 
 **What flies the craft is now read** (2026-10-19): the player's own driver, the
@@ -265,8 +368,8 @@ contact ([ai-controls.md](ai-controls.md#the-players-own-driver-the-autopilot)).
   ([ai-controls.md](ai-controls.md#who-drives-whom-the-control-record)):
   `Ship_UpdateCraft` reads the craft's controls through `craft+0x78`, which is
   `craft+0x3c` (the pad record) unless the blend `craft+0x1d4` is non-zero, when
-  it copies `craft+0x40`'s record, the `"autopilot input"` below, over it. What
-  sets the blend from bit `0x800` is still not read. The original note:
+  it copies `craft+0x40`'s record, the `"autopilot input"` below, over it. The
+  blend's setter is now read (2026-10-19, above): `PlayerStatus_Update`. The original note:
   `Ai_Construct` (`0x088536bc`)
   names the local player's input `"autopilot input"`, which
   [`weapon-stats.md`](../../../formats/weapon-stats.md) already records, so the

@@ -87,14 +87,47 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     PHANTOM was never measured for the same exposure.
   - In an Eliminator an opponent can fire it (`0.012` a decision); what
     `Autopilot_Fire`'s running bit does to a craft its driver already flies is
-    unread. `Autopilot_Fire` has no player gate; the only direct float store
-    to the blend `craft+0x1d4` is `Ship_InitCraft` (`0x08849564`), so the
-    bit's reader is still the next address to find.
+    unread. `Autopilot_Fire` has no player gate. The bit's reader is now
+    found (2026-10-19, lane `autopilot-rail`): `PlayerStatus_Update`, which
+    runs for the local player alone, so an opponent's running bit sets no
+    blend and no engine bits.
   - 2048 and Omega steer the player's driver with the pilot assist's gains
     (airbrake `1`/`0`, a `1.73 |x|` lookahead floor, a `libm` call); not read
     whole, the opponents' controller flies it.
-  - What sets `craft+0x1d4` (the pad-to-driver blend) is unread; the handover is
-    one tick here.
+  - ~~What sets `craft+0x1d4` (the pad-to-driver blend) is unread.~~ Read
+    2026-10-19 (lane `autopilot-rail`, autopilot.md "What the running bit does
+    to the craft"): `PlayerStatus_Update`. Only zero-tested, so the original
+    hands over in one tick too.
+- **The Autopilot's rail and pace (2026-10-19, lane `autopilot-rail`;
+  docs/gameplay/ai.md, "The Autopilot's rail is the opponents', and its pace
+  is the engine's").** There is no harder snap, and the original scrapes de
+  Konstruct Black too. What was missing was the engine's x1.2 and the lifted
+  acceleration cap while the pickup runs; that is now wired. Left open:
+  - **Fort Gale Black (`14_Track` forward) at PHANTOM: our autopilot is
+    rescued 5 times with the port and was rescued 0 times before; the
+    original is rescued 0 times.** Both leave the crest at (-434, 115, 747)
+    at 181. In the air the original steers left (-10 to -43), slows to 144 and
+    lands on the ramp at about (-233, 109, 609). Ours steers right (+6 to +44),
+    holds about 162 and falls off every lap. The cause is our driver's
+    airborne steering (`Ai_ComputeControls` with the height term), which has
+    no live leg. Next address: a conditional breakpoint inside
+    `Ai_ComputeControls` (`0x08855dc4`) on the player's driver over that
+    crest, logging the lookahead sample, the target and the error, against
+    `steer::steer`'s at the same position.
+  - **HD Ubermall (`05_ubermall`) at PHANTOM under the inherited law**: our
+    autopilot goes from 1 rescue, 5 wall ticks and 78.3 end shield to 2
+    rescues, 143 wall ticks in 27 episodes and 6.3 end shield (weapons off,
+    seed 1). HD's own law is unread, so read it before tuning anything.
+  - HD's player-status function (the engine bits and the blend) was not
+    found: the `"%1.2f"` string's TOC slot resolves into `libm`. HD, Pure,
+    2048 and Omega inherit Pulse's law.
+  - Not measured: a pickup-shaped stint engaged off the line, against the
+    original (`scripts/psp-autopilot-rail.py --stint --steer` exists for it).
+    De Konstruct Black was captured for laps 1-2 and part of 3 only.
+  - The opponent stint sweep with the port: PHANTOM's extra walls do not
+    shrink (B over A on 14 of 16 cells, HD B rescues 6), as expected for a
+    player-only engine law; `opponent-autopilot-wire` decides on the same
+    picture as before.
   - HD scales the player's `100` by `SplitScreenMultiplier` with more than one
     person; not applied.
   - Pure's player lane `0` is inherited from Pulse (`0x08919b6c` unread for it).

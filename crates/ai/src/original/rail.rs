@@ -28,6 +28,9 @@ pub struct Rail {
     pub blend: f32,
     /// `+0x4c`.
     pub time: f32,
+    /// The signed offset across the track from the lane point on the last
+    /// call, `dot(d, lateral)`: read by measurements, never by the rail.
+    pub lateral: f32,
 }
 
 impl Rail {
@@ -48,6 +51,7 @@ impl Rail {
     ) -> Option<RailCorrection> {
         let lane = own.lane_point(own_lane);
         let d = pose.position - lane;
+        self.lateral = d.dot(own.lateral);
         let speed = pose.velocity.length();
         let a = ((speed - 50.0) * 0.01).clamp(0.0, 1.0);
         let b = (1.0 - (d.dot(own.down).abs() - 7.0) / 7.0).clamp(0.0, 1.0);

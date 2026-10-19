@@ -852,8 +852,10 @@ autopilot can easily overtake AI opponents"). The read is on
   opponent or a finished racer), the rail is kept through contact, and the
   authority is already `1`. Confidence 88 to 90, instruction level, HD and Pure
   agreeing on the throttle.
-- **The speed-up is the law, not a constant.** There is no pace multiplier to
-  port. The autopilot flies `100` where an opponent flies `AIThrust` at the
+- **The speed-up is the law, not a constant.** *Corrected 2026-10-19, below:
+  there is one, on the engine rather than the driver: thrust x1.2 with no
+  acceleration cap while the pickup runs.* There is no pace multiplier in the
+  driver to port. The autopilot flies `100` where an opponent flies `AIThrust` at the
   player's place plus its formation term; that alone is why it pulls through a
   field holding formation around it. Nothing is added here.
 - **An opponent holding the Autopilot never fires it** outside an Eliminator
@@ -876,8 +878,9 @@ write is applied right before the player's step, as an opponent's is.
 Chosen, not measured: the driver starts each stint warm (authority `1`,
 smoothed speed current, ring on lane `0`, one discarded steering call), where
 the original's is warm because it runs every tick; it draws from its own
-generator; the handover from the pad is one tick (what sets the original's
-blend `craft+0x1d4` is unread). Pure's player lane `0` is inherited from Pulse.
+generator. The handover from the pad is one tick, which matches the original
+(the blend `craft+0x1d4` is only ever tested against zero, read 2026-10-19,
+below). Pure's player lane `0` is inherited from Pulse.
 **2048 and Omega: checked, differs.** Their player's driver steers with the
 pilot assist's gains (airbrake gains `1`/`0`, a `1.73 |x|` lookahead floor and a
 `libm` call, [2048](../ghidra/functions/vita-2048-eu-v104/ai-controls.md),
@@ -917,6 +920,121 @@ rescue (`the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
 the shield ends at 95 on eleven of them and 91.1 on `05_Track`, and `02_Track`
 places 3rd at tick 6801: the 95 points `02_Track` lost with weapons on were
 weapon hits, not walls.
+
+### The Autopilot's rail is the opponents', and its pace is the engine's (2026-10-19)
+
+The maintainer's question: "so autopilot still does wall hits, in the original,
+it shouldn't, I think it snaps harder to the spline?" The evidence is on
+[autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md#what-the-running-bit-does-to-the-craft-2026-10-19-autopilot-rail).
+
+**No harder snap.** `Ai_SnapToLane` has no player-only gain, clamp or hard snap.
+The only player branch keeps the rail through contact, and that was already
+ported. The original's autopilot touches walls too: 16 wall-contact frames in
+3 episodes over two and a half laps of de Konstruct Black (VENOM), measured
+live in PPSSPP. Its lateral offset from the lane point is about the same as
+ours (p50 0.2, p95 1.0-1.3 against ours 0.1, 0.5-0.6).
+
+**What was missing was pace.** While the pickup's running bit `0x800` is set,
+the local player's status update sets two engine bits on the craft
+(`craft+0x1c0 = 0xd`, read live every frame):
+- `0x8`: no acceleration cap;
+- `0x4`: `craft+0x2a0 = 1.2` multiplies thrust.
+
+A finished player gets `0x8` alone. Opponents never get either. The rail's
+strength rises with speed (`a = clamp((|v| - 50) / 100)`, `f = 0.7 * blend^2`),
+so the faster craft also holds the line harder. That is the "snap" a player
+feels.
+
+**Built** as `oag_physics::engine::EngineFlags`, set by
+`Race::autopilot_engine_flags` for a person's craft. The pickup and
+`--autopilot` set both bits. Past the line only the uncapped bit is set. A
+Disruptor's autopilot effect sets neither, because it never sets the running
+bit. Chosen, not measured: past the line the original keeps `0x4` as the last
+racing frame left it; ours takes it from whether the autopilot still flies.
+
+**Per title.** Pulse is measured. HD, Pure, 2048 and Omega are inherited from
+Pulse: in HD the `"%1.2f"` timer string's only TOC reference resolves into
+`libm`, and its player-status function was not found within this lane.
+
+Measured, Pulse PSP USA, seed 1, weapons off, slot 0 on `--autopilot` for the
+whole race (`autopilot_original_ground_truth::wall_sweep`). The original column
+is PPSSPP, armed 60 frames after GO, means taken from frame 300 on:
+
+| Circuit, class | Original: speed, blend, wall frames | Ours before: speed, blend, wall ticks (episodes) | Ours after: speed, blend, wall ticks (episodes) |
+| --- | --- | --- | --- |
+| Talon's Junction White (`16`), VENOM | 139.6, 0.87, 0 | 129.4, 0.78, 0 (0) | 140.7, 0.88, 0 (0) |
+| de Konstruct Black (`05`), VENOM | 132.1, 0.82, 16 in 3 (partial race) | 121.6, 0.71, 16 (2) | 134.8, 0.83, 12 (6) |
+| Fort Gale Black (`14`), PHANTOM | 211.0, 0.88, 0, finished | finished, 0 rescues | 207.8, 0.77, 0, **5 rescues** |
+
+The VENOM rows match the original within about 2 %. Every other circuit at
+VENOM and PHANTOM had 0 wall ticks both before and after, except PHANTOM
+`16_Track` (1 tick before, 0 after). Shield was 95 at every lap end and at the
+end of the run on all of them, except:
+
+| Circuit, class | Shield at each lap end, after | Shield at the end, after |
+| --- | --- | --- |
+| `05`, VENOM | 95.0, 93.1, 90.5 | 90.5 |
+| `06`, PHANTOM | 87.4, 87.4, 79.8, 79.8, 72.2 | 72.2 |
+| `13`, PHANTOM | 95.0, 95.0, 87.4, 79.8, 79.8 | 79.8 |
+| `14`, PHANTOM | 87.4, 87.4, 79.8, 72.2, 64.6 | 64.6 |
+
+**Open: Fort Gale Black at PHANTOM goes from 0 rescues to 5 with the port,
+while the original has 0.** Matched by position, the original against ours:
+- on the ground, speed and inputs agree within about 3 %;
+- both leave the crest at (-434, 115, 747) at 181;
+- in the air the original steers left (-10 to -43), turns with the track, slows
+  to 144 and lands on the ramp at about (-233, 109, 609);
+- ours steers right (+6 to +44), holds about 162, overshoots, and falls off
+  every lap.
+
+So the difference is our driver's airborne steering (`Ai_ComputeControls`
+with its height term), which has no live leg. No class gate or tuning was added
+to hide it.
+
+**The inherited titles, before and after the port** (same sweep, weapons off,
+whole race, seed 1). HD and Pure run the Pulse law unmeasured:
+
+| Title, circuit, class | Before: rescues, wall ticks (episodes), end shield | After |
+| --- | --- | --- |
+| HD 12_sol_2, VENOM / PHANTOM | 0, 0, 95.0 / 0, 0, 95.0 | 0, 0, 95.0 / 0, 0, 95.0 |
+| HD talons_junction, VENOM / PHANTOM | 0, 0, 95.0 / 0, 0, 95.0 | 0, 0, 95.0 / 0, 0, 95.0 |
+| HD 05_ubermall, VENOM | 0, 0, 95.0 | 0, 0, 95.0 |
+| **HD 05_ubermall, PHANTOM** | 1, 5 (3), 78.3 | **2, 143 (27), 6.3** |
+| HD amphiseum, VENOM / PHANTOM | 0, 0, 95.0 / 0, 2 (2), 94.1 | 0, 0, 95.0 / 0, 0, 95.0 |
+| Pure 01_Vineta_K, VENOM / PHANTOM | 0, 0, 100.0 / 0, 0, 44.0 | 0, 0, 92.0 / 0, 0, 68.0 |
+
+Mean speed rises about 9 % at VENOM (127 to 139 on HD) and 8 to 12 % at
+PHANTOM. **HD's Ubermall at PHANTOM is open, beside Fort Gale Black:** under a
+law HD was never read for, its autopilot scrapes 27 times and ends a race on
+6.3 shield.
+
+**The opponent stint, re-run with the port** (`opponent_autopilot_sweep`, Ace,
+8 seeds, 64 forks a cell, as before). The engine bits are the local player's
+alone, so an opponent's stint law does not change. What moves is the field the
+forks start from, because the player's autopilot is now faster. PHANTOM's extra
+wall hits do not shrink: B touches walls more than A on 14 of 16 cells (13
+before), and HD's B rescues are 6 (8 before). VENOM: B touches more on 3 of 16
+cells (4 before), and HD has no B rescues before or after. So the decision left
+for `opponent-autopilot-wire` stands as it was.
+
+| Cell, PHANTOM Ace | B faster, before -> after | Median gain s, before -> after | Walls A -> B, before | Walls A -> B, after | Rescues A -> B, before | Rescues A -> B, after |
+| --- | --- | --- | --- | --- | --- | --- |
+| HD 12_sol_2 | 59 -> 61 | +0.95 -> +0.96 | 73 -> 375 | 103 -> 483 | 0 -> 2 | 0 -> 2 |
+| HD talons_junction | 53 -> 52 | +0.75 -> +0.53 | 275 -> 222 | 262 -> 153 | 0 -> 0 | 0 -> 0 |
+| HD 05_ubermall | 47 -> 49 | +0.87 -> +0.74 | 85 -> 124 | 59 -> 254 | 0 -> 2 | 0 -> 0 |
+| HD amphiseum | 55 -> 54 | +0.35 -> +0.38 | 213 -> 312 | 111 -> 261 | 0 -> 4 | 0 -> 4 |
+| Pulse 01 | 62 -> 58 | +0.76 -> +0.54 | 122 -> 172 | 153 -> 195 | 3 -> 0 | 3 -> 0 |
+| Pulse 02 | 51 -> 41 | +0.41 -> +0.15 | 79 -> 235 | 41 -> 565 | 0 -> 0 | 0 -> 0 |
+| Pulse 03 | 54 -> 53 | +0.79 -> +0.81 | 130 -> 185 | 117 -> 158 | 0 -> 0 | 0 -> 0 |
+| Pulse 04 | 49 -> 48 | +0.28 -> +0.47 | 146 -> 214 | 184 -> 287 | 3 -> 2 | 1 -> 0 |
+| Pulse 05 | 45 -> 38 | +0.25 -> +0.15 | 54 -> 184 | 80 -> 227 | 3 -> 2 | 4 -> 2 |
+| Pulse 06 | 51 -> 48 | +0.41 -> +0.51 | 283 -> 456 | 285 -> 673 | 0 -> 1 | 0 -> 0 |
+| Pulse 07 | 64 -> 64 | +3.20 -> +3.37 | 205 -> 597 | 282 -> 660 | 1 -> 1 | 0 -> 2 |
+| Pulse 09 | 54 -> 45 | +0.26 -> +0.17 | 190 -> 261 | 226 -> 277 | 0 -> 0 | 0 -> 0 |
+| Pulse 10 | 63 -> 59 | +1.41 -> +1.09 | 354 -> 261 | 167 -> 262 | 0 -> 0 | 0 -> 0 |
+| Pulse 13 | 64 -> 63 | +1.20 -> +1.19 | 150 -> 253 | 179 -> 330 | 0 -> 0 | 0 -> 0 |
+| Pulse 14 | 57 -> 55 | +0.91 -> +1.07 | 736 -> 270 | 600 -> 207 | 0 -> 0 | 0 -> 0 |
+| Pulse 16 | 51 -> 49 | +0.55 -> +0.58 | 241 -> 350 | 137 -> 379 | 0 -> 0 | 0 -> 0 |
 
 ### An opponent's Autopilot, measured and not wired (2026-10-19)
 

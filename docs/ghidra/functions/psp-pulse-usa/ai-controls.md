@@ -650,8 +650,11 @@ decision with no target in range); what
 is not read. An opponent is flown by its driver anyway, so outside that case
 there is nothing for the pickup to change.
 
-**Not read:** what sets `craft+0x1d4`, the blend that switches the player's
-control source (so the shape of the handover from the pad), and whether the
+**Read since (2026-10-19):** what sets `craft+0x1d4` is `PlayerStatus_Update`. The
+same branch gives the craft thrust x1.2 and no acceleration cap while the pickup runs
+([autopilot.md](autopilot.md#what-the-running-bit-does-to-the-craft-2026-10-19-autopilot-rail)).
+`Ai_SnapToLane` has no player gain: measured live, the player's lateral offset from
+the lane point is p50 0.2 to 0.5. **Not read:** whether the
 `"autopilot input"` driver is flown in a split-screen race (HD scales its `100`
 by `SplitScreenMultiplier` when more than one person races).
 

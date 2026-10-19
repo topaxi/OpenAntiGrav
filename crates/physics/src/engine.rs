@@ -71,26 +71,37 @@ use crate::ship::{ShipControls, ShipState};
 /// so re-confirm it off the capture before changing a coefficient.
 pub const ENGINE_OUTPUT_SCALE: f32 = crate::launch::LaunchState::NEUTRAL;
 
-/// The flag-gated engine multiplier: the speed-up pickup, a flat +20 % on thrust.
+/// The Autopilot's engine multiplier, a flat +20 % on thrust after the acceleration cap.
 ///
-/// `if (flags & 0x0004) T *= craft+0x2a0`, in `Ship_UpdateEngine`. The only writer using a
-/// craft base is `0x0883b3b8`, which writes the value and the gating flag in one branch
-/// (`craft+0x2a0 = 1.2` with the flag set, `0` with it cleared), so the `0` case is
-/// unreachable through the read. Confidence 85; weaker is calling the `0x800`
-/// pickup-flag bit "speed-up".
+/// `if (flags & 0x0004) T *= craft+0x2a0`, in `Ship_UpdateEngine`. `PlayerStatus_Update`
+/// (`0x0883b3b8`) is the only writer using a craft base: while the player's pickup word has
+/// the Autopilot's running bit `0x800` (`autopilot.md`) it sets the flag and writes `1.2`
+/// (`0x3f99999a`, `0x0883beb0..0x0883bec0`), and clears both when the bit is clear. Read
+/// live under the pickup: `craft+0x1c0 = 0xd` every frame of two whole races (Pulse USA,
+/// VENOM, Talon's Junction White and de Konstruct Black). Confidence 90. See
+/// [`EngineFlags`].
+pub const ENGINE_AUTOPILOT_SPEEDUP: f32 = 1.2;
+
+/// The two engine bits of `craft+0x1c0` the local player's status update writes, both
+/// read in `Ship_UpdateEngine` alone (every masked read of `craft+0x1c0` against `0x4`
+/// and `0x8` in the image: `0x0884c874`, `0x0884c7d0`).
 ///
-/// # Still not applied
+/// `PlayerStatus_Update` (`0x0883b3b8`), per frame, for a racing player:
+/// - the Autopilot running: `uncapped` and `speedup` set
+///   (`Craft_SetUncappedThrust(craft, 1)` at `0x0883bea4`, then `0x4` and `1.2`);
+/// - not running: both cleared (`0x0883bf2c..`);
+/// - finished (`entity+0x912`) or in ship state `2`: `uncapped` set, `speedup` left as
+///   it was (`0x0883bde8..0x0883bdf8`).
 ///
-/// It was briefly wired up as the Turbo pickup's effect, **wrongly, by two orders of
-/// magnitude**: a `1.2` multiplier on thrust already clamped to `0.5 * speed +
-/// accelcap` is a few units of force, while `Engine.turbo`, added *uncapped* on the next
-/// branch, is authored an order of magnitude above `accelcap` on every shipped class.
-/// Also, the arming branch is in the **HUD update** (`0x0883b3b8`), sets HUD icon id `6`
-/// and drives a bar from the pickup's `+0x148` timer, so `0x800` is a timed effect the HUD
-/// fills. Which pickup arms it is unidentified (id `6` lands on `Shield` or `Autopilot`
-/// depending on where the class-name pool starts counting); it stays unapplied. See
-/// [`ShipState::turbo_timer`] and `docs/gameplay/pickups.md`.
-pub const ENGINE_PICKUP_SPEEDUP: f32 = 1.2;
+/// Opponents never get either: the function runs for the local player's status alone.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EngineFlags {
+    /// `craft+0x1c0 & 0x8`: the acceleration cap is `1e10`, so the throttle's thrust is
+    /// never clamped to `0.5 * speed + accelcap`.
+    pub uncapped: bool,
+    /// `craft+0x1c0 & 0x4`: [`ENGINE_AUTOPILOT_SPEEDUP`] multiplies thrust after the cap.
+    pub speedup: bool,
+}
 
 /// The fixed doubling on the engine's output, from the same expression.
 pub const ENGINE_OUTPUT_DOUBLE: f32 = 2.0;
@@ -165,12 +176,12 @@ impl EngineForce {
 /// caller holds the armed value
 /// ([`crate::forces::Environment::thrust_scale`]) and does the write-back.
 ///
-/// **Not implemented**, all flag-gated on the undecoded `craft+0x1c0`: the uncapped mode
-/// (`cap = 1e10`), the [`ENGINE_PICKUP_SPEEDUP`] multiplier, turbo's boost lift and the
-/// kill switch at bit `0x2000`. Implementing them would mean inventing their triggers. (The
+/// **The Autopilot's two bits are implemented**, as `flags` ([`EngineFlags`]).
+///
+/// **Not implemented**, flag-gated on `craft+0x1c0`: turbo's boost lift and the kill
+/// switch at bit `0x2000`. Implementing them would mean inventing their triggers. (The
 /// four-corner mode's `(flags & 1) && !(flags & 2)` gate is groundedness and
 /// [`ShipState::on_grid`].)
-/// implementing them would mean inventing their triggers.
 #[must_use]
 pub fn engine(
     state: &ShipState,
@@ -179,6 +190,7 @@ pub fn engine(
     forward_speed: f32,
     auto_speed: Option<f32>,
     thrust_scale: f32,
+    flags: EngineFlags,
 ) -> EngineForce {
     // The prologue's early return (`0x0884c634`): a stunned or weapon-slowed craft gets no
     // thrust and no lift. The original's `craft+0x2b8 = 0` here is **not reproduced**:
@@ -224,11 +236,16 @@ pub fn engine(
     // Blended, not switched: a half-grounded ship gets 60 %.
     thrust = thrust * grounded + thrust * ENGINE_AIR_THRUST * (1.0 - grounded);
 
-    let mut cap = 0.5 * forward_speed.abs() + handling.engine.accelcap;
-    if throttle > crate::controls::CONTROL_MAX {
-        cap *= throttle * 0.01;
+    if !flags.uncapped {
+        let mut cap = 0.5 * forward_speed.abs() + handling.engine.accelcap;
+        if throttle > crate::controls::CONTROL_MAX {
+            cap *= throttle * 0.01;
+        }
+        thrust = thrust.min(cap);
     }
-    thrust = thrust.min(cap);
+    if flags.speedup {
+        thrust *= ENGINE_AUTOPILOT_SPEEDUP;
+    }
 
     // The turbo add, `T += Engine.turbo`, sits between the cap and the doubling as in the
     // original, so it is **uncapped**. Either source arms it, as the original's
@@ -257,8 +274,7 @@ fn one_shot_scale(thrust: f32, scale: f32) -> f32 {
 ///
 /// Called once a tick from [`crate::step`], **after** the force law has read the timer, so
 /// the tick a pickup fires on is boosted. That ordering is this project's, not a reading
-/// (the original keeps a bit and a timer in two undecoded words); see
-/// [`ENGINE_PICKUP_SPEEDUP`].
+/// (the original keeps a bit and a timer in two undecoded words).
 ///
 /// **It boosts one tick more than the arithmetic suggests**: a `0.75` s pickup runs 46
 /// ticks at 60 Hz, not 45, because 45 sequential `f32` subtractions of `1/60` leave a
@@ -506,7 +522,7 @@ mod tests;
 
 #[cfg(test)]
 mod auto_speed_tests {
-    use super::{ENGINE_OUTPUT_DOUBLE, ENGINE_OUTPUT_SCALE, engine};
+    use super::{ENGINE_OUTPUT_DOUBLE, ENGINE_OUTPUT_SCALE, EngineFlags, engine};
     use crate::params::Handling;
     use crate::ship::ShipState;
 
@@ -524,9 +540,27 @@ mod auto_speed_tests {
         let handling = Handling::ZERO;
 
         // Throttle at zero and yet there is thrust, as in Zone.
-        let idle = engine(&state, &handling, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        let idle = engine(
+            &state,
+            &handling,
+            1.0,
+            0.0,
+            Some(50.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         state.thrust = 100.0;
-        let full = engine(&state, &handling, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        let full = engine(
+            &state,
+            &handling,
+            1.0,
+            0.0,
+            Some(50.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert_eq!(idle, full, "the throttle changed the auto-speed output");
         assert_eq!(idle, 50.0 * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE);
     }
@@ -536,7 +570,16 @@ mod auto_speed_tests {
         // The ordinary branch clamps against `0.5 * speed + accelcap` (zero for
         // `Handling::ZERO`); the four-corner branch has no clamp.
         let state = grounded_ship();
-        let force = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(10_000.0), 1.0).thrust;
+        let force = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(10_000.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert!(force > 0.0, "the cap bound a branch that has no cap");
     }
 
@@ -545,9 +588,27 @@ mod auto_speed_tests {
         // `craft+0x294` is in the shared tail (live on a Zone engine, see `engine`).
         let mut state = grounded_ship();
         state.launch.multiplier = 1.4;
-        let boosted = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(34.0), 1.0).thrust;
+        let boosted = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(34.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         state.launch.multiplier = 1.0;
-        let resting = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(34.0), 1.0).thrust;
+        let resting = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(34.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert_eq!(boosted, resting * 1.4, "the launch multiplier was dropped");
     }
 
@@ -556,10 +617,28 @@ mod auto_speed_tests {
         // `(flags & 1) && !(flags & 2)`: bit 1 is the grid state.
         let mut state = grounded_ship();
         state.on_grid = true;
-        let held = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        let held = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(50.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert_eq!(held, 0.0, "auto-speed ran under the grid state");
         state.on_grid = false;
-        let released = engine(&state, &Handling::ZERO, 1.0, 0.0, Some(50.0), 1.0).thrust;
+        let released = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(50.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert!(released > 0.0);
     }
 
@@ -567,7 +646,16 @@ mod auto_speed_tests {
     fn an_airborne_zone_craft_gets_nothing() {
         // The gate: the original writes `0.0` when the contact bit is clear.
         let state = grounded_ship();
-        let force = engine(&state, &Handling::ZERO, 0.0, 0.0, Some(50.0), 1.0).thrust;
+        let force = engine(
+            &state,
+            &Handling::ZERO,
+            0.0,
+            0.0,
+            Some(50.0),
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust;
         assert_eq!(force, 0.0);
     }
 
@@ -577,13 +665,53 @@ mod auto_speed_tests {
         state.thrust = 100.0;
         let handling = Handling::ZERO;
         assert_eq!(
-            engine(&state, &handling, 1.0, 40.0, None, 1.0),
-            engine(&state, &handling, 1.0, 40.0, None, 1.0)
+            engine(
+                &state,
+                &handling,
+                1.0,
+                40.0,
+                None,
+                1.0,
+                EngineFlags::default()
+            ),
+            engine(
+                &state,
+                &handling,
+                1.0,
+                40.0,
+                None,
+                1.0,
+                EngineFlags::default()
+            )
         );
         // `Handling::ZERO` has no engine amount: the ordinary path is zero, auto-speed is
         // not.
-        assert_eq!(engine(&state, &handling, 1.0, 40.0, None, 1.0).thrust, 0.0);
-        assert!(engine(&state, &handling, 1.0, 40.0, Some(50.0), 1.0).thrust > 0.0);
+        assert_eq!(
+            engine(
+                &state,
+                &handling,
+                1.0,
+                40.0,
+                None,
+                1.0,
+                EngineFlags::default()
+            )
+            .thrust,
+            0.0
+        );
+        assert!(
+            engine(
+                &state,
+                &handling,
+                1.0,
+                40.0,
+                Some(50.0),
+                1.0,
+                EngineFlags::default()
+            )
+            .thrust
+                > 0.0
+        );
     }
 }
 

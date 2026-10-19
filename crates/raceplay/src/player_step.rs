@@ -217,7 +217,9 @@ impl Race {
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
         let pilot_assist = self.pilot_assist_input(slot);
+        let engine_flags = self.autopilot_engine_flags(slot);
         let ship = &mut self.sim.world.ships[slot];
+        let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
         // throttle armed last tick is consumed by this step and nothing after
         // it. See `Ship::pending_thrust_scale`. One asymmetry: the original's
@@ -243,6 +245,7 @@ impl Race {
             damage_rules: env_damage_rules,
             pilot_assist,
             barrel_rolls: self.sim.barrel_rolls,
+            engine_flags,
             ..Environment::default()
         };
         // The autopilot's `Ai_SnapToLane` write, between its controls and
@@ -259,6 +262,7 @@ impl Race {
             self.sim.dt,
         );
         self.lay_crumb(slot, crumb_flags);
+        self.count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
         // The contact half of the same edge as the blast one, and the one a
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this
@@ -271,6 +275,26 @@ impl Race {
             env,
             before,
             spline_distance,
+        }
+    }
+
+    /// The two engine bits the original's local-player status update writes
+    /// (`PlayerStatus_Update`, `0x0883b3b8`; [`oag_physics::engine::EngineFlags`]):
+    /// both while the Autopilot flies the craft, the uncapped one alone past the
+    /// line. The `--autopilot` route counts as the pickup, which it stands in for;
+    /// a Disruptor's autopilot effect does not, as it never sets the pickup's
+    /// running bit.
+    ///
+    /// Past the line the original leaves the `0x4` bit as the last racing frame
+    /// wrote it; this takes it from whether the autopilot still flies the craft,
+    /// which differs only for a pickup that runs out after the finish (chosen,
+    /// not measured, and capped by the finished craft's own thrust law anyway).
+    fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
+        let ship = &self.sim.world.ships[slot];
+        let autopilot = ship.autopilot_timer > 0.0 || self.autopilot_flies(slot);
+        oag_physics::engine::EngineFlags {
+            uncapped: autopilot || ship.standing.finished(),
+            speedup: autopilot,
         }
     }
 

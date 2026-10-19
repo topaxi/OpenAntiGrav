@@ -297,6 +297,10 @@ pub struct Environment {
     /// online `Barrel rolls` row): the gesture is never read, so no roll arms and no shield is
     /// spent. `true` is every race the originals run.
     pub barrel_rolls: bool,
+    /// The Autopilot's engine bits ([`crate::engine::EngineFlags`]), which the original's
+    /// local-player status update writes into `craft+0x1c0` each frame. Default clear: every
+    /// AI craft, every player not on the Autopilot or past the line.
+    pub engine_flags: crate::engine::EngineFlags,
 }
 
 impl Default for Environment {
@@ -313,6 +317,7 @@ impl Default for Environment {
             start_boost: None,
             pilot_assist: None,
             barrel_rolls: true,
+            engine_flags: crate::engine::EngineFlags::default(),
         }
     }
 }
@@ -468,6 +473,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         cached_speed,
         env.auto_speed,
         env.thrust_scale,
+        env.engine_flags,
     );
     acc.local_force += engine_force.as_local_force();
     // After the engine, which has just read last tick's multiplier: the grader and boost

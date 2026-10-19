@@ -329,3 +329,172 @@ fn an_original_field_opponent_is_not_handed_an_autopilot() {
         "the original's absorbs it"
     );
 }
+
+/// What the player's own craft did against the walls over one autopiloted
+/// race, weapons off.
+#[derive(Debug, Default)]
+struct WallRun {
+    ticks: u64,
+    contact: u32,
+    inbound: u32,
+    respawns: u32,
+    finish: Option<u64>,
+    /// `|lateral|` samples on ticks the craft raced, off the rail's own lane
+    /// point.
+    lateral: Vec<f32>,
+    /// Contact episodes: runs of consecutive contact ticks.
+    episodes: u32,
+    /// Speed and the rail's blend on the same ticks as `lateral`.
+    speed: Vec<f32>,
+    blend: Vec<f32>,
+    /// Slot 0's shield at the end of each lap, and at the end of the run.
+    shield_per_lap: Vec<f32>,
+    shield_end: f32,
+}
+
+fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun> {
+    let image = oag_testdata::image(image)?;
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(track.to_string()),
+        seed: Some(1),
+        weapons_override: std::env::var_os("OAG_SWEEP_WEAPONS")
+            .is_none()
+            .then_some(false),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the track");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(race.use_original_ai(None, 1), "the AI tables read");
+    race.set_autopilot(true);
+    let mut out = WallRun::default();
+    let mut last = 0;
+    let mut touching = false;
+    let mut lap = race.sim.world.ships[0].standing.lap;
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::none());
+        out.ticks += 1;
+        let now = race.wall_contact_ticks_of(0);
+        let touch = now != last;
+        if touch && !touching {
+            out.episodes += 1;
+        }
+        touching = touch;
+        last = now;
+        if let Some(autopilot) = race.original_autopilot(0)
+            && race.sim.world.tick > 300
+        {
+            out.lateral.push(autopilot.driver.rail.lateral.abs());
+            out.blend.push(autopilot.driver.rail.blend);
+            out.speed.push(
+                race.sim.world.ships[0]
+                    .physics
+                    .body
+                    .linear_velocity
+                    .length(),
+            );
+        }
+        if std::env::var_os("OAG_SWEEP_TRACE").is_some() {
+            let ship = &race.sim.world.ships[0];
+            let rail = race.original_autopilot(0).map(|a| a.driver.rail);
+            if race.sim.world.tick.is_multiple_of(2) || race.respawns_of(0) != out.respawns {
+                println!(
+                    "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}]",
+                    race.sim.world.tick,
+                    ship.physics.body.position,
+                    ship.physics.body.linear_velocity.length(),
+                    ship.physics.grounded,
+                    rail.map(|r| r.lateral),
+                    rail.map(|r| r.blend),
+                    race.respawns_of(0),
+                    race.last_respawn_cause_of(0),
+                    ship.physics.thrust,
+                    ship.physics.brake,
+                    ship.physics.steer,
+                    ship.physics.airbrake_left,
+                    ship.physics.airbrake_right
+                );
+            }
+            out.respawns = race.respawns_of(0);
+        }
+        if race.sim.world.ships[0].standing.lap != lap {
+            lap = race.sim.world.ships[0].standing.lap;
+            out.shield_per_lap
+                .push(race.sim.world.ships[0].physics.shield);
+        }
+        if race.sim.world.ships[0].standing.finished() {
+            out.finish = Some(race.sim.world.tick);
+            break;
+        }
+    }
+    out.contact = race.wall_contact_ticks_of(0);
+    out.inbound = race.wall_inbound_ticks_of(0);
+    out.respawns = race.respawns_of(0);
+    out.shield_end = race.sim.world.ships[0].physics.shield;
+    Some(out)
+}
+
+/// The mean of `values`.
+fn mean(values: &[f32]) -> f32 {
+    values.iter().sum::<f32>() / values.len().max(1) as f32
+}
+
+/// A scratch sweep: the player's own wall contact and lateral offset under a
+/// whole-race autopilot on every Pulse circuit, weapons off, for the classes
+/// in `OAG_SWEEP_CLASSES` (default `VENOM,PHANTOM`).
+///
+/// ```sh
+/// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
+///     --run-ignored all autopilot_original_ground_truth::wall_sweep --no-capture
+/// ```
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn wall_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let image = std::env::var("OAG_SWEEP_IMAGE").unwrap_or_else(|_| "pulse-psp-usa.chd".into());
+    let classes = std::env::var("OAG_SWEEP_CLASSES").unwrap_or_else(|_| "VENOM,PHANTOM".into());
+    let tracks: Vec<String> = std::env::var("OAG_SWEEP_TRACKS").map_or_else(
+        |_| {
+            CIRCUITS
+                .iter()
+                .map(|id| format!(r"Data\Environments\{id}_Track\track.vex"))
+                .collect()
+        },
+        |list| list.split(',').map(str::to_string).collect(),
+    );
+    for class in classes.split(',') {
+        for track in &tracks {
+            let Some(mut r) = wall_run(&image, class, track, 15_000) else {
+                return;
+            };
+            r.lateral.sort_by(f32::total_cmp);
+            let pct = |p: f32| {
+                r.lateral
+                    .get(((r.lateral.len() as f32 - 1.0) * p) as usize)
+                    .copied()
+                    .unwrap_or(f32::NAN)
+            };
+            println!(
+                "{class} {track} ticks {} finish {:?} respawns {} contact {} inbound {} episodes {} lateral p50 {:.2} p95 {:.2} p99 {:.2} max {:.2} speed mean {:.1} blend mean {:.2} shield per lap {:?} shield end {:.1}",
+                r.ticks,
+                r.finish,
+                r.respawns,
+                r.contact,
+                r.inbound,
+                r.episodes,
+                pct(0.5),
+                pct(0.95),
+                pct(0.99),
+                pct(1.0),
+                mean(&r.speed),
+                mean(&r.blend),
+                r.shield_per_lap,
+                r.shield_end
+            );
+        }
+    }
+}
