@@ -29,7 +29,7 @@ fn hash_u32(mut x: u32) -> u32 {
 }
 
 /// `hash_u32` remapped to `[0, 1)`.
-fn hash01(seed: u32) -> f32 {
+pub fn hash01(seed: u32) -> f32 {
     (hash_u32(seed) >> 8) as f32 / (1u32 << 24) as f32
 }
 

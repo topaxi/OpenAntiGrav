@@ -169,6 +169,11 @@ pub struct Scene {
     /// eight model matrices a frame, and the draw loop indexes rather than
     /// zips.
     flares: Vec<Option<Drawable>>,
+    /// Each slot's five flare spikes, drawn beside [`Self::flares`] with a
+    /// flicker scale of their own - `EngineFlare_PlaceShapes` gives every spike
+    /// a fresh `Spikes Random Scale` draw per frame. Empty for a slot whose
+    /// title splits none out.
+    flare_spikes: Vec<Vec<boost_flare::SpikeDrawable>>,
     /// One shield shell per craft, on the same additive pipeline as
     /// [`Self::boost`] and for the same reason: both textures carry the artists'
     /// `_ADD` suffix.
@@ -779,7 +784,7 @@ impl Scene {
                 )
             })
             .transpose()?;
-        let (boost, boost_uv_transforms, flares) = boost_flare::build(
+        let (boost, boost_uv_transforms, flares, flare_spikes) = boost_flare::build(
             device,
             queue,
             liveries,
@@ -1042,6 +1047,7 @@ impl Scene {
             ships,
             boost,
             flares,
+            flare_spikes,
             shield,
             shield_cockpit,
             absorb_overlay,

@@ -30,6 +30,27 @@ pub(super) struct Flare {
     /// `EF_Boost` - this engine's boost gate is what reveals it; see
     /// [`per_team`]'s report line.
     pub boost: Option<Model>,
+    /// The five spike shapes, each split out of its group so it can take its
+    /// own flicker scale; see [`Spike`].
+    pub spikes: Vec<Spike>,
+}
+
+/// One spike shape of the flare: a part of its own, and the group it left.
+///
+/// `EngineFlare_PlaceShapes` draws a fresh `Spikes Random Scale` factor for
+/// each of these every frame and scales the shape uniformly by it, about the
+/// nozzle, on top of the scale its group would have given it. The group
+/// models ([`Flare::always`], [`Flare::boost`]) no longer carry them.
+#[derive(Debug, Clone)]
+pub struct Spike {
+    /// The geometry of this one shape, at the nozzle.
+    pub model: Model,
+    /// Whether it hung under `EF_Boost` (revealed and scaled by the boost
+    /// blend) rather than `EF_Main`.
+    pub boost: bool,
+    /// Its index among the five, in the executable's order (`Spikes1` to
+    /// `Spikes3`, then `Left`, `Right`): the stream the flicker is keyed on.
+    pub index: u32,
 }
 
 /// Loads a team's authored flare and splits it into its two groups.
@@ -116,7 +137,16 @@ pub(super) fn per_team(
         shading(&mut model, &geometry, report);
     }
     translate(&mut model, nozzle);
-    let groups = [authored.always, authored.boost];
+    let spike_names: Vec<&str> = authored
+        .main_spikes
+        .iter()
+        .chain(authored.boost_spikes)
+        .copied()
+        .collect();
+    let groups: Vec<&str> = [authored.always, authored.boost]
+        .into_iter()
+        .chain(spike_names.iter().copied())
+        .collect();
     let split = if vita {
         mesh::groups::split_psp2(&model, &geometry, &blob, &groups)
     } else {
@@ -135,6 +165,23 @@ pub(super) fn per_team(
     let mut out = Flare::default();
     for (index, part) in parts.into_iter().enumerate() {
         let triangles = part.triangles();
+        if index >= 2 {
+            let spike = index as u32 - 2;
+            let boost = spike as usize >= authored.main_spikes.len();
+            if triangles == 0 {
+                report.push(format!(
+                    "{name}: authors no geometry for {} - that spike draws nothing",
+                    part.group
+                ));
+            } else {
+                out.spikes.push(Spike {
+                    model: part.model,
+                    boost,
+                    index: spike,
+                });
+            }
+            continue;
+        }
         let what = if index == 0 { "always" } else { "boost" };
         if triangles == 0 {
             report.push(format!(

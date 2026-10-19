@@ -480,6 +480,37 @@ pub const BOOST_EXTRA_XY: f32 = 1.4;
 /// See [`BOOST_EXTRA_XY`].
 pub const BOOST_EXTRA_Z: f32 = 2.0;
 
+/// `Spikes Thrust Max Scale`: what the three `EF_Main` spikes grow to at full
+/// smoothed throttle, on their own uniform scale (`EngineFlare_PlaceShapes`
+/// reads it at tuning-block `+0x42c`, the file's order).
+pub const SPIKES_THRUST_MAX: f32 = 1.5;
+
+/// `Spikes Boost Max Scale` (`+0x430`): the same shapes at full boost blend.
+pub const SPIKES_BOOST_MAX: f32 = 2.0;
+
+/// `Spikes Random Scale Min/Max` (`+0x434`/`+0x438`): the range each of the
+/// five spikes draws a fresh uniform scale factor from, once per frame -
+/// `FUN_002e15f0(min, max)`, spilled to the function's own stack frame and
+/// splatted into the shape's three basis rows. A geometric scale about the
+/// nozzle, not a shader parameter.
+pub const SPIKES_RANDOM_SCALE: (f32, f32) = (0.65, 0.85);
+
+/// One spike's flicker factor this frame, in [`SPIKES_RANDOM_SCALE`].
+///
+/// **Render-side and chosen, not measured.** The original's generator
+/// (`FUN_002e15f0`'s stream) is not reproduced; only the range is read. The
+/// hash is keyed on the render tick, the craft's slot and the spike's index,
+/// so a screenshot or a replay of the same tick draws the same frame and
+/// nothing here touches the simulation's `Rng`.
+#[must_use]
+pub fn spike_flicker(tick: u32, slot: u32, spike: u32) -> f32 {
+    let seed = tick.wrapping_mul(0x85eb_ca6b)
+        ^ slot.wrapping_mul(0x9e37_79b1)
+        ^ spike.wrapping_mul(0xc2b2_ae35);
+    let t = crate::weapon_quads::random::hash01(seed);
+    SPIKES_RANDOM_SCALE.0 + t * (SPIKES_RANDOM_SCALE.1 - SPIKES_RANDOM_SCALE.0)
+}
+
 /// `Flare Radius` from `Data/ships/shipeffectstweaks.txt`: the sprite
 /// flare's fade-scaled half-height term, in the same model space every other
 /// per-craft tuning number in this file lives in - **not** world units on its
@@ -781,6 +812,24 @@ impl Flame {
     /// `EF_Boost`'s length scale, `b * 2.0` - its cross-section stays 1.
     #[must_use]
     pub fn boost_scale_z(&self) -> f32 {
+        self.b * BOOST_EXTRA_Z
+    }
+
+    /// The uniform scale of an `EF_Main` spike before its flicker:
+    /// `lerp(1, Spikes Thrust Max, s) + lerp(1, Spikes Boost Max, b)`.
+    ///
+    /// Read as the sum of the two lerps, which is 2.0 at rest - the
+    /// disassembly adds them (`fadds f0,f13,f0` at `0x002a2820`).
+    #[must_use]
+    pub fn main_spike_scale(&self) -> f32 {
+        (1.0 + (SPIKES_THRUST_MAX - 1.0) * self.s) + (1.0 + (SPIKES_BOOST_MAX - 1.0) * self.b)
+    }
+
+    /// The uniform scale of an `EF_Boost` spike before its flicker:
+    /// `b * 2.0` on all three axes, where the group's other shapes grow in
+    /// length alone.
+    #[must_use]
+    pub fn boost_spike_scale(&self) -> f32 {
         self.b * BOOST_EXTRA_Z
     }
 

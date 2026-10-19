@@ -110,6 +110,8 @@ pub const TITLE: &Title = &Title {
         stem: "engineflare",
         always: "EF_Main",
         boost: "EF_Boost",
+        main_spikes: &["ef_Spikes1Shape", "ef_Spikes2Shape", "ef_Spikes3Shape"],
+        boost_spikes: &["ef_SpikesLeftShape", "ef_SpikesRightShape"],
         sprite: "/data/tex/engineflare/engine_flare_rich.gxt",
         // **Off, chosen, not measured.** See `Authored::engine_light`.
         engine_light: false,

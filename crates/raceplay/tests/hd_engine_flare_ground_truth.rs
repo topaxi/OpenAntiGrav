@@ -60,6 +60,7 @@ fn the_loaded_race_holds_every_flare_and_trail_hit_claim() {
         return;
     };
     every_craft_on_the_grid_carries_both_halves_of_its_flare(&loaded);
+    every_craft_splits_five_spikes_out_of_its_flare(&loaded);
     the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(&loaded);
     the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(&loaded);
     every_flare_carries_the_flames_own_shader_parameters(&loaded);
@@ -118,6 +119,64 @@ fn every_craft_on_the_grid_carries_both_halves_of_its_flare(loaded: &race::Loade
             "{}: dst factor",
             livery.team
         );
+    }
+}
+
+/// Up to five spike shapes come out of the two groups, one part each, on none
+/// of the draw ranges their group keeps.
+///
+/// `EngineFlare_PlaceShapes` gives `ef_Spikes1Shape` to `ef_Spikes3Shape`
+/// (`EF_Main`) and `ef_SpikesLeftShape`/`ef_SpikesRightShape` (`EF_Boost`) a
+/// flicker scale of their own, so they must be parts of their own: dropping the
+/// split leaves them inside the group models, scaled with the group and never
+/// flickering. Asserted per craft, because a team whose flare authors no spike
+/// geometry would otherwise pass as a shorter list.
+fn every_craft_splits_five_spikes_out_of_its_flare(loaded: &race::Loaded) {
+    for livery in &loaded.liveries {
+        // **Not every craft authors all five**: the census on this grid is
+        // Assegai without `ef_Spikes3Shape`, AG Systems and EGX without the
+        // two `EF_Boost` spikes. An absent one is named on the load report
+        // and draws nothing; the other shapes of that craft still flicker.
+        assert!(
+            !livery.flare_spikes.is_empty() && livery.flare_spikes.len() <= 5,
+            "{}: {} spikes split out of the flare",
+            livery.team,
+            livery.flare_spikes.len()
+        );
+        for spike in &livery.flare_spikes {
+            assert!(spike.index < 5, "{}: spike index", livery.team);
+            assert_eq!(
+                spike.boost,
+                spike.index >= 3,
+                "{}: spike {}'s group",
+                livery.team,
+                spike.index
+            );
+        }
+        let ranges = |model: &oag_mesh::mesh::Model| -> Vec<(u32, u32)> {
+            [
+                &model.draws,
+                &model.alpha_tested_draws,
+                &model.transparent_draws,
+            ]
+            .into_iter()
+            .flatten()
+            .map(|d| (d.range.start, d.range.end))
+            .collect()
+        };
+        let main = ranges(livery.flare.as_ref().expect("flame"));
+        let boost = ranges(livery.boost.as_ref().expect("plume"));
+        for spike in &livery.flare_spikes {
+            let group = if spike.boost { &boost } else { &main };
+            for range in ranges(&spike.model) {
+                assert!(
+                    !group.contains(&range),
+                    "{}: spike {} is still drawn by its group too",
+                    livery.team,
+                    spike.index
+                );
+            }
+        }
     }
 }
 
@@ -304,6 +363,10 @@ fn the_tube_constants_are_the_discs_own_tuning_file() {
     assert_eq!(value("Thrust Max Scale Z"), hd::THRUST_SCALE_Z.1);
     assert_eq!(value("Thrust Extra Boost Scale XY"), hd::BOOST_EXTRA_XY);
     assert_eq!(value("Thrust Extra Boost Scale Z"), hd::BOOST_EXTRA_Z);
+    assert_eq!(value("Spikes Thrust Max Scale"), hd::SPIKES_THRUST_MAX);
+    assert_eq!(value("Spikes Boost Max Scale"), hd::SPIKES_BOOST_MAX);
+    assert_eq!(value("Spikes Random Scale Min"), hd::SPIKES_RANDOM_SCALE.0);
+    assert_eq!(value("Spikes Random Scale Max"), hd::SPIKES_RANDOM_SCALE.1);
     assert_eq!(value("Tex Scroll Speed Delta Min"), hd::SCROLL_DELTA.0);
     assert_eq!(value("Tex Scroll Speed Delta Max"), hd::SCROLL_DELTA.1);
     assert_eq!(value("Tex Scroll Speed Ship Min"), 0.0);

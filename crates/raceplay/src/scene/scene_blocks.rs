@@ -55,6 +55,9 @@ impl Scene {
         for drawable in self.flares.iter_mut().chain(&mut self.boost).flatten() {
             drawable.share_scene(device, blocks, SceneKind::Flame);
         }
+        for spike in self.flare_spikes.iter_mut().flatten() {
+            spike.drawable.share_scene(device, blocks, SceneKind::Flame);
+        }
     }
 
     /// Moves every drawable the frame writes matrices for onto the shared uniform buffer
@@ -81,6 +84,14 @@ impl Scene {
             device,
             blocks,
             self.flares.iter_mut().chain(&mut self.boost).flatten(),
+        );
+        share_all(
+            device,
+            blocks,
+            self.flare_spikes
+                .iter_mut()
+                .flatten()
+                .map(|s| &mut s.drawable),
         );
         share_all(
             device,

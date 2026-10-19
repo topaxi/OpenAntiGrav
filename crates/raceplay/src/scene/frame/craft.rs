@@ -8,6 +8,7 @@
 //! scene's own state.
 
 use oag_core::math::{Mat4, Vec3};
+use oag_fx::exhaust;
 
 use crate::Race;
 
@@ -37,11 +38,8 @@ pub(super) fn cockpit_shield_visible(race: &Race) -> bool {
 /// is baked at - identity on every other source and where no locator exists.
 ///
 /// `EF_Main` scales its cross-section and length from the smoothed throttle
-/// plus the boost blend; `EF_Boost` only its length, by `blend * 2.0`. The
-/// spikes' per-shape random flicker (`Spikes Random Scale Min/Max`, 0.65 to
-/// 0.85) needs a per-shape split this scene does not carry yet and is
-/// documented rather than drawn - see
-/// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
+/// plus the boost blend; `EF_Boost` only its length, by `blend * 2.0`. The five
+/// spikes are split out of both groups and take [`hd_spike_transform`] instead.
 pub(super) fn hd_flame_transform(race: &Race, slot: usize, boost: bool) -> Mat4 {
     if !race.hd_trail_active() {
         return Mat4::IDENTITY;
@@ -57,4 +55,43 @@ pub(super) fn hd_flame_transform(race: &Race, slot: usize, boost: bool) -> Mat4 
         Vec3::new(xy, xy, z)
     };
     Mat4::from_translation(nozzle) * Mat4::from_scale(scale) * Mat4::from_translation(-nozzle)
+}
+
+/// One flare spike's scale this frame: its group's uniform spike scale times
+/// a fresh `Spikes Random Scale` draw, about the nozzle the flare model is
+/// baked at - identity where [`hd_flame_transform`] is.
+///
+/// `EngineFlare_PlaceShapes` scales all five spikes uniformly, `EF_Main`'s
+/// three by `lerp(1, Spikes Thrust Max, s) + lerp(1, Spikes Boost Max, b)` and
+/// `EF_Boost`'s two by `b * 2.0`, then by one draw of `RandRange(0.65, 0.85)`
+/// each (`oag_fx::exhaust::hd::spike_flicker`, chosen, not measured). The
+/// group's own anisotropic scale does not touch them.
+pub(super) fn hd_spike_transform(race: &Race, slot: usize, boost: bool, index: u32) -> Mat4 {
+    if !race.hd_trail_active() {
+        return Mat4::IDENTITY;
+    }
+    let Some(nozzle) = race.nozzle_local_of(slot) else {
+        return Mat4::IDENTITY;
+    };
+    let flame = race.hd_flame_of(slot);
+    let group = if boost {
+        flame.boost_spike_scale()
+    } else {
+        flame.main_spike_scale()
+    };
+    let tick = race.sim.world.tick as u32;
+    let scale = group * exhaust::hd::spike_flicker(tick, slot as u32, index);
+    Mat4::from_translation(nozzle)
+        * Mat4::from_scale(Vec3::splat(scale))
+        * Mat4::from_translation(-nozzle)
+}
+
+/// Whether an `EF_Boost` spike is drawn: the gate the boost group itself is
+/// drawn behind (the HD blend's reveal, or the PSP/PS2 plume's).
+pub(super) fn spike_boost_visible(race: &Race, slot: usize) -> bool {
+    if race.hd_trail_active() {
+        race.hd_flame_of(slot).boost_visible()
+    } else {
+        race.exhaust_of(slot).plume_visible()
+    }
 }
