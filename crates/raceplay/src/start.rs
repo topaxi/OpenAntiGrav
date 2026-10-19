@@ -593,6 +593,7 @@ impl Race {
                 autopilots: std::array::from_fn(|_| None),
                 autopilot_rail: [None; oag_gameplay::MAX_PLAYERS],
                 autopilot_ours: false,
+                opponent_autopilot: false,
                 world,
                 collision,
                 spline,

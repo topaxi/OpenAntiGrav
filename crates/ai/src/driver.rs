@@ -253,6 +253,13 @@ impl Driver {
         }
     }
 
+    /// Whether a takeoff lies within the run-up this driver flies its own way
+    /// (no lift, the plan's clearing speed) from where it last located itself.
+    #[must_use]
+    pub fn on_run_up(&self, line: &Line) -> bool {
+        line.takeoff_within(self.index as usize, planned::RUN_UP_REACH)
+    }
+
     /// Advances what [`Self::drive`] advances besides the controls: what the
     /// driver has noticed of `ctx.field`, its noise phase and its provocation.
     /// For a craft another driver steers (the original's, `crate::original`):

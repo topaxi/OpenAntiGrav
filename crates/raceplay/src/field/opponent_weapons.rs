@@ -298,10 +298,11 @@ impl Race {
     /// - **A forward weapon is fired or absorbed when `Race::opponent_decides`
     ///   says so**, and kept rather than spent when it says hold, or when the
     ///   weapon itself declines (no lock, no authored stats, no free slot).
-    /// - **An Autopilot is absorbed**, and for once that is not a policy but
-    ///   the only thing it could be: the pickup hands a craft to its driver, and
-    ///   an opponent is already flown by one. There is nothing for it to do. It
-    ///   is named here rather than left to fall through the default below,
+    /// - **An Autopilot is absorbed**, a choice: the original's field never
+    ///   fires one outside an Eliminator. `Race::set_opponent_autopilot` (off)
+    ///   flies the original's player driver for its `time` instead, which was
+    ///   measured faster and, at PHANTOM, less safe (`docs/gameplay/ai.md`).
+    ///   It is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
     /// - **A Mine or a Bomb is dropped when somebody is close behind**, on
@@ -466,6 +467,13 @@ impl Race {
             }
         } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
             if !fires || !self.fire_opponent_leach_beam(slot) {
+                return;
+            }
+        } else if weapon == oag_tables::weapons::Weapon::Autopilot {
+            // Absorbed, unless the measurement switch hands the craft to the
+            // original's player driver (`Race::set_opponent_autopilot`).
+            if !self.engage_opponent_autopilot(slot) {
+                self.absorb_opponent_pickup(slot, absorb);
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Disruptor {

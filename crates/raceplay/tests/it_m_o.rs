@@ -29,6 +29,7 @@ mod omega_hud_ground_truth;
 mod omega_lightmap_ground_truth;
 mod omega_original_ai_ground_truth;
 mod omega_race_ground_truth;
+mod opponent_autopilot_sweep;
 mod opponent_fire_ground_truth;
 mod opponent_weapons_ground_truth;
 

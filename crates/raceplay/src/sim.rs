@@ -137,6 +137,10 @@ pub struct RaceSim {
     /// set by the developer flags that tune ours (`--autopilot-skill`,
     /// `--autopilot-pilot`), which would otherwise do nothing.
     pub(super) autopilot_ours: bool,
+    /// An opponent on this project's driver flies the original's player
+    /// driver while it holds an Autopilot, instead of absorbing it
+    /// ([`Race::set_opponent_autopilot`]). Off by default: a measurement switch.
+    pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     pub(super) course: Option<Course>,
     /// Zone mode's three numbers, off the disc. `None` outside Zone mode, and on

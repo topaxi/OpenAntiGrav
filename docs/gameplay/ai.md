@@ -864,7 +864,8 @@ autopilot can easily overtake AI opponents"). The read is on
   `0.8` s held: it can fire there, and what that does to a craft already flown
   by its driver is unread.
   So nothing changes for an opponent flying this project's driver: the
-  original has no "AI under autopilot" behaviour to switch to.
+  original has no "AI under autopilot" behaviour to switch to. Flying it
+  anyway was measured on 2026-10-19 and not wired (below).
 
 **Built.** `oag_ai::original::Autopilot` is that driver; `Race::autopilot_controls`
 flies it on every title whose original tables read (Pulse, Pure, HD, 2048,
@@ -916,6 +917,122 @@ rescue (`the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
 the shield ends at 95 on eleven of them and 91.1 on `05_Track`, and `02_Track`
 places 3rd at tick 6801: the 95 points `02_Track` lost with weapons on were
 weapon hits, not walls.
+
+### An opponent's Autopilot, measured and not wired (2026-10-19)
+
+The maintainer's rule for an opponent on this project's driver holding an
+Autopilot: fly the original's player driver for the pickup's `time` "if
+autopilot helps them / speeds them up, otherwise no". The lead's brief added
+"no worse safety". Measured: it is faster in every cell run (VENOM on all five titles,
+PHANTOM on Pulse and HD; FLASH and RAPIER not run), and at PHANTOM it is less
+safe, so **nothing is wired**. The switch is
+`Race::set_opponent_autopilot` (off in every race); the result goes to the
+maintainer as a tradeoff, not as a yes.
+
+**Today an opponent draws it and absorbs it.** The `ai` column gives the
+Autopilot 5.8 % of a draw on every Pulse class, 6.3 to 6.8 % on Pure's four
+lower classes and 11.6 % on its Phantom, and 14 % on HD, Omega and 2048. The
+weapon chain in `Race::spend_opponent_pickup` absorbs it on the tick it
+lands; until this change it reached the absorb through the default arm, not
+the named one its doc comment described. Stints a race with the switch on
+(whole races below): Pulse 0.4 Novice, 0.9 Ace; Pure 2.0, 2.4; HD 2.7, 3.6;
+Omega 3.5, 4.2; 2048 3.5, 7.0.
+
+**Method: paired forks.** `opponent_autopilot_sweep` (`crates/raceplay`)
+snapshots a weapons-on single race (player on `--autopilot`) every 600
+ticks from tick 900, eight forks a seed on seeds 1 to 8, cycling the
+opponent slot. Branch A leaves the craft alone (the absorb's energy is not
+paid, so A's shield is given with and without it). Branch B arms the
+authored `time` (5 s on every title here) and flies
+`oag_ai::original::Autopilot`. Both run the stint plus 3 s. Reproduce:
+
+```sh
+OAG_SWEEP=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
+    --run-ignored all opponent_autopilot_sweep --no-capture
+# OAG_SWEEP_CLASS=PHANTOM, OAG_SWEEP_DIFFICULTY=ace, OAG_SWEEP_TRACK=05_,
+# OAG_SWEEP_NO_WEAPONS=1, OAG_SWEEP_TRACE=<seed>,<trigger tick> narrow it.
+```
+
+**Two fixes the first run needed**, both in the switch's path and both
+pinned by `autopilot_original_ground_truth`:
+
+1. **Keep the driver's place.** A cold stint searched the whole racing line
+   for the craft, as the player's pickup does. On Pulse `05_Track` at
+   `[-860, 41, -445]` that chose index 367 over the 2312 the opponent's
+   driver held, and the original flew the craft into the wall (contact 42
+   ticks in, rescued `Beneath` at 89). An opponent's driver is already
+   located, so its stint does not search.
+2. **Leave a jump's run-up to our driver** (`Driver::on_run_up`, the plan's
+   own 450-unit reach). The original's player driver took `05_Track`'s jump
+   at 125 where ours reaches 133 on the ramp, peaked at y 56 against 73, and
+   landed on the deck below. Chosen, not measured. Weapons off, Pulse
+   `05_Track`, 64 forks, rescues in the stint branch: no fix, Novice 4 and
+   Ace 5; the first fix alone, 5 and 2; both, 1 and 0 (the absorb branch 1
+   and 0).
+
+**The paired forks, after both fixes** (64 forks a cell; walls are
+wall-contact ticks; HD's default circuit is Talon's Junction):
+
+{table}
+
+- **Faster everywhere.** Every cell's median is a gain: 0.4 to 4.1 s at
+  Novice, 0.01 to 1.2 s at VENOM Ace, 0.25 to 3.2 s at PHANTOM Ace.
+- **Safer at VENOM.** Rescues are no worse than A in any VENOM cell. Walls
+  fall in total, and rise on five VENOM Ace cells: Pulse 05 (8 -> 98), 06
+  (48 -> 91), 07 (76 -> 122), HD `12_sol_2` (59 -> 73), 2048 (19 -> 21).
+- **Less safe at PHANTOM.** Walls rise on 13 of 16 cells, roughly tripling on
+  Pulse 02 and 07; HD rescues go 0 -> 8 of 256 stints. Pulse's rescues fall
+  10 -> 6. Most rescues land in the 3 s after the stint, 60 to 170 ticks after
+  the handback (`ResetZone`): the craft is handed to our driver faster than
+  its plan carries. All four amphiseum ones start from one engage point.
+- **Shield is a cost by construction.** B forgoes the absorb, about 18 a
+  stint (10 on Pure), an upper bound because the pool caps.
+
+**One handback gate was tried and dropped**: end the stint for good once
+`Driver::affords_boost` refuses the craft's current speed over the next
+120 ticks. It took every cell's median gain to zero (PHANTOM and VENOM, all
+Pulse circuits and HD's four) because the plan almost never carries the
+original's speed two seconds out.
+
+**Whole races are inconclusive.** Switch off and on, same seed, 4 seeds a
+cell (Pure Ace 16), Pulse 12 circuits, HD 4 and the default circuit of Pure,
+Omega and 2048, at Novice and Ace VENOM (`races_pulse`, `races_others`): the
+median lap-time change is under 0.1 s on 33 of 38 cells, and stints are too
+rare to move a race at this sample. Wrecks went 2 -> 6 on Pulse Ace (48
+races) and 1 -> 4 on Pure Ace (16 races); none of Pure's four falls inside a
+stint or its 3 s tail (the nearest 986 ticks after one), so they are
+divergence, not the stint. Shield is each opponent's at the end of each
+lap (field mean) and at the end of the run, both labelled:
+
+| Title, level | Races | Stints a race | Lap change on - off, median | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks, off -> on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2048 Ace | 4 | 7.0 | -0.00 s | 89.8, 80.8, 82.1 | 90.5, 80.0, 80.2 | 82.9 -> 81.8 | 0 -> 0 |
+| 2048 Novice | 4 | 3.5 | -0.05 s | 107.5, 107.3, 101.9 | 106.4, 106.0, 98.6 | 106.9 -> 105.8 | 0 -> 0 |
+| HD Ace | 16 | 3.6 | -0.10 s | 90.6, 82.5, 78.9 | 90.2, 84.3, 82.2 | 78.1 -> 82.1 | 2 -> 0 |
+| HD Novice | 16 | 2.7 | -0.10 s | 89.9, 83.0, 79.9 | 89.7, 82.8, 78.2 | 79.1 -> 78.6 | 1 -> 0 |
+| Omega Ace | 4 | 4.2 | -0.10 s | 91.0, 84.6, 79.8 | 88.3, 77.7, 75.4 | 78.1 -> 73.2 | 1 -> 1 |
+| Omega Novice | 4 | 3.5 | -0.25 s | 94.4, 90.0, 85.8 | 93.3, 89.0, 84.0 | 85.6 -> 83.9 | 0 -> 0 |
+| Pulse Ace | 48 | 0.9 | +0.00 s | 86.1, 78.1, 74.8 | 86.8, 79.4, 75.6 | 74.4 -> 74.4 | 2 -> 6 |
+| Pulse Novice | 48 | 0.4 | +0.00 s | 86.1, 76.9, 68.2 | 85.8, 76.2, 67.2 | 66.5 -> 65.5 | 2 -> 2 |
+| Pure Ace | 16 | 2.4 | +0.00 s | 82.6, 71.4, 67.2 | 81.2, 69.1, 63.4 | 66.4 -> 60.7 | 1 -> 4 |
+| Pure Novice | 4 | 2.0 | -0.20 s | 95.0, 85.5, 84.7 | 90.2, 90.8, 88.2 | 84.7 -> 88.2 | 0 -> 0 |
+
+**2048 and Omega: checked, applies, not wired.** Both were measured on
+their own tables and physics (rows above), with the same direction as HD
+and the same 14 % draw; the decision is open in the handover thread. The original's 2048 and Omega player driver steers with the
+pilot assist's gains, unread, so the opponents' controller flies it there as
+for the player.
+
+**What the original does with one, in an Eliminator** (the only mode it fires
+one): `Autopilot_Fire` (`0x088613bc`) sets bit `0x800` and the timer at
+`craft+0x148` with no player gate, and `Autopilot_Update` (`0x08861404`)
+counts it down; the disengage line and the hum are behind `entity+0x368 == 0`,
+the player. What changes the driving is the blend `craft+0x1d4`, and the
+only direct float store to it in `BOOT.BIN` is `Ship_InitCraft`
+(`0x08849564`); its setter from bit `0x800` is not found. An opponent's
+`craft+0x3c` is already its own `"AI input %d"` record. So for an opponent
+the effect is still unread: a clean negative at those addresses, no rename.
+Confidence 80 that `Autopilot_Fire` has no player gate (decompile only).
 
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 
