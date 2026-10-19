@@ -114,6 +114,12 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // see `refracted` and `mesh::rcs::refraction`. A black placeholder elsewhere.
 @group(2) @binding(15) var behind_glass_tex: texture_2d<f32>;
 
+// The per-craft environment probes, one layer per craft: Wipeout HD's
+// `paraboloidIblTex`, the blend of the circuit's baked `.probes` at the craft. A hull
+// reads it through the coverage map's clamped filtering sampler at the layer
+// `uniforms.env_layer` names, and only there - see `lit_texel`.
+@group(2) @binding(16) var env_probe_tex: texture_2d_array<f32>;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;

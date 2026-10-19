@@ -448,6 +448,12 @@ impl super::super::Scene {
                 continue;
             }
             if let Some(drawable) = self.ships.get(slot) {
+                // The hull's environment light: the circuit's baked probes blended at the
+                // craft, one array layer per grid slot, where the circuit ships any.
+                let env_layer = self.env_probes.as_ref().map(|probes| {
+                    probes.write(queue, slot, race.ship_probe_position(slot));
+                    slot
+                });
                 drawable.write_hull(
                     queue,
                     view_projection,
@@ -455,6 +461,7 @@ impl super::super::Scene {
                     prev_vp * prev.ship(slot, race),
                     self.sun_occlusion_layer(slot),
                     race.ship_hull_scale(slot),
+                    env_layer,
                 );
             }
         }

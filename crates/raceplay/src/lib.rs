@@ -203,6 +203,8 @@ mod destroy_camera;
 mod drawable;
 #[cfg(feature = "view")]
 mod effects;
+#[cfg(feature = "view")]
+pub mod env_probes;
 mod eliminator;
 #[cfg(feature = "view")]
 pub mod engine_light;

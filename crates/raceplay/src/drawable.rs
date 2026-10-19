@@ -592,7 +592,7 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
     ) {
-        self.write_hull(queue, view_projection, model, prev_mvp, None, 0.0);
+        self.write_hull(queue, view_projection, model, prev_mvp, None, 0.0, None);
     }
 
     /// [`Self::write`] for a craft: `sun_occlusion_layer` names which layer
@@ -600,7 +600,9 @@ impl Drawable {
     /// craft under the `original` tier on Wipeout HD - or `None`, which is
     /// what every other drawable writes. See `oag_render::shadow::occlusion`.
     /// `hull_scale` is [`mesh_render::pack_hull_scale`]'s word for Pulse's
-    /// hull lights, `0.0` for the default.
+    /// hull lights, `0.0` for the default. `env_layer` names the layer of the
+    /// environment-probe array this hull is lit from (Wipeout HD, see
+    /// [`crate::env_probes`]), or `None` for the constant ambient.
     #[track_caller]
     pub(super) fn write_hull(
         &self,
@@ -610,6 +612,7 @@ impl Drawable {
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
         hull_scale: f32,
+        env_layer: Option<usize>,
     ) {
         self.write_uniforms(
             queue,
@@ -618,6 +621,7 @@ impl Drawable {
             prev_mvp,
             sun_occlusion_layer,
             [0.0, 0.0, hull_scale],
+            env_layer,
         );
     }
 
@@ -640,6 +644,7 @@ impl Drawable {
             prev_mvp,
             None,
             [clock, 0.0, 0.0],
+            None,
         );
     }
 
@@ -663,6 +668,7 @@ impl Drawable {
             prev_mvp,
             None,
             [clock, colour, 0.0],
+            None,
         );
     }
 
@@ -675,6 +681,7 @@ impl Drawable {
         prev_mvp: Mat4,
         sun_occlusion_layer: Option<usize>,
         [clock, colour, hull_scale]: [f32; 3],
+        env_layer: Option<usize>,
     ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
@@ -683,6 +690,8 @@ impl Drawable {
             model_clock: clock,
             model_colour: colour,
             hull_scale,
+            env_layer: env_layer.map_or(0.0, |layer| layer as f32 + 1.0),
+            env_pad: [0.0; 3],
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
         self.put_uniforms(queue, uniforms);
@@ -1085,6 +1094,9 @@ pub(crate) struct Uniforms {
     model_colour: f32,
     /// See `mesh_render`'s own mirror: Pulse's packed hull light scales.
     hull_scale: f32,
+    /// See `mesh_render`'s own mirror: the environment-probe layer plus one, `0.0` for none.
+    env_layer: f32,
+    env_pad: [f32; 3],
     /// The previous tick's `view_projection * model`, premultiplied - one
     /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog
     /// and lighting need world position, velocity needs only clip position.

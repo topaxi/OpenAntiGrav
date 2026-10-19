@@ -131,6 +131,7 @@ impl Scene {
                     prev_vp * prev.ship(slot, race),
                     self.sun_occlusion_layer(slot),
                     race.ship_hull_scale(slot),
+                    None,
                 );
             }
         }

@@ -37,6 +37,10 @@ pub(super) struct Uniforms {
     /// `0.0` for every draw but a craft's hull, which the shader reads as the
     /// default `255`. Padding until 2026-10-17.
     hull_scale: f32,
+    /// Which layer of the per-craft environment-probe array this hull is lit
+    /// from, plus one; `0.0` for none. See `shaders/types.wesl`.
+    env_layer: f32,
+    env_pad: [f32; 3],
     /// The previous simulation tick's `view_projection * model`,
     /// premultiplied: what the velocity target measures screen motion
     /// against. See `mesh.wesl`'s own mirror for why this is one matrix
@@ -69,6 +73,8 @@ fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
         model_clock: 0.0,
         model_colour: 0.0,
         hull_scale: 0.0,
+        env_layer: 0.0,
+        env_pad: [0.0; 3],
         // The viewer has no previous tick; previous equals current, which is
         // zero velocity. Its pipelines are built `Velocity::None` and never
         // read this, but a zeroed matrix would still be the wrong value to
@@ -153,6 +159,8 @@ pub fn write_uniforms_raw(
         model_clock: 0.0,
         model_colour: 0.0,
         hull_scale: 0.0,
+        env_layer: 0.0,
+        env_pad: [0.0; 3],
         prev_mvp: mvp.to_cols_array_2d(),
     };
     queue.write_buffer(buffer, 0, bytemuck::bytes_of(&uniforms));
@@ -752,6 +760,10 @@ pub struct ShadowMaps<'a> {
     /// [`Scene::refraction`]. Not a shadow map: it is here because it is the
     /// other picture of the frame the scene group carries.
     pub behind_glass: Option<&'a wgpu::TextureView>,
+    /// The per-craft environment-probe array (`ENV_PROBE_SIZE` texels a layer,
+    /// `Rgba8UnormSrgb`), a `D2Array` view, read by a hull whose uniform names
+    /// a layer: Wipeout HD's `paraboloidIblTex`. Not a shadow either.
+    pub env_probes: Option<&'a wgpu::TextureView>,
 }
 
 impl ShadowMaps<'_> {
@@ -762,6 +774,7 @@ impl ShadowMaps<'_> {
         occlusion: None,
         self_shadow: None,
         behind_glass: None,
+        env_probes: None,
     };
 }
 

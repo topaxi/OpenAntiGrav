@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{emissives, scene, sun_delta, sun_known, uniforms};
+import package::bindings::{emissives, env_probe_tex, scene, shadow_sampler, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -13,6 +13,15 @@ import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
 import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
+
+// **Where a normal looks in Wipeout HD's environment probe**: the dual paraboloid the
+// hull's `IBL` programs address, read off the live microcode (confidence 85,
+// `docs/rendering/hd-ship-materials.md`, "Finding 4"). `x > 0` is the right-hand
+// disc, `z` its horizontal and `y` its vertical.
+fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
+    let u = 0.25 + select(-n.z / 4.0, 0.5 + n.z / 4.0, n.x > 0.0);
+    return vec2<f32>(u, 0.5 - 0.5 * n.y);
+}
 
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
 // and a 2x2 fragment quad - helper lanes included - is always shaded for one
@@ -281,9 +290,23 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // add the SPU light inside that same product), and carry no lightmap
         // term and no added vertex light - `skin/light_inputs.rs` has the
         // blocks.
+        // **A hull's ambient is `4 * paraboloidIblTex[n]` where the draw names an
+        // environment-probe layer** (the original's `HalfBrightIBL...` variants,
+        // word `0x847`/`0x047`), the constant ambient everywhere else. The layer
+        // is a uniform, so the fetch keeps its derivatives, and level 0 is the
+        // only level the 64x32 map has. Both arms below take it: the hull programs
+        // that multiply `VertexColour1` in and the ones that do not both read the
+        // IBL variant of their own block.
+        var hull_ambient = ambient_term;
+        if uniforms.env_layer > 0.5 && !no_ambient {
+            let layer = i32(uniforms.env_layer + 0.5) - 1;
+            hull_ambient = 4.0 * textureSampleLevel(
+                env_probe_tex, shadow_sampler, env_probe_uv(n), layer, 0.0,
+            ).rgb;
+        }
         let lit_sum = select(
-            ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light,
-            in.colour.rgb * (ambient_term + sun_diffuse + in.spu_light),
+            hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,
+            in.colour.rgb * (hull_ambient + sun_diffuse + in.spu_light),
             colour_factor,
         );
         authored = select(lit_sum, vec3<f32>(1.0), emissive);

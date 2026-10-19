@@ -39,6 +39,19 @@ pub const OCCLUSION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 /// number `oag_render::shadow::map::MAX_CASTERS` is.
 pub const OCCLUSION_LAYERS: u32 = 8;
 
+/// The environment-probe array's texel format: `Rgba8Unorm`, the stored bytes read raw.
+///
+/// **Not sRGB-decoded, though the original's sampler word carries the gamma nibble
+/// `7`**: this project settled that the RSX multiplies raw 8-bit throughout
+/// (`renderer.md`, "Per-texture sRGB/`GAMMA` decode: settled negative"), and the light
+/// terms here are authored magnitudes in the raw domain (`light.sun`, the constant
+/// ambient). A probe texel is a light, so it enters as one: `4 * texel` against the
+/// constant ambient's `0.4`, which is the pale hull the original shows.
+pub const ENV_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+/// One layer per craft, the same count as the sun-occlusion array.
+pub const ENV_PROBE_LAYERS: u32 = OCCLUSION_LAYERS;
+
 /// The self-shadow maps' texel format: real depth, for the same reason
 /// [`SHADOW_DEPTH_FORMAT`] is - a comparison needs it, and eight bits
 /// over a 140-unit-deep box would be half a unit per step.
@@ -61,7 +74,7 @@ pub const SELF_SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32
 /// (`super::ShadowMaps::behind_glass`), read through the coverage map's
 /// clamped filtering sampler, which is the original's own sampler state for it
 /// (clamp to edge, linear, `0x60030303`/`0x02022000` on Vineta K's capture).
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 7] {
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
     [
         wgpu::BindGroupLayoutEntry {
             binding: 6,
@@ -125,6 +138,16 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 7] {
             },
             count: None,
         },
+        wgpu::BindGroupLayoutEntry {
+            binding: 16,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        },
     ]
 }
 
@@ -141,6 +164,8 @@ pub(super) struct Resources {
     pub self_shadow_view: wgpu::TextureView,
     /// The behind-the-glass target, or a black placeholder.
     pub behind_glass_view: wgpu::TextureView,
+    /// The per-craft environment-probe array, or a one-layer black placeholder.
+    pub env_probe_view: wgpu::TextureView,
 }
 
 /// The view and sampler to bind, given the caller's map or none.
@@ -166,6 +191,7 @@ pub(super) fn resources(
         occlusion,
         self_shadow,
         behind_glass,
+        env_probes,
     } = maps;
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("shadow map"),
@@ -350,6 +376,44 @@ pub(super) fn resources(
             texture.create_view(&wgpu::TextureViewDescriptor::default())
         }
     };
+    // Black, one layer, never sampled: no hull names a layer without an array bound.
+    let env_probe_view = match env_probes {
+        Some(view) => view.clone(),
+        None => {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("environment probe placeholder"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: ENV_PROBE_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                texture.as_image_copy(),
+                &[0u8, 0, 0, 255],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: Some(1),
+                },
+                wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+            );
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            })
+        }
+    };
     Resources {
         view,
         sampler,
@@ -358,5 +422,6 @@ pub(super) fn resources(
         occlusion_view,
         self_shadow_view,
         behind_glass_view,
+        env_probe_view,
     }
 }

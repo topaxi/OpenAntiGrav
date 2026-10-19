@@ -6,6 +6,12 @@
 
 use super::*;
 
+/// How many ticks behind a craft's body the environment-probe blend position sits.
+/// Measured on 52 pauses of a drive round Talon's Junction, where one tick back fits
+/// best for 41 of them (`crates/vex/tests/probes_ground_truth.rs`); the rest fit zero
+/// or two.
+const PROBE_LAG_TICKS: f32 = 1.0;
+
 impl Race {
     /// Where the ship is and how it is oriented, as the mesh shader's model matrix.
     ///
@@ -135,6 +141,22 @@ impl Race {
             .map_or(0.0, |[ambient, directional, ..]| {
                 oag_mesh::mesh_render::pack_hull_scale(ambient, directional)
             })
+    }
+
+    /// Where a craft's environment probes are blended: its body, one tick back.
+    ///
+    /// The original's SPU job takes the previous frame's position (one tick fits best
+    /// on 41 of 52 measured pauses, [`PROBE_LAG_TICKS`]), so the blend
+    /// trails the craft by about a tick's travel.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_probe_position(&self, slot: usize) -> [f32; 3] {
+        let body = &self.sim.world.ships[slot].physics.body;
+        let at = body.position - body.linear_velocity * (PROBE_LAG_TICKS / 60.0);
+        at.to_array()
     }
 
     /// One model matrix per craft in play, the player's first.
