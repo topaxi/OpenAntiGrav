@@ -111,6 +111,7 @@ fn nothing_is_saved_before_a_race_has_started_the_playlist() {
 fn discs() -> MusicDiscs {
     MusicDiscs {
         library: &NoLibrary,
+        listings: Listings::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,

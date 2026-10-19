@@ -22,24 +22,14 @@ the shadow map's GPU share, which another lane owns ([hd-gpu-cost.md](../../docs
 
 Worth a lane now, in order:
 
-1. **The Deck's 28 fps stretch is unexplained by any measurement.** The scene-only bench gives
-   HD 8.5 ms p50 and 11.7 ms p99 at the 1080p budget (`high-resolution-cost.md`). 28 fps is
-   35.7 ms. The thread that carries the 28 fps says the gap is "HUD, bloom and compositor on
-   top" (`steam-deck-gamescope-checks-owed.md`). That is an estimate, not a measurement, and the
-   HUD cannot account for it: its four overlay passes are a few small draws (item 4). The gap
-   is about 20 ms a frame, which points at something the bench does not run: a CPU spike in the
-   race loop, a first-use pipeline or texture upload, or the presentation path.
-   - Where the bench is blind: `scripts/bench-render.py` runs the scene only, and the
-     `high-resolution-cost.md` resolve table is serialised single-tick. Nothing times the HUD
-     (`crates/game/src/hud_overlay.rs:346` `paint`, untimed), and the overlay pass at
-     `crates/game/src/render.rs:908` to `:921` has `timestamp_writes: None`.
-   - **Measure first, before any fix:** on the Deck, `--presented --frame-log` for the HD worst
-     stretch, with the frame log's stage breakdown read per frame, not the p50. The Deck is the
-     maintainer's machine; a Deck run needs the maintainer's go-ahead and the `deck.lock` rule.
-   - What should move: the frames over 33 ms. If they are CPU frames, the stage that stalls
-     names the next item. If they are GPU frames, add a `PassTimer` around the scene and the
-     overlay together.
-   - Risk: none to the simulation. A measurement only.
+1. ~~**The Deck's 28 fps stretch is unexplained by any measurement.**~~ Closed 2026-10-19
+   (`deck-hd-28fps`). It was not a stretch: one 248 to 264 ms frame at race start, a
+   synchronous soundtrack listing read on the first audio tick on `--race` and on a race
+   resumed from the menus, held for two lines by the frame log's 120-frame mean. Fixed in
+   `oag-sound` (`MusicDiscs` keeps listings). Numbers and evidence:
+   [hd-gpu-cost.md](../../docs/rendering/hd-gpu-cost.md), last section. Items 2 and 3 could not
+   be judged from that profile (64 of 1,613 steady samples unwound deeply); the panel is vsync
+   bound at 90 fps with the main thread about 43 % busy, so neither limits it there.
 
 2. **Default-path post passes create a bind group every frame.** The perf probe counts these
    (`crates/gpu/src/perfprobe.rs:153` `bind_group`), so the count is available with no new code.

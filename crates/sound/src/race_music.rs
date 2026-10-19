@@ -25,7 +25,7 @@ pub(super) fn locate(
     source: &str,
     index: usize,
 ) -> Result<Option<Track>> {
-    let Some(soundtrack) = Soundtrack::read(discs.library, source, platform)? else {
+    let Some(soundtrack) = discs.listings.read(discs.library, source, platform)? else {
         return Ok(None);
     };
     if discs.booted() == Some(platform) {
@@ -35,7 +35,10 @@ pub(super) fn locate(
     let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
         return Ok(soundtrack.tracks.get(index).copied());
     };
-    let Some(booted) = Soundtrack::read(discs.library, booted_source, booted_platform)? else {
+    let Some(booted) = discs
+        .listings
+        .read(discs.library, booted_source, booted_platform)?
+    else {
         return Ok(soundtrack.tracks.get(index).copied());
     };
     let Some(wanted) = booted.tracks.get(index) else {
