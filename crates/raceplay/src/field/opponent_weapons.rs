@@ -468,6 +468,13 @@ impl Race {
             if !fires || !self.fire_opponent_leach_beam(slot) {
                 return;
             }
+        } else if weapon == oag_tables::weapons::Weapon::Autopilot {
+            // Absorbed, unless the measurement switch hands the craft to the
+            // original's player driver (`Race::set_opponent_autopilot`).
+            if !self.engage_opponent_autopilot(slot) {
+                self.absorb_opponent_pickup(slot, absorb);
+                return;
+            }
         } else if weapon == oag_tables::weapons::Weapon::Disruptor {
             if !self.fire_opponent_disruptor(slot, field) {
                 return;

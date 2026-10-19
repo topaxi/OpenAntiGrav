@@ -367,6 +367,56 @@ impl Race {
         }
     }
 
+    /// Lets an opponent on this project's driver fly the original's player
+    /// driver while it holds an Autopilot ([`Self::engage_opponent_autopilot`]),
+    /// where it otherwise absorbs the pickup. A measurement switch, off in
+    /// every race: see `docs/gameplay/ai.md`.
+    pub fn set_opponent_autopilot(&mut self, on: bool) {
+        self.sim.opponent_autopilot = on;
+    }
+
+    /// Hands opponent `slot` to the original's player driver for the
+    /// authored Autopilot `time`, as `Autopilot_Fire` arms the player's.
+    /// Returns whether it did: the switch is on, the table authors an
+    /// Autopilot, and the slot is an opponent.
+    pub fn engage_opponent_autopilot(&mut self, slot: usize) -> bool {
+        if !self.sim.opponent_autopilot || self.sim.world.person_flown(slot) {
+            return false;
+        }
+        let Some(time) = self
+            .sim
+            .weapons
+            .as_ref()
+            .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
+            .map(|simple| simple.time)
+        else {
+            return false;
+        };
+        self.sim.world.ships[slot].autopilot_timer = time;
+        true
+    }
+
+    /// The original's autopilot for an opponent holding one under
+    /// [`Self::set_opponent_autopilot`], with its rail write; `None` when it
+    /// holds none (its stint released) or the original cannot fly it.
+    pub(super) fn opponent_autopilot_controls(
+        &mut self,
+        slot: usize,
+    ) -> Option<(
+        oag_physics::ShipControls,
+        Option<oag_ai::original::RailCorrection>,
+    )> {
+        if !self.sim.opponent_autopilot {
+            return None;
+        }
+        if self.sim.world.ships[slot].autopilot_timer <= 0.0 {
+            self.release_autopilot(slot);
+            return None;
+        }
+        let controls = self.original_autopilot_controls(slot)?;
+        Some((controls, self.sim.autopilot_rail[slot].take()))
+    }
+
     /// What this project's driver wants of the player's craft this tick.
     ///
     /// The opponents' path exactly - the same line, the same pilot slot and
@@ -532,7 +582,16 @@ impl Race {
             // for the tick it was wrecked on, nor for the thousands after.
             let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
             let mut rail = None;
-            let mut controls = if was_racing && let Some(lane_slot) = lane_slot {
+            let flown = if was_racing && lane_slot.is_none() {
+                self.opponent_autopilot_controls(slot)
+            } else {
+                None
+            };
+            let ship = &mut self.sim.world.ships[slot];
+            let mut controls = if let Some((controls, flown_rail)) = flown {
+                rail = flown_rail;
+                controls
+            } else if was_racing && let Some(lane_slot) = lane_slot {
                 // The original's own opponent (`crate::original_ai`): this
                 // project's driver only locates the craft on the line, which
                 // still decides its hover surface below and its respawn.

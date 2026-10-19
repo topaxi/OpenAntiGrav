@@ -162,6 +162,8 @@ impl Race {
             if self.sim.world.person_flown(slot) {
                 self.spend_pickup(slot, inputs.get(slot));
                 self.tick_autopilot(slot);
+            } else if self.sim.opponent_autopilot {
+                self.tick_autopilot(slot);
             }
         }
         // The start-of-race voice, on the ticks the original plays it.

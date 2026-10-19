@@ -337,6 +337,20 @@ impl Race {
         self.sim.wall_racing_ticks.get(slot).copied().unwrap_or(0)
     }
 
+    /// How far slot `slot` has raced, laps included; `None` on a track whose
+    /// chain does not close.
+    #[must_use]
+    pub fn race_distance_of(&self, slot: usize) -> Option<f32> {
+        let course = self.sim.course.as_ref()?;
+        Some(self.sim.world.ships.get(slot)?.standing.distance(course))
+    }
+
+    /// The race's weapon table, `None` with weapons off or none read.
+    #[must_use]
+    pub fn weapon_stats(&self) -> Option<&oag_tables::weapons::WeaponStats> {
+        self.sim.weapons.as_ref()
+    }
+
     /// The fixed timestep, from [`TickRate::DEFAULT`].
     #[must_use]
     pub fn dt(&self) -> f32 {
