@@ -908,15 +908,35 @@ row says NONE for `0`, the original's Zone, which is a choice Omega's slider doe
 mirror rule needed nothing of its own: the screen is shared, Pure shows Pulse's strings and 2048
 shows HD's via Omega (`MAN_2_BR`) or its own.
 
-**Walked, 2026-10-19.** Stills (`--menu-page online-room:8`) of the full room (eight seats, the
-five owner rows, START, BACK: fourteen rows, all on the picture) on Pulse and HD (HD draws its own
-"BARREL ROLL"). Localhost two-client races, the real `oag-server lobby` forking the race child,
-`--net-bot` clients, debug builds:
+**Walked, 2026-10-19.** Stills (`--menu-page online-room:8`) of the fullest room (eight seats, the
+five owner rows, START, BACK: fifteen rows, all on the picture) on Pulse, Pure, HD, 2048 and Omega
+(each draws its own face; HD, 2048 and Omega say their own "BARREL ROLL", Pulse and Pure this
+project's "BARREL ROLLS"; Pure's START RACE and BACK sit tight against each other at fifteen rows
+but do not overlap). Localhost two-client races, the real `oag-server lobby` forking the race
+child, `--net-bot` clients, debug builds. Every client log was searched whole for `bad [1-9]`:
+none, in any run below. What each run **exercised**:
 
-| Setting | Title | Result |
+| Run | Setting reached the race | Exercised |
 | --- | --- | --- |
-| Zone target 15 | Pulse PSP EU | both clients and the server ended the race on tick 9271 (15 zones of 600 ticks plus the countdown), `every person has finished`, 0 bad hashes |
-| Rolls off, assists `[extreme, normal]`, zone target 20 | Pulse PSP EU (900 ticks), Pure PSP EU, HD (PS3 EU), 2048 (Vita folder), Omega (PS4 folder) (600 or 400 ticks) | the lobby's `RaceParams` line carried every field; every client's last per-second counter read `bad 0` |
+| Pulse PSP EU, Zone, target 15, 12000-tick cap | zone target | both clients and the server ended the race on tick 9271 (15 zones of 600 ticks plus the countdown), `every person has finished`, 0 bad hashes |
+| Pulse PSP EU, single race, 900 ticks, rolls off, assists `[extreme, normal]` | rolls, assists | the lobby's `RaceParams` carried both; Pulse's `Laws` may hold none for a level (not checked), so this run shows agreement, not the assist acting |
+| HD (PS3 EU) and 2048 (Vita folder), single race, 900 ticks, same settings | rolls, assists | the same, on the titles that author the laws; 0 bad hashes |
+| Pure PSP EU (600 ticks), HD, 2048, Omega (PS4 folder) (400 ticks), Zone, rolls off, assists, zone target 20 | carried (the server's `RaceParams` line) | **the target was never reached** (20 zones is 12000 ticks), and `pilot_assist_input` turns the assist off in Zone, so these four prove the fields travel and the ends agree, nothing more |
+
+The disc-backed `room_settings_ground_truth` test is what proves each reaches the race: it loads Pulse
+with the settings, reads each seat's level, the roll switch and the target back off the `Race`, and
+runs a one-zone Zone race to its end next to one with no target. `ship_dynamics`'s
+`a_room_with_barrel_rolls_off_never_arms_one` proves the roll gate itself (a craft that arms and
+pays with rolls on, and neither with them off).
+
+**Who wins a zone-target race.** No craft has a standing finish in Zone (`Standing::update` ends on laps
+only), so the board ranks by `oag_race::places`'s racers rule: distance covered at the end, ties by
+slot. Every person reaches the target zone on the same tick; the first place is whoever got
+furthest round, not the owner.
+
+**Replays and ghosts.** An online race records neither: a ghost is a one-person Time Trial
+(`race_stage/ghost.rs`), and no replay recording was found on the online path (searched, not
+proven absent). A replay of a networked race would need the room's settings in its header.
 
 **Open.** The room screen's new rows are walked as stills, not clicked live on every title (the
 pointer is covered by the row tests); Omega's remaining sub-pages (kick, friends, invite-only) and

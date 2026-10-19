@@ -515,6 +515,42 @@ fn the_owners_rows_answer_the_pad_and_the_pointer_alike() {
     );
 }
 
+/// A click on each settings row, on the rows as this screen draws them, answers that setting.
+#[test]
+fn a_click_on_a_settings_row_steps_that_setting() {
+    let skin = skin();
+    let mut join = screen(2);
+    join.set_owner(Some(6));
+    join.set_settings(vec![
+        (Setting::Laps, "3".into()),
+        (Setting::BarrelRolls, "ON".into()),
+        (Setting::PilotAssist, "ON".into()),
+        (Setting::ZoneTarget, "30".into()),
+    ]);
+    let layout = join.layout(&skin);
+    for setting in [
+        Setting::Laps,
+        Setting::BarrelRolls,
+        Setting::PilotAssist,
+        Setting::ZoneTarget,
+    ] {
+        let index = join
+            .rows()
+            .iter()
+            .position(|row| *row == Row::Setting(setting))
+            .expect("the row is there");
+        let at = (
+            layout.width / 2.0,
+            layout.top + (index as f32 + 0.5) * layout.line,
+        );
+        assert_eq!(
+            join.pointer(&click(at), &skin),
+            [Event::Moved, Event::Setting(setting, 1)],
+            "{setting:?}"
+        );
+    }
+}
+
 #[test]
 fn a_rooms_size_is_how_many_seats_the_grid_has() {
     let mut join = screen(2);
