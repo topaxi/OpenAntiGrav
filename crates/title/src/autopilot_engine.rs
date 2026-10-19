@@ -33,9 +33,8 @@ mod tests {
 
     #[test]
     fn the_measured_law_is_one_point_two_and_uncapped() {
-        assert_eq!(MEASURED.speedup.value, 1.2);
-        assert!(MEASURED.uncapped.value);
+        assert_eq!(MEASURED.speedup, Sourced::measured(1.2));
+        assert_eq!(MEASURED.uncapped, Sourced::measured(true));
         assert_eq!(MEASURED.speedup.origin, Origin::Measured);
-        assert_eq!(MEASURED.uncapped.origin, Origin::Measured);
     }
 }
