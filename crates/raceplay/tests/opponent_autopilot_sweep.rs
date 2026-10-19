@@ -188,7 +188,7 @@ fn sweep(
                 }
                 *was = now;
             }
-            if tick < 900 || tick % 600 != 0 {
+            if tick < 900 || !tick.is_multiple_of(600) {
                 continue;
             }
             let slot = next_slot;
@@ -437,11 +437,11 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
             break;
         }
     }
-    for slot in 1..count {
+    for (slot, finished) in finish.iter().enumerate().take(count).skip(1) {
         out.wall += race.wall_contact_ticks_of(slot);
         out.respawns += race.respawns_of(slot);
         let ship = &race.sim.world.ships[slot];
-        if ship.physics.craft_state != oag_physics::CraftState::Racing && finish[slot].is_none() {
+        if ship.physics.craft_state != oag_physics::CraftState::Racing && finished.is_none() {
             out.wrecked += 1;
         }
         out.shield_end += ship.physics.shield / (count - 1) as f32;

@@ -200,6 +200,9 @@ fn vita_2048_flies_the_original_autopilot() {
     flies_the_original_autopilot("data/test-vpk/2048-PCSF00007-dlc1.vpk");
 }
 
+/// Distance covered and rescues taken over one fork's window.
+type Leg = (f32, u32);
+
 /// An opponent on this project's driver handed an Autopilot, against the
 /// same tick with the absorb: Pulse PSP USA, VENOM, one fork at `trigger` on
 /// `slot`, weapons off unless `weapons`. Returns (distance, rescues) for the
@@ -211,7 +214,7 @@ fn opponent_fork(
     seed: u64,
     trigger: u64,
     slot: usize,
-) -> Option<((f32, u32), (f32, u32), bool)> {
+) -> Option<(Leg, Leg, bool)> {
     let image = oag_testdata::image("pulse-psp-usa.chd")?;
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
