@@ -146,6 +146,42 @@ fn every_circuit_binds_pictures(
     (tracks.len(), faulty)
 }
 
+/// Altima's road binds its `DiffuseMap`, not the first sampler listed.
+///
+/// `road_alphaspec_normal_emissive_panelmap1` names a 1-channel `R16F` panel
+/// map ahead of its `DiffuseMap`; binding the first left the road with no
+/// picture (flat pink under Omega's sun, 2026-10-19). Drop the named-sampler
+/// choice in `Material::diffuse_texture` and 241 road draws are unresolved
+/// again: 690 against the 449 below, which are the other causes (`fc01` flat
+/// materials and the like, not taken apart). The count may shrink, never grow.
+const ALTIMA_UNRESOLVED: usize = 449;
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_altimas_road_binds_its_diffuse_map() {
+    let Some(root) = root() else { return };
+    let mut archives: Vec<_> = ARCHIVES
+        .iter()
+        .filter_map(|a| oag_assets::psarc::Archive::open_file(&root.join(a)).ok())
+        .collect();
+    let path = "Data/environments2048/altima/track.final.rcsmodel";
+    let blob = archives
+        .iter_mut()
+        .find_map(|a| a.read_path(path).ok())
+        .expect("altima's model is in a base archive");
+    let (_, report) = psp2::build("altima", &blob, None, &mut |p| {
+        archives.iter_mut().find_map(|a| a.read_path(p).ok())
+    })
+    .expect("builds");
+    println!("altima: {}", report.describe());
+    assert!(
+        report.unresolved_draws <= ALTIMA_UNRESOLVED,
+        "{} unresolved draws: {}",
+        report.unresolved_draws,
+        report.describe()
+    );
+}
+
 /// Drawn colour slots of each Omega circuit that are not pictures, and 2048's:
 /// **a ratchet over a known gap, not a claim of zero.**
 ///
@@ -241,6 +277,9 @@ omega_circuit_test!(
     "tech_de_ra",
     22
 );
+omega_circuit_test!(omega_altima_binds_no_more_lookups_than_known, "altima", 0);
+omega_circuit_test!(omega_mall_binds_no_more_lookups_than_known, "mall", 0);
+omega_circuit_test!(omega_tower_binds_no_more_lookups_than_known, "tower", 0);
 omega_circuit_test!(omega_arena_binds_no_more_lookups_than_known, "arena", 1);
 omega_circuit_test!(omega_park_binds_no_more_lookups_than_known, "park", 1);
 omega_circuit_test!(omega_square_binds_no_more_lookups_than_known, "square", 1);

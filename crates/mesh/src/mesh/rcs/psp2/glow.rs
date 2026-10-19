@@ -80,7 +80,6 @@ const OFFSET: &str = "Emissive_UV_Offset";
 const SCALE: &str = "Emissive_UV_Scale";
 const TINT: &str = "GlowTint";
 const EMISSIVE_SAMPLERS: [&str; 2] = ["EmissiveTexture", "EmissiveMap"];
-const DIFFUSE_SAMPLERS: [&str; 3] = ["DiffuseTexture", "DiffuseAlphaMap", "DiffuseMap"];
 
 fn scalar(material: &Material, name: &str) -> Option<f32> {
     material.param(name_hash(name))?.first().copied()
@@ -158,7 +157,10 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
     let offset = scalar(material, OFFSET)?;
     let scale = scalar(material, SCALE)?;
     let emissive = sampler(material, &EMISSIVE_SAMPLERS)?;
-    let diffuse = sampler(material, &DIFFUSE_SAMPLERS)?;
+    let diffuse = sampler(
+        material,
+        &oag_rcs::rcsmodel::psp2::material::DIFFUSE_SAMPLER_NAMES,
+    )?;
     let tint = material
         .param(name_hash(TINT))
         .filter(|v| v.len() >= 3)

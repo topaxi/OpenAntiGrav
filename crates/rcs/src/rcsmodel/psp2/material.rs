@@ -340,21 +340,39 @@ impl Material {
         })
     }
 
-    /// The first texture found that is not the lightmap - this reading's
-    /// answer for "the" diffuse texture. Ordinal, not semantic; see the module
-    /// doc.
+    /// The picture this material draws: the sampler it names as its diffuse
+    /// ([`DIFFUSE_SAMPLER_NAMES`], matched by the name's hash) where it has one,
+    /// otherwise the first texture found that is not the lightmap - ordinal,
+    /// not semantic; see the module doc.
+    ///
+    /// **The name wins because the order can put something else first.**
+    /// `road_alphaspec_normal_emissive_panelmap1` (79 samplers over Omega's
+    /// circuits, Altima's whole road among them) lists `panel_df` ahead of its
+    /// `DiffuseMap`: a 1-channel `R16F` map that decodes to nothing, so the
+    /// road drew with no picture at all and read as a flat colour. The two
+    /// samplers' own names are read off the hashes (`crate::rcsmaterial::name_hash`
+    /// of `DiffuseMap` is `0x38c2e35a`); that `DiffuseMap` is *the picture* is
+    /// read off the texels, not off a program.
     ///
     /// A material that names only a lightmap has no diffuse one. None of
     /// `tech_de_ra`'s 461 does, so on every circuit measured this is the first
     /// texture, as it always was.
     #[must_use]
     pub fn diffuse_texture(&self) -> Option<&str> {
-        self.textures
+        let not_lightmap = |path: &&str| Some(*path) != self.lightmap.as_deref();
+        DIFFUSE_SAMPLER_NAMES
             .iter()
-            .map(String::as_str)
-            .find(|path| Some(*path) != self.lightmap.as_deref())
+            .find_map(|name| self.sampler(crate::rcsmaterial::name_hash(name)))
+            .filter(not_lightmap)
+            .or_else(|| self.textures.iter().map(String::as_str).find(not_lightmap))
     }
 }
+
+/// The sampler names a PS4 or Vita material gives its colour picture, in the
+/// order tried. Read off the hashes (`DiffuseMap` is `0x38c2e35a`, on 7,419
+/// sampler entries of Omega's circuit models; `DiffuseTexture` and
+/// `DiffuseAlphaMap` are the ones a glow layer already names).
+pub const DIFFUSE_SAMPLER_NAMES: [&str; 3] = ["DiffuseTexture", "DiffuseAlphaMap", "DiffuseMap"];
 
 /// The sampler entries (`kind == 0x12`) of the material header at
 /// `header_at`: name hash and the `.gxt` path at `+0x10`.
