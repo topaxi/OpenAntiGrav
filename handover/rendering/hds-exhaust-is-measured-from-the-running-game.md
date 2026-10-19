@@ -69,6 +69,15 @@ section) is the current, authoritative state.
   still no setter. Full account: `engine-trail.md`, the 2026-09-15 entry
   under "What arms the boost timer".
 
+- **2026-10-19 (`hd-exhaust-trail-boost`): the spike flicker is a per-shape
+  shader factor, not a scale** (engine-trail.md, `EngineFlare_PlaceShapes`
+  bullet, confidence 40). Wiring needs the flare split per shape and a
+  per-draw factor in the flame material, and what the factor multiplies is
+  unread. The sprite flare's spin is never loaded by the draw, so there is
+  none to wire; its dispersion and occluder query stay read-not-drawn. The
+  boost timer's arm is Zone-only (race mode 10) and still needs a live trace.
+  Neither is a quick wiring step.
+
 ## Next Steps
 
 - Confirm live whether `craft+0xfc`'s rate-selector byte is set by driving

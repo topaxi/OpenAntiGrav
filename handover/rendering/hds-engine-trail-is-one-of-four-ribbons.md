@@ -117,23 +117,12 @@
   `mod hd` - mirroring the PSP/PS2 one - is the natural place to enforce the
   bucketing the same way those two discs already are, rather than leaving it
   as prose here indefinitely.
-- **`WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are a correctness question, not
-  just an unread trigger.** `RACE_EFFECTS`' `WO_SHIP_ENGINEFLARE` is wired
-  for a PS2-sourced race and its reasoning is source-specific: the PS2 disc
-  authors that one name and the PSP doesn't, so a PSP-sourced race falls back
-  to `oag_fx::exhaust`'s procedural flare (see `ENGINE_FLARE_EFFECT`'s
-  own doc comment in `crates/title/src/engine_effects.rs`). HD authors
-  three engine-flare names, not one: `WO_SHIP_ENGINEFLARE` plus these two
-  unwired ones, and none of the three shows up in HD's own string table
-  (checked 2026-09-08, `strings -a` + `search_strings`, all zero) - which
-  the environment-family finding above already establishes doesn't mean much
-  on its own for a continuous effect. Open question this project hasn't
-  answered: is HD's real engine flare actually `WO_SHIP_ENGINEFLARE` (as
-  currently assumed by extension from the PS2 case), or does HD's own
-  executable reach one of `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` instead - in
-  which case an HD-sourced race is currently playing the wrong asset. Needs a
-  Ghidra read of whatever spawns the flare on HD specifically, not an
-  inference from the PS2 disc's own trigger.
+- **Closed 2026-10-19: `WO_ENGINE_FLARE`/`WO_ENGINE_JETFLARE` are dead
+  assets.** Nothing in HD's executable references either file. The engine
+  flare HD draws is the authored `engineflare.vex` model plus the
+  `Engine_Flare_Rich.gtf` sprite, both measured on
+  [engine-trail.md](../../docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md).
+  An HD-sourced race plays the right assets.
 - **Whether HD's environment four (`WO_BLUE_WELDER`, `WO_MODESTO_STEAM_A`,
   `WO_DustMotes`, `WO_UNDERWATER_GODRAYS`) are live content or dead authored
   assets is unasked and unanswered.** 2026-09-08: put to the user directly -
