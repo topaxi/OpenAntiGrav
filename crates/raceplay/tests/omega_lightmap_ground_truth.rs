@@ -69,8 +69,8 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
         .expect("Omega authors an intensity");
     let colour = env.vec3(PSP2_SUN_DIFFUSE_COLOUR).expect("and a colour");
     assert!(intensity > 1.5, "a factor that is not the identity");
-    for i in 0..3 {
-        assert_eq!(light.sun[i], colour[i] * intensity, "channel {i}");
+    for (i, c) in colour.iter().enumerate() {
+        assert_eq!(light.sun[i], c * intensity, "channel {i}");
     }
     assert_eq!(light.nova, 1.0, "the Omega rig is flagged");
     assert_eq!(light.prelit_scale, [2.5; 3]);
