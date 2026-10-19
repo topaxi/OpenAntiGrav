@@ -304,6 +304,21 @@ this capture's own. The next step it points at -
 the same pose-walk generalisation one step further, confirming or refuting
 the wall reading against the actual collision geometry - is unmeasured.
 
+**Measured 2026-10-19: it is a wall, and our hull does not find it.** Two
+corrections to the paragraphs above. First, the event is not near-elastic. The
+`108.6 -> 108.8` is the `speed` column, `body+0x398`, which `Body_Integrate`
+writes before the contact pass. The recorded velocity itself falls from `108.61`
+to `99.16` on the tick, a `39.29` units/s change along a direction `1.86`
+degrees from the normal of a `16_Track` wall triangle that passes `3.37` units
+from the craft. The recorded rotation rate jumps by `0.770` rad/s on the same tick, as a corner contact's would. Second,
+`wall::resolve` does not see it: stepped from tick 1583, our ten-point hull
+crosses no triangle at all, even with the box enlarged to `1.33x`. So this is
+a contact-*generation* miss, and the response law is not involved. Evidence and
+the next step (a `Collision_AddContact` breakpoint on that tick) are in
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#one-wall-hit-our-hull-does-not-find-clean-lap-tick-1584).
+The same pass confirms the angular half of the wall response against the
+original's own rotation on three captures (`0.990`-`1.035`; same page).
+
 ### The cross-product signs: a contradiction here, resolved
 
 This page originally recorded that term as `-400 * cross(up, avgNormal)` *and*, in
