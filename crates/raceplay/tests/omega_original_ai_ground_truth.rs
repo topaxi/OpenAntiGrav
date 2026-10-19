@@ -259,10 +259,11 @@ circuit!(
     r"Data\Environments\05_Ubermall\track.vex",
     "Phantom"
 );
-// **One respawn, caused by a weapon** (2026-10-19, once the field fires):
-// slot 3 takes a hit at tick 5439 (shield 100 to 85), slows from 313 to 220
-// over the next 30 ticks, meets the wall at tick 5472 and comes off. Every
-// other circuit stays at none.
+// **One respawn a craft, each after a weapon hit** (2026-10-19, once the
+// field fires). Slot 5 is hit at tick 5568 (shield 76 to 61 at speed 232,
+// touching no wall), meets the wall at tick 5608 at speed 24 and comes off.
+// Slot 7 is hit at tick 11205 (26 to 12 at speed 331) and comes off by tick
+// 11242. Every other circuit stays at none.
 circuit!(
     the_field_finishes_amphiseum_reversed,
     r"Data\Environments\amphiseum\track_reversed.vex",
