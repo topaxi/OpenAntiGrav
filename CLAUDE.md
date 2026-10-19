@@ -436,9 +436,16 @@ Consequences that affect how you name and touch things in Ghidra / decompiled co
 **Wipeout 2048 (Vita) and the Omega Collection (PS4) share an asset lineage**:
 Omega reads through 2048's `.rcsmodel` readers (8-byte pointers aside), keeps its
 ships in 2048's directory scheme, splits its plugin definitions three ways like
-2048, and re-ships 2048's own circuits byte-for-byte at the same layouts (see
-[`docs/formats/omega-status.md`](docs/formats/omega-status.md)). Omega's front end
-is HD's instead, so a front-end finding is checked against HD.
+2048, and re-ships 2048's own circuits at the same layouts (see
+[`docs/formats/omega-status.md`](docs/formats/omega-status.md)). Re-shipped is
+not identical: XML tables (handling, teams, end race) are byte-identical, but
+models are re-cooked (hulls keep 2048's triangle and material counts with
+re-welded vertices, altima's collision re-encodes its node array around
+identical leaf data), textures are `.gnf` against `.gxt` at resolutions never
+compared, and shaders are recompiled for the PS4. HD's circuits ship in 2048's
+container with HD's own geometry. So a law read off one title's shader or model
+is checked against the other's own file, never assumed. Omega's front end is
+HD's instead, so a front-end finding is checked against HD.
 
 So **anything recovered or wired for one of the two - a format field, a law, a
 material rule, a table, an asset path - gets a quick check against the other in the
