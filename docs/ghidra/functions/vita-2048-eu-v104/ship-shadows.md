@@ -92,16 +92,18 @@ quoted so the next reader can check them.
 
 ## What receives, and what the receiver does with it
 
-- **Receivers are the track's own materials.** 2,075 fragment programs across
-  `data.psarc`, `data1.psarc` and `data2.psarc` bind `shadowMap` (a
+- **Receivers are the track's own materials.** 2,075 fragment-program
+  occurrences across `data.psarc`, `data1.psarc` and `data2.psarc` (base and
+  patch copies counted separately; `gxp.md`'s 1,799 is the deduplicated count)
+  bind `shadowMap` (a
   single-channel sampler at texture unit 3, beside `lightmap` at unit 1 and
   `occlusionMap` at unit 2); `scripts/vita-gxp.py grep` lists them. The global
   slots `0x66` and `0x69` above are what those samplers resolve to.
-- **The receiver is a depth compare, not a plain coverage lookup** (confidence
-  70). Vita3K's `.dsm` log of `fc06_lambert_simple.rcsmaterial` fragment program
-  #14 (the variant that binds `shadowMap`; its file name is the SHA-256 of the
-  whole GXP container, which matched all 5 of 5 programs tried) reads, next to
-  the same material's unshadowed #16:
+- **The receiver reads as a depth compare, not a plain coverage lookup**
+  (confidence 70). Vita3K's `.dsm` log of `fc06_lambert_simple.rcsmaterial`
+  fragment program #14 (the variant that binds `shadowMap`; a log's file name is
+  the SHA-256 of the whole GXP container, which matched 5 of 5 programs tried)
+  reads, next to the same material's unshadowed #16:
 
   ```text
   VPCKF16F32 pa0.x pa10.x                       ; fragment depth in the light, to f16
@@ -110,31 +112,53 @@ quoted so the next reader can check them.
   VF16MUL    pa0.xyz pa2.www pa0.xxx            ; scales the lit term by the chosen value
   ```
 
-  So the map holds depth and the program compares once per pixel and selects
-  between two values. **This corrects `gxp.md`'s "not a depth map the renderer
-  projects and compares"** (2026-08-30, read from the container only). It also
-  differs from HD, whose receiver block has no compare because the RSX compares
-  inside the depth-texture sample.
-- **How dark is not read.** The shadowed value (`sa10.x`) is a constant or a
-  uniform word past the declared uniforms; the program's one literal record is
-  `(2, 1.0, 0.0)` as a pair of `f16`, which would make the lit branch and the
-  shadowed branch both 1.0 if it were `sa10`, so the mapping of `sa10` to a
-  record is not settled. **No strength is claimed for 2048 or Omega.**
+  The same subtract-then-select appears in a material with a different literal
+  table, `diffuse_normal_specular` #14 (`VMOVC ... (pa0.xy < 0) ? pa14.xx :
+  sa14.xx`), so the shape is not one compiler accident. It differs from HD,
+  whose receiver block has no compare because the RSX compares inside the
+  depth-texture sample.
+- **What the two values are (confidence 65).** The select's constant register
+  moves with the program's literal layout: `sa10` in `fc06_lambert_simple` #14
+  (declared uniforms end with `fogColour` at words 6-9) and `sa14` in
+  `diffuse_normal_specular` #14 (`fogColour` at words 10-13), in each case the
+  first word past the declared uniforms, where the first literal record lives
+  (index 2, `f16` pair `(1.0, 0.0)`). In `diffuse_normal_specular` the same
+  `sa14.x` is also what `VF16ADD sa6.xyz -sa6.www sa14.xxx` subtracts from
+  `shadowLightSpecularDiffuse.w` (a `1 - w`), which reads as a 1.0. So **one
+  branch of the select is the literal 1.0 (no darkening)** and **the other is an
+  interpolant, `pa6.x` / `pa14.x`, written by the vertex program**: the
+  shadowed strength comes per vertex, not from a constant in the fragment
+  program. **Which branch is the lit one is not read** (the depth orientation
+  is unknown), and the vertex program that fills the interpolant is unread, so
+  **no strength is claimed for 2048 or Omega.**
 
 ## What the original draws, on Vita3K
 
-- **Both flags toggled live** (`W 0x815cb9cc` through a guest-memory daemon,
-  `scripts/vita3k-mem.py`) on the Metro Park grid and while driving. A frozen
-  photo-mode scene (tunnel) gave 0 differing pixels between `11`, `00`, `10` and
-  `01`: nothing visible changed there. On the sunlit grid and in a drive the
-  camera moves between captures (photo mode orbits, the grid sways), so a pixel
-  difference cannot separate a shadow from the motion; the four grid stills
-  (`11`, `10`, `01`, `00`) show no craft shadow on the road behind the craft in any
-  state. **No craft-shaped shadow was isolated, so the mechanism is not
-  confirmed by a still** and the `Built` flip is not made.
-- **Vita3K itself is the open question** (a depth-sampled projected map may not
-  be rendered by the emulator): an A/B on a static camera in the open is the
-  next measurement, with the receiver's `sa10` read first.
+- **`Ship shadow direction` is live where the executable says** (confidence 90):
+  a guest read of `0x815d13b0..0x815d13bb` on the Metro Park grid returned
+  `(-0.545, 0.5299, 0.6496)`, `park`'s authored `Lighting.Ship shadow direction`
+  to the digit. Nothing rewrites it within seconds of a write.
+- **Both flags and the vector were driven live** (`W 0x815cb9cc`, `W 0x815d13b0`
+  through `scripts/vita3k-mem.py`, a guest-memory daemon that owns Vita3K) on
+  the sunlit Metro Park grid: the authored vector, `(1, 0.25, 0)`, `(-1, 0.25, 0)`
+  and `(0.01, 1, 0.01)`, each with the gate on and off, six stills read by eye.
+  **No streak appears, moves or disappears in any of them**: the road behind the
+  craft is the same frame in every state (a dark ellipse right of centre is in
+  all of them, and in the flag-off ones: baked). So Vita3K draws no craft
+  shadow from this pass on the grid. **That is a blocker of its own and not
+  "unmeasured"**: either Vita3K does not render the depth-compared projected
+  map (the receiver's compare needs the map bound and the depth texture
+  sampled as depth), or the pass does not reach this material in this view.
+  Nothing here separates the two, and neither is a statement about a real Vita.
+- **Earlier pixel comparisons are void.** A paused photo-mode scene gave an exact
+  0-pixel difference across all four flag states, which means that frame was not
+  being redrawn (the pause menu freezes the scene), so it says nothing about the
+  flags. In a live drive and on the grid the camera moves between captures, which
+  swamps a pixel difference. The vector experiment above is the test that
+  does not depend on either.
+- **Strength cannot be measured from stills for the same reason**: with no
+  craft shadow in any frame there is no in-shadow against out-of-shadow
+  luminance to take.
 
 ## Omega
 
@@ -156,10 +180,11 @@ Checked, differs (confidence 75), from `/omega/eboot-ps4-omega-eu.bin`:
 
 ## Open
 
-- The receiver's shadowed value (`sa10`): read the `fc06_lambert_simple` GXP's
-  uniform image against the `.dsm`, or capture the same program's constant.
-- A static-camera A/B on Vita3K in the sun, to see whether the craft's shadow
-  is drawn at all and how dark.
+- The vertex program that fills the shadowed branch's interpolant (`pa6.x` in
+  `fc06_lambert_simple` #14), and which branch of the select is the lit one.
+- Whether Vita3K can render this pass at all: read its handling of a
+  depth-format render target sampled as a texture, or capture the original on
+  a real Vita (none available). Until then no still can confirm the mechanism.
 - `FUN_8101bc7a` (the per-frame scene setup) holds the dispatch for both passes
   and is unnamed.
 - Omega's cast axis, from `FUN_015c63a0` or the `CastShipShadows` use at

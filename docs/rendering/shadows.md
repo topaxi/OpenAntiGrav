@@ -747,17 +747,22 @@ default there; the rest of this section is what was learned and what blocks it.
   `occlusionMap`, with one matrix for both (confidence 65): a different projection
   from this project's per-craft atlas, so `Fit::craft` along the ship-shadow vector
   would be this project's own and must not be called `original`.
-- **The receiver is a depth compare** (confidence 70, from a Vita3K `.dsm`),
-  not a coverage lookup, which corrects the "not a depth map" reading above and in
-  [gxp.md](../formats/gxp.md). **How dark is not read**: the shadowed value is a
-  word the program does not declare, and no strength is claimed.
+- **The receiver reads as a depth compare** (confidence 70, from two Vita3K
+  `.dsm` logs), not a coverage lookup, which revises the "not a depth map" reading
+  above and in [gxp.md](../formats/gxp.md). One branch of its select is the literal
+  1.0 and the other is a per-vertex interpolant, so **how dark is not read** and no
+  strength is claimed.
 - **The second pass is the other direction**: track pieces beside the craft are
   drawn from the sun into a map of the craft's own (confidence 62), so they shade
   the craft, not the road. Not traced further.
-- **Vita3K shows no craft shadow in either state of either flag** on the grid or
-  in a drive, and a frozen photo-mode frame is identical with both off. The camera
-  moves in every live capture, so this is an inconclusive A/B and not a negative;
-  a static-camera A/B in the sun is the measurement that would settle it.
+- **Vita3K shows no craft shadow from this pass.** With `Ship shadow direction`
+  confirmed live (the guest holds park's authored vector), writing four vectors
+  (the authored one, a long sideways `(1, 0.25, 0)` and its mirror, and straight
+  down) with the gate on and off changed nothing in six stills on the sunlit
+  grid. That is a blocker of its own: either Vita3K does not render the depth-compared
+  map or the pass does not reach the road in that view, and nothing yet separates
+  them. No still confirms the mechanism, so there is no `Built`, and no strength
+  was measured.
 - **Omega: checked, differs** (confidence 75). It has none of 2048's two debug
   keys or `Ship shadow direction`; it has `shadowCoeffs`, `CastShipShadows`,
   `CastNoShipShadows` and `Ship diffuse brightness (shadow)`, which 2048 lacks.
