@@ -57,10 +57,11 @@
 //!   view's pixels. The views now only fill the linear target, and the chain then
 //!   runs over each view's own rectangle of it, with an adaptation per seat: a view in
 //!   a dark tunnel and one in daylight each have their own exposure, and HD's glow
-//!   stops at the view's edge. **Chosen, not measured.** The boost zoom streak (HD's own ring) is not drawn under a
-//!   split and Omega's distortion offsets are not drawn: the first holds the
-//!   primary craft's pulse; the second reads the depth attachment, which since the blur
-//!   (a later view loads it) holds every view's and could be wired. Both open.
+//!   stops at the view's edge. **Chosen, not measured.** The borrowed boost zoom streak (Pulse and Pure) draws in each view from that
+//!   seat's own pulse; HD's own ring, inside its chain, and Omega's distortion offsets are
+//!   not drawn under a split: the chain runs after the last view, and the offsets are
+//!   read from the depth attachment, which since the blur (a later view loads it) holds
+//!   every view's and could be wired. Both open.
 
 use super::*;
 

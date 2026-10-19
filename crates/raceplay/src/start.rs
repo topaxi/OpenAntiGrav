@@ -697,8 +697,7 @@ impl Race {
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,
                 seat: None,
-                shake: oag_render::camera::shake::Shake::new(),
-                shake_rng: Rng::new(SHAKE_SEED),
+                contact: super::contact_fx::ContactFx::new(),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())
                     .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
@@ -744,7 +743,6 @@ impl Race {
                 spark_anchors,
                 slot_teams,
                 collision_fx,
-                sparks: psys::System::new(),
                 effects,
                 handles,
                 sounds,
@@ -807,14 +805,6 @@ impl Race {
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),
                 stage_rng: Rng::new(STAGE_SEED),
-                sparks_ignitions: 0,
-                sparks_rng: Rng::new(SPARKS_SEED),
-                // No sync frame to be mid-scrape on, so the first tick's contact -
-                // if any - is always read as a fresh impact.
-                sparks_cooldown: 0.0,
-                sparks_anchor: None,
-                sparks_anchor_up: None,
-                sparks_attached: false,
                 results: None,
                 run_stats: results::RunStats::default(),
                 shield_was_up: false,
@@ -836,7 +826,7 @@ impl Race {
                 texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
                 boost_kick: 0.0,
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
-                flaps: [0.0, 0.0],
+                flaps: [[0.0; 2]; MAX_SHIPS],
                 flap_graphics: setup.airbrake_graphics,
             },
             #[cfg(feature = "view")]

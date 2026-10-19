@@ -18,12 +18,13 @@
 //! - Every extra view flies the **player's own `<ExternalCameraFar>` rig**
 //!   (`RaceView::chase_far`), whatever team the craft it follows belongs to: the
 //!   load keeps one team's camera blocks, and a rig per slot is open work.
-//! - An extra view has **no impact shake**, no intro flyby, no finish or destroy
+//! - An extra view shakes on its own seat's wall hits and weapon hits and the blast of its
+//!   own craft (`ContactFx`), and has no intro flyby, no finish or destroy
 //!   camera and no cockpit view. Those belong to the player's own camera, and the
 //!   flyby plays full screen before the split starts ([`Race::views_drawn`]); in a
 //!   multi-window race every window plays it ([`Race::window_drawn`]).
-//! - The speed widen of the field of view follows the viewed craft; the boost
-//!   kick does not (it is armed from slot 0's pad alone).
+//! - The speed widen of the field of view and the boost kick follow the viewed craft: the
+//!   kick is the player's rule, armed from that craft's own pad timer.
 
 use std::cell::Cell;
 
@@ -32,6 +33,7 @@ use oag_gameplay::MAX_SHIPS;
 use oag_render::camera::chase::Chase;
 
 use super::camera::target_of;
+use super::contact_fx::ContactFx;
 use super::*;
 
 /// One extra view's camera: the spring, and the view of the last two ticks so a
@@ -44,6 +46,10 @@ struct Cam {
     /// The craft's respawn count when the spring was last settled, so a
     /// teleport re-snaps the camera instead of sweeping it across the circuit.
     respawns: u32,
+    /// The boost's field-of-view kick on this seat's lens, `0..=1`: the player's
+    /// ([`RaceView::boost_kick`](super::view::RaceView::boost_kick)) rule, from this seat's
+    /// own craft's pad timer.
+    boost_kick: f32,
 }
 
 /// The extra views of a split-screen race.
@@ -65,6 +71,12 @@ pub(super) struct Viewpoints {
     /// Indexed by slot. Slot 0 stays `None`: the player's camera is
     /// `RaceView::camera`.
     cams: [Option<Cam>; MAX_SHIPS],
+    /// The wall-contact effects of each extra person's seat, indexed by slot like
+    /// [`Self::cams`]: the sparks at its craft and the shake on its camera.
+    pub(super) contact: [Option<Box<ContactFx>>; MAX_SHIPS],
+    /// The boost zoom-streak pulse of each extra person's view, a fresh one of the player's
+    /// tuning, fired by that seat's own speed pad and Turbo ([`Race::fire_zoom_boost`]).
+    pub(super) zoom: [Option<oag_post::hd_zoom::Pulse>; MAX_SHIPS],
 }
 
 /// What one OS window shows of a multi-window race: which grid slots, cut up the way a split
@@ -80,6 +92,11 @@ pub struct WindowViews {
 }
 
 impl Viewpoints {
+    /// The shake on extra slot `slot`'s camera, `None` for a slot with no view.
+    pub(super) fn shake_of(&self, slot: usize) -> Option<&oag_render::camera::shake::Shake> {
+        self.contact.get(slot)?.as_ref().map(|fx| &fx.shake)
+    }
+
     /// The blended view of the extra slot `slot`, at draw alpha `alpha`.
     fn view(&self, slot: usize, alpha: f32) -> Mat4 {
         match self.cams.get(slot).copied().flatten() {
@@ -288,17 +305,26 @@ impl Race {
         let count = count.clamp(1, oag_render::viewport::MAX_VIEWPORTS.min(fielded));
         self.view.viewpoints.count = count;
         self.view.viewpoints.cams = [None; MAX_SHIPS];
+        self.view.viewpoints.contact = std::array::from_fn(|_| None);
+        self.view.viewpoints.zoom = std::array::from_fn(|_| None);
         let player = self.player_slot();
         for slot in (0..count).filter(|&slot| slot != player) {
             let target = target_of(&self.sim.world.ships[slot]);
             let params = self.view.chase_far;
             let chase = Chase::snapped(target, &params);
             let view = chase.view(target, &params);
+            self.view.viewpoints.contact[slot] = Some(Box::new(ContactFx::new()));
+            self.view.viewpoints.zoom[slot] = self
+                .view
+                .zoom
+                .as_ref()
+                .map(|pulse| oag_post::hd_zoom::Pulse::new(pulse.tuning()));
             self.view.viewpoints.cams[slot] = Some(Cam {
                 chase,
                 previous: view,
                 current: view,
                 respawns: self.respawns_of(slot),
+                boost_kick: 0.0,
             });
         }
         count
@@ -309,7 +335,9 @@ impl Race {
     pub(super) fn advance_viewpoints(&mut self) {
         let params = self.view.chase_far;
         let dt = self.sim.dt;
+        let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
         for slot in 0..MAX_SHIPS {
+            let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
             let respawns = self.respawns_of(slot);
             let target = target_of(&self.sim.world.ships[slot]);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
@@ -320,6 +348,9 @@ impl Race {
                 cam.respawns = respawns;
             } else {
                 cam.chase.advance(target, &params, dt);
+            }
+            if kicks {
+                cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
             }
             cam.previous = cam.current;
             cam.current = cam.chase.view(target, &params);
@@ -374,10 +405,43 @@ impl Race {
         &self.sim.world.ships[self.viewed_slot()]
     }
 
-    /// An extra view's blended camera, `None` for the player's own.
+    /// An extra view's blended camera with its seat's impact shake, `None` for the player's
+    /// own. The shake is the seat's state this tick, turned about the blended view as the
+    /// player's is ([`oag_render::camera::shake::Shake::apply`]).
     pub(super) fn extra_view(&self) -> Option<Mat4> {
+        let slot = self.extra_viewpoint()?;
+        let base = self.view.viewpoints.view(slot, self.draw_alpha());
+        Some(match self.view.viewpoints.shake_of(slot) {
+            Some(shake) => shake.apply(base),
+            None => base,
+        })
+    }
+
+    /// [`Self::extra_view`] without the shake: where the seat's camera is really pointed.
+    pub(super) fn extra_view_unshaken(&self) -> Option<Mat4> {
         self.extra_viewpoint()
             .map(|slot| self.view.viewpoints.view(slot, self.draw_alpha()))
+    }
+
+    /// The wall-contact effects of `slot`'s seat: the player's own for the player's slot, an
+    /// extra person's beside their camera, `None` for a craft nobody sits in. The one
+    /// place a shake or a spark is routed to the seat it belongs to.
+    pub(super) fn seat_contact_mut(&mut self, slot: usize) -> Option<&mut ContactFx> {
+        if slot == self.player_slot() {
+            return Some(&mut self.view.contact);
+        }
+        if !self.sim.world.person_flown(slot) {
+            return None;
+        }
+        self.view.viewpoints.contact.get_mut(slot)?.as_deref_mut()
+    }
+
+    /// Steps every extra seat's shake one tick, as the player's is. See
+    /// [`Self::advance_seat_contact_fx`](super::tick).
+    pub(super) fn advance_seat_shakes(&mut self, dt: f32) {
+        for fx in self.view.viewpoints.contact.iter_mut().flatten() {
+            fx.shake.advance(dt);
+        }
     }
 
     /// An extra view's vertical field of view, the authored far rig widened by
@@ -392,8 +456,18 @@ impl Race {
         let speed = body.forward().dot(body.linear_velocity);
         let degrees = (self.view.chase_far.fov + SPEED_FOV_GAIN_DEG * speed)
             .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
+        let authored = setting.apply(degrees.to_radians());
+        // The player's order and its zero case (`Race::vertical_fov`): the kick widens the
+        // field after the setting, and a closed one leaves it untouched.
+        let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
+        let kicked = if kick == 0.0 {
+            authored
+        } else {
+            let widen = 1.0 + kick * self.view.boost_fov_kick.gain();
+            2.0 * ((authored * 0.5).tan() * widen).atan()
+        };
         Some(oag_render::camera::fit_vertical_fov(
-            setting.apply(degrees.to_radians()),
+            kicked,
             AUTHORED_ASPECT,
             aspect,
         ))

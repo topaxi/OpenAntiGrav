@@ -190,7 +190,7 @@ impl Race {
         }
         // The camera turned about its own up and forward, the eye fixed:
         // see `oag_render::camera::shake::Shake::apply`.
-        self.view.shake.apply(base)
+        self.view.contact.shake.apply(base)
     }
 
     /// [`Self::view`] without the impact shake: where the camera is really
@@ -202,7 +202,7 @@ impl Race {
     /// [`Self::view`] is, by the same alpha and on the same snaps.
     #[must_use]
     pub fn view_unshaken(&self) -> Mat4 {
-        if let Some(view) = self.extra_view() {
+        if let Some(view) = self.extra_view_unshaken() {
             return view;
         }
         self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken)
@@ -242,10 +242,15 @@ impl Race {
     /// not reach.
     #[must_use]
     pub fn view_shake_rotation(&self) -> Mat4 {
-        if self.extra_viewpoint().is_some()
-            || self.view.camera_override.is_some()
-            || !self.view.shake.active()
-        {
+        let shaking = match self.extra_viewpoint() {
+            Some(slot) => self
+                .view
+                .viewpoints
+                .shake_of(slot)
+                .is_some_and(|s| s.active()),
+            None => self.view.camera_override.is_none() && self.view.contact.shake.active(),
+        };
+        if !shaking {
             return Mat4::IDENTITY;
         }
         self.view() * self.view_unshaken().inverse()
@@ -297,10 +302,10 @@ impl Race {
     /// a capture can show a hard hit without producing one. The shake's phase
     /// draw is its own seeded stream, so the same call twice shakes the same.
     pub fn force_shake(&mut self, severity: f32) {
-        self.view.shake.arm(
+        self.view.contact.shake.arm(
             severity.clamp(0.0, 1.0),
             oag_render::camera::shake::Side::Elsewhere,
-            &mut self.view.shake_rng,
+            &mut self.view.contact.shake_rng,
         );
     }
 

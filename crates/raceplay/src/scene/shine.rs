@@ -133,10 +133,8 @@ impl Scene {
                 &mut track.texcoords.borrow_mut(),
             );
         }
-        // The flaps the hull's base draw swings: the player's alone
-        // (`deflect_airbrakes` runs for `ships.first()`), so a rival's pass
-        // stays with its own stowed hull.
-        let player_flaps = race.airbrake_flaps();
+        // The flaps the hull's base draw swings: a person's own (`deflect_airbrakes` runs for
+        // every craft a person flies), so a rival's pass stays with its own stowed hull.
         let maps = self.does_frame_work();
         for (slot, shine) in self.shines(race) {
             let ship = race.ship_model_matrix_of(slot);
@@ -147,7 +145,7 @@ impl Scene {
                 prev_vp * prev.ship(slot, race),
             );
             if maps {
-                let flaps = if slot == 0 { player_flaps } else { [0.0; 2] };
+                let flaps = race.airbrake_flaps_of(slot);
                 shine.write_environment_map(queue, ship, flaps, scratch);
             }
         }

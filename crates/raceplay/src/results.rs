@@ -179,7 +179,8 @@ impl Race {
         // Before the destroy camera eases - see `between_ticks`.
         self.capture_poses();
         let dt = self.sim.dt;
-        self.view.shake.advance(dt);
+        self.view.contact.shake.advance(dt);
+        self.advance_seat_shakes(dt);
         self.advance_bomb_blast_models(dt);
         self.advance_wreck_fx();
         self.view.stage.advance(dt, &mut self.view.stage_rng);

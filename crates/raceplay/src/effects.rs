@@ -823,13 +823,13 @@ impl Race {
     /// [`RaceView::sparks_ignitions`].
     #[must_use]
     pub fn spark_ignitions(&self) -> u32 {
-        self.view.sparks_ignitions
+        self.view.contact.ignitions
     }
 
     /// The collision sparks' current particle pool.
     #[must_use]
     pub fn sparks(&self) -> &psys::System {
-        &self.view.sparks
+        &self.view.contact.sparks
     }
 
     /// Whether the player's craft is mid-explosion.

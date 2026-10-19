@@ -43,6 +43,7 @@ mod laid_from_rear;
 mod leach_ball_draw;
 mod leach_beam;
 mod load;
+mod local_seat_fx;
 mod lock;
 mod message_cue;
 mod mode_override;

@@ -107,7 +107,7 @@ impl Race {
                 // The shake that tick would have armed had the hit been predicted: once, here,
                 // where the hit is drawn. **Chosen, not measured:** a weapon hit's, since a
                 // correction cannot tell what struck (the replay is quiet).
-                self.arm_weapon_hit_shake();
+                self.arm_weapon_hit_shake(slot);
             }
             if self.view.correction_smoothing && remote && !hit && *pop <= SNAP_DISTANCE {
                 self.view.correction[slot] += moved;
