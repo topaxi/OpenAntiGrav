@@ -217,6 +217,10 @@ fn the_2048_table_set_equals_the_base_set() {
 /// opponent's lap crossings (per lap) and at the end of the run, reported
 /// apart. The parked player is behind the whole field, so `WhenBehind` holds
 /// every opponent back: a race takes 160 to 280 s.
+///
+/// And a field that picked anything up put something in the air: the
+/// campaign's opponents fire (zero on every event until 2026-10-19, see
+/// `oag_ai::Driver::attend`).
 fn fly(event: &str, respawns: u32) {
     let limit = 300.0;
     let Some(mut race) = race(event, None) else {
@@ -224,8 +228,24 @@ fn fly(event: &str, respawns: u32) {
     };
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
+    let (mut pickups, mut fired) = (0u32, 0u32);
+    let mut weapon = [None; 8];
+    let mut owned = [0usize; 8];
     while seconds(&race) <= limit && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
         race.tick(&PlayerInputs::none());
+        let mut now = [0usize; 8];
+        for projectile in &race.sim.world.projectiles.slots {
+            if projectile.kind.is_some() && usize::from(projectile.owner) < 8 {
+                now[usize::from(projectile.owner)] += 1;
+            }
+        }
+        for slot in 1..8 {
+            let held = race.sim.world.ships[slot].pickup.weapon;
+            pickups += u32::from(held.is_some() && held != weapon[slot]);
+            weapon[slot] = held;
+            fired += now[slot].saturating_sub(owned[slot]) as u32;
+            owned[slot] = now[slot];
+        }
         for slot in 1..8 {
             let ship = &race.sim.world.ships[slot];
             if ship.standing.lap != lap[slot] {
@@ -234,7 +254,10 @@ fn fly(event: &str, respawns: u32) {
             }
         }
     }
-    println!("{event}: {:.1} s", seconds(&race));
+    println!(
+        "{event}: {:.1} s, opponent pickups {pickups}, projectiles {fired}",
+        seconds(&race)
+    );
     for (slot, shields) in per_lap.iter().enumerate().skip(1) {
         let ship = &race.sim.world.ships[slot];
         println!(
@@ -246,6 +269,10 @@ fn fly(event: &str, respawns: u32) {
             ship.physics.shield
         );
     }
+    assert!(
+        pickups == 0 || fired > 0,
+        "{event}: {pickups} opponent pickups and nothing fired"
+    );
     for slot in 1..8 {
         let ship = &race.sim.world.ships[slot];
         assert!(
