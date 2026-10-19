@@ -203,6 +203,11 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
 - **Never end a turn waiting for a background job to notify you.** No member
   has ever been woken that way. Run long commands in the foreground with a
   600000 ms timeout, or poll the job's output file yourself.
+- **No fine-grained Monitors** (maintainer, 2026-10-19). Every Monitor event
+  wakes you, and each turn you then end idle sends the lead an idle
+  notification, so a per-case or per-line Monitor wakes the lead on every
+  case. Watch only the event you actually need (the whole run or gate
+  finishing), or poll at intervals of 10 minutes or more.
 
 ## Commits
 
