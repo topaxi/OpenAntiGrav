@@ -1,7 +1,8 @@
 # Wipeout HD's race frame: where the GPU time goes (2026-10-15, `hd-gpu`)
 
 The question was why HD is the title that runs out of GPU first (14.0 ms on the
-Raphael iGPU at 1280x800, 28 fps on the Steam Deck's worst stretch) and what can
+Raphael iGPU at 1280x800; the "28 fps on the Steam Deck's worst stretch" turned out to be one
+stalled frame at race start, see the last section) and what can
 come off it without changing the picture. **One cut landed (craft outside the
 frustum are not drawn, byte-identical, 1 to 4 % of the GPU on the iGPU); the velocity
 attachment, first thought to be about 10 % of the race pass, measured as nothing
@@ -150,7 +151,8 @@ to show.
    `RADV VANGOGH`, not llvmpipe). **The offscreen bench leaves out the presented
    upscale and composite to 4K**, which cost 4 to 5 ms on the Deck
    ([dynamic resolution](dynamic-resolution.md)): add that to its frame before
-   comparing with 28 fps.
+   comparing with a presented run (the old 28 fps figure was a stalled frame at race
+   start, not a stretch; see the last section).
 2. The spans: `cargo build --release -p oag-game --features perf-probe`, then
    `OAG_RENDER_GPU_BENCH=150 OAG_RENDER_PERF=1 target/release/oag-game
    data/images/hdfury-ps3-eu-dec.iso --race --mode single_race --seed 1 --autopilot
@@ -158,3 +160,81 @@ to show.
    likely profile, the same with `--msaa 4x --motion-blur high`. Read the
    `bench race pass`, `HD bloom`, `motion blur` and `span / ...` lines.
 3. `--shadows off` on the same line is the shadow passes' cost on the Deck.
+
+## The Deck's "28 fps" was one frame at race start (2026-10-19, `deck-hd-28fps`)
+
+**Verdict.** HD never had a 28 fps stretch of the circuit on the Steam Deck. The number was
+the first line of `--frame-log` in the race, and it came from **one stalled frame at race
+start**, not from any render pass. On the Deck panel that frame took 248 to 264 ms. The frame
+log's `fps` is a rolling mean over the last 120 frames (`oag_present::perf::WINDOW`), so one
+250 ms frame stays in the first one or two lines a second apart. Read per second, that looked
+like a slow stretch.
+
+**Evidence, 2026-10-14 (`deck-4k`, a TV at 3840x2160, gamescope budget 1906x1080, `--race
+--autopilot`, one view).** The first lines of the race, a second apart:
+
+```
+fps=28.5 frame_ms=35.11 p99_ms=46.53 cpu_ms=17.76 gpu_ms=7.97 present_ms=8.32 render=1906x1080
+fps=38.9 frame_ms=25.69 p99_ms=46.53 cpu_ms=17.18 gpu_ms=7.52 present_ms=8.01 render=1906x1080
+fps=59.9 frame_ms=16.68 p99_ms=20.04 cpu_ms=16.64 gpu_ms=7.14 present_ms=7.62 render=1906x1080
+fps=64.2 frame_ms=15.57 p99_ms=19.67 cpu_ms=15.59 gpu_ms=7.25 present_ms=6.58 render=1906x1080
+fps=71.1 ...  then 67 to 93 for the rest of the 56 s run
+```
+
+The two-view run reads the same: 27.1 and 38.7 in its first two lines, then 56.6 at its worst.
+After the start window, HD's worst second at the 4K budget is about 60 to 64 fps for one view
+and 56.6 for two. The scene-only bench figure (8.5 / 11.7 ms p50 / p99 at 1920x1080,
+[high-resolution cost](high-resolution-cost.md)) was right, and nothing was missing from it.
+Pulse's "56 fps worst second" in the same table is a real stretch later in its race. Its
+first lines read 86.5 and 109.9.
+
+**Cause (perf on the Deck, `perf record -g --call-graph dwarf`, main thread).** On the first
+audio tick of a race, `Audio::maybe_prefetch_next_race_track` needs the playlist's length.
+`Audio::race_soundtrack_len` found it unknown and read the booted soundtrack's listing
+synchronously on the frame thread. A PSARC entry cannot be peeked, so on HD that read
+decompresses all fifteen tracks whole (about 75 MiB; the samples are `miniz_oxide` inflate,
+`psarc::Directory::read_entry` and `oag_music::mp3::probe`, about 210 ms of the frame). The
+length was unknown on two routes: `--race`, which every Deck measurement used, and a race
+resumed from the menus (`pause_race_music` clears the context, and `start_race_music` restarts
+it with no length). A race launched from the menus takes the length from its fetch worker
+(`Audio::finish_race_music`), so by the code it never stalled. That route was not run on the
+Deck. Every title paid this read on those two routes; on Pulse and Pure it is a WAD header
+peek and cheap.
+
+**Fix.** `oag_sound::MusicDiscs` keeps every listing it has read, shared by its clones and
+by the fetch workers (`crates/sound/src/listings.rs`). An error or a missing soundtrack is not
+kept, so a failed read is retried. Audio only: no simulation crate is touched.
+`music_resume_ground_truth.rs` checks, on all six titles' discs, that the first tick of a
+started and of a resumed race opens no source on the calling thread. With the memo switched
+off, the check fails on every archived title. The PS2 read does not go through the library,
+so the check cannot count it, but the memo keeps that listing too.
+
+**Before and after on the Deck panel** (Steam Deck LCD, gamescope 1280x800 at 90 Hz, vsync,
+windowed `:1` with Steam's environment over ssh, `--race --autopilot --frame-log --no-audio`,
+default HD circuit, 20 s per run, base and fix interleaved, AC power, GPU 1,040 MHz while
+racing, Deck load average 0.9 to 1.4; release `perf-probe` build, `-C target-cpu=znver2`, in
+the AppImage container):
+
+| Run | Frames over 40 ms | First line: fps / p99 ms | Steady fps (median / min) |
+| --- | --- | --- | --- |
+| base 1 | 1 (252.3 ms) | 70.3 / 31.8 | 90.0 / 90.0 |
+| base 2 | 1 (251.1 ms) | 70.4 / 32.3 | 90.0 / 90.0 |
+| base 3 | 1 (252.2 ms) | 70.7 / 28.8 | 90.0 / 90.0 |
+| fix 1 | 0 | 85.1 / 31.8 | 90.0 / 89.4 |
+| fix 2 | 0 | 85.6 / 30.7 | 90.0 / 90.0 |
+| fix 3 | 0 | 85.6 / 28.5 | 90.0 / 90.0 |
+
+The panel is vsync bound at 90 fps, so the change shows only in the first line. What remains
+there (p99 about 30 ms) is the first race frame's own uploads and passes, about 30 to 50 ms
+in the profile. That is a separate, smaller cost and was left alone.
+
+**At 4K (estimated, not measured).** No TV was attached to the Deck on 2026-10-19 (`eDP-1`
+only, Xwayland 1280x800), so the docked case was not re-run. The removed read is CPU work
+that does not depend on the resolution, so the 4K start window should lose the same frame. In
+the 2026-10-14 first line, about 490 ms of the first second sat outside `cpu_ms`, against
+about 210 ms on the panel. Part of that is not accounted for, so expect the 4K start to
+read about 60 fps (the third line's level), not the 78 fps mean.
+
+**The scout's two small CPU items were not in the profile.** Bind groups rebuilt each frame in
+the post passes, and the empty shadow clears: the steady race's main thread was about 43 % busy
+and waiting on vsync, and neither showed among its samples. Both are left open.

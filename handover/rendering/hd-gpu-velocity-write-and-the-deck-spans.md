@@ -15,6 +15,8 @@ left is a measurement only the Deck can make.
   Intel iGPU and 2 to 8 % of the race pass on the NVIDIA card, so it stays out until
   a Deck run shows a bandwidth saving. A split view with blur on (`split-bloom`'s
   work) must pass its blur strength to `velocity_readers`.
+- **The Deck's 28 fps was not a GPU stretch** (2026-10-19, `docs/rendering/hd-gpu-cost.md`, last
+  section): it was a stalled frame at race start, now fixed. So the gate is not chasing it.
 - **No Deck number exists.** Every figure is the Intel iGPU or the NVIDIA card, and
   neither predicts the Deck's 8-CU RDNA2 APU (this host's iGPU is CPU-bound at
   1280x800, the Deck is GPU-bound at 4K under the 1080p budget). Whether the shadows

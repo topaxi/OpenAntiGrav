@@ -189,8 +189,10 @@ GPU p50 / CPU p50 (ms) at 4K: Pulse 11.11 / 4.45, HD 18.01 / 6.00, Omega 14.56 /
 above their GPU time: the panel baseline is CPU bound, which is why the ratio is under the 8.1x pixel count
 (Pulse's p99 is the slow stretch, 33 ms against its median 12). **Pulse at native 4K was run three times**:
 frame p50 12.07 / 12.09 / 12.08, p99 33.30 / 33.22 / 33.26 ms (spread under 1 %), with a hot SoC
-(66 C) on the third; no thermal effect shows. HD's 28 fps worst stretch in the older handover is
-with HUD, bloom and gamescope on top; this bench is scene only, so it is a floor, not that number.
+(66 C) on the third; no thermal effect shows. HD's "28 fps worst stretch" in the older handover was not a
+stretch: it was one stalled frame at race start, a synchronous soundtrack read, fixed on 2026-10-19
+([HD GPU cost](hd-gpu-cost.md#the-decks-28-fps-was-one-frame-at-race-start-2026-10-19-deck-hd-28fps)).
+This scene-only bench was never missing a 20 ms pass.
 
 ### The presented resolve at a 4K output, single tick (serialised GPU, median ms)
 

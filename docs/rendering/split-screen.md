@@ -628,7 +628,9 @@ does, because the split halves the pixels per view: Pulse 49.6 fps mean (23.5 wo
 against 50.2 (23.1) for one view, HD 37.7 (15.4) against 38.9 (15.9). With the gamescope default
 of at most 1920x1080 pixels (1906x1080) the split runs Pulse 104.2 (57.0) against 112.3 (56.3)
 for one view and HD 69.1 (27.1) against 77.8 (28.5): the split costs 8-11 % of the mean here, and
-HD's worst stretch stays near 28 fps either way. The full table and the cause of the "58 then 23
+HD's worst second read near 28 fps either way, but that second is the race's first: one stalled
+frame at race start, fixed on 2026-10-19 ([HD GPU cost](hd-gpu-cost.md#the-decks-28-fps-was-one-frame-at-race-start-2026-10-19-deck-hd-28fps));
+after it HD's worst second is about 60 to 64 fps for one view and 56.6 for two. The full table and the cause of the "58 then 23
 fps" run are in [packaging](../tools/packaging.md#under-gamescope-the-window-is-not-6x-the-size).
 
 **The whole-race version (2026-10-14).** `just bench-render --views 1,2h,2v --size 1280x800`

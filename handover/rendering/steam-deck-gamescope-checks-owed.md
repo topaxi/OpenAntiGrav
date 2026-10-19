@@ -25,10 +25,13 @@ reports 1016x572 mm and scale 1) still need a run there. Evidence:
 - **The CLI AI-order fix is not confirmed on the Deck.** On the iGPU the frame
   cost did not move (22.17 -> 22.27 fps), so no Deck change is expected.
 - **Deck leftovers.** `~/oag-perf/borderless-6x` is still on the Deck; remove it.
-- **HD at 4K on the Deck** still drops to 28 fps on its worst stretch under the
-  pixel budget. The budget is not tuned per title. 2026-10-19 (`docs/rendering/high-resolution-cost.md`,
-  "Steam Deck, 4K"): scene only, HD at the 1080p budget is 8.5 / 11.7 ms p50 / p99, so the 28 fps is
-  HUD, bloom and compositor on top; the budget itself was judged right and left as it is.
+- **HD at 4K on the Deck: confirm the start-of-race fix on a TV.** The "28 fps worst stretch"
+  was one stalled frame at race start (a synchronous soundtrack read), fixed 2026-10-19 and
+  measured on the panel only, because no TV was attached (`docs/rendering/hd-gpu-cost.md`, last
+  section). Owed: with the TV attached, the same `--race --autopilot --frame-log` run at the
+  default budget, base and fixed binary. Expected (estimated): the first line near 60 fps, no
+  `frame:` warning, worst second after the start 60 to 64 fps. About 490 ms of the 4K first
+  second sat outside `cpu_ms` and is not attributed; if the first line stays low, that is it.
 - **RENDER SCALE row** shows no "auto" label while the gamescope budget is in
   effect.
 

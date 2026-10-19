@@ -665,9 +665,12 @@ folds into one window with two views):
 | HD/Fury, one view | 38.9 (15.9) | 77.8 (28.5) |
 | HD/Fury, two views | 37.7 (15.4) | 69.1 (27.1) |
 
-Pulse holds 60 fps at its worst second only just (56) and HD does not hold it at the worst
-stretch (28) in either layout: the budget is one number for every title and was not tuned per
-title, a player who wants HD smoother lowers the scale or turns dynamic resolution on. GPU clock
+Pulse holds 60 fps at its worst second only just (56). HD's worst second (28 and 27) is the race's
+first one, not a stretch of the circuit: one stalled frame at race start, a synchronous soundtrack
+read on the `--race` route, fixed on 2026-10-19 (see
+[HD GPU cost](../rendering/hd-gpu-cost.md#the-decks-28-fps-was-one-frame-at-race-start-2026-10-19-deck-hd-28fps)).
+After that window HD's worst second is about 60 to 64 fps for one view and 56.6 for two. The
+budget is one number for every title and was not tuned per title. GPU clock
 over the "after" runs was 1400-1540 MHz mean, no throttling.
 
 **Several windows.** gamescope maps every window of a client full-output at 0,0 (measured with
