@@ -1009,7 +1009,13 @@ person's name** where the race knows one (`Race::set_person_names`, set from the
 `scoreboard::Row.name`), else `PLAYER n`. That the original's multiplayer table prints the person's name in `PRO_NAME` is
 what `endrace/people.rs` already records for Pulse's network-play branch; HD's `PI001` fills its name cell the same way, so the
 name is the authored behaviour, the seat fallback is ours. Opponents are not named by the HD grid (its authored column).
-The built-in results table (no `EndRace_Definition.xml`) prints the name upper-cased in the craft column. Walked live on Pulse
+The built-in results table (no `EndRace_Definition.xml`) prints the name upper-cased in the craft column. **Which route each title takes** (read from the code, `oag_game::endrace::dialect` and `endrace_entry`): Pulse (its own
+`EndRace_Definition.xml`, the `PeopleResults` table) and HD (the field grid) were walked; **Pure and Omega name no
+`EndRace_Definition.xml` (`endrace_entry: None`)**, so a network race there draws the built-in results table, which now
+names each person (`scoreboard::craft_label`, tested); **2048 is the touch dialect**, whose pages summarise one racer, so a
+network race of several people keeps the built-in table over them, as a split screen already did (`build_endrace_touch`,
+**checked, differs**: 2048 and Omega do not use HD's grid). None of Pure, Omega or 2048 was walked live. The mode/team fix
+below is in `build_endrace` only: the touch route reads neither. Walked live on Pulse
 PSP: the first two screens a person sees after the line were the two stacked split tables before this choice (4TH PLACE and
 8TH PLACE, nobody named), which is why the table is the named one.
 
@@ -1119,7 +1125,7 @@ JOIN GAME and the room list, START RACE, the race, the end screens, the room aga
   client showed `THE HOST REMOVED YOU FROM THIS GAME` with BACK, and in JOIN GAME the room was listed dimmed (not joinable)
   and could not be chosen.
 - **Not walked:** a pad-only kick (the confirm path is the same `Event::Leave` as the click and is read by the pad's
-  `confirm()`, covered by the room form's own tests), Omega and 2048 (the board, the names and the lobby code are title-blind;
-  their end screens read the same `FieldRow`s as HD's, `crates/ui-screens/src/endrace/hd.rs`, **ported, not walked**), Pure
-  (shares Pulse's `PeopleResults`, **ported, not walked**).
+  `confirm()`, covered by the room form's own tests), and Pure, Omega, 2048 and the PS2 pressing: their routes are above
+  (**checked, differs** from HD's grid: Pure and Omega the built-in table, 2048 the built-in table over its touch pages);
+  the board, the names and all the lobby code are title-blind.
 
