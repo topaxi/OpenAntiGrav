@@ -22,12 +22,15 @@ on the RX 7800 XT.
 - **No windowed 4K or 8K surface measured**: this host's RADV cannot present on Xvfb,
   so the present, HUD overlay and swapchain are only covered by `--presented`'s
   resolve (454 us at 8K).
-- The Steam Deck was out of scope; the Omega prepass is expected to help there (its
-  split is GPU bound) and is unmeasured.
+- **Steam Deck measured 2026-10-19** (`docs/rendering/high-resolution-cost.md`, "Steam Deck,
+  4K"): native 4K fails 60 Hz on every title but Pure; FSR 1 adds 7.0 ms (about 4.5 at a steady
+  clock, estimated), FSR 3 17.4 to 20.0 ms at a 4K output. Open there: the Omega prepass before
+  and after on the Deck, the resolve at a steady 1,600 MHz, GPU memory, a windowed run on a real
+  4K display (none attached), Omega/Pure/2048 at scale 67.
 
 ## Next Steps
 
-1. Run `docs/rendering/high-resolution-cost.md`'s two commands on the Deck for Omega
-   before and after the Omega prepass commit, one view and 2h.
+1. Run the Deck's Omega whole race (`bench-render.py run omega --size 3840x2160`) with a binary
+   built before the Omega prepass commit, for the before/after (the Deck's after is in the doc).
 2. If Pulse/Pure's prepass is wanted, gate it on view pixels and compare 12 stills
    byte for byte before enabling it.
