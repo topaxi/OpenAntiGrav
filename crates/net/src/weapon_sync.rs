@@ -30,7 +30,7 @@ pub fn digest(sim: &RaceSim) -> u64 {
         let mut h = oag_core::hash::StateHasher::new();
         h.write_u8(p.kind.map_or(0, |k| k as u8 + 1));
         h.write_u8(p.owner);
-        h.write_u8(p.target.map_or(255, |t| t));
+        h.write_u8(p.target.unwrap_or(255));
         shots = shots.wrapping_add(h.finish());
     }
     let mut h = oag_core::hash::StateHasher::new();
