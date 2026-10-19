@@ -69,6 +69,16 @@ pub(crate) fn craft_inertia(laws: Option<&CraftLaws>) -> Vec3 {
     })
 }
 
+/// The frame a title's [`CraftLaws`] apply the inertia diagonal in, Pulse's world axes for
+/// `None`.
+pub(crate) fn inertia_frame(laws: Option<&CraftLaws>) -> oag_physics::InertiaFrame {
+    if laws.is_some_and(|laws| laws.inertia_rotates.value) {
+        oag_physics::InertiaFrame::Body
+    } else {
+        oag_physics::InertiaFrame::World
+    }
+}
+
 /// Ticks since the grid state ended, counting the tick it ended on as the first.
 fn released_ticks(world_tick: u64) -> u64 {
     (world_tick + 1).saturating_sub(oag_race::COUNTDOWN_TICKS) + 1
@@ -87,6 +97,7 @@ impl Race {
             ship.physics.hover_rig = self.sim.hover_rig;
             ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
             ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
+            ship.physics.inertia_frame = self.sim.inertia_frame;
         }
     }
 }

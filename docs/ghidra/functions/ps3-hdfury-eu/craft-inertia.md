@@ -56,7 +56,10 @@ each sum by the mass and divides `12.0` (`0x008a92fc`) by it, storing the invers
 degrees of pitch and roll), and `body+0x1c0` is the world angular momentum: `I_world *
 body+0x1a0` reproduces it to three digits. That answers the "inertia frame" question the
 previous pass left open: HD rotates the body tensor (`R I R^T`), where Pulse applies its diagonal
-in world axes. Negligible while the craft is level; not ported.
+in world axes. Negligible while the craft is level. **Ported 2026-10-19** as
+`oag_title::craft_laws::CraftLaws::inertia_rotates` (HD `true`, measured; Omega and 2048
+inherit it; Pulse's world-axis frame is measured in
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md)).
 
 **Confidence 90**: the literal, its two call sites and the writer read statically; the tensor read
 live on two sessions; and the one-airbrake yaw rate, the measurement that found it, runs

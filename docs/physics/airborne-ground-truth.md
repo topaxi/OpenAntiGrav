@@ -102,15 +102,20 @@ rotates its tensor (`body+0x50` read live as `R I R^T`,
 [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md)), so the frame is a
 per-title law.
 
-**Measured, not ported (held, maintainer 2026-10-19).** Ported as a per-title craft law
-(Pulse and PS2 world axes, Pure inherited from Pulse and unmeasured; HD rotated, Omega and 2048 inheriting HD's), the lone
-craft's regression gate stayed twelve of twelve clean, but the player's whole-race
-autopilot in `opponent_autopilot_sweep` (4 seeds, 48 races per Pulse difficulty) gained
-rescues: novice `62 -> 106` with the switch off and `68 -> 91` on, mostly `05_Track` and
-`06_Track`, and new ones on Ace's `04_Track`, `07_Track` and `10_Track` (Ace totals
-`29 -> 25` and `34 -> 32`). HD, Omega and 2048 were unchanged bit for bit. The law waits
-until this engine's own driver and pace plan fly the world-axis craft as well as the
-body-axis one; the measured law is not to be tuned to get there.
+**Ported 2026-10-20 (maintainer-approved).** `oag_physics::InertiaFrame` and
+`oag_title::craft_laws::CraftLaws::inertia_rotates`: Pulse and PS2 world axes, measured;
+Wipeout HD rotated, measured (`craft-inertia.md`); Omega and 2048 rotated, inherited from HD;
+**Pure rotated, chosen: unchanged until a `pure-physics` lane measures it** (Pure's physics
+differ, so inheriting Pulse's frame is not safe; with it, Pure's opponent stints' wall ticks
+rose `69 -> 541` and `18 -> 82`).
+
+The first attempt (on the tree before the pitch gate and the bias) raised the player's
+whole-race autopilot rescues on Pulse (`opponent_autopilot_sweep`, 4 seeds, 48 races per
+difficulty: novice `62 -> 106` off, `68 -> 91` on) and was held. On the tree with the gate,
+the bias and HD's gravity law it lowers them: novice `24 -> 14` off and `16 -> 7` on, Ace
+`24 -> 22` and `24 -> 25`, wall ticks `75,965 -> 71,852` and `6,084 -> 5,520`, opponent
+stint rescues `6 -> 1` and `3 -> 2`. The lone craft's regression gate stays twelve of
+twelve clean. HD, Omega and 2048 are unchanged bit for bit.
 
 ## The pitch-input gate, live
 

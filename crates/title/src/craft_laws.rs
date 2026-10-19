@@ -22,4 +22,7 @@ pub struct CraftLaws {
     /// Wipeout HD's `Craft_Update` does, rather than Pulse's `normal_gravity`
     /// (`oag_physics::passive::ClassGravityTerm`).
     pub class_gravity_on_flight: Sourced<bool>,
+    /// The inertia diagonal rotates with the craft (`R I R^T`) rather than staying fixed in
+    /// world axes as Pulse's `Body_Integrate` keeps it (`oag_physics::InertiaFrame`).
+    pub inertia_rotates: Sourced<bool>,
 }

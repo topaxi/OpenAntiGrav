@@ -665,6 +665,17 @@ uv run scripts/trace-omega-identity.py \
 
 ### The crate keeps its body-space diagonal: chosen, not measured
 
+**Superseded 2026-10-20 (maintainer-approved).** The sustained-bank capture item 2
+asks for now exists: Fort Gale Black's banked ramp and jump, three captures of the
+original's autopilot. On them the world-axis diagonal halves the one-step yaw and roll
+residual and keeps an open-loop rollout's fall with the original's
+([airborne-ground-truth.md](airborne-ground-truth.md#the-tensor-is-applied-in-world-axes-measured-dynamically)).
+`integrate` and the angular-damping momentum now apply the diagonal in the title's
+`oag_physics::InertiaFrame`: world axes for Pulse and the PS2, rotated for Wipeout HD
+(Omega and 2048 inherited; Pure chosen, unchanged until it is measured). `wall`'s two sites are unchanged: the denominator was
+already world-axis, and the wall-angular test cannot tell the two frames apart for the
+impulse response. The text below is the decision as it stood.
+
 `crates/physics/src/integrate.rs` applies the inertia as a body-space diagonal,
 `R^T (I^-1 (x) (R tau))`, and **that stays**, knowingly diverging from the
 original. No confidence score attaches to this: it is a design decision, not a
