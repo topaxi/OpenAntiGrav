@@ -170,6 +170,16 @@ impl Archive {
         self.read(index)
     }
 
+    /// [`Archive::peek`] by name.
+    ///
+    /// # Errors
+    ///
+    /// As [`Archive::read_name`].
+    pub fn peek_name(&mut self, name: &str, len: u64) -> Result<Vec<u8>> {
+        let index = self.index_for_name(name)?;
+        self.peek(index, len)
+    }
+
     /// Reads `len` bytes starting `offset` bytes into entry `index`.
     ///
     /// [`Archive::peek`] answers "what is at the start of this blob"; this

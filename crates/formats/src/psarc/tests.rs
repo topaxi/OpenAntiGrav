@@ -455,3 +455,30 @@ fn a_positionally_ordered_manifest_still_resolves_in_order_through_digest_matchi
         "entry n + 1 is manifest line n, recovered by digest rather than assumed"
     );
 }
+
+/// An entry's head is its first bytes, read off its leading blocks alone: the
+/// range stops at the block that holds byte `len`, and every length (inside a
+/// block, on a boundary, past the end) is the whole entry's prefix.
+#[test]
+fn an_entry_head_reads_only_its_leading_blocks() {
+    let long: Vec<u8> = (0..300u32).map(|i| (i * 7 % 251) as u8).collect();
+    for stored in [false, true] {
+        let archive = build(64, 2, &[planned("/data/long.bin", long.clone(), stored)]);
+        let header = Header::parse(&archive).expect("header");
+        let directory = Directory::parse(&archive[..header.toc_len as usize]).expect("directory");
+        let (offset, whole) = directory.entry_range(1).expect("range");
+        for len in [0u64, 1, 63, 64, 65, 200, 300, 1000] {
+            let (at, stored_len) = directory.entry_head_range(1, len).expect("head range");
+            assert_eq!(at, offset);
+            assert!(stored_len <= whole);
+            let bytes = &archive[at as usize..(at + stored_len) as usize];
+            let head = directory
+                .read_entry_head(1, bytes, len)
+                .expect("head reads");
+            let want = (len as usize).min(long.len());
+            assert_eq!(head, long[..want], "stored {stored}, {len} bytes");
+        }
+        let (_, one_block) = directory.entry_head_range(1, 10).unwrap();
+        assert!(one_block < whole, "ten bytes need one of five blocks");
+    }
+}

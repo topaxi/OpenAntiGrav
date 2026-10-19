@@ -208,35 +208,34 @@ fn found(archives: &mut Archives) -> Result<Vec<Entry>> {
 /// How long the entry called `name` is, or `None` when it is not a stream this
 /// can measure.
 ///
-/// **A WAD is peeked and anything else is read whole**, which is the one place
-/// the container leaks into this module. A `.wad` entry's header is reachable
-/// on its own through the directory, so a Pure listing costs a kibibyte a
-/// track; `oag_assets::psarc::Archive` exposes no ranged read, because a PSARC
-/// entry is block-compressed and has no offset to seek to, so a Wipeout HD
-/// listing reads all fifteen tracks whole - about 75 MiB, and it is done once
-/// per boot inside `oag_sound::MusicDiscs::survey`. Measured at well under a
-/// second off a local image; if that ever stops being true, a first-block read
-/// on `psarc::Archive` is the fix rather than caching the answer.
+/// **Read from the entry's head, not the entry.** A RIFF header (ATRAC3+,
+/// ATRAC9) sits in its first hundred bytes and an MP3's `Info` frame, which
+/// states the frame count, in its first frame. So this reads
+/// [`MEDIA_HEADER_PEEK`] bytes, which on a PSARC is its first block, where it
+/// used to inflate every track whole: about 75 MiB for HD's fifteen, 305 ms
+/// on the Steam Deck. A head that does not say (an MP3 behind a long ID3 tag)
+/// falls back to the whole entry, so the answer is the one a whole read gives.
 fn measure(archives: &mut Archives, name: &str) -> Option<f64> {
-    if let Ok(data) = archives.data.as_wad_mut("a name")
-        && let Some(index) = data
-            .directory()
-            .entries
-            .iter()
-            .position(|entry| entry.name_hash == oag_formats::wad::hash_name(name))
-        && let Ok(header) = data.peek(index, RIFF_HEADER_PEEK)
-        && let Some(seconds) = riff_seconds(&header)
+    if let Ok(head) = archives.peek_name(name, MEDIA_HEADER_PEEK)
+        && let Some(seconds) = seconds_of(&head)
     {
         return Some(seconds);
     }
     seconds_of(&archives.read_name(name).ok()?)
 }
 
+/// How much of a music entry [`measure`] reads to find its length: one PSARC
+/// block (64 KiB on every archive these titles ship), far past any RIFF
+/// header and an MP3's first frame.
+pub const MEDIA_HEADER_PEEK: u64 = 64 * 1024;
+
 /// How long a stream is, whichever of the two containers it is in.
 ///
 /// The dispatch the module header describes: RIFF first because that is what a
-/// peeked header is, MPEG second.
-fn seconds_of(blob: &[u8]) -> Option<f64> {
+/// peeked header is, MPEG second. Public so a test can hold a listing's
+/// head-read length against the whole entry's.
+#[must_use]
+pub fn seconds_of(blob: &[u8]) -> Option<f64> {
     riff_seconds(blob).or_else(|| crate::mp3::describe(blob)?.seconds)
 }
 

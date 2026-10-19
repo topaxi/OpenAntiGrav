@@ -75,12 +75,13 @@ impl Drop for Work {
         }
         let took = self.start.elapsed();
         TIME.with(|time| time.set(time.get() + took));
+        let ms = took.as_secs_f64() * 1000.0;
         if FRAME.with(Cell::get) {
-            log::warn!(
-                "audio: {} on the frame thread took {:.1} ms",
-                self.what,
-                took.as_secs_f64() * 1000.0
-            );
+            log::warn!("audio: {} on the frame thread took {ms:.1} ms", self.what);
+        } else {
+            let thread = std::thread::current();
+            let name = thread.name().unwrap_or("a worker");
+            log::debug!("audio: {} on {name} took {ms:.1} ms", self.what);
         }
     }
 }

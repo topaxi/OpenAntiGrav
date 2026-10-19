@@ -666,6 +666,26 @@ impl Archives {
         Ok(blob)
     }
 
+    /// The first `len` bytes of `name` (all of it when shorter), out of
+    /// whichever archive [`Self::read_name`] would read it from, reading only
+    /// what holds them. A layer's file is read whole and cut.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::read_name`].
+    pub fn peek_name(&mut self, name: &str, len: u64) -> Result<Vec<u8>> {
+        let cut = usize::try_from(len).unwrap_or(usize::MAX);
+        match self.holder_of(name) {
+            Some(at @ (Held::Override | Held::Fallback)) => {
+                let mut blob = self.read_at(at, name)?;
+                blob.truncate(cut);
+                Ok(blob)
+            }
+            Some(at) => self.held(at).peek_entry(name, len),
+            None => self.data.peek_entry(name, len),
+        }
+    }
+
     /// Reads **every** archive's copy of `name`, labelled with the archive it
     /// came from, in [`Self::locations`] order.
     ///
