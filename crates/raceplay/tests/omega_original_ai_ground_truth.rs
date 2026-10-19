@@ -180,11 +180,21 @@ fn seconds(race: &oag_raceplay::Race) -> f32 {
         / 60.0
 }
 
+/// A shield loss of at least this much on a tick with no new wall contact is
+/// read as a weapon hit, for [`fly`]'s respawn allowance.
+const HIT: f32 = 5.0;
+
+/// A respawn counts as weapon-caused when a hit came at most this many ticks
+/// before it.
+const HIT_WINDOW: u64 = 60;
+
 /// The race with the player parked: every opponent finishes inside 300 s
-/// with at most `respawns` respawns (none, except where a circuit names its
-/// cause). The skill is the race's ambient one. Shield is read at
-/// each opponent's lap crossings (per lap) and at the end, reported apart.
-fn fly(track: &str, class: &str, respawns: u32) {
+/// with no respawn, or, where a circuit names its cause, at most
+/// `field_respawns` in the whole field, each within [`HIT_WINDOW`] ticks of a
+/// weapon hit on that craft. The skill is the race's ambient one. Shield is
+/// read at each opponent's lap crossings (per lap) and at the end, reported
+/// apart.
+fn fly(track: &str, class: &str, field_respawns: u32) {
     let Some(loaded) = loaded(track, class) else {
         return;
     };
@@ -195,10 +205,30 @@ fn fly(track: &str, class: &str, respawns: u32) {
     );
     let mut lap = [1u32; 8];
     let mut per_lap: [Vec<f32>; 8] = Default::default();
+    let mut shield = [0.0f32; 8];
+    let mut walls = [0u32; 8];
+    let mut last_hit = [None::<u64>; 8];
+    let mut respawned = [0u32; 8];
     while seconds(&race) <= 300.0 && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
         race.tick(&PlayerInputs::none());
+        let tick = race.sim.world.tick;
         for slot in 1..8 {
+            let now_walls = race.wall_contact_ticks_of(slot);
             let ship = &race.sim.world.ships[slot];
+            if shield[slot] - ship.physics.shield >= HIT && now_walls == walls[slot] {
+                last_hit[slot] = Some(tick);
+            }
+            shield[slot] = ship.physics.shield;
+            walls[slot] = now_walls;
+            if race.respawns_of(slot) > respawned[slot] {
+                respawned[slot] = race.respawns_of(slot);
+                assert!(
+                    field_respawns > 0
+                        && last_hit[slot].is_some_and(|hit| tick - hit <= HIT_WINDOW),
+                    "{track}: slot {slot} respawned at tick {tick}, last weapon hit {:?}",
+                    last_hit[slot]
+                );
+            }
             if ship.standing.lap != lap[slot] {
                 lap[slot] = ship.standing.lap;
                 per_lap[slot].push(ship.physics.shield);
@@ -222,23 +252,23 @@ fn fly(track: &str, class: &str, respawns: u32) {
             race.sim.world.ships[slot].standing.finished(),
             "{track}: slot {slot} did not finish"
         );
-        assert!(
-            race.respawns_of(slot) <= respawns,
-            "{track}: slot {slot} respawned {} times",
-            race.respawns_of(slot)
-        );
     }
+    let total: u32 = (1..8).map(|slot| race.respawns_of(slot)).sum();
+    assert!(
+        total <= field_respawns,
+        "{track}: {total} respawns in the field"
+    );
 }
 
 macro_rules! circuit {
     ($name:ident, $track:literal, $class:literal) => {
         circuit!($name, $track, $class, 0);
     };
-    ($name:ident, $track:literal, $class:literal, $respawns:literal) => {
+    ($name:ident, $track:literal, $class:literal, $field_respawns:literal) => {
         #[test]
         #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
         fn $name() {
-            fly($track, $class, $respawns);
+            fly($track, $class, $field_respawns);
         }
     };
 }
@@ -259,14 +289,14 @@ circuit!(
     r"Data\Environments\05_Ubermall\track.vex",
     "Phantom"
 );
-// **One respawn a craft, each after a weapon hit** (2026-10-19, once the
-// field fires). Slot 5 is hit at tick 5568 (shield 76 to 61 at speed 232,
-// touching no wall), meets the wall at tick 5608 at speed 24 and comes off.
-// Slot 7 is hit at tick 11205 (26 to 12 at speed 331) and comes off by tick
-// 11242. Every other circuit stays at none.
+// **Two respawns in the field, each after a weapon hit** (2026-10-19, once
+// the field fires; asserted, not only stated). Slot 5 both times: hit at tick
+// 5568 (shield 76 to 61 at speed 232, touching no wall), the wall at tick 5608
+// at speed 24, off; and hit at tick 11163 (69.9 to 54.9 at speed 314), off by
+// tick 11193. Every other circuit stays at none.
 circuit!(
     the_field_finishes_amphiseum_reversed,
     r"Data\Environments\amphiseum\track_reversed.vex",
     "Flash",
-    1
+    2
 );
