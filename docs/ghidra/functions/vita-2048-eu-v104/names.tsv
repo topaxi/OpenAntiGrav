@@ -175,3 +175,7 @@
 0x810134ce	function	Profile_AwardXP	80	xp-award.md
 0x8101340a	function	Profile_BankRaceXP	78	xp-award.md
 0x810133da	function	Profile_GetXPRank	84	xp-award.md
+0x8101b70c	function	ShipShadow_BuildLightMap	65	ship-shadows.md
+0x8102d9e8	function	ShipShadow_DrawCasters	60	ship-shadows.md
+0x8102d92a	function	ShipEnvShadow_DrawAll	62	ship-shadows.md
+0x8102d748	function	ShipEnvShadow_RenderForShip	62	ship-shadows.md

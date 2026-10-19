@@ -65,7 +65,8 @@ and in doing so **discards art the disc authored**. See
 on `original` where that tier is built and draws, and on `off` elsewhere: Pulse
 and HD/Fury `original`; Pure `off` (it authors no shadow, so `original` would
 draw nothing and `off` says so without a pass); 2048 and Omega `off` (nothing
-built, Omega's carry-over from HD untried). The answer is
+built: 2048's mechanism is read but its strength and a still are not, Omega's cast axis is
+unread - see "2048's and Omega's `original`" below). The answer is
 `oag_title::Title::original_shadows`, applied by the game's per-title render
 profile (`RenderProfile::for_title`), not by `Shadows`' own `#[default]`, which
 stays `off`. Only a profile with no `shadows` key takes it: a settings file
@@ -405,7 +406,9 @@ What 2048 does instead, on the evidence of its own names:
   `shadowMap` at texture unit 3**, bound on 1,799 fragment programs
   immediately beside `lightmap` (4,467, unit 1, four channels) and
   `occlusionMap` (1,895, unit 2) - so it is a one-channel texture sampled per
-  pixel with the lightmap, not a depth map the renderer projects and compares.
+  pixel with the lightmap, not a depth map the renderer projects and compares
+  (**superseded 2026-10-19**: the receiver is a depth compare, see the 2048 and
+  Omega section below).
   That is a mechanism, and it is inconsistent with HD's shadow-map pipeline in
   the same direction the string comparison above already pointed. **What the
   shader itself computes is still unread**: the USSE instruction stream is
@@ -722,6 +725,48 @@ variant. **That is this project's mechanism on Omega's data, not Omega's own, so
 Next step, if the maintainer wants it on by default anyway: that is a **chosen**
 default (HD's map along Omega's sun), to be labelled so, not a `Built`. Reading
 what `Debug.Draw Ship Env Shadows` gates in the executable is the measured route.
+
+## 2048's and Omega's `original`: the mechanism read, and why both stay `Unbuilt`
+
+2026-10-19, `omega-2048-original-shadows`. Evidence:
+[ship-shadows.md](../ghidra/functions/vita-2048-eu-v104/ship-shadows.md).
+`Title::original_shadows` stays `Unbuilt` on both titles, so `off` stays the
+default there; the rest of this section is what was learned and what blocks it.
+
+- **2048 runs two shadow passes in every race, and no circuit switches either
+  off** (confidence 85-90). `Lighting.Debug.Draw Ship Shadows` (`+0x4a4`) and
+  `Draw Ship Env Shadows` (`+0x4a5`) both default to 1; the ten base circuits'
+  `.EnvSettings` author neither; a Vita3K guest read in a Metro Park race returned
+  `01 01`.
+- **The craft's map is cast along `Lighting.Ship shadow direction`, not along
+  `ShadowLight`** (confidence 80). This corrects the lane brief and the Omega
+  section above, which named `ShadowLight`: `ShadowLight direction` is a shading
+  uniform (`shadowLightDirection`) and neither pass reads it. The vector's length
+  is discarded (altima authors `0.45 0.6 1.2`). The map is one orthographic map
+  fitted to the camera frustum out to 60 units, bound as `shadowMap` and
+  `occlusionMap`, with one matrix for both (confidence 65): a different projection
+  from this project's per-craft atlas, so `Fit::craft` along the ship-shadow vector
+  would be this project's own and must not be called `original`.
+- **The receiver reads as a depth compare** (confidence 70, from two Vita3K
+  `.dsm` logs), not a coverage lookup, which revises the "not a depth map" reading
+  above and in [gxp.md](../formats/gxp.md). One branch of its select is the literal
+  1.0 and the other is a per-vertex interpolant, so **how dark is not read** and no
+  strength is claimed.
+- **The second pass is the other direction**: track pieces beside the craft are
+  drawn from the sun into a map of the craft's own (confidence 62), so they shade
+  the craft, not the road. Not traced further.
+- **Vita3K shows no craft shadow from this pass.** With `Ship shadow direction`
+  confirmed live (the guest holds park's authored vector), writing four vectors
+  (the authored one, a long sideways `(1, 0.25, 0)` and its mirror, and straight
+  down) with the gate on and off changed nothing in six stills on the sunlit
+  grid. That is a blocker of its own: either Vita3K does not render the depth-compared
+  map or the pass does not reach the road in that view, and nothing yet separates
+  them. No still confirms the mechanism, so there is no `Built`, and no strength
+  was measured.
+- **Omega: checked, differs** (confidence 75). It has none of 2048's two debug
+  keys or `Ship shadow direction`; it has `shadowCoeffs`, `CastShipShadows`,
+  `CastNoShipShadows` and `Ship diffuse brightness (shadow)`, which 2048 lacks.
+  Its cast axis is not recovered. Omega is not built on 2048's reading.
 
 ## Pushing it further, and what it is actually blocked on
 

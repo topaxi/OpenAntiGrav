@@ -473,6 +473,12 @@ and what the shader does with it is in the bytecode this page does not read.
 `track_proximity_shadow_vp`/`_fp` and `shadowMap` from the string table and
 read neither. With the container decoded:
 
+- **Revised 2026-10-19:** the receiver reads as a depth compare. Vita3K's `.dsm`
+  for `fc06_lambert_simple` #14 and `diffuse_normal_specular` #14 subtract the
+  sample from the fragment's light-space depth and select between two values on
+  the sign ([ship-shadows.md](../ghidra/functions/vita-2048-eu-v104/ship-shadows.md),
+  confidence 70). The "not a depth map the renderer projects and compares" below
+  is the container-only reading it supersedes; the single-channel finding stands.
 - **`shadowMap` is a single-channel sampler**, `comp = 1` on all **1,799**
   programs that bind it, at texture unit 3, immediately beside `lightmap`
   (4,467 programs, unit 1, four channels) and `occlusionMap` (1,895 programs,

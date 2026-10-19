@@ -1305,7 +1305,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   earlier note here, "its sun (`[4.00, 2.33, 0.82]`...)", was Tech De Ra's colour
   alone; the sun is `[10.1, 5.9, 2.1]`. 2048 carries no intensity key: checked,
   differs. **Omega's `original` shadow tier does not draw on the ground**: see
-  [shadows.md](../rendering/shadows.md) "Omega's `original` was tried".
+  [shadows.md](../rendering/shadows.md) "Omega's `original` was tried". Omega's
+  ship-shadow keys against 2048's, 2026-10-19: **checked, differs** (no `Ship
+  shadow direction`, no debug gates; `shadowCoeffs` and `CastShipShadows` are
+  Omega's own), `original` stays `Unbuilt` - [ship-shadows.md](../ghidra/functions/vita-2048-eu-v104/ship-shadows.md).
 - **`.EnvSettings` is read through 2048's reader** and its sun colour was read
   as the diffuse colour alone (above). The
   patch's copy carries no HDR/bloom block, so the read bloom chain is off.
