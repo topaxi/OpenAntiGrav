@@ -149,6 +149,18 @@ fn every_declared_track_resolves_to_a_real_entry() {
             "{name} is declared and absent"
         );
     }
+
+    // The listing reads each track's first PSARC block, not the track: the
+    // length it reports is the one the whole entry declares, to the bit.
+    for (track, entry) in declared.iter().zip(listing(&image)) {
+        let name = track.entry_name(tracks.file);
+        let whole = archives.read_name(&name).expect("reading a track whole");
+        assert_eq!(
+            oag_music::seconds_of(&whole),
+            Some(entry.seconds),
+            "{name}: the head and the whole entry disagree on its length"
+        );
+    }
 }
 
 /// Every soundtrack track is a real length rather than a zero.

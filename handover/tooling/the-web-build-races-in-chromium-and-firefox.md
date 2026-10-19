@@ -47,8 +47,8 @@ Architecture, measurements, hosting and limits:
   closed; what is left: (1) 0.4 to 0.55 s between frames at the end of the
   load while the browser compiles 80 pipelines, the page's thread idle;
   (2) the boot's about 1 s: 307 synchronous requests (38 MiB), the front-end
-  music's MP3 decode inline in `Audio::start_music` (0.16 to 0.24 s), inflate;
-  moving the music decode onto the music worker is the cheapest next piece, the
+  music's MP3 decode inline in `Audio::start_music` (0.16 to 0.24 s; moved to
+  the `menu-music` worker on 2026-10-19, not re-measured in a browser), inflate; the
   boot's loads touching the GPU keep the rest on the page's thread;
   (3) the menus' own flyer previews rebuild on every return to Cell Selection
   (`oag_game::preview`, another lane's file).

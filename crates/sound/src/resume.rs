@@ -30,6 +30,16 @@ pub struct RaceMusicState {
     pub track_seconds: f64,
 }
 
+/// When a saved place handed to [`Audio::restore_race_music`] is checked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Restored {
+    /// Checked and applied (or ignored, a race having started already).
+    Now,
+    /// Kept until the next race's fetch has read the listing, which checks it
+    /// and logs the outcome.
+    WhenListed,
+}
+
 /// Why a saved [`RaceMusicState`] was not used; the playlist then starts where it
 /// normally does. `Display` is the load-report line.
 #[derive(Debug, Clone, PartialEq)]
@@ -134,6 +144,11 @@ impl Audio {
     /// the menus after one and at a quit from either.
     #[must_use]
     pub fn race_music_state(&self) -> Option<RaceMusicState> {
+        // Between tracks, or before the first lands: `race_index` may still
+        // name the track that ended, so nothing is said until the next starts.
+        if self.race_job.is_some() {
+            return None;
+        }
         let index = self.race_index?;
         if self.race_tracks == 0 {
             return None;
@@ -159,18 +174,43 @@ impl Audio {
     /// playlist's normal start. Does nothing once a race has started the playlist
     /// this run.
     ///
+    /// **Reads nothing.** With the booted listing already read (a PSP or PS2
+    /// boot's survey reads it) the place is checked here; otherwise it is kept
+    /// and the next race's [`MusicFetchWorker`] checks it before it fetches,
+    /// logging either outcome. On HD that read is every track's header off a
+    /// PSARC: 305 ms on the Steam Deck when it ran here, on the frame that
+    /// launches the race.
+    ///
     /// # Errors
-    /// [`Unusable`] when the booted soundtrack no longer matches what was saved;
-    /// nothing is changed then.
+    /// [`Unusable`] when the listing was read and no longer matches what was
+    /// saved; nothing is changed then.
     pub fn restore_race_music(
         &mut self,
         discs: &MusicDiscs,
         saved: &RaceMusicState,
-    ) -> Result<(), Unusable> {
+    ) -> Result<Restored, Unusable> {
         if self.race_index.is_some() {
-            return Ok(());
+            return Ok(Restored::Now);
         }
-        self.apply_restored(saved, &Self::booted_track_seconds(discs))
+        let Some(listing) = Self::known_track_seconds(discs) else {
+            self.pending_restore = Some(*saved);
+            return Ok(Restored::WhenListed);
+        };
+        self.apply_restored(saved, &listing).map(|()| Restored::Now)
+    }
+
+    /// The booted soundtrack's track lengths if they were already read, without
+    /// reading them.
+    fn known_track_seconds(discs: &MusicDiscs) -> Option<Vec<f64>> {
+        let (source, platform) = discs.pick(MusicSource::Auto)?;
+        let soundtrack = discs.listings.known(source, platform)?;
+        Some(
+            soundtrack
+                .tracks
+                .iter()
+                .map(|track| track.seconds)
+                .collect(),
+        )
     }
 
     /// [`Self::restore_race_music`] against a listing already read.

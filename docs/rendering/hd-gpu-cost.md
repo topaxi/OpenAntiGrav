@@ -228,6 +228,10 @@ The panel is vsync bound at 90 fps, so the change shows only in the first line. 
 there (p99 about 30 ms) is the first race frame's own uploads and passes, about 30 to 50 ms
 in the profile. That is a separate, smaller cost and was left alone.
 
+**Followed up on 2026-10-19:** no music work runs on the frame thread any more, and HD's
+listing reads each track's first block (305 ms became 23 ms, on a worker). See
+[music threads](../architecture/music-threads.md) for the paths and the Deck numbers.
+
 **At 4K (estimated, not measured).** No TV was attached to the Deck on 2026-10-19 (`eDP-1`
 only, Xwayland 1280x800), so the docked case was not re-run. The removed read is CPU work
 that does not depend on the resolution, so the 4K start window should lose the same frame. In

@@ -726,6 +726,9 @@ fn run(cli: Cli) -> Result<()> {
         suspended: false,
         occluded: false,
     };
+    // From here on this thread draws frames, so music work on it is logged with
+    // its duration (`oag_sound::probe`).
+    oag_sound::probe::mark_frame_thread();
     // The browser owns the loop: `spawn_app` returns at once and the page's
     // own frame callbacks drive `app` from then on, so there is no "after" to
     // finish audio or a prefetch in (the web build has neither).

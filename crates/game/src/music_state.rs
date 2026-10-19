@@ -142,7 +142,12 @@ pub fn resume_from(path: &Path, audio: &mut Audio, discs: &MusicDiscs, title: &s
         return;
     };
     match audio.restore_race_music(discs, &saved) {
-        Ok(()) => info!(
+        // Checked by the race's music fetch, which logs the outcome.
+        Ok(oag_sound::Restored::WhenListed) => info!(
+            "audio: race music saved at track {} and {} s, checked when the race starts",
+            saved.index, saved.second
+        ),
+        Ok(oag_sound::Restored::Now) => info!(
             "audio: race music resumes at track {} and {} s, as saved",
             saved.index, saved.second
         ),

@@ -165,6 +165,22 @@ impl Container {
     }
 }
 
+impl Container {
+    /// The first `len` bytes of entry `name` (all of it when shorter), reading
+    /// only what holds them: a WAD's stored or LZSS prefix, a PSARC's leading
+    /// blocks. See [`crate::Archive::peek`] and [`crate::psarc::Archive::peek`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Container::read_entry`].
+    pub fn peek_entry(&mut self, name: &str, len: u64) -> Result<Vec<u8>> {
+        match self {
+            Self::Wad(a) => a.peek_name(name, len),
+            Self::Psarc(a) => a.peek_path(name, len),
+        }
+    }
+}
+
 /// Reads one named entry out of the archive `spec` points at.
 ///
 /// The one-shot form of [`Container::open`] plus [`Container::read_entry`], for

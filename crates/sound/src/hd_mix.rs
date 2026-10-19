@@ -283,18 +283,10 @@ impl Audio {
         self.hd.state = State::PreRace;
     }
 
-    /// Reads HD's authored mix off the booted source, once.
-    ///
-    /// A title with no `GlobalAudioConfig.xml` (Pulse, Pure) leaves
-    /// [`Hd::live`] `None`, which keeps it on the three buses it had.
-    pub(crate) fn load_hd_mix(&mut self, library: &dyn Library, source: &str) {
-        if self.hd.live.is_some() {
-            return;
-        }
-        let Some(mut opened) = library.open(source) else {
-            return;
-        };
-        if let Some(maps) = Maps::load(&mut opened.archives) {
+    /// Installs HD's mix, read off the frame thread by [`read_maps`]. The
+    /// first one read wins, as the per-source read always did.
+    pub(crate) fn set_hd_mix(&mut self, maps: Maps) {
+        if self.hd.live.is_none() {
             self.hd.live = Some(Live::new(maps));
         }
     }
@@ -313,4 +305,12 @@ impl Audio {
             live.apply(mixer, music * SLIDER_DEFAULT, sfx * SLIDER_DEFAULT, speech)
         });
     }
+}
+
+/// Reads HD's mix tables off `source`, or `None` where it has none. Opens the
+/// source, so it runs on the menu-music worker, never on the frame thread.
+pub(crate) fn read_maps(library: &dyn Library, source: &str) -> Option<Maps> {
+    let _work = crate::probe::work("HD's mix tables");
+    let mut opened = library.open(source)?;
+    Maps::load(&mut opened.archives)
 }

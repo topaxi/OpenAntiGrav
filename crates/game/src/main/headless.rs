@@ -782,6 +782,7 @@ pub(crate) fn run_race(
         suspended: false,
         occluded: false,
     };
+    oag_sound::probe::mark_frame_thread();
     event_loop.run_app(&mut app)?;
     app.finish_audio()
 }

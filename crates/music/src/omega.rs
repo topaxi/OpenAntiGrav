@@ -185,16 +185,23 @@ pub fn plan(archives: &mut Archives, st: &StateTracks, check_media: bool) -> Res
         };
         if check_media {
             let lead = song.stems[0];
-            let first = if song.embedded[0] {
-                lib.banks()[0].embedded(lead).map(<[u8]>::to_vec)
+            // A loose stem is its header only: the channel count is in its
+            // `fmt ` chunk, and the stem is megabytes of ATRAC9.
+            let channels = if song.embedded[0] {
+                lib.banks()[0]
+                    .embedded(lead)
+                    .map(|blob| Wem::parse(blob).map(|w| w.format().channels).ok())
             } else {
-                archives.read_name(&wem_name(st, lead)).ok()
+                archives
+                    .peek_name(&wem_name(st, lead), crate::MEDIA_HEADER_PEEK)
+                    .ok()
+                    .map(|head| crate::at3::describe(&head).ok().map(|s| s.format.channels))
             };
-            let Some(first) = first else {
+            let Some(channels) = channels else {
                 skip(Skip::MissingMedia(lead));
                 continue;
             };
-            match Wem::parse(&first).map(|w| w.format().channels) {
+            match channels.ok_or(()) {
                 Ok(2) => {}
                 Ok(other) => {
                     skip(Skip::Channels(other));

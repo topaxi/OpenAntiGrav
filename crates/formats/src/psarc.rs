@@ -408,6 +408,16 @@ impl Directory {
         Ok(self.blocks[first..end].to_vec())
     }
 
+    /// The stored length of each block holding entry `index`'s first `len`
+    /// bytes.
+    fn head_blocks(&self, index: usize, len: u64) -> Result<Vec<u32>> {
+        let mut blocks = self.entry_blocks(index)?;
+        let block_size = u64::from(self.header.block_size.max(1));
+        let wanted = usize::try_from(len.div_ceil(block_size)).unwrap_or(usize::MAX);
+        blocks.truncate(wanted);
+        Ok(blocks)
+    }
+
     /// Turns the bytes [`Directory::entry_range`] named into the entry itself.
     /// `stored` must be exactly that range. Each block is inflated when it
     /// starts with zlib's header byte and copied otherwise - **and copied anyway
@@ -420,12 +430,50 @@ impl Directory {
     /// a block (inflated or raw) is not the full block size without being the
     /// entry's last.
     pub fn read_entry(&self, index: usize, stored: &[u8]) -> Result<Vec<u8>> {
+        self.read_entry_head(index, stored, u64::MAX)
+    }
+
+    /// Where the blocks holding entry `index`'s first `len` bytes lie:
+    /// [`Directory::entry_range`] cut to those blocks, for a reader that needs
+    /// a header and not the entry (a track's length, say).
+    ///
+    /// # Errors
+    ///
+    /// As [`Directory::entry_range`].
+    pub fn entry_head_range(&self, index: usize, len: u64) -> Result<(u64, u64)> {
+        let (offset, _) = self.entry_range(index)?;
+        let stored = self
+            .head_blocks(index, len)?
+            .into_iter()
+            .map(|block| {
+                if block == 0 {
+                    u64::from(self.header.block_size)
+                } else {
+                    u64::from(block)
+                }
+            })
+            .sum();
+        Ok((offset, stored))
+    }
+
+    /// Entry `index`'s first `len` bytes (all of it when shorter), inflating
+    /// only the blocks that hold them. `stored` is exactly the range
+    /// [`Directory::entry_head_range`] named.
+    ///
+    /// # Errors
+    ///
+    /// As [`Directory::read_entry`].
+    pub fn read_entry_head(&self, index: usize, stored: &[u8], len: u64) -> Result<Vec<u8>> {
         let entry = self.entries.get(index).ok_or(Error::NoSuchEntry {
             index,
             entries: self.entries.len(),
         })?;
         let block_size = self.header.block_size as usize;
-        let size = usize::try_from(entry.size).unwrap_or(usize::MAX);
+        // Whole blocks, so the last one inflates in place; cut to `len` at the end.
+        let whole_blocks = len
+            .div_ceil(u64::from(self.header.block_size.max(1)))
+            .saturating_mul(u64::from(self.header.block_size));
+        let size = usize::try_from(entry.size.min(whole_blocks)).unwrap_or(usize::MAX);
 
         // Validated before allocated: `entry.size` is a u40 read from the file,
         // so a crafted entry could declare a terabyte and `Vec::with_capacity`
@@ -433,7 +481,7 @@ impl Directory {
         // (`size.div_ceil(block_size)` blocks must exist). A public parser owes
         // this guard to itself even though the assets layer calls `entry_range`
         // first. Finding F2 of the 2026-08-18 review.
-        let blocks = self.entry_blocks(index)?;
+        let blocks = self.head_blocks(index, len)?;
 
         let mut out = Vec::with_capacity(size);
         let mut inflater: Option<Box<DecompressorOxide>> = None;
@@ -498,7 +546,7 @@ impl Directory {
             }
         }
 
-        out.truncate(size);
+        out.truncate(size.min(usize::try_from(len).unwrap_or(usize::MAX)));
         Ok(out)
     }
 }

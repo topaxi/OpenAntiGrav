@@ -184,6 +184,38 @@ impl Archive {
         self.directory.read_entry(index, &stored).map_err(bad)
     }
 
+    /// Entry `index`'s first `len` bytes, reading and inflating only the
+    /// blocks that hold them (64 KiB each on every archive these titles ship):
+    /// a track's header without the track.
+    ///
+    /// # Errors
+    ///
+    /// As [`Archive::read`].
+    pub fn peek(&mut self, index: usize, len: u64) -> Result<Vec<u8>> {
+        let bad = |source: psarc::Error| Error::BadPsarcDirectory {
+            archive: self.label.clone(),
+            source,
+        };
+        let (offset, stored_len) = self.directory.entry_head_range(index, len).map_err(bad)?;
+        let stored = self.source.read(offset, stored_len)?;
+        self.directory
+            .read_entry_head(index, &stored, len)
+            .map_err(bad)
+    }
+
+    /// [`Archive::peek`] by path.
+    ///
+    /// # Errors
+    ///
+    /// As [`Archive::read_path`].
+    pub fn peek_path(&mut self, path: &str, len: u64) -> Result<Vec<u8>> {
+        let index = self.index_of_path(path).ok_or_else(|| Error::NoSuchPath {
+            archive: self.label.clone(),
+            path: path.to_string(),
+        })?;
+        self.peek(index, len)
+    }
+
     /// Reads and inflates the entry with this path.
     ///
     /// # Errors

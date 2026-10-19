@@ -178,6 +178,50 @@ fn the_eleven_declared_race_tracks_are_listed_and_decode() {
         );
     }
 
+    // Each length is read off the track's first PSARC block, not the track;
+    // it is the one the whole entry declares, to the bit.
+    let tracks = oag_2048::MUSIC
+        .tracks
+        .expect("2048 declares its soundtrack");
+    let mut archives = oag_2048::open(&source).expect("opening the extraction");
+    let definition = String::from_utf8(archives.read_name(tracks.declared_in).unwrap()).unwrap();
+    let names: Vec<String> = oag_music::playlist::music(&definition)
+        .iter()
+        .map(|track| track.entry_name(tracks.file))
+        .filter(|name| archives.locate(name).is_some())
+        .collect();
+    assert_eq!(names.len(), entries.len());
+    for (name, entry) in names.iter().zip(&entries) {
+        let whole = archives.read_name(name).expect("reading a track whole");
+        assert_eq!(
+            oag_music::seconds_of(&whole),
+            Some(entry.seconds),
+            "{name}: the head and the whole entry disagree on its length"
+        );
+    }
+
+    // Each length is read off the track's first PSARC block, not the track;
+    // it is the one the whole entry declares, to the bit.
+    let tracks = oag_2048::MUSIC
+        .tracks
+        .expect("2048 declares its soundtrack");
+    let mut archives = oag_2048::open(&source).expect("opening the extraction");
+    let definition = String::from_utf8(archives.read_name(tracks.declared_in).unwrap()).unwrap();
+    let names: Vec<String> = oag_music::playlist::music(&definition)
+        .iter()
+        .map(|track| track.entry_name(tracks.file))
+        .filter(|name| archives.locate(name).is_some())
+        .collect();
+    assert_eq!(names.len(), entries.len());
+    for (name, entry) in names.iter().zip(&entries) {
+        let whole = archives.read_name(name).expect("reading a track whole");
+        assert_eq!(
+            oag_music::seconds_of(&whole),
+            Some(entry.seconds),
+            "{name}: the head and the whole entry disagree on its length"
+        );
+    }
+
     let cache = std::env::temp_dir().join("oag-2048-music-ground-truth");
     let sound = library::load_entry(&GameLibrary, &source, entries[0].at, &cache)
         .expect("decoding track 01");

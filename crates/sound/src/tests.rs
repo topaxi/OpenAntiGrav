@@ -12,6 +12,7 @@
 use super::*;
 
 mod no_audio;
+mod race_pick;
 mod race_switch;
 mod resume;
 mod source_switch;
@@ -36,6 +37,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let psp_only = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: None,
         ps3: None,
@@ -55,6 +57,7 @@ fn a_release_that_is_not_there_falls_back_to_the_booted_one() {
     let both = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -238,6 +241,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -273,6 +277,9 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -338,6 +345,7 @@ fn asking_for_the_music_again_never_restarts_it() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -366,6 +374,9 @@ fn asking_for_the_music_again_never_restarts_it() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -397,6 +408,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let nothing = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: None,
         ps2: None,
         ps3: None,
@@ -421,6 +433,9 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -434,6 +449,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: None,
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -460,6 +476,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
     let discs = MusicDiscs {
         library: &NoLibrary,
         listings: Listings::default(),
+        later: Default::default(),
         psp: Some("psp.chd".into()),
         ps2: Some("ps2.chd".into()),
         ps3: None,
@@ -493,6 +510,9 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -552,6 +572,9 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -602,6 +625,9 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -655,6 +681,9 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -693,6 +722,9 @@ fn a_movie_with_no_voice_has_no_playhead() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -728,6 +760,9 @@ fn a_run_with_no_dump_accumulates_nothing() {
         menu_sound: None,
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),
@@ -759,7 +794,7 @@ fn silence(seconds: f64, channels: u16, rate: u32) -> Arc<Sound> {
 /// (`music_from: None`) and a race track is already decoded and cached, so
 /// [`Audio::start_race_music`] never touches a disc (the technique of
 /// [`changing_the_music_source_seeks_rather_than_restarting`]).
-fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
+pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
     let menu_sound = silence(28.0, 2, 44_100);
     let race_sound = silence(180.0, 2, 44_100);
     let mut audio = Audio {
@@ -782,6 +817,9 @@ fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
         race_prefetch: None,
+        race_job: None,
+        menu_job: None,
+        pending_restore: None,
         source_switch: None,
         sfx: None,
         hd: Default::default(),

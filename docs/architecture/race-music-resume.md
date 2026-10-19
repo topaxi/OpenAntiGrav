@@ -55,10 +55,12 @@ the normal place.
 
 ## When it is read
 
-Once per run, in `Session::launch_race` before `reserve_race_music_index` (which only
-fills an empty index, so a later restore would silently do nothing).
-`Audio::restore_race_music` re-lists the booted soundtrack and refuses the saved state,
-leaving the playlist at its normal start with a `warn` line
+Once per run, in `Session::launch_race` before `race_music_pick` (which hands a saved
+place out once). `Audio::restore_race_music` reads nothing: with the booted listing
+already read it checks the place there, otherwise it keeps it and the race's
+`MusicFetchWorker` checks it against the listing before it fetches
+([music threads](music-threads.md)). Either way the saved state is refused, leaving the
+playlist at its normal start with a `warn` line
 (`audio: not resuming the saved race music (...)`), when:
 
 - the soundtrack cannot be listed;

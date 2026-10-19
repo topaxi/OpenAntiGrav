@@ -15,7 +15,7 @@ while it is still running:
 | Work | Thread | Handed back by |
 | --- | --- | --- |
 | Reading the circuit off the disc (`race::load`) | `race-load` (`race::LoadWorker`) | `LoadWorker::is_finished`, then `join` |
-| Locating and decoding the race music | `race-music` (`audio::MusicFetchWorker`) | `is_finished`, then `join` at the hand-off |
+| Locating and decoding the race music | `race-music` (`audio::MusicFetchWorker`) | `is_finished`, applied at the hand-off or on a later tick ([music threads](music-threads.md)) |
 | Building the race scene and warming its pipelines | `race-build` (`crate::race_build::BuildWorker`) | `BuildWorker::take`, a poll |
 | Releasing a parked race's GPU resources on `LAUNCH RACE` | `race-drop` (`race_build::drop_off_thread`) | nothing - fire and forget |
 

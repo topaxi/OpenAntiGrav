@@ -13,52 +13,74 @@
 //! A title whose race music cannot be listed or decoded here reports that and
 //! passes nothing: the test names which of the five reach the playlist.
 //!
-//! The same walk checks that **a race's first tick opens no disc on the
-//! calling thread**. It used to re-read the booted soundtrack's listing there
-//! (`Audio::race_soundtrack_len`), which on HD decompresses every track whole:
-//! a 248 to 264 ms frame at race start on the Steam Deck (2026-10-19,
-//! `docs/rendering/hd-gpu-cost.md`). `oag_sound::MusicDiscs` now keeps a
-//! listing once read.
+//! The same walk checks that **the calling thread does no music work**: no
+//! listing, disc read or decode, counted by `oag_sound::probe`, across the
+//! music survey, the menu music's start, a race's start, its first tick, a resume from the
+//! menus, a track change and (where both releases are here) a `MUSIC SOURCE`
+//! switch. That thread is the frame thread in the game. On the Steam Deck the
+//! synchronous versions cost 231 ms (HD's menu music), 305 ms (HD's listing,
+//! for a saved place) and 416 ms (a race track) (2026-10-19,
+//! `docs/rendering/hd-gpu-cost.md`).
 
-use std::cell::Cell;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use oag_game::music_state::{self, Saver};
 use oag_game::sound::GameLibrary;
 use oag_sound::library::{Library, Opened};
-use oag_sound::{self as audio, Audio, MusicSource};
+use oag_sound::{self as audio, Audio, MusicSource, probe};
 
-thread_local! {
-    /// Sources opened on this thread. A fetch worker's opens land on its own
-    /// thread's counter, so this counts only what would stall a frame.
-    static OPENED_HERE: Cell<usize> = const { Cell::new(0) };
-}
-
-/// [`GameLibrary`], counting each open on the thread that asked.
+/// [`GameLibrary`], searching the workspace's `data/images/` for a counterpart
+/// release: the game's search path starts at a relative `data/images`, which
+/// a test (run from its crate's directory) does not reach.
 #[derive(Debug)]
-struct Counting;
+struct Workspace;
 
-impl Library for Counting {
+impl Library for Workspace {
     fn open(&self, source: &str) -> Option<Opened> {
-        OPENED_HERE.with(|n| n.set(n.get() + 1));
         GameLibrary.open(source)
     }
 
     fn containers(&self) -> Vec<PathBuf> {
-        GameLibrary.containers()
+        let images = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/images");
+        let mut found: Vec<PathBuf> = std::fs::read_dir(images)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file() && oag_source::source::is_container(path))
+            .collect();
+        found.sort();
+        found
     }
 }
 
-/// Plays one tick, the race's first, and fails if it opened a source here.
-fn first_tick_opens_nothing(audio: &mut Audio, label: &str) {
-    let before = OPENED_HERE.with(Cell::get);
-    audio.tick();
-    let opened = OPENED_HERE.with(Cell::get) - before;
+/// Runs `step` and fails if it did music work on this thread.
+fn here_does_no_music_work<T>(label: &str, what: &str, step: impl FnOnce() -> T) -> T {
+    let before = probe::on_this_thread();
+    let out = step();
+    let after = probe::on_this_thread();
     assert_eq!(
-        opened, 0,
-        "{label}: the race's first tick opened {opened} source(s) on the calling thread"
+        after.calls - before.calls,
+        0,
+        "{label}: {what} did {} piece(s) of music work on the calling thread, {:?}",
+        after.calls - before.calls,
+        after.time - before.time
     );
+    out
+}
+
+/// Ticks until `ready` holds, as a frame loop would, failing after a minute.
+fn tick_until(audio: &mut Audio, label: &str, what: &str, ready: impl Fn(&Audio) -> bool) {
+    let start = Instant::now();
+    while !ready(audio) {
+        assert!(
+            start.elapsed() < Duration::from_secs(60),
+            "{label}: {what} never landed"
+        );
+        audio.tick();
+        std::thread::sleep(Duration::from_millis(2));
+    }
 }
 
 const SECONDS: u32 = 20;
@@ -105,21 +127,25 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     let Some(image) = image else {
         return;
     };
-    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &Counting);
+    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
     let scratch = scratch(label);
     let cache = scratch.0.clone();
     let file = cache.join("music.toml");
     let title = format!("title-{label}");
 
+    a_frame_thread_does_no_music_work(label, &image.display().to_string(), &cache);
+
     let mut first = open_audio(&cache);
-    first.start_race_music(&discs, MusicSource::Auto, &cache);
+    here_does_no_music_work(label, "starting the race music", || {
+        first.start_race_music(&discs, MusicSource::Auto, &cache);
+    });
     assert!(
         first.playhead_race().is_some(),
         "{label}: no race music started"
     );
     // The playlist needs its track count on the first tick of a race, and has
     // it without reading the disc again.
-    first_tick_opens_nothing(&mut first, label);
+    here_does_no_music_work(label, "the race's first tick", || first.tick());
     play(&mut first, SECONDS);
     let saved = first
         .race_music_state()
@@ -133,9 +159,13 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     drop(first);
 
     let mut second = open_audio(&cache);
-    music_state::resume_from(&file, &mut second, &discs, &title);
-    second.start_race_music(&discs, MusicSource::Auto, &cache);
-    first_tick_opens_nothing(&mut second, label);
+    // The saved place is checked against a listing HD's survey has not read:
+    // the race's fetch reads and checks it, not this thread.
+    here_does_no_music_work(label, "resuming a saved place", || {
+        music_state::resume_from(&file, &mut second, &discs, &title);
+        second.start_race_music(&discs, MusicSource::Auto, &cache);
+        second.tick();
+    });
     let again = second
         .race_music_state()
         .expect("the resumed race has a place");
@@ -177,6 +207,79 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     println!(
         "{label}: track {} resumed at {at:.1} s of {:.0} s",
         saved.index, saved.track_seconds
+    );
+
+    // A track change: the second track resumed a second before its end.
+    let near_end = audio::RaceMusicState {
+        second: listed[1].floor() as u32 - 1,
+        ..wanted
+    };
+    let mut fourth = open_audio(&cache);
+    fourth.restore_race_music(&discs, &near_end).unwrap();
+    fourth.start_race_music(&discs, MusicSource::Auto, &cache);
+    here_does_no_music_work(label, "a track change", || play(&mut fourth, 3));
+    assert_eq!(
+        fourth.race_music_state().map(|s| s.index),
+        Some(2 % listed.len()),
+        "{label}: the playlist moved on to the next track"
+    );
+}
+
+/// The steps a frame loop takes, on a null output with no dump, so every start
+/// takes the route a window does: started, then polled by `tick` until it lands.
+fn a_frame_thread_does_no_music_work(label: &str, image: &str, cache: &Path) {
+    // The game's own survey, which runs on a worker; every start below waits
+    // for its answer there.
+    let discs = here_does_no_music_work(label, "the music survey", || {
+        audio::MusicDiscs::survey_in_background(image, &Workspace)
+    });
+    let discs = &discs;
+    let mut audio = Audio::open(
+        &audio::settings::Settings::default(),
+        None,
+        None,
+        Duration::from_millis(50),
+        true,
+    );
+    here_does_no_music_work(label, "the menu music", || {
+        audio.start_music(discs, MusicSource::Auto, cache);
+        tick_until(&mut audio, label, "the menu music", |a| {
+            !a.music_in_flight()
+        });
+    });
+    let menu = audio.playhead().is_some();
+    here_does_no_music_work(label, "a race's music", || {
+        audio.start_race_music(discs, MusicSource::Auto, cache);
+        tick_until(&mut audio, label, "the race music", |a| {
+            !a.music_in_flight()
+        });
+    });
+    assert!(audio.playhead_race().is_some(), "{label}: no race music");
+    here_does_no_music_work(label, "a resume from the menus", || {
+        audio.tick();
+        audio.pause_race_music();
+        audio.start_race_music(discs, MusicSource::Auto, cache);
+    });
+    assert!(
+        audio.playhead_race().is_some(),
+        "{label}: the decoded track resumes at once"
+    );
+    discs.wait_surveyed();
+    if discs.both() {
+        let other = match discs.booted() {
+            Some(oag_disc::Platform::Ps2) => MusicSource::Psp,
+            _ => MusicSource::Ps2,
+        };
+        here_does_no_music_work(label, "a MUSIC SOURCE switch", || {
+            audio.set_music_source(discs, other, cache);
+            tick_until(&mut audio, label, "the source switch", |a| {
+                !a.music_in_flight()
+            });
+        });
+    }
+    println!(
+        "{label}: no music work on the calling thread (menu music: {menu}, source switch: {})",
+        discs.both()
     );
 }
 
