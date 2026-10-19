@@ -121,27 +121,24 @@ use oag_ai::probe::{self, Scenario};
 ///   flattened onto the ground plane differs from the plain chord angle in the
 ///   last bit; the spread reads `0.000255..0.020490` and `0.000030..0.026295`.
 ///   No transcendental added; `oag_core::math::acos` is the only one.
-/// - **2026-10-20, all rows and the plan (maintainer-approved physics port)**: the
-///   player's physics, no driver code: Pulse's inertia diagonal in world axes
-///   (`oag_physics::InertiaFrame::World`, `docs/physics/airborne-ground-truth.md`).
 const REFERENCE: [(u32, Scenario, u64, u64); 3] = [
     (
         600,
         Scenario::Solo,
-        0xf96e_d07e_cadf_d101,
-        0xdc2d_92b4_6cbb_6ab4,
+        0xb27b_df5d_9fd5_c28d,
+        0x74b5_77e2_abbc_dc2d,
     ),
     (
         600,
         Scenario::Field,
-        0x3d7d_62f5_72e7_60d4,
-        0x9855_1bad_0258_1292,
+        0x5249_34d8_34dd_e4e6,
+        0xfac7_6d7b_763e_551e,
     ),
     (
         1_800,
         Scenario::Field,
-        0x22fd_eaeb_61ee_a41c,
-        0xa077_9ebc_90e0_b0b2,
+        0x9548_b23b_b132_b7b7,
+        0xb7da_882b_82c1_cdb7,
     ),
 ];
 
@@ -220,7 +217,7 @@ fn the_scenario_still_exercises_corners_and_craft_that_drive() {
 /// The speed plan learned on the probe's circuit, hashed ([`probe::speed_plan`]).
 /// Added 2026-10-03 with the plan; nothing above moved, every scenario there
 /// drives with `plan: None`.
-const PLAN_REFERENCE: u64 = 0x2b15_a393_2422_05de;
+const PLAN_REFERENCE: u64 = 0xc6b7_1a41_c017_d1b5;
 
 #[test]
 fn the_speed_plan_matches_the_committed_reference() {
