@@ -961,6 +961,12 @@ a second HOST GAME in the same game after the race binds the port again; a Pure 
 when it picks a Pulse host. A ground-truth test (`net_ground_truth::a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets`)
 runs the same chain over real sockets without a window.
 
+**Re-walked on HD EU (2026-10-19, Xvfb, lavapipe, loopback, one host and one joiner).** MULTIPLAYER, LAN, JOIN GAME,
+Ship Select, the host list with one `JOINABLE` row, the row chosen, the host's lobby showing the second person, the host
+starting: both ends `hash ok` with 0 bad over the first 700 ticks. JOIN GAME's Ship Select is opened from the join row,
+not from a Track Select, so its BACK returns to the LAN page directly (it used to open a stray Track Select first, which
+needed a second BACK; `Session::handle_picker`'s `joining` branch, LAN and online alike).
+
 **Not covered:** two physical machines (one network, a real broadcast), a firewall in the way, IPv6, a
 different pressing of the same title live (the tick-0 refusal is a loopback test), more than two people,
 a human at the keys, Android and iOS, the web (the rows decline there).
@@ -1131,3 +1137,7 @@ Deliberately last. Multiplayer built on an unverified simulation inherits every
 one of its bugs and adds desync on top. The state hash of `oag-core` and the
 input-stream replays of M7 are what a desync check and a record check are built
 from.
+
+**Android needs the `INTERNET` permission** (`scripts/build-apk.sh`'s manifest; a test guards it): without it the host
+browser's UDP socket is refused, JOIN GAME's Ship Select was followed by no host list and the player was back on the LAN
+page (maintainer, Android joiner against a Steam Deck host, 2026-10-19). Not yet confirmed on a device.

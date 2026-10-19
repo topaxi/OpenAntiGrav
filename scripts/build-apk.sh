@@ -101,6 +101,8 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
     android:versionCode="$code"
     android:versionName="$version_name">
     <uses-sdk android:minSdkVersion="$api" android:targetSdkVersion="34" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />

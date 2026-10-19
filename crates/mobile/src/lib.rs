@@ -26,3 +26,16 @@ pub mod ios;
 /// default and a way to quit is not offered (the OS owns the app's lifetime).
 /// A constant of the build, not a probe of the machine.
 pub const MOBILE: bool = cfg!(any(target_os = "android", target_os = "ios"));
+
+#[cfg(test)]
+mod tests {
+    /// Android refuses every socket to an app without `INTERNET`: LAN JOIN GAME's host
+    /// browser failed to open and the player landed back on the LAN page.
+    #[test]
+    fn the_apk_manifest_asks_for_the_network() {
+        let script = include_str!("../../../scripts/build-apk.sh");
+        assert!(
+            script.contains(r#"<uses-permission android:name="android.permission.INTERNET" />"#)
+        );
+    }
+}
