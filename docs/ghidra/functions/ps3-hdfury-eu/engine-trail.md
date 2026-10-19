@@ -1676,6 +1676,23 @@ ramp at `+0x108` and the trail block's brightness:
 - The five spike shapes flicker at `RandRange(0.65, 0.85)` each, per frame -
   read, and **not implemented** (the scene draws the flare as two groups, not
   ten shapes; the load report says so).
+  **2026-10-19 re-read of the decompile (hypothesis, confidence 40, no name):**
+  every one of the five spikes calls `FUN_002e15f0(Spikes Random Scale Min,
+  Spikes Random Scale Max)` (`+0x434`/`+0x438` of the tuning block) once per
+  frame and stores the result as a **float field of that shape's own
+  draw-state record** (`+0x60`, `+0x62` and their siblings off the record base),
+  beside the shape's transform. It is not folded into the transform
+  matrix the shape is submitted with, so the flicker is a per-shape shader
+  parameter (the `AlphaScaler` node name looked up after the eleven shapes is
+  the candidate), not a geometric scale. Wiring it needs two things this
+  renderer lacks: the `EF_Main` and `EF_Boost` models split per shape (the node
+  tree names `ef_Spikes1Shape` to `ef_Spikes3Shape` under `EF_Main` and
+  `ef_SpikesLeftShape`/`ef_SpikesRightShape` under `EF_Boost`) and a
+  per-draw factor in the flame material. What the factor multiplies is not
+  read, so nothing was drawn on a guess. Cross-title: 2048's 72 flare trees
+  hang the same shape names (read by `oag_livery::flare`'s own census) and
+  Omega's tree is the same two groups, so the law is **checked, applies, not
+  wired** there.
 - `EngineFlare_Update` also writes the trail's brightness
   (`+0x11d8` above) and the scroll phase/`u_head` pair - the flare object
   owns the trail's animation inputs.

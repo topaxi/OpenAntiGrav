@@ -27,10 +27,17 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Open
 
-- **The Harimau livery.** The original's in-race `Data\Ships\Harimau` is the
-  white and orange scheme its carousel shows. Our `--team harimau` flies an
-  orange and blue one. It shows in every paired frame of 2026-10-12. This is
-  a texture or skin choice, not lighting, and it is unread.
+- **The Harimau livery - re-read 2026-10-19, probably not a skin choice.**
+  `ship.vex` names `textures_dlc/livery1/harimau_livery.gtf` (the only livery
+  its materials name) and our hull wears exactly that: orange, white and blue.
+  Livery 2 is white and yellow, livery 3 white, light blue and orange, livery 4
+  a grey mask. At the `hd-timetrial-talons-harimau-classic-start` state the
+  original's hull shows livery 1's orange outer wings, blue wing tips and
+  yellow underside, washed pale by a strong sky and floor reflection
+  (by eye, at 2000x1200, not measured). So the visible gap is the hull's
+  environment and specular response, the same bright-scene umbrella as the
+  scene calibration, not a texture choice. Unread: whether the original binds a
+  different livery number for the carousel row. Not wired.
 - **The white wing rims on the `_n1` skins** are not the SPU term: they stay
   with the craft binding removed. Whether the original shows them is unread.
 
