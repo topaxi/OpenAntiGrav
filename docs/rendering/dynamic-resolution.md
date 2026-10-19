@@ -533,7 +533,9 @@ made the true scalable cost visible for the first time:**
   still over budget, no render scale can deliver the target - and the
   controller must not walk toward the floor chasing a rate that will never
   arrive, the same failure `Target::at_most` already guards from the clamping
-  side. `Controller::unreachable()` requires `RISE_PATIENCE` consecutive frames
+  side. **Superseded for the fixed-cost half (2026-10-19, ADR-0072):** holding
+  there left a 4K FSR 3.1 profile at full resolution whatever its minimum said;
+  the controller now falls to the floor and still reports it (next section). `Controller::unreachable()` requires `RISE_PATIENCE` consecutive frames
   of "nothing left to decide" before it reports true, for the same reason a
   rise needs earning: at a target the machine can only just miss, the
   underlying condition flickers between frames, and a caller that logged every
@@ -638,3 +640,28 @@ which is the same thing `restart_required` already means.
   applies verbatim. A load is not a frame either - `Session::stalled` exists for
   that and clears the meter, and a controller needs the same guard or a track
   load drives the scale to the floor and takes seconds to climb back.
+
+## The fixed cost over the period (2026-10-19)
+
+Report: Pulse (PS2) "always renders full resolution, no matter the value" on the Steam
+Deck, Pulse (PSP) scaling as expected. Not the platform and not `bb542a73a` (only menu
+values and the default floor): the maintainer's PS2 row is the one with
+`reconstruction = "fsr3"`, `target_fps = "90"`, and the Deck's gamescope was on a
+3840x2160 output. FSR 3.1's presented half measured 11.99 ms there against an 11.11 ms
+period, so the budget was negative and the controller held at the ceiling.
+
+Deck, release build, 50 s races on the maintainer's settings file copied read-only into
+a private XDG dir (`render=` is the scene target):
+
+| profile | scene target | fps |
+| --- | --- | --- |
+| PS2, fsr3, target 90, min 50 (as reported), before | 3840x2160 all run | 15 |
+| PS2, smaa, target 90, min 50 | 2112x1188 (55 %) | 49 |
+| PSP, fsr3, target 60, min 25 | 960x540 (25 %) | 41 |
+
+Static `--render-scale 50` already gave 720x408 on PS2 and PSP alike (Xvfb, lavapipe), so
+the fixed-scale path was never broken; only the controller held. ADR-0072 makes it fall
+to the floor. Pins: `oag_present::drs::tests::an_unreachable_target_falls_to_the_floor_and_says_so`,
+`a_fixed_cost_over_the_period_still_honours_the_minimum_resolution` (floors 25, 33 and 50),
+and `oag_game::settings::tests::a_render_scale_below_100_shrinks_every_title_and_platforms_scene_target`
+(every `(title, platform)` row, and the reported file's shape).
