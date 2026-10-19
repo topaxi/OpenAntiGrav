@@ -602,6 +602,11 @@ impl Scale {
     /// Rendering at exactly the size it is displayed at.
     pub const FULL: Self = Self(100);
 
+    /// Half the size on each side. The resolution controller's default floor:
+    /// a named constant because the first entry of [`Self::OFFERED`] is no
+    /// longer it (33 is 720p drawn for a 4K output, 25 is 540p).
+    pub const HALF: Self = Self(50);
+
     /// The narrowest and widest a scale may be.
     ///
     /// Not preferences: below the floor a 480-wide viewport renders at 120
@@ -612,8 +617,11 @@ impl Scale {
     pub const RANGE: std::ops::RangeInclusive<u32> = 25..=200;
 
     /// The percentages the menus offer.
-    pub const OFFERED: [Self; 6] = [
+    pub const OFFERED: [Self; 9] = [
+        Self(25),
+        Self(33),
         Self(50),
+        Self(67),
         Self(75),
         Self(100),
         Self(125),

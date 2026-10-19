@@ -90,7 +90,7 @@ pub(super) fn known_profiles()
 /// the one value that means "the controller has nowhere to go" and would fire
 /// the menu's own warning out of the box.
 fn default_minimum_resolution() -> oag_display::display::Scale {
-    oag_display::display::Scale::OFFERED[0]
+    oag_display::display::Scale::HALF
 }
 
 /// The render-cost-sensitive slice of [`super::Graphics`], persisted one per

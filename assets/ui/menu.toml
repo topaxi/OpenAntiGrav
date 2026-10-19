@@ -849,7 +849,7 @@ kind = "choice"
 label = "RENDER SCALE"
 string_id = "OAG_GRAPHICS_RENDER_SCALE"
 setting = "graphics.render_scale"
-values = ["50", "75", "100", "125", "150", "200"]
+values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
 
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
@@ -928,32 +928,44 @@ kind = "choice"
 label = "MINIMUM RESOLUTION"
 string_id = "OAG_GRAPHICS_MINIMUM_RESOLUTION"
 setting = "graphics.minimum_resolution"
-values = ["50", "75", "100", "125", "150", "200"]
+values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
 disabled_by = { setting = "graphics.target_fps", value = "off" }
 warn_when = [
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.minimum_resolution", value = "25" },
+        { setting = "graphics.render_scale", values = ["25"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.minimum_resolution", value = "33" },
+        { setting = "graphics.render_scale", values = ["25", "33"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "50" },
-        { setting = "graphics.render_scale", values = ["50"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50"] },
+    ] },
+    { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
+        { setting = "graphics.minimum_resolution", value = "67" },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "75" },
-        { setting = "graphics.render_scale", values = ["50", "75"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "100" },
-        { setting = "graphics.render_scale", values = ["50", "75", "100"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75", "100"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "125" },
-        { setting = "graphics.render_scale", values = ["50", "75", "100", "125"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75", "100", "125"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "150" },
-        { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75", "100", "125", "150"] },
     ] },
     { message = "A FLOOR AT OR ABOVE RENDER SCALE LEAVES NOTHING TO MOVE", all = [
         { setting = "graphics.minimum_resolution", value = "200" },
-        { setting = "graphics.render_scale", values = ["50", "75", "100", "125", "150", "200"] },
+        { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"] },
     ] },
 ]
 

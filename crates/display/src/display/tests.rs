@@ -156,6 +156,22 @@ fn every_offered_scale_is_one_this_build_accepts() {
     );
 }
 
+#[test]
+fn the_menu_reaches_720p_on_a_4k_output() {
+    let third = Scale::OFFERED
+        .iter()
+        .find(|s| s.percent() == 33)
+        .expect("33% is offered");
+    let height = (2160.0 * third.factor()).round();
+    assert!((height - 720.0).abs() <= 10.0, "{height}");
+    assert!(Scale::OFFERED[0].percent() < Scale::HALF.percent());
+    assert!(
+        Scale::OFFERED
+            .windows(2)
+            .all(|w| w[0].percent() < w[1].percent())
+    );
+}
+
 /// The three percentages the macro writes out behave the way the render
 /// scale already did, which is the whole reason they share it.
 #[test]
