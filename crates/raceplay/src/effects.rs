@@ -893,10 +893,18 @@ impl Race {
         self.stage().anchor_of(self.view.quake_effect?)
     }
 
-    /// The full-screen wash a detonation or the Quake is drawing this frame,
-    /// as `RGBA`, or `None` with none (and on a source that draws none).
+    /// The full-screen wash a detonation or the Quake is drawing this frame in the view being
+    /// drawn, as `RGBA`, or `None` with none (and on a source that draws none).
+    ///
+    /// **The player's view alone.** The wash is one state, started and faded from the player's
+    /// own events and camera (its falloff is measured from the player's eye), so another local
+    /// seat's view does not wear it: before, the player's explosion or respawn washed every
+    /// view of a split. **Chosen, not measured**: a seat has no wash of its own yet.
     #[must_use]
     pub fn screen_wash(&self) -> Option<[f32; 4]> {
+        if self.extra_viewpoint().is_some() {
+            return None;
+        }
         self.view.screen_flash.as_ref()?.colour()
     }
 

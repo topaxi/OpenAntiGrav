@@ -599,12 +599,16 @@ impl Race {
             // two milliseconds and the parameter would not be worth authoring.
             // It is also the convention `<Airbrake gain/falloff>` already uses on
             // the same scale, one element away.
-            for slot in (0..MAX_SHIPS).filter(|&slot| self.sim.world.person_flown(slot)) {
+            for slot in 0..MAX_SHIPS {
+                // A craft nobody flies folds its flaps back, so a seat handed to the AI
+                // does not keep its last deflection.
+                let flown = self.sim.world.person_flown(slot);
                 let ship = &self.sim.world.ships[slot].physics;
                 for (flap, level) in self.view.flaps[slot]
                     .iter_mut()
                     .zip([ship.airbrake_left, ship.airbrake_right])
                 {
+                    let level = if flown { level } else { 0.0 };
                     let target = level.clamp(0.0, 100.0);
                     let (rate, rising) = if target > *flap {
                         (self.view.flap_graphics.up_speed, true)

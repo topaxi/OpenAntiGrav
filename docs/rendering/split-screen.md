@@ -92,12 +92,14 @@ puts the player's back. Chosen, not measured:
   view), and a person's craft swings its own airbrake flaps (`RaceView::flaps` is per slot, so a
   rival stays stowed and every person, not the first slot only, deflects).
   Chosen, not measured, like the rest: a person with no view (more people than views) throws
-  nothing; the explosion flash and the destroy camera stay the player's alone; the announcer's
+  nothing; the destroy camera stays the player's alone, and so does the full-screen wash
+  (`Race::screen_wash` is `None` in another seat's view; before, the player's explosion or
+  respawn washed every view of a split); the announcer's
   shield-up cue stays the player's (an audio change, not a view one).
   Checked by `tests/local_seat_fx.rs` (2 and 4 views, each seat against every other; each test
   fails with its fix put back), by `just bench-render pulse --views 1,2h,2v --size 1280x800` before and after (frame p50 one view 1166 and 1145 us, 2h 1713 and 1715, 2v 1664 and 1678, load 7-14 on an RX 7800 XT: unmoved), and by stills 2h and 4-way with
-  `--force-wall-slide TICK:SLOT` (a verification aid that throws one craft into the nearest
-  wall): the hit seat's view shows its sparks and the shake, the same frame without the change
+  `--force-wall-slide TICK:SLOT` (a verification aid that throws one craft sideways to its right at 600 units a second, so
+  it meets a wall where there is one): the hit seat's view shows its sparks and the shake, the same frame without the change
   shows neither, and with no hit the frames are `cmp`-identical to before for one, two and
   four views.
 - **The flyby plays full screen and the split starts when it ends**

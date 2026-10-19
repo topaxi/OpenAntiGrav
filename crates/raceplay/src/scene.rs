@@ -359,6 +359,10 @@ pub struct Scene {
     /// Which split-screen view the next [`Scene::render`] draws. See
     /// [`Scene::render_viewports`].
     layer: std::cell::Cell<viewports::Layer>,
+    /// Which craft's hull holds its flaps at rest in the vertex buffer, so a craft a person
+    /// stopped flying (a window closed, the seat went to the AI) is written back to rest once
+    /// and then left alone like every AI craft.
+    flaps_stowed: std::cell::Cell<[bool; oag_gameplay::MAX_SHIPS]>,
     boost_zoom: hd_chain::BoostZoom,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
@@ -1014,6 +1018,7 @@ impl Scene {
             bloom_pending: std::cell::Cell::new(false),
             bloom_views: std::cell::RefCell::new(Vec::new()),
             layer: std::cell::Cell::new(viewports::Layer::Whole),
+            flaps_stowed: std::cell::Cell::new([true; oag_gameplay::MAX_SHIPS]),
             boost_zoom: hd_chain::BoostZoom::new(caller_format),
             hd,
             omega,

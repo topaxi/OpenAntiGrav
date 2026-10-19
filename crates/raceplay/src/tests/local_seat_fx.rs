@@ -230,3 +230,45 @@ fn a_local_seats_airbrake_swings_its_own_flaps() {
         }
     }
 }
+
+/// The player's explosion wash is the player's view's alone: it was one state drawn over
+/// every view of a split.
+#[test]
+fn the_players_screen_wash_does_not_cover_another_seats_view() {
+    use oag_physics::CraftState;
+    for views in VIEWS {
+        let mut race = local_people(views, false);
+        race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
+        let at = race.sim.world.ships[0].physics.body.position;
+        race.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
+        race.advance_craft_flashes();
+        race.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
+        race.advance_craft_flashes();
+        race.view
+            .screen_flash
+            .as_mut()
+            .expect("a flash")
+            .advance(1.0 / 60.0, at);
+        for view in 0..views {
+            race.set_viewpoint(view);
+            let wash = race.screen_wash();
+            race.reset_viewpoint();
+            assert_eq!(wash.is_some(), view == 0, "{views} views, view {view}");
+        }
+    }
+}
+
+/// A seat handed to the AI (its window closed) folds its flaps back to rest instead of keeping
+/// the deflection it had.
+#[test]
+fn a_seat_given_back_to_the_ai_folds_its_flaps() {
+    let mut race = local_people(2, false);
+    race.sim.world.ships[1].physics.airbrake_left = 100.0;
+    race.tick(&PlayerInputs::none());
+    assert!(race.airbrake_flaps_of(1)[0] > 0.0);
+    race.sim.world.controllers[1] = Controller::Ai;
+    for _ in 0..240 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.airbrake_flaps_of(1), [0.0; 2], "the flap stayed out");
+}

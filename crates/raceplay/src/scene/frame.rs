@@ -604,12 +604,18 @@ impl Scene {
         // change-gated: two kilobytes a frame is cheaper than the state needed
         // to know they have not moved, and a gate would have to be invalidated
         // by anything that ever rebuilds the buffer.
+        let mut stowed = self.flaps_stowed.get();
         for (slot, ship) in self.ships.iter().enumerate().take(drawn) {
-            if race.sim.world.person_flown(slot) {
-                let [left, right] = race.airbrake_flaps_of(slot);
+            let [left, right] = race.airbrake_flaps_of(slot);
+            let swung = left != 0.0 || right != 0.0;
+            // A person's craft every frame; any other craft only to fold a flap that was
+            // left deflected (its seat went to the AI) back to rest, once.
+            if race.sim.world.person_flown(slot) || swung || !stowed[slot] {
                 ship.deflect_airbrakes(queue, left, right, recoloured);
+                stowed[slot] = !race.sim.world.person_flown(slot) && !swung;
             }
         }
+        self.flaps_stowed.set(stowed);
         // The shield shell: the craft's own matrix with a uniform swell on top,
         // and its colour written into the vertex buffer.
         //

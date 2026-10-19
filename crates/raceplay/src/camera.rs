@@ -408,9 +408,9 @@ impl Race {
         }
     }
 
-    /// Throws the craft in `slot` sideways at 150 units a second, toward whichever side of the
-    /// circuit the track's left-right position puts it nearer, for `--force-wall-slide`: the
-    /// wall contact that follows is the simulation's own. A verification aid and nothing
+    /// Throws the craft in `slot` sideways to its right at 600 units a second, for
+    /// `--force-wall-slide`, so it meets a wall where the circuit has one on that side: the wall
+    /// contact that follows is the simulation's own. A verification aid and nothing
     /// else; a slot that is not racing is left alone.
     pub fn force_wall_slide(&mut self, slot: usize) {
         let ship = &mut self.sim.world.ships[slot].physics;
