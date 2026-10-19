@@ -77,6 +77,11 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
 - **Processes.** Record the PID of everything you start, and kill only by
   that PID. Never `pkill -f <pattern>`: one pattern kill took down every
   member's `oag-game --race` run.
+- **Profilers open windows too.** `heaptrack` launches `heaptrack_gui` on
+  the maintainer's display when `DISPLAY` is set (2026-10-19). Run every
+  profiler with `DISPLAY` and `WAYLAND_DISPLAY` unset (`env -u DISPLAY -u
+  WAYLAND_DISPLAY heaptrack ...`) and read its output with
+  `heaptrack_print`.
 - **Emulators.** Start your own instance (see "Waiting on an emulator capture" below; PPSSPP with its own `HOME` and
   `XDG_CONFIG_HOME`, debugger port and display; RPCS3 with its own config
   copy). Never attach to an instance another member started. PPSSPP returns
