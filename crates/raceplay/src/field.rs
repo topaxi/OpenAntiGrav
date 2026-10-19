@@ -409,7 +409,7 @@ impl Race {
     /// truth for long enough to mislead: pads of both classes, a standing that
     /// counts *and times* its laps, an `Exhaust`, a livery, a pickup it can spend
     /// ([`Self::spend_opponent_pickup`]), a target for what it fires
-    /// (`Race::opponent_decides`), and two ways of being put back - the
+    /// (`Race::opponent_fires`), and two ways of being put back - the
     /// authored reset volumes and, below, the two dwell counters for a craft that
     /// has left the circuit or stopped on it.
     ///

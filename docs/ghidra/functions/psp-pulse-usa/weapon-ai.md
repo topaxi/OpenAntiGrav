@@ -235,25 +235,14 @@ and every craft fires or absorbs at random. Dead on any real machine; recorded
 because it is a second, simpler code path a future capture could mistake for the
 real one.
 
-## The absorb half, ported (2026-10-19)
+## The absorb half, tried and reverted (2026-10-19)
 
-`oag_ai::weapon_ai` now ports the absorb half of
-[the decision](#the-decision) for the weapons `FUN_088508d4` sets up (the
-forward ones and the Quake; the Cannon stays out, as its fire does).
-`Situation::absorb_index` builds `+0x34` from three terms: one per
-`FUN_088509e4` shield tier the craft is at or below (80, 60, 40, 20), one past
-15 s held, and one with no craft ahead inside 300. It is zero in an
-Eliminator. `WeaponAi::decide` returns `Decision::Absorb` when the fire roll
-fails (or the 0.8 s hold is not met), the absorb roll lands under
-`rate[+0x34] * absorb` (computed the long way), and the weapon has been held
-more than 0.2 s. Outside an Eliminator, `oag_raceplay` pays the weapon's
-`absorb` energy into the pool. Inside one it keeps the weapon, as before (see
-[mode 8](#mode-8-what-the-original-does-with-a-held-weapon-read-2026-10-03)).
-**Chosen, not measured:** the absorb roll is a third stream of the driver's
-noise, as the other two rolls already are. HD, 2048 and Omega run the same law
-on their own `WeaponAIstats.xml` odds and their own shield scale, inherited
-from Pulse and unmeasured there. 2048 and Omega: **ported**, both pinned by
-`fire_law_inherit_ground_truth.rs`.
+The absorb half of [the decision](#the-decision) was ported (absorb index from
+the `FUN_088509e4` shield tiers, the 15 s hold and nobody inside 300 ahead;
+`rate[+0x34] * absorb` after 0.2 s held) and reverted the same day. It moved
+11 lone-craft cells of `ai_clean_lap_gate` by freeing a craft's pickup slot
+for a Turbo that this project's own Turbo policy fires into walls, and the
+cadence it rolls at is not settled (see the section above). Still open.
 
 ## What is still open
 

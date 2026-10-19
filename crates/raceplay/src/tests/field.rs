@@ -103,7 +103,7 @@ fn craft_that_are_not_touching_are_left_alone() {
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
     race.sim.weapons = Some(one_rocket_table());
-    // Whether to fire is `Race::opponent_decides`'s question, asked by the
+    // Whether to fire is `Race::opponent_fires`'s question, asked by the
     // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
     assert!(

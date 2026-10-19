@@ -2,8 +2,7 @@
 //! law.
 //!
 //! `WeaponAi_Update` (`0x08851550`) and `WeaponAi_DecideFireOrAbsorb`
-//! (`0x088518b4`) decide this in Wipeout Pulse; this module is that decision,
-//! fire and absorb, for the weapons the forward setup (`0x088508d4`) builds.
+//! (`0x088518b4`) decide this in Wipeout Pulse; this module is their fire half.
 //! Every constant and branch is read off `BOOT.BIN`, see
 //! `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md` for addresses and
 //! confidence. What is **chosen** is said so where it happens, with no score.
@@ -21,9 +20,9 @@
 //!
 //! # Not covered
 //!
-//! - **Absorbing in an Eliminator**: there the original's absorb spends the
-//!   weapon on a Shield rather than energy, and was swept and did not move
-//!   the time to five kills. `oag_raceplay` keeps the weapon instead.
+//! - **Absorbing**, the other half of the decision: opponents absorb on
+//!   `oag_game`'s `Race::spend_opponent_pickup`, and the original's absorb in an
+//!   Eliminator was swept and did not move the time to five kills.
 //! - **The Cannon**: the original's opponent fire byte reaches a bit nothing
 //!   dispatches and the Cannon fires off an uninitialised byte
 //!   (`docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`), so
@@ -79,35 +78,6 @@ pub const PATH_FLOOR: f32 = 4.0;
 /// The `useAgainst*` multiplier in an Eliminator (`0x08851b10..5c`).
 pub const ELIMINATOR_USE: f32 = 5.0;
 
-/// How long a weapon is held before an absorb roll may succeed:
-/// `+0x2c > 0.2`, at 60 Hz 12 ticks, strictly.
-pub const ABSORB_HOLD_TICKS: u32 = 12;
-
-/// Held longer than this, the absorb index rises by one: `+0x2c > 15.0`
-/// (`0x088508d4`).
-pub const ITCHY_TICKS: u32 = 15 * 60;
-
-/// No craft ahead inside this gap raises the absorb index by one
-/// (`0x088508d4`: `gap_ahead == 0 || gap_ahead > 300`).
-pub const NOTHING_AHEAD: f32 = 300.0;
-
-/// `FUN_088509e4`'s shield tiers: the absorb index rises by one for each of
-/// these the craft's own shield is at or below (`> 80` none, `< 20` four).
-/// Read off Pulse at confidence 80; HD, 2048 and Omega inherit them on their
-/// own shield scale, unmeasured there.
-pub const SHIELD_TIERS: [f32; 4] = [80.0, 60.0, 40.0, 20.0];
-
-/// What a craft does with its held weapon this tick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Decision {
-    /// Keeps holding it.
-    Hold,
-    /// Fires it (`craft+0x15`).
-    Fire,
-    /// Absorbs it into its shield (`craft+0x17`).
-    Absorb,
-}
-
 /// One craft's weapon-AI clocks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct WeaponAi {
@@ -125,8 +95,6 @@ pub struct Odds {
     pub use_against_player: f32,
     /// Otherwise.
     pub use_against_ai: f32,
-    /// `absorb`, the absorb roll's multiplier (`stats[0x10]`).
-    pub absorb: f32,
 }
 
 /// What the decision reads this tick, measured by the caller.
@@ -145,8 +113,6 @@ pub struct Situation {
     pub player_gap: Option<f32>,
     /// [`target_in_path`] found a craft (`+0x52 == 0`).
     pub target_in_path: bool,
-    /// The craft's own shield pool, which `FUN_088509e4` tiers.
-    pub shield: f32,
     /// This weapon's row of `WeaponAIstats.xml`.
     pub odds: Odds,
 }
@@ -174,42 +140,6 @@ impl Situation {
         } else {
             index as usize
         }
-    }
-
-    /// The absorb index (`+0x34`) a forward weapon's setup builds for a
-    /// weapon held `held_ticks`, clamped: one per [`SHIELD_TIERS`] the shield
-    /// is at or below, one past [`ITCHY_TICKS`] held, one with nobody inside
-    /// [`NOTHING_AHEAD`]. An Eliminator forces it to zero (`0x08851a8c`).
-    #[must_use]
-    pub fn absorb_index(&self, held_ticks: u32) -> usize {
-        if self.eliminator {
-            return 0;
-        }
-        let mut index = SHIELD_TIERS
-            .iter()
-            .filter(|&&tier| self.shield <= tier)
-            .count();
-        if held_ticks > ITCHY_TICKS {
-            index += 1;
-        }
-        if self
-            .gap_ahead
-            .is_none_or(|gap| gap <= 0.0 || gap > NOTHING_AHEAD)
-        {
-            index += 1;
-        }
-        index.min(4)
-    }
-
-    /// The chance an absorb roll succeeds this tick, the long way as
-    /// [`Self::fire_chance`] is.
-    #[must_use]
-    pub fn absorb_chance(&self, held_ticks: u32) -> f32 {
-        let rate = self.rates()[self.absorb_index(held_ticks)];
-        if rate == 0.0 || self.odds.absorb == 0.0 {
-            return 0.0;
-        }
-        1.0 / ((1.0 / rate) * (1.0 / self.odds.absorb))
     }
 
     /// The table this race reads.
@@ -260,19 +190,11 @@ impl WeaponAi {
         };
     }
 
-    /// What to do this tick. Call after [`Self::tick`].
+    /// Whether to fire this tick. Call after [`Self::tick`].
     ///
-    /// `early`, `roll` and `absorb` are three independent draws in `0..1`: the
-    /// open window's flat [`RATE`]`[4]` chance, the fire roll and the absorb
-    /// roll, which is only drawn on when the fire roll fails or the hold is
-    /// not met.
-    pub fn decide(
-        &mut self,
-        situation: &Situation,
-        early: f32,
-        roll: f32,
-        absorb: f32,
-    ) -> Decision {
+    /// `early` and `roll` are two independent draws in `0..1`: the first is the
+    /// open window's flat [`RATE`]`[4]` chance, the second the fire roll.
+    pub fn decide(&mut self, situation: &Situation, early: f32, roll: f32) -> bool {
         // The window an earlier roll opened: a target now in the path gets the
         // table's top rate, whatever the hold time and the odds.
         if situation.aimed
@@ -281,21 +203,16 @@ impl WeaponAi {
             && early < situation.rates()[4]
         {
             self.wait_ticks = 0;
-            return Decision::Fire;
+            return true;
         }
         if roll >= situation.fire_chance() || self.held_ticks <= HOLD_TICKS {
-            if absorb < situation.absorb_chance(self.held_ticks)
-                && self.held_ticks > ABSORB_HOLD_TICKS
-            {
-                return Decision::Absorb;
-            }
-            return Decision::Hold;
+            return false;
         }
         if !situation.aimed || situation.target_in_path {
-            return Decision::Fire;
+            return true;
         }
         self.wait_ticks = WAIT_TICKS;
-        Decision::Hold
+        false
     }
 }
 
@@ -305,17 +222,13 @@ const EARLY_STREAM: u32 = 6;
 /// And the fire roll's: a stream of its own, so the two are not one coin.
 const FIRE_STREAM: u32 = 7;
 
-/// And the absorb roll's.
-const ABSORB_STREAM: u32 = 8;
-
 impl WeaponAi {
     /// [`Self::decide`] with both draws from `driver`'s own noise this tick,
     /// never the world's generator (see `crate::noise::roll`).
-    pub fn decide_for(&mut self, driver: &crate::Driver, situation: &Situation) -> Decision {
+    pub fn decide_for(&mut self, driver: &crate::Driver, situation: &Situation) -> bool {
         let early = crate::noise::roll(driver.seed, driver.phase, EARLY_STREAM);
         let roll = crate::noise::roll(driver.seed, driver.phase, FIRE_STREAM);
-        let absorb = crate::noise::roll(driver.seed, driver.phase, ABSORB_STREAM);
-        self.decide(situation, early, roll, absorb)
+        self.decide(situation, early, roll)
     }
 }
 

@@ -886,7 +886,7 @@ impl Race {
     ///
     /// # The player and an opponent use the same rule, on purpose
     ///
-    /// `Race::opponent_decides` decides whether an *opponent* pulls the trigger -
+    /// `Race::opponent_fires` decides whether an *opponent* pulls the trigger -
     /// the original's law (`oag_ai::weapon_ai`), or `oag_ai::Driver::wants_to_fire`
     /// without `WeaponAIstats.xml` - and its gates are about that decision: is
     /// there somebody in the shot's path, has the roll come up. They are not

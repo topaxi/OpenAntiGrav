@@ -21,6 +21,12 @@ is unchanged.
   "Where HD does apply it". The trip cadence, 0.3 to 1.0 s on beam length,
   is read at confidence 85 on the same page.
 - **The player's beam is as lethal against opponents** on these titles today.
+- **The absorb half of `WeaponAi_DecideFireOrAbsorb`** (Pulse, recovered on
+  `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`) was ported and reverted
+  on 2026-10-19: it moved 11 lone-craft cells of `ai_clean_lap_gate` and the
+  de Konstruct gates, through this project's Turbo policy, and its decision
+  cadence (every tick or four a second) is unconfirmed. Port it with the
+  cadence settled and those gates rebaselined on purpose.
 
 ## Next Steps
 
