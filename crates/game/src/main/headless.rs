@@ -702,6 +702,7 @@ pub(crate) fn run_race(
                 hud_scale: settings.graphics.hud_scale,
                 hud_safe_area: settings.graphics.hud_safe_area,
                 shadows: render_profile.shadows,
+                ray_debug: cli.ray_debug,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,

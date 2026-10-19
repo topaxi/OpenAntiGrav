@@ -219,6 +219,10 @@ fn new_event_loop() -> Result<EventLoop<()>> {
 }
 
 fn run(cli: Cli) -> Result<()> {
+    // Before any device: the ray tier is part of what a device is created with.
+    if cli.ray || cli.ray_debug {
+        oag_mesh::mesh_render::ray::request(true);
+    }
     // Ahead of settings and the disc search, deliberately: rasterising the
     // icon needs neither, and `just install-desktop-file` /
     // `scripts/build-appimage.sh` both call this on machines that may have no

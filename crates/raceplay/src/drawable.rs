@@ -481,6 +481,16 @@ impl Drawable {
 
     /// Binds this drawable's vertex buffer - and its streamed coordinates,
     /// when it has them - for the pipelines it built.
+    /// The model this drawable draws.
+    pub(super) fn model(&self) -> &Model {
+        &self.model
+    }
+
+    /// The vertex buffer holding [`Self::model`]'s vertices.
+    pub(super) fn vertex_buffer(&self) -> &wgpu::Buffer {
+        &self.vertices
+    }
+
     pub(super) fn bind_vertices(&self, pass: &mut wgpu::RenderPass<'_>) {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         if let Some(texcoords) = &self.texcoords {

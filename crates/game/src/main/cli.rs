@@ -823,6 +823,21 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) shadows: Option<oag_display::display::Shadows>,
 
+    /// Ours: ask the device for hardware ray queries, where the adapter has them.
+    ///
+    /// The ray tier is an enhancement no original draws (`docs/rendering/ray-tracing.md`),
+    /// off unless asked for here or with `OAG_RAY=1`, and it is chosen at launch because a
+    /// device's features are fixed when it is made. An adapter without the feature runs
+    /// exactly as without this flag, and the load says so.
+    #[arg(long)]
+    pub(crate) ray: bool,
+
+    /// Ours: with `--race --screenshot`, also write the ray-debug picture - one primary ray
+    /// per pixel against the acceleration structures, coloured by what it hit - to
+    /// `<screenshot stem>-ray.png`. Implies `--ray`.
+    #[arg(long)]
+    pub(crate) ray_debug: bool,
+
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
     /// `<config dir>/oag/shaders/`.

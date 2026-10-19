@@ -39,13 +39,16 @@ pub struct Stats {
     pub moving_triangles: u32,
     /// Distinct BLASes: the static one, if any, plus one per animated node.
     pub blases: u32,
+    /// Of those, the ones under an animated node.
+    pub moving_blases: u32,
     /// Triangles the model has that are left out: blended draws.
     pub skipped_triangles: u32,
     /// Wall clock of the builds, submitted and waited on.
     pub build: Duration,
-    /// Device memory the build added, from the allocator report; `None` where the backend
-    /// reports none.
-    pub bytes: Option<u64>,
+    /// Device memory the build added, from the allocator report: what was allocated, and
+    /// what the allocator reserved to hold it. `None` where the backend reports none.
+    /// Includes the index buffers the BLASes were built from.
+    pub bytes: Option<(u64, u64)>,
 }
 
 impl std::fmt::Display for Stats {
@@ -56,12 +59,18 @@ impl std::fmt::Display for Stats {
             self.triangles,
             self.blases,
             self.moving_triangles,
-            self.blases.saturating_sub(1),
+            self.moving_blases,
             self.skipped_triangles,
             self.build.as_secs_f64() * 1000.0
         )?;
-        if let Some(bytes) = self.bytes {
-            write!(f, ", {:.1} MiB", bytes as f64 / (1024.0 * 1024.0))?;
+        if let Some((allocated, reserved)) = self.bytes {
+            const MIB: f64 = 1024.0 * 1024.0;
+            write!(
+                f,
+                ", {:.1} MiB allocated ({:.1} MiB reserved)",
+                allocated as f64 / MIB,
+                reserved as f64 / MIB
+            )?;
         }
         Ok(())
     }
@@ -80,6 +89,9 @@ struct Part {
 #[derive(Debug)]
 pub struct ModelAccel {
     parts: Vec<Part>,
+    /// The model's nodes at time zero (`Model::sample_anim_nodes`): where a hull's parts
+    /// sit before anything moves them. A circuit is updated with live ones instead.
+    rest: Vec<[f32; 16]>,
     pub stats: Stats,
 }
 
@@ -101,10 +113,10 @@ pub fn affine(m: &[f32; 16]) -> [f32; 12] {
 /// [`affine`] of the identity.
 pub const IDENTITY: [f32; 12] = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
 
-fn allocated(device: &wgpu::Device) -> Option<u64> {
+fn allocated(device: &wgpu::Device) -> Option<(u64, u64)> {
     device
         .generate_allocator_report()
-        .map(|r| r.total_allocated_bytes)
+        .map(|r| (r.total_allocated_bytes, r.total_reserved_bytes))
 }
 
 fn xform_of(model: &Model, draw: &DrawCall) -> u32 {
@@ -192,6 +204,7 @@ impl ModelAccel {
             stats.triangles += triangles;
             if *xform != 0 {
                 stats.moving_triangles += triangles;
+                stats.moving_blases += 1;
             }
             stats.blases += 1;
             staged.push((size, blas, index_buffer, *xform));
@@ -229,9 +242,15 @@ impl ModelAccel {
             });
         }
         stats.build = started.elapsed();
-        stats.bytes = before.zip(allocated(device)).map(|(a, b)| b.saturating_sub(a));
+        stats.bytes = before.zip(allocated(device)).map(|((a0, r0), (a1, r1))| {
+            (a1.saturating_sub(a0), r1.saturating_sub(r0))
+        });
         log::info!("ray: {label}: {stats}");
-        Some(Self { parts, stats })
+        Some(Self {
+            parts,
+            rest: model.sample_anim_nodes(0.0),
+            stats,
+        })
     }
 }
 
@@ -305,9 +324,18 @@ impl Scene {
                 continue;
             };
             for part in &accel.parts {
+                // A part under a hull node is baked in that node's space: node first, then
+                // the craft (the row-vector product `Model::sample_anim_nodes` also uses).
+                let placed = match part.xform {
+                    0 => *model,
+                    x => match accel.rest.get(x as usize - 1) {
+                        Some(node) => oag_vex::vex::multiply(node, model),
+                        None => continue,
+                    },
+                };
                 self.tlas[next] = Some(wgpu::TlasInstance::new(
                     &part.blas,
-                    affine(model),
+                    affine(&placed),
                     KIND_HULL,
                     0xFF,
                 ));

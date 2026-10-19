@@ -24,6 +24,7 @@ mod mist;
 mod motion;
 mod per_slot;
 mod queries;
+mod ray;
 mod record;
 #[cfg(test)]
 pub(crate) use record::{TRACK_STAGES, TrackStage, track_blended};
@@ -71,6 +72,8 @@ pub(crate) struct FrameWork {
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The ray tier's acceleration structures, on a device that has it - see [`ray`].
+    ray: Option<std::cell::RefCell<ray::RayTier>>,
     /// The buffer every drawable the frame writes a scene block into reads it from, a block
     /// per view and per kind - see [`SceneBlocks`] and `scene_blocks.rs`.
     scene_blocks: SceneBlocks,
@@ -1074,6 +1077,7 @@ impl Scene {
             split_recording: std::cell::Cell::new(Recording::default_for_target()),
             split_logs: std::cell::RefCell::default(),
             track,
+            ray: None,
             visibility,
             ships,
             boost,
@@ -1136,6 +1140,8 @@ impl Scene {
         };
         scene.share_scene_blocks(device);
         scene.share_uniform_blocks(device);
+        scene.ray = ray::RayTier::build(device, queue, &scene.track, &scene.ships)
+            .map(std::cell::RefCell::new);
         Ok(scene)
     }
 }
