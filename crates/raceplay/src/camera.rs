@@ -438,9 +438,10 @@ impl Race {
     /// degrades only the camera's half.
     #[must_use]
     pub fn visibility_sections(&self) -> (u8, u8) {
-        // The player's, because this places the player's camera. An opponent
-        // recovering across the circuit must not blank the shot.
-        let slot = self.extra_viewpoint().unwrap_or(0);
+        // The viewed craft's, because this places the camera being drawn: the seat's on a
+        // network client, not slot 0's. An opponent recovering across the circuit must not
+        // blank the shot.
+        let slot = self.viewed_slot();
         if self.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }

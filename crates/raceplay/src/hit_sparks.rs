@@ -236,7 +236,7 @@ impl Race {
     /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read
     /// 2026-09-30, confidence 85. **The game-mode gate** (not mode 2 or 12) is
     /// not applied: neither mode is one this port races in.
-    fn arm_weapon_hit_shake(&mut self) {
+    pub(super) fn arm_weapon_hit_shake(&mut self) {
         use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
         self.view.shake.arm(
             WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,

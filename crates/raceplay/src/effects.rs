@@ -846,7 +846,7 @@ impl Race {
     /// line that changes.
     #[must_use]
     pub fn craft_is_exploding(&self) -> bool {
-        self.sim.world.ships[0].physics.craft_state == oag_physics::CraftState::Destroyed
+        self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
     /// Whether the player's Autopilot pickup is currently active.
@@ -859,7 +859,7 @@ impl Race {
     /// "`Ship_FireHeldWeapon` opens both cues" section.
     #[must_use]
     pub fn autopilot_is_active(&self) -> bool {
-        self.sim.world.ships[0].autopilot_timer > 0.0
+        self.ship().autopilot_timer > 0.0
     }
 
     /// Where the Quake wave is on the road, while one travels: the point
@@ -909,7 +909,7 @@ impl Race {
     /// [`Self::tick`] - so "the shell is up" is one fact read in two places.
     #[must_use]
     pub fn shield_is_up(&self) -> bool {
-        self.sim.world.ships[0].physics.shield_pickup_timer > 0.0
+        self.ship().physics.shield_pickup_timer > 0.0
     }
 
     /// The track's speed-pad trigger volumes.

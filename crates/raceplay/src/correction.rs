@@ -102,6 +102,13 @@ impl Race {
             // softened into a glide.
             let hit = slot == self.player_slot()
                 && self.sim.world.ships[slot].physics.shield < shield_before - HIT_SHIELD;
+            #[cfg(feature = "view")]
+            if hit {
+                // The shake that tick would have armed had the hit been predicted: once, here,
+                // where the hit is drawn. **Chosen, not measured:** a weapon hit's, since a
+                // correction cannot tell what struck (the replay is quiet).
+                self.arm_weapon_hit_shake();
+            }
             if self.view.correction_smoothing && remote && !hit && *pop <= SNAP_DISTANCE {
                 self.view.correction[slot] += moved;
             } else {
@@ -312,6 +319,16 @@ impl Scene {
         if k == 0 {
             race.set_correction_smoothing(self.smooth);
             race.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
+            // The remote person makes two people: in a Time Trial that is Pulse's Multiplayer
+            // Time Trial, where craft do not collide, so a `contact` scene has nothing to touch.
+            let people = race.sim.world.human_slots().count();
+            if self.contact && !race.sim.world.mode().craft_collide(people) {
+                log::warn!(
+                    "force-remote-correction: {:?} with {people} people is a Multiplayer Time \
+                     Trial, craft do not collide: `contact` touches nothing (use `--mode single_race`)",
+                    race.sim.world.mode()
+                );
+            }
             if self.contact || self.own.is_some() {
                 // Seated, as on a network, so its own correction glides with its camera.
                 // (The controller stays a person here: on a network it is `Remote`.)

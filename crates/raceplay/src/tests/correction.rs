@@ -194,6 +194,38 @@ fn a_seat_one_camera_follows_seat_one() {
     assert!((eye - own).length() < 40.0, "{}", (eye - own).length());
 }
 
+/// Whichever seat a client holds, and whichever view it flies, the camera is built from that
+/// seat's craft and from nothing else: seat 0 and seat 1 of one race frame two different
+/// craft, each within the chase distance of its own.
+#[test]
+fn every_seat_camera_follows_its_own_craft() {
+    use oag_display::display::CameraView;
+    for view in [CameraView::Close, CameraView::Far, CameraView::Internal] {
+        let mut eyes = Vec::new();
+        for seat in 0..2 {
+            let Scene { sc, mut client, .. } = scene();
+            client.set_camera_view(view);
+            client.set_seat(Some(seat));
+            for t in 0..120 {
+                client.tick(&sc.truth(START + t.min(59)));
+            }
+            let eye = client.camera_position();
+            let ships = &client.sim.world.ships;
+            let own = (eye - ships[seat].physics.body.position).length();
+            let other = (eye - ships[1 - seat].physics.body.position).length();
+            assert!(
+                own < 40.0 && own < other,
+                "{view:?} seat {seat}: eye {own} from its craft, {other} from the other"
+            );
+            eyes.push(eye);
+        }
+        assert!(
+            (eyes[0] - eyes[1]).length() > 1.0,
+            "{view:?}: one eye for two seats"
+        );
+    }
+}
+
 /// The way the chase camera points, as a unit vector in the world.
 fn aim(race: &Race) -> Vec3 {
     (race.tick_view().inverse().z_axis.truncate()).normalize()
@@ -269,11 +301,11 @@ fn the_own_glide_is_view_only_and_a_snap_is_not_glided() {
 }
 
 /// A hit the client had not predicted is drawn where it lands, however small the move: the
-/// own craft in a correction that took shield off it is not glided, and contact wear (under
-/// [`crate::correction::HIT_SHIELD`]) is.
+/// own craft in a correction that took shield off it is not glided and shakes the camera once,
+/// and contact wear (under [`crate::correction::HIT_SHIELD`]) is glided and shakes nothing.
 #[test]
 fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
-    let drawn_after = |lost: f32| {
+    let corrected = |lost: f32| {
         let Scene {
             sc,
             mut client,
@@ -283,14 +315,49 @@ fn a_hit_that_first_shows_in_a_correction_is_not_softened() {
         // The fixture's craft have no shield pool; give this one a pool of 100.
         client.sim.world.ships[0].handling.dimensions.shield = 100.0;
         client.sim.world.ships[0].physics.shield = 90.0;
+        client.view.shake.cancel();
         let mut shifted = authoritative;
         shifted.world.ships[0].handling.dimensions.shield = 100.0;
         let right = shifted.world.ships[0].physics.body.right();
         shifted.world.ships[0].physics.body.position += right * 3.0;
         shifted.world.ships[0].physics.shield = 90.0 - lost;
         client.reconcile(&shifted, (START..START + WINDOW).map(|t| sc.truth(t)));
-        client.correction_offset_of(0).length()
+        client
     };
-    assert!(drawn_after(0.2) > 2.0, "wear glides");
-    assert_eq!(drawn_after(20.0), 0.0, "a hit is drawn where it lands");
+    let wear = corrected(0.2);
+    assert!(wear.correction_offset_of(0).length() > 2.0, "wear glides");
+    assert!(!wear.view.shake.active(), "wear shakes nothing");
+    let hit = corrected(20.0);
+    assert_eq!(
+        hit.correction_offset_of(0),
+        Vec3::ZERO,
+        "a hit is drawn where it lands"
+    );
+    assert!(hit.view.shake.active(), "and shakes the camera there");
+}
+
+/// The shake fires once per hit: a second correction that takes nothing more off the shield
+/// does not arm it again.
+#[test]
+fn a_hit_seen_in_a_correction_shakes_once() {
+    let Scene {
+        sc,
+        mut client,
+        authoritative,
+    } = scene();
+    client.set_seat(Some(0));
+    client.sim.world.ships[0].handling.dimensions.shield = 100.0;
+    client.sim.world.ships[0].physics.shield = 90.0;
+    let mut hit = authoritative;
+    hit.world.ships[0].handling.dimensions.shield = 100.0;
+    hit.world.ships[0].physics.shield = 60.0;
+    let replay = || (START..START + WINDOW).map(|t| sc.truth(t));
+    client.reconcile(&hit, replay());
+    assert!(client.view.shake.active());
+    client.view.shake.cancel();
+    client.reconcile(&hit, replay());
+    assert!(
+        !client.view.shake.active(),
+        "the same loss is not a new hit"
+    );
 }
