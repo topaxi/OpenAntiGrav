@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod archive_cache;
+mod track_albedo;
 
 mod airbrake_flaps_ground_truth;
 mod alpha_test_cutout;

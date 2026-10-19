@@ -236,3 +236,48 @@ fn every_reachable_pure_craft_switches_at_fifty_units() {
     let archives = oag_pure::open(&image.display().to_string()).expect("the disc opens");
     ships_switch_at(archives, 6, |_| 50.0);
 }
+
+/// Every Pure circuit's drawn colour textures are pictures (`track_albedo`).
+///
+/// The circuits are the disc's own: every `PI_Track` of
+/// `Data\Plugins\PI001\Definition.xml`, each `<location>\track.vex` that
+/// resolves (a Zone or Classic entry names its own directory layout).
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn every_pure_circuit_binds_pictures_not_lookups() {
+    let Some(image) = image("pure-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("the disc opens");
+    let definition = archives
+        .read_name(r"Data\Plugins\PI001\Definition.xml")
+        .expect("Definition.xml");
+    let definition =
+        oag_tables::pure_campaign::parse(&oag_tables::fexml::text(&definition).expect("text"))
+            .expect("a definition");
+    let (mut built, mut missing) = (0usize, Vec::new());
+    for track in &definition.tracks {
+        let entry = format!(r"{}\track.vex", track.location);
+        let Ok(blob) = archives.read_name(&entry) else {
+            missing.push(track.name.clone());
+            continue;
+        };
+        let model = mesh::build_with_textures(&entry, &blob, None)
+            .unwrap_or_else(|e| panic!("{entry}: {e}"));
+        let faults = crate::track_albedo::faults(&model, false);
+        assert!(
+            faults.is_empty(),
+            "{entry}: a drawn colour texture is not a picture: {}",
+            crate::track_albedo::describe(&faults)
+        );
+        built += 1;
+    }
+    println!(
+        "{built} of {} PI_Track circuit(s) built; no track.vex for {missing:?}",
+        definition.tracks.len()
+    );
+    assert_eq!(built, PURE_CIRCUITS, "{missing:?}");
+}
+
+/// How many of the definition's circuits have a `track.vex`, measured 2026-10-19.
+const PURE_CIRCUITS: usize = 16;

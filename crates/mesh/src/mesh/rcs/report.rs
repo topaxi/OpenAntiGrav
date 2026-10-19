@@ -96,6 +96,18 @@ pub struct Report {
     /// exactly what a *working* surface looks like at a glance. See
     /// [`decode_texture`].
     pub untextured: usize,
+    /// Materials whose resolved program samples no colour texture - every
+    /// texture they name is a normal map or the lightmap - so nothing is bound
+    /// as their picture and they draw as constants and light alone.
+    ///
+    /// `constantdiffuse_specular_normal`, `m_diffuse_normal_constantspecular`
+    /// and `ds_booth_glass` are this on Talon's Junction. Their normal-and-
+    /// specular map is read by no pass here, so the surface is drawn without
+    /// its bump and its specular, stated rather than painted as colour.
+    pub picture_unsampled: usize,
+    /// Of [`Self::picture_unsampled`], the materials whose authored constant
+    /// diffuse colour is bound as a one-texel picture.
+    pub constant_diffuse: usize,
     /// Materials that carry the circuit's baked lighting atlas in their second
     /// texture slot, and are therefore drawn multiplied by it.
     ///
@@ -313,6 +325,12 @@ impl Report {
         } + &match self.untextured {
             0 => String::new(),
             n => format!(", {n} material(s) whose .gtf did not paint"),
+        } + &match self.picture_unsampled {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) whose program samples no colour texture (normal map and lightmap only), drawn without a picture ({} of them with their authored constant diffuse)",
+                self.constant_diffuse
+            ),
         } + &match self.lightmapped {
             0 => String::new(),
             n => format!(", {n} material(s) lit through the circuit's lightmap"),

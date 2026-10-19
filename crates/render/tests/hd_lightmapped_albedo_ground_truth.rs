@@ -197,3 +197,54 @@ fn vinetas_backdrop_terrain_binds_sand_and_rock_not_its_blend_mask() {
     }
     assert!(checked > 0, "Vineta K should draw an and_rocktosand slot");
 }
+
+/// The start line: Talon's Junction's `constantdiffuse_specular_normal` names
+/// one texture, `ds_sfblend_ns`, a tangent-space normal and specular map its
+/// program unpacks with `MAD 2, -1` and never samples as colour, so the
+/// surface is its authored constant diffuse (`0x7611a2d8`, a dark
+/// `0.037, 0.054, 0.077`) times the light. Binding the map as the picture drew
+/// a purple ridged strip across the road on twelve circuits. Dropping
+/// `Program::samples_as_normal` from `skin::lightmapped` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let path = "/data/environments/talons_junction/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Talon's Junction builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/constantdiffuse_specular_normal.rcsmaterial")
+        {
+            continue;
+        }
+        let texture = model.textures[slot]
+            .as_ref()
+            .expect("the authored constant diffuse is bound");
+        assert_eq!(
+            (texture.width, texture.height),
+            (1, 1),
+            "slot {slot} binds {} instead of its constant diffuse",
+            texture.label
+        );
+        let rgba = texture.to_rgba().expect("a one-texel picture");
+        assert_eq!(
+            [rgba[0], rgba[1], rgba[2]],
+            [9, 14, 20],
+            "slot {slot}: 0.037, 0.054, 0.077 as unorm bytes"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "Talon's Junction carries the start line slots");
+    assert!(report.constant_diffuse > 0, "{}", report.describe());
+}

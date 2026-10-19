@@ -42,6 +42,21 @@ fn build(
     .ok()
 }
 
+/// How many drawn materials and chunks resolve no shader variant, per circuit
+/// and direction, measured 2026-10-19: **a ratchet over a known gap, not zero**.
+/// Only Modesto Heights, Talon's Junction and Tech De Ra have one (the others
+/// resolve every drawn material); those materials draw through `mesh.wgsl`'s
+/// unresolved fallback. May shrink, never grow.
+fn variant_gap(circuit: &str, track: &str) -> (usize, usize) {
+    match (circuit, track) {
+        ("modesto_heights", _) => (21, 176),
+        ("talons_junction", _) => (16, 54),
+        ("tech_de_ra", "track.vex") => (18, 103),
+        ("tech_de_ra", _) => (17, 103),
+        _ => (0, 0),
+    }
+}
+
 /// `(water_lit_colour, water_glint_only, ice_bound)` for one circuit's two
 /// directions, with every one of the models building and `ice_unread` zero.
 fn reach(circuit: &str) -> (usize, usize, usize) {
@@ -56,6 +71,19 @@ fn reach(circuit: &str) -> (usize, usize, usize) {
             continue;
         };
         assert_eq!(report.ice_unread, 0, "{path}");
+        let (unshipped, missed) = variant_gap(circuit, track);
+        assert!(
+            report.variants_unshipped <= unshipped && report.variant_chunks_missed <= missed,
+            "{path}: {} material(s) and {} chunk(s) without a shader variant, known {unshipped} and {missed}",
+            report.variants_unshipped,
+            report.variant_chunks_missed
+        );
+        let faults = crate::track_albedo::faults(&model, true);
+        assert!(
+            faults.is_empty(),
+            "{path}: a drawn colour texture is not a picture: {}",
+            crate::track_albedo::describe(&faults)
+        );
         lit += report.water_lit_colour;
         glint += report.water_glint_only;
         ice += report.ice_bound;

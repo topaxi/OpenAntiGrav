@@ -2637,6 +2637,97 @@ Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tes
 for the cause of the wall, the pool's wrong picture and the red shape (each found by decode, fixed, and the frame
 re-read); 60 for the 127 other slots (rule justified by the program text, not by a reference frame each).
 
+## A normal map is not the picture: HD's purple start line (2026-10-19, `hd-finish-line-purple`)
+
+**Reported from play: "on several tracks at the finish line is a purple line".** The
+object is the start-line strip: Talon's Junction draw `ds_sfblend_ns.gtf` (512x256,
+1,440 triangles at world `(23, -54, -186)`) on material
+`constantdiffuse_specular_normal`, drawn as the road's colour. The file is a
+tangent-space normal and specular map (RGB mean near `(128, 128, 250)`, the ridged
+purple/blue pattern the strip showed), not a picture.
+
+**What the program does with it** (Talon's `constantdiffuse_specular_normal`,
+lightmapped variant, fragment block #7, `scripts/ps3-microcode.py fp-file`): `TEX R0,
+R0 unit0` is followed at once by `MAD R0.y, R0, {2,-1}.xxxx, {2,-1}.yyyy` - the
+`2 * tap - 1` unpack of a normal - and its lanes only ever feed `DP3`s with the light.
+Colour comes from `MOV R3.xyz, f[TC0]` (vertex colour) plus the lightmap and sun terms,
+finished by `MAD H0.xyz, H0, C, H1` with `C` patched from the unnamed parameter
+`0x7611a2d8` (`0.037, 0.054, 0.077` here: a dark blue-grey, matching the `startdark*`
+textures the same area uses). So the surface is **no texture**: constants and light.
+Confidence 85 (one traced program per family, the census below for the rest).
+
+**Why the old pick bound it.** `skin::picks` took the first entry that is not a lookup.
+`0x3bdc0403` (`Texture1`) binds 1,438 paths disc-wide, pictures and maps alike, so the
+hash cannot refuse it; the program can. `Program::samples_as_normal` (the water lane's
+reader) is now consulted by `lightmapped::declared_picture`, and a lightmapped material
+left with no picture is `Albedo::Unsampled` instead of entry 0. Where the family's
+program multiplies the light by a constant, that constant is bound as a one-texel
+picture: `diffuse` (`0x515e298e`, `diffuse_spec_constant`) and
+`constantdiffuse_specular_normal`'s `0x7611a2d8`. Other families left white times light
+(their parameter was not traced): `m_diffuse_normal_constantspecular` (uses `0x7611a2d8`
+on a `.w` term), `ds_booth_glass`, `metallic`, `dc_constantglow`, `cf_constantcolourglow`,
+`dc_metallic`, `mesh_colour_constant`, `emissive`, `dc_glowlightband`.
+`martin_inflatable2` and `glass_2uv_rgb_reflect_normal_glow` moved to their real
+pictures.
+
+**Against the original (2026-10-19).** `data/reference/hd-capture/talons-grid-wcb-on-s150/00.png`
+(RPCS3, `feisar_c1`, eye `-143.57, -48.45, -175.11`) rendered by this build at the same
+pose (`--camera-pose`, fov 60): the original's pit-lane lines across the road are thin
+dark grey; ours with the constant diffuse are thin and darker (no specular or normal
+sheen is applied, so black rather than grey), and the same surface bound white drew
+glowing cream bars, plainly wrong. The constant diffuse is therefore kept. Three
+weapon-scene proxies in `oag-game` sit on this strip and were re-baselined for it
+(`hd_weapon_scene_ground_truth`, `hd_plasma_ball_ground_truth`).
+
+**Disc-wide effect**, every HD circuit model before and after
+(`crates/render/examples/hd_albedo_dump.rs`, 14,373 material slots): 173 slots changed,
+and the constant diffuse is bound on 46 of them (42 `constantdiffuse_specular_normal`, 4
+`diffuse_spec_constant`; no other family carries `diffuse`). Start frames of 02, 03,
+05, Amphiseum, Modesto, Tech De Ra and Vineta K show no blown-out or dark strip; no
+pre-fix frame exists per changed family.
+Normal maps no longer bound as colour: `ds_pipe_nc` (51), `ds_sfblend_ns` (25),
+`ds_glass_panels_ns` (16), `ds_mesh_n`, `j_window9_n`, `bumpycones_normal`.
+Lightmap atlases that were also the albedo (so lit twice): `metallic` (38),
+`cf_constantcolourglow`, `dc_constantglow`, `diffuse_spec_constant`. And
+`nr_holobowlparallax` (`(family, 0xa2d555b9)` joins `CIRCUIT_SURFACE_MAP_SAMPLERS`): its
+unit 2 is a hologram overlay multiplied in, its picture is unit 0 (`auricom_landscape01`
+on 02, Sol 2 and Anulpha; `qirex02_flat` on Modesto, where unit 2 was
+`hologramscanlines`, a picture - **Modesto's bowl moved with the rest and is unchecked
+against the original**).
+
+**The test that was missing.** Every format-level test said "every material names a
+texture" and none looked at what a draw binds. `crates/render/tests/track_albedo/mod.rs`
+judges every drawn colour slot of a built circuit: not the slot's own lightmap atlas, a
+texture that decoded, and - on titles with normal maps - not a tangent-space normal map
+by its texels (unit-length `2c - 1`, z-dominant, on 90% of 4,096 sampled texels; a light
+grey picture is a unit vector too, hence the z test; two-channel DXT5 packings read flat
+and are **not** caught). It runs inside walks that already build every circuit:
+`hd_water_ground_truth` (HD, all 16 circuit directories, both ways),
+`pvs_placement_ground_truth` (Pulse PSP and PS2, every track variant),
+`lod_switch_ground_truth` (Pure, all 16 `PI_Track` circuits of its own definition),
+`omega_transparency_ground_truth` (Omega per circuit, 2048's Vita package). Before the
+fix Talon's alone failed with `ds_sfblend_ns`, `ds_pipe_nc` (x2), `ds_glass_panels_ns`
+and the `diffuse_spec_constant` lightmap; after it HD is clean on every circuit.
+
+### 2048 and Omega: **checked, applies, not wired**
+
+Both ship these same materials and files (`ds_sfblend_ns.gxt`/`.gnf`, `ds_pipe_nc`,
+`ds_glass_panels_ns`). Their builder (`oag_mesh::mesh::rcs::psp2`) binds
+`Material::diffuse_texture`, the first non-lightmap texture, without reading the
+Vita/PS4 program, so the same strip draws. Census, drawn colour slots that are normal
+maps: Omega 223 over 34 circuit models, 2048 66 over 18 (ratchets in
+`omega_transparency_ground_truth`, per circuit, may shrink and never grow). The
+water, rock (`rocks_01_normal_alpha`), glass and `jd_*_n` families are in the same list.
+Not wired because the GXP/GNM programs are not read for it; HD's rule is the model for it.
+Pulse, Pure: **not applicable**, the PSP/PS2 games ship no normal maps (the oracle is off
+there; the walks still check the lightmap and undecoded clauses). They also have no shader
+variant table (fixed-function GE), so the census's "a shader variant resolves" clause is
+HD's alone: `hd_water_ground_truth` freezes the per-circuit counts of materials and chunks
+with no variant (Modesto 21 and 176, Talon's 16 and 54, Tech De Ra 17-18 and 103, every
+other circuit zero; may shrink, never grow). 2048 and Omega read no program either, so
+that clause does not exist there; `psp2::Report::unresolved_draws` is not ratcheted
+(about 2,100 on Amphiseum alone, not taken apart).
+
 ## Water family: `water_test_2`, `water_noref` and `sebenco_ice` (2026-10-07, `hd-water`)
 
 **Reports:** Vineta K's sea behind the tunnel glass is blue where the RPCS3 capture is teal, and Sebenco Climb's pool is

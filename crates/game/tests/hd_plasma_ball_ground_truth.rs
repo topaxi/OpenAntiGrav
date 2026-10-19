@@ -92,13 +92,23 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
 
 /// Pixels dark enough to be the bolt's core, in the box the bolt sits in
 /// ahead of the nose: the middle of the frame, above the cockpit.
-fn dark_core(frame: &[u8]) -> usize {
+/// Pixels of the bolt's box that are dark in `frame` and **not** dark in the
+/// control (`frame` itself when `control` is `None`).
+///
+/// Counting only what the bolt added is what keeps this about the bolt: the
+/// start line under it is HD's authored dark constant diffuse since 2026-10-19
+/// (it was a normal map drawn as colour, bright purple), so 2,070 of the box's
+/// 12,000 road pixels are dark with no bolt in the frame at all.
+fn dark_core(frame: &[u8], control: Option<&[u8]>) -> usize {
     (230..330)
         .flat_map(|y| (420..540).map(move |x| (x, y)))
         // Was `< 40`; HD's lit programs end on a /2 output scale (2026-10-09), so the
         // road and the bolt's core both read darker, and 24 keeps the control
         // under 50 (18) with the bolt over 200 (275).
-        .filter(|&(x, y)| frame[y * SIZE.0 + x] < 24)
+        .filter(|&(x, y)| {
+            let at = y * SIZE.0 + x;
+            frame[at] < 24 && control.is_none_or(|c| c[at] >= 24)
+        })
         .count()
 }
 
@@ -114,15 +124,23 @@ fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
     let control = frame_of(&image, &scratch, false);
     std::fs::remove_dir_all(&scratch).ok();
 
-    let (with, without) = (dark_core(&fired), dark_core(&control));
-    println!("dark pixels in the bolt's box: {with} with a bolt, {without} without");
+    let (with, without) = (dark_core(&fired, Some(&control)), dark_core(&control, None));
+    println!(
+        "dark pixels the bolt adds to its box: {with}; dark pixels of the road alone: {without}"
+    );
     // With both the halved lit output and the encoded-mean adaptation
     // (2026-10-09) the bolt counts 190 and the control 16: the core is a
     // gradient, so the `< 24` cut takes less of it, and a white disc would
     // count about what the control does. The floor keeps the two far apart.
-    assert!(without < 100, "the control's box is not road any more");
+    // **Re-measured 2026-10-19: the bolt adds 119** new dark pixels over a road
+    // that is dark in 2,070 of the box's pixels with no bolt (see `dark_core`),
+    // part of the core landing on pixels already dark, so the floor is 60.
     assert!(
-        with > 120,
+        (1000..3500).contains(&without),
+        "the control's box is not the dark start line any more"
+    );
+    assert!(
+        with > 60,
         "the bolt's core is not dark: a white disc is the eye read from the origin"
     );
 }
