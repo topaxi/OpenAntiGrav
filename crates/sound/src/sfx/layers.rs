@@ -137,8 +137,9 @@ impl Timeline {
 ///
 /// `replace_with_child` walks opcode `0x08` as a child cue (and so reads the guard
 /// registers as zero): the countdown loader sets it, because HD's `ready` is a lone
-/// `0x08` into `321_GO`. Nothing else asks for it. Chosen, not measured: Pulse's
-/// `0x08` is the measured reading, HD's handler was not read.
+/// `0x08` into `321_GO`. Nothing else asks for it. Pulse's `0x08` is the measured
+/// reading and HD's handler (`Scream_DoGrainBranch`) reads the same, read and not run: it
+/// replaces the voice's own playback state with the child cue.
 ///
 /// `Ok(None)` keeps the flat pick: unknown tick, an incompletely modelled walk,
 /// a grain angle in the rear half the pan law does not model, or a cue a flat
