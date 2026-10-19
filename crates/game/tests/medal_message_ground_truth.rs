@@ -144,7 +144,9 @@ fn hd_zone_and_speed_lap_draw_the_phrase_from_hds_own_table() {
 
 /// A real crossing, through the same `oag_game::medal_watch::tick` the windowed
 /// session and the headless capture both call: Pulse's `grid8_3_2` Speed Lap
-/// (`14_Track`, silver at 44 s), flown by the autopilot. The banner appears on
+/// (`14_Track`), flown by the autopilot. Its lap earns gold since the
+/// autopilot carries the original's engine bits (x1.2, no acceleration cap;
+/// silver before, 2026-10-19). The banner appears on
 /// the lap that earns the tier, expires, and the standing line is still drawn
 /// ten seconds on; a watch that stops calling either raises nothing.
 #[test]
@@ -177,12 +179,12 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
     .expect("loading 14_Track");
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
     race.set_autopilot(true);
-    let silver = loaded
+    let gold = loaded
         .hud
         .context()
         .expect("Pulse's layout parses")
         .strings
-        .get_or_id("ER_SMA");
+        .get_or_id("ER_GMA");
     let mut earned = None;
     let mut raised_at = None;
     for tick in 0..4200u32 {
@@ -201,7 +203,7 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
     let raised_at = raised_at.expect("the autopilot's lap earns a medal");
     assert_eq!(
         earned,
-        Some(oag_tables::race_campaign::Medal::Silver),
+        Some(oag_tables::race_campaign::Medal::Gold),
         "raised at tick {raised_at}"
     );
     assert!(
@@ -210,7 +212,7 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
     );
     let saying = drawn(&loaded, &race.readout());
     assert_eq!(
-        saying.iter().filter(|text| **text == silver).count(),
+        saying.iter().filter(|text| **text == gold).count(),
         1,
         "only the standing line is up: {saying:?}"
     );

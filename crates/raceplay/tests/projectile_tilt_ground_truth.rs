@@ -21,9 +21,10 @@
 //! rest) along `-surface` from the projectile, and asks two things of the floor it finds:
 //!
 //! - the carried normal agrees with the floor's (angle, degrees), and
-//! - the projectile sits near [`RIDE_HEIGHT`] above it (the Plasma is exempt on
-//!   the tick it is released: it leaves the nose at the craft's hover height and
-//!   settles a tick later).
+//! - the projectile sits near [`RIDE_HEIGHT`] above it.
+//!
+//! The Plasma is exempt from both on the tick it is released: it leaves the nose
+//! at the craft's hover height and attitude and settles a tick later.
 //!
 //! A projectile born riding world up fails both within a few ticks of a bank
 //! (measured 2026-10-08 with the seeds forced back to `Vec3::Y`: worst angle
@@ -154,7 +155,8 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             // tick 2480 once opponents flew their own teams' stats: 8 ticks with no
             // floor inside the 12-unit probe, then 7.37 above the road, and it was
             // back at 3.00 the next tick) carries the shot out past the probe's reach.
-            // The height is judged from the second tick on; the angle always is.
+            // The height is judged from the second tick on; the angle always is (bar a
+            // Plasma's release tick, below).
             let reattaching = std::mem::replace(&mut was_airborne, false);
             // A wall under the probe is the weapon's own ending or bounce, not a
             // floor to ride.
@@ -162,6 +164,16 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                 continue;
             }
             out.judged_ticks += 1;
+            // The Plasma's release tick carries the craft's own attitude, not a
+            // ridden normal, for the angle as for the height. Since the
+            // autopilot carries the original's engine bits (2026-10-19) it
+            // reaches 03_Track's (-476, 15, 352) crest faster and releases
+            // there with its nose up: 21 to 28 degrees on the release tick on
+            // four laps, under 15 on every tick after. A world-up seed stays
+            // wrong for ticks, so the later ticks still catch it.
+            if weapon == Weapon::Plasma && first_flying_tick {
+                continue;
+            }
             out.worst_angle = out.worst_angle.max(
                 floor
                     .normal
@@ -170,7 +182,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                     .acos()
                     .to_degrees(),
             );
-            if !(weapon == Weapon::Plasma && first_flying_tick) && !reattaching {
+            if !reattaching {
                 out.worst_height_error = out
                     .worst_height_error
                     .max((floor.distance - RIDE_HEIGHT).abs());
