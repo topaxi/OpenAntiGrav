@@ -438,6 +438,36 @@ lookup, and the rule leaves it alone**: `m_diffuse_normal_constantspecular` decl
 **Omega: checked, applies, inherited** (`rcsmaterial.md`): its programs are PS4 and unread;
 three of these families carry 2048's instance record exactly and take the answer.
 
+**`m_diffuse_normal_constantspecular`, second pass (2026-10-20, `normal-maps-2`): still
+open, with what was learned.** Read from the bytes plus the dictionary of 64-bit words
+labelled by every `.dsm` Vita3K had written (a `.dsm` file name is the SHA-256 of the whole
+GXP container):
+
+- The family's ambient-only fragment program (#1 on Moa Therma, Anulpha, Vineta K; `NEW`
+  on Chenghou is #1 with `Norm`) is four primary words: `PHAS`, two unlabelled
+  `VF16MAD2`-shaped words, and the output scale. Compared with the five-word ambient
+  programs of sibling families, its second word has the fog-mix shape (`pa2.xxxx` factor,
+  `fogColour` as `sa4`) and its first word reads `pa0.wwww`, the sampled texel's alpha.
+  So the sample's **alpha** reaches the colour, not an rgb picture; what it multiplies is
+  not decoded (confidence 40). It is not classified.
+- The texture is `ds_pipe_nc.gxt` (Vineta K, Moa Therma, Anulpha, Chenghou). The suffixes
+  on the start-line set read `_cs` colour+spec, `_ne` normal+emissive, `_ns` normal+spec,
+  `_nc` normal+constant; the texels read as a tangent-space normal map
+  (`track_albedo::is_normal_map`). Name agreement only, not a program reading.
+- On Vineta K the three draws (materials 550, 553, 554 of `track.rcsmodel`, state word 124)
+  sit at (11, 37, -107), radius about 27, 28 units ahead of grid slot 1: the start line's
+  chain strip, beside `ds_sfline_trench`, `ds_sfblend_ns` and `ds_sf_cs/ne`.
+- **Vita3K compiled none of this family's fragment programs** over two laps of Vineta K
+  from the grid (358 `.dsm` logs; the word-level search finds only the shared `lightmap`
+  program #10), while `diffuse_normal_specular*` and the seawater programs of the same
+  circuit did compile. Either the original does not draw these three draws in a race, or
+  the log misses them; one race is not enough to say which. Ours draws a dark chain band
+  across the road there; the original frames at the grid and at lap 2's line show plain
+  road.
+
+To close it: a Vita3K race on a circuit whose start line is reachable at a matched pose
+(Chenghou's `ds_sf_ne`/trench draws are the largest set), then label words 1 and 2 of #1.
+
 ## The composite family, and the Zone one
 
 *Read 2026-08-30, against the base build. Blob indices below are that build's;

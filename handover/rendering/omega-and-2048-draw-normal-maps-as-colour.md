@@ -45,6 +45,15 @@ non-lightmap texture) and so still draw it.
   line; a flat-black rocket may now pass. A control frame needs a pose with no start line
   under the weapon. (HD only; this lane's change reaches 2048 and Omega.)
 
+- **2026-10-20 (`normal-maps-2`), no census change (2048 41, Omega 149).** The family is the
+  start line's pipe strip (`ds_pipe_nc`, Vineta K, Moa, Anulpha, Chenghou); its ambient
+  program uses the texel's alpha, and Vita3K never compiled its programs in two Vineta K laps
+  (the original may not draw it there). Evidence and what closes it: `docs/formats/gxp.md`,
+  "second pass". Not done: the water against Vita3K (the seawater lit program is fully
+  labelled in the dictionary: two scrolled normal samples, no colour sample, specular from
+  `ColourConstant`; no matched frame taken), the water edge, `rocks_01`, `jd_*_n`,
+  `amb_glass`, `temp_diffuse`, Omega.
+
 ## Next Steps
 
 1. Read what `m_diffuse_normal_constantspecular` does with `Norm`/`Texture1` in its
