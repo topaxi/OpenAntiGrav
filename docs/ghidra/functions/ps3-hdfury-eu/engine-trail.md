@@ -1725,15 +1725,52 @@ ramp at `+0x108` and the trail block's brightness:
     load report names each absent one. Base Harimau and every other HD craft
     author `EF_Boost` geometry (the unchecked warning in the brief did not
     hold for this grid).
-  - **Not compared against a live RPCS3 frame** in this change: the 2.0-at-rest
-    base scale and the flicker's visible amplitude are the disassembly's, not a
-    pixel measurement.
-  - **2048 and Omega: checked, applies, wired through the same `Authored`
-    names.** Both executables carry the same five `ef_Spikes*Shape` strings and
-    the four `Spikes ... Scale` tuning names; their races now split the spikes
-    the same way (2048 `hdships\*` craft author them; the native `feisar2048`
-    flare authors none). Their own tuning *values* were not compared with HD's,
-    and Omega's race was not loaded here.
+  - **Live check, 2026-10-19 (`hd-flare-rpcs3-check`).** RPCS3 under the
+    interpreter, restored from the Harimau classic / Talon's Junction
+    time-trial start state, a `Z0` breakpoint at `0x002a2824` (the `fadds f0,f13,f0`
+    result just before `stfs f0,0x320(r1)`, so `f0` is the main-spike group
+    scale the shapes are scaled by). **Two boots, both:** `f0 = 2.0000`,
+    `s` (`f31`) `= 0.0`, `b` (`f30`) `= 0.0`, `f13` (the throttle lerp alone)
+    `= 1.0`. **The falsifier:** the sum of the two lerps gives 2.0 at rest, while
+    a product or a single lerp gives 1.0; the register read says 2.0, so the
+    sum is what the game submits. Confidence **90** for the rest value (the
+    rubric's runtime-read band, two boots, one binary); the thrust and boost
+    terms stay at 85 (disassembly only, not read). Not read live: the
+    thrust and boost values and the per-spike draw at `0x002a286c` (`f1`);
+    the stub answered one stop in four interpreter restores on the first lane
+    pass and one in two on the repeat (see [rpcs3-debugger.md](../../../reverse-engineering/rpcs3-debugger.md),
+    "The stub after an interpreter restore"). The flicker amplitude is
+    therefore still the tuning file's range, not a register or pixel read.
+  - **Side by side at a matched view (Harimau classic, Talon's Junction, `far`
+    chase camera).** Reproduce: ours, `oag-game <hdfury-ps3-eu-dec.iso> --race
+    --no-audio --no-intro --team harimau --camera-view far --size 1760x990
+    --ticks 5|6|7` (rest) or `--ticks 400|401|402 --hold cross` (thrust, speed
+    about 100 units) or `--ticks 500|501|502 --hold cross --pose-boost 1.0`
+    (forced boost); the original, the maintainer's `hd-timetrial-talons-harimau-classic-start`
+    save state restored with `scripts/emu-restore-state.sh`, frames grabbed
+    with `rpcs3-drive.py`'s screenshot (a 2000x1200 grab of the virtual display
+    holding the 1760x990 game image at y offset 41), rest frames straight
+    from the restore, thrust frames with `cross` held (HUD read 380, 437 and
+    439 km/h in the three frames used). All crops are the same box,
+    x 720-1040, y 640-840 of the game image, enlarged 2x. The frames and the
+    three contact sheets are kept under `data/reference/hd-flare-rpcs3-check/`.
+    **Rest:** the original's flare is a small cyan-and-pink jewel in the
+    nozzle with a few thin cyan lines trailing straight back; ours is a large
+    white glare with radial glitter around it. **Thrust:** the original is a
+    smooth, solid cyan block with a straight plume; ours a glittering blob with
+    ragged edges. **Boost: not compared** - none of the original's Harimau
+    frames is a verified boost (HUD speeds 380-439 km/h; the only boosted frame
+    seen, 570 km/h, was a different craft), so ours at `--pose-boost 1.0` has no
+    original counterpart here. **The scale law is not what differs**: scaling
+    our spikes by 0.001 (a local experiment, not kept) still leaves the large
+    white glare at rest (the sprite flare and bloom), and the original's
+    spikes at 1.5x (2.0 x a 0.65-0.85 draw) show no radial rays in any frame.
+    What the original draws the spikes with (material, blend, any alpha term)
+    is unread, and is the likely source of ours' glitter. The player craft in
+    the Metropia and Talon's Venom-start states was identified by eye as
+    Feisar's Fury skin; `feisar_c1` authors none of the five spikes (load
+    WARN), which would make the thin lines at rest on that hull the trail or
+    the sprite, not spikes - a reading by eye, not a measurement.
 - `EngineFlare_Update` also writes the trail's brightness
   (`+0x11d8` above) and the scroll phase/`u_head` pair - the flare object
   owns the trail's animation inputs.
