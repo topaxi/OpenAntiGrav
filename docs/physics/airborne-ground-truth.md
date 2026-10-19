@@ -154,7 +154,12 @@ input torque (`input * 0.3 / I_xx`, `1.92` rad/s² at full deflection) is:
 So the original drops the whole input exactly where the dot product crosses
 `0.9`, on three crossings and both input signs: capture 2 ticks 1236/1237
 (`0.9022` open, `0.8984` closed) and 1297/1298, capture 3 ticks 1312/1313
-(`0.9009`, `0.8976`). **Confidence 90.** Ported as `oag_physics::engine::pitch_aligned`,
+(`0.9009`, `0.8976`). **Confidence 90. Measured, held (2026-10-20)**: committed on in `6cb7830a6`, then
+switched off (`oag_physics::engine::PITCH_GATE_ON`) because on its own it costs the original's
+autopilot driver two rescues on Pulse's `05_Track`
+(`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`,
+tick 7282); with the tensor and the bias also on that test passed. The mechanism is
+`oag_physics::engine::pitch_aligned`,
 reading the located sample `Environment::track_sample` carries (the entity's `+0xaf0`,
 whose `down` is `+0xb10`); with no sample the gate is open, chosen. Every title runs it:
 Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate, read statically, not

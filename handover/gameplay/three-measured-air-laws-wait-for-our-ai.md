@@ -1,12 +1,11 @@
-# Three measured air laws wait for our AI to fly them
+# Four measured air laws wait for our AI to fly them
 
-2026-10-20, `airborne-capture`. Three laws are measured against the original and held
+2026-10-20, `airborne-capture`. Four laws are measured against the original and held
 off, because this engine's own AI (our driver, its speed plan and the autopilot built on
 the original's driver) regresses under them. Measurements, the 8-test table and how the
 causes were separated:
 [airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md). Landed and on:
-the pitch-input gate (all titles) and HD's class gravity scale on flight gravity (HD,
-Omega and 2048).
+HD's class gravity scale on flight gravity (HD, Omega and 2048).
 
 ## Open
 
@@ -28,16 +27,22 @@ Omega and 2048).
   `CraftLaws::air_pitch_bias` measured `true` in `crates/hd/src/race.rs` (Omega and 2048
   inherit `true`). On, HD's whole-race autopilot gains a net 4 rescues over 32 races, every
   one on `12_sol_2` (novice seeds 1 and 4, Ace seeds 1 and 3, switch on).
+- **The pitch-input gate** (`Ship_TestPitchAlignment`, confidence 90). Law `6cb7830a6`,
+  held by the commit that set `oag_physics::engine::PITCH_GATE_ON = false` (re-apply: revert
+  it). On its own it gives the original's autopilot two rescues on `05_Track`
+  (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`,
+  tick 7282); with the tensor and the bias also on, that test passed.
 - HD's grounded hover residual is a separate thread:
   [hd-handling-against-rpcs3.md](hd-handling-against-rpcs3.md).
 
 ## Next Steps
 
-1. Re-apply the three laws on a branch, then run the bar: the eight tests above
+1. Re-apply the four laws on a branch, then run the bar: the nine tests above
    (`OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all -E
    'test(track_01_phantom) | test(track_07_flash) | test(track_07_venom) |
    test(track_14_phantom) | test(speed_plan_flash_forward) | test(speed_plan_rapier_reversed)
-   | test(speed_plan_venom_forward) | test(a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack)'`)
+   | test(speed_plan_venom_forward) | test(a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack)
+   | test(the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue)'`)
    and the sweep (`OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay
    --run-ignored all opponent_autopilot_sweep --no-capture`, about 20 minutes). Fix our
    driver and plan; never re-baseline a gate to hide a regression. 2-4 hours a law.
