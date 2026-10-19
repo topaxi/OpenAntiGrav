@@ -103,6 +103,34 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   is the engine's").** There is no harder snap, and the original scrapes de
   Konstruct Black too. What was missing was the engine's x1.2 and the lifted
   acceleration cap while the pickup runs; that is now wired. Left open:
+  - **Not the driver (2026-10-19, lane `autopilot-crest-steering`;
+    docs/gameplay/ai.md, "The autopilot's airborne steering is the original's").**
+    The two bullets below blame our driver's airborne steering. A live open-loop
+    replay clears the controller: the original's own state through
+    `oag_ai::original::steer` and `pitch` gives steer p99 1.4 on 1,649 frames
+    and pitch identical on 234 airborne frames (Fort Gale Black PHANTOM,
+    PPSSPP). Our samples (own projection, lookahead walk), checked by a Python
+    mimic on the main ring, put the target within 0.2 units across (p50), at
+    most 2 steer units on the first ramp. The states the drivers react to
+    differ: physics, or the rail, which the replay does not cover. Not
+    re-checked: our own-sample locate through a fork (the mimic ignores routes).
+    Also unclaimed: the confidence rows in `names.tsv` for
+    `Ai_ComputeControls`, `Ai_SampleLookahead` and `Ai_ComputePitch`. Their page
+    now argues for 92, 85 and 95, but the rows sit in the `orig-ai-pulse`
+    section.
+    - **Pulse:** the gap opens before the *first* jump (x `-536`), at launch `vy`
+      75.5 against 67. In the air both fall at about `-137`. Next: a
+      single-step residual of our physics seeded from the original's frames on
+      that ramp; `scripts/psp-autopilot-air.py` logs the state.
+    - **HD Ubermall:** ours falls about 20 units/s² less in the air at the same
+      pitch (`-100` both), so it peaks 5 higher and flies long. Next: an RPCS3
+      capture with orientation, then the same residual.
+    - **Unported, both titles:** the pitch-input gate `Ship_TestPitchAlignment`
+      (`0x088492bc`; HD `Craft_UpdatePitch` `0x000f0980`) and the in-air
+      `<Misc weight_distribution>` pitch torque (engine.md, "Pitch"). Player
+      physics: decide its scope before porting. Not shown to be this cause.
+    - Brief questions left to the lead: whether `oag-physics` is in this
+      thread's scope.
   - **Fort Gale Black (`14_Track` forward) at PHANTOM: our autopilot is
     rescued 5 times with the port and was rescued 0 times before; the
     original is rescued 0 times.** Both leave the crest at (-434, 115, 747)
@@ -110,10 +138,9 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     lands on the ramp at about (-233, 109, 609). Ours steers right (+6 to +44),
     holds about 162 and falls off every lap. The cause is our driver's
     airborne steering (`Ai_ComputeControls` with the height term), which has
-    no live leg. Next address: a conditional breakpoint inside
-    `Ai_ComputeControls` (`0x08855dc4`) on the player's driver over that
-    crest, logging the lookahead sample, the target and the error, against
-    `steer::steer`'s at the same position.
+    no live leg. ~~Next address: a conditional breakpoint inside
+    `Ai_ComputeControls`~~ done 2026-10-19: the driver matches, see "Not the
+    driver" above.
   - **HD Ubermall (`05_ubermall`) at PHANTOM: the same airborne-steering gap
     (2026-10-19, lane `hd-autopilot-law`).** Our autopilot goes from 1 rescue,
     5 wall ticks, 78.3 end shield to 2 rescues, 143 wall ticks in 27 episodes,
@@ -128,10 +155,10 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     open. It drifts 17 units with the engine bits off too, and only hits the
     wall at height with them on. Same on the original's team (Feisar: 3
     rescues, 211 walls, end shield 27.3), so it is not the team. Evidence: `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
-    Next: HD `AI_ComputeControls` (`0x00100658`) air term and `Ai_ComputePitch`
-    (`0x000fe510`) on this jump, against `oag_ai::original`;
-    `scripts/rpcs3-hd-autopilot.py` logs the original's controls
-    (`craft+0x4c`) per frame there. Fix it together with Fort Gale above.
+    ~~Next: HD `AI_ComputeControls` (`0x00100658`) air term and `Ai_ComputePitch`
+    (`0x000fe510`) on this jump~~ read 2026-10-19: the same air term as Pulse,
+    and the original's pitch on this jump matches ours; see "Not the driver"
+    above.
   - ~~HD's player-status function was not found~~ **Found 2026-10-19:**
     `PlayerStatus_Update` (`0x000cb928`), and every title carries the same law
     (Pure, Omega and 2048 read off their code). It is a `Title` axis now

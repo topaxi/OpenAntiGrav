@@ -1747,20 +1747,38 @@ and the recorded yaw rate does not follow it, it decays smoothly.
 
 ```
 p = 0
-if (FUN_088492bc(craft))                       // gate, not decoded
+if (Ship_TestPitchAlignment(craft))            // 0x088492bc, below
     p = controls.pitch * (grounded ? pitch_ground : pitch_air)
 if (!grounded)
     p += *(craft+0x6c) + 0x90                  // per-team in-air pitch bias
 angularLocal.x += p
 ```
 
+`grounded` is the bit `craft+0x1c0 & 1` (`0x08848d34`, `0x08848d7c`), and both
+gains come off `*(craft+0x70)` (`+0x74` ground, `+0x70` air). The bias is read
+off `*(craft+0x6c)` whenever the bit is clear, **whether or not the gate passed**:
+the gate's failure branches straight to `0x08848d7c`, the bias test.
+
+**`Ship_TestPitchAlignment` (`0x088492bc`), decoded 2026-10-19
+(`autopilot-crest-steering`), confidence 80.** It returns
+`dot(craft+0x160, -1.0 * (*(craft+0x1c4) + 0xb10)) > 0.9`: the hull up against the
+located spline sample's down, negated (`vscl.q` by `-1.0` at `0x088492f0`,
+`vdot.t` at `0x08849318`, `c.le.s` against `0x3f666666` at `0x08849338`). So
+pitch input applies only while the hull is within about 26 degrees of the
+track's up under it. HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate
+and bias ([ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md)). The bias is
+`<Misc weight_distribution>` (the PS2 parser, below); the PSP disc authors
+`8.0` on Assegai, Qirex and Triakis, `-8.0` on AG Systems, Feisar and Piranha, and
+`0.0` on EGX and Goteki. It was read live as `8.0` on a captured craft
+(PPSSPP, 2026-10-19). **Neither the gate nor the bias is in
+`oag_physics::engine::pitch`.**
+
 Confidence **82**. `pitch_air` and `pitch_ground` are plain gains on the input
 axis, not rates: there is no ramp and no state. `pitch_damping` is consumed
 elsewhere, by `Ship_ApplyAngularDamping`.
 
-The gate at `0x088492bc` was not decoded; without it, pitch input would apply
-unconditionally. **Measured at runtime, it does not block a grounded craft
-standing still**: holding the pitch axis on the start line rotates the craft
+The gate is decoded above. **Measured at runtime, it does not block a grounded
+craft standing still**: holding the pitch axis on the start line rotates the craft
 immediately, so whatever the gate tests, it is open in the ordinary case.
 
 ### The pitch axis, read at runtime

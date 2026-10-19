@@ -32,7 +32,7 @@ Confidence is per claim below. Static reading unless a row says measured.
 | `0x088354c8` | `AiManager_ShufflePack` | 90 | the `AIPackSwapping` consumer, below; measured |
 | `0x088357a0` | `AiStats_SetDefaults` | 88 | the AI-stats header constants and the per-class defaults, below |
 | `0x08853a80` | `Ai_Update` | 85 (already named) | per driver per tick, below |
-| `0x08855dc4` | `Ai_ComputeControls` | **85** (was 75) | the steering controller and the thrust slot, read at instruction level |
+| `0x08855dc4` | `Ai_ComputeControls` | **92** (was 85) | the steering controller and the thrust slot, read at instruction level; replayed live on 1,649 frames, [below](#the-airborne-driver-replayed-live-2026-10-19) |
 | `0x08855904` | `AI_ComputeOpponentThrust` | **94** (was 82) | the thrust law, read whole and reproduced on 1,140 live samples |
 | `0x08852ef4` | `Ai_UpdateSpreadWander` | 92 | the pack-position wander (HD's name for the same function); measured |
 | `0x08854e7c` | `Ai_PlanLane` | 80 | picks a lane in the AI corridor and fills the lane ring |
@@ -45,10 +45,10 @@ Confidence is per claim below. Static reading unless a row says measured.
 | `0x08853534` | `AiLane_Reset` | 85 | one slot holding the given lane |
 | `0x08852dac` | `Ai_LanePoint` | 85 | world point of a lane on a track sample, racing line included |
 | `0x08852364` | `Ai_LanePointFromCentre` | 85 | the same **without** the racing-line term, see below |
-| `0x088530a0` | `Ai_SampleLookahead` | 80 | the steering's lookahead track sample |
+| `0x088530a0` | `Ai_SampleLookahead` | **85** (was 80) | the steering's lookahead track sample; its second float argument is dead, [below](#the-airborne-driver-replayed-live-2026-10-19) |
 | `0x08852afc` | `AiTrack_SampleAtProgress` | 80 | walks the path to a progress and evaluates the spline there |
 | `0x088542e4` | `Ai_SnapToLane` | 90 | the kinematic rail; measured, see below |
-| `0x08853148` | `Ai_ComputePitch` | 75 | pitch input while airborne |
+| `0x08853148` | `Ai_ComputePitch` | **95** (was 75) | pitch input while airborne; read whole and replayed exactly on 234 airborne frames, [below](#the-airborne-driver-replayed-live-2026-10-19) |
 
 ## Who drives whom: the control record
 
@@ -289,7 +289,10 @@ The tail (`0x08856750..0x088568d8`) was read instruction by instruction: the
 with `80.0` and `10.0` from `RM+0x2c8`/`RM+0x2d4`, and the `lbu 0x12(racer+0x70)`
 finished test. Confidence 85. Two pieces rest on the decompile only: the
 `0.7/0.3` split of the cross-track shift and the yaw prediction, which are long
-VFPU sequences; 75 for those.
+VFPU sequences; 75 for those. **Both have a live leg since 2026-10-19**: the
+original's own state, fed through `oag_ai::original::steer`, reproduces its
+heading error to about `1e-4` and its steer to p99 `1.4` on 1,649 frames
+([below](#the-airborne-driver-replayed-live-2026-10-19)), so the whole function is 92.
 
 ## `AI_ComputeOpponentThrust` (`0x08855904`): the thrust law, whole
 
@@ -442,7 +445,8 @@ While the craft's ground fraction (`craft+0x94 -> +0x2b0`) is `<= 0.9`:
 `rate = dot(cross(fwd, last_fwd), left)` (`last_fwd` at `driver+0x190`),
 `err = dot(cross(fwd, tangent_own), left)`,
 `pitch = clamp(-2500 * (err + 40 * rate), -100, 100)`. Otherwise `0`.
-Confidence 75.
+Confidence **95** since 2026-10-19 (was 75): read at instruction level and replayed
+exactly on live frames ([below](#the-airborne-driver-replayed-live-2026-10-19)).
 
 ## A per-point speed floor
 
@@ -661,3 +665,100 @@ by `SplitScreenMultiplier` when more than one person races).
 **Wired** in `oag_ai::original::Autopilot`, flown by
 `oag_raceplay`'s `Race::autopilot_controls` on every title whose original tables
 read, whatever the opponents fly; see [gameplay/ai.md](../../../gameplay/ai.md#the-autopilot-flies-the-originals-player-driver-2026-10-19).
+
+## The airborne driver, replayed live (2026-10-19)
+
+Lane `autopilot-crest-steering`. The question: does the original's driver do
+something different while the craft is airborne (a grounded gate, a held or
+rate-limited steer, another lane target), which would explain this engine's
+autopilot weaving and falling off Fort Gale Black at PHANTOM
+([gameplay/ai.md](../../../gameplay/ai.md#the-autopilots-airborne-steering-is-the-originals-2026-10-19))?
+**It does not.** Confidence **92**.
+
+**Static.** The only airborne terms in `Ai_ComputeControls` are the height
+fraction `air = clamp((|h| - 15) * 0.025, 0, 1)`, which scales the cross-track
+term by `1 - air`, and the lookahead time `LookAheadSecs + air`
+(`add.s f12,f26,f28` at `0x08856008`). Two details read at instruction level:
+
+- `Ai_SampleLookahead` is called with a second float, `f13 = x`, the scaled
+  cross-track (`mov.s f13,f20` at `0x08856018`). The callee overwrites it before
+  reading it (`lwc1 f13,0x170(a0)` at `0x088530a8`, the smoothed speed), so the
+  argument is dead and the distance is `max(speed * t, 15) / lap * 1.5` as
+  documented.
+- `Ai_ComputePitch` computes the height over the own sample
+  (`vdot.t` at `0x0885331c` against `racer+0x280`) and the distance to it
+  (`vsqrt.s` at `0x0885336c`) and uses neither: the output is
+  `clamp((err + 40 * rate) * -2500, -100, 100)` (`0xc51c4000` at `0x08853378`,
+  `swc1 f14,0x18(a0)` at `0x088533b0`). Pure's distance fade
+  ([psp-pure-usa/ai-controls.md](../psp-pure-usa/ai-controls.md)) is the use
+  Pulse leaves dead.
+
+Nothing else branches on the ground fraction, `craft+0x1c0` or the height: no
+held steer, no rate limit and no airborne lane. The steer ramp the craft applies
+afterwards is the player's own (`Ship_UpdateSteering`, ported in
+`oag_physics::controls`).
+
+**Live, open loop.** `scripts/psp-autopilot-air.py` (PPSSPP v1.20.4, software
+renderer, muted) arms the player's Autopilot after GO on Fort Gale Black
+(`14_Track` forward), Time Trial, PHANTOM, and stops once a frame. It logs the
+racer record, the own and lookahead samples, the target, the driver's state and
+the craft's controls. Each frame's state is fed through this engine's
+`steer::steer` and `steer::pitch` (`crates/ai/tests/air_replay.rs`, scratch,
+`OAG_AIR_REPLAY`) with the class's disc controller (`SteerMul 0.7`,
+`SteerDamp 5.057`, `LookAheadSecs 0.3`, `xtrackMul 0.0091`) and lane `0`:
+
+| Stop | Frames | Compared | Result |
+| --- | ---: | --- | --- |
+| `0x08856058` (`--at controls`), output read off the next frame | 1,649 (248 airborne) | heading error, steer, airbrakes | error within `~1e-4`; steer \|diff\| p50 `0.26`, p99 `1.36` (airborne p99 `1.03`, max `1.28`); target point within `0.017` |
+| `0x088533b4` (`--at pitch`) | 234 airborne | pitch | identical on all 234 (max \|diff\| `0.00`) |
+
+The steer outliers are the first seven frames after the pickup engages (the
+authority ramp) and airbrake jitter at saturation, where the airbrake's `80x`
+gain turns a `1e-4` heading difference into tens of units.
+
+**What the replay covers.** It proves the controller's arithmetic given the
+original's own samples. How this engine builds those samples is a separate
+step (`oag_raceplay`'s own-sample projection and its lookahead walk along the
+sample polyline, against the original's spline evaluated at a progress). It
+was checked separately by `scripts/psp-autopilot-samples.py`, which mimics that
+sampling over the disc's `14_Track` path 2 at every captured position. Main-ring frames only (1,338):
+
+| Sample | Along the track, \|diff\| p50 / p90 | Across, \|diff\| p50 / p90 | Steer equivalent of the target's across error, p50 / p90 |
+| --- | --- | --- | --- |
+| Own | 3.5 / 4.0 (ours ahead) | 0.27 / 0.75 | |
+| Target | 3.6 / 5.7 | 0.20 / 0.89 | 1.4 / 6.6 |
+
+Over the first jump's ramp (x `-514..-540`) the target's across error is
+0.07 to 0.30, at most 2 units of steer. The original's own sample trails the
+craft by about one frame of travel. The outliers (about 45 steer units) sit at
+the fork entry near (-487, 54, -777), where the mimic ignores routes, so they
+are the mimic's limit and not evidence. Confidence 75 for this leg, because it
+is a mimic rather than this engine's own code. The rail (`Ai_SnapToLane`)
+moves the body and is not covered by the replay; it was measured separately
+(above, 90).
+
+**So the ramp gap is the craft's state, not the controller or its samples.**
+On the same circuit this engine's autopilot and the original's diverge before
+the first jump (x `-536`). At the ramp lip ours carries `vy` 75.5 against the
+original's 67 at the same speed. On the ramp the original is in a hard left
+turn (`-98`) where ours steers `-20`. Given equal controllers and samples within
+2 steer units there, that 78-unit gap comes from the pose. In the air both fall
+at about `-137`. The next address is the craft physics on that ramp.
+
+`names.tsv` still carries the earlier confidences for `Ai_ComputeControls`
+(85), `Ai_SampleLookahead` (80) and `Ai_ComputePitch` (75): those rows belong to
+the `orig-ai-pulse` lane's section, and raising them is left to the lead.
+
+**Also read for the next lane: the pitch gate and the in-air bias.**
+`Ship_UpdatePitch` (`0x08848d08`) applies the pitch input only when
+`FUN_088492bc` passes: `dot(craft+0x160, -(*(craft+0x1c4) + 0xb10)) > 0.9`. That
+is the hull up against the located spline sample's down, negated
+(`0x3f666666` at `0x0884932c`; `0x088492bc..0x08849350`). Separately, whenever
+the grounded bit `craft+0x1c0 & 1` is clear, it adds
+`*(craft+0x6c) + 0x90` (`<Misc weight_distribution>`; `lwc1 f13,0x90(a0)` at
+`0x08848d94`) to the pitch torque, gate or not. Live:
+`weight_distribution = 8.0` on the captured craft. HD's `Craft_UpdatePitch`
+(`0x000f0980`) has the same gate and bias
+([ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md)). Neither is in
+`oag_physics::engine::pitch`; whether they close the gap is not shown.
+

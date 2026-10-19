@@ -360,6 +360,7 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         mode: oag_race::Mode::SingleRace,
         track: Some(track.to_string()),
         seed: Some(1),
+        team: std::env::var("OAG_SWEEP_TEAM").ok(),
         weapons_override: std::env::var_os("OAG_SWEEP_WEAPONS")
             .is_none()
             .then_some(false),
@@ -399,9 +400,12 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         if std::env::var_os("OAG_SWEEP_TRACE").is_some() {
             let ship = &race.sim.world.ships[0];
             let rail = race.original_autopilot(0).map(|a| a.driver.rail);
-            if race.sim.world.tick.is_multiple_of(2) || race.respawns_of(0) != out.respawns {
+            if std::env::var_os("OAG_SWEEP_TRACE_ALL").is_some()
+                || race.sim.world.tick.is_multiple_of(2)
+                || race.respawns_of(0) != out.respawns
+            {
                 println!(
-                    "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}]",
+                    "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}] fwd {:?} up {:?} vel {:?}",
                     race.sim.world.tick,
                     ship.physics.body.position,
                     ship.physics.body.linear_velocity.length(),
@@ -414,7 +418,10 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
                     ship.physics.brake,
                     ship.physics.steer,
                     ship.physics.airbrake_left,
-                    ship.physics.airbrake_right
+                    ship.physics.airbrake_right,
+                    ship.physics.body.forward(),
+                    ship.physics.body.up(),
+                    ship.physics.body.linear_velocity
                 );
             }
             out.respawns = race.respawns_of(0);
@@ -443,7 +450,9 @@ fn mean(values: &[f32]) -> f32 {
 
 /// A scratch sweep: the player's own wall contact and lateral offset under a
 /// whole-race autopilot on every Pulse circuit, weapons off, for the classes
-/// in `OAG_SWEEP_CLASSES` (default `VENOM,PHANTOM`).
+/// in `OAG_SWEEP_CLASSES` (default `VENOM,PHANTOM`). `OAG_SWEEP_TEAM` flies
+/// another team; `OAG_SWEEP_TRACE` prints the craft every other tick (pose,
+/// velocity, control states), `OAG_SWEEP_TRACE_ALL` every tick.
 ///
 /// ```sh
 /// OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \

@@ -380,11 +380,13 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// `pitch_air` and `pitch_ground` are plain gains on the input, with no ramp and no state.
 /// The `grounded` test is the **boolean** contact flag, previous frame's.
 ///
-/// **Not implemented:** the per-team in-air pitch bias at `stats_base + 0x90` (outside
-/// every class block, XML element unknown, so no [`Handling`] field), and the gate at
-/// `FUN_088492bc` (never decoded, but observed not to fire in the ordinary case: a
-/// grounded craft on the start line pitches the moment the axis is held, in
-/// `data/traces/talons-junction-pitch-both-ways.csv`).
+/// **Not implemented:** the per-team in-air pitch bias, `<Misc weight_distribution>`
+/// (`Handling::weight_distribution`, added whenever the craft is not grounded), and the
+/// gate `Ship_TestPitchAlignment` (`0x088492bc`): the input applies only while
+/// `dot(hull_up, -spline_down) > 0.9`. Both are decoded in
+/// `docs/ghidra/functions/psp-pulse-usa/engine.md`, "Pitch", and HD carries both. The gate
+/// is open in the ordinary case: a grounded craft on the start line pitches the moment the
+/// axis is held, in `data/traces/talons-junction-pitch-both-ways.csv`.
 /// # The scale and the sign, both measured
 ///
 /// Read by probing the control block the original's `Ship_UpdatePitch` reads,

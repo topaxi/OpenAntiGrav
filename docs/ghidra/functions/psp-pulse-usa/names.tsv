@@ -1381,3 +1381,5 @@
 0x0884866c	function	Craft_SetUncappedThrust	88	autopilot.md
 # 2026-10-19 moa-strip-band: the list-B queue key (mesh-draw.md)
 0x08902b24	function	ViewCull_ViewDepth	80	mesh-draw.md
+# 2026-10-19 autopilot-crest-steering: the pitch gate (engine.md)
+0x088492bc	function	Ship_TestPitchAlignment	80	engine.md
