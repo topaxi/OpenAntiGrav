@@ -109,6 +109,7 @@ use std::fmt;
 use container::u32_at;
 
 pub mod container;
+pub mod lighting_only;
 pub mod lineage_blend;
 pub mod material;
 pub mod nodes;

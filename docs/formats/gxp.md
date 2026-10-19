@@ -395,6 +395,49 @@ Two smaller things are also left unread on purpose:
   ordinal correspondence is at 40 and nothing is named on it; the reasoning is
   in the handover thread this page's index line points at.
 
+## Which sampler carries the colour (2026-10-19, `normal-maps-as-colour`)
+
+**No instruction is read for this.** A `.rcsmaterial` holds a fragment program per
+permutation of one shader source, and the compiler declares a sampler only in a permutation
+that reads it. The smallest permutation declares `constantAmbientColour` and `fogColour` and
+no `liveLighting*` uniform: the surface with the lights off. Over `data.psarc`'s 204 material
+families that have both that permutation and a lit one, **eight families' ambient-only program
+declares no sampler at all while their lit ones do**: `constantdiffuse_specular_normal` and
+`New` (`Texture1`, `norm`), `ds_booth_glass` (`Texture1`), `fc15`/`fc17_effects_vscroll_water`
+(`NormalMap`), `dc_seawater`, `dc_seawater_cheap` and `reflectplane_dc_seawater`
+(`DiffuseTexture`, `DiffuseTexture1`). Their colour is the one other uniform that program
+declares (`Constant1`, `ColourConstant`, `Watercolour`); the texture is a lighting lookup.
+Confidence 80: the rule is structural, and it agrees on the one family HD's traced program
+settles (`constantdiffuse_specular_normal`: `Texture1` only through a `2c - 1` unpack into
+the light dots, `rcsmaterial.md`).
+
+**The rule never looks at a name, and the names agree with it.** Every sampler it calls
+lighting-only over the whole package (`psp2_sampler_use_ground_truth` pins the list): `Norm`,
+`Normal`, `NormalMap`, `NormalAndSpecular`, `NormalMapTexture`, `NormalTexture`, `Normal_Map`,
+`NormalAlphaMap`, `Spec`, `SpecularTexture`, `Specular_Texture`, `norm`, plus `Texture1/2/4`,
+`screenSpaceRefractionTex` and the seawaters' `DiffuseTexture`/`DiffuseTexture1`. The last
+two are the check that it is the programs and not the author's names that decide: the
+seawater shaders call their wave normal map `DiffuseTexture` (`dc_waternormalmap`), and the
+rule refuses it where a name rule (`Material::diffuse_texture`'s `DIFFUSE_SAMPLER_NAMES`)
+bound it. Engine samplers (`lightmap`, `occlusionMap`, `shadowMap`, the reflection
+captures) are lit-only by construction and left out.
+
+**Only these eight are acted on.** The build refuses a sampler and draws the constant only where
+`SamplerUse::colourless` holds (no material sampler in the ambient-only permutation). Many other
+families carry an extra lit-only sampler beside a picture they do sample (`NormalMap`,
+`Specular_Texture`, `NormalTexture` and so on, with colour uniforms that are not colours such as
+`time` or `Bloom`): recorded here, **not wired**. The state word of `ds_booth_glass` (2048 and Omega) and Omega's
+`reflectplane_dc_seawater` is `124`, mode 0, opaque, so the constant's alpha turns no see-through
+draw opaque there; the other 2048 water files' words were not read.
+
+**A permutation that does sample in the ambient-only case is a colour or a mask, not a
+lookup, and the rule leaves it alone**: `m_diffuse_normal_constantspecular` declares
+`Texture1` (`Norm` on `New`) there, and the Altima water edge declares `NormalMap` there
+(beside an `Opacity` uniform). Both stay open.
+
+**Omega: checked, applies, inherited** (`rcsmaterial.md`): its programs are PS4 and unread;
+three of these families carry 2048's instance record exactly and take the answer.
+
 ## The composite family, and the Zone one
 
 *Read 2026-08-30, against the base build. Blob indices below are that build's;

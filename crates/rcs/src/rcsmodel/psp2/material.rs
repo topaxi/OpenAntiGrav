@@ -359,12 +359,28 @@ impl Material {
     /// texture, as it always was.
     #[must_use]
     pub fn diffuse_texture(&self) -> Option<&str> {
-        let not_lightmap = |path: &&str| Some(*path) != self.lightmap.as_deref();
+        self.diffuse_texture_without(&[])
+    }
+
+    /// [`Self::diffuse_texture`] with the samplers named in `refused` (name
+    /// hashes) taken out of the choice: neither picked by name nor by order.
+    /// The caller learns which samplers carry no colour from the material's
+    /// own programs, `crate::gxp::sampler_use`.
+    #[must_use]
+    pub fn diffuse_texture_without(&self, refused: &[u32]) -> Option<&str> {
+        let refused_paths: Vec<&str> = self
+            .samplers
+            .iter()
+            .filter(|(hash, _)| refused.contains(hash))
+            .map(|(_, path)| path.as_str())
+            .collect();
+        let allowed =
+            |path: &&str| Some(*path) != self.lightmap.as_deref() && !refused_paths.contains(path);
         DIFFUSE_SAMPLER_NAMES
             .iter()
             .find_map(|name| self.sampler(crate::rcsmaterial::name_hash(name)))
-            .filter(not_lightmap)
-            .or_else(|| self.textures.iter().map(String::as_str).find(not_lightmap))
+            .filter(allowed)
+            .or_else(|| self.textures.iter().map(String::as_str).find(allowed))
     }
 }
 
