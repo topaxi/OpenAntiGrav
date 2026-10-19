@@ -72,6 +72,47 @@ fn a_repeat_inside_the_hold_is_silent_and_a_change_is_not() {
     assert_eq!(race.damage_smokes_started_for_tests(), 3, "hold ran out");
 }
 
+/// The smoke is placed and followed at the pose the hull is drawn at: a craft mid-glide after a
+/// correction carries its smoke with it.
+#[test]
+fn the_smoke_rides_the_drawn_pose() {
+    let mut race = race_with_smoke(true);
+    let offset = Vec3::new(3.0, 0.0, 0.0);
+    race.view.correction[0] = offset;
+    hit_leaving(&mut race, 90.0, false);
+    let sim_at = race.sim.world.ships[0].physics.body.position;
+    let placed = race.damage_smoke_anchors_for_tests();
+    assert!(!placed.is_empty());
+    assert!(
+        placed
+            .iter()
+            .all(|at| (*at - (sim_at + offset)).length() < 1e-3)
+    );
+    race.advance_damage_smoke();
+    let followed = race.damage_smoke_anchors_for_tests();
+    assert!(
+        followed
+            .iter()
+            .all(|at| (*at - (sim_at + offset)).length() < 1e-3)
+    );
+}
+
+/// A seated client's weapon-hit shake is its own craft's: a hit on the seat shakes the camera,
+/// a hit on slot 0 does not.
+#[test]
+fn a_seat_one_hit_shakes_the_seats_camera() {
+    let mut race = race_with_smoke(true);
+    race.set_seat(Some(1));
+    race.view.shake.cancel();
+    race.force_weapon_hit(0);
+    assert!(!race.view.shake.active(), "a hit on slot 0 is not seat 1's");
+    race.force_weapon_hit(1);
+    assert!(
+        race.view.shake.active(),
+        "a hit on the seat shakes its camera"
+    );
+}
+
 #[test]
 fn a_spent_shield_a_leachbeam_and_a_title_without_the_smoke_play_nothing() {
     let mut race = race_with_smoke(true);

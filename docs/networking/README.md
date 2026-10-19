@@ -396,7 +396,7 @@ correction (it has none); there is no reference frame.**
   frame 345. Read by eye on a contact sheet of the crops (the left column pops, the
   right column glides). A 1 unit pop is about 15 px at that distance and would not be
   noticed against 2 units of travel a tick.
-- **B, contact** (`480:7:16:contact`, window 16 is the shortest of 12/16/20 where
+- **B, contact** (`--mode single_race 480:7:16:contact`, window 16 is the shortest of 12/16/20 where
   the touch exists: own craft 2.1 units at 16, 3.6 at 20): the rival is **out of shot**
   behind a trackside barrier, so the picture shows only the player's own craft and the
   camera jerked by 2.1 units, which is not smoothed by the rule above and which the
@@ -432,17 +432,21 @@ off the seat's own craft (`correction::HIT_SHIELD`, ADR-0071's `SHIELD_STEP`,
 **chosen**) draws the craft where it lands, and a smaller loss (contact wear) glides
 (`a_hit_that_first_shows_in_a_correction_is_not_softened`). In the wire runs below such
 corrections are rare: `own hit added` was 2 in 16 client runs of 4 clients (and 0 in the
-four 2-client runs), against 1 to 27 own-craft moves per client. **Left open**: a hit first
-seen inside a correction's replay arms no camera shake (the replay is quiet, and
-`settle_presentation` covers cues, blasts and bulges only), so such a hit is drawn where it
-lands but without the shake it would have had on the predicted timeline.
+four 2-client runs), against 1 to 27 own-craft moves per client. A hit first
+seen inside a correction's replay arms the camera shake once, at the correction, where the hit is
+drawn (2026-10-19, `reconcile`: the replay is quiet and `settle_presentation` covers cues, blasts
+and bulges only, so the shake had no other way in). The shake is a weapon hit's (`0.6`, elsewhere),
+**chosen, not measured**: a correction cannot tell what struck. The same loss in a second
+correction arms nothing (`a_hit_seen_in_a_correction_shakes_once`).
 
 **What follows the drawn pose.** Read in the view modules, then looked at in the frames:
 the hull (`drawn_model`), the shadow (`body_between`), the exhaust nozzle and its trail
 (`nozzle_of` reads the drawn model matrix) and the camera. `hull_reach` is now measured on
 the drawn pose too. **Still on the simulation's pose, listed rather than fixed**:
-`craft_flash`'s and `damage_fx`'s positions (the smoke following a damaged hull, the
-leach spark), which are discrete events and fire on a hit, where the craft is not gliding.
+nothing now: `craft_flash`'s and `damage_fx`'s positions (the smoke following a damaged hull, the
+leach spark, the wreck flash and blast) moved to the drawn pose on 2026-10-19
+(`the_smoke_rides_the_drawn_pose` fails with the sim pose put back; the wreck flash has no test of
+its own).
 The frames at ticks 501 and 504 (read at 960x540) show the hull, its shadow and its engine
 bloom together with no visible separation; a 3-unit offset is a quarter of a craft's width.
 
@@ -451,15 +455,39 @@ toward `ships[0]` (and snapped to it) whatever seat the client had, while its vi
 built from the seat's craft. A client in seat 1 had its camera spring toward slot 0.
 On the test grid the eye stood 555 units from seat 1's craft before and 4.5 units after
 (`a_seat_one_camera_follows_seat_one`); `set_seat` now snaps the camera to the seat when the craft it follows changes (a seat that
-names the craft already followed is no cut). View only, no hash moves. Whether a real online client in seat 1 showed it is not
-established: the 2-person tests ran their screenshots on seat 0.
+names the craft already followed is no cut). View only, no hash moves. **A real online seat 1 did show it** (2026-10-19): an `oag-server --people 2` and two
+`oag-game --net-bot` clients on loopback, the seat-1 client's still at tick 700 on the
+parent of the first netcode-conditions commit has the craft small and far from the framing
+(the camera chases slot 0's craft, one place ahead), and on this branch it is framed as seat 0's
+is. The error is the distance between the two craft, so it is largest when they are far apart
+and small on the grid; `every_seat_camera_follows_its_own_craft` (both seats, close, far and
+cockpit views) and `a_seat_one_camera_follows_seat_one` fail if the camera follows another slot.
+The same sweep found `visibility_sections` placing the camera by slot 0's respawn (a seat-1 shot
+went to "draw everything" while a rival recovered in slot 0, and a seat-1 craft's own recovery was
+not seen), the three audio levels (`shield_is_up`, `craft_is_exploding`, `autopilot_is_active`)
+reading slot 0, and the view-only readers of `primary_slot` (the first person, which is slot 0 on every
+network client): the weapon-hit shake, the destroyed-craft shake cancel and blast shake, the
+PLAYER_DESTROYED flash, the reset flash, the destroy camera (a seat-1 client's wreck camera never
+started) and the speed-pad boost pulse; all now read the seat (`a_seated_view_is_placed_by_its_own_respawn`, `a_seat_one_hit_shakes_the_seats_camera`; each fails with the call put back). Split screen and local windows are unchanged: `player_slot` is the primary slot there.
+**Still on slot 0 on a seat-1 client, open**: the wall-contact effects of `Race::tick`
+(`advance_contact_fx`: the collision sparks, the wall shake and the contact sounds) run on the
+`evaluated` step of `primary_slot`, so a seat-1 client shakes on slot 0's wall hits and not its own.
+The sparks and the shake there are view state and could move to the seat on their own; the contact
+sound goes through `raise_contact_cue`, whose cooldown is hashed per-slot state (the quiet path
+advances slot 0's), so that part needs a hash check. Also still on `primary_slot` and unlooked-at:
+the countdown cue's slot, the weapon reticle, and `sight_screen_of`. Split screen and local multi-window seats do not take
+this path: `player_slot` is the primary slot there and every other seat is an extra viewpoint
+(`set_viewpoint`), which reads its own slot throughout.
 
 Frames: `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
 --ticks N --force-remote-correction 480:7:20:own=3 [--no-correction-smoothing]
 --screenshot out.png`, with `own[=UNITS]` new: the server's copy of the player's craft
-is that many units to its right when the correction arrives (on this branch the older `contact` scene
-no longer moves the own craft: 0.00 units at windows 16 and 20, where this page recorded
-2.1 and 3.6; the cause was not chased). The correction is drawn at tick 501. Ticks 500 to 504,
+is that many units to its right when the correction arrives (the older `contact` scene stopped moving the own craft on 2026-10-14, at the commit that made
+Time Trial with two or more people Pulse's Multiplayer Time Trial: the scene hands the rival to
+a "remote person", which makes two people, and craft do not collide in that mode. Found by
+bisecting `480:7:16:contact`: own craft 2.11 before, 0.00 from that commit. Not a bug: run the
+scene with `--mode single_race` and it moves 2.11 units again at window 16 exactly as recorded, and
+the scene now warns when its mode has no collisions). The correction is drawn at tick 501. Ticks 500 to 504,
 smoothing off (top row) against on (bottom row): off, the view lurches at 501 (the track
 edge, the horizon and the hull all jump sideways and the rival appears at the left edge);
 on, the four frames are one continuous sweep and the hull stays centred. No reference

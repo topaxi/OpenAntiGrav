@@ -34,6 +34,19 @@ fn a_respawn_in_flight_makes_everything_visible() {
     );
 }
 
+/// A network client's camera is its seat's: a rival recovering in slot 0 does not blank a
+/// seat-1 shot, and the seat's own recovery does.
+#[test]
+fn a_seated_view_is_placed_by_its_own_respawn() {
+    let mut race = Race::start(setup(Handling::default()));
+    race.set_seat(Some(1));
+    race.sim.respawn_cooldown[0] = 1;
+    assert_ne!(race.visibility_sections(), (UNPLACED, UNPLACED));
+    race.sim.respawn_cooldown[0] = 0;
+    race.sim.respawn_cooldown[1] = 1;
+    assert_eq!(race.visibility_sections(), (UNPLACED, UNPLACED));
+}
+
 /// The feature, end to end: a ship that leaves the track and crosses `Reset`
 /// geometry is put back on the spline.
 ///

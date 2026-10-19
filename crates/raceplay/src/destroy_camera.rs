@@ -108,7 +108,7 @@ impl Race {
     /// while the wreck is out of the race and lets it go when the craft is
     /// racing again. Once a tick, after the craft's state has settled.
     pub(super) fn advance_destroy_camera(&mut self) {
-        let player = self.sim.world.primary_slot();
+        let player = self.player_slot();
         let ship = &self.sim.world.ships[player];
         let state = ship.physics.craft_state;
         let subject = ship.physics.body.position;
