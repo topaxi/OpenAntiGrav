@@ -109,11 +109,9 @@ toward the sun, in the mesh fragment shader, opaque geometry only.
 - What it buys: no cascade fit, no resolution, no `MAPPED_AHEAD` gap, every surface casts and receives (ship on ship,
   scenery on ship), crisp contact. On a split it replaces a whole-circuit depth redraw per view with a per-pixel query
   per view.
-- Titles: **HD, Omega, 2048**, which author a sun. Pulse and Pure only on the borrowed axis `mapped` already uses,
-  labelled as ours.
+- Titles: **HD and 2048** author a sun (`shadows.md`). **Omega** ships `.EnvSettings` read through 2048's reader and carries a sun (`omega-status.md`, checked, applies, not wired). **Pulse** takes `oag_pulse::shadow::AUTHORED_AXIS`, as `mapped` does, labelled as ours. **Pure** has no measured sun and no axis of its own: not checked whether `mapped` borrows Pulse's there, so the tier waits on that.
 - Cost (estimate): 1 ray per pixel is 1 M rays at 1280x800, 2 M at 1080p, 8.3 M at 4K. On the 7800 XT well under
-  1 ms at 4K; on the Deck's 8 RT units **2 to 4 ms at 800p, which is more than `mapped` costs there**. So the honest
-  claim is quality and split-screen scaling, not speed, and the Deck verdict needs a measurement.
+  1 ms at 4K; on the Deck's 8 RT units **2 to 4 ms at 800p** (about 1 M rays at 2 to 4 ns each, a guess at coherent shadow rays on 8 ray accelerators). `mapped`'s cost has been measured per view on a desktop iGPU only (1 to 1.6 ms, `split-screen.md`), never on the Deck, so no speed claim is made: the case for the tier is quality and split-screen scaling, and the Deck verdict needs `mapped` measured there too.
 - Risk: alpha-tested geometry (cutout fences, the perforated barrier) casts a solid shadow unless the query loop
   fetches UVs and tests alpha (needs the hit's primitive index and an index fetch, or `RAY_HIT_VERTEX_RETURN`). First
   spike: opaque flag only, and name the gap, as `mapped` named its own. HD's baked lightmap shadows are art; the traced
@@ -199,12 +197,11 @@ lane A should print).
 | | 1080p | 4K | Steam Deck 1280x800 |
 | --- | --- | --- | --- |
 | TLAS rebuild | under 0.1 ms | same | 0.1 to 0.4 ms |
-| Sun shadow ray (spike 1) | 0.2 to 0.5 ms discrete, 3 to 8 ms on a 2-CU iGPU | 0.5 to 1 ms discrete | 2 to 4 ms |
+| Sun shadow ray (spike 1) | 0.2 to 0.5 ms discrete, 8 to 25 ms on a 2-CU iGPU (a quarter of the Deck's RT units, twice the rays: about 8x the Deck's figure, so not usable) | 0.5 to 1 ms discrete | 2 to 4 ms |
 | Glass reflection (spike 2) | 0.2 to 1 ms | 0.5 to 2 ms | 1 to 3 ms |
 | Contact occlusion (spike 3) | like spike 1 | like spike 1 | 1.5 to 3 ms |
 
-The 2-CU iGPU and the Deck are the cases that decide whether a tier is offered by default-on anywhere. Under the
-Deck rule it is off by default there regardless.
+The 2-CU iGPU is not a usable target for a per-pixel ray tier. The Deck is the case that decides how it is presented there, and it is never the default anywhere (see Policy).
 
 ## Policy
 
@@ -216,7 +213,7 @@ Deck rule it is off by default there regardless.
 - **It never overrides authored data.** A traced shadow multiplies with HD's lightmap alpha and does not replace it. A
   reflection uses the title's own glass material and tint; it replaces only the reflected-colour term, never the base.
   Where a title has no authored glass, the tier draws nothing and says so (the `original` shadow on Pure does the same).
-- **Titles.** Shadows: HD, Omega, 2048 (authored sun), Pulse and Pure on the borrowed axis. Glass: HD and Omega first
+- **Titles.** Shadows: HD, Omega, 2048 (authored sun), Pulse on the borrowed axis, Pure unchecked. Glass: HD and Omega first
   (their circuits author the glass); 2048's re-shipped circuits unchecked, per the 2048/Omega rule; Pulse's canopy glass
   is environment-mapped and stays so. A finding for one of 2048 and Omega gets the quick check against the other.
 - **Platform.** Native and Vulkan, DX12 and Metal where the adapter says so; absent in the browser. The `unsafe`

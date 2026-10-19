@@ -800,7 +800,7 @@ receives - is this project's own enhancement and not a recovery, so it belongs
 behind the same opt-in that any backported effect does, and its doc must say so
 the way `BoostFovKick` and `MotionBlur` already say it of themselves.
 
-**Ray tracing is a documented future tier with no enum variant**, blocked on
+**Ray tracing is a documented future tier with no enum variant** (the support survey and ranked spikes are in [`ray-tracing.md`](ray-tracing.md); point 2 below is out of date for wgpu 30.0.1, which also reports ray query on DX12 and Metal), blocked on
 three things in this order:
 
 1. **A light to trace against.** Pulse has none: `DirectionalLight` is a

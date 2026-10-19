@@ -18,8 +18,9 @@ feature needs an `unsafe` token under a workspace that denies `unsafe_code`.
   rows are inferred.
 - Triangle counts per circuit, BLAS size and per-frame TLAS cost are unmeasured; memory figures are orders of magnitude.
 - Whether draws can be separated per `AnimNode` so animated scenery is one instance per node, not a rebuild.
-- Whether a traced shadow on the Deck beats `mapped` on cost (estimate says it does not, 2 to 4 ms against 1 to 1.6 ms);
-  the case for the tier there is quality and split scaling.
+- The Deck cost of a traced shadow (estimate 2 to 4 ms at 800p) against `mapped`, which has never been measured on the
+  Deck; the case for the tier is quality and split scaling.
+- Pure has no measured sun; whether `mapped` borrows Pulse's axis there is unchecked.
 - Alpha-tested geometry (cutout fences) casts solid in an opaque-only first spike.
 
 ## Next Steps
@@ -29,5 +30,5 @@ feature needs an `unsafe` token under a workspace that denies `unsafe_code`.
    picture, print triangle counts and BLAS size per circuit per title. Decide on an ADR for the token.
 2. `graphics.shadows = traced` on HD, Omega and 2048 (one ray per pixel in `mesh.wesl`, multiplied with the lightmap
    alpha), measured with `just bench-render hd --tag base|rt --views 1,2h,2v` against `--shadows mapped`.
-3. Run `cargo run -q -p oag-gpu --example ray_query_probe` on the Deck (under `deck.lock`), the notebook and an APK build.
+3. Measure `mapped` on the Deck, and run `cargo run -q -p oag-gpu --example ray_query_probe` on the Deck (under `deck.lock`), the notebook and an APK build.
 4. Only then glass reflections (HD Vineta K, Talon's Junction floor), after the original's own glass paths are done.
