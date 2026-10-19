@@ -17,6 +17,10 @@
 //! u8      tail[count * 31]         24 + 4 + 3 bytes per probe, unread here
 //! ```
 //!
+//! Talon's Junction closes exactly at the tail; a longer circuit can carry more
+//! after it (Sol 2's reversed file is 123,632 bytes over), which this reader
+//! leaves alone: the loader (`0x003c1120`) reads the tail's arrays and stops.
+//!
 //! A block is two `BGR888` endpoints (6 bytes) then sixteen 3-bit indices, least
 //! significant first, row-major inside the block; a texel is
 //! `c0 + (c1 - c0) * index / 7`. Blocks run row-major across the image.
@@ -26,9 +30,9 @@
 //! weights are bilinear over the four probes of the two sections its position
 //! falls between, clamped at the edges ([`Probes::locate`]).
 //!
-//! Confidence: layout, block format and the blend **85** (the file length closes
-//! exactly on every one of the 28 files and the decoded blend reproduces the live
-//! maps); the locate law **70** (it fits six of twelve drive samples to 0.06 in
+//! Confidence: layout, block format and the blend **85** (the file holds at least
+//! the layout on all 28 files, closes exactly on Talon's Junction, and the decoded
+//! blend reproduces the live maps); the locate law **70** (it fits six of twelve drive samples to 0.06 in
 //! weight at one frame of position lag and the rest at zero or two frames of lag,
 //! and one sample, at a corner, names a section pair this law does not).
 //!
@@ -56,7 +60,7 @@ pub enum Error {
     Truncated,
     /// The second header word is not [`STRIDE`].
     Stride(u32),
-    /// The length does not close: the table, both image sets and the tail.
+    /// Shorter than the table, both image sets and the tail the loader reads.
     Length { expected: usize, found: usize },
     /// An odd count: probes come in left/right pairs.
     OddCount(usize),
@@ -70,7 +74,10 @@ impl fmt::Display for Error {
             Self::Length { expected, found } => {
                 write!(f, "probes: {found} bytes, the layout closes at {expected}")
             }
-            Self::OddCount(n) => write!(f, "probes: {n} entries, left/right pairs need an even count"),
+            Self::OddCount(n) => write!(
+                f,
+                "probes: {n} entries, left/right pairs need an even count"
+            ),
         }
     }
 }
@@ -110,11 +117,19 @@ fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 fn mid(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
-    [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5, (a[2] + b[2]) * 0.5]
+    [
+        (a[0] + b[0]) * 0.5,
+        (a[1] + b[1]) * 0.5,
+        (a[2] + b[2]) * 0.5,
+    ]
 }
 
 fn lerp(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+    ]
 }
 
 /// The fraction of `axis` that `from_origin` reaches, clamped to `0..=1`; a
@@ -145,8 +160,11 @@ impl Probes {
         }
         let expected = HEADER
             + count * (STRIDE as usize + IRRADIANCE_BYTES + REFLECTION_BYTES + TAIL_PER_PROBE);
-        if bytes.len() != expected {
-            return Err(Error::Length { expected, found: bytes.len() });
+        if bytes.len() < expected {
+            return Err(Error::Length {
+                expected,
+                found: bytes.len(),
+            });
         }
         if count % 2 != 0 {
             return Err(Error::OddCount(count));
@@ -154,7 +172,11 @@ impl Probes {
         let positions = (0..count)
             .map(|i| {
                 let at = HEADER + i * STRIDE as usize;
-                [be_f32(bytes, at), be_f32(bytes, at + 4), be_f32(bytes, at + 8)]
+                [
+                    be_f32(bytes, at),
+                    be_f32(bytes, at + 4),
+                    be_f32(bytes, at + 8),
+                ]
             })
             .collect();
         let irr_at = HEADER + count * STRIDE as usize;
@@ -202,21 +224,29 @@ impl Probes {
     pub fn locate(&self, p: [f32; 3]) -> Taps {
         let sections = self.sections();
         if sections == 0 {
-            return Taps { probes: [0; 4], weights: [0.0; 4] };
+            return Taps {
+                probes: [0; 4],
+                weights: [0.0; 4],
+            };
         }
         let nearest = (0..sections)
             .map(|s| {
                 let d = sub(self.centre(s), p);
                 (s, dot(d, d))
             })
-            .fold((0, f32::INFINITY), |best, c| if c.1 < best.1 { c } else { best })
+            .fold(
+                (0, f32::INFINITY),
+                |best, c| if c.1 < best.1 { c } else { best },
+            )
             .0;
         let (a, b) = if sections == 1 {
             (0, 0)
         } else if nearest + 1 == sections
             || (nearest > 0
-                && dot(sub(p, self.centre(nearest)), sub(self.centre(nearest + 1), self.centre(nearest)))
-                    < 0.0)
+                && dot(
+                    sub(p, self.centre(nearest)),
+                    sub(self.centre(nearest + 1), self.centre(nearest)),
+                ) < 0.0)
         {
             (nearest - 1, nearest)
         } else {
@@ -247,13 +277,19 @@ impl Probes {
     /// Probe `i`'s irradiance map alone, 64x32 `RGBA8`.
     #[must_use]
     pub fn irradiance(&self, i: usize) -> Vec<u8> {
-        decode(&self.irradiance[i * IRRADIANCE_BYTES..][..IRRADIANCE_BYTES], IRRADIANCE_SIZE.0)
+        decode(
+            &self.irradiance[i * IRRADIANCE_BYTES..][..IRRADIANCE_BYTES],
+            IRRADIANCE_SIZE.0,
+        )
     }
 
     /// Probe `i`'s reflection map alone, 128x64 `RGBA8`.
     #[must_use]
     pub fn reflection(&self, i: usize) -> Vec<u8> {
-        decode(&self.reflection[i * REFLECTION_BYTES..][..REFLECTION_BYTES], REFLECTION_SIZE.0)
+        decode(
+            &self.reflection[i * REFLECTION_BYTES..][..REFLECTION_BYTES],
+            REFLECTION_SIZE.0,
+        )
     }
 }
 

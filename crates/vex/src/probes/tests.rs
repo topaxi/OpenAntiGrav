@@ -29,7 +29,12 @@ fn file(positions: &[[f32; 3]], shade: &dyn Fn(usize) -> [u8; 3]) -> Vec<u8> {
 
 /// Two sections 12 apart along x, left and right probes 20 apart along z.
 fn quad() -> [[f32; 3]; 4] {
-    [[0.0, 0.0, -10.0], [0.0, 0.0, 10.0], [12.0, 0.0, -10.0], [12.0, 0.0, 10.0]]
+    [
+        [0.0, 0.0, -10.0],
+        [0.0, 0.0, 10.0],
+        [12.0, 0.0, -10.0],
+        [12.0, 0.0, 10.0],
+    ]
 }
 
 fn shade(i: usize) -> [u8; 3] {
@@ -57,10 +62,12 @@ fn a_block_is_two_endpoints_and_three_bit_indices_lsb_first() {
 }
 
 #[test]
-fn the_layout_must_close_exactly() {
+fn a_file_shorter_than_the_layout_is_refused_and_a_longer_one_is_not() {
     let mut bytes = file(&quad(), &shade);
     assert_eq!(Probes::parse(&bytes).expect("closes").len(), 4);
     bytes.push(0);
+    assert_eq!(Probes::parse(&bytes).expect("a longer file").len(), 4);
+    bytes.truncate(bytes.len() - 2);
     assert!(matches!(Probes::parse(&bytes), Err(Error::Length { .. })));
     assert_eq!(Probes::parse(&[0; 4]).unwrap_err(), Error::Truncated);
     let mut bad = file(&quad(), &shade);
@@ -77,15 +84,26 @@ fn a_position_blends_the_four_probes_of_its_sections_bilinearly() {
         assert!((w - 0.25).abs() < 1e-6, "{:?}", centre.weights);
     }
     let corner = probes.locate([0.0, 0.0, -10.0]);
-    assert!((corner.weights[0] - 1.0).abs() < 1e-6, "{:?}", corner.weights);
+    assert!(
+        (corner.weights[0] - 1.0).abs() < 1e-6,
+        "{:?}",
+        corner.weights
+    );
     let outside = probes.locate([60.0, 5.0, -90.0]);
-    assert!((outside.weights[1] - 1.0).abs() < 1e-6, "clamped to the far corner: {:?}", outside.weights);
+    assert!(
+        (outside.weights[1] - 1.0).abs() < 1e-6,
+        "clamped to the far corner: {:?}",
+        outside.weights
+    );
 }
 
 #[test]
 fn the_blend_is_the_weighted_sum_of_the_decoded_probes() {
     let probes = Probes::parse(&file(&quad(), &shade)).expect("parses");
-    let taps = Taps { probes: [0, 1, 0, 0], weights: [0.75, 0.25, 0.0, 0.0] };
+    let taps = Taps {
+        probes: [0, 1, 0, 0],
+        weights: [0.75, 0.25, 0.0, 0.0],
+    };
     let irr = probes.blend_irradiance(&taps);
     assert_eq!(irr.len(), 64 * 32 * 4);
     assert_eq!(&irr[..4], &[150, 50, 0, 255]);
