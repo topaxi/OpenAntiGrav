@@ -34,6 +34,8 @@ mod tests {
     #[test]
     fn the_apk_manifest_asks_for_the_network() {
         let script = include_str!("../../../scripts/build-apk.sh");
-        assert!(script.contains(r#"<uses-permission android:name="android.permission.INTERNET" />"#));
+        assert!(
+            script.contains(r#"<uses-permission android:name="android.permission.INTERNET" />"#)
+        );
     }
 }
