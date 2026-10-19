@@ -1075,6 +1075,45 @@ player parked and no respawn, and a cell's skill comes off its circuit's
 `stats.xml` as HD's does. PS4 `rand()`'s width is chosen (HD's 30 bits), not
 measured.
 
+### An original opponent never fired, and now does (2026-10-19)
+
+**Measured, all five titles: an opponent flown by the original driver picked up
+one weapon and held it to the flag.** The maintainer reported campaign
+opponents not using weapons. A race box race flies the same driver
+(`oag_game::ai_choice`, "Which AI flies"), so it was the same there. Single
+race, seed 1, player parked, 240 s, weapons on:
+
+| Title | Original driver before: pickups / spends / opponent projectiles | After the fix | This project's driver |
+| --- | --- | --- | --- |
+| Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 34 / 27 / 140 |
+| Pure | 8 / 1 / 0 | 33 / 26 / 38 | 21 / 14 / 20 |
+| HD | 7 / 0 / 0 | 24 / 18 / 131 | 29 / 22 / 152 |
+| 2048 | 8 / 1 / 0 | 27 / 22 / 171 | 24 / 18 / 104 |
+| Omega | 8 / 1 / 0 | 29 / 23 / 143 | 17 / 10 / 43 |
+
+The one spend in the "before" column is a Turbo, whose gate reads the
+throttle and not the driver's noise. **Cause:** the original branch of
+`Race::step_opponents` only called `oag_ai::Driver::locate`. `Driver::phase`
+and the reflex advance in `Driver::drive` alone, so `phase` read `0` all race
+on every opponent. Every weapon gate draws its roll from
+`noise::roll(seed, phase, stream)`: `weapon_ai::WeaponAi::decide_for` for the
+forward weapons, and `wants_to_drop` and `holds_fire`, which also read the
+reflex. So each craft rolled one constant number all race, and that number
+almost never came in under the fire chance. **Fix:** `Driver::attend`, called
+after `locate`, advances the reflex, the phase and the provocation as `drive`
+does. That the per-craft noise is the roll's source is this project's choice,
+not measured; the fire law it feeds is the original's. Pinned by
+`fire_law_inherit_ground_truth.rs` (each title's single race flown two minutes
+under the original driver, 36 to 221 opponent projectiles) and by
+`vita_2048_original_ai_ground_truth.rs`'s event walks, which now count what a
+campaign field fires.
+
+**The absorb half came with it.** With the field firing, the absorb half of
+`WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md))
+is ported: `oag_ai::weapon_ai::Decision::Absorb`, on the shield tier, the 15 s
+hold and nobody inside 300 ahead. It did not change how many craft are
+wrecked.
+
 ### Still open, with the next address
 
 - **Why our field closes into formation slower** than the original's, above:

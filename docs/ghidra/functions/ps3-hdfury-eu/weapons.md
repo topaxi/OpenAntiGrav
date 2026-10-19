@@ -413,6 +413,17 @@ Confidence **70**: the loop and the spawn are direct reads. That
 `0x0013c8e8` is the drain, and that `+0x1d0` is the shooter's matrix, come
 from the Pulse analogue rather than a read of either.
 
+**Corrected 2026-10-19: `0x0013c8e8` is not the drain.** Decompiled, it
+takes a record and a value. When the value is non-zero it stores it at
+`[5]`, sets `[0] = 1`, copies `[2]` into `[3]`, and writes
+`[4] = _opd_FUN_002a3718([2], DAT_008aaa58, DAT_008aaa5c)`, the same
+remap-with-clamp helper the period uses. That arms a timed record; it moves
+no shield. **Where HD's beam takes shield, and how much a trip carries, is
+not located.** This engine still drains at Pulse's per-tick cadence with HD's
+authored `damage` 1.5, and that empties a pool of 93 to 130 in 94 to 119
+ticks (measured 2026-10-19 on HD and 2048, opponent beams); Pulse's beam
+moved 105 to 87 in 211.
+
 **The beam object holds four balls and two strips.** `0x00153218` (called
 from `LeachBeamManager_Construct`) initialises two `0x63d0`-byte strip
 objects at `+0x50` and `+0x6420` (`_opd_FUN_00115770`; their constructors

@@ -280,24 +280,24 @@ impl Race {
 
     /// What an opponent does with a pickup it is holding.
     ///
-    /// # When a forward weapon fires is the original's; the rest is policy
+    /// # When a forward weapon fires or is absorbed is the original's; the rest is policy
     ///
-    /// **The fire half of `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is
-    /// ported** (2026-10-03): `Race::opponent_decides` asks `oag_ai::weapon_ai`
-    /// for the Rocket, Missile, Plasma, Shuriken, LeachBeam and Quake, on the
-    /// odds out of the title's `WeaponAIstats.xml`, and falls back to
-    /// `oag_ai::Driver::wants_to_fire` where that file was not read. See
-    /// `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`. Its absorb half is
-    /// not ported, and everything below that is not a forward weapon is still
-    /// this project's own:
+    /// **`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is ported**, its fire
+    /// half on 2026-10-03 and its absorb half on 2026-10-19:
+    /// `Race::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
+    /// Missile, Plasma, Shuriken, LeachBeam, Repulser and Quake, on the odds out
+    /// of the title's `WeaponAIstats.xml`, and falls back to
+    /// `oag_ai::Driver::wants_to_fire` (fire only) where that file was not
+    /// read. See `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`.
+    /// Everything below that is not one of those is still this project's own:
     ///
     /// - **Turbo is fired at once**, but only on a stretch the driver is not
     ///   braking for. A turbo spent into a corner is a turbo spent into a wall.
     ///   It arms that craft's own boost plume, the same reuse the player's Turbo
     ///   makes of the speed pad's visual.
-    /// - **A forward weapon is fired when `Race::opponent_decides` says so**, and
-    ///   kept rather than spent when it does not, or when the weapon itself
-    ///   declines (no lock, no authored stats, no free slot).
+    /// - **A forward weapon is fired or absorbed when `Race::opponent_decides`
+    ///   says so**, and kept rather than spent when it says hold, or when the
+    ///   weapon itself declines (no lock, no authored stats, no free slot).
     /// - **An Autopilot is absorbed**, and for once that is not a policy but
     ///   the only thing it could be: the pickup hands a craft to its driver, and
     ///   an opponent is already flown by one. There is nothing for it to do. It
@@ -309,7 +309,8 @@ impl Race {
     ///   tick it is taken: a cluster comes out over half a second and the craft
     ///   holds the weapon until the last one is laid. This is the one arm that
     ///   returns rather than falling to the bottom of the function.
-    /// - **A declined shot keeps the pickup**, on every armed weapon. It did not
+    /// - **A declined shot keeps the pickup**, on every armed weapon; only the
+    ///   original's own absorb roll above turns it into energy. It did not
     ///   until 2026-08-26, and the bug was invisible because the comments here
     ///   described the intended behaviour rather than the written one: each arm
     ///   was `weapon == X && self.fire_x(..)`, so a helper returning `false` -

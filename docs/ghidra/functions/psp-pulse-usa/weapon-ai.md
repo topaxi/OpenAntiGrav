@@ -235,6 +235,26 @@ and every craft fires or absorbs at random. Dead on any real machine; recorded
 because it is a second, simpler code path a future capture could mistake for the
 real one.
 
+## The absorb half, ported (2026-10-19)
+
+`oag_ai::weapon_ai` now ports the absorb half of
+[the decision](#the-decision) for the weapons `FUN_088508d4` sets up (the
+forward ones and the Quake; the Cannon stays out, as its fire does).
+`Situation::absorb_index` builds `+0x34` from three terms: one per
+`FUN_088509e4` shield tier the craft is at or below (80, 60, 40, 20), one past
+15 s held, and one with no craft ahead inside 300. It is zero in an
+Eliminator. `WeaponAi::decide` returns `Decision::Absorb` when the fire roll
+fails (or the 0.8 s hold is not met), the absorb roll lands under
+`rate[+0x34] * absorb` (computed the long way), and the weapon has been held
+more than 0.2 s. Outside an Eliminator, `oag_raceplay` pays the weapon's
+`absorb` energy into the pool. Inside one it keeps the weapon, as before (see
+[mode 8](#mode-8-what-the-original-does-with-a-held-weapon-read-2026-10-03)).
+**Chosen, not measured:** the absorb roll is a third stream of the driver's
+noise, as the other two rolls already are. HD, 2048 and Omega run the same law
+on their own `WeaponAIstats.xml` odds and their own shield scale, inherited
+from Pulse and unmeasured there. 2048 and Omega: **ported**, both pinned by
+`fire_law_inherit_ground_truth.rs`.
+
 ## What is still open
 
 - **`FUN_088504f4`**, which returns the held weapon id - not read, so not named.
