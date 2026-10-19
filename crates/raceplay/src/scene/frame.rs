@@ -12,7 +12,10 @@ use super::record::{Draw, DrawList, ViewPass};
 use super::viewports::Layer;
 
 mod craft;
-use craft::{cockpit_shield_visible, hd_flame_transform, shell_visible};
+use craft::{
+    cockpit_shield_visible, hd_flame_transform, hd_spike_transform, shell_visible,
+    spike_boost_visible,
+};
 
 /// What a view is drawn with besides its camera and its rectangle: [`Scene::render`]'s
 /// arguments of that kind, read fresh off the settings each frame.
@@ -743,6 +746,25 @@ impl Scene {
                 prev_vp * prev.ship(slot, race) * flame,
             );
         }
+        // The five spikes, each on its own flicker scale: split out of the
+        // groups above, so they get no part of those groups' length scale.
+        for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
+            if !race.ship_active(slot) {
+                continue;
+            }
+            for spike in spikes {
+                if spike.boost && !spike_boost_visible(race, slot) {
+                    continue;
+                }
+                let flame = hd_spike_transform(race, slot, spike.boost, spike.index);
+                spike.drawable.write(
+                    queue,
+                    view_projection,
+                    race.ship_model_matrix_of(slot) * flame,
+                    prev_vp * prev.ship(slot, race) * flame,
+                );
+            }
+        }
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             // `None` is a slot whose *team* ships no plume, which is a
             // reported absence rather than a hidden one - see `livery::plume`.
@@ -1038,6 +1060,17 @@ impl Scene {
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
             draws.mesh(flare);
+        }
+        for (slot, spikes) in self.flare_spikes.iter().enumerate().take(drawn) {
+            if !race.ship_active(slot) {
+                continue;
+            }
+            for spike in spikes {
+                if spike.boost && !spike_boost_visible(race, slot) {
+                    continue;
+                }
+                draws.mesh(&spike.drawable);
+            }
         }
         draws.mark("boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {

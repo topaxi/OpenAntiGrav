@@ -58,6 +58,7 @@ mod cannon_flash;
 pub mod engine_light;
 pub mod entry;
 mod flare;
+pub use flare::Spike;
 mod shield;
 pub mod ship_skin;
 mod wreck;
@@ -93,6 +94,9 @@ pub struct Livery {
     /// exhaust pipeline draws rather than geometry - see
     /// [`oag_title::flare::Flare`].
     pub flare: Option<Model>,
+    /// The five spike shapes of that flare, each split out of its group for
+    /// its own per-frame flicker scale. Empty where the title authors none.
+    pub flare_spikes: Vec<Spike>,
     /// The additive shell a fired Shield pickup raises,
     /// `shipshield.vex` beside the hull - or `Data\Weapons\shield.vex` on a
     /// source that carries no per-team one, which is every Pure source.
@@ -294,6 +298,7 @@ pub fn load(
                 boost: source.boost.clone(),
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
+                flare_spikes: source.flare_spikes.clone(),
                 shield: source.shield.clone(),
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
@@ -339,6 +344,7 @@ pub fn load(
                     boost: player.boost.clone(),
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
+                    flare_spikes: player.flare_spikes.clone(),
                     shield: player.shield.clone(),
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
@@ -438,6 +444,7 @@ fn one(
                     boost: None,
                     boost_uv: None,
                     flare: None,
+                    flare_spikes: Vec::new(),
                     shield: None,
                     engine_light: None,
                     cannon_flash: [None, None],
@@ -480,6 +487,7 @@ fn one(
             hull,
             boost: lit.boost,
             flare: lit.always,
+            flare_spikes: lit.spikes,
             boost_uv: None,
             // **The shell is loaded on PS3 too**, unlike the plume: HD carries a
             // per-team `shipshield.vex` with its geometry in the `.rcsmodel`
@@ -560,6 +568,7 @@ fn one(
         boost,
         boost_uv,
         flare: lit.always,
+        flare_spikes: lit.spikes,
         shield,
         engine_light,
         cannon_flash: [None, None],

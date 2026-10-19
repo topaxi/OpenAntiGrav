@@ -148,7 +148,19 @@ type BoostAndFlares = (
     Vec<Option<Drawable>>,
     Vec<Option<oag_vex::vex::TexTransform>>,
     Vec<Option<Drawable>>,
+    Vec<Vec<SpikeDrawable>>,
 );
+
+/// One flare spike's drawable: a shape of its own with its own per-frame
+/// flicker scale, see [`oag_livery::Spike`].
+#[derive(Debug)]
+pub(super) struct SpikeDrawable {
+    pub drawable: Drawable,
+    /// Hung under `EF_Boost`, so it takes the boost blend's scale and reveal.
+    pub boost: bool,
+    /// Its index among the five: the flicker stream it draws from.
+    pub index: u32,
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(super) fn build(
@@ -165,6 +177,7 @@ pub(super) fn build(
     let mut boost = Vec::new();
     let mut boost_uv_transforms = Vec::new();
     let mut flares = Vec::new();
+    let mut spikes = Vec::new();
     for slot in 0..GRID_SLOTS as usize {
         let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
         boost_uv_transforms.push(livery.boost_uv.clone());
@@ -206,6 +219,34 @@ pub(super) fn build(
                 None => None,
             },
         );
+        spikes.push(
+            livery
+                .flare_spikes
+                .iter()
+                .filter(|spike| !spike.model.indices.is_empty())
+                .map(|spike| {
+                    Ok(SpikeDrawable {
+                        drawable: Drawable::new(
+                            device,
+                            queue,
+                            spike.model.clone(),
+                            format,
+                            anisotropy,
+                            sample_count,
+                            scene_depth,
+                            mesh_render::ADDITIVE_BLEND,
+                            mesh_render::GlowMask::Protected,
+                            zone_art,
+                            shadow_maps,
+                            mesh_render::ShadowReceiver::Mapped,
+                            mesh_render::Velocity::Attached,
+                        )?,
+                        boost: spike.boost,
+                        index: spike.index,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?,
+        );
         let Some(model) = livery
             .boost
             .as_ref()
@@ -237,5 +278,5 @@ pub(super) fn build(
             )?));
         }
     }
-    Ok((boost, boost_uv_transforms, flares))
+    Ok((boost, boost_uv_transforms, flares, spikes))
 }

@@ -75,6 +75,15 @@ pub struct Authored {
     /// concluded before this group was found - the plume is not a file of its
     /// own there, it is a subtree of the flare.
     pub boost: &'static str,
+    /// The shapes under [`Self::always`] that flicker on their own uniform
+    /// scale instead of riding the group's: `ef_Spikes1Shape` to
+    /// `ef_Spikes3Shape`. Each is split out of the group into a part of its
+    /// own - `EngineFlare_PlaceShapes` gives every one a fresh
+    /// `Spikes Random Scale` draw per frame - and `always` keeps the rest.
+    pub main_spikes: &'static [&'static str],
+    /// The same for [`Self::boost`]: `ef_SpikesLeftShape` and
+    /// `ef_SpikesRightShape`.
+    pub boost_spikes: &'static [&'static str],
     /// The sprite flare's texture, in the archive set's lower-case path form,
     /// drawn **beside** the model: `/data/tex/engineflare/engine_flare_rich.gtf`
     /// on HD and `.gxt` on 2048 - both executables carry the literal. The

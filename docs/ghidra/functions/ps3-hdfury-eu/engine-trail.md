@@ -620,8 +620,8 @@ decryption step beyond the disc's own layer-1 key:
 
 | Key | Value | Where it went |
 | --- | ---: | --- |
-| `Spikes Thrust Max Scale` | 1.5 | runtime storage unresolved - the `+0x490` the fourth session assigned by value is `Max Chromatic Dispersion` ("Ninth session" below), and the block's head holds 1.5 at both `+0x420` and `+0x42c`; no consumer read; the five spike shapes' own throttle scale, separate from `EF_Main`'s |
-| `Spikes Boost Max Scale` | 2.0 | runtime storage unresolved - not `+0x480`, which is `Flare Radius Min` ("Ninth session"), and 2.0 sits at both `+0x428` and `+0x430`; no consumer read; the spikes' boost scale |
+| `Spikes Thrust Max Scale` | 1.5 | tuning-block `+0x42c` (read at `0x002a27dc`; the file lists the four spike fields in this order). The three `EF_Main` spikes' own throttle scale, see the `EngineFlare_PlaceShapes` bullet |
+| `Spikes Boost Max Scale` | 2.0 | tuning-block `+0x430`. The `EF_Main` spikes' boost scale (`+0x428`, also 2.0, is `Thrust Extra Boost Scale Z`, which the `EF_Boost` spikes use) |
 | `Engine Flare Particles Min Alpha` | 0.25 | runtime storage `+0x44c` (not `+0x464`, which is `Tex Scroll Speed Thrust Contrib` - "Ninth session") - no consumer read; see below |
 | `Enable Engine Flare Particles` | 1 | runtime storage `+0x450`, a byte ("Ninth session") - no consumer read; see below |
 | `Shockwave Cycle Speed` | 0.01 | runtime storage found (`+0x46c`) - no consumer read, no shockwave node identified yet |
@@ -1673,26 +1673,67 @@ ramp at `+0x108` and the trail block's brightness:
   blinking. This corrects the picture the `Exhaust::plume_visible` wiring
   drew; `oag_fx::exhaust::hd::Flame` is the replacement and
   `race::scene::frame::hd_flame_transform` applies it.
-- The five spike shapes flicker at `RandRange(0.65, 0.85)` each, per frame -
-  read, and **not implemented** (the scene draws the flare as two groups, not
-  ten shapes; the load report says so).
-  **2026-10-19 re-read of the decompile (hypothesis, confidence 40, no name):**
-  every one of the five spikes calls `FUN_002e15f0(Spikes Random Scale Min,
-  Spikes Random Scale Max)` (`+0x434`/`+0x438` of the tuning block) once per
-  frame and stores the result as a **float field of that shape's own
-  draw-state record** (`+0x60`, `+0x62` and their siblings off the record base),
-  beside the shape's transform. It is not folded into the transform
-  matrix the shape is submitted with, so the flicker is a per-shape shader
-  parameter (the `AlphaScaler` node name looked up after the eleven shapes is
-  the candidate), not a geometric scale. Wiring it needs two things this
-  renderer lacks: the `EF_Main` and `EF_Boost` models split per shape (the node
-  tree names `ef_Spikes1Shape` to `ef_Spikes3Shape` under `EF_Main` and
-  `ef_SpikesLeftShape`/`ef_SpikesRightShape` under `EF_Boost`) and a
-  per-draw factor in the flame material. What the factor multiplies is not
-  read, so nothing was drawn on a guess. Cross-title: 2048's 72 flare trees
-  hang the same shape names (read by `oag_livery::flare`'s own census) and
-  Omega's tree is the same two groups, so the law is **checked, applies, not
-  wired** there.
+- **The five spikes are scaled uniformly, on their own law, by a fresh draw
+  each frame (2026-10-19, read from the disassembly of
+  `EngineFlare_PlaceShapes`, confidence 85; wired).** The first re-read of the
+  decompile took the float for a field of a per-shape draw-state record and
+  the `AlphaScaler` name for its consumer; both are **refuted**. `puVar12` in
+  the decompile is the function's own stack frame (`stdu r1,-0x480`), so the
+  "record field" `+0x60`/`+0x62`/`+0x5e`/`+0x5a`/`+0x5c` is a stack spill
+  (`stfs f1,0x300(r1)`, `0x310`, `0x2f0`, `0x2e0`, `0x2d0`), and each spill is
+  reloaded at once (`lvewx`), splatted (`vspltw`) and multiplied into the
+  shape's three basis rows (`vmaddfp` with the zero vector `v30 = vxor` as the
+  addend, `vsel` keeping the fourth lane): **a uniform geometric scale of the
+  shape about its origin, which is the nozzle** (the shape's own matrix is the
+  identity, the translation row `+0x30` is not scaled), composed with its
+  group's matrix. There is no shader parameter, so what the flame fragment
+  program multiplies does not enter. `AlphaScaler` (`0x0079bf58`) stays
+  what the flare page says: another node, unfollowed.
+  - **The draw:** `Rand_FloatRange` (`0x002e15f0`, `FUN_002e15f0(min, max)`) is
+    `min + u32 * ((max - min) * 2^-32)` (`DAT_008b4404` reads `0x2f800000`)
+    over the generator `FUN_002e1bb0`'s 32-bit output - a uniform float in
+    `[min, max)`. Named `Rand_FloatRange`, confidence 90. The arguments are
+    tuning-block `+0x434`/`+0x438`, which the file `shipeffectstweaks.txt`
+    names in order: `Spikes Thrust Max Scale` 1.5 (`+0x42c`), `Spikes Boost
+    Max Scale` 2.0 (`+0x430`), `Spikes Random Scale Min` 0.65 (`+0x434`),
+    `Spikes Random Scale Max` 0.85 (`+0x438`). This closes the "runtime
+    storage unresolved" cells of the table above.
+  - **Five calls, each gated on its shape pointer** (`+0x164`, `+0x168`,
+    `+0x16c`, `+0x174`, `+0x17c` = `ef_Spikes1Shape`, `Spikes2`, `Spikes3`,
+    `SpikesLeft`, `SpikesRight`), so a craft that authors no such node draws
+    nothing for it and the others flicker regardless.
+  - **The group scale they ride on is their own, not `EF_Main`'s or
+    `EF_Boost`'s.** With `s` the smoothed throttle and `b` the boost blend
+    (`+0x144 + +0x150`): the three `EF_Main` spikes scale by
+    `lerp(1, Spikes Thrust Max, s) + lerp(1, Spikes Boost Max, b)` on all
+    three axes (`fadds f0,f13,f0` at `0x002a2820`: **the sum of the two
+    lerps, 2.0 at rest**, as disassembled; not cross-checked against a live
+    frame), and the two `EF_Boost` spikes by `b * 2.0` (`+0x428`, the same
+    `Thrust Extra Boost Scale Z`) on all three axes, where the boost group's
+    other shapes grow in length alone. Before this the scene scaled the spikes
+    with their group's anisotropic length, which was wrong for all five.
+  - **Wired:** `oag_fx::exhaust::hd::Flame::{main_spike_scale,
+    boost_spike_scale}` and `spike_flicker`; `oag_livery::Spike` (each spike
+    split out of its group by `groups::split`/`split_psp2`);
+    `oag_raceplay::scene` draws each on `hd_spike_transform`. The draw is
+    render-side: a hash of (tick, slot, spike), **chosen, not measured** - the
+    original's generator stream is not reproduced, only its range. Pinned by
+    `hd_engine_flare_ground_truth` (the five split out per craft, tuning file
+    equality) and `oag-fx`'s unit tests.
+  - **Census of the grid:** not every craft authors all five - Assegai has no
+    `ef_Spikes3Shape`, AG Systems and EGX no `ef_SpikesLeftShape`/`Right`; the
+    load report names each absent one. Base Harimau and every other HD craft
+    author `EF_Boost` geometry (the unchecked warning in the brief did not
+    hold for this grid).
+  - **Not compared against a live RPCS3 frame** in this change: the 2.0-at-rest
+    base scale and the flicker's visible amplitude are the disassembly's, not a
+    pixel measurement.
+  - **2048 and Omega: checked, applies, wired through the same `Authored`
+    names.** Both executables carry the same five `ef_Spikes*Shape` strings and
+    the four `Spikes ... Scale` tuning names; their races now split the spikes
+    the same way (2048 `hdships\*` craft author them; the native `feisar2048`
+    flare authors none). Their own tuning *values* were not compared with HD's,
+    and Omega's race was not loaded here.
 - `EngineFlare_Update` also writes the trail's brightness
   (`+0x11d8` above) and the scroll phase/`u_head` pair - the flare object
   owns the trail's animation inputs.

@@ -59,6 +59,7 @@ pub(super) fn livery() -> Livery {
         nozzle: None,
         boost: None,
         flare: None,
+        flare_spikes: Vec::new(),
         shield: None,
         collision_fx: Vec::new(),
         absorb: Vec::new(),

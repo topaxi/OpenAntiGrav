@@ -363,3 +363,37 @@ fn the_vertex_ramp_follows_the_fury_flag_as_the_running_game_wrote_it() {
         assert!(v.colour[1] >= 0.49 && (v.colour[2] - 1.0).abs() < 1e-6);
     }
 }
+
+#[test]
+fn every_spike_flickers_inside_the_authored_range_and_differs_by_shape_and_tick() {
+    let mut seen = std::collections::BTreeSet::new();
+    for tick in 0..600 {
+        for slot in 0..12 {
+            for spike in 0..5 {
+                let r = spike_flicker(tick, slot, spike);
+                assert!(
+                    (SPIKES_RANDOM_SCALE.0..=SPIKES_RANDOM_SCALE.1).contains(&r),
+                    "{r}"
+                );
+                seen.insert(r.to_bits());
+            }
+        }
+    }
+    assert!(seen.len() > 30_000, "only {} distinct draws", seen.len());
+    assert_eq!(spike_flicker(7, 3, 2), spike_flicker(7, 3, 2), "repeatable");
+    assert_ne!(spike_flicker(7, 3, 2), spike_flicker(7, 3, 3), "per shape");
+    assert_ne!(spike_flicker(7, 3, 2), spike_flicker(8, 3, 2), "per frame");
+}
+
+#[test]
+fn the_spikes_scale_uniformly_from_their_own_law_not_the_groups() {
+    let mut flame = Flame::new();
+    // At rest both lerps are 1: the disassembly adds them, so 2.0.
+    assert_eq!(flame.main_spike_scale(), 2.0);
+    assert_eq!(flame.boost_spike_scale(), 0.0);
+    for _ in 0..200 {
+        flame.advance(true, true);
+    }
+    assert!((flame.main_spike_scale() - (SPIKES_THRUST_MAX + SPIKES_BOOST_MAX)).abs() < 1e-3);
+    assert_eq!(flame.boost_spike_scale(), BOOST_EXTRA_Z);
+}
