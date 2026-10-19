@@ -424,6 +424,36 @@ authored `damage` 1.5, and that empties a pool of 93 to 130 in 94 to 119
 ticks (measured 2026-10-19 on HD and 2048, opponent beams); Pulse's beam
 moved 105 to 87 in 211.
 
+**Where HD does apply it, read 2026-10-19 (confidence 75).**
+`LeachBeamManager_Update_q` (`0x0013d7a8`) runs once per beam per manager
+update. For a beam in state `4` with flag bit `1` set, it stores
+`FUN_00153188(beam)` (`beam+0xc938`, a plain float getter) and continues only
+while that value is `> 0.0` (TOC word `0x008aaae0`, read: `0x00000000`). It
+then calls two Pulse-shaped rate functions. `_opd_FUN_001534f0` returns stats
+`+0x140` times `+0x160` on the first call (flag `beam+0xc948`) and times `1.0`
+after (`DAT_008ab1f0`, read). `_opd_FUN_00153d70` does the same with `+0x148`
+and flag `+0xc949`. The reader `0x0002c3d0` stores the XML keys `damage` at
+`+0x140` (`0x0002c4d8`, key string `0x0077a858`), `repair` at `+0x148`
+(`0x0002c568`, `0x0077aa48`) and `energy_multiplier` at `+0x160`
+(`0x0002c688`, `0x0077aa98`). The first result goes into the target's pending
+pool, `target+0x120 += damage`, kind `7` at `+0x138`, with stats `+0x14c` at
+`+0x134`; the second goes to the owner's `+0x128`. **That is Pulse's per-call
+shape, and it is what this engine runs.** What is still open, and decides
+whether HD's `1.5` lands once a frame:
+
+- **The writer of `beam+0xc938`.** The only stores found
+  (`search_instructions` on `-0x36c8`, the `addis +1` form) are the
+  constructors' zeroing: `0x00153218`, `0x00153e98` and `LeachBeam_Construct`.
+  The value the gate reads is written some other way, not yet found. If it
+  is the ball's arrival, the drain is per trip; if it is a link strength, it
+  is per frame.
+- **How `Ship`'s side spends `+0x120`**: whether HD scales the pending pool
+  by `dt` or a class factor before it reaches the shield.
+- **Whether `LeachBeamManager_Update_q` runs once per 60 Hz frame.**
+
+Next address: the ship-side consumer of `+0x120` with kind `7`, which Pulse
+has as `Ship_ApplyPendingWeaponDamage`.
+
 **The beam object holds four balls and two strips.** `0x00153218` (called
 from `LeachBeamManager_Construct`) initialises two `0x63d0`-byte strip
 objects at `+0x50` and `+0x6420` (`_opd_FUN_00115770`; their constructors
