@@ -44,6 +44,17 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
   sits on the craft.
 - **Omega**: `Craft_UpdateSurfaceProbes` (`0x0131b510`) marches HD's four hull segments; its
   spring share and offsets are unread, so Omega keeps `hover_rig: None`. 2048 not checked.
+- **HD's grounded craft carries a vertical residual our hover does not explain** (2026-10-19,
+  `airborne-capture`). One `oag_physics::step` from each grounded row of an RPCS3 capture of
+  the original's autopilot on Ubermall PHANTOM (Feisar; rows 400-1260, 422 grounded ticks)
+  lands the craft about `0.95` units/s a tick lower along its up than the original's next
+  row (median `dv_up -0.95`, `dvy -0.78`), under either reading of the class gravity scale
+  (the two differ by `0.02` a tick there). The airborne rows of the same capture close to
+  `0.000`, so it is the grounded half: the four-probe spring, its seeding (`time_since_landing`,
+  the hover cap, the `+0x358` field this page lists as unported) or the ride height. Reproduce:
+  `scripts/rpcs3-hd-autopilot.py --out <dir>` on Racebox Ubermall PHANTOM, then
+  `OAG_SWEEP=1 OAG_HD_AIR=<dir>/samples.csv OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1 cargo nextest run
+  -p oag-raceplay hd_air_pose_walk --run-ignored all --no-capture`. Its own physics lane.
 - **Not measured**: barrel roll, weapon slowdown, sideshift's gesture timing (as before).
 - HD's hover pieces not ported: the trailing 10-unit ray (`0x000ee510`), the escape's class
   gates, `craft+0x358`.

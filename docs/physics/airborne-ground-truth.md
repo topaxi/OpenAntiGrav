@@ -175,3 +175,58 @@ lane: `opponent_autopilot_sweep`'s whole-race player autopilot (4 seeds, 48 race
 difficulty) went from 62 to 24 rescues on Novice with the switch off and 68 to 16 with it
 on, and from 29 to 24 and 34 to 24 on Ace; the opponents' paired-fork stints went from
 5,317 to 4,570 wall ticks.
+
+## Wipeout HD: the class scale is on flight gravity (Ubermall)
+
+The question: our autopilot fell about `20` units/s² short of the original in
+Ubermall's jump. Measured on RPCS3 `0.0.42`, HD EU (`BCES00664`), Racebox Single
+Race, PHANTOM, weapons off, Ubermall forward, Feisar, the original's autopilot
+armed after GO. `scripts/rpcs3-hd-autopilot.py` logs every new body position with
+the basis rows `body+0x1d0..+0x1f0`, the rate `body+0x1a0` (negated body-local, as on
+Pulse: a median `0.006` error against the basis' own motion, against `0.7` or worse
+for the other three readings), the craft's up `craft+0x200`, the located sample's
+down `ship+0x7850` and the team block's `+0x9c`. One boot, 15,499 rows, two
+Ubermall jumps (two laps).
+`crates/raceplay/tests/hd_air_pose_walk.rs` (ignored, `OAG_SWEEP`) loads the race
+for HD's own craft laws, handling and collision, seeds a craft from each row and
+steps it once; `dt` is the position change along the velocity.
+
+**Static.** `Craft_Update` (`0x000f1958`) builds gravity as
+
+```text
+force.y = -( normal_gravity * m * grounded
+           + flight_gravity * m * scale[class] * (1 - grounded) )
+```
+
+with `m` the body's `+0x4a4`, `grounded` `craft+0x304` and `scale` a per-speed-class
+table indexed by the class. Pulse puts its class scale on the **grounded** term
+(`oag_physics::forces::Environment::class_gravity_scale`); HD puts it on the airborne one.
+
+**Live.** With the scale on the grounded term (Pulse's law), every airborne row
+falls short by `0.380` units/s a tick (median, 117 and 115 rows on the two jumps),
+`22.9` units/s², almost all of it along the craft's up. Feisar's `flight_gravity`
+is `115` and PHANTOM's scale `1.2`, so moving the scale to flight gravity predicts
+`115 * 0.2 = 23.0`; with it there, the median residual is `0.000` on both jumps.
+**Confidence 85** (static read, and the residual closes on two jumps of one boot).
+Ported as `oag_title::craft_laws::CraftLaws::class_gravity_on_flight` and
+`oag_physics::passive::ClassGravityTerm`: HD measured; Omega and 2048 inherit HD's;
+Pulse and the PS2 keep the grounded term (measured); Pure inherits Pulse's,
+unmeasured. 2048/Omega: **not checkable** here (no executable read of either's
+gravity site, no Omega capture path).
+
+Sweep (`opponent_autopilot_sweep`, 4 seeds) against the baseline: HD rescues unchanged
+(novice 0/0, Ace 1/0) and its opponent stints' wall ticks `1016 -> 912` and `528 -> 484`;
+2048's wall ticks down (`169 -> 122` on Ace, stints `33 -> 16`, `17 -> 0`), no rescues;
+Pulse and Pure identical. **Omega: inherited, unmeasured; small respawn rise under our
+driver**: Ace rescues `0 -> 1` with the switch off and `1 -> 2` on, and one stint rescue
+(`0 -> 1`), over 4 races.
+
+On the ground the two readings differ by `0.02` units/s a tick and cannot be told
+apart here. The grounded rows carry a separate residual of about `0.95` units/s a
+tick along the craft's up, the same under either law: open, not this law.
+
+**The in-air `weight_distribution` torque on HD, live.** The team block reads
+`-4.0` (Feisar). With the bias off, the airborne pitch residual is `+0.205` and
+`+0.176` rad/s² (median, the two jumps) against `4 / 17.33 = 0.231` predicted; on, it
+is `-0.026`. The pitch gate never closed over this jump (the product stayed at or
+above `0.926`), so HD's gate is still read, not seen.

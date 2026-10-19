@@ -18,4 +18,8 @@ pub struct CraftLaws {
     /// `Ship_UpdatePitch` adds the team's `<Misc weight_distribution>` as a pitch torque while
     /// airborne (`oag_physics::engine::pitch`). Pulse's law, measured.
     pub air_pitch_bias: Sourced<bool>,
+    /// The per-class `<GravityMul>` scale multiplies `flight_gravity` (the airborne term), as
+    /// Wipeout HD's `Craft_Update` does, rather than Pulse's `normal_gravity`
+    /// (`oag_physics::passive::ClassGravityTerm`).
+    pub class_gravity_on_flight: Sourced<bool>,
 }

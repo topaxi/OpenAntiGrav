@@ -356,6 +356,8 @@ pub struct RaceSim {
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
+    /// Which gravity term that scale multiplies, the title's craft law.
+    pub(super) class_gravity_term: oag_physics::passive::ClassGravityTerm,
     /// The launch boost's parameters - see [`Setup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].

@@ -235,12 +235,17 @@ pub struct Environment {
     /// **The attribute is named `airborne` and this scales the *grounded* term.** The
     /// gravity site's VFPU pair chain puts the table value on the lane carrying
     /// `normal_gravity * grounded` and a literal `1.0` on the airborne lane
-    /// (`oag_tables::handling::GravityMul`). Do not "fix" this onto `flight_gravity`.
+    /// (`oag_tables::handling::GravityMul`). Do not "fix" this onto `flight_gravity` for
+    /// Pulse; Wipeout HD does put it there, a measured per-title law
+    /// ([`Self::class_gravity_term`]).
     ///
     /// An input because it belongs to the speed class, which this crate does not know.
     /// The default is the identity (what a caller that cannot read the file should pass; a
     /// zero leaves a grounded craft weightless).
     pub class_gravity_scale: f32,
+    /// Which term [`Self::class_gravity_scale`] multiplies: Pulse's grounded one unless the
+    /// title measured its own ([`crate::passive::ClassGravityTerm`]).
+    pub class_gravity_term: crate::passive::ClassGravityTerm,
     /// The ship's own collider index, so its probes do not hit itself.
     pub self_collider: Option<u32>,
     /// Zone mode's auto-speed target, replacing the throttle entirely.
@@ -309,6 +314,7 @@ impl Default for Environment {
             track_sample: None,
             track_sample_next: None,
             class_gravity_scale: 1.0,
+            class_gravity_term: crate::passive::ClassGravityTerm::Grounded,
             self_collider: None,
             auto_speed: None,
             pad_hit: None,
@@ -545,6 +551,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         handling,
         state.body.mass,
         env.class_gravity_scale,
+        env.class_gravity_term,
         control_grounded,
     );
     acc.world_force += drag;

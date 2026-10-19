@@ -13,6 +13,7 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod hd_ai_craft_laws_ground_truth;
+mod hd_air_pose_walk;
 mod hd_engine_flare_ground_truth;
 mod hd_envsettings_carry_ground_truth;
 mod hd_flyby_ground_truth;

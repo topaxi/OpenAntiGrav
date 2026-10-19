@@ -163,6 +163,12 @@ impl Race {
         let rig = crate::launch_hover::physics_rig(hover_rig);
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
+        let class_gravity_term =
+            if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
+                oag_physics::passive::ClassGravityTerm::Airborne
+            } else {
+                oag_physics::passive::ClassGravityTerm::Grounded
+            };
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
         let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
 
@@ -674,6 +680,7 @@ impl Race {
                 allowed_weapons,
                 class,
                 class_gravity_scale,
+                class_gravity_term,
                 start_boost,
                 pilot_assist,
                 pilot_assist_levels: Default::default(),

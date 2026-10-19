@@ -260,12 +260,30 @@ pub fn vertical_damping(up: Vec3, velocity: Vec3, grounded: f32) -> Vec3 {
     up * up.dot(velocity) * VERTICAL_DAMPING * (1.0 - grounded)
 }
 
+/// Which gravity term the per-class `<GravityMul>` scale multiplies: a per-title law.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ClassGravityTerm {
+    /// `normal_gravity`, the grounded term: Pulse (the VFPU pair chain at the gravity site,
+    /// confidence 90, [`crate::forces::Environment::class_gravity_scale`]).
+    #[default]
+    Grounded,
+    /// `flight_gravity`, the airborne term: Wipeout HD. `Craft_Update` (`0x000f1958`) builds
+    /// `-(normal * m * grounded + flight * m * scale[class] * (1 - grounded))`, and on Ubermall
+    /// PHANTOM the original falls `22.9` units/s² faster in the air than this engine with the
+    /// scale on the grounded term, against `115 * 0.2 = 23.0` predicted
+    /// (`docs/physics/airborne-ground-truth.md`). Confidence 85.
+    Airborne,
+}
+
 /// Gravity, as a world-space force.
 ///
 /// ```text
 /// worldForce.y += -( normal_gravity * classScale * mass * grounded
 ///                  + flight_gravity             * mass * (1 - grounded) )
 /// ```
+///
+/// That is Pulse's law; on Wipeout HD the scale moves to `flight_gravity`
+/// ([`ClassGravityTerm::Airborne`]).
 ///
 /// Four things `docs/physics/README.md` guessed wrong before the term was read:
 ///
@@ -281,9 +299,19 @@ pub fn vertical_damping(up: Vec3, velocity: Vec3, grounded: f32) -> Vec3 {
 /// spring multiplies by `normal_gravity + track_gravity` and must push up, so both are
 /// positive in the data and a downward force needs the sign here.
 #[must_use]
-pub fn gravity(handling: &Handling, mass: f32, class_gravity_scale: f32, grounded: f32) -> Vec3 {
-    let ground = handling.physical.normal_gravity * class_gravity_scale * mass * grounded;
-    let air = handling.physical.flight_gravity * mass * (1.0 - grounded);
+pub fn gravity(
+    handling: &Handling,
+    mass: f32,
+    class_gravity_scale: f32,
+    term: ClassGravityTerm,
+    grounded: f32,
+) -> Vec3 {
+    let (ground_scale, air_scale) = match term {
+        ClassGravityTerm::Grounded => (class_gravity_scale, 1.0),
+        ClassGravityTerm::Airborne => (1.0, class_gravity_scale),
+    };
+    let ground = handling.physical.normal_gravity * ground_scale * mass * grounded;
+    let air = handling.physical.flight_gravity * air_scale * mass * (1.0 - grounded);
 
     Vec3::new(0.0, -(ground + air), 0.0)
 }
