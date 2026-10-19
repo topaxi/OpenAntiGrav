@@ -46,14 +46,15 @@ pub mod settings;
 pub mod sfx;
 
 mod listings;
+mod menu_music;
 pub mod probe;
 mod race_music;
 mod resume;
 use library::{Library, NoLibrary, listing, load_entry, load_front_end};
 use listings::Listings;
-pub use race_music::MusicFetchWorker;
-use race_music::{PendingSwitch, locate};
-pub use resume::{RaceMusicState, Unusable};
+use race_music::PendingSwitch;
+pub use race_music::{MusicFetchWorker, RacePick};
+pub use resume::{RaceMusicState, Restored, Unusable};
 
 /// A bus volume, as a percentage of unattenuated.
 ///
@@ -107,7 +108,7 @@ const PS2_MUSIC_PATH: &str = "54748/PS2MUSIC.WAD";
 /// The first: each disc's plugin definition declares one `PI_Music` node per
 /// track ([`oag_title::DeclaredTracks`]), but which one a menu or circuit
 /// plays is unestablished. [`Audio::race_index`] addresses the same order for
-/// the race playlist, starting one past this one ([`Audio::initial_race_index`]).
+/// the race playlist, starting one past this one ([`Audio::race_music_pick`]).
 const MUSIC_TRACK: usize = 0;
 
 /// Which release's encode of the soundtrack is played.
@@ -452,7 +453,7 @@ pub struct Audio {
     /// Which release the race voice came off, mirroring [`Self::music_from`].
     race_from: Option<Platform>,
     /// Which track of the **booted** disc's soundtrack order the race playlist
-    /// is on. `None` until the first race starts one ([`Audio::initial_race_index`]);
+    /// is on. `None` until the first race starts one ([`Audio::race_music_pick`]);
     /// never reset by a visit to the menus.
     race_index: Option<usize>,
     /// Where the current race track was cut off, in the track's seconds
@@ -476,21 +477,27 @@ pub struct Audio {
     /// What [`Audio::start_race_music`] was last called with, so the
     /// advance-on-finish check in [`Audio::tick`] can fetch the next track
     /// without threading arguments through every caller. `None` outside a race.
-    /// The fourth element is the booted soundtrack's length once known
-    /// ([`Self::race_soundtrack_len`]).
-    race_context: Option<(MusicDiscs, MusicSource, PathBuf, Option<usize>)>,
-    /// The **next** race track being fetched ahead, as its index and worker.
+    race_context: Option<(MusicDiscs, MusicSource, PathBuf)>,
+    /// The **next** race track being fetched ahead.
     ///
     /// Keeps a track boundary from hitching: [`Self::advance_race_track`] used
     /// to decode the next track (0.4 to 2.8 s measured) inside the
     /// fixed-timestep loop. Started as soon as the current track plays
-    /// ([`Self::maybe_prefetch_next_race_track`]), so advancing only joins it.
-    ///
-    /// The index travels with the worker because [`MusicSource`] can move the
-    /// race voice mid-track, changing what "the next track" means without
-    /// touching [`Self::race_index`]; [`Self::advance_race_track`] checks the
-    /// two agree and [`Self::set_race_music_source`] drops a stale one.
-    race_prefetch: Option<(usize, MusicFetchWorker)>,
+    /// ([`Self::maybe_prefetch_next_race_track`]), so advancing only hands it
+    /// over. Its [`RacePick`] says which track it follows, because
+    /// [`MusicSource`] can move the race voice mid-track;
+    /// [`Self::set_race_music_source`] drops a stale one.
+    race_prefetch: Option<MusicFetchWorker>,
+    /// The race track being fetched to start the race voice: a start or a
+    /// resume whose track is not decoded yet, or a track boundary. Applied by
+    /// [`Self::tick`] the tick it lands, so the music starts late rather than
+    /// the frame blocking. See [`MusicFetchWorker`].
+    race_job: Option<MusicFetchWorker>,
+    /// The front end's music being read ([`Self::start_music`]).
+    menu_job: Option<menu_music::MenuJob>,
+    /// A saved race place [`Self::restore_race_music`] could not check because
+    /// the booted listing was not read yet; the next race's fetch checks it.
+    pending_restore: Option<RaceMusicState>,
     /// A `MUSIC SOURCE` switch being fetched off the tick thread
     /// ([`Self::set_music_source`]). At most one: a fresh request replaces it,
     /// and a late result from the detached worker is nobody's.
@@ -555,10 +562,10 @@ impl std::fmt::Debug for Audio {
             .field("race_cache", &self.race_cache.is_some())
             .field("menu_sound", &self.menu_sound.is_some())
             .field("race_context", &self.race_context.is_some())
-            .field(
-                "race_prefetch",
-                &self.race_prefetch.as_ref().map(|(i, _)| i),
-            )
+            .field("race_prefetch", &self.race_prefetch)
+            .field("race_job", &self.race_job)
+            .field("menu_job", &self.menu_job)
+            .field("pending_restore", &self.pending_restore)
             .field(
                 "source_switch",
                 &self.source_switch.as_ref().map(|pending| pending.wanted),
@@ -617,6 +624,9 @@ impl Audio {
             menu_sound: None,
             race_context: None,
             race_prefetch: None,
+            race_job: None,
+            menu_job: None,
+            pending_restore: None,
             source_switch: None,
             sfx: None,
         };
@@ -657,86 +667,50 @@ impl Audio {
         &self.output
     }
 
-    /// Starts the music this source plays under the front end, looping.
-    ///
-    /// Not at boot: the intro reel (`LogoFMV`) carries its own sound on
-    /// [`Bus::Music`], so the front end's tick loops call this once the
-    /// sequence has left a movie state (`Frontend::is_playing_movie`). Callers
-    /// with no sequence to wait on start it outright.
-    ///
-    /// The releases play different things, by the disc's doing: the PSP its own
-    /// 28-second loop ([`PSP_MUSIC_NAME`]), the PS2 [`PS2_MUSIC_PATH`] track
-    /// [`MUSIC_TRACK`], one of the sixteen. [`MusicSource`] cannot reach the
-    /// PSP's; [`Self::set_music_source`] enforces it.
-    ///
-    /// `cache_dir` is where a decoded PSP track lands
-    /// (`oag_source::cache::default_audio_cache_dir`); the PS2 path ignores it.
-    ///
-    /// Never fatal: a source with no decodable music (or no `ffmpeg` on `PATH`
-    /// for a PSP disc) says so on stdout and plays nothing.
-    pub fn start_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        // Idempotent: the front end's tick loops call this every tick and track
-        // no edge. See [`Self::music_attempted`].
-        if self.music_attempted {
-            return;
-        }
-        self.music_attempted = true;
-        if discs.booted() == Some(Platform::Ps3)
-            && let Some((source, _)) = discs.pick(MusicSource::Auto)
-        {
-            self.load_hd_mix(discs.library, source);
-        }
-        // The PS2's front-end music is a soundtrack track, so it goes through
-        // `fetch` and is stamped with its release; the PSP's is loaded unstamped,
-        // and `music_from` staying `None` is the scoping rule.
-        let loaded = match discs.booted() {
-            Some(Platform::Ps2) => self.fetch(discs, choice, cache_dir),
-            _ => front_end_music(discs, cache_dir),
-        };
-
-        match loaded {
-            Ok(Some(loaded)) => {
-                let seconds = loaded.sound.seconds();
-                // So `pause_race_music` can restart this decode without disc or `ffmpeg`.
-                self.menu_sound = Some(Arc::clone(&loaded.sound));
-                self.music = self
-                    .output
-                    .with_mixer(|mixer| mixer.play(Play::looping(loaded.sound, Bus::Music)));
-                self.music_from = self.music.and(loaded.from);
-                debug!("audio: music {}, {seconds:.1} s, looping", loaded.what);
-            }
-            Ok(None) => warn!("audio: this source carries no music this can play"),
-            Err(error) => race_music::warn_no_music("no music", &error),
-        }
-    }
-
     /// Starts (or resumes) the race playlist, stopping the menu voice first.
     ///
     /// **Authored, not recovered** (see [`Self::race_voice`]). Cycles the booted
     /// disc's soundtrack order instead of the menu's fixed [`MUSIC_TRACK`]. The
-    /// first call picks an index via [`Self::initial_race_index`]; later ones
+    /// first call picks a track via [`Self::race_music_pick`]; later ones
     /// continue from [`Self::pause_race_music`]'s position, as
     /// [`Self::race_index`] and [`Self::race_position`] are never reset here.
     ///
+    /// **Reads nothing on the calling thread.** The track already decoded (a
+    /// resume from the menus) starts at once; any other is fetched by a
+    /// [`MusicFetchWorker`] and starts on the [`Self::tick`] it lands. On the
+    /// Steam Deck the synchronous version spent 305 ms listing HD's soundtrack
+    /// and 416 ms decoding a track on this thread.
+    ///
     /// Never fatal, like [`Self::start_music`].
     pub fn start_race_music(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        if let Some(id) = self.music.take() {
-            self.output.with_mixer(|mixer| mixer.stop(id));
+        self.stop_music_voices();
+        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf()));
+        // A fetch still in flight from before (a race left and resumed before
+        // its track landed) is the same track; it lands into this race.
+        if self.race_job.is_some() {
+            self.poll_race_job();
+            self.settle_if_dumping();
+            return;
         }
-        // Defensive: nothing calls this with a race voice sounding today.
-        if let Some(id) = self.race_voice.take() {
-            self.output.with_mixer(|mixer| mixer.stop(id));
+        let pick = self.race_music_pick();
+        if let Some((index, loaded)) = self.cached_race_track(discs, choice, &pick) {
+            self.race_index = Some(index);
+            let seek = (self.race_position > 0.0).then_some(self.race_position);
+            self.apply_fetched_race_track(index, Ok(Some(loaded)), seek);
+            if self.race_voice.is_some() {
+                self.race_position = 0.0;
+            }
+            return;
         }
-
-        let index = self.reserve_race_music_index(discs);
-        let seek = (self.race_position > 0.0).then_some(self.race_position);
-        self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf(), None));
-        self.play_race_track(discs, choice, cache_dir, index, seek);
-        // Consumed only once applied to a sounding voice, so a failed attempt
-        // keeps the saved position for a later call.
-        if self.race_voice.is_some() {
-            self.race_position = 0.0;
-        }
+        self.race_job = Some(MusicFetchWorker::spawn(
+            discs.clone(),
+            choice,
+            cache_dir.to_path_buf(),
+            pick,
+            "race-music",
+        ));
+        self.poll_race_job();
+        self.settle_if_dumping();
     }
 
     /// How many tracks the **booted** disc's soundtrack lists, or `0` when it
@@ -826,101 +800,6 @@ impl Audio {
         self.output.with_mixer(|mixer| mixer.position(self.music?))
     }
 
-    /// The soundtrack track `choice` names, from the cache or from a disc.
-    ///
-    /// Returns the release it came off, the sound, and a line naming it;
-    /// `Ok(None)` when the release has no soundtrack.
-    ///
-    /// The booted release's order decides which track [`MUSIC_TRACK`] is; the
-    /// other release is reached by **length** ([`Soundtrack::nearest`]), since
-    /// neither archive stores names and the two orders differ.
-    fn fetch(
-        &mut self,
-        discs: &MusicDiscs,
-        choice: MusicSource,
-        cache_dir: &Path,
-    ) -> Result<Option<Loaded>> {
-        let Some((source, platform)) = discs.pick(choice) else {
-            return Ok(None);
-        };
-        if let Some((_, sound)) = self.held.iter().find(|(held, _)| *held == platform) {
-            return Ok(Some(Loaded {
-                from: Some(platform),
-                sound: Arc::clone(sound),
-                what: format!("{platform} soundtrack track {MUSIC_TRACK}, already read"),
-            }));
-        }
-
-        // No fallback to the front end's music: it would be a different
-        // recording, and the row claims its values are one recording encoded
-        // twice (see [`MusicSource`]). The caller reports the absence.
-        let Some(track) = locate(discs, platform, source, MUSIC_TRACK)? else {
-            return Ok(None);
-        };
-
-        let sound = Arc::new(load_track(
-            discs.library,
-            source,
-            platform,
-            track,
-            cache_dir,
-        )?);
-        self.held.push((platform, Arc::clone(&sound)));
-        Ok(Some(Loaded {
-            from: Some(platform),
-            sound,
-            what: format!(
-                "{platform} soundtrack track {MUSIC_TRACK}, {:.1} s as its own disc lists it",
-                track.seconds
-            ),
-        }))
-    }
-
-    /// [`Self::fetch`]'s race counterpart: any track of the booted order, cached
-    /// in the single-slot [`Self::race_cache`] rather than the unbounded
-    /// [`Self::held`], which is safe only because the menu asks for one index.
-    fn fetch_indexed(
-        &mut self,
-        discs: &MusicDiscs,
-        choice: MusicSource,
-        cache_dir: &Path,
-        index: usize,
-    ) -> Result<Option<Loaded>> {
-        let Some((source, platform)) = discs.pick(choice) else {
-            return Ok(None);
-        };
-        if let Some((cached_platform, cached_index, sound)) = &self.race_cache
-            && *cached_platform == platform
-            && *cached_index == index
-        {
-            return Ok(Some(Loaded {
-                from: Some(platform),
-                sound: Arc::clone(sound),
-                what: format!("{platform} soundtrack track {index}, already read"),
-            }));
-        }
-
-        let Some(track) = locate(discs, platform, source, index)? else {
-            return Ok(None);
-        };
-
-        let sound = Arc::new(load_track(
-            discs.library,
-            source,
-            platform,
-            track,
-            cache_dir,
-        )?);
-        Ok(Some(Loaded {
-            from: Some(platform),
-            sound,
-            what: format!(
-                "{platform} soundtrack track {index}, {:.1} s as its own disc lists it",
-                track.seconds
-            ),
-        }))
-    }
-
     /// Starts one of the boot sequence's movie sounds, reporting what happened.
     ///
     /// The seam both tick loops go through, so the stdout line and the decision
@@ -1008,6 +887,8 @@ impl Audio {
         // just replaced `race_voice`, and polling first keeps the two from
         // both moving it.
         self.poll_source_switch();
+        self.poll_menu_job();
+        self.poll_race_job();
         self.hd_mix_tick(self.hd.state);
         if let Some(id) = self.race_voice
             && !self.output.with_mixer(|mixer| mixer.is_playing(id))

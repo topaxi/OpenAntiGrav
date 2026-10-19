@@ -530,17 +530,18 @@ impl Session {
         // this synchronously at the hand-off used to decode a full track on
         // the frame thread, measured at 2.83s for a cold PS2 one - the whole
         // of the gap that used to open up behind the loading screen's fade.
-        // `reserve_race_music_index` settles which track before the worker
-        // starts, so it and `Audio::finish_race_music` (called once this
-        // stage's fade runs out) agree on one without either asking `discs`
-        // twice. See `LoadingStage::music` and `oag_sound::MusicFetchWorker`.
+        // `race_music_pick` hands the worker the rule for which track (the
+        // listing it may need is read on the worker), and
+        // `Audio::finish_race_music` (called once this stage's fade runs out)
+        // applies what the worker chose. See `LoadingStage::music` and
+        // `oag_sound::MusicFetchWorker`.
         self.resume_race_music();
-        let music_index = self.audio.reserve_race_music_index(&self.music_discs);
+        let music_pick = self.audio.race_music_pick();
         let music = oag_sound::MusicFetchWorker::spawn(
             self.music_discs.clone(),
             self.settings.audio.music_source,
             oag_source::cache::default_audio_cache_dir(),
-            music_index,
+            music_pick,
             "race-music",
         );
         let shell = self.shell.clone().ok_or_else(|| {
