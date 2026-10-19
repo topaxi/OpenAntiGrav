@@ -236,3 +236,52 @@ fn every_reachable_pure_craft_switches_at_fifty_units() {
     let archives = oag_pure::open(&image.display().to_string()).expect("the disc opens");
     ships_switch_at(archives, 6, |_| 50.0);
 }
+
+/// Every Pure circuit's drawn colour textures are pictures (`track_albedo`).
+///
+/// Pure names its circuit directories (`01_Vineta_K`), so the walk tries each
+/// numbered slot against the names the series uses and builds what is there.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn every_pure_circuit_binds_pictures_not_lookups() {
+    const NAMES: &[&str] = &[
+        "Vineta_K",
+        "Metropia",
+        "Moa_Therma",
+        "Chenghou_Project",
+        "Ubermall",
+        "Sol_2",
+        "Sebenco_Climb",
+        "Anulpha_Pass",
+        "Talons_Junction",
+        "Tech_de_Ra",
+        "Amphiseum",
+        "Modesto_Heights",
+        "Altima",
+        "Track",
+    ];
+    let Some(image) = image("pure-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("the disc opens");
+    let mut built = 0;
+    for n in 1..=20 {
+        for name in NAMES {
+            let entry = format!(r"Data\Environments\{n:02}_{name}\track.vex");
+            let Ok(blob) = archives.read_name(&entry) else {
+                continue;
+            };
+            let model = mesh::build_with_textures(&entry, &blob, None)
+                .unwrap_or_else(|e| panic!("{entry}: {e}"));
+            let faults = crate::track_albedo::faults(&model, false);
+            assert!(
+                faults.is_empty(),
+                "{entry}: a drawn colour texture is not a picture: {}",
+                crate::track_albedo::describe(&faults)
+            );
+            println!("{entry}: ok");
+            built += 1;
+        }
+    }
+    assert!(built > 0, "no Pure circuit found");
+}

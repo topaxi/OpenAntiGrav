@@ -119,6 +119,7 @@ const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, 0x0617_f87
 /// | `and_glass_normscale` | `0xa2d555b9` | 2 |
 /// | `glass_texture_n` | `0xa2d555b9` | 2 - the ship glass, `hd-ship-materials.md`'s own open case |
 /// | `pb_diffalphaspecnormal` | `0x3bdc0403` | 4 |
+/// | `nr_holobowlparallax` | `0xa2d555b9` | 1 - `bumpycones_normal.gtf`, the hologram bowl's cone lattice (02 and Sol 2); its picture is `dcaf37ac` at unit 0 |
 /// | `tracktexture_with_normal` | `0x48f37f5a` | 4 |
 /// | `reflectplane_dc_seawater` | `0x11cb4f74` | 4 |
 /// | `glassalpha` | `0xfc52b822` | 3 |
@@ -157,6 +158,7 @@ const CIRCUIT_SURFACE_MAP_SAMPLERS: &[(&str, u32)] = &[
     ("and_glass_normscale", 0xa2d5_55b9),
     ("glass_texture_n", 0xa2d5_55b9),
     ("pb_diffalphaspecnormal", 0x3bdc_0403),
+    ("nr_holobowlparallax", 0xa2d5_55b9),
     ("tracktexture_with_normal", 0x48f3_7f5a),
     ("reflectplane_dc_seawater", 0x11cb_4f74),
     ("glassalpha", 0xfc52_b822),
@@ -181,13 +183,19 @@ const NAMED_GLOW: &[u32] = &[
 
 /// The material's leaf file name without its extension - the key the
 /// per-family tables are written in.
-fn family(material: &rcsmodel::Material) -> &str {
+pub(super) fn family(material: &rcsmodel::Material) -> &str {
     material
         .name
         .rsplit('/')
         .next()
         .unwrap_or(&material.name)
         .trim_end_matches(".rcsmaterial")
+}
+
+/// Whether `hash` binds a surface map (a normal map) under this material's
+/// family, which [`super::skin::picks`] never takes as the picture.
+pub(super) fn is_circuit_surface_map(material: &rcsmodel::Material, hash: u32) -> bool {
+    CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&(family(material), hash))
 }
 
 fn sampler_role(material: &rcsmodel::Material, hash: u32) -> Option<SamplerRole> {

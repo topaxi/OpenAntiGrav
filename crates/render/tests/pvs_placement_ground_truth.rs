@@ -109,6 +109,12 @@ fn sweep(image: &Path, minimum: usize) {
             };
             measured += 1;
             let model = mesh::build_with_textures(&entry, &blob, None).expect("decoding track.vex");
+            let faults = crate::track_albedo::faults(&model, false);
+            assert!(
+                faults.is_empty(),
+                "{entry}: a drawn colour texture is not a picture: {}",
+                crate::track_albedo::describe(&faults)
+            );
             let pvs = TrackPvs::parse(&blob).expect("parsing sections");
 
             let nodes = vex::nodes(&blob).expect("walking the tree");

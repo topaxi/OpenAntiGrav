@@ -56,6 +56,12 @@ fn reach(circuit: &str) -> (usize, usize, usize) {
             continue;
         };
         assert_eq!(report.ice_unread, 0, "{path}");
+        let faults = crate::track_albedo::faults(&model, true);
+        assert!(
+            faults.is_empty(),
+            "{path}: a drawn colour texture is not a picture: {}",
+            crate::track_albedo::describe(&faults)
+        );
         lit += report.water_lit_colour;
         glint += report.water_glint_only;
         ice += report.ice_bound;

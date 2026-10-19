@@ -85,7 +85,19 @@ pub(super) fn skin(
             seconds.push(None);
             continue;
         }
-        match entry(Some(pick.albedo)) {
+        match entry(pick.albedo) {
+            None if pick.albedo.is_none() => {
+                // Deliberately unbound: the program samples no colour texture,
+                // so the surface is its constants and light alone.
+                report.picture_unsampled += 1;
+                match constant_diffuse(material) {
+                    Some(colour) => {
+                        report.constant_diffuse += 1;
+                        skins.push(Some(Arc::new(colour)));
+                    }
+                    None => skins.push(None),
+                }
+            }
             None => {
                 report.untextured += 1;
                 skins.push(None);
@@ -117,6 +129,50 @@ pub(super) fn skin(
         seconds.push(second.flatten());
     }
     (skins, seconds)
+}
+
+/// `~crc32("diffuse")`: the constant colour a `diffuse_*_constant` program
+/// multiplies its light sum by.
+const DIFFUSE: u32 = 0x515e_298e;
+
+/// Families whose program multiplies the light by an unnamed parameter instead,
+/// read off the microcode: `constantdiffuse_specular_normal`'s lightmapped
+/// block ends `MAD H0.xyz, H0, C, H1` with `C` patched from `0x7611a2d8`, and
+/// `H0` the vertex colour plus the light - the same final step
+/// `diffuse_spec_constant` takes with `diffuse`. Other families that carry
+/// `0x7611a2d8` use it in other places (`m_diffuse_normal_constantspecular`
+/// scales a `.w` term with it) and are left out until read.
+const DIFFUSE_PARAMETER: &[(&str, u32)] = &[("constantdiffuse_specular_normal", 0x7611_a2d8)];
+
+/// The constant diffuse colour of a material whose program samples no colour
+/// texture, as the one-texel picture the shader multiplies the light by.
+///
+/// Unorm bytes, no sRGB step: the constant is a shader value and every
+/// texture here is sampled the same way. `None` where the family's diffuse
+/// parameter is not one of the two read above, which leaves the surface white
+/// times its light and says so in the report's `picture_unsampled`.
+fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
+    let family = super::emissive::family(material);
+    let hash = DIFFUSE_PARAMETER
+        .iter()
+        .find_map(|&(name, hash)| (name == family).then_some(hash))
+        .unwrap_or(DIFFUSE);
+    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
+    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+    Some(ModelTexture::rgba8(
+        format!("constant diffuse {hash:08x}"),
+        1,
+        1,
+        vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
+        None,
+    ))
+}
+
+/// Whether a sampler hash can bind a surface's picture: not a lookup
+/// ([`NOT_A_PICTURE`]) and not a normal map this material's family is measured
+/// to bind there (`emissive::CIRCUIT_SURFACE_MAP_SAMPLERS`).
+fn is_picture(material: &rcsmodel::Material, hash: u32) -> bool {
+    !NOT_A_PICTURE.contains(&hash) && !super::emissive::is_circuit_surface_map(material, hash)
 }
 
 /// Sampler name hashes whose texture is **not a picture** - a lookup a shader
@@ -209,8 +265,11 @@ const NOT_A_PICTURE: &[u32] = &[
 /// lane reaches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Pick {
-    /// The entry bound as the surface's picture.
-    pub albedo: usize,
+    /// The entry bound as the surface's picture, or `None` when the resolved
+    /// program samples no colour texture at all: its colour is vertex colour,
+    /// constants and light, and every texture it names is a lookup (a normal
+    /// map, a lightmap). Bound as white, not as the first entry.
+    pub albedo: Option<usize>,
     /// The entry bound beside it - the coverage source, or the lightmap.
     pub aux: Option<usize>,
 }
@@ -220,7 +279,7 @@ impl Default for Pick {
     /// material with no resolved variant still gets.
     fn default() -> Self {
         Self {
-            albedo: 0,
+            albedo: Some(0),
             aux: Some(1),
         }
     }
@@ -272,18 +331,22 @@ pub(super) fn picks(
                         *hash == rcsmaterial::LIGHTMAP_SAMPLER && path.is_some()
                     })
                     .unwrap_or(1);
+                let albedo = match lightmapped::albedo(
+                    material,
+                    variants.get(slot).copied().flatten(),
+                    |name| {
+                        cache
+                            .entry(name.to_string())
+                            .or_insert_with(|| textures(&format!("/{name}")))
+                            .clone()
+                    },
+                ) {
+                    lightmapped::Albedo::Entry(entry) => Some(entry),
+                    lightmapped::Albedo::Unsampled => None,
+                    lightmapped::Albedo::Unresolved => default.albedo,
+                };
                 return Pick {
-                    albedo: lightmapped::albedo(
-                        material,
-                        variants.get(slot).copied().flatten(),
-                        |name| {
-                            cache
-                                .entry(name.to_string())
-                                .or_insert_with(|| textures(&format!("/{name}")))
-                                .clone()
-                        },
-                    )
-                    .unwrap_or(default.albedo),
+                    albedo,
                     aux: Some(at),
                 };
             }
@@ -314,7 +377,7 @@ pub(super) fn picks(
             // question it settles.
             if let Some(sheen) = glass_sheen::classify(material, &declared, &program) {
                 return Pick {
-                    albedo: sheen.ramp_entry,
+                    albedo: Some(sheen.ramp_entry),
                     aux: Some(sheen.grid_entry),
                 };
             }
@@ -339,24 +402,35 @@ pub(super) fn picks(
             let plain = material
                 .samplers
                 .iter()
-                .position(|(hash, path)| path.is_some() && !NOT_A_PICTURE.contains(hash));
+                .position(|(hash, path)| path.is_some() && is_picture(material, *hash));
             // Opaque only: blended families carry their own rules.
             let picture = (material.blend() == rcsmodel::Blend::Opaque)
                 .then(|| lightmapped::declared_picture(material, &declared, &program, false))
                 .flatten()
                 .or(plain)
-                .unwrap_or(default.albedo);
+                .or(default.albedo);
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
             let albedo = colour
                 .unit()
                 .and_then(|u| index_of(u32::from(u)))
-                .unwrap_or(picture);
+                .or(picture);
+            // A texture the program only unpacks as a normal is no picture:
+            // see `lightmapped::albedo`.
+            let reads_as_normal = |entry: usize| {
+                let hash = material.samplers[entry].0;
+                declared
+                    .samplers
+                    .iter()
+                    .find_map(|&(h, unit)| (h == hash).then_some(unit))
+                    .is_some_and(|unit| program.samples_as_normal(u8::try_from(unit).unwrap_or(0)))
+            };
+            let albedo = albedo.filter(|&entry| !reads_as_normal(entry));
             let aux = match texels[3] {
                 Texel::Unit { unit, .. } => index_of(u32::from(unit)),
                 _ => None,
             }
-            .filter(|&i| i != albedo)
+            .filter(|&i| Some(i) != albedo)
             .or(default.aux);
             Pick { albedo, aux }
         })
@@ -640,7 +714,7 @@ fn units(
             .find(|(h, _)| h == hash)
             .map(|&(_, unit)| unit)
     };
-    let first = unit_of(Some(pick.albedo));
+    let first = unit_of(pick.albedo);
     let second = unit_of(pick.aux);
     // A material whose two slots resolve to the same unit is a reading that
     // cannot be right, and taking it would paint the first texture through the
