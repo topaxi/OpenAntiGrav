@@ -24,7 +24,7 @@ per-subsystem matrix, before assuming a subsystem exists.
 ## Commands
 
 ```sh
-just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-title-branching + check-title-reach + check-names + check-handover + check-status - the gate every commit must pass
+just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-title-branching + check-title-reach + check-names + check-handover + check-status + check-weapon-lineage - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace --tests --cargo-profile quick (our crates at opt-level 0, examples not built)
@@ -40,6 +40,7 @@ just check-title-branching # ratchet on `title.name == oag_X::TITLE.name`-style 
 just check-title-reach # ratchet on generic crates naming a title package by path (`oag_hd::hud::ART`); they reach a title through `oag_title::Title`, the registry in oag-source, or the composition root (scripts/check-title-reach.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
 just check-handover # HANDOVER.md stays under 256 KiB, the Read tool's own ceiling (scripts/check-handover-size.py)
+just check-weapon-lineage # docs/gameplay/weapon-lineage.md's checked axes match the title crates' `Weapons`/`WeaponModels`/effect data and their `Origin`s (scripts/check-weapon-lineage.py)
 just check-schemas # every shipped TOML validates against the TOML Schema it names (`schemas/v1/`), schema and loader agree on each example, the schemas stage for Pages (scripts/check-schemas.sh, ADR-0064)
 just check-status # docs/overview/status.md's RE-coverage table matches names.tsv and the evidence pages; `just gen-status` regenerates it (scripts/gen-re-coverage.py)
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)

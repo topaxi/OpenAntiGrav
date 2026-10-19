@@ -23,6 +23,9 @@
   rubberbanding: the original spreads the player coupling across *two* blocks
   and only one of them is called `RubberBanding`.
 
+- [weapon lineage](weapon-lineage.md) - whose law, numbers, AI use, look and sound each
+  weapon has on each title (measured, inherited, chosen, absent or not investigated), and
+  the per-title fields the engine adjusts it with. Update it with any weapon change.
 - [before the race: the flyby](race-intro.md) - the circuit's own camera animation that plays
   under the track-description panel before the countdown, what ends it, and what the original
   does meanwhile. **The camera is `start_grid.vex`'s `grid_camera1`**, not a `Camera` node.
