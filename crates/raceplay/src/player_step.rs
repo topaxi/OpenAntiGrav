@@ -218,6 +218,7 @@ impl Race {
         let env_damage_rules = self.sim.damage_rules();
         let pilot_assist = self.pilot_assist_input(slot);
         let ship = &mut self.sim.world.ships[slot];
+        let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
         // throttle armed last tick is consumed by this step and nothing after
         // it. See `Ship::pending_thrust_scale`. One asymmetry: the original's
@@ -259,6 +260,7 @@ impl Race {
             self.sim.dt,
         );
         self.lay_crumb(slot, crumb_flags);
+        self.count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
         // The contact half of the same edge as the blast one, and the one a
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this

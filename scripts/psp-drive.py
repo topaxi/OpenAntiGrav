@@ -540,6 +540,8 @@ def menu(args):
         tap(dbg, "right", presses, wait=0.4)  # -> TIME TRIAL
     tap(dbg, "down")  # SPEED CLASS
     tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
+    if args.class_right:
+        tap(dbg, "right", args.class_right, wait=0.4)  # -> FLASH, RAPIER, PHANTOM
     tap(dbg, "up")
     # **The Talon's Junction check below is mis-calibrated for a full grid.**
     # A single race spawns the player on the grid, which sits about 139.9 units
@@ -921,6 +923,15 @@ def main():
         help="press down N times on Track Select before confirming, to reach "
         "Moa Therma (1) or Metropia (2) from Talon's Junction. Implies --any-track's "
         "warning-only check.",
+    )
+    p.add_argument(
+        "--class-right",
+        type=int,
+        default=0,
+        metavar="N",
+        help="press right N times from VENOM on SPEED CLASS (1 FLASH, 2 RAPIER, "
+        "3 PHANTOM where the profile has them; --unlock opens them). Check the "
+        "class that comes up.",
     )
     p.add_argument(
         "--ship-down",

@@ -444,6 +444,31 @@ impl Race {
         Some((controls, self.sim.autopilot_rail[slot].take()))
     }
 
+    /// The wall counters for `slot` after its step: bookkeeping outside
+    /// `state_hash`, for opponents and the player alike. See
+    /// [`RaceSim::wall_contact_ticks`]; `was_racing` is the craft's state
+    /// before the step, so a wreck accrues nothing.
+    pub(super) fn count_wall_contact(
+        &mut self,
+        slot: usize,
+        was_racing: bool,
+        wall: &oag_physics::wall::WallResponse,
+        damage_rules: oag_physics::damage::DamageRules,
+    ) {
+        if !was_racing {
+            return;
+        }
+        self.sim.wall_racing_ticks[slot] += 1;
+        if wall.contacts > wall.floor_contacts {
+            self.sim.wall_contact_ticks[slot] += 1;
+            if wall.impact {
+                self.sim.wall_inbound_ticks[slot] += 1;
+            }
+            self.sim.wall_damage[slot] +=
+                oag_physics::damage::contact_damage(wall.impulse_sum, damage_rules);
+        }
+    }
+
     /// What this project's driver wants of the player's craft this tick.
     ///
     /// The opponents' path exactly - the same line, the same pilot slot and
@@ -783,19 +808,7 @@ impl Race {
             // ticks against 328 before a tuning change that *halved* what the
             // walls charged it, and `07_Track` charged 122.05 against a pool of
             // 95.00. Both are the wreck, not the driving.
-            if was_racing {
-                self.sim.wall_racing_ticks[slot] += 1;
-                if evaluated.wall.contacts > evaluated.wall.floor_contacts {
-                    self.sim.wall_contact_ticks[slot] += 1;
-                    if evaluated.wall.impact {
-                        self.sim.wall_inbound_ticks[slot] += 1;
-                    }
-                    self.sim.wall_damage[slot] += oag_physics::damage::contact_damage(
-                        evaluated.wall.impulse_sum,
-                        damage_rules,
-                    );
-                }
-            }
+            self.count_wall_contact(slot, was_racing, &evaluated.wall, damage_rules);
             // Bookkeeping for the deviation, not state the race reads back: our
             // opponents barrel-roll and the original's never do, so what an
             // opponent spends on them has to be countable on the disc's own
