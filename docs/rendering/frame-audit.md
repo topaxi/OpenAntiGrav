@@ -38,6 +38,9 @@ Three traps that each produced a false difference before they were understood:
 3. **The gantry and the strip lights are time.** The original was captured 0.1-2 s
    after GO; ours is a fresh state. The GO banner, the countdown board and the
    pulsing cyan wall strip differ for that reason alone.
+4. **A brightness reference is only as good as its `Write Color Buffers`.** HD captures with it off read 1.6-1.9x bright
+   (`rpcs3-capture.md`); the gantry's 0.63-0.66 frame and 0.53-0.56 panel ratios were exactly that, and read 1.06 and about 1.0
+   against a WCB-on re-shot of the same pose (2026-10-19). Check the `Used configuration:` line before reading a luma gap.
 
 ## Ranked differences
 
