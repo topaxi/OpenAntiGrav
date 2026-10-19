@@ -114,18 +114,27 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     most 2 steer units on the first ramp. The states the drivers react to
     differ: physics, or the rail, which the replay does not cover. Not
     re-checked: our own-sample locate through a fork (the mimic ignores routes).
-    Also unclaimed: the confidence rows in `names.tsv` for
-    `Ai_ComputeControls`, `Ai_SampleLookahead` and `Ai_ComputePitch`. Their page
-    now argues for 92, 85 and 95, but the rows sit in the `orig-ai-pulse`
-    section.
-    - **Pulse:** the gap opens before the *first* jump (x `-536`), at launch `vy`
+    The `names.tsv` rows for `Ai_ComputeControls`, `Ai_SampleLookahead` and
+    `Ai_ComputePitch` now carry the page's 92, 85 and 95 (2026-10-19).
+    **Answered (2026-10-20, `airborne-capture`;
+    [airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md)):**
+    the linear force law and the rail match the original per tick; on Pulse the
+    gap is the angular law (the world-axis inertia diagonal, about 5 of the 8.5
+    units/s of launch `vy`), on HD the class gravity scale sits on flight gravity
+    (ported). Pulse's tensor and in-air `weight_distribution` torque and HD's
+    torque are measured and held until our AI flies them:
+    [three-measured-air-laws-wait-for-our-ai.md](three-measured-air-laws-wait-for-our-ai.md).
+    Fort Gale's second jump loses our autopilot to an airborne wall contact our
+    hull misses (capture 3, tick 1341):
+    [our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md](our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md).
+    - ~~**Pulse:** the gap opens before the *first* jump~~ answered above. The gap opens before the *first* jump (x `-536`), at launch `vy`
       75.5 against 67. In the air both fall at about `-137`. Next: a
       single-step residual of our physics seeded from the original's frames on
       that ramp; `scripts/psp-autopilot-air.py` logs the state.
-    - **HD Ubermall:** ours falls about 20 units/s² less in the air at the same
+    - ~~**HD Ubermall:**~~ answered above (HD's class gravity scale, ported). Ours fell about 20 units/s² less in the air at the same
       pitch (`-100` both), so it peaks 5 higher and flies long. Next: an RPCS3
       capture with orientation, then the same residual.
-    - **Unported, both titles:** the pitch-input gate `Ship_TestPitchAlignment`
+    - ~~**Unported, both titles:**~~ the gate is ported; the torque is measured and held (above). The pitch-input gate `Ship_TestPitchAlignment`
       (`0x088492bc`; HD `Craft_UpdatePitch` `0x000f0980`) and the in-air
       `<Misc weight_distribution>` pitch torque (engine.md, "Pitch"). Player
       physics: decide its scope before porting. Not shown to be this cause.
