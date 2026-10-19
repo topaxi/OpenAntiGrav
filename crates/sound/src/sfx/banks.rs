@@ -66,6 +66,17 @@ pub struct Banks {
     /// HD's authored group volumes, read with the engine tables and gated the
     /// same way. See [`crate::hd_mix`].
     pub(super) mix: Option<Arc<crate::hd_mix::Maps>>,
+    /// The start a title's own events play, decoded beside the named pair and
+    /// held until [`Banks::use_event_start`].
+    pub(super) event_start: Option<Box<StagedStart>>,
+}
+
+/// [`Cue::Ready`] and [`Cue::Go`] as a title's own events play them.
+#[derive(Debug, Default, Clone)]
+pub(super) struct StagedStart {
+    sounds: BTreeMap<Cue, Loaded>,
+    timelines: BTreeMap<Cue, Vec<Timeline>>,
+    programs: BTreeMap<Cue, Program>,
 }
 
 impl Banks {
@@ -150,7 +161,7 @@ impl Banks {
                 blob,
                 entry,
                 (cue, name_of(cue)),
-                tick,
+                Reading::plain(tick),
                 &mut sounds,
                 Tables {
                     timelines: &mut timelines,
@@ -174,39 +185,121 @@ impl Banks {
     ///
     /// A separate pass because the bank is the mode's: `speech.bnk`,
     /// `speech_elim.bnk` (Eliminator), `speech_zone.bnk` (Zone), see
-    /// [`oag_title::CountdownVoice`]. Never fails, on [`Self::load`]'s terms.
+    /// [`oag_title::CountdownVoice`]. The voice says how the build counts delays
+    /// and whether the names are hashed; a title with its own **event start**
+    /// ([`oag_title::CountdownEvent`]) has that pair decoded too and held back:
+    /// [`Self::use_event_start`] swaps it in for [`Cue::Ready`] and [`Cue::Go`].
+    ///
+    /// A title whose names are hashed (2048) loads `ready` and `go` alone:
+    /// [`Cue::ContElim`] would start resolving there with its trigger unread.
+    /// Never fails, on [`Self::load`]'s terms.
     pub fn load_countdown(
         &mut self,
         archives: &mut Archives,
         entry: &str,
-        tick: oag_title::SequenceTick,
+        voice: &oag_title::CountdownVoice,
+    ) {
+        let mut report = Vec::new();
+        let cues: &[Cue] = if voice.hashed {
+            &[Cue::Ready, Cue::Go]
+        } else {
+            &Cue::COUNTDOWN
+        };
+        self.load_start_pair(archives, entry, voice, cues, None, &mut report);
+        if let Some(event) = voice.event {
+            let mut staged = StagedStart::default();
+            for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
+                match event_cue {
+                    oag_title::StartCue::Plays(name) => self.load_start_pair(
+                        archives,
+                        event.bank,
+                        voice,
+                        &[cue],
+                        Some((&mut staged, name)),
+                        &mut report,
+                    ),
+                    oag_title::StartCue::Unplayed { name, why } => {
+                        report.push(format!("sfx: {name} not played: {why}"));
+                    }
+                }
+            }
+            self.event_start = Some(Box::new(staged));
+        }
+        self.report.extend(report);
+    }
+
+    /// Swaps the title's event start in for `ready` and `go`, when it has one:
+    /// the race is one of the title's own events, not a named mode. A cue the
+    /// event start does not play ([`oag_title::StartCue::Unplayed`]) is silent
+    /// there, not the named mode's. `false` (and nothing changes) when the title
+    /// has no event start.
+    pub fn use_event_start(&mut self) -> bool {
+        let Some(staged) = self.event_start.take() else {
+            return false;
+        };
+        for cue in [Cue::Ready, Cue::Go] {
+            self.sounds.remove(&cue);
+            self.timelines.remove(&cue);
+            self.programs.remove(&cue);
+        }
+        self.sounds.extend(staged.sounds);
+        self.timelines.extend(staged.timelines);
+        self.programs.extend(staged.programs);
+        true
+    }
+
+    /// One bank blob, read once, and the countdown cues `cues` out of it: into
+    /// `self` when `staged` is `None`, else under the cue's event name into the
+    /// staging area.
+    fn load_start_pair(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        voice: &oag_title::CountdownVoice,
+        cues: &[Cue],
+        mut staged: Option<(&mut StagedStart, &str)>,
+        report: &mut Vec<String>,
     ) {
         let blob = match archives.read_name(entry) {
             Ok(blob) => blob,
             Err(e) => {
                 let line = format!("sfx: {entry} not read: {e}");
                 warn!("{line}");
-                self.report.push(line);
+                report.push(line);
                 return;
             }
         };
-        let mut report = Vec::new();
-        for cue in Cue::COUNTDOWN {
+        for &cue in cues {
+            let (sounds, timelines, programs, name) = match staged.as_mut() {
+                Some((area, name)) => (
+                    &mut area.sounds,
+                    &mut area.timelines,
+                    &mut area.programs,
+                    *name,
+                ),
+                None => (
+                    &mut self.sounds,
+                    &mut self.timelines,
+                    &mut self.programs,
+                    cue.name(),
+                ),
+            };
             load_one(
                 &blob,
                 entry,
-                (cue, cue.name()),
-                tick,
-                &mut self.sounds,
-                Tables {
-                    timelines: &mut self.timelines,
-                    programs: &mut self.programs,
+                (cue, name),
+                Reading {
+                    tick: voice.tick,
+                    hashed: voice.hashed,
                 },
-                &mut report,
+                sounds,
+                Tables {
+                    timelines,
+                    programs,
+                },
+                report,
             );
         }
-
-        self.report.extend(report);
     }
 
     /// Loads the lap announcer, [`Cue::LAP_VOICES`], from `entry` under the
@@ -251,7 +344,7 @@ impl Banks {
                     blob,
                     entry,
                     (cue, name),
-                    tick,
+                    Reading::plain(tick),
                     &mut self.sounds,
                     Tables {
                         timelines: &mut self.timelines,
@@ -293,7 +386,7 @@ impl Banks {
                 &blob,
                 medal.bank,
                 pair,
-                tick,
+                Reading::plain(tick),
                 &mut self.sounds,
                 Tables {
                     timelines: &mut self.timelines,
@@ -427,13 +520,31 @@ struct Tables<'a> {
     programs: &'a mut BTreeMap<Cue, Program>,
 }
 
+/// How a bank's cues are read: what its delays count in, and whether its cue
+/// names are spelled or hashed (2048's `SBlk` version 5).
+#[derive(Debug, Clone, Copy)]
+struct Reading {
+    tick: oag_title::SequenceTick,
+    hashed: bool,
+}
+
+impl Reading {
+    /// Spelled names, the reading every cue but the countdown's takes.
+    fn plain(tick: oag_title::SequenceTick) -> Self {
+        Self {
+            tick,
+            hashed: false,
+        }
+    }
+}
+
 /// The body of [`Banks::load`]'s loop, lifted so [`Banks::load_countdown`] can
 /// load from the *mode's* speech bank on the same terms.
 fn load_one(
     blob: &[u8],
     entry: &str,
     (cue, name): (Cue, &str),
-    tick: oag_title::SequenceTick,
+    read: Reading,
     sounds: &mut BTreeMap<Cue, Loaded>,
     tables: Tables,
     report: &mut Vec<String>,
@@ -442,7 +553,7 @@ fn load_one(
         timelines,
         programs,
     } = tables;
-    match load_cue(blob, (cue, name), tick) {
+    match load_cue(blob, (cue, name), read) {
         Ok((loaded, skipped, timeline, program)) => {
             let undecoded = if skipped == 0 {
                 String::new()
@@ -496,7 +607,7 @@ type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
 fn load_cue(
     blob: &[u8],
     (cue, name): (Cue, &str),
-    tick: oag_title::SequenceTick,
+    Reading { tick, hashed }: Reading,
 ) -> anyhow::Result<(
     Loaded,
     usize,
@@ -504,7 +615,11 @@ fn load_cue(
     anyhow::Result<Option<Program>>,
 )> {
     let bank = sblk::Bank::parse(blob)?;
-    let (loaded, skipped) = load_named_cue(&bank, name)?;
+    let (loaded, skipped) = if hashed {
+        load_track_cue(&bank, name)?
+    } else {
+        load_named_cue(&bank, name)?
+    };
     // The engine is driven by one voice's per-tick pitch and volume, and how
     // that law spreads over layers is unread: it keeps its flat set.
     let timeline = if cue == Cue::Engine {
@@ -516,6 +631,7 @@ fn load_cue(
             tick,
             cue.bank() == BankName::Frontend,
             Cue::COUNTDOWN.contains(&cue),
+            hashed,
         )
     };
     let program = if cue.repeats() {

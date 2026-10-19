@@ -26,9 +26,9 @@ fn ready_follows_its_child_cue_to_a_timeline() {
         return;
     };
     let race = opened.title.race;
-    let tick = race.zone_announcer.expect("HD's tick").tick;
+    let voice = race.countdown_voice.expect("HD voices its start");
     let mut banks = Banks::default();
-    banks.load_countdown(&mut opened.archives, race.sounds.speech, tick);
+    banks.load_countdown(&mut opened.archives, race.sounds.speech, voice);
     let line = |cue: &str| {
         banks
             .report

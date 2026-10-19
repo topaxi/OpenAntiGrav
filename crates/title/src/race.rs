@@ -98,7 +98,9 @@ mod transition;
 mod variants;
 mod zone_circuit;
 pub use crate::speed::SpeedClasses;
-pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
+pub use announcer::{
+    CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
+};
 pub use fresh::FreshVariant;
 pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks};
 pub use transition::ZoneTransition;

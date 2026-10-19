@@ -208,7 +208,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1342 (1209 fn, 133 data) | 31 (2%) | 89 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+48 measurement scripts) | 2026-10-19, [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 77 (76 fn, 1 data) | 3 (3%) | 9 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+48 measurement scripts) | 2026-10-14, [mp-time-trial-collision.md](../ghidra/functions/psp-pure-eu/mp-time-trial-collision.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 126 (124 fn, 2 data) | 2 (1%) | 20 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+48 measurement scripts) | 2026-10-19, [countdown-voice.md](../ghidra/functions/psp-pure-usa/countdown-voice.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 152 (141 fn, 11 data) | 14 (9%) | 32 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-19, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 158 (147 fn, 11 data) | 14 (8%) | 32 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-19, [countdown-voice.md](../ghidra/functions/vita-2048-eu-v104/countdown-voice.md) |
 
 <!-- re-coverage:end -->
 

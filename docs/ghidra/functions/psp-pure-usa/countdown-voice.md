@@ -45,12 +45,15 @@ restart via the pause menu or RACE AGAIN.
   countdown cues.
 - **Spacing:** 180.0 frames at 59.94 frames a second, in every run: 3.0 s, Pulse's 180 ticks.
 - **`go` is at the release.** Pure's game update runs at 30 a second (two frames), so the
-  resolution is 2 frames. The craft's launch gate (`craft+0x260` and `+0x264` reading `100.0`,
-  `+0x270` reading `0.0`) flips (`0.0`, `0.0`, `100.0`) in the first `Ship_UpdateEngine` update
-  after `go` starts, 2 to 4 frames later; `craft+0x290` starts a 100 to 0 ramp of about 60 frames
-  from the same update. That is Pulse's "`go` voiced on the last gated tick", to the update.
-  The three field names are not recovered, so the gate is read off values, not off code.
-  Confidence 70 for the `go` anchor, 85 for the cues and the 180 frame spacing.
+  resolution is 2 frames. `Ship_UpdateEngine` (`0x0892f1f0`, [names.tsv](names.tsv)) writes
+  `craft+0x270` from the throttle input `*(*(craft + 0x48) + 4)` (Pulse's `craft+0x2b8`, the field
+  [the Pulse page](../psp-pulse-usa/countdown-voice.md) anchors tick 272 on), and with cross held
+  that field reads `0.0` in the last update before `go` and `100.0` in the first after it: the
+  first non-zero throttle comes 2 to 4 frames after `go` starts, in all three runs. The same
+  update flips `craft+0x260` and `+0x264` (`100.0` to `0.0`) and starts a 100 to 0 ramp of about
+  60 frames in `craft+0x290`; those fields are not named. That is Pulse's "`go` voiced on the last
+  gated tick", to the update. Confidence 85 for the cues and the 180 frame spacing, 85 for the
+  `go` anchor (the throttle field is read in code, not guessed from values).
 - **No beep between** `ready` and `go`: the log has no other cue start in the 180 frames.
 
 ## What this settles for the port
@@ -58,8 +61,9 @@ restart via the pause menu or RACE AGAIN.
 Pure keeps Pulse's ticks (`ready` at `World::tick` 91, `go` at 271) and `speech.bnk`, and the
 Title data says so as `Origin::Measured` instead of lent. Render with
 `cargo run -p oag-game --example countdown_census -- data/images/pure-psp-usa.chd out.wav`:
-`ready` plays 1.24 s from tick 91.1 and `go` 1.12 s from tick 271.1, the bank's own lengths. (The
-census table's earlier "0.51 s" and "0.43 s" for Pure were wrong.)
+`ready` plays 1.24 s from tick 91.1 and `go` 1.12 s from tick 271.1, the bank's own lengths, on the
+USA and the EU pressing alike. (The census table's earlier "0.51 s" and "0.43 s" for Pure match
+neither render today.)
 
 **Not measured on Pure:** Zone and Eliminator (the banks are the title's own names, unrun), the
 EU pressing, and whether Pure's 30 Hz update shifts `go` by one update against the 60 Hz tick.

@@ -714,11 +714,30 @@ mod team_identity_tests {
     }
 }
 
-/// The start-of-race voice's banks: the Zone bank is the one the Zone announcer reads, Eliminator
-/// reads the ordinary speech bank. Timing lent from Pulse, chosen, not measured - see
-/// `oag_title::CountdownVoice`.
+/// The start-of-race voice. A named mode (the race box, free play) plays `ready` and `go` from
+/// the speech bank, a campaign event plays `321_NGP` and `Go_NGP` from `Weapons_NGP.bnk`: the
+/// original picks on the mode id, read statically (confidence 80,
+/// `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`). The 240 Hz tick is read from the
+/// executable (85). **The 180 tick spacing and the thrust gate are Pulse's, lent: chosen, not
+/// measured**, so `origin` is `Chosen`. Both banks resolve by hash.
 pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoice {
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
     origin: oag_title::Origin::Chosen,
+    tick: oag_title::SequenceTick::Vita,
+    hashed: true,
+    event: Some(oag_title::CountdownEvent {
+        bank: r"Data\audio\sound\Weapons_NGP.bnk",
+        // Two looping voices keyed on 150 and 155 ticks in and keyed off 900 ticks later (opcode
+        // 0x29), their pan swept by a modulator of +-180 degrees at 1 Hz (0x04), the second at 30
+        // degrees and the first in the rear half: none of it is in the mixer, and where it starts
+        // against `go` is unmeasured. Not played rather than played as one flat waveform.
+        ready: oag_title::StartCue::Unplayed {
+            name: "321_NGP",
+            why: "two looping voices keyed off after 3.75 s under a rotating pan modulator, which the \
+                  mixer has no model for, and its offset from go is unmeasured",
+        },
+        // Four arms picked uniformly (opcode 0x2e, mode 0), each one waveform: the flat pick.
+        go: oag_title::StartCue::Plays("Go_NGP"),
+    }),
 };

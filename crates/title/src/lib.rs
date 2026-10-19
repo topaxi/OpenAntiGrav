@@ -87,9 +87,10 @@ pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
 };
 pub use race::{
-    CircuitBanks, CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks,
-    SpeedClasses, TeamVariant, TeamVariants, TrackBanks, VariantJoin, ZoneAnnouncer, ZoneCircuit,
-    ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTransition,
+    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, GuestRoster, RaceDefaults,
+    SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant, TeamVariants, TrackBanks,
+    VariantJoin, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneCraft, ZonePalette,
+    ZoneStageTextures, ZoneStages, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};
 pub use zoom::ZoomRing;

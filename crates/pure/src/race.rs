@@ -514,6 +514,9 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     eliminator_bank: r"Data\Sound\speech.bnk",
     zone_bank: ZONE_ANNOUNCER.bank,
     origin: oag_title::Origin::Measured,
+    tick: oag_title::SequenceTick::Unknown,
+    hashed: false,
+    event: None,
 };
 
 #[cfg(test)]

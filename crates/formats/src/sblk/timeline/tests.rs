@@ -432,6 +432,7 @@ const GOTO_MODEL: WalkModel = WalkModel {
     goto_markers: true,
     hd_alternates: false,
     globals: None,
+    vita: false,
 };
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
@@ -606,4 +607,81 @@ fn a_replacing_child_is_walked_only_under_the_global_model() {
     assert_eq!(two.grains.len(), 1);
     assert_eq!(two.grains[0].sound.offset, 16);
     assert!(!bank.cue_timeline(&cue).is_complete());
+}
+
+const VITA_MODEL: WalkModel = WalkModel {
+    goto_markers: true,
+    hd_alternates: false,
+    globals: None,
+    vita: true,
+};
+
+/// 2048's marker id is the operand's low byte: a goto to marker 2 lands on the
+/// second marker there, and on the first (id byte 1 reads zero) on Pulse's and HD's.
+#[test]
+fn a_vita_goto_finds_its_marker_by_the_low_operand_byte() {
+    let data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x24, 2, 0),
+            raw(0x23, 1, 0),
+            key(0, 0, 0),
+            raw(0x2b, 0, 0),
+            raw(0x23, 2, 0),
+            key(16, 0, 0),
+        ],
+    )]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let vita = bank.cue_timeline_modelled(&cue, &[], VITA_MODEL);
+    assert!(vita.is_complete(), "{:?}", vita.unread);
+    assert_eq!(vita.grains.len(), 1);
+    assert_eq!(vita.grains[0].sound.offset, 16, "marker 2, not the first");
+    let other = bank.cue_timeline_modelled(&cue, &[], GOTO_MODEL);
+    assert_eq!(other.grains[0].sound.offset, 0, "the first marker");
+}
+
+/// `0x2e` mode 0 draws a marker uniformly from `first..=last`: an alternate group of
+/// `last - first + 1`, one timeline per marker. Any other mode is unread.
+#[test]
+fn a_vita_random_goto_is_an_alternate_over_its_markers() {
+    let mut data = build(&[Spec(
+        "A",
+        100,
+        vec![
+            raw(0x2e, 0, 0),
+            raw(0x23, 1, 0),
+            key(0, 0, 0),
+            raw(0x2b, 0, 0),
+            raw(0x23, 2, 0),
+            key(16, 0, 0),
+        ],
+    )]);
+    let (block_at, record_at) = {
+        let bank = Bank::parse(&data).expect("parse");
+        (
+            bank.block.as_ptr() as usize - data.as_ptr() as usize,
+            bank.parameter_offset as usize,
+        )
+    };
+    let at = block_at + record_at;
+    data[at..at + 4].copy_from_slice(&[1, 2, 0, 3]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let all = bank
+        .cue_timelines_modelled(&cue, VITA_MODEL)
+        .expect("two combinations");
+    let offsets: Vec<u32> = all.iter().map(|t| t.grains[0].sound.offset).collect();
+    assert_eq!(offsets, vec![0, 16]);
+    assert!(all.iter().all(|t| t.is_complete()));
+    data[at + 2] = 1;
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("A").expect("cue");
+    let history = bank.cue_timeline_modelled(&cue, &[], VITA_MODEL);
+    assert_eq!(
+        history.unread,
+        vec![0x2e],
+        "mode 1 keeps a history: not modelled"
+    );
 }

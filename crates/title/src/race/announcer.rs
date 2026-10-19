@@ -83,6 +83,15 @@ pub enum SequenceTick {
     /// 10 s windows). Omega's PS4 build is a different binary and is not
     /// covered.
     Ps3,
+    /// The Vita's 240 Hz master tick, Wipeout 2048's SCREAM 7.0.29: the mixer
+    /// accumulates the frames it renders and runs one tick per
+    /// `48000 / (240 * m)` frames, `m` a float initialised to `1.0` in
+    /// `FUN_8134af2c` and written nowhere else (`0x8153bc9c`, read by the
+    /// tick loop `FUN_81354b74` and the pitch scale `FUN_8135718a`).
+    /// **Read from the executable, not run** (no Vita capture): confidence 85.
+    /// Only the countdown's own cues use it ([`CountdownVoice::tick`]); 2048's
+    /// other cues keep the flat pick until a lane widens it.
+    Vita,
 }
 
 impl SequenceTick {
@@ -92,7 +101,7 @@ impl SequenceTick {
         match self {
             Self::Unknown => None,
             Self::Psp => Some(44_100.0 * 3.0 / 512.0),
-            Self::Ps3 => Some(240.0),
+            Self::Ps3 | Self::Vita => Some(240.0),
         }
     }
 
@@ -117,7 +126,14 @@ impl SequenceTick {
     /// that measured HD.
     #[must_use]
     pub fn follows_gotos(self) -> bool {
-        matches!(self, Self::Ps3)
+        matches!(self, Self::Ps3 | Self::Vita)
+    }
+
+    /// Whether the build's command handlers are Wipeout 2048's (`0x2e`, `0x29`,
+    /// `0x04` and the low-byte marker id), against Pulse's and HD's.
+    #[must_use]
+    pub fn vita_handlers(self) -> bool {
+        matches!(self, Self::Vita)
     }
 }
 
@@ -236,6 +252,48 @@ pub struct CountdownVoice {
     /// apart, `go` on the last gated tick) came from: [`Origin::Measured`] when
     /// the title's own cue-start log shows it.
     pub origin: Origin,
+    /// What the countdown's delays are counted in. Not the title's other cues'
+    /// tick ([`ZoneAnnouncer::tick`]): a title opts its countdown in on its own.
+    pub tick: SequenceTick,
+    /// Whether the cue names are looked up by FNV hash of the
+    /// name (2048's `SBlk` version 5 banks) rather than spelled in the bank.
+    pub hashed: bool,
+    /// The start a title's **own events** play instead of `ready` and `go`, or
+    /// `None` when every race plays the named pair.
+    pub event: Option<CountdownEvent>,
+}
+
+/// The start a race built from a title's own event (not a named mode) plays.
+///
+/// 2048's race-state setter (`0x811743e4`) and the countdown's end
+/// (`0x81175d12`) pick on the mode id: below `0x17` (every named mode) it plays
+/// `ready` and `go` from the speech bank, from `0x17` up (the CRC ids of its own
+/// campaign and multiplayer events) it plays `321_NGP` and `Go_NGP` from a bank
+/// of its own, `docs/ghidra/functions/vita-2048-eu-v104/countdown-voice.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CountdownEvent {
+    /// The bank both cues are in, `Data\audio\sound\Weapons_NGP.bnk` on 2048.
+    pub bank: &'static str,
+    /// The cue played where a named mode plays `ready`.
+    pub ready: StartCue,
+    /// The cue played where a named mode plays `go`.
+    pub go: StartCue,
+}
+
+/// One cue of a [`CountdownEvent`]: played, or authored and left unplayed.
+///
+/// An unplayed cue is **silence and a loader report line**, never the flat pick
+/// of its waveforms: a cue the mixer cannot render as authored must not become
+/// a different sound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartCue {
+    /// Played, under this name in [`CountdownEvent::bank`].
+    Plays(&'static str),
+    /// Authored, not played: what it is and what is missing, for the report.
+    Unplayed {
+        name: &'static str,
+        why: &'static str,
+    },
 }
 
 #[cfg(test)]
@@ -257,5 +315,13 @@ mod tests {
         assert!(!SequenceTick::Unknown.follows_gotos());
         assert!(!SequenceTick::Psp.follows_gotos());
         assert!(SequenceTick::Ps3.follows_gotos());
+    }
+
+    #[test]
+    fn the_vita_counts_240_ticks_and_reads_its_own_handlers() {
+        assert_eq!(SequenceTick::Vita.ticks_per_second(), Some(240.0));
+        assert!(SequenceTick::Vita.follows_gotos());
+        assert!(SequenceTick::Vita.vita_handlers());
+        assert!(!SequenceTick::Ps3.vita_handlers());
     }
 }

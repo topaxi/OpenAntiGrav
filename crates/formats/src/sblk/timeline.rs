@@ -47,6 +47,12 @@
 //!   there; the marker is a no-op returning zero. No marker is an error that
 //!   ends the cue, and a ninth goto within one tick is refused. Read on both
 //!   binaries (`Scream_DoGrainGoto` on HD, `Scream_OpGoto` on Pulse's).
+//! - Wipeout 2048's handlers (the Vita build, [`WalkModel::vita`]) differ in
+//!   one place and add one: its marker id is the operand's **low** byte
+//!   (`FUN_8134fc58`), and `0x2e` is a **random marker goto** over the ids
+//!   `byte0..=byte1` of its parameter record (mode `0`: uniform, no history),
+//!   walked as an alternate group. Its `0x29` (key off) and `0x04` (modulator)
+//!   are read but not modelled, so they stay in [`Timeline::unread`].
 //! - Every other opcode is reported in [`Timeline::unread`], not skipped
 //!   silently: `0x1a` adds a random wait, `0x08` replaces the voice's playback
 //!   state, `0x04` starts an LFO. A timeline that met any is not the whole cue.
@@ -80,6 +86,8 @@ const GOTO: u8 = 0x24;
 const MARKER: u8 = 0x23;
 /// Gotos one tick may run before `Scream_DoGrainGoto` refuses (its depth guard).
 const MAX_GOTOS_PER_TICK: u32 = 8;
+/// Wipeout 2048's random marker goto (`FUN_8134fe5c`, "Goto Random Marker Ex").
+const RANDOM_GOTO: u8 = 0x2e;
 /// The opcode that skips the next command unless a variable holds
 /// (`Scream_OpGuard`), walked only under [`WalkModel::globals`].
 const GUARD: u8 = 0x22;
@@ -136,6 +144,11 @@ pub struct WalkModel {
     /// `0x05`), which `FRONT_END_VO.bnk`'s `TRTX_NAME` selects its circuit
     /// cue with. A guard naming a slot outside the table is reported unread.
     pub globals: Option<[i8; GLOBAL_SLOTS]>,
+    /// Read the commands as Wipeout 2048's (Vita) handlers do; see the module
+    /// documentation. `0x2e` is only walked in its mode `0`.
+    ///
+    /// Off by default: Pulse, Pure and HD keep the walk they were measured with.
+    pub vita: bool,
 }
 
 /// One waveform started at one moment.
@@ -386,8 +399,8 @@ impl Bank<'_> {
                 walk.out.passed.push(opcode);
             } else if walk.model.goto_markers && opcode == GOTO {
                 gotos_this_tick += 1;
-                let id = ((word >> 16) & 0xff) as u8;
-                let target = self.marker_of(cue, id);
+                let id = self.marker_id(word, walk.model.vita);
+                let target = self.marker_of(cue, id, walk.model.vita);
                 match target {
                     // The handler refuses a ninth goto in one tick.
                     Some(_) if gotos_this_tick > MAX_GOTOS_PER_TICK => {
@@ -398,6 +411,30 @@ impl Bank<'_> {
                     // No marker is an error return: the cue ends.
                     None => return,
                 }
+            } else if walk.model.vita && opcode == RANDOM_GOTO {
+                gotos_this_tick += 1;
+                let Some(r) = self.record(word & 0x00ff_ffff, 4) else {
+                    walk.out.unread.push(opcode);
+                    return;
+                };
+                let (first, last, mode) = (r[0] as i8, r[1] as i8, r[2]);
+                let count = i32::from(last) - i32::from(first) + 1;
+                if mode != 0 || count < 1 || gotos_this_tick > MAX_GOTOS_PER_TICK {
+                    walk.out.unread.push(opcode);
+                    return;
+                }
+                let group = walk.out.groups.len();
+                let pick = i32::from(walk.picks.get(group).copied().unwrap_or(0)) % count;
+                walk.out.groups.push(AlternateGroup {
+                    count: count as u8,
+                    stride: 0,
+                });
+                // No marker is an error return: the cue ends.
+                let Some(marker) = self.marker_of(cue, (i32::from(first) + pick) as u8, true)
+                else {
+                    return;
+                };
+                pc = marker - 1;
             } else if opcode == END {
                 return;
             } else if opcode == ALTERNATE {
@@ -454,12 +491,28 @@ impl Bank<'_> {
 
     /// The first marker (`0x23`) of `cue` whose operand byte 1 is `id`, as an
     /// index into the cue's own commands.
-    fn marker_of(&self, cue: &Cue, id: u8) -> Option<i32> {
+    fn marker_of(&self, cue: &Cue, id: u8, vita: bool) -> Option<i32> {
         (0..cue.commands).find_map(|k| {
             let at = (cue.first_command + k) * COMMAND_LEN;
             let word = self.order.u32(self.commands.get(at..at + COMMAND_LEN)?, 0);
-            ((word >> 24) as u8 == MARKER && ((word >> 16) & 0xff) as u8 == id).then_some(k as i32)
+            ((word >> 24) as u8 == MARKER && self.marker_id(word, vita) == id).then_some(k as i32)
         })
+    }
+
+    /// The marker id a goto or marker word carries: operand byte 1 on Pulse and
+    /// HD, the operand's low byte on 2048.
+    fn marker_id(&self, word: u32, vita: bool) -> u8 {
+        if vita {
+            (word & 0xff) as u8
+        } else {
+            ((word >> 16) & 0xff) as u8
+        }
+    }
+
+    /// The `len` bytes of the parameter record an operand names.
+    fn record(&self, operand: u32, len: usize) -> Option<&[u8]> {
+        let at = self.parameter_offset.checked_add(operand)? as usize;
+        self.block.get(at..)?.get(..len)
     }
 
     fn walk_child(&self, operand: u32, tick: u32, frame: Frame, walk: &mut Walk) {

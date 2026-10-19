@@ -150,6 +150,9 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     eliminator_bank: r"Data\Sound\speech_elim.bnk",
     zone_bank: r"Data\Sound\speech_zone.bnk",
     origin: oag_title::Origin::Measured,
+    tick: oag_title::SequenceTick::Psp,
+    hashed: false,
+    event: None,
 };
 
 /// What Pulse puts on the front of a circuit's file name to reach the Zone

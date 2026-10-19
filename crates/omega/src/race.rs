@@ -403,4 +403,7 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     eliminator_bank: r"Data\audio\sound\speech.bnk",
     zone_bank: r"Data\audio\sound\speech.bnk",
     origin: oag_title::Origin::Chosen,
+    tick: oag_title::SequenceTick::Unknown,
+    hashed: false,
+    event: None,
 };
