@@ -120,6 +120,10 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   - Not measured: a pickup-shaped stint engaged off the line, against the
     original (`scripts/psp-autopilot-rail.py --stint --steer` exists for it).
     De Konstruct Black was captured for laps 1-2 and part of 3 only.
+  - The opponent stint sweep with the port: PHANTOM's extra walls do not
+    shrink (B over A on 14 of 16 cells, HD B rescues 6), as expected for a
+    player-only engine law; `opponent-autopilot-wire` decides on the same
+    picture as before.
   - HD scales the player's `100` by `SplitScreenMultiplier` with more than one
     person; not applied.
   - Pure's player lane `0` is inherited from Pulse (`0x08919b6c` unread for it).

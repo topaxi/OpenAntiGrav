@@ -991,6 +991,34 @@ So the difference is our driver's airborne steering (`Ai_ComputeControls`
 with its height term), which has no live leg. No class gate or tuning was added
 to hide it.
 
+**The opponent stint, re-run with the port** (`opponent_autopilot_sweep`, Ace,
+8 seeds, 64 forks a cell, as before). The engine bits are the local player's
+alone, so an opponent's stint law does not change. What moves is the field the
+forks start from, because the player's autopilot is now faster. PHANTOM's extra
+wall hits do not shrink: B touches walls more than A on 14 of 16 cells (13
+before), and HD's B rescues are 6 (8 before). VENOM: B touches more on 3 of 16
+cells (4 before), and HD has no B rescues before or after. So the decision left
+for `opponent-autopilot-wire` stands as it was.
+
+| Cell, PHANTOM Ace | B faster, before -> after | Median gain s, before -> after | Walls A -> B, before | Walls A -> B, after | Rescues A -> B, before | Rescues A -> B, after |
+| --- | --- | --- | --- | --- | --- | --- |
+| HD 12_sol_2 | 59 -> 61 | +0.95 -> +0.96 | 73 -> 375 | 103 -> 483 | 0 -> 2 | 0 -> 2 |
+| HD talons_junction | 53 -> 52 | +0.75 -> +0.53 | 275 -> 222 | 262 -> 153 | 0 -> 0 | 0 -> 0 |
+| HD 05_ubermall | 47 -> 49 | +0.87 -> +0.74 | 85 -> 124 | 59 -> 254 | 0 -> 2 | 0 -> 0 |
+| HD amphiseum | 55 -> 54 | +0.35 -> +0.38 | 213 -> 312 | 111 -> 261 | 0 -> 4 | 0 -> 4 |
+| Pulse 01 | 62 -> 58 | +0.76 -> +0.54 | 122 -> 172 | 153 -> 195 | 3 -> 0 | 3 -> 0 |
+| Pulse 02 | 51 -> 41 | +0.41 -> +0.15 | 79 -> 235 | 41 -> 565 | 0 -> 0 | 0 -> 0 |
+| Pulse 03 | 54 -> 53 | +0.79 -> +0.81 | 130 -> 185 | 117 -> 158 | 0 -> 0 | 0 -> 0 |
+| Pulse 04 | 49 -> 48 | +0.28 -> +0.47 | 146 -> 214 | 184 -> 287 | 3 -> 2 | 1 -> 0 |
+| Pulse 05 | 45 -> 38 | +0.25 -> +0.15 | 54 -> 184 | 80 -> 227 | 3 -> 2 | 4 -> 2 |
+| Pulse 06 | 51 -> 48 | +0.41 -> +0.51 | 283 -> 456 | 285 -> 673 | 0 -> 1 | 0 -> 0 |
+| Pulse 07 | 64 -> 64 | +3.20 -> +3.37 | 205 -> 597 | 282 -> 660 | 1 -> 1 | 0 -> 2 |
+| Pulse 09 | 54 -> 45 | +0.26 -> +0.17 | 190 -> 261 | 226 -> 277 | 0 -> 0 | 0 -> 0 |
+| Pulse 10 | 63 -> 59 | +1.41 -> +1.09 | 354 -> 261 | 167 -> 262 | 0 -> 0 | 0 -> 0 |
+| Pulse 13 | 64 -> 63 | +1.20 -> +1.19 | 150 -> 253 | 179 -> 330 | 0 -> 0 | 0 -> 0 |
+| Pulse 14 | 57 -> 55 | +0.91 -> +1.07 | 736 -> 270 | 600 -> 207 | 0 -> 0 | 0 -> 0 |
+| Pulse 16 | 51 -> 49 | +0.55 -> +0.58 | 241 -> 350 | 137 -> 379 | 0 -> 0 | 0 -> 0 |
+
 ### An opponent's Autopilot, measured and not wired (2026-10-19)
 
 The maintainer's rule for an opponent on this project's driver holding an
