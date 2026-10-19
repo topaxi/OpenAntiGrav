@@ -177,9 +177,8 @@ pub const TITLE: &Title = &Title {
         // opponents run Pulse's fire law on these odds: the law is **inherited
         // from Pulse, unmeasured on HD** - HD's own decision code is unread.
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
-        // Opponents hold the LeachBeam until the title's drain is read:
-        // `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
-        opponents_fire_leach_beam: false,
+        // Read off HD's own EBOOT: one transfer per ball trip.
+        leach_drain: oag_title::weapons::LeachDrain::PerTrip,
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

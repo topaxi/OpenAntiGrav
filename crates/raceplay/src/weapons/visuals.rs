@@ -140,11 +140,11 @@ impl Race {
             _ => {}
         }
 
-        self.advance_leach_ball_hd(owner, target, dt);
+        self.advance_leach_ball_hd(beam.trip, owner, target, dt);
     }
 
     /// Wipeout HD's own LeachBall drain trip - `LeachBall_Advance`'s
-    /// recovered law ([`oag_fx::beam::hd_ball`]), run alongside Pulse's
+    /// recovered law (`oag_weapons::projectile::leach_beam::trip`), run alongside Pulse's
     /// ribbon above rather than instead of it: both are driven from the same
     /// `beam`, and a title with no `WO_LEACHBEAM_ABSORB` asset mounted simply
     /// never resolves the effect below, the same "an absent name costs one
@@ -154,14 +154,34 @@ impl Race {
     /// separate read of the same accumulator - see
     /// [`Self::leach_ball_model_matrix`] - since a draw call needs this
     /// frame's position whether or not this tick happened to wrap.
-    fn advance_leach_ball_hd(&mut self, owner: Vec3, target: Vec3, dt: f32) {
+    ///
+    /// On a title that drains per trip the simulation carries the
+    /// accumulator (`Beam::trip`) and this reads it, so the burst lands on the
+    /// tick the drain does; elsewhere the view keeps its own on the same law.
+    fn advance_leach_ball_hd(&mut self, trip: Option<f32>, owner: Vec3, target: Vec3, dt: f32) {
         let length = (target - owner).length();
-        let wrapped = oag_fx::beam::hd_ball::advance(&mut self.view.leach_ball_elapsed, dt, length);
+        let wrapped = match trip {
+            // The simulation's clock wrapped this tick (the drain landed):
+            // it went down since the last frame read it.
+            Some(elapsed) => {
+                let wrapped = elapsed < self.view.leach_ball_elapsed;
+                self.view.leach_ball_elapsed = elapsed;
+                wrapped
+            }
+            None => oag_weapons::projectile::leach_beam::trip::advance(
+                &mut self.view.leach_ball_elapsed,
+                dt,
+                length,
+            ),
+        };
         if !wrapped {
             return;
         }
-        let at =
-            oag_fx::beam::hd_ball::position(self.view.leach_ball_elapsed, length, owner, target);
+        let at = oag_fx::beam::hd_ball::position(
+            leach_ball_fraction(self.view.leach_ball_elapsed, length),
+            owner,
+            target,
+        );
         if let Some(effect) = self.view.handles.get(Trigger::LeachbeamAbsorb) {
             self.view.stage.play(effect, at, 1.0);
         }
@@ -202,8 +222,11 @@ impl Race {
             .body
             .position;
         let length = (target - owner).length();
-        let at =
-            oag_fx::beam::hd_ball::position(self.view.leach_ball_elapsed, length, owner, target);
+        let at = oag_fx::beam::hd_ball::position(
+            leach_ball_fraction(self.view.leach_ball_elapsed, length),
+            owner,
+            target,
+        );
         Some(Mat4::from_translation(at))
     }
 
@@ -936,4 +959,10 @@ impl Race {
             projectile.position.extend(1.0),
         )
     }
+}
+
+/// How far along its trip the HD LeachBall is, `0..=1`, `elapsed` seconds in
+/// on a beam `length` long.
+fn leach_ball_fraction(elapsed: f32, length: f32) -> f32 {
+    (elapsed / oag_weapons::projectile::leach_beam::trip::period(length)).clamp(0.0, 1.0)
 }

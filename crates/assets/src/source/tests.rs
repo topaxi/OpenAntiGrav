@@ -126,7 +126,7 @@ const TITLE: &Title = &Title {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: None,
         ai: None,
-        opponents_fire_leach_beam: true,
+        leach_drain: oag_title::weapons::LeachDrain::PerTick,
     },
     // Unread on the same terms as `weapons` above: this fixture is about
     // archive discovery, not about any weapon's own model.

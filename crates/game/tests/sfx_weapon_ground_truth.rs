@@ -194,6 +194,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         active_time: 100.0,
         energy_multiplier: 1.0,
         slow_ship_factor: 1.0,
+        trip: None,
     });
 
     oag_game::sound::race_tick(&mut audio, &mut race);

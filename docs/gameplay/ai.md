@@ -1083,13 +1083,13 @@ opponents not using weapons. A race box race flies the same driver
 (`oag_game::ai_choice`, "Which AI flies"), so it was the same there. Single
 race, seed 1, player parked, 240 s, weapons on:
 
-| Title | Original driver before: pickups / spends / opponent projectiles | After (fix, LeachBeam held on HD lineage) | This project's driver, same tree |
+| Title | Original driver before: pickups / spends / opponent projectiles | After (fix, HD's per-trip LeachBeam drain) | This project's driver, same tree |
 | --- | --- | --- | --- |
 | Pulse | 7 / 0 / 0 | 34 / 27 / 244 | 34 / 27 / 140 |
 | Pure | 8 / 1 / 0 | 33 / 26 / 38 | 21 / 14 / 20 |
-| HD | 7 / 0 / 0 | 32 / 26 / 186 | 28 / 21 / 152 |
-| 2048 | 8 / 1 / 0 | 46 / 39 / 264 | 32 / 27 / 187 |
-| Omega | 8 / 1 / 0 | 24 / 17 / 138 | 17 / 10 / 43 |
+| HD | 7 / 0 / 0 | 40 / 33 / 168 | 29 / 22 / 152 |
+| 2048 | 8 / 1 / 0 | 58 / 52 / 288 | 36 / 30 / 196 |
+| Omega | 8 / 1 / 0 | 31 / 24 / 156 | 17 / 10 / 43 |
 
 The one spend in the "before" column is a Turbo, whose gate reads the
 throttle and not the driver's noise. **Cause:** the original branch of
@@ -1118,16 +1118,18 @@ fires into walls. Its decision cadence is also unconfirmed (every tick against
 four times a second, `weapon-ai.md`). It stays open.
 
 **What wrecked them was the LeachBeam on HD, 2048 and Omega.** Fired by an
-opponent, it emptied a shield of 93 to 130 in 94 to 119 ticks. This engine
-drains at Pulse's per-tick rate, and those titles author `damage` 1.5 against
+opponent, it emptied a shield of 93 to 130 in 94 to 119 ticks: this engine
+drained at Pulse's per-tick rate, and those titles author `damage` 1.5 against
 Pulse's 0.1. With the opponent beam off, the measured HD and 2048 readings
-(`54.51`, `63`, `74`) held again. Until HD's drain is read
-([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)), opponents on
-those three titles hold the beam: `oag_title::weapons::Weapons::opponents_fire_leach_beam`,
-**chosen, not measured** (maintainer, 2026-10-19). Wrecks in the 240 s run
-above: 1 on HD (original driver), 0 elsewhere. A craft another opponent's
-weapons destroy still happens (2048 Event 4-1, two Plasma hits), and the 2048 event walks accept a wreck in place of
-a finish.
+(`54.51`, `63`, `74`) held again, so for a few hours those titles' opponents
+held the beam (chosen, maintainer, 2026-10-19). The same day HD's own drain
+was read: **once per ball trip** (0.3 to 1.0 s), not per tick
+([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md), confidence 80).
+`oag_title::weapons::LeachDrain::PerTrip` runs it on HD, and on 2048 and
+Omega inherited; opponents fire the beam again. Wrecks in the 240 s run above:
+0 on every title. A craft another opponent's weapons destroy still happens
+(2048 Event 4-1, two Plasma hits), and the 2048 event walks accept a wreck in
+place of a finish.
 
 ### Still open, with the next address
 

@@ -140,9 +140,8 @@ pub const TITLE: &Title = &Title {
         // two tables above. Opponents run Pulse's fire law on it: **inherited
         // from Pulse, unmeasured on 2048**.
         ai: Some(r"Data\XML\WeaponAIStats2048.xml"),
-        // Opponents hold the LeachBeam until the title's drain is read:
-        // `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
-        opponents_fire_leach_beam: false,
+        // HD's law, inherited through Omega: 2048's own drain is unread.
+        leach_drain: oag_title::weapons::LeachDrain::PerTrip,
     },
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`

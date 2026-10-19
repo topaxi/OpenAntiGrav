@@ -53,22 +53,25 @@ fn started(source: String, mode: oag_race::Mode) -> race::Race {
 const SECONDS: u64 = 120;
 
 /// Flies `race` under the original driver with the player parked and returns
-/// how many projectiles opponents launched, and whether an opponent's
-/// LeachBeam was ever up.
-fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, bool) {
+/// how many projectiles opponents launched, and the drain cadence of every
+/// opponent LeachBeam that came up (`true` for once a trip).
+fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<bool>) {
     assert!(race.use_original_ai(None, 1), "the original driver flies");
     let count = usize::from(race.ship_count());
     let mut held = vec![0usize; count];
     let mut fired = 0;
-    let mut leach = false;
+    let mut beams = Vec::new();
+    let mut was_up = false;
     while race.sim.world.tick < oag_race::COUNTDOWN_TICKS + SECONDS * 60 {
         race.tick(&PlayerInputs::none());
-        leach |= race
-            .sim
-            .world
-            .leach_beam
-            .as_ref()
-            .is_some_and(|beam| beam.owner != 0);
+        let beam = race.sim.world.leach_beam;
+        if let Some(beam) = beam
+            && beam.owner != 0
+            && !was_up
+        {
+            beams.push(beam.trip.is_some());
+        }
+        was_up = beam.is_some();
         let mut owned = vec![0usize; count];
         for projectile in &race.sim.world.projectiles.slots {
             let owner = usize::from(projectile.owner);
@@ -81,26 +84,28 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, bool)
             held[slot] = owned[slot];
         }
     }
-    (fired, leach)
+    (fired, beams)
 }
 
 /// One title, one mode: a race load each, which is most of a 2048 test's time, so the
 /// modes are the test axis rather than a loop. A single race also flies.
 ///
-/// On HD, 2048 and Omega an opponent holds the LeachBeam
-/// (`oag_title::weapons::Weapons::opponents_fire_leach_beam`, chosen until HD's
-/// drain is read), so none may be up there.
-fn fires_original(source: String, mode: oag_race::Mode) {
-    let hd_lineage = !source.contains("pulse") && !source.contains("pure");
+/// Every opponent LeachBeam drains on its title's cadence
+/// (`oag_title::weapons::Weapons::leach_drain`): once a ball trip on HD, 2048
+/// and Omega, every tick on Pulse.
+fn fires_original(source: String, mode: oag_race::Mode, per_trip: bool) {
     let race = started(source, mode);
     assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
     if mode == oag_race::Mode::SingleRace {
-        let (fired, leach) = opponents_fire_under_the_original_driver(race);
-        println!("opponent projectiles in {SECONDS} s: {fired}, an opponent's beam up: {leach}");
+        let (fired, beams) = opponents_fire_under_the_original_driver(race);
+        println!(
+            "opponent projectiles in {SECONDS} s: {fired}, opponent beams (per trip): {beams:?}"
+        );
         assert!(fired > 0, "no opponent fired in {SECONDS} s");
-        if hd_lineage {
-            assert!(!leach, "an opponent fired the LeachBeam it should hold");
-        }
+        assert!(
+            beams.iter().all(|&beam| beam == per_trip),
+            "a LeachBeam on the wrong cadence: {beams:?}"
+        );
     }
 }
 
@@ -110,7 +115,11 @@ fn a_pulse_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        false,
+    );
 }
 
 #[test]
@@ -119,7 +128,11 @@ fn a_pure_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        false,
+    );
 }
 
 #[test]
@@ -128,7 +141,11 @@ fn a_hd_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::SingleRace,
+        true,
+    );
 }
 
 #[test]
@@ -137,7 +154,11 @@ fn a_hd_eliminator_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    fires_original(image.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(
+        image.display().to_string(),
+        oag_race::Mode::Eliminator,
+        true,
+    );
 }
 
 #[test]
@@ -146,7 +167,7 @@ fn a_2048_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
 }
 
 #[test]
@@ -155,7 +176,7 @@ fn a_2048_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
 }
 
 #[test]
@@ -164,7 +185,7 @@ fn an_omega_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace, true);
 }
 
 #[test]
@@ -173,5 +194,5 @@ fn an_omega_eliminator_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator, true);
 }

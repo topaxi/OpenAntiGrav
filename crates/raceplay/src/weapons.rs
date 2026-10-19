@@ -57,6 +57,22 @@ pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
 pub(super) const SIGHT_FAR: f32 = 10_000.0;
 
 impl Race {
+    /// A beam locked from `owner` onto `target`, on this title's drain cadence
+    /// (`oag_title::weapons::Weapons::leach_drain`): every tick on Pulse, once
+    /// a ball trip on HD and the titles that inherit HD's law.
+    pub(crate) fn locked_leach_beam(
+        &self,
+        owner: u8,
+        target: u8,
+        stats: &oag_tables::weapons::LeachBeamStats,
+    ) -> oag_weapons::projectile::leach_beam::Beam {
+        let beam = oag_weapons::projectile::leach_beam::Beam::locked(owner, target, stats);
+        match self.sim.leach_drain {
+            oag_title::weapons::LeachDrain::PerTick => beam,
+            oag_title::weapons::LeachDrain::PerTrip => beam.per_trip(),
+        }
+    }
+
     /// Hands a time trial or a speed lap its free Turbo.
     ///
     /// **Two shipped records say this happens, and they were found
@@ -480,9 +496,7 @@ impl Race {
                                 oag_gameplay::cue::Cue::Leach,
                                 slot,
                             ));
-                            oag_weapons::projectile::leach_beam::Beam::locked(
-                                slot as u8, target, &stats,
-                            )
+                            self.locked_leach_beam(slot as u8, target, &stats)
                         }
                         // `LeachBeam_InitUnlocked` plays `LEACHFAIL` on the
                         // shooter's emitter - see `Cue::LeachFail`.

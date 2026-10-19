@@ -418,8 +418,8 @@ takes a record and a value. When the value is non-zero it stores it at
 `[5]`, sets `[0] = 1`, copies `[2]` into `[3]`, and writes
 `[4] = _opd_FUN_002a3718([2], DAT_008aaa58, DAT_008aaa5c)`, the same
 remap-with-clamp helper the period uses. That arms a timed record; it moves
-no shield. **Where HD's beam takes shield, and how much a trip carries, is
-not located.** This engine still drains at Pulse's per-tick cadence with HD's
+no shield. **Where HD's beam takes shield, and how much a trip carries, was
+not located at this point; both are answered below, the same day.** This engine still drains at Pulse's per-tick cadence with HD's
 authored `damage` 1.5, and that empties a pool of 93 to 130 in 94 to 119
 ticks (measured 2026-10-19 on HD and 2048, opponent beams); Pulse's beam
 moved 105 to 87 in 211.
@@ -453,6 +453,50 @@ whether HD's `1.5` lands once a frame:
 
 Next address: the ship-side consumer of `+0x120` with kind `7`, which Pulse
 has as `Ship_ApplyPendingWeaponDamage`.
+
+**Both found the same day: the drain is once per ball trip (confidence 80).**
+
+- **The writer of `beam+0xc938`.** Ghidra marks `_opd_FUN_00126c38`
+  non-returning and so cuts `LeachBeam_Update` (`0x001535f8`) short after its
+  first call. Its body is a state switch on `beam+0x4c` (jump table at TOC
+  `-0x22d4`), readable raw from `0x00153648`. In the connected state,
+  `0x00153ba0` calls `_opd_FUN_00114ef0` (a tail call into
+  `LeachBall_Advance`, `0x00114c78`) with `dt` and the strip at
+  `beam+0x6550`, and `0x00153bac` stores the result at `beam+0xc938`.
+  `LeachBall_Advance` returns `DAT_008a9c94 + n * DAT_008a9c98`, `n` this
+  call's wraps; both read directly, `0.0` and `10.0`. So `beam+0xc938` is
+  `10` on a tick the ball arrives and `0` otherwise, and the manager's
+  `> 0.0` gate runs the transfer once per trip. The same block holds the
+  period constants: `DAT_008a9c80 = 0.3`, `9c88 = 20.0`, `9c8c = 100.0`,
+  `9c90 = 1.0`.
+- **The consumer of `target+0x120`.** `Ship_ApplyPendingDamage_q`
+  (`0x000e8de0`) takes the pool when it is above `DAT_008a8b00` and the craft
+  is racing, hands it to `Ship_ApplyDamage_q` (`0x000e7760`), copies `+0x134`
+  to the hull record's `+0x378` when `+0x138` is `7` (the LeachBeam's
+  `slowShipFactor`), and zeroes the pool. `Ship_ApplyDamage_q` subtracts the
+  amount from the shield as is, scaled only by a TOC constant when the race
+  state's `+0x18` byte is clear (read as the weapons-off factor by Pulse's
+  analogue, not confirmed here). No `dt`, no class scale.
+
+So: **`damage` leaves the victim once per ball trip** (times
+`energy_multiplier` on the first trip) and `repair` reaches the shooter the
+same way. Over the authored `active_time` of 3 s that is 3 to 10 trips, about
+4.5 to 16.5 shield on HD's `damage` 1.5, where the per-tick reading emptied a
+pool. **Still chosen:** the length the period is remapped from (`strip+0x10`,
+whose writer is unread) is taken as the straight distance between the two
+craft.
+
+**Wired 2026-10-19:** `oag_title::weapons::LeachDrain::PerTrip` on HD;
+`oag_weapons::projectile::leach_beam::trip` holds the period and `Beam::trip`
+the accumulator, for the player's beam and every opponent's, and the HD ball
+visual reads the same accumulator. Opponents fire the beam again on all
+three titles. The 2048/Omega check: **ported** to both, each pinned by
+`fire_law_inherit_ground_truth.rs` (every opponent beam there carries a trip
+clock), as a law inherited from HD; 2048's own executable was not read for
+it, and Omega's is **not checkable** here (no PS4 capture or decompile path in
+this project's toolchain). Not yet seen live: an RPCS3 capture would show the
+target's shield falling in steps of `damage` every 0.3 to 1.0 s, twice that
+on the first.
 
 **The beam object holds four balls and two strips.** `0x00153218` (called
 from `LeachBeamManager_Construct`) initialises two `0x63d0`-byte strip

@@ -230,7 +230,7 @@ pub struct Scene {
     bomb_blast: bomb_blast::BombBlastDrawables,
     /// The LeachBeam's own ball, HD only - `None` when
     /// `Data\Weapons\hd_leachbeam_ball_bloomring.vex` did not load. Drawn
-    /// at [`oag_fx::beam::hd_ball::position`] each tick a beam is locked
+    /// at `oag_fx::beam::hd_ball::position` each tick a beam is locked
     /// (see [`Race::leach_ball_model_matrix`] and `scene/frame/beam.rs`),
     /// through its own material's program, `mesh::rcs::rim_glow`'s
     /// `RIM_GLOW` (docs/rendering/hd-unlit-programs.md).

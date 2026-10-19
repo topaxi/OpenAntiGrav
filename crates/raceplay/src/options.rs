@@ -702,9 +702,9 @@ pub struct Setup {
     pub zoom_borrowed: bool,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
-    /// Whether an opponent fires a LeachBeam it holds,
-    /// `oag_title::weapons::Weapons::opponents_fire_leach_beam`.
-    pub opponents_fire_leach_beam: bool,
+    /// When a locked LeachBeam moves energy,
+    /// `oag_title::weapons::Weapons::leach_drain`.
+    pub leach_drain: oag_title::weapons::LeachDrain,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

@@ -289,3 +289,68 @@ fn a_respawned_target_is_not_drained() {
     assert_eq!(ships[1].physics.shield, shield);
     assert!(!beam.connected());
 }
+
+#[test]
+fn a_trip_period_is_clamped_at_both_ends_and_linear_between() {
+    use trip::{
+        PERIOD_MAX_LENGTH, PERIOD_MAX_SECONDS, PERIOD_MIN_LENGTH, PERIOD_MIN_SECONDS, period,
+    };
+    assert_eq!(period(0.0), PERIOD_MIN_SECONDS);
+    assert_eq!(period(PERIOD_MIN_LENGTH), PERIOD_MIN_SECONDS);
+    assert_eq!(period(PERIOD_MAX_LENGTH), PERIOD_MAX_SECONDS);
+    assert_eq!(period(10_000.0), PERIOD_MAX_SECONDS);
+    // `LeachBall_Advance` takes the magnitude first.
+    assert_eq!(period(-50.0), period(50.0));
+    let midpoint = (PERIOD_MIN_LENGTH + PERIOD_MAX_LENGTH) / 2.0;
+    let expected = (PERIOD_MIN_SECONDS + PERIOD_MAX_SECONDS) / 2.0;
+    assert!((period(midpoint) - expected).abs() < 1e-6);
+}
+
+#[test]
+fn a_trip_wraps_once_a_period_and_keeps_the_remainder() {
+    let mut elapsed = 0.0;
+    let ticks_per_period = (trip::PERIOD_MIN_SECONDS / DT).round() as u32;
+    let mut wraps = 0;
+    for _ in 0..ticks_per_period * 3 {
+        if trip::advance(&mut elapsed, DT, trip::PERIOD_MIN_LENGTH) {
+            wraps += 1;
+            assert!(elapsed < DT + 1e-6, "elapsed {elapsed}");
+        }
+    }
+    assert_eq!(wraps, 3);
+}
+
+/// **HD's cadence: a transfer once a ball trip, not once a tick.** Between
+/// arrivals nothing moves; at each arrival `damage` leaves the victim (times
+/// `energy_multiplier` the first time) and `repair` reaches the shooter. Two
+/// craft 20 apart make the shortest trip, 0.3 s, 18 ticks.
+#[test]
+fn a_per_trip_beam_moves_energy_only_when_the_ball_arrives() {
+    let stats = LeachBeamStats {
+        damage: 1.5,
+        repair: 1.5,
+        energy_multiplier: 2.0,
+        ..stats()
+    };
+    let mut ships = field(trip::PERIOD_MIN_LENGTH);
+    ships[1].physics.shield = 90.0;
+    let mut beam = Beam::locked(0, 1, &stats).per_trip();
+    let mut taken = Vec::new();
+    for tick in 0..60 {
+        let before = ships[1].physics.shield;
+        let report = beam.advance(&mut ships, 2, rules(), DT);
+        let lost = before - ships[1].physics.shield;
+        assert_eq!(report.drained, lost > 0.0, "tick {tick}");
+        if lost > 0.0 {
+            taken.push((tick, lost));
+        }
+    }
+    let ticks: Vec<_> = taken.iter().map(|(tick, _)| *tick).collect();
+    assert_eq!(ticks, [17, 35, 53], "an arrival every 18 ticks");
+    assert!((taken[0].1 - 3.0).abs() < 1e-4, "first trip {}", taken[0].1);
+    assert!(
+        (taken[1].1 - 1.5).abs() < 1e-4,
+        "second trip {}",
+        taken[1].1
+    );
+}

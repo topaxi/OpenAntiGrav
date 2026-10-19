@@ -181,7 +181,7 @@ impl Setup {
             #[cfg(feature = "view")]
             zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
-            opponents_fire_leach_beam: true,
+            leach_drain: oag_title::weapons::LeachDrain::PerTick,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,
