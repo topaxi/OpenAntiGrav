@@ -13,8 +13,15 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
    `git merge main`, then `just link-data`.
 3. Never write into the main checkout, except your scratch directory
    `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
-4. Do not spawn sub-agents or forks. A member fork once wrote into the main
-   checkout.
+4. No forks, and no sub-agent that can write. A member fork once wrote into
+   the main checkout. **The one exception (maintainer, 2026-10-19): read-only
+   haiku helpers for scanning and aggregating docs, code, logs or captures.**
+   Spawn them with `subagent_type: "Explore"` (no Edit/Write tools) and
+   `model: "haiku"`; never `fork`, never a type that can edit. Give each one
+   absolute paths into **your worktree** (or `data/`), tell it to write
+   nothing and to return at most 15 lines, and check what it returns before
+   you act on it. Run them one at a time, short-lived. Nothing a helper says
+   is evidence until you have read the cited `path:line` yourself.
 5. Never use `git stash`. The stash list is shared by every worktree of the
    repository, so `git stash pop` can apply another lane's changes onto your
    tree (2026-10-13, `pulse-split-pages`). Commit work in progress on your own
