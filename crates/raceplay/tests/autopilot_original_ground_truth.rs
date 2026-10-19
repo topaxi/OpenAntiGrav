@@ -399,7 +399,7 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         if std::env::var_os("OAG_SWEEP_TRACE").is_some() {
             let ship = &race.sim.world.ships[0];
             let rail = race.original_autopilot(0).map(|a| a.driver.rail);
-            if race.sim.world.tick % 2 == 0 || race.respawns_of(0) != out.respawns {
+            if race.sim.world.tick.is_multiple_of(2) || race.respawns_of(0) != out.respawns {
                 println!(
                     "trace {} pos {:?} speed {:.1} grounded {:.2} lateral {:?} blend {:?} respawns {} cause {:?} craft [{:.1}, {:.1}, {:.1}, {:.1}, {:.1}]",
                     race.sim.world.tick,
