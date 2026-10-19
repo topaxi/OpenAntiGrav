@@ -1032,11 +1032,17 @@ Every other HD cell ends every lap on 95.0 after; Pure Vineta K ends VENOM
 
 **The cause is Ubermall's long jump**, x `-216` to `-600`, about 2.5 s airborne.
 Matched by position against the original:
-- in the air past x `-450` the original steers right (`+43..+85`) and lands on
-  the line (z `334-338`). Ours steers hard left (`-50..-100`, left airbrake) and
-  drifts to z `317`, 17 units off. The ground steer agrees in sign
-  (correlation `0.76` over 2,375 positions);
-- ours also peaks higher (y `117` against `112`) from the same entry speed.
+- in the air the original holds its steer near zero to x `-400`, then ramps
+  smoothly right (`+43..+57` at `-450`, `+81..+85` at `-500`), uses no airbrake,
+  and lands on the line (z `334-338`). Ours steers `+65..+100` right with the
+  right airbrake at `-370..-415`, swings left (`-32..-53`) at `-450`, then right
+  again, and drifts to z `317`, 17 units off. That is a weave (phase or
+  damping), not a plain sign flip. The ground steer agrees in sign (correlation
+  `0.76` over 2,375 positions);
+- ours also peaks higher (y `117` against `112`) from the same entry speed;
+- neither is the team: the sweep flies `assegai`, the original raced Feisar,
+  and ours on Feisar peaks and weaves the same (3 rescues, 211 wall ticks, end
+  shield 27.3).
 
 With the engine bits off ours already drifts 17 units here and takes a rescue
 on lap 1. The bits only move the drift into the wall at height. Split (rescues,

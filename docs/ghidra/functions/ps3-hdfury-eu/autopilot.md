@@ -130,17 +130,26 @@ against the original (cells: y, z):
 | -550 | 43-46, 351-355 | 55-75, 327-333 | 20-47, 333-347 |
 | -600 | 7-8 (lands), 334-338 | 22-50, 317-319 | 7-12, 319-329 |
 
-- **Steering in the air has the opposite sign.** From x `-450`, the original steers right (`craft+0x4c` steer
-`+43..+85`, then `+100` at landing) and lands on the line at z `334-338`. Ours steers
-hard left (`-50` to `-100`, left airbrake up to `100`) and drifts to z `317`, 17
-units off. On the ground the two steer channels agree in sign (correlation `0.76`
-over 2,375 matched ground positions), so the mismatch is the airborne law, not a
-convention. This is the same signature `autopilot-rail` found on Pulse's Fort Gale
-Black crest.
-- **Ours flies higher.** It enters at the original's speed (`246-249`), but it peaks
+- **Ours weaves in the air where the original ramps.** The original's steer
+(`craft+0x4c`) holds near zero to x `-400` (`-3..+8`, `-21..-28` on two passes), then
+ramps smoothly right (`+17..+23` at `-415`, `+43..+57` at `-450`, `+81..+85` at `-500`,
+`+100` at landing). It touches no airbrake in the air, and it lands on the line at z
+`334-338`. Ours commands `+65..+100` right with the right airbrake at x `-370..-415`,
+where the original holds near zero. It then swings left (`-32..-53`, left airbrake up
+to `100`) at `-450`, then right again, and drifts to z `317`, 17 units off. On the
+ground the two steer channels agree in sign (correlation `0.76` over 2,375 matched
+ground positions), so this is the airborne law, and it reads as phase or damping (a
+weave), not a sign flip. Both stay open. This is the same signature `autopilot-rail`
+found on Pulse's Fort Gale Black crest.
+- **Ours flies higher, on the original's own team too.** It enters at the original's speed (`246-249`), but it peaks
 at y `117` against `112` and still has y `95` at x `-500`. Every contact episode ours has on
 Ubermall is this flight ending against the wall at y `45-51`, about 15 units lateral,
 and then sliding down it.
+- **Team.** The sweep flies HD's default `assegai`; the original raced Feisar (the
+Racebox default). Ours on Feisar, same cell: 3 rescues, 211 wall ticks in 25 episodes,
+shield `90.8, 81.7, 70.7, 44.2, 27.3` at the lap ends and `27.3` at the end. It peaks
+at y `117` at x `-370` like Assegai, and weaves the same way (`+65..+100` at
+`-370..-400`, `-32..-53` at `-450`). So neither the height nor the weave is a team difference.
 - **The engine bits only move the drift into the wall.** Engine bits off, ours already
 drifts 17 units on this jump and takes a ResetZone rescue on lap 1. Split
 (rescues, wall ticks (episodes), end shield): none `1, 5 (3), 78.3`; cap lift alone
@@ -159,7 +168,7 @@ belong to another lane.
 | --- | --- | --- | --- |
 | Pulse (USA) | `0x0883be54..0x0883bec0` | the law above (live, [autopilot.md](../psp-pulse-usa/autopilot.md)) | measured |
 | Pure (USA) | `BOOT.BIN` VA `0x089223c8..0x089223e4` (file `0x11e448`) | `ori 4` into `craft+0x1c0`, `1.2` to `craft+0x258`, blend `min(timer, 1)` (timer `+0x15c`), uncapped setter `0x0892c620` (`ori 8`, the twin of Pulse's `0x0884866c`), message id `7` | checked, applies; wired (the axis carries it, `Origin::Measured`) |
-| Omega (EU) | `eboot.bin` VA `0x012e7797..0x012e77a8` (file `0x2eb797`; VA = file - `0x4000` + `0x01000000`, checked against the `1.0` the `vminss` reads) | `or [craft+0x2c4], 0xc` (both bits inlined), `[craft+0x604] = 1.2`, blend `vminss(1.0, slot+0x158)` into `craft+0x2e8`, message `6`; slot bit `0x800` is `test byte [slot+0x215], 8` | checked, applies; wired |
+| Omega (EU) | `eboot.bin` VA `0x012e66a7..0x012e66b8` (file `0x2eb797`; VA = file + `0xffaf10`, found from `ModeManager`'s `lea rcx, [0x1252a60]` at `0x01251b5b` and checked on `AiManager_AddDriver` `0x012c80c0`, which lands on `push rbp; mov rbp, rsp`) | `or [craft+0x2c4], 0xc` (both bits inlined), `[craft+0x604] = 1.2`, blend `vminss(1.0, slot+0x158)` into `craft+0x2e8`, message `6`; slot bit `0x800` is `test byte [slot+0x215], 8` | checked, applies; wired |
 | 2048 (v1.04) | `eboot.elf` `0x811b2376..0x811b238a` | `craft+0x55c = 1.2`, `orrs #4` into `craft+0x264`, uncapped setter `0x811d132c` (bit `0x8` of `+0x264`), blend setter `0x811d1326` (`+0x278`, HD's offsets), message `6` | checked, applies; wired |
 
 So every title runs the same law, and the axis `oag_title::autopilot_engine` carries

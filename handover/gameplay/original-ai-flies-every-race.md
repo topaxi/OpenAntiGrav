@@ -121,10 +121,13 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     shield 140.0 to 134.5, 1st in 2:21.36. HD's own law is read and is Pulse's
     (live `craft+0x264 = 0xd`, `craft+0x2f0 = 1.2`), so it cannot close this.
     The cause is the long jump, x `-216` to `-600`. In the air the original
-    steers right (`+43..+85`) and lands at z `334-338`. Ours steers hard left
-    (`-50..-100`), peaks 5 units higher and drifts to z `317`; it drifts 17
-    units with the engine bits off too, and only hits the wall at height with
-    them on. Evidence: `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
+    holds its steer near zero to x `-400`, then ramps smoothly right to `+85`,
+    no airbrake, and lands at z `334-338`. Ours weaves: `+65..+100` right with
+    the airbrake at `-370..-415`, `-32..-53` at `-450`, then right again. It
+    peaks 5 units higher and drifts to z `317`; phase/damping or sign, both
+    open. It drifts 17 units with the engine bits off too, and only hits the
+    wall at height with them on. Same on the original's team (Feisar: 3
+    rescues, 211 walls, end shield 27.3), so it is not the team. Evidence: `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
     Next: HD `AI_ComputeControls` (`0x00100658`) air term and `Ai_ComputePitch`
     (`0x000fe510`) on this jump, against `oag_ai::original`;
     `scripts/rpcs3-hd-autopilot.py` logs the original's controls
