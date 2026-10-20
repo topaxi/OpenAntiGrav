@@ -98,8 +98,9 @@ compared with the profile (`read_back`).
 **State parity, recorded in `pair.json` on both sides:** circuit and layout file (our own start on each layout
 against the original's grid pose, `--layout auto`; refused beyond 25 units or 5 degrees), game mode and speed
 class (declared by the state's file name or sidecar; **not read from RAM**), team, **race clock** (below), ship
-position and heading **at the rendered tick** (measured from a second, `--trace-out` run of the same command,
-within 0.5 units and 1 degree, so a pose fed to ours is not echoed back as evidence), and the field of view. The
+position and heading **at the rendered tick** (read from a second, `--trace-out` run of the same command, within
+0.5 units and 1 degree; with `--pose-hold`, below, this is an import check of the basis, convention and pose, not a
+measurement of the simulation, which `scripts/compare-resting-yaw.py` makes), and the field of view. The
 binary that rendered ours is recorded by hash.
 
 **The race clock** is the state difference that mattered most: the original's HUD clock runs on from the state
@@ -111,9 +112,15 @@ still), HD f32 at craft `+0x7014` (read in the same pause as the pose), PS2 f32 
 test pairs. **A craft resting after GO turns, in the original as in ours** (bank-to-yaw; ours unposed lands within 0.101
 degrees of the original's heading on all 24 Pulse PSP pairs and 0.694 on all 13 HD pairs, see
 [grid state](../physics/grid-state.md#a-resting-craft-after-go-turns-in-the-original-too-2026-10-20-resting-yaw)).
-Posing ours on tick 0 at the original's already-turned pose and then simulating the clock again turns it twice, so
-`rpcs3-hd-pair.py` and `psp-pulse-pair.py` correct the yaw they hand to ours until the heading measured at the
-rendered tick is the original's (`pair.json` `ours.yaw_corrections`, `ours.heading_corrections`).
+Posing ours on tick 0 at the original's already-turned pose and then simulating the clock again turned it twice, so
+the pair scripts pass `--pose-hold` (2026-10-20): the countdown and the clock run as before (GO board, record panel,
+HUD clock, exhaust), and the craft is put back on the fed pose for the frame and the last trace row (`pair.json`
+`ours.pose_hold`). It replaced a heading-correction loop (`ours.yaw_corrections`, `ours.heading_corrections` in a
+pair made before it): Pulse PSP Talon's Junction White, refused at 0.777 units, passes at 0.000 units and 0.000
+degrees (edge correlation 0.34 before, 0.36 after); HD Talon's after `Restart Race` at 17.1 s is 0.000 units and
+0.088 degrees in one run, against 4.085 degrees without the hold (edge correlation 0.24 on the old pair, 0.25).
+`--ticks 0` with an imposed `--hud-state`, the race shots' route, was tried for the grid pairs and dropped: the
+trackside GO board renders dark and the exhaust glow is missing at tick 0.
 
 ## Capturing a pair per title
 
@@ -132,8 +139,7 @@ its `pair.json` has no failed check.
 **Re-making a pair in place.** When the renderer changes, `just compare-rerender [--only <substring>] [dir]`
 (`scripts/compare-rerender.py`, default `data/reference/compare-page`) re-runs each pair's script with the arguments
 recorded in its `pair.json` (`argv`): ours is therefore **always posed from the emulator's own savestate**, the ship
-pose, camera and race clock are read out of RAM fresh and the pose row and heading correction derived from that
-read, never taken from a stored `pair.json` or CSV. `theirs.png` is captured in the same run, every environment and
+pose, camera and race clock are read out of RAM fresh and the pose row derived from that read, never taken from a stored `pair.json` or CSV. `theirs.png` is captured in the same run, every environment and
 parity check runs again, and on success the pair's files are replaced; the old values become a record in the new
 `pair.json` (`previous`), with `drift` (ship position and heading, camera, clock, the RMSE between the old and new
 `theirs.png`) and a WARNING printed when the drift is beyond the profile's tolerance. A pair whose fresh run is

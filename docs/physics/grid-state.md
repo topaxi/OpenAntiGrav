@@ -278,7 +278,9 @@ the same resting turn. The heading correction undoes that second turn, and it eq
 drift from GO in magnitude on every Pulse pair to 0.033 degrees (0.5 of 61 on Talon's White). Its
 sign follows each script's own convention (the PSP pair's turn about `up`, HD's `--pose` yaw), which
 runs opposite to the heading `atan2(fwd_x, -fwd_z)` used for the drift, so the two columns below
-show the same sign.
+show the same sign. Since 2026-10-20 the pairs pass `oag-game --pose-hold`, which puts the
+craft back on the fed pose for the frame after the clock has run, and the correction is gone
+([compare page](../tools/compare-page.md)).
 
 **Evidence**, with ours run unposed from its own grid, no input, for each pair's own tick
 count (`scripts/compare-resting-yaw.py`), against the original's heading at the same race

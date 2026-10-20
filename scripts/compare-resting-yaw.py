@@ -6,8 +6,8 @@ For every pair under a compare-page title directory (`pair.json`, written by
 with no input for the pair's own tick count (`GO_TICK + clock * 60`), and prints
 our heading at GO, at that tick, and the original's heading read out of RAM at
 the same race clock. `drift` is ours from GO; `diff` is ours minus the original
-at the rendered clock; `correction` is the heading turn the pair script applied
-to its tick-0 pose.
+at the rendered clock; `correction` is the heading turn a pair made before
+`--pose-hold` applied to its tick-0 pose (0 for a pair made with the hold).
 
     python3 scripts/compare-resting-yaw.py --title pulse-psp --image data/images/pulse-psp-usa.chd
     python3 scripts/compare-resting-yaw.py --title hd --image data/images/hdfury-ps3-eu-dec.iso
