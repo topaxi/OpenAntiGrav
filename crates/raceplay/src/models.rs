@@ -133,13 +133,23 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_hull_scale(&self, slot: usize) -> f32 {
+        self.hull_light_scale(slot)
+            .map_or(0.0, |[ambient, directional, ..]| {
+                oag_mesh::mesh_render::pack_hull_scale(ambient, directional)
+            })
+    }
+
+    /// The four light-scale bytes under a craft: the spline's blend at the
+    /// craft's own place, [`oag_race::Course::light_scale_at`], or `None` for a
+    /// craft the course has not located or a circuit with no course.
+    fn hull_light_scale(&self, slot: usize) -> Option<[u8; 4]> {
+        let at = self.ship_model_matrix_of(slot).w_axis;
         self.sim
             .course
             .as_ref()
             .zip(self.sim.world.ships[slot].standing.course_index)
-            .and_then(|(course, index)| course.light_scale(index as usize))
-            .map_or(0.0, |[ambient, directional, ..]| {
-                oag_mesh::mesh_render::pack_hull_scale(ambient, directional)
+            .and_then(|(course, index)| {
+                course.light_scale_at(index as usize, oag_core::math::Vec3::new(at.x, at.y, at.z))
             })
     }
 
@@ -161,13 +171,7 @@ impl Race {
             return Default::default();
         }
         let at = self.ship_model_matrix_of(slot).w_axis;
-        let [.., point, spot] = self
-            .sim
-            .course
-            .as_ref()
-            .zip(self.sim.world.ships[slot].standing.course_index)
-            .and_then(|(course, index)| course.light_scale(index as usize))
-            .unwrap_or([255; 4]);
+        let [.., point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
         self.view.hull_points.at([at.x, at.y, at.z], [point, spot])
     }
 

@@ -215,8 +215,61 @@ before `(78,76,74) (61,70,81) (91,85,75)`, original `(87,105,115) (62,73,86)
 Not reproduced: the countdown timers (a pure function of distance is equivalent, since a
 light cannot come into range before the craft has moved the remaining distance), and
 non-player craft use the same list from their own position (the original rebuilds each
-craft's list; the player's was the only one read live). PS2 shares the rule through
-`hull_lights` (the same `.vex` nodes) and was not read on its own executable.
+craft's list; the player's was the only one read live). **Pulse PS2: checked, applies
+in the data, not wired** (2026-10-20, `hull-points-ps2`). The PS2 builds the same vector and
+colour bytes for the same `wopoint` (read live on PCSX2), but composes its own rig around
+it, and our PS2 hull has never taken any of the rig: its vertices carry a colour, so
+`lit = 0` and `mesh.wesl` skips the branch. Evidence and the open items on
+[`ps2-pulse-eu/hull-lights.md`](../ps2-pulse-eu/hull-lights.md). **Pure: checked, applies
+(data), not wired**, on the same page.
+
+### De Konstruct, the 8-level residual (2026-10-20)
+
+The residual on the PSP hull (ours `(102,106,89)` against the original's `(94,98,78)` on
+the Time Trial grid) was read against the live lists. PPSSPP, De Konstruct White (the
+reversed `05_Track`), the same Time Trial grid. **Eleven GE light lists exist in
+memory** (found by scanning for the list's `0x5c`/`0x5d` ambient opening); three are
+*templates*, built with the craft at the origin and the default scale `255`, and one is
+the player's live hull:
+
+```text
+live hull  (scales 179, 179, 250, 250)
+5c  ambient (25, 23, 16)
+L0  vector (0.584, 0.557, 0.590)   LDC0 (35, 60, 85)
+L1  vector (-0.501, 0.620, -0.603) LDC1 (178, 152, 83)
+L2, L3 off
+template   (scales 255, 255, 255, 255, model position (0, nan, 0))
+5c  ambient (36, 32, 23)    LDC0 (50, 85, 121)    LDC1 (254, 217, 118)
+L2  vector (-15.0967, -19.7246, -0.8759)  LDC2 (254, 246, 208)
+```
+
+(The first read of this lane, `entity + 0x8b4`, landed on a template: it is the object
+with the craft pointer at `+0x10`, and its model holds no position. The earlier lane's
+`+0x8b4` read on Tech de Ra hit the live one.) What the lists say:
+
+- **The rig matches ours to the byte**, scale aside. The vectors are row 2 of the two
+  `DirectionalLight`s' world matrices (`light_rig_probe`), the colours are
+  `trunc(c * 255) * scale >> 8` with **no intensity** (`0.31` and `0.71` on the ambient
+  and the first directional do not enter, again), and the ambient is the sum.
+- **The live list takes no point light**: the craft on the grid is 75.5 units from the
+  `wopoint`, outside its `50` outer radius, which is what ours finds. The template's `L2`
+  is that node's **world position** to four decimals (`light - (0, 0, 0)`, strength 1 at
+  24.8 units, `(1.0, 0.9719, 0.82) * 255 * 255 >> 8 = (254, 246, 208)` to the byte): the
+  `wopoint` law again, on a list built before the craft was placed.
+- **The scale is the cause of part of the residual.** The live scales are `179`
+  (`(179, 179, 250, 250)`), the blend of a `255` control point and a `127` one at 0.59 of
+  the way between them (`127 + 0.41 * 128 = 179`; the craft's projection onto the chord
+  is 0.61). Ours read the nearest ring point's `187`. `Course::light_scale_at` now
+  projects the craft onto the chord to the neighbouring ring point and blends the two
+  (reads `(179, 179, 250, 250)` here, `hull_light_scale_ground_truth.rs`), and
+  `Race::ship_hull_scale`/`ship_hull_points` use it. Region means on the new pair
+  (ours before, after, original): `(123,132,111) (121,130,109) (116,125,96)`,
+  `(100,94,58) (97,90,56) (95,88,55)`, `(75,68,76) (73,67,75) (65,60,69)`.
+- **What is left is `(5,5,13)`, `(2,2,1)` and `(8,7,6)`**: the second region is closed
+  and the first and third keep most of their gap, which was not isolated. The
+  original's hull is softer and flatter (a bloom or blur the hull does not escape) and
+  ours has white edge highlights; both are suspects, neither measured.
+  Confidence 40 that the rest is a post effect and not the light list, which now matches.
 
 ## Applied names
 

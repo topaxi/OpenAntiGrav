@@ -359,3 +359,35 @@ fn a_ring_point_carries_the_light_scale_the_spline_blends_there() {
     // The original's double truncation: a blend of 255s reads 251.
     assert_eq!(open.light_scale(0).map(|s| s[0]), Some(251));
 }
+
+#[test]
+fn a_craft_between_two_ring_points_reads_a_blend_of_their_light_scales() {
+    let mut ai = square_track(2);
+    let mut value = 255u8;
+    for path in &mut ai.paths {
+        for point in &mut path.points {
+            point.light_scale = [value; 4];
+            value = if value == 255 { 127 } else { 255 };
+        }
+    }
+    let course = Course::from_track(&ai, None).expect("a ring");
+    let index = course.len() / 2;
+    let here = course.position(index).expect("a ring point");
+    let next = course.position(index + 1).expect("the next ring point");
+    let a = course.light_scale(index).expect("a scale")[0];
+    let b = course.light_scale(index + 1).expect("a scale")[0];
+    assert_ne!(a, b, "the fixture must change scale between neighbours");
+    let at_point = course.light_scale_at(index, here).expect("a blend");
+    assert_eq!(
+        at_point[0], a,
+        "on a ring point the blend is that point's own"
+    );
+    let halfway = course
+        .light_scale_at(index, here + (next - here) * 0.5)
+        .expect("a blend")[0];
+    let mid = (f32::from(a) + f32::from(b)) * 0.5;
+    assert!(
+        (f32::from(halfway) - mid).abs() <= 1.0,
+        "halfway between {a} and {b} reads {halfway}"
+    );
+}

@@ -585,3 +585,52 @@ law above that this section called unread is now read and matched against a
 live dump: life 1.85 s, half-width 0.4 to 2.0, alpha from
 `smoke_trails_opacity_ramp.tga`, three single-sided fins, alpha-over. See
 [rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md).
+
+## Pulse PS2 at rest: a narrow spike under the nozzle (2026-10-20, `hull-points-ps2`)
+
+Read from a GS dump of the Moa Therma White Single Race state on PCSX2 (craft at rest,
+after GO; `scripts/pcsx2-drive.py gsdump`, read with `scripts/pcsx2-gsdump.py`). The
+original's nozzle is a white-hot plate with **one narrow spike behind it**, seen from the
+chase camera as a column about 13 px wide running from the nozzle to the bottom of the
+screen, magenta at the edge and grey in the core. Ours draws a wide blue-purple halo
+round the plate instead.
+
+What the dump says the spike is:
+
+- A run of nine state groups, one texture (`64x64`, 8-bit, the size of the ship's
+  `Engine_GLOW.tga`), alpha-blended (`ALPHA 0x68`, `TEST 0x70002`). Each group is a
+  strip that alternates an **axis** vertex with an **edge** vertex at `+x`, the axis,
+  `-x`, the axis, then the same in the other plane: **four thin fins** round the axis,
+  `7` px either side at the nozzle, growing towards the camera along the length.
+- Two passes over it: grey vertex colours fading `210 -> 147 -> 99 -> 63 -> 38 -> 20`
+  along the length, and `(155, 0, 124)` fading the same way to `(15, 0, 12)`. The
+  vertex colours are set per pass by the game; they are neither the palette of
+  `WO_SHIP_ENGINEFLARE.POB` (teal and orange) nor the file's `253`.
+- It sits on the **centre line**.
+
+What `shipboost.vex` (Feisar, PS2) holds, `crates/vex/examples/ship_colour_census.rs`
+with `DUMP_VERTICES=1`: per nozzle, a flat flare disc (`+-0.51 x +-0.59`) and **a four-fin
+spike `+-0.1625` wide and `3.86` long** (34 vertices, rings of eight round an axis at
+`z = -0.33 .. -0.45` and a tip at `z = -3.86`, vertex alpha `197` on the axis and `0` at
+the edges), under two `Anim Transform` anchors fixed at `(+0.900, -0.122, -6.122)` and
+`(-0.894, -0.122, -6.122)` with a `z` flicker of `0.75 .. 1.0` over `1.67` s. That is the
+dump's shape and size, but at **`+-0.9`, not on the centre line** - and the dump shows no
+spike at `+-39` px.
+
+What ours does with the same pose, tested by bypassing both `plume_visible` gates
+(a scratch edit, reverted):
+
+- With the gate as shipped the PS2 draws the engine-flare `.POB` (halo and white plate)
+  and no plume, because the plume is hidden at rest; the dark square under the nozzle
+  is the hull's own nozzle notch, present with the `.POB` off.
+- With the gate bypassed `shipboost.vex` draws its two side flares with short streaks, at
+  the side anchors.
+
+**Not identified.** The spike is the same construction as `shipboost.vex`'s, drawn at
+rest on the centre line and with game-set colours, which none of what ours plays
+reproduces. Whether it is that mesh at another anchor (the hull's `engine_flare`
+locator is on the centre line), or another mesh built the same way, is not settled: the
+test above says only where *ours* draws it. PSP at rest draws no such spike (the
+original PSP frames show the star alone), so the difference is in what the PS2 draws, not
+a different gate on the same asset. Leads: the `engine_flare` locator as the anchor, and
+the draw's colour source (the two passes' `RGBAQ`).

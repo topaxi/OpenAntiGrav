@@ -136,7 +136,9 @@ pub const LOOKS: &Looks = &Looks {
     },
     // `SceneLight_BuildLightingList` and `Craft_ApplyHullLightScale`, read and
     // matched live on the PSP (`scene-light.md`). The PS2 circuits author the
-    // same light nodes, so the PSP's law is carried over, unmeasured on the PS2.
+    // same light nodes and the PS2 builds the same `wopoint` vector, but its hull
+    // vertices carry a colour, so the rig is inert there today
+    // (`ps2-pulse-eu/hull-lights.md`).
     hull_lights: Rule {
         on: Platforms::Only(&[Platform::Psp, Platform::Ps2]),
         origin: Origin::Measured,
