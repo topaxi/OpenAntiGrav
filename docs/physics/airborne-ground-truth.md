@@ -247,7 +247,8 @@ the fast mode, 1,750, in 4 of 9 medians): the plan-selection amplifier in one ro
   `14_Track` PHANTOM and `speed_plan_phantom_forward` every time.
 
 Cost: five races where there was one, about `+30` s of the full suite's wall clock at its
-measured parallelism; the slowest converted test is a speed-plan slice at about 23 s.
+measured parallelism; the slowest converted test is a speed-plan slice at 28.7 s in a full loaded run (9,233
+tests, 364 s).
 
 ## The pitch-input gate, live
 

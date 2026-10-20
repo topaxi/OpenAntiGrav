@@ -204,7 +204,8 @@ between). Outside the Eliminator a wreck reaches state 6 1.5 s after it finishes
 (measured live 2026-10-02, `shield.md`), so `oag_gameplay::cage::pass` skips a craft for
 which `oag_physics::damage::in_state_6` holds. On de Konstruct Black (12 forward cells by
 nine perturbation scales, `cage_effect_sweep`) it changes 5 of 108 races and moves
-destroyed 59 to 60: a wreck's pose decides nothing else. Still not ported: the finished
+destroyed 59 to 60: a wreck's pose decides nothing else. HD's `04_chenghou_project`, which runs Pulse's cage, gets the
+same skip: **inherited, not measured**. Still not ported: the finished
 player, which also reads `6`, and `CageEffect_Spawn`'s visual (the trigger is now known: one per cage
 contact, at the boundary point). Our own track format carries the cage bytes but
 not the header flag, so a track file runs no cage.

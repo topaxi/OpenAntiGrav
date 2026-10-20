@@ -39,7 +39,8 @@ pub const SCALES: [f32; 9] = [0.0, 1e-3, -1e-3, 1e-4, -1e-4, 1e-5, -1e-5, 1e-6, 
 /// The subset a gate runs: the unperturbed race and one scale per magnitude,
 /// signs alternating. Five, not [`SCALES`]' nine, for the suite's time ceiling
 /// (`scripts/check-test-budget.py`): each scale is a whole race, and the two
-/// gates built on this cost about 170 s of test time per scale. A median of
+/// gates first built on it (the clean-lap board and the speed plan) cost about 170 s of
+/// test time per scale. A median of
 /// five ignores two outliers. **Chosen, not measured.**
 pub const GATE: [f32; 5] = [0.0, 1e-3, -1e-4, 1e-5, -1e-6];
 

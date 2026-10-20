@@ -36,7 +36,8 @@
 //! # The three columns, and how each is asserted
 //!
 //! - **`status`** ([`Status`]): `CleanLap`, `NoCleanLap`, `Died` or
-//!   `Eliminated`, asserted **exactly** - not as a ceiling. `Died` joined on
+//!   `Eliminated`, asserted **exactly** - not as a ceiling (until 2026-10-20; a
+//!   floor since, see the last bullet). `Died` joined on
 //!   2026-09-16, when a wrecked opponent started coming back after the
 //!   original's own 2.3 s: every row that read `Eliminated` before then reads
 //!   `Died` now, for the same driving, and `Eliminated` is reserved for a
@@ -52,6 +53,10 @@
 //!   clean lap. The failure message says which way the row moved: a regression
 //!   reads as a regression, and an improvement reads as an instruction to
 //!   tighten [`BASELINE`] rather than as a bug.
+//!   **Since 2026-10-20 it is a floor on the median of five perturbed runs**
+//!   (`tests/perturb`), the worst median status over nine offsets: a row that
+//!   is a coin between two categories cannot be asserted exactly, so nothing
+//!   reads as "improved" any more, and a row moving up is a cue to regenerate.
 //! - **`lap_ticks`** (`Option<u64>`): the fastest clean lap, as a **ceiling**
 //!   with [`LAP_TOLERANCE_TICKS`] of slack, asserted whenever the baseline
 //!   recorded a time - which includes some `Eliminated` rows, because a craft
@@ -90,6 +95,11 @@
 //! commit `8f5070ef` (158.9s, then 157.7s) and the two 48-row outputs `diff`
 //! byte-for-byte identical - every `lap_ticks` and every `contact_ticks`, not
 //! only the ones that made it into [`BASELINE`]. Spread was zero.
+//!
+//! **Repeat runs have no spread; perturbed runs do.** Since 2026-10-20 the
+//! bounds come from the spread of the median over small perturbations of the
+//! airborne gravity ([`BASELINE`]'s own doc comment), and the tolerances below
+//! sit on top of that.
 //!
 //! So the tolerance is **chosen, not measured** (no confidence score - this is
 //! an engineering choice, not an RE claim), from what a *legitimate* AI change
@@ -545,24 +555,32 @@ struct Row {
 ///   ticks (lap 1,772); `07_Track` RAPIER 0 to 36 (lap 2,467). `06_Track` RAPIER
 ///   regresses under 4 of the 9 perturbations with every law off.
 ///
-/// **Regenerated 2026-10-20 as medians (lane `ai-gate-robustness`).** Each row
-/// is now raced once per scale of `perturb::GATE` (every craft's airborne
-/// gravity times `1 + eps`, `eps` in `0, 1e-3, -1e-4, 1e-5, -1e-6`;
-/// `tests/perturb/mod.rs`) and every column is the median of its five runs,
-/// which the trailing comment lists in that order. Over all nine scales of
-/// `perturb::SCALES` the single-run gates regressed 0, 3, 3, 4, 5, 6, 7, 7 and 8
-/// of the 58 AI-gate tests (the force-term sweep in
-/// `docs/physics/airborne-ground-truth.md` read median 6, max 8 with every law
-/// on), nearly all of it here on `06_Track` and `07_Track` and in
-/// `speed_plan_ground_truth`. Against the single-run ceilings before it, 36 rows
-/// tightened (a lap faster or less contact; the board had not been regenerated
-/// after earlier improvements) and these loosened: `03_Track` FLASH lap 2,114 to
-/// 2,177 (the unperturbed run already read 2,177), `06_Track` PHANTOM lap 1,424
-/// to 1,454 and contact 0 to 13 (unperturbed 0, the others 13-105), `07_Track`
-/// PHANTOM 2,453 to 2,468 and 2 to 5, `07_Track` FLASH contact 2 to 4,
-/// `05_Track` PHANTOM contact 0 to 4, and laps by 1-28 ticks on `07_Track`
-/// VENOM, `04_Track` FLASH, RAPIER and PHANTOM, `03_Track` RAPIER and PHANTOM
-/// and `16_Track` PHANTOM. **Chosen, not measured**: the method is ours.
+/// **Regenerated 2026-10-20 from a distribution (lane `ai-gate-robustness`).**
+/// Each row is now raced once per scale of `perturb::GATE` (every craft's
+/// airborne gravity times `1 + eps`, `eps` in `0, 1e-3, -1e-4, 1e-5, -1e-6`;
+/// `tests/perturb/mod.rs`) and asserted on the median of its five runs. A
+/// median is itself a draw, so each bound is the **worst** of nine medians, one
+/// per offset of `perturb::BOUND_OFFSETS` (`0, 2e-3, -2e-5, 3e-6, -5e-4, 5e-5,
+/// -3e-6, 7e-4, -7e-6` on top of every run); the trailing comment lists those
+/// nine medians as `lap/contact` in that order. Over the nine scales of
+/// `perturb::SCALES` the single-run gates had regressed 0, 3, 3, 4, 5, 6, 7, 7
+/// and 8 of the 58 AI-gate tests (the force-term sweep in
+/// `docs/physics/airborne-ground-truth.md` read median 6, max 8). Against the
+/// single-run ceilings before it, 28 rows are no looser and these 20 are
+/// (lap, contact, old -> new): `07_Track` VENOM 2956 -> 2964, 0 -> 1; `03_Track`
+/// FLASH 2114 -> 2185; `04_Track` FLASH 2064 -> 2074; `06_Track` FLASH
+/// 1924 -> 1979, 0 -> 89 (one offset's median); `07_Track` FLASH 2836 -> 2833,
+/// 2 -> 13; `03_Track` RAPIER 1940 -> 1952; `04_Track` RAPIER 1768 -> 1789;
+/// `14_Track` RAPIER 1959 -> 1961, 141 -> 57; `01_Track` RAPIER 1462 -> 1551,
+/// 0 -> 1; `13_Track` RAPIER 2013 -> 1873, 0 -> 1; `06_Track` RAPIER
+/// 1772 -> 2693, 156 -> 154 (the plan-selection amplifier: its plan verifies in
+/// 4 of the 9 medians, lapping about 1,750, and not in the rest, about 2,690);
+/// `07_Track` RAPIER 2467 -> 2777, 36 -> 19; `16_Track` PHANTOM 1636 -> 1664;
+/// `03_Track` PHANTOM 1792 -> 1803; `10_Track` PHANTOM 0 -> 1 contact; `05_Track`
+/// PHANTOM 1329 -> 1326, 0 -> 4; `04_Track` PHANTOM 1570 -> 1608; `01_Track`
+/// PHANTOM 1472 -> 1495, 27 -> 32; `06_Track` PHANTOM 1424 -> 1460, 0 -> 53;
+/// `07_Track` PHANTOM 2453 -> 2486, 2 -> 10. The status column is every row's
+/// `CleanLap`, now a floor. **Chosen, not measured**: the method is ours.
 ///
 /// The frozen board: 12 circuits x 4 classes, generated the way this file's
 /// own doc comment describes. **May only improve** - see that doc comment for
