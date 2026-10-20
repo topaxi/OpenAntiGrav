@@ -69,11 +69,12 @@ pub(in crate::load) fn envsettings_light(
     } else {
         SUN_COLOUR
     };
-    let (Some(direction), Some(colour), Some(ambient)) = (
-        env.direction(SUN_DIRECTION),
-        env.vec3(colour_key),
-        env.vec3(ambient_key),
-    ) else {
+    let (direction, colour) = match env.direction(SUN_DIRECTION) {
+        Some(direction) => (Some(direction), env.vec3(colour_key)),
+        None => sunless_sun(&env, SUN_DIRECTION, colour_key, report, &name),
+    };
+    let (Some(direction), Some(colour), Some(ambient)) = (direction, colour, env.vec3(ambient_key))
+    else {
         report.push(format!(
             "{name}: no usable sun direction, colour and ambient; lighting with the \
              stand-in rig"
@@ -145,6 +146,37 @@ pub(in crate::load) fn envsettings_light(
         specular_scale,
     ));
     light
+}
+
+/// The sun of a circuit whose `Sun direction` is the degenerate triple (a length
+/// under `1e-3`: Tech de Ra, Modesto Heights): the axis as authored, normalised
+/// from the raw triple, and a **sun colour of zero**.
+///
+/// **Chosen, not measured.** Falling back to the stand-in rig here dropped the whole
+/// authored rig (ambient, the prelit curve, specular) along with the sun, and
+/// those two circuits drew 54.5 and 42.1 mean grey levels from the original; the
+/// authored sun of 4.0 over a direction of length `1e-4` contributes `~1e-4` under
+/// either reading of the length (an intensity, or an off switch), so zero is the
+/// value both agree on. What the original's draw feeds its shader for this key is
+/// unread. Zone's graded rigs already author a sunless rig the same way.
+fn sunless_sun(
+    env: &EnvSettings,
+    direction_key: &str,
+    colour_key: &str,
+    report: &mut Vec<String>,
+    name: &str,
+) -> (Option<[f32; 3]>, Option<[f32; 3]>) {
+    let Some([x, y, z]) = env.vec3(direction_key) else {
+        return (None, None);
+    };
+    let length = (x * x + y * y + z * z).sqrt();
+    if !length.is_finite() || length == 0.0 || env.vec3(colour_key).is_none() {
+        return (None, None);
+    }
+    report.push(format!(
+        "{name}: the sun direction is the degenerate triple [{x}, {y}, {z}]; the authored rig is          kept and its sun is drawn at zero (chosen, not measured)"
+    ));
+    (Some([x / length, y / length, z / length]), Some([0.0; 3]))
 }
 
 /// Omega's `Tonemap` block, read into [`oag_post::omega_tonemap::Params`].
