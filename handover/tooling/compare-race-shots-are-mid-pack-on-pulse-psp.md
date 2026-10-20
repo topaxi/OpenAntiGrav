@@ -1,4 +1,4 @@
-# Race shots: Pulse PSP and HD give mid-pack pairs with the whole field; trails, a closer pack and more circuits are open
+# Race shots: Pulse PSP and HD give mid-pack pairs with the whole field; a closer pack and more circuits are open
 
 The maintainer asked whether the original can be put "in the middle of the pack via automation" and shot there, with weapons off.
 **Pulse PSP can** (2026-10-20, `compare-race-shots`): a Single Race on the Racebox page with `WEAPONS` Off (`psp-drive.py menu
@@ -16,9 +16,13 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   Ideas: the Racebox `AI DIFFICULTY` row (the walk leaves it at EASY, a lower field speed is not an option), a longer race (no
   Laps row on the Racebox page), or swapping the player's grid pose with a mid-field slot's in RAM before GO (a manipulation, would
   need its own caveat).
-- **Stage 3: the exhaust plume and trails.** A craft at rest in ours has no plume and no trail; the original's player has both.
-  A frozen warm-up (ticks run with the field pinned to the captured poses, so each craft's trail and exhaust history exist) is not
-  built. `--field-from` keeps the grid's opponents alive and posed, with no tick run.
+- **Trails and plume landed (2026-10-20, `--field-warmup`)**, an exhaust-only replay of every craft on a straight path at its captured velocity.
+  Still open: the original's plume is wider and brighter than ours (a bloom, not a ribbon); the ribbon is straight where the original's curved;
+  an opponent's throttle and every craft's flare block (`boost_timer`, `plume_timer`) are not read from RAM (full thrust and the engine's own state are chosen).
+- **PSP hull skew.** On `pulse-psp-race/talons-alongside` the original hull is about 1.5x larger than ours at the camera read from RAM; holding
+  the body back one tick of its velocity (about 1.8 units) matches its size (docs: "The player's hull in a race shot"). Find which of the body
+  read and the camera node is a tick off the frame the PSP presents (the screenshot is the previous frame in a PPSSPP stop), then feed ours the
+  right one. HD has no such skew.
 - **The pickup row** (the Autopilot icon and its `1000000000.00` counter) is not drawn in ours: nothing in the pair carries the
   player's held pickup. `entity+0x1bc` holds it.
 - **HD: one circuit.** Talon's Junction, 6th of 8 in lap 2, weapons off, the Autopilot; the walk, the hunt, the paused restore and the
@@ -26,8 +30,8 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   decoded both ways, refused when ambiguous, not understood); the best-lap line (not located in the record); the Fury `Absorb`/`DAMAGE`
   strips; `Pilot Assist` was left on (the profile's default, `0101`), the Autopilot flew with it.
 - **PS2, Pure**: not attempted.
-- **An opponent's driver lane index is its grid row's, not its field pose's** (`start.rs`, `opponent.driver.index`): harmless at `--ticks 0`, but a stage 3 that
-  runs ticks would steer the AI at the wrong part of the circuit; set the index from the field pose first.
+- **An opponent's driver lane index is its grid row's, not its field pose's** (`start.rs`, `opponent.driver.index`): harmless at `--ticks 0` and for the
+  exhaust-only warm-up (no AI runs); a capture that runs real ticks from a field would steer the AI at the wrong part of the circuit.
 - **A second Pulse pair** (`talons-p6`, a loose pack) was dropped: its state never passed the pack check again; only `race-talons-venom-alongside` is kept.
 - **Layout is asserted, not probed** (`--layout forward`): the grid probe is a start-line test. A mid-race check of the layout would
   compare the player's pose with our spline.

@@ -189,6 +189,16 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    - `--field-from` (`race::Options::field`, `grid_teams`) keeps the Single Race grid's seven opponents alive, puts each on the
      pose its row carries (the same left/up/forward reading `--pose-from` uses, `oag_trace::replay::orientation_of_rows`) and flies
      the team the row names; the original's slot `n` is our opponent `n + 1`. The craft are drawn at rest: no tick runs.
+   - `--field-warmup` (`CaptureOptions::field_warmup`, `Race::warm_up_field`, 2026-10-20, `race-shot-trails`) gives every craft the exhaust
+     history of a craft that has been flying: the field file carries `vel_x,vel_y,vel_z` per row (the body's velocity read at the same
+     stop: PSP `body+0x140`, HD `body+0x190`, units per second; HD's agree with the forward axis and `|v| * 3.6` is the HUD's km/h) and a
+     slot 0 row for the player, and ours replays **the exhaust alone** (no physics, AI, pad, lap, weapon or clock step; `world.tick`
+     stays 0) for `Race::field_warm_up_ticks` steps (the intensity's full climb, 1 / 0.25 s, plus a full HD tube: 294 ticks at 60 Hz),
+     each craft on a straight path that ends exactly on its captured pose. A file without the columns is refused by name, never given a
+     guessed velocity. **Chosen, not measured:** the straight path and fixed heading (the original's craft had curved, so a ribbon in
+     a corner leans where ours is straight) and full thrust for every craft (the player's throttle reads 100; an opponent's is not
+     read from RAM, nor any craft's flare block, `boost_timer` or `plume_timer`: all left at the engine's own values for a craft at that
+     speed). The pair scripts pass it by default, so `just compare-rerender` picks it up from the stored `argv`.
    - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
      of the pool: PSP's maximum is `*(*(craft+0x6c) + g_skill_level*4 + 0x84)`, 135 here, so the 134.5 pool reads 99 %, and
      HD's is 140; ours is the handling file's) and best lap on the primary readout: all read from RAM, none
@@ -239,9 +249,22 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
 captures of one state: PSP 15 to 90 units (the CPU stops a few ticks after the load; two direct runs agreed exactly, a rerender did not),
 HD 14.0 to 14.2 s on the lap clock in five restores and 19.7 s in one (the pause after the load did not hold).
 
-**What is not matched in a race shot** (the pair's caveat says it): the exhaust plume and the engine's light (a craft at rest in
-ours; stage 3, a frozen warm-up that gives every craft its trails, is not built), the Autopilot icon and its counter (the pickup
-row), HD's `Absorb` and `DAMAGE` strips and its best-lap line, the opponents' own trails and any weapon or effect in flight, and the scene objects that animate (the billboards).
+**What is not matched in a race shot** (the pair's caveat says it): the plume's width and glow (with the warm-up ours draws each
+craft's ribbon and plume, but the original's is a wider, brighter bloom: on the same instant the whole-frame RMSE went from 0.219 cold to
+0.254 with the warm-up on PSP and from 0.258 to 0.280 on HD, because a thinner bright streak in a different place costs more than none; the
+number is not the measure of this change, the picture is), a ribbon that curves where the original's did, the Autopilot icon and its
+counter (the pickup row), HD's `Absorb` and `DAMAGE` strips and its best-lap line, any weapon or effect in flight, and the scene objects
+that animate (the billboards).
+
+**The player's hull in a race shot.** Checked 2026-10-20 (`race-shot-trails`), the hull's size against the camera read at the same stop:
+on **HD** (`hd-race/talons-pack`) ours matches: the hull is 170 px wide in a 560 x 420 crop of the 1920 x 1080 frame on both sides and starts at the same
+row; holding the player back by one tick (2.4 units at 141 u/s) already makes it far too large, so there is no body/camera instant skew
+there, and the "lower and larger" look was the original's bright plume and bloom around it. On **Pulse PSP** the original hull is
+larger and lower than ours (about 1.5x across): holding the body back one tick of its velocity (1.8 units at 106 u/s) lands close to the original's size
+and two ticks is already far too large, so on PSP the drawn hull matches a body about a tick older than the one read at the stop (or a camera a tick
+ahead). The display matrix (`entity+0x8b0`, two hops) is not the cause of a position offset: its translation equals the body's to the
+last digit for all eight craft, and its rotation rows are scaled by 0.75 with an up axis tilted about 10 degrees from the body's (a visual
+roll). Not wired: ours keeps the body as read, with the skew recorded in the handover thread.
 
 ## Publishing is locked
 
