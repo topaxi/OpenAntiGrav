@@ -409,6 +409,9 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
     let mut shield_sum: Vec<(f32, u32)> = Vec::new();
     let mut last_stint_end = [None::<u64>; 8];
     let mut racing = [true; 8];
+    // `OAG_SWEEP_WRECK_TRACE=1`: the last 400 ticks of a craft that wrecks.
+    let wreck_trace = std::env::var_os("OAG_SWEEP_WRECK_TRACE").is_some();
+    let mut history: Vec<std::collections::VecDeque<String>> = vec![Default::default(); 8];
     for tick in 1..=16_000u64 {
         race.tick_sim_only(&PlayerInputs::none());
         for slot in 1..count {
@@ -420,7 +423,27 @@ fn whole_race(race: &mut oag_raceplay::Race, on: bool) -> Field {
                 last_stint_end[slot] = Some(tick);
             }
             let now_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
+            if wreck_trace {
+                let body = &ship.physics.body;
+                history[slot].push_back(format!(
+                    "    t {tick} shield {:.1} wall {} timer {:.2} grounded {} pos [{:.0} {:.0} {:.0}] v {:.1}",
+                    ship.physics.shield,
+                    race.wall_contact_ticks_of(slot),
+                    ship.autopilot_timer,
+                    ship.physics.grounded,
+                    body.position.x,
+                    body.position.y,
+                    body.position.z,
+                    body.linear_velocity.dot(body.forward()),
+                ));
+                if history[slot].len() > 400 {
+                    history[slot].pop_front();
+                }
+            }
             if racing[slot] && !now_racing && !ship.standing.finished() {
+                for line in &history[slot] {
+                    println!("{line}");
+                }
                 println!(
                     "  WRECK on {on} slot {slot} tick {tick} last stint end {:?} ago {:?}",
                     last_stint_end[slot],
@@ -484,7 +507,13 @@ fn races(image: &str, tracks: &[Option<&str>]) {
     }
     let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string());
     for difficulty in difficulties() {
+        let only = std::env::var("OAG_SWEEP_TRACK").ok();
         for track in tracks {
+            if let (Some(only), Some(track)) = (&only, track)
+                && !track.contains(only.as_str())
+            {
+                continue;
+            }
             let mut lap_delta = Vec::new();
             let mut finish_delta = Vec::new();
             for seed in 1..=seeds() {

@@ -76,9 +76,31 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     (by the data: walls up on 10 of 19 Ace cells, rescues from zero on 2048
     and HD amphiseum) and PHANTOM, as `oag_title::opponent_autopilot::BELOW_RAPIER`
     on all five titles, each measured on its own sweep over `perturb::GATE`.
-    Open: RAPIER Novice alone was clean (walls 17,966 -> 7,556, rescues
-    23 -> 7); a difficulty axis on the switch would let it fly, not decided.
-    PHANTOM was never run on Pure, Omega or 2048 (off by the rule).
+    ~~Open: RAPIER Novice alone was clean; a difficulty axis would let it
+    fly.~~ **Difficulty axis wired 2026-10-20, lane
+    `opponent-autopilot-difficulty`** (docs/gameplay/ai.md, "An opponent's
+    Autopilot, per class and difficulty"): every class x level re-measured on
+    one tree, `BY_CLASS_AND_DIFFICULTY` on all five titles. VECTOR/VENOM/FLASH
+    fly at every level, RAPIER at Skilled and Elite only, PHANTOM never. The
+    maintainer expected RAPIER Novice on and Ace/Elite off; the measurement
+    gives the reverse for Novice and Elite. Open:
+    - **RAPIER Novice** fails the rule on Pulse `03_Track` alone (rescues
+      median 0 -> 1, 0 -> 4 over five runs), clean in total. Tolerating one
+      rescue from zero on one circuit would turn it on: maintainer's call.
+    - **Per-title split**: alone, 2048 and Omega would both absorb RAPIER
+      Skilled and Elite (walls up a little), Pulse RAPIER Elite and FLASH Ace
+      too; HD, Omega and 2048 would fly RAPIER Novice. The switch is one
+      rule pooled over every title today.
+    - **SUPERPHANTOM**: the field does not race at it on 2048 (44-64 forks a
+      run, window 44-662 units against PHANTOM's 1,300); Omega's handling
+      authors no SUPERPHANTOM class. Not judged, absorbs.
+    - **Two in-stint wrecks** at RAPIER in whole races, both slot 7 on Pulse
+      `16_Track` (Elite seed 3 tick 7,794; Skilled seed 2 tick 9,014,
+      `races_pulse`). Traced (`OAG_SWEEP_WRECK_TRACE=1`): both are weapon
+      damage with no wall contact in the stint, on 9.1 and 15.8 shield that
+      the forgone absorb (about 18) would have covered. The shield cost every
+      flying class pays; the fork sweep cannot see a wreck, so a rule that
+      weighs the absorb's shield against a stint's exposure is open.
   - ~~**Lead, the player's own pickup:** a cold stint finds the craft with a
     whole-line search (`Race::locate_player_driver`).~~ Fixed 2026-10-20
     (lane `opponent-autopilot-wire`): the ring search is right on the ring

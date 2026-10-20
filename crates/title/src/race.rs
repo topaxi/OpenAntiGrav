@@ -203,7 +203,7 @@ pub struct RaceDefaults {
     /// [`crate::autopilot_engine::AutopilotEngine`].
     pub autopilot_engine: crate::autopilot_engine::AutopilotEngine,
     /// Whether an opponent on this project's driver flies the Autopilot it
-    /// holds, per class: [`crate::opponent_autopilot::OpponentAutopilot`].
+    /// holds, per class and difficulty: [`crate::opponent_autopilot::OpponentAutopilot`].
     pub opponent_autopilot: crate::opponent_autopilot::OpponentAutopilot,
     /// The campaign's opponents fly the original's own driver
     /// (`oag_ai::original`, the maintainer's AI mode 3). `true` where that

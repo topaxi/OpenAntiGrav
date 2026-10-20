@@ -679,13 +679,15 @@ fn cold_locate_sweep() {
     }
 }
 
-/// The Autopilot's opponent switch is the title's per-class rule
-/// (`oag_title::opponent_autopilot::BELOW_RAPIER`): an opponent at VENOM or
-/// FLASH flies the pickup, one at RAPIER or PHANTOM absorbs it, on all five
-/// titles, weapons on. Fails if a race starts with the switch the other way.
+/// The Autopilot's opponent switch is the title's class and difficulty rule
+/// (`oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY`): VENOM flies the
+/// pickup and PHANTOM absorbs it, and RAPIER flies at Elite but absorbs at
+/// Novice, on all five titles, weapons on. Fails if a race starts with the
+/// switch the other way, or if the load stops reading the race's difficulty
+/// (RAPIER would then read the same at both levels).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn an_opponent_flies_its_autopilot_below_rapier_only() {
+fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
     for (image, track) in [
         (
             "pulse-psp-usa.chd",
@@ -707,11 +709,12 @@ fn an_opponent_flies_its_autopilot_below_rapier_only() {
         let Some(path) = path else {
             return;
         };
-        for (class, flies) in [
-            ("VENOM", true),
-            ("FLASH", true),
-            ("RAPIER", false),
-            ("PHANTOM", false),
+        use oag_ai::Difficulty::{Elite, Novice};
+        for (class, difficulty, flies) in [
+            ("VENOM", Elite, true),
+            ("RAPIER", Novice, false),
+            ("RAPIER", Elite, true),
+            ("PHANTOM", Elite, false),
         ] {
             let loaded = oag_raceplay::load(&oag_raceplay::Options {
                 source: path.display().to_string(),
@@ -719,11 +722,16 @@ fn an_opponent_flies_its_autopilot_below_rapier_only() {
                 mode: oag_race::Mode::SingleRace,
                 track: track.map(str::to_string),
                 seed: Some(1),
+                difficulty,
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the track");
             let mut race = oag_raceplay::Race::start(loaded.setup);
-            assert_eq!(race.engage_opponent_autopilot(1), flies, "{image} {class}");
+            assert_eq!(
+                race.engage_opponent_autopilot(1),
+                flies,
+                "{image} {class} {difficulty}"
+            );
         }
     }
 }

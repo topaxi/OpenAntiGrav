@@ -1140,7 +1140,263 @@ this lane's tree, weapons off, seed 1:
 - HD Ubermall PHANTOM: 2 rescues, 143 wall ticks, lap ends 79.7, 78.2, 54.0,
   30.0, 6.3, end 6.3.
 
+### An opponent's Autopilot, per class and difficulty (2026-10-20)
+
+**An opponent on this project's driver that holds an Autopilot flies the
+original's player driver for the pickup's `time` at VECTOR (Pure), VENOM and
+FLASH at every difficulty, at RAPIER at Skilled and Elite only, and absorbs it
+at PHANTOM and SUPERPHANTOM at every difficulty.** Chosen, not measured, no
+confidence score: the original's own field never fires one outside an
+Eliminator (below), so this is the maintainer's rule, applied per class and
+difficulty from the measurement of this engine below (2026-10-19: "if
+autopilot helps them / speeds them up"; 2026-10-20: "Ace and Elite should
+probably absorb if they are better without it"). Against the class-only rule
+before it (next section), the one change is **RAPIER Skilled and Elite turning
+on**. The rule is title data, `oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY`
+on all five titles (`RaceDefaults::opponent_autopilot`, every switch
+`Origin::Chosen`), read at load at the race's class and difficulty;
+`Race::set_opponent_autopilot` still overrides it. The original-AI field (the
+campaign) keeps the absorb.
+
+**The difficulty is the race's own** `oag_ai::Difficulty` by name (`novice`,
+`skilled`, `elite`, `ace`), the same four levels on every title, and the
+switch keys on it: the race box's `AI DIFFICULTY` row (`assets/ui/menu.toml`,
+setting `ai.difficulty`) offers all four by these names, Elite the default. A
+title's own `Easy`/`Medium`/`Hard` exist only as campaign rungs and reach only
+the original's pack shuffle (`oag_game::ai_choice::free_level`: Novice easy,
+Skilled and Elite medium, Ace hard, chosen).
+
+**Method** as in the next section: `opponent_autopilot_sweep`, paired forks
+every 600 ticks from tick 900, 8 seeds of 8 forks, each cell at the five
+`perturb::GATE` scales, so a cell is five runs of 64 forks. Every cell was
+re-run on one tree (`dd965b1b6`, after the Zone route re-commit changed the
+original's driver): every class a title offers at all four levels, Pulse
+(4 classes, 12 circuits) and HD (4 classes, 4 circuits), Pure (5 classes),
+Omega and 2048 (5 classes each, default circuit): 316 cells, of which the
+4 Omega SUPERPHANTOM cells cannot load (below), so 312 cells of five runs.
+
+```sh
+OAG_SWEEP=1 OAG_SWEEP_GATE=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 \
+    OAG_SWEEP_CLASS=RAPIER OAG_SWEEP_DIFFICULTY=skilled OAG_SWEEP_TRACK=03_ \
+    cargo nextest run -p oag-raceplay --run-ignored all opponent_autopilot_sweep::pulse --no-capture
+```
+
+**The rule that decides a cell** (chosen, written before any cell finished,
+applied to every cell the same way). A cell is one class at one level, pooled
+over every circuit of every title that offers the class; each circuit's
+numbers are the median of its five runs. It flies when all hold:
+
+1. walls not up: the circuits' median wall ticks summed, B no more than A;
+2. rescues not up: the circuits' median rescues summed, B no more than A,
+   **and** no circuit whose absorb had a median of no rescue has one when it
+   flies;
+3. lap not slower: the circuits' median gain (seconds over the window)
+   summed is positive.
+
+It assumes the field is racing: every run of a cell must carry all 64 forks
+(a fork is skipped when the triggered craft is not racing). This precondition
+was added after the sweep, on SUPERPHANTOM's short runs, and changes no other
+cell's verdict. Every cell passes
+that except SUPERPHANTOM on 2048, which carries 44 to 64 a run with a window
+of 44 to 662 units against PHANTOM's 1,300 there: the field does not race at
+SUPERPHANTOM on 2048, so it is not judged and stays absorbing. Omega's
+handling (`hdships/ag_systems/handlingstats.xml`) authors no SUPERPHANTOM
+class, so a race there cannot load at it.
+
+This replaces the rule of the next section (run sums for rescues, one rescue
+from zero tolerated on a circuit, a positive median on all but one circuit):
+medians throughout and none from zero. RAPIER Novice fails under both on the
+same circuit, Pulse `03_Track` (rescues 0 -> 4 over the five runs, median
+0 -> 1). Tolerating one rescue from zero on one circuit would turn it on; that
+is the maintainer's call, not this measurement's.
+
+| Class, level | Circuits | Gain, s summed (circuits not faster) | Walls A -> B, summed medians (circuits up) | Rescues A -> B, summed medians | Circuits rescued from zero | Rescues A -> B, all runs | Shield a stint: A / A with the absorb / B | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| VECTOR Novice | 1 | +1.56 (0) | 17 -> 0 (0) | 0 -> 0 | 0 | 0 -> 0 | -1.0 / +11.0 / -1.0 | flies |
+| VECTOR Skilled | 1 | +0.96 (0) | 86 -> 40 (0) | 0 -> 0 | 0 | 0 -> 0 | -1.5 / +10.5 / -2.3 | flies |
+| VECTOR Elite | 1 | +0.91 (0) | 65 -> 44 (0) | 0 -> 0 | 0 | 0 -> 0 | -2.2 / +9.8 / -2.6 | flies |
+| VECTOR Ace | 1 | +0.44 (0) | 103 -> 38 (0) | 0 -> 0 | 0 | 1 -> 0 | -2.1 / +9.9 / -2.4 | flies |
+| VENOM Novice | 19 | +19.18 (0) | 10869 -> 4074 (1) | 0 -> 0 | 0 | 9 -> 2 | -1.7 / +17.9 / -1.1 | flies |
+| VENOM Skilled | 19 | +10.81 (0) | 2254 -> 1153 (2) | 0 -> 0 | 0 | 11 -> 7 | -1.8 / +17.8 / -1.9 | flies |
+| VENOM Elite | 19 | +6.17 (1) | 1551 -> 1120 (4) | 1 -> 1 | 0 | 7 -> 4 | -1.4 / +18.2 / -1.7 | flies |
+| VENOM Ace | 19 | +4.70 (0) | 1552 -> 1265 (3) | 3 -> 2 | 0 | 22 -> 12 | -1.9 / +17.7 / -1.8 | flies |
+| FLASH Novice | 19 | +29.75 (0) | 14200 -> 4580 (1) | 7 -> 3 | 0 | 40 -> 17 | -2.0 / +17.6 / -1.1 | flies |
+| FLASH Skilled | 19 | +14.75 (0) | 4229 -> 1817 (4) | 12 -> 5 | 0 | 61 -> 32 | -1.6 / +17.9 / -2.0 | flies |
+| FLASH Elite | 19 | +7.53 (1) | 1807 -> 1428 (3) | 1 -> 0 | 0 | 13 -> 4 | -1.4 / +18.1 / -1.7 | flies |
+| FLASH Ace | 19 | +5.16 (1) | 2114 -> 1782 (6) | 3 -> 1 | 0 | 21 -> 6 | -1.8 / +17.8 / -1.9 | flies |
+| RAPIER Novice | 19 | +39.61 (0) | 17966 -> 7598 (1) | 1 -> 1 | 1 | 23 -> 7 | -2.4 / +17.2 / -1.5 | absorbs |
+| RAPIER Skilled | 19 | +21.07 (0) | 4450 -> 3411 (7) | 2 -> 0 | 0 | 14 -> 5 | -1.5 / +18.0 / -1.9 | flies |
+| RAPIER Elite | 19 | +15.23 (0) | 3280 -> 2966 (7) | 3 -> 2 | 0 | 22 -> 12 | -1.7 / +17.9 / -2.0 | flies |
+| RAPIER Ace | 19 | +9.50 (0) | 3321 -> 4407 (10) | 4 -> 3 | 1 | 26 -> 20 | -1.6 / +18.0 / -1.9 | absorbs |
+| PHANTOM Novice | 19 | +53.97 (0) | 17375 -> 9384 (5) | 48 -> 9 | 3 | 263 -> 56 | -2.4 / +17.2 / -1.8 | absorbs |
+| PHANTOM Skilled | 19 | +32.76 (0) | 4808 -> 4690 (8) | 5 -> 4 | 2 | 28 -> 26 | -1.5 / +18.1 / -2.0 | absorbs |
+| PHANTOM Elite | 19 | +21.27 (0) | 3072 -> 4627 (13) | 6 -> 5 | 0 | 38 -> 35 | -1.9 / +17.7 / -2.2 | absorbs |
+| PHANTOM Ace | 19 | +13.88 (0) | 3530 -> 6541 (15) | 8 -> 6 | 2 | 41 -> 28 | -1.6 / +18.0 / -2.4 | absorbs |
+| SUPERPHANTOM Novice | 1 | +5.30 (0) | 5722 -> 3974 (0) | 0 -> 0 | 0 | 1 -> 2 | -9.2 / +10.8 / -5.8 | flies |
+| SUPERPHANTOM Skilled | 1 | +0.00 (1) | 5120 -> 4937 (0) | 12 -> 3 | 0 | 62 -> 15 | -9.5 / +10.5 / -9.2 | absorbs |
+| SUPERPHANTOM Elite | 1 | +0.00 (1) | 6377 -> 5826 (0) | 22 -> 7 | 0 | 118 -> 28 | -11.2 / +8.8 / -9.1 | absorbs |
+| SUPERPHANTOM Ace | 1 | +1.82 (0) | 5550 -> 5216 (0) | 42 -> 12 | 0 | 201 -> 61 | -5.9 / +14.1 / -3.3 | flies |
+
+- **VECTOR, VENOM, FLASH: on at every level.** Faster in total at every level;
+  walls and rescues fall in total at every level.
+- **RAPIER: on at Skilled and Elite, off at Novice and Ace.** Novice is the
+  cleanest in total (walls 17,966 -> 7,598, rescues 23 -> 7 over every run)
+  but Pulse `03_Track` gets a rescue its absorb never had. Ace raises walls
+  (3,321 -> 4,407; up on 10 of 19 circuits, HD `12_sol_2` 217 -> 513, Pulse
+  07 214 -> 740, 02 175 -> 471) and rescues 2048 from zero (median 0 -> 1,
+  0 -> 4 over the runs). Skilled and Elite pass in total, with walls up on 7
+  circuits each (Elite: Pulse 02 144 -> 363, 07 289 -> 562, HD amphiseum
+  93 -> 166), carried by HD (Elite 735 -> 398) while Pulse is flat
+  (2,246 -> 2,273) and Omega and 2048 rise a little (58 -> 72, 54 -> 57).
+- **PHANTOM: off at every level.** Novice and Skilled rescue circuits from
+  zero (3 and 2), Elite and Ace raise walls on 13 and 15 of 19 circuits.
+- **SUPERPHANTOM: not judged** (above); 2048 only.
+- Shield is a cost by construction: B forgoes the absorb, about 18 a stint
+  (10 on Pure, 11 on 2048 SUPERPHANTOM).
+
+The rule on each title alone, given for the record and not used to split the
+switch (Pure, Omega and 2048 are one circuit each). Where it disagrees with
+the pooled verdict:
+
+- it would **absorb** at VENOM Novice on Pure (walls 63 -> 78); VENOM Skilled
+  and Elite, FLASH Skilled, Elite and Ace on 2048 (walls 0 -> 1, 0 -> 1,
+  5 -> 6, 6 -> 21, 10 -> 12); FLASH Ace on Pulse (1,479 -> 1,486); RAPIER
+  Skilled on 2048 and Omega (30 -> 73, 60 -> 67) and RAPIER Elite on 2048,
+  Omega and Pulse (54 -> 57, 58 -> 72, 2,246 -> 2,273);
+- it would **fly** RAPIER Novice on HD, Omega and 2048, RAPIER Ace on Pure,
+  and PHANTOM on Omega (Novice, Skilled, Elite) and Pure (Skilled, Elite).
+
+**2048 and Omega agree with each other** on the cells that changed: alone,
+both would absorb RAPIER Skilled and Elite (walls up a little on their one
+circuit), and both fly it under the pooled rule. Checked, differs from the
+pooled verdict; the switch stays one rule for every title, and a per-title
+split is open.
+
+| Class, level | Title | Circuits | Gain, s summed | Walls A -> B, medians summed | Rescues A -> B, medians summed | Circuits rescued from zero | The rule on this title alone |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| VECTOR Novice | Pure | 1 | +1.56 | 17 -> 0 | 0 -> 0 | 0 | flies |
+| VECTOR Skilled | Pure | 1 | +0.96 | 86 -> 40 | 0 -> 0 | 0 | flies |
+| VECTOR Elite | Pure | 1 | +0.91 | 65 -> 44 | 0 -> 0 | 0 | flies |
+| VECTOR Ace | Pure | 1 | +0.44 | 103 -> 38 | 0 -> 0 | 0 | flies |
+| VENOM Novice | 2048 | 1 | +0.66 | 21 -> 9 | 0 -> 0 | 0 | flies |
+| VENOM Novice | HD | 4 | +3.45 | 1467 -> 803 | 0 -> 0 | 0 | flies |
+| VENOM Novice | Omega | 1 | +0.70 | 437 -> 281 | 0 -> 0 | 0 | flies |
+| VENOM Novice | Pulse | 12 | +12.40 | 8881 -> 2903 | 0 -> 0 | 0 | flies |
+| VENOM Novice | Pure | 1 | +1.97 | 63 -> 78 | 0 -> 0 | 0 | absorbs |
+| VENOM Skilled | 2048 | 1 | +0.31 | 0 -> 1 | 0 -> 0 | 0 | absorbs |
+| VENOM Skilled | HD | 4 | +1.62 | 525 -> 375 | 0 -> 0 | 0 | flies |
+| VENOM Skilled | Omega | 1 | +0.41 | 37 -> 3 | 0 -> 0 | 0 | flies |
+| VENOM Skilled | Pulse | 12 | +7.01 | 1572 -> 714 | 0 -> 0 | 0 | flies |
+| VENOM Skilled | Pure | 1 | +1.46 | 120 -> 60 | 0 -> 0 | 0 | flies |
+| VENOM Elite | 2048 | 1 | +0.10 | 0 -> 1 | 0 -> 0 | 0 | absorbs |
+| VENOM Elite | HD | 4 | +1.10 | 382 -> 154 | 0 -> 0 | 0 | flies |
+| VENOM Elite | Omega | 1 | +0.32 | 83 -> 9 | 0 -> 0 | 0 | flies |
+| VENOM Elite | Pulse | 12 | +3.64 | 958 -> 866 | 1 -> 1 | 0 | flies |
+| VENOM Elite | Pure | 1 | +1.01 | 128 -> 90 | 0 -> 0 | 0 | flies |
+| VENOM Ace | 2048 | 1 | +0.08 | 3 -> 2 | 0 -> 0 | 0 | flies |
+| VENOM Ace | HD | 4 | +0.91 | 337 -> 141 | 0 -> 0 | 0 | flies |
+| VENOM Ace | Omega | 1 | +0.27 | 49 -> 19 | 0 -> 0 | 0 | flies |
+| VENOM Ace | Pulse | 12 | +2.53 | 1038 -> 1006 | 3 -> 2 | 0 | flies |
+| VENOM Ace | Pure | 1 | +0.91 | 125 -> 97 | 0 -> 0 | 0 | flies |
+| FLASH Novice | 2048 | 1 | +0.68 | 62 -> 18 | 0 -> 0 | 0 | flies |
+| FLASH Novice | HD | 4 | +5.53 | 1784 -> 672 | 0 -> 0 | 0 | flies |
+| FLASH Novice | Omega | 1 | +1.13 | 431 -> 129 | 0 -> 0 | 0 | flies |
+| FLASH Novice | Pulse | 12 | +20.00 | 11838 -> 3681 | 7 -> 3 | 0 | flies |
+| FLASH Novice | Pure | 1 | +2.41 | 85 -> 80 | 0 -> 0 | 0 | flies |
+| FLASH Skilled | 2048 | 1 | +0.32 | 5 -> 6 | 0 -> 0 | 0 | absorbs |
+| FLASH Skilled | HD | 4 | +2.34 | 279 -> 223 | 0 -> 0 | 0 | flies |
+| FLASH Skilled | Omega | 1 | +0.51 | 128 -> 40 | 0 -> 0 | 0 | flies |
+| FLASH Skilled | Pulse | 12 | +9.81 | 3583 -> 1468 | 12 -> 5 | 0 | flies |
+| FLASH Skilled | Pure | 1 | +1.77 | 234 -> 80 | 0 -> 0 | 0 | flies |
+| FLASH Elite | 2048 | 1 | +0.09 | 6 -> 21 | 0 -> 0 | 0 | absorbs |
+| FLASH Elite | HD | 4 | +1.35 | 235 -> 149 | 0 -> 0 | 0 | flies |
+| FLASH Elite | Omega | 1 | +0.29 | 41 -> 33 | 0 -> 0 | 0 | flies |
+| FLASH Elite | Pulse | 12 | +4.66 | 1351 -> 1096 | 1 -> 0 | 0 | flies |
+| FLASH Elite | Pure | 1 | +1.14 | 174 -> 129 | 0 -> 0 | 0 | flies |
+| FLASH Ace | 2048 | 1 | +0.09 | 10 -> 12 | 0 -> 0 | 0 | absorbs |
+| FLASH Ace | HD | 4 | +0.89 | 428 -> 202 | 0 -> 0 | 0 | flies |
+| FLASH Ace | Omega | 1 | +0.23 | 61 -> 18 | 0 -> 0 | 0 | flies |
+| FLASH Ace | Pulse | 12 | +2.93 | 1479 -> 1486 | 3 -> 1 | 0 | absorbs |
+| FLASH Ace | Pure | 1 | +1.02 | 136 -> 64 | 0 -> 0 | 0 | flies |
+| RAPIER Novice | 2048 | 1 | +0.82 | 159 -> 119 | 0 -> 0 | 0 | flies |
+| RAPIER Novice | HD | 4 | +8.11 | 3278 -> 1378 | 0 -> 0 | 0 | flies |
+| RAPIER Novice | Omega | 1 | +1.31 | 679 -> 551 | 0 -> 0 | 0 | flies |
+| RAPIER Novice | Pulse | 12 | +26.83 | 13740 -> 5400 | 1 -> 1 | 1 | absorbs |
+| RAPIER Novice | Pure | 1 | +2.54 | 110 -> 150 | 0 -> 0 | 0 | absorbs |
+| RAPIER Skilled | 2048 | 1 | +0.34 | 30 -> 73 | 0 -> 0 | 0 | absorbs |
+| RAPIER Skilled | HD | 4 | +4.58 | 1007 -> 495 | 0 -> 0 | 0 | flies |
+| RAPIER Skilled | Omega | 1 | +0.76 | 60 -> 67 | 0 -> 0 | 0 | absorbs |
+| RAPIER Skilled | Pulse | 12 | +13.69 | 3237 -> 2716 | 2 -> 0 | 0 | flies |
+| RAPIER Skilled | Pure | 1 | +1.70 | 116 -> 60 | 0 -> 0 | 0 | flies |
+| RAPIER Elite | 2048 | 1 | +0.15 | 54 -> 57 | 0 -> 0 | 0 | absorbs |
+| RAPIER Elite | HD | 4 | +4.44 | 735 -> 398 | 0 -> 0 | 0 | flies |
+| RAPIER Elite | Omega | 1 | +0.45 | 58 -> 72 | 0 -> 0 | 0 | absorbs |
+| RAPIER Elite | Pulse | 12 | +8.25 | 2246 -> 2273 | 3 -> 2 | 0 | absorbs |
+| RAPIER Elite | Pure | 1 | +1.94 | 187 -> 166 | 0 -> 0 | 0 | flies |
+| RAPIER Ace | 2048 | 1 | +0.14 | 58 -> 77 | 0 -> 1 | 1 | absorbs |
+| RAPIER Ace | HD | 4 | +1.94 | 572 -> 794 | 0 -> 0 | 0 | absorbs |
+| RAPIER Ace | Omega | 1 | +0.33 | 95 -> 167 | 0 -> 0 | 0 | absorbs |
+| RAPIER Ace | Pulse | 12 | +5.89 | 2401 -> 3229 | 4 -> 2 | 0 | absorbs |
+| RAPIER Ace | Pure | 1 | +1.20 | 195 -> 140 | 0 -> 0 | 0 | flies |
+| PHANTOM Novice | 2048 | 1 | +1.55 | 146 -> 197 | 0 -> 0 | 0 | absorbs |
+| PHANTOM Novice | HD | 4 | +10.71 | 3400 -> 1356 | 1 -> 1 | 1 | absorbs |
+| PHANTOM Novice | Omega | 1 | +2.66 | 1281 -> 453 | 0 -> 0 | 0 | flies |
+| PHANTOM Novice | Pulse | 12 | +36.37 | 12467 -> 7200 | 47 -> 8 | 2 | absorbs |
+| PHANTOM Novice | Pure | 1 | +2.68 | 81 -> 178 | 0 -> 0 | 0 | absorbs |
+| PHANTOM Skilled | 2048 | 1 | +1.14 | 53 -> 99 | 3 -> 0 | 0 | absorbs |
+| PHANTOM Skilled | HD | 4 | +7.00 | 876 -> 543 | 0 -> 1 | 1 | absorbs |
+| PHANTOM Skilled | Omega | 1 | +1.31 | 297 -> 287 | 0 -> 0 | 0 | flies |
+| PHANTOM Skilled | Pulse | 12 | +20.89 | 3479 -> 3658 | 2 -> 3 | 1 | absorbs |
+| PHANTOM Skilled | Pure | 1 | +2.42 | 103 -> 103 | 0 -> 0 | 0 | flies |
+| PHANTOM Elite | 2048 | 1 | +0.86 | 58 -> 165 | 1 -> 0 | 0 | absorbs |
+| PHANTOM Elite | HD | 4 | +5.02 | 443 -> 499 | 1 -> 2 | 0 | absorbs |
+| PHANTOM Elite | Omega | 1 | +1.14 | 175 -> 145 | 0 -> 0 | 0 | flies |
+| PHANTOM Elite | Pulse | 12 | +12.99 | 2264 -> 3693 | 4 -> 3 | 0 | absorbs |
+| PHANTOM Elite | Pure | 1 | +1.26 | 132 -> 125 | 0 -> 0 | 0 | flies |
+| PHANTOM Ace | 2048 | 1 | +0.34 | 64 -> 150 | 0 -> 0 | 0 | absorbs |
+| PHANTOM Ace | HD | 4 | +2.80 | 613 -> 1029 | 0 -> 4 | 2 | absorbs |
+| PHANTOM Ace | Omega | 1 | +0.45 | 101 -> 188 | 0 -> 0 | 0 | absorbs |
+| PHANTOM Ace | Pulse | 12 | +8.84 | 2580 -> 4994 | 8 -> 2 | 0 | absorbs |
+| PHANTOM Ace | Pure | 1 | +1.45 | 172 -> 180 | 0 -> 0 | 0 | absorbs |
+| SUPERPHANTOM Novice | 2048 | 1 | +5.30 | 5722 -> 3974 | 0 -> 0 | 0 | flies |
+| SUPERPHANTOM Skilled | 2048 | 1 | +0.00 | 5120 -> 4937 | 12 -> 3 | 0 | absorbs |
+| SUPERPHANTOM Elite | 2048 | 1 | +0.00 | 6377 -> 5826 | 22 -> 7 | 0 | absorbs |
+| SUPERPHANTOM Ace | 2048 | 1 | +1.82 | 5550 -> 5216 | 42 -> 12 | 0 | flies |
+
+**Whole races at the cells that changed** (RAPIER Skilled and Elite; switch
+off and on, same seed, 4 seeds a circuit; `races_pulse`, `races_others`). The
+median lap change is at most 0.2 s in every row. Shield is the field's mean at
+the end of each of the first three laps, and at the end of the run, each
+labelled. Of the on-branch wrecks, two fall inside a stint, both slot 7 on
+Pulse `16_Track` (Elite seed 3 tick 7,794; Skilled seed 2 tick 9,014), and
+both are the shield cost, not the driving: traced tick by tick
+(`OAG_SWEEP_WRECK_TRACE=1 OAG_SWEEP_TRACK=16_`, `races_pulse`), the craft
+starts the stint on 9.1 and 15.8 shield, takes no wall contact in it (wall
+ticks flat at 41 and 293), and is drained to zero by weapon damage in its last
+second (12 and 40 ticks), where the forgone absorb (about 18) would have
+covered either hit. The rest come from crafts that flew no stint or long
+after one (934 to 4,777 ticks), the divergence of a changed race. Pulse Elite
+wrecks 6 -> 15 is that divergence plus the one in-stint wreck.
+
+| Title, level | Races | Stints a race | Lap on - off, median | Walls off -> on | Rescues off -> on | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks off -> on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2048 Elite | 4 | 8.8 | -0.20 s | 327 -> 314 | 4 -> 1 | 94.2, 93.8, 89.2 | 88.5, 80.1, 82.5 | 82.2 -> 77.0 | 1 -> 0 |
+| 2048 Skilled | 4 | 8.5 | -0.20 s | 573 -> 568 | 0 -> 0 | 101.1, 102.0, 100.6 | 103.0, 100.8, 97.2 | 91.0 -> 99.3 | 1 -> 0 |
+| HD Elite | 16 | 4.6 | -0.10 s | 3748 -> 3521 | 0 -> 1 | 91.0, 89.2, 83.8 | 90.6, 86.6, 84.9 | 81.2 -> 80.4 | 1 -> 3 |
+| HD Skilled | 16 | 4.5 | -0.20 s | 7704 -> 7653 | 2 -> 2 | 90.4, 82.0, 77.2 | 90.3, 84.5, 78.2 | 74.1 -> 73.4 | 1 -> 0 |
+| Omega Elite | 4 | 3.2 | +0.00 s | 288 -> 369 | 1 -> 0 | 90.4, 90.1, 86.2 | 91.5, 82.3, 81.2 | 81.8 -> 77.8 | 0 -> 0 |
+| Omega Skilled | 4 | 3.2 | -0.10 s | 664 -> 546 | 0 -> 0 | 94.1, 87.6, 87.0 | 93.6, 88.0, 86.6 | 84.2 -> 83.2 | 0 -> 0 |
+| Pulse Elite | 48 | 0.8 | +0.00 s | 13897 -> 14329 | 29 -> 29 | 87.3, 80.8, 77.1 | 87.3, 79.9, 76.9 | 73.1 -> 70.7 | 6 -> 15 |
+| Pulse Skilled | 48 | 0.9 | +0.00 s | 26248 -> 27397 | 6 -> 9 | 86.8, 80.7, 77.6 | 86.0, 80.0, 76.6 | 73.1 -> 71.5 | 8 -> 7 |
+| Pure Elite | 4 | 1.5 | +0.10 s | 1499 -> 1297 | 1 -> 1 | 76.8, 74.6, 66.4 | 75.7, 73.4, 67.2 | 50.9 -> 55.6 | 3 -> 4 |
+| Pure Skilled | 4 | 2.5 | -0.10 s | 1078 -> 1016 | 0 -> 0 | 77.1, 66.4, 59.1 | 80.0, 72.8, 59.0 | 51.9 -> 50.0 | 4 -> 5 |
+
 ### An opponent's Autopilot, wired below PHANTOM (2026-10-20)
+
+**Superseded on 2026-10-20 by the class and difficulty rule** (previous
+section): this is the class-only rule and the measurement it rested on, kept
+for its method and evidence. Its numbers predate the Zone route re-commit.
+
 
 **An opponent on this project's driver that holds an Autopilot flies the
 original's player driver for the pickup's `time` at VENOM and FLASH (and
@@ -1519,7 +1775,8 @@ tail.
 same rule decides it, so the rule is **ported** to all five titles with its
 own sweep each (the per-title table above): Pulse 12 circuits, HD 4, Pure,
 Omega and 2048 on their default circuit. `an_opponent_flies_its_autopilot_below_rapier_only`
-pins the rule on all five at the four classes. 2048 and Omega agree (VENOM and FLASH
+pinned the rule on all five at the four classes (now
+`an_opponent_flies_its_autopilot_by_class_and_difficulty`). 2048 and Omega agree (VENOM and FLASH
 faster with walls down; RAPIER Ace walls up on both, 2048's rescues 0 -> 4).
 The original's 2048 and Omega player driver steers with the pilot assist's
 gains, unread, so the opponents' controller flies it there as for the player.
