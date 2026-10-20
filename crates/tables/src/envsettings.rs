@@ -386,23 +386,28 @@ impl EnvSettings {
         }
     }
 
-    /// A unit direction, or `None` when the triple has no direction.
+    /// A unit direction, or `None` when the triple is all zeros.
     ///
     /// **Normalising is done here because the file does not.** Over the 32
     /// circuits [`SUN_DIRECTION`]'s length takes eight values (0.0, 1.0, 1.208,
     /// 1.784, 2.375, 4.743, 7.348, 34.641), so assuming a unit vector is wrong on
-    /// most and using the raw triple scales the light by accident. Whether the
-    /// length carries an intensity is **not** established.
+    /// most and using the raw triple scales the light by accident. The original
+    /// normalises it too (`Scene_PrepareFrame` stores `Sun direction`
+    /// "normalised", `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`), so the
+    /// length is **not** an intensity.
     ///
-    /// The zero-length case is real: `modesto_heights` authors a `Physical Sun
-    /// direction` of `-0.000030 0.000040 -0.000060`, a disabled field; `None`
-    /// stops it becoming a NaN in a shader.
+    /// **A tiny triple is a direction like any other** (2026-10-20,
+    /// `hd-scene-light`): Tech de Ra writes `0.000040 0.000040 -0.000050` and
+    /// Modesto Heights `-0.000030 0.000040 -0.000060`. They were read as an off
+    /// switch below a length of `1e-3`, which sent both circuits to the stand-in
+    /// rig and dropped their ambient and prelit curve with the sun. Only a
+    /// triple below one quantisation step of the file's six decimals has no
+    /// direction, and answering `None` keeps that out of a shader as a NaN.
     #[must_use]
     pub fn direction(&self, key: &str) -> Option<[f32; 3]> {
         let [x, y, z] = self.vec3(key)?;
         let length = (x * x + y * y + z * z).sqrt();
-        // Two quantisation steps below the smallest real length (1.0); under this is an off switch.
-        if !length.is_finite() || length < 1e-3 {
+        if !length.is_finite() || length < 1e-6 {
             return None;
         }
         Some([x / length, y / length, z / length])

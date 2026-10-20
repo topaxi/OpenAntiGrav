@@ -32,7 +32,7 @@ mod hd_pickup_icon_ground_truth;
 mod hd_rim_glow_ground_truth;
 mod hd_rocket_smoke_ground_truth;
 mod hd_sky_tint_ground_truth;
-mod hd_sunless_rig_ground_truth;
+mod hd_tiny_sun_direction_ground_truth;
 mod hd_trackwall_ground_truth;
 mod hd_zone_hover_ground_truth;
 mod head_to_head_people_ground_truth;

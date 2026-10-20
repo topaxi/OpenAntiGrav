@@ -57,14 +57,24 @@ fn the_sun_direction_comes_back_as_a_unit_vector() {
     assert!((length - 1.0).abs() < 1e-5, "length {length}");
 }
 
-/// `modesto_heights` authors this, and it is an off switch rather than a
-/// direction. Answering `None` is what stops it becoming a NaN in a shader.
+/// A triple of zeros has no direction; answering `None` is what stops it becoming a NaN in
+/// a shader.
 #[test]
-fn a_degenerate_direction_is_none_rather_than_a_nan() {
-    let env =
-        EnvSettings::parse("\"Lighting.Physical Sun direction\"=-0.000030 0.000040 -0.000060\n")
-            .expect("it parses");
-    assert_eq!(env.direction("Lighting.Physical Sun direction"), None);
+fn a_zero_direction_is_none_rather_than_a_nan() {
+    let env = EnvSettings::parse("\"Lighting.Sun direction\"=0.0 0.0 0.0\n").expect("it parses");
+    assert_eq!(env.direction(SUN_DIRECTION), None);
+}
+
+/// `modesto_heights` authors `-0.000030 0.000040 -0.000060` and the engine normalises it like
+/// any other: a direction, not an off switch.
+#[test]
+fn a_tiny_direction_is_still_a_direction() {
+    let env = EnvSettings::parse("\"Lighting.Sun direction\"=-0.000030 0.000040 -0.000060\n")
+        .expect("it parses");
+    let d = env.direction(SUN_DIRECTION).expect("a direction");
+    let length = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+    assert!((length - 1.0).abs() < 1e-5, "length {length}");
+    assert!(d[0] < 0.0 && d[1] > 0.0 && d[2] < 0.0, "{d:?}");
 }
 
 /// A triple that is not unit is normalised rather than used raw: most of the
