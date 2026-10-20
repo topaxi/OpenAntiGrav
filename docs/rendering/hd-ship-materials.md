@@ -648,3 +648,22 @@ per-material branching already exists and is already correctly wired for
 TC0/TC1 question (Finding 3), the three ship-hull families with no settled
 `ADD_SECOND` role, and `carbonfibre`'s own possibly-wrong albedo pick, not a
 missing branch structure.
+
+## The Zone-mode hull, matched against RPCS3 (2026-10-20, `hd-zone-hulls`)
+
+`/data/ships/zone/ship.vex` takes its geometry from the `.rcsmodel` beside it like every team hull: 29 of 29
+nodes, 32,065 triangles, 9 of 9 drawn materials resolved to a shipped variant (33 of 33 chunks), 42,919 authored
+vertex normals, albedo `zone_tp_1024.gtf`. The earlier reading "untextured, computed normals" was stale: the
+normal decode landed 2026-08-17. A matched pair (Zone mode 6 on RPCS3, Vineta K, `--camera-pose` and `--camera-fov`
+taken from the capture) agrees on geometry and paint. Remaining differences, none measured to a law yet:
+
+- **`dg_zonelights1`** (five chunks, the hull's side light cells) is Zone-only: four samplers (`cf_damage_lights`,
+  `damage_lights_n`, `dg_flasha`, `dg_flash3`) and params `0xf8f3ade0 = 3.0`, `0xef18f362` and `0xffede334` at 0.
+  The original shows lit blue cells there on an undamaged craft; ours draws them dark.
+- **Gloss.** Ours reads chrome-like with an iridescent probe sheen where the original's Zone hull is matte white
+  (the Zone material's `0x4232e459 = 120.2`, `0xab31c2b1 = 0.2532` against Feisar's 235 and 0.2; our report says "9
+  material(s) with no specular_exponent chain read (default used)"). Hull-wide, not Zone-specific.
+- **`zone_tp_1024_n.gtf`** is a tangent-space normal map, loaded as a second texture and not applied.
+
+Cross-title: Omega ships the same hull as `hdships/Zone` (6 of 6 materials textured, 24,547 authored normals) and
+is in the same state, **checked, applies, not wired**. 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).
