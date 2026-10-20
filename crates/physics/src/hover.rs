@@ -422,10 +422,15 @@ fn probe_from_hit(
     // `craft+0x208 == 1`, the `Floor` class, so escape is narrower than contact (a
     // magstrip holds kinematically, a wall is `crate::wall`'s business).
     let rig = &state.hover_rig;
-    let escape = if rig.probe_escape
-        && (!rig.escape_floor_only || hit.surface == crate::collide::Surface::Floor)
-        && height < PENETRATION_LIMIT
-    {
+    // A magstrip is held out by choice: the shape tag passes it too, but no live tick has
+    // shown one escaping, and our craft only reaches one inside a unit where it has drifted
+    // under the original's magnet hold (`Rig::escape_floor_only`).
+    let escapes_off = match hit.surface {
+        crate::collide::Surface::Floor => true,
+        crate::collide::Surface::Wall => !rig.escape_floor_only,
+        crate::collide::Surface::MagFloor | crate::collide::Surface::Reset => false,
+    };
+    let escape = if rig.probe_escape && escapes_off && height < PENETRATION_LIMIT {
         up * (PENETRATION_LIMIT - height)
     } else {
         Vec3::ZERO

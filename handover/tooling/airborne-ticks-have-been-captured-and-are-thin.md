@@ -81,6 +81,10 @@ ticks, `0.5` runs included - see
   1594 the nose stays within `1.5` mrad and the landing is the original's tick.
   The `--reseed 60` run keeps its `32` mrad because it reaches 1594 with `+1.7`
   units/s of vertical velocity from 1580-1584.
+- **A `MagFloor` hit does not escape (chosen).** Pulse's shape tag would pass
+  it; with it on, a single-seeded pad replay (`pad_crossing_ground_truth`, 1284)
+  drifted under a magstrip and escaped seven times. Settle it with a live tick of
+  a probe within a unit of a magstrip (de Konstruct's first jump is one).
 - The air pitch residual on the clean lap's own ten fully airborne crest rows is
   a steady `-0.34` rad/s² (against `+0.008` on the drops), and `-0.23` on its
   six half-grounded rows. Small, and the opposite sign to the old free-run gap;

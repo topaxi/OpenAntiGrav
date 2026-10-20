@@ -362,8 +362,9 @@ Regressing the residual on the input: coefficient `-0.004` (up) and `0.000` (dow
 `pitch_air` (`0.3`), the axis' sign and `+/-100` scale, the in-air bias and the in-air pitch
 damping all hold on the control block's own axis to well under one percent of the input
 torque. **Confidence 90** for `pitch_air` as a plain gain on that axis (three inputs, both
-signs, the static read). The gate stayed open: the nose came no closer than `26` degrees to
-it.
+signs, the static read). These runs do not test the gate: the sweep gates on world down, and the
+lowest airborne `up.y` was `0.912` (the up run; `0.959` on the others), above the `0.9` threshold
+on every row, so ours and the original agree on an open gate throughout.
 
 **The weathervane is not settled by these.** It is a yaw term here (the craft is placed with
 its velocity along the nose, and the fall builds about `15` degrees of incidence): its yaw
@@ -402,7 +403,13 @@ mesh-shape tag (`Collision_RaycastMesh` writes `1`, `Collision_RaycastBox` `3`;
 [collision.md](../ghidra/functions/psp-pulse-usa/collision.md#raycasts)), not the floor class,
 and the translate sits inside the probe loop before the type test
 ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
-**Confidence 85** for both (the static reads and one live tick to a millimetre). **On** since
+**Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
+millimetre). A `MagFloor` hit would pass the shape tag too and is **held out, by choice**: no
+live magstrip tick has been checked, and with it on, `pad_crossing_ground_truth`'s single-seeded
+replay across the 1284 pad drifted under a magstrip and escaped off it seven times, gaining
+`+53.26` against the recording's `+46.24` (`+48.94` before; `+48.94` again with it held out). The floor-only gate this replaces (2026-08-12) was a reading of the field as
+the floor class, made the same day the shape tag was not yet recovered; nothing measured it
+against the original. **On** since
 2026-10-20 (`oag_physics::hover::Rig::escape_floor_only` false for Pulse; the escape summed
 before the contact test for every rig).
 
@@ -411,12 +418,19 @@ before the contact test for every rig).
 | one step from 1594, height against the record | `-0.202` | `-0.0004` |
 | rolled from 1594, nose error at 1608 | `-14.6` mrad | `-1.5` mrad (peak) |
 | rolled from 1594, landing | one tick early (1608) | the original's tick (1609) |
-| one-step height misses over `0.05` on five captures (10,838 rows) | 391 | 390 (1594 alone moved) |
+| one-step height misses over `0.05` on five captures (12,838 rows) | 391 | 390 (1594 alone moved) |
 | `race_ground_truth` lone craft | 12/12 clean | 12/12 clean (`06_Track` 36.1 -> 35.0 s, `02_Track` 35.1 -> 35.0 s) |
+
+Our AI's gates, with MagFloor held out: `ai_clean_lap_gate` unchanged; `speed_plan_ground_truth`'s
+`06_Track` RAPIER goes from clean under 0 of the nine `perturb::BOUND_OFFSETS` to 8 of 9 (moved
+from `NOT_CLEAN` to `UNSETTLED`); `ai_dekonstruct_black_ground_truth` VENOM seed 1 forward loses
+one craft at offset 0 (bound 0 -> 1). Noise method over the nine offsets, de Konstruct cells over
+the old bounds (of 12): before `0 0 0 1 2 1 2 1 1`, after `1 0 0 1 1 1 1 1 1` (median 1 both, max
+2 -> 1); destroyed per board, `143` -> `135` summed over the nine.
 
 Pinned by `hover_contact_ground_truth.rs`'s
 `the_crest_lifts_off_through_a_wall_escape_with_no_contact` and, in `oag-physics`,
-`penetration_escape_fires_off_any_surface_and_off_floor_alone_when_gated` and
+`penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated` and
 `a_wall_under_the_probes_lifts_the_body_with_no_contact`.
 
 **What is left of the `--reseed 60` figure** is unchanged by this: at 1594 that run arrives
@@ -427,10 +441,10 @@ the cage response's vertical component, not to the air.
 
 | title | escape off any hit | escape without contact | origin |
 | --- | --- | --- | --- |
-| Pulse (PSP, PS2) | yes | yes | measured |
+| Pulse (PSP, PS2) | yes (`Floor`, `Wall`; `MagFloor` held out, chosen) | yes | measured |
 | Pure | yes | yes | inherited from Pulse (Pure's `Ship_HoverTwoPoint` lineage; its gate not read) |
 | Wipeout HD | no, `Floor` only | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the floor gate is HD's `hit+0x28 == 1`, whose meaning is unread, kept by choice |
-| Omega, 2048 | yes | yes | inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |
+| Omega, 2048 | yes | yes | **changed by this port** (they had Pulse's floor-only gate too), inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |
 
 ## Wipeout HD: the class scale is on flight gravity (Ubermall)
 

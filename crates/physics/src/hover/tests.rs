@@ -199,14 +199,14 @@ fn a_wall_is_not_a_hoverable_surface() {
     assert!(!probe.contact);
 }
 
-/// Penetration escape fires off any surface the probe hits on Pulse, and off `Floor` alone on a
-/// rig whose gate is floor-only (HD's reading). Pulse's gate, `craft+0x208 == 1`, is the hit
+/// Penetration escape fires off a `Floor` or a `Wall` on Pulse, and off `Floor` alone on a rig
+/// whose gate is floor-only (HD's reading); never off a magstrip (chosen, `Rig::escape_floor_only`). Pulse's gate, `craft+0x208 == 1`, is the hit
 /// record's shape tag, `1` for every mesh (`collision.md`), applied *before* the collider's
 /// type is looked at: a probe half a unit above a wall is lifted out though the wall carries
 /// no suspension. Measured on Talon's Junction's crest (`airborne-ground-truth.md`). This
 /// module escaped off `Floor` alone until 2026-10-20, reading the tag as the floor class.
 #[test]
-fn penetration_escape_fires_off_any_surface_and_off_floor_alone_when_gated() {
+fn penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated() {
     let world = |surface| {
         let mut world = CollisionWorld::new();
         world.push(TriangleSoup::new(
@@ -247,7 +247,7 @@ fn penetration_escape_fires_off_any_surface_and_off_floor_alone_when_gated() {
         assert!(floor.contact, "and it still carries the suspension");
     }
 
-    // Pulse: a wall and a magstrip escape too, and neither changes what carries the craft.
+    // Pulse: a wall escapes too, and carries nothing.
     let wall = inside(Surface::Wall, false);
     assert!(
         (wall.escape.y - shortfall).abs() < 1e-5,
@@ -256,8 +256,9 @@ fn penetration_escape_fires_off_any_surface_and_off_floor_alone_when_gated() {
     );
     assert!(!wall.contact, "a wall must never carry the suspension");
     assert_eq!(wall.force, Vec3::ZERO);
+    // A magstrip is held out on every rig.
     let mag = inside(Surface::MagFloor, false);
-    assert!((mag.escape.y - shortfall).abs() < 1e-5, "{:?}", mag.escape);
+    assert_eq!(mag.escape, Vec3::ZERO);
     assert!(mag.contact, "a magstrip is still a hoverable surface");
 
     // A floor-only gate: neither escapes.
