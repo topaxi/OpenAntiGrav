@@ -5433,7 +5433,11 @@ Not: `06_Track` VENOM and RAPIER
 (the corner after the gap at 1196-1200), `14_Track` PHANTOM and `29_Track`
 RAPIER and PHANTOM (rescued, in the air or off the line, at 1247 and
 2402-2441 with every ceiling tried). By team: Feisar (`Turning` 1.80) 89,
-Assegai 87, Piranha (1.30) 83 of 96.
+Assegai 87, Piranha (1.30) 83 of 96. Since 2026-10-20 the test asserts only `29_Track` PHANTOM as not clean
+and prints `06_Track` VENOM (clean under 3 of the nine perturbation offsets) and RAPIER (8 of
+9, from 0 of 9 before the hover escape off a wall,
+[airborne-ground-truth.md](../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch))
+and `29_Track` RAPIER (8 of 9) without a verdict.
 
 ### What it costs
 
