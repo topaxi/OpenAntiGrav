@@ -53,6 +53,62 @@ fn no_camera_keeps_the_chase_camera_even_when_the_capture_has_one() {
     assert!(camera.is_none());
 }
 
+const FIELD: &str = "\
+slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z
+1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30
+2,Qirex,0,0,-1,0,1,0,1,0,0,-5,3,8
+";
+
+#[test]
+fn a_field_row_is_an_exact_pose_and_names_its_team() {
+    let path = fixture_file("field", FIELD);
+    let field = pose::field_from_csv(&path).expect("the fixture field");
+    assert_eq!(field.len(), 2);
+    assert_eq!(field[0].team, "Feisar");
+    assert_eq!(field[1].team, "Qirex");
+    assert_eq!(
+        field[1].pose.position,
+        oag_core::math::Vec3::new(-5.0, 3.0, 8.0)
+    );
+    // The same reading `--pose-from` gives a row of the same basis.
+    let frame_pose = oag_trace::replay::orientation_of_rows(
+        oag_core::math::Vec3::X,
+        oag_core::math::Vec3::Y,
+        oag_core::math::Vec3::Z,
+        oag_trace::replay::Basis::LeftUpForward,
+    );
+    assert_eq!(field[0].pose.orientation, frame_pose);
+}
+
+#[test]
+fn a_field_with_a_gap_in_its_slots_is_refused() {
+    let text = FIELD.replace("\n2,Qirex", "\n3,Qirex");
+    let path = fixture_file("field-gap", &text);
+    let error = pose::field_from_csv(&path).expect_err("slot 3 follows slot 1");
+    assert!(format!("{error:#}").contains("in order"), "{error:#}");
+}
+
+#[test]
+fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
+    let hud = pose::parse_hud_state("6,1,30.0,31.5").expect("four values");
+    assert_eq!(
+        hud,
+        race::CaptureHud {
+            place: 6,
+            lap: 1,
+            lap_ticks: 1800,
+            race_ticks: 1890,
+            speed_kmh: None,
+            shield: None,
+        }
+    );
+    let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
+    assert_eq!((full.speed_kmh, full.shield), (Some(571.5), Some(99.0)));
+    assert!(pose::parse_hud_state("6,1,30.0").is_err());
+    assert!(pose::parse_hud_state("0,1,3,3").is_err());
+    assert!(pose::parse_hud_state("1,1,-3,3").is_err());
+}
+
 /// One frame of the PSP's backdrop, to the nanosecond.
 const BACKDROP_FRAME: f64 = 1001.0 / 30_000.0;
 

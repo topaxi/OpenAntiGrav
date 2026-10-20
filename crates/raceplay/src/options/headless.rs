@@ -197,6 +197,9 @@ impl Setup {
             allowed_weapons: Vec::new(),
             weapon_pad_refresh: 0.0,
             pose_override: None,
+            field_poses: Vec::new(),
+            #[cfg(feature = "view")]
+            capture_hud: None,
             #[cfg(feature = "view")]
             camera_override: None,
         }

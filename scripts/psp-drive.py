@@ -542,6 +542,13 @@ def menu(args):
     tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
     if args.class_right:
         tap(dbg, "right", args.class_right, wait=0.4)  # -> FLASH, RAPIER, PHANTOM
+    if args.weapons_off:
+        # The Racebox page's rows are RACE TYPE, SPEED CLASS, WEAPONS, AI DIFFICULTY (screenshotted
+        # 2026-10-20); WEAPONS' list is On, then Off. The result is read back from
+        # `g_weapons_enabled` (0x08b30fa8) once the race is up (printed below).
+        tap(dbg, "down")  # SPEED CLASS -> WEAPONS
+        tap(dbg, "right", 1, wait=0.4)  # On -> Off
+        tap(dbg, "up")
     tap(dbg, "up")
     # **The Talon's Junction check below is mis-calibrated for a full grid.**
     # A single race spawns the player on the grid, which sits about 139.9 units
@@ -577,6 +584,7 @@ def menu(args):
     print("loading the race", file=sys.stderr)
 
     _, sample = settle_into_race(dbg)
+    print("g_weapons_enabled byte = %d" % dbg.read(0x08B30FA8, 1)[0])
     off = sum((a - b) ** 2 for a, b in zip(sample["pos"], TALONS_JUNCTION_START)) ** 0.5
     if off > TALONS_JUNCTION_TOLERANCE:
         message = (
@@ -907,6 +915,11 @@ def main():
         "6 ELIMINATOR. **ZONE is greyed on a fresh profile** and the press "
         "lands on a plain single race (an eight-craft grid, g_game_mode 3): "
         "check the race that comes up, not the index.",
+    )
+    p.add_argument(
+        "--weapons-off",
+        action="store_true",
+        help="set the Racebox page's WEAPONS row to Off (a single race, where it is editable)",
     )
     p.add_argument(
         "--unlock",

@@ -107,6 +107,9 @@ impl Race {
             pilot_assist,
             wall_restitution,
             pose_override,
+            field_poses,
+            #[cfg(feature = "view")]
+            capture_hud,
             #[cfg(feature = "view")]
             camera_override,
             #[cfg(feature = "view")]
@@ -434,7 +437,7 @@ impl Race {
                 crate::pilots::Roster::built_in()
             }
         };
-        if pose_override.is_none()
+        if (pose_override.is_none() || !field_poses.is_empty())
             && full_grid
             && let Some(base) = base
         {
@@ -527,7 +530,9 @@ impl Race {
                 // "the same race" with different files must not agree on the
                 // hash - see `oag_ai::Driver::pilot`.
                 opponent.driver.pilot = entry.digest;
-                opponent.place_at(*pose);
+                // A captured field puts the craft where the original had it, not on its row.
+                // The driver's lane index above is the row's: a posed capture takes no tick.
+                opponent.place_at(field_poses.get(ship_index - 1).copied().unwrap_or(*pose));
             }
             world.ship_count = field_opponents + 1;
             // **What was loaded, and who is flying what, once per race.** The
@@ -764,6 +769,7 @@ impl Race {
                     .filter(|_| camera_override.is_none())
                     .map(|(grid, rule)| super::intro_camera::IntroCamera::new(grid, rule)),
                 camera_override,
+                capture_hud,
                 wreck_ended_tick: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(

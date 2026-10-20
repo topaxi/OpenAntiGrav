@@ -239,6 +239,14 @@ impl Race {
                 .filter(|_| primary)
                 .and_then(|split| split.display.line().cloned()),
         };
+        if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
+            readout.place = hud.place;
+            readout.lap = hud.lap;
+            readout.lap_ticks = hud.lap_ticks;
+            readout.race_ticks = hud.race_ticks;
+            readout.speed_kmh = hud.speed_kmh.unwrap_or(readout.speed_kmh);
+            readout.shield = hud.shield.unwrap_or(readout.shield);
+        }
         if finished.is_some() {
             readout.messages[oag_hud::messages::SLOTS - 1] = Some(oag_hud::messages::MessageLine {
                 text: FINISHED_LINE.to_string(),

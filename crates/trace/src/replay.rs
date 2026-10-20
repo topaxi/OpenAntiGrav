@@ -305,7 +305,14 @@ fn divide_or_zero(numerator: f32, denominator: f32) -> f32 {
 /// and `Quat::from_mat3` wants a rotation.
 #[must_use]
 pub fn orientation_of(frame: &Frame, basis: Basis) -> Quat {
-    let (right, up, forward) = basis.to_body(frame.row0, frame.up, frame.forward);
+    orientation_of_rows(frame.row0, frame.up, frame.forward, basis)
+}
+
+/// [`orientation_of`] for a basis that is not in a [`Frame`]: the three recorded rows themselves,
+/// as a capture of a whole field (one row set per craft) carries them.
+#[must_use]
+pub fn orientation_of_rows(row0: Vec3, row1: Vec3, row2: Vec3, basis: Basis) -> Quat {
+    let (right, up, forward) = basis.to_body(row0, row1, row2);
     let Some((x, y, z)) = look_columns(right, forward) else {
         return Quat::IDENTITY;
     };

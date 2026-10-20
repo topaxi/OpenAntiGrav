@@ -67,6 +67,8 @@ pub struct RaceView {
     pub(super) contact: super::contact_fx::ContactFx,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
+    /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].
+    pub(super) capture_hud: Option<crate::CaptureHud>,
     /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
     /// [`super::intro_camera`].
     pub(super) intro: Option<super::intro_camera::IntroCamera>,
