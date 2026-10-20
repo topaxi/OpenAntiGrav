@@ -585,3 +585,43 @@ law above that this section called unread is now read and matched against a
 live dump: life 1.85 s, half-width 0.4 to 2.0, alpha from
 `smoke_trails_opacity_ramp.tga`, three single-sided fins, alpha-over. See
 [rocket-trail.md](../ghidra/functions/ps3-hdfury-eu/rocket-trail.md).
+
+## Pulse PS2 at rest: a narrow tube under the nozzle (2026-10-20, `hull-points-ps2`)
+
+Read from a GS dump of the Moa Therma White Single Race state on PCSX2 (craft at rest,
+after GO; `scripts/pcsx2-drive.py gsdump`, read with `scripts/pcsx2-gsdump.py`). The
+original's nozzle is a white-hot plate with **one narrow tube behind it**, seen from the
+chase camera as a column about 13 px wide running from the nozzle to the bottom of the
+screen, magenta at the edge and grey in the core. Ours draws a wide blue-purple halo
+round the plate instead.
+
+What the dump says the column is:
+
+- A run of nine state groups, one texture (`64x64`, 8-bit, the size of the ship's
+  `Engine_GLOW.tga`), alpha-blended (`ALPHA 0x68`, `TEST 0x70002`), strips of rings
+  of **four vertices** each: a four-sided tube of geometry, `7` px either side of the
+  centre line at the nozzle, growing towards the camera as it recedes.
+- Two passes over the same tube: one with grey vertex colours fading `210 -> 147 -> 99 ->
+  63 -> 38 -> 20` along the tube, one `(155, 0, 124)` fading the same way to `(15, 0, 12)`.
+  So the magenta is a vertex colour the game sets and the grey a second pass; neither
+  is the palette of `WO_SHIP_ENGINEFLARE.POB` (`pal0` teal, `Flares` orange).
+- It is **centred**, not at the two side nozzles. The mesh is not the hull's own
+  `booster:` parts either (those span `x = -1 .. 1`).
+
+What ours does with the same pose, tested by bypassing both `plume_visible` gates
+(a scratch edit, reverted):
+
+- With the gate as shipped the PS2 draws the engine-flare `.POB` (halo and white plate)
+  and no plume, because the plume is hidden at rest; the dark square under the nozzle
+  is the hull's own nozzle notch, present with the `.POB` off.
+- With the gate bypassed `shipboost.vex` draws **two** flares at the side anchors with
+  short streaks - not the original's single centred tube, and not at rest in the
+  original either. So the plume's gate is **not** the whole difference, and the tube is
+  **not** `shipboost.vex`.
+
+**Open.** What mesh the tube is (the `Trail` node class's own mesh, per
+[exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md), is the lead: the PSP's ribbon
+is history-based and has no length at rest, the PS2's evidently is not), why it exists at
+rest, and who sets the magenta. PSP at rest draws no such tube (the reference frames
+under `data/reference/compare-page/pulse/` show the star alone), so this is a per-pressing
+difference in what is drawn, not a different gate on the same asset.

@@ -2,7 +2,10 @@
 //! live on PPSSPP: the bloom's stencil-stamped glow mask, unmeasured on the PS2
 //! port, Pure or any later title, so it stays behind [`is_pulse_psp`]. The hull's
 //! GE lights and the Quake's road ripple are read off the PSP executable and
-//! carried to the PS2 by the `hull_lights` and `road_ripple` rules.
+//! carried to the PS2 by the `hull_lights` and `road_ripple` rules. The hull rig
+//! is built for the PS2 too but draws nothing there: a PS2 hull vertex carries a
+//! colour, which `mesh.wesl` reads as already lit
+//! (`docs/ghidra/functions/ps2-pulse-eu/hull-lights.md`).
 //!
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
