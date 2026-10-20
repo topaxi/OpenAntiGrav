@@ -48,13 +48,11 @@
 //! | `0x92fc84bf` | (no preimage) | 2.0 |
 //! | `0x17d9b3d3` | (no preimage) | 1.0 |
 //!
-//! and a hull's materials carry `SpecScale` (`0x4232e459`) at 235 on the paint
-//! and 500 on the glass, and `Bloom` (`0xf8f3ade0`) at 1.0 on
-//! `emissive_bloom` - so the specular exponent
-//! `docs/ghidra/functions/ps3-hdfury-eu/renderer.md` records as "32, the
-//! commonest of three round values, a stand-in" is authored per material
-//! instance after all. **That is a finding this module makes possible and does
-//! not act on**; nothing reads `SpecScale` yet.
+//! and a hull's materials carry `0x4232e459` (once guessed `SpecScale`) at 160 on
+//! `feisar_c1`'s paint, 300 on Harimau's and 115 to 260 on glass, and `Bloom` (`0xf8f3ade0`) at 1.0 on
+//! `emissive_bloom`. `0x4232e459` is the specular **exponent**: the live program patches it into
+//! the exponent's own `MUL`, and `oag_mesh::mesh::rcs::skin` now reads it there
+//! (`docs/rendering/hd-ship-materials.md`, "The hull's specular exponent").
 
 use oag_formats::ByteOrder;
 

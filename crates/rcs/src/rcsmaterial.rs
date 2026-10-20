@@ -465,6 +465,17 @@ pub const SUN_DIRECTION: u32 = 0x02df_31e5;
 /// specular-exponent chain is the strongest candidate for having been
 /// patched from, at draw time, rather than baked in the file.
 pub const SPECULAR_POWER: u32 = 0x81e0_e773;
+/// The parameter a hull's `diffuse_with_specular_from_alpha_*` programs patch into the
+/// exponent's own `MUL` (`parameter 0x4232e459` at code slot `0x58` of the live program on
+/// Sebenco Climb and Anulpha Pass): 300 on Harimau, 160 on `feisar_c1`'s paint. An earlier
+/// reading called it `SpecScale`; where it patches the exponent slot it is the exponent.
+/// Eight other hashes patch an exponent slot on the circuits' materials
+/// (`hd_specular_patch_census`); they are not read, because their names say scalar
+/// (`specscalar`) and nothing has pinned their meaning.
+pub const SPEC_EXPONENT: u32 = 0x4232_e459;
+/// The parameter `carbonfibre` patches into its exponent's `MUL`: 80 on `feisar_c1`, 70 on
+/// `assegai_c1`, 60 on the circuits' carbon (`hd_specular_patch_census`).
+pub const CARBON_EXPONENT: u32 = 0xebec_ee0f;
 
 impl Declared {
     /// Reads one `SHO` block's declaration tables, or `None` if `at` does not

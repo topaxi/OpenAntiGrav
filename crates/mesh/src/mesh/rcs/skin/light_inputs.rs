@@ -50,6 +50,13 @@ pub(super) fn colour_factor(
     !fed.is_empty() && fed.iter().all(|&n| program.input_is_only_a_factor(n))
 }
 
+/// The parameters read as an exponent where they patch the exponent's own `MUL`.
+const EXPONENT_PARAMETERS: [u32; 3] = [
+    rcsmaterial::SPECULAR_POWER,
+    rcsmaterial::SPEC_EXPONENT,
+    rcsmaterial::CARBON_EXPONENT,
+];
+
 /// The exponent this material's specular term is drawn with: its own chain's
 /// literal, [`crate::mesh::NO_SPECULAR`] for a [`colour_factor`] material
 /// whose program has no chain, else the shared stand-in.
@@ -63,9 +70,10 @@ pub(super) fn specular_exponent(
     // not a plausible authored exponent, and the code slot of that chain's `MUL` is one
     // the engine overwrites at draw time with a parameter of the material instance
     // (`Program::specular_exponent_parameter` names it): `SpecularPower` on most
-    // materials, and `0x4232e459` on a hull's `diffuse_with_specular_from_alpha_*`
-    // (300 on Harimau, 160 on `feisar_c1`'s paint, read off the live program's patch
-    // table on Sebenco Climb and Anulpha Pass). Asking for `SpecularPower` alone left
+    // materials, `SPEC_EXPONENT` (`0x4232e459`) on a hull's
+    // `diffuse_with_specular_from_alpha_*` (300 on Harimau, 160 on `feisar_c1`'s paint, read
+    // off the live program's patch table on Sebenco Climb and Anulpha Pass), and
+    // `CARBON_EXPONENT` on `carbonfibre`. Asking for `SpecularPower` alone left
     // every hull on the shared 32 and its highlights a broad white wash. A `0.0` whose
     // slot nothing patches, or a material with no authored value for it, still falls
     // back to `DEFAULT_SPECULAR_EXPONENT`; every other resolved value is wired as read.
@@ -74,7 +82,9 @@ pub(super) fn specular_exponent(
         if value != 0.0 {
             return Some(value);
         }
-        let hash = program.specular_exponent_parameter()?;
+        let hash = program
+            .specular_exponent_parameter()
+            .filter(|hash| EXPONENT_PARAMETERS.contains(hash))?;
         material
             .parameters
             .iter()
