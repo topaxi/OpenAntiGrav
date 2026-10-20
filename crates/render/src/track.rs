@@ -151,6 +151,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
+        material_tangent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -228,6 +229,7 @@ fn strip(
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
             texcoord2: [0.0, 0.0],
+            tangent: 0,
         });
         vertices.push(GpuVertex {
             quake: 0.0,
@@ -244,6 +246,7 @@ fn strip(
             specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
             glow: 0.0,
             texcoord2: [0.0, 0.0],
+            tangent: 0,
         });
     }
     for i in 0..samples.len() as u32 - 1 {

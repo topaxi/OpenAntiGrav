@@ -151,6 +151,14 @@ pub struct GpuVertex {
     /// `docs/ghidra/functions/ps3-hdfury-eu/quake.md`, "Open".
     /// Last, for the reason [`Self::lightmap_texcoord`] gives.
     pub quake: f32,
+    /// The authored `tangent` of a hull whose material reads a texture as a
+    /// tangent-space normal, as the four raw bytes the file holds
+    /// (`Unorm8x4` on the wire): `xyz` is `2b - 1` and `w` multiplies the
+    /// binormal `cross(N, T)`. `0` - which no unit vector encodes - on every
+    /// other vertex, which is what switches the shader's hull normal map off.
+    /// See `mesh::rcs::hull_normal`. Last, for the reason
+    /// [`Self::lightmap_texcoord`] gives.
+    pub tangent: u32,
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,

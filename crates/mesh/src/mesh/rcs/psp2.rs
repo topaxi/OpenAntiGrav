@@ -632,6 +632,7 @@ fn build_planned(
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
                 texcoord2: [0.0, 0.0],
+                tangent: 0,
             });
         }
         if !place.hidden {

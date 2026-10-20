@@ -19,6 +19,7 @@ fn vertex(normal: [f32; 3]) -> GpuVertex {
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 1.0,
         texcoord2: [0.0, 0.0],
+        tangent: 0,
     }
 }
 

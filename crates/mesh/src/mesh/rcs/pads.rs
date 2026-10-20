@@ -484,6 +484,7 @@ pub(super) fn emit_chunk(
                     texcoords: texcoords.as_deref(),
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
                     texcoords2: texcoords2.as_deref(),
+                    tangents: None,
                     vertex_light: vertex_light.as_deref(),
                     indices: &indices,
                     chunk: u32::try_from(chunk_index).ok(),

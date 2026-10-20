@@ -56,6 +56,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let cofactor = mat3x3<f32>(cross(c1, c2), cross(c2, c0), cross(c0, c1));
     let turned = (cofactor * in.normal) * handed;
     out.normal = (uniforms.model * vec4<f32>(turned, 0.0)).xyz;
+    // The authored tangent turned like a direction (the node, then the model);
+    // an all-zero tangent stays zero, which is the fragment stage's off switch.
+    if dot(in.tangent.xyz, in.tangent.xyz) > 0.0 {
+        let t = in.tangent.xyz * 2.0 - 1.0;
+        out.tangent = vec4<f32>((uniforms.model * (node * vec4<f32>(t, 0.0))).xyz, in.tangent.w);
+    }
     out.colour = in.colour;
     out.lit = in.lit;
     out.glow = in.glow;

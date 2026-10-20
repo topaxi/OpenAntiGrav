@@ -36,6 +36,7 @@ mod hd_holo_billboard_lit_path;
 mod hd_hull_colour_factor_ground_truth;
 mod hd_hull_env_probe;
 mod hd_hull_glow_role_ground_truth;
+mod hd_hull_normal_lit_path;
 mod hd_light_bar_ground_truth;
 mod hd_light_cone_ground_truth;
 mod hd_light_cone_lit_path;

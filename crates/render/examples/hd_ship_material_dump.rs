@@ -7,6 +7,10 @@
 //! cargo run -p oag-render --example hd_ship_material_dump -- data/images/hdfury-ps3-eu-dec.iso /data/ships/feisar_c1/ship.vex diffuse_with_specular_from_alpha_n_vcol.rcsmaterial
 //! ```
 //!
+//! `OAG_PASS=<hex pass word>` resolves the variant of that word instead of the
+//! lit race pass's (`Features::chunk_word` still folds in the chunk's own
+//! declaration, so `0x847` did not land on the live `IBL` permutation here).
+//!
 //! With a third argument (a material's leaf file name), only that one
 //! material prints its full instruction listing; otherwise every resolved
 //! material on the `.vex` prints its summary row only.
@@ -122,7 +126,13 @@ fn main() -> anyhow::Result<()> {
             continue;
         };
         let decl = decl_of.get(&ordinal).copied().flatten();
-        let word = rcsmaterial::Features::chunk_word(LIT_RACE_PASS, decl);
+        let word = rcsmaterial::Features::chunk_word(
+            std::env::var("OAG_PASS")
+                .ok()
+                .and_then(|v| u32::from_str_radix(v.trim_start_matches("0x"), 16).ok())
+                .unwrap_or(LIT_RACE_PASS),
+            decl,
+        );
         let key = rcsmaterial::Features::from_pass_word(word);
         let Some((class, variant)) = Class::ALL
             .into_iter()
@@ -137,10 +147,11 @@ fn main() -> anyhow::Result<()> {
         };
 
         println!(
-            "== {} [{slot}] ({chunks} chunk(s)) - {class:?}/{} @ {:#x} ==",
+            "== {} [{slot}] ({chunks} chunk(s)) - {class:?}/{} @ {:#x} (vertex @ {:#x}) ==",
             material.name,
             key.name(),
-            variant.fragment.offset
+            variant.fragment.offset,
+            variant.vertex.offset
         );
         // The model's own sampler table: (hash, path), by ordinal.
         for (i, (hash, path)) in material.samplers.iter().enumerate() {

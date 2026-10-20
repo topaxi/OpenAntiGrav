@@ -84,3 +84,87 @@ fn the_zone_hulls_light_cells_bind_their_flash_and_read_a_second_uv_set() {
         "texcoord2 is read, not left at the origin"
     );
 }
+
+/// The same hull's paint reads its `_n` normal map through the authored tangent
+/// (`mesh::rcs::hull_normal`): the map binds third, the chunks carry their
+/// tangent, it is perpendicular to the vertex normal, and the light cells'
+/// own material (no normal map) carries none.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_zone_hulls_paint_binds_its_normal_map_and_its_chunks_carry_the_tangent() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let data = archive_cache::read(&spec, ZONE_HULL).expect("the Zone hull's .vex reads");
+    let geometry =
+        mesh::rcs::sibling_geometry(&spec, ZONE_HULL, &data).expect("a sibling .rcsmodel");
+    let (model, report) = mesh::rcs::build(
+        ZONE_HULL,
+        &data,
+        &geometry,
+        &mut |name| archive_cache::read(&spec, name),
+        |c| c.mesh,
+    )
+    .expect("the Zone hull builds");
+
+    assert!(
+        report.hull_normal_bound >= 1 && report.hull_normal_unread == 0,
+        "the paint's normal map binds: {} bound, {} unread",
+        report.hull_normal_bound,
+        report.hull_normal_unread
+    );
+    let marked: Vec<usize> = model
+        .material_tangent
+        .iter()
+        .enumerate()
+        .filter(|(_, on)| **on)
+        .map(|(slot, _)| slot)
+        .collect();
+    assert!(!marked.is_empty(), "a material takes the tangent");
+    for &slot in &marked {
+        let map = model.pad_masks[slot]
+            .as_ref()
+            .expect("its map is bound third");
+        assert!(
+            map.label.ends_with("zone_tp_1024_n.gtf"),
+            "the third binding is the normal map: {}",
+            map.label
+        );
+    }
+
+    // Only a marked material's vertices carry a tangent, every one of them,
+    // and it is a unit vector on average (a few padding vertices decode
+    // to `(-1, -1, -1)` and a few are short) perpendicular to the authored normal.
+    let tangents: Vec<_> = model.vertices.iter().filter(|v| v.tangent != 0).collect();
+    assert!(
+        tangents.len() > 10_000,
+        "the hull's chunks carry their tangents: {}",
+        tangents.len()
+    );
+    let (mut dot_sum, mut len_sum) = (0.0f64, 0.0f64);
+    for v in &tangents {
+        let b = v.tangent.to_le_bytes();
+        let t = [0, 1, 2].map(|i| f64::from(b[i]) / 255.0 * 2.0 - 1.0);
+        let len = (t[0] * t[0] + t[1] * t[1] + t[2] * t[2]).sqrt();
+        len_sum += len;
+        dot_sum += (0..3)
+            .map(|i| t[i] * f64::from(v.normal[i]))
+            .sum::<f64>()
+            .abs();
+    }
+    let mean = dot_sum / tangents.len() as f64;
+    let mean_len = len_sum / tangents.len() as f64;
+    assert!(
+        (mean_len - 1.0).abs() < 0.02,
+        "unit tangents on average: {mean_len}"
+    );
+    assert!(
+        mean < 0.05,
+        "perpendicular to the normal: mean |t.n| {mean}"
+    );
+    assert!(
+        tangents.len() < model.vertices.len(),
+        "the light cells and the glass carry none"
+    );
+}

@@ -101,6 +101,7 @@ pub mod psp2;
 mod render_block;
 mod stride;
 mod surface;
+mod tangent;
 
 pub use coverage::coverage;
 pub use render_block::{RENDER_ALTERNATE_FOG, RENDER_BEHIND_GLASS, RENDER_BLOCK_LEN, RENDER_TRACK};
