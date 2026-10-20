@@ -213,7 +213,10 @@ fn a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack() {
         COUNTDOWN + 600,
         120,
         |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
-        |step| step == 40,
+        // Step 90, not 40 (2026-10-20): under Pulse's measured world-axis inertia the
+        // scripted pack sits elsewhere at window step 40 and nobody is in the lock
+        // cone. The scenario moved; the claim did not.
+        |step| step == 90,
     ) else {
         return;
     };
