@@ -140,6 +140,7 @@ OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-state-probe.py   # 
 | `grid-flyover-talons` | Campaign race, Talon's Junction grid fly-over, `START RACE` up | `cross` when the prompt shows (a `cross` before it is ignored) |
 | `hd-racebox-talons-venom-weapons-grid` | Racebox Single Race, Venom, weapons ON, Feisar, 8 ships, fly-over | same; weapon pickups seen in the race |
 | `hd-timetrial-talons-venom-start` | Racebox Time Trial, Venom, Feisar, 4.5 s after `GO`, ship at 0 km/h | drive at once |
+| `hd-race-talons-venom-pack` | Racebox Single Race, Venom, **weapons Off**, Talon's Junction, Feisar (Fury hull), the Autopilot flying, lap 2 of 3, 6th of 8 between two craft, 500 km/h (`rpcs3-hd-race-hunt.py`, 2026-10-20) | `emu-restore-state.sh <lane> <state> --pause`, then `rpcs3-hd-pair.py --field` |
 | `hd-racebox-talons-venom-midrace-absorb` | Racebox race, 312 km/h, `Absorb` pickup held, lap 1 | drive at once |
 | `hd-timetrial-talons-assegai-start` | Racebox Time Trial, Venom, `Assegai_c1` (the row Team Selection opens on), at rest just after `GO` | drive at once |
 | `hd-timetrial-talons-assegai-classic-start` | the same with the classic `Assegai` hull (Team Selection `down` once) | drive at once |

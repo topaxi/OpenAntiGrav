@@ -1144,6 +1144,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             pilot_assist,
             wall_restitution,
             pose_override,
+            field_poses: options.field.clone(),
+            #[cfg(feature = "view")]
+            capture_hud: options.hud,
             #[cfg(feature = "view")]
             camera_override: options.camera,
         },

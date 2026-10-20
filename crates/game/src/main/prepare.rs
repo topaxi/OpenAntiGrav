@@ -50,6 +50,10 @@ pub(crate) struct Pending {
     pub(crate) mode: oag_race::Mode,
     pub(crate) leg: frontend::Leg,
     pub(crate) pose: Option<race::PoseRequest>,
+    /// `--field-from`: the opponents a captured frame had, empty for a race.
+    pub(crate) field: Vec<crate::pose::FieldCraft>,
+    /// `--hud-state`: the HUD's race state, imposed.
+    pub(crate) hud_state: Option<race::CaptureHud>,
     pub(crate) camera: Option<race::CameraOverride>,
 }
 
@@ -203,10 +207,9 @@ impl Pending {
             weapons_override: self.settings.race.weapons_override(self.mode),
             zone_stage: self.cli.zone_stage,
             opponent_teams,
-            // No CLI flag or menu screen offers a per-slot override; only
-            // `race::load_event`'s own 2048-campaign resolution sets this.
-            // See `race::Options::grid_teams`.
-            grid_teams: Vec::new(),
+            // Only `race::load_event`'s 2048-campaign resolution and a captured field
+            // (`--field-from`, one team per row) set this. See `race::Options::grid_teams`.
+            grid_teams: self.field.iter().map(|craft| Some(craft.team.clone())).collect(),
             // The join screen's Ship Selects fill this at launch; `--seat-team`
             // is the headless way.
             seat_picks: self
@@ -253,6 +256,8 @@ impl Pending {
             trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,
+            field: self.field.iter().map(|craft| craft.pose).collect(),
+            hud: self.hud_state,
             camera: self.camera,
         }
     }

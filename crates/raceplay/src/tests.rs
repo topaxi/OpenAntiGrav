@@ -347,6 +347,8 @@ fn setup(handling: Handling) -> Setup {
         // spawn and the ordinary chase camera; `--pose` and its camera are
         // capture aids with nothing to say here.
         pose_override: None,
+        field_poses: Vec::new(),
+        capture_hud: None,
         camera_override: None,
         // The identity, so every assertion below is about the force law and
         // not about a scale. This is also what a race gets when the
