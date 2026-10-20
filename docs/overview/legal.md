@@ -2,7 +2,8 @@
 
 ## The rule
 
-**No game content is in this repository, and none ever will be.**
+**No game content is in this repository or in any build, and none ever will
+be.**
 
 That means no assets, no textures, no models, no audio, no executables, no
 extracted data, no disc images, and no data derived from any of them in a form
@@ -10,6 +11,10 @@ that reconstitutes the original.
 
 What this project distributes is *code* that reads formats, and *documentation*
 that describes them. Users supply their own legally obtained copies.
+
+The rule is about distribution. What the project may *show* on its public pages
+is a separate, narrower question, answered in
+[Published screenshots](#published-screenshots) below.
 
 ## How this is enforced
 
@@ -104,8 +109,43 @@ resulting Rust is written fresh, not transliterated.
 Where a documented algorithm turns out to be a well-known one, we say so and
 implement the well-known one.
 
+## Published screenshots
+
+**Decision (proposed in [ADR-0074](../architecture/adr/0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md);
+in force only once the maintainer marks it Accepted).** Curated, credited
+screenshots and comparison frames of the original games, and of this engine
+running a player's own copy, may be published on the project's pages as
+illustration and commentary. Nothing in the repository or in a build changes:
+the rule above still holds.
+
+The limits:
+
+- Never assets, extracted files, bulk or automatic galleries, or anything that
+  reconstitutes the original (full-length race video, complete frame sets,
+  texture sheets, soundtracks).
+- Published images never enter git. `--screenshot` output and `data/` stay
+  gitignored and `scripts/check-leakage.py` is unchanged.
+- Publishing is a manual step the maintainer runs from the workstation, never
+  CI, and not before the ADR is Accepted.
+- Any image is removed on request (below).
+
+## Screenshots and rights holders
+
+OpenAntiGrav is an independent, non-commercial reimplementation. It is not
+affiliated with or endorsed by Sony Interactive Entertainment, Studio Liverpool
+or any other rights holder; *Wipeout* and related names are trademarks of their
+owners. This project ships no game content. Some pages show screenshots of the
+original games and of this engine running a player's own copy, to document and
+compare behaviour; they are credited and shown for commentary. If you hold
+rights to anything shown here and want it removed, contact us through **GitHub's
+private vulnerability/issue reporting on this repository** (fallback: open a
+GitHub issue). Name the page or image. We will take it down without argument,
+usually within a few days. The same channel works for any other concern about
+this project.
+
 ## Reporting a problem
 
-If you believe something in this repository infringes your rights, open an issue
-and it will be removed while the claim is assessed. The project has no interest
-in hosting anything it should not.
+If you believe something in this repository infringes your rights, use the
+channel in [Screenshots and rights holders](#screenshots-and-rights-holders)
+above. What you name is removed while the claim is assessed. The project has no
+interest in hosting anything it should not.
