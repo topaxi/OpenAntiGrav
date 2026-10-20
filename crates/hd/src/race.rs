@@ -773,6 +773,8 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
     probe_escape: oag_title::pre_race::Sourced::measured(true),
     four_corner_spring: oag_title::pre_race::Sourced::measured(false),
+    plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
+    alignment_pitches: oag_title::pre_race::Sourced::measured(false),
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

@@ -56,6 +56,8 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         along_normal: rig.along_hit_normal.value,
         normal_mean: if rig.quarter_sum_normal.value {
             NormalMean::QuarterSum
+        } else if rig.plain_mean_normal.value {
+            NormalMean::Mean
         } else {
             NormalMean::Normalised
         },
@@ -66,6 +68,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         } else {
             SpringLaw::Racing
         },
+        align_projects_pitch_out: !rig.alignment_pitches.value,
     }
 }
 

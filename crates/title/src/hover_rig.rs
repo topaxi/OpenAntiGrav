@@ -35,4 +35,10 @@ pub struct HoverRig {
     /// The spring is Pulse's Zone law, `Ship_HoverFourCorner`'s: no load factor, no rebound,
     /// no magnet-lock fade, and a fixed `0.8` damper clamped at `1`.
     pub four_corner_spring: Sourced<bool>,
+    /// The contact normals are summed and multiplied by `1.0 / n`, not normalised (Pulse's Zone
+    /// hover). Ignored when [`Self::quarter_sum_normal`] is set.
+    pub plain_mean_normal: Sourced<bool>,
+    /// The alignment torque keeps its pitch component: no right-axis projection (Pulse's Zone
+    /// hover).
+    pub alignment_pitches: Sourced<bool>,
 }

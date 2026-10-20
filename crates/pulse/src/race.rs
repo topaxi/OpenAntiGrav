@@ -555,4 +555,9 @@ pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig:
     // `((((t - h) * K) * gravity) * 0.15) * mass * (1 + 0.8 * clamp(-0.1 vn, -1, 1))`
     // (`0x0884b4a8`-`0x0884b538`), live to one ulp on 340 probe calls.
     four_corner_spring: oag_title::pre_race::Sourced::measured(true),
+    // `sum * (1.0 / n)` (`0x0884b6c0`, `0x0884b6d8`), live length `0.99979`-`1.0`.
+    plain_mean_normal: oag_title::pre_race::Sourced::measured(true),
+    // `-400 * (up x n)` straight to `Body_AddTorqueWorld` (`0x0884b704`-`0x0884b758`); live, its
+    // component along the right axis reads `-3.80`..`+2.76`.
+    alignment_pitches: oag_title::pre_race::Sourced::measured(true),
 };

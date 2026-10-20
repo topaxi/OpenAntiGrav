@@ -715,12 +715,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         NormalMean::Normalised => (normal_sum / (contacts as f32)).normalize_or_zero(),
         NormalMean::QuarterSum if contacts == 1 => normal_sum,
         NormalMean::QuarterSum => normal_sum * QUARTER,
+        NormalMean::Mean => normal_sum * (1.0 / (contacts as f32)),
     };
 
     let mut alignment_torque = up.cross(average_normal) * ALIGNMENT_GAIN;
     // Projecting the right axis out removes pitch and leaves roll and yaw.
     let right = state.body.right();
-    alignment_torque -= right * alignment_torque.dot(right);
+    if rig.align_projects_pitch_out {
+        alignment_torque -= right * alignment_torque.dot(right);
+    }
 
     // The load the spring is calibrated to carry, with THIS frame's groundedness (the
     // original accumulates `craft+0x2b0` in this function, half per contacting probe,

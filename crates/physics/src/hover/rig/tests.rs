@@ -26,6 +26,7 @@ fn four_point() -> Rig {
         sum_escapes: true,
         probe_escape: true,
         spring: SpringLaw::Racing,
+        align_projects_pitch_out: true,
     }
 }
 
@@ -205,10 +206,11 @@ fn four_corner() -> Rig {
         spring_share: 0.15,
         derive_rear: false,
         along_normal: false,
-        normal_mean: NormalMean::Normalised,
+        normal_mean: NormalMean::Mean,
         sum_escapes: false,
         probe_escape: false,
         spring: SpringLaw::FourCorner,
+        align_projects_pitch_out: false,
     }
 }
 
@@ -252,17 +254,29 @@ fn the_four_corner_spring_is_its_own_law() {
             TARGET,
         )
         .probes[0]
-        .force
+            .force
     };
     // h = 3.0 with level probes: (4.125 - 3.0) * 4/3 * 80 * 0.15 * 1.0.
     let spring = (TARGET - 3.0) * crate::hover::HOVER_K * 80.0 * 0.15 * 1.0;
     let at_rest = probe(four_corner(), 1.0, 0.0, 0.0);
     assert_eq!(at_rest, Vec3::new(0.0, spring, 0.0));
-    assert_eq!(probe(four_corner(), 0.0, 0.0, 0.0), at_rest, "no load factor");
-    assert_eq!(probe(four_corner(), 1.0, 0.5, 0.0), at_rest, "no magnet-lock fade");
+    assert_eq!(
+        probe(four_corner(), 0.0, 0.0, 0.0),
+        at_rest,
+        "no load factor"
+    );
+    assert_eq!(
+        probe(four_corner(), 1.0, 0.5, 0.0),
+        at_rest,
+        "no magnet-lock fade"
+    );
     // Closing at 5 units/s: 1 + 0.8 * 0.5; at 30 units/s the clamp holds it at 1 + 0.8.
     let closing = probe(four_corner(), 1.0, 0.0, 5.0).y;
-    assert!((closing / spring - 1.4).abs() < 1e-5, "{}", closing / spring);
+    assert!(
+        (closing / spring - 1.4).abs() < 1e-5,
+        "{}",
+        closing / spring
+    );
     let fast = probe(four_corner(), 1.0, 0.0, 30.0).y;
     assert!((fast / spring - 1.8).abs() < 1e-5, "{}", fast / spring);
 
@@ -271,4 +285,50 @@ fn the_four_corner_spring_is_its_own_law() {
         ..four_corner()
     };
     assert_ne!(probe(racing, 0.0, 0.0, 0.0), probe(racing, 1.0, 0.0, 0.0));
+}
+
+/// **Zone's alignment torque pitches.** A craft pitched over a flat floor gets
+/// `-400 * (up x n)`, whose component about the right axis the racing law projects out and the
+/// four-corner law keeps. Its normal is `sum * (1 / n)`, here the floor's own.
+#[test]
+fn the_four_corner_alignment_torque_keeps_its_pitch_component() {
+    let torque = |rig: Rig| {
+        let state = craft(rig, 3.0, 0.05, 0.0);
+        let hover = evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        assert_eq!(hover.contacts, 4);
+        assert_eq!(hover.average_normal, Vec3::new(0.0, 1.0, 0.0));
+        let up = state.body.up();
+        let pitch = hover.alignment_torque.dot(state.body.right()).abs();
+        if rig.align_projects_pitch_out {
+            assert!(pitch < 1e-4, "{pitch}");
+        } else {
+            assert!(pitch > 1.0, "{pitch}");
+        }
+        (hover.alignment_torque, up)
+    };
+    let (zone, up) = torque(four_corner());
+    assert_eq!(
+        zone,
+        up.cross(Vec3::new(0.0, 1.0, 0.0)) * crate::hover::ALIGNMENT_GAIN
+    );
+    torque(Rig {
+        align_projects_pitch_out: true,
+        ..four_corner()
+    });
+}
+
+/// `sum * (1 / n)` is not normalised: two unit normals 90 degrees apart average to length
+/// `sqrt(0.5)`, where the racing law's mean is unit length.
+#[test]
+fn the_plain_mean_normal_is_not_normalised() {
+    let two = Vec3::new(1.0, 0.0, 0.0) + Vec3::new(0.0, 1.0, 0.0);
+    let mean = two * (1.0 / 2.0_f32);
+    assert!((mean.length() - 0.5_f32.sqrt()).abs() < 1e-6);
+    assert_eq!(NormalMean::Mean, four_corner().normal_mean);
 }

@@ -27,6 +27,9 @@ pub enum NormalMean {
     /// HD: the sum of the contacting normals times `0.25`, not normalised, or the one normal
     /// as found when a single probe is in contact (`0x000ee02c`-`0x000ee060`).
     QuarterSum,
+    /// Pulse's Zone hover: the sum times `1.0 / n`, not normalised (`Ship_HoverFourCorner`,
+    /// `div.s` at `0x0884b6c0`, `vscl.q` at `0x0884b6d8`).
+    Mean,
 }
 
 /// Which spring law a probe in contact pushes with.
@@ -70,6 +73,10 @@ pub struct Rig {
     pub probe_escape: bool,
     /// See [`SpringLaw`].
     pub spring: SpringLaw,
+    /// The alignment torque has the right axis projected out, so it never pitches
+    /// (`Ship_HoverTwoPoint`, `0x0884ac94`-`0x0884acfc`; HD). Pulse's Zone hover sends
+    /// `-400 * (up x n)` to the body whole (`0x0884b704`-`0x0884b758`).
+    pub align_projects_pitch_out: bool,
 }
 
 impl Rig {
@@ -97,6 +104,7 @@ impl Rig {
         sum_escapes: false,
         probe_escape: true,
         spring: SpringLaw::Racing,
+        align_projects_pitch_out: true,
     };
 
     /// The probes in use.
