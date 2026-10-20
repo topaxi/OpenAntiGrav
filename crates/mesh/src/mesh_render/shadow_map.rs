@@ -39,15 +39,16 @@ pub const OCCLUSION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
 /// number `oag_render::shadow::map::MAX_CASTERS` is.
 pub const OCCLUSION_LAYERS: u32 = 8;
 
-/// The environment-probe array's texel format: `Rgba8Unorm`, the stored bytes read raw.
+/// The environment-probe array's texel format: `Rgba8UnormSrgb`, decoded on fetch.
 ///
-/// **Not sRGB-decoded, though the original's sampler word carries the gamma nibble
-/// `7`**: this project settled that the RSX multiplies raw 8-bit throughout
-/// (`renderer.md`, "Per-texture sRGB/`GAMMA` decode: settled negative"), and the light
-/// terms here are authored magnitudes in the raw domain (`light.sun`, the constant
-/// ambient). A probe texel is a light, so it enters as one: `4 * texel` against the
-/// constant ambient's `0.4`, which is the pale hull the original shows.
-pub const ENV_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// The original's probe units 4 and 5 carry the gamma nibble `7` in their address word
+/// (`0x60730303`, read off the live draw of a hull), the register `hd-exposure` showed the
+/// RSX honours: R, G and B are sRGB-decoded before the filter, and the scene target is encoded
+/// on write. So a probe texel is linear light once fetched, and the engine's tint of 4 scales
+/// that. An earlier build read the bytes raw, chosen by pixel match against captures taken
+/// with RPCS3's `Write Color Buffers` off, which read 1.6-1.8x too bright; against a capture
+/// with it on, the raw read is the pale, washed hull and this one the original's saturation.
+pub const ENV_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 /// Two layers per craft: its irradiance map (resized to the reflection map's size) and
 /// its reflection map.
