@@ -559,17 +559,22 @@ pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
 /// `<Misc weight_distribution>`.
 ///
 /// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
-/// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), and
-/// its grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame). Its
-/// two-point hover's bank-to-yaw gain is measured `50`, not `30` (`0x0892dea8`, 129 banked
-/// frames), and held at Pulse's until our AI flies it.
+/// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
+/// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
+/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). All
+/// three are held at Pulse's until our AI flies them; the sideshift is on.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    engine_output_double: oag_title::pre_race::Sourced::measured(false),
-    drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
+    // Measured: Pure's engine does not double (`false`) and its grounded drag is `-0.0025`. Both
+    // held at Pulse's until this engine's AI flies them: on, the Pure pad replay test's driver
+    // (`replay_ground_truth::pure_replays_reproduce...`) pins itself on Vineta K's first wall and
+    // crawls too slowly to lap in 7200 ticks, as it pins on Pulse's laws too
+    // (`docs/physics/pure-physics.md`).
+    engine_output_double: oag_title::pre_race::Sourced::chosen(true),
+    drag_ground: oag_title::pre_race::Sourced::chosen(-0.005),
     // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), held at Pulse's `30` until
     // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
     // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
@@ -592,25 +597,18 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
 mod tests {
     use super::{COUNTDOWN_VOICE, DEFAULT_TEAM, DEFAULT_TRACK};
 
-    /// Pure's start voice is its own measurement, not Pulse's lent: a regression to `Chosen` would
-    /// put the "lent" label back on a measured title.
-    /// Pure's engine does not double its output, measured live (`docs/physics/pure-physics.md`):
-    /// a regression to Pulse's law gives every Pure craft twice the acceleration.
+    /// Pure's engine does not double its output and its grounded drag is `-0.0025`, both
+    /// measured live (`docs/physics/pure-physics.md`); the table holds Pulse's as a choice until
+    /// our AI flies them. Releasing the hold is this test's change.
     #[test]
-    fn the_engine_output_is_not_doubled_on_pure() {
+    fn the_speed_laws_are_measured_and_held() {
         assert_eq!(
             super::CRAFT_LAWS.engine_output_double,
-            oag_title::pre_race::Sourced::measured(false)
+            oag_title::pre_race::Sourced::chosen(true)
         );
-    }
-
-    /// Pure's grounded drag is half Pulse's, measured live.
-    #[test]
-    fn the_grounded_drag_is_pures_own() {
-        assert_eq!(super::CRAFT_LAWS.drag_ground.value, -0.0025);
         assert_eq!(
-            super::CRAFT_LAWS.drag_ground.origin,
-            oag_title::Origin::Measured
+            super::CRAFT_LAWS.drag_ground,
+            oag_title::pre_race::Sourced::chosen(-0.005)
         );
     }
 
@@ -665,6 +663,8 @@ mod tests {
         assert_eq!(super::CRAFT_LAWS.code_start_boost, None);
     }
 
+    /// Pure's start voice is its own measurement, not Pulse's lent: a regression to `Chosen` would
+    /// put the "lent" label back on a measured title.
     #[test]
     fn the_start_voice_is_measured_on_pure() {
         assert_eq!(COUNTDOWN_VOICE.origin, oag_title::Origin::Measured);
