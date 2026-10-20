@@ -51,3 +51,60 @@ The cached `Mode` (`param_1 + 0xd8`) is `GameMode_FromName(&0x08b30f90, <front-e
 `TrackDefinition_EnterScreenState` and `TrackSelection_ApplySelection` test the same byte with the same mode). Not
 run live: Zone is greyed on a fresh profile. The earlier claim "the byte is on exactly three circuits" is not
 supported by anything read here. `+0x99` (always-hidden) was not touched.
+
+## The Autopilot's speedup reaches the auto-speed too (2026-10-20)
+
+Lane `zone-05-shield`. The four-corner branch (`0x0884c834`-`0x0884c868`: `lw a1,0x28c(a0)`,
+`g_autospeed_step * zone + g_autospeed_base`) ends in the branch-delay `add.s` and falls into
+`0x0884c86c`, the same `swc1 f12,0x0(sp)` the throttle path stores to. Everything after it is
+shared: `flags & 4` -> `T *= craft+0x2a0` (`0x0884c874`-`0x0884c894`), the turbo/roll-payout add
+on `flags & 0x200 || flags & 0x400` with `craft+0x2a4 == 1` (`0x0884c898`-`0x0884c914`), then the
+launch multiplier at `0x0884c918`. Read off the disassembly (Ghidra, `/pulse/BOOT-psp-pulse-usa.BIN`).
+
+**Live**, PPSSPP 1.20.4 software renderer, `time-trial-de-konstruct-black-venom-grid.ppst`
+(forward `05_Track`), `g_game_mode` written to 6 and the Autopilot armed one frame after GO
+(`scripts/psp-zone-autopilot.py`): `craft+0x328` reads **`81.6` = `34 * 1.2 * 2`** on 1,499 of
+1,500 logged frames, with `craft+0x294` at `1.0` and the zone counter `craft+0x28c` at `0`. The one
+`0.0` (frame 448) is one of the 34 half-grounded frames at the ramp's lip, the branch's own
+`(flags & 1)` ground gate. The `1.2` is not a held launch grade: that one lives in `craft+0x294`,
+which reads `1.0` here. So the x1.2 Autopilot speedup ([autopilot.md](autopilot.md)) multiplies the Zone target.
+Confidence **88** (two sources: the control flow and the live word).
+
+Ported for that one term (`oag_physics::engine::engine`, the auto-speed branch applies
+`EngineFlags::speedup`). The speed it gives, the same autopilot on the same circuit at zone 0:
+
+| x along the run-up | original | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| about -370 | 123.5 | 113.6 | 124.7 |
+| about -490 | 125.2 | 115.0 | 126.2 |
+
+The turbo/roll-payout add on the same tail is **not ported** to the Zone branch: a static read only,
+and nothing fires a Turbo in Zone; a Zone barrel roll's payout would reach it. Open.
+
+Cross-title: HD's Zone engine (`Craft_UpdateThrottle`, `0x000efb50`) is not this shape (its Zone mask
+only ramps `craft+0x2d4`, and it reads no `+0x2f0`), so HD's Zone keeps flying Pulse's auto-speed with
+the speedup **inherited from Pulse**; it reaches only an Autopilot in Zone, which Zone never hands out
+(the `--autopilot` aid alone): **checked, differs** (HD's engine), HD's Zone inherits Pulse's.
+**Pure: checked, applies** (static): its `Ship_UpdateEngine` (`0x0892f1f0`) has the same mode-6
+branch (`g_autospeed` base plus step times `craft+0x244`) falling into the same `flags & 4` multiply,
+by `craft+0x258` there. Pure's mode 6 being Zone is the zone-hover thread's open question, so this is
+static only. **2048 and Omega: not checkable here**: no Zone race of either runs in this engine yet.
+
+**The fork re-commit, per title** (the driver half of this lane, `docs/gameplay/ai.md`). Route counts
+of every Zone circuit as loaded here: HD `zone_1`, `zone_2`, `zone_4`, Vineta K 0, `zone_3` 1;
+Pure `01_Zone`, `02_Zone`, `04_Zone` 0, `03_Zone` 1. Where there are no routes the failure cannot
+happen: checked, not reachable. HD `zone_3` under the original's driver ends 7,200 ticks at shield 100.
+Pure has no original driver (`original_driver` unset), so its Autopilot is this project's driver and
+the re-commit stays plan-gated there; `03_Zone` ended at 94.6 to 98.2, no deck failure seen.
+**Pure's Zone drains shield on every circuit** (02_Zone 93.9 before this lane's speedup and 77.4 after,
+01_Zone 91.6 and 81.3), gradually and on circuits with no fork: a different class, open.
+
+## On 05_Track a Zone craft falls short of the first jump in the original too (2026-10-20)
+
+Same capture, with the player's driver's fork decision written to the ring (`Ai_ChooseBranch`'s
+`ai+0x58 = 1`, excluded path `ai+0x60 = 1`, [ai-branch-choice.md](ai-branch-choice.md); the
+driver's own coin took the lower deck on every unpatched run, so on this fork the junction's
+primary successor is the lower deck): the craft reaches the ring's ramp at 121-125 units/s,
+leaves it half-grounded at y 41 (`craft+0x2b0` 0.25-0.5 for 34 frames), lands on the lower deck
+and follows it, **0 contact frames and the shield unchanged over 1,500 frames**. A patch of the
+coin instruction itself (`0x08854a24`) changed nothing: PPSSPP keeps the compiled block.

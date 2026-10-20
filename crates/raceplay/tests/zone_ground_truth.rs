@@ -999,6 +999,57 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
     );
 }
 
+/// A Zone craft on autopilot that falls short of Pulse `05_Track`'s first jump lands on route
+/// 1's deck and its driver follows it there, as `Ai_ChooseBranch`'s re-commit does.
+///
+/// The craft reaches the ring's ramp at Zone's zone-0 speed (about 125 under the Autopilot) and
+/// lands on the deck below, as the original's does at 121-125 (`docs/ghidra/functions/
+/// psp-pulse-usa/zone-start.md`). A lone craft builds no route plans, and the re-commit used to offer
+/// only planned routes: the driver stayed on the ring 60 units above, ground the wall from tick
+/// 886 and was still short of lap 2 at tick 7,200 with the shield at 0. Two laps and the
+/// shield untouched is what the fixed race does (`docs/gameplay/ai.md`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_zone_craft_that_falls_short_of_05_tracks_first_jump_follows_the_deck_it_lands_on() {
+    let Some(path) = image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let source = path.display().to_string();
+    let mut archives = oag_pulse::open(&source).expect("mounting the disc");
+    let track = race_circuits(&mut archives, oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .into_iter()
+        .find(|track| !track.reversed && track.id == "05_Track")
+        .expect("05_Track in the plugin definition");
+    let loaded = race::load(&race::Options {
+        source,
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Zone,
+        track: Some(track.entry_name()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut zone = race::Race::start(loaded.setup);
+    zone.set_autopilot(true);
+    let shield = zone.ship().physics.shield;
+    let mut landed_on_route = false;
+    for _ in 0..3_000 {
+        zone.tick(&PlayerInputs::none());
+        let branching = zone.ship().driver.branching;
+        landed_on_route |= branching.route != 0 && branching.entered;
+    }
+    let ship = zone.ship();
+    assert!(
+        landed_on_route,
+        "the driver never followed the craft onto a route"
+    );
+    assert!(ship.standing.lap >= 2, "lap {}", ship.standing.lap);
+    assert!(
+        ship.physics.shield >= shield,
+        "shield {} of {shield}",
+        ship.physics.shield
+    );
+}
+
 /// HD's Zone race flies its racing rig with the trailing ray at `0.5` and no brakes;
 /// `Craft_UpdateHover` sets `Craft_HoverFourPoint`'s ray argument on the Zone modes' mask
 /// (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`). A time trial flies no ray.

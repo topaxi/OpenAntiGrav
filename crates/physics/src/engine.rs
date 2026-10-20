@@ -249,11 +249,20 @@ pub fn engine(
         // so `on_grid` is that bit. Read live 2026-10-02 on a Zone engine: `flags` `0x3`
         // through state 0 with the craft still (`0.02` units/s), `0x1` and `95.2` thrust
         // from the first state-1 frame.
-        let thrust = if grounded > 0.0 && !state.on_grid {
+        let mut thrust = if grounded > 0.0 && !state.on_grid {
             target
         } else {
             0.0
         };
+        // **The Autopilot's speedup applies here too.** The branch stores its target at
+        // `0x0884c86c` and falls into the same `flags & 4` multiply as the throttle path
+        // (`T *= craft+0x2a0`, `0x0884c874`-`0x0884c894`). Live on PPSSPP 2026-10-20, a
+        // Zone engine flown by the Autopilot on `05_Track` at zone 0: `craft+0x328` read
+        // `81.6` = `34 * 1.2 * 2` for 1,500 frames with `craft+0x294` at `1.0`
+        // (`docs/ghidra/functions/psp-pulse-usa/zone-start.md`).
+        if let Some(speedup) = flags.speedup {
+            thrust *= speedup;
+        }
         return EngineForce {
             // **The launch multiplier applies here too**: the tail is shared
             // (`craft+0x294`, `0x0884c918`) and reads no mode. Live on a Zone engine
@@ -696,6 +705,27 @@ mod auto_speed_tests {
         )
         .thrust;
         assert!(force > 0.0, "the cap bound a branch that has no cap");
+    }
+
+    #[test]
+    fn the_auto_speed_branch_carries_the_autopilot_speedup() {
+        // `flags & 4` multiplies whatever target either branch stored (`0x0884c874`):
+        // live, a Zone engine under the Autopilot read `34 * 1.2 * 2` = `81.6`.
+        let state = grounded_ship();
+        let flown = engine(
+            &state,
+            &Handling::ZERO,
+            1.0,
+            0.0,
+            Some(34.0),
+            1.0,
+            EngineFlags {
+                uncapped: true,
+                speedup: Some(1.2),
+            },
+        )
+        .thrust;
+        assert_eq!(flown, 34.0 * 1.2 * ENGINE_OUTPUT_DOUBLE);
     }
 
     #[test]

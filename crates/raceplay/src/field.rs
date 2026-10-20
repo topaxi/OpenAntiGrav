@@ -371,7 +371,7 @@ impl Race {
         {
             self.locate_player_driver(slot);
         }
-        self.steer_branching(slot);
+        self.steer_branching(slot, true);
         let ship = &mut self.sim.world.ships[slot];
         let position = ship.physics.body.position;
         let route = ship.driver.branching.route;
@@ -499,7 +499,7 @@ impl Race {
     /// [`RaceSim::ai_tuning`], when `--autopilot-skill` set it - see
     /// [`Self::set_autopilot_tuning`] for why the two stay apart.
     pub(super) fn our_autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
-        self.steer_branching(slot);
+        self.steer_branching(slot, false);
         let places = self.places();
         let field = self.field_for(slot, &places);
         let pilot = self.sim.ai_pilots[slot];
@@ -643,7 +643,7 @@ impl Race {
             // `oag_physics::damage::CraftState` and `crate::eliminator`.
             let pilot = self.sim.ai_pilots[slot];
             let field = self.field_for(slot, &places);
-            self.steer_branching(slot);
+            self.steer_branching(slot, false);
             let ship = &mut self.sim.world.ships[slot];
             let route = ship.driver.branching.route;
             let handling = ship.handling;

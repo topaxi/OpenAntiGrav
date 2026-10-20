@@ -38,10 +38,18 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
 - **Pure's four-corner hover** (`0x0892e5b8`) is Pulse's law with three small differences
   (zone-hover.md, "The other titles"); not wired until Pure's mode 6 is confirmed as Zone and its
   brake gate is read.
-- **Pulse `05_Track` in Zone**: in a 7200-tick autopilot run on main and on this lane alike, it ends
-  one lap in at shield 0 with a mean speed of 12. Not investigated
-  (`crates/raceplay/tests/zone_hover_sweep.rs`, `OAG_SWEEP=1`; the sweep walks every forward race
-  circuit, so the four without `availableInZone` fail to load there, as they should).
+- ~~**Pulse `05_Track` in Zone** ended one lap in at shield 0~~: closed 2026-10-20 (`zone-05-shield`).
+  Our driver, not physics: a lone craft has no route plans and the re-commit only offered planned
+  routes, so the Autopilot steered at the ring above the deck it fell to
+  ([ai.md](../../docs/gameplay/ai.md)). Same run: Zone's auto-speed now carries the Autopilot's x1.2
+  (live 81.6, [zone-start.md](../../docs/ghidra/functions/psp-pulse-usa/zone-start.md)); all Pulse
+  Zone circuits end at shield 95. Left open: the Zone branch's turbo/roll-payout add (static, not
+  ported); a lone craft's coin never offers route 1 (the original's does); HD's own Zone engine
+  (`0x000efb50`) not compared, HD inherits the speedup from Pulse.
+- **Pure's Zone autopilot loses shield on every circuit** (`zone_hover_sweep`-style run, 7,200 ticks:
+  02_Zone ends at 77.4, 01_Zone 81.3; 93.9 and 91.6 before the Autopilot's x1.2 reached Zone), with no
+  fork involved. Pre-existing; Pure flies the two-point hover in Zone (its four-corner law is unwired)
+  and this project's driver. Not investigated.
 - **Zone grid height**: a Zone craft now spawns at the four-corner law's own rest point
   (`oag_gameplay::spawn::rig_spawn_height`, `target - 1.25`, about 2.9), derived; Pulse's Zone grid
   height was not measured. HD's is (centre `3.20` above the floor, `hd_zone_hover_ground_truth.rs`);

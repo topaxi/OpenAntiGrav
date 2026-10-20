@@ -306,7 +306,11 @@ impl Race {
     /// Moves slot `slot`'s driver between the ring and the routes, before it
     /// drives this tick: the coin on entering a pre-fork path, and back onto
     /// the ring once past the merge. `Ai_ChooseBranch`'s states 0-2.
-    pub(super) fn steer_branching(&mut self, slot: usize) {
+    ///
+    /// `original` is whether the original's driver flies the craft this tick
+    /// (the player's Autopilot): it reads no speed plan, so [`Self::recommit`]
+    /// follows it onto any route, planned or not.
+    pub(super) fn steer_branching(&mut self, slot: usize, original: bool) {
         if self.sim.routes.is_empty() {
             return;
         }
@@ -378,7 +382,7 @@ impl Race {
             }
         }
         driver.branching = branching;
-        self.recommit(slot);
+        self.recommit(slot, original);
     }
 
     /// The nearest point of any route's own samples (past its ring stretch)
@@ -410,7 +414,15 @@ impl Race {
     /// that scores lower. Siblings are the ring and every route leaving the same
     /// fork. The original relocates on one sibling path; a nested fork has
     /// several, and all are tried here.
-    fn recommit(&mut self, slot: usize) {
+    ///
+    /// **Which siblings count is ours.** This project's driver is kept off a
+    /// route with no verified speed plan, so for it only a plannable route is a
+    /// sibling. The original's driver (`original`) reads no plan and re-commits
+    /// onto whichever route it is on, as `Ai_ChooseBranch` does: a lone craft
+    /// builds no route plans at all, and without this a Zone craft that fell
+    /// short of `05_Track`'s first jump onto route 1's deck kept steering at the
+    /// ring 60 units above it and ground the wall until its shield was gone.
+    fn recommit(&mut self, slot: usize, original: bool) {
         let Some(n) = self.sim.course.as_ref().map(Course::len) else {
             return;
         };
@@ -495,8 +507,8 @@ impl Race {
             }
         };
         for (k, r) in routes.iter().enumerate() {
-            // Only a route the coin may draw is a sibling to switch to.
-            if r.pre_fork != fork || r.plan.is_none() {
+            // For our driver, only a route the coin may draw is a sibling.
+            if r.pre_fork != fork || (r.plan.is_none() && !original) {
                 continue;
             }
             let route = u16::try_from(k + 1).unwrap_or(0);
