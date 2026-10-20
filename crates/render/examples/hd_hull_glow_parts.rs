@@ -32,7 +32,7 @@ fn main() -> anyhow::Result<()> {
                 sub.index_count / 3
             );
             let mut parent: Vec<usize> = (0..pos.len()).collect();
-            fn find(p: &mut Vec<usize>, mut x: usize) -> usize {
+            fn find(p: &mut [usize], mut x: usize) -> usize {
                 while p[x] != x {
                     p[x] = p[p[x]];
                     x = p[x];
