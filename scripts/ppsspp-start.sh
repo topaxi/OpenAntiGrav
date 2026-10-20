@@ -20,6 +20,9 @@ fi
 disp=${2:?display number}; port=${3:?debugger port}; image=${4:?image}
 mkdir -p "$W/home/.config/ppsspp/PSP/SYSTEM"
 printf '[General]\nRemoteDebuggerOnStartup = True\nRemoteDebuggerLocal = True\nRemoteISOPort = %s\n[Sound]\nEnable = False\n[Graphics]\nSoftwareRenderer = True\n' "$port" > "$W/debugger.ini"
+# Extra ini text (e.g. the compare profile's picture settings, scripts/compare_env.py ppsspp-ini):
+# appended after the generated sections, so a later [Graphics] key overrides the default one.
+if [ -n "${PPSSPP_EXTRA_INI:-}" ]; then cat "$PPSSPP_EXTRA_INI" >> "$W/debugger.ini"; fi
 Xvfb ":$disp" -screen 0 1280x800x24 -listen tcp -nolisten unix > "$W/xvfb.log" 2>&1 &
 echo $! > "$W/xvfb.pid"; sleep 1
 (cd "$W"; env -u WAYLAND_DISPLAY DISPLAY=127.0.0.1:$disp HOME="$W/home" \
