@@ -752,3 +752,20 @@
 0x003c1120	function	EnvProbes_ReadTables	85	env-probes.md
 0x003c3b30	function	EnvProbes_SubmitDecodeJob	65	env-probes.md
 0x003c4a70	function	EnvProbes_SubmitBlendJob	60	env-probes.md
+# 2026-10-20, hd-wall-resolver: the wall response (wall-response.md).
+0x000f7770	function	Body_ResolveContact	90	wall-response.md
+0x000f7bc0	function	Body_ResolveContactPair	60	wall-response.md
+0x000f6348	function	Body_ApplyImpulseAtPoint	88	wall-response.md
+0x000f6870	function	Body_Integrate	82	wall-response.md
+0x000f5810	function	Body_ClearAccumulators	78	wall-response.md
+0x000f5848	function	Body_AddTorque	85	wall-response.md
+0x000f5dd8	function	Body_AddBodyTorque	78	wall-response.md
+0x000f5ca0	function	Body_Translate	88	wall-response.md
+0x00033af0	function	Collision_AddContact	88	wall-response.md
+0x00033618	function	Collision_GetContact	85	wall-response.md
+0x000bdec0	function	Collision_PairRestitution	90	wall-response.md
+0x000be068	function	Collision_PairFriction	85	wall-response.md
+0x000c67a8	function	Handling_ParseCollision	82	wall-response.md
+0x008c1564	data	g_ShipShipCofR	88	wall-response.md
+0x008c156c	data	g_ShipWallCofR	92	wall-response.md
+0x008c1738	data	g_WeaponHitMassFactor	80	wall-response.md
