@@ -74,3 +74,4 @@ PS2: the original's hull fills about 1.35 times the width ours does (the camera 
 2. Re-make the Pulse PSP Talon's Junction White pair with `psp-pulse-pair.py` (it passes with `--pose-hold`; `compare-rerender` skips refused pairs), and re-make the rest so their `pair.json` records `pose_hold`.
 3. HD's 0.5 to 0.7 degree heading residual on pairs where ours does not turn: read the original's heading at GO after `Restart Race`.
 4. Make a Pure PSP grid state and locate its camera node; 2048 and Omega need a race reached first.
+5. Pulse PS2 in widescreen (maintainer, 2026-10-20, lower priority): the game has its own widescreen option, which may need switching on in the state (and the PCSX2 window or screen resized to match). Take the PS2 pairs with it on, at 1280x720 rather than the 960x720 4:3 profile, together with step 1's camera.
