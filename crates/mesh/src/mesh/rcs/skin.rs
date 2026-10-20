@@ -114,7 +114,7 @@ pub(super) fn skin(
                         })
                         .clone()
                 });
-                match alpha.or_else(|| constant_diffuse(material).map(Arc::new)) {
+                match alpha.or_else(|| constant_diffuse(material, false).map(Arc::new)) {
                     Some(colour) => {
                         report.constant_diffuse += 1;
                         skins.push(Some(colour));
@@ -122,10 +122,16 @@ pub(super) fn skin(
                     None => skins.push(None),
                 }
             }
-            None => {
-                report.untextured += 1;
-                skins.push(None);
-            }
+            None => match constant_diffuse(material, true) {
+                Some(colour) => {
+                    report.constant_diffuse += 1;
+                    skins.push(Some(Arc::new(colour)));
+                }
+                None => {
+                    report.untextured += 1;
+                    skins.push(None);
+                }
+            },
             Some(path) => {
                 let decoded = load(path, textures);
                 if decoded.is_none() {
@@ -167,12 +173,21 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// block (#7, traced 2026-10-20) multiplies the same light sum by it - the
 /// constant is black on Sebenco Climb, so the glass is its reflection alone
 /// (`paraboloidReflectionTex`, not drawn). The pipe family reads it times a
-/// map's alpha instead ([`ALPHA_DIFFUSE`]); other families that carry
-/// `0x7611a2d8` use it in other places (`dc_*glow`, the pads) and are left out
-/// until read.
+/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic`, `dc_metallic` and
+/// `mesh_colour_constant` end `MAD H0.xyz, light, C, specular` with their own
+/// `C`, and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
+/// and nothing else. Other families that carry `0x7611a2d8` use it in other
+/// places (the pads) and are left out until read.
 const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
     ("constantdiffuse_specular_normal", 0x7611_a2d8),
     ("ds_booth_glass", 0x7611_a2d8),
+    ("metallic", 0x512f_8e65),
+    ("dc_metallic", 0x512f_8e65),
+    ("mesh_colour_constant", 0x02ab_9f07),
+    ("dc_glowlightband", 0x7611_a2d8),
+    // No light at all: fog over the constant (blocks `@0x00-0x0d`).
+    ("dc_constantglow", 0x4d60_d566),
+    ("cf_constantcolourglow", 0x7611_a2d8),
 ];
 
 /// The constant diffuse colour of a material whose program samples no colour
@@ -185,12 +200,20 @@ const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
 /// 2 against 21, before the encode; 46 and 15 after). `None` where the
 /// family's diffuse parameter is not one of those read above, which leaves the
 /// surface white times its light and says so in the report's `picture_unsampled`.
-fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
+///
+/// `listed_only` drops the `diffuse` fallback: a slot that names a picture its
+/// program does not sample (the engine-bound lightmap entry of a family whose
+/// variant has no lightmap) takes its constant only if its family is traced.
+fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
-    let hash = DIFFUSE_PARAMETER
+    let listed = DIFFUSE_PARAMETER
         .iter()
-        .find_map(|&(name, hash)| (name == family).then_some(hash))
-        .unwrap_or(DIFFUSE);
+        .find_map(|&(name, hash)| (name == family).then_some(hash));
+    let hash = if listed_only {
+        listed?
+    } else {
+        listed.unwrap_or(DIFFUSE)
+    };
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
     let byte = raw_to_texel;
     Some(crate::mesh_render::offer_to_texture_sink(

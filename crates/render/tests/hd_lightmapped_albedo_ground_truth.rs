@@ -372,3 +372,59 @@ fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
     }
     assert!(checked > 0, "Sebenco Climb carries pipe slots");
 }
+
+/// Families whose program is a constant and nothing else sampled: `metallic`
+/// (Amphiseum) is `light * 0x512f8e65 + specular`, so the slot binds that
+/// constant as the texel its sRGB decode returns; `dc_constantglow` (Moa
+/// Therma) is fog over `0x4d60d566` and no light, bound the same way.
+/// Dropping either family from `skin::DIFFUSE_PARAMETER` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn constant_colour_families_bind_their_authored_constant() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = 0;
+    for (circuit, family, parameter) in [
+        ("amphiseum", "metallic", 0x512f_8e65_u32),
+        ("03_track", "dc_constantglow", 0x4d60_d566),
+    ] {
+        let path = format!("/data/environments/{circuit}/track.vex");
+        let Some((spec, data)) = (0..4).find_map(|n| {
+            let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
+            archive_cache::read(&spec, &path).map(|data| (spec, data))
+        }) else {
+            panic!("{path} is on no archive");
+        };
+        let geometry =
+            mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
+        let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
+            archive_cache::read(&spec, name)
+        })
+        .expect("the circuit builds");
+        for (slot, material) in rcs.materials.iter().enumerate() {
+            if !material.name.ends_with(&format!("/{family}.rcsmaterial")) {
+                continue;
+            }
+            let Some(constant) = material.parameters.iter().find(|p| p.hash == parameter) else {
+                continue;
+            };
+            let texture = model.textures[slot]
+                .as_ref()
+                .unwrap_or_else(|| panic!("{family} slot {slot} binds its constant"));
+            assert_eq!((texture.width, texture.height), (1, 1), "{family} {slot}");
+            let rgba = texture.to_rgba().expect("a one-texel picture");
+            for lane in 0..3 {
+                let c = constant.value[lane].clamp(0.0, 1.0);
+                assert_eq!(
+                    rgba[lane],
+                    (c.powf(1.0 / 2.2) * 255.0).round() as u8,
+                    "{family} slot {slot} lane {lane}"
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked >= 2, "both families are present, saw {checked}");
+}
