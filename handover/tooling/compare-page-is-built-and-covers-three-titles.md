@@ -16,8 +16,10 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
 `just compare-rerender` re-makes them from the savestates after a renderer change. The overlap score
 (`pair.json` `overlap`, `edge_ncc` 0.07 to 0.44 on PSP, 0.14 to 0.31 on HD) is on the page.
 
-- **Pulse PSP Talon's Junction White is refused**: its state sits 216 s into the race and ours drifts 0.78 units from the
-  original's body over that clock (the heading is corrected, the position is not). Needs a fresher state or a position correction.
+- **Pulse PSP Talon's Junction White passes with `--pose-hold` (2026-10-20, `resting-yaw`)**: 0.000 units and 0.000
+  degrees at 216.4 s, where the shipped pair was refused at 0.777 units (the resting turn's double count, below). The pair
+  in `data/reference/compare-page/pulse-psp/talons-white` is still the refused one: `just compare-rerender` skips a
+  `refused` pair, so re-make it with `psp-pulse-pair.py` and its recorded `argv` (run 2026-10-20 into a scratch copy only).
 - **PS2: the camera is not matched** (pair shipped with `--allow-own-camera`, edge correlation 0.01). A camera node whose
   position fits the PSP's follow geometry is in the state (a 4x4 at several EE addresses, e.g. `0x609bf0`, 11.64 units behind
   and 3.0 above the craft); its pitch sign is the PSP's opposite and the 4:3 fov is unmeasured, a fov sweep gives only an
@@ -30,9 +32,18 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
 - **`just compare-rerender` was run once each on PSP, HD and PS2.** HD drifts 10 degrees in the ship's heading and 1.8 units in the
   camera between two captures of one restored state (the craft's heading is not stable in the first seconds of a restart), a
   warning in the output; the clock and pose are re-read each time.
-- **A resting craft in ours turns** on HD (Talon's: 0.26 degrees a second, 26 degrees in 6,000 ticks) and on some Pulse grids
-  (Amphiseum Black 1.8 degrees over 14 s), the original's does not. `rpcs3-hd-pair.py` and `psp-pulse-pair.py` correct the pose they feed
-  to ours until the heading measured at the rendered tick is the original's; the cause in the simulation is not investigated.
+- **A resting craft turns in the original too (2026-10-20, `resting-yaw`); the correction compensates for posing at tick 0.**
+  Ours unposed from its own grid, no input, lands within 0.101 degrees of the original's RAM heading on all 24 Pulse PSP
+  pairs and 0.694 on all 13 HD pairs at the pair's clock; the live rates match (Pulse Amphiseum Black `avel_y` -0.04725
+  against ours -0.0473; HD Talon's -0.00461 against -0.00454 degrees a tick). The pairs pose ours at the original's
+  already-turned pose and simulate the clock again, so it turns twice, and each pair's heading correction equals ours'
+  drift from GO in magnitude (Pulse to 0.033 degrees). The physics is unchanged; evidence and the table in
+  [grid-state.md](../../docs/physics/grid-state.md#a-resting-craft-after-go-turns-in-the-original-too-2026-10-20-resting-yaw),
+  reproducer `scripts/compare-resting-yaw.py`. **Fixed 2026-10-20:** the pair scripts pass `--pose-hold` (the craft back on the fed pose at the rendered tick, the
+  clock still run) and the correction loops are gone; see [compare-page.md](../../docs/tools/compare-page.md) for the
+  before and after. **Talon's Junction White's refused 0.78-unit position drift is the same double count**:
+  unposed, ours is 0.198 units from the original there. HD keeps a 0.5 to 0.7 degree residual even where ours does not
+  turn (Chenghou Project, Metropia, Ubermall): HD's heading at GO after `Restart Race`, unmeasured.
 - **Publishing**: `just publish-compare` is unlocked and has never been run (the maintainer runs it); a new manifest entry needs `platform`.
 
 ### Visible rendering differences on the fresh set (leads, nothing fixed here)
@@ -60,6 +71,6 @@ PS2: the original's hull fills about 1.35 times the width ours does (the camera 
 ## Next Steps
 
 1. Recover the PS2 camera (orientation and fov) so the PS2 pair needs no `--allow-own-camera`.
-2. A fresher Talon's Junction White state (or a position correction in `psp-pulse-pair.py`).
-3. Investigate why a resting craft turns in ours (HD and some Pulse grids).
+2. Re-make the Pulse PSP Talon's Junction White pair with `psp-pulse-pair.py` (it passes with `--pose-hold`; `compare-rerender` skips refused pairs), and re-make the rest so their `pair.json` records `pose_hold`.
+3. HD's 0.5 to 0.7 degree heading residual on pairs where ours does not turn: read the original's heading at GO after `Restart Race`.
 4. Make a Pure PSP grid state and locate its camera node; 2048 and Omega need a race reached first.

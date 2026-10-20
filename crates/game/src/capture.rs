@@ -502,6 +502,7 @@ pub fn run(
                 pose_boost: None,
                 pose_intensity: None,
                 pose_speed: None,
+                pose_hold: false,
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {

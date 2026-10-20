@@ -11,8 +11,10 @@ The environment is `scripts/compare-environment.toml`, platform `pulse-psp`: the
 been started with its `ppsspp-ini` text (`PPSSPP_EXTRA_INI`, see ppsspp-start.sh); the 960x544 window the pause
 menu needs to load a state is resized to the native 480x272 afterwards, so the frame is the console's own
 size with nothing scaled. Ours is rendered at 480x272 with the profile's flags and settings file, the original's
-camera and its speed-widened fov, and run a second time with `--trace-out` so the ship's pose at the rendered
-tick is MEASURED from our own run and compared with the original's row. A pair that differs from the profile
+camera and its speed-widened fov, after the countdown and the original's race clock, with `--pose-hold` putting
+the craft back on the original's pose for the frame (a resting craft turns in both, so running the clock from
+an already-turned pose turned ours twice). A second, `--trace-out` run checks that pose landed: an import check
+of the basis, convention and fov, not of the simulation (`scripts/compare-resting-yaw.py` measures that). A pair that differs from the profile
 (image size, settings read back, layout file, mode, class, pose, fov) is refused with the mismatch named, and
 `pair.json` records both sides.
 """
@@ -306,51 +308,18 @@ def main():
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
     if pair.failed():
         pair.finish()
-    # Ours can turn slowly while it sits (a craft that rests on a banked or skewed grid yaws, the original's does
-    # not), so the row handed to `--pose-from` is turned about the craft's up axis until the heading MEASURED at the
-    # rendered tick (a second, trace-only run of the same command) is the original's.
+    # A craft resting after GO turns, in the original as in ours (bank-to-yaw, docs/physics/grid-state.md), and the
+    # original's pose has already turned for the clock it was read at. Running that clock again from it turned ours
+    # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
+    # the GO board, the record panel and the exhaust still run their ticks. The pose check below is then an import
+    # check (basis, convention, fov); `scripts/compare-resting-yaw.py` measures the turn itself against the pairs.
     ours_csv = out / "ours-trace.csv"
-    fixed_csv = out / "trace-corrected.csv"
-    lines = csv.read_text().splitlines()
-    start = next(i for i, ln in enumerate(lines) if ln.startswith("tick,"))
-    head = lines[start].split(",")
-    data = [ln.split(",") for ln in lines[start + 1:] if ln.count(",") == len(head) - 1]
-    first = dict(zip(head, data[0]))
-
-    def with_turn(deg):
-        cells = dict(first)
-        up = [float(first["up_" + a]) for a in "xyz"]
-        for name in ("right", "fwd"):
-            v = ce.rotate_about([float(first["%s_%s" % (name, a)]) for a in "xyz"], up, deg)
-            for a, x in zip("xyz", v):
-                cells["%s_%s" % (name, a)] = repr(x)
-        fixed_csv.write_text("\n".join([",".join(head)] + [",".join(cells[h] for h in head)]
-                                       + [",".join(r) for r in data[1:]]) + "\n")
-        cmd = [c if c != csv else fixed_csv for c in base]
-        run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks + 1, "--trace-out", ours_csv],
-            stdout=subprocess.DEVNULL)
-        row = ce.csv_row(ours_csv, args.ours_ticks)
-        return ce.signed_heading([row["fwd_" + a] for a in "xyz"], [row["up_" + a] for a in "xyz"], theirs["fwd"]), cmd
-
-    turn, sign = 0.0, 1.0
-    err, cmd = with_turn(turn)
-    corrections = [{"turn_deg": turn, "heading_error_deg": err}]
-    for _ in range(10):
-        if abs(err) <= plat["tolerance"]["heading_deg"] / 4:
-            break
-        trial = turn + sign * err
-        new_err, new_cmd = with_turn(trial)
-        if abs(new_err) > abs(err) and sign == 1.0:
-            sign = -1.0
-            trial = turn + sign * err
-            new_err, new_cmd = with_turn(trial)
-        turn, err, cmd = trial, new_err, new_cmd
-        corrections.append({"turn_deg": turn, "heading_error_deg": err})
-    pair.rec["ours"]["heading_corrections"] = corrections
+    cmd = base + ["--pose-hold"]
+    pair.rec["ours"]["pose_hold"] = True
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
     run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--screenshot", out / "ours.png"],
         stdout=subprocess.DEVNULL)
-    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks + 1, "--trace-out", ours_csv],
+    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--trace-out", ours_csv],
         stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got

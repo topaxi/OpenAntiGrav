@@ -13,6 +13,7 @@ use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+pub mod pose_hold;
 mod race_bench;
 mod spectrum;
 pub mod tick;
@@ -240,6 +241,9 @@ pub struct CaptureOptions {
     /// With [`Self::pose_boost`]: the speed in units/s to advance the exhaust
     /// at, instead of `120`. `--pose-speed`.
     pub pose_speed: Option<f32>,
+    /// `--pose-hold`: put ship 0 back on its start pose before the frame is drawn. See
+    /// [`pose_hold`].
+    pub pose_hold: bool,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -433,6 +437,7 @@ pub fn capture(
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
+    let start_pose = options.pose_hold.then(|| pose_hold::StartPose::of(&race));
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).
     if options.net.is_some() {
@@ -835,6 +840,9 @@ pub fn capture(
     options.ghost.finish(&mut race)?;
     if let Some(age) = options.pose_boost {
         race.force_boost_state(age, options.pose_intensity, options.pose_speed);
+    }
+    if let Some(pose) = start_pose {
+        pose.restore(&mut race);
     }
     println!(
         "after {} tick(s): {}",

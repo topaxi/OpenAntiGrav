@@ -151,7 +151,10 @@ def main():
     if args.team:
         flags += ["--team", args.team]
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if args.reversed else "")
-    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--no-camera"] + flags
+    # `--pose-hold`: the original's pose has already turned for the clock it was read at (a resting craft turns, in
+    # the original as in ours, docs/physics/grid-state.md), so the frame and the last trace row put ours back on it.
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--no-camera",
+            "--pose-hold"] + flags
     pair.rec["ours"].update({"mode": "single_race", "class": "venom", "layout": "reversed" if args.reversed else "forward",
                              "flags": [str(c) for c in base[2:]], "camera": "our own chase camera"})
     if args.allow_own_camera:
@@ -177,7 +180,7 @@ def main():
         pair.finish()
     run(base + ["--ticks", ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     ours_csv = out / "ours-trace.csv"
-    run(base + ["--ticks", ticks + 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    run(base + ["--ticks", ticks, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, scratch)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:

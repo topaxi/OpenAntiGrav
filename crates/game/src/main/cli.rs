@@ -951,6 +951,17 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "UNITS_PER_S", requires = "pose_boost")]
     pub(crate) pose_speed: Option<f32>,
 
+    /// With a posed craft (`--pose-from` or `--pose`): put the craft back on that pose for the
+    /// frame `--screenshot` draws and the last row `--trace-out` writes (the row at `--ticks`),
+    /// after the countdown and the clock have run.
+    ///
+    /// For a pair taken at race clock `T`: the original's pose has already turned for `T` seconds
+    /// at rest (bank-to-yaw, `docs/physics/grid-state.md`), so running `T` more seconds from it
+    /// turned ours twice. Position and orientation only; the clock, the GO board, the record
+    /// panel and the exhaust run as they did.
+    #[arg(long)]
+    pub(crate) pose_hold: bool,
+
     /// With `--race --screenshot` or `--race --trace-out`: drive the run from
     /// a committed `.inputs` script (see `scripts/input_script.py` for the
     /// format) instead of `--hold`/`--press` - the same file
