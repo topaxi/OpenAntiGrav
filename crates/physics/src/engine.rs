@@ -226,7 +226,8 @@ pub fn engine(
     // `ShipState::turbo_timer` here (live 2026-10-20, `psp-craft-flags.py`). The barrel
     // roll's payout (`0x400`) does not escape it. The `0x10` escape of the slowdown arm has
     // no writer anywhere in the image, so the slowdown arm always applies.
-    if (state.stun_timer > 0.0 || state.slowdown_timer > 0.0) && state.turbo_timer <= 0.0 {
+    let turbo_escapes = state.turbo_running_laws && state.turbo_timer > 0.0;
+    if (state.stun_timer > 0.0 || state.slowdown_timer > 0.0) && !turbo_escapes {
         return EngineForce::default();
     }
 
@@ -338,7 +339,7 @@ pub fn advance_turbo(state: &mut ShipState, dt: f32) {
 /// [`engine`], and so before [`speedup_pad`] reads it the same tick, as in the original's
 /// `Ship_UpdateCraft`.
 pub fn advance_pad_fade(state: &mut ShipState, dt: f32) {
-    state.pad_fade_clock = if state.turbo_timer > 0.0 {
+    state.pad_fade_clock = if state.turbo_running_laws && state.turbo_timer > 0.0 {
         0.0
     } else {
         (state.pad_fade_clock + dt).min(1.0)

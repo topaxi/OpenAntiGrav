@@ -508,7 +508,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     };
     // The boost lift's d-pad Up gate, `*(craft+0x78)+0x24 & 1`: the held button itself, which
     // the original's AI never sets (it writes the analog record only).
-    let engine_force = if input.dpad_up {
+    let engine_force = if input.dpad_up && state.turbo_running_laws {
         engine_force
     } else {
         engine::EngineForce {

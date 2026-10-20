@@ -519,6 +519,17 @@ pub struct ShipState {
     /// Written by the race from the title every tick, not hashed, for [`Self::on_grid`]'s
     /// reason.
     pub pitch_gate: bool,
+    /// The sideshift gestures are withheld in the grid state (`craft+0x1c0 & 2`,
+    /// [`crate::airbrake::advance_sideshift`]): Pulse measured, Pure read; HD and its heirs
+    /// inherit it. Written by the race from the title every tick, not hashed, for
+    /// [`Self::on_grid`]'s reason.
+    pub sideshift_grid_gate: bool,
+    /// The three laws a running Turbo pickup (`craft+0x1c0 & 0x200`) adds beyond the thrust:
+    /// the escape from the engine's stun/slowdown return, the speed-pad fade
+    /// ([`Self::pad_fade_clock`]) and the d-pad Up boost lift. Pulse measured, Pure read; HD
+    /// and its heirs inherit them. Written by the race from the title every tick, not hashed,
+    /// for [`Self::on_grid`]'s reason.
+    pub turbo_running_laws: bool,
     /// The frame the inertia diagonal is applied in ([`InertiaFrame`]): Pulse's world axes
     /// unless the title measured its own. Written by the race from the title every tick, not
     /// hashed, for [`Self::on_grid`]'s reason.
@@ -711,6 +722,8 @@ impl Default for ShipState {
             steer_ramp_clamped: false,
             air_pitch_bias: true,
             pitch_gate: true,
+            sideshift_grid_gate: true,
+            turbo_running_laws: true,
             inertia_frame: InertiaFrame::World,
             released: true,
             wrong_way_kill: false,

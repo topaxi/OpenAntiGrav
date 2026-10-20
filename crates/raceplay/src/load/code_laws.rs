@@ -67,6 +67,8 @@ mod tests {
             code_start_boost: None,
             pitch_gate: Sourced::chosen(true),
             eliminator_wrong_way_kill: Sourced::chosen(true),
+            sideshift_grid_gate: Sourced::chosen(true),
+            turbo_running_laws: Sourced::chosen(true),
             inertia_rotates: Sourced::chosen(true),
         }
     }

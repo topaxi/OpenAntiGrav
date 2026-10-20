@@ -166,6 +166,8 @@ impl Race {
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
         let pitch_gate = craft_laws.is_none_or(|laws| laws.pitch_gate.value);
+        let sideshift_grid_gate = craft_laws.is_none_or(|laws| laws.sideshift_grid_gate.value);
+        let turbo_running_laws = craft_laws.is_none_or(|laws| laws.turbo_running_laws.value);
         let eliminator_wrong_way_kill =
             craft_laws.is_none_or(|laws| laws.eliminator_wrong_way_kill.value);
         let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
@@ -246,6 +248,8 @@ impl Race {
         ship.physics.steer_ramp_clamped = steer_ramp_clamped;
         ship.physics.air_pitch_bias = air_pitch_bias;
         ship.physics.pitch_gate = pitch_gate;
+        ship.physics.sideshift_grid_gate = sideshift_grid_gate;
+        ship.physics.turbo_running_laws = turbo_running_laws;
         ship.physics.inertia_frame = inertia_frame;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
@@ -476,6 +480,8 @@ impl Race {
                 opponent.physics.steer_ramp_clamped = steer_ramp_clamped;
                 opponent.physics.air_pitch_bias = air_pitch_bias;
                 opponent.physics.pitch_gate = pitch_gate;
+                opponent.physics.sideshift_grid_gate = sideshift_grid_gate;
+                opponent.physics.turbo_running_laws = turbo_running_laws;
                 opponent.physics.inertia_frame = inertia_frame;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
@@ -677,6 +683,8 @@ impl Race {
                 steer_ramp_clamped,
                 air_pitch_bias,
                 pitch_gate,
+                sideshift_grid_gate,
+                turbo_running_laws,
                 eliminator_wrong_way_kill,
                 inertia_frame,
                 physics_laws,

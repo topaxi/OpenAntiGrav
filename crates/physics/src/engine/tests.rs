@@ -183,6 +183,14 @@ fn a_running_turbo_keeps_the_engine_through_a_stun_and_a_slowdown() {
         state.roll_payout_timer = 0.0;
         state.turbo_timer = 0.5;
         assert!(run(&state) > 0.0, "a running turbo escapes the gate");
+
+        state.turbo_running_laws = false;
+        assert_eq!(
+            run(&state),
+            0.0,
+            "a title without the Turbo's laws has no escape"
+        );
+        state.turbo_running_laws = true;
     }
 }
 

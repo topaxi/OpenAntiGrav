@@ -354,7 +354,7 @@ pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
     let mut fire_left = input.sideshift == Sideshift::Left;
     let mut fire_right = input.sideshift == Sideshift::Right;
 
-    if !state.on_grid && state.shift_lockout <= 0.0 {
+    if !(state.on_grid && state.sideshift_grid_gate) && state.shift_lockout <= 0.0 {
         if input.shift_modifier {
             if state.shift_armed {
                 if input.steer_x > SIDESHIFT_FLICK_THRESHOLD {

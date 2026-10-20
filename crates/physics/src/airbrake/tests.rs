@@ -575,6 +575,19 @@ fn no_sideshift_gesture_is_read_on_the_grid() {
         state.sideshift_timers[0], SIDESHIFT_DURATION,
         "released, the same taps shift"
     );
+
+    // A title without the gate reads the gestures on the grid too.
+    let mut state = ShipState {
+        on_grid: true,
+        sideshift_grid_gate: false,
+        ..ShipState::default()
+    };
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(
+        state.sideshift_timers[0], SIDESHIFT_DURATION,
+        "no gate, the grid shifts"
+    );
 }
 
 /// The window closes, and a slow second tap opens a new one instead.
