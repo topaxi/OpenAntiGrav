@@ -75,7 +75,12 @@ const FIELD: &[(&str, &str, u32)] = &[
     // 2026-10-13, 3 -> 5 (samples 206-208): a
     // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
     ("05_Track", "FLASH", 5),
-    ("05_Track", "RAPIER", 2),
+    // 2026-10-20, 2 -> 4: the measured air laws (Pulse's world-axis inertia, pitch gate and
+    // in-air bias, with `oag_ai::air_trim`). Per perturbation of an airborne pitch torque
+    // (`docs/physics/airborne-ground-truth.md`, "Our AI against the air laws"): laws off
+    // `2 1 1 2 1 1 1 6 2`, on `2 2 2 3 4 0 4 4 3`. Every stop follows a `ResetZone`
+    // rescue at samples 88-103 by about 70 ticks, the short relaunch, in either frame.
+    ("05_Track", "RAPIER", 4),
     // 2026-10-13, 1 -> 4 (samples 206-207): a
     // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
     // 2026-10-19, 4 -> 6 (samples 205-208), the absorb half of
