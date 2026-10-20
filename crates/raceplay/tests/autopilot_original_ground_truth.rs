@@ -682,7 +682,7 @@ fn cold_locate_sweep() {
 /// The Autopilot's opponent switch is the title's class and difficulty rule
 /// (`oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY`): VENOM flies the
 /// pickup and PHANTOM absorbs it, and RAPIER flies at Elite but absorbs at
-/// Novice, on all five titles, weapons on. Fails if a race starts with the
+/// Ace, on all five titles, weapons on. Fails if a race starts with the
 /// switch the other way, or if the load stops reading the race's difficulty
 /// (RAPIER would then read the same at both levels).
 #[test]
@@ -709,10 +709,10 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
         let Some(path) = path else {
             return;
         };
-        use oag_ai::Difficulty::{Elite, Novice};
+        use oag_ai::Difficulty::{Ace, Elite};
         for (class, difficulty, flies) in [
             ("VENOM", Elite, true),
-            ("RAPIER", Novice, false),
+            ("RAPIER", Ace, false),
             ("RAPIER", Elite, true),
             ("PHANTOM", Elite, false),
         ] {

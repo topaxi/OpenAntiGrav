@@ -1224,7 +1224,7 @@ is the maintainer's call, not this measurement's.
 | FLASH Skilled | 19 | +14.75 (0) | 4229 -> 1817 (4) | 12 -> 5 | 0 | 61 -> 32 | -1.6 / +17.9 / -2.0 | flies |
 | FLASH Elite | 19 | +7.53 (1) | 1807 -> 1428 (3) | 1 -> 0 | 0 | 13 -> 4 | -1.4 / +18.1 / -1.7 | flies |
 | FLASH Ace | 19 | +5.16 (1) | 2114 -> 1782 (6) | 3 -> 1 | 0 | 21 -> 6 | -1.8 / +17.8 / -1.9 | flies |
-| RAPIER Novice | 19 | +39.61 (0) | 17966 -> 7598 (1) | 1 -> 1 | 1 | 23 -> 7 | -2.4 / +17.2 / -1.5 | absorbs |
+| RAPIER Novice | 19 | +39.61 (0) | 17966 -> 7598 (1) | 1 -> 1 | 1 | 23 -> 7 | -2.4 / +17.2 / -1.5 | fails, flies (maintainer) |
 | RAPIER Skilled | 19 | +21.07 (0) | 4450 -> 3411 (7) | 2 -> 0 | 0 | 14 -> 5 | -1.5 / +18.0 / -1.9 | flies |
 | RAPIER Elite | 19 | +15.23 (0) | 3280 -> 2966 (7) | 3 -> 2 | 0 | 22 -> 12 | -1.7 / +17.9 / -2.0 | flies |
 | RAPIER Ace | 19 | +9.50 (0) | 3321 -> 4407 (10) | 4 -> 3 | 1 | 26 -> 20 | -1.6 / +18.0 / -1.9 | absorbs |
@@ -1239,9 +1239,10 @@ is the maintainer's call, not this measurement's.
 
 - **VECTOR, VENOM, FLASH: on at every level.** Faster in total at every level;
   walls and rescues fall in total at every level.
-- **RAPIER: on at Skilled and Elite, off at Novice and Ace.** Novice is the
+- **RAPIER: on at Novice, Skilled and Elite, off at Ace.** Novice is the
   cleanest in total (walls 17,966 -> 7,598, rescues 23 -> 7 over every run)
-  but Pulse `03_Track` gets a rescue its absorb never had. Ace raises walls
+  but Pulse `03_Track` gets a rescue its absorb never had, so it fails the
+  rule; it flies anyway, the maintainer's choice (2026-10-20), chosen. Ace raises walls
   (3,321 -> 4,407; up on 10 of 19 circuits, HD `12_sol_2` 217 -> 513, Pulse
   07 214 -> 740, 02 175 -> 471) and rescues 2048 from zero (median 0 -> 1,
   0 -> 4 over the runs). Skilled and Elite pass in total, with walls up on 7

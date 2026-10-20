@@ -67,15 +67,16 @@ const fn cell(class: &'static str, difficulty: &'static str, flies: bool) -> Swi
 }
 
 /// The split the measurement leaves, the same on every title: VECTOR, VENOM
-/// and FLASH fly at every level, RAPIER at Skilled and Elite only, PHANTOM at
+/// and FLASH fly at every level, RAPIER at every level but Ace, PHANTOM at
 /// none. SUPERPHANTOM is not listed (absorbs): the field does not race at it
 /// on 2048 and Omega's handling authors no such class.
 ///
 /// The rule, per class and level pooled over every circuit, each circuit the
 /// median of five runs: walls summed do not rise, rescues summed do not rise
 /// and no circuit is rescued where the absorb was not, and the gain summed is
-/// positive. RAPIER Novice fails on Pulse `03_Track` alone (rescues 0 -> 1),
-/// RAPIER Ace on walls (3,321 -> 4,407) and 2048 (rescues 0 -> 1), PHANTOM on
+/// positive. RAPIER Novice fails on Pulse `03_Track` alone (rescues 0 -> 1)
+/// and flies anyway: the maintainer's choice (2026-10-20), clean in total.
+/// RAPIER Ace fails on walls (3,321 -> 4,407) and 2048 (rescues 0 -> 1), PHANTOM on
 /// walls or rescues from zero at every level.
 pub const BY_CLASS_AND_DIFFICULTY: OpponentAutopilot = OpponentAutopilot {
     switches: &[
@@ -91,7 +92,7 @@ pub const BY_CLASS_AND_DIFFICULTY: OpponentAutopilot = OpponentAutopilot {
         cell("FLASH", "skilled", true),
         cell("FLASH", "elite", true),
         cell("FLASH", "ace", true),
-        cell("RAPIER", "novice", false),
+        cell("RAPIER", "novice", true),
         cell("RAPIER", "skilled", true),
         cell("RAPIER", "elite", true),
         cell("RAPIER", "ace", false),
@@ -123,11 +124,11 @@ mod tests {
     }
 
     #[test]
-    fn rapier_flies_at_the_middle_levels_only() {
+    fn rapier_flies_at_every_level_but_ace() {
         let rapier: Vec<bool> = ["novice", "skilled", "elite", "ace"]
             .iter()
             .map(|level| BY_CLASS_AND_DIFFICULTY.flies("RAPIER", level))
             .collect();
-        assert_eq!(rapier, [false, true, true, false]);
+        assert_eq!(rapier, [true, true, true, false]);
     }
 }

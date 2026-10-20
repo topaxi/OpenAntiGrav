@@ -84,13 +84,18 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     fly at every level, RAPIER at Skilled and Elite only, PHANTOM never. The
     maintainer expected RAPIER Novice on and Ace/Elite off; the measurement
     gives the reverse for Novice and Elite. Open:
-    - **RAPIER Novice** fails the rule on Pulse `03_Track` alone (rescues
-      median 0 -> 1, 0 -> 4 over five runs), clean in total. Tolerating one
-      rescue from zero on one circuit would turn it on: maintainer's call.
+    - ~~**RAPIER Novice** fails the rule on Pulse `03_Track` alone (rescues
+      median 0 -> 1, 0 -> 4 over five runs), clean in total.~~ **On since
+      2026-10-20**, the maintainer's choice: it flies despite the one rescue.
     - **Per-title split**: alone, 2048 and Omega would both absorb RAPIER
       Skilled and Elite (walls up a little), Pulse RAPIER Elite and FLASH Ace
       too; HD, Omega and 2048 would fly RAPIER Novice. The switch is one
-      rule pooled over every title today.
+      rule pooled over every title today. **Deferred (maintainer,
+      2026-10-20): 2048 likely needs a rule of its own**, since 2048's
+      Autopilot is a different pickup: it also raises the shield, so the
+      shield-cost reasoning above (the absorb's ~18 shield against the
+      stint's wrecks) does not carry over. Measure 2048's Autopilot effect
+      first, then judge its cells alone.
     - **SUPERPHANTOM**: the field does not race at it on 2048 (44-64 forks a
       run, window 44-662 units against PHANTOM's 1,300); Omega's handling
       authors no SUPERPHANTOM class. Not judged, absorbs.
