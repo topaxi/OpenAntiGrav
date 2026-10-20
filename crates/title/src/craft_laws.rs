@@ -23,4 +23,7 @@ pub struct CraftLaws {
     /// Wipeout HD's `Craft_Update` does, rather than Pulse's `normal_gravity`
     /// (`oag_physics::passive::ClassGravityTerm`).
     pub class_gravity_on_flight: Sourced<bool>,
+    /// `Ship_UpdateEngine` doubles its output, `T * craft+0x294 * 2.0`, as Pulse's does.
+    /// Wipeout Pure's engine has no doubling (`oag_physics::laws::Laws::engine_output_double`).
+    pub engine_output_double: Sourced<bool>,
 }

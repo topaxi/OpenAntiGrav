@@ -69,6 +69,14 @@ pub(crate) fn craft_inertia(laws: Option<&CraftLaws>) -> Vec3 {
     })
 }
 
+/// The craft's force-law constants for a title's [`CraftLaws`], Pulse's for `None`.
+pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws {
+    let pulse = oag_physics::laws::Laws::PULSE;
+    laws.map_or(pulse, |laws| oag_physics::laws::Laws {
+        engine_output_double: laws.engine_output_double.value,
+    })
+}
+
 /// Ticks since the grid state ended, counting the tick it ended on as the first.
 fn released_ticks(world_tick: u64) -> u64 {
     (world_tick + 1).saturating_sub(oag_race::COUNTDOWN_TICKS) + 1

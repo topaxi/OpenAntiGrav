@@ -349,6 +349,8 @@ pub struct RaceSim {
     pub(super) steer_ramp_clamped: bool,
     /// Whether every craft adds the in-air `weight_distribution` torque - see [`Setup::craft_laws`].
     pub(super) air_pitch_bias: bool,
+    /// Every craft's force-law constants, the title's - see [`Setup::craft_laws`].
+    pub(super) physics_laws: oag_physics::laws::Laws,
     /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].
     pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].

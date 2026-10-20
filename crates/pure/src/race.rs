@@ -520,12 +520,17 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 };
 
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no `<Misc weight_distribution>`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure).
+/// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no
+/// `<Misc weight_distribution>`.
+///
+/// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
+/// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`).
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    engine_output_double: oag_title::pre_race::Sourced::measured(false),
 };
 
 #[cfg(test)]
@@ -534,6 +539,17 @@ mod tests {
 
     /// Pure's start voice is its own measurement, not Pulse's lent: a regression to `Chosen` would
     /// put the "lent" label back on a measured title.
+    /// Pure's engine does not double its output, measured live (`docs/physics/pure-physics.md`):
+    /// a regression to Pulse's law gives every Pure craft twice the acceleration.
+    #[test]
+    fn the_engine_output_is_not_doubled_on_pure() {
+        assert!(!super::CRAFT_LAWS.engine_output_double.value);
+        assert_eq!(
+            super::CRAFT_LAWS.engine_output_double.origin,
+            oag_title::Origin::Measured
+        );
+    }
+
     #[test]
     fn the_start_voice_is_measured_on_pure() {
         assert_eq!(COUNTDOWN_VOICE.origin, oag_title::Origin::Measured);

@@ -165,6 +165,7 @@ impl Race {
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         // Held off on a title with no `CraftLaws` (Pulse) as well, until our AI flies with it.
         let air_pitch_bias = craft_laws.is_some_and(|laws| laws.air_pitch_bias.value);
+        let physics_laws = crate::launch_hover::physics_laws(craft_laws);
         let class_gravity_term =
             if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
                 oag_physics::passive::ClassGravityTerm::Airborne
@@ -650,6 +651,7 @@ impl Race {
                 hover_rig: rig,
                 steer_ramp_clamped,
                 air_pitch_bias,
+                physics_laws,
                 autopilot_engine,
                 weapon_pad_glow,
                 leach_drain,
