@@ -703,3 +703,25 @@ fn the_uncapped_bit_lifts_the_acceleration_cap() {
     let autopilot = engine(&state, &handling, 1.0, 0.0, None, 1.0, both).thrust;
     assert_eq!(autopilot, free * ENGINE_AUTOPILOT_SPEEDUP);
 }
+
+/// Wipeout Pure's engine has no doubling (`oag_physics::laws::Laws::engine_output_double`),
+/// measured live on 374 frames: `T = min(throttle * amount, 0.5 * speed + accelcap)`
+/// exactly. Undoing the doubling is exact, so Pure gets its own law to the bit.
+#[test]
+fn undoubling_the_engine_gives_the_capped_thrust_exactly() {
+    let handling = test_handling();
+    let mut state = ship_moving_forward(10.0);
+    state.thrust = 100.0;
+    let force = engine(
+        &state,
+        &handling,
+        1.0,
+        10.0,
+        None,
+        1.0,
+        EngineFlags::default(),
+    );
+    // Throttle-bound: 100 * 0.4 = 40 against a cap of 0.5 * 10 + 20 = 25, so the cap.
+    assert_eq!(force.thrust, 50.0);
+    assert_eq!(force.undoubled().thrust, 25.0);
+}

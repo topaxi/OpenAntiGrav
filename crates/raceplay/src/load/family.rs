@@ -90,8 +90,10 @@ pub(super) fn opponent_handling(
             .map_err(|e| e.to_string())
             .and_then(|blob| handling::from_blob(&blob).map_err(|e| e.to_string()))
             .and_then(|stats| {
-                oag_gameplay::handling_for(&stats, class, pad_tunables, special)
-                    .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))
+                let mut handling = oag_gameplay::handling_for(&stats, class, pad_tunables, special)
+                    .ok_or_else(|| format!("authors no <Class name=\"{class}\">"))?;
+                super::code_laws::apply(&mut handling, &stats, class, race.craft_laws);
+                Ok(handling)
             });
         match loaded {
             Ok(handling) => out[slot] = Some(handling),

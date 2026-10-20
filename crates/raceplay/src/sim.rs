@@ -349,6 +349,8 @@ pub struct RaceSim {
     pub(super) steer_ramp_clamped: bool,
     /// Whether every craft adds the in-air `weight_distribution` torque - see [`Setup::craft_laws`].
     pub(super) air_pitch_bias: bool,
+    /// Every craft's force-law constants, the title's - see [`Setup::craft_laws`].
+    pub(super) physics_laws: oag_physics::laws::Laws,
     /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].
     pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
@@ -362,6 +364,9 @@ pub struct RaceSim {
     pub(super) class_gravity_term: oag_physics::passive::ClassGravityTerm,
     /// The launch boost's parameters - see [`Setup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
+    /// The launch boost the AI field flies: [`Self::start_boost`], or `None` where the title's
+    /// engine boosts the player's craft alone.
+    pub(super) field_start_boost: Option<oag_physics::launch::StartBoost>,
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
     /// The level each person-flown slot flies with; the settings decide, and a network room

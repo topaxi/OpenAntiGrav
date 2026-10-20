@@ -237,6 +237,7 @@ impl Race {
             thrust_scale,
             class_gravity_scale: self.sim.class_gravity_scale,
             class_gravity_term: self.sim.class_gravity_term,
+            laws: self.sim.physics_laws,
             start_boost: self.sim.start_boost,
             // The mode's own `Weapons`/`Damage` defaults, which decide both what
             // a wall costs the energy pool and whether it recovers - a time trial

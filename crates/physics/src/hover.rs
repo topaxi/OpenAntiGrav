@@ -700,7 +700,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // Bank-to-yaw: body-local yaw proportional to how far the right axis has tipped out
     // of the horizontal, cancelled by a magstrip lock. Skipped on the grid
     // (`craft+0x2a4 != 0`, see `ShipState::on_grid`).
-    let bank = bank::gain(state) * right.y * (1.0 - state.mag_lock_blend);
+    let bank = bank::gain(state, &env.laws) * right.y * (1.0 - state.mag_lock_blend);
     let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
 
     // Two penetrating probes would each ask for a teleport; applying both would move the
@@ -728,7 +728,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
 mod bank;
 mod rig;
-pub use bank::BANK_TO_YAW_GAIN_FOUR_CORNER;
+pub use bank::{BANK_TO_YAW_GAIN_FOUR_CORNER, BANK_TO_YAW_GAIN_PURE};
 pub use rig::{MAX_PROBES, NormalMean, Rig};
 
 /// `0.25` at `TOC-0x4358` (`0x008a9180`): HD's scale on the summed contact normals.

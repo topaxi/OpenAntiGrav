@@ -51,8 +51,14 @@ use crate::params::Handling;
 /// the forward coefficients, so the ship is reluctant to fly backwards.
 pub const DRAG_REVERSING: f32 = -0.1;
 
-/// Quadratic drag coefficient while grounded.
+/// Quadratic drag coefficient while grounded, Pulse's. A title carries its own in
+/// [`crate::laws::Laws::drag_ground`]: Pure's is [`DRAG_GROUND_PURE`].
 pub const DRAG_GROUND: f32 = -0.005;
+
+/// Wipeout Pure's grounded coefficient, `0xbb23d70a` in its `Ship_ApplyQuadraticDrag_q`
+/// (`0x0892cba0`): half of [`DRAG_GROUND`]. Measured live: the coefficient register reads it on
+/// every grounded frame and the force reproduces exactly (`docs/physics/pure-physics.md`).
+pub const DRAG_GROUND_PURE: f32 = -0.0025;
 
 /// Quadratic drag coefficient while airborne. **Smaller than [`DRAG_GROUND`]**, not larger;
 /// a reimplementation that "fixed" the intuitive ordering would change how far a ship
@@ -119,7 +125,7 @@ pub const VERTICAL_DAMPING: f32 = -0.25;
 /// Quadratic drag, as a world-space force.
 ///
 /// ```text
-/// k = forwardSpeed < -0.2 ? -0.1 : grounded ? -0.005 : -0.002
+/// k = forwardSpeed < -0.2 ? -0.1 : grounded ? ground_k : -0.002   // ground_k Pulse -0.005
 /// worldForce += velocity * forwardSpeed * k
 /// ```
 ///
@@ -136,11 +142,11 @@ pub const VERTICAL_DAMPING: f32 = -0.25;
 /// coefficient. Lateral velocity is dragged too; projected onto `forward` it is `k * fs^2`,
 /// which is why the along-track balance sees a quadratic.
 #[must_use]
-pub fn quadratic_drag(velocity: Vec3, forward_speed: f32, grounded: bool) -> Vec3 {
+pub fn quadratic_drag(velocity: Vec3, forward_speed: f32, grounded: bool, ground_k: f32) -> Vec3 {
     let k = if forward_speed < DRAG_REVERSE_THRESHOLD {
         DRAG_REVERSING
     } else if grounded {
-        DRAG_GROUND
+        ground_k
     } else {
         DRAG_AIR
     };

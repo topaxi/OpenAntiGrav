@@ -306,6 +306,9 @@ pub struct Environment {
     /// local-player status update writes into `craft+0x1c0` each frame. Default clear: every
     /// AI craft, every player not on the Autopilot or past the line.
     pub engine_flags: crate::engine::EngineFlags,
+    /// The title's force-law constants, Pulse's unless the title measured its own
+    /// ([`crate::laws::Laws`]).
+    pub laws: crate::laws::Laws,
 }
 
 impl Default for Environment {
@@ -324,6 +327,7 @@ impl Default for Environment {
             pilot_assist: None,
             barrel_rolls: true,
             engine_flags: crate::engine::EngineFlags::default(),
+            laws: crate::laws::Laws::PULSE,
         }
     }
 }
@@ -481,6 +485,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         env.thrust_scale,
         env.engine_flags,
     );
+    let engine_force = if env.laws.engine_output_double {
+        engine_force
+    } else {
+        engine_force.undoubled()
+    };
     acc.local_force += engine_force.as_local_force();
     // After the engine, which has just read last tick's multiplier: the grader and boost
     // writer run behind it in the original's frame (`crate::launch`).
@@ -547,7 +556,12 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     acc.local_angular.x += pitch;
 
     // 6. Quadratic drag and 7. gravity.
-    let drag = passive::quadratic_drag(velocity, cached_speed, control_contact);
+    let drag = passive::quadratic_drag(
+        velocity,
+        cached_speed,
+        control_contact,
+        env.laws.drag_ground,
+    );
     let gravity = passive::gravity(
         handling,
         state.body.mass,

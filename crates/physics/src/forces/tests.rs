@@ -635,3 +635,50 @@ fn a_titles_inertia_mass_rebuilds_the_same_box() {
     assert!((hd.y - 24.0).abs() < 0.001, "I_yy was {}", hd.y);
     assert!((hd.z - 17.333).abs() < 0.001, "I_zz was {}", hd.z);
 }
+
+/// Wipeout Pure's laws reach the frame through [`Environment::laws`]: its engine does not double
+/// and its grounded drag is half Pulse's (`docs/physics/pure-physics.md`). The same grounded,
+/// moving craft gets exactly half the thrust and half the drag on Pure's laws.
+#[test]
+fn a_titles_laws_halve_the_thrust_and_the_grounded_drag() {
+    let handling = Handling {
+        engine: Engine {
+            accelcap: 1000.0,
+            amount: 0.4,
+            ..Engine::default()
+        },
+        ..test_handling()
+    };
+    let world = flat_floor();
+    let full_throttle = ShipControls {
+        thrust: 1.0,
+        ..ShipControls::default()
+    };
+    let frame = |laws: crate::laws::Laws| {
+        let mut ship = ship_at(4.0);
+        ship.grounded = 1.0;
+        ship.body.linear_velocity = Vec3::new(0.0, 0.0, -50.0);
+        let env = Environment {
+            laws,
+            ..Environment::default()
+        };
+        evaluate(
+            &mut ship,
+            &full_throttle,
+            &handling,
+            &env,
+            &world,
+            1.0 / 60.0,
+        )
+    };
+    let pulse = frame(crate::laws::Laws::PULSE);
+    let pure = frame(crate::laws::Laws {
+        engine_output_double: false,
+        drag_ground: crate::passive::DRAG_GROUND_PURE,
+        ..crate::laws::Laws::PULSE
+    });
+    assert!(pulse.engine.thrust > 0.0);
+    assert_eq!(pure.engine.thrust * 2.0, pulse.engine.thrust);
+    assert!(pulse.drag.length() > 0.0);
+    assert_eq!(pure.drag * 2.0, pulse.drag);
+}

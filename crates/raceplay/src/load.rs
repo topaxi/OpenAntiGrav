@@ -11,6 +11,7 @@ mod cameras;
 #[cfg(feature = "view")]
 pub mod campaign;
 mod closing_report;
+mod code_laws;
 #[cfg(feature = "view")]
 mod countdown;
 #[cfg(feature = "view")]
@@ -177,7 +178,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         .filter(|class| class.pitch.is_none())
         .map(|class| class.raw_name.as_str())
         .collect();
-    if !unauthored.is_empty() {
+    let code_pitch = craft_title
+        .race
+        .craft_laws
+        .and_then(|laws| laws.code_pitch)
+        .is_some();
+    if !unauthored.is_empty() && code_pitch {
+        report.push(format!(
+            "{stats_name}: no <pitch> authored; flying on this title's own compiled-in pitch \
+             (measured, docs/physics/pure-physics.md)"
+        ));
+    } else if !unauthored.is_empty() {
         report.push(format!(
             "{stats_name}: {} of {} class(es) author no <pitch> ({}); flying on \
              oag_gameplay::handling::PITCH_STAND_IN, which is Pulse's block and \
@@ -206,11 +217,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
     // that cannot be set up, rather than one run on somebody else's tuning.
-    let handling =
+    let mut handling =
         handling_for(&stats, &options.class, pad_tunables, special).with_context(|| {
             let (class, ladder) = (&options.class, stats.ladder());
             format!("{stats_name} authors no <Class name=\"{class}\"> - it carries {ladder}")
         })?;
+    code_laws::apply(
+        &mut handling,
+        &stats,
+        &options.class,
+        craft_title.race.craft_laws,
+    );
     // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
     // here, by its own function: it is per team rather than per class, and it
     // is graphics, so it deliberately never enters `Handling`.
@@ -693,6 +710,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !extents {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
+    // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
+    let code_start_boost = craft_title
+        .race
+        .craft_laws
+        .and_then(|laws| laws.code_start_boost)
+        .map(|b| oag_physics::launch::StartBoost {
+            window_start: b.value.window_start,
+            window_end: b.value.window_end,
+            stall_end: b.value.stall_end,
+            overall_duration: b.value.overall_duration,
+            stall_mul: b.value.stall_mul,
+            normal_mul: b.value.normal_mul,
+            boost_mul: b.value.boost_mul,
+        });
+    if code_start_boost.is_some() && start_boost.is_none() {
+        report.push(
+            "launch boost: this title's own, compiled in (measured, docs/physics/pure-physics.md)"
+                .to_string(),
+        );
+    }
+    let start_boost = start_boost.or(code_start_boost);
     #[cfg(feature = "view")]
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let gtf = craft_title.effects.sprites.contains(&name);
