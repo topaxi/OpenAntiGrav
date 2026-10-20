@@ -222,6 +222,7 @@
 0x0892b094	function	Ship_UpdateSideshiftInput	85	craft-physics.md
 0x0880f870	function	Race_UpdateLaunchGrade	88	craft-physics.md
 0x089252e8	function	Ship_UpdateStartBoost	88	craft-physics.md
+0x0886b600	function	ExhaustFlare_OnPerfectStart	85	craft-physics.md
 0x08920a4c	function	Handling_ParseStats	88	craft-physics.md
 0x0891fadc	function	HandlingXml_ParseAntigrav	88	craft-physics.md
 0x0891ff38	function	HandlingXml_ParseBrakes	88	craft-physics.md

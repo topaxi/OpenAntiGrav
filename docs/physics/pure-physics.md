@@ -11,16 +11,17 @@ differ, and every one was read off `BOOT.BIN` and then measured live to float pr
 
 | Law | Pulse | Pure | Where (Pure USA) | Confidence | Status here |
 | --- | --- | --- | --- | --- | --- |
-| Engine output doubling | `T * 2.0` | **none** | `Ship_UpdateEngine` `0x0892f1f0` | 92 | ported, `CraftLaws::engine_output_double` |
-| Grounded quadratic drag | `-0.005` | **`-0.0025`** | `Ship_ApplyQuadraticDrag_q` `0x0892cba0` | 92 | see below |
-| Bank-to-yaw gain, two-point hover | `30.0` | **`50.0`** | two-point hover `0x0892dea8` | 92 | see below |
-| Pitch torque per unit input | XML `pitch_air`/`pitch_ground` (`0.3`/`1.0` on every Pulse team) | **`0.1` air, `0.4` grounded**, code literals | `Ship_UpdatePitch` counterpart `0x0892caf8` | 92 | see below |
-| Pitch damping | XML `pitch_damping` (`3`) | **`1.5`** racing, `0.6` on the grid (`3 / c`) | `Ship_ApplyAngularDamping_q` `0x0892cc2c` | 92 | see below |
-| Sideshift force | XML `Airbrake sideshift` | **`200.0`**, a code literal | airbrake counterpart `0x0892f64c` | 92 | see below |
-| Launch boost | `<StartBoost>` XML, every craft | **code law**, player only, `x4.2`/`x1.2`/`x0.8` for 1 s | `0x0880f870`, `0x089252e8` | 80 (static) | open |
+| Engine output doubling | `T * 2.0` | **none** | `Ship_UpdateEngine` `0x0892f1f0` | 92 | on: `CraftLaws::engine_output_double` (see [the gates](#what-is-on-and-what-is-held)) |
+| Grounded quadratic drag | `-0.005` | **`-0.0025`** | `Ship_ApplyQuadraticDrag` `0x0892cba0` | 92 | on: `CraftLaws::drag_ground` |
+| Bank-to-yaw gain, two-point hover | `30.0` | **`50.0`** | `Ship_HoverTwoPoint` `0x0892dea8` | 92 | **held** at `30`: `CraftLaws::bank_to_yaw` |
+| Pitch torque per unit input | XML `pitch_air`/`pitch_ground` (`0.3`/`1.0` on every Pulse team) | **`0.1` air, `0.4` grounded**, code literals | `Ship_UpdatePitch` `0x0892caf8` | 92 | **held**: `oag_pure::race::CODE_PITCH`, `CraftLaws::code_pitch` `None` |
+| Pitch damping | XML `pitch_damping` (`3`) | **`1.5`** racing, `0.6` on the grid (`3 / c`) | `Ship_ApplyAngularDamping` `0x0892cc2c` | 92 | **held**, with the pitch torque |
+| Sideshift force | XML `Airbrake sideshift` | **`200.0`**, a code literal | `Ship_UpdateAirbrakes` `0x0892f64c` | 92 | on: `CraftLaws::code_sideshift` (ours read `0`: no Pure craft could sideshift) |
+| Launch boost | `<StartBoost>` XML | **code law**: windows `0.1`/`0.4`/`0.5` s, `x0.8`/`x1.2`/`x4.2` for 1 s, player only | `Race_UpdateLaunchGrade` `0x0880f870`, `Ship_UpdateStartBoost` `0x089252e8` | 88 | **held**: `oag_pure::race::START_BOOST`, `CraftLaws::code_start_boost` `None` |
 
 Confidence 92 on the six measured rows: a runtime trace that reproduces the instruction-level
-reading exactly, on one binary. Not 95: the EU pressing was not run.
+reading exactly, on one binary. Not 95: the EU pressing was not run. The launch is 88: its
+grade-2 branch and its multipliers were watched, its window edges are read.
 
 ## How it was measured
 
@@ -126,7 +127,8 @@ frame; the damping reproduces `-1.5 * omega.x` racing and `-0.6 * omega.x` on th
 `right` being row 0 (`craft+0x170`), through `Body_AddForceWorld` (`0x089334a4`, `body+0x140`).
 The flags come from `entity+0x9dc`/`+0x9e0`, set to `0.2` when a shift fires (`0x0892b094`).
 Live: writing `0.2` to the left timer gives `body+0x140 += right * 200.000` for the next five
-updates, then nothing.
+updates, then nothing. Five, not six, because the timer was written after that frame's input
+pass had already run; a shift the player fires pushes for `0.2` s, as ours does.
 
 ## The launch is Pure's own
 
@@ -134,9 +136,56 @@ updates, then nothing.
 edge flag `Ship_UpdateEngine` raises) against a race-manager timer (`+0x130`): before `0.1` s
 grade `1`, `0.1`-`0.4` s grade `2` (and the exhaust flare), `0.4`-`0.5` s grade `1`, `0.5`-`1.3`
 s grade `0`. `FUN_089252e8` turns the grade into `craft+0x24c` for the first second of state
-`1`: `1.2`, `0.8` or `4.2`, then `1.0`. Only the player's engine reads it. Live so far: holding
-throttle through the countdown gives `0.8`. Where the timer starts relative to GO is not yet
-read, so this law is not ported.
+`1`: `1.2`, `0.8` or `4.2`, then `1.0` until `1.5` s. Only the player's engine reads it
+(`entity == *(0x538e8)+0x13c`, `0x0892f60c`). Live: the race-manager clock reads `0.0` on the
+first racing update (it starts at GO, as Pulse's does); a first press at `0.200` s wrote grade
+`2` and `craft+0x24c` read `4.2` until the craft's state-1 clock reached `1.0`, then `1.0`; no
+press read `1.2`; throttle held through the countdown read `0.8`. That is Pulse's
+`<StartBoost>` law (`launch-boost.md`) with the seven figures as code literals, so it ports as
+data: `oag_pure::race::START_BOOST` = windows `0.1`/`0.4`/`0.5`, held `1.0` s, `0.8`/`1.2`/`4.2`.
+Pure's last grading window runs to `1.3` s, past the multiplier's `1.0`, so a press there
+changes nothing on either engine. The original applies the multiplier to the player's engine
+alone, and so would ours (`CodeStartBoost::player_only`: the field launches unboosted). Applied
+to every craft instead (Pulse's rule), our AI, which holds throttle from GO, took Pure's `x0.8`
+stall for a second, and the sweep's Ace branch-A walls rose `13 -> 118`. **Held**: player-only,
+it still moved the gates (below), and it rides on the engine's missing doubling.
+The perfect start's own effect is Pulse's too: `ExhaustFlare_OnPerfectStart` (`0x0886b600`)
+arms the flare's boost at `0.8` and plays `TURBO`.
+
+## What is on and what is held
+
+Every law was gated before and after: the Pulse lone-craft gate
+(`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`, 12/12 clean
+throughout), `pure_race_ground_truth`, `opponent_autopilot_sweep::pure` (32 Autopilot stints at
+each of novice and Ace, wall ticks in branch A, our driver, and branch B, the original's player
+driver), its `races_others` on Pure (4 seeds a level, Autopilot off and on, laps, walls and
+shield per lap and at the end) and `test-data-affected`. A law that regressed our AI was held,
+as `docs/physics/airborne-ground-truth.md` held Pulse's; the evidence:
+
+| State | Sweep walls novice A/B | Sweep walls Ace A/B | Race walls off, novice / Ace | Ace wrecks (off) | Lap novice / Ace |
+| --- | --- | --- | --- | --- | --- |
+| Base (Pulse's laws on Pure) | 31 / 0 | 38 / 18 | 269 / 1104 | 0 | 49.8 / 41 s |
+| + no doubling, drag `-0.0025` | 23 / 25 | 14 / 25 | 399 / 731 | 0 | 54.5 / 44 s |
+| + bank-to-yaw `50` (held) | 56 / 28 | 42 / 265 | 422 / 758 | 4 | 54 / 44 s |
+| + pitch `0.1`/`0.4`/`1.5` (held) | 58 / 78 | 53 / 72 | 459 / 829 | 2 | 54 / 44 s |
+| + sideshift `200` (on) | 23 / 25 | 13 / 32 | 399 / 855 | 0 | 54.5 / 44 s |
+| + launch, every craft (not kept) | 8 / 50 | 118 / 44 | 311 / 958 | 1 | 54 / 44.5 s |
+| + launch, player only (held) | 73 / 17 | 24 / 24 | 397 / 778 | 4 | 54 / 44.5 s |
+
+The race columns move with anything that changes the start, including a launch that touches the
+player's craft alone: the pack reshuffles and four seeds a level is a small sample. The rule was
+applied the same way to every law regardless.
+
+The speed laws land the acceleration the original has and leave one red test:
+`replay_ground_truth::pure_replays_reproduce_catch_a_tampered_input_and_ghosts_change_nothing`,
+whose pad is our own driver (`oag_ai::Driver`, default tuning) on the player's craft. It hits the
+wall at the end of Vineta K's start straight and stays pinned there on Pulse's laws and on
+Pure's alike; on Pulse's it crawls at about `10` units/s and completes a lap inside the test's
+7,200 ticks, on Pure's at about `5` and does not.
+
+Not ported: the grid's pitch damping (`-0.6`), which waits on the pitch triple. The inertia
+frame is Pulse's (the integrator is the same code, above), so Pure's world-axis tensor is held
+with Pulse's ([airborne-ground-truth.md](airborne-ground-truth.md)).
 
 ## Cross-title
 

@@ -62,6 +62,7 @@ mass, `(12, 8, 12)` to `Body_SetBoxInertia`'s caller and stores `0.01`, `0.01`, 
 | `0x0892b094` | `Ship_UpdateSideshiftInput` | 85 | live: writing `0.2` to `entity+0x9dc` makes `craft+0x1c0` carry `0x800` for the next five updates (`0x0892b97c`); `+0x9e0` sets `0x1000` (`0x0892b9c4`). The tap windows above it (`0.25` at `+0x9d4`/`+0x9d8`, the `+/-10` flick) are read statically |
 | `0x0880f870` | `Race_UpdateLaunchGrade` | 88 | live: the race-manager clock at `+0x130` starts at `0.0` on the first racing update; a first throttle edge (`craft+0x28d`) at `0.200` wrote grade `2` to `entity+0x48c`. Windows `0.1`, `0.4`, `0.5`, `1.3` are its literals |
 | `0x089252e8` | `Ship_UpdateStartBoost` | 88 | live: `craft+0x24c` read `4.2` (grade 2) until the craft's state-1 clock (`entity+0x9c0`) reached `1.0`, then `1.0`; `1.2` before the edge; `0.8` after a throttle held through the countdown |
+| `0x0886b600` | `ExhaustFlare_OnPerfectStart` | 85 | static: called from `Race_UpdateLaunchGrade`'s grade-2 branch for a non-AI craft; stores `0.8` to the flare's boost timer (`+0x19c`) and plays `TURBO` (`0x08a490c4`), where `ExhaustFlare_OnSpeedupPad` (`0x0886b548`, beside it) plays the pad's cue: Pulse's `0x08904fd4` |
 
 ## The handling loader
 
