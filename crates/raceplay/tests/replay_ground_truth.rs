@@ -86,20 +86,37 @@ struct Pad {
     driver: oag_ai::Driver,
     tuning: oag_ai::Tuning,
     input: Input,
+    /// `Some` when the pad is the race's own driver for the player's craft
+    /// ([`race::Race::autopilot_wants`]): the speed plan, the field and the
+    /// hull's yaw ceiling, kept outside the world, as `--net-bot` flies.
+    race_driver: Option<Option<oag_ai::Driver>>,
 }
 
+/// The titles whose pad is the race's own driver rather than a bare
+/// [`oag_ai::Driver`] on the line alone. Pure since 2026-10-20: on Pure's
+/// measured speed laws (no engine doubling, half the drag) the bare driver
+/// pins itself on the wall at the end of Vineta K's start straight and
+/// crawls too slowly to lap in [`TICKS`].
+const RACE_DRIVER: [&str; 1] = ["pure"];
+
 impl Pad {
-    fn new() -> Self {
+    fn new(title: &str) -> Self {
         Self {
             driver: oag_ai::Driver::default(),
             tuning: oag_ai::Tuning::default(),
             input: Input::new(),
+            race_driver: RACE_DRIVER.contains(&title).then_some(None),
         }
     }
 
-    fn inputs(&mut self, race: &race::Race) -> PlayerInputs {
-        let ctx = oag_ai::Context::new(race.racing_line(), &self.tuning);
-        let controls = self.driver.drive(&race.ship().physics, &ctx);
+    fn inputs(&mut self, race: &mut race::Race) -> PlayerInputs {
+        let controls = if let Some(driver) = self.race_driver.as_mut() {
+            let slot = race.sim.world.primary_slot();
+            race.autopilot_wants(slot, driver)
+        } else {
+            let ctx = oag_ai::Context::new(race.racing_line(), &self.tuning);
+            self.driver.drive(&race.ship().physics, &ctx)
+        };
         let mut held = 0;
         if controls.thrust > 0.5 {
             held |= Button::Cross.bit();
@@ -127,9 +144,9 @@ fn header(title: &str) -> Header {
 fn record(title: &str) -> Option<(race::Race, Replay)> {
     let mut race = race::Race::start(setup(title)?);
     race.start_recording(header(title));
-    let mut pad = Pad::new();
+    let mut pad = Pad::new(title);
     for _ in 0..TICKS {
-        let inputs = pad.inputs(&race);
+        let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
         race.drain_cues();
     }
