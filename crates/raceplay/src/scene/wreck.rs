@@ -14,6 +14,8 @@
 
 use oag_physics::CraftState;
 
+use crate::drawable::HullLayers;
+
 use super::per_slot::Build;
 use super::*;
 
@@ -129,8 +131,11 @@ impl Scene {
                     view_projection,
                     race.ship_model_matrix_of(slot),
                     prev_vp * prev.ship(slot, race),
-                    self.sun_occlusion_layer(slot),
-                    race.ship_hull_scale(slot),
+                    HullLayers {
+                        sun_occlusion: self.sun_occlusion_layer(slot),
+                        scale: race.ship_hull_scale(slot),
+                        env: None,
+                    },
                 );
             }
         }

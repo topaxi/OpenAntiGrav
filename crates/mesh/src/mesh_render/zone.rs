@@ -432,6 +432,10 @@ fn bind_group(
                 binding: 15,
                 resource: wgpu::BindingResource::TextureView(&kept.shadow.behind_glass_view),
             },
+            wgpu::BindGroupEntry {
+                binding: 16,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.env_probe_view),
+            },
         ],
     })
 }
@@ -525,6 +529,10 @@ pub(super) fn scene_bind_group(
             // The behind-the-glass target, binding 15: a picture of the frame
             // like the maps above, read by Vineta K's tunnel glass alone.
             shadow_entries[6],
+            // The per-craft environment probes, binding 16: the circuit's baked
+            // `.probes` blended at each craft, read by a hull whose uniform
+            // names a layer.
+            shadow_entries[7],
         ],
     });
 

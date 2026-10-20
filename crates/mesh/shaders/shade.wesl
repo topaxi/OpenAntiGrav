@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{emissives, scene, sun_delta, sun_known, uniforms};
+import package::bindings::{emissives, env_probe_tex, scene, shadow_sampler, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -13,6 +13,35 @@ import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
 import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
+
+// **Where a normal looks in Wipeout HD's environment probe**: the dual paraboloid the
+// hull's `IBL` programs address, read off the live microcode (confidence 85,
+// `docs/rendering/hd-ship-materials.md`, "Finding 4"). `x > 0` is the right-hand
+// disc, `z` its horizontal and `y` its vertical.
+fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
+    let u = 0.25 + select(-n.z / 4.0, 0.5 + n.z / 4.0, n.x > 0.0);
+    return vec2<f32>(u, 0.5 - 0.5 * n.y);
+}
+
+// The engine's probe tint, parameter `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction
+// (read live on RPCS3, `.w` the desaturation lerp, zero there): both probe maps are
+// multiplied by it. Its source is an engine table with no authored preimage, so the
+// value is the measurement of two circuits (Talon's Junction, Metropia).
+const ENV_PROBE_GAIN: f32 = 4.0;
+
+// The array holds two layers per craft, each 128x64: the irradiance map in its top-left
+// 64x32 corner, then the reflection map in all of its layer. `which` is 0 or 1.
+fn env_probe_layer(which: i32) -> i32 {
+    return (i32(uniforms.env_layer + 0.5) - 1) * 2 + which;
+}
+
+// Where the irradiance map's own `0..1` coordinate lands in its layer: halved, and clamped
+// to the map's texel centres first, so the filter never reaches past the 64x32 corner (a
+// dedicated map's `ClampToEdge`).
+fn env_probe_irradiance_uv(uv: vec2<f32>) -> vec2<f32> {
+    let clamped = clamp(uv, vec2<f32>(0.5 / 64.0, 0.5 / 32.0), vec2<f32>(1.0 - 0.5 / 64.0, 1.0 - 0.5 / 32.0));
+    return clamped * 0.5;
+}
 
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
 // and a 2x2 fragment quad - helper lanes included - is always shaded for one
@@ -281,9 +310,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // add the SPU light inside that same product), and carry no lightmap
         // term and no added vertex light - `skin/light_inputs.rs` has the
         // blocks.
+        // **A hull's ambient is `4 * paraboloidIblTex[n]` where the draw names an
+        // environment-probe layer** (the original's `HalfBrightIBL...` variants,
+        // word `0x847`/`0x047`), the constant ambient everywhere else. The layer
+        // is a uniform, so the fetch keeps its derivatives, and level 0 is the
+        // only level the 64x32 map has. Both arms below take it: the hull programs
+        // that multiply `VertexColour1` in and the ones that do not both read the
+        // IBL variant of their own block.
+        var hull_ambient = ambient_term;
+        if uniforms.env_layer > 0.5 && !no_ambient {
+            hull_ambient = ENV_PROBE_GAIN * textureSampleLevel(
+                env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n)), env_probe_layer(0), 0.0,
+            ).rgb;
+        }
         let lit_sum = select(
-            ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light,
-            in.colour.rgb * (ambient_term + sun_diffuse + in.spu_light),
+            hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,
+            in.colour.rgb * (hull_ambient + sun_diffuse + in.spu_light),
             colour_factor,
         );
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
@@ -588,7 +630,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let zone_weight = select(
         scene.zone.enabled,
         0.0,
-        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5,
+        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5 && emissives.scale[zone_entry].y < 7.5,
     );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
@@ -643,6 +685,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
 
+        // **The reflection probe**, on the hull materials whose `IBL` variant declares it
+        // (`slots` index into the glow table, `rate` 8): `probe(reflect(-V, N))` times
+        // the probe tint, the livery's alpha (the gloss mask) and the material's own
+        // reflectivity, added after the albedo multiply and before the fog - read off
+        // the live microcode, `@0x5c`-`@0x70` of `diffuse_with_specular_from_alpha_n`'s
+        // `IBL` block. **Added raw, not sRGB-decoded**, as the RSX adds its bytes: chosen by
+        // pixel match against the original's hull, no score (luma 0.56-0.91, saturation
+        // 0.08-0.27 over four boxes), the decoded add reads 0.40-0.49 and 0.23-0.42, the
+        // raw one 0.56-0.65 and 0.11-0.29 (`docs/rendering/hd-ship-materials.md`,
+        // "Finding 5").
+        var probe_reflection = vec3<f32>(0.0);
+        let probe_entry = in.slots >> 24u;
+        if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
+            let r = reflect(-to_eye, n);
+            let probe = textureSampleLevel(
+                env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
+            ).rgb;
+            probe_reflection = probe * ENV_PROBE_GAIN
+                * (texel.a * emissives.tint_offset[probe_entry].x);
+        }
+
         // The authored path shades in linear light, as the RSX does: the samples
         // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
         // the result is saturated (the stand-in for HD's exposure stage) and
@@ -685,7 +748,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // program ends on a /2 output scale"), so the sum below is what the
         // arithmetic states and the scene holds half of it.
         let lit_linear = scene.light.output_scale
-            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow);
+            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow
+                + probe_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

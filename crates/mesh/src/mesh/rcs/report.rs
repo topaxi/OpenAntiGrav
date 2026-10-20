@@ -237,6 +237,14 @@ pub struct Report {
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
+    /// Hull materials whose `IBL` variant reads the reflection probe, tagged in
+    /// the glow table - see `super::probe_lit`.
+    pub probe_lit_bound: usize,
+    /// Reflective materials left untagged because their glow index was taken or
+    /// the table was full.
+    pub probe_lit_blocked: usize,
+    /// Reflective materials whose reflectivity parameter was missing.
+    pub probe_lit_unread: usize,
     /// HD holographic billboards whose three textures were bound, and the
     /// materials of the family left on the generic emissive reading: one whose
     /// program is another one (`scanlinebillboard*`), or whose texture did not
@@ -405,6 +413,15 @@ impl Report {
             n => format!(
                 ", {n} holographic billboard material(s) left on the generic emissive reading \
                  (another program, such as `scanlinebillboard`, or an unreadable texture)"
+            ),
+        } + &match self.probe_lit_bound {
+            0 => String::new(),
+            n => format!(", {n} hull material(s) reading the reflection probe"),
+        } + &match self.probe_lit_blocked + self.probe_lit_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} reflective hull material(s) NOT tagged (glow index taken, table full \
+                 or no reflectivity)"
             ),
         } + &match self.light_cone_bound {
             0 => String::new(),

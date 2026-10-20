@@ -86,6 +86,9 @@ pub struct Scene {
     /// the assets already author is why that is read rather than approximated.
     /// See [`oag_tables::envsettings`].
     light: mesh_render::Light,
+    /// The circuit's baked environment probes and the per-craft array they are blended
+    /// into - `None` where the circuit ships none. See [`crate::env_probes`].
+    env_probes: Option<crate::env_probes::EnvProbes>,
     /// The track's authored fog volumes, sampled at the camera each frame.
     ///
     /// Empty for a track that authors no `fogCube` - four of the forty - and the
@@ -536,6 +539,7 @@ impl Scene {
         msaa: oag_display::display::Msaa,
         fog_volumes: Vec<oag_vex::fog::FogVolume>,
         light: mesh_render::Light,
+        probes: Option<oag_vex::probes::Probes>,
         authored_fog: Option<mesh_render::Fog>,
         hd_bloom: Option<oag_post::hd_bloom::Params>,
         omega_tonemap: Option<oag_post::omega_tonemap::Params>,
@@ -594,12 +598,16 @@ impl Scene {
             device,
             &mesh_render::material_bind_group_layout(device),
         );
+        // The circuit's baked environment probes, blended per craft each frame: only a
+        // circuit that ships them (Wipeout HD's) has an array to bind.
+        let env_probes = probes.map(|probes| crate::env_probes::EnvProbes::new(device, probes));
         let shadow_maps = mesh_render::ShadowMaps {
             coverage: Some(shadow_map.view()),
             depth: Some(shadow_map.depth_view()),
             occlusion: Some(sun_occlusion.view()),
             self_shadow: Some(sun_occlusion.self_shadow().view()),
             behind_glass: None,
+            env_probes: env_probes.as_ref().map(crate::env_probes::EnvProbes::view),
         };
         let behind_glass = behind_glass::Target::build(
             device,
@@ -1073,6 +1081,7 @@ impl Scene {
             behind_glass,
             fog_volumes,
             light,
+            env_probes,
             authored_fog,
             zone_grade,
             exhaust,

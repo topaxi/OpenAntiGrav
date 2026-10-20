@@ -27,31 +27,32 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Open
 
-- **The pale, washed hull is the original's IBL variant, and ours lacks the environment map it reads
-  (`hd-hull-reflection`, 2026-10-20, confidence 85 for the variant, 80 for what the maps are).** The livery is right
-  (`harimau_livery.gtf` matched byte for byte on the live hull draws). The original draws the hull with
-  `HalfBrightIBLSunShadowMapSpot0SVC1` (word `0x847`) where we resolve `HalfBrightAmbientSunSpot0SVC0` (`0x001`):
-  its ambient is `4 * paraboloidIblTex[n]`, a 64x32 dual paraboloid of the surroundings, and a 128x64 sharper one
-  (`paraboloidReflectionTex`) for the specular-from-alpha chunks. Both maps are rebuilt at runtime, in main memory,
-  with no draw into them in the frames caught. Law, units, numbers, the matching recipe and the cross-title answers:
-  [hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "Finding 4". Nothing is wired: the variant
-  switch and a probe have to land together (an IBL variant with no probe draws a black ambient), and a probe pasted
-  from the RPCS3 dump would be a stand-in. The nozzle "jewel" is the `emissive_bloom` chunk drawn with a texel of
-  `colours_flashing_glow.gtf` (ours draws that material and shows black; the `TC4` coordinate is unread).
+- **Landed 2026-10-20 (`hd-craft-ibl-probe`): the pale, metallic hull.** The original's IBL variant and the environment maps it
+  reads are wired: the maps are not a runtime render but a blend of the circuit's baked `track.probes`, decoded and read at
+  each craft (`oag_vex::probes`, `oag_raceplay::env_probes`, `shade.wesl`), the hull's ambient is `4 * irradiance[n]` and
+  the materials that declare `paraboloidReflectionTex` add `4 * reflection[reflect(-V, n)] * alpha * reflectivity`. Rest-frame hull
+  luma 0.18-0.30 before, 0.56-0.65 after, against the original's 0.56-0.91. Evidence, numbers, cost (+0.42 ms CPU a frame on
+  the desktop, nothing on the GPU), the decode-domain choice and the cross-title answers:
+  [hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "Finding 5"; the file:
+  [hd-probes.md](../../docs/formats/hd-probes.md); the engine side:
+  [env-probes.md](../../docs/ghidra/functions/ps3-hdfury-eu/env-probes.md). Still open, in order:
+  - the nozzle "jewel" is **not drawn at all** in ours (the earlier note said it drew black): the two `emissive_bloom` chunks
+    (258 and 24 indices) of the Harimau nozzle are missing from our hull, and the material's vertex law is read
+    (`TC4 = (u, v + 1.0 * time)`, additive `SRC_ALPHA, ONE`);
+  - two tight corners blend a section pair two apart where `Probes::locate` takes neighbours (weights, 70);
+  - 2048 ships 28 `.probes` in a different layout (and an authored sky paraboloid), Omega `.shprobes`: unread;
+  - the Steam Deck cost is estimated, not measured; the lever is blending an opponent every second tick;
+  - the Assegai wings and pods still read a little low in luma (0.29-0.40 against 0.59-0.62).
 - **The white wing rims on the `_n1` skins** are not the SPU term: they stay
   with the craft binding removed. Whether the original shows them is unread.
 
 ## Next Steps
 
-1. **Environment probe (the big one, a renderer lane).** Build a dual-paraboloid 128x64 of our scene at the craft
-   (cube or two hemispheres, every frame or every few: the original's maps match 83-87 % of their bytes after 0.4-0.8 s
-   and 50 % after 3-7 s), a convolved 64x32 copy, bind them as `0x9edd3243`/`0x872ed3bd`, resolve the `IBL` words
-   (`0x007`/`0x047`, `0x807`/`0x847` for the craft light) in `skin::variants` for ships, scale by 4. Find the producer
-   first: break on a write into `0x4348b000` or draw-capture a frame that holds `liveRsxPanXForm_CubemapToDualParaboloide_fp`
-   (`rsx-fp-names.py` names it) to read what the original puts in the cube. Compare at the rest state (original hull
-   luma 0.60-0.74, saturation 0.21-0.31; ours 0.24-0.29 and 0.67-0.79 before any change).
-2. **Nozzle jewel.** Read the vertex program the live `emissive_bloom` draws (521, 522 of the Harimau rest frame) use,
-   find what `TC4` is, and compare with ours.
+1. **Nozzle jewel.** Find why the two `emissive_bloom` chunks of the Harimau nozzle are not in our hull's draws
+   (`OAG_ONLY_MATERIAL=emissive_bloom` shows the cockpit dots and exhaust rings, nothing in the nozzle); the shader
+   side is read and the scroll is wired. Compare the chunk list of `Ship.vex` against the capture's draws 521-522.
+2. **Deck cost.** One `just bench-render hd` on the Deck, with and without the probes (the build has no switch: a
+   one-line `Option::filter` in `Scene::new` was the A/B), then decide whether an opponent's blend needs a cadence.
 3. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
    emulator-recipes.md, and read whether the wing rims are white at rest in
    the original.

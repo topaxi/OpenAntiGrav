@@ -27,6 +27,16 @@ struct Uniforms {
     // integer-valued float; `0.0` is the default `255` for both. Written for a
     // craft's hull alone. Was padding until 2026-10-17.
     hull_scale: f32,
+    // Which layer of the per-craft environment-probe array this model's hull is
+    // lit from, **plus one** - `0.0` for none. Wipeout HD's hull draws its
+    // ambient as `4 * paraboloidIblTex[n]`, a blend of the circuit's own baked
+    // `.probes` (`oag_vex::probes`); `0.0` keeps the constant ambient every
+    // other draw uses. The three f32s after it are padding, not a vec3, for
+    // the alignment reason `sun_occlusion_layer` gives.
+    env_layer: f32,
+    env_pad0: f32,
+    env_pad1: f32,
+    env_pad2: f32,
     // The previous simulation tick's `view_projection * model`, premultiplied.
     // **Deliberately not symmetric with the pair above**: fog and lighting
     // need world position, so the current camera and model stay separate;

@@ -526,8 +526,10 @@ pub(super) fn envsettings_alternate_fog(
 
 mod bloom;
 mod light;
+mod probes;
 pub(super) use bloom::envsettings_bloom;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
+pub(super) use probes::read_probes;
 
 /// Everything the four environment readers found, in one value.
 ///

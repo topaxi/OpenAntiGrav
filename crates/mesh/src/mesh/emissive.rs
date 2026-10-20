@@ -55,3 +55,11 @@ pub struct Emissive {
 /// surface is switched off for the quad that shows a card. How the original
 /// keeps the board is unread; see `docs/rendering/start-gantry.md`.
 pub const ZONE_EXEMPT_RATE: f32 = 4.0;
+
+/// The `rate` of an entry that marks a hull material reading the reflection probe, with
+/// the material's own reflectivity in `tint.x`: read by `shade.wesl` off the entry the
+/// vertex's material index names. See `super::rcs::probe_lit`.
+///
+/// **A value above [`ZONE_EXEMPT_RATE`]**, so the Zone-exemption test is a band
+/// (`3.5 < rate < 7.5`) and a reflective hull still takes the Zone grade.
+pub const REFLECTION_RATE: f32 = 8.0;

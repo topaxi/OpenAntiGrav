@@ -206,6 +206,8 @@ mod effects;
 mod eliminator;
 #[cfg(feature = "view")]
 pub mod engine_light;
+#[cfg(feature = "view")]
+pub mod env_probes;
 mod field;
 #[cfg(feature = "view")]
 pub mod finish_camera;

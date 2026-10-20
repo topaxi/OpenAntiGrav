@@ -426,6 +426,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    #[cfg(feature = "view")]
+    let probes = environment::read_probes(&mut archives, &track, &mut report);
     // `fc01_dummy`'s pixel is the circuit's fog colour, which only the staging
     // knows: write it into the vertices that carry the placeholder.
     #[cfg(feature = "view")]
@@ -1078,6 +1080,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         clouds: cloud_layer(&mut archives, &track_blob, vex_geometry, &mut report),
         #[cfg(feature = "view")]
         light,
+        #[cfg(feature = "view")]
+        probes,
         #[cfg(feature = "view")]
         authored_fog,
         #[cfg(feature = "view")]

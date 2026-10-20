@@ -748,3 +748,7 @@
 0x00129988	function	Autopilot_Update	85	autopilot.md
 0x002e15f0	function	Rand_FloatRange	90	engine-trail.md
 0x00057690	function	RaceManager_UpdateCountdown	82	countdown-voice.md
+0x003c4d78	function	EnvProbes_LoadForTrack	82	env-probes.md
+0x003c1120	function	EnvProbes_ReadTables	85	env-probes.md
+0x003c3b30	function	EnvProbes_SubmitDecodeJob	65	env-probes.md
+0x003c4a70	function	EnvProbes_SubmitBlendJob	60	env-probes.md

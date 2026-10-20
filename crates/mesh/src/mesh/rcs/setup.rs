@@ -188,6 +188,17 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The hulls that read the reflection probe claim a slot's glow index last: ice ORs its
+    // index into whatever the slot holds, so a tag laid earlier would be corrupted, and every
+    // other family above keeps the slot it took (a tagged slot is counted, not overwritten).
+    super::probe_lit::probe_lit(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.

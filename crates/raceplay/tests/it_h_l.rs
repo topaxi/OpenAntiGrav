@@ -15,6 +15,7 @@
 mod hd_ai_craft_laws_ground_truth;
 mod hd_air_pose_walk;
 mod hd_engine_flare_ground_truth;
+mod hd_env_probes_ground_truth;
 mod hd_envsettings_carry_ground_truth;
 mod hd_flyby_ground_truth;
 mod hd_grid_hover_ground_truth;
