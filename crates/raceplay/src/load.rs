@@ -1120,7 +1120,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             },
             craft_laws: title.race.craft_laws,
             autopilot_engine: title.race.autopilot_engine,
-            opponent_autopilot: title.race.opponent_autopilot.flies(&options.class),
+            opponent_autopilot: title
+                .race
+                .opponent_autopilot
+                .flies(&options.class, options.difficulty.name()),
             #[cfg(feature = "view")]
             zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
             #[cfg(feature = "view")]
