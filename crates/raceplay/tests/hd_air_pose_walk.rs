@@ -73,7 +73,12 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
     let mut race = oag_raceplay::Race::start(loaded.setup);
     // One tick so the per-tick craft laws (hover rig, steering clamp) are written.
     race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
-    let template = race.sim.world.ships[0].physics;
+    let mut template = race.sim.world.ships[0].physics;
+    // The tick above ran on the grid, where HD caps the hover target low (`hover_cap`); the
+    // capture is flown long after GO, when the cap has released (`hover-target.md`).
+    if std::env::var_os("OAG_HD_GRID_CAP").is_none() {
+        template.hover_cap = None;
+    }
     let handling = race.sim.world.ships[0].handling;
     let world = race.collision();
     let term = match std::env::var("OAG_HD_GRAV").as_deref() {
@@ -142,7 +147,45 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
             steer_y: r[at("c4")] / 100.0,
             ..ShipControls::default()
         };
-        step(&mut state, &controls, &handling, &env, world, dt);
+        let ev = step(&mut state, &controls, &handling, &env, world, dt);
+        if std::env::var_os("OAG_HD_DIAG").is_some() {
+            let m = state.body.mass;
+            let spring: Vec3 = ev
+                .hover
+                .active()
+                .iter()
+                .map(|p| p.force)
+                .fold(Vec3::ZERO, |a, b| a + b);
+            let hs: Vec<String> = ev
+                .hover
+                .active()
+                .iter()
+                .map(|p| {
+                    if p.contact {
+                        format!("{:.2}", p.height)
+                    } else {
+                        "-".into()
+                    }
+                })
+                .collect();
+            println!(
+                "diag {i} c{} h[{}] spring {:.2} down {:.2} grav {:.2} vdamp {:.2} wall {} floor {} wdv {:.3} wesc {:.3} hesc {:.3} tsl {:.3} gp {:.2} cap {:?}",
+                ev.hover.contacts,
+                hs.join(" "),
+                spring.dot(up) / m,
+                ev.hover.downforce.dot(up) / m,
+                ev.gravity.dot(up) / m,
+                ev.vertical_damping.dot(up) / m,
+                ev.wall.contacts,
+                ev.wall.floor_contacts,
+                ev.wall.velocity_delta.dot(up),
+                ev.wall.escape.dot(up),
+                ev.hover.escape.dot(up),
+                template.time_since_landing,
+                template.grounded_prev,
+                r[at("grounded")],
+            );
+        }
         let v_next = v3(n, "vx", "vy", "vz");
         let (n_up, n_fw) = (v3(n, "upx", "upy", "upz"), v3(n, "fwx", "fwy", "fwz"));
         let n_left = v3(n, "r0x", "r0y", "r0z");
