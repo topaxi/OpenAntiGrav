@@ -323,7 +323,7 @@ for a day while our AI's gates regressed; this engine's driver now holds it off 
 | Pulse (PSP, PS2) | on | measured |
 | Wipeout HD | on | measured under player input: each team's own `+0x9c` (`-4` Feisar and Harimau, `+4` Assegai), the airborne pitch residual closing to `-0.007`..`+0.009` with it, confidence 92 ([below](#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input)) |
 | Omega | on | inherited from HD |
-| 2048 | off | inherited from HD, **held** (chosen): the original AI field respawns once on park at `eps = 0` (1 of 9 perturbations, 0 of 9 with the bias off); measure on 2048 to release |
+| 2048 | on | inherited from HD via Omega (2026-10-20): held off until HD's was re-measured under player input, then switched to the original's (maintainer's decision); `vita_2048_original_ai_ground_truth` passes 18 of 18 with it at `eps = 0`. 2048's own pitch update is unread |
 | Pure | off | **measured**: Pure's `Ship_UpdatePitch` has no `weight_distribution` term, and Pure authors none ([pure-physics.md](pure-physics.md#pitch-is-three-code-literals)) |
 
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
@@ -645,4 +645,6 @@ and ground drag, which are inherited from Pulse and unread on HD.
 applies, wired**: the same `CraftLaws` values; not re-measured, no Omega capture path). The
 escape sum does not reach Omega or 2048: both fly Pulse's two-point rig until their own hover
 loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)).
-2048's gate and gravity term were already HD's; its bias was held off until this re-measure.
+2048's gate and gravity term were already HD's; its bias was held off until this re-measure
+and is now on, inherited from HD via Omega (**checked, applies, wired**; 2048's own pitch update
+is not read, so not re-measured on 2048).
