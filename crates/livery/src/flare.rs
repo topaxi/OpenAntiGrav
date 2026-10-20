@@ -33,6 +33,11 @@ pub(super) struct Flare {
     /// The five spike shapes, each split out of its group so it can take its
     /// own flicker scale; see [`Spike`].
     pub spikes: Vec<Spike>,
+    /// Where `EF_Main` sits in the hull's model space: the point its shapes
+    /// are baked at and the group's length and cross-section scale about.
+    pub always_origin: Option<Vec3>,
+    /// The same for `EF_Boost`.
+    pub boost_origin: Option<Vec3>,
 }
 
 /// One spike shape of the flare: a part of its own, and the group it left.
@@ -51,16 +56,21 @@ pub struct Spike {
     /// Its index among the five, in the executable's order (`Spikes1` to
     /// `Spikes3`, then `Left`, `Right`): the stream the flicker is keyed on.
     pub index: u32,
+    /// Where the shape's own node sits in the hull's model space, which is the
+    /// point it is baked at and its flicker scale is about.
+    pub origin: Vec3,
 }
 
 /// Loads a team's authored flare and splits it into its two groups.
 ///
-/// **Placed by baking the nozzle translation into the vertices**, rather than
-/// by a draw-time offset. The model is authored about its own origin - every
-/// node transform in the file is the identity, so nothing in the file places
-/// it, and the craft's `Engine Flare` locator is what says where on the hull it
-/// hangs. Baking keeps the draw path identical to the plume's, which already
-/// takes the craft's own model matrix and nothing else.
+/// **Placed by baking each group's origin into its vertices**, rather than by a
+/// draw-time offset. The shapes are authored about their group's origin and the
+/// group nodes say where that is on the hull (`EF_Main` is an `Anim Transform`),
+/// which is where the original draws the main flame and its spikes; the craft's
+/// `Engine Flare` locator places the boost group, a node the file lacks and
+/// 2048's container. Baking keeps
+/// the draw path identical to the plume's, which already takes the craft's own
+/// model matrix and nothing else.
 ///
 /// **No locator, nothing drawn**, on the same rule the flare quad follows: a
 /// flare at the hull's origin sits in the middle of the fuselage, and a
@@ -139,7 +149,6 @@ pub(super) fn per_team(
             front_faces_only(&mut model);
         }
     }
-    translate(&mut model, nozzle);
     let spike_names: Vec<&str> = authored
         .main_spikes
         .iter()
@@ -165,8 +174,47 @@ pub(super) fn per_team(
             return Flare::default();
         }
     };
+    // **`EF_Main` and its spikes are placed by their own nodes, not by the
+    // `Engine Flare` locator.** The `.vex` authors the model's origin: `EF_Main`
+    // is an `Anim Transform` whose single key puts it at Harimau's
+    // (0, -0.178, -5.911) in the hull's model space, and the three spikes hang
+    // one level lower at -0.052 on z. The running game's draws put every flame
+    // shape's matrix translation exactly there (hull-local, four captures on
+    // two boots, at rest and at thrust; Feisar Fury's body matches its own node
+    // too), 0.54 units ahead of the locator - inside the nozzle opening where
+    // the locator sits behind it. **`EF_Boost` and its spikes keep the
+    // locator**: they hang under `Joint_*` nodes with offsets of their own (up
+    // to two units on Triakis) and no boost frame of the original has been read.
+    // 2048's container and a node the file does not carry keep the locator too.
+    let main_spikes = authored.main_spikes.len();
+    let origins: Vec<Vec3> = if vita {
+        vec![nozzle; groups.len()]
+    } else {
+        let nodes = vex::nodes(&blob).unwrap_or_default();
+        let world = vex::world_transforms(&blob, &nodes);
+        groups
+            .iter()
+            .enumerate()
+            .map(|(index, group)| {
+                let authored_group = index == 0 || (2..2 + main_spikes).contains(&index);
+                if !authored_group {
+                    return nozzle;
+                }
+                nodes
+                    .iter()
+                    .position(|n| {
+                        n.name
+                            .as_deref()
+                            .is_some_and(|name| name.eq_ignore_ascii_case(group))
+                    })
+                    .and_then(|i| world.get(i))
+                    .map_or(nozzle, |m| Vec3::new(m[12], m[13], m[14]))
+            })
+            .collect()
+    };
     let mut out = Flare::default();
-    for (index, part) in parts.into_iter().enumerate() {
+    for (index, mut part) in parts.into_iter().enumerate() {
+        translate(&mut part.model, origins[index]);
         let triangles = part.triangles();
         if index >= 2 {
             let spike = index as u32 - 2;
@@ -181,6 +229,7 @@ pub(super) fn per_team(
                     model: part.model,
                     boost,
                     index: spike,
+                    origin: origins[index],
                 });
             }
             continue;
@@ -222,8 +271,10 @@ pub(super) fn per_team(
         ));
         if index == 0 {
             out.always = Some(part.model);
+            out.always_origin = Some(origins[0]);
         } else {
             out.boost = Some(part.model);
+            out.boost_origin = Some(origins[1]);
         }
     }
     out
