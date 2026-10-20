@@ -22,16 +22,16 @@ main { flex:1; min-width:0; padding:12px 16px 40px; }
 .seg button:last-child { border-right:0; }
 .seg button.on { background:var(--acc); color:#04121f; font-weight:600; }
 .seg button:disabled { opacity:.35; cursor:default; }
-.stagewrap { position:relative; width:100%; max-width:1600px; }
+.stagewrap { position:relative; width:100%; }
 .stage { position:relative; width:100%; background:#000; overflow:hidden; touch-action:pan-y; user-select:none; -webkit-user-select:none; }
-.stage img { display:block; width:100%; height:100%; position:absolute; inset:0; object-fit:fill; pointer-events:none; -webkit-user-drag:none; }
+.stage img { display:block; width:100%; height:100%; position:absolute; inset:0; object-fit:contain; pointer-events:none; -webkit-user-drag:none; }
 .stage .tag { position:absolute; top:8px; padding:3px 8px; border-radius:4px; background:rgba(0,0,0,.6); font-size:12px; pointer-events:none; }
 .stage .tag.l { left:8px; } .stage .tag.r { right:8px; }
 .handle { position:absolute; top:0; bottom:0; width:44px; margin-left:-22px; cursor:ew-resize; touch-action:none; }
 .handle::before { content:""; position:absolute; left:21px; top:0; bottom:0; width:2px; background:#fff; box-shadow:0 0 4px #000; }
 .handle::after { content:"\25C0\25B6"; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:38px; height:38px; line-height:38px; font-size:11px; text-align:center; letter-spacing:-2px; border-radius:50%; background:#fff; color:#111; box-shadow:0 0 6px #000; }
 .side { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-.side figure { margin:0; } .side img { width:100%; display:block; background:#000; }
+.side figure { margin:0; } .side img { width:auto; height:auto; max-width:100%; display:block; margin:0 auto; background:#000; }
 .side figcaption { color:var(--dim); font-size:12px; padding:3px 0; }
 .onion[hidden] { display:none; }
 .onion { display:flex; align-items:center; gap:10px; margin:10px 0 0; max-width:720px; }
@@ -132,6 +132,8 @@ function render() {
   const [w, h] = e.size;
   const stage = $("stage");
   stage.style.aspectRatio = w + " / " + h;
+  // Never wider than the frame itself: scaling down is fine, scaling up blurs it.
+  stage.style.maxWidth = w + "px";
   stage.innerHTML = "";
   stage.onpointerdown = null;
   $("onion").hidden = st.view !== "onion";
@@ -153,6 +155,7 @@ function render() {
     $("opacity").oninput = ev => { st.opacity = +ev.target.value; over.style.opacity = st.opacity / 100; $("opout").textContent = st.opacity + "%"; };
   } else if (st.view === "side") {
     stage.style.aspectRatio = "auto";
+    stage.style.maxWidth = (2 * w + 6) + "px";
     const g = document.createElement("div"); g.className = "side";
     for (const s of [a, b]) {
       const f = document.createElement("figure"); const c = document.createElement("figcaption"); c.textContent = sideName(e, s) + ": " + credit(e, s);
