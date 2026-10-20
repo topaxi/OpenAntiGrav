@@ -192,8 +192,10 @@ def main():
                    layout, ", ".join("%s %.1f units / %.1f deg" % (k, v["start_distance"], v["heading_deg"])
                                      for k, v in rep.items()),
                    "asserted %s" % args.layout if asserted is not None else "nothing asserted, the probe chooses"))
-    pair.check("circuit start within 25 units of the original's grid pose",
-               rep[layout]["start_distance"] <= 25 and rep[layout]["heading_deg"] <= 5,
+    # the heading is only a layout discriminator here (the wrong layout points 178 degrees away); the ship may have
+    # yawed on the grid since the start, and the real pose parity is checked at the rendered tick below
+    pair.check("circuit start within 25 units of the original's grid pose, facing the same way (under 90 deg)",
+               rep[layout]["start_distance"] <= 25 and rep[layout]["heading_deg"] <= 90,
                "%.1f units, %.1f deg" % (rep[layout]["start_distance"], rep[layout]["heading_deg"]))
     pair.rec["ours"].update({"mode": mode, "class": klass, "team": args.team or "default", "layout": layout})
     pair.rec["original"]["layout"] = layout
