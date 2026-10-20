@@ -2323,7 +2323,7 @@ derived rear hit sits `0.798` above it, and the recorded body rises `0.2026` alo
 velocity with `grounded` reading `0` next; `1 - 0.798 = 0.2017`. Ours escaped off `Floor` only and
 dropped every escape when nothing was in contact, so it stayed `0.202` low and the rear probe's
 spring then pitched the nose `15` mrad off the original's by landing. Confidence **85**; on
-(`oag_physics::hover::Rig::escape_floor_only`, false on Pulse). Evidence and the before/after:
+(`escape_floor_only`, false on Pulse; since 2026-10-21 every rig escapes off a wall and `oag_physics::hover::Rig::mag_floor_escape` decides a magstrip). Evidence and the before/after:
 [airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch).
 
 ### Resolved: neither reading was refuted, the load was

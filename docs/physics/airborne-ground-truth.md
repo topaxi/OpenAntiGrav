@@ -421,7 +421,7 @@ replay across the 1284 pad drifted under a magstrip and escaped off it seven tim
 `+53.26` against the recording's `+46.24` (`+48.94` before; `+48.94` again with it held out). The floor-only gate this replaces (2026-08-12) was a reading of the field as
 the floor class, made the same day the shape tag was not yet recovered; nothing measured it
 against the original. **On** since
-2026-10-20 (`oag_physics::hover::Rig::escape_floor_only` false for Pulse; the escape summed
+2026-10-20 (`oag_physics::hover::Rig::escape_floor_only` false for Pulse, a field `oag_physics::hover::Rig::mag_floor_escape` replaced on 2026-10-21; the escape summed
 before the contact test for every rig).
 
 | | before | after |
@@ -454,7 +454,7 @@ the cage response's vertical component, not to the air.
 | --- | --- | --- | --- |
 | Pulse (PSP, PS2) | yes (`Floor`, `Wall`; `MagFloor` held out, chosen) | yes | measured |
 | Pure | yes | yes | inherited from Pulse (Pure's `Ship_HoverTwoPoint` lineage; its gate not read) |
-| Wipeout HD | no, `Floor` only | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the floor gate is HD's `hit+0x28 == 1`, whose meaning is unread, kept by choice |
+| Wipeout HD | yes (`Floor`, `Wall`; `MagFloor` below full magnet lock) | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the gate `hit+0x28 == 1` is the march's mesh-shape tag, read and seen constant live, `Floor` only before 2026-10-21 ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#hit0x28-is-the-marchs-mesh-shape-tag-2026-10-21-deviations-to-original)) |
 | Omega, 2048 | yes | yes | **changed by this port** (they had Pulse's floor-only gate too), inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |
 
 ## Wipeout HD: the class scale is on flight gravity (Ubermall)

@@ -171,7 +171,7 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// by a field of seven different hulls, some of them wider.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     // 2026-10-20, forward 0 -> 1 (lane `pulse-air-pitch`): the hover escape off a wall under
-    // a probe (`oag_physics::hover::Rig::escape_floor_only`, measured on Talon's Junction).
+    // a probe (the wall escape, `oag_physics::hover::Rig::mag_floor_escape`, measured on Talon's Junction).
     // Noise method over `perturb::BOUND_OFFSETS` (0, 2e-3, -2e-5, 3e-6, -5e-4, 5e-5, -3e-6,
     // 7e-4, -7e-6; cells over the old bounds, of 12): before 0 0 0 1 2 1 2 1 1 (median 1,
     // max 2), after 1 0 0 1 1 1 1 1 1 (median 1, max 1). Destroyed per board, before

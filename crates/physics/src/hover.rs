@@ -247,10 +247,9 @@ pub struct HoverProbe {
     /// no velocity change. That is penetration escape for the last unit only; it
     /// is not the hover mechanism and must not be mistaken for one.
     ///
-    /// **On `Floor` only** - narrower than contact, which also accepts
-    /// `MagFloor`. The original's gate is `craft+0x208 == 1`, the `Floor`
-    /// class, and it is applied before the collider's type is looked at, so
-    /// this can be set on a probe that reports no contact.
+    /// Off a `Floor` or a `Wall`, and off a `MagFloor` as [`Rig::mag_floor_escape`] says. The
+    /// original's gate is the hit's mesh-shape tag (`craft+0x208 == 1`), applied before the
+    /// collider's type is looked at, so this can be set on a probe that reports no contact.
     pub escape: Vec3,
 }
 
@@ -418,17 +417,19 @@ fn probe_from_hit(
 
     // Penetration escape runs before the surface check, so on any surface:
     // `Ship_HoverTwoPoint` computes `craft+0x308`, escapes on it, and only then tests
-    // the collider type, so a probe inside a `Wall` is extruded too. The gate is
-    // `craft+0x208 == 1`, the `Floor` class, so escape is narrower than contact (a
-    // magstrip holds kinematically, a wall is `crate::wall`'s business).
+    // the collider type, so a probe inside a `Wall` is extruded too. The gate is the hit's
+    // mesh-shape tag (`craft+0x208 == 1`, HD's `hit+0x28 == 1`), which every track surface
+    // carries; HD skips class `2` (`0x000ee664`), which its march never returns unless asked,
+    // the reset class this enum calls `Reset` (excluded from ordinary raycasts here too).
     let rig = &state.hover_rig;
-    // A magstrip is held out by choice: the shape tag passes it too, but no live tick has
-    // shown one escaping, and our craft only reaches one inside a unit where it has drifted
-    // under the original's magnet hold (`Rig::escape_floor_only`).
     let escapes_off = match hit.surface {
-        crate::collide::Surface::Floor => true,
-        crate::collide::Surface::Wall => !rig.escape_floor_only,
-        crate::collide::Surface::MagFloor | crate::collide::Surface::Reset => false,
+        crate::collide::Surface::Floor | crate::collide::Surface::Wall => true,
+        crate::collide::Surface::MagFloor => match rig.mag_floor_escape {
+            crate::hover::MagFloorEscape::Held => false,
+            crate::hover::MagFloorEscape::Always => true,
+            crate::hover::MagFloorEscape::BelowFullLock => state.mag_lock_blend != 1.0,
+        },
+        crate::collide::Surface::Reset => false,
     };
     let escape = if rig.probe_escape && escapes_off && height < PENETRATION_LIMIT {
         up * (PENETRATION_LIMIT - height)
@@ -829,7 +830,7 @@ fn snap<R: Raycaster + ?Sized>(
 mod bank;
 mod rig;
 pub use bank::{BANK_TO_YAW_GAIN_FOUR_CORNER, BANK_TO_YAW_GAIN_PURE};
-pub use rig::{MAX_PROBES, NormalMean, Rig, SpringLaw};
+pub use rig::{MAX_PROBES, MagFloorEscape, NormalMean, Rig, SpringLaw};
 
 /// `0.25` at `TOC-0x4358` (`0x008a9180`): HD's scale on the summed contact normals.
 const QUARTER: f32 = 0.25;

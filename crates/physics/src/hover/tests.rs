@@ -199,14 +199,15 @@ fn a_wall_is_not_a_hoverable_surface() {
     assert!(!probe.contact);
 }
 
-/// Penetration escape fires off a `Floor` or a `Wall` on Pulse, and off `Floor` alone on a rig
-/// whose gate is floor-only (HD's reading); never off a magstrip (chosen, `Rig::escape_floor_only`). Pulse's gate, `craft+0x208 == 1`, is the hit
-/// record's shape tag, `1` for every mesh (`collision.md`), applied *before* the collider's
-/// type is looked at: a probe half a unit above a wall is lifted out though the wall carries
-/// no suspension. Measured on Talon's Junction's crest (`airborne-ground-truth.md`). This
-/// module escaped off `Floor` alone until 2026-10-20, reading the tag as the floor class.
+/// Penetration escape fires off a `Floor` and a `Wall` on every rig, and off a `MagFloor` as the
+/// rig's [`MagFloorEscape`] says: never while held, always on Pulse's reading, and below full
+/// magnet lock on HD's. Both engines gate the escape on the hit record's mesh-shape tag (Pulse
+/// `craft+0x208 == 1`, HD `hit+0x28 == 1`), applied *before* the collider's type is looked at: a
+/// probe half a unit above a wall is lifted out though the wall carries no suspension. Measured
+/// on Talon's Junction's crest (`airborne-ground-truth.md`). This module escaped off `Floor`
+/// alone until 2026-10-20 (Pulse) and 2026-10-21 (HD), reading the tag as the floor class.
 #[test]
-fn penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated() {
+fn penetration_escape_fires_off_floor_and_wall_and_off_a_magstrip_as_the_rig_says() {
     let world = |surface| {
         let mut world = CollisionWorld::new();
         world.push(TriangleSoup::new(
@@ -223,9 +224,10 @@ fn penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated() 
         world
     };
     // Half a unit above the surface, so inside `PENETRATION_LIMIT`.
-    let inside = |surface, floor_only| {
+    let inside = |surface, mag: MagFloorEscape, lock: f32| {
         let mut state = state_at(0.5);
-        state.hover_rig.escape_floor_only = floor_only;
+        state.hover_rig.mag_floor_escape = mag;
+        state.mag_lock_blend = lock;
         probe(
             &state,
             &test_handling(),
@@ -236,34 +238,41 @@ fn penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated() 
         )
     };
     let shortfall = PENETRATION_LIMIT - 0.5;
+    let all = [
+        MagFloorEscape::Held,
+        MagFloorEscape::Always,
+        MagFloorEscape::BelowFullLock,
+    ];
 
-    for floor_only in [false, true] {
-        let floor = inside(Surface::Floor, floor_only);
+    for mag in all {
+        let floor = inside(Surface::Floor, mag, 0.0);
         assert!(
             (floor.escape.y - shortfall).abs() < 1e-5,
             "a floor should push the body out by the shortfall, got {:?}",
             floor.escape
         );
         assert!(floor.contact, "and it still carries the suspension");
+
+        let wall = inside(Surface::Wall, mag, 0.0);
+        assert!(
+            (wall.escape.y - shortfall).abs() < 1e-5,
+            "{:?}",
+            wall.escape
+        );
+        assert!(!wall.contact, "a wall must never carry the suspension");
+        assert_eq!(wall.force, Vec3::ZERO);
     }
 
-    // Pulse: a wall escapes too, and carries nothing.
-    let wall = inside(Surface::Wall, false);
+    let escapes = |mag, lock| inside(Surface::MagFloor, mag, lock).escape != Vec3::ZERO;
+    assert!(!escapes(MagFloorEscape::Held, 0.0));
+    assert!(escapes(MagFloorEscape::Always, 0.0));
+    assert!(escapes(MagFloorEscape::Always, 1.0));
+    assert!(escapes(MagFloorEscape::BelowFullLock, 0.5));
+    assert!(!escapes(MagFloorEscape::BelowFullLock, 1.0));
     assert!(
-        (wall.escape.y - shortfall).abs() < 1e-5,
-        "{:?}",
-        wall.escape
+        inside(Surface::MagFloor, MagFloorEscape::Held, 0.0).contact,
+        "a magstrip is still a hoverable surface"
     );
-    assert!(!wall.contact, "a wall must never carry the suspension");
-    assert_eq!(wall.force, Vec3::ZERO);
-    // A magstrip is held out on every rig.
-    let mag = inside(Surface::MagFloor, false);
-    assert_eq!(mag.escape, Vec3::ZERO);
-    assert!(mag.contact, "a magstrip is still a hoverable surface");
-
-    // A floor-only gate: neither escapes.
-    assert_eq!(inside(Surface::Wall, true).escape, Vec3::ZERO);
-    assert_eq!(inside(Surface::MagFloor, true).escape, Vec3::ZERO);
 
     // Clear of the floor there is nothing to escape from.
     let clear = probe(
