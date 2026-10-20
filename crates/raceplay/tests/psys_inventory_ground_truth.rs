@@ -641,7 +641,6 @@ mod v2048 {
 
     const ABSENT: [&str; 9] = [
         "WO_PLASMA_FLASH",
-        "WO_SHIP_ENGINEFLARE",
         "WO_LEACHBEAM_ENERGY",
         "WO_SHIP_FXNODE_EXPLO",
         "WO_SHIP_DEATH_SPARKS",
@@ -649,6 +648,7 @@ mod v2048 {
         "WO_RAIN",
         "WO_RAIN_LENS",
         "WO_SNOW",
+        "WO_SHIP_ENGINEFLARE",
     ];
 
     #[test]
