@@ -60,7 +60,37 @@ def set_menu(dbg, want_open):
     raise SystemExit("could not %s the pause menu" % ("open" if want_open else "close"))
 
 
+def window_origin():
+    """Root coordinates of the emulator window's top-left corner.
+
+    The button positions are relative to the 960x544 window, and `xdotool`
+    moves the pointer in root coordinates. On an Xvfb exactly as large as the
+    window the two agree; on the 1280x800 screen `ppsspp-start.sh` declares
+    there is no window manager, so the window is centred at (160, 128) and every
+    click landed in the black margin, outside it (found 2026-10-20: `load`
+    reported success on a fresh instance and nothing loaded).
+    """
+    out = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", ""],
+                         capture_output=True, text=True, env=os.environ).stdout.split()
+    best = None
+    for wid in out:
+        geo = subprocess.run(["xdotool", "getwindowgeometry", "--shell", wid],
+                             capture_output=True, text=True, env=os.environ).stdout
+        vals = dict(line.split("=") for line in geo.split() if "=" in line)
+        try:
+            x, y, w, h = (int(vals[k]) for k in ("X", "Y", "WIDTH", "HEIGHT"))
+        except (KeyError, ValueError):
+            continue
+        if (w, h) == (960, 544):
+            return x, y
+        if best is None and w >= 400 and h >= 300:
+            best = (x, y)
+    return best or (0, 0)
+
+
 def click(x, y):
+    ox, oy = window_origin()
+    x, y = x + ox, y + oy
     xdo("mousemove", str(x), str(y))
     time.sleep(0.3)
     xdo("mousedown", "1")
