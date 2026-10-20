@@ -68,8 +68,9 @@ pub(super) fn spawn_pose(
     collision: &CollisionWorld,
     handling: &Handling,
     grid_cap: Option<f32>,
+    rig: &oag_physics::hover::Rig,
 ) -> Option<Pose> {
-    let height = capped_spawn_height(handling, grid_cap);
+    let height = rig_spawn_height(handling, grid_cap, rig);
     if let Some(slot) = start_position {
         let pose = Pose::from_start_position(slot, ground_under(collision, slot), height);
         return Some(face_the_way_the_track_runs(pose, slot, spline));

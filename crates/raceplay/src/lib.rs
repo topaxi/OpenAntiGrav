@@ -697,7 +697,7 @@ const ALONGSIDE_WIDTH: f32 = 12.0;
 /// a ship on a start line exactly the way a race does and may not depend on this
 /// crate. Re-exported so every call site here, and both ground-truth tests, read
 /// as they did.
-pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, spawn_height};
+pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height, spawn_height};
 
 /// A race in progress: the world, the track it is on, and the camera behind it.
 ///

@@ -226,6 +226,22 @@ fn braking_does_nothing_in_the_air() {
         1.0 / 60.0,
     );
     assert!(grounded_eval.brakes.z > 0.0);
+
+    // Zone: `Ship_UpdateCraft` skips `Ship_UpdateBrakes` on game mode 6 (`0x08849ac4`).
+    let mut zone = ship_at(4.0);
+    zone.body.linear_velocity = Vec3::new(0.0, 0.0, -60.0);
+    zone.brake = 100.0;
+    zone.grounded = 1.0;
+    zone.hover_rig.brakes_off = true;
+    let zone_eval = evaluate(
+        &mut zone,
+        &held,
+        &handling,
+        &Environment::default(),
+        &world,
+        1.0 / 60.0,
+    );
+    assert_eq!(zone_eval.brakes, Vec3::ZERO);
 }
 
 /// The weapon slowdown timer suppresses lateral grip entirely while it runs.

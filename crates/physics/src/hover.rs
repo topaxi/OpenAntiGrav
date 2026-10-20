@@ -288,7 +288,8 @@ pub struct Hover {
     /// The grounded-only bank-to-yaw coupling, as a body-local angular
     /// acceleration.
     pub local_angular_torque: Vec3,
-    /// The penetration-escape position correction for the whole body.
+    /// The penetration-escape position correction for the whole body, plus the four-corner
+    /// law's trailing snap ([`Rig::snap`]).
     pub escape: Vec3,
 }
 
@@ -420,7 +421,11 @@ fn probe_from_hit(
     // the collider type, so a probe inside a `Wall` is extruded too. The gate is
     // `craft+0x208 == 1`, the `Floor` class, so escape is narrower than contact (a
     // magstrip holds kinematically, a wall is `crate::wall`'s business).
-    let escape = if hit.surface == crate::collide::Surface::Floor && height < PENETRATION_LIMIT {
+    let rig = &state.hover_rig;
+    let escape = if rig.probe_escape
+        && hit.surface == crate::collide::Surface::Floor
+        && height < PENETRATION_LIMIT
+    {
         up * (PENETRATION_LIMIT - height)
     } else {
         Vec3::ZERO
@@ -443,9 +448,19 @@ fn probe_from_hit(
     let normal_velocity = velocity.dot(hit.normal);
 
     let gravity = handling.physical.normal_gravity + handling.physical.track_gravity;
+    if rig.spring == SpringLaw::FourCorner {
+        return HoverProbe {
+            point,
+            force: up
+                * four_corner_spring(state, rig, target_height, height, gravity, normal_velocity),
+            contact: true,
+            normal: hit.normal,
+            height,
+            escape,
+        };
+    }
     let load = 0.75 * state.grounded_prev + 0.25;
     // Grouped left to right: operation order is part of the result. No `mul_add`.
-    let rig = &state.hover_rig;
     let spring = handling.physical.mass
         * rig.spring_share
         * (target_height - height)
@@ -472,6 +487,28 @@ fn probe_from_hit(
         height,
         escape,
     }
+}
+
+/// The four-corner damper's gain, `0x3f4ccccd` at `0x0884b08c`: `1 + 0.8 * clamp(-0.1 vn, -1, 1)`
+/// in place of the racing law's `1 + rebound * clamp(-0.1 vn, -1, 2)`.
+pub const FOUR_CORNER_DAMPER: f32 = 0.8;
+
+/// One probe's spring magnitude under [`SpringLaw::FourCorner`], `Ship_HoverFourCorner`
+/// (`0x0884b4a8`-`0x0884b538`), in the original's multiply order:
+/// `((((t - h) * K) * gravity) * share) * mass`, then `* (1 + 0.8 * clamp(-0.1 vn, -1, 1))`.
+/// `mass` is the body's (`body+0x374`). Read live to one ulp on 340 probe calls
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+fn four_corner_spring(
+    state: &ShipState,
+    rig: &Rig,
+    target_height: f32,
+    height: f32,
+    gravity: f32,
+    normal_velocity: f32,
+) -> f32 {
+    let spring = (target_height - height) * HOVER_K * gravity * rig.spring_share * state.body.mass;
+    let damping = (-0.1 * normal_velocity).clamp(-1.0, 1.0) * FOUR_CORNER_DAMPER;
+    spring * (damping + 1.0)
 }
 
 /// Above this forward speed the rear probe is **derived rather than cast**.
@@ -663,9 +700,19 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let active = &probes[..count];
 
+    // The four-corner law's trailing snap runs with or without contact: the no-contact branch
+    // at `0x0884b654` lands on it.
+    let snap = if rig.snap {
+        snap(state, env, raycaster)
+    } else {
+        Vec3::ZERO
+    };
     let contacts = active.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {
-        return Hover::airborne(probes, count);
+        return Hover {
+            escape: snap,
+            ..Hover::airborne(probes, count)
+        };
     }
 
     let mut normal_sum = Vec3::ZERO;
@@ -679,23 +726,31 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         NormalMean::Normalised => (normal_sum / (contacts as f32)).normalize_or_zero(),
         NormalMean::QuarterSum if contacts == 1 => normal_sum,
         NormalMean::QuarterSum => normal_sum * QUARTER,
+        NormalMean::Mean => normal_sum * (1.0 / (contacts as f32)),
     };
 
     let mut alignment_torque = up.cross(average_normal) * ALIGNMENT_GAIN;
     // Projecting the right axis out removes pitch and leaves roll and yaw.
     let right = state.body.right();
-    alignment_torque -= right * alignment_torque.dot(right);
+    if rig.align_projects_pitch_out {
+        alignment_torque -= right * alignment_torque.dot(right);
+    }
 
     // The load the spring is calibrated to carry, with THIS frame's groundedness (the
     // original accumulates `craft+0x2b0` in this function, half per contacting probe,
     // before the epilogue reads it). `mass` is the body's.
     let grounded = rig.grounded(contacts);
-    let downforce = -average_normal
-        * (handling.physical.track_gravity
-            * state.body.mass
-            * grounded
-            * (1.0 - state.mag_lock_blend)
-            * DOWNFORCE_SCALE);
+    let downforce = if rig.downforce_scaled {
+        -average_normal
+            * (handling.physical.track_gravity
+                * state.body.mass
+                * grounded
+                * (1.0 - state.mag_lock_blend)
+                * DOWNFORCE_SCALE)
+    } else {
+        // `Ship_HoverFourCorner`: `vscl(n, -(track_gravity * mass))`, nothing else.
+        average_normal * -(handling.physical.track_gravity * state.body.mass)
+    };
 
     // Bank-to-yaw: body-local yaw proportional to how far the right axis has tipped out
     // of the horizontal, cancelled by a magstrip lock. Skipped on the grid
@@ -724,14 +779,40 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         alignment_torque,
         downforce,
         local_angular_torque,
-        escape,
+        escape: escape + snap,
+    }
+}
+
+/// How far down the four-corner snap ray reaches, `0x41200000` at `0x0884b824`.
+pub const SNAP_REACH: f32 = 10.0;
+/// The height the snap pulls toward, `0x40400000` at `0x0884b90c`: nothing moves at or below it.
+pub const SNAP_FLOOR: f32 = 3.0;
+/// The share of the gap closed per frame, `0x3e800000` at `0x0884b970`.
+pub const SNAP_GAIN: f32 = 0.25;
+
+/// `Ship_HoverFourCorner`'s trailing snap (`0x0884b824`-`0x0884b9c0`): a ray from the craft's
+/// centre [`SNAP_REACH`] along `-up`, hitting any surface; with `d = dot(pos - hit, hit.normal)`,
+/// a hit at `SNAP_FLOOR < d < SNAP_REACH` moves the body by `n * (3 - d) * 0.25` there and then
+/// (`Body_Translate`), no velocity change. Read live exactly on four frames
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+fn snap<R: Raycaster + ?Sized>(state: &ShipState, env: &Environment, raycaster: &R) -> Vec3 {
+    let position = state.body.position;
+    let ray = Ray::new(position, -state.body.up(), SNAP_REACH);
+    let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
+        return Vec3::ZERO;
+    };
+    let d = (position - hit.point).dot(hit.normal);
+    if d > SNAP_FLOOR && d < SNAP_REACH {
+        hit.normal * (SNAP_FLOOR - d) * SNAP_GAIN
+    } else {
+        Vec3::ZERO
     }
 }
 
 mod bank;
 mod rig;
 pub use bank::{BANK_TO_YAW_GAIN_FOUR_CORNER, BANK_TO_YAW_GAIN_PURE};
-pub use rig::{MAX_PROBES, NormalMean, Rig};
+pub use rig::{MAX_PROBES, NormalMean, Rig, SpringLaw};
 
 /// `0.25` at `TOC-0x4358` (`0x008a9180`): HD's scale on the summed contact normals.
 const QUARTER: f32 = 0.25;

@@ -17,7 +17,7 @@
 //!   Time Trial's lone player was the only one measured.
 
 use oag_core::math::Vec3;
-use oag_physics::hover::{MAX_PROBES, NormalMean, Rig};
+use oag_physics::hover::{MAX_PROBES, NormalMean, Rig, SpringLaw};
 use oag_race::RaceState;
 use oag_title::craft_laws::CraftLaws;
 use oag_title::hover_rig::HoverRig;
@@ -56,10 +56,22 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         along_normal: rig.along_hit_normal.value,
         normal_mean: if rig.quarter_sum_normal.value {
             NormalMean::QuarterSum
+        } else if rig.plain_mean_normal.value {
+            NormalMean::Mean
         } else {
             NormalMean::Normalised
         },
         sum_escapes: rig.sum_escapes.value,
+        probe_escape: rig.probe_escape.value,
+        spring: if rig.four_corner_spring.value {
+            SpringLaw::FourCorner
+        } else {
+            SpringLaw::Racing
+        },
+        align_projects_pitch_out: !rig.alignment_pitches.value,
+        downforce_scaled: !rig.downforce_unscaled.value,
+        snap: rig.snap.value,
+        brakes_off: rig.brakes_off.value,
     }
 }
 

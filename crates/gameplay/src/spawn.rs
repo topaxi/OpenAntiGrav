@@ -457,10 +457,26 @@ pub fn spawn_height(handling: &Handling) -> f32 {
 /// `0.16` under the lower target, so the craft starts where its suspension already holds it.
 #[must_use]
 pub fn capped_spawn_height(handling: &Handling, cap: Option<f32>) -> f32 {
+    rig_spawn_height(handling, cap, &oag_physics::hover::Rig::TWO_POINT)
+}
+
+/// [`capped_spawn_height`] for the craft's own hover rig: its centre sits the rig's probe drop
+/// above the probes' rest height. Every rig shipped carries the same total spring
+/// (`2 * 0.3 == 4 * 0.15`) and, at full contact, the same load, so only the drop differs: `1.125`
+/// for the racing rigs, `0` for Pulse's Zone hover, whose four probes sit level with the centre
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`). The Zone grid height this gives
+/// (`target - 1.25`) is the four-corner law's own rest point, derived; the original's Zone grid
+/// height was not measured.
+#[must_use]
+pub fn rig_spawn_height(
+    handling: &Handling,
+    cap: Option<f32>,
+    rig: &oag_physics::hover::Rig,
+) -> f32 {
     let target = oag_physics::hover::capped_target_height(handling, 0.0, 0.0, cap);
     let load = handling.physical.normal_gravity + handling.physical.track_gravity;
     let gradient = 2.0 * 0.3 * oag_physics::hover::HOVER_K * load;
-    let drop = oag_physics::hover::PROBE_DROP_RAW * oag_physics::hover::TARGET_GLOBAL_SCALE;
+    let drop = -rig.offsets[0].y;
 
     if gradient > 0.0 {
         target - load / gradient + drop
@@ -737,6 +753,36 @@ mod launch_tests {
         });
 
         assert_eq!(ship.physics.launch, spent);
+    }
+
+    /// A rig whose probes sit level with the centre (Pulse's Zone hover) spawns its centre at the
+    /// probes' rest height, the racing rig's `1.125` drop lower; the racing rig is unchanged.
+    #[test]
+    fn a_level_probe_rig_spawns_its_centre_at_the_probes_rest_height() {
+        let handling = oag_physics::Handling {
+            antigrav: oag_physics::params::Antigrav {
+                ride_height: 5.5,
+                ..oag_physics::params::Antigrav::default()
+            },
+            physical: oag_physics::params::Physical {
+                mass: 1.0,
+                normal_gravity: 10.0,
+                track_gravity: 70.0,
+                ..oag_physics::params::Physical::default()
+            },
+            ..oag_physics::Handling::ZERO
+        };
+        let racing = capped_spawn_height(&handling, None);
+        let mut level = oag_physics::hover::Rig::TWO_POINT;
+        for offset in &mut level.offsets {
+            offset.y = 0.0;
+        }
+        assert_eq!(
+            rig_spawn_height(&handling, None, &oag_physics::hover::Rig::TWO_POINT),
+            racing
+        );
+        assert!((racing - 4.0).abs() < 1e-5, "{racing}");
+        assert!((rig_spawn_height(&handling, None, &level) - 2.875).abs() < 1e-5);
     }
 
     /// A title's craft laws survive a respawn, as the inertia does: HD's four-probe rig and

@@ -51,6 +51,7 @@ mod zone_announcer_ground_truth;
 mod zone_craft_ground_truth;
 mod zone_grade_ground_truth;
 mod zone_ground_truth;
+mod zone_hover_sweep;
 mod zone_sky_ground_truth;
 mod zone_start_ground_truth;
 

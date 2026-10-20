@@ -29,4 +29,24 @@ pub struct HoverRig {
     /// largest one alone. HD measures each probe's height off a hull point placed before the
     /// loop, so an escape does not change the next probe's height.
     pub sum_escapes: Sourced<bool>,
+    /// A probe under `1.0` unit moves the body out by `1 - h`. Pulse's Zone hover
+    /// (`Ship_HoverFourCorner`) has no such escape.
+    pub probe_escape: Sourced<bool>,
+    /// The spring is Pulse's Zone law, `Ship_HoverFourCorner`'s: no load factor, no rebound,
+    /// no magnet-lock fade, and a fixed `0.8` damper clamped at `1`.
+    pub four_corner_spring: Sourced<bool>,
+    /// The contact normals are summed and multiplied by `1.0 / n`, not normalised (Pulse's Zone
+    /// hover). Ignored when [`Self::quarter_sum_normal`] is set.
+    pub plain_mean_normal: Sourced<bool>,
+    /// The alignment torque keeps its pitch component: no right-axis projection (Pulse's Zone
+    /// hover).
+    pub alignment_pitches: Sourced<bool>,
+    /// The downforce is `-track_gravity * mass` along the normal on any contact, with no
+    /// grounded fraction and no magnet-lock fade (Pulse's Zone hover).
+    pub downforce_unscaled: Sourced<bool>,
+    /// The trailing 10-unit ray that pulls the craft a quarter of the way down to `3.0` above
+    /// what it hits, every frame (Pulse's Zone hover).
+    pub snap: Sourced<bool>,
+    /// The craft update skips the brakes in the mode this rig flies (Pulse's Zone).
+    pub brakes_off: Sourced<bool>,
 }

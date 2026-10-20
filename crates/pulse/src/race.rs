@@ -40,6 +40,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
+    zone_hover_rig: Some(&ZONE_HOVER_RIG),
     craft_laws: None,
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,
@@ -523,3 +524,49 @@ mod team_identity_tests {
         assert_eq!(identity_of(super::TEAM_IDENTITIES, "Mantis"), "mirage");
     }
 }
+
+/// Pulse's Zone hover: [`oag_title::hover_rig::HoverRig`] for `Ship_HoverFourCorner`
+/// (`0x0884ae90`), which `Ship_UpdateHover` runs on game mode 6.
+///
+/// Four probes at `(+/-2.5, 0, +/-5.0)` times `g_craft_scale` (`0.75`), built at
+/// `0x0884aeec`-`0x0884b060`, with **no drop**: the racing law's probes hang `1.125` below the
+/// centre, these sit level with it. All four are cast every frame (no speed test, no derived
+/// hit), `0.15` of the load each (`0x3e19999a` at `0x0884b4c4`), the spring along the craft's
+/// up axis (`craft+0x160`). The original's row 0 is the craft's left and row 2 its forward, so
+/// probe 0, `(+2.5, 0, +5.0)`, is the left front in this engine's frame. Read live: every probe
+/// point equals the basis times the offset plus the position to the bit, on 340 frames
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`, confidence 92).
+pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    probes: oag_title::pre_race::Sourced::measured(&[
+        [-1.875, 0.0, -3.75],
+        [1.875, 0.0, -3.75],
+        [-1.875, 0.0, 3.75],
+        [1.875, 0.0, 3.75],
+    ]),
+    spring_share: oag_title::pre_race::Sourced::measured(0.15),
+    cast_every_probe: oag_title::pre_race::Sourced::measured(true),
+    along_hit_normal: oag_title::pre_race::Sourced::measured(false),
+    quarter_sum_normal: oag_title::pre_race::Sourced::measured(false),
+    // Moot: no probe escapes (`probe_escape`).
+    sum_escapes: oag_title::pre_race::Sourced::measured(false),
+    // The probe loop (`0x0884b11c`-`0x0884b564`) calls only the raycast and
+    // `Body_AddForceAtPoint`: nothing moves the body out of a penetrating probe.
+    probe_escape: oag_title::pre_race::Sourced::measured(false),
+    // `((((t - h) * K) * gravity) * 0.15) * mass * (1 + 0.8 * clamp(-0.1 vn, -1, 1))`
+    // (`0x0884b4a8`-`0x0884b538`), live to one ulp on 340 probe calls.
+    four_corner_spring: oag_title::pre_race::Sourced::measured(true),
+    // `sum * (1.0 / n)` (`0x0884b6c0`, `0x0884b6d8`), live length `0.99979`-`1.0`.
+    plain_mean_normal: oag_title::pre_race::Sourced::measured(true),
+    // `-400 * (up x n)` straight to `Body_AddTorqueWorld` (`0x0884b704`-`0x0884b758`); live, its
+    // component along the right axis reads `-3.80`..`+2.76`.
+    alignment_pitches: oag_title::pre_race::Sourced::measured(true),
+    // `-(track_gravity * mass)` along the normal (`0x0884b7b0`-`0x0884b818`); live, the whole
+    // `-80` on two-contact frames where the racing law would give half.
+    downforce_unscaled: oag_title::pre_race::Sourced::measured(true),
+    // `0x0884b824`-`0x0884b9c0`: `n * (3 - d) * 0.25` for `3 < d < 10`, every frame; live
+    // exactly on four frames.
+    snap: oag_title::pre_race::Sourced::measured(true),
+    // `Ship_UpdateCraft` skips `Ship_UpdateBrakes` on mode 6 (`0x08849ab8`-`0x08849ac4`); live,
+    // never entered with the mode at 6, entered every frame at 1.
+    brakes_off: oag_title::pre_race::Sourced::measured(true),
+};

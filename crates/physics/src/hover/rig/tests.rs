@@ -24,6 +24,12 @@ fn four_point() -> Rig {
         along_normal: true,
         normal_mean: NormalMean::QuarterSum,
         sum_escapes: true,
+        probe_escape: true,
+        spring: SpringLaw::Racing,
+        align_projects_pitch_out: true,
+        downforce_scaled: true,
+        snap: false,
+        brakes_off: false,
     }
 }
 
@@ -187,4 +193,200 @@ fn a_rig_that_sums_escapes_moves_the_body_by_every_penetrating_probe() {
     });
     assert!((summed - 1.6).abs() < 1e-4, "{summed}");
     assert!((largest - 0.4).abs() < 1e-4, "{largest}");
+}
+
+/// A rig shaped like Pulse's Zone hover, `Ship_HoverFourCorner`: four level probes, `0.15`
+/// each, all cast, the springs along up, and no escape in the probe loop.
+fn four_corner() -> Rig {
+    Rig {
+        offsets: [
+            Vec3::new(-1.875, 0.0, -3.75),
+            Vec3::new(1.875, 0.0, -3.75),
+            Vec3::new(-1.875, 0.0, 3.75),
+            Vec3::new(1.875, 0.0, 3.75),
+        ],
+        count: 4,
+        spring_share: 0.15,
+        derive_rear: false,
+        along_normal: false,
+        normal_mean: NormalMean::Mean,
+        sum_escapes: false,
+        probe_escape: false,
+        spring: SpringLaw::FourCorner,
+        align_projects_pitch_out: false,
+        downforce_scaled: false,
+        snap: true,
+        brakes_off: true,
+    }
+}
+
+/// **Zone's probes do not escape.** The same penetrating craft that the racing law's rig pushes
+/// out by `0.4` stays where it is under the four-corner law, whose loop moves nothing.
+#[test]
+fn the_four_corner_rig_has_no_escape_in_its_probe_loop() {
+    let escape = |rig: Rig| {
+        evaluate(
+            &craft(rig, 0.6, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .escape
+    };
+    assert_eq!(escape(four_corner()), Vec3::ZERO);
+    let with_escape = escape(Rig {
+        probe_escape: true,
+        ..four_corner()
+    });
+    assert!((with_escape.y - 0.4).abs() < 1e-4, "{with_escape:?}");
+}
+
+/// **Zone's spring carries no load factor, no rebound and no magnet-lock fade**, and its damper
+/// is a fixed `0.8` clamped at `1`: `((((t - h) * K) * g) * 0.15) * m * (1 + 0.8 * clamp(-0.1 vn,
+/// -1, 1))`. The same probe under the racing law moves with every one of those.
+#[test]
+fn the_four_corner_spring_is_its_own_law() {
+    let probe = |rig: Rig, grounded_prev: f32, mag_lock: f32, sink: f32| {
+        let mut state = craft(rig, 3.0, 0.0, 0.0);
+        state.grounded_prev = grounded_prev;
+        state.mag_lock_blend = mag_lock;
+        state.body.linear_velocity = Vec3::new(0.0, -sink, 0.0);
+        evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .probes[0]
+            .force
+    };
+    // h = 3.0 with level probes: (4.125 - 3.0) * 4/3 * 80 * 0.15 * 1.0.
+    let spring = (TARGET - 3.0) * crate::hover::HOVER_K * 80.0 * 0.15 * 1.0;
+    let at_rest = probe(four_corner(), 1.0, 0.0, 0.0);
+    assert_eq!(at_rest, Vec3::new(0.0, spring, 0.0));
+    assert_eq!(
+        probe(four_corner(), 0.0, 0.0, 0.0),
+        at_rest,
+        "no load factor"
+    );
+    assert_eq!(
+        probe(four_corner(), 1.0, 0.5, 0.0),
+        at_rest,
+        "no magnet-lock fade"
+    );
+    // Closing at 5 units/s: 1 + 0.8 * 0.5; at 30 units/s the clamp holds it at 1 + 0.8.
+    let closing = probe(four_corner(), 1.0, 0.0, 5.0).y;
+    assert!(
+        (closing / spring - 1.4).abs() < 1e-5,
+        "{}",
+        closing / spring
+    );
+    let fast = probe(four_corner(), 1.0, 0.0, 30.0).y;
+    assert!((fast / spring - 1.8).abs() < 1e-5, "{}", fast / spring);
+
+    let racing = Rig {
+        spring: SpringLaw::Racing,
+        ..four_corner()
+    };
+    assert_ne!(probe(racing, 0.0, 0.0, 0.0), probe(racing, 1.0, 0.0, 0.0));
+}
+
+/// **Zone's alignment torque pitches.** A craft pitched over a flat floor gets
+/// `-400 * (up x n)`, whose component about the right axis the racing law projects out and the
+/// four-corner law keeps. Its normal is `sum * (1 / n)`, here the floor's own.
+#[test]
+fn the_four_corner_alignment_torque_keeps_its_pitch_component() {
+    let torque = |rig: Rig| {
+        let state = craft(rig, 3.0, 0.05, 0.0);
+        let hover = evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        assert_eq!(hover.contacts, 4);
+        assert_eq!(hover.average_normal, Vec3::new(0.0, 1.0, 0.0));
+        let up = state.body.up();
+        let pitch = hover.alignment_torque.dot(state.body.right()).abs();
+        if rig.align_projects_pitch_out {
+            assert!(pitch < 1e-4, "{pitch}");
+        } else {
+            assert!(pitch > 1.0, "{pitch}");
+        }
+        (hover.alignment_torque, up)
+    };
+    let (zone, up) = torque(four_corner());
+    assert_eq!(
+        zone,
+        up.cross(Vec3::new(0.0, 1.0, 0.0)) * crate::hover::ALIGNMENT_GAIN
+    );
+    torque(Rig {
+        align_projects_pitch_out: true,
+        ..four_corner()
+    });
+}
+
+/// `sum * (1 / n)` is not normalised: two unit normals 90 degrees apart average to length
+/// `sqrt(0.5)`, where the racing law's mean is unit length.
+#[test]
+fn the_plain_mean_normal_is_not_normalised() {
+    let two = Vec3::new(1.0, 0.0, 0.0) + Vec3::new(0.0, 1.0, 0.0);
+    let mean = two * (1.0 / 2.0_f32);
+    assert!((mean.length() - 0.5_f32.sqrt()).abs() < 1e-6);
+    assert_eq!(NormalMean::Mean, four_corner().normal_mean);
+}
+
+/// **Zone's downforce is the whole `track_gravity * mass` on any contact.** With two of four
+/// probes down (a craft lifted and pitched so its rear pair touches) the racing law's downforce
+/// is half, the four-corner law's is all of it: read live on two-contact frames,
+/// `-80 * 1 * n` with `craft+0x2b0 = 0.5`.
+#[test]
+fn the_four_corner_downforce_takes_no_grounded_factor() {
+    let downforce = |rig: Rig| {
+        let mut state = craft(rig, 3.8, 0.3, 0.0);
+        state.mag_lock_blend = 0.5;
+        let hover = evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        assert_eq!(hover.contacts, 2);
+        hover.downforce.y
+    };
+    assert_eq!(downforce(four_corner()), -70.0);
+    let scaled = downforce(Rig {
+        downforce_scaled: true,
+        ..four_corner()
+    });
+    assert_eq!(scaled, -70.0 * 0.5 * 0.5);
+}
+
+/// **Zone pulls a high craft down.** Its centre `5.0` above a flat floor, every level probe out
+/// of reach, the four-corner law moves the body `(3 - 5) * 0.25 = -0.5` along the floor's normal
+/// that frame; at `2.9` (inside `3.0`) or `10.5` (past the ray) it moves nothing.
+#[test]
+fn the_four_corner_snap_pulls_a_quarter_of_the_way_to_three() {
+    let escape = |rig: Rig, height: f32| {
+        let hover = evaluate(
+            &craft(rig, height, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        hover.escape
+    };
+    assert_eq!(escape(four_corner(), 5.0), Vec3::new(0.0, -0.5, 0.0));
+    assert_eq!(escape(four_corner(), 2.9), Vec3::ZERO);
+    assert_eq!(escape(four_corner(), 10.5), Vec3::ZERO);
+    let off = Rig {
+        snap: false,
+        ..four_corner()
+    };
+    assert_eq!(escape(off, 5.0), Vec3::ZERO);
 }

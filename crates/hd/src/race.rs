@@ -56,6 +56,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
+    zone_hover_rig: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // HD's own driver, Pulse's with five gated branches, flown in the
@@ -770,6 +771,13 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     // `0x000ee6ac`, then on to the next probe) off heights from the hull array it built before
     // the loop; live, the summed escape closes the position residual (`hover-four-point.md`).
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
+    probe_escape: oag_title::pre_race::Sourced::measured(true),
+    four_corner_spring: oag_title::pre_race::Sourced::measured(false),
+    plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
+    alignment_pitches: oag_title::pre_race::Sourced::measured(false),
+    downforce_unscaled: oag_title::pre_race::Sourced::measured(false),
+    snap: oag_title::pre_race::Sourced::measured(false),
+    brakes_off: oag_title::pre_race::Sourced::measured(false),
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

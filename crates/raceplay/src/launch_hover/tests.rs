@@ -44,6 +44,13 @@ const RIG: HoverRig = HoverRig {
     along_hit_normal: Sourced::measured(true),
     quarter_sum_normal: Sourced::measured(true),
     sum_escapes: Sourced::measured(true),
+    probe_escape: Sourced::measured(true),
+    four_corner_spring: Sourced::measured(false),
+    plain_mean_normal: Sourced::measured(false),
+    alignment_pitches: Sourced::measured(false),
+    downforce_unscaled: Sourced::measured(false),
+    snap: Sourced::measured(false),
+    brakes_off: Sourced::measured(false),
 };
 
 #[test]

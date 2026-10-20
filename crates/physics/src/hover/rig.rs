@@ -27,6 +27,22 @@ pub enum NormalMean {
     /// HD: the sum of the contacting normals times `0.25`, not normalised, or the one normal
     /// as found when a single probe is in contact (`0x000ee02c`-`0x000ee060`).
     QuarterSum,
+    /// Pulse's Zone hover: the sum times `1.0 / n`, not normalised (`Ship_HoverFourCorner`,
+    /// `div.s` at `0x0884b6c0`, `vscl.q` at `0x0884b6d8`).
+    Mean,
+}
+
+/// Which spring law a probe in contact pushes with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpringLaw {
+    /// `Ship_HoverTwoPoint` and HD's `Craft_HoverFourPoint`:
+    /// `mass * share * (t - h) * K * (0.75 g' + 0.25) * gravity`, damped by
+    /// `1 + rebound * clamp(-0.1 vn, -1, 2)`, faded by `1 - magLockBlend`.
+    Racing,
+    /// Pulse's Zone hover, `Ship_HoverFourCorner` (`0x0884b4a8`-`0x0884b538`):
+    /// `(((t - h) * K) * gravity) * share * mass * (1 + 0.8 * clamp(-0.1 vn, -1, 1))`. No load
+    /// factor, no rebound, no magnet-lock fade ([`super::FOUR_CORNER_DAMPER`]).
+    FourCorner,
 }
 
 /// One title's hover probe set.
@@ -50,6 +66,29 @@ pub struct Rig {
     /// Apply every penetrating probe's escape, summed (HD), rather than the largest alone (ours
     /// for Pulse, see [`super::Hover::escape`]).
     pub sum_escapes: bool,
+    /// A probe under `1.0` unit moves the body out (`Ship_HoverTwoPoint`, HD's
+    /// `Craft_HoverFourPoint`). Pulse's Zone hover, `Ship_HoverFourCorner` (`0x0884ae90`), has
+    /// no escape in its probe loop: the height store at `0x0884b2e0` goes straight to the
+    /// surface-class test (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+    pub probe_escape: bool,
+    /// See [`SpringLaw`].
+    pub spring: SpringLaw,
+    /// The alignment torque has the right axis projected out, so it never pitches
+    /// (`Ship_HoverTwoPoint`, `0x0884ac94`-`0x0884acfc`; HD). Pulse's Zone hover sends
+    /// `-400 * (up x n)` to the body whole (`0x0884b704`-`0x0884b758`).
+    pub align_projects_pitch_out: bool,
+    /// The downforce is scaled by the grounded fraction and by `1 - magLockBlend`
+    /// (`Ship_HoverTwoPoint`, `0x0884ad78`-`0x0884ae18`; HD). Pulse's Zone hover applies
+    /// `-track_gravity * mass` along the normal whatever the contact count
+    /// (`0x0884b7b0`-`0x0884b818`).
+    pub downforce_scaled: bool,
+    /// Pulse's Zone hover ends with a 10-unit ray down from the craft's centre and pulls the body
+    /// a quarter of the way to `3.0` above whatever it hits ([`super::snap`]).
+    pub snap: bool,
+    /// The craft update skips the brakes: `Ship_UpdateCraft` calls `Ship_UpdateBrakes` only outside
+    /// game mode 6 (`0x08849ab8`-`0x08849ac4`), the mode whose hover this rig is. Not a hover
+    /// term, but it is selected by the same mode, so it rides on the mode's rig.
+    pub brakes_off: bool,
 }
 
 impl Rig {
@@ -75,6 +114,12 @@ impl Rig {
         along_normal: false,
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
+        probe_escape: true,
+        spring: SpringLaw::Racing,
+        align_projects_pitch_out: true,
+        downforce_scaled: true,
+        snap: false,
+        brakes_off: false,
     };
 
     /// The probes in use.
