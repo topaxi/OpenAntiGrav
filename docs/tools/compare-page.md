@@ -133,7 +133,13 @@ CSV beside it, the binary hash), so when the renderer changes `just compare-rere
 rewrites `ours.png` and `side.png` with no emulator; `theirs.png` and the `original` block are untouched. The
 heading is not re-solved. It re-runs the checks that need only ours (settings read back, image size, ship position
 and heading at the rendered tick against the stored original pose); a pair that fails is named, keeps its old
-`ours.png`, and makes the exit status non-zero. A success updates `ours.binary` and `rerendered_at`. Paths in the
+`ours.png`, and makes the exit status non-zero. A success updates `ours.binary` and `rerendered_at`. **`just compare-rerender --recapture-original`**
+also runs the emulator side again (the same pair script and arguments, stored in `pair.json` as `argv`, with the
+emulator up exactly as when the pair was made) and replaces `theirs.png` only when the new capture's ship pose,
+camera and race clock equal the stored ones within the profile's tolerances; the pixel drift against the previous
+`theirs.png` is recorded under `original.recapture`. A capture that does not match is refused by name and the old
+images are kept; ours is rendered from the stored pose either way, so the two halves never come from different
+poses. Paths in the
 flags are resolved by file name inside the pair's directory, so it works from any worktree. Then rebuild the
 page with `just compare-page`.
 

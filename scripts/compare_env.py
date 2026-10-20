@@ -239,6 +239,8 @@ class Pair:
                     "output": self.plat["output"], "original": {}, "ours": {}}
         self.checks = []
         self.rec["caveats"] = []
+        # how this pair was made, so `compare-rerender.py --recapture-original` can run the same capture again
+        self.rec["argv"] = [Path(sys.argv[0]).name] + sys.argv[1:]
 
     def caveat(self, text):
         """A difference the pair KNOWS about and was allowed to ship with; the manifest shows it."""

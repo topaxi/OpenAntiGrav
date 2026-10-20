@@ -9,7 +9,7 @@ For each `pair.json` (written by psp-pulse-pair.py, rpcs3-hd-pair.py, pcsx2-puls
 worktree), the tick count is `ours.ticks`, and the heading is NOT re-solved. `theirs.png` and the `original` block
 are untouched. The checks that need only ours are re-run (settings read back, image size, pose at the rendered tick
 against the stored original pose); a pair that fails is named, keeps its old `ours.png` and the exit status counts
-it. On success `ours.png` and `side.png` are rewritten and `ours.binary` and `rerendered_at` updated.
+it. `--recapture-original` first re-runs the emulator side (see its help). On success `ours.png` and `side.png` are rewritten and `ours.binary` and `rerendered_at` updated.
 """
 
 import argparse
@@ -47,9 +47,72 @@ def resolve_flags(flags, pair_dir):
     return out
 
 
-def rerender(pj, oag, profile_root):
+def recapture(pj, rec):
+    """Run the pair's own script again into a scratch directory and, when the new capture's pose, camera and
+    clock are the stored ones within the profile's tolerances, replace `theirs.png` and record the drift.
+    Returns a list of problems (empty: replaced)."""
+    argv = rec.get("argv")
+    if not argv:
+        return ["pair.json has no argv (made before recapture was recorded)"]
+    plat = ce.platform(rec["profile"])
+    tol = plat["tolerance"]
+    tmp = Path(tempfile.mkdtemp(prefix="recapture-", dir=pj.parent))
+    cmd = [sys.executable if argv[0].endswith(".py") else argv[0]]
+    args = list(argv)
+    if "--out" in args:
+        args[args.index("--out") + 1] = str(tmp)
+    cmd = [str(HERE / args[0])] + args[1:]
+    runner = ["uv", "run", "--with", "websocket-client", "--with", "evdev", "--with", "python-xlib", "python3"]
+    subprocess.run(runner + cmd, capture_output=True, text=True)
+    new_pj = tmp / "pair.json"
+    if not new_pj.exists():
+        return ["the recapture wrote no pair.json (emulator not up in the pair's state?)"]
+    new = json.loads(new_pj.read_text())["original"]
+    old = rec["original"]
+    problems = []
+    if "pose" in new and "pose" in old:
+        d = ce.math.dist(new["pose"]["pos"], old["pose"]["pos"])
+        a = ce.vec_angle(new["pose"]["fwd"], old["pose"]["fwd"])
+        if d > tol["pos_units"] or a > tol["heading_deg"]:
+            problems.append("the new ship pose is %.3f units and %.3f deg from the stored one" % (d, a))
+    else:
+        problems.append("no original pose in the recapture")
+    oc, nc = old.get("camera"), new.get("camera")
+    if oc and nc:
+        def cam(c):
+            return (c.get("pos") or c.get("eye"), c.get("fwd") or c.get("forward"))
+        (op, of), (np_, nf) = cam(oc), cam(nc)
+        if ce.math.dist(op, np_) > tol["camera_pos_units"] or ce.vec_angle(of, nf) > tol["heading_deg"]:
+            problems.append("the new camera is %.3f units and %.3f deg from the stored one"
+                            % (ce.math.dist(op, np_), ce.vec_angle(of, nf)))
+    elif bool(oc) != bool(nc):
+        problems.append("a camera is recorded on only one side")
+    if old.get("race_clock_s") is not None and new.get("race_clock_s") is not None \
+            and abs(old["race_clock_s"] - new["race_clock_s"]) > 0.25:
+        problems.append("the new race clock %.2f s differs from the stored %.2f s (ours would be at another phase)"
+                        % (new["race_clock_s"], old["race_clock_s"]))
+    if problems:
+        return problems
+    out = subprocess.run(["compare", "-metric", "RMSE", str(pj.parent / "theirs.png"), str(tmp / "theirs.png"), "null:"],
+                         capture_output=True, text=True)
+    os.replace(tmp / "theirs.png", pj.parent / "theirs.png")
+    rec["original"]["recapture"] = {"at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+                                    "rmse_against_previous": out.stderr.strip(), "pose_drift_units": d,
+                                    "emulator": new.get("emulator")}
+    import shutil
+    shutil.rmtree(tmp, ignore_errors=True)
+    pj.write_text(json.dumps(rec, indent=2) + "\n")
+    return []
+
+
+def rerender(pj, oag, profile_root, recapture_original=False):
     rec = json.loads(pj.read_text())
     pair_dir = pj.parent
+    if recapture_original:
+        problems = recapture(pj, rec)
+        if problems:
+            return ["recapture refused, old images kept: " + "; ".join(problems)]
+        rec = json.loads(pj.read_text())
     plat = ce.platform(rec["profile"])
     image = ROOT / plat["image"]
     flags = resolve_flags(rec["ours"]["flags"], pair_dir)
@@ -100,6 +163,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("dir", nargs="?", type=Path, default=ROOT / "data/reference/compare-page")
     ap.add_argument("--only", help="substring of the pair directory path")
+    ap.add_argument("--recapture-original", action="store_true",
+                    help="also run the emulator again from the stored state (the emulator must be up as when the "
+                         "pair was made) and replace theirs.png when the new capture's pose, camera and clock "
+                         "match the stored ones; ours is rendered from the STORED pose either way")
     ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
     ap.add_argument("--profile-dir", type=Path, default=ROOT / "data/compare-rerender-profile",
                     help="private XDG tree oag-game writes its settings into")
@@ -110,7 +177,7 @@ def main():
             continue
         if json.loads(pj.read_text()).get("refused"):
             continue
-        problems = rerender(pj, args.oag_game, args.profile_dir)
+        problems = rerender(pj, args.oag_game, args.profile_dir, args.recapture_original)
         if problems:
             failed += 1
             print("FAILED %s: %s" % (pj.parent, "; ".join(problems)))
