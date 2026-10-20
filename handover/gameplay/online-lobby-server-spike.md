@@ -21,6 +21,14 @@ tested locally; nothing has been deployed or tried over a real network.
 
 9. **ADR-0069's conditions (2026-10-19, `netcode-conditions`)**: 2 to 4 answered (ADR-0069 follow-up), condition 1 (the Galaxy S24 replay cost) open, deferred by the maintainer. Open from it: a recorded pad stream (`oag_raceplay::hand::Hand` is the stand-in; fly a pack with a controller through `--record-ghost` and replay it through `reconcile_predict_human_sweep`); a shot's late first appearance has a tail under loss and jitter (62, 137 and 152 ticks in 3 of 12 client runs) that nothing caps; a seat-1 client's wall contact effects, countdown cue, reticle, boost kick and flaps now follow its seat (2026-10-19, `seat1-contact-fx`); open: a second local person's sparks and shake (split screen, multi-window), the zone announcement gate, the wreck-ended tick and the engine throttle have no test of their own (the real seat-1 camera bug, the PVS placement and the audio levels are fixed, 2026-10-19).
 
+- **`online::a_client_of_another_build_reads_the_refusal_before_the_close` flaked once
+  under load** (2026-10-20, the lead's quick run at load average 71: FAIL in 0.08 s, then 4 of 4
+  PASS alone and the whole quick suite green on the rerun). At 0.08 s it is not the 20 s timeout,
+  so it is most likely the test's other assertion, "the link closed before the refusal was read":
+  the server's close can overtake the refusal on a starved machine. Either the refusal is not
+  guaranteed to arrive before the close (a real ordering bug a slow client would also hit) or the
+  test polls too narrowly. Not investigated.
+
 ## Next Steps
 
 
