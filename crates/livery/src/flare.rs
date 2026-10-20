@@ -59,6 +59,25 @@ pub struct Spike {
     /// Where the shape's own node sits in the hull's model space, which is the
     /// point it is baked at and its flicker scale is about.
     pub origin: Vec3,
+    /// What scales it; see [`Scale`].
+    pub scale: Scale,
+}
+
+/// The law a [`Spike`] part is scaled by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scale {
+    /// One of the five spikes the original binds by name
+    /// (`EngineFlare_PlaceShapes` finds `ef_Spikes<N>Shape` and nothing else):
+    /// its group's uniform spike scale times a fresh flicker draw.
+    Flicker,
+    /// A shape the original's lookup does not bind but still submits, at its
+    /// node's own matrix: the hull's scale alone, no group scale, no flicker.
+    /// Feisar Fury's `ef_SpikesShape<N>` are such shapes; see
+    /// [`oag_title::flare::Authored::main_spikes_alt`].
+    Hull,
+    /// A `Joint_*` shape of `EF_Boost`: its length scaled by the boost blend
+    /// about its own joint ([`oag_title::flare::Authored::boost_shapes`]).
+    BoostLength,
 }
 
 /// Loads a team's authored flare and splits it into its two groups.
@@ -66,9 +85,8 @@ pub struct Spike {
 /// **Placed by baking each group's origin into its vertices**, rather than by a
 /// draw-time offset. The shapes are authored about their group's origin and the
 /// group nodes say where that is on the hull (`EF_Main` is an `Anim Transform`),
-/// which is where the original draws the main flame and its spikes; the craft's
-/// `Engine Flare` locator places the boost group, a node the file lacks and
-/// 2048's container. Baking keeps
+/// which is where the original draws the flare's shapes; the craft's
+/// `Engine Flare` locator places a node the file lacks and 2048's container. Baking keeps
 /// the draw path identical to the plume's, which already takes the craft's own
 /// model matrix and nothing else.
 ///
@@ -149,11 +167,36 @@ pub(super) fn per_team(
             front_faces_only(&mut model);
         }
     }
+    // A main-spike slot takes the first spelling this file's node tree carries.
+    let tree = if vita {
+        Vec::new()
+    } else {
+        vex::nodes(&blob).unwrap_or_default()
+    };
+    let has_node = |wanted: &str| {
+        tree.iter().any(|n| {
+            n.name
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case(wanted))
+        })
+    };
+    let unbound = |slot: usize| {
+        authored
+            .main_spikes
+            .get(slot)
+            .is_some_and(|first| !has_node(first))
+    };
+    let boost_shapes: &[&str] = if vita { &[] } else { authored.boost_shapes };
     let spike_names: Vec<&str> = authored
         .main_spikes
         .iter()
-        .chain(authored.boost_spikes)
-        .copied()
+        .enumerate()
+        .map(|(slot, first)| match authored.main_spikes_alt.get(slot) {
+            Some(alt) if unbound(slot) && has_node(alt) => *alt,
+            _ => *first,
+        })
+        .chain(authored.boost_spikes.iter().copied())
+        .chain(boost_shapes.iter().copied())
         .collect();
     let groups: Vec<&str> = [authored.always, authored.boost]
         .into_iter()
@@ -174,30 +217,31 @@ pub(super) fn per_team(
             return Flare::default();
         }
     };
-    // **`EF_Main` and its spikes are placed by their own nodes, not by the
-    // `Engine Flare` locator.** The `.vex` authors the model's origin: `EF_Main`
-    // is an `Anim Transform` whose single key puts it at Harimau's
-    // (0, -0.178, -5.911) in the hull's model space, and the three spikes hang
-    // one level lower at -0.052 on z. The running game's draws put every flame
-    // shape's matrix translation exactly there (hull-local, four captures on
-    // two boots, at rest and at thrust; Feisar Fury's body matches its own node
-    // too), 0.54 units ahead of the locator - inside the nozzle opening where
-    // the locator sits behind it. **`EF_Boost` and its spikes keep the
-    // locator**: they hang under `Joint_*` nodes with offsets of their own (up
-    // to two units on Triakis) and no boost frame of the original has been read.
-    // 2048's container and a node the file does not carry keep the locator too.
-    let main_spikes = authored.main_spikes.len();
+    // **Every shape is placed by its own node, not by the `Engine Flare`
+    // locator.** The `.vex` authors the model's origin: `EF_Main` is an `Anim
+    // Transform` whose single key puts it at Harimau's (0, -0.178, -5.911) in the
+    // hull's model space, and the three spikes hang one level lower at -0.052 on
+    // z. The running game's draws put every flame shape's matrix translation
+    // exactly there (hull-local, four captures on two boots, at rest and at
+    // thrust; Feisar Fury's body matches its own node too), 0.54 units ahead of
+    // the locator - inside the nozzle opening where the locator sits behind it.
+    // **The `EF_Boost` shapes hang under `Joint_*` nodes** (up to 2.16 units off
+    // on Triakis) and the original draws each at its own joint: Feisar Fury's
+    // three boost draws sit at (+-0.804, 0.0732, -4.6293) and (0, 0.1688, -5.8044),
+    // the authored translations of `Joint_BoostLeft`/`Right` and `Joint_Diamonds`
+    // to four decimals. The two boost spikes share their joint's node rule, which
+    // no frame read separately. A node the file does not carry and 2048's
+    // container keep the locator.
     let origins: Vec<Vec3> = if vita {
         vec![nozzle; groups.len()]
     } else {
-        let nodes = vex::nodes(&blob).unwrap_or_default();
-        let world = vex::world_transforms(&blob, &nodes);
+        let nodes = &tree;
+        let world = vex::world_transforms(&blob, nodes);
         groups
             .iter()
             .enumerate()
             .map(|(index, group)| {
-                let authored_group = index == 0 || (2..2 + main_spikes).contains(&index);
-                if !authored_group {
+                if index == 1 {
                     return nozzle;
                 }
                 nodes
@@ -219,9 +263,17 @@ pub(super) fn per_team(
         if index >= 2 {
             let spike = index as u32 - 2;
             let boost = spike as usize >= authored.main_spikes.len();
+            let scale =
+                if spike as usize >= authored.main_spikes.len() + authored.boost_spikes.len() {
+                    Scale::BoostLength
+                } else if unbound(spike as usize) {
+                    Scale::Hull
+                } else {
+                    Scale::Flicker
+                };
             if triangles == 0 {
                 report.push(format!(
-                    "{name}: authors no geometry for {} - that spike draws nothing",
+                    "{name}: authors no geometry for {} - that shape draws nothing",
                     part.group
                 ));
             } else {
@@ -230,11 +282,21 @@ pub(super) fn per_team(
                     boost,
                     index: spike,
                     origin: origins[index],
+                    scale,
                 });
             }
             continue;
         }
         let what = if index == 0 { "always" } else { "boost" };
+        if triangles == 0 && index == 1 && !boost_shapes.is_empty() {
+            report.push(format!(
+                "{name}: {} carries no geometry of its own; its {} shapes are parts placed \
+                 at their own joints",
+                part.group,
+                boost_shapes.len()
+            ));
+            continue;
+        }
         if triangles == 0 {
             report.push(format!(
                 "{name}: authors no geometry under {} - the {what} half of this \

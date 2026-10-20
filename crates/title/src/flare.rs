@@ -81,9 +81,24 @@ pub struct Authored {
     /// own - `EngineFlare_PlaceShapes` gives every one a fresh
     /// `Spikes Random Scale` draw per frame - and `always` keeps the rest.
     pub main_spikes: &'static [&'static str],
+    /// The second spelling of [`Self::main_spikes`], slot for slot (empty for a
+    /// title with none). Wipeout Fury's Feisar concept and neon craft author
+    /// the same three shapes as `ef_SpikesShape1` to `ef_SpikesShape3`, with the
+    /// number after `Shape`; the census over every `engineflare.vex` HD ships
+    /// finds no other deviation. A slot takes the first spelling the file
+    /// carries, so the flicker stream stays keyed on the slot.
+    pub main_spikes_alt: &'static [&'static str],
     /// The same for [`Self::boost`]: `ef_SpikesLeftShape` and
     /// `ef_SpikesRightShape`.
     pub boost_spikes: &'static [&'static str],
+    /// The shapes under [`Self::boost`] that hang from a `Joint_*` node of their
+    /// own: `ef_BoostLeftShape`, `ef_BoostRightShape` and `ef_DiamondsShape`.
+    /// `EngineFlare_PlaceShapes` scales each one's length by the boost blend
+    /// about its own joint (read live on Feisar Fury: three draws at the joints'
+    /// authored translations), so each is a part of its own, placed at its node,
+    /// instead of a share of the group at the locator. Empty for a container
+    /// whose node transforms are not composed (2048's Vita files).
+    pub boost_shapes: &'static [&'static str],
     /// The sprite flare's texture, in the archive set's lower-case path form,
     /// drawn **beside** the model: `/data/tex/engineflare/engine_flare_rich.gtf`
     /// on HD and `.gxt` on 2048 - both executables carry the literal. The
