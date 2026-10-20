@@ -84,8 +84,40 @@ GO, so the sampler's wall time does not enter):
 | tau 1.8 / 1.9 | 3.421 / 3.500 (c3) | 3.627 at 2.00 (the original is about 0.1 lower at equal tau) |
 | tau 2.6 and later | 4.040 (c2, tau 2.6), 4.027 (c3, tau 3.5) | 3.998 at 2.5, 4.039 at 3.0, 4.025 at 4.0 |
 
-The ramp's middle runs about 0.1 above the original at equal tau (one tick of timer step or the
-spring's lag, which ours does not model separately); the end states and the shape match.
+~~The ramp's middle runs about 0.1 above the original at equal tau~~: **closed 2026-10-20
+(`hd-hover-residual`), it does not.** That reading set two boots' 0.1 s samples against ours. A
+per-frame capture of one boot (below) puts ours within `+0.006`..`+0.011` of the original through
+the whole ramp, aligned on each side's own clamp.
+
+### The release ramp, frame by frame (2026-10-20, `hd-hover-residual`)
+
+`scripts/rpcs3-hd-autopilot.py --skip-walk --ramp` samples every new body position from the grid,
+through GO and the release, with the target `+0x344`, the clamp `+0x348`, the height `+0x260` and
+the entry state `+0x2f8`, unarmed. Recipe: `scripts/emu-restore-state.sh <lane>
+data/saves/hd-fury/hd-timetrial-talons-venom-start.SAVESTAT.zst --restart` (Racebox Time Trial,
+Talon's Junction, Venom, grid slot 0), then the sampler with `OAG_RPCS3_ATTACH=1` straight after
+another `rpcs3-drive.py restart`: a Time Trial restart goes to the countdown with no flyby, and
+the sampler's usual 8 s settle misses the ramp. (The restore's own `--restart` timed out once on
+this machine with presses lost; `press start` twice, then `restart`, worked.) 1001 rows, the flip
+at row ~290; this boot's grid clamp read `3.0033`.
+
+Ours is `hd_air_pose_walk.rs` with `OAG_HD_OPENLOOP=900 OAG_HD_MODE=tt OAG_HD_CLASS=VENOM` on the
+same circuit, no input. Heights above the floor `-54.080`, at equal tau (clamp minus its grid
+value):
+
+| tau (s) | 0.10 | 0.50 | 1.00 | 1.45 | 1.80 | 2.00 | 2.30 | 2.50 | 2.80 | 3.50 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| original | 2.156 | 2.480 | 2.824 | 3.191 | 3.439 | 3.593 | 3.820 | 3.968 | 4.052 | 4.020 |
+| ours | 2.162 | 2.491 | 2.833 | 3.201 | 3.446 | 3.602 | 3.830 | 3.975 | 4.033 | 4.018 |
+
+Grid: `-51.9229` against `-51.9228`. Rest: `4.002` against `4.007`. The original overshoots the
+release by `0.02` more at tau 2.8. Per frame (one `oag_physics::step` a row, the row's own state
+and clamp): the ramp's 148 rows close to median dv_up `-0.020` (accel `-1.2` u/s^2, about 1.3 % of
+the load) taking the clamp the next row reads, `-0.030` taking the row's own (the capture's
+target is `0.75 x` the same row's clamp, so the timer steps before the target is built), and
+`+1.000` with no clamp; the 556 resting rows close to `0.000`. And on the race straight
+(Ubermall, 412 four-contact rows) a `+/-0.1` ride height moves the grounded median by `+/-0.09`
+against `-0.010` measured: the race ride height matches to about `0.01`. Nothing to port.
 
 Frames: `ours-sheet2.png` (original flyby shot beside ours), `c2/sheet.png`
 (the original's countdown and GO). The chase camera follows the craft down, so the craft holds the
