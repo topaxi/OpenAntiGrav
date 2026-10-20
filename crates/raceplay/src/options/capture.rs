@@ -44,6 +44,8 @@ pub struct CaptureHud {
     pub speed_kmh: Option<f32>,
     /// The shield pool, in the pool's own units, when the capture read it.
     pub shield: Option<f32>,
+    /// The best lap so far in ticks, when the capture read it (`None` also when there is none).
+    pub best_lap_ticks: Option<u32>,
 }
 
 /// A camera pose imposed from outside, replacing the chase camera.

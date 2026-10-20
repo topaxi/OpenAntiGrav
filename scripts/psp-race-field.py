@@ -97,6 +97,7 @@ class Field:
                 "pos": list(pose[12:15]),
                 "place": self.dbg.read_u32(s["entity"] + PLACE),
                 "lap": struct.unpack("<I", craft_words)[0],
+                "best_lap_cs": self.dbg.read_u32(s["entity"] + 0x930),
                 "lap_time": rail.f32s(self.dbg, s["entity"] + RACE_TIME, 1)[0],
             })
         return out
@@ -142,8 +143,8 @@ def matches(rows, cam, args):
     if not lo <= player["place"] + args.place_base <= hi:
         return None
     seen = [r for r in rows if not r["player"] and in_view(cam, r["pos"], args.max_dist, args.half_fov)]
-    near = [r for r in seen if math.dist(r["pos"], player["pos"]) <= args.max_dist]
-    if len(seen) < args.min_in_view:
+    near = [r for r in seen if math.dist(r["pos"], player["pos"]) <= args.near_dist]
+    if len(seen) < args.min_in_view or len(near) < args.min_near:
         return None
     return {"in_view": [r["slot"] for r in seen], "near": [r["slot"] for r in near]}
 
@@ -202,6 +203,10 @@ def hunt(args):
                 st = dbg.call("cpu.status")
                 if not (st["stepping"] and st["pc"] == SHIP_UPDATE_CRAFT):
                     raise
+            # one read decides whether this frame can match at all: the player's place
+            place_now = dbg.read_u32(field.player["entity"] + PLACE)
+            if not args.place[0] <= place_now + args.place_base <= args.place[1] and n % args.every:
+                continue
             rows = field.rows()
             cam = camera(dbg, node)
             player = next(r for r in rows if r["player"])
@@ -249,7 +254,9 @@ def main():
     h.add_argument("--place", type=parse_range, default=(3, 6), help="player's 1-based place, a-b")
     h.add_argument("--place-base", type=int, default=0, help="added to the RAM value (the RAM value is already 1-based)")
     h.add_argument("--min-in-view", type=int, default=2)
-    h.add_argument("--max-dist", type=float, default=90.0)
+    h.add_argument("--max-dist", type=float, default=90.0, help="a craft counts as in view up to this far from the camera")
+    h.add_argument("--near-dist", type=float, default=45.0, help="a craft in view this close to the player is `near`")
+    h.add_argument("--min-near", type=int, default=1, help="at least this many in-view craft within --near-dist")
     h.add_argument("--half-fov", type=float, default=22.0)
     h.add_argument("--min-frame", type=int, default=0)
     h.add_argument("--stint", type=float)

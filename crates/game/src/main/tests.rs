@@ -100,10 +100,15 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             race_ticks: 1890,
             speed_kmh: None,
             shield: None,
+            best_lap_ticks: None,
         }
     );
     let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
     assert_eq!((full.speed_kmh, full.shield), (Some(571.5), Some(99.0)));
+    let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
+    assert_eq!(best.best_lap_ticks, Some(3375));
+    let none = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,0").expect("seven values");
+    assert_eq!(none.best_lap_ticks, None);
     assert!(pose::parse_hud_state("6,1,30.0").is_err());
     assert!(pose::parse_hud_state("0,1,3,3").is_err());
     assert!(pose::parse_hud_state("1,1,-3,3").is_err());

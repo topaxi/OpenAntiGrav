@@ -120,7 +120,7 @@ its `pair.json` has no failed check.
 
 | Title | Status | What matched | How |
 | --- | --- | --- | --- |
-| Pulse PSP | **works**, about 1.5 min per circuit | everything in the checks above | `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pulse-psp> scripts/ppsspp-start.sh <lane> <display> <port> <image>`, then `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track NN_Track --state <ppst>` (it resizes the SDL window to 960x544 for `psp-state.py`'s pause-menu clicks, loads the state, stops the CPU, resizes the window to the native 480x272 and crops the Xvfb root at the window origin: nothing is scaled), or `scripts/compare-pulse-psp-batch.py --out D` for all 24 kept states. No state yet: `psp-drive.py menu --unlock --track-down N --any-track` (about 105 s from a fresh profile, N from [the table](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)), then `psp-state.py save 1 --keep`. Full pipeline: [frame comparison](frame-compare.md) |
+| Pulse PSP | **works**, about 1.5 min per circuit (a mid-race **race shot** with the whole field: see "Race shots" below) | everything in the checks above | `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pulse-psp> scripts/ppsspp-start.sh <lane> <display> <port> <image>`, then `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track NN_Track --state <ppst>` (it resizes the SDL window to 960x544 for `psp-state.py`'s pause-menu clicks, loads the state, stops the CPU, resizes the window to the native 480x272 and crops the Xvfb root at the window origin: nothing is scaled), or `scripts/compare-pulse-psp-batch.py --out D` for all 24 kept states. No state yet: `psp-drive.py menu --unlock --track-down N --any-track` (about 105 s from a fresh profile, N from [the table](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)), then `psp-state.py save 1 --keep`. Full pipeline: [frame comparison](frame-compare.md) |
 | HD (PS3) | **works**, about 1.5 min per circuit | pose, camera, fov, clock | `export OAG_COMPARE_PLATFORM=hd-fury` before `scripts/emu-restore-state.sh` (so `rpcs3-drive.py` writes the profile's video settings into the private config **and** the game's custom config), restore the state with `--restart`, then `OAG_RPCS3_ATTACH=1 scripts/rpcs3-hd-pair.py --out D --team harimau --state <state>`: it resizes RPCS3's window to 1920x1080 (the default 1760x1072 window carries black bars), captures, and checks the frame is exactly 1920x1080. One state per circuit: `scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0\|1> <name>` (Track Select index 0 is Vineta K, 8 Talon's Junction; Harimau classic is 9 `right`s and a `down`). The state only names the circuit and craft: **the pair is taken after `Restart Race`, a few seconds into a fresh Time Trial**, so the clock is small and our drift small. `--team` carries HD's variant (`Assegai_c1` is the Fury Concept craft). |
 | Pulse PS2 | **works for Moa Therma White; the camera is not matched** | pose, clock, circuit and layout | PCSX2 booted by `pcsx2-drive.py boot` with `OAG_COMPARE_PLATFORM=pulse-ps2` in the environment (its ini carries the profile's upscale and screenshot size), then `scripts/pcsx2-pulse-pair.py --slot S --state <p2s> --track 03_Track --out D --allow-own-camera`. Pose, craft and clock are read out of the state file's own EE RAM (`pcsx2_state.py`), the frame is PCSX2's GS screenshot of the loaded state. **The PS2 camera is not recovered**: a node whose position matches the PSP's follow geometry (11.64 units behind and 3.0 above the craft) is in the state, but its orientation convention differs from the PSP's (the pitch sign is opposite) and the 4:3 fov is unmeasured; rendering the node with the pitch flipped and a fov sweep gives only an ambiguous best fit (RMSE 0.184 at 48 degrees against 0.217 at 60), so the pair is refused unless `--allow-own-camera` is given, and then names the camera in its note. Only Moa Therma White has a state; more need a menu route for `pcsx2-drive.py` |
 | Pure (PSP) | **not reachable, for now** | | `psp-drive.py menu` is Pulse's walk and stops at `the front end is in None`; `psp-trace.py --camera` breaks at Pulse USA's `Camera_UpdatePlayerView` (`0x0883c13c`), and Pure's counterpart is not located ([Pure camera rig](../ghidra/functions/psp-pure-usa/camera.md) is a static read of the rig only). Needs a hand walk to a grid, a save state and the camera node. The profile row `pure-psp` carries the PSP values |
@@ -142,6 +142,56 @@ is defined, so the command works for PSP, HD and PS2 alike. Then rebuild the pag
 The fresh set lives in `data/reference/compare-page/` (`pulse-psp/`, `hd/`, `pulse-ps2/`, one directory per pair
 holding `theirs.png`, `ours.png`, `side.png` and `pair.json`); the manifest is built with
 `python3 scripts/compare_env.py manifest data/reference/compare-page/fresh.toml data/reference/compare-page/<dirs>`.
+
+## Race shots: a mid-pack frame of a Single Race, weapons off (2026-10-20, `compare-race-shots`)
+
+The grid and Time Trial pairs have one craft. A race shot is the player **in the pack of a Single Race**, flown by the
+original's own Autopilot, with every craft of the field, the HUD's race state and the camera taken from the original's RAM
+at the one stop the screenshot is taken at. `just compare-rerender` re-makes it from its savestate like any pair.
+
+**Pulse PSP (works, measured).**
+
+1. **Weapons off.** The Racebox page (`RACEBOX` > `CUSTOM RACE`) has the rows `RACE TYPE`, `SPEED CLASS`, `WEAPONS`, `AI
+   DIFFICULTY` (screenshotted, 2026-10-20), and `WEAPONS` is editable in a Single Race (a Time Trial forces it off, Head to Head
+   locks it). `psp-drive.py menu --single-race --weapons-off` sets it (`down` to `WEAPONS`, `right` once: On, then Off) and prints
+   `g_weapons_enabled` (`0x08b30fa8`, a byte) once the race is up: it reads `0` ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md)).
+   The pair script reads the same byte out of the loaded state and **refuses** a state where it is not `0`.
+2. **Autopilot.** `psp-race-field.py hunt` arms the player's Autopilot the way `psp-autopilot-rail.py` does (fire bit `0x1000`, timer
+   `record+0x148` written huge); the original's driver then flies the race. It also works with weapons off.
+3. **The hunt.** One conditional breakpoint on `Ship_UpdateCraft` (`0x08849618`) for the player's craft, once a tick; the update
+   order is the player first and then slots 6 down to 0, so at that stop **all eight bodies are on the same tick boundary**. Per
+   stop it reads the player's place (`entity+0xbd4`, 1-based, in the racer entity at `manager+0x78+4n`, not the craft), and only
+   when that is in the wanted range the whole field and the camera node, and tests: other craft inside the camera's cone
+   (`--half-fov`, `--max-dist` from the eye) and at least `--min-near` of them within `--near-dist` of the player. The player
+   starts eighth and is on the grid's back for the first lap; with weapons off the autopilot reaches 6th to 5th only late in lap 1
+   or in lap 2, and the field is spread out (the grid alone spans 344 units), so a hunt takes one to nine minutes and some
+   races never match. **The criteria are the brief's (place 3 to 6, craft close and in view); where a hunt had to settle for less,
+   the state's note says so.**
+4. **The state.** The pause menu cannot be opened while the debugger holds the CPU (its `paused()` reads the stop as the menu), so
+   the hunt resumes, presses Escape at once and saves slot 3: the saved tick is a few frames after the match. The pair script
+   reads the field again after loading, so nothing is trusted from the hunt. A state is `data/saves/pulse-psp/race-*.ppst` with a
+   `.json` sidecar naming `mode single_race`, the class, the player's team and the layout.
+5. **The pair.** `psp-pulse-pair.py --field --layout forward --team <player team> --track 16_Track --state race-*.ppst`: load,
+   stop the CPU, `psp-trace.py --craft <player craft> --field-out field.json --camera --shot-every 2` captures at the first stop
+   of the player's craft the player's row, the camera node, **every racer's body, team name, place, lap, lap time and best lap**
+   (`psp-race-field.py` rows) and the screenshot. Ours is `oag-game --race --pose-from trace.csv --field-from field.csv
+   --hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST_S --ticks 0`:
+   - `--field-from` (`race::Options::field`, `grid_teams`) keeps the Single Race grid's seven opponents alive, puts each on the
+     pose its row carries (the same left/up/forward reading `--pose-from` uses, `oag_trace::replay::orientation_of_rows`) and flies
+     the team the row names; the original's slot `n` is our opponent `n + 1`. The craft are drawn at rest: no tick runs.
+   - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield and best lap on
+     the primary readout: all read from RAM, none derived. The lap on screen is `entity+0xacc - 1`.
+   - Ours races with weapons off (`[race] weapons = "Off"` in the pair's private settings); the layout is **asserted** with
+     `--layout` (the grid probe is a start-line test), and checked against the sidecar.
+6. **Checks.** Everything in "Environment parity" except the race-clock phase (there is no run-up: ours renders at tick 0 and
+   takes the clocks from `--hud-state`), plus `weapons off in the original's own RAM`, eight craft, a team name for each, and the
+   pose and fov at the rendered tick. The re-capture drifts: the state loads, the CPU stops a few ticks after, so two captures of
+   one state differ by about 4 ticks (10 units, 2.5 degrees in the first rerender); the pose, camera and field of each capture are
+   from its own stop, so ours matches whichever stop it was.
+
+**What is not matched in a race shot** (the pair's caveat says it): the exhaust plume and the engine's light (a craft at rest in
+ours; stage 3, a frozen warm-up that gives every craft its trails, is not built), the Autopilot icon and its counter (the pickup
+row), the opponents' own trails and any weapon or effect in flight, and the scene objects that animate (the billboards).
 
 ## Publishing is locked
 

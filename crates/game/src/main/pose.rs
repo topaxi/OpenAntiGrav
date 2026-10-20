@@ -172,13 +172,13 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Vec<FieldCraft>> 
     Ok(field)
 }
 
-/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD]]`, the clocks
-/// rounded to the tick.
+/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD[,BEST_LAP_SECONDS]]]`,
+/// the clocks rounded to the tick; a best lap of zero is none.
 pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
     let parts: Vec<&str> = text.split(',').map(str::trim).collect();
     ensure!(
-        (4..=6).contains(&parts.len()),
-        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD]], not {} value(s)",
+        (4..=7).contains(&parts.len()),
+        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD[,BEST_LAP_SECONDS]]], not {} value(s)",
         parts.len()
     );
     let whole = |name: &str, text: &str| -> Result<u32> {
@@ -215,6 +215,13 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
                 text.parse::<f32>()
                     .with_context(|| format!("--hud-state SHIELD {text:?} is not a number"))
             })
+            .transpose()?,
+        best_lap_ticks: parts
+            .get(6)
+            .map(|text| seconds("BEST_LAP_SECONDS", text))
+            .transpose()?
+            .filter(|&ticks| ticks > 0)
+            .map(|ticks| u32::try_from(ticks).context("--hud-state BEST_LAP_SECONDS is too long"))
             .transpose()?,
     };
     ensure!(

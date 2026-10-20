@@ -246,6 +246,7 @@ impl Race {
             readout.race_ticks = hud.race_ticks;
             readout.speed_kmh = hud.speed_kmh.unwrap_or(readout.speed_kmh);
             readout.shield = hud.shield.unwrap_or(readout.shield);
+            readout.best_lap_ticks = hud.best_lap_ticks.or(readout.best_lap_ticks);
         }
         if finished.is_some() {
             readout.messages[oag_hud::messages::SLOTS - 1] = Some(oag_hud::messages::MessageLine {

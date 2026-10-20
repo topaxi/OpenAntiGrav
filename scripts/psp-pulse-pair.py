@@ -141,7 +141,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     pair.rec["original"]["field"] = [{k: r[k] for k in ("slot", "team", "place", "lap", "lap_time", "pos")} for r in rows]
     lap_number = player["lap"] - 1  # PlayerStatus_Update: the HUD's lap is `entity+0xacc - 1`
     pair.rec["original"]["hud"] = {"place": player["place"], "of": len(rows), "lap_number": lap_number,
-                                   "lap_time_s": player["lap_time"], "race_clock_s": clock}
+                                   "lap_time_s": player["lap_time"], "race_clock_s": clock,
+                                   "best_lap_s": player["best_lap_cs"] / 100}
     pair.check_equal("original field size", len(rows), 8)
     pair.check("every craft has a team name", all(t and not t.startswith("?") for t in teams), ", ".join(teams))
     pair.rec["ours"].update({"mode": facts.get("mode", "single_race"), "class": facts.get("class", "venom"),
@@ -151,9 +152,9 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
             "--field-from", out / "field.csv",
-            "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
+            "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
-                theirs_row["speed"] * SPEED_TO_KMH, theirs_row["shield"])] + flags + [
+                theirs_row["speed"] * SPEED_TO_KMH, theirs_row["shield"], player["best_lap_cs"] / 100)] + flags + [
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
