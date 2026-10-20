@@ -57,6 +57,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
     zone_hover_rig: Some(&ZONE_HOVER_RIG),
+    zone_handling: Some(&ZONE_HANDLING),
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // HD's own driver, Pulse's with five gated branches, flown in the
@@ -783,6 +784,23 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     snap: oag_title::pre_race::Sourced::measured(None),
     brakes_off: oag_title::pre_race::Sourced::measured(false),
 };
+
+/// HD's Zone handling: [`oag_title::zone_handling::ZoneHandling`].
+///
+/// `Team_LoadHandlingStats` (`0x001e6ff8`) reads `Data\Ships\Zone\handlingstats.xml` for the
+/// team on the Zone modes' mask, and the file authors no `<Class>`. Live (RPCS3, a cold boot to
+/// mode 6 on Vineta K): `craft+0x7c` is the team block plus `0xa0`, class 0, and holds the Zone
+/// file's numbers (accelcap `20`, engine `900`/`0.3`/`500`, grip `16`, track gravity `100`,
+/// sideshift `550`); class 1 is empty. The file has no `landing_rebound` or `rebound_jump_time`;
+/// the Antigrav reader (`0x000c6550`) writes them to class `+0x08` and `+0x0c`, which read `0.0`
+/// and `2.0` live, the values class 1's untouched block holds too. Confidence 90:
+/// `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+pub const ZONE_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured("/data/ships/zone/handlingstats.xml"),
+        landing_rebound: oag_title::pre_race::Sourced::measured(0.0),
+        rebound_jump_time: oag_title::pre_race::Sourced::measured(2.0),
+    };
 
 /// HD's Zone hover: [`HOVER_RIG`] with the trailing ray on, and no brakes.
 ///

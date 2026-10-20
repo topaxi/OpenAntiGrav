@@ -14,6 +14,7 @@ pub(super) fn resolve(
     options: &Options,
     handling: &oag_physics::params::Handling,
     team: &str,
+    zone_file_read: bool,
     report: &mut Vec<String>,
 ) -> (ChaseParams, ChaseParams, InternalParams) {
     let far = stats.external_camera_far;
@@ -34,7 +35,9 @@ pub(super) fn resolve(
         "{stats_name}: team {:?}, {:?} class, mass {}, ride_height {}",
         stats.team, options.class, handling.physical.mass, handling.antigrav.ride_height
     ));
-    report.extend(assets::zone_handling_note(options.mode, team));
+    if !zone_file_read {
+        report.extend(assets::zone_handling_note(options.mode, team));
+    }
     // The eye offsets are reported **after** `craft_scale`, because that is
     // where the eye actually ends up, and the two differ now that the scale is a
     // rig parameter rather than a factor folded into the four offsets. Reporting

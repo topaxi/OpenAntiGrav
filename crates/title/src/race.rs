@@ -193,6 +193,10 @@ pub struct RaceDefaults {
     /// title's Zone hover was not read (the race keeps [`Self::hover_rig`]). Pulse's
     /// `Ship_UpdateHover` picks `Ship_HoverFourCorner` on game mode 6: [`crate::hover_rig::HoverRig`].
     pub zone_hover_rig: Option<&'static crate::hover_rig::HoverRig>,
+    /// The handling file a Zone race reads in place of the team's, or `None` where the Zone race
+    /// flies the team's own class (Pulse, read; the rest, unread):
+    /// [`crate::zone_handling::ZoneHandling`].
+    pub zone_handling: Option<&'static crate::zone_handling::ZoneHandling>,
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
     /// What the Autopilot pickup does to the player's engine while it runs:

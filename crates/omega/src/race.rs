@@ -98,6 +98,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     zone_hover_rig: None,
+    // Unread: whether this title's Zone reads a Zone file, and which (`hover-four-point.md`).
+    zone_handling: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,

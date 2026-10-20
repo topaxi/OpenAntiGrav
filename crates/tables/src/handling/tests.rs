@@ -775,3 +775,43 @@ fn a_collision_restitution_that_is_not_a_number_is_an_error() {
         .is_err()
     );
 }
+
+/// A classless file (the Zone files' shape) reads as one class under the asked name, with the
+/// caller's numbers for the `<Antigrav>` attributes it leaves out, and is refused by the
+/// per-class reader's strictness nowhere else.
+#[test]
+fn a_classless_file_reads_as_the_one_class_with_the_callers_unauthored_antigrav() {
+    let doc = r#"<?xml version="1.0"?>
+<Handling><Stats team="ZoneMode">
+<InternalCamera fov="65" height="0" length="3" pitch="0"/>
+<BackwardCamera fov="65" height="0" length="3" pitch="0"/>
+<BonnetCamera fov="70" height="2.0" length="0" pitch="0"/>
+<ExternalCameraFar fov="60" lookat_height="0" lookat_length="25" pos_height="4.0" pos_length="-13.5" spring_horiz="10" spring_vert="10"/>
+<ExternalCameraClose fov="60" lookat_height="-4" lookat_length="25" pos_height="3.6" pos_length="-10.5" spring_horiz="12" spring_vert="12"/>
+<Physical flight_gravity="120" mass="1" normal_gravity="5" track_gravity="100"/>
+<Antigrav grip_air="3.0" grip_ground="16.0" rebound="0.4" ride_height="5.5"/>
+<AirbrakeGraphics amount="30" down_speed="50" up_speed="500"/>
+<Misc height="3.5" length="13" shield="100" width="5.0"/>
+<Engine accelcap="20" amount="300" falloff="500" gain="900" turbo="150"/>
+<Brakes amount="100" falloff="100" gain="100"/>
+<Turning amount="1.8" falloff="1000" gain="500"/>
+<Airbrake amount="9" drag="2" falloff="500" gain="800" turn="10" slidegrip="100" sideshift="550"/>
+<Pitch pitch_air="0.2" pitch_ground="1.0" pitch_damping="5" antigrav_height_adjust="1.0"/>
+</Stats></Handling>"#;
+    let unauthored = Unauthored {
+        landing_rebound: 0.0,
+        rebound_jump_time: 2.0,
+    };
+    let stats = parse_classless(doc, "VENOM", unauthored).expect("a classless file");
+    assert_eq!(stats.classes.len(), 1);
+    let class = stats.class_named("VENOM").expect("the one class");
+    assert_eq!(class.engine.accelcap, 20.0);
+    assert_eq!(class.physical.track_gravity, 100.0);
+    assert_eq!(class.antigrav.grip_ground, 16.0);
+    assert_eq!(class.antigrav.landing_rebound, 0.0);
+    assert_eq!(class.antigrav.rebound_jump_time, 2.0);
+    assert_eq!(stats.misc.weight_distribution, None);
+    // The per-class reader still finds no class in it, and still requires both attributes in a
+    // `<Class>`.
+    assert!(parse(doc).expect("the plain reader").classes.is_empty());
+}
