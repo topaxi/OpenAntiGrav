@@ -1059,8 +1059,8 @@ frame-compare theirs ours out="/tmp":
 #   just compare-page                                  # every manifest in data/reference/compare-page/
 #   just compare-page data/reference/mine.toml --serve
 [doc("Build the original-vs-ours comparison page from a manifest (--serve for the LAN)")]
-compare-page manifest="data/reference/compare-page" *ARGS:
-    python3 scripts/compare-page.py {{manifest}} {{ARGS}}
+compare-page *ARGS:
+    python3 scripts/compare-page.py {{ARGS}}
 
 # Rebuild the seed manifest from the reference sheets under data/reference/.
 [doc("Split the HD lanes' reference sheets into the compare-page seed manifest")]

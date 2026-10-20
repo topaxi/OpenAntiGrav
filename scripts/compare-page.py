@@ -388,7 +388,9 @@ def main():
         print("statement: legal.md matches the ADR")
         return
     if not a.manifest:
-        ap.error("a manifest is required")
+        if a.publish:
+            ap.error("--publish needs the curated manifest directory; the seed set is not a publishing set")
+        a.manifest = [str(ROOT / "data" / "reference" / "compare-page")]
     try:
         if a.publish:
             publish(manifest_files(a.manifest), a.out.resolve())
