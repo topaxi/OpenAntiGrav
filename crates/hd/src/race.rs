@@ -60,7 +60,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_handling: Some(&ZONE_HANDLING),
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
-    opponent_autopilot: oag_title::opponent_autopilot::BELOW_PHANTOM,
+    opponent_autopilot: oag_title::opponent_autopilot::BELOW_RAPIER,
     // HD's own driver, Pulse's with five gated branches, flown in the
     // campaign: read off the executable and its thrust law reproduced on 83
     // live samples, `docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`.

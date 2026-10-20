@@ -85,7 +85,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_handling: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
-    opponent_autopilot: oag_title::opponent_autopilot::BELOW_PHANTOM,
+    opponent_autopilot: oag_title::opponent_autopilot::BELOW_RAPIER,
     // The campaign's opponents fly Pure's own sibling driver
     // ([`ORIGINAL_DRIVER`]); every other mode keeps this project's.
     original_opponent: true,

@@ -400,8 +400,8 @@ impl Race {
     /// Lets an opponent on this project's driver fly the original's player
     /// driver while it holds an Autopilot ([`Self::engage_opponent_autopilot`]),
     /// where it otherwise absorbs the pickup. A race starts with the title's
-    /// per-class rule (`oag_title::RaceDefaults::opponent_autopilot`: on below
-    /// PHANTOM, chosen); this overrides it, for the paired-fork sweep. It
+    /// per-class rule (`oag_title::RaceDefaults::opponent_autopilot`: on at
+    /// VENOM and FLASH, chosen); this overrides it, for the paired-fork sweep. It
     /// speeds an opponent up in every cell measured, and at PHANTOM it also
     /// hits more walls and, on HD, gets rescued more (`docs/gameplay/ai.md`,
     /// "An opponent's Autopilot, wired below PHANTOM").

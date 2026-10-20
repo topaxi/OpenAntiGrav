@@ -680,12 +680,12 @@ fn cold_locate_sweep() {
 }
 
 /// The Autopilot's opponent switch is the title's per-class rule
-/// (`oag_title::opponent_autopilot::BELOW_PHANTOM`): an opponent below PHANTOM
-/// flies the pickup, one at PHANTOM absorbs it. Pulse and HD, weapons on.
-/// Fails if a race starts with the switch off below PHANTOM or on at it.
+/// (`oag_title::opponent_autopilot::BELOW_RAPIER`): an opponent at VENOM or
+/// FLASH flies the pickup, one at RAPIER or PHANTOM absorbs it. Pulse and HD,
+/// weapons on. Fails if a race starts with the switch the other way.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn an_opponent_flies_its_autopilot_below_phantom_only() {
+fn an_opponent_flies_its_autopilot_below_rapier_only() {
     for (image, track) in [
         ("pulse-psp-usa.chd", r"Data\Environments\01_Track\track.vex"),
         (
@@ -696,7 +696,7 @@ fn an_opponent_flies_its_autopilot_below_phantom_only() {
         for (class, flies) in [
             ("VENOM", true),
             ("FLASH", true),
-            ("RAPIER", true),
+            ("RAPIER", false),
             ("PHANTOM", false),
         ] {
             let Some(path) = oag_testdata::image(image) else {
