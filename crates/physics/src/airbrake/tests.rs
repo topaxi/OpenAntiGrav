@@ -549,6 +549,28 @@ fn a_veteran_double_tap_shifts_and_a_single_tap_does_not() {
     assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
 }
 
+/// On the grid (`craft+0x1c0 & 2`) no gesture is read at all: a double tap opens no window and
+/// fires nothing, and a flick does not even arm. Measured live on Pulse PSP, 2026-10-20. The
+/// same input after the release shifts, so this fails if the gate is dropped or inverted.
+#[test]
+fn no_sideshift_gesture_is_read_on_the_grid() {
+    let mut state = ShipState {
+        on_grid: true,
+        ..ShipState::default()
+    };
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(state.shift_tap_windows[0], 0.0, "no tap window opens on the grid");
+    assert_eq!(state.sideshift_timers, [0.0, 0.0]);
+    flick(&mut state, 0.0);
+    assert!(!state.shift_armed, "the flick does not arm on the grid");
+
+    state.on_grid = false;
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION, "released, the same taps shift");
+}
+
 /// The window closes, and a slow second tap opens a new one instead.
 #[test]
 fn a_veteran_tap_outside_the_window_is_a_first_tap_again() {

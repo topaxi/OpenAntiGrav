@@ -321,11 +321,19 @@ pub fn sideshift_force(state: &ShipState, handling: &Handling, grounded: f32) ->
 /// (`oag_gameplay::controls::ship_controls`); the scheme is an options setting, not
 /// physics.
 ///
-/// # Not ported
+/// # Not on the grid
 ///
-/// The original gates the block on `craft+0x1c0 & 2`, a flag bit nothing has identified
-/// (`engine.md` names eleven bits and only bit 0 is established), so our sideshift may be
-/// available where the original withholds it.
+/// The gestures are read only while the craft is out of the grid state: the original's
+/// `if (!(craft+0x1c0 & 2) && entity+0x8ac <= 0)` (`0x088472bc`) wraps the whole gesture
+/// block, the flick arm and the tap windows included, and bit `0x2` is the grid state
+/// (`Craft_EnterGridState`), [`ShipState::on_grid`] here. The countdowns and the lockout
+/// refresh run either way. Measured live on Pulse PSP (USA, Time Trial, Talon's Junction,
+/// 2026-10-20, `scripts/psp-craft-flags.py`): two veteran double taps during the countdown
+/// (`craft+0x1c0 = 0x3`) armed no tap window and fired nothing; the same taps after GO
+/// fired `0x800` and `0x1000`. Confidence 92.
+///
+/// [`ShipControls::sideshift`], the direct request, has no counterpart in the original's
+/// function and is left ungated: **chosen, not measured**.
 pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
     // The original's countdown is gated, not clamped (`if (t > 0.0f) t -= dt;`), so it lands
     // slightly negative on expiry and freezes. Deliberately not matched: every reader gates
@@ -346,7 +354,7 @@ pub fn advance_sideshift(state: &mut ShipState, input: &ShipControls, dt: f32) {
     let mut fire_left = input.sideshift == Sideshift::Left;
     let mut fire_right = input.sideshift == Sideshift::Right;
 
-    if state.shift_lockout <= 0.0 {
+    if !state.on_grid && state.shift_lockout <= 0.0 {
         if input.shift_modifier {
             if state.shift_armed {
                 if input.steer_x > SIDESHIFT_FLICK_THRESHOLD {
