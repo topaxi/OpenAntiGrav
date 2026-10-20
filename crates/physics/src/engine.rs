@@ -239,63 +239,54 @@ pub fn engine(
     }
 
     // The four-corner branch (`0x0884c834`) replaces the whole throttle path: the target
-    // is the output directly and the `0.5 * speed + accelcap` clamp does not apply.
+    // is the output directly and the `0.5 * speed + accelcap` clamp does not apply. It stores
+    // its target at `0x0884c86c` and falls into the tail the throttle path shares: the
+    // speedup, the turbo add and its lift, the launch multiplier and the doubling.
     //
     // **The gate is approximated.** The original tests `(flags & 1) && !(flags & 2)` on
     // the undecoded `craft+0x1c0` and writes `0.0` when it fails. Bit 0 is ground contact
     // (the bit that gates `brakes`), so groundedness stands in; bit 1 is the grid state.
-    if let Some(target) = auto_speed {
+    let mut thrust = if let Some(target) = auto_speed {
         // Bit 1 of `craft+0x1c0` is the grid state (`Craft_EnterGridState`, `0x088486d4`),
         // so `on_grid` is that bit. Read live 2026-10-02 on a Zone engine: `flags` `0x3`
         // through state 0 with the craft still (`0.02` units/s), `0x1` and `95.2` thrust
         // from the first state-1 frame.
-        let mut thrust = if grounded > 0.0 && !state.on_grid {
+        if grounded > 0.0 && !state.on_grid {
             target
         } else {
             0.0
-        };
-        // **The Autopilot's speedup applies here too.** The branch stores its target at
-        // `0x0884c86c` and falls into the same `flags & 4` multiply as the throttle path
-        // (`T *= craft+0x2a0`, `0x0884c874`-`0x0884c894`). Live on PPSSPP 2026-10-20, a
-        // Zone engine flown by the Autopilot on `05_Track` at zone 0: `craft+0x328` read
-        // `81.6` = `34 * 1.2 * 2` for 1,500 frames with `craft+0x294` at `1.0`
-        // (`docs/ghidra/functions/psp-pulse-usa/zone-start.md`).
-        if let Some(speedup) = flags.speedup {
-            thrust *= speedup;
         }
-        return EngineForce {
-            // **The launch multiplier applies here too**: the tail is shared
-            // (`craft+0x294`, `0x0884c918`) and reads no mode. Live on a Zone engine
-            // 2026-10-02: GO read `34.0 * 1.4 * 2` = `95.2` coasting (grade 0) and `1.2`
-            // held (grade 1), then `1.0` after 60 frames.
-            thrust: one_shot_scale(
-                thrust * state.launch.multiplier * ENGINE_OUTPUT_SCALE * ENGINE_OUTPUT_DOUBLE,
-                thrust_scale,
-            ),
-            lift: 0.0,
-        };
-    }
+    } else {
+        let throttle = state.thrust;
 
-    let throttle = state.thrust;
+        let mut thrust = throttle * handling.engine.amount;
+        // Blended, not switched: a half-grounded ship gets 60 %.
+        thrust = thrust * grounded + thrust * ENGINE_AIR_THRUST * (1.0 - grounded);
 
-    let mut thrust = throttle * handling.engine.amount;
-    // Blended, not switched: a half-grounded ship gets 60 %.
-    thrust = thrust * grounded + thrust * ENGINE_AIR_THRUST * (1.0 - grounded);
-
-    if !flags.uncapped {
-        let mut cap = 0.5 * forward_speed.abs() + handling.engine.accelcap;
-        if throttle > crate::controls::CONTROL_MAX {
-            cap *= throttle * 0.01;
+        if !flags.uncapped {
+            let mut cap = 0.5 * forward_speed.abs() + handling.engine.accelcap;
+            if throttle > crate::controls::CONTROL_MAX {
+                cap *= throttle * 0.01;
+            }
+            thrust = thrust.min(cap);
         }
-        thrust = thrust.min(cap);
-    }
+        thrust
+    };
+    // **The Autopilot's speedup applies on both branches.** `T *= craft+0x2a0` under
+    // `flags & 4` (`0x0884c874`-`0x0884c894`) reads whatever either branch stored. Live on
+    // PPSSPP 2026-10-20, a Zone engine flown by the Autopilot on `05_Track` at zone 0:
+    // `craft+0x328` read `81.6` = `34 * 1.2 * 2` for 1,500 frames with `craft+0x294` at `1.0`
+    // (`docs/ghidra/functions/psp-pulse-usa/zone-start.md`).
     if let Some(speedup) = flags.speedup {
         thrust *= speedup;
     }
 
     // The turbo add, `T += Engine.turbo`, sits between the cap and the doubling as in the
-    // original, so it is **uncapped**. Either source arms it, as the original's
-    // `(flags & 0x200) || (flags & 0x400)` reads: a fired Turbo pickup
+    // original, so it is **uncapped**, and the Zone branch reaches it too
+    // (`0x0884c898`-`0x0884c914`, after the four-corner target's store): a Zone craft whose
+    // roll payout runs gets `target + turbo`, airborne or on the grid `0 + turbo`. Either
+    // source arms it, as the original's `(flags & 0x200) || (flags & 0x400)` reads: a fired
+    // Turbo pickup
     // ([`ShipState::turbo_timer`]) or a barrel roll's landing payout
     // ([`ShipState::roll_payout_timer`]); see `input-bindings.md`.
     //
@@ -310,6 +301,10 @@ pub fn engine(
         lift = handling.turbo_jump * thrust;
     }
 
+    // The launch multiplier and the doubling are the shared tail too (`craft+0x294`,
+    // `0x0884c918`; the mode is read nowhere after the branch). Live on a Zone engine
+    // 2026-10-02: GO read `34.0 * 1.4 * 2` = `95.2` coasting (grade 0) and `1.2` held
+    // (grade 1), then `1.0` after 60 frames.
     thrust = one_shot_scale(
         thrust * state.launch.multiplier * ENGINE_OUTPUT_DOUBLE,
         thrust_scale,
@@ -785,6 +780,39 @@ mod auto_speed_tests {
         )
         .thrust;
         assert!(released > 0.0);
+    }
+
+    #[test]
+    fn a_zone_craft_takes_the_turbo_add_and_its_lift_from_a_roll_payout() {
+        // The four-corner target falls into the shared tail (`0x0884c86c`), so the
+        // `0x200 || 0x400` add reaches it: grounded `target + turbo`, airborne `0 + turbo`.
+        let mut handling = Handling::ZERO;
+        handling.engine.turbo = 20.0;
+        handling.turbo_jump = 0.5;
+        let mut state = grounded_ship();
+        state.roll_payout_timer = 1.0;
+        let grounded = engine(
+            &state,
+            &handling,
+            1.0,
+            0.0,
+            Some(34.0),
+            1.0,
+            EngineFlags::default(),
+        );
+        assert_eq!(grounded.thrust, (34.0 + 20.0) * ENGINE_OUTPUT_DOUBLE);
+        assert_eq!(grounded.lift, 0.5 * (34.0 + 20.0));
+        let airborne = engine(
+            &state,
+            &handling,
+            0.0,
+            0.0,
+            Some(34.0),
+            1.0,
+            EngineFlags::default(),
+        );
+        assert_eq!(airborne.thrust, 20.0 * ENGINE_OUTPUT_DOUBLE);
+        assert_eq!(airborne.lift, 0.5 * 20.0);
     }
 
     #[test]

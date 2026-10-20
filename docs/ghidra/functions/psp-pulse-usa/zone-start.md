@@ -78,8 +78,29 @@ Ported for that one term (`oag_physics::engine::engine`, the auto-speed branch a
 | about -370 | 123.5 | 113.6 | 124.7 |
 | about -490 | 125.2 | 115.0 | 126.2 |
 
-The turbo/roll-payout add on the same tail is **not ported** to the Zone branch: a static read only,
-and nothing fires a Turbo in Zone; a Zone barrel roll's payout would reach it. Open.
+**The turbo/roll-payout add reaches the Zone branch too, ported 2026-10-21** (`deviations-to-original`,
+the maintainer's "Original shall always be the default"). Read off the disassembly: the branch's
+`swc1 f12,0x0(sp)` at `0x0884c86c` is the throttle path's own store, and everything after it runs for
+both: `flags & 4` (`0x0884c870`), then `(flags & 0x200 || flags & 0x400) && craft+0x2a4 == 1`
+(`0x0884c898`-`0x0884c8d0`) adds `*(craft+0x70)+0x34` (`Engine.turbo`) and, with d-pad Up held,
+writes the lift `T * [0x08b36be8]` (`0x0884c8f0`-`0x0884c910`), then the launch multiplier
+(`0x0884c918`) and the doubling. The grounded gate is before the store, so an airborne Zone craft with
+a payout running gets `0 + turbo`. Confidence **85** (control flow read once, no live tick).
+`oag_physics::engine::engine` now runs one tail for both branches; pinned by
+`a_zone_craft_takes_the_turbo_add_and_its_lift_from_a_roll_payout`.
+
+**What fires it in Zone.** A Turbo pickup cannot: Zone hands out no weapons. The barrel roll can: its
+payout writer, `Ship_UpdateSideshiftInput_q` (`0x0884703c`, `craft+0x1c0 |= 0x400` while
+`entity+0x898 > 0`), reads `g_game_mode` only to send a network message (`> 0xd`), so a player's Zone
+roll arms the add. This project's driver never rolls, so no AI Zone run changes (the 119 Zone tests and
+the lone-craft gate read the same).
+
+**Pure: checked, applies, with a difference.** Pure's Zone branch stores at `0x0892f4f8` and falls into
+the same tail (`flags & 4` at `0x0892f4fc`, the add at `0x0892f528`, gated `craft+0x25c == 1`), so the
+port reaches Pure too. But Pure scales the add by `craft+0x288` while that is below `1.0`
+(`0x0892f568`-`0x0892f5ac`: `T += turbo * craft+0x288`, else `T += turbo`), on both branches. The
+field is unread and ours adds the full turbo on Pure; open. HD: its Zone engine is not this shape
+(above), unchanged.
 
 Cross-title: HD's Zone engine (`Craft_UpdateThrottle`, `0x000efb50`) is not this shape (its Zone mask
 only ramps `craft+0x2d4`, and it reads no `+0x2f0`), so HD's Zone keeps flying Pulse's auto-speed with
