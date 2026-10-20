@@ -341,7 +341,7 @@ pub fn resolve<R: Raycaster + ?Sized>(
             &mut state.body,
             contact,
             friction,
-            env.laws.wall_restitution,
+            env.laws.restitution_against(contact.surface),
         );
 
         response.resolved_count += 1;

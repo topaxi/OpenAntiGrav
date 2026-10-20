@@ -889,3 +889,32 @@ fn the_wall_restitution_comes_from_the_laws() {
         state.body.linear_velocity
     );
 }
+
+/// The title's restitution is a **wall** law: it was measured on wall contacts alone, so a hull
+/// sample crossing a floor keeps Pulse's `0.4` (`crate::laws::Laws::restitution_against`).
+#[test]
+fn a_floor_contact_keeps_pulses_restitution() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_restitution: 0.8,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut floor = ship_at(1.0, 10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    let mut pulse = ship_at(1.0, 10.0);
+    resolve(
+        &mut pulse,
+        &handling(),
+        &Environment::default(),
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert_eq!(floor.body.linear_velocity, pulse.body.linear_velocity);
+    assert!(floor.body.linear_velocity.x < 0.0, "{:?}", floor.body);
+}

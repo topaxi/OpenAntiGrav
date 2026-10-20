@@ -36,6 +36,19 @@ pub struct Laws {
 }
 
 impl Laws {
+    /// The restitution a contact against `surface` takes. [`Self::wall_restitution`] is
+    /// measured on walls alone (HD's material `3`, 26 of 26 records): a floor or reset
+    /// surface keeps Pulse's [`crate::wall::BODY_RESTITUTION`], as nothing measured says what
+    /// HD's pair table gives it (`(0, 2)` and `(0, 4)` read `1.0`, a pair outside it `0.0`).
+    #[must_use]
+    pub fn restitution_against(&self, surface: crate::Surface) -> f32 {
+        if surface == crate::Surface::Wall {
+            self.wall_restitution
+        } else {
+            crate::wall::BODY_RESTITUTION
+        }
+    }
+
     /// Pulse's laws, every title's unless it measured its own.
     pub const PULSE: Self = Self {
         engine_output_double: true,
