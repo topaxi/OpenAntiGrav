@@ -147,7 +147,12 @@ fn every_craft_lays_its_own_ribbon() {
         // The head of the ribbon: `trail_vertices` builds every layer from
         // the newest sample first, so the first vertex sits on the rim of a
         // cross centred on this craft's own nozzle.
-        let head = race.exhaust_of(slot).trail_vertices(Vec3::X, Vec3::Y)[0].position;
+        let head = race.exhaust_of(slot).trail_vertices(
+            Vec3::X,
+            Vec3::Y,
+            oag_fx::exhaust::TrailLaw::Ramped,
+        )[0]
+        .position;
         let head = Vec3::from_array(head);
         let nearest = (0..8)
             .min_by(|a, b| {

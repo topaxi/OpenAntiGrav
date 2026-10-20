@@ -431,6 +431,11 @@ pub struct Setup {
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
     #[cfg(feature = "view")]
     pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
+    /// Whether the PSP-preset ribbon draws by the PS2's law
+    /// ([`oag_fx::exhaust::TrailLaw::Baked`]): the title's `ps2_trail` rule on the
+    /// disc the race loaded from. Read off `Looks`, never off the title's name.
+    #[cfg(feature = "view")]
+    pub ps2_trail: bool,
     /// Which three colours a fired shield's shell moves between.
     ///
     /// A title fact, not a per-craft one - every shield on one source shares

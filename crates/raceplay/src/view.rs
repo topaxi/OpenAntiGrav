@@ -130,6 +130,8 @@ pub struct RaceView {
     pub(super) hd_trail: [exhaust::hd::Tube; MAX_SHIPS],
     pub(super) hd_trail_active: bool,
     pub(super) hd_trail_red: [f32; MAX_SHIPS],
+    /// The PSP-preset ribbon draws by the PS2's law; see [`Race::trail_law`].
+    pub(super) ps2_trail: bool,
     /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
     /// ease rather than Pulse's baked anim-time scrub. See
     /// `options::Setup::hd_plasma_blast`.

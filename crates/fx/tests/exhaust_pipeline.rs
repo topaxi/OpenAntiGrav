@@ -116,7 +116,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
     // than `repeat_n(_, MAX_TRAILS)` because the budget is sized for the
     // larger of the two ribbon shapes - HD's 954-vertex tube, not this PSP
     // ribbon's 648 - so eight PSP ribbons no longer fill it exactly.
-    let one = state.trail_vertices(Vec3::X, Vec3::Y);
+    let one = state.trail_vertices(Vec3::X, Vec3::Y, oag_fx::exhaust::TrailLaw::Ramped);
     assert_eq!(one.len(), exhaust::TRAIL_VERTICES_PER_CRAFT);
     let trail: Vec<_> = one
         .iter()
@@ -203,7 +203,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         &identity,
         Vec3::ZERO,
         &cold.vertices(Vec3::ZERO, Vec3::X, Vec3::Y),
-        &cold.trail_vertices(Vec3::X, Vec3::Y),
+        &cold.trail_vertices(Vec3::X, Vec3::Y, oag_fx::exhaust::TrailLaw::Ramped),
     );
     device
         .poll(wgpu::PollType::wait_indefinitely())

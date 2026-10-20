@@ -27,3 +27,7 @@ Neither capture is committed - both are derived evidence and gitignored, per the
 
 - If a pixel-level comparison is ever wanted, pin the PS2 profile's `Aspect Ratio` to a known value first (`docs/ps2/aspect-ratio.md`), match our own render's viewport aspect to it, and hold both captures to the same scene lighting (same track position) - a same-speed comparison without controlling those three is not a comparison.
 - Do not tune the flare to taste - treat a wrong-looking result as a missing mechanism, not a coefficient, once a real comparison like that exists.
+
+## 2026-10-20 ps2-plume: the centred spike is the Trail ribbon (closed)
+
+The at-rest spike the PS2 draws is the `Trail` ribbon, not `shipboost.vex`: the PS2's draw (`0x001f0a08`) never applies the per-frame grey ramp that zeroes the PSP's ribbon at rest, and skips layer 0. Wired as `Looks::ps2_trail` -> `TrailLaw::Baked`; evidence in `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`. Still open: draw-gate global `DAT_0027e7f0`, the pre-texel colour clamp, the violet halo from the engine-flare `.POB` (a separate comparison).

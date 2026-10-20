@@ -111,6 +111,8 @@ impl Race {
             #[cfg(feature = "view")]
             hd_trail,
             #[cfg(feature = "view")]
+            ps2_trail,
+            #[cfg(feature = "view")]
             shield_palette,
             #[cfg(feature = "view")]
             hd_plasma_blast,
@@ -774,6 +776,7 @@ impl Race {
                 hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],
                 hd_trail_active: hd_trail.is_some(),
                 hd_trail_red: hd_trail.unwrap_or([0.0; MAX_SHIPS]),
+                ps2_trail,
                 hull_reach: [0.0; MAX_SHIPS],
                 trail_sparks,
                 trail_inside: [0; MAX_SHIPS],

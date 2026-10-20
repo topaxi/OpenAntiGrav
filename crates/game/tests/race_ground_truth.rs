@@ -838,7 +838,9 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
         // The head of the ribbon sits on the rim of a cross centred on the
         // craft's own nozzle, so the nearest nozzle to it must be that craft's.
         // A shared `Exhaust` puts every head on whichever craft pushed last.
-        let head = Vec3::from_array(exhaust.trail_vertices(Vec3::X, Vec3::Y)[0].position);
+        let head = Vec3::from_array(
+            exhaust.trail_vertices(Vec3::X, Vec3::Y, oag_fx::exhaust::TrailLaw::Ramped)[0].position,
+        );
         let nearest = (0..8)
             .min_by(|a, b| {
                 head.distance(nozzles[*a])

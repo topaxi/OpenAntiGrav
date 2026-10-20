@@ -634,3 +634,5 @@ test above says only where *ours* draws it. PSP at rest draws no such spike (the
 original PSP frames show the star alone), so the difference is in what the PS2 draws, not
 a different gate on the same asset. Leads: the `engine_flare` locator as the anchor, and
 the draw's colour source (the two passes' `RGBAQ`).
+
+**Resolved 2026-10-20 (ps2-plume).** The "Not identified" spike above is the `Trail` ribbon itself, not a `shipboost.vex` anchor: the PS2 draws it unramped and without layer 0, so it shows at rest. See [engine-trail.md](../ghidra/functions/ps2-pulse-eu/engine-trail.md); wired as `Looks::ps2_trail`.

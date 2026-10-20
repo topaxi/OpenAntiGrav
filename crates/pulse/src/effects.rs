@@ -120,6 +120,12 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[Platform::Ps2]),
         origin: Origin::Measured,
     },
+    // The PS2 trail draw `0x001f0a08`, read statically and on a GS dump of the original on
+    // PCSX2: `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`.
+    ps2_trail: Rule {
+        on: Platforms::Only(&[Platform::Ps2]),
+        origin: Origin::Measured,
+    },
     // `PsysNode_Init`, `Weather_Update` and the destroy camera, read on the PSP
     // (`placed-particle-systems.md`, `weather.md`); the PS2 circuits author the
     // same nodes, so the PSP's law is carried over.

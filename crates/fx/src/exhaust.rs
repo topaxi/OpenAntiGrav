@@ -114,6 +114,34 @@ pub const LAYER_COLOUR: [[f32; 3]; LAYERS] = [
     [210.0 / 255.0, 210.0 / 255.0, 210.0 / 255.0],
 ];
 
+/// How the ribbon's colours reach the screen: the PSP's law, or the PS2's.
+///
+/// The ribbon is the same preset on both (`Trail_InitPreset`, preset 2, and the PS2
+/// build's `0x001f0090`), drawn by the same ring walk. What differs is the last step.
+/// The PSP's GE multiplies the baked vertex colours by the per-frame grey ramp
+/// (`sceGuAmbient`), which is zero at rest. The PS2's draw (`0x001f0a08`) never reads
+/// the ramp: the baked colours go to the GS as they are, so the ribbon shows at rest,
+/// and its submit loop skips layer 0, the PSP's stencil-stamped one. See
+/// `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrailLaw {
+    /// The PSP: every layer, scaled by [`Exhaust::layer_alphas`].
+    Ramped,
+    /// The PS2: layers from [`PS2_FIRST_LAYER`], the baked colours unramped at the
+    /// GS's own scale ([`PS2_GS_COLOUR_SCALE`]), stamping no glow mask.
+    Baked,
+}
+
+/// The first layer the PS2's draw submits: its loop's `index != 0` test leaves out
+/// layer 0, the widest one (`LAYER_WIDTH[0]`, the blue `LAYER_COLOUR[0]`).
+pub const PS2_FIRST_LAYER: usize = 1;
+
+/// A vertex colour byte on the GS is `0x80 = 1.0`, not `0xff`, and the ribbon's
+/// texture function is modulate (`TEX0.TFX = 0`), so the baked `210` the PS2 sends is
+/// `210 / 128 = 1.64` times the texel. Our colours are `byte / 255`; this carries them
+/// to `byte / 128`. Derived from the GS register layout, not tuned.
+pub const PS2_GS_COLOUR_SCALE: f32 = 255.0 / 128.0;
+
 /// Per-sample step of the baked colour fade, `ring+0x08` at preset 2.
 ///
 /// Also the per-sample `u` texcoord step the bake writes (`0.1` per sample,
@@ -574,9 +602,9 @@ impl Exhaust {
     /// Each sample is displaced along the direction it was recorded with by
     /// [`trail_stretch`] - about 3.5 world units at the tail.
     #[must_use]
-    pub fn trail_vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
+    pub fn trail_vertices(&self, right: Vec3, up: Vec3, law: TrailLaw) -> Vec<GpuVertex> {
         let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
-        self.extend_trail_vertices(&mut out, None, right, up);
+        self.extend_trail_vertices(&mut out, None, right, up, law);
         out
     }
 
@@ -597,11 +625,15 @@ impl Exhaust {
         head: Option<Vec3>,
         right: Vec3,
         up: Vec3,
+        law: TrailLaw,
     ) {
         if !self.trail_ready() {
             return;
         }
-        let ramps = self.layer_alphas();
+        let (ramps, first_layer, glow_stamp) = match law {
+            TrailLaw::Ramped => (self.layer_alphas(), 0, true),
+            TrailLaw::Baked => ([PS2_GS_COLOUR_SCALE; LAYERS], PS2_FIRST_LAYER, false),
+        };
         let mut samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
         if let (Some(head), Some(newest)) = (head, samples.first_mut()) {
             newest.0 = head;
@@ -612,7 +644,7 @@ impl Exhaust {
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
         // the tube; `v` runs 0..1 once around it in quarters.
         let rim = [up, right, -up, -right, up];
-        for layer in 0..LAYERS {
+        for layer in first_layer..LAYERS {
             let ramp = ramps[layer];
             let base_width = LAYER_WIDTH[layer] * width_scale;
             let colour = LAYER_COLOUR[layer];
@@ -635,7 +667,11 @@ impl Exhaust {
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
                 // One stencil byte per segment, not interpolated: [`trail_stencil`].
-                let glow = trail_stencil(self.intensity, k);
+                let glow = if glow_stamp {
+                    trail_stencil(self.intensity, k)
+                } else {
+                    0.0
+                };
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {

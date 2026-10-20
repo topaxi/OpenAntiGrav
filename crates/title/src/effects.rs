@@ -712,6 +712,13 @@ pub struct Looks {
     pub particle_laws: Rule,
     /// The PS2's bloom glow-mask stamp rule. Keyed on the race's own archive.
     pub ps2_glow_mask: Rule,
+    /// The PS2's engine trail: the ribbon's baked vertex colours go out as
+    /// they are, at the GS's `128 = 1.0` scale, with no per-frame grey ramp
+    /// over them and the widest layer not submitted. The PSP multiplies the
+    /// colours by the ramp through the GE's ambient register (zero at rest,
+    /// so nothing shows) and draws all three layers. Keyed on the race's own
+    /// archive.
+    pub ps2_trail: Rule,
     /// What a circuit's own `.vex` authors for the race to play: its placed
     /// `ParticleSystem` nodes, its `<Weather>` element and its `Camera` nodes
     /// (the destroy camera's stations). Keyed on the race's own archive.
@@ -757,6 +764,7 @@ impl Looks {
             measured_draws: Rule::UNREAD,
             particle_laws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
+            ps2_trail: Rule::UNREAD,
             circuit_effects: Rule::UNREAD,
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
