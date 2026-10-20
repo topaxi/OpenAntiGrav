@@ -2663,10 +2663,9 @@ reader) is now consulted by `lightmapped::declared_picture`, and a lightmapped m
 left with no picture is `Albedo::Unsampled` instead of entry 0. Where the family's
 program multiplies the light by a constant, that constant is bound as a one-texel
 picture: `diffuse` (`0x515e298e`, `diffuse_spec_constant`) and
-`constantdiffuse_specular_normal`'s `0x7611a2d8`. Other families left white times light
-(their parameter was not traced): `m_diffuse_normal_constantspecular` (uses `0x7611a2d8`
-on a `.w` term), `ds_booth_glass`, `metallic`, `dc_constantglow`, `cf_constantcolourglow`,
-`dc_metallic`, `mesh_colour_constant`, `emissive`, `dc_glowlightband`.
+`constantdiffuse_specular_normal`'s `0x7611a2d8`. Other families were left white times light
+(their parameter was not traced); **all but `emissive` were traced on 2026-10-20 and bound**, see
+[Scenery that is a constant, and the booth glass](#scenery-that-is-a-constant-and-the-booth-glass-2026-10-20-hd-scenery-materials).
 `martin_inflatable2` and `glass_2uv_rgb_reflect_normal_glow` moved to their real
 pictures.
 
@@ -3111,6 +3110,88 @@ exist in every HD-lineage `.envsettings`; Omega not checkable (no PS4 emulator).
 Vineta K is a psp2-layout `track.final.rcsmodel` (the 2048 lineage), whose mesh records carry a `u16` of node flags
 (`0x0101`/`0x0201`) and no HD render-block halfword, so the bit has no counterpart this reader can see; whether Omega
 draws a separate behind-glass pass is not checkable (no PS4 capture path).
+
+## Scenery that is a constant, and the booth glass (2026-10-20, `hd-scenery-materials`)
+
+**Report:** the near-white pit-wall arches and tunnel pipes on Sebenco Climb (and the same class on four other
+circuits) where the original's are dark. **Method:** `OAG_TINT_MATERIALS` (a flat colour per slot ordinal, exact in
+the unlit path: the hue walk is `isolate::tint`) names the slot under a white pixel, `OAG_SKIP_SLOT` (new, beside
+`OAG_ONLY_SLOT`) drops it to confirm, then the material's resolved variant is read with `scripts/ps3-microcode.py
+fp-file`. Every row is a program read off the disc, no frame needed for the law; the magnitude was checked against
+`theirs.png`.
+
+| Family (circuit) | Block read | What the program does | Bound as |
+| --- | --- | --- | --- |
+| `ds_booth_glass` (Sebenco arch glass, slot 346) | lit lightmap variant `@0x5ca0` | `Texture1` is a tangent normal (`MAD 2, -1` on xyz, never colour); light sum times `0x7611a2d8`, plus a reflection of `paraboloidReflectionTex` (unit 2) tinted by `0x7480de6d` and gated by `R0.w`, a `MOV H0.w, {0}` literal in this variant | the constant (`0, 0, 0` on Sebenco): black. **The reflection is not drawn** (no probe), so the original's dark green texture on the band is a named absence |
+| `m_diffuse_normal_constantspecular` (Sebenco pipes, slots 351-354) | blocks `#5` (ambient) and `#7` (lightmap), both | `MUL H.xyz, R.w, C` with `R` the unit-0 texel and `C` = `0x7611a2d8`: **the diffuse is `Texture1`'s alpha times the constant**, its RGB a normal | a picture the size of the map, `alpha * C` per texel (`skin::alpha_diffuse`) |
+| `metallic`, `dc_metallic` (Amphiseum, Moa Therma) | `#12` / `#3` | `MAD H0.xyz, light, 0x512f8e65, specular`, no diffuse texture at all | `0x512f8e65` |
+| `mesh_colour_constant` (Metropia) | `#5` | `MAD H0.xyz, light, 0x02ab9f07, reflection`; unit 0 is a normal map | `0x02ab9f07` |
+| `dc_glowlightband` (Moa Therma) | `#3` | `(0x81db67ea + sun * sat(N.L)) * 0x7611a2d8`, fogged | `0x7611a2d8` |
+| `dc_constantglow`, `cf_constantcolourglow` (Moa Therma, Metropia, Ubermall) | `#3` | fog over `0x4d60d566` / `0x7611a2d8` and **no light** | the constant |
+
+**Magnitude: a program-computed diffuse has to be encoded.** `ModelTexture` bindings are sRGB-decoded here and the
+RSX multiplies raw 8-bit values, so a constant bound as its own bytes reads `x^2.2` too dark. Sebenco's pipe pixels
+(ours against the original's `theirs.png`): before the fix 211 / 205 / 216 (white), with the alpha product bound raw
+24 / 23 / 2 against the original's 50 / 61 / 21, with it encoded (`skin::raw_to_texel`, `c^(1/2.2)`) 46 / 58 / 15.
+The same rule applied to `constantdiffuse_specular_normal`'s start-line constant and `diffuse_spec_constant`'s
+`diffuse` moved all 13 HD pairs down (mean grey difference 25.76 to 24.94; Talon's 26.1 to 25.0, Talon's Assegai
+23.2 to 22.0, Sebenco 25.0 to 24.5). That also answers the 2026-10-19 note above that the pit-lane lines were
+"thinner and darker" than the original's: they were `x^2.2` too dark, the original's thin dark grey is the encoded value.
+
+**Per-pair mean absolute grey difference against the original** (`theirs.png`; ours rendered with this build's
+`oag-game` from each pair's recorded argv, so the numbers are an A/B of two binaries and not the remade pairs):
+before; then cumulatively the booth glass; the pipes' alpha product; that product encoded; the constant diffuses encoded.
+
+| Pair | before | + glass | + pipes | + pipes encoded | + constants encoded |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Sebenco Climb | 28.53 | 26.28 | 25.24 | 25.00 | 24.45 |
+| Ubermall | 24.25 | 22.98 | 19.04 | 18.40 | 17.81 |
+| Talon's | 27.30 | 26.52 | 26.41 | 26.10 | 25.00 |
+| Tech de Ra | 40.58 | 38.90 | 37.31 | 36.56 | 35.55 |
+| Chenghou Project | 18.56 | 18.56 | 16.79 | 16.61 | 16.49 |
+| Sol 2 | 31.57 | 30.70 | 29.83 | 29.10 | 28.74 |
+| Moa Therma | 26.85 | 26.17 | 26.04 | 25.98 | 25.83 |
+| Modesto Heights | 26.65 | 26.63 | 25.94 | 25.82 | 25.56 |
+| Amphiseum | 27.24 | 27.03 | 26.97 | 26.84 | 26.25 |
+| Vineta K | 30.17 | 29.97 | 28.90 | 28.84 | 28.76 |
+| Talon's Assegai | 25.10 | 23.97 | 23.77 | 23.19 | 21.98 |
+| Anulpha Pass | 26.72 | 26.72 | 26.33 | 26.30 | 26.01 |
+| Metropia | 22.52 | 22.52 | 22.25 | 22.17 | 21.81 |
+
+The constant-colour families after that table (`metallic` through the glows, a later commit) are not in it: Amphiseum 26.25 to
+25.86 and Moa Therma 25.83 to 25.80 improve, **Metropia 21.81 to 22.2 rises**. The reason is the glow strips, not the
+law: `cf_constantcolourglow` now draws its authored colour (the "Be" neon sign gains its magenta, the stand sign
+its lime) where it drew grey, but the original draws it **blown white with a large halo** (255 against ours 153-174)
+and our bloom does not reach it, so a grey that happened to sit nearer white scored better. That is the bloom lane's
+number, not a material one, and is named in the thread.
+
+**Not drawn, named:**
+
+- **`glasstest` (Tech de Ra's stand glass, slots 428/437/447)** is traced and not wired. Block `#5`: the lit sum
+  (`f[TC0] + f[TC1] + sunmask * N.L * sun`) times unit 0 (`orangeglass.gtf`, rgb `(137, 51, 27)`, alpha 170) **times
+  `bwgradient.gtf` at the second UV set** (unit 1, 8 to 140 grey, `@0x41`: `H2 = H5 * H2 + spec`), plus a reflection of
+  the probe tinted by `0xd5814b74` (orange, `(1.5, 0.70, 0.16)`), and alpha `unit0.a * glass_fratio(-N.V) * 1.25`
+  (unit 3, a 512x16 ramp 0.77 to 0.97, so about 0.83). Ours binds `orangeglass` as albedo and `bwgradient` as the
+  second texture with no role for it, so the mean over the glass region (1500-1800 x 150-300) reads `(97, 78, 80)` against the original's
+  `(57, 55, 37)` (peach against olive): the missing `bwgradient` multiply is the first suspect, the probe the second. `0x7611a2d8` is a
+  float1 specular power here (63.4 and 30), not a diffuse: keep `glasstest` out of `DIFFUSE_PARAMETER`.
+- **`cf_vex_billboard` (Vineta K's `harimau` billboard, slot 330)**: the program is `tex0 * (glow.a * k + glow.rgb *
+  light)` with `glow` the `tv_glow.gtf` second texture (alpha 255 everywhere) and `k` = `0xb17204e5`/`0x21db4cba`;
+  `tex0` is `(247, 247, 25)`, so the original saturates to `(255, 255, 28)`. Ours adds `glow` to the albedo
+  (`ADD_SECOND`, `albedo + a * glow`) and reads `(164, 183, 118)`. The accumulate predicate (`Program::accumulates`)
+  matches this program by shape, but the structure is a **multiply by the first texture**, not an add of the second.
+- **`emissive` (Amphiseum, 3 slots)**: `(f[TC1] + C * fog) / 2`, constant `0x6223f485`; the vertex-colour term makes it
+  not a plain constant, left unbound.
+
+**Cross-title (CLAUDE.md, 2048 and Omega).** `ds_booth_glass`: **checked, already wired** - 2048's `lighting_only`
+table already names `Constant1` (`0x7611a2d8`, the same hash HD's block names) as its colour and Omega's instance is
+2048's record for record. `m_diffuse_normal_constantspecular`: **checked, applies, not wired** - 2048's ambient-only
+program samples `Texture1` and the instance carries `0x7611a2d8`, the shape HD's `MUL H.xyz, R.w, C` reads; 2048's
+programs are declared-interface only (no decoder), so the alpha product is unverified there and the family keeps what
+it drew. The `metallic` family and its siblings: not looked up in 2048's materials this lane (open). **The encode:**
+`psp2.rs` binds its constants as unorm bytes "the way `skin::constant_diffuse` binds HD's"; the reasoning (an
+sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but no 2048 frame was compared, so it is
+**checked, applies, not wired**.
 
 ## See also
 
