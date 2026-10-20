@@ -1076,7 +1076,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .race
                 .countdown_voice
                 .is_some_and(|voice| voice.beat.is_some()),
-            launch_hover: title.race.launch_hover,
+            // A title whose grid hover skips Zone (HD's `Craft_Update`, modes 6, 13 and 14) races
+            // Zone at the race target from the grid.
+            launch_hover: title
+                .race
+                .launch_hover
+                .filter(|hover| options.mode != oag_race::Mode::Zone || hover.in_zone.value),
             // Zone flies the title's Zone hover where it has one (Pulse's `Ship_HoverFourCorner`).
             hover_rig: match (options.mode, title.race.zone_hover_rig) {
                 (oag_race::Mode::Zone, Some(zone)) => Some(zone),

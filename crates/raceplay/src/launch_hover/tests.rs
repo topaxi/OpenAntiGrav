@@ -7,6 +7,7 @@ const DT: f32 = 1.0 / 60.0;
 const HOVER: LaunchHover = LaunchHover {
     grid_cap: Sourced::chosen(3.0),
     release_rate: Sourced::measured(1.0),
+    in_zone: Sourced::chosen(true),
 };
 
 #[test]

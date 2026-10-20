@@ -745,6 +745,10 @@ pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
         // The mean of the original's `3.0 + rand8 * 0.0003`; the mean is chosen.
         grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
         release_rate: oag_title::pre_race::Sourced::measured(1.0),
+        // `Craft_Update` branches past the grid clamp and the ramp on modes 6, 13 and 14
+        // (`0x000f2390`-`0x000f23a8`); live, a mode-6 grid holds `entry+0x344 = 4.125` (the race
+        // target) through flyby and countdown with the entry in state 0 (`hover-target.md`).
+        in_zone: oag_title::pre_race::Sourced::measured(false),
     };
 
 /// HD's hover probe set: [`oag_title::hover_rig::HoverRig`].
