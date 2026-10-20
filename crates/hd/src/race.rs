@@ -910,7 +910,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     inertia_rotates: oag_title::pre_race::Sourced::measured(true),
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
-    bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    // HD's own: `Craft_HoverFourPoint`'s epilogue reads `30` (`0x008a9198`, at `0x000ee6cc`) for
+    // racing and Zone alike (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`); the same
+    // number as Pulse's racing law, read off HD's executable rather than inherited.
+    bank_to_yaw: oag_title::pre_race::Sourced::measured(30.0),
     // HD's Zone (mask `0x206040`) runs the racing `Craft_HoverFourPoint` with its trailing ray
     // on, and the epilogue's `30` (`0x008a9198`, read at `0x000ee6cc`) is the same either way:
     // not Pulse's four-corner `50` (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`).
