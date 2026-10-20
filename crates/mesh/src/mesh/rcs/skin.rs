@@ -68,6 +68,12 @@ pub(super) fn skin(
             })
             .clone()
     };
+    let mut alpha_maps: std::collections::HashMap<String, Option<ModelTexture>> =
+        Default::default();
+    let mut alpha_pictures: std::collections::HashMap<
+        (String, [u32; 4]),
+        Option<Arc<ModelTexture>>,
+    > = Default::default();
     let mut skins = Vec::with_capacity(model.materials.len());
     let mut seconds = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
@@ -90,18 +96,42 @@ pub(super) fn skin(
                 // Deliberately unbound: the program samples no colour texture,
                 // so the surface is its constants and light alone.
                 report.picture_unsampled += 1;
-                match constant_diffuse(material) {
+                // One picture per (map, constant): a circuit names a family's
+                // map in a dozen slots and the product is a full-size copy.
+                let alpha = alpha_diffuse(material).and_then(|(path, colour)| {
+                    let key = (path.to_string(), colour.map(f32::to_bits));
+                    alpha_pictures
+                        .entry(key)
+                        .or_insert_with(|| {
+                            let map = alpha_maps
+                                .entry(path.to_string())
+                                .or_insert_with(|| {
+                                    textures(path)
+                                        .and_then(|blob| ModelTexture::from_gtf(path, &blob))
+                                })
+                                .as_ref()?;
+                            scale_alpha(map, colour).map(Arc::new)
+                        })
+                        .clone()
+                });
+                match alpha.or_else(|| constant_diffuse(material, false).map(Arc::new)) {
                     Some(colour) => {
                         report.constant_diffuse += 1;
-                        skins.push(Some(Arc::new(colour)));
+                        skins.push(Some(colour));
                     }
                     None => skins.push(None),
                 }
             }
-            None => {
-                report.untextured += 1;
-                skins.push(None);
-            }
+            None => match constant_diffuse(material, true) {
+                Some(colour) => {
+                    report.constant_diffuse += 1;
+                    skins.push(Some(Arc::new(colour)));
+                }
+                None => {
+                    report.untextured += 1;
+                    skins.push(None);
+                }
+            },
             Some(path) => {
                 let decoded = load(path, textures);
                 if decoded.is_none() {
@@ -139,32 +169,119 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// read off the microcode: `constantdiffuse_specular_normal`'s lightmapped
 /// block ends `MAD H0.xyz, H0, C, H1` with `C` patched from `0x7611a2d8`, and
 /// `H0` the vertex colour plus the light - the same final step
-/// `diffuse_spec_constant` takes with `diffuse`. Other families that carry
-/// `0x7611a2d8` use it in other places (`m_diffuse_normal_constantspecular`
-/// scales a `.w` term with it) and are left out until read.
-const DIFFUSE_PARAMETER: &[(&str, u32)] = &[("constantdiffuse_specular_normal", 0x7611_a2d8)];
+/// `diffuse_spec_constant` takes with `diffuse`, and `ds_booth_glass`'s lit
+/// block (#7, traced 2026-10-20) multiplies the same light sum by it - the
+/// constant is black on Sebenco Climb, so the glass is its reflection alone
+/// (`paraboloidReflectionTex`, not drawn). The pipe family reads it times a
+/// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic`, `dc_metallic` and
+/// `mesh_colour_constant` end `MAD H0.xyz, light, C, specular` with their own
+/// `C`, and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
+/// and nothing else. Other families that carry `0x7611a2d8` use it in other
+/// places (the pads) and are left out until read.
+const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
+    ("constantdiffuse_specular_normal", 0x7611_a2d8),
+    ("ds_booth_glass", 0x7611_a2d8),
+    ("metallic", 0x512f_8e65),
+    ("dc_metallic", 0x512f_8e65),
+    ("mesh_colour_constant", 0x02ab_9f07),
+    ("dc_glowlightband", 0x7611_a2d8),
+    // No light at all: fog over the constant (blocks `@0x00-0x0d`).
+    ("dc_constantglow", 0x4d60_d566),
+    ("cf_constantcolourglow", 0x7611_a2d8),
+];
 
 /// The constant diffuse colour of a material whose program samples no colour
 /// texture, as the one-texel picture the shader multiplies the light by.
 ///
-/// Unorm bytes, no sRGB step: the constant is a shader value and every
-/// texture here is sampled the same way. `None` where the family's diffuse
-/// parameter is not one of the two read above, which leaves the surface white
-/// times its light and says so in the report's `picture_unsampled`.
-fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
+/// **Encoded with [`raw_to_texel`].** The constant is a raw shader value the
+/// program multiplies the light by; this renderer's albedo binding decodes
+/// sRGB, so the bytes bound have to be the encoding of the value or it reads
+/// `x^2.2` too dark (the Sebenco tunnel pipes: 24 against the original's 50,
+/// 2 against 21, before the encode; 46 and 15 after). `None` where the
+/// family's diffuse parameter is not one of those read above, which leaves the
+/// surface white times its light and says so in the report's `picture_unsampled`.
+///
+/// `listed_only` drops the `diffuse` fallback: a slot that names a picture its
+/// program does not sample (the engine-bound lightmap entry of a family whose
+/// variant has no lightmap) takes its constant only if its family is traced.
+fn constant_diffuse(material: &rcsmodel::Material, listed_only: bool) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
-    let hash = DIFFUSE_PARAMETER
+    let listed = DIFFUSE_PARAMETER
         .iter()
-        .find_map(|&(name, hash)| (name == family).then_some(hash))
-        .unwrap_or(DIFFUSE);
+        .find_map(|&(name, hash)| (name == family).then_some(hash));
+    let hash = if listed_only {
+        listed?
+    } else {
+        listed.unwrap_or(DIFFUSE)
+    };
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
-    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let byte = raw_to_texel;
     Some(crate::mesh_render::offer_to_texture_sink(
         ModelTexture::rgba8(
             format!("constant diffuse {hash:08x}"),
             1,
             1,
             vec![byte(value[0]), byte(value[1]), byte(value[2]), 255],
+            None,
+        ),
+    ))
+}
+
+/// The texel byte whose sRGB decode is the raw shader value `c`: what a
+/// program-computed diffuse (a constant, or a constant times a map's alpha)
+/// has to be bound as, because the albedo binding decodes sRGB and the RSX
+/// multiplies raw 8-bit values.
+fn raw_to_texel(c: f32) -> u8 {
+    (c.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8
+}
+
+/// `Texture1`'s sampler name hash, the one unit 0 of the lightmapped blocks.
+const TEXTURE1: u32 = 0x3bdc_0403;
+
+/// Families whose lightmapped program unpacks `Texture1`'s RGB as a tangent
+/// normal and takes its **alpha** as the grey the diffuse constant scales:
+/// `m_diffuse_normal_constantspecular`'s block ends `MUL H2.xyz, R1.w, C` with
+/// `R1` the unit-0 texel and `C` patched from `0x7611a2d8`, then multiplies the
+/// light sum by `H2`. The `_nc` pipe textures this is authored for carry the
+/// colour in alpha; bound as RGB they were a normal map (or, refused as one,
+/// white).
+const ALPHA_DIFFUSE: &[(&str, u32)] = &[("m_diffuse_normal_constantspecular", 0x7611_a2d8)];
+
+/// The path of the alpha map and the constant that scales it, for a material
+/// of one of the [`ALPHA_DIFFUSE`] families that names both.
+fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4])> {
+    let family = super::emissive::family(material);
+    let hash = ALPHA_DIFFUSE
+        .iter()
+        .find_map(|&(name, hash)| (name == family).then_some(hash))?;
+    let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
+    let path = material
+        .samplers
+        .iter()
+        .find(|(h, _)| *h == TEXTURE1)?
+        .1
+        .as_deref()?;
+    Some((path, value))
+}
+
+/// `map`'s alpha times `colour`, as the grey-to-colour picture the program
+/// computes per texel (unorm bytes, opaque).
+fn scale_alpha(map: &ModelTexture, colour: [f32; 4]) -> Option<ModelTexture> {
+    let texels = map.to_rgba()?;
+    let mut out = Vec::with_capacity(texels.len());
+    for texel in texels.as_chunks::<4>().0 {
+        let alpha = f32::from(texel[3]) / 255.0;
+        for c in &colour[..3] {
+            out.push(raw_to_texel(alpha * c));
+        }
+        out.push(255);
+    }
+    Some(crate::mesh_render::offer_to_texture_sink(
+        ModelTexture::rgba8(
+            format!("alpha diffuse {}", map.label),
+            map.width,
+            map.height,
+            out,
             None,
         ),
     ))

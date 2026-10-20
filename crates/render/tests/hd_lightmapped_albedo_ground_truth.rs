@@ -240,11 +240,197 @@ fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
         let rgba = texture.to_rgba().expect("a one-texel picture");
         assert_eq!(
             [rgba[0], rgba[1], rgba[2]],
-            [9, 14, 20],
-            "slot {slot}: 0.037, 0.054, 0.077 as unorm bytes"
+            [57, 68, 80],
+            "slot {slot}: 0.037, 0.054, 0.077 as the texel bytes the sRGB decode turns back into them"
         );
         checked += 1;
     }
     assert!(checked > 0, "Talon's Junction carries the start line slots");
     assert!(report.constant_diffuse > 0, "{}", report.describe());
+}
+
+/// Sebenco Climb's booth glass: `ds_booth_glass` samples its `Texture1` as a
+/// tangent-space normal map (`MAD 2, -1` on all three channels, block #7 of
+/// its `.rcsmaterial`) and never as colour, so the surface is its authored
+/// constant (`0x7611a2d8`) times the light. Binding the map as the picture
+/// drew the arch's glass band pure white, where the original's is dark.
+/// Dropping the family from `skin::DIFFUSE_PARAMETER` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/10_sebenco_climb/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Sebenco Climb builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/ds_booth_glass.rcsmaterial") {
+            continue;
+        }
+        let texture = model.textures[slot]
+            .as_ref()
+            .expect("the authored constant is bound");
+        assert_eq!(
+            (texture.width, texture.height),
+            (1, 1),
+            "slot {slot} binds {} instead of its constant",
+            texture.label
+        );
+        let rgba = texture.to_rgba().expect("a one-texel picture");
+        let want = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x7611_a2d8)
+            .expect("the glass authors 0x7611a2d8")
+            .value;
+        let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+        assert_eq!(
+            [rgba[0], rgba[1], rgba[2]],
+            [byte(want[0]), byte(want[1]), byte(want[2])],
+            "slot {slot}"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "Sebenco Climb carries booth glass slots");
+}
+
+/// Sebenco Climb's pipes: `m_diffuse_normal_constantspecular` unpacks
+/// `ds_pipe_nc.gtf`'s RGB as a normal and multiplies its **alpha** by the
+/// authored `0x7611a2d8` (`MUL H2.xyz, R1.w, C`) to get the diffuse. Unsampled
+/// as a colour, the slot drew pure white (a tunnel's pipe and stairs, 211 where
+/// the original reads 50; 24 before the product was sRGB-encoded, 46 after).
+/// Every sampled texel is checked against that product.
+/// Dropping `skin::ALPHA_DIFFUSE` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/10_sebenco_climb/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Sebenco Climb builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/m_diffuse_normal_constantspecular.rcsmaterial")
+        {
+            continue;
+        }
+        let Some(map_path) = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x3bdc_0403)
+            .and_then(|(_, path)| path.as_deref())
+        else {
+            continue;
+        };
+        let constant = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x7611_a2d8)
+            .expect("the material authors 0x7611a2d8")
+            .value;
+        let texture = model.textures[slot].as_ref().expect("the diffuse is bound");
+        assert!(
+            texture.label.starts_with("alpha diffuse"),
+            "slot {slot} binds {}",
+            texture.label
+        );
+        let blob = archive_cache::read(&spec, &format!("/{map_path}")).expect("the map reads");
+        let map = mesh::ModelTexture::from_gtf(map_path, &blob).expect("the map decodes");
+        let (map, got) = (
+            map.to_rgba().expect("decoded texels"),
+            texture.to_rgba().expect("one-texel-per-texel picture"),
+        );
+        assert_eq!(map.len(), got.len(), "slot {slot}: same size as its map");
+        for (m, g) in map
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(got.as_chunks::<4>().0)
+            .step_by(97)
+        {
+            let alpha = f32::from(m[3]) / 255.0;
+            for lane in 0..3 {
+                // The raw product, bound as the byte its sRGB decode returns.
+                let raw = (alpha * constant[lane]).clamp(0.0, 1.0);
+                let want = (raw.powf(1.0 / 2.2) * 255.0).round() as u8;
+                assert_eq!(g[lane], want, "slot {slot} lane {lane}");
+            }
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "Sebenco Climb carries pipe slots");
+}
+
+/// Families whose program is a constant and nothing else sampled: `metallic`
+/// (Amphiseum) is `light * 0x512f8e65 + specular`, so the slot binds that
+/// constant as the texel its sRGB decode returns; `dc_constantglow` (Moa
+/// Therma) is fog over `0x4d60d566` and no light, bound the same way.
+/// Dropping either family from `skin::DIFFUSE_PARAMETER` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn constant_colour_families_bind_their_authored_constant() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut checked = 0;
+    for (circuit, family, parameter) in [
+        ("amphiseum", "metallic", 0x512f_8e65_u32),
+        ("03_track", "dc_constantglow", 0x4d60_d566),
+    ] {
+        let path = format!("/data/environments/{circuit}/track.vex");
+        let Some((spec, data)) = (0..4).find_map(|n| {
+            let spec = format!("{}:PS3_GAME/USRDIR/DATA0{n}.PSARC", image.display());
+            archive_cache::read(&spec, &path).map(|data| (spec, data))
+        }) else {
+            panic!("{path} is on no archive");
+        };
+        let geometry =
+            mesh::rcs::sibling_geometry(&spec, &path, &data).expect("a sibling .rcsmodel");
+        let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+        let (model, _) = mesh::rcs::build_scene(&path, &data, &geometry, &mut |name| {
+            archive_cache::read(&spec, name)
+        })
+        .expect("the circuit builds");
+        for (slot, material) in rcs.materials.iter().enumerate() {
+            if !material.name.ends_with(&format!("/{family}.rcsmaterial")) {
+                continue;
+            }
+            let Some(constant) = material.parameters.iter().find(|p| p.hash == parameter) else {
+                continue;
+            };
+            let texture = model.textures[slot]
+                .as_ref()
+                .unwrap_or_else(|| panic!("{family} slot {slot} binds its constant"));
+            assert_eq!((texture.width, texture.height), (1, 1), "{family} {slot}");
+            let rgba = texture.to_rgba().expect("a one-texel picture");
+            for lane in 0..3 {
+                let c = constant.value[lane].clamp(0.0, 1.0);
+                assert_eq!(
+                    rgba[lane],
+                    (c.powf(1.0 / 2.2) * 255.0).round() as u8,
+                    "{family} slot {slot} lane {lane}"
+                );
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked >= 2, "both families are present, saw {checked}");
 }
