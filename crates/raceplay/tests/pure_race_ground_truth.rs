@@ -474,34 +474,3 @@ fn a_pulse_source_has_no_fifth_rung_and_says_so() {
     assert_eq!(ladder.names(), oag_title::SpeedClasses::PULSE_LADDER);
     assert!(!ladder.names().contains(&oag_title::SpeedClasses::VECTOR));
 }
-
-/// Pure's `<Airbrake>` authors no `sideshift`, and its engine pushes a shift at `200.0`
-/// (measured live, `docs/physics/pure-physics.md`): a Pure race carries that on the player and
-/// on every opponent, where it once carried `0.0` and no Pure craft could sideshift at all.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_pure_race_sideshifts_at_pures_compiled_in_force() {
-    for (label, image) in images() {
-        let loaded = race::load(&race::Options {
-            source: image.display().to_string(),
-            class: "VENOM".to_string(),
-            mode: oag_race::Mode::SingleRace,
-            track: Some(oag_pure::race::DEFAULT_TRACK.to_string()),
-            ..race::Options::default()
-        })
-        .unwrap_or_else(|e| panic!("{label}: {e:#}"));
-        let setup = &loaded.setup;
-        assert_eq!(
-            setup.handling.airbrake.sideshift, 200.0,
-            "{label}: the player"
-        );
-        let opponents: Vec<_> = setup.opponent_handling.iter().flatten().collect();
-        assert!(
-            !opponents.is_empty(),
-            "{label}: a single race fields other teams"
-        );
-        for handling in opponents {
-            assert_eq!(handling.airbrake.sideshift, 200.0, "{label}: an opponent");
-        }
-    }
-}
