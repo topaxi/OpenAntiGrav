@@ -460,6 +460,30 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let ice = pale + facing * (first.rgb - pale);
         picture = vec4<f32>(water + pond * (ice - water), picture.a);
     }
+    // **HD's Zone-mode light cells** (`slots::MAG_WAVE` with the glow entry's rate 3,
+    // `oag_mesh::mesh::rcs::damage_lights`): the picture gains a scrolling flash,
+    //
+    //     flash = mask(uv2 + (rate * time, -shift)) * (blue(uv2 + (shift, 0)) - C) + C
+    //
+    // `mask` is the fourth binding, `blue` the third, `C` the entry's tint, the scroll
+    // rate its offset and `shift` its scale. The program adds the picture itself unlit
+    // as well (`out = P * (light + 1)`), which `mag_glow` carries below.
+    var cell_picture = vec3<f32>(0.0);
+    let cell_entry = in.slots >> 24u;
+    let is_cell = (in.slots & 131072u) != 0u && cell_entry != 0u
+        && emissives.scale[cell_entry].y > 2.5 && emissives.scale[cell_entry].y < 3.5;
+    if is_cell {
+        let shift = emissives.scale[cell_entry].x;
+        let flash_c = emissives.tint_offset[cell_entry].rgb;
+        let uv2 = in.lightmap_texcoord.zw;
+        let mask = textureSample(
+            wave_map, albedo_sampler,
+            vec2<f32>(uv2.x + emissives.tint_offset[cell_entry].w * scene.time.x, uv2.y - shift),
+        ).x;
+        let blue = textureSample(pad_mask, albedo_sampler, vec2<f32>(uv2.x + shift, uv2.y)).rgb;
+        picture = vec4<f32>(picture.rgb + mask * (blue - flash_c) + flash_c, picture.a);
+        cell_picture = picture.rgb;
+    }
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
@@ -598,8 +622,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // these surfaces as the ordinary Zone surface and this term, and the floor
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
-    var mag_glow = vec3<f32>(0.0);
-    if (in.slots & 131072u) != 0u && scene.zone.enabled == 0.0 {
+    var mag_glow = pow(cell_picture, vec3<f32>(2.2));
+    if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
         let e = textureSample(pad_mask, albedo_sampler, in.texcoord);
         let w = textureSample(
             wave_map,

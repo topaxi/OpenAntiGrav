@@ -67,7 +67,8 @@ pub(super) fn is_ice(declared: &rcsmaterial::Declared, program: &Program) -> boo
 }
 
 /// The second coordinate set of a submesh whose material is an ice material
-/// (`roles` carries [`slots::ICE`]), and `None` for every other surface, so
+/// (`roles` carries [`slots::ICE`]) or a Zone light cell (`slots::MAG_WAVE`, which reads the
+/// set too, see `damage_lights`), and `None` for every other surface, so
 /// nothing but the pool reads it.
 pub(super) fn second_uv(
     roles: u32,
@@ -76,7 +77,7 @@ pub(super) fn second_uv(
     submesh: &rcsmodel::SubMesh,
     stride: usize,
 ) -> Option<Vec<[f32; 2]>> {
-    (roles & slots::ICE != 0)
+    (roles & (slots::ICE | slots::MAG_WAVE) != 0)
         .then(|| mesh.second_texcoords(model_blob, submesh, stride).ok())
         .flatten()
 }

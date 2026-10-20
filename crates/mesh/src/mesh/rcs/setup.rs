@@ -121,7 +121,7 @@ pub(super) fn material_setup(
     // After the glow table, because it clears a slot's `ADD_SECOND` and
     // writes its own entry into the same table.
     let mut emissive = emissive;
-    let (mut mag_emissive, wave_maps) = super::mag_wave::mag_wave(
+    let (mut mag_emissive, mut wave_maps) = super::mag_wave::mag_wave(
         model,
         &material_variants,
         textures,
@@ -130,6 +130,17 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The Zone hull's light cells ride the magstrips' two bindings and a glow entry.
+    let (cell_blues, cell_masks) = super::damage_lights::damage_lights(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, cell_blues);
+    super::mag_wave::merge(&mut wave_maps, cell_masks);
     // The light cone's own combine claims its slots after the glow table is
     // final, for the same reason: it writes an entry into it.
     super::light_cone::light_cone(

@@ -231,6 +231,11 @@ pub struct Report {
     /// Magstrip materials that declare the wave and could not be bound: a
     /// texture did not decode or an authored value is missing. Drawn without.
     pub mag_wave_unread: usize,
+    /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
+    /// `super::damage_lights`.
+    pub damage_lights_bound: usize,
+    /// Light-cell materials whose textures or authored colour could not be read (drawn without).
+    pub damage_lights_unread: usize,
     /// Materials whose vertex program scrolls their one texture off `time`
     /// and an authored rate - see `super::vertex_scroll`.
     pub vertex_scrolls: usize,
@@ -402,6 +407,14 @@ impl Report {
         } + &match self.mag_wave_unread {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) whose wave could not be read (drawn without)"),
+        } + &match self.damage_lights_bound {
+            0 => String::new(),
+            n => format!(", {n} Zone light-cell material(s) with their scrolling flash bound"),
+        } + &match self.damage_lights_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} Zone light-cell material(s) whose flash could not be read (drawn without)"
+            ),
         } + &match self.vertex_scrolls {
             0 => String::new(),
             n => format!(", {n} material(s) scrolling their texture off an authored rate"),
