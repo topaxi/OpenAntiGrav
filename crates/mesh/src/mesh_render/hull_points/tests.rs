@@ -51,7 +51,7 @@ fn inside_the_inner_radius_is_full_strength() {
     // 0.388 * 255 = 98.9, so 98, at the full 256 scale.
     assert_eq!(
         unpack(lights.at([0.0, 3.0, 0.0], [255, 255])[0][3]),
-        [98 * 255 >> 8, 231 * 255 >> 8, 255 * 255 >> 8]
+        [(98 * 255) >> 8, (231 * 255) >> 8, (255 * 255) >> 8]
     );
 }
 

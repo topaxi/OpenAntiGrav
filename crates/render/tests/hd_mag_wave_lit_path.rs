@@ -220,6 +220,7 @@ fn uniforms() -> Vec<u8> {
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // view_projection
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // model
     bytes.extend_from_slice(&[0u8; 32]); // the four pad floats, then the environment-probe layer and its padding
+    bytes.extend_from_slice(&[0u8; 32]); // hull point lights
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // prev_mvp
     assert_eq!(bytes.len() as u64, UNIFORMS_SIZE);
     bytes

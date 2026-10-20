@@ -12,7 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         u32::from_str_radix(s.trim_start_matches("0x"), 16).unwrap()
     });
     for (i, n) in nodes.iter().enumerate() {
-        if u32::from(n.class_id) != want {
+        if n.class_id != want {
             continue;
         }
         let m = chain[i];

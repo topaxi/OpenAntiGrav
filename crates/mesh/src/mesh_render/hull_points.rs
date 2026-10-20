@@ -96,7 +96,9 @@ impl HullPointLights {
         let mut weakest = f32::MAX;
         for light in &self.lights {
             let s = strength(light, position) * 255.0;
-            if !(s > 0.0) || (chosen.len() == self.slots && weakest > s) {
+            if s.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater)
+                || (chosen.len() == self.slots && weakest > s)
+            {
                 continue;
             }
             if chosen.len() < self.slots {
@@ -127,8 +129,9 @@ impl HullPointLights {
             }
             let scale = u32::from(if light.cone.is_some() { spot } else { point });
             let byte = |c: f32| (((c * s) as u32).min(255) * scale) >> 8;
-            let packed =
-                byte(light.colour[0]) | byte(light.colour[1]) << 8 | byte(light.colour[2]) << 16;
+            let packed = byte(light.colour[0])
+                | (byte(light.colour[1]) << 8)
+                | (byte(light.colour[2]) << 16);
             out[slot] = [
                 to[0] / length,
                 to[1] / length,
