@@ -12,6 +12,8 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+mod perturb;
+
 mod hd_ai_craft_laws_ground_truth;
 mod hd_air_pose_walk;
 mod hd_engine_flare_ground_truth;

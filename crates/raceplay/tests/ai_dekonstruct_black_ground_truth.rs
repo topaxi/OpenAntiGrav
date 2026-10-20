@@ -53,7 +53,9 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading 05_Track at {class}: {error}"));
-    let mut race = race::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = race::Race::start(setup);
     race.sim.world.ships[0].active = false;
     let count = race.ship_count() as usize;
     let mut dead = vec![false; count];

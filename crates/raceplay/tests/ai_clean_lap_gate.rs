@@ -287,6 +287,9 @@ use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 use oag_raceplay::catalogue;
 
+use crate::in_parallel;
+use crate::perturb;
+
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
@@ -332,7 +335,11 @@ struct Solo {
 /// anything - caught by running the tests, not by reading the code. `race::load`
 /// now panics loudly on any failure other than a missing image, so a load
 /// error can never again read as a green, empty test again.
-fn solo_on(track: &str, class: &str) -> Option<Solo> {
+///
+/// Loaded once and raced once per scale in [`perturb::GATE`]
+/// (`tests/perturb/mod.rs`), in that order: the gate judges the median, not
+/// one chaotic run.
+fn solos_on(track: &str, class: &str) -> Option<Vec<Solo>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -343,7 +350,21 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));
-    let mut race = race::Race::start(loaded.setup);
+    Some(
+        perturb::GATE
+            .iter()
+            .map(|&eps| {
+                let mut setup = loaded.setup.clone();
+                perturb::apply(&mut setup, eps);
+                solo(setup)
+            })
+            .collect(),
+    )
+}
+
+/// One lone race from `setup`.
+fn solo(setup: race::Setup) -> Solo {
+    let mut race = race::Race::start(setup);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
     }
@@ -371,12 +392,36 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
         }
     }
 
-    Some(Solo {
+    Solo {
         best,
         contact_ticks: race.wall_contact_ticks_of(LONE),
         state: race.sim.world.ships[LONE].physics.craft_state,
         deaths: race.sim.world.ships[LONE].standing.deaths,
-    })
+    }
+}
+
+/// The three columns of one row over its runs, each the median of its own
+/// column: the status by rank, the clean lap with a missing one ranked
+/// slowest, the contact ticks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Median {
+    status: Status,
+    lap_ticks: Option<u64>,
+    contact_ticks: u32,
+}
+
+impl Median {
+    fn of(solos: &[Solo]) -> Self {
+        let statuses: Vec<Status> = solos.iter().map(Status::of).collect();
+        let laps: Vec<u64> = solos.iter().map(|s| s.best.unwrap_or(u64::MAX)).collect();
+        let contacts: Vec<u32> = solos.iter().map(|s| s.contact_ticks).collect();
+        let lap = perturb::median(&laps);
+        Self {
+            status: perturb::median(&statuses),
+            lap_ticks: (lap != u64::MAX).then_some(lap),
+            contact_ticks: perturb::median(&contacts),
+        }
+    }
 }
 
 /// Every forward circuit on the disc, as `(id, entry name)`. Reversed circuits
@@ -500,77 +545,97 @@ struct Row {
 ///   ticks (lap 1,772); `07_Track` RAPIER 0 to 36 (lap 2,467). `06_Track` RAPIER
 ///   regresses under 4 of the 9 perturbations with every law off.
 ///
+/// **Regenerated 2026-10-20 as medians (lane `ai-gate-robustness`).** Each row
+/// is now raced once per scale of `perturb::GATE` (every craft's airborne
+/// gravity times `1 + eps`, `eps` in `0, 1e-3, -1e-4, 1e-5, -1e-6`;
+/// `tests/perturb/mod.rs`) and every column is the median of its five runs,
+/// which the trailing comment lists in that order. Over all nine scales of
+/// `perturb::SCALES` the single-run gates regressed 0, 3, 3, 4, 5, 6, 7, 7 and 8
+/// of the 58 AI-gate tests (the force-term sweep in
+/// `docs/physics/airborne-ground-truth.md` read median 6, max 8 with every law
+/// on), nearly all of it here on `06_Track` and `07_Track` and in
+/// `speed_plan_ground_truth`. Against the single-run ceilings before it, 36 rows
+/// tightened (a lap faster or less contact; the board had not been regenerated
+/// after earlier improvements) and these loosened: `03_Track` FLASH lap 2,114 to
+/// 2,177 (the unperturbed run already read 2,177), `06_Track` PHANTOM lap 1,424
+/// to 1,454 and contact 0 to 13 (unperturbed 0, the others 13-105), `07_Track`
+/// PHANTOM 2,453 to 2,468 and 2 to 5, `07_Track` FLASH contact 2 to 4,
+/// `05_Track` PHANTOM contact 0 to 4, and laps by 1-28 ticks on `07_Track`
+/// VENOM, `04_Track` FLASH, RAPIER and PHANTOM, `03_Track` RAPIER and PHANTOM
+/// and `16_Track` PHANTOM. **Chosen, not measured**: the method is ours.
+///
 /// The frozen board: 12 circuits x 4 classes, generated the way this file's
 /// own doc comment describes. **May only improve** - see that doc comment for
 /// what "improve" means per field and how each is asserted.
 #[rustfmt::skip]
 const BASELINE: &[Row] = &[
-    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2349), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2388), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2123), contact_ticks: 0 },
-    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2391), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2091), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2313), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2764), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2548), contact_ticks: 0 },
-    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1945), contact_ticks: 3 },
-    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2264), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2642), contact_ticks: 97 },
-    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2956), contact_ticks: 0 },
-    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2095), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2114), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1938), contact_ticks: 306 },
-    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2160), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1833), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2064), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2443), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2239), contact_ticks: 0 },
-    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1712), contact_ticks: 0 },
-    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2043), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1924), contact_ticks: 0 },
-    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2836), contact_ticks: 2 },
-    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1824), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1940), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1728), contact_ticks: 290 },
-    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1904), contact_ticks: 0 },
-    // 2026-10-13, 0 -> 16 contact ticks: the lone Ace overshoots off the road at
-    // idx 318, is airborne-reset to idx 89 and scrapes on the way back. A
-    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
-    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1554), contact_ticks: 16 },
-    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1768), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2094), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1959), contact_ticks: 141 },
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1462), contact_ticks: 0 },
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2013), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1772), contact_ticks: 156 },
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2467), contact_ticks: 36 },
-    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1636), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1792), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1609), contact_ticks: 0 },
-    Row { circuit: "10_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1778), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1329), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1570), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1840), contact_ticks: 21 },
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2222), contact_ticks: 521 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1472), contact_ticks: 27 },
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1852), contact_ticks: 13 },
-    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1424), contact_ticks: 0 },
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2453), contact_ticks: 2 },
+    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2324), contact_ticks: 0 }, // CleanLap/2327/0 CleanLap/2323/0 CleanLap/2324/0 CleanLap/2327/0 CleanLap/2323/0
+    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2324), contact_ticks: 0 }, // CleanLap/2323/0 CleanLap/2323/0 CleanLap/2326/0 CleanLap/2324/0 CleanLap/2324/0
+    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2100), contact_ticks: 0 }, // CleanLap/2104/0 CleanLap/2099/0 CleanLap/2100/0 CleanLap/2100/0 CleanLap/2102/0
+    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2355), contact_ticks: 0 }, // CleanLap/2355/0 CleanLap/2353/0 CleanLap/2369/0 CleanLap/2356/0 CleanLap/2299/0
+    Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2005), contact_ticks: 0 }, // CleanLap/2005/0 CleanLap/2003/0 CleanLap/2005/0 CleanLap/2007/0 CleanLap/2004/0
+    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2234), contact_ticks: 0 }, // CleanLap/2232/0 CleanLap/2232/0 CleanLap/2236/0 CleanLap/2234/0 CleanLap/2234/0
+    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2683), contact_ticks: 0 }, // CleanLap/2686/0 CleanLap/2681/0 CleanLap/2683/0 CleanLap/2683/0 CleanLap/2682/0
+    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2520), contact_ticks: 0 }, // CleanLap/2520/0 CleanLap/2530/0 CleanLap/2520/0 CleanLap/2520/0 CleanLap/2523/0
+    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1904), contact_ticks: 0 }, // CleanLap/1902/0 CleanLap/1906/0 CleanLap/1904/0 CleanLap/1904/0 CleanLap/1902/0
+    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2208), contact_ticks: 0 }, // CleanLap/2208/0 CleanLap/2215/0 CleanLap/2206/0 CleanLap/2206/0 CleanLap/2208/0
+    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2093), contact_ticks: 0 }, // CleanLap/2168/57 CleanLap/2085/0 CleanLap/2093/0 CleanLap/2088/0 CleanLap/2163/12
+    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2964), contact_ticks: 0 }, // CleanLap/2953/0 CleanLap/2972/1 CleanLap/2964/0 CleanLap/2863/0 CleanLap/2990/0
+    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2082), contact_ticks: 0 }, // CleanLap/2082/0 CleanLap/2082/0 CleanLap/2084/0 CleanLap/2084/0 CleanLap/2079/0
+    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2177), contact_ticks: 0 }, // CleanLap/2177/0 CleanLap/2187/0 CleanLap/2177/0 CleanLap/2175/0 CleanLap/2181/0
+    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1909), contact_ticks: 27 }, // CleanLap/1911/27 CleanLap/1905/25 CleanLap/1924/303 CleanLap/1907/28 CleanLap/1909/26
+    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2139), contact_ticks: 0 }, // CleanLap/2135/0 CleanLap/2139/0 CleanLap/2139/0 CleanLap/2128/0 CleanLap/2142/0
+    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1760), contact_ticks: 0 }, // CleanLap/1758/0 CleanLap/1760/0 CleanLap/1760/0 CleanLap/1762/0 CleanLap/1762/0
+    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2069), contact_ticks: 0 }, // CleanLap/2072/0 CleanLap/2070/0 CleanLap/2069/0 CleanLap/2064/0 CleanLap/2069/0
+    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2382), contact_ticks: 0 }, // CleanLap/2382/0 CleanLap/2384/0 CleanLap/2378/0 CleanLap/2380/0 CleanLap/2384/0
+    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2202), contact_ticks: 0 }, // CleanLap/2200/0 CleanLap/2200/0 CleanLap/2202/0 CleanLap/2202/0 CleanLap/2202/0
+    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1664), contact_ticks: 0 }, // CleanLap/1664/0 CleanLap/1666/0 CleanLap/1663/0 CleanLap/1663/0 CleanLap/1664/0
+    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1997), contact_ticks: 0 }, // CleanLap/1990/0 CleanLap/2004/0 CleanLap/1995/0 CleanLap/1997/0 CleanLap/2002/0
+    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1922), contact_ticks: 0 }, // CleanLap/1934/0 CleanLap/1915/0 CleanLap/1922/0 CleanLap/1918/0 CleanLap/1932/0
+    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2823), contact_ticks: 4 }, // CleanLap/2816/4 CleanLap/2793/0 CleanLap/2823/4 CleanLap/2828/2 CleanLap/2847/4
+    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1784), contact_ticks: 0 }, // CleanLap/1784/0 CleanLap/1786/0 CleanLap/1793/46 CleanLap/1781/0 CleanLap/1784/0
+    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1952), contact_ticks: 0 }, // CleanLap/1952/0 CleanLap/1946/0 CleanLap/1946/0 CleanLap/1963/0 CleanLap/1961/0
+    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1689), contact_ticks: 0 }, // CleanLap/1689/0 CleanLap/1686/0 CleanLap/1690/0 CleanLap/1690/0 CleanLap/1681/0
+    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1870), contact_ticks: 0 }, // CleanLap/1870/0 CleanLap/1868/0 CleanLap/1880/0 CleanLap/1881/0 CleanLap/1868/8
+    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1503), contact_ticks: 0 }, // CleanLap/1502/0 CleanLap/1503/10 CleanLap/1504/0 CleanLap/1502/0 CleanLap/1505/14
+    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1787), contact_ticks: 0 }, // CleanLap/1791/0 CleanLap/1787/0 CleanLap/1784/0 CleanLap/1780/0 CleanLap/1789/0
+    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2056), contact_ticks: 0 }, // CleanLap/2056/0 CleanLap/2054/0 CleanLap/2055/0 CleanLap/2061/0 CleanLap/2060/0
+    Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1931), contact_ticks: 48 }, // CleanLap/1931/0 CleanLap/1965/134 CleanLap/1931/48 CleanLap/1965/71 CleanLap/1930/26
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1462), contact_ticks: 0 }, // CleanLap/1462/1 CleanLap/1547/0 CleanLap/1454/0 CleanLap/1450/2 CleanLap/1551/0
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1871), contact_ticks: 0 }, // CleanLap/1869/0 CleanLap/1871/0 CleanLap/1872/0 CleanLap/1875/1 CleanLap/1811/3
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1750), contact_ticks: 62 }, // CleanLap/1745/35 CleanLap/2680/143 CleanLap/2698/113 CleanLap/1750/41 CleanLap/1749/62
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2466), contact_ticks: 2 }, // CleanLap/2467/36 CleanLap/2465/0 CleanLap/2468/17 CleanLap/2466/1 CleanLap/2445/2
+    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1664), contact_ticks: 0 }, // CleanLap/1662/0 CleanLap/1664/0 CleanLap/1668/0 CleanLap/1666/0 CleanLap/1652/0
+    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1793), contact_ticks: 0 }, // CleanLap/1785/0 CleanLap/1793/0 CleanLap/1808/0 CleanLap/1796/0 CleanLap/1788/0
+    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1598), contact_ticks: 0 }, // CleanLap/1605/0 CleanLap/1592/0 CleanLap/1603/0 CleanLap/1598/0 CleanLap/1598/0
+    Row { circuit: "10_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1777), contact_ticks: 0 }, // CleanLap/1783/1 CleanLap/1770/0 CleanLap/1772/0 CleanLap/1777/0 CleanLap/1777/0
+    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1325), contact_ticks: 4 }, // CleanLap/1324/0 CleanLap/1326/2 CleanLap/1325/11 CleanLap/1328/5 CleanLap/1325/4
+    Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1581), contact_ticks: 0 }, // CleanLap/1581/0 CleanLap/1609/0 CleanLap/1570/0 CleanLap/1560/0 CleanLap/1615/0
+    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1824), contact_ticks: 0 }, // CleanLap/1824/0 CleanLap/1832/0 CleanLap/1820/0 CleanLap/1831/0 CleanLap/1824/0
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1978), contact_ticks: 267 }, // CleanLap/2219/531 CleanLap/2000/0 CleanLap/1972/268 CleanLap/1978/261 CleanLap/1976/267
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1453), contact_ticks: 7 }, // CleanLap/1316/1 CleanLap/1453/7 CleanLap/1496/28 CleanLap/1497/34 CleanLap/1320/2
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1839), contact_ticks: 0 }, // CleanLap/1839/0 CleanLap/1995/0 CleanLap/1834/0 CleanLap/1837/0 CleanLap/1840/0
+    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1454), contact_ticks: 13 }, // CleanLap/1448/0 CleanLap/1470/13 CleanLap/1454/42 CleanLap/1459/0 CleanLap/1446/105
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2468), contact_ticks: 5 }, // CleanLap/2479/4 CleanLap/2506/6 CleanLap/2465/5 CleanLap/2468/5 CleanLap/2462/23
 ];
 
-/// Runs one row and asserts it against its frozen [`BASELINE`] entry.
+/// Runs one row over [`perturb::GATE`] and asserts its [`Median`] against its
+/// frozen [`BASELINE`] entry.
 ///
-/// `entry` is the WAD entry name [`solo_on`] needs - see its own doc comment
+/// `entry` is the WAD entry name [`solos_on`] needs - see its own doc comment
 /// for why this takes one instead of resolving `baseline.circuit` itself.
 ///
 /// Three assertions, in the order described in the file doc comment: `status`
 /// exactly, `lap_ticks` as a ceiling when the baseline has one, `contact_ticks`
-/// always as a ceiling.
+/// always as a ceiling, each on the median of the runs. A failure lists every
+/// run, so a row at the edge of its distribution reads as one.
 fn check_row(baseline: &Row, entry: &str) {
-    let Some(solo) = solo_on(entry, baseline.class) else {
+    let Some(solos) = solos_on(entry, baseline.class) else {
         return;
     };
-    let status = Status::of(&solo);
+    let median = Median::of(&solos);
+    let runs = runs_text(&solos);
+    let status = median.status;
     let direction = if status > baseline.status {
         "IMPROVED - tighten BASELINE in crates/raceplay/tests/ai_clean_lap_gate.rs"
     } else {
@@ -578,22 +643,22 @@ fn check_row(baseline: &Row, entry: &str) {
     };
     assert_eq!(
         status, baseline.status,
-        "{} {}: status {status:?}, baseline says {:?} ({direction})",
+        "{} {}: median status {status:?}, baseline says {:?} ({direction}); runs {runs}",
         baseline.circuit, baseline.class, baseline.status
     );
 
     if let Some(ceiling) = baseline.lap_ticks {
-        let actual = solo.best.unwrap_or_else(|| {
+        let actual = median.lap_ticks.unwrap_or_else(|| {
             panic!(
-                "{} {}: status matched {status:?} but no clean lap was recorded, \
-                 though the baseline carries one",
+                "{} {}: status matched {status:?} but the median run has no clean lap, \
+                 though the baseline carries one; runs {runs}",
                 baseline.circuit, baseline.class
             )
         });
         assert!(
             actual <= ceiling + LAP_TOLERANCE_TICKS,
-            "{} {}: clean lap took {actual} ticks ({:.1}s), baseline {ceiling} ticks \
-             ({:.1}s) + {LAP_TOLERANCE_TICKS} tolerance",
+            "{} {}: median clean lap {actual} ticks ({:.1}s), baseline {ceiling} ticks \
+             ({:.1}s) + {LAP_TOLERANCE_TICKS} tolerance; runs {runs}",
             baseline.circuit,
             baseline.class,
             actual as f32 / 60.0,
@@ -602,11 +667,12 @@ fn check_row(baseline: &Row, entry: &str) {
     }
 
     assert!(
-        solo.contact_ticks <= baseline.contact_ticks + CONTACT_TOLERANCE_TICKS,
-        "{} {}: {} contact ticks, baseline {} + {CONTACT_TOLERANCE_TICKS} tolerance{}",
+        median.contact_ticks <= baseline.contact_ticks + CONTACT_TOLERANCE_TICKS,
+        "{} {}: median {} contact ticks, baseline {} + {CONTACT_TOLERANCE_TICKS} tolerance{}; \
+         runs {runs}",
         baseline.circuit,
         baseline.class,
-        solo.contact_ticks,
+        median.contact_ticks,
         baseline.contact_ticks,
         if baseline.contact_ticks == 0 {
             " - this was a zero-contact row"
@@ -616,13 +682,29 @@ fn check_row(baseline: &Row, entry: &str) {
     );
 }
 
+/// Every run of a row as `status/lap/contact`, in [`perturb::GATE`] order.
+fn runs_text(solos: &[Solo]) -> String {
+    solos
+        .iter()
+        .map(|solo| {
+            format!(
+                "{:?}/{}/{}",
+                Status::of(solo),
+                solo.best.map_or("-".to_string(), |t| t.to_string()),
+                solo.contact_ticks
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Looks a row up in [`BASELINE`] by name, resolves its WAD entry name off
 /// the disc's own catalogue, and runs [`check_row`] against it.
 ///
 /// Resolving through `circuits()` rather than reconstructing the entry name
 /// from the id is deliberate: it is the same lookup `check_named_row`'s own
 /// membership assertion already needs, and it means a track renamed or
-/// removed upstream fails loudly here instead of `solo_on` silently loading
+/// removed upstream fails loudly here instead of `solos_on` silently loading
 /// nothing for a path that no longer exists.
 fn check_named_row(circuit: &str, class: &str) {
     let circuits = circuits();
@@ -737,9 +819,11 @@ row_test!(track_13_phantom, "13_Track", "PHANTOM");
 row_test!(track_14_phantom, "14_Track", "PHANTOM");
 row_test!(track_16_phantom, "16_Track", "PHANTOM");
 
-/// Regenerates [`BASELINE`] from a real run. Never run in `just test-data` -
-/// `#[ignore]`d and gated on `OAG_SWEEP`, the same contract every scratch
-/// sweep in this crate uses. See the file doc comment for the command.
+/// Regenerates [`BASELINE`] from a real run: every row's [`Median`] over
+/// [`perturb::GATE`], with its runs as a trailing comment. Never run in
+/// `just test-data` - `#[ignore]`d and gated on `OAG_SWEEP`, the same contract
+/// every scratch sweep in this crate uses. See the file doc comment for the
+/// command. Rows run side by side (`in_parallel`), twelve at a time.
 #[test]
 #[ignore = "a generator: set OAG_SWEEP, paste the printed rows into BASELINE"]
 fn print_baseline_source() {
@@ -750,31 +834,31 @@ fn print_baseline_source() {
     if circuits.is_empty() {
         return;
     }
+    let cells: Vec<(&str, &String, &String)> = CLASSES
+        .iter()
+        .flat_map(|&class| circuits.iter().map(move |(id, entry)| (class, id, entry)))
+        .collect();
+    let rows = in_parallel::map(&cells, 12, |&(class, _, entry)| {
+        solos_on(entry, class).expect("the image is present")
+    });
     println!("#[rustfmt::skip]\nconst BASELINE: &[Row] = &[");
-    for class in CLASSES {
-        for (id, entry) in &circuits {
-            let start = std::time::Instant::now();
-            let Some(solo) = solo_on(entry, class) else {
-                continue;
-            };
-            let elapsed = start.elapsed();
-            let status = Status::of(&solo);
-            let status_src = match status {
-                Status::Eliminated => "Status::Eliminated",
-                Status::Died => "Status::Died",
-                Status::NoCleanLap => "Status::NoCleanLap",
-                Status::CleanLap => "Status::CleanLap",
-            };
-            let lap_src = solo
-                .best
-                .map_or_else(|| "None".to_string(), |t| format!("Some({t})"));
-            eprintln!("// {id} {class}: {:.1}s wall", elapsed.as_secs_f32());
-            println!(
-                "    Row {{ circuit: \"{id}\", class: \"{class}\", status: {status_src}, \
-                 lap_ticks: {lap_src}, contact_ticks: {} }},",
-                solo.contact_ticks
-            );
-        }
+    for ((class, id, _), solos) in cells.iter().zip(&rows) {
+        let median = Median::of(solos);
+        let status_src = match median.status {
+            Status::Eliminated => "Status::Eliminated",
+            Status::Died => "Status::Died",
+            Status::NoCleanLap => "Status::NoCleanLap",
+            Status::CleanLap => "Status::CleanLap",
+        };
+        let lap_src = median
+            .lap_ticks
+            .map_or_else(|| "None".to_string(), |t| format!("Some({t})"));
+        println!(
+            "    Row {{ circuit: \"{id}\", class: \"{class}\", status: {status_src}, \
+             lap_ticks: {lap_src}, contact_ticks: {} }}, // {}",
+            median.contact_ticks,
+            runs_text(solos)
+        );
     }
     println!("];");
 }

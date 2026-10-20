@@ -11,21 +11,33 @@
 //! improvement and a failure that says to tighten the list, a layout joining
 //! it is a regression. Split by class and direction so nextest runs eight
 //! slices side by side.
+//!
+//! **A layout's verdict is the majority of five builds** (2026-10-20, lane
+//! `ai-gate-robustness`), one per scale of `perturb::GATE`
+//! (`tests/perturb/mod.rs`: every craft's airborne gravity times `1 + eps`).
+//! A single build is a coin on the circuits whose verification turns on a
+//! landing: over the nine scales of `perturb::SCALES`, `06_Track` VENOM and
+//! RAPIER failed under 5 and 6 of the 8 non-zero scales while clean at `0`, and
+//! `14_Track` PHANTOM verified clean under 7 of 8 while not clean at `0`.
 
 use std::path::PathBuf;
 
 use oag_raceplay as race;
 use oag_raceplay::catalogue;
 
+use crate::perturb;
+
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
 const NOT_CLEAN: &[(&str, &str)] = &[
-    // `06_Track` VENOM, the corner after the gap at 1196-1200, left this list on
-    // 2026-10-20 with Pulse's measured air laws on (RAPIER on 2026-10-12).
-    // Rescued - in the air too long, or off the line - at 1247 and at
-    // 2402-2441, with every ceiling the search tried.
-    ("14_Track", "PHANTOM"),
+    // The gap landing at 1233-1241: walls at 1233-1239 in most builds, the
+    // unperturbed one clean (it left this list on 2026-10-20 with Pulse's
+    // measured air laws on, RAPIER on 2026-10-12, both on that one build).
+    ("06_Track", "VENOM"),
+    ("06_Track", "RAPIER"),
+    // `14_Track` PHANTOM left on 2026-10-20 as a majority: clean in four of the
+    // five builds, not clean in the unperturbed one.
     ("29_Track", "PHANTOM"),
 ];
 
@@ -63,13 +75,27 @@ fn slice(class: &str, reversed: bool) {
             ..race::Options::default()
         })
         .unwrap_or_else(|error| panic!("loading {entry} at {class}: {error}"));
-        let race = race::Race::start(loaded.setup);
-        let (plan, report) = race.build_player_speed_plan();
-        assert_eq!(plan.len(), race.racing_line().len());
-        let clean = report.verify_failures == 0 && report.verify_respawns == 0;
+        let builds: Vec<_> = perturb::GATE
+            .iter()
+            .map(|&eps| {
+                let mut setup = loaded.setup.clone();
+                perturb::apply(&mut setup, eps);
+                let race = race::Race::start(setup);
+                let (plan, report) = race.build_player_speed_plan();
+                assert_eq!(plan.len(), race.racing_line().len());
+                (plan, report)
+            })
+            .collect();
+        let verdicts: Vec<bool> = builds
+            .iter()
+            .map(|(_, report)| report.verify_failures == 0 && report.verify_respawns == 0)
+            .collect();
+        let clean = verdicts.iter().filter(|&&c| c).count() * 2 > verdicts.len();
+        let (plan, report) = &builds[0];
         let expected = !NOT_CLEAN.contains(&(id.as_str(), class));
         println!(
-            "{id} {class}: clean {clean}, steps {}, lap {:?}, unresolved {:?}, tight {} of {}",
+            "{id} {class}: clean {clean} {verdicts:?}, steps {}, lap {:?}, unresolved {:?}, \
+             tight {} of {}",
             report.steps,
             report.verify_lap_ticks,
             report.unresolved,
@@ -78,7 +104,8 @@ fn slice(class: &str, reversed: bool) {
         );
         if clean != expected {
             wrong.push(format!(
-                "{id} {class}: {} (verify failures {}, respawns {}, unresolved {:?})",
+                "{id} {class}: {} (builds clean {verdicts:?}; unperturbed: verify failures {}, \
+                 respawns {}, unresolved {:?})",
                 if clean {
                     "now clean - remove it from NOT_CLEAN"
                 } else {

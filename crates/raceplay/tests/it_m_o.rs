@@ -12,6 +12,8 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
+mod perturb;
+
 mod maglock_ground_truth;
 mod magstrip_anchor_ground_truth;
 mod main_menu_ground_truth;

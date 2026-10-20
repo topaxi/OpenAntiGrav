@@ -33,7 +33,9 @@ fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay:
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    Some(oag_raceplay::Race::start(loaded.setup))
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    Some(oag_raceplay::Race::start(setup))
 }
 
 /// The opponents on this project's driver (no `use_original_ai`), and the

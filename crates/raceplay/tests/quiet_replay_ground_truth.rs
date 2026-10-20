@@ -68,7 +68,9 @@ fn start() -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = race::Race::start(setup);
     assert_eq!(race.ship_count(), 8, "the field is not eight craft");
     race.sim.world.controllers[1] = Controller::Remote;
     Some(race)
