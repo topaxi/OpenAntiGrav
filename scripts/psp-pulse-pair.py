@@ -80,8 +80,9 @@ def resume(port):
     "the menu is open", so run it first."""
     from ppsspp_debugger import Debugger
     dbg = Debugger(port)
-    dbg.call("cpu.resume")
-    time.sleep(1.0)
+    if dbg.is_stepping():
+        dbg.call("cpu.resume")
+        time.sleep(1.0)
 
 
 def detect_layout(oag, image, track, theirs_row, flags, tol):
