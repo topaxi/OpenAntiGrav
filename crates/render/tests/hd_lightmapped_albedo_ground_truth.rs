@@ -301,3 +301,72 @@ fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
     }
     assert!(checked > 0, "Sebenco Climb carries booth glass slots");
 }
+
+/// Sebenco Climb's pipes: `m_diffuse_normal_constantspecular` unpacks
+/// `ds_pipe_nc.gtf`'s RGB as a normal and multiplies its **alpha** by the
+/// authored `0x7611a2d8` (`MUL H2.xyz, R1.w, C`) to get the diffuse. Unsampled
+/// as a colour, the slot drew pure white (a tunnel's pipe and stairs, 211 where
+/// the original reads 50). Every texel is checked against that product.
+/// Dropping `skin::ALPHA_DIFFUSE` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/10_sebenco_climb/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Sebenco Climb builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/m_diffuse_normal_constantspecular.rcsmaterial")
+        {
+            continue;
+        }
+        let Some(map_path) = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x3bdc_0403)
+            .and_then(|(_, path)| path.as_deref())
+        else {
+            continue;
+        };
+        let constant = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x7611_a2d8)
+            .expect("the material authors 0x7611a2d8")
+            .value;
+        let texture = model.textures[slot].as_ref().expect("the diffuse is bound");
+        assert!(
+            texture.label.starts_with("alpha diffuse"),
+            "slot {slot} binds {}",
+            texture.label
+        );
+        let blob = archive_cache::read(&spec, &format!("/{map_path}")).expect("the map reads");
+        let map = mesh::ModelTexture::from_gtf(map_path, &blob).expect("the map decodes");
+        let (map, got) = (
+            map.to_rgba().expect("decoded texels"),
+            texture.to_rgba().expect("one-texel-per-texel picture"),
+        );
+        assert_eq!(map.len(), got.len(), "slot {slot}: same size as its map");
+        let byte = |c: f32| c.clamp(0.0, 1.0);
+        for (m, g) in map.chunks_exact(4).zip(got.chunks_exact(4)).step_by(97) {
+            let alpha = f32::from(m[3]) / 255.0;
+            for lane in 0..3 {
+                let want = (alpha * byte(constant[lane]) * 255.0).round() as u8;
+                assert_eq!(g[lane], want, "slot {slot} lane {lane}");
+            }
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "Sebenco Climb carries pipe slots");
+}
