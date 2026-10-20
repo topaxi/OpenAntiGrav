@@ -64,3 +64,11 @@ not measured: Time Trial had no AI).
 Other titles: Pulse's craft update is the PSP/PS2 `Ship_UpdateCraft`; whether it carries the same
 grid-state branch is **not read** (Pulse measured no lowered flyby craft; its target block is
 unchecked). Omega and 2048: not checkable here (no PS4 emulator; 2048's craft is a separate build).
+
+## Zone skips both (2026-10-20, hd-zone-handling)
+
+The "not read" item above, read: `0x000f2390`-`0x000f23a8` compare the game mode against `6`,
+`0xd` and `0xe` (Zone, Zone Battle, Detonator) and branch to `0x000f1ce8`, so in those modes the
+target is the handling's base times `0.75` from the first frame. Live (RPCS3, mode 6, Vineta K):
+`entry+0x344 = 4.125` on every sample of the grid state. Confidence 90; evidence and the port in
+[hover-four-point.md](hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling).

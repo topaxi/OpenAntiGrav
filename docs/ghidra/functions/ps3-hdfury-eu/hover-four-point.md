@@ -200,8 +200,9 @@ Static read, for the cross-title check of Pulse's Zone hover
 not identified. `Craft_HoverFourPoint`'s second argument gates only the trailing 10-unit ray
 (`0x000ee510`, `(3 - d) * 0.5` for a hit between 3 and 10, above): HD keeps its four-point probes,
 its `0.15` spring with load factor and rebound, its projected alignment and its scaled downforce in
-Zone. The ray's gain is `0.5` where Pulse's is `0.25`; its axis was not re-read here. Not wired:
-this engine's HD Zone flies HD's racing rig without the ray.
+Zone. The ray's gain is `0.5` where Pulse's is `0.25`; its axis was not re-read here. Not wired
+by this lane; read whole, verified live and wired on 2026-10-20 (the `hd-zone-handling` section
+below).
 
 **Which class HD's classless Zone file fills.** `Team_LoadHandlingStats` reads
 `Data\Ships\Zone\handlingstats.xml` for the same mask ([opponent-handling.md](opponent-handling.md)),
@@ -213,4 +214,94 @@ moves the index. So a classless file fills **class 0 alone**; classes 1 to 3 kee
 stats block held before. Confidence **70** for that (decompile of the parser and one block reader).
 Which class index a Zone race then reads, and so whether a Zone craft flies these numbers in every
 class, is **not determined**: the next read is the class index `Craft_Update` uses for the stats
-block in mode 6, or an RPCS3 read of `engine->stats` in a Zone race.
+block in mode 6, or an RPCS3 read of `engine->stats` in a Zone race. (Read live on 2026-10-20: class 0,
+the Zone file's numbers; the `hd-zone-handling` section below.)
+
+## Zone, read live: the ray, the class, the grid and the brakes (2026-10-20, hd-zone-handling)
+
+Static reads plus one RPCS3 capture: a cold boot straight into Racebox Zone (`TTY.log`:
+`BackendRoot has g_GameState.GetMode()==6`), Vineta K, the player's craft entry (`ship+0x5fac`,
+`0x600` bytes), its class block (`*(entry+0x7c)`) and team block (`*(entry+0x78)`) read through
+`/proc/<pid>/mem` at 10 Hz, no pause: 21 flyby samples, 81 through the countdown, 401 over 50 s of
+flight. Cold boot first is deliberate: `Team_LoadHandlingStats` loads a team's file once
+(`team+0xb8`), so a racing mode run first in the session would leave the racing file in place.
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | ---: | --- |
+| `0x000c6550` | `Handling_ReadAntigrav` | 85 | the `<Antigrav>` block reader: one string dispatch over six TOC names (`-0x4dd8` `rebound` -> class `+0x04`, `-0x4dd4` `landing_rebound` -> `+0x08`, `-0x4dd0` `rebound_jump_time` -> `+0x0c`, `-0x4dcc` -> `+0x00`, `-0x4dc8` -> `+0x10`, `-0x4dc4` -> `+0x14`), each stored at `block + index * 0x80 + 0xa0 + offset` with `index = *(*(-0x4e64(r2)) + 0x10)`; live, the class block is the team block plus `0xa0` and `+0x00`/`+0x04`/`+0x10`/`+0x14` hold the file's `ride_height`/`rebound`/`grip_ground`/`grip_air` |
+
+**The trailing ray, read whole (confidence 85).** `r18` is `Craft_HoverFourPoint`'s second
+argument (`or r18,r4,r4` at `0x000edf44`); `r25`, `r27` and `r31` are all the craft. After the probe
+loop both paths reach the ray: with a contact through the epilogue (`0x000ee188`), with none through
+`0x000ee4e8`. Ghidra's listing is misaligned at `0x000ee52c` and `0x000ee5e0`-`0x000ee5e8`; the words
+were decoded from the raw bytes (`7c004c0e` `lvewx v0,0,r9`; `7c204c0e` `lvewx v1,0,r9`, `10200a8c`
+`vspltw`, `d0010100` `stfs f0,0x100(r1)`).
+
+    0x000ee510  r9 = TOC-0x4350 -> 10.0 (0x008a9188), splatted
+    0x000ee548  end = craft+0x240 (centre) - craft+0x200 (up) * 10
+    0x000ee560  Collision_MarchSegment(craft+0x35c, centre, end, hit at r1+0xa0, body+0x4cc, 1, 2)
+                (the four probe marches pass r8 = 0; what r8 = 1 changes is not read)
+    0x000ee594  d = dot(centre - hit.point, hit.normal)
+    0x000ee5b0  skip unless 3.0 < d < 10.0   (3.0 at 0x008a919c, 10.0 at 0x008a9188)
+    0x000ee5f4  move = hit.normal * (3.0 - d) * 0.5   (0.5 at 0x008a918c, TOC-0x434c)
+    0x000ee614  Body_Translate(body, move)   (the probe escapes call it at 0x000ee6ac)
+
+Pulse's `Ship_HoverFourCorner` snap term for term, gain `0.5` against `0.25`. **Live**: the mean probe
+height (`craft+0x364..0x370`) reads `2.077` through the flyby, median `2.041` (`2.007`-`2.077`)
+through the countdown and median `2.117` (tenth to ninetieth percentile `2.019`-`2.207`) in flight,
+on a `4.125` target; the racing rig rests at `2.85` (above). With the probes `1.125` below the centre
+that puts the centre at `3.17`-`3.24` above the floor: held just above `3.0` by a half-gap pull every
+frame against a spring that would rest it at `4.0`. The breakpoint at `0x000ee614` was not set (the
+height is the measurement); confidence 85 rests on the instructions and the height agreeing.
+**Ported**: `oag_hd::race::ZONE_HOVER_RIG`, `oag_physics::hover::Rig::snap` now the gain.
+
+**The brakes (confidence 82, static).** `Craft_Update` (`0x000f1958`): at `0x000f1e78` the debug
+byte is tested, then the mode at `0x000f1e84`, and `0x000f27c8`-`0x000f27e0` (`lis 0x20; ori 0x6040;
+sld; and`) branches past `Craft_UpdateBrake` (`bl 0x000f0700` at `0x000f28c0`) for a mode in the
+mask. Pulse's Zone skips its brakes the same way. Ported as `ZONE_HOVER_RIG.brakes_off`.
+
+**The grid (confidence 90).** `0x000f1ca0` branches to `0x000f2390`, which sends modes `6`, `0xd`
+and `0xe` (not 21) straight to the scale at `0x000f1ce8`, past both the grid clamp
+(`0x000f1cb4`-`0x000f1cc4`) and the raced ramp (`0x000f23bc`). Live, mode 6: `entry+0x344` reads
+`4.125` on every sample of the grid state (`entry+0x2f8 = 0`, flags `3`) and after it, and
+`entry+0x348` holds `4.0` unread. So a Zone craft waits on the grid at the ray's height, not the
+lowered hover ([hover-target.md](hover-target.md)). Ported as
+`oag_title::launch_hover::LaunchHover::in_zone` (HD `false`).
+
+**The class (confidence 90, live).** `craft+0x7c` is `craft+0x78 + 0xa0`: class 0. It holds the
+Zone file's numbers: `+0x24` engine gain `900`, `+0x28` amount `0.3`, `+0x2c` falloff `500`, `+0x30`
+accelcap `20`, `+0x10` grip_ground `16`, `+0x5c` sideshift `550`, `+0x58` slidegrip `0.01`,
+`+0x50` turn `10`, `+0x60..+0x6c` `<Physical>` `1, 5, 120, 100`. Class 1 (`+0x80`) is empty but for
+`+0x0c = 2.0`, `+0x58 = 0.01` and `+0x78 = 1.5`. The team block is the Zone file as well:
+`+0x78` airbrake graphics `0.5236` (30 deg), `+0x80` down speed `50`, `+0x84..+0x90` Misc
+`5, 13, 3.5, 100`, `+0x9c` weight_distribution `0.0` (unauthored). The file authors no
+`landing_rebound` or `rebound_jump_time`; class `+0x08` and `+0x0c` read `0.0` and `2.0`, the values
+class 1's untouched block holds. So **a Zone craft flies the Zone file in every class**, which
+closes the question the section above left open. **Ported**: `oag_hd::race::ZONE_HANDLING`
+(`oag_title::zone_handling`), read by `oag_tables::handling::parse_classless`.
+
+**Bank-to-yaw.** Zone runs this same function, so its epilogue's `30` (`0x008a9198`) is the Zone gain
+too, not Pulse's four-corner `50`. **Ported**: `CraftLaws::bank_to_yaw_zone`, HD measured `30`.
+
+**Wall friction under the mask: not measured.** `Collision_PairFriction` (`0x000be068`) returns
+`*(table + 0x38)` for a craft-wall pair (`(0 or 1, 3)`) when the net byte `*0x008a83fc` is clear and
+the mode is in the mask (`0x000be1a4`, `0x000be1fc`), `*(table + 0x2c)` otherwise, `table` the
+pointer at `0x008a83ec`. The capture above hit no wall it could isolate and set no breakpoint. Next:
+an interpreter boot to mode 6, a `Z0` on the return of `0x000be068` during a wall scrape, read `f1`.
+
+**Not read here.** `Craft_UpdateThrottle` (`0x000efb50`) tests the same mask at `0x000efeb8`-`0x000efed0`
+(the Zone engine; this engine's auto-speed law was not compared); the other 45 sites of the
+`0x206040` literal in this executable are not in the hover, handling or brake path.
+
+### The other titles (hd-zone-handling)
+
+- **Omega**: checked, applies, not wired. `Data/art/published/hdships/zone/handlingstats.xml` is HD's
+  file value for value (`ZoneMode`, no `<Class>`, accelcap `20`, `Antigrav` without
+  `landing_rebound`). Omega's executable keeps the mask (`mov edx,0x206040; bt` at `0x0150bb28` in
+  `FUN_0150b8f0`, and in `FUN_015314b0` and `FUN_0157f360`), three sites to HD's 51; its hover
+  selector was not located. Omega's race flies Pulse's two-point rig (`hover_rig: None`), so HD's ray
+  on it would be a hybrid nobody measured: not wired. Its Zone bank-to-yaw is inherited from HD (`30`).
+- **2048**: not checkable here. The v1.04 `eboot.elf` holds no `0x206040` literal (an ARM build would
+  split it into `movw`/`movt`; not searched). The base package's ships are PFS-encrypted; the HD pack
+  (`2048-PCSF00007-dlc1.vpk`) ships `data/art/published/hdships/Zone/handlingstats.xml`, HD's file.
+  Zone bank-to-yaw inherited from HD (`30`).

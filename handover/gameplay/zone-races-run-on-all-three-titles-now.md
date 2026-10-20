@@ -14,14 +14,24 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
 
 ## Open
 
-- **HD's Zone handling**: which class index a Zone race reads from HD's stats block. If it is 0 (or
-  forced to 0), an HD Zone craft flies the Zone file's numbers; this engine still flies the team's
-  own. Next: the class index `Craft_Update` uses in mode 6, or an RPCS3 read of `engine->stats`
-  plus the class slot in a Zone race. Pure's `Zone_01` (marked `type="Zone"`) is the same question.
-- **HD's Zone trailing ray** (`Craft_HoverFourPoint` with `r4 = 1`, gain `0.5`) is read, not wired.
-  The `Rig::snap` axis carries Pulse's `0.25`; HD needs its gain (and the ray's axis re-read).
-- **`ShipState::four_corner` gives every title's Zone bank-to-yaw `50`**; HD's Zone runs
-  `Craft_HoverFourPoint`, whose gain is `30`. Pre-existing, not changed by this lane.
+- ~~HD's Zone handling, trailing ray and bank-to-yaw~~: closed 2026-10-20 (`hd-zone-handling`), each
+  read live on RPCS3 and wired as data ([hover-four-point.md](../../docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling)):
+  class 0 is the Zone file's (`ZONE_HANDLING`), the ray at `0.5` along the hit normal plus brakes off
+  (`ZONE_HOVER_RIG`), no grid clamp in Zone (`LaunchHover::in_zone`), bank-to-yaw `30`
+  (`CraftLaws::bank_to_yaw_zone`). Pure's `Zone_01` (marked `type="Zone"`) is still the open
+  handling question.
+- **HD's Zone wall friction** (`Collision_PairFriction` `+0x38` against `+0x2c` under the mask) is
+  not measured: next, an interpreter boot to mode 6 and a `Z0` on `0x000be068`'s return during a
+  wall scrape (also in `hd-wall-response-leftovers.md`).
+- **HD's Zone engine**: `Craft_UpdateThrottle` (`0x000efb50`) tests the mask at `0x000efeb8`; not
+  compared with this engine's auto-speed law.
+- **Omega's Zone**: the file is HD's (checked, applies, not wired: Omega's racing hover is Pulse's
+  two-point here, so neither the ray nor the file is wired); its hover selector is unlocated, the
+  mask survives at `0x0150bb28` and two more sites. Omega and 2048 fly Zone bank-to-yaw `30`,
+  inherited from HD. 2048's mask is not found as a literal (ARM `movw`/`movt` not searched).
+- **HD sweep shield**: `hd_zone_hover_sweep` reports the shield unchanged at 100 on every circuit (it
+  read 95, the team file's, before the Zone file was wired); the autopilot takes no damage in 7200
+  ticks, so the sweep says nothing about Zone damage.
 - **Pure's four-corner hover** (`0x0892e5b8`) is Pulse's law with three small differences
   (zone-hover.md, "The other titles"); not wired until Pure's mode 6 is confirmed as Zone and its
   brake gate is read.
@@ -30,12 +40,13 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
   (`crates/raceplay/tests/zone_hover_sweep.rs`, `OAG_SWEEP=1`; the sweep walks every forward race
   circuit, so the four without `availableInZone` fail to load there, as they should).
 - **Zone grid height**: a Zone craft now spawns at the four-corner law's own rest point
-  (`oag_gameplay::spawn::rig_spawn_height`, `target - 1.25`, about 2.9), derived; the original's
-  Zone grid height was not measured.
+  (`oag_gameplay::spawn::rig_spawn_height`, `target - 1.25`, about 2.9), derived; Pulse's Zone grid
+  height was not measured. HD's is (centre `3.20` above the floor, `hd_zone_hover_ground_truth.rs`);
+  the spawn itself still uses the racing rest height and settles within a few ticks.
 - Pure ships no boost plume under any recovered name.
 - **HD's Zone hull: the "untextured, computed normals" claim was stale** (the `.rcsmodel` normal decode landed 2026-08-17, two days before the sentence was written). Ours loads `/data/ships/zone/ship.rcsmodel` as 29 of 29 nodes, 32,065 triangles, 9 of 9 materials resolved, 42,919 authored vertex normals, textured from `zone_tp_1024.gtf`. Matched against RPCS3 (Zone mode 6, Vineta K, same camera): geometry and paint agree. What still differs, all open: the side light panels (`dg_zonelights1`, four samplers `cf_damage_lights`, `damage_lights_n`, `dg_flasha`, `dg_flash3`, damage-driven params; Zone-only, no team hull has it) draw dark where the original shows lit blue cells; the hull reads glossier and more iridescent than the original's matte white (reflection/specular, the hull-wide lane, 4 hull materials read the probe, 9 take the default specular exponent); `zone_tp_1024_n.gtf` is a real tangent-space normal map that is loaded but not applied (second texture, role unread; near flat on this hull). Omega's `hdships/Zone` hull loads textured with 24,547 authored normals (6 of 6 materials), checked, same state. 2048's Zone hull is not checkable from the `.pkg` (PFS-encrypted).
 - Both PSP titles' Zone HUD draws labels with no values (the `IG_HUD_*` substitution gap).
 
 ## Next Steps
 
-- HD's Zone class index (above), then decide whether HD's Zone craft flies `Data\Ships\Zone`'s class-0 blocks.
+- HD's Zone wall friction live (above), then Omega's hover selector so its Zone can follow HD's.

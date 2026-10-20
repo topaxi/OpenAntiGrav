@@ -23,6 +23,9 @@ the point rate. Evidence and the sweep:
   confidence 60) and `shipShipCofR = 1.0` drive craft-craft contacts; ours keeps Pulse's.
 - **Mode-masked friction.** `Collision_PairFriction` (`0x000be068`) returns `0.025`
   under game-mode mask `0x206040` (Zone and kin, not run live); ours always uses `0.035`.
+  Re-read 2026-10-20 (`hd-zone-handling`): the craft-wall pair `(0 or 1, 3)` takes `*(table + 0x38)`
+  under the mask with the net byte `*0x008a83fc` clear, `*(table + 0x2c)` otherwise, `table` at
+  `0x008a83ec`; still not run live (a mode-6 capture reached no isolated wall hit).
 - **Shield drain with weapons off.** `0.035 * |p|` per record is measured; Pulse's
   weapons-off halving is not checked on HD.
 - **The wall laws' two extra wrecks were never explained.** HD `races_others` went from 2 wrecks
