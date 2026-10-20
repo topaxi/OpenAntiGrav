@@ -118,6 +118,7 @@ fn position_error() -> Option<Vec<f32>> {
         scheme: Default::default(),
         reseed: None,
         pads: speedup,
+        cage: Some(oag_trace::replay::cage_of(&blob).expect("16_Track runs the cage")),
     };
     let ours = replay(
         &recorded,

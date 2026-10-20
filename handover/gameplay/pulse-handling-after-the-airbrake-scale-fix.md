@@ -45,7 +45,11 @@ they belong:
 - **The crest lag is unchanged by either fix**: at `--reseed 60` ours still
   lifts off at 1606 against the original's 1595. No pad falls inside that
   window (crossings are at 161, 680, 989, 1284, 1708, 2398, 2409, 2793), so
-  the missing-pad bug was never its cause. The crest thread stands as written.
+  the missing-pad bug was never its cause. **Closed 2026-10-20**: the lag was
+  the replay never running the collision cage; with it the crest lifts off on
+  the original's tick (`docs/physics/README.md`, "The crest-phase drift traces
+  to a wall event"). `oag-trace drive` runs no cage either, beside the pads
+  below.
 - **`oag-trace drive` (and so `just scripted-sim`) still takes no pads.**
   `DriveOptions` has no track pad list; only `run` loads one.
 - **The swept pad test now exists twice**: `oag_raceplay::pads` and

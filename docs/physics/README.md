@@ -212,7 +212,8 @@ Two things follow, and the second is the useful one:
   not the cushion.** The seven-tick liftoff lag the hover thread measured at
   `--reseed 60` (measured: ours airborne 1603-1615 against the original's
   1595-1608, liftoff eight ticks late) survives only until the pose is made
-  exact. `oag-trace run --reseed 2` on the same capture reports `grounded max
+  exact. It was the replay missing the collision cage (closed 2026-10-20, in the
+  next section). `oag-trace run --reseed 2` on the same capture reports `grounded max
   error 0.000e0 ... exact` with the integrator and the sweep in the loop, which a
   pose walk does not exercise - though read that as half a column: at reseed 2 the
   even rows are the reseed echo, and only the odd rows carry a stepped verdict.
@@ -341,6 +342,36 @@ with friction `0`. The craft is outside the tube's side, over the top of a lower
 wall. Our step from tick 1583 plus the cage (`oag_physics::cage`, run by the race
 after every step) lands `0.18` units/s from tick 1584. See
 [collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20).
+
+**Closed 2026-10-20: the cage hit is the whole crest lag, and the yardstick
+above was wrong.** `oag_trace::replay` stepped the physics and never ran the
+cage after it, though the race has since the cage landed. So at `--reseed 60`
+the original's tick-1584 hit was missing from our run. Measured on `20418873f`
+with the clean lap's own script (`--script-lead 2`) and the locator, before the
+replay ran the cage: original airborne 1595-1608, ours 1602-1613, 16 `grounded`
+disagreements over the lap. The per-tick walk shows where it departs: through
+1583 ours is within `0.5` units/s and `1.6` mrad of the record. At 1584 ours
+misses the record by `38.6` units/s (`35.8` across the track and `14.4` along
+it). The recorded speed falls `108.8 -> 98.3` and ours stays at `109.3`. The replay now runs `oag_gameplay::cage::pass` after every step. With
+the cage, the run has **1** disagreement, tick 1595 (ours `0.5` against the
+original's `0`). The crest is otherwise the original's tick for tick: `0.5`
+1596-1601, `0` 1602-1608, `1` from 1609. A second capture agrees.
+`talons-junction-autopilot.csv` goes from 24 disagreements to 6, and its
+position max from `18.98` to `8.52` units. `time-trial-lap` and `standing-start`
+are unchanged at 0. Pinned by
+`hover_contact_ground_truth.rs`'s
+`a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage`: 2 on recorded
+inputs, 26 with the cage dropped. **So the along-track arithmetic above, which
+credited tick 1583 with about 12% of the shift and the wrong sign, was wrong:
+including that one event closes the gap.** The force-term result stands. What is
+left on this crest does not move contact: from 1597 to 1610 our nose sits up to
+about `32` mrad off the original's in the air, and our vertical velocity carries
+about `2` units/s of residual from the 1580 landing. Both are leads for the
+airborne pitch laws, not for the cushion.
+Cross-title: **not checkable**. `oag-trace run` replays Pulse PSP captures
+only (`oag_pulse::open`), and no Pure, HD, 2048 or Omega capture of a cage
+circuit exists. The race already runs the cage wherever a track's header asks
+for it.
 
 ### The cross-product signs: a contradiction here, resolved
 

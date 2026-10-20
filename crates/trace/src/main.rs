@@ -1433,7 +1433,7 @@ fn run(args: RunArgs) -> Result<()> {
         angular: args.angular.into(),
         scheme: args.scheme,
         reseed: args.reseed,
-        pads: locator::load_speedup_pads(args.source.as_deref(), &args.track)?,
+        ..locator::on_track(args.source.as_deref(), &args.track, args.no_collision)?
     };
     if args.fixed_dt {
         warn!(

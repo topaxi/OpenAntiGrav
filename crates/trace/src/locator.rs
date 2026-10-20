@@ -12,6 +12,7 @@ use oag_race::Course;
 use oag_vex::pads::PadVolume;
 use oag_vex::{track, vex};
 
+use crate::replay::Options;
 use crate::{load_ai, read_track_blob, resample};
 
 /// A track's spline, resampled the same way `resample` always is - dropping
@@ -30,7 +31,7 @@ pub(crate) fn load_samples(source: Option<&str>, name: &str) -> Result<Vec<track
         .collect())
 }
 
-/// The track's speed pads, in node order - what [`crate::replay::Options::pads`]
+/// The track's speed pads, in node order - what [`Options::pads`]
 /// takes. Empty with no disc, exactly as [`load_samples`] is, and for a `.vex`
 /// that authors none.
 pub(crate) fn load_speedup_pads(source: Option<&str>, name: &str) -> Result<Vec<PadVolume>> {
@@ -42,4 +43,34 @@ pub(crate) fn load_speedup_pads(source: Option<&str>, name: &str) -> Result<Vec<
     let pads = oag_vex::pads::volumes(&blob, &nodes, vex::CLASS_SPEEDUP_PAD);
     debug!("{name}: {} speed pad(s)", pads.len());
     Ok(pads)
+}
+
+/// What a replay reads off the track besides its collision: the speed pads and the
+/// collision cage, the rest of [`Options`] left at its default. `no_collision` drops the
+/// cage with the mesh: the cage is the track's second contact source, and a run with
+/// nothing to hover on has nothing to be kept inside either.
+pub(crate) fn on_track(source: Option<&str>, name: &str, no_collision: bool) -> Result<Options> {
+    Ok(Options {
+        pads: load_speedup_pads(source, name)?,
+        cage: if no_collision {
+            None
+        } else {
+            load_cage(source, name)?
+        },
+        ..Options::default()
+    })
+}
+
+/// The track's collision cage - what [`Options::cage`] takes. `None` with no disc, and
+/// where the original runs none.
+fn load_cage(source: Option<&str>, name: &str) -> Result<Option<oag_gameplay::cage::CageTrack>> {
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    let cage = crate::replay::cage_of(&read_track_blob(source, name)?);
+    debug!(
+        "{name}: collision cage {}",
+        if cage.is_some() { "on" } else { "off" }
+    );
+    Ok(cage)
 }

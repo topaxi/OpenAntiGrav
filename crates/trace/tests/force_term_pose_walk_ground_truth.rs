@@ -13,6 +13,13 @@
 //! there, so a comparison against the recording's own next velocity cannot be
 //! contaminated by our own trajectory being somewhere else.
 //!
+//! **Closed 2026-10-20**: the lag was the replay never running the collision
+//! cage, whose tick-1584 hit is the tick-1583 event below. With the cage the
+//! crest lifts off on the original's tick
+//! (`hover_contact_ground_truth.rs`). So this file's along-track yardstick,
+//! which credits that event with about 12% of the shift, was wrong. The
+//! force-term result still holds.
+//!
 //! # The comparison, one tick at a time
 //!
 //! At each recorded pose `t` in [`WINDOW`]:

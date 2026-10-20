@@ -206,6 +206,26 @@ pub struct Options {
     /// track and was, until 2026-09-30, what every run did whether or not it
     /// had one; the replay's `pads` module says what that cost a lap comparison.
     pub pads: Vec<oag_vex::pads::PadVolume>,
+    /// The track's collision cage, run after every step as the race's own craft step
+    /// runs it (`oag_gameplay::cage::pass`, `FUN_08831aa4` after `Body_StepWorld`).
+    ///
+    /// `None` - the default - runs no cage, which is what every replay did until
+    /// 2026-10-20: on `talons-junction-clean-lap.csv` that dropped the original's
+    /// tick-1584 cage hit (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`),
+    /// and the seven-tick crest liftoff lag at `--reseed 60` was that missing hit.
+    /// A reset the cage asks for is not acted on: a replay has no respawn.
+    pub cage: Option<oag_gameplay::cage::CageTrack>,
+}
+
+/// The collision cage of a track's `.vex`, as the race loads it (`CageTrack::new` over
+/// the spline and its header flag): `None` where the original runs none, or where the
+/// spline does not decode.
+#[must_use]
+pub fn cage_of(track_blob: &[u8]) -> Option<oag_gameplay::cage::CageTrack> {
+    let nodes = oag_vex::vex::nodes(track_blob).ok()?;
+    let node = track::find_node(track_blob, &nodes)?;
+    let ai = track::parse(track_blob.get(node.payload())?).ok()?;
+    oag_gameplay::cage::CageTrack::new(&ai, track::cage_flag_in_vex(track_blob))
 }
 
 /// The ship state a recording's first row describes.
@@ -540,13 +560,19 @@ pub fn replay<R: Raycaster + ?Sized>(
             ..located_environment(environment, track, position)
         };
         let ship = &mut world.ships[0];
-        oag_physics::step(
+        let evaluated = oag_physics::step(
             &mut ship.physics,
             &controls,
             &ship.handling,
             &env,
             raycaster,
             dt,
+        );
+        oag_gameplay::cage::pass(
+            options.cage.as_ref(),
+            &mut ship.physics,
+            &ship.handling,
+            &evaluated.wall,
         );
         world.tick += 1;
     }
@@ -719,8 +745,9 @@ where
         scheme: options.scheme,
         // A scenario run has no recording to be put back onto.
         reseed: None,
-        // Nor, yet, a track's pads: `drive` takes none.
+        // Nor, yet, a track's pads or its cage: `drive` takes neither.
         pads: Vec::new(),
+        cage: None,
     };
 
     for index in 0..options.ticks {

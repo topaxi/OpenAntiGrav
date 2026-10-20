@@ -1339,6 +1339,12 @@ measurement that says *when* that gap bites, rather than that it exists.
 > airborne 1595-1608, ours 1602-1614, nearly the same duration started about
 > seven ticks late.
 >
+> **Closed 2026-10-20**: the lag was the replay never running the collision
+> cage, which the race runs after every step. With it the crest matches to the
+> tick but one (1 disagreement over the lap, against 16 on `20418873f`). Every
+> `--reseed` table on this page before that date was measured without the cage.
+> See `docs/physics/README.md`, "The crest-phase drift traces to a wall event".
+>
 > **Single-seeded, the same capture reads `grounded = 1.0` on all 2,977 ticks and
 > every disagreement points one way.** That is this page's own force-law drift -
 > by tick 432 the two craft are not on the same part of the track - and reading
