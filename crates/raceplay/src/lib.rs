@@ -327,7 +327,8 @@ pub use load::{export_track, load};
 #[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
-    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup, Sighting,
+    CameraOverride, Campaign2048Progress, CaptureHud, Loaded, Options, PoseRequest, SeatPick,
+    Setup, Sighting,
 };
 #[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};

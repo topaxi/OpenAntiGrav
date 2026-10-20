@@ -85,7 +85,9 @@ use crate::app::App;
 use crate::args::{autopilot_pilot, give_weapon};
 use crate::cli::Cli;
 use crate::headless::{run_race, run_windowless};
-use crate::pose::{parse_camera_pose, parse_pose, pose_from_trace};
+use crate::pose::{
+    field_from_csv, parse_camera_pose, parse_hud_state, parse_pose, pose_from_trace,
+};
 
 /// Installs the sink every `log` call in this workspace ends up in.
 ///
@@ -394,6 +396,17 @@ fn run(cli: Cli) -> Result<()> {
         ..camera
     });
 
+    let field = cli.field_from.as_deref().map(field_from_csv).transpose()?;
+    // A field file with a slot 0 row carries the player's exact pose, which wins over `--pose`.
+    let pose = field
+        .as_ref()
+        .and_then(|field| field.player)
+        .map(race::PoseRequest::Exact)
+        .or(pose);
+    let field = field.map(|field| field.opponents).unwrap_or_default();
+
+    let hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
+
     let leg = if cli.reel {
         frontend::Leg::DevPubReel
     } else {
@@ -437,6 +450,8 @@ fn run(cli: Cli) -> Result<()> {
         mode,
         leg,
         pose,
+        field,
+        hud_state,
         camera,
         cli,
     };

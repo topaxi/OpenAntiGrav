@@ -327,6 +327,16 @@ pub struct Options {
     /// same place instead of by running the same number of ticks and hoping.
     /// `None` spawns normally.
     pub pose: Option<PoseRequest>,
+    /// Put the opponents here too, one exact pose per grid slot, index `0` being grid slot `1`
+    /// (the same indexing as [`Self::grid_teams`], whose teams a capture sets beside it).
+    ///
+    /// **A capture aid for a mid-race frame** of the original: the whole field read out of its
+    /// RAM at one tick. Empty (the default) changes nothing anywhere. Non-empty, together with
+    /// [`Self::pose`], keeps the grid's opponents alive and puts each one on its pose instead of
+    /// on its grid row; a slot past the end of the list stays on its grid row.
+    pub field: Vec<Pose>,
+    /// The HUD's place, lap and clocks, imposed. See [`CaptureHud`]; `None` for every race.
+    pub hud: Option<CaptureHud>,
     /// Render from this camera instead of the chase camera.
     ///
     /// The other half of the same capture aid: a ship pose replicates *what*
@@ -337,7 +347,7 @@ pub struct Options {
 
 /// The two capture aids [`Options::pose`] and [`Options::camera`] carry.
 mod capture;
-pub use capture::{CameraOverride, PoseRequest};
+pub use capture::{CameraOverride, CaptureHud, PoseRequest};
 
 /// [`Options`]' `Default`.
 mod defaults;
@@ -786,6 +796,11 @@ pub struct Setup {
     /// Where [`Options::pose`] asked for the craft to start, already resolved
     /// against the spline. `None` uses the ordinary spawn.
     pub pose_override: Option<Pose>,
+    /// [`Options::field`], carried to [`Race::start`].
+    pub field_poses: Vec<Pose>,
+    /// [`Options::hud`], carried through to the readout.
+    #[cfg(feature = "view")]
+    pub capture_hud: Option<CaptureHud>,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     #[cfg(feature = "view")]

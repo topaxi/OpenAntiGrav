@@ -53,6 +53,8 @@ impl Default for Options {
             trail_sparks: false,
             seed: None,
             pose: None,
+            field: Vec::new(),
+            hud: None,
             camera: None,
         }
     }

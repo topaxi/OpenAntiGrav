@@ -30,6 +30,7 @@ derived data - it is a list of button names somebody chose - and is committed.
 """
 
 import argparse
+import json
 import math
 import struct
 import time
@@ -219,6 +220,15 @@ def main():
         type=Path,
         help="where --shot-every writes its screenshots (derived game data: "
         "keep it under data/shots/, which is gitignored)",
+    )
+    parser.add_argument(
+        "--field-out",
+        type=Path,
+        metavar="JSON",
+        help="at the first recorded tick, also write every racer's pose, team, place, lap and lap "
+        "time (`scripts/psp-race-field.py`'s rows) to this file, read at the same stop as the "
+        "traced craft's own row, the camera and the shot. The traced craft has to be the first "
+        "one to update in a tick (the player is), so every body is on the same tick boundary.",
     )
     parser.add_argument(
         "--edram-every",
@@ -460,6 +470,16 @@ def main():
                     else struct.unpack("<f", blob[at : at + 4])[0]
                     for name, at in CAMERA_FIELDS
                 ]
+            if args.field_out is not None and tick == 0:
+                from importlib.util import module_from_spec, spec_from_file_location
+
+                spec = spec_from_file_location(
+                    "psp_race_field", Path(__file__).resolve().parent / "psp-race-field.py"
+                )
+                race_field = module_from_spec(spec)
+                spec.loader.exec_module(race_field)
+                field_rows = race_field.Field(dbg).rows()
+                args.field_out.write_text(json.dumps({"rows": field_rows, "craft": craft}))
             if args.flare:
                 if flare_node is None:
                     racer = struct.unpack(

@@ -209,6 +209,66 @@ def write_trace_row(path, values):
     Path(path).write_text(",".join(PSP_TRACE_COLUMNS) + "\n" + ",".join(repr(float(row[c])) for c in PSP_TRACE_COLUMNS) + "\n")
 
 
+FIELD_COLUMNS = ("slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").split(",")
+
+
+def write_field_csv(path, rows, with_player=False):
+    """`oag-game --field-from`'s CSV: the opponents in slot order, slot numbered 1..N, and with `with_player`
+    a first row numbered 0 that carries the player's own exact pose."""
+    lines = [",".join(FIELD_COLUMNS)]
+    if with_player:
+        p = next(r for r in rows if r["player"])
+        lines.append(",".join(["0", p["team"]] + [repr(v) for v in (*p["left"], *p["up"], *p["fwd"], *p["pos"])]))
+    others = sorted((r for r in rows if not r["player"]), key=lambda r: r["slot"])
+    for n, r in enumerate(others, 1):
+        cells = [str(n), r["team"]] + [repr(v) for v in (*r["left"], *r["up"], *r["fwd"], *r["pos"])]
+        lines.append(",".join(cells))
+    Path(path).write_text("\n".join(lines) + "\n")
+    return [r["team"] for r in others]
+
+
+def pack_check(pair, place, cam_eye, cam_fwd, player_pos, others, place_range=(3, 6), near=45.0,
+               max_dist=110.0, half_fov=28.0, min_in_view=2, min_near=1):
+    """A race shot is only a race shot when the frame IS a pack: the player's place in `place_range`, at least
+    `min_in_view` other craft inside the camera's cone (within `max_dist` of the eye) and `min_near` of those within
+    `near` of the player. Checked on the captured RAM, recorded, and a miss REFUSES the pair (the capture instant
+    cannot be chosen: a restored state runs a few ticks before it is stopped, so rerun it)."""
+    cos_limit = math.cos(math.radians(half_fov))
+    seen, close = [], []
+    for pos in others:
+        d = [p - e for p, e in zip(pos, cam_eye)]
+        dist = math.sqrt(sum(x * x for x in d))
+        if 6.0 <= dist <= max_dist and sum(a * b for a, b in zip(d, cam_fwd)) / dist >= cos_limit:
+            seen.append(round(dist, 1))
+            if math.dist(pos, player_pos) <= near:
+                close.append(round(math.dist(pos, player_pos), 1))
+    pair.rec["pack"] = {"place": place, "in_view": seen, "near_player": close, "criteria": {
+        "place": list(place_range), "near": near, "max_dist": max_dist, "half_fov": half_fov,
+        "min_in_view": min_in_view, "min_near": min_near}}
+    return pair.check("the frame is a pack (player %d-%d, %d+ craft in view, %d+ within %g units)"
+                      % (place_range[0], place_range[1], min_in_view, min_near, near),
+                      place_range[0] <= place <= place_range[1] and len(seen) >= min_in_view and len(close) >= min_near,
+                      "place %s, craft in view at %s from the camera, near the player at %s" % (place, seen, close))
+
+
+def set_ours_weapons_off(profile_dir):
+    """`[race] weapons = "Off"` in the private settings file, whether or not an earlier run of `oag-game`
+    already rewrote the file with its own `[race]` table (a second `[race]` header is a TOML error)."""
+    path = settings_path(profile_dir)
+    lines = path.read_text().splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == "[race]"), None)
+    if start is None:
+        lines += ["", "[race]", 'weapons = "Off"']
+    else:
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
+        hit = next((i for i in range(start + 1, end) if lines[i].split("=")[0].strip() == "weapons"), None)
+        if hit is None:
+            lines.insert(start + 1, 'weapons = "Off"')
+        else:
+            lines[hit] = 'weapons = "Off"'
+    path.write_text("\n".join(lines) + "\n")
+
+
 def git_head():
     return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()

@@ -112,6 +112,19 @@ def main():
                          "pose but draws the pre-countdown board): see the docs")
     ap.add_argument("--size", default=None, help="default: the profile's output size")
     ap.add_argument("--load", type=float, default=0)
+    ap.add_argument("--field", action="store_true",
+                    help="a race shot: the state is a mid-race frame of a Single Race, weapons off. Ours takes all eight "
+                         "craft (pose, team), the player's pose and camera and the HUD's place, lap, clock, speed and "
+                         "shield from the SAME pause as the screenshot (`rpcs3-drive.py capture --field --in-race`), "
+                         "renders at that tick (--ticks 0), and the HUD state is imposed. Restore the state with "
+                         "`emu-restore-state.sh <lane> <state> --pause` first")
+    ap.add_argument("--pack-near", type=float, default=45.0,
+                    help="with --field: how close to the player a craft in view must be (units); the pair is "
+                         "refused when the frame is not a pack")
+    ap.add_argument("--pack-max-dist", type=float, default=160.0, help="with --field: craft this far from the camera count as in view")
+    ap.add_argument("--pack-half-fov", type=float, default=45.0,
+                    help="with --field: half the angle of the cone around the look direction that counts as in view "
+                         "(HD's 16:9 frame is about 100 degrees wide)")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -135,6 +148,8 @@ def main():
         cap = [sys.executable, HERE / "rpcs3-drive.py", "capture", "--out", out / "capture",
                "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team,
                "--press", args.press]
+        if args.field:
+            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
         run(cap)
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())
@@ -148,6 +163,8 @@ def main():
     track = track.replace(".rcsmodel", ".vex")
     pos, forward = ship["pos"], ship["rows"][2]
     clock = ship.get("race_clock_s")
+    if args.field:
+        args.ours_ticks = 0
     if args.ours_ticks is None:
         if clock is None:
             sys.exit("the capture has no race clock (ship.race_clock_s): pass --ours-ticks")
@@ -155,13 +172,17 @@ def main():
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
-    if clock is not None:
+    if clock is not None and not args.field:
         pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,
                    "original %.2f s on its lap clock, ours %.2f s (ticks %d, GO at tick %d)"
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
     pair.check_size("original", out / "theirs.png")
-    yaw, agree, our_up = solve_yaw(args.oag_game, args.image, track, pos, forward, scratch)
+    if args.field:
+        # the player goes in as slot 0 of the field file, an exact pose: no yaw solve, no tilt left uncarried
+        yaw, agree, our_up = 0.0, 1.0, ship["rows"][1]
+    else:
+        yaw, agree, our_up = solve_yaw(args.oag_game, args.image, track, pos, forward, scratch)
     print("yaw %.3f deg, forward agreement %.6f" % (yaw, agree), file=sys.stderr)
     # What `--pose` cannot carry: the angle between the original's body up and ours (the
     # spline's), i.e. the pitch and roll off the track surface, in degrees.
@@ -175,10 +196,41 @@ def main():
     pose = "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw)
     flags = ce.ours_flags(plat)
     flags[flags.index("--size") + 1] = size
-    mode = pair.rec["original"].get("state", {}).get("mode", "time_trial")
+    mode = pair.rec["original"].get("state", {}).get("mode", "single_race" if args.field else "time_trial")
     flags += ["--mode", mode]
+    field_flags = []
+    if args.field:
+        rows = [{"slot": r["slot"], "player": r["player"], "team": r["team"], "left": r["rows"][0],
+                 "up": r["rows"][1], "fwd": r["rows"][2], "pos": r["pos"]} for r in ship["field"]]
+        teams = ce.write_field_csv(out / "field.csv", rows, with_player=True)
+        hud = ship["hud"]
+        player_row = next(r for r in ship["field"] if r["player"])
+        pair.rec["original"]["field"] = [{k: r[k] for k in ("slot", "team", "pos", "clock")} for r in ship["field"]]
+        pair.rec["original"]["hud"] = {"place": hud["place"], "lap": hud["lap"], "laps": hud["laps"],
+                                       "lap_time_s": player_row["clock"], "speed_kmh": hud["speed"], "shield": hud["shield"]}
+        pair.check_equal("original field size", len(ship["field"]), 8)
+        pair.check("HUD record decodes to one place and lap", hud["place"] is not None,
+                   "words %s: place %s lap %s of %d" % (hud["words"], hud["place"], hud["lap"], hud["laps"]))
+        if hud["place"] is None:
+            pair.finish()
+        ce.pack_check(pair, hud["place"], camera["eye"], camera["forward"], player_row["pos"],
+                      [r["pos"] for r in ship["field"] if not r["player"]], near=args.pack_near,
+                      max_dist=args.pack_max_dist, half_fov=args.pack_half_fov)
+        if pair.failed():
+            pair.finish()
+        pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
+        field_flags = ["--field-from", out / "field.csv", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
+            hud["place"], hud["lap"], player_row["clock"], player_row["clock"], hud["speed"],
+            100.0 * hud["shield"] / hud["shield_max"])]
+        # ours races with weapons off the way the original's Racebox row was set
+        ce.set_ours_weapons_off(scratch / "profile")
+        pair.caveat("trails and exhaust history start from nothing in ours (a craft at rest); the HUD's place, lap, "
+                    "clock, speed and shield are imposed from the original's RAM (%d/8, lap %d, %.1f s), the best-lap "
+                    "line, the pickup row and the sight are ours" % (hud["place"], hud["lap"], player_row["clock"]))
     base = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(),
-            "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags
+            "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags
+    if args.field:
+        base.remove("--pose=" + pose)
     if args.variant:
         base += ["--variant", args.variant]
     if args.skin:
@@ -207,9 +259,12 @@ def main():
 
     yaw_now = yaw
     sign = 1.0
-    signed, cmd = trace_at(yaw_now)
-    corrections = [{"yaw": yaw_now, "heading_error_deg": signed}]
-    for _ in range(4):
+    if args.field:
+        cmd, signed, corrections = base, 0.0, []
+    else:
+        signed, cmd = trace_at(yaw_now)
+        corrections = [{"yaw": yaw_now, "heading_error_deg": signed}]
+    for _ in range(0 if args.field else 4):
         if abs(signed) <= pair.plat["tolerance"]["heading_deg"] / 4:
             break
         trial = yaw_now + sign * signed
@@ -221,7 +276,8 @@ def main():
         yaw_now, signed, cmd = trial, new_signed, new_cmd
         corrections.append({"yaw": yaw_now, "heading_error_deg": signed})
     pair.rec["ours"]["yaw_corrections"] = corrections
-    pair.rec["ours"]["pose_arg"] = "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw_now)
+    pair.rec["ours"]["pose_arg"] = ("exact, slot 0 of field.csv" if args.field
+                                    else "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw_now))
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     run(cmd + ["--ticks", args.ours_ticks + 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
