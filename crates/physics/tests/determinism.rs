@@ -146,24 +146,30 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   probe's handling authors `weight_distribution 0.5`, so every airborne tick of every script
 ///   gains a pitch torque. No field hashed. The parent commit (law off, gate in) reproduced the
 ///   previous constants.
+/// - **2026-10-20, behaviour (all three rows; maintainer-approved physics port).** Pulse's
+///   inertia diagonal in world axes (`ShipState::inertia_frame`, default `World`;
+///   `docs/physics/airborne-ground-truth.md`): `integrate` divides a world torque by the
+///   world-axis diagonal and angular damping reads the world-axis momentum. Every tick the
+///   probe is not level moves. No field hashed; `InertiaFrame::Body` reproduces the previous
+///   constants.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x44f3_ff55_0277_73fd,
-        0x7f67_bcaa_7369_70cd,
+        0xe7c8_5a81_7d6a_904e,
+        0x5a70_12ce_802d_241f,
     ),
     (
         3_600,
         Script::Corridor,
-        0xcf38_448d_6d2e_2c5c,
-        0xd462_1a5a_583c_5030,
+        0x748f_2c1e_c1e5_a041,
+        0x2090_aba1_2a31_e235,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0x5b24_c769_4a27_908f,
-        0x728c_447f_e260_af36,
+        0x1ab1_29bc_df4a_a853,
+        0x229a_4cc1_aaba_9687,
     ),
 ];
 
