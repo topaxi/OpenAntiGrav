@@ -289,17 +289,28 @@ the mode is in the mask (`0x000be1a4`, `0x000be1fc`), `*(table + 0x2c)` otherwis
 pointer at `0x008a83ec`. The capture above hit no wall it could isolate and set no breakpoint. Next:
 an interpreter boot to mode 6, a `Z0` on the return of `0x000be068` during a wall scrape, read `f1`.
 
-**Not read here.** `Craft_UpdateThrottle` (`0x000efb50`) tests the same mask at `0x000efeb8`-`0x000efed0`
-(the Zone engine; this engine's auto-speed law was not compared); the other 45 sites of the
-`0x206040` literal in this executable are not in the hover, handling or brake path.
+**The mask's other sites in the craft code.** A search for `ori rX,rY,0x6040` (any register; the
+mask is built `lis 0x20` then `ori 0x6040`) finds 25 word-aligned sites between `0x000d0000` and
+`0x000f9000` plus `0x001e7110`. Read in this lane: `0x000f18f8` (`Craft_UpdateHover`, the selector
+above), `0x000f2740` (`Craft_Update` calls `Craft_HoverFourPoint(craft, 1)` itself under the mask,
+`bl 0x000ede88` at `0x000f275c`: a second route to the same ray), `0x000f27d0` (the brakes, above),
+`0x001e7110` (`Team_LoadHandlingStats`, the Zone file, [opponent-handling.md](opponent-handling.md)).
+Open, address only: `0x000efec0` in `Craft_UpdateThrottle` (the Zone engine; this engine's
+auto-speed law was not compared); `0x000eed84` in `FUN_000eeb70`, which sets `ship+0x6a64 |=
+0x04000000` under the mask (the flag's reader is unread); `0x000e7d00` (`Ship_ApplyDamage_q`),
+`0x000e8d58` (`FUN_000e8b38`), `0x000e3f04` (`FUN_000e3d18`), and `0x000e2260`, `0x000e2bf8`,
+`0x000e504c`, `0x000e50cc`, `0x000ec7e0`, `0x000ec988` (code Ghidra holds no function for); the rest
+are in the ship constructors, the engine sound and the model reload. Nothing beyond the four read
+sites is wired.
 
 ### The other titles (hd-zone-handling)
 
 - **Omega**: checked, applies, not wired. `Data/art/published/hdships/zone/handlingstats.xml` is HD's
   file value for value (`ZoneMode`, no `<Class>`, accelcap `20`, `Antigrav` without
-  `landing_rebound`). Omega's executable keeps the mask (`mov edx,0x206040; bt` at `0x0150bb28` in
-  `FUN_0150b8f0`, and in `FUN_015314b0` and `FUN_0157f360`), three sites to HD's 51; its hover
-  selector was not located. Omega's race flies Pulse's two-point rig (`hover_rig: None`), so HD's ray
+  `landing_rebound`). Omega's executable keeps the mask as an `imm32` (`mov edx,0x206040; bt` at
+  `0x0150bb28` in `FUN_0150b8f0`, and in `FUN_015314b0` and `FUN_0157f360`); a compiler that folds
+  the test another way would not show up in that search, so three is a floor. Its hover selector was
+  not located. Omega's race flies Pulse's two-point rig (`hover_rig: None`), so HD's ray
   on it would be a hybrid nobody measured: not wired. Its Zone bank-to-yaw is inherited from HD (`30`).
 - **2048**: not checkable here. The v1.04 `eboot.elf` holds no `0x206040` literal (an ARM build would
   split it into `movw`/`movt`; not searched). The base package's ships are PFS-encrypted; the HD pack
