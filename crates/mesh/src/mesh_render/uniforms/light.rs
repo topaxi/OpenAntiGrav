@@ -119,8 +119,8 @@ impl Light {
     ///
     /// `direction` must already be normalised;
     /// `oag_tables::envsettings::EnvSettings::direction` does it and answers
-    /// `None` for the degenerate triples four circuits write, which is why this
-    /// takes a direction rather than a settings file.
+    /// `None` only for an all-zero triple, which is why this takes a direction
+    /// rather than a settings file.
     ///
     /// Every value is passed through as authored - the equation these feed is
     /// the one read out of the circuit's own microcode, and reducing a term of
