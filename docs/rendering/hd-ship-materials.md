@@ -699,10 +699,8 @@ first sheet of this section was framed on Vineta K and is not the comparison. Tw
   `texcoord2` is read and varies, which a still cannot show (blue everywhere also comes from a zero coordinate).
   `texcoord2` is now also filled for the magstrip chunks (`ice::second_uv`), unread there.
 - **`zone_tp_1024_n.gtf` is sampled by the original**: `@0x05` of the `_n` block reads unit 1 as a tangent-space
-  normal (`2x - 1`) combined with the vertex tangent frame (`tangent` `0xdbe5f417`, present on the Zone hull's chunks,
-  and the second attribute `0x868f8229`). **Not wired**: ours binds it as the second texture and ignores it, as it does
-  on every HD `_n` hull (Feisar's `feisar_c1_livery_norm`, `carbon_n`), so wiring it changes every HD hull and needs a
-  vertex tangent (a new attribute) or a chosen derivative frame. Open, in the Zone handover thread.
+  normal (`2x - 1`) through the vertex tangent frame. **Wired since `hd-hull-normals`** for this hull and every other
+  HD ship hull, see "Hull normal maps" below.
 
 Judged against `data/reference/hd-zone-material/`: original frames at zones 3, 4 and 5 (top) against ours before and
 after (bottom), Zone_1, `--zone-stage 3`, the chase camera of each; the camera could not be picked from the capture, so
@@ -713,3 +711,71 @@ Cross-title: Omega ships the same hull as `hdships/Zone` and it **includes `dg_z
 materials; HD's nine add `diffuse_with_specular_from_alpha_n`, `diffuse` and a second `basicalpha`) with `.gnf`
 textures: **checked, applies, not wired** (Omega's hulls build through the PS4 path, which has none of this; it ships
 no `.probes`, so the tint is moot there). 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).
+
+## Hull normal maps (2026-10-20, `hd-hull-normals`)
+
+The lit hull programs (`diffuse_with_specular_from_alpha_n`, `_vcol`, `carbonfibre`, `nitro_body_new` and the Fury
+`detonator_*` kin) read **texture unit 1 as a tangent-space normal** and light with it. Until this lane ours bound the
+map and ignored it, on every HD ship.
+
+**What the program does** (`diffuse_with_specular_from_alpha_n.rcsmaterial`, fragment block 17 against the vertex blocks
+that write `TC2` as `cross * w`, blocks 5, 6, 9 and 10; `scripts/ps3-microcode.py fp-file|vp-file`; read statically, not
+from a live dump of the draw):
+
+```text
+t   = tex(unit 1, uv)                         plain RGB, not DXT5nm: MAD x*2-1 on x, y and z
+N   = (2 t.x - 1) T + (2 t.y - 1) B + (2 t.z - 1) N0       normalised (DP3 + DIVSQ)
+vertex program:  T = 2 v[tangent].xyz - 1                  attribute 0xdbe5f417, four ubyte-norm
+                 B = cross(N0, T) * v[tangent].w           the fourth byte, raw 0..1
+                 TC4 / TC2 / TC6 = N0 / B / T              (numbering differs per block)
+```
+
+`N` then feeds every term the program lights with: the sun's `N.L`, the specular's `N.H` and both probe lookups
+(`-N.y * 0.5 + 0.5` of the irradiance map, `reflect(-V, N)` of the reflection map). The frame is **object space** in
+the original (no matrix on `T` in these blocks); ours turns `T` by the node and model matrices like the normal.
+
+**The tangent is authored on every normal-reading hull chunk** (`hd_hull_normal_census`, all 32 `/data/ships/*`
+hulls, 2,000+ chunks): the `tangent` attribute `0xdbe5f417` is four normalised bytes in 100 % of them, perpendicular
+to the authored normal (mean `|T.N0|` 0.004), unit length on average (0.99 to 1.04 per material; a few vertices are
+short, and a few padding vertices decode to `(-1,-1,-1)`, the shader's off value). The fourth byte `w` is **`0` or
+`255`** (about 45 % `255` on the paint materials), so `B` is the zero vector on the `w = 0` vertices and only the
+`x`/`z` of the map reach `N` there, the same finding `pads.md` made for the pads. No hull declares the second
+attribute `0x868f8229` the live dump named (0 chunks); it is not a tangent stream of the hull.
+
+**Wired** (`mesh::rcs::hull_normal`, `GpuVertex::tangent`, `shade.wesl`'s `hull_normal`): the map binds in the third
+slot (`Model::pad_masks`, the pad mask's), the material is marked `Model::material_tangent`, and its chunks carry
+their authored tangent as four raw bytes (`Unorm8x4`, 4 bytes a vertex, zero = none, the shader's off switch). A
+node transform that is not the identity rotates the tangent like the position and the normal and packs it again.
+
+- **Scope: opaque `data/materials/ships/*` materials whose resolved program reads unit 1 as a normal.** Left as they
+  drew, unmeasured: the blended ones (`glass_texture_n`, `nitro_perspex_new`), `detonator_shield` (normal on unit 2),
+  `detonator_ship_rich_iridescent` (unit 0), and every circuit material that reads a normal map
+  (`tracktexture_with_normal`, `diffuse_normal_specular`: not ships, other programs).
+- **Chosen, not measured: `B = cross(N0, T) * w` is built per pixel** from the interpolated `N0` and `T`, where the
+  original builds it per vertex and interpolates it. Equal at every vertex; a saved varying (the vertex stage has the
+  sixteen locations wgpu guarantees).
+- Not changed: the facing ramp and the fog read the vertex normal, as the programs do.
+
+Judged against `data/reference/hd-hull-normals/`: `harimau-classic/hull-sheet-harimau-classic.png` and
+`assegai-c1/hull-sheet-assegai-c1.png` (original from RPCS3 on Talon's Junction, ours before and after, the original's
+frame at rest at the start line against our `--camera-view far` at tick 120, so **hull-sized, not pixel matched**; the
+camera could not be placed on the original's ship), and `zone/` (ours before and after at Zone stage 3 against
+`hd-zone-material/original-zone3.png`, a different spot of the tunnel). Read as a player would: the change is real but
+small at this size. Before against after differs across the whole hull (wings, nose, the probe's reflection tint; a
+difference image scaled x6 shows it, the raw pictures a few levels), none of it a change of look; the
+lighting level and the probe colour, not the normal, are what still separate the frames (the original is brighter and
+whiter, the bloom halo ours draws around the paint is not there). **Not claimed a match**; the claim is the data path:
+authored tangent, authored map, the program's own formula.
+
+**Zone hull brightness (the brief's item 5): not a clear data miss, left open.** Ours feeds the stage's authored
+`Sun colour` (`zonemode.effectsettings`, stage 3 `Sub Flash`: `1 1 1`; `zone_1/track.envsettings` authors
+`1.5 1.294 1.0`, which the stage replaces). The live `directionalLight0Colour` `(1.144, 1.091, 1.906)` equals neither
+and no stage authors it (the stage's `EQ colour tint` is `123 154 253`, `Sky horizon colour` `0.055 0.004 0.365`), so
+what composes it, a blend with a bluish term, is unread. Feeding the live number would be a hand-transcribed constant.
+
+**Cross-title.** Omega: **checked, applies, not wired.** `hdships/Zone` and the other hulls ship `*_N.gnf` normal maps
+(66 `_n.gnf` entries under `hdships/` in `data01.psarc`, `Zone_TP_1024_N.gnf` among them) beside the same hull
+materials, and 2048's reader `psp2` already decodes the `tangent` stream (`unpack_tangent`, signed bytes, `w` `+-1` on 82.6 %
+of vertices; the `w` convention differs from HD's `0`/`255`), but Omega's hulls build through the PS4 path, which reads
+no material program and fills no `GpuVertex::tangent`; wiring is the PS4 lit path's lane. 2048: **not checkable**
+(PFS-encrypted `.pkg`).

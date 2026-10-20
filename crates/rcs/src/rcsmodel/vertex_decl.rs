@@ -465,6 +465,19 @@ mod tests {
         out
     }
 
+    /// `tangent()` finds the four normalised bytes of a ship chunk's own
+    /// declaration by hash, shape and offset, and a declaration without one
+    /// answers `None`.
+    #[test]
+    fn the_tangent_is_found_by_hash_and_shape() {
+        let decl = VertexDecl::parse(&ship_stride_with_vertex_colour1(), 0).expect("declares");
+        let tangent = decl.tangent().expect("a tangent");
+        assert_eq!((tangent.offset, tangent.components), (7, 4));
+        assert_eq!(tangent.name(), Some("tangent"));
+        let plain = VertexDecl::parse(&talons_stride_18(), 0).expect("declares");
+        assert!(plain.tangent().is_none());
+    }
+
     /// **`vertex_colour()` still matches `VertexColour1` by shape - the
     /// engine flame's own alpha ramp reads it through exactly this method**
     /// (`oag_game::livery::flare::alpha_ramp`, via `Mesh::vertex_light`).
