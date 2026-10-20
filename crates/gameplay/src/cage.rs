@@ -92,17 +92,26 @@ impl CageTrack {
 /// hull left it (`oag_physics::cage::resolve`). A track with no cage does nothing.
 ///
 /// The response's `reset` is the original's `Ship_SetState(3)`; the caller turns it
-/// into a reset. **Not ported:** the original's skip of a craft whose `entity+0x8c`
-/// reads `6` (the finished player).
+/// into a reset.
+///
+/// **A craft in state 6 is skipped**, as the original's cage block gates on
+/// `entity+0x8c != 6` (`0x08842328`-`0x08842364`): outside the Eliminator that is a wreck
+/// 1.5 s after it finished exploding ([`oag_physics::damage::in_state_6`];
+/// `eliminator_route` is the mode fact). A wreck still exploding, in state 4 or 5, is
+/// caged. **Not ported:** the original's finished player, which also reads `6`.
 pub fn pass(
     cage: Option<&CageTrack>,
     state: &mut oag_physics::ShipState,
     handling: &oag_physics::Handling,
     wall: &oag_physics::WallResponse,
+    eliminator_route: bool,
 ) -> oag_physics::cage::CageResponse {
     let Some(cage) = cage else {
         return oag_physics::cage::CageResponse::default();
     };
+    if oag_physics::damage::in_state_6(state, eliminator_route) {
+        return oag_physics::cage::CageResponse::default();
+    }
     let located = cage.locate(wall.synced_position);
     oag_physics::cage::resolve(
         state,

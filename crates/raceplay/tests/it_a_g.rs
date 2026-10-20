@@ -13,6 +13,7 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod in_parallel;
+mod perturb;
 
 mod absorb_ground_truth;
 mod ai_clean_lap_board;
@@ -33,6 +34,7 @@ mod between_ticks_ground_truth;
 mod billboard_adverts_ground_truth;
 mod boost_plume_ground_truth;
 mod branch_progress_ground_truth;
+mod cage_effect_sweep;
 mod campaign_skill_scale_ground_truth;
 mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;

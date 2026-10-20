@@ -264,12 +264,14 @@ impl Race {
             self.sim.dt,
         );
         let reset_contact = self.reset_zone_contact(slot, &env, before);
+        let eliminator_route = self.sim.world.mode() == oag_race::Mode::Eliminator;
         let ship = &mut self.sim.world.ships[slot];
         self.sim.cage_reset[slot] = oag_gameplay::cage::pass(
             self.sim.spline.cage(),
             &mut ship.physics,
             &ship.handling,
             &evaluated.wall,
+            eliminator_route,
         )
         .reset;
         self.lay_crumb(slot, crumb_flags);

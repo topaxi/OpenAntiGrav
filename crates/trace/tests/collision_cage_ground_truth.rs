@@ -132,7 +132,13 @@ fn step_and_cage(c: &Circuit, frame: &oag_trace::Frame) -> Stepped {
         frame.dt,
     );
     let without = state.body;
-    let cage = oag_gameplay::cage::pass(Some(&c.cage), &mut state, &c.handling, &evaluated.wall);
+    let cage = oag_gameplay::cage::pass(
+        Some(&c.cage),
+        &mut state,
+        &c.handling,
+        &evaluated.wall,
+        false,
+    );
     Stepped {
         hull_contacts: evaluated.wall.contacts,
         cage,

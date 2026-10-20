@@ -198,7 +198,9 @@ fn fly(track: &str, class: &str, field_respawns: u32, field_destroyed: u32) {
     let Some(loaded) = loaded(track, class) else {
         return;
     };
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = oag_raceplay::Race::start(setup);
     assert!(
         race.use_original_ai(None, 1),
         "Omega flies the original driver"

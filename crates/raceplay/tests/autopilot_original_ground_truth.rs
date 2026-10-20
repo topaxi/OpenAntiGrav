@@ -22,6 +22,12 @@ struct Run {
 }
 
 fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Race> {
+    let mut setup = setup(image, track, weapons)?;
+    crate::perturb::apply(&mut setup, 0.0);
+    Some(oag_raceplay::Race::start(setup))
+}
+
+fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Setup> {
     let image = oag_testdata::image(image)?;
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
@@ -33,7 +39,7 @@ fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay:
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    Some(oag_raceplay::Race::start(loaded.setup))
+    Some(loaded.setup)
 }
 
 /// The opponents on this project's driver (no `use_original_ai`), and the
@@ -69,21 +75,95 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
 /// The autopilot gets round every Pulse circuit against the original field
 /// with no rescue (weapons off, so a hit does not decide it): the
 /// round-the-lap check the original field's thread asked for.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue() {
-    let mut failed = Vec::new();
-    for id in CIRCUITS {
-        let track = format!(r"Data\Environments\{id}_Track\track.vex");
-        let Some(r) = run("pulse-psp-usa.chd", &track, 15_000, Some(false)) else {
-            return;
-        };
-        if r.finish.is_none() || r.respawns != 0 {
-            failed.push((id, r.finish, r.respawns));
-        }
-    }
-    assert!(failed.is_empty(), "{failed:?}");
+///
+/// **One test per circuit, judged on the majority of five races**
+/// (2026-10-20, lane `ai-gate-robustness`), one per scale of `perturb::GATE`
+/// (`tests/perturb/mod.rs`). As one twelve-circuit run it failed under 4 of 8
+/// sweep offsets with every law on, and under 2 of 9 force-term perturbations
+/// with every law off (`docs/physics/airborne-ground-truth.md`).
+fn finishes_without_a_rescue(id: &str) {
+    let track = format!(r"Data\Environments\{id}_Track\track.vex");
+    let Some(setup) = setup("pulse-psp-usa.chd", &track, Some(false)) else {
+        return;
+    };
+    let runs: Vec<(Option<u64>, u32)> = crate::perturb::GATE
+        .iter()
+        .map(|&eps| {
+            let mut setup = setup.clone();
+            crate::perturb::apply(&mut setup, eps);
+            let r = run_from(oag_raceplay::Race::start(setup), 15_000);
+            (r.finish, r.respawns)
+        })
+        .collect();
+    let good = runs
+        .iter()
+        .filter(|(finish, respawns)| finish.is_some() && *respawns == 0)
+        .count();
+    assert!(
+        good * 2 > runs.len(),
+        "{id}: {good} of {} runs finished without a rescue: {runs:?}",
+        runs.len()
+    );
 }
+
+macro_rules! finishes_test {
+    ($name:ident, $id:expr) => {
+        #[test]
+        #[ignore = "needs a disc image in data/images/"]
+        fn $name() {
+            finishes_without_a_rescue($id);
+        }
+    };
+}
+
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_01,
+    "01"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_02,
+    "02"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_03,
+    "03"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_04,
+    "04"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_05,
+    "05"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_06,
+    "06"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_07,
+    "07"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_09,
+    "09"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_10,
+    "10"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_13,
+    "13"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_14,
+    "14"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_16,
+    "16"
+);
 
 /// Every Pulse circuit, forward.
 const CIRCUITS: [&str; 12] = [
@@ -91,7 +171,10 @@ const CIRCUITS: [&str; 12] = [
 ];
 
 fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Run> {
-    let mut race = race(image, track, weapons)?;
+    Some(run_from(race(image, track, weapons)?, ticks))
+}
+
+fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
     assert!(race.use_original_ai(None, 1), "the AI tables read");
     race.set_autopilot(true);
     let mut out = Run::default();
@@ -113,7 +196,7 @@ fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Ru
     out.place = race.places()[0];
     out.respawns = race.respawns_of(0);
     out.shield_end = ship.physics.shield;
-    Some(out)
+    out
 }
 
 /// A scratch sweep: prints each Pulse circuit's autopiloted race, for the

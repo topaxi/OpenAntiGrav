@@ -119,3 +119,56 @@ fn a_fork_offers_the_other_branch_as_the_sibling() {
     // The sibling's section is the main branch's point nearest the located one.
     assert!((sibling.left - located.section.left).z.abs() > 39.0);
 }
+
+/// A craft 300 units off the cage's points: the original's reset distance.
+fn far_off(craft_state: oag_physics::CraftState, state_timer: f32) -> oag_physics::ShipState {
+    let mut state = oag_physics::ShipState {
+        craft_state,
+        state_timer,
+        ..oag_physics::ShipState::default()
+    };
+    state.body.position = Vec3::new(30.0, 300.0, 0.0);
+    state
+}
+
+fn caged(state: &mut oag_physics::ShipState, eliminator_route: bool) -> bool {
+    let cage = CageTrack::new(&straight(), true).expect("a cage");
+    let wall = oag_physics::WallResponse {
+        synced_position: state.body.position,
+        synced_orientation: state.body.orientation,
+        ..oag_physics::WallResponse::default()
+    };
+    pass(
+        Some(&cage),
+        state,
+        &oag_physics::Handling::default(),
+        &wall,
+        eliminator_route,
+    )
+    .reset
+}
+
+#[test]
+fn a_wreck_leaves_the_cage_in_state_6() {
+    use oag_physics::CraftState::{Destroyed, Eliminated, Racing};
+    assert!(
+        caged(&mut far_off(Racing, 0.0), false),
+        "the reset distance"
+    );
+    assert!(
+        caged(&mut far_off(Destroyed, 0.3), false),
+        "state 4 is caged"
+    );
+    assert!(
+        caged(&mut far_off(Eliminated, 0.7), false),
+        "state 5's dwell is caged"
+    );
+    assert!(
+        !caged(&mut far_off(Eliminated, 0.0), false),
+        "state 6 is skipped"
+    );
+    assert!(
+        caged(&mut far_off(Eliminated, 0.0), true),
+        "an Eliminator wreck goes to state 8, which is caged"
+    );
+}

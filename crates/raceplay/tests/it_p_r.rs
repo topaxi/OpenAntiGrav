@@ -13,6 +13,7 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod in_parallel;
+mod perturb;
 mod pickup_icon_ground_truth;
 mod pilot_assist_ground_truth;
 mod pilot_assist_levels_ground_truth;

@@ -225,7 +225,17 @@ pub const ELIMINATED_SOLID_DURATION: f32 = 1.5;
 /// walls and floor go through does not, which is why a wreck still lands and comes to rest.
 #[must_use]
 pub fn solid_to_craft(state: &ShipState, eliminator_route: bool) -> bool {
-    eliminator_route || state.craft_state != CraftState::Eliminated || state.state_timer > 0.0
+    !in_state_6(state, eliminator_route)
+}
+
+/// Whether the craft is in the original's state 6: out of the race with state 5's `1.5` s
+/// run out ([`ELIMINATED_SOLID_DURATION`]), in every mode but the Eliminator, whose wreck
+/// goes to state 8 instead. Besides the collider byte ([`solid_to_craft`]), state 6 is what
+/// the collision cage skips: `FUN_088418e0`'s cage block (`0x08842328`-`0x08842364`) gates on
+/// `entity+0x8c != 6` (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`).
+#[must_use]
+pub fn in_state_6(state: &ShipState, eliminator_route: bool) -> bool {
+    !eliminator_route && state.craft_state == CraftState::Eliminated && state.state_timer <= 0.0
 }
 
 /// Counts a fired Shield pickup down.
