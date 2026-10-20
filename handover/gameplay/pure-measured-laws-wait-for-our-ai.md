@@ -7,6 +7,20 @@ table per law. Evidence for the addresses:
 
 ## Open
 
+- **The speed laws** (confidence 92), held at Pulse's: no engine doubling and grounded drag
+  `-0.0025`, which together halve Pure's acceleration and keep its top speed. Re-apply: in
+  `crates/pure/src/race.rs` set `engine_output_double` to `Sourced::measured(false)` and
+  `drag_ground` to `Sourced::measured(-0.0025)` and flip `the_speed_laws_are_measured_and_held`.
+  On, the Pulse gate holds 12/12, Pure's sweep walls go A `69 -> 37`, B `18 -> 50`, laps
+  `49.8 -> 54.5` s novice and `41 -> 44` s Ace, and the full suite's one red is the pad test
+  below. This is the feel the maintainer reported: Pure on Pulse's laws accelerates twice as hard
+  as the original.
+- **Sideshift `200`** (confidence 92), held: Pure's files author no `sideshift`, so a Pure craft
+  cannot sideshift at all today. Re-apply: set `CRAFT_LAWS.code_sideshift` to
+  `Some(Sourced::measured(SIDESHIFT))` and flip `the_sideshift_is_measured_and_held`; the loader
+  fills it for the player and every opponent. On Pulse's laws alone, Ace races walled
+  `1104 -> 1650` (seed 2 `405 -> 999`, a wreck) and the sweep's Ace A `38 -> 51`; on top of the
+  speed laws it was neutral, so release it with them.
 - **Bank-to-yaw `50`** (confidence 92), held at Pulse's `30`. Re-apply: in
   `crates/pure/src/race.rs` set `CRAFT_LAWS.bank_to_yaw` to `Sourced::measured(50.0)` and flip
   `the_bank_to_yaw_gain_is_measured_and_held`. On, Pure's opponent sweep Ace walls went
@@ -27,8 +41,8 @@ table per law. Evidence for the addresses:
   needs a lap from its pad (our `oag_ai::Driver`, default tuning, on the player's craft) inside
   7,200 ticks. The pad pins itself against the wall at the end of Vineta K's start straight on
   Pulse's laws and on Pure's alike; at Pure's acceleration it crawls too slowly to lap. Red with
-  the speed laws on. The lead decides between holding the speed laws, leaving it red for the
-  driver lane, or a longer budget.
+  the speed laws on, which is why they are held. The options put to the lead: hold (taken), land
+  them and leave the test red for the driver lane, or give the Pure pad a longer budget.
 - **The inertia frame.** Pure's `Body_Integrate` (`0x089345e8`) is Pulse's instruction for
   instruction and `Craft_Construct` passes Pulse's `0.9` and `(12, 8, 12)`, so Pure applies its
   tensor in Pulse's world axes (confidence 88, read; not captured separately). Pulse's frame is
@@ -41,12 +55,13 @@ table per law. Evidence for the addresses:
 
 ## Next Steps
 
-1. When our driver flies Pulse's held air laws (`driver-vs-new-physics`), re-run Pure's sweep with
+1. Fix the pad first (step 2): it is what blocks the speed laws, the biggest felt difference.
+2. When our driver flies Pulse's held air laws (`driver-vs-new-physics`), re-run Pure's sweep with
    each hold released, one at a time:
    `OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all -E
    'test(/opponent_autopilot_sweep::pure/) | test(/opponent_autopilot_sweep::races_others/)'
    --no-capture` with `OAG_SWEEP_IMAGE=pure` (about 10 minutes). 1 hour a law.
-2. Fix the pad's pin at Vineta K's first corner (our driver, not physics): trace it with a
+3. Fix the pad's pin at Vineta K's first corner (our driver, not physics): trace it with a
    per-120-tick print in `record()` (position, speed, wall ticks). 1-2 hours.
-3. To measure another class: unlock it in a profile (or write the unlock flag) and rerun
+4. To measure another class: unlock it in a profile (or write the unlock flag) and rerun
    `scripts/psp-pure-force-capture.py`. 30 minutes once unlocked.

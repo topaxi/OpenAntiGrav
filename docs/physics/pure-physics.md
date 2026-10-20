@@ -11,12 +11,12 @@ differ, and every one was read off `BOOT.BIN` and then measured live to float pr
 
 | Law | Pulse | Pure | Where (Pure USA) | Confidence | Status here |
 | --- | --- | --- | --- | --- | --- |
-| Engine output doubling | `T * 2.0` | **none** | `Ship_UpdateEngine` `0x0892f1f0` | 92 | on: `CraftLaws::engine_output_double` (see [the gates](#what-is-on-and-what-is-held)) |
-| Grounded quadratic drag | `-0.005` | **`-0.0025`** | `Ship_ApplyQuadraticDrag` `0x0892cba0` | 92 | on: `CraftLaws::drag_ground` |
+| Engine output doubling | `T * 2.0` | **none** | `Ship_UpdateEngine` `0x0892f1f0` | 92 | **held**: `CraftLaws::engine_output_double` (see [the gates](#what-is-on-and-what-is-held)) |
+| Grounded quadratic drag | `-0.005` | **`-0.0025`** | `Ship_ApplyQuadraticDrag` `0x0892cba0` | 92 | **held**: `CraftLaws::drag_ground` |
 | Bank-to-yaw gain, two-point hover | `30.0` | **`50.0`** | `Ship_HoverTwoPoint` `0x0892dea8` | 92 | **held** at `30`: `CraftLaws::bank_to_yaw` |
 | Pitch torque per unit input | XML `pitch_air`/`pitch_ground` (`0.3`/`1.0` on every Pulse team) | **`0.1` air, `0.4` grounded**, code literals | `Ship_UpdatePitch` `0x0892caf8` | 92 | **held**: `oag_pure::race::CODE_PITCH`, `CraftLaws::code_pitch` `None` |
 | Pitch damping | XML `pitch_damping` (`3`) | **`1.5`** racing, `0.6` on the grid (`3 / c`) | `Ship_ApplyAngularDamping` `0x0892cc2c` | 92 | **held**, with the pitch torque |
-| Sideshift force | XML `Airbrake sideshift` | **`200.0`**, a code literal | `Ship_UpdateAirbrakes` `0x0892f64c` | 92 | on: `CraftLaws::code_sideshift` (ours read `0`: no Pure craft could sideshift) |
+| Sideshift force | XML `Airbrake sideshift` | **`200.0`**, a code literal | `Ship_UpdateAirbrakes` `0x0892f64c` | 92 | **held**: `oag_pure::race::SIDESHIFT`, `CraftLaws::code_sideshift` `None` (ours reads `0`: no Pure craft can sideshift) |
 | Launch boost | `<StartBoost>` XML | **code law**: windows `0.1`/`0.4`/`0.5` s, `x0.8`/`x1.2`/`x4.2` for 1 s, player only | `Race_UpdateLaunchGrade` `0x0880f870`, `Ship_UpdateStartBoost` `0x089252e8` | 88 | **held**: `oag_pure::race::START_BOOST`, `CraftLaws::code_start_boost` `None` |
 
 Confidence 92 on the six measured rows: a runtime trace that reproduces the instruction-level
@@ -171,12 +171,17 @@ as `docs/physics/airborne-ground-truth.md` held Pulse's; the evidence:
 | + sideshift `200` (on) | 23 / 25 | 13 / 32 | 399 / 855 | 0 | 54.5 / 44 s |
 | + launch, every craft (not kept) | 8 / 50 | 118 / 44 | 311 / 958 | 1 | 54 / 44.5 s |
 | + launch, player only (held) | 73 / 17 | 24 / 24 | 397 / 778 | 4 | 54 / 44.5 s |
+| Base + sideshift `200` alone (held) | 31 / 0 | 51 / 14 | 269 / 1650 | 1 | 49.8 / 41 s |
 
 The race columns move with anything that changes the start, including a launch that touches the
 player's craft alone: the pack reshuffles and four seeds a level is a small sample. The rule was
 applied the same way to every law regardless.
 
-The speed laws land the acceleration the original has and leave one red test:
+**Every law is held; the branch lands the axes, the measured constants and the evidence, and
+Pure still flies Pulse's laws.** The sideshift was gated twice: on top of the speed laws it was
+neutral, but those were held, and on Pulse's laws alone it regressed Ace (one seed's walls
+`405 -> 999` with a wreck), so it is held as well. The speed laws give Pure the original's
+acceleration and leave one red test (the lead was asked and the stated default applied):
 `replay_ground_truth::pure_replays_reproduce_catch_a_tampered_input_and_ghosts_change_nothing`,
 whose pad is our own driver (`oag_ai::Driver`, default tuning) on the player's craft. It hits the
 wall at the end of Vineta K's start straight and stays pinned there on Pulse's laws and on
