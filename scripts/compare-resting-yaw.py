@@ -21,6 +21,7 @@ import glob
 import json
 import math
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -63,6 +64,13 @@ def main():
     scratch = Path(tempfile.mkdtemp(prefix="resting-yaw-"))
     env = dict(os.environ, XDG_CONFIG_HOME=str(scratch / "c"), XDG_DATA_HOME=str(scratch / "d"),
                XDG_STATE_HOME=str(scratch / "s"))
+    try:
+        run(args, pairs, scratch, env)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def run(args, pairs, scratch, env):
     for path in sorted(glob.glob(str(pairs / "*/pair.json"))):
         pair = json.load(open(path))
         flags = pair["ours"]["flags"]

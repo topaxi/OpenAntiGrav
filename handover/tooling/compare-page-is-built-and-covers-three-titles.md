@@ -16,8 +16,8 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
 `just compare-rerender` re-makes them from the savestates after a renderer change. The overlap score
 (`pair.json` `overlap`, `edge_ncc` 0.07 to 0.44 on PSP, 0.14 to 0.31 on HD) is on the page.
 
-- **Pulse PSP Talon's Junction White is refused**: its state sits 216 s into the race and ours drifts 0.78 units from the
-  original's body over that clock (the heading is corrected, the position is not). Needs a fresher state or a position correction.
+- **Pulse PSP Talon's Junction White is refused** for 0.78 units of position at 216 s: the resting turn's double count
+  (below), unposed ours is 0.198 units from the original there.
 - **PS2: the camera is not matched** (pair shipped with `--allow-own-camera`, edge correlation 0.01). A camera node whose
   position fits the PSP's follow geometry is in the state (a 4x4 at several EE addresses, e.g. `0x609bf0`, 11.64 units behind
   and 3.0 above the craft); its pitch sign is the PSP's opposite and the 4:3 fov is unmeasured, a fov sweep gives only an
@@ -31,14 +31,14 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   camera between two captures of one restored state (the craft's heading is not stable in the first seconds of a restart), a
   warning in the output; the clock and pose are re-read each time.
 - **A resting craft turns in the original too (2026-10-20, `resting-yaw`); the correction compensates for posing at tick 0.**
-  Ours unposed from its own grid, no input, lands within 0.10 degrees of the original's RAM heading on all 24 Pulse PSP
-  pairs and 0.69 on all 13 HD pairs at the pair's clock; the live rates match (Pulse Amphiseum Black `avel_y` -0.04725
+  Ours unposed from its own grid, no input, lands within 0.101 degrees of the original's RAM heading on all 24 Pulse PSP
+  pairs and 0.694 on all 13 HD pairs at the pair's clock; the live rates match (Pulse Amphiseum Black `avel_y` -0.04725
   against ours -0.0473; HD Talon's -0.00461 against -0.00454 degrees a tick). The pairs pose ours at the original's
   already-turned pose and simulate the clock again, so it turns twice, and each pair's heading correction equals ours'
-  drift from GO (Pulse to 0.03 degrees). The physics is unchanged; evidence and the table in
+  drift from GO in magnitude (Pulse to 0.033 degrees). The physics is unchanged; evidence and the table in
   [grid-state.md](../../docs/physics/grid-state.md#a-resting-craft-after-go-turns-in-the-original-too-2026-10-20-resting-yaw),
   reproducer `scripts/compare-resting-yaw.py`. The correction can go once the pair stops double counting: render ours
-  from its own grid (no pose; Pulse heading within 0.10 degrees, position under 0.37 units on 23 of 24) or apply the
+  from its own grid (no pose; Pulse heading within 0.101 degrees, position under 0.37 units on 23 of 24) or apply the
   pose at the rendered tick. **Talon's Junction White's refused 0.78-unit position drift is the same double count**:
   unposed, ours is 0.198 units from the original there. HD keeps a 0.5 to 0.7 degree residual even where ours does not
   turn (Chenghou Project, Metropia, Ubermall): HD's heading at GO after `Restart Race`, unmeasured.

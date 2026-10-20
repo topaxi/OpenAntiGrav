@@ -266,11 +266,19 @@ after GO: a craft sitting on a banked slot (Amphiseum Black's right axis tipped 
 yaws at a steady rate where the torque and the angular damping balance, set by the bank.
 Nothing in the simulation was changed.
 
+It is neither an input leak nor a pose artefact: throttle, steer and both airbrakes read `0` on every
+tick of ours' trace and in the original's captured rows, and the slots with no bank (Arc Prime,
+Basilico, Tech De Ra, `right_y` about `0`) turn by `0.000` degrees in both, which isolates the
+bank-to-yaw term.
+
 **What the pairs measured is a double count.** A pair poses ours on tick 0 at the original's
 pose read out of RAM at race clock `T`, which has already turned for `T` seconds, then
 simulates `276 + 60 T` ticks: the countdown (where `on_grid` holds yaw) and `T` more seconds of
 the same resting turn. The heading correction undoes that second turn, and it equals ours' own
-drift from GO on every Pulse pair to 0.03 degrees (0.5 of 61 on Talon's White).
+drift from GO in magnitude on every Pulse pair to 0.033 degrees (0.5 of 61 on Talon's White). Its
+sign follows each script's own convention (the PSP pair's turn about `up`, HD's `--pose` yaw), which
+runs opposite to the heading `atan2(fwd_x, -fwd_z)` used for the drift, so the two columns below
+show the same sign.
 
 **Evidence**, with ours run unposed from its own grid, no input, for each pair's own tick
 count (`scripts/compare-resting-yaw.py`), against the original's heading at the same race
@@ -278,8 +286,8 @@ clock (the PSP pair's `trace.csv` row 0, HD's `pair.json` `original.pose`):
 
 | | Pairs | Ours' drift from GO | Ours minus the original at `T` | Position |
 | --- | --- | --- | --- | --- |
-| Pulse PSP USA, Venom Time Trial, default team | 24 (12 circuits, both layouts), `T` 9.6 to 216.7 s | `-60.89` to `+9.05` degrees | within **0.10** degrees on all 24 | under 0.37 units on 23; Amphiseum White 1.46 |
-| HD/Fury EU, Time Trial after `Restart Race`, Harimau (one Assegai_c1) | 13, `T` 12.0 to 51.7 s | `-12.69` to `+9.47` | within **0.69** degrees on all 13 | 0.07 to 2.92 units |
+| Pulse PSP USA, Venom Time Trial, default team | 24 (12 circuits, both layouts), `T` 9.6 to 216.7 s | `-60.89` to `+9.05` degrees | within **0.101** degrees on all 24 | under 0.37 units on 23; Amphiseum White 1.46 |
+| HD/Fury EU, Time Trial after `Restart Race`, Harimau (one Assegai_c1) | 13, `T` 12.0 to 51.7 s | `-12.69` to `+9.47` | within **0.694** degrees on all 13 | 0.07 to 2.92 units |
 
 Selected rows (degrees):
 
@@ -305,8 +313,8 @@ Selected rows (degrees):
   first 30 ticks).
 
 Confidence **90** that the resting turn is the original's own behaviour at ours' rate on Pulse
-PSP (24 pairs within 0.10 degrees, the live rate within 1 %); **85** on HD (13 pairs within
-0.69 degrees, the live rate within 2 %). The HD residual, 0.1 to 0.7 degrees and up to 2.9
+PSP (24 pairs within 0.101 degrees, the live rate within 1 %); **85** on HD (13 pairs within
+0.694 degrees, the live rate within 2 %). The HD residual, 0.1 to 0.7 degrees and up to 2.9
 units, is open: pairs where ours does not turn at all (Chenghou Project, Metropia, Ubermall)
 still sit 0.5 to 0.7 degrees off, which points at HD's heading at GO after `Restart Race`
 rather than at the turn. Not separable without the original's heading at GO.
