@@ -4,10 +4,11 @@
 onion skin, side by side, difference) from manifests under
 `data/reference/compare-page/`, and `--serve` puts it on the LAN. Usage, the manifest
 and per-title recipes with their status: [`docs/tools/compare-page.md`](../../docs/tools/compare-page.md).
-Landed 2026-10-20 (`compare-page` lane).
+Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, platform, original or engine) and the page footer carries ADR-0074's rights-holder statement, read from `legal.md` and checked against the ADR by `just check-docs` (`compare-page-credits` lane, 2026-10-20); `--publish` builds strictly and refuses an entry with no `platform`.
 
 ## Open
 
+- **A new manifest entry needs `platform`**; the seed and live manifests under `data/` have it (`compare-seed.py` writes it).
 - **`just publish-compare` is unlocked (ADR-0074 Accepted) and has never been run.** The maintainer runs it; `wrangler` is not installed on the lane host.
 - **HD: the craft pose is not carried.** `rpcs3-drive.py capture` gives the camera, so
   our craft sits a little off (the original has moved a few frames on). `frame-shot`

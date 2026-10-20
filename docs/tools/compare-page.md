@@ -31,7 +31,8 @@ files a player or modder edits); a wrong shape is refused by name instead
 
 | Key | Meaning |
 | --- | --- |
-| `id`, `game`, `title` | required; `game` groups the list |
+| `id`, `game`, `title` | required; `game` is the title and region (`Wipeout HD (EU)`) and groups the list |
+| `platform` | the console the original ran on (`PS3`, `PSP`, `PS4`, `Vita`); required to publish, a warning otherwise (see Credits) |
 | `original`, `before`, `ours` | image paths; at least two |
 | `track`, `craft`, `state`, `setting` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size |
 | `note` | free text, shown under the caption (what is not matched) |
@@ -46,6 +47,23 @@ of ours is never put in the original slot.
 `just compare-seed` rebuilds `seed.toml` from the HD lanes' reference sheets
 (`scripts/compare-seed.py` splits the 3x3 composites into one entry per column).
 `live.toml` is hand-written from the captures below.
+
+## Credits and the rights-holder statement
+
+ADR-0074 requires both on every published page, so every page carries them:
+
+- **A credit under each image** on view: `<game> - <platform> - Original game` or
+  `... - OpenAntiGrav engine` (`before` reads `OpenAntiGrav engine, before`), built from
+  the entry's `game` and `platform`; in side by side it is the figure caption. An entry
+  with no `platform` is **warned about by file and entry** in a local build and shows
+  "platform not recorded"; `--strict`, and `--publish` always, **refuse the build naming
+  the manifest** instead of guessing.
+- **The rights-holder statement** in the page footer. Its text is read at build time from
+  `docs/overview/legal.md`, "Screenshots and rights holders", the one source, and the
+  build refuses if that no longer equals the statement quoted in ADR-0074 word for word
+  (markdown emphasis and line breaks ignored). `python3 scripts/compare-page.py
+  --check-statement` runs only that check; `just check-docs` runs it, so the gate fails on
+  drift. The ADR is immutable, so a mismatch is fixed in `legal.md`.
 
 ## Capturing a pair per title
 
@@ -75,7 +93,8 @@ It **refuses to run** unless the screenshot-policy ADR,
 has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
 constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
-`python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`just publish-compare` rebuilds the page strictly from `data/reference/compare-page/` first, so a missing
+`platform` refuses it before anything uploads. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

@@ -3,6 +3,7 @@
 
     scripts/compare-page.py MANIFEST_OR_DIR... [--out DIR] [--serve [--port N]]
     scripts/compare-page.py --check-publish-lock      (used by `just publish-compare`)
+    scripts/compare-page.py --check-statement         (legal.md's rights-holder text equals ADR-0074's)
 
 MANIFEST is TOML (docs/tools/compare-page.md): a `[page]` table and one `[[entry]]`
 per review pair. Every image path is relative to the manifest. The page lands in
@@ -44,6 +45,10 @@ MAIN_SITE_PROJECT = "openantigrav"
 SLOTS = ("original", "before", "ours")
 LABELS = {"original": "Original", "before": "Ours (before)", "ours": "Ours"}
 CAPTION_KEYS = ("title", "track", "craft", "state", "setting")
+# `platform` names the console the original ran on; the credit under every image is
+# built from `game` and `platform`. Publishing refuses an entry without one.
+LEGAL = ROOT / "docs" / "overview" / "legal.md"
+LEGAL_HEADING = "## Screenshots and rights holders"
 
 
 class ManifestError(Exception):
@@ -65,12 +70,67 @@ def manifest_files(args: list[str]) -> list[Path]:
     return files
 
 
-def load_all(paths: list[Path]) -> dict:
+def plain(md: str) -> str:
+    """Markdown emphasis stripped and whitespace collapsed, so two renderings compare equal."""
+    return re.sub(r"\s+", " ", md.replace("*", "")).strip()
+
+
+def legal_statement() -> str:
+    """The rights-holder paragraph of docs/overview/legal.md, as it is written there."""
+    try:
+        lines = LEGAL.read_text().splitlines()
+    except OSError as e:
+        refuse(f"{LEGAL}: {e}")
+    if LEGAL_HEADING not in lines:
+        refuse(f"{LEGAL}: no `{LEGAL_HEADING}` section; the page's rights-holder statement comes from it")
+    body = []
+    for line in lines[lines.index(LEGAL_HEADING) + 1:]:
+        if line.startswith("#"):
+            break
+        body.append(line)
+    text = " ".join(" ".join(body).split())
+    if not text:
+        refuse(f"{LEGAL}: the `{LEGAL_HEADING}` section is empty")
+    return text
+
+
+def adr_statement() -> str | None:
+    """The statement quoted in ADR-0074's `## Rights-holder statement`, or None without the ADR."""
+    matches = sorted((ROOT / "docs/architecture/adr").glob(f"{POLICY_ADR}-*.md"))
+    if not matches:
+        return None
+    lines = matches[0].read_text().splitlines()
+    if "## Rights-holder statement" not in lines:
+        refuse(f"{matches[0].name}: no `## Rights-holder statement` section")
+    quoted = []
+    for line in lines[lines.index("## Rights-holder statement") + 1:]:
+        if line.startswith("## "):
+            break
+        if line.startswith(">"):
+            quoted.append(line[1:].strip())
+    return " ".join(quoted)
+
+
+def statement_html() -> str:
+    """The footer paragraph: legal.md's text, which must equal the ADR's word for word."""
+    text = legal_statement()
+    adr = adr_statement()
+    lead = "Screenshots and rights holders."
+    if adr is not None and plain(adr) != plain(lead + " " + text):
+        refuse(f"{LEGAL} no longer matches the rights-holder statement in ADR-{POLICY_ADR}; "
+               "the page carries the ADR's wording, so bring legal.md back to it (the ADR is immutable)")
+    esc = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    esc = re.sub(r"\*\*(.+?)\*\*", r"\1", esc)
+    esc = re.sub(r"\*(.+?)\*", r"<em>\1</em>", esc)
+    return f"<strong>{lead}</strong> {esc}"
+
+
+def load_all(paths: list[Path], strict: bool = False) -> dict:
     """The first manifest's [page]; every file's entries, each remembering its own directory."""
     merged = None
     ids = set()
     for path in paths:
-        doc = load_manifest(path)
+        doc = load_manifest(path, strict)
         for e in doc["entry"]:
             if e["id"] in ids:
                 refuse(f"{path}: entry id {e['id']!r} already used by an earlier manifest")
@@ -83,7 +143,7 @@ def load_all(paths: list[Path]) -> dict:
     return merged
 
 
-def load_manifest(path: Path) -> dict:
+def load_manifest(path: Path, strict: bool = False) -> dict:
     try:
         doc = tomllib.loads(path.read_text())
     except (OSError, tomllib.TOMLDecodeError) as e:
@@ -103,6 +163,11 @@ def load_manifest(path: Path) -> dict:
         if e["id"] in seen:
             refuse(f"{where}: duplicate id")
         seen.add(e["id"])
+        if not str(e.get("platform", "")).strip():
+            msg = f"{where}: no `platform` (the credit under each image names title, platform and source)"
+            if strict:
+                refuse(msg + "; publishing refuses to guess one")
+            print(f"compare-page: warning: {msg}", file=sys.stderr)
         have = [s for s in SLOTS if e.get(s)]
         if len(have) < 2:
             refuse(f"{where}: needs at least two of original/before/ours; has {have or 'none'}")
@@ -110,7 +175,7 @@ def load_manifest(path: Path) -> dict:
             p = path.parent / e[s]
             if not p.is_file():
                 refuse(f"{where}: `{s}` image {p} does not exist")
-        unknown = set(e) - {"_base", "id", "game", "note", "not_captured", *SLOTS, *CAPTION_KEYS}
+        unknown = set(e) - {"_base", "id", "game", "platform", "note", "not_captured", *SLOTS, *CAPTION_KEYS}
         if unknown:
             refuse(f"{where}: unknown key(s) {sorted(unknown)}")
     return doc
@@ -190,6 +255,7 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
     return {
         "id": entry["id"],
         "game": entry["game"],
+        "platform": str(entry.get("platform", "")).strip(),
         "title": entry["title"],
         "caption": caption,
         "note": entry.get("note", ""),
@@ -200,8 +266,9 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
     }
 
 
-def build(manifests: list[Path], out: Path) -> Path:
-    doc = load_all(manifests)
+def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
+    footer = statement_html()
+    doc = load_all(manifests, strict)
     img = out / "img"
     img.mkdir(parents=True, exist_ok=True)
     records = [normalise(e, e["_base"], img) for e in doc["entry"]]
@@ -211,7 +278,7 @@ def build(manifests: list[Path], out: Path) -> Path:
         if f.name not in used:
             f.unlink()
     page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records}
-    (out / "index.html").write_text(TEMPLATE.replace("/*DATA*/", json.dumps(page).replace("</", "<\\/")))
+    (out / "index.html").write_text(TEMPLATE.replace("<!--STATEMENT-->", footer).replace("/*DATA*/", json.dumps(page).replace("</", "<\\/")))
     return out / "index.html"
 
 
@@ -277,7 +344,7 @@ def publish_lock() -> str | None:
     return None
 
 
-def publish(out: Path):
+def publish(manifests: list[Path], out: Path):
     why = publish_lock()
     if why:
         print(f"publish-compare: REFUSED. {why}", file=sys.stderr)
@@ -285,8 +352,10 @@ def publish(out: Path):
     if shutil.which("wrangler") is None:
         print("publish-compare: wrangler is not installed (npm i -g wrangler)", file=sys.stderr)
         sys.exit(3)
-    if not (out / "index.html").is_file():
-        print(f"publish-compare: {out}/index.html missing; run `just compare-page` first", file=sys.stderr)
+    try:
+        build(manifests, out, strict=True)
+    except ManifestError as e:
+        print(f"publish-compare: REFUSED. {e}", file=sys.stderr)
         sys.exit(4)
     subprocess.run(["wrangler", "pages", "deploy", str(out), "--project-name", PUBLISH_PROJECT,
                     "--branch", "main"], check=True)
@@ -302,19 +371,29 @@ def main():
     ap.add_argument("--serve", action="store_true", help="serve the built page on every interface")
     ap.add_argument("--port", type=int, default=8097)
     ap.add_argument("--check-publish-lock", action="store_true")
-    ap.add_argument("--publish", action="store_true", help="used by `just publish-compare` only")
+    ap.add_argument("--publish", action="store_true", help="used by `just publish-compare` only: rebuilds strictly, then uploads")
+    ap.add_argument("--strict", action="store_true", help="refuse an entry with no platform instead of warning (publishing implies it)")
+    ap.add_argument("--check-statement", action="store_true", help="fail unless legal.md's rights-holder text equals ADR-0074's")
     a = ap.parse_args()
     if a.check_publish_lock:
         why = publish_lock()
         print(why or "unlocked")
         sys.exit(2 if why else 0)
-    if a.publish:
-        publish(a.out)
+    if a.check_statement:
+        try:
+            statement_html()
+        except ManifestError as e:
+            print(f"compare-page: {e}", file=sys.stderr)
+            sys.exit(1)
+        print("statement: legal.md matches the ADR")
         return
     if not a.manifest:
         ap.error("a manifest is required")
     try:
-        index = build(manifest_files(a.manifest), a.out.resolve())
+        if a.publish:
+            publish(manifest_files(a.manifest), a.out.resolve())
+            return
+        index = build(manifest_files(a.manifest), a.out.resolve(), a.strict)
     except ManifestError as e:
         print(f"compare-page: {e}", file=sys.stderr)
         sys.exit(1)

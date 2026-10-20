@@ -24,7 +24,7 @@ REF = ROOT / "data" / "reference"
 SEED = REF / "compare-page" / "seed"
 CELL_W, CELL_H, LABEL = 640, 400, 14
 
-HD = "Wipeout HD (EU, PS3)"
+HD = "Wipeout HD (EU)"
 TALON = "Talon's Junction (Time Trial)"
 HARIMAU = "Harimau classic"
 
@@ -43,7 +43,11 @@ def toml_str(s: str) -> str:
     return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+PLATFORMS = {"Wipeout HD (EU)": "PS3", "Wipeout Omega Collection": "PS4", "Wipeout 2048 (DLC)": "Vita"}
+
+
 def entry(**kv) -> str:
+    kv = {**{k: v for k, v in kv.items() if k == "id"}, "platform": PLATFORMS[kv["game"]], **{k: v for k, v in kv.items() if k != "id"}}
     return "[[entry]]\n" + "".join(f"{k} = {toml_str(v)}\n" for k, v in kv.items()) + "\n"
 
 
@@ -89,11 +93,11 @@ def main():
                  "Evidence: hd-ship-materials.md Finding 4."))
 
     omega_2048 = (
-        ("omega-01_vineta_k", "Wipeout Omega Collection (PS4)", "Vineta K", "red/white craft"),
-        ("omega-02_metropia", "Wipeout Omega Collection (PS4)", "Metropia", "red/white craft"),
-        ("omega-05_ubermall", "Wipeout Omega Collection (PS4)", "Ubermall", "red/white craft"),
-        ("Anulpha_Pass", "Wipeout 2048 (Vita, DLC)", "Anulpha Pass", "green FEISAR craft"),
-        ("Moa_Therma", "Wipeout 2048 (Vita, DLC)", "Moa Therma", "yellow FEISAR craft"),
+        ("omega-01_vineta_k", "Wipeout Omega Collection", "Vineta K", "red/white craft"),
+        ("omega-02_metropia", "Wipeout Omega Collection", "Metropia", "red/white craft"),
+        ("omega-05_ubermall", "Wipeout Omega Collection", "Ubermall", "red/white craft"),
+        ("Anulpha_Pass", "Wipeout 2048 (DLC)", "Anulpha Pass", "green FEISAR craft"),
+        ("Moa_Therma", "Wipeout 2048 (DLC)", "Moa Therma", "yellow FEISAR craft"),
     )
     for stem, game, track, craft in omega_2048:
         if not (SEED / f"{stem}-before.png").is_file():
