@@ -571,8 +571,15 @@ saturation, 0-1; the original 0.56-0.91 and 0.08-0.27, boxes picked by eye, one 
 
 Assegai (original 0.39-0.62 luma, 0.29-0.36 saturation over four boxes): before 0.11-0.22 and 0.32-0.49, after 0.29-0.46
 and 0.22-0.45: most of the gap closed, the wings and pods still a little low (their pose differs from the capture's).
-Chosen, not measured: the raw domain for the ambient (the sampler word says otherwise) and the one-tick lag, whose
-weight is the 41/52 count above.
+Chosen by pixel match, no score: the raw domain of both maps (the sampler word says otherwise). Measured, as counts: the
+one-tick lag, best for 41 of 52 pauses (0 ticks for 4, 2 for 7).
+
+**Thrust, matched against the previous lane's frames** (`data/reference/hd-flare-rpcs3-check/`, the nozzle crop of
+`sheet2.py`; luma / saturation / fraction of pixels at 255): Harimau original 0.71-0.87 / 0.17-0.34 / 0.48-0.67; before
+0.43-0.46 / 0.57-0.58 / 0.03-0.08; after 0.60-0.61 / 0.39 / 0.08-0.12. Assegai (no "before" frame was taken): original
+0.65-0.72 / 0.23-0.24 / 0.36-0.46, after 0.48-0.49 / 0.38-0.39 / 0.04-0.07. The hull moves toward the original and
+nowhere near clips more than it does; the original's remaining lead at thrust is its boost wash and bloom, which are
+measured elsewhere and **not tuned here**.
 
 **Cost.** `just bench-render hd` (release, one fixed race, 1280x720, RX 7800 XT, one binary run with and without the
 probes; load 12-16, so the numbers are relative; `data/bench/ibl-before`, `ibl-after`, `ibl-after2`, `ibl-after3`):
@@ -589,8 +596,17 @@ Deck the CPU is two to three times slower per thread, so about 1 ms a frame: not
 and affordable against a 16.6 ms frame, so the original's cadence (every tick, the position one tick old) is kept and no
 render-profile setting was added. If a Deck run says otherwise, the lever is blending an opponent every second tick.
 
-**Cross-title.** 2048: checked, differs (a different `.probes`, and an authored sky). Omega: checked, applies, not wired
-(not checkable). Pulse, Pure: no `.rcsmaterial`.
+**Cross-title.** 2048: checked, differs (a different `.probes`, named as such in its load report, and an authored sky).
+Omega: checked, applies, not wired (not checkable); it ships no `.probes`, so nothing was ported by accident.
+Pulse, Pure: no `.rcsmaterial`.
+
+**How brief step 3 was done.** The brief asked to resolve the `IBL` permutation words in `skin::variants`. They are not:
+`variants` still resolves the constant-ambient block of every material, which also feeds `colour_factor`, the specular
+exponent and the `StaticQuake` tag, and re-keying it moves all of those for every title at once. Instead the shader keys on
+the draw's craft layer (a hull that names one is lit from its probe) and `probe_lit` resolves the `IBL` block
+(`0x007`) of each material on its own, only to read whether it declares the reflection sampler. The `IBL` block has no
+`constantAmbientColour`, so a `NO_AMBIENT` gate keyed on the resolved variant would have switched the probe off; keying on
+the layer avoids that. The `Spot`/`SVC1`/`ShadowMap` words (`0x047`, `0x807`, `0x847`) are carried by the existing SPU light and shadow paths.
 
 **The nozzle jewel, read** (draws 521-522 of the Harimau rest frame; `scripts/rsx-draw-list.py` and the vertex programs out of
 the same capture): the vertex program is `TC4 = (u, v + c[207].x * c[208].x)` with `c[207].x = 1.0` the material's rate and
@@ -603,9 +619,8 @@ dots and the exhaust rings and nothing in the nozzle, at any `--anim-seconds`. W
 missing from our hull is open: not in `Ship.vex`'s drawn chunks, or culled, or a different model.
 
 **Open.** Why the nozzle chunks are not drawn (above). The weights at two tight corners (a section pair two apart).
-The tail arrays of the file (24 + 4 + 3 bytes a probe) are read by the loader and unread here. The `Spot`/`SVC1` words of
-the IBL variants (`0x047`, `0x807`, `0x847`) are carried by the existing SPU light and the shadow path rather than resolved:
-the shader keys on the draw's craft layer and the material's own reflection sampler, which for the hull is the same set.
+The tail arrays of the file (24 + 4 + 3 bytes a probe) are read by the loader and unread here. The word resolution is
+the one the previous paragraph names.
 Whether 2048's hull programs sample its `.probes` or its authored sky paraboloid.
 
 ## What has not moved

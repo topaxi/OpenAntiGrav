@@ -25,6 +25,15 @@ pub(in crate::load) fn read_probes(
             ));
             Some(probes)
         }
+        // Wipeout 2048 ships a `.probes` of its own, little-endian with another header: not a
+        // failure of this reader, a file of a layout it does not know.
+        Err(oag_vex::probes::Error::Stride(word)) => {
+            report.push(format!(
+                "{name}: a different layout (second header word {word}, not HD's 16), not read; \
+                 hulls keep the constant ambient"
+            ));
+            None
+        }
         Err(e) => {
             report.push(format!("{name}: {e}; hulls keep the constant ambient"));
             None

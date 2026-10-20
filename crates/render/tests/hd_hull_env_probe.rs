@@ -20,11 +20,11 @@ use oag_mesh::mesh_render::{
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
 
-fn vertex(position: [f32; 3], slots: u32) -> GpuVertex {
+fn vertex(position: [f32; 3], slots: u32, normal: [f32; 3]) -> GpuVertex {
     GpuVertex {
         quake: 0.0,
         position,
-        normal: [0.0, 0.0, 1.0],
+        normal,
         colour: [1.0, 1.0, 1.0, 1.0],
         texcoord: [0.0, 0.0],
         lightmap_texcoord: [0.0, 0.0],
@@ -50,7 +50,7 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
 }
 
 /// One triangle at `z = 0.5`, a white albedo, no second texture.
-fn model(slots: u32, emissive: Vec<Emissive>) -> Model {
+fn model(slots: u32, emissive: Vec<Emissive>, normal: [f32; 3]) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -100,9 +100,9 @@ fn model(slots: u32, emissive: Vec<Emissive>) -> Model {
         anim_nodes: Vec::new(),
         emissive,
         vertices: vec![
-            vertex([-0.9, -0.9, 0.5], slots),
-            vertex([0.9, -0.9, 0.5], slots),
-            vertex([0.0, 0.9, 0.5], slots),
+            vertex([-0.9, -0.9, 0.5], slots, normal),
+            vertex([0.9, -0.9, 0.5], slots, normal),
+            vertex([0.0, 0.9, 0.5], slots, normal),
         ],
     }
 }
@@ -120,7 +120,7 @@ fn rig() -> Scene {
 fn array(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    fill: impl Fn(u32) -> [u8; 4],
+    fill: impl Fn(u32, u32, u32) -> [u8; 4],
 ) -> wgpu::TextureView {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("environment probes"),
@@ -138,7 +138,7 @@ fn array(
     });
     for layer in 0..ENV_PROBE_LAYERS {
         let texels: Vec<u8> = (0..ENV_PROBE_SIZE.0 * ENV_PROBE_SIZE.1)
-            .flat_map(|_| fill(layer))
+            .flat_map(|at| fill(layer, at % ENV_PROBE_SIZE.0, at / ENV_PROBE_SIZE.0))
             .collect();
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -182,11 +182,15 @@ fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     )
 }
 
-/// What the probe arrays hold: craft 0's irradiance (layer 0) a dim blue-grey, its reflection
-/// (layer 1) a dim red, craft 1's two layers black.
-fn fill(layer: u32) -> [u8; 4] {
+/// What the probe arrays hold. Craft 0's irradiance (layer 0) lives in the top-left 64x32
+/// corner, as the engine writes it: a dim blue-grey over its top half, a dim brown over its
+/// bottom half, and a loud red everywhere outside the corner, which a hull must never see. Its
+/// reflection (layer 1) is a dim red throughout. Craft 1's two layers are black.
+fn fill(layer: u32, x: u32, y: u32) -> [u8; 4] {
     match layer {
-        0 => [13, 26, 38, 255],
+        0 if x >= 64 || y >= 32 => [200, 0, 0, 255],
+        0 if y < 16 => [13, 26, 38, 255],
+        0 => [38, 26, 13, 255],
         1 => [64, 0, 0, 255],
         _ => [0, 0, 0, 255],
     }
@@ -201,11 +205,18 @@ fn reflective() -> Vec<Emissive> {
     }]
 }
 
+const UP: [f32; 3] = [0.0, 1.0, 0.0];
+const DOWN: [f32; 3] = [0.0, -1.0, 0.0];
+
 #[test]
 fn a_hull_is_lit_from_its_crafts_probe_and_reflects_where_tagged() {
     let Some((device, queue)) = gpu() else { return };
-    let plain = model(slots::DEFAULT, Vec::new());
-    let tagged = model(slots::DEFAULT | (1 << slots::MATERIAL_SHIFT), reflective());
+    let plain = |normal| model(slots::DEFAULT, Vec::new(), normal);
+    let tagged = model(
+        slots::DEFAULT | (1 << slots::MATERIAL_SHIFT),
+        reflective(),
+        UP,
+    );
     let view = array(&device, &queue, fill);
     let maps = ShadowMaps {
         env_probes: Some(&view),
@@ -213,24 +224,33 @@ fn a_hull_is_lit_from_its_crafts_probe_and_reflects_where_tagged() {
     };
 
     // No craft named: the constant ambient, 0.1 of every channel, and nothing of the probe.
-    let constant = draw(&device, &queue, &plain, rig(), maps, 0.0);
+    let constant = draw(&device, &queue, &plain(UP), rig(), maps, 0.0);
     assert!(
         constant[0] > 0 && constant[0] == constant[1],
         "{constant:?}"
     );
 
-    // Craft 0: `4 * (0.05, 0.1, 0.15)` replaces it, so the hull takes the probe's blue-grey hue
-    // and is brighter than the constant ambient it replaces.
-    let lit = draw(&device, &queue, &plain, rig(), maps, 1.0);
+    // Craft 0, facing up: the paraboloid's top row, `4 * (0.05, 0.1, 0.15)` of the blue-grey
+    // half, so the hull takes its hue and is brighter than the ambient it replaces. A shader
+    // that addressed the corner without halving its coordinate would read the loud red.
+    let lit = draw(&device, &queue, &plain(UP), rig(), maps, 1.0);
     assert!(
         lit[2] > lit[1] && lit[1] > lit[0],
         "the probe's hue: {lit:?}"
     );
     assert!(lit[1] > constant[1], "{lit:?} against {constant:?}");
 
+    // Facing down: the bottom row, the brown half. The normal's `y` is the vertical of the
+    // map, so this is the `v = 0.5 - 0.5 n.y` law, and a flipped one swaps the two.
+    let down = draw(&device, &queue, &plain(DOWN), rig(), maps, 1.0);
+    assert!(
+        down[0] > down[1] && down[1] > down[2],
+        "the lower half's hue: {down:?}"
+    );
+
     // Craft 1 owns layers 2 and 3, which are black: a hull that read craft 0's layer instead
     // would not go dark.
-    let other = draw(&device, &queue, &plain, rig(), maps, 2.0);
+    let other = draw(&device, &queue, &plain(UP), rig(), maps, 2.0);
     assert_eq!((other[0], other[1], other[2]), (0, 0, 0), "{other:?}");
 
     // A tagged material adds the craft's reflection layer, red, weighted by the texel's alpha

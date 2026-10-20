@@ -26,7 +26,7 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
 // The engine's probe tint, parameter `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction
 // (read live on RPCS3, `.w` the desaturation lerp, zero there): both probe maps are
 // multiplied by it. Its source is an engine table with no authored preimage, so the
-// value is the one circuit's measurement.
+// value is the measurement of two circuits (Talon's Junction, Metropia).
 const ENV_PROBE_GAIN: f32 = 4.0;
 
 // The array holds two layers per craft, each 128x64: the irradiance map in its top-left
@@ -690,8 +690,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // the probe tint, the livery's alpha (the gloss mask) and the material's own
         // reflectivity, added after the albedo multiply and before the fog - read off
         // the live microcode, `@0x5c`-`@0x70` of `diffuse_with_specular_from_alpha_n`'s
-        // `IBL` block. **Added raw, not sRGB-decoded**, as the RSX adds its bytes: measured
-        // on the rest frame against the original's hull (luma 0.56-0.91, saturation
+        // `IBL` block. **Added raw, not sRGB-decoded**, as the RSX adds its bytes: chosen by
+        // pixel match against the original's hull, no score (luma 0.56-0.91, saturation
         // 0.08-0.27 over four boxes), the decoded add reads 0.40-0.49 and 0.23-0.42, the
         // raw one 0.56-0.65 and 0.11-0.29 (`docs/rendering/hd-ship-materials.md`,
         // "Finding 5").

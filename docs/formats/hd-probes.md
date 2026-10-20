@@ -79,10 +79,11 @@ Confidence 55: nothing here reads the bake.
   this one: little-endian, a header of `u32` count and a `u32` that reads `2` or `1`, then
   records of 1,112 bytes (Anulpha Pass: 1,146 probes, 1,274,368 bytes = 16 + 1,146 x 1,112) or of
   88 bytes (its reversed file: 858 probes, 75,520 bytes = 16 + 858 x 88). No `64x32`/`128x64`
-  image set fits that. Not decoded, and whether 2048's hull programs sample a probe or the
-  authored sky paraboloid is unread: open.
-- **Omega** (PS4, `data00.psarc`): **checked, differs.** Its two 2048-lineage circuits (`tower`,
-  `mall`) carry a `track.shprobes` of 3.7 and 4.7 MB: spherical-harmonic probes by the name,
-  not read. HD's own circuits on Omega ship no `.probes` in the archives searched (`data00`-`data04` and the patch's
-  `data09`; the patch's other archives were not). HD-derived hull programs on Omega would sample a probe all the same;
+  image set fits that. Not decoded: a 2048 race load names the file as a different layout
+  (`probes::Error::Stride`, `hd_env_probes_ground_truth`) and binds no probes. Whether 2048's hull
+  programs sample a probe or the authored sky paraboloid is unread: open.
+- **Omega** (PS4): **checked, differs.** No `.probes` in any archive of the base package (`data00`-`data04`)
+  or the patch (`data05`, `data07`-`data09`), so an Omega load binds none and its hulls keep the constant ambient: nothing was
+  ported there by accident. Its two 2048-lineage circuits (`tower`, `mall`) carry a `track.shprobes` of 3.7 and 4.7 MB:
+  spherical-harmonic probes by the name, not read. HD-derived hull programs on Omega would sample a probe all the same;
   not checkable without a PS4 emulator.
