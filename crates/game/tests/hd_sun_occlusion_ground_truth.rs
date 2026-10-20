@@ -42,7 +42,7 @@ fn grey_texels(png: &[u8]) -> Vec<u8> {
         }
     }
     raw.chunks_exact(1 + width * 4)
-        .flat_map(|row| row[1..].chunks_exact(4).map(|px| px[0]))
+        .flat_map(|row| row[1..].as_chunks::<4>().0.iter().map(|px| px[0]))
         .collect()
 }
 
