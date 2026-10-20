@@ -12,6 +12,12 @@ end-of-run shields.
 
 ## Open
 
+- **The pitch-alignment gate must become a title axis before anyone turns it on.** Pure's
+  `Ship_UpdatePitch` (`0x0892caf8`) has no `Ship_TestPitchAlignment` call, measured live. Ours is
+  a bare const, `oag_physics::engine::PITCH_GATE_ON` (off), read for every title.
+  `driver-vs-new-physics` is re-applying Pulse's held air laws, and the gate is one of them. Turned
+  on for every title, it would give Pure a gate under the measured pitch it now flies. Make it a
+  `CraftLaws` axis, as `air_pitch_bias` is, with Pure off (measured).
 - **Bank-to-yaw `50`** (confidence 92) is held at Pulse's `30`. The test was on top of the speed
   pair, the launch and the sideshift, with 12 airborne-pitch perturbations of 8 seeds each.
   - Ace race walls: 7 of 12 samples land past the base's worst (`3052`-`4338` against `2339`,

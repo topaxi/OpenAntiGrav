@@ -163,8 +163,10 @@ tick 7282); with the tensor and the bias also on that test passed. The mechanism
 reading the located sample `Environment::track_sample` carries (the entity's `+0xaf0`,
 whose `down` is `+0xb10`); with no sample the gate is open, chosen. Every title runs it:
 Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate, read statically, not
-measured live ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); The PS2 inherits Pulse's; Pure is **inherited from Pulse,
-unmeasured** (a `pure-physics` lane is to measure it); Omega and 2048 inherit HD's. 2048/Omega: **not checkable** here, no executable read of
+measured live ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); The PS2 inherits Pulse's; **Pure has no gate**, measured
+([pure-physics.md](pure-physics.md#pitch-is-three-code-literals): its `Ship_UpdatePitch`,
+`0x0892caf8`, makes no `Ship_TestPitchAlignment` call), so a gate turned on for every title would
+give Pure one the original lacks; Omega and 2048 inherit HD's. 2048/Omega: **not checkable** here, no executable read of
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
 every committed reference were unchanged by it: no scripted or lone-craft run pitches
 past the cone.
@@ -198,7 +200,7 @@ switches the default off, so a follow-up reverts that to put it back:
 | Pulse (PSP, PS2) | off | **measured, held**: on, our AI's gates regress (above) |
 | Wipeout HD | off | **measured, not yet on: our driver regresses.** Read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below); on, HD's autopilot rescues rise by a net 4 over 32 races (twice, before and after HD's gravity law), so it waits for this engine's driver to fly HD with it |
 | Omega, 2048 | off | inherited from HD |
-| Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
+| Pure | off | **measured**: Pure's `Ship_UpdatePitch` has no `weight_distribution` term, and Pure authors none ([pure-physics.md](pure-physics.md#pitch-is-three-code-literals)) |
 
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
 capture path).
