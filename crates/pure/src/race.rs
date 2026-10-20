@@ -554,6 +554,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // sweep walls rose (Ace A `14 -> 53`, B `25 -> 72`) and Ace races wrecked twice where they
     // wrecked none (`docs/physics/pure-physics.md`). `None` flies Pulse's `<pitch>` stand-in.
     code_pitch: None,
+    // `Ship_UpdateAirbrakes` (`0x0892f64c`) pushes `right * 200.0` while a shift's timer runs,
+    // grounded; Pure's `<Airbrake>` has no `sideshift`. Live: `body+0x140 += right * 200.000`.
+    code_sideshift: Some(oag_title::pre_race::Sourced::measured(200.0)),
 };
 
 #[cfg(test)]
@@ -600,6 +603,15 @@ mod tests {
         let pitch = super::CODE_PITCH;
         assert_eq!((pitch.air, pitch.ground, pitch.damping), (0.1, 0.4, 1.5));
         assert_eq!(super::CRAFT_LAWS.code_pitch, None);
+    }
+
+    /// Pure's sideshift pushes at `200`, a code literal measured live; Pure's files author none.
+    #[test]
+    fn the_sideshift_is_pures_own() {
+        assert_eq!(
+            super::CRAFT_LAWS.code_sideshift,
+            Some(oag_title::pre_race::Sourced::measured(200.0))
+        );
     }
 
     #[test]

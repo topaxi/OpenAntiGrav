@@ -35,6 +35,9 @@ pub struct CraftLaws {
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,
+    /// The sideshift force a title compiles into its engine, used where a `<Class>` authors no
+    /// `<Airbrake sideshift>`: Wipeout Pure's `200`. `None`: the file's, or none at all.
+    pub code_sideshift: Option<Sourced<f32>>,
 }
 
 /// A pitch response compiled into the engine rather than authored as `<pitch>`.
