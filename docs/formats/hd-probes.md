@@ -15,7 +15,7 @@ that `.probes` is a PVS structure and that the hull's environment maps are rende
 runtime. They are disc data: the original blends a few of these probes by the craft's
 position and writes the result, on an SPU, into the two textures the hull samples.
 
-## Layout (confidence 85)
+## Layout (confidence 85 for the header, position table and image sets; 85 for the block format; the 24 + 4 + 3 byte tail is unread, no score)
 
 One file per circuit direction, 28 on the disc, big-endian:
 
@@ -41,7 +41,7 @@ The probes come in left/right pairs (entries `2k`, `2k + 1`, about 20 units apar
 track) and a section every 12-23 units along it. The first `3 * count` bytes of the
 24 + 4 + 3 tail look like one average `RGB` per probe; none of it is read here.
 
-## What the original does with it (confidence 85 the blend, 70 the weights)
+## What the original does with it (confidence 85 that the maps are this blend; the weights are fitted, not read)
 
 The live `paraboloidIblTex` (64x32) and `paraboloidReflectionTex` (128x64) of a craft are
 a **weighted blend of the probes around it**, equal to this file's images:
@@ -58,6 +58,7 @@ a **weighted blend of the probes around it**, equal to this file's images:
   (`Probes::locate`). One craft on one side of the track blends two probes; one between
   them blends four. The position the original uses is **one tick old** (lag 1 fits best on
   41 of 52 pauses, lag 0 on 4 and lag 2 on 7).
+- **The weighting rule is fitted to the live maps, not read from the SPU job** (its program was not read): label it chosen and fitted, no confidence score beyond the fit above.
 - Two of the 52 pauses (tight corners) blend a section pair **two apart** where the law
   takes neighbours; held in the test as named exceptions. So the law is 70, not 85.
 
