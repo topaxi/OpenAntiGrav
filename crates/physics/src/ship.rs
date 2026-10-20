@@ -216,6 +216,11 @@ pub struct ShipControls {
     /// tick's axis (per-craft state). Scheme-independent: both schemes feed the history
     /// from the d-pad. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub roll_tap_left: bool,
+    /// The `UP` d-pad is **held**: bit 0 of the control record's held mask
+    /// (`*(craft+0x78)+0x24 & 1`), which gates the Turbo's boost lift
+    /// ([`crate::engine::EngineForce::lift`]). Filled from a real pad only; the original's
+    /// AI writes the analog record and never this mask, so no driver sets it.
+    pub dpad_up: bool,
     /// The `RIGHT` d-pad was pressed this tick, the `2` of [`Self::roll_tap_left`].
     pub roll_tap_right: bool,
     /// A barrel roll was decided on this tick, and which way.

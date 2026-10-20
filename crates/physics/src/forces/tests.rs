@@ -769,3 +769,43 @@ fn the_wrong_way_kill_holds_both_airbrakes_full() {
     assert!(left > 0.0 && right > 0.0, "{left} {right}");
     assert_eq!(left, right);
 }
+
+/// The boost lift is gated on the held d-pad Up button, not on the pitch axis: a driver that
+/// pitches the nose down (as the AI's analog record does) gets no lift. Fails if the gate reads
+/// `steer_y` again or is dropped.
+#[test]
+fn the_boost_lift_needs_the_d_pad_up_button_and_not_the_pitch_axis() {
+    let mut handling = Handling {
+        turbo_jump: 0.1,
+        ..test_handling()
+    };
+    handling.engine.turbo = 100.0;
+    let world = flat_floor();
+    let lift = |controls: ShipControls| {
+        let mut ship = ship_at(4.0);
+        ship.turbo_timer = 0.5;
+        ship.thrust = 100.0;
+        evaluate(
+            &mut ship,
+            &controls,
+            &handling,
+            &Environment::default(),
+            &world,
+            1.0 / 60.0,
+        )
+        .engine
+        .lift
+    };
+    let pitched = ShipControls {
+        thrust: 1.0,
+        steer_y: -1.0,
+        ..ShipControls::default()
+    };
+    assert_eq!(lift(pitched), 0.0, "the pitch axis is not the button");
+    let held = ShipControls {
+        thrust: 1.0,
+        dpad_up: true,
+        ..ShipControls::default()
+    };
+    assert!(lift(held) > 0.0, "d-pad Up held lifts");
+}

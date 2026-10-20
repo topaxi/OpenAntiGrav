@@ -396,6 +396,7 @@ fn a_zero_parameter_ship_at_rest_never_accelerates() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
+        dpad_up: true,
         roll_request: Some(oag_physics::barrel_roll::TapDirection::Right),
         roll_shield_floor: 0.2,
     };

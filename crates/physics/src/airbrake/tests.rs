@@ -656,6 +656,7 @@ fn a_zero_handling_ship_gets_nothing_from_the_airbrake_path() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
+        dpad_up: true,
         // The barrel roll's direct request and its invented shield floor too,
         // so this covers the AI's path and not only a pad's.
         roll_request: Some(crate::barrel_roll::TapDirection::Right),

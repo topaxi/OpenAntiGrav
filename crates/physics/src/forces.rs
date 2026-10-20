@@ -506,9 +506,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     } else {
         engine_force.undoubled()
     };
-    // The boost lift's d-pad Up gate, `*(craft+0x78)+0x24 & 1`, read the way
-    // `engine::speedup_pad` reads the same bit for its tilt.
-    let engine_force = if input.steer_y <= -engine::SPEEDPAD_JUMP_THRESHOLD {
+    // The boost lift's d-pad Up gate, `*(craft+0x78)+0x24 & 1`: the held button itself, which
+    // the original's AI never sets (it writes the analog record only).
+    let engine_force = if input.dpad_up {
         engine_force
     } else {
         engine::EngineForce {
