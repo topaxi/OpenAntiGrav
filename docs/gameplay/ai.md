@@ -1455,6 +1455,26 @@ on the deck above. No locate put a craft on the ring onto a route, in the
 air or on the ground. Those five are a lead on the autopilot's own branch
 tracking, not followed here.
 
+**The original's driver re-commits onto an unplanned route (2026-10-20, lane
+`zone-05-shield`).** `Race::recommit` (the port of `Ai_ChooseBranch`'s state-2
+re-commit) offered only routes with a verified speed plan, a filter that is
+ours: it keeps this project's driver off a route it cannot pace. A lone craft
+builds no route plans at all (`route_speed_plans` returns none below two
+craft), so a Zone race on `05_Track` that fell short of the first jump onto
+route 1's deck kept the Autopilot on the ring, aiming 20-70 units above the
+craft: wall contact from tick 886, under 2 units/s by tick 2,000 and the
+shield at 0 by tick 7,200, short of lap 2. In a Single Race the same fall
+re-committed onto route 1, because the field's route plans existed. The
+original's driver reads no plan, so the filter now applies only when this
+project's driver flies (`steer_branching(slot, original)`); the original's
+re-commits onto any route. The original does the same live: forced onto the
+ring in Zone it falls to the lower deck and follows it with no contact
+([zone-start.md](../ghidra/functions/psp-pulse-usa/zone-start.md#on-05_track-a-zone-craft-falls-short-of-the-first-jump-in-the-original-too-2026-10-20)).
+Pinned by `zone_ground_truth::a_zone_craft_that_falls_short_of_05_tracks_first_jump_follows_the_deck_it_lands_on`.
+The coin itself is still plan-gated for every driver, so a lone craft's
+Autopilot never chooses route 1 at the fork; the original's flips a fair coin
+there (its own coin took route 1 on every capture). Open.
+
 **Whole races are inconclusive again.** Switch off and on, same seed, 4 seeds
 a cell, Pulse 12 circuits, HD 4 and the default circuit of Pure, Omega and
 2048, at Novice and Ace (`races_pulse`, `races_others`, `OAG_SWEEP_CLASS`):

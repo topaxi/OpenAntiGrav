@@ -51,3 +51,45 @@ The cached `Mode` (`param_1 + 0xd8`) is `GameMode_FromName(&0x08b30f90, <front-e
 `TrackDefinition_EnterScreenState` and `TrackSelection_ApplySelection` test the same byte with the same mode). Not
 run live: Zone is greyed on a fresh profile. The earlier claim "the byte is on exactly three circuits" is not
 supported by anything read here. `+0x99` (always-hidden) was not touched.
+
+## The Autopilot's speedup reaches the auto-speed too (2026-10-20)
+
+Lane `zone-05-shield`. The four-corner branch (`0x0884c834`-`0x0884c868`: `lw a1,0x28c(a0)`,
+`g_autospeed_step * zone + g_autospeed_base`) ends in the branch-delay `add.s` and falls into
+`0x0884c86c`, the same `swc1 f12,0x0(sp)` the throttle path stores to. Everything after it is
+shared: `flags & 4` -> `T *= craft+0x2a0` (`0x0884c874`-`0x0884c894`), the turbo/roll-payout add
+on `flags & 0x200 || flags & 0x400` with `craft+0x2a4 == 1` (`0x0884c898`-`0x0884c914`), then the
+launch multiplier at `0x0884c918`. Read off the disassembly (Ghidra, `/pulse/BOOT-psp-pulse-usa.BIN`).
+
+**Live**, PPSSPP 1.20.4 software renderer, `time-trial-de-konstruct-black-venom-grid.ppst`
+(forward `05_Track`), `g_game_mode` written to 6 and the Autopilot armed one frame after GO
+(`scripts/psp-zone-autopilot.py`): `craft+0x328` reads **`81.6` = `34 * 1.2 * 2`** on every one of
+1,500 logged frames after the first, with `craft+0x294` at `1.0` and the zone counter `craft+0x28c`
+at `0`. So the x1.2 Autopilot speedup ([autopilot.md](autopilot.md)) multiplies the Zone target.
+Confidence **88** (two sources: the control flow and the live word).
+
+Ported for that one term (`oag_physics::engine::engine`, the auto-speed branch applies
+`EngineFlags::speedup`). The speed it gives, the same autopilot on the same circuit at zone 0:
+
+| x along the run-up | original | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| about -370 | 123.5 | 113.6 | 124.7 |
+| about -490 | 125.2 | 115.0 | 126.2 |
+
+The turbo/roll-payout add on the same tail is **not ported** to the Zone branch: a static read only,
+and nothing fires a Turbo in Zone; a Zone barrel roll's payout would reach it. Open.
+
+Cross-title: HD's Zone engine (`Craft_UpdateThrottle`, `0x000efb50`) is not this shape (its Zone mask
+only ramps `craft+0x2d4`, and it reads no `+0x2f0`), so HD's Zone keeps flying Pulse's auto-speed with
+the speedup **inherited from Pulse**; it reaches only an Autopilot in Zone, which Zone never hands out
+(the `--autopilot` aid alone). Pure, 2048, Omega: not checked here.
+
+## On 05_Track a Zone craft falls short of the first jump in the original too (2026-10-20)
+
+Same capture, with the player's driver's fork decision written to the ring (`Ai_ChooseBranch`'s
+`ai+0x58 = 1`, excluded path `ai+0x60 = 1`, [ai-branch-choice.md](ai-branch-choice.md); the
+driver's own coin took the lower deck on every unpatched run, so on this fork the junction's
+primary successor is the lower deck): the craft reaches the ring's ramp at 121-125 units/s,
+leaves it half-grounded at y 41 (`craft+0x2b0` 0.25-0.5 for 34 frames), lands on the lower deck
+and follows it, **0 contact frames and the shield unchanged over 1,500 frames**. A patch of the
+coin instruction itself (`0x08854a24`) changed nothing: PPSSPP keeps the compiled block.
