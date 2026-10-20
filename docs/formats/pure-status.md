@@ -596,7 +596,7 @@ What Pulse authors and Pure does not - **this list is complete**:
 | Element | Absent from Pure | Consequence |
 | --- | --- | --- |
 | `<Stats><FE speed thrust handling shield/>` | the whole element | Presentation, the ship-select bars. `Stats::fe` is an `Option` |
-| `<Class><pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>` | the whole element | Feeds `oag_physics::Pitch`. **Was the live blocker; optional since 2026-08-12.** `Class::pitch` is an `Option` and `oag_gameplay::handling::PITCH_STAND_IN` substitutes Pulse's own block, which `race::load` reports by name. A malformed one is still an error - see `an_absent_pitch_is_none_and_a_broken_one_is_still_an_error` |
+| `<Class><pitch pitch_air pitch_ground pitch_damping antigrav_height_adjust/>` | the whole element | Feeds `oag_physics::Pitch`. **Pure's engine has no such block: its pitch is three code literals, measured live** ([pure-physics.md](../physics/pure-physics.md)). **Was the live blocker; optional since 2026-08-12.** `Class::pitch` is an `Option` and `oag_gameplay::handling::PITCH_STAND_IN` substitutes Pulse's own block, which `race::load` reports by name. A malformed one is still an error - see `an_absent_pitch_is_none_and_a_broken_one_is_still_an_error` |
 | `<Class><Airbrake sideshift>` | one attribute | Optional; `oag_physics::Airbrake` already defaults it to `0.0` |
 | `<Misc easyshield>`, `<Misc weight_distribution>` | two attributes | Optional, same defaulting argument |
 

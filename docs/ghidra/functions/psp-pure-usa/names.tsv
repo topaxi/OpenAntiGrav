@@ -26,10 +26,10 @@
 # and why the _q-suffixed rows below still cleared the bar despite noisier
 # diffs than psp-pulse-eu's.
 0x0880bae8	function	Options_LoadDefaultControlMapping	75	corroboration.md
-0x089345e8	function	Body_Integrate	70	corroboration.md
-0x0892f1f0	function	Ship_UpdateEngine	74	weapons.md
-0x0892cba0	function	Ship_ApplyQuadraticDrag	60	corroboration.md
-0x0892cc2c	function	Ship_ApplyAngularDamping	60	corroboration.md
+0x089345e8	function	Body_Integrate	88	craft-physics.md
+0x0892f1f0	function	Ship_UpdateEngine	92	craft-physics.md
+0x0892cba0	function	Ship_ApplyQuadraticDrag	92	craft-physics.md
+0x0892cc2c	function	Ship_ApplyAngularDamping	92	craft-physics.md
 
 # String-anchored, not fuzzy-matched: read directly off the .pob effect
 # names and tags each function spawns. See rocket-and-collision-fx.md.
@@ -108,7 +108,7 @@
 0x08850274	function	Disruptor_TestHit	80	weapons.md
 0x08850ec8	function	Disruptor_ApplyEffect	84	weapons.md
 0x0892935c	function	Ship_UpdateWeapons	78	weapons.md
-0x0892edfc	function	Ship_ApplySteeringTorque	72	weapons.md
+0x0892edfc	function	Ship_ApplySteeringTorque	90	craft-physics.md
 0x088580d8	function	Bomb_Init	84	weapons.md
 0x088583d8	function	Bomb_UpdateSpin	78	weapons.md
 0x0884e968	function	BombPool_Update	80	weapons.md
@@ -196,3 +196,38 @@
 0x08815e1c	function	MPTimeTrial_Construct	82	mp-time-trial-collision.md
 0x08824e34	function	Collision_DispatchPair	80	mp-time-trial-collision.md
 0x0883defc	function	Scream_StartSound	88	countdown-voice.md
+
+# Pure's craft update, force laws, launch and handling loader (2026-10-20, lane pure-physics):
+# diffed against psp-pulse-usa/engine.md instruction by instruction and measured live in
+# PPSSPP with scripts/psp-pure-force-capture.py. Evidence on craft-physics.md; the laws on
+# docs/physics/pure-physics.md. Five rows above moved to craft-physics.md in this change:
+# Ship_ApplyQuadraticDrag and Ship_ApplyAngularDamping (60 -> 92, live), Body_Integrate
+# (70 -> 88, read against Pulse's), Ship_UpdateEngine (74 -> 92, live) and
+# Ship_ApplySteeringTorque (72 -> 90, live).
+0x0892d214	function	Ship_UpdateCraft	92	craft-physics.md
+0x0892c7dc	function	Ship_UpdateBrakes	80	craft-physics.md
+0x0892f64c	function	Ship_UpdateAirbrakes	90	craft-physics.md
+0x0892caf8	function	Ship_UpdatePitch	92	craft-physics.md
+0x0892c6b0	function	Ship_UpdateHover	85	craft-physics.md
+0x0892dea8	function	Ship_HoverTwoPoint	90	craft-physics.md
+0x0892e5b8	function	Ship_HoverFourCorner	75	craft-physics.md
+0x0892c994	function	Ship_ApplyLateralGrip	80	craft-physics.md
+0x0892cb58	function	Ship_ApplyWeathervaneTorque	80	craft-physics.md
+0x0892cc94	function	Ship_ApplyRollingResistance	85	craft-physics.md
+0x0892ccd0	function	Ship_ApplySpeedupPad	80	craft-physics.md
+0x08933730	function	Body_SetMass	80	craft-physics.md
+0x089334a4	function	Body_AddForceWorld	85	craft-physics.md
+0x08934530	function	Body_SetBoxInertia	88	craft-physics.md
+0x0892cf5c	function	Ship_InitCraft	80	craft-physics.md
+0x0892b094	function	Ship_UpdateSideshiftInput	85	craft-physics.md
+0x0880f870	function	Race_UpdateLaunchGrade	88	craft-physics.md
+0x089252e8	function	Ship_UpdateStartBoost	88	craft-physics.md
+0x08920a4c	function	Handling_ParseStats	88	craft-physics.md
+0x0891fadc	function	HandlingXml_ParseAntigrav	88	craft-physics.md
+0x0891ff38	function	HandlingXml_ParseBrakes	88	craft-physics.md
+0x0891fd10	function	HandlingXml_ParseEngine	92	craft-physics.md
+0x089200c8	function	HandlingXml_ParseTurning	92	craft-physics.md
+0x0892021c	function	HandlingXml_ParseAirbrake	88	craft-physics.md
+0x0891f93c	function	HandlingXml_ParsePhysical	88	craft-physics.md
+0x089204b4	function	HandlingXml_ParseAirbrakeGraphics	80	craft-physics.md
+0x089205c0	function	HandlingXml_ParseMisc	85	craft-physics.md
