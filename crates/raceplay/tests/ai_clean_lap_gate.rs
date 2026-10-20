@@ -277,6 +277,18 @@
 //! though a generator run on this change's tree already differs from the table
 //! on many of them inside the tolerances.
 //!
+//! **Regenerated 2026-10-21 for the magstrip escape** (lane `deviations-to-original`): a
+//! probe inside a `MagFloor` escapes, as Pulse's `Ship_HoverTwoPoint` gate allows
+//! (`oag_physics::hover::MagFloorEscape::Always`). By the noise method over
+//! `perturb::BOUND_OFFSETS`, failures of the 100 Pulse AI-gate tests per offset: law off
+//! `0 1 0 1 1 2 1 1 1` (median 1, max 2), law on `1 1 1 2 1 2 1 2 1` (median 1, max 2), inside
+//! the bar (median and max each at most two above law off). One row carries it: `06_Track`
+//! RAPIER, worst median contact `154` to `419`, still `CleanLap`. That is our magnet hold, not
+//! our driver: one run of that row escaped off a magstrip 489 times at full blend, with probe
+//! heights down to `-0.25` and the craft pinned near `(745, 365, -1)`, where the original's hold
+//! kept every probe at least `2.19` above the strip on Talon's Junction
+//! (`docs/physics/airborne-ground-truth.md`). Every other row moved inside the tolerances.
+//!
 //! Before that, [`BASELINE`] was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
 //! 2026-09-12, and cross-checked field by field against a board printed
@@ -587,54 +599,54 @@ struct Row {
 /// what "improve" means per field and how each is asserted.
 #[rustfmt::skip]
 const BASELINE: &[Row] = &[
-    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2328), contact_ticks: 0 }, // 2324/0 2325/0 2324/0 2328/0 2325/0 2324/0 2325/0 2327/0 2324/0
+    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2327), contact_ticks: 0 }, // 2327/0 2324/0 2327/0 2325/0 2324/0 2325/0 2325/0 2327/0 2324/0
     Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2325), contact_ticks: 0 }, // 2324/0 2325/0 2325/0 2324/0 2323/0 2325/0 2325/0 2324/0 2325/0
-    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2102), contact_ticks: 0 }, // 2100/0 2101/0 2100/0 2100/0 2100/0 2102/0 2101/0 2101/0 2100/0
+    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2102), contact_ticks: 0 }, // 2102/0 2100/0 2101/0 2101/0 2102/0 2101/0 2101/0 2101/0 2101/0
     Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2356), contact_ticks: 0 }, // 2355/0 2350/0 2351/0 2350/0 2299/0 2353/0 2353/0 2356/0 2354/0
     Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2007), contact_ticks: 0 }, // 2005/0 2004/0 2004/0 2003/0 2002/0 2007/0 1996/0 2005/0 2004/0
     Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2237), contact_ticks: 0 }, // 2234/0 2237/0 2234/0 2234/0 2233/0 2234/0 2235/0 2233/0 2235/0
-    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2687), contact_ticks: 0 }, // 2683/0 2687/0 2685/0 2684/0 2683/0 2683/0 2682/0 2686/0 2683/0
+    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2688), contact_ticks: 0 }, // 2685/0 2681/0 2685/0 2683/0 2682/0 2688/0 2685/0 2684/0 2683/0
     Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2530), contact_ticks: 0 }, // 2520/0 2530/0 2524/0 2523/0 2523/0 2522/0 2521/0 2521/0 2521/0
-    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1910), contact_ticks: 0 }, // 1904/0 1906/0 1904/0 1904/0 1906/0 1905/0 1903/0 1906/0 1910/0
+    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1917), contact_ticks: 0 }, // 1904/0 1891/0 1904/0 1904/0 1906/0 1905/0 1902/0 1901/0 1917/0
     Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2216), contact_ticks: 0 }, // 2208/0 2209/0 2207/0 2207/0 2213/0 2216/0 2212/0 2212/0 2212/0
-    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2109), contact_ticks: 0 }, // 2093/0 2094/0 2089/0 2093/0 2109/0 2094/0 2098/0 2091/0 2100/0
-    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2964), contact_ticks: 1 }, // 2964/0 2956/0 2949/0 2934/0 2873/0 2949/0 2942/0 2937/0 2951/1
-    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2083), contact_ticks: 0 }, // 2082/0 2083/0 2078/0 2079/0 2082/0 2081/0 2079/0 2080/0 2081/0
+    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2116), contact_ticks: 4 }, // 2096/0 2098/0 2116/0 2110/0 2109/0 2089/4 2099/0 2089/0 2093/0
+    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2958), contact_ticks: 0 }, // 2949/0 2950/0 2958/0 2941/0 2862/0 2950/0 2954/0 2942/0 2938/0
+    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2083), contact_ticks: 0 }, // 2081/0 2082/0 2083/0 2081/0 2081/0 2081/0 2079/0 2080/0 2082/0
     Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2185), contact_ticks: 0 }, // 2177/0 2185/0 2183/0 2183/0 2180/0 2178/0 2184/0 2183/0 2176/0
-    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1910), contact_ticks: 30 }, // 1909/27 1908/25 1908/28 1907/27 1909/30 1909/29 1907/23 1910/30 1908/30
+    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1913), contact_ticks: 30 }, // 1907/19 1910/29 1913/30 1910/25 1909/27 1911/25 1899/28 1909/28 1902/29
     Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2139), contact_ticks: 0 }, // 2139/0 2136/0 2134/0 2137/0 2134/0 2134/0 2134/0 2134/0 2132/0
     Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1760), contact_ticks: 0 }, // 1760/0 1760/0 1760/0 1759/0 1758/0 1758/0 1758/0 1760/0 1758/0
     Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2074), contact_ticks: 0 }, // 2069/0 2068/0 2069/0 2069/0 2070/0 2069/0 2069/0 2074/0 2070/0
-    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2385), contact_ticks: 0 }, // 2382/0 2379/0 2381/0 2383/0 2377/0 2379/0 2385/0 2381/0 2381/0
+    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2383), contact_ticks: 0 }, // 2379/0 2374/0 2383/0 2381/0 2377/0 2380/0 2382/0 2379/0 2383/0
     Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2202), contact_ticks: 0 }, // 2202/0 2195/0 2201/0 2201/0 2201/0 2200/0 2202/0 2200/0 2200/0
-    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1666), contact_ticks: 0 }, // 1664/0 1666/0 1664/0 1664/0 1666/0 1663/0 1666/0 1665/0 1666/0
+    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1668), contact_ticks: 3 }, // 1666/2 1667/2 1666/3 1666/1 1665/0 1667/1 1666/2 1668/1 1665/1
     Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2003), contact_ticks: 0 }, // 1997/0 2002/0 1998/0 2001/0 2003/0 1991/0 1998/0 1998/0 2001/0
-    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1979), contact_ticks: 89 }, // 1922/0 1913/4 1920/0 1922/0 1917/0 1922/0 1920/0 1979/89 1917/0
-    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2833), contact_ticks: 13 }, // 2823/4 2821/10 2826/3 2833/12 2822/1 2820/13 2826/5 2820/4 2823/2
-    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1788), contact_ticks: 0 }, // 1784/0 1785/0 1785/0 1786/0 1786/0 1788/0 1783/0 1785/0 1786/0
+    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1930), contact_ticks: 0 }, // 1913/0 1930/0 1914/0 1918/0 1909/0 1922/0 1929/0 1918/0 1923/0
+    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2837), contact_ticks: 7 }, // 2837/2 2802/0 2828/3 2834/0 2819/0 2818/2 2828/7 2823/5 2824/1
+    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1789), contact_ticks: 0 }, // 1787/0 1789/0 1787/0 1786/0 1785/0 1785/0 1785/0 1784/0 1781/0
     Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1952), contact_ticks: 0 }, // 1952/0 1944/0 1952/0 1950/0 1945/0 1947/0 1949/0 1948/0 1947/0
-    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1689), contact_ticks: 0 }, // 1689/0 1687/0 1686/0 1683/0 1682/0 1684/0 1688/0 1680/0 1682/0
+    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1696), contact_ticks: 0 }, // 1692/0 1688/0 1685/0 1685/0 1688/0 1696/0 1693/0 1695/0 1693/0
     Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1882), contact_ticks: 0 }, // 1870/0 1882/0 1870/0 1878/0 1882/0 1877/0 1881/0 1880/0 1876/0
-    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1504), contact_ticks: 13 }, // 1503/0 1500/0 1503/12 1503/0 1503/0 1504/13 1504/0 1504/0 1504/1
+    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1504), contact_ticks: 11 }, // 1503/1 1502/0 1503/0 1503/0 1503/11 1504/0 1504/1 1502/0 1504/1
     Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1789), contact_ticks: 0 }, // 1787/0 1788/0 1786/0 1789/0 1787/0 1788/0 1787/0 1786/0 1788/0
-    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2059), contact_ticks: 0 }, // 2056/0 2056/0 2059/0 2056/0 2056/0 2055/0 2054/0 2056/0 2056/0
+    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2059), contact_ticks: 0 }, // 2055/0 2055/0 2059/0 2059/0 2055/0 2055/0 2058/0 2059/0 2056/0
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1961), contact_ticks: 57 }, // 1931/48 1928/28 1930/24 1928/30 1930/25 1931/53 1930/28 1961/57 1929/19
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1551), contact_ticks: 1 }, // 1462/0 1447/0 1447/0 1551/0 1472/1 1448/0 1447/1 1449/0 1447/0
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1873), contact_ticks: 1 }, // 1871/0 1864/0 1870/0 1864/1 1873/0 1871/1 1868/0 1869/0 1808/0
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2693), contact_ticks: 154 }, // 1750/62 2692/143 2687/137 1869/126 2687/132 2686/154 1788/121 2693/144 1847/137
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2777), contact_ticks: 19 }, // 2466/2 2777/0 2460/19 2455/1 2475/2 2482/5 2476/15 2459/1 2462/2
-    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1664), contact_ticks: 0 }, // 1664/0 1661/0 1661/0 1654/0 1648/0 1655/0 1657/0 1651/0 1654/0
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1550), contact_ticks: 2 }, // 1445/1 1446/1 1455/0 1455/1 1447/1 1446/0 1449/0 1550/2 1443/2
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1873), contact_ticks: 2 }, // 1871/0 1864/0 1869/0 1864/2 1873/0 1871/0 1868/1 1869/0 1808/0
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2693), contact_ticks: 419 }, // 1767/303 1850/419 1877/327 1882/324 1787/122 1764/304 2693/147 2686/146 1849/160
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2776), contact_ticks: 21 }, // 2750/17 2776/3 2459/21 2766/16 2468/2 2470/18 2756/16 2762/16 2485/19
+    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1667), contact_ticks: 0 }, // 1653/0 1660/0 1667/0 1657/0 1664/0 1656/0 1655/0 1654/0 1661/0
     Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1803), contact_ticks: 0 }, // 1793/0 1796/0 1796/0 1795/0 1803/0 1790/0 1791/0 1789/0 1792/0
-    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1606), contact_ticks: 0 }, // 1598/0 1599/0 1595/0 1606/0 1603/0 1601/0 1599/0 1596/0 1604/0
+    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1608), contact_ticks: 0 }, // 1595/0 1601/0 1603/0 1597/0 1593/0 1599/0 1608/0 1599/0 1597/0
     Row { circuit: "10_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1778), contact_ticks: 1 }, // 1777/0 1777/0 1778/0 1776/1 1775/1 1775/1 1774/1 1778/0 1772/1
-    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1326), contact_ticks: 4 }, // 1325/4 1326/2 1326/2 1325/0 1326/2 1325/0 1325/2 1326/4 1325/3
+    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1327), contact_ticks: 4 }, // 1325/2 1327/3 1326/0 1326/0 1326/0 1325/0 1326/2 1326/4 1326/3
     Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1608), contact_ticks: 0 }, // 1581/0 1581/0 1594/0 1600/0 1585/0 1587/0 1603/0 1608/0 1586/0
-    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1832), contact_ticks: 0 }, // 1824/0 1831/0 1829/0 1832/0 1829/0 1831/0 1826/0 1830/0 1831/0
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2001), contact_ticks: 272 }, // 1978/267 1982/256 1991/245 2001/266 1975/269 1999/0 1980/272 1983/252 1981/256
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1495), contact_ticks: 32 }, // 1453/7 1421/5 1318/2 1310/3 1317/2 1313/2 1495/32 1456/15 1467/30
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1842), contact_ticks: 0 }, // 1839/0 1837/0 1841/0 1839/0 1842/0 1835/0 1839/0 1834/0 1835/0
-    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1460), contact_ticks: 53 }, // 1454/13 1460/0 1456/0 1459/0 1455/2 1454/2 1459/0 1459/53 1460/1
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2486), contact_ticks: 10 }, // 2468/5 2476/9 2470/5 2476/10 2486/5 2483/2 2470/3 2462/6 2484/4
+    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1833), contact_ticks: 0 }, // 1832/0 1827/0 1833/0 1830/0 1833/0 1831/0 1828/0 1829/0 1830/0
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2001), contact_ticks: 272 }, // 1978/267 1978/263 1991/245 2001/266 1975/269 1999/0 1980/272 1983/252 1981/256
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1466), contact_ticks: 31 }, // 1450/13 1306/6 1466/31 1315/6 1310/22 1314/8 1419/6 1306/6 1313/3
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1841), contact_ticks: 0 }, // 1836/0 1838/0 1841/0 1839/0 1838/0 1838/0 1839/0 1834/0 1835/0
+    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1463), contact_ticks: 33 }, // 1453/1 1463/0 1452/3 1460/21 1449/0 1451/0 1458/0 1460/2 1457/33
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2483), contact_ticks: 14 }, // 2467/1 2468/5 2463/6 2470/9 2468/11 2475/14 2456/3 2483/9 2466/11
 ];
 
 /// Runs one row over [`perturb::GATE`] and asserts its [`Median`] against its
