@@ -499,6 +499,23 @@ impl Program {
         self.specular_exponent_chain().and_then(|(_, slot, _)| slot)
     }
 
+    /// The parameter the engine patches into [`Self::specular_exponent_slot`] at draw
+    /// time, whichever hash that is: the exponent the draw really uses is that
+    /// parameter's value in the material instance.
+    ///
+    /// A hull's `diffuse_with_specular_from_alpha_n` program is patched by
+    /// `0x4232e459` (`300` on Harimau, `160` on `feisar_c1`'s paint), not by
+    /// [`crate::rcsmaterial::SPECULAR_POWER`], so asking only [`Self::patches`] for
+    /// `SPECULAR_POWER` left every hull on the shared stand-in.
+    #[must_use]
+    pub fn specular_exponent_parameter(&self) -> Option<u32> {
+        let slot = self.specular_exponent_slot()?;
+        self.parameter_patches
+            .iter()
+            .find(|&&(patched, _)| patched == slot)
+            .map(|&(_, hash)| hash)
+    }
+
     /// The index of the saturated `DP3` feeding [`Self::specular_exponent`]'s
     /// own chain, when that chain exists. [`Self::instructions`] indexed at
     /// the returned value is the `DP3` itself; its two
