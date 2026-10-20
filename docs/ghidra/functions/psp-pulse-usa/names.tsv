@@ -1396,3 +1396,5 @@
 0x0897e140	function	fabsf	95	collision-cage.md
 0x08ab0c8c	data	g_cage_enabled	85	collision-cage.md
 0x08a7abd8	data	g_cage_max_depth	90	collision-cage.md
+0x088418e0	function	Ship_UpdateEntity	75	craft-flags.md
+0x088272f4	function	Entity_SetGridState	80	craft-flags.md

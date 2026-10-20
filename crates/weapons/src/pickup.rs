@@ -182,8 +182,9 @@ pub struct Held {
     pub weapon: Option<Weapon>,
     /// The last weapon this craft was handed, whether or not it still has it.
     ///
-    /// The original keeps `craft+0x1bc`, which every fire handler clears to `-1`,
-    /// and `craft+0x1c0`, which it does not; the grant reads the second to refuse
+    /// The original keeps `pickup+0x1bc`, which every fire handler clears to `-1`,
+    /// and `pickup+0x1c0`, which it does not (the pickup object `*(entity+0x4c)`, not
+    /// the physics craft's flag word at the same offset); the grant reads the second to refuse
     /// repeats (see [`draw`]). Set by [`Self::grant`], never cleared, and hashed.
     pub last: Option<Weapon>,
     /// How many mines are still to be laid from the drop in progress.

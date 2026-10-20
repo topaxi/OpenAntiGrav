@@ -603,16 +603,17 @@ pub struct ShipState {
     /// `0x400` is held for `<Special roll_turbotime>` after a completed barrel roll lands
     /// (confidence 90; see [`Self::roll_payout_timer`], kept separate because `0x400` also
     /// drives a lateral-grip multiplier and a hover override that a Turbo pickup must not
-    /// get). `0x200` is therefore the Turbo pickup, **but its writer has not been found**,
-    /// so that half is inference, confidence 75. See `input-bindings.md`.
+    /// get). `0x200` is the Turbo pickup's running bit, copied from the pickup object's
+    /// fire word by `Ship_UpdateStartBoost` every frame (traced and watched live 2026-10-20,
+    /// confidence 95, `docs/ghidra/functions/psp-pulse-usa/craft-flags.md`). Besides the add
+    /// it escapes the engine's stun/slowdown return, resets [`Self::pad_fade_clock`] and,
+    /// with d-pad Up held, gives the boost lift (`<Special turbo_jump> * T`).
     ///
-    /// **The timer itself is ours**: the original holds a bit, neither `craft+0x1c0`'s
-    /// writer nor the pickup word was read. The **duration** is the disc's
-    /// `<Weapon type="Turbo"><Stats time>` and the **magnitude** its `<Engine turbo>`.
-    /// **The `craft+0x2a4 == 1` gate is not reproduced** (nothing decodes that enum), so
-    /// a craft here can turbo where the original might not. **The boost lift is not
-    /// implemented**: the branch adds `g_boost_lift * T` along body up while thrust is
-    /// held, and that global was never read (`docs/gameplay/pickups.md`).
+    /// **The timer itself is ours**: the original holds a bit and the pickup object's own
+    /// timer. The **duration** is the disc's `<Weapon type="Turbo"><Stats time>` and the
+    /// **magnitude** its `<Engine turbo>`. **The `craft+0x2a4 == 1` gate is not
+    /// reproduced** (no racing-state enum here), so a craft here can turbo where the
+    /// original might not.
     ///
     /// In this crate and hashed, like [`Self::shield`]: written by gameplay, read by the
     /// force law. The *inventory* is not here, because it is an

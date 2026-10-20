@@ -175,7 +175,7 @@ pub struct Special {
     pub roll_turbotime: f32,
     /// The Turbo's boost lift: while a Turbo or a barrel roll's payout runs and
     /// d-pad Up is held, the engine adds `turbo_jump * T` along the hull's up
-    /// axis. `0.1` on both PSP discs. `g_boost_lift` (`0x08b36be8`), written by
+    /// axis. `0.1` on both PSP discs. `g_turbo_jump` (`0x08b36be8`), written by
     /// `Xml_ReadGlobalSettings` (`0x0883ac54`) from the attribute named at
     /// `0x08a7b3cc`; read by `Ship_UpdateEngine` (`0x0884c908`). See
     /// `oag_physics::engine::engine`.
