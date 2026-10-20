@@ -131,10 +131,10 @@ pub struct EngineForce {
     /// Thrust along body forward, the accumulator's `.z`.
     pub thrust: f32,
     /// Boost lift along body up, the accumulator's `.y`.
-    /// Boost lift along body up, the accumulator's `.y`.
     ///
-    /// **Always zero here.** It is non-zero only under the turbo flags (bits of the
-    /// undecoded `craft+0x1c0`) and the boost scale is a global that was not read.
+    /// `<Special turbo_jump> * T` while a Turbo (`craft+0x1c0 & 0x200`) or a roll payout
+    /// (`0x400`) runs, `T` being the thrust just after the turbo add. [`engine`] returns it
+    /// as if d-pad Up were held; [`crate::forces::evaluate`] zeroes it otherwise.
     ///
     /// The original's final accumulate reads a VFPU register for this lane that the
     /// function never loads; the reading is that the caller's `vzero.q` left it at zero,
@@ -184,10 +184,11 @@ impl EngineForce {
 /// `speed` is `|dot(velocity, forward)|`, not `|velocity|`. `grounded` is the previous
 /// frame's 0/0.5/1 fraction.
 ///
-/// The early return **is** implemented, on both timers. Its `0x0200` escape and the
-/// slowdown arm's `0x0010` escape are not (nothing decodes those flags), so a stunned
-/// ship here always loses its engine where the original might not. The slowdown arm is
-/// live: [`crate::slowdown::add`] arms [`ShipState::slowdown_timer`] from a weapon impact.
+/// The early return **is** implemented, on both timers, with its `0x0200` escape: a
+/// running Turbo pickup ([`ShipState::turbo_timer`]) keeps the engine through a stun or a
+/// slowdown. The slowdown arm's `0x0010` escape is dead in the original (no store sets
+/// that bit), so it is not an input. The slowdown arm is live: [`crate::slowdown::add`]
+/// arms [`ShipState::slowdown_timer`] from a weapon impact.
 ///
 /// **The one-shot scale at `craft+0x31c` is implemented, as `thrust_scale`.** A value
 /// test, not a flag test: below `1.0` it multiplies the doubled thrust once on both the
@@ -198,10 +199,11 @@ impl EngineForce {
 ///
 /// **The Autopilot's two bits are implemented**, as `flags` ([`EngineFlags`]).
 ///
-/// **Not implemented**, flag-gated on `craft+0x1c0`: turbo's boost lift and the kill
-/// switch at bit `0x2000`. Implementing them would mean inventing their triggers. (The
-/// four-corner mode's `(flags & 1) && !(flags & 2)` gate is groundedness and
-/// [`ShipState::on_grid`].)
+/// **The boost lift and the Eliminator kill are implemented** (`craft+0x1c0` bits
+/// `0x200`/`0x400` and `0x2000`). The four-corner mode's `(flags & 1) && !(flags & 2)` gate
+/// is groundedness and [`ShipState::on_grid`]. The `craft+0x2a4 == 1` gate on the turbo add
+/// is not reproduced: `ShipState` has no racing-state enum, and a craft outside state 1 has
+/// no running Turbo in any race measured.
 #[must_use]
 pub fn engine(
     state: &ShipState,
@@ -217,7 +219,22 @@ pub fn engine(
     // `controls::update` rewrites `ShipState::thrust` every tick, so it would be
     // overwritten before anything read it, and only the HUD throttle display sees it.
     // Keeping `engine` a function of `&ShipState` is worth more than a cosmetic store.
-    if state.stun_timer > 0.0 || state.slowdown_timer > 0.0 {
+    //
+    // A running Turbo pickup escapes it: the test is skipped while `craft+0x1c0 & 0x200`
+    // (`0x0884c678`), and that bit is the pickup object's running bit `0x200` mirrored by
+    // `Ship_UpdateStartBoost` (`0x0883fe14`/`0x0883fe2c`) every frame, which is
+    // `ShipState::turbo_timer` here (live 2026-10-20, `psp-craft-flags.py`). The barrel
+    // roll's payout (`0x400`) does not escape it. The `0x10` escape of the slowdown arm has
+    // no writer anywhere in the image, so the slowdown arm always applies.
+    let turbo_escapes = state.turbo_running_laws && state.turbo_timer > 0.0;
+    if (state.stun_timer > 0.0 || state.slowdown_timer > 0.0) && !turbo_escapes {
+        return EngineForce::default();
+    }
+
+    // The Eliminator wrong-way kill, `if (flags & 0x2000) { throttle = 0; T = 0; lift = 0 }`
+    // (`0x0884c954`), the last thing the original does: nothing survives it on either
+    // branch, so returning here is the same force. See [`ShipState::wrong_way_kill`].
+    if state.wrong_way_kill {
         return EngineForce::default();
     }
 
@@ -272,8 +289,16 @@ pub fn engine(
     // `(flags & 0x200) || (flags & 0x400)` reads: a fired Turbo pickup
     // ([`ShipState::turbo_timer`]) or a barrel roll's landing payout
     // ([`ShipState::roll_payout_timer`]); see `input-bindings.md`.
+    //
+    // The boost lift sits in the same branch (`0x0884c8d8`-`0x0884c910`): `turbo_jump * T`
+    // on the thrust just after the add, so neither the launch multiplier nor the doubling
+    // reaches it. Its d-pad Up gate (`*(craft+0x78)+0x24 & 1`) is an input this function
+    // does not see: [`EngineForce::lift`] is the lift with Up held, and
+    // [`crate::forces::evaluate`] drops it when Up is not.
+    let mut lift = 0.0;
     if state.turbo_timer > 0.0 || state.roll_payout_timer > 0.0 {
         thrust += handling.engine.turbo;
+        lift = handling.turbo_jump * thrust;
     }
 
     thrust = one_shot_scale(
@@ -281,7 +306,7 @@ pub fn engine(
         thrust_scale,
     );
 
-    EngineForce { thrust, lift: 0.0 }
+    EngineForce { thrust, lift }
 }
 
 /// `if (craft+0x31c < 1.0) T *= craft+0x31c`, after the doubling, on both branches; the
@@ -304,6 +329,21 @@ fn one_shot_scale(thrust: f32, scale: f32) -> f32 {
 /// not drift the determinism hash.
 pub fn advance_turbo(state: &mut ShipState, dt: f32) {
     state.turbo_timer = (state.turbo_timer - dt).max(0.0);
+}
+
+/// Runs the speed-pad fade clock, [`ShipState::pad_fade_clock`]: `0.0` while a Turbo runs,
+/// otherwise `+ dt`, clamped at `1.0`.
+///
+/// `Ship_UpdateEngine`'s first act (`0x0884c5cc`-`0x0884c5f4`), before its early return, so
+/// a stunned craft's clock still runs. Called from [`crate::forces::evaluate`] just before
+/// [`engine`], and so before [`speedup_pad`] reads it the same tick, as in the original's
+/// `Ship_UpdateCraft`.
+pub fn advance_pad_fade(state: &mut ShipState, dt: f32) {
+    state.pad_fade_clock = if state.turbo_running_laws && state.turbo_timer > 0.0 {
+        0.0
+    } else {
+        (state.pad_fade_clock + dt).min(1.0)
+    };
 }
 
 /// The brake, as a world-space force.
@@ -535,15 +575,15 @@ pub const SPEEDPAD_JUMP_THRESHOLD: f32 = 0.5;
 /// `steer_y <= -threshold`. Backwards would tilt the boost upward whenever the player
 /// pitches down, behaviour that looks deliberate (see `crate::controls`' module docs).
 ///
-/// # Deliberately not here: the `craft+0x2cc` scale
+/// # The fade after a Turbo: `craft+0x2cc`
 ///
-/// `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, a one-second fade-in. `craft+0x2cc` is
-/// written only in `Ship_UpdateEngine`'s prologue (`flags & 0x200 ? 0.0 : craft+0x2cc +
-/// dt`), so it is **seconds since flag `0x200` was last set**, one of the eleven
-/// undecoded bits of `craft+0x1c0`; it is not the contact ratio an earlier reading assumed
-/// (an unbounded accumulator cannot be a groundedness). Omitting it gives full strength
-/// from the first tick, which the trace measures: `0x200` is evidently clear during
-/// ordinary racing.
+/// `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, after the speed-pad-jump tilt and before the
+/// scale onto the direction. `craft+0x2cc` is [`ShipState::pad_fade_clock`], seconds since
+/// the Turbo pickup's running bit `0x200` was last set ([`advance_pad_fade`]); it is not the
+/// contact ratio an earlier reading assumed. So a pad gives nothing while a Turbo runs and
+/// fades back in linearly over the next second. Ordinary racing never sees it, which is
+/// what the pad traces measured at full strength. Confidence 85 (the multiply read in the
+/// decompile; the clock and the bit live).
 pub fn speedup_pad(
     state: &mut ShipState,
     controls: &ShipControls,
@@ -582,6 +622,11 @@ pub fn speedup_pad(
         state.pad_direction + up * handling.speedpad_jump
     } else {
         state.pad_direction
+    };
+    let force = if state.pad_fade_clock < 1.0 {
+        force * state.pad_fade_clock
+    } else {
+        force
     };
 
     direction * force

@@ -721,7 +721,7 @@ if (flags & 0x0004)  T *= craft+0x2a0                   // the Autopilot, 1.2
 lift = 0
 if ((flags & 0x0200) || (flags & 0x0400)) and craft+0x2a4 == 1 {
     T += Engine.turbo
-    if (controls.buttons & 1)  lift = g_boost_lift * T
+    if (controls.buttons & 1)  lift = g_turbo_jump * T   // d-pad Up, <Special turbo_jump>
 }
 T = T * craft+0x294 * 2.0                               // start-boost mul, 1.0 when racing
 if (craft+0x31c < 1.0) { T *= craft+0x31c; craft+0x31c = 1.0 }  // one-shot scale
@@ -1067,16 +1067,13 @@ craft+0x2cc = (craft+0x1c0 & 0x200) ? 0.0 : craft+0x2cc + dt;
 
 That is an **accumulator of seconds**, reset while flag `0x200` is set, and an
 unbounded one - it cannot be a `0..1` groundedness. What it holds is *time since
-flag `0x200` was last set*, and `0x200` is one of the eleven undecoded bits of
-`craft+0x1c0` (see the bottom of this page). So the term is a **one-second
-fade-in after some unidentified state ends**, not a contact scale.
-
-`crates/physics/src/engine.rs`'s `speedup_pad` therefore leaves it out rather than
-guessing. **It is now the only branch of that function left out** - the
-`controls->0x24 & 1` one beside it is implemented, see below. That is also what
-the measurement wants: `docs/physics/cornering-ground-truth.md` records five pad
-crossings at full magnitude, so `0x200` is evidently not set during ordinary
-racing and the gate would be inert anyway.
+flag `0x200` was last set*. **`0x200` is the Turbo pickup running** (2026-10-20,
+traced and watched live, [craft-flags.md](craft-flags.md)). So the term is a
+**one-second fade-in after a Turbo ends**, not a contact scale: a pad gives nothing
+while a Turbo runs. Ported as `ShipState::pad_fade_clock`
+(`oag_physics::engine::advance_pad_fade`). Ordinary racing never sees it, which is
+what `docs/physics/cornering-ground-truth.md`'s five full-magnitude pad crossings
+measured.
 
 ##### `<Special speedpad_jump>` is recovered, applied, and is not a jump
 
@@ -2673,8 +2670,10 @@ stored**. Same conclusion, now with the location.
   addresses truncated, so the "no commanded roll" negative does not cover it.
 - **The `flags` word at `craft+0x1c0`.** Eleven bits are used across this path
   (`0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x100, 0x200, 0x400, 0x800,
-  0x1000, 0x2000`). Only bit 0 is established (grounded, set by the hover probes).
-  The rest are described where they appear and not named.
+  0x1000, 0x2000`). **Every writer is now named** ([craft-flags.md](craft-flags.md),
+  2026-10-20): `0x10`, `0x20`, `0x40`, `0x80` and `0x100` have none, so their
+  branches (the slowdown escape, the steering bias, reversed controls) are dead;
+  `0x200` is the Turbo running and `0x2000` the Eliminator wrong-way kill.
 - **Units.** Still open, and this page does not settle them.
 - **Handedness.** Still open in the sense of world units and axis directions.
   What is *no longer* open, and was being confused with it, is the angular sign

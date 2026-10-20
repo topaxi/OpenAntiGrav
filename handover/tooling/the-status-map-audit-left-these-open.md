@@ -121,9 +121,9 @@ marked.
 5. Colour grading is unported on Pulse and HD. (Pulse's motion blur is an
    invented feature per `docs/rendering/motion-blur.md`, not a port gap.) The
    bloom work is the template.
-6. Sideshift's availability gate (`craft+0x1c0 & 2`) is read and
-   deliberately unported. A short RE pass on what sets that bit, then a small
-   change.
+6. ~~Sideshift's availability gate (`craft+0x1c0 & 2`)~~ - **closed 2026-10-20**:
+   bit `0x2` is the grid state; no gesture is read before GO, measured live and
+   ported ([craft-flags.md](../../docs/ghidra/functions/psp-pulse-usa/craft-flags.md)).
 7. 2048's atmosphere (skybox, fog, particles) is uninvestigated; it starts
    from zero on `vita-2048-eu-v104`.
 8. HD/2048 engine sound. See

@@ -176,6 +176,8 @@ pub fn ship_controls(snapshot: &InputSnapshot, scheme: ControlScheme) -> ShipCon
         // `oag_physics::barrel_roll::advance_gesture`, which is also where the
         // two are ORed into one tap; see that function for why they must be.
         roll_tap_left: snapshot.buttons.is_pressed(Button::Left),
+        // The boost lift's button, held (`*(craft+0x78)+0x24 & 1`).
+        dpad_up: snapshot.buttons.is_held(Button::Up),
         roll_tap_right: snapshot.buttons.is_pressed(Button::Right),
         // A real pad, so **never**: a human's roll arrives through the gesture
         // above, exactly as the original's does. `roll_request` is the direct

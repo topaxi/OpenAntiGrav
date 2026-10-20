@@ -216,6 +216,11 @@ pub struct ShipControls {
     /// tick's axis (per-craft state). Scheme-independent: both schemes feed the history
     /// from the d-pad. See `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`.
     pub roll_tap_left: bool,
+    /// The `UP` d-pad is **held**: bit 0 of the control record's held mask
+    /// (`*(craft+0x78)+0x24 & 1`), which gates the Turbo's boost lift
+    /// ([`crate::engine::EngineForce::lift`]). Filled from a real pad only; the original's
+    /// AI writes the analog record and never this mask, so no driver sets it.
+    pub dpad_up: bool,
     /// The `RIGHT` d-pad was pressed this tick, the `2` of [`Self::roll_tap_left`].
     pub roll_tap_right: bool,
     /// A barrel roll was decided on this tick, and which way.
@@ -472,6 +477,18 @@ pub struct ShipState {
     /// ([`crate::launch`]); Zone's auto-speed uses the same multiplier. Written by the
     /// race, not hashed, for [`Self::on_grid`]'s reason.
     pub released: bool,
+    /// The craft is flying the wrong way in an Eliminator race, `craft+0x1c0 & 0x2000`: its
+    /// engine gives nothing and both airbrakes are held full.
+    ///
+    /// The entity update `FUN_088418e0` sets the bit at its end (`0x088428a4`-`0x08842924`)
+    /// when `dot(node forward, located tangent) < -0.4` and clears it otherwise, but only in
+    /// game modes 8 and 18 (`Elimination`, `Multiplayer Elimination`); in every other mode
+    /// the block is skipped and the bit is never set. `Ship_UpdateCraft` then forces the
+    /// control record's airbrakes to `100.0` (`0x088497e8`) and `Ship_UpdateEngine` zeroes
+    /// throttle, thrust and lift (`0x0884c954`). Static read, confidence 82: not watched
+    /// live (no Elimination state was captured). Written by the race every tick, not
+    /// hashed, for [`Self::on_grid`]'s reason: it is a function of the pose and the mode.
+    pub wrong_way_kill: bool,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
     /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the bank-to-yaw
@@ -502,6 +519,17 @@ pub struct ShipState {
     /// Written by the race from the title every tick, not hashed, for [`Self::on_grid`]'s
     /// reason.
     pub pitch_gate: bool,
+    /// The sideshift gestures are withheld in the grid state (`craft+0x1c0 & 2`,
+    /// [`crate::airbrake::advance_sideshift`]): Pulse measured, Pure read; HD and its heirs
+    /// inherit it. Written by the race from the title every tick, not hashed, for
+    /// [`Self::on_grid`]'s reason.
+    pub sideshift_grid_gate: bool,
+    /// The three laws a running Turbo pickup (`craft+0x1c0 & 0x200`) adds beyond the thrust:
+    /// the escape from the engine's stun/slowdown return, the speed-pad fade
+    /// ([`Self::pad_fade_clock`]) and the d-pad Up boost lift. Pulse measured, Pure read; HD
+    /// and its heirs inherit them. Written by the race from the title every tick, not hashed,
+    /// for [`Self::on_grid`]'s reason.
+    pub turbo_running_laws: bool,
     /// The frame the inertia diagonal is applied in ([`InertiaFrame`]): Pulse's world axes
     /// unless the title measured its own. Written by the race from the title every tick, not
     /// hashed, for [`Self::on_grid`]'s reason.
@@ -591,21 +619,39 @@ pub struct ShipState {
     /// `0x400` is held for `<Special roll_turbotime>` after a completed barrel roll lands
     /// (confidence 90; see [`Self::roll_payout_timer`], kept separate because `0x400` also
     /// drives a lateral-grip multiplier and a hover override that a Turbo pickup must not
-    /// get). `0x200` is therefore the Turbo pickup, **but its writer has not been found**,
-    /// so that half is inference, confidence 75. See `input-bindings.md`.
+    /// get). `0x200` is the Turbo pickup's running bit, copied from the pickup object's
+    /// fire word by `Ship_UpdateStartBoost` every frame (traced and watched live 2026-10-20,
+    /// confidence 95, `docs/ghidra/functions/psp-pulse-usa/craft-flags.md`). Besides the add
+    /// it escapes the engine's stun/slowdown return, resets [`Self::pad_fade_clock`] and,
+    /// with d-pad Up held, gives the boost lift (`<Special turbo_jump> * T`).
     ///
-    /// **The timer itself is ours**: the original holds a bit, neither `craft+0x1c0`'s
-    /// writer nor the pickup word was read. The **duration** is the disc's
-    /// `<Weapon type="Turbo"><Stats time>` and the **magnitude** its `<Engine turbo>`.
-    /// **The `craft+0x2a4 == 1` gate is not reproduced** (nothing decodes that enum), so
-    /// a craft here can turbo where the original might not. **The boost lift is not
-    /// implemented**: the branch adds `g_boost_lift * T` along body up while thrust is
-    /// held, and that global was never read (`docs/gameplay/pickups.md`).
+    /// **The timer itself is ours**: the original holds a bit and the pickup object's own
+    /// timer. The **duration** is the disc's `<Weapon type="Turbo"><Stats time>` and the
+    /// **magnitude** its `<Engine turbo>`. **The `craft+0x2a4 == 1` gate is not
+    /// reproduced** (no racing-state enum here), so a craft here can turbo where the
+    /// original might not.
     ///
     /// In this crate and hashed, like [`Self::shield`]: written by gameplay, read by the
     /// force law. The *inventory* is not here, because it is an
     /// `oag_tables::weapons::Weapon` and this crate depends on nothing but `oag-core`.
     pub turbo_timer: f32,
+    /// Seconds since a Turbo pickup last ran, `craft+0x2cc`, clamped at `1.0`.
+    ///
+    /// `Ship_UpdateEngine`'s prologue (`0x0884c5cc`-`0x0884c5f4`) writes
+    /// `craft+0x2cc = (craft+0x1c0 & 0x200) ? 0.0 : craft+0x2cc + dt` every frame, and
+    /// `Ship_ApplySpeedupPad` scales the pad force by it while it is below `1.0`, so a pad
+    /// gives nothing while a Turbo runs and fades back in over the second after it ends.
+    /// Bit `0x200` is the Turbo pickup's running bit ([`Self::turbo_timer`]); read live on
+    /// Pulse PSP 2026-10-20 (the clock held at `0.0` for the 47 frames the bit was set and
+    /// counted from `0.017` the frame it cleared). See [`crate::engine::advance_pad_fade`].
+    ///
+    /// **Two choices, neither observable:** the clamp at `1.0` (the original's accumulator
+    /// is unbounded and only ever compared against `1.0`), and the default of `1.0` where
+    /// `Ship_InitCraft` writes `0.0` (`0x08849524`): its one caller is `Craft_Construct_q`
+    /// (`0x088412d4`), not the respawn, every race places its craft more than a second
+    /// before the release, and a craft cannot reach a pad on the grid. Hashed only
+    /// while below `1.0`, so a run that never fires a Turbo hashes as it did before.
+    pub pad_fade_clock: f32,
     /// Seconds left on a fired Shield pickup.
     ///
     /// While positive the craft takes no damage: [`crate::damage::apply_contact`] returns
@@ -677,8 +723,11 @@ impl Default for ShipState {
             steer_ramp_clamped: false,
             air_pitch_bias: true,
             pitch_gate: true,
+            sideshift_grid_gate: true,
+            turbo_running_laws: true,
             inertia_frame: InertiaFrame::World,
             released: true,
+            wrong_way_kill: false,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,
@@ -691,6 +740,7 @@ impl Default for ShipState {
             craft_state: crate::damage::CraftState::Racing,
             state_timer: 0.0,
             turbo_timer: 0.0,
+            pad_fade_clock: 1.0,
             shield_pickup_timer: 0.0,
             pilot_assist: crate::pilot_assist::State::default(),
         }

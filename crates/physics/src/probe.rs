@@ -183,6 +183,8 @@ pub fn handling() -> Handling {
         },
         // `<Special speedpad_jump>`, a round number, **not** the disc's.
         speedpad_jump: 0.2,
+        // No probe script fires a Turbo, so the boost lift never runs.
+        turbo_jump: 0.1,
         // `<Special roll_cost/roll_speed/roll_turbotime>`: round numbers, **not** the disc's.
         // No probe script taps out a roll, so these hold their defaults every tick
         // (`crates/physics/tests/determinism.rs`).
@@ -353,6 +355,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         on_grid: _,
         // Not hashed, for `on_grid`'s reason.
         released: _,
+        // Not hashed, for `on_grid`'s reason.
+        wrong_way_kill: _,
         // Not hashed: the race writes it from the mode every tick.
         four_corner: _,
         // Not hashed, for `on_grid`'s reason.
@@ -364,6 +368,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         // Not hashed: the race writes it from the title every tick.
         air_pitch_bias: _,
         pitch_gate: _,
+        sideshift_grid_gate: _,
+        turbo_running_laws: _,
         // Not hashed: the race writes it from the title every tick.
         inertia_frame: _,
         launch,
@@ -376,6 +382,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         craft_state,
         state_timer,
         turbo_timer,
+        pad_fade_clock,
         shield_pickup_timer,
         pilot_assist,
     } = *state;
@@ -476,6 +483,11 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // shield makes `crate::damage::apply_contact` return early, so it can suppress a write to
     // `shield` above; the first scenario that fires one sees both fields move together.
     hasher.write_f32(shield_pickup_timer);
+    // Only below its steady `1.0`, which it leaves for a second after a fired Turbo: every
+    // reference committed before it existed stays valid, as with `pilot_assist` below.
+    if pad_fade_clock != 1.0 {
+        hasher.write_f32(pad_fade_clock);
+    }
     // Only once it leaves its default, which a craft never enabled never does: every
     // reference committed before Pilot Assist existed stays valid, and an assisted run is
     // covered from its first enabled tick.

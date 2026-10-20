@@ -454,6 +454,20 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     state.grounded_prev = control_grounded;
     let control_contact = control_grounded > 0.0;
 
+    // `Ship_UpdateCraft` overwrites the control record's airbrakes with `100.0` while the
+    // Eliminator wrong-way bit is set (`0x088497e8`), ahead of the controls that ramp toward
+    // them.
+    let forced;
+    let input = if state.wrong_way_kill {
+        forced = ShipControls {
+            airbrake_left: 1.0,
+            airbrake_right: 1.0,
+            ..*input
+        };
+        &forced
+    } else {
+        input
+    };
     controls::update(state, input, handling, dt);
     // `Craft_UpdateThrottle` (`0x000efb50`) scales the throttle it has just written by
     // `PilotAssist_ThrustScale`, read here from the state the last tick left.
@@ -475,7 +489,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     let mut acc = Accumulators::default();
 
-    // 1. Engine, into the local force accumulator.
+    // 1. Engine, into the local force accumulator. Its prologue runs the pad fade clock
+    //    first, ahead of the early return.
+    engine::advance_pad_fade(state, dt);
     let engine_force = engine::engine(
         state,
         handling,
@@ -489,6 +505,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         engine_force
     } else {
         engine_force.undoubled()
+    };
+    // The boost lift's d-pad Up gate, `*(craft+0x78)+0x24 & 1`: the held button itself, which
+    // the original's AI never sets (it writes the analog record only).
+    let engine_force = if input.dpad_up && state.turbo_running_laws {
+        engine_force
+    } else {
+        engine::EngineForce {
+            lift: 0.0,
+            ..engine_force
+        }
     };
     acc.local_force += engine_force.as_local_force();
     // After the engine, which has just read last tick's multiplier: the grader and boost

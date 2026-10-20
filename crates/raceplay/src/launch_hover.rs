@@ -126,6 +126,8 @@ impl Race {
             ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
             ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
             ship.physics.pitch_gate = self.sim.pitch_gate;
+            ship.physics.sideshift_grid_gate = self.sim.sideshift_grid_gate;
+            ship.physics.turbo_running_laws = self.sim.turbo_running_laws;
             ship.physics.inertia_frame = self.sim.inertia_frame;
         }
     }

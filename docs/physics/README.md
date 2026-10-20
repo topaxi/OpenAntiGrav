@@ -730,9 +730,15 @@ Three consequences, and the first is the interesting one:
 
 **Deliberately not implemented, and why:**
 
-- **Everything flag-gated on the undecoded `craft+0x1c0`**: turbo's boost lift, the
-  uncapped-thrust mode, the `craft+0x2a0` engine multiplier, the engine kill switch, and
-  the steering bias at `craft+0x2e4`. Implementing them means inventing their triggers.
+- **`craft+0x1c0`'s bits are all decoded now** (2026-10-20,
+  [craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md)), and what they gate
+  is ported: the Autopilot's uncapped thrust and `craft+0x2a0` multiplier (`EngineFlags`);
+  the Turbo's (`0x200`) escape from the stun return, its speed-pad fade and its boost lift
+  (`<Special turbo_jump>`); the sideshift gestures withheld on the grid (`0x2`); the
+  Eliminator wrong-way kill (`0x2000`, a `CraftLaws` axis). **Five bits have no writer
+  anywhere** - `0x10`, `0x20`, `0x40`, `0x80`, `0x100` - so the steering bias at
+  `craft+0x2e4`, reversed controls and the slowdown arm's escape are dead in the
+  original and stay unported on purpose.
   The `craft+0x31c` one-shot scale used to be in this list and is not flag-gated at all:
   it is the LeachBeam's `slowShipFactor`, armed by `Ship_ApplyPendingWeaponDamage` and
   spent by `oag_physics::engine` through `Environment::thrust_scale` since 2026-09-16
@@ -740,10 +746,10 @@ Three consequences, and the first is the interesting one:
 - **The `craft+0x2a4` mode enum**, which selects a `-0.9` drag coefficient, a `-5.0` roll
   damping and a disabled `rebound` in mode 0, and skips the control block entirely in 4,
   5, 6 and 8. Naming it is a guess at confidence 40, so the racing values are used.
-- **One branch of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`), down from
-  two. `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades the boost in over a second after
-  flag `0x200` clears, and `0x200` is one of the eleven undecoded bits of `craft+0x1c0`,
-  so it is left out for the same reason as the entries above. **`craft+0x2cc` is not the
+- ~~**One branch of the speed-pad boost**~~ - **ported 2026-10-20**:
+  `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades the boost in over a second after
+  flag `0x200` clears, and `0x200` is the Turbo pickup running
+  (`ShipState::pad_fade_clock`). **`craft+0x2cc` is not the
   contact ratio**, which an earlier plan assumed: `Ship_UpdateEngine`'s prologue
   accumulates `dt` into it, so it is unbounded and cannot be a `0..1` groundedness.
   The other arm, `if (controls->0x24 & 1) dir += craft+0x160 * speedpad_jump`, **is now
@@ -877,10 +883,11 @@ Three consequences, and the first is the interesting one:
   the parameter set for the spring and the body for gravity, and keeping the two equal is
   the integration layer's job.
 - The magnetic-hold force law.
-- What the `craft+0x2a4` mode enum is, and the eleven flag bits at `craft+0x1c0` other than
-  bit 0.
-- **What arms the `craft+0x2e0` timer**, which lowers the hover target and suppresses
-  lateral grip while it runs. A leap, a respawn and a race start are all plausible.
+- What the `craft+0x2a4` mode enum is. (The flag bits at `craft+0x1c0` are decoded:
+  [craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md).)
+- ~~**What arms the `craft+0x2e0` timer**~~ - **closed**: `Ship_AddSlowdown`, called only
+  from `Ship_UpdateEntity` (`0x08842104`) on a weapon's pending slowdown, already ported
+  as `ShipState::slowdown_timer` (`crates/weapons/src/slowdown.rs`).
 
 - **A craft already under a floor face falls through in ours and is recovered by the
   original.** Read 2026-09-29: the hull narrowphase makes contacts against floors,

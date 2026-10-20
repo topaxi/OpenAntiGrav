@@ -22,6 +22,19 @@ pub struct CraftLaws {
     /// (`Ship_TestPitchAlignment`, `oag_physics::engine::pitch_aligned`). A title with no
     /// `CraftLaws` (Pulse) runs it.
     pub pitch_gate: Sourced<bool>,
+    /// In an Eliminator race a craft pointing more than about 114 degrees off the track's
+    /// direction (`dot(forward, tangent) < -0.4`) loses its engine and holds both airbrakes
+    /// full: Pulse PSP's `craft+0x1c0 & 0x2000`, set by `FUN_088418e0` in game modes 8 and 18
+    /// (`oag_raceplay`'s `wrong_way_kill`). Wipeout Pure's executable reads no such bit. A title
+    /// with no `CraftLaws` (Pulse) runs it.
+    pub eliminator_wrong_way_kill: Sourced<bool>,
+    /// The sideshift gestures are withheld in the grid state (Pulse's `craft+0x1c0 & 2` test in
+    /// `Ship_UpdateSideshiftInput_q`). A title with no `CraftLaws` (Pulse) runs it.
+    pub sideshift_grid_gate: Sourced<bool>,
+    /// A running Turbo (Pulse's `craft+0x1c0 & 0x200`) escapes the engine's stun return,
+    /// zeroes a speed pad's force and fades it back in over a second, and lifts with d-pad Up
+    /// held. A title with no `CraftLaws` (Pulse) runs them.
+    pub turbo_running_laws: Sourced<bool>,
     /// The per-class `<GravityMul>` scale multiplies `flight_gravity` (the airborne term), as
     /// Wipeout HD's `Craft_Update` does, rather than Pulse's `normal_gravity`
     /// (`oag_physics::passive::ClassGravityTerm`).

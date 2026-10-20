@@ -1402,3 +1402,5 @@
 0x0892d410	function	WoSpot_GetStrength	85	scene-light.md
 0x0892d640	function	WoSpot_GetVectorFromLight	90	scene-light.md
 0x0892d688	function	WoSpot_GetDistanceBeyondRadius	80	scene-light.md
+0x088418e0	function	Ship_UpdateEntity	75	craft-flags.md
+0x088272f4	function	Entity_SetGridState	80	craft-flags.md

@@ -110,6 +110,9 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         code_sideshift: None,
         code_start_boost: None,
         pitch_gate: Sourced::chosen(true),
+        eliminator_wrong_way_kill: Sourced::chosen(true),
+        sideshift_grid_gate: Sourced::chosen(true),
+        turbo_running_laws: Sourced::chosen(true),
         inertia_rotates: Sourced::chosen(true),
     };
     let pitch = oag_title::craft_laws::CodePitch {

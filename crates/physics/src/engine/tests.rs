@@ -152,6 +152,110 @@ fn a_weapon_slowed_ship_produces_no_thrust_either() {
     );
 }
 
+/// A running Turbo pickup escapes both arms of the early return (`craft+0x1c0 & 0x200`,
+/// `0x0884c678`), and the barrel roll's payout does not. Fails if the escape is dropped or
+/// widened to the roll.
+#[test]
+fn a_running_turbo_keeps_the_engine_through_a_stun_and_a_slowdown() {
+    let handling = test_handling();
+    let run = |state: &ShipState| {
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust
+    };
+    for (stun, slow) in [(0.5, 0.0), (0.0, 1.0)] {
+        let mut state = ship_moving_forward(24.0);
+        state.thrust = 100.0;
+        state.stun_timer = stun;
+        state.slowdown_timer = slow;
+        assert_eq!(run(&state), 0.0, "gated without a turbo");
+
+        state.roll_payout_timer = 0.5;
+        assert_eq!(run(&state), 0.0, "the roll payout is not the escape");
+
+        state.roll_payout_timer = 0.0;
+        state.turbo_timer = 0.5;
+        assert!(run(&state) > 0.0, "a running turbo escapes the gate");
+
+        state.turbo_running_laws = false;
+        assert_eq!(
+            run(&state),
+            0.0,
+            "a title without the Turbo's laws has no escape"
+        );
+        state.turbo_running_laws = true;
+    }
+}
+
+/// The Eliminator wrong-way kill zeroes the engine whatever else is running, a Turbo included
+/// (`0x0884c954` is the last thing the original does to `T`).
+#[test]
+fn the_wrong_way_kill_zeroes_thrust_even_under_a_turbo() {
+    let handling = test_handling();
+    let mut state = ship_moving_forward(24.0);
+    state.thrust = 100.0;
+    state.turbo_timer = 0.5;
+    let run = |state: &ShipState| {
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+    };
+    assert!(run(&state).thrust > 0.0);
+    state.wrong_way_kill = true;
+    assert_eq!(run(&state), EngineForce::default());
+}
+
+/// The boost lift: `<Special turbo_jump> * T` on the thrust just after the turbo add, under a
+/// Turbo or a roll payout, and nothing otherwise (`0x0884c8d8`-`0x0884c910`). Fails if the lift
+/// is dropped, ungated, or taken from the doubled thrust.
+#[test]
+fn a_turbo_lifts_by_turbo_jump_times_the_thrust_after_the_add() {
+    let handling = Handling {
+        turbo_jump: 0.1,
+        ..test_handling()
+    };
+    let mut state = ship_moving_forward(24.0);
+    state.thrust = 100.0;
+    let run = |state: &ShipState| {
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+    };
+    let plain = run(&state);
+    assert_eq!(plain.lift, 0.0, "no lift without a turbo");
+
+    let before_double = plain.thrust / ENGINE_OUTPUT_DOUBLE + handling.engine.turbo;
+    for roll in [false, true] {
+        let mut boosted = state;
+        if roll {
+            boosted.roll_payout_timer = 0.5;
+        } else {
+            boosted.turbo_timer = 0.5;
+        }
+        let lift = run(&boosted).lift;
+        assert!((lift - 0.1 * before_double).abs() < 1e-3, "{lift}");
+    }
+}
+
 #[test]
 fn no_throttle_is_no_thrust() {
     let handling = test_handling();

@@ -549,6 +549,47 @@ fn a_veteran_double_tap_shifts_and_a_single_tap_does_not() {
     assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION);
 }
 
+/// On the grid (`craft+0x1c0 & 2`) no gesture is read at all: a double tap opens no window and
+/// fires nothing, and a flick does not even arm. Measured live on Pulse PSP, 2026-10-20. The
+/// same input after the release shifts, so this fails if the gate is dropped or inverted.
+#[test]
+fn no_sideshift_gesture_is_read_on_the_grid() {
+    let mut state = ShipState {
+        on_grid: true,
+        ..ShipState::default()
+    };
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(
+        state.shift_tap_windows[0], 0.0,
+        "no tap window opens on the grid"
+    );
+    assert_eq!(state.sideshift_timers, [0.0, 0.0]);
+    flick(&mut state, 0.0);
+    assert!(!state.shift_armed, "the flick does not arm on the grid");
+
+    state.on_grid = false;
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(
+        state.sideshift_timers[0], SIDESHIFT_DURATION,
+        "released, the same taps shift"
+    );
+
+    // A title without the gate reads the gestures on the grid too.
+    let mut state = ShipState {
+        on_grid: true,
+        sideshift_grid_gate: false,
+        ..ShipState::default()
+    };
+    tap(&mut state, true, 4);
+    tap(&mut state, true, 0);
+    assert_eq!(
+        state.sideshift_timers[0], SIDESHIFT_DURATION,
+        "no gate, the grid shifts"
+    );
+}
+
 /// The window closes, and a slow second tap opens a new one instead.
 #[test]
 fn a_veteran_tap_outside_the_window_is_a_first_tap_again() {
@@ -628,6 +669,7 @@ fn a_zero_handling_ship_gets_nothing_from_the_airbrake_path() {
         shift_tap_right: true,
         roll_tap_left: true,
         roll_tap_right: true,
+        dpad_up: true,
         // The barrel roll's direct request and its invented shield floor too,
         // so this covers the AI's path and not only a pad's.
         roll_request: Some(crate::barrel_roll::TapDirection::Right),

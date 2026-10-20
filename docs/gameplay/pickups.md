@@ -24,7 +24,7 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | `<WeaponPad refresh_time elimination_refresh_time>` | **recovered** | 90 |
 | `SQUARE` fires, `CIRCLE` absorbs | **recovered** | 90 |
 | `T += Engine.turbo`, uncapped, and where it lands in `Ship_UpdateEngine` | **recovered** | 84 |
-| That flag bit `0x200` is the Turbo pickup's half of that gate | inferred from the pair with the barrel roll's `0x400` | 75 |
+| That flag bit `0x200` is the Turbo pickup's half of that gate | **traced 2026-10-20**: `Ship_UpdateStartBoost` copies the pickup's running bit, watched live ([craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md)) | 95 |
 | `Ship_SetShield`'s clamp, which absorb pays through | **recovered** | 84 |
 | Weapons off hides the pads and empties the trigger list | **recovered** | 88 |
 | The free Turbo once a lap in a time trial and a speed lap | **recovered**, from two shipped records | 85 |
@@ -90,8 +90,10 @@ The three "ours" rows in the middle are not a gap anyone can close by looking
 harder in the obvious place. `WeaponPads_TestCraft` (`0x0888727c`) stamps the
 pad's refresh timer on a hit and **that is the whole of what it does** - no
 pickup-grant call site has been found anywhere, and the craft-side flag word
-that would hold the result (`*(entity+0x4c) + 0x1b8`, and `craft+0x1c0`) has
-one bit identified out of fourteen. So the machinery *around* the grant is
+that would hold the result (`*(entity+0x4c) + 0x1b8`) was unread when this was
+written. (The physics craft's flag word `craft+0x1c0` is a different structure: every
+writer of it is named in
+[craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md), 2026-10-20.) So the machinery *around* the grant is
 recovered in detail and the grant itself is this project's reading of what a
 weapon pad is for.
 
@@ -125,7 +127,8 @@ the `back` column.
 
 The **no-repeat rule** is ported with it: the grant compares each draw against
 the craft's previous one and re-rolls rather than handing it over, which is what
-the second copy of the held weapon id (`craft+0x1c0`) is for. `pickup::Held` grew
+the second copy of the held weapon id (`pickup+0x1c0` on the pickup object
+`*(entity+0x4c)`, not the physics craft's flag word at the same offset) is for. `pickup::Held` grew
 a `last` field, and that field is hashed - what a craft was last given decides
 what it can be given next, so it is simulation state.
 
@@ -660,7 +663,7 @@ out of the decompiler on 2026-08-11:
 if ((flags & 0x200) || (flags & 0x400)) {
     if (craft+0x2a4 == 1) {
         T += Engine.turbo;                        // after the cap, before the * 2.0
-        if (controls.buttons & 1)  lift = g_boost_lift * T;
+        if (controls.buttons & 1)  lift = g_turbo_jump * T;   // d-pad Up
     }
 }
 ```
@@ -675,12 +678,15 @@ pickup.** `0x400` is held while the barrel roll's timer runs
 ([input-bindings](../ghidra/functions/psp-pulse-usa/input-bindings.md),
 confidence 80), and `<Special>` authors `roll_turbotime` beside it - so a roll
 grants a *turbo*, and the term has two sources. `0x200` is the other one.
-**Its writer has not been found**, so this is an inference from the pair rather
-than a traced path: confidence **75**.
+Its writer was found on 2026-10-20 (`Ship_UpdateStartBoost`, `0x0883fe14`), so
+this is a traced path now, confidence **95**.
 
-Not reproduced, both stated where they live: the `craft+0x2a4 == 1` gate, whose
-enum nothing decodes, and the **boost lift** along body up under the thrust
-button, whose `g_boost_lift` global was never read.
+Not reproduced: the `craft+0x2a4 == 1` gate. The **boost lift** is ported
+(2026-10-20): `g_turbo_jump` is `<Special turbo_jump>` (`0.1`, read live), the
+button is d-pad Up, and the lift is taken before the doubling. A running Turbo also
+keeps the engine through a stun and holds a speed pad's force at zero, fading it
+back in over the next second
+([craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md)).
 
 ### The `1.2` multiplier is a different pickup, and wiring it here was wrong
 
@@ -709,9 +715,11 @@ turbo from a nudge, because a ratio is a ratio. `a_weapon_pad_on_the_disc_hands_
 now compares speed after a second against a control on the shipped numbers,
 which is a magnitude and would have caught it.
 
-**The timer itself is ours.** The original holds a bit; this holds seconds,
-because neither `craft+0x1c0`'s writer nor the pickup word behind it has been
-read. Its duration is the file's own `<Weapon type="Turbo"><Stats time>` and its
+**The timer itself is ours.** The original holds a bit; this holds seconds.
+The bit is now traced (2026-10-20): `Ship_UpdateStartBoost` copies the pickup
+object's running bit `+0x1b8 & 0x200` into `craft+0x1c0` every frame, watched
+live for the 47 frames a free Turbo ran
+([craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md)). Its duration is the file's own `<Weapon type="Turbo"><Stats time>` and its
 magnitude the class's own `<Engine turbo>`, so both numbers are real. The field
 is hashed by the determinism gate, which is why it lives on `ShipState` rather
 than beside the inventory.

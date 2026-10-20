@@ -355,6 +355,13 @@ pub struct RaceSim {
     pub(super) air_pitch_bias: bool,
     /// [`oag_physics::ShipState::pitch_gate`] for every craft, from the title.
     pub(super) pitch_gate: bool,
+    /// [`oag_physics::ShipState::sideshift_grid_gate`] for every craft, from the title.
+    pub(super) sideshift_grid_gate: bool,
+    /// [`oag_physics::ShipState::turbo_running_laws`] for every craft, from the title.
+    pub(super) turbo_running_laws: bool,
+    /// Whether an Eliminator race kills a wrong-way craft's engine, from the title - see
+    /// [`oag_physics::ShipState::wrong_way_kill`].
+    pub(super) eliminator_wrong_way_kill: bool,
     /// The frame every craft's inertia diagonal is applied in - see [`Setup::craft_laws`].
     pub(super) inertia_frame: oag_physics::InertiaFrame,
     /// Every craft's force-law constants, the title's - see [`Setup::craft_laws`].

@@ -851,6 +851,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `Craft_UpdatePitch` (`0x000f0980`) calls the same alignment gate: a static read, not seen
     // closing live (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
     pitch_gate: oag_title::pre_race::Sourced::measured(true),
+    // Not read on HD: its flag word (`craft+0x264`) numbers its bits differently and the
+    // mapping is open (`docs/ghidra/functions/psp-pulse-usa/craft-flags.md`), so HD inherits Pulse's.
+    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table; measured on
     // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),

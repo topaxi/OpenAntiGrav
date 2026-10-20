@@ -307,3 +307,45 @@ fn a_tripped_mine_that_finishes_the_craft_credits_the_layer() {
     assert_eq!(race.sim.world.ships[0].standing.kills, 1);
     assert_eq!(race.sim.world.ships[1].standing.kills, 0);
 }
+
+/// The wrong-way kill (`craft+0x1c0 & 0x2000`): an Eliminator craft turned to face back down
+/// the track is flagged, the same craft facing forward is not, and outside the Eliminator or on
+/// a title without the law nothing is ever flagged. Fails if the mode gate, the title gate or
+/// the direction test is dropped.
+#[test]
+fn only_an_eliminator_craft_facing_back_down_the_track_loses_its_engine() {
+    use oag_core::math::Quat;
+    let turn_round = |race: &mut Race| {
+        let body = &mut race.sim.world.ships[0].physics.body;
+        body.orientation = Quat::from_rotation_y(std::f32::consts::PI) * body.orientation;
+    };
+
+    let mut race = eliminator();
+    race.set_wrong_way_kill();
+    assert!(
+        !race.sim.world.ships[0].physics.wrong_way_kill,
+        "facing forward"
+    );
+    turn_round(&mut race);
+    race.set_wrong_way_kill();
+    assert!(
+        race.sim.world.ships[0].physics.wrong_way_kill,
+        "facing back down the track"
+    );
+
+    race.sim.eliminator_wrong_way_kill = false;
+    race.set_wrong_way_kill();
+    assert!(
+        !race.sim.world.ships[0].physics.wrong_way_kill,
+        "a title without the law"
+    );
+
+    let mut race =
+        race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
+    turn_round(&mut race);
+    race.set_wrong_way_kill();
+    assert!(
+        !race.sim.world.ships[0].physics.wrong_way_kill,
+        "not an Eliminator race"
+    );
+}

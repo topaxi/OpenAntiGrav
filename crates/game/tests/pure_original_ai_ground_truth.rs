@@ -227,6 +227,12 @@ fn seconds(race: &oag_raceplay::Race) -> f32 {
 /// cause). Shield is read at each opponent's lap crossings (per lap) and at
 /// the end, reported apart.
 fn fly(track: &str, class: &str, start: PureClass, respawns: u32) {
+    fly_allowing(track, class, start, respawns, 0);
+}
+
+/// [`fly`], with up to `destroyed` opponents allowed to end the run as wrecks (their pool
+/// emptied) instead of finishing.
+fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destroyed: u32) {
     let Some(image) = oag_testdata::image("pure-psp-usa.chd") else {
         return;
     };
@@ -284,23 +290,39 @@ fn fly(track: &str, class: &str, start: PureClass, respawns: u32) {
             ship.physics.shield
         );
     }
+    let mut wrecks = 0;
     for slot in 1..8 {
-        assert!(
-            race.sim.world.ships[slot].standing.finished(),
-            "{track}: slot {slot} did not finish"
-        );
+        let ship = &race.sim.world.ships[slot];
+        if !ship.standing.finished() {
+            assert!(
+                ship.physics.shield <= 0.0,
+                "{track}: slot {slot} did not finish"
+            );
+            wrecks += 1;
+        }
         assert!(
             race.respawns_of(slot) <= respawns,
             "{track}: slot {slot} respawned {} times",
             race.respawns_of(slot)
         );
     }
+    assert!(
+        wrecks <= destroyed,
+        "{track}: {wrecks} opponent(s) destroyed"
+    );
 }
 
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
 fn the_field_finishes_vineta_k() {
-    fly(VINETA_TRACK, "Venom", PureClass::Venom, 0);
+    // **One opponent may be destroyed.** The Turbo's running laws (`craft+0x1c0 & 0x200`: the stun escape and the pad fade,
+    // `docs/ghidra/functions/psp-pulse-usa/craft-flags.md`) moved it, judged by the noise method on
+    // 2026-10-20: failures among the 49 `*_original_ai_ground_truth` tests per airborne pitch-torque
+    // perturbation (-1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5), laws off `0 0 1 1 0 0 0 2 0`
+    // (median 0, max 2), laws on `1 2 0 1 4 2 0 0 0` (median 1, max 4): inside the bar.
+    // In the unperturbed run slot 7 is destroyed (per-lap shield `[25.0, 7.0]`, end-of-run shield
+    // `0.0`); before the laws every opponent finished.
+    fly_allowing(VINETA_TRACK, "Venom", PureClass::Venom, 0, 1);
 }
 
 #[test]
