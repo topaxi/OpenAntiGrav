@@ -68,9 +68,10 @@ def main():
     ap.add_argument("--json", type=Path, help="reuse a capture record instead of capturing")
     ap.add_argument("--image", default=str(MAIN / "data/images/hdfury-ps3-eu-dec.iso"))
     ap.add_argument("--oag-game", default=str(MAIN / "target/debug/oag-game"))
-    ap.add_argument("--ours-ticks", type=int, default=0,
-                    help="ticks ours runs before the frame; 0 keeps the craft on the pose, but the gantry "
-                         "board is then unlit (the state is after GO): see the docs")
+    ap.add_argument("--ours-ticks", type=int, default=300,
+                    help="ticks ours runs before the frame; the states are after GO, so ours runs past its "
+                         "own countdown to show the same gantry board (0 keeps the craft exactly on the "
+                         "pose but draws the pre-countdown board): see the docs")
     ap.add_argument("--size", default="1760x990")
     ap.add_argument("--load", type=float, default=0)
     ap.add_argument("--press", default="none",
