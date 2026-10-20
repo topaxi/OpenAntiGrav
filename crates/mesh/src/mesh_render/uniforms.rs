@@ -40,7 +40,10 @@ pub(super) struct Uniforms {
     /// Which layer of the per-craft environment-probe array this hull is lit
     /// from, plus one; `0.0` for none. See `shaders/types.wesl`.
     env_layer: f32,
-    env_pad: [f32; 3],
+    /// The probe tint `iblScalePower` of a hull that names a layer: the rgb scale and the
+    /// desaturation lerp. `[0.0; 2]` where `env_layer` is `0.0`. See `shaders/types.wesl`.
+    env_tint: [f32; 2],
+    env_pad: f32,
     /// Pulse's point and spot lights for a hull, [`crate::mesh_render::HullPointLights::at`]:
     /// per slot the unit vector towards the light and, in `w`, its colour bytes packed
     /// `r | g << 8 | b << 16` as an integer-valued float, `0.0` for none.
@@ -78,7 +81,8 @@ fn matrices(model: &Model, aspect: f32, orbit: Orbit) -> Uniforms {
         model_colour: 0.0,
         hull_scale: 0.0,
         env_layer: 0.0,
-        env_pad: [0.0; 3],
+        env_tint: [0.0; 2],
+        env_pad: 0.0,
         hull_point: [[0.0; 4]; super::HULL_POINT_SLOTS],
         // The viewer has no previous tick; previous equals current, which is
         // zero velocity. Its pipelines are built `Velocity::None` and never
@@ -165,7 +169,8 @@ pub fn write_uniforms_raw(
         model_colour: 0.0,
         hull_scale: 0.0,
         env_layer: 0.0,
-        env_pad: [0.0; 3],
+        env_tint: [0.0; 2],
+        env_pad: 0.0,
         hull_point: [[0.0; 4]; super::HULL_POINT_SLOTS],
         prev_mvp: mvp.to_cols_array_2d(),
     };

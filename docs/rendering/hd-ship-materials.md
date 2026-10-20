@@ -649,21 +649,67 @@ TC0/TC1 question (Finding 3), the three ship-hull families with no settled
 `ADD_SECOND` role, and `carbonfibre`'s own possibly-wrong albedo pick, not a
 missing branch structure.
 
-## The Zone-mode hull, matched against RPCS3 (2026-10-20, `hd-zone-hulls`)
+## The Zone-mode hull, matched against RPCS3 (2026-10-20, `hd-zone-hulls`, `hd-zone-material`)
 
 `/data/ships/zone/ship.vex` takes its geometry from the `.rcsmodel` beside it like every team hull: 29 of 29
 nodes, 32,065 triangles, 9 of 9 drawn materials resolved to a shipped variant (33 of 33 chunks), 42,919 authored
 vertex normals, albedo `zone_tp_1024.gtf`. The earlier reading "untextured, computed normals" was stale: the
-normal decode landed 2026-08-17. A matched pair (Zone mode 6 on RPCS3, Vineta K, `--camera-pose` and `--camera-fov`
-taken from the capture) agrees on geometry and paint. Remaining differences, none measured to a law yet:
+normal decode landed 2026-08-17. Geometry and paint agree with the original.
 
-- **`dg_zonelights1`** (five chunks, the hull's side light cells) is Zone-only: four samplers (`cf_damage_lights`,
-  `damage_lights_n`, `dg_flasha`, `dg_flash3`) and params `0xf8f3ade0 = 3.0`, `0xef18f362` and `0xffede334` at 0.
-  The original shows lit blue cells there on an undamaged craft; ours draws them dark.
-- **Gloss.** Ours reads chrome-like with an iridescent probe sheen where the original's Zone hull is matte white
-  (the Zone material's `0x4232e459 = 120.2`, `0xab31c2b1 = 0.2532` against Feisar's 235 and 0.2; our report says "9
-  material(s) with no specular_exponent chain read (default used)"). Hull-wide, not Zone-specific.
-- **`zone_tp_1024_n.gtf`** is a tangent-space normal map, loaded as a second texture and not applied.
+**Zone mode flies `Data\Environments\Zone_1`, not the circuit picked** (the original's load log, two captures); the
+first sheet of this section was framed on Vineta K and is not the comparison. Two draw dumps of Zone mode on RPCS3
+(zones 3 and 4, both the `Sub Flash` stage; `rpcs3_draw_hook.py`, `rsx-draw-list.py`, `rsx-fp-match-material.py`,
+`ps3-fp-live.py`) read the hull's draws:
 
-Cross-title: Omega ships the same hull as `hdships/Zone` (6 of 6 materials textured, 24,547 authored normals) and
-is in the same state, **checked, applies, not wired**. 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).
+- **Every hull draw is an `IBL` permutation**, `diffuse_with_specular_from_alpha_n` block 17 (`0x847`,
+  `HalfBrightIBLSunShadowMapSpot0SVC1`) and `dg_zonelights1` block 17, with the probe maps bound (units 4 and 5 of the
+  64x32 and 128x64 images). So the gloss is not a variant choice.
+- **The probe tint is a draw value.** `iblScalePower` (`0x7480de6d`) is `(0.69804, 0.69804, 0.69804, 1.0)` in the
+  live program of both frames, where Talon's Junction and Metropia read `(4, 4, 4, 0)`. `.w` lerps the tinted probe
+  towards its own luma (`@0x28`-`@0x31` of the `_n` block), so a Zone hull's probe light and reflection are grey and
+  a fifth as strong. Ours multiplied by a constant 4, which is the chrome and the iridescence. **Wired**:
+  `oag_raceplay::env_probes::ProbeTint` (`ENGINE` and `ZONE`), carried in the model uniform's two spare floats
+  (`env_gain`, `env_desat`), `shade.wesl`'s `probe_tint`. Confidence 85 for the two values at that stage; **what moves
+  the value inside a Zone race is not read** (both frames were at `Sub Flash`; the stage table's per-stage
+  `Lighting.Sky reflection colour` is `0 0 0` at stages 0, 7, 13 and 14 and magenta at 6, the obvious untested
+  driver), so the one value is carried for the whole mode. Source: `Scene_PrepareFrame` copies a vec4 at
+  `object+0x510` to `block+0x7c40` (`0x003ab100`), which is the shader parameter; `(4, 4, 4, 0)` is written there at
+  `0x003abb10`-`0x003abb28` on the path where the byte at `r17` is 0, and the other path (`0x003ad748`) is unread.
+- **The hull's gloss gap that remains** is brightness: the original's hull reads white, ours light grey. The live
+  `directionalLight0Colour` is `(1.144, 1.091, 1.906)` in both frames and its direction `(0.577, 0.577, 0.577)`
+  (Zone_1's `Sun direction`); where the colour comes from, and what ours feeds, is not compared. The original frame
+  is also visibly bloomed and tone-mapped brighter overall.
+- **`dg_zonelights1`** (five chunks, one material) is the hull's side light cells. Block 17, from the microcode:
+
+  ```text
+  uv2   = TC6.xy                           vertex attribute 0x1aefe524 .zw (Uv2)
+  mask  = tex(unit 4, dg_flasha, (uv2.x + 0.4 * time, uv2.y - 0.09 * K))
+  blue  = tex(unit 5, dg_flash3, (uv2.x + 0.09 * K, uv2.y))
+  flash = mask * (blue - C) + C
+  P     = tex(unit 0, cf_damage_lights, uv) + flash
+  out   = P * (light + 1)                  the picture is added unlit as well
+  ```
+
+  `time` is `0x906b67ba` (186.4 and 712.7 in the two frames), `C` is `0xef18f362` and `K` is `0xffede334`. The file
+  authors `C` and `K` as 0; live `C` is `(0, 0, 0)` and `K` is 6.0 at zone 3 and 7.0 at zone 4. `dg_flash3` is blue
+  with one red corner and `dg_flasha` a white mask with notches in its top rows, so the cells are lit blue on an
+  undamaged craft and the mask scrolls. **Wired** (`mesh::rcs::damage_lights`, role `MAG_WAVE` with glow rate 3, the
+  second UV set, `shade.wesl`'s `is_cell`); `K` is the **chosen** constant 6 (what it follows is not read: the zone
+  number plus three fits two points and is not claimed). `hd_zone_light_cells_ground_truth` pins the binding and that
+  `texcoord2` is read and varies, which a still cannot show (blue everywhere also comes from a zero coordinate).
+  `texcoord2` is now also filled for the magstrip chunks (`ice::second_uv`), unread there.
+- **`zone_tp_1024_n.gtf` is sampled by the original**: `@0x05` of the `_n` block reads unit 1 as a tangent-space
+  normal (`2x - 1`) combined with the vertex tangent frame (`tangent` `0xdbe5f417`, present on the Zone hull's chunks,
+  and the second attribute `0x868f8229`). **Not wired**: ours binds it as the second texture and ignores it, as it does
+  on every HD `_n` hull (Feisar's `feisar_c1_livery_norm`, `carbon_n`), so wiring it changes every HD hull and needs a
+  vertex tangent (a new attribute) or a chosen derivative frame. Open, in the Zone handover thread.
+
+Judged against `data/reference/hd-zone-material/`: original frames at zones 3, 4 and 5 (top) against ours before and
+after (bottom), Zone_1, `--zone-stage 3`, the chase camera of each; the camera could not be picked from the capture, so
+the pose is not pixel matched. After: matte, form-shaded, blue cells in the original's places; the original's hull is
+brighter and its panel normal detail finer.
+
+Cross-title: Omega ships the same hull as `hdships/Zone` and it **includes `dg_zonelights1`** and `zoneship01` (6
+materials; HD's nine add `diffuse_with_specular_from_alpha_n`, `diffuse` and a second `basicalpha`) with `.gnf`
+textures: **checked, applies, not wired** (Omega's hulls build through the PS4 path, which has none of this; it ships
+no `.probes`, so the tint is moot there). 2048's is **not checkable** from its `.pkg` here (PFS-encrypted).

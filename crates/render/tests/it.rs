@@ -57,6 +57,7 @@ mod hd_vineta_ceiling_ground_truth;
 mod hd_water_ground_truth;
 mod hd_weapon_pad_glow_ground_truth;
 mod hd_weapon_pad_split_ground_truth;
+mod hd_zone_light_cells_ground_truth;
 mod hd_zone_wave_census_ground_truth;
 mod hull_lights_ground_truth;
 mod lod_switch_ground_truth;

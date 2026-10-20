@@ -34,9 +34,10 @@ struct Uniforms {
     // other draw uses. The three f32s after it are padding, not a vec3, for
     // the alignment reason `sun_occlusion_layer` gives.
     env_layer: f32,
-    env_pad0: f32,
-    env_pad1: f32,
-    env_pad2: f32,
+    // The probe tint `iblScalePower`: `.x` the rgb scale, `.y` the desaturation lerp.
+    env_gain: f32,
+    env_desat: f32,
+    env_pad: f32,
     // Pulse's point and spot lights for a hull, `mesh_render::HullPointLights`:
     // per slot the unit vector towards the light, `.w` its colour bytes packed
     // `r | g << 8 | b << 16` as an integer-valued float, `0.0` for none.

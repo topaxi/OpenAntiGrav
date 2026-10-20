@@ -1606,6 +1606,8 @@ def cmd_capture(args):
         for item in args.nav:
             screen, _, buttons = item.partition("=")
             plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+        # An attached emulator already in a race skips the walk; one in the front end walks it.
+        attached = os.environ.get("OAG_RPCS3_ATTACH") == "1" and session.in_race()
         if not attached and session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
@@ -1776,6 +1778,8 @@ def cmd_place(args):
         for item in args.nav:
             screen, _, buttons = item.partition("=")
             plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
+        # An attached emulator already in a race skips the walk; one in the front end walks it.
+        attached = os.environ.get("OAG_RPCS3_ATTACH") == "1" and session.in_race()
         if not attached and session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)

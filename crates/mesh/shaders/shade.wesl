@@ -23,11 +23,17 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
     return vec2<f32>(u, 0.5 - 0.5 * n.y);
 }
 
-// The engine's probe tint, parameter `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction
-// (read live on RPCS3, `.w` the desaturation lerp, zero there): both probe maps are
-// multiplied by it. Its source is an engine table with no authored preimage, so the
-// value is the measurement of two circuits (Talon's Junction, Metropia).
-const ENV_PROBE_GAIN: f32 = 4.0;
+// The engine's probe tint, parameter `0x7480de6d` (`iblScalePower`), `(4, 4, 4, 0)` on
+// Talon's Junction and Metropia and `(0.698, 0.698, 0.698, 1)` in a Zone race (read live on
+// RPCS3 at zones 3 and 4 of Zone mode): both probe maps are multiplied by it, and `.w` lerps
+// the result towards its own luma, so a Zone hull's probe light is grey and a fifth the
+// strength. The draw names it: `uniforms.env_gain` is the rgb scale and `uniforms.env_desat`
+// the `.w` (`oag_raceplay::env_probes::ProbeTint`).
+fn probe_tint(texel: vec3<f32>) -> vec3<f32> {
+    let scaled = texel * uniforms.env_gain;
+    let grey = vec3<f32>(dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985)) * uniforms.env_gain);
+    return mix(scaled, grey, uniforms.env_desat);
+}
 
 // The array holds two layers per craft, each 128x64: the irradiance map in its top-left
 // 64x32 corner, then the reflection map in all of its layer. `which` is 0 or 1.
@@ -319,9 +325,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // IBL variant of their own block.
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
-            hull_ambient = ENV_PROBE_GAIN * textureSampleLevel(
+            hull_ambient = probe_tint(textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n)), env_probe_layer(0), 0.0,
-            ).rgb;
+            ).rgb);
         }
         let lit_sum = select(
             hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,
@@ -453,6 +459,30 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let water = deep + facing * (cyan - deep);
         let ice = pale + facing * (first.rgb - pale);
         picture = vec4<f32>(water + pond * (ice - water), picture.a);
+    }
+    // **HD's Zone-mode light cells** (`slots::MAG_WAVE` with the glow entry's rate 3,
+    // `oag_mesh::mesh::rcs::damage_lights`): the picture gains a scrolling flash,
+    //
+    //     flash = mask(uv2 + (rate * time, -shift)) * (blue(uv2 + (shift, 0)) - C) + C
+    //
+    // `mask` is the fourth binding, `blue` the third, `C` the entry's tint, the scroll
+    // rate its offset and `shift` its scale. The program adds the picture itself unlit
+    // as well (`out = P * (light + 1)`), which `mag_glow` carries below.
+    var cell_picture = vec3<f32>(0.0);
+    let cell_entry = in.slots >> 24u;
+    let is_cell = (in.slots & 131072u) != 0u && cell_entry != 0u
+        && emissives.scale[cell_entry].y > 2.5 && emissives.scale[cell_entry].y < 3.5;
+    if is_cell {
+        let shift = emissives.scale[cell_entry].x;
+        let flash_c = emissives.tint_offset[cell_entry].rgb;
+        let uv2 = in.lightmap_texcoord.zw;
+        let mask = textureSample(
+            wave_map, albedo_sampler,
+            vec2<f32>(uv2.x + emissives.tint_offset[cell_entry].w * scene.time.x, uv2.y - shift),
+        ).x;
+        let blue = textureSample(pad_mask, albedo_sampler, vec2<f32>(uv2.x + shift, uv2.y)).rgb;
+        picture = vec4<f32>(picture.rgb + mask * (blue - flash_c) + flash_c, picture.a);
+        cell_picture = picture.rgb;
     }
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
@@ -592,8 +622,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // these surfaces as the ordinary Zone surface and this term, and the floor
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
-    var mag_glow = vec3<f32>(0.0);
-    if (in.slots & 131072u) != 0u && scene.zone.enabled == 0.0 {
+    var mag_glow = pow(cell_picture, vec3<f32>(2.2));
+    if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
         let e = textureSample(pad_mask, albedo_sampler, in.texcoord);
         let w = textureSample(
             wave_map,
@@ -702,7 +732,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             let probe = textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
             ).rgb;
-            probe_reflection = probe * ENV_PROBE_GAIN
+            probe_reflection = probe_tint(probe)
                 * (texel.a * emissives.tint_offset[probe_entry].x);
         }
 

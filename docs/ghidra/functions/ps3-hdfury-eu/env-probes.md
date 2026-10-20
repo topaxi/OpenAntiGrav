@@ -95,7 +95,11 @@ out   = fog(out) / 2
   Metropia (Feisar, a 1,377-draw grid frame with eight craft: the two programs read,
   `0x748081` and `0x749041`, both `MUL H0.xyz, H2, {4, 4, 4, 0}` after the unit-4 fetch; 66
   programs there sample both units, two were read). It has no authored preimage; two circuits
-  and two teams agree. Engine constant, not read from a table.
+  and two teams agree. **Not a constant**: in a Zone race the live program reads `(0.69804, 0.69804, 0.69804, 1.0)`
+  (two frames of Zone mode, `hd-ship-materials.md`, "The Zone-mode hull"), and `.w` lerps the tinted probe towards its
+  luma. `Scene_PrepareFrame` publishes a vec4 copied from `object+0x510` (`lvx` at `0x003ab100`, `stvx` to
+  `block+0x7c40`, the table slot at `0x003ab5b0`); `(4, 4, 4, 0)` is stored at `object+0x510` at
+  `0x003abb10`-`0x003abb28` when the byte at `r17` is 0, and the other path (`0x003ad748`) is unread.
 - **The reflectivity `0.5` is material parameter `0xab31c2b1`** of the `.rcsmodel`'s material
   record (Harimau: `[0.5, 0, 0, 0]`), and the exponent `300` is `0x4232e459`; both are read
   from the material, not transcribed (`mesh::rcs::probe_lit`).
