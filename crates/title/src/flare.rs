@@ -91,6 +91,14 @@ pub struct Authored {
     /// The same for [`Self::boost`]: `ef_SpikesLeftShape` and
     /// `ef_SpikesRightShape`.
     pub boost_spikes: &'static [&'static str],
+    /// The shapes under [`Self::boost`] that hang from a `Joint_*` node of their
+    /// own: `ef_BoostLeftShape`, `ef_BoostRightShape` and `ef_DiamondsShape`.
+    /// `EngineFlare_PlaceShapes` scales each one's length by the boost blend
+    /// about its own joint (read live on Feisar Fury: three draws at the joints'
+    /// authored translations), so each is a part of its own, placed at its node,
+    /// instead of a share of the group at the locator. Empty for a container
+    /// whose node transforms are not composed (2048's Vita files).
+    pub boost_shapes: &'static [&'static str],
     /// The sprite flare's texture, in the archive set's lower-case path form,
     /// drawn **beside** the model: `/data/tex/engineflare/engine_flare_rich.gtf`
     /// on HD and `.gxt` on 2048 - both executables carry the literal. The

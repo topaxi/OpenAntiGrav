@@ -2279,6 +2279,7 @@ rule read from the file, not drawn live).** `EF_Boost` hangs `Joint_BoostLeft/Ri
 `Joint_Diamonds` and `Joint_BoostRot` nodes with offsets of their own (Triakis' joints sit at
 x = +-2.16 against `EF_Boost`'s 0), and no boost frame of the original has been read, so the
 boost group and its spikes keep the locator: not verified live, the same node rule would apply.
+**Superseded 2026-10-20 (`hd-fury-spikes`):** the Fury frames read the boost shapes at their joints, see "Feisar Fury's spikes and the boost joints".
 
 **Scale law, a third reading.** The same frames give the body a uniform 1.527 (xy) and 1.538 (z)
 times the hull's 0.75 at thrust, which is `lerp(1, 1.5, s) + 1.4 b` and `1.5 + 2.0 b` with the
@@ -2315,11 +2316,56 @@ craft, ours at `--team feisar_c1` reads orange with the violet core of the origi
 is not read as a field: ours plays the `feisar_c1` files and matches the original by eye, one frame
 each on different circuits (seen once; the carrying data is the skin's own `engineflare` pair or
 the flame material's constants, not separated), and the trail's ramp is the Fury flag's (already
-wired, "The vertex colour ramp is per skin"). Nothing to change. One real gap found beside it: the Fury skins (`feisar_c1`, `feisar_n1`)
-name their spike shapes `ef_SpikesShape1..3` where the base teams say `ef_Spikes1Shape..3Shape`, so
-`Authored::main_spikes` finds none and the load report says "authors no geometry for
-ef_Spikes1Shape" - the original draws extra flame draws on that craft. Unread whether those are the
-spikes.
+wired, "The vertex colour ramp is per skin"). Nothing to change. One real gap found beside it: the Fury skins (`feisar_c1`, `feisar_n1`) name their spike shapes
+`ef_SpikesShape1..3` where the base teams say `ef_Spikes1Shape..3Shape`; settled in "Feisar Fury's
+spikes and the boost joints" below.
+
+## Feisar Fury's spikes and the boost joints (2026-10-20, `hd-fury-spikes`)
+
+**Census, all 42 hull directories HD ships (`engineflare.vex`, every PSARC copy).** Spike shapes
+are spelled `ef_Spikes<N>Shape` (plus `ef_SpikesLeftShape`/`RightShape` under `EF_Boost`) in every
+file but two: `feisar_c1` and `feisar_n1` spell the three main spikes `ef_SpikesShape1..3`, hang
+them directly under `ef_Main` (the base teams hang each under an `ef_Spikes<N>` transform, -0.052
+on z) and carry no boost spikes. Their groups are `ef_Main`/`ef_Boost`, so group lookup is
+case-insensitive and fine. Omega re-ships the same two files (38 `engineflare.vex` read, the same
+census); 2048's Vita container does not parse as a `.vex`, so its names are not checkable here.
+
+**What the original does with them (read live, Feisar Fury).** The executable's name table holds
+only `ef_Spikes1Shape` ... `ef_SpikesRightShape` (`0x0079bea0`-`0x0079bf18`), so the Fury names bind
+to nothing and the flicker never touches them. They are still submitted. The Metropia thrust frame
+(270 km/h, `hd-flare-thrust`'s dump, drawn through `rsx-draw-list.py`) and a near-rest frame (27
+km/h, this lane, grid state `hd-racebox-metropia-feisar-grid-flyover` plus `cross` and `triangle`,
+`scripts/rpcs3-hd-flare-origin.py`) both draw **three flame draws at the `ef_Main` origin
+(0, 0.1688, -5.8044) with a model matrix of exactly the hull's 0.75, no group scale and no
+flicker** (row lengths 0.7500 against the body's 1.55 xy / 1.575 z at thrust). Two frames, two speeds,
+identical: a constant, not a throttle law (confidence 85). Before this lane they rode `ef_Main`'s
+group scale (about 1.55 at thrust); the claim "ours draws no spikes for them" was wrong, they were
+drawn at the wrong scale. Wired as `oag_livery::Scale::Hull`.
+
+**The boost shapes sit at their own joints (confidence 85 for Fury, read live; 75 for the other
+craft, the same node rule from the file).** The same Fury frames hold three boost draws (z scale
+0.075 at thrust, 0.0 at near rest: the blend's `* 2.0` length) whose translations, hull-local, are
+(+0.804, 0.0732, -4.6293), (-0.8041, 0.0732, -4.6293) and (0, 0.1688, -5.8044): the authored
+world translations of `Joint_BoostLeft`, `Joint_BoostRight` and `Joint_Diamonds` to four decimals,
+and not `ef_Boost`'s own (0, 0.2382, -5.4465) nor the locator. So each boost shape is scaled about
+its own joint. Wired: `Authored::boost_shapes` names `ef_BoostLeftShape`, `ef_BoostRightShape` and
+`ef_DiamondsShape`, each is split out as a part (`Scale::BoostLength`) baked at its node and scaled
+by `hd_flame_transform`'s boost law about it; `EF_Boost` itself then carries no geometry
+(`Livery::boost` is `None` on HD, the plume is these parts). Triakis' joints sit at x = +-2.16,
+y -0.71 against the locator; before, they collapsed on the locator. `ef_SpikesLeftShape`/`Right`
+share a `Joint_Boost*` parent on the classic craft and take that joint as well: the node rule,
+**no frame read them separately** (a Fury has none, and no classic boost frame was read), so that
+placement is an extension at confidence 60. The boost scale law is unchanged (still not seen at a
+boost above the 0.2 gate; the Fury frames show only the blend's tail).
+
+**Not done.** A boost frame proper (blend at 1.0) was not captured: the arm of the timer is the
+open Zone-only path above, and a pad drive was out of this lane's reach. The Fury skin choice's
+carrying field stays unread.
+
+**Cross-title.** Omega: ported (same two spike spellings, same `Authored` fields, the boost shapes
+placed by the same nodes; Omega's own draw was not captured, so by shared lineage, not measured).
+2048: checked, not checkable (the Vita `.vex` does not parse here, node transforms not composed);
+it keeps the locator and the old group split.
 
 ## Reproducing this
 

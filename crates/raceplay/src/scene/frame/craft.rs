@@ -72,6 +72,11 @@ pub(super) fn hd_flame_transform(
 /// `EF_Boost`'s two by `b * 2.0`, then by one draw of `RandRange(0.65, 0.85)`
 /// each (`oag_fx::exhaust::hd::spike_flicker`, chosen, not measured). The
 /// group's own anisotropic scale does not touch them.
+///
+/// A spike the original's name lookup does not bind (`Scale::Hull`: Feisar
+/// Fury's `ef_SpikesShape<N>`) takes none of this and stays at the
+/// hull's scale, which is what the original submits for it (all three draws
+/// at 1.000 times the hull's 0.75, thrust frame, 270 km/h).
 pub(super) fn hd_spike_transform(
     race: &Race,
     slot: usize,

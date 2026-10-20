@@ -756,7 +756,15 @@ impl Scene {
                 if spike.boost && !spike_boost_visible(race, slot) {
                     continue;
                 }
-                let flame = hd_spike_transform(race, slot, spike.boost, spike.index, spike.origin);
+                let flame = match spike.scale {
+                    oag_livery::Scale::Flicker => {
+                        hd_spike_transform(race, slot, spike.boost, spike.index, spike.origin)
+                    }
+                    oag_livery::Scale::Hull => Mat4::IDENTITY,
+                    oag_livery::Scale::BoostLength => {
+                        hd_flame_transform(race, slot, true, Some(spike.origin))
+                    }
+                };
                 spike.drawable.write(
                     queue,
                     view_projection,

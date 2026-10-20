@@ -30,6 +30,16 @@ use std::path::PathBuf;
 use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 
+/// A craft's boost plume: the `Joint_*` shapes of `EF_Boost`, each a part of its
+/// own placed at its joint. The group itself carries no geometry.
+fn boost_parts(livery: &oag_livery::Livery) -> Vec<&oag_livery::Spike> {
+    livery
+        .flare_spikes
+        .iter()
+        .filter(|s| s.scale == oag_livery::Scale::BoostLength)
+        .collect()
+}
+
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")
 }
@@ -82,25 +92,24 @@ fn every_craft_on_the_grid_carries_both_halves_of_its_flare(loaded: &race::Loade
             .flare
             .as_ref()
             .unwrap_or_else(|| panic!("{}: no engine flare model", livery.team));
-        let plume = livery
-            .boost
-            .as_ref()
-            .unwrap_or_else(|| panic!("{}: no boost plume - EF_Boost is missing", livery.team));
+        let plume = boost_parts(livery);
         assert!(
-            !flame.indices.is_empty() && !plume.indices.is_empty(),
-            "{}: {} flame indices, {} plume indices",
+            !flame.indices.is_empty() && !plume.is_empty(),
+            "{}: {} flame indices, {} boost shape parts",
             livery.team,
             flame.indices.len(),
-            plume.indices.len()
+            plume.len()
         );
-        // **Both halves index the one shared buffer pair**, which is what says
-        // the split is a filter over draw calls rather than two builds.
-        assert_eq!(
-            flame.vertices.len(),
-            plume.vertices.len(),
-            "{}: the two groups are two views of one model",
-            livery.team
-        );
+        // **Every part indexes the one shared buffer pair**, which is what says
+        // the split is a filter over draw calls rather than separate builds.
+        for part in &plume {
+            assert_eq!(
+                flame.vertices.len(),
+                part.model.vertices.len(),
+                "{}: the groups are views of one model",
+                livery.team
+            );
+        }
         // Additive, off the material rather than off a constant here: every
         // batch carries the factor pair `flame_test.rcsmaterial` authors.
         let blend = flame
@@ -138,13 +147,18 @@ fn every_craft_splits_five_spikes_out_of_its_flare(loaded: &race::Loaded) {
         // Assegai without `ef_Spikes3Shape`, AG Systems and EGX without the
         // two `EF_Boost` spikes. An absent one is named on the load report
         // and draws nothing; the other shapes of that craft still flicker.
+        let spikes: Vec<_> = livery
+            .flare_spikes
+            .iter()
+            .filter(|s| s.scale != oag_livery::Scale::BoostLength)
+            .collect();
         assert!(
-            !livery.flare_spikes.is_empty() && livery.flare_spikes.len() <= 5,
+            !spikes.is_empty() && spikes.len() <= 5,
             "{}: {} spikes split out of the flare",
             livery.team,
-            livery.flare_spikes.len()
+            spikes.len()
         );
-        for spike in &livery.flare_spikes {
+        for spike in &spikes {
             assert!(spike.index < 5, "{}: spike index", livery.team);
             assert_eq!(
                 spike.boost,
@@ -166,7 +180,7 @@ fn every_craft_splits_five_spikes_out_of_its_flare(loaded: &race::Loaded) {
             .collect()
         };
         let main = ranges(livery.flare.as_ref().expect("flame"));
-        let boost = ranges(livery.boost.as_ref().expect("plume"));
+        let boost = livery.boost.as_ref().map(ranges).unwrap_or_default();
         for spike in &livery.flare_spikes {
             let group = if spike.boost { &boost } else { &main };
             for range in ranges(&spike.model) {
@@ -273,12 +287,22 @@ fn every_flame_group_sits_ahead_of_its_locator(loaded: &race::Loaded) {
             "{}: EF_Main at {always:?}, the locator at {nozzle:?}",
             livery.team
         );
-        assert_eq!(
-            livery.flare_origins.boost,
-            Some(nozzle),
-            "{}: the boost group keeps the locator",
+        // The boost shapes sit at their own joints, never at the group's
+        // locator and never at the hull's origin (a joint that failed to decode
+        // would come back at (0, 0, 0)).
+        assert!(
+            livery.flare_origins.boost.is_none(),
+            "{}: EF_Boost carries no geometry of its own",
             livery.team
         );
+        for part in boost_parts(livery) {
+            assert!(
+                part.origin.z < -1.0 && part.origin.z > -9.0,
+                "{}: a boost shape at {:?}",
+                livery.team,
+                part.origin
+            );
+        }
     }
 }
 
@@ -299,10 +323,11 @@ fn the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(loaded: &race::Loaded) 
         // vertices too without saying so - but the ramp is per node, and the
         // plume's own nodes carry their own: `ef_BoostLeftShape` spans 0.000 to
         // 1.000 and `ef_DiamondsShape` 0.000 to 0.596 on Feisar.
-        for (what, model) in [("flame", &livery.flare), ("plume", &livery.boost)] {
-            let Some(model) = model.as_ref() else {
-                panic!("{}: no {what}", livery.team);
-            };
+        let plume: Vec<_> = boost_parts(livery).into_iter().map(|p| &p.model).collect();
+        assert!(!plume.is_empty(), "{}: no plume parts", livery.team);
+        let models = std::iter::once(("flame", livery.flare.as_ref().expect("flame")))
+            .chain(plume.into_iter().map(|m| ("plume", m)));
+        for (what, model) in models {
             let min = model
                 .vertices
                 .iter()
@@ -340,10 +365,11 @@ fn the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(loaded: &race::Loaded) 
 /// is that they reach the model the renderer draws.
 fn every_flare_carries_the_flames_own_shader_parameters(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
-        for (what, model) in [("flame", &livery.flare), ("plume", &livery.boost)] {
-            let Some(model) = model.as_ref() else {
-                panic!("{}: no {what}", livery.team);
-            };
+        let plume: Vec<_> = boost_parts(livery).into_iter().map(|p| &p.model).collect();
+        assert!(!plume.is_empty(), "{}: no plume parts", livery.team);
+        let models = std::iter::once(("flame", livery.flare.as_ref().expect("flame")))
+            .chain(plume.into_iter().map(|m| ("plume", m)));
+        for (what, model) in models {
             let flame = model
                 .flame
                 .unwrap_or_else(|| panic!("{}: the {what} has no shading parameters", livery.team));

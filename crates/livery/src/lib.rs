@@ -58,7 +58,7 @@ mod cannon_flash;
 pub mod engine_light;
 pub mod entry;
 mod flare;
-pub use flare::Spike;
+pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
 mod wreck;
