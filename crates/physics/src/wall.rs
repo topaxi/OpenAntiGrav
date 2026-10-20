@@ -593,9 +593,11 @@ fn resolve_contact(
 
 /// A collision-cage contact through [`resolve_contact`], friction `0`: the cage hands
 /// `Body_ResolveContact` (`0x0884e968`) a contact whose `+0x34` is zero (`0x08831ff0`).
+/// The cage is Pulse's, so it takes Pulse's laws whatever the title: restitution
+/// [`BODY_RESTITUTION`], a two-sided impulse, the world-frame point rate, no yaw kick.
 /// Returns the velocity, angular velocity and position changes.
 pub(crate) fn resolve_cage_contact(body: &mut Body, contact: &WallContact) -> (Vec3, Vec3, Vec3) {
-    let applied = resolve_contact(body, contact, 0.0);
+    let applied = resolve_contact(body, contact, 0.0, &crate::laws::Laws::PULSE);
     (
         applied.velocity_delta,
         applied.angular_velocity_delta,
