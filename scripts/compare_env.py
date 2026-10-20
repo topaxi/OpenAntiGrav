@@ -175,6 +175,23 @@ def state_facts(state_path):
     return facts
 
 
+PSP_TRACE_COLUMNS = (
+    "tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,stun_timer,timer_2e0,shield,"
+    "fov_intercept,fov_additive,controller_class,ss_tap_window_l,ss_tap_window_r,ss_shift_l,ss_shift_r,"
+    "ss_lockout,steer_lean,cam_lean,cam_lean_follower,roll_phase,roll_eased,right_x,right_y,right_z,up_x,up_y,"
+    "up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,avel_x,avel_y,avel_z,omega_x,omega_y,"
+    "omega_z,cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,cam_fwd_x,cam_fwd_y,cam_fwd_z,"
+    "cam_pos_x,cam_pos_y,cam_pos_z").split(",")
+
+
+def write_trace_row(path, values):
+    """A one-row trace CSV in the capture's own columns (what `oag-game --pose-from` reads); columns not
+    in `values` are zero."""
+    row = {c: 0.0 for c in PSP_TRACE_COLUMNS}
+    row.update(values)
+    Path(path).write_text(",".join(PSP_TRACE_COLUMNS) + "\n" + ",".join(repr(float(row[c])) for c in PSP_TRACE_COLUMNS) + "\n")
+
+
 def git_head():
     return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
@@ -204,6 +221,12 @@ class Pair:
         self.rec = {"profile": plat_key, "profile_sha": self.plat["profile_sha"],
                     "output": self.plat["output"], "original": {}, "ours": {}}
         self.checks = []
+        self.rec["caveats"] = []
+
+    def caveat(self, text):
+        """A difference the pair KNOWS about and was allowed to ship with; the manifest shows it."""
+        self.rec["caveats"].append(text)
+        print("CAVEAT %s" % text, file=sys.stderr)
 
     def check(self, name, ok, detail):
         self.checks.append({"name": name, "ok": bool(ok), "detail": detail})
@@ -294,7 +317,7 @@ def manifest(out_path, dirs):
                 "setting = %s" % toml_str("%s %s, %s; ours %s" % (plat["emulator"]["name"], plat["emulator"].get("version", ""),
                                                                  size_text(plat), size_text(plat))),
                 "environment = %s" % toml_str(rec["environment"]),
-                "note = %s" % toml_str(m.get("note", "")),
+                "note = %s" % toml_str(" ".join([m.get("note", "")] + [("Not matched: " + c) for c in rec.get("caveats", [])]).strip()),
             ]))
     out.write_text('[page]\ntitle = "Original vs ours"\nintro = "Fresh set of 2026-10-20: environment parity checked per pair (see Environment)."\n\n'
                    + "\n\n".join(entries) + "\n")

@@ -209,6 +209,7 @@ VsyncEnable = false
 ; the same window is letterboxed and the grab is 30 % RMSE away from the GS
 ; output. Headless, there is no other reason to care what the window looks like.
 AspectRatio = Stretch
+upscale_multiplier = {upscale}
 ScreenshotSize = {screenshot_size}
 ScreenshotFormat = 0
 OsdShowSpeed = false
@@ -298,8 +299,15 @@ def write_config(slot, renderer=12, screenshot_size=SCREENSHOT_INTERNAL,
                  os.path.join(DATA_PATH, "PCSX2", "logs")):
         os.makedirs(path, exist_ok=True)
     pad1 = "\n".join("%s = %s" % row for row in PAD1_BINDINGS)
+    upscale = 1
+    if os.environ.get("OAG_COMPARE_PLATFORM"):
+        # The comparison profile (scripts/compare-environment.toml) fixes what changes the picture.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import compare_env
+        emu = compare_env.platform(os.environ["OAG_COMPARE_PLATFORM"])["emulator"]
+        upscale, screenshot_size = emu["upscale_multiplier"], emu["screenshot_size"]
     ini = INI_TEMPLATE.format(
-        bios=BIOS_DIR, slot=slot, renderer=renderer,
+        bios=BIOS_DIR, slot=slot, renderer=renderer, upscale=upscale,
         screenshot_size=screenshot_size,
         osd_messages="true" if osd_messages else "false", pad1=pad1)
     target = os.path.join(INI_DIR, "PCSX2.ini")

@@ -107,7 +107,8 @@ def main():
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--track", required=True, help="circuit directory, e.g. 03_Track")
-    ap.add_argument("--reversed", action="store_true", help="assert the track_reversed layout (checked, not trusted)")
+    ap.add_argument("--layout", choices=("auto", "forward", "reversed"), default="auto",
+                    help="auto: the layout whose own start is on the original's grid pose; forward/reversed asserts it")
     ap.add_argument("--team", help="our --team, when the original's is not the default")
     ap.add_argument("--state", required=True, help="a .ppst to restore into slot 2 first")
     ap.add_argument("--home", default=os.environ.get("PP_HOME"), help="the instance's own HOME (PP_HOME)")
@@ -184,10 +185,12 @@ def main():
 
     layout, rep = detect_layout(args.oag_game, image, args.track, theirs_row, flags, {"scratch": str(out)})
     pair.rec["ours"]["layout_probe"] = rep
-    pair.check("layout file matches the start position", (layout == "reversed") == args.reversed,
-               "probe says %s (%s); the flag says %s" % (
+    asserted = {"forward": False, "reversed": True}.get(args.layout)
+    pair.check("layout file matches the start position", asserted is None or (layout == "reversed") == asserted,
+               "probe says %s (%s); %s" % (
                    layout, ", ".join("%s %.1f units / %.1f deg" % (k, v["start_distance"], v["heading_deg"])
-                                     for k, v in rep.items()), "reversed" if args.reversed else "forward"))
+                                     for k, v in rep.items()),
+                   "asserted %s" % args.layout if asserted is not None else "nothing asserted, the probe chooses"))
     pair.check("circuit start within 25 units of the original's grid pose",
                rep[layout]["start_distance"] <= 25 and rep[layout]["heading_deg"] <= 5,
                "%.1f units, %.1f deg" % (rep[layout]["start_distance"], rep[layout]["heading_deg"]))
