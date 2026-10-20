@@ -519,6 +519,17 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     beat: None,
 };
 
+/// Pure's compiled-in pitch: `Ship_UpdatePitch` (`0x0892caf8`) adds `pitch * 0.1` airborne and
+/// `pitch * 0.4` grounded, `Ship_ApplyAngularDamping` (`0x0892cc2c`) damps pitch at `1.5` while
+/// racing. **Measured live** on Pure PSP (USA), 2026-10-20: input `-100` adds `-10` and `-40`,
+/// and the damping reproduces `-1.5 * omega.x` to `2e-6` (`docs/physics/pure-physics.md`). Held
+/// out of [`CRAFT_LAWS`] until our AI flies it.
+pub const CODE_PITCH: oag_title::craft_laws::CodePitch = oag_title::craft_laws::CodePitch {
+    air: 0.1,
+    ground: 0.4,
+    damping: 1.5,
+};
+
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
 /// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no
 /// `<Misc weight_distribution>`.
@@ -539,6 +550,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
     // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
     bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
+    // Measured (`CODE_PITCH`), held off until this engine's AI flies it: on, Pure's opponent
+    // sweep walls rose (Ace A `14 -> 53`, B `25 -> 72`) and Ace races wrecked twice where they
+    // wrecked none (`docs/physics/pure-physics.md`). `None` flies Pulse's `<pitch>` stand-in.
+    code_pitch: None,
 };
 
 #[cfg(test)]
@@ -551,10 +566,9 @@ mod tests {
     /// a regression to Pulse's law gives every Pure craft twice the acceleration.
     #[test]
     fn the_engine_output_is_not_doubled_on_pure() {
-        assert!(!super::CRAFT_LAWS.engine_output_double.value);
         assert_eq!(
-            super::CRAFT_LAWS.engine_output_double.origin,
-            oag_title::Origin::Measured
+            super::CRAFT_LAWS.engine_output_double,
+            oag_title::pre_race::Sourced::measured(false)
         );
     }
 
@@ -577,6 +591,15 @@ mod tests {
             super::CRAFT_LAWS.bank_to_yaw.origin,
             oag_title::Origin::Chosen
         );
+    }
+
+    /// Pure's pitch is three code literals, measured live, and held out of the table until our
+    /// AI flies it. Releasing the hold is this test's change.
+    #[test]
+    fn the_pitch_is_measured_and_held() {
+        let pitch = super::CODE_PITCH;
+        assert_eq!((pitch.air, pitch.ground, pitch.damping), (0.1, 0.4, 1.5));
+        assert_eq!(super::CRAFT_LAWS.code_pitch, None);
     }
 
     #[test]

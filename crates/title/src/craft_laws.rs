@@ -32,4 +32,18 @@ pub struct CraftLaws {
     /// The two-point hover's bank-to-yaw gain, `torque.y += gain * right.y`: Pulse `30`,
     /// Wipeout Pure `50` (`oag_physics::laws::Laws::bank_to_yaw`).
     pub bank_to_yaw: Sourced<f32>,
+    /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
+    /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
+    pub code_pitch: Option<Sourced<CodePitch>>,
+}
+
+/// A pitch response compiled into the engine rather than authored as `<pitch>`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CodePitch {
+    /// Torque per unit of pitch input while airborne (Pulse's `pitch_air`).
+    pub air: f32,
+    /// Torque per unit of pitch input while grounded (Pulse's `pitch_ground`).
+    pub ground: f32,
+    /// The racing pitch damping (Pulse's `pitch_damping`).
+    pub damping: f32,
 }
