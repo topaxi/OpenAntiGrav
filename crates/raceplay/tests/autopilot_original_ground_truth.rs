@@ -590,3 +590,91 @@ fn wall_sweep() {
         }
     }
 }
+
+/// Slot 0's warm driver against a cold locate of the same craft
+/// (`Race::set_autopilot` re-locates it, as a pickup does), every `every`
+/// ticks over `ticks` of an autopiloted Pulse VENOM race, seed 1, weapons on.
+/// Returns (located, of them on a route, wrong: the cold point more than 10
+/// units further from the craft than the warm one), and the first wrong tick.
+fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, Option<u64>)> {
+    let mut race = race("pulse-psp-usa.chd", track, None)?;
+    race.set_autopilot(true);
+    let (mut n, mut on_route, mut wrong, mut first) = (0, 0, 0, None);
+    for tick in 1..=ticks {
+        race.tick_sim_only(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[0];
+        if !tick.is_multiple_of(every)
+            || ship.physics.craft_state != oag_physics::CraftState::Racing
+            || ship.standing.finished()
+        {
+            continue;
+        }
+        let warm = ship.driver;
+        let warm_point = race.line_of(0).point(warm.index as usize);
+        let snapshot = race.snapshot_sim();
+        race.set_autopilot(true);
+        let cold = race.sim.world.ships[0].driver;
+        let cold_point = race.line_of(0).point(cold.index as usize);
+        race.restore_sim(&snapshot);
+        n += 1;
+        on_route += u32::from(warm.branching.route != 0);
+        let craft = race.sim.world.ships[0].physics.body.position;
+        if cold_point.distance(craft) > warm_point.distance(craft) + 10.0 {
+            wrong += 1;
+            {
+                let ship = &race.sim.world.ships[0];
+                println!(
+                    "  tick {tick} craft {:?} air {:.2} grounded {} warm {} {:?} at {warm_point:?}, cold {} {:?} at {cold_point:?}",
+                    ship.physics.body.position,
+                    ship.physics.time_airborne,
+                    ship.physics.grounded,
+                    warm.index,
+                    warm.branching,
+                    cold.index,
+                    cold.branching
+                );
+            }
+            first.get_or_insert(tick);
+        }
+    }
+    Some((n, on_route, wrong, first))
+}
+
+/// A cold locate of the player's craft on a route's own samples finds that
+/// route, not the ring's nearest point on another deck: Pulse `05_Track`,
+/// where the ring passes 55 units above route 1 (`docs/gameplay/ai.md`, "An
+/// opponent's Autopilot"). Fails if `Race::locate_player_driver` searches the
+/// ring alone.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_cold_locate_on_a_route_stays_on_the_route() {
+    let Some((n, on_route, wrong, first)) =
+        cold_locates(r"Data\Environments\05_Track\track.vex", 4_000, 30)
+    else {
+        return;
+    };
+    println!("located {n}, on a route {on_route}, wrong {wrong} (first {first:?})");
+    assert!(
+        on_route > 10,
+        "slot 0 never took the route: {on_route} of {n}"
+    );
+    assert_eq!(wrong, 0, "first wrong at tick {first:?}");
+}
+
+/// [`cold_locates`] on every Pulse circuit for a whole race.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn cold_locate_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for id in [
+        "01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16",
+    ] {
+        let track = format!(r"Data\Environments\{id}_Track\track.vex");
+        let Some((n, on_route, wrong, first)) = cold_locates(&track, 12_000, 30) else {
+            return;
+        };
+        println!("LOCATE {id} located {n} on a route {on_route} wrong {wrong} first {first:?}");
+    }
+}
