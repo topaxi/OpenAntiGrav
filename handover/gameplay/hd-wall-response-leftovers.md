@@ -25,6 +25,10 @@ the point rate. Evidence and the sweep:
   under game-mode mask `0x206040` (Zone and kin, not run live); ours always uses `0.035`.
 - **Shield drain with weapons off.** `0.035 * |p|` per record is measured; Pulse's
   weapons-off halving is not checked on HD.
+- **The wall laws' two extra wrecks were never explained.** HD `races_others` went from 2 wrecks
+  to 4 with the four laws on (wall-response.md, the sweep table); the sweep does not say what
+  wrecked them. The next merge (`hd-hover-residual`, HD summing its hover escapes) brought the
+  total to 1, so the count no longer shows a regression, but the cause of the two was not found.
 - **The yaw kick lands one step late by loop order**, not by a capture of the step after.
 - **`0x000f56d0`** is the body contact-record push (its float is the friction), not a ray
   probe. The rename belongs to the crossfade lane's page, where it is
