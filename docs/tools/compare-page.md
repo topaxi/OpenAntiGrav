@@ -79,6 +79,8 @@ PID. A pair is only a pair when the caption says what matched.
 | 2048 (Vita) | **partial** | nothing | `vita3k-drive.py race --screenshot` boots Vita3K on a private config, on its own weston and Xwayland display, and writes a frame; its fixed-timing tap walk never changed screen in the 2026-10-20 run and the frame was an intro cinematic, not a race |
 | Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. Ours is `oag-game <extracted> --menu-page main`, **our own menu**, so the pair is a layout comparison. No race was reached |
 
+`pulse.toml` holds both of each circuit's entries (White and Black, 24 pairs; the Black walk is `--track-down` 1, 3, ... 23 from a fresh profile, `menu --unlock`).
+
 The pairs in `live.toml` are Pulse PSP, HD (a Time Trial start, Harimau classic) and Omega's menu; `pulse.toml` holds the Pulse PSP circuits and the first Pulse PS2 pair, `hd.toml` the twelve HD circuits (Harimau classic) and one Fury craft, pose matched.
 
 ## Publishing is locked
