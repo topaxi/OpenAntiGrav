@@ -229,6 +229,31 @@ def image_size(path):
     return [int(out[0]), int(out[1])]
 
 
+def overlap_score(theirs, ours):
+    """A cheap overlap score of two same-size frames: normalised RMSE of the pictures, and the normalised
+    cross-correlation of their blurred edge maps (1.0 = the edges lie on each other; a pair that lines up badly
+    reads low). Returns {} when ImageMagick cannot score them."""
+    out = {}
+    try:
+        r = subprocess.run(["compare", "-metric", "RMSE", str(theirs), str(ours), "null:"], capture_output=True, text=True)
+        out["rmse"] = float(r.stderr.split("(")[1].split(")")[0])
+        raws = []
+        for p in (theirs, ours):
+            r = subprocess.run(["magick", str(p), "-resize", "960x960>", "-colorspace", "Gray", "-blur", "0x1.2", "-edge", "1",
+                                "-depth", "8", "gray:-"], capture_output=True, check=True)
+            raws.append(r.stdout)
+        a, b = raws
+        n = len(a)
+        ma, mb = sum(a) / n, sum(b) / n
+        sab = sum((x - ma) * (y - mb) for x, y in zip(a, b))
+        saa = sum((x - ma) ** 2 for x in a)
+        sbb = sum((y - mb) ** 2 for y in b)
+        out["edge_ncc"] = sab / ((saa * sbb) ** 0.5) if saa and sbb else 0.0
+    except Exception as exc:  # noqa: BLE001 - a score is a convenience, never a reason to lose a pair
+        out["error"] = str(exc)
+    return out
+
+
 class Pair:
     """One pair's recorded environment and its checks; `finish` refuses on any failed check."""
 
@@ -280,7 +305,8 @@ class Pair:
 
     def finish(self):
         bad = self.failed()
-        self.rec["checks"] = self.checks
+        if (self.out / "theirs.png").exists() and (self.out / "ours.png").exists():
+            self.rec["overlap"] = overlap_score(self.out / "theirs.png", self.out / "ours.png")
         self.rec["refused"] = bool(bad)
         self.rec["environment"] = environment_text(self.plat, self.rec)
         (self.out / "pair.json").write_text(json.dumps(self.rec, indent=2) + "\n")
@@ -299,6 +325,9 @@ def environment_text(plat, rec):
             "ours: %s, render scale %d, %s, shadows %s, motion blur %s, aspect %s, HUD %s, camera %s"
             % (size_text(plat), o["render_scale"], "no upscaler" if o["reconstruction"] == "off" else o["reconstruction"],
                o["shadows"], o["motion_blur"], plat["aspect"], o["hud"], o["camera"])]
+    ov = rec.get("overlap") or {}
+    if "edge_ncc" in ov:
+        bits.append("overlap: edge correlation %.2f, RMSE %.3f" % (ov["edge_ncc"], ov["rmse"]))
     if rec.get("ours", {}).get("binary"):
         bits.append("binary %s" % rec["ours"]["binary"]["sha256_12"])
     return "; ".join(bits)
@@ -320,6 +349,10 @@ def manifest(out_path, dirs):
                 continue
             plat = platform(rec["profile"])
             base = pj.parent
+            if "overlap" not in rec:
+                rec["overlap"] = overlap_score(base / "theirs.png", base / "ours.png")
+                rec["environment"] = environment_text(plat, rec)
+                pj.write_text(json.dumps(rec, indent=2) + "\n")
             rel = lambda name: Path(__import__("os").path.relpath(base / name, out.parent))
             m = rec.get("meta", {})
             entries.append("\n".join([
