@@ -165,7 +165,7 @@ RACE_ARRIVED = {"InGame", "HUD"}
 
 # HD prints this on every track load, which is where a capture gets its
 # circuit from for free - the GDB stub is never asked.
-TRACK_LINE = re.compile(r"Loading track model (\S+)")
+TRACK_LINE = re.compile(r'Loading (?:track model |World ")([^"\s]+)')
 
 #: RPCS3's own configuration, the one its GUI edits. Never written by this
 #: script: everything below reads it and writes a *copy*.
@@ -1584,6 +1584,7 @@ def cmd_capture(args):
     """
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import ps3_pose
+    import rpcs3_place
     from rpcs3_debugger import Debugger
 
     out = Path(args.out).resolve()
@@ -1634,14 +1635,24 @@ def cmd_capture(args):
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
-                session.pad.set("cross", True)
+                # `cross` is throttle in a running Time Trial: `--press none` leaves the pad alone
+                # so a pair shows the craft at rest.
+                if args.press != "none":
+                    session.pad.set(args.press, True)
                 gdb.resume()
                 time.sleep(args.interval)
                 gdb.pause()
-                session.pad.set("cross", False)
+                if args.press != "none":
+                    session.pad.set(args.press, False)
 
                 stem = "%02d" % n
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
+                # The player's body at the same instant as the frame and the camera.
+                try:
+                    ship_pose = rpcs3_place.read_pose(gdb, rpcs3_place.find_player(gdb)[1])
+                except Exception as error:  # noqa: BLE001 - the camera is still worth having
+                    print("  %s: no player pose (%s)" % (stem, error), flush=True)
+                    ship_pose = None
                 blobs = []
                 for chain, size in regions:
                     # A region that will not resolve or will not read is
@@ -1668,16 +1679,16 @@ def cmd_capture(args):
                     candidates.extend(ps3_pose.packet_candidates(blob, base=at))
                 print("  %s: %d packet candidate(s) read" % (stem, len(candidates)),
                       flush=True)
-                shots.append((stem, shot, candidates))
+                shots.append((stem, shot, candidates, ship_pose))
                 if args.keep_dumps:
                     for at, blob in blobs:
                         (out / ("%s-%08x.bin" % (stem, at))).write_bytes(blob)
             gdb.resume()
 
-    picks = ps3_pose.pick_camera([candidates for _, _, candidates in shots])
-    for (stem, shot, _), (camera, reason, count) in zip(shots, picks):
+    picks = ps3_pose.pick_camera([candidates for _, _, candidates, _ in shots])
+    for (stem, shot, _, ship_pose), (camera, reason, count) in zip(shots, picks):
         record = describe(camera, reason, count, track, shot,
-                           args.team, args.hull_variant)
+                           args.team, args.hull_variant, ship_pose)
         (out / ("%s.json" % stem)).write_text(json.dumps(record, indent=2) + "\n")
         if camera:
             print("  %s: eye %s regs %s unit error %.2e" % (
@@ -1945,7 +1956,8 @@ def track_name():
     return hits[-1] if hits else None
 
 
-def describe(camera, reason, candidate_count, track, shot, team=None, hull_variant=None):
+def describe(camera, reason, candidate_count, track, shot, team=None, hull_variant=None,
+             ship_pose=None):
     """The capture record: what a frame needs to be reproduced, and nothing more.
 
     `camera`, `reason` and `candidate_count` are one element of
@@ -1963,6 +1975,9 @@ def describe(camera, reason, candidate_count, track, shot, team=None, hull_varia
     `--team`/`--hull-variant`, `None` when not supplied. Recorded beside
     `track` regardless, so a render command built from this file races the
     same craft the screenshot shows rather than whatever `--team` defaults to.
+
+    `ship_pose` is the player body's `{pos, rows, vel}` (`rpcs3_place.read_pose`), read
+    in the same pause as the frame; `scripts/rpcs3-hd-pair.py` turns it into `--pose`.
 
     Deliberately not a memory dump. The raw bytes are game memory - extracted
     executable data, which `just audit-leakage` refuses and CI's leakage job
@@ -1984,6 +1999,7 @@ def describe(camera, reason, candidate_count, track, shot, team=None, hull_varia
         "team": team,
         "hull_variant": hull_variant,
         "screenshot": str(shot) if shot else None,
+        "ship": ship_pose,
         "camera": record_camera,
         "camera_reason": reason,
         "camera_candidates": candidate_count,
@@ -2392,6 +2408,10 @@ def main(argv=None):
     cap.add_argument("--load", type=float, default=50.0)
     cap.add_argument("--shots", type=int, default=3,
                      help="how many poses to capture in this one boot")
+    cap.add_argument("--press", default="cross",
+                     help="the button held across each frame interval (default cross, which "
+                     "starts a race from its prompt but is throttle once it runs); `none` for "
+                     "no press")
     cap.add_argument("--interval", type=float, default=6.0,
                      help="seconds of thrust between poses")
     cap.add_argument("--out", default="data/reference/hd-capture",

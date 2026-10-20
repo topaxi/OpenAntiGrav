@@ -27,6 +27,7 @@ way. Three rules follow, each backed by a tool.
 | `scripts/ppsspp-start.sh <lane> <display> <port> <image>` | A private muted PPSSPP SDL under its own Xvfb, stopped by recorded pid (`... <lane> stop`). |
 | `scripts/psp-state.py` | PPSSPP save and load through the pause menu. |
 | `scripts/emu-rebuild-states.sh <lane> pulse-grid\|hd-grid [name]` | Rebuilds a state from the user's own disc into `data/saves/`. |
+| `scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0\|1> <name>` | Cold boot to a saved HD Time Trial state in about 3 min (2026-10-20, `compare-hd-pose`): reads the screen after each step (`Single Player`, then `Track Creation` is Track Select, `Team Selection`), backs out of Campaign when the first `right` is dropped, and fails with the screen it stopped on. 12 circuits and Harimau classic saved this way. |
 | `scripts/emu-restore-state.sh <lane> <state> [--restart] [--no-gdb]` | Restores an RPCS3 state into a long-lived `serve` with pad, GDB proxy and memory, in about 10 s. `scripts/emu-save-state.sh <lane> <name>` takes one from a running `serve`; `scripts/rpcs3-state-probe.py` checks GDB and memory after a restore. |
 | `scripts/hd-ibl-poll.py <ibl> <refl> [s] [button...]`, `hd-ibl-sample.py`, `hd-ibl-catch.py`, `hd-draw-dump.py` | HD environment-probe reads on an attached RPCS3: poll the two live maps at ~100 Hz without pausing and print when they change; pause on a drive and write the player's position and velocity with both maps (the `data/reference/hd-craft-ibl-probe/` set); pause on the first change and dump the frame's draws; dump any frame's draws. See [hd-probes.md](../formats/hd-probes.md). |
 
@@ -143,6 +144,17 @@ OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-state-probe.py   # 
 | `hd-timetrial-talons-assegai-start` | Racebox Time Trial, Venom, `Assegai_c1` (the row Team Selection opens on), at rest just after `GO` | drive at once |
 | `hd-timetrial-talons-assegai-classic-start` | the same with the classic `Assegai` hull (Team Selection `down` once) | drive at once |
 | `hd-timetrial-talons-harimau-classic-start` | the same with the classic `Harimau` (nine `right`s from `Feisar`, then `down`) | drive at once |
+| `hd-timetrial-vineta-k-harimau-classic-start` | Racebox Time Trial, Vineta K, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-anulpha-pass-harimau-classic-start` | Racebox Time Trial, Anulpha Pass, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-moa-therma-harimau-classic-start` | Racebox Time Trial, Moa Therma (`03_Track`), Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-chenghou-project-harimau-classic-start` | Racebox Time Trial, Chenghou Project, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-metropia-harimau-classic-start` | Racebox Time Trial, Metropia (`02_Track`), Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-sebenco-climb-harimau-classic-start` | Racebox Time Trial, Sebenco Climb, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-ubermall-harimau-classic-start` | Racebox Time Trial, Ubermall, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-sol-2-harimau-classic-start` | Racebox Time Trial, Sol 2, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-the-amphiseum-harimau-classic-start` | Racebox Time Trial, The Amphiseum, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-modesto-heights-harimau-classic-start` | Racebox Time Trial, Modesto Heights, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-tech-de-ra-harimau-classic-start` | Racebox Time Trial, Tech de Ra, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
 
 **A new team needs a cold boot, not a restore (2026-10-12, `hd-hull-wash-2`).** Restoring
 `hd-timetrial-talons-venom-start` with the stub off, quitting to the Main Menu and walking

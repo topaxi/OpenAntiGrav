@@ -10,11 +10,7 @@ Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, plat
 
 - **A new manifest entry needs `platform`**; the seed and live manifests under `data/` have it (`compare-seed.py` writes it).
 - **`just publish-compare` is unlocked (ADR-0074 Accepted) and has never been run.** The maintainer runs it; `wrangler` is not installed on the lane host.
-- **HD: the craft pose is not carried.** `rpcs3-drive.py capture` gives the camera, so
-  our craft sits a little off (the original has moved a few frames on). `frame-shot`
-  for HD wants a ship pose row too (the autopilot capture `scripts/rpcs3-hd-autopilot.py`
-  reads one). A campaign-start pair also has the original in grid slot 8 and ours in
-  slot 1: use a Time Trial state.
+- ~~**HD: the craft pose is not carried.**~~ **Closed** (2026-10-20, `compare-hd-pose`): `rpcs3-drive.py capture` records the player body (`ship`: position, basis rows, velocity) in the same pause as the camera, and `scripts/rpcs3-hd-pair.py` renders ours with `--pose x,y,z,yaw --camera-pose --camera-fov --ticks 0`; 12 Time Trial states (one per circuit, Harimau classic) and an Assegai_c1 (Fury Concept) pair on Talon's, in `data/reference/compare-page/hd.toml`. Recipe in `docs/tools/compare-page.md`. **Open in it**: `--pose` takes its attitude from the spline, so pitch and roll are not carried (0.00-0.34 degrees on the 12 pairs); at `--ours-ticks 0` the gantry board is unlit (pair artifact), later ticks light it but our craft sinks about 1.9 units below the original's body (see lead A below); a campaign start would still be slot 8 against slot 1, so the states are Time Trial.
 - **Pure (PSP): not reachable.** `psp-drive.py menu` is Pulse's walk; the camera hook
   `0x0883c13c` is Pulse USA's. Needs a hand walk to a grid, a save state
   (`psp-state.py save --keep`, `--serial` for Pure) and Pure's camera node located.
@@ -45,11 +41,26 @@ Seen on the PSP pairs unless noted. Items 1-4 are closed; 5-8 are still leads.
 7. **Race clock**: not matched by design (the original has run since GO).
 8. **PS2**: the original's hull fills about 1.35x the width ours does (our PSP-shape fit and our own camera), the original shows "pos 8/8" where ours shows no position, and a faint `(UT EDIT)` string sits at the bottom left of the original (a debug string).
 
+### HD visible differences (`compare-hd-pose`, 2026-10-20)
+
+Seen on the 13 HD pairs (12 circuits, Harimau classic, Time Trial just after GO; Assegai_c1 on Talon's), the original at rest (`rpcs3-hd-pair.py` holds no pad button; `rpcs3-drive.py capture` defaults to holding `cross`, which is throttle once a Time Trial runs, and a first set of pairs taken that way read 5-7 km/h and a 96-98% thrust bar: that bar is closed as an artifact, at rest it is 0%). Leads only, nothing here was fixed. Pair artifacts, not differences: the unlit gantry board and the race clock (tick 0 of ours is before GO). Ours is the main checkout's `target/debug/oag-game` of 13:18 on 2026-10-20, after the HD Zone material merge `4097e9a44`.
+
+A. **Ride height after the pose.** Ours placed at the original's body position (`y = -50.078` at Talon's) settles to `y = -51.93` by tick 60 and stays: 1.9 units lower than the original's resting body, on the same spline. Measured on Talon's only (`oag-game --pose ... --ticks 300 --trace-out`); other circuits not run. Either our hover rests lower than HD's, or the body origin differs between the engines.
+B. **Exposure and bloom.** The original is brighter and high-key everywhere: Moa Therma, Ubermall and Sol 2 blow out to white (sky, track), Metropia and Chenghou carry a warm bloom; ours is darker, more contrasted, tonemapped. Largest single difference on every pair.
+C. **The hover glow under the craft.** At rest the original draws a faint blue ring and chevrons under the hull on the road (brighter under throttle, in the first pairs); ours draws a small blue spot at the nozzle and nothing on the road. The `.pob`/ground-glow trigger was not identified here.
+D. **Hull colour.** On Modesto Heights and Tech de Ra the original craft reads cream-yellow and ours orange and blue (Amphiseum: original yellow-green, ours pink-cream); on the other circuits ours has a pearl, rainbow sheen the original does not. The hull takes the circuit's probe/lights differently.
+E. **The scan line.** The original draws a thin horizontal line across the track at the craft's height (red on Metropia, Chenghou and Ubermall, green on Sebenco Climb); ours draws none.
+F. **Sky.** Ours draws a textured, cloudy sky where the original is white or washed out (Talon's, Moa Therma, Sol 2); Sebenco's snow and Modesto's sky agree in hue.
+G. **Sprites and lights.** Pink flare sprites top right on Metropia and the harimau banner's glow on Vineta K are absent in ours; Metropia's left-hand stair rail and Chenghou's ribbed steps are lit tan in ours and dark in the original (a lighting or shadow difference on those meshes).
+H. **HUD.** The original reads `RECORD 9:50.x` where ours reads `TOTAL 0:00.0`; the original's speed and thrust panel is translucent where ours is solid (the thrust bar reads 0% on both at rest); the position hexagon matches.
+I. **Concept-craft engine.** Assegai_c1 at rest: the original's engine plate is a bright pink-red glow, ours a dim orange.
+
+States: `data/saves/hd-fury/hd-timetrial-<circuit>-harimau-classic-start.SAVESTAT.zst` for `vineta-k`, `anulpha-pass`, `moa-therma`, `chenghou-project`, `metropia`, `sebenco-climb`, `ubermall`, `sol-2`, `talons`, `the-amphiseum`, `modesto-heights`, `tech-de-ra` (all twelve; the table in `docs/reverse-engineering/emulator-recipes.md` lists them). `emu-restore-state.sh <lane> <state> --restart` then `rpcs3-hd-pair.py` rebuilds a pair in about 1 minute (a restart that does not reload in 120 s happened once in 14: run it again).
+
 ## Next Steps
 
 0. Pulse PS2: more circuits need a menu route for `pcsx2-drive.py` (it only boots and loads states); the original camera's pose (rig eyes at craft-rig `+0x850`/`+0x860`) could be carried like PSP's `--camera`.
 
 1. Make a Time Trial state for each title the maintainer wants reviewed and capture
    one pair per circuit with the recipes in the doc.
-2. HD ship pose: add the player body pose to `rpcs3-drive.py capture`'s JSON and let
-   `render_with` carry it, so a pair is pose-matched as on Pulse PSP.
+2. ~~HD ship pose~~ done (`rpcs3-hd-pair.py`); the next HD step is lead A above (ride height) and, for a pair that shows the lit board, carrying the original's clock into ours.
