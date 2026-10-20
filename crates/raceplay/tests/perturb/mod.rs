@@ -43,6 +43,21 @@ pub const SCALES: [f32; 9] = [0.0, 1e-3, -1e-3, 1e-4, -1e-4, 1e-5, -1e-5, 1e-6, 
 /// five ignores two outliers. **Chosen, not measured.**
 pub const GATE: [f32; 5] = [0.0, 1e-3, -1e-4, 1e-5, -1e-6];
 
+/// The offsets a gate's bounds are generated over: a gate's statistic (the
+/// median of its [`GATE`] runs) is itself a draw, so a bound taken from one
+/// draw is exceeded by the next about half the time on a row whose outcome is
+/// bimodal. A generator computes the statistic once per offset here (every
+/// run moved by `1 + offset` on top of its own scale) and freezes the worst.
+/// `0` first, so the first median is the gate's own. **Chosen, not measured.**
+pub const BOUND_OFFSETS: [f32; 9] = [0.0, 2e-3, -2e-5, 3e-6, -5e-4, 5e-5, -3e-6, 7e-4, -7e-6];
+
+/// Offsets used for nothing but checking a regenerated gate: none is in
+/// [`BOUND_OFFSETS`], so a gate that stays green under them was not fitted to
+/// them.
+pub const HELD_OUT: [f32; 8] = [
+    1.5e-3, -1.5e-5, 2.5e-6, -3.5e-4, 4.5e-5, -4.5e-6, 9e-4, -9e-6,
+];
+
 /// The offset named by `OAG_PERTURB`, else `0`: a scratch switch that moves
 /// every run of every test calling [`apply`] by one more factor, so a sweep
 /// can ask how often a gate itself flips (`OAG_PERTURB=1e-5 cargo nextest
@@ -58,7 +73,13 @@ pub fn offset() -> f32 {
 /// `1 + offset()`). A no-op at `eps = 0` with no offset; a single-run test
 /// calls it with `0` so the sweep switch reaches it too.
 pub fn apply(setup: &mut Setup, eps: f32) {
-    let factor = (1.0 + eps) * (1.0 + offset());
+    apply_at(setup, eps, offset());
+}
+
+/// [`apply`] with the offset given rather than read: what a bound generator
+/// sweeps [`BOUND_OFFSETS`] with.
+pub fn apply_at(setup: &mut Setup, eps: f32, offset: f32) {
+    let factor = (1.0 + eps) * (1.0 + offset);
     if factor == 1.0 {
         return;
     }

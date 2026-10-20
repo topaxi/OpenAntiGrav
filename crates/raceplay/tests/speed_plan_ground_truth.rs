@@ -31,14 +31,23 @@ use crate::perturb;
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
 const NOT_CLEAN: &[(&str, &str)] = &[
-    // The gap landing at 1233-1241: walls at 1233-1239 in most builds, the
-    // unperturbed one clean (it left this list on 2026-10-20 with Pulse's
-    // measured air laws on, RAPIER on 2026-10-12, both on that one build).
-    ("06_Track", "VENOM"),
+    // The gap landing at 1233-1241: walls at 1233-1239. Not clean under every
+    // offset of `perturb::BOUND_OFFSETS` (it read clean on the single
+    // unperturbed build from 2026-10-12 to 2026-10-20).
     ("06_Track", "RAPIER"),
-    // `14_Track` PHANTOM left on 2026-10-20 as a majority: clean in four of the
-    // five builds, not clean in the unperturbed one.
     ("29_Track", "PHANTOM"),
+];
+
+/// `(layout, class)` pairs whose majority flips between offsets of
+/// `perturb::BOUND_OFFSETS`, so neither verdict is asserted; each with the
+/// share of offsets whose majority verified clean (2026-10-20). Printed, so a
+/// change that settles one is visible. `14_Track` PHANTOM, on [`NOT_CLEAN`]
+/// before 2026-10-20 on its single build, is clean under all nine.
+const UNSETTLED: &[(&str, &str)] = &[
+    // 3 of 9: the gap landing, as `06_Track` RAPIER.
+    ("06_Track", "VENOM"),
+    // 8 of 9: a rescue at 2402-2405.
+    ("29_Track", "RAPIER"),
 ];
 
 fn image() -> Option<PathBuf> {
@@ -102,7 +111,9 @@ fn slice(class: &str, reversed: bool) {
             plan.tight_samples(),
             plan.len()
         );
-        if clean != expected {
+        if UNSETTLED.contains(&(id.as_str(), class)) {
+            println!("{id} {class}: unsettled, not asserted");
+        } else if clean != expected {
             wrong.push(format!(
                 "{id} {class}: {} (builds clean {verdicts:?}; unperturbed: verify failures {}, \
                  respawns {}, unresolved {:?})",
