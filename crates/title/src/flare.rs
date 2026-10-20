@@ -81,6 +81,13 @@ pub struct Authored {
     /// own - `EngineFlare_PlaceShapes` gives every one a fresh
     /// `Spikes Random Scale` draw per frame - and `always` keeps the rest.
     pub main_spikes: &'static [&'static str],
+    /// The second spelling of [`Self::main_spikes`], slot for slot (empty for a
+    /// title with none). Wipeout Fury's Feisar concept and neon craft author
+    /// the same three shapes as `ef_SpikesShape1` to `ef_SpikesShape3`, with the
+    /// number after `Shape`; the census over every `engineflare.vex` HD ships
+    /// finds no other deviation. A slot takes the first spelling the file
+    /// carries, so the flicker stream stays keyed on the slot.
+    pub main_spikes_alt: &'static [&'static str],
     /// The same for [`Self::boost`]: `ef_SpikesLeftShape` and
     /// `ef_SpikesRightShape`.
     pub boost_spikes: &'static [&'static str],

@@ -149,11 +149,28 @@ pub(super) fn per_team(
             front_faces_only(&mut model);
         }
     }
+    // A main-spike slot takes the first spelling this file's node tree carries.
+    let tree = if vita {
+        Vec::new()
+    } else {
+        vex::nodes(&blob).unwrap_or_default()
+    };
+    let has_node = |wanted: &str| {
+        tree.iter().any(|n| {
+            n.name
+                .as_deref()
+                .is_some_and(|name| name.eq_ignore_ascii_case(wanted))
+        })
+    };
     let spike_names: Vec<&str> = authored
         .main_spikes
         .iter()
-        .chain(authored.boost_spikes)
-        .copied()
+        .enumerate()
+        .map(|(slot, first)| match authored.main_spikes_alt.get(slot) {
+            Some(alt) if !has_node(first) && has_node(alt) => *alt,
+            _ => *first,
+        })
+        .chain(authored.boost_spikes.iter().copied())
         .collect();
     let groups: Vec<&str> = [authored.always, authored.boost]
         .into_iter()
