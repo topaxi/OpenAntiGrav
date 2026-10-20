@@ -581,8 +581,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     engine_output_double: oag_title::pre_race::Sourced::measured(false),
     drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
     // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), held at Pulse's `30` until
-    // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
-    // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
+    // this engine's AI flies it: on, 7 of 12 perturbed samples put Pure's Ace race walls past the
+    // worst of the noise distribution (`P 0.002`, `docs/physics/pure-physics.md`).
     bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).

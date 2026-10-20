@@ -1,69 +1,60 @@
-# Pure's measured craft laws: what waits for our AI
+# Pure's measured craft laws: what still waits for our AI
 
-2026-10-20, `pure-physics`. Pure's craft update was diffed against Pulse's and every difference
-measured live in PPSSPP: [pure-physics.md](../../docs/physics/pure-physics.md), with the gate
-table per law. Evidence for the addresses:
-[psp-pure-usa/craft-physics.md](../../docs/ghidra/functions/psp-pure-usa/craft-physics.md).
+2026-10-20. Lane `pure-physics` diffed Pure's craft update against Pulse's and measured each
+difference live in PPSSPP ([pure-physics.md](../../docs/physics/pure-physics.md); the addresses
+are in [psp-pure-usa/craft-physics.md](../../docs/ghidra/functions/psp-pure-usa/craft-physics.md)).
+Lane `pure-laws-on` then judged each law against a noise distribution of our AI's gates.
+
+**On:** the speed pair (no engine doubling, grounded drag `-0.0025`), the launch boost, the
+sideshift `200`, and the pitch (`0.1`/`0.4`, damping `1.5`, `0.6` on the grid). The page's "What
+is on and what is held" section has the method, the verdict table and the tip's per-lap and
+end-of-run shields.
 
 ## Open
 
-- **The speed laws** (confidence 92), held at Pulse's: no engine doubling and grounded drag
-  `-0.0025`, which together halve Pure's acceleration and keep its top speed. Re-apply: in
-  `crates/pure/src/race.rs` set `engine_output_double` to `Sourced::measured(false)` and
-  `drag_ground` to `Sourced::measured(-0.0025)` and flip `the_speed_laws_are_measured_and_held`.
-  On, the Pulse gate holds 12/12, Pure's sweep walls go A `69 -> 37`, B `18 -> 50`, laps
-  `49.8 -> 54.5` s novice and `41 -> 44` s Ace, and the full suite's one red is the pad test
-  below. This is the feel the maintainer reported: Pure on Pulse's laws accelerates twice as hard
-  as the original.
-- **Sideshift `200`** (confidence 92), held: Pure's files author no `sideshift`, so a Pure craft
-  cannot sideshift at all today. Re-apply: set `CRAFT_LAWS.code_sideshift` to
-  `Some(Sourced::measured(SIDESHIFT))` and flip `the_sideshift_is_measured_and_held`; the loader
-  fills it for the player and every opponent. On Pulse's laws alone, Ace races walled
-  `1104 -> 1650` (seed 2 `405 -> 999`, a wreck) and the sweep's Ace A `38 -> 51`; on top of the
-  speed laws it was neutral, so release it with them.
-- **Bank-to-yaw `50`** (confidence 92), held at Pulse's `30`. Re-apply: in
-  `crates/pure/src/race.rs` set `CRAFT_LAWS.bank_to_yaw` to `Sourced::measured(50.0)` and flip
-  `the_bank_to_yaw_gain_is_measured_and_held`. On, Pure's opponent sweep Ace walls went
-  A `14 -> 42`, B `25 -> 265`, and Ace races wrecked 4 times where they wrecked none.
-- **Pitch `0.1` air, `0.4` grounded, damping `1.5`** (confidence 92), held: Pure flies Pulse's
-  `<pitch>` stand-in (`0.3`/`1.0`/`3`). Re-apply: set `CRAFT_LAWS.code_pitch` to
-  `Some(Sourced::measured(CODE_PITCH))` and flip `the_pitch_is_measured_and_held`. On, sweep Ace
-  walls A `14 -> 53`, B `25 -> 72`; 2 Ace wrecks; Ace end shield `64.4 -> 52.8`. The grid's
-  `-0.6` pitch damping is not ported either.
-- **The launch boost** (confidence 88), held: `oag_pure::race::START_BOOST` (windows `0.1`/`0.4`/
-  `0.5` s, `x0.8`/`x1.2`/`x4.2` for `1.0` s, the player's engine alone, `player_only`). Re-apply:
-  set `CRAFT_LAWS.code_start_boost` to `Some(Sourced::measured(START_BOOST))` and flip
-  `the_launch_boost_is_measured_and_held`; the loader and the player-only field gate are wired.
-  On, sweep novice walls A `23 -> 73` and Ace races wrecked 4 times. It needs
-  `engine_output_double` false (Pure's multipliers apply to an undoubled engine).
-- **The Pure pad replay test.**
-  `replay_ground_truth::pure_replays_reproduce_catch_a_tampered_input_and_ghosts_change_nothing`
-  needs a lap from its pad (our `oag_ai::Driver`, default tuning, on the player's craft) inside
-  7,200 ticks. The pad pins itself against the wall at the end of Vineta K's start straight on
-  Pulse's laws and on Pure's alike; at Pure's acceleration it crawls too slowly to lap. Red with
-  the speed laws on, which is why they are held. The options put to the lead: hold (taken), land
-  them and leave the test red for the driver lane, or give the Pure pad a longer budget.
-- **The inertia frame.** Pure's `Body_Integrate` (`0x089345e8`) is Pulse's instruction for
-  instruction and `Craft_Construct` passes Pulse's `0.9` and `(12, 8, 12)`, so Pure applies its
-  tensor in Pulse's world axes (confidence 88, read; not captured separately). Pulse's frame is
-  held for our AI (`three-measured-air-laws-wait-for-our-ai.md`); Pure's goes with it.
-- Not separated live: the brakes, lateral grip, weathervane and speed-pad functions (Pulse's laws
-  by reading). The EU pressing was not compared.
-- **Classes beyond Vector and Venom were not run**: both available profiles (a fresh one and the
-  maintainer's) are rookie saves with only those two unlocked. The laws are class-independent
-  code reading the class block; Flash, Rapier and Phantom were not watched.
+- **Bank-to-yaw `50`** (confidence 92) is held at Pulse's `30`. The test was on top of the speed
+  pair, the launch and the sideshift, with 12 airborne-pitch perturbations of 8 seeds each.
+  - Ace race walls: 7 of 12 samples land past the base's worst (`3052`-`4338` against `2339`,
+    `P 0.002`), with Ace laps of `45`-`46` s and respawns.
+  - The median moves `1911 -> 2594` (Mann-Whitney p `0.13`). Half the perturbations go badly;
+    the other half come out slightly better.
+  - To re-apply, in `crates/pure/src/race.rs`:
+    1. set `CRAFT_LAWS.bank_to_yaw` to `Sourced::measured(50.0)`;
+    2. flip `the_bank_to_yaw_gain_is_measured_and_held`.
+- **Novice pays for the speed pair.** The pair landed on the lead's decision while outside noise
+  in both directions.
+  - Ace is better: race walls `-38 %`, sweep A `-75 %`.
+  - Novice is worse: race walls `593 -> 786` (every sample past the base's worst), end shield
+    `88.2 -> 85.7`, sweep B `16 -> 51`.
+  - The law is measured, so this is our driver at half the acceleration. It is a driver item
+    for `driver-vs-new-physics` or a later AI lane.
+- **The bare `oag_ai::Driver` pins on Vineta K's first wall.**
+  - The pad: default tuning, on the racing line alone, with no speed plan, no field and no hull
+    yaw ceiling.
+  - It hits the wall at the end of the start straight and stays pinned, on Pulse's laws and on
+    Pure's alike. It crawls at about `10` u/s on Pulse's and about `5` on Pure's.
+  - The Pure replay test no longer uses it: its pad is now `Race::autopilot_wants`, which laps
+    in `2206`-`2250` ticks. Pulse, HD and 2048 keep the bare pad.
+  - This is a driver bug: with no plan, the bare driver does not back off a wall it is pressed
+    against.
+- **The inertia frame.** Pure's `Body_Integrate` (`0x089345e8`) is Pulse's, so Pure's world-axis
+  tensor is held with Pulse's (`three-measured-air-laws-wait-for-our-ai.md`).
+- **Not separated live:** the brakes, lateral grip, weathervane and speed-pad functions (Pulse's
+  laws, by reading). The EU pressing was not compared.
+- **Classes beyond Vector and Venom were not run.** Both available profiles are rookie saves.
 
 ## Next Steps
 
-1. Fix the pad's pin at Vineta K's first corner (our driver, not physics) first: it is what
-   blocks the speed laws, the biggest felt difference. Trace it with a per-120-tick print in
-   `replay_ground_truth.rs`'s `record()` (position, speed, wall ticks). 1-2 hours.
-2. When our driver flies Pulse's held air laws (`driver-vs-new-physics`), re-run Pure's sweep with
-   each hold released, one at a time:
-   `OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all -E
-   'test(/opponent_autopilot_sweep::pure/) | test(/opponent_autopilot_sweep::races_others/)'
-   --no-capture` with `OAG_SWEEP_IMAGE=pure` (about 10 minutes). 1 hour a law. Use more seeds
-   than four: a player-only launch moved the AI sweep's novice walls `23 -> 73`, so the columns
-   also measure the start's reshuffle, not only the law.
-3. To measure another class: unlock it in a profile (or write the unlock flag) and rerun
-   `scripts/psp-pure-force-capture.py`. 30 minutes once unlocked.
+1. Once our driver handles a stronger yaw coupling, re-judge bank-to-yaw, about 15 minutes of
+   machine time. Use the bar in
+   [pure-physics.md](../../docs/physics/pure-physics.md#the-noise-bar):
+   1. Apply the airborne `OAG_X_EPS` pitch knob as an uncommitted patch.
+   2. Build the `it_m_o` test binary once per law state.
+   3. Run `opponent_autopilot_sweep::pure` and `::races_others` with `OAG_SWEEP=1
+      OAG_SWEEP_IMAGE=pure OAG_SWEEP_SEEDS=8`, per difficulty, over the twelve `eps` values. Each
+      job takes 12-25 s, so a dozen run in parallel.
+   4. Hold if any metric regresses at `P < 0.01` (Mann-Whitney, or `k` past the base's worst).
+2. Fix the bare driver's wall pin (step 1 of a driver lane): trace it with a per-120-tick print in
+   `replay_ground_truth.rs`'s `record()` with the Pure pad set back to the bare driver. 1-2 hours.
+3. To measure another class: unlock it in a profile and rerun `scripts/psp-pure-force-capture.py`.
+   30 minutes once unlocked.
