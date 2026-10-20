@@ -62,6 +62,8 @@ impl Setup {
             start_position: None,
             #[cfg(feature = "view")]
             hd_trail: None,
+            #[cfg(feature = "view")]
+            ps2_trail: false,
             // No shield to draw either, and `Palette` has no measured "empty"
             // constant of its own - only Pulse's and HD's real, measured
             // colours - so a zeroed literal is the honest absence here,

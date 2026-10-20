@@ -926,7 +926,13 @@ impl Scene {
             if race.hd_trail_active() {
                 race.extend_hd_trail_vertices(trail, slot);
             } else {
-                exhaust.extend_trail_vertices(trail, race.trail_head_of(slot), right, up);
+                exhaust.extend_trail_vertices(
+                    trail,
+                    race.trail_head_of(slot),
+                    right,
+                    up,
+                    race.trail_law(),
+                );
             }
         }
         // Only the billboard *fallback*, per kind: a body whose own model did

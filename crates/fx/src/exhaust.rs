@@ -574,9 +574,9 @@ impl Exhaust {
     /// Each sample is displaced along the direction it was recorded with by
     /// [`trail_stretch`] - about 3.5 world units at the tail.
     #[must_use]
-    pub fn trail_vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
+    pub fn trail_vertices(&self, right: Vec3, up: Vec3, law: TrailLaw) -> Vec<GpuVertex> {
         let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
-        self.extend_trail_vertices(&mut out, None, right, up);
+        self.extend_trail_vertices(&mut out, None, right, up, law);
         out
     }
 
@@ -597,11 +597,15 @@ impl Exhaust {
         head: Option<Vec3>,
         right: Vec3,
         up: Vec3,
+        law: TrailLaw,
     ) {
         if !self.trail_ready() {
             return;
         }
-        let ramps = self.layer_alphas();
+        let (ramps, first_layer, glow_stamp) = match law {
+            TrailLaw::Ramped => (self.layer_alphas(), 0, true),
+            TrailLaw::Baked => ([PS2_GS_COLOUR_SCALE; LAYERS], PS2_FIRST_LAYER, false),
+        };
         let mut samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
         if let (Some(head), Some(newest)) = (head, samples.first_mut()) {
             newest.0 = head;
@@ -612,7 +616,7 @@ impl Exhaust {
         // The rim, in `Trail_DrawRibbon`'s own order. The fifth entry closes
         // the tube; `v` runs 0..1 once around it in quarters.
         let rim = [up, right, -up, -right, up];
-        for layer in 0..LAYERS {
+        for layer in first_layer..LAYERS {
             let ramp = ramps[layer];
             let base_width = LAYER_WIDTH[layer] * width_scale;
             let colour = LAYER_COLOUR[layer];
@@ -635,7 +639,11 @@ impl Exhaust {
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
                 // One stencil byte per segment, not interpolated: [`trail_stencil`].
-                let glow = trail_stencil(self.intensity, k);
+                let glow = if glow_stamp {
+                    trail_stencil(self.intensity, k)
+                } else {
+                    0.0
+                };
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
@@ -1102,6 +1110,8 @@ pub const MAX_TRAIL_VERTICES: usize = MAX_TRAILS
 /// and the same 128-byte uniform block so
 /// [`oag_mesh::mesh_render::UNIFORMS_SIZE`] describes both.
 pub mod hd;
+mod law;
+pub use law::{PS2_FIRST_LAYER, PS2_GS_COLOUR_SCALE, TrailLaw};
 mod texture;
 pub use texture::FlareTexture;
 

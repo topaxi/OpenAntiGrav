@@ -296,12 +296,15 @@ fn the_ribbon_waits_for_a_full_ring() {
     for k in 0..TRAIL_SAMPLES - 1 {
         e.push_trail(Vec3::new(0.0, 0.0, -(k as f32)), -Vec3::Z);
         assert!(!e.trail_ready(), "ready after only {} samples", k + 1);
-        assert!(e.trail_vertices(Vec3::X, Vec3::Y).is_empty());
+        assert!(
+            e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped)
+                .is_empty()
+        );
     }
     e.push_trail(Vec3::new(0.0, 0.0, -9.0), -Vec3::Z);
     assert!(e.trail_ready());
     assert_eq!(
-        e.trail_vertices(Vec3::X, Vec3::Y).len(),
+        e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped).len(),
         TRAIL_VERTICES_PER_CRAFT,
         "a full ring must emit every layer's every segment"
     );
@@ -323,7 +326,10 @@ fn clearing_the_trail_stops_it_drawing() {
     assert!(e.trail_ready());
     e.clear_trail();
     assert!(!e.trail_ready());
-    assert!(e.trail_vertices(Vec3::X, Vec3::Y).is_empty());
+    assert!(
+        e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped)
+            .is_empty()
+    );
 }
 
 /// The ribbon tapers in width from head to tail, and its colour fades on
@@ -343,7 +349,7 @@ fn the_ribbon_tapers_in_width_and_fades_in_colour() {
     for k in 0..TRAIL_SAMPLES {
         e.push_trail(Vec3::new(0.0, 0.0, -(k as f32) * 3.0), -Vec3::Z);
     }
-    let v = e.trail_vertices(Vec3::X, Vec3::Y);
+    let v = e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped);
 
     let per_segment = TRAIL_FINS * 6;
     let per_layer = (TRAIL_SAMPLES - 1) * per_segment;
@@ -585,13 +591,13 @@ fn a_head_moves_only_the_newest_sample() {
     }
     let positions = |head: Option<Vec3>| {
         let mut out = Vec::new();
-        e.extend_trail_vertices(&mut out, head, Vec3::X, Vec3::Y);
+        e.extend_trail_vertices(&mut out, head, Vec3::X, Vec3::Y, TrailLaw::Ramped);
         out.iter().map(|v| v.position).collect::<Vec<_>>()
     };
     let recorded = positions(None);
     assert_eq!(
         recorded,
-        e.trail_vertices(Vec3::X, Vec3::Y)
+        e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped)
             .iter()
             .map(|v| v.position)
             .collect::<Vec<_>>()
@@ -603,4 +609,48 @@ fn a_head_moves_only_the_newest_sample() {
         recorded[per_segment..2 * per_segment],
         headed[per_segment..2 * per_segment]
     );
+}
+
+fn full_ring_at_rest() -> Exhaust {
+    let mut e = Exhaust::new();
+    for k in 0..TRAIL_SAMPLES {
+        e.push_trail(Vec3::new(0.0, 0.0, -(k as f32)), -Vec3::Z);
+    }
+    e
+}
+
+/// At rest the PSP's ramp is zero, so the ribbon is black; the PS2 sends the baked
+/// colours unramped, and its draw leaves layer 0 out.
+#[test]
+fn the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer() {
+    let e = full_ring_at_rest();
+    assert_eq!(e.intensity, 0.0);
+    let lit = |v: &[GpuVertex]| v.iter().filter(|v| v.colour[..3] != [0.0; 3]).count();
+
+    let psp = e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Ramped);
+    assert_eq!(lit(&psp), 0, "the PSP ribbon is black at rest");
+
+    let ps2 = e.trail_vertices(Vec3::X, Vec3::Y, TrailLaw::Baked);
+    assert_eq!(ps2.len() * LAYERS, psp.len() * (LAYERS - PS2_FIRST_LAYER));
+    assert_eq!(
+        lit(&ps2),
+        ps2.len()
+            - ps2
+                .iter()
+                .filter(|v| v.colour[0] == 0.0 && v.colour[2] == 0.0)
+                .count()
+    );
+    assert!(lit(&ps2) > 0);
+    // Head of the grey layer: 210 on the GS's 128 scale; no blue vertex anywhere.
+    let head = ps2.iter().map(|v| v.colour[0]).fold(0.0, f32::max);
+    assert!((head - 210.0 / 128.0).abs() < 1e-5, "{head}");
+    assert!(
+        ps2.iter().all(|v| v.colour[2] <= v.colour[0] * 2.0),
+        "layer 0 is blue"
+    );
+    assert!(
+        ps2.iter().all(|v| v.colour[3] == 0.0),
+        "the PS2 trail stamps no glow mask"
+    );
+    assert_eq!(LAYER_COLOUR[0], [0.0, 8.0 / 255.0, 128.0 / 255.0]);
 }

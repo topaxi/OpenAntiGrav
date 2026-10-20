@@ -978,6 +978,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
             #[cfg(feature = "view")]
+            ps2_trail: title.looks.ps2_trail.applies(archives.layout.platform),
+            #[cfg(feature = "view")]
             shield_palette: roster::shield_palette(
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,

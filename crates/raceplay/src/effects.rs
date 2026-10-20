@@ -511,6 +511,17 @@ impl Race {
         );
     }
 
+    /// How the PSP-preset ribbon's colours reach the screen on this disc: the PS2's
+    /// law when the title's `ps2_trail` rule applies to the disc's platform.
+    #[must_use]
+    pub fn trail_law(&self) -> exhaust::TrailLaw {
+        if self.view.ps2_trail {
+            exhaust::TrailLaw::Baked
+        } else {
+            exhaust::TrailLaw::Ramped
+        }
+    }
+
     /// Whether this race draws HD's trail tube instead of the PSP ribbon.
     #[must_use]
     pub fn hd_trail_active(&self) -> bool {
