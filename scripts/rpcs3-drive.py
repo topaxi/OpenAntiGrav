@@ -81,6 +81,7 @@ import os
 import re
 import shutil
 import subprocess
+import struct
 import sys
 import time
 from pathlib import Path
@@ -225,6 +226,19 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
     # wrong by that much (rpcs3-capture.md, 2026-10-20).
     if os.environ.get("OAG_RPCS3_WCB") != "0":
         edits[("Video", "Write Color Buffers")] = "true"
+    if os.environ.get("OAG_COMPARE_PLATFORM"):
+        # The comparison profile (scripts/compare-environment.toml) fixes every video setting that changes
+        # the picture, in this copy and, through `prepare_state_boot`, in the game's custom config.
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import compare_env
+        e = compare_env.platform(os.environ["OAG_COMPARE_PLATFORM"])["emulator"]
+        edits[("Video", "Resolution")] = e["resolution"]
+        edits[("Video", "Resolution Scale")] = str(e["resolution_scale"])
+        edits[("Video", "Output Scaling Mode")] = e["output_scaling"]
+        edits[("Video", "MSAA")] = e["msaa"]
+        edits[("Video", "Anisotropic Filter Override")] = str(e["anisotropic_override"])
+        edits[("Video", "Stretch To Display Area")] = str(e["stretch_to_display_area"]).lower()
+        edits[("Video", "Write Color Buffers")] = str(e["write_color_buffers"]).lower()
     if GDB_SERVER:
         edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
     elif os.environ.get("OAG_RPCS3_NO_GDB") == "1":
@@ -1649,7 +1663,12 @@ def cmd_capture(args):
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
                 # The player's body at the same instant as the frame and the camera.
                 try:
-                    ship_pose = rpcs3_place.read_pose(gdb, rpcs3_place.find_player(gdb)[1])
+                    player_ship, player_body = rpcs3_place.find_player(gdb)
+                    ship_pose = rpcs3_place.read_pose(gdb, player_body)
+                    # The craft's running lap clock, seconds (f32 at ship+0x7014, read 2026-10-20: it
+                    # equals the HUD's `current` time and counts 1:1 with emulated time), so a pair can
+                    # run ours the same number of seconds after GO.
+                    ship_pose["race_clock_s"] = struct.unpack(">f", gdb.read(player_ship + 0x7014, 4))[0]
                 except Exception as error:  # noqa: BLE001 - the camera is still worth having
                     print("  %s: no player pose (%s)" % (stem, error), flush=True)
                     ship_pose = None
