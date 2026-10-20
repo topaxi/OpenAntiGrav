@@ -698,16 +698,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Spline::STEPS_PER_SEGMENT,
         spline.max_half_width()
     ));
-    // The collision cage, where the track's own header asks for it and its points
-    // carry the bytes: every Pulse circuit; on HD the one circuit that sets the
-    // flag, inherited from Pulse and not measured; never a foreign or own-format
+    // The collision cage, where the track's own header asks for it, its points carry
+    // the bytes and the title runs a cage off that flag: every Pulse circuit; never
+    // HD's Chenghou Project, whose header sets the flag but whose original runs no
+    // cage (`CraftLaws::cage_from_track_header`); never a foreign or own-format
     // track, which has no header word to read (`crate::cage`).
-    let cage =
-        oag_gameplay::cage::CageTrack::new(&ai, oag_vex::track::cage_flag_in_vex(&track_blob));
+    let header_flag = oag_vex::track::cage_flag_in_vex(&track_blob);
+    let title_runs_it = title
+        .race
+        .craft_laws
+        .is_none_or(|laws| laws.cage_from_track_header.value);
+    let cage = oag_gameplay::cage::CageTrack::new(&ai, header_flag && title_runs_it);
     report.push(match &cage {
         Some(cage) => format!(
             "collision cage: on, {} control point(s)",
             cage.point_count()
+        ),
+        None if header_flag && !title_runs_it => format!(
+            "collision cage: off, {} runs no cage off the track header's flag",
+            title.name
         ),
         None => "collision cage: off (no header flag, or no cage bytes)".to_string(),
     });

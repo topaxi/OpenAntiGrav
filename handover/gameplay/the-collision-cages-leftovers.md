@@ -27,16 +27,13 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
   sample 0 is lower *left* front (`body.right()` is `-row0`), ours lower right
   front. The order decides the sequence contacts resolve in. One-law change,
   measured against the weave capture below.
-- **HD's `04_chenghou_project`** runs the cage, inherited from Pulse: the one HD
-  circuit whose track header sets the flag, with bytes on every point. HD's own
-  code is not read; the `hd-wall-resolver` lane can check it.
-  **Maintainer report (2026-10-20): on Chenghou Project (HD, Time Trial,
-  Piranha) the craft is pulled down hard on the first two jumps, unlike the
-  original, and it feels very unnatural.** The cage inherited from Pulse is the
-  first suspect (it runs on no other HD circuit); also check HD's airborne
-  gravity there. Next: RPCS3, the same jumps under the original's Autopilot,
-  height and vertical velocity per tick against ours, then read whether HD's
-  code runs a cage at all.
+- **HD Chenghou Project's pull-down (2026-10-20, `hd-chenghou-jumps`): closed.** HD's
+  original runs no cage. Ours now holds it off by the title
+  (`CraftLaws::cage_from_track_header`), and the jumps' vy follows the original's
+  ([ps3-hdfury-eu/collision-cage.md](../../docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md)).
+  Still open from that lane: ours flies about 2 units lower than the original from the
+  takeoff on, with takeoff vy 8.8 against 13.0 at `pz -100` on jump 1. That is a ramp or
+  launch residual, not the cage.
 - **Our own track format** carries the bytes (`_OAG_CAGE_A`/`_OAG_CAGE_B`) but not
   the header flag, so a track file runs no cage. A manifest or node field for the
   flag is the port (v1 can be edited in place).

@@ -109,6 +109,7 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         wall_one_sided: Sourced::chosen(false),
         wall_steer_away: Sourced::chosen(false),
         wall_point_rate_body_local: Sourced::chosen(false),
+        cage_from_track_header: Sourced::chosen(true),
         code_pitch,
         code_sideshift: None,
         code_start_boost: None,

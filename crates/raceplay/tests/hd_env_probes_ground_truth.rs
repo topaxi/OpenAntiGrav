@@ -4,6 +4,10 @@
 //! **`#[ignore]`d, needs the decrypted HD image** (and Pulse's for the negative case).
 //! Dropping the `.probes` read from the load turns the first test red: the hull would
 //! silently keep its constant ambient.
+//!
+//! The same loads carry a second claim, [`runs_no_cage`]: no HD circuit runs the collision
+//! cage, Chenghou Project included although its header sets Pulse's flag, and Pulse's
+//! circuit still does (`oag_title::craft_laws::CraftLaws::cage_from_track_header`).
 
 use oag_raceplay as race;
 
@@ -29,6 +33,26 @@ const ENVIRONMENTS: &[&str] = &[
     "12_sol_2",
     "15_anulpha_pass",
 ];
+
+/// HD's original runs no cage off the track header (`docs/ghidra/functions/ps3-hdfury-eu/
+/// collision-cage.md`): on Chenghou Project ours pulled the craft down on both jumps with a
+/// one-tick `-35` vertical velocity step the original never shows. Chenghou is the one
+/// circuit whose header sets the flag, so its load says it held the cage off by the title.
+fn runs_no_cage(environment: &str, loaded: &race::Loaded) {
+    assert!(
+        loaded.setup.spline.cage().is_none(),
+        "{environment}: an HD circuit runs the collision cage"
+    );
+    if environment == "04_chenghou_project" {
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.contains("runs no cage off the track header's flag")),
+            "{environment}: the header flag is set, so the title must be what holds it off"
+        );
+    }
+}
 
 fn load(image: &str, track: Option<&str>) -> Option<race::Loaded> {
     let path = oag_testdata::image(image)?;
@@ -66,6 +90,10 @@ fn a_title_with_no_probes_loads_none() {
         return;
     };
     assert!(loaded.probes.is_none());
+    assert!(
+        loaded.setup.spline.cage().is_some(),
+        "Pulse's circuit runs the collision cage off its header flag"
+    );
 }
 
 /// Every circuit loads its own probes, and **no circuit surface is tagged as reading the
@@ -80,6 +108,7 @@ fn every_circuit_loads_probes_and_none_of_its_surfaces_reflects_them() {
         let Some(loaded) = load(HD, Some(&track)) else {
             return;
         };
+        runs_no_cage(environment, &loaded);
         let count = loaded.probes.as_ref().map(oag_vex::probes::Probes::len);
         assert!(count.is_some_and(|n| n >= 2), "{environment}: {count:?}");
         let tagged = |line: &&String| line.contains("reading the reflection probe");
