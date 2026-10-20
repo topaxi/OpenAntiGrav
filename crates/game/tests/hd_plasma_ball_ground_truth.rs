@@ -102,12 +102,15 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
 fn dark_core(frame: &[u8], control: Option<&[u8]>) -> usize {
     (230..330)
         .flat_map(|y| (420..540).map(move |x| (x, y)))
-        // Was `< 40`; HD's lit programs end on a /2 output scale (2026-10-09), so the
+        // Re-cut to `< 40` on 2026-10-20 (`hd-scenery-materials`): the start line's constant
+        // diffuse is now bound sRGB-encoded (57 where it was 9), so the road reads
+        // brighter and the old `< 24` left the control at 171, under its own floor;
+        // at 40 the control counts 1,311 and the bolt adds 380. Was `< 40`; HD's lit programs end on a /2 output scale (2026-10-09), so the
         // road and the bolt's core both read darker, and 24 keeps the control
         // under 50 (18) with the bolt over 200 (275).
         .filter(|&(x, y)| {
             let at = y * SIZE.0 + x;
-            frame[at] < 24 && control.is_none_or(|c| c[at] >= 24)
+            frame[at] < 40 && control.is_none_or(|c| c[at] >= 40)
         })
         .count()
 }
