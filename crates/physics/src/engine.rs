@@ -393,7 +393,8 @@ pub fn steering(state: &ShipState, handling: &Handling) -> f32 {
 /// # The in-air bias: `<Misc weight_distribution>`
 ///
 /// Whether a title adds it at all is [`crate::ship::ShipState::air_pitch_bias`] (`air_bias`):
-/// measured on Pulse, off on the titles where it is not yet measured live.
+/// measured on Pulse (`+8`/`-8` by team) and HD (`-4.0` on Feisar); Omega and 2048 inherit HD's.
+/// This engine's own driver holds it off with pitch, as a player would (`oag_ai::air_trim`).
 ///
 /// Added whenever the craft is not grounded, **whether or not the gate passed**: the gate's
 /// failure branches straight to the bias test (`0x08848d7c`). Read live in the air as

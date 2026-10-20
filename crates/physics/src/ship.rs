@@ -488,7 +488,7 @@ pub struct ShipState {
     /// by the race from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
     pub steer_ramp_clamped: bool,
     /// `Ship_UpdatePitch` adds `<Misc weight_distribution>` while airborne
-    /// ([`crate::engine::pitch`]): Pulse's law, measured; `false` on a title where it is not
+    /// ([`crate::engine::pitch`]): measured on Pulse and HD; `false` on a title where it is not
     /// yet measured live. Written by the race from the title every tick, not hashed, for
     /// [`Self::on_grid`]'s reason.
     pub air_pitch_bias: bool,
