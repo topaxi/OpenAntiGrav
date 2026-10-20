@@ -711,6 +711,11 @@ pub struct Setup {
     /// The title's Autopilot engine law, `oag_title::RaceDefaults::autopilot_engine`
     /// (`Race::autopilot_engine_flags`).
     pub autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
+    /// Whether an opponent on this project's driver flies the Autopilot it
+    /// holds rather than absorbing it: the title's
+    /// `oag_title::RaceDefaults::opponent_autopilot` at the race's class
+    /// (`Race::set_opponent_autopilot` overrides it).
+    pub opponent_autopilot: bool,
     /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
     #[cfg(feature = "view")]
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,

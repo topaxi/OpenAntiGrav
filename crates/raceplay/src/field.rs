@@ -192,10 +192,27 @@ impl Race {
             .sim
             .racing_line
             .nearest(position, 0, self.sim.racing_line.len());
-        let driver = &mut self.sim.world.ships[slot].driver;
-        driver.index = u32::try_from(index).unwrap_or(0);
-        // Located on the ring, so it is on the ring. See `oag_ai::branch::Branching::on_ring`.
-        driver.branching = driver.branching.on_ring();
+        let ring = self.sim.racing_line.point(index).distance_squared(position);
+        // A craft on a route's own samples is located on that route's line:
+        // the ring's nearest point there can be another deck (Pulse
+        // `05_Track`, 55 units above; `docs/gameplay/ai.md`).
+        let route = self
+            .nearest_route_sample(position)
+            .filter(|&(_, _, distance)| distance < ring);
+        let ship = &mut self.sim.world.ships[slot];
+        match route {
+            Some((route, at, _)) => {
+                ship.driver.index = u32::try_from(at).unwrap_or(0);
+                ship.driver.branching =
+                    self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
+            }
+            None => {
+                ship.driver.index = u32::try_from(index).unwrap_or(0);
+                // Located on the ring, so it is on the ring. See
+                // `oag_ai::branch::Branching::on_ring`.
+                ship.driver.branching = ship.driver.branching.on_ring();
+            }
+        }
     }
 
     /// Whether slot `slot` is being flown for its person this tick, by any of
@@ -382,11 +399,12 @@ impl Race {
 
     /// Lets an opponent on this project's driver fly the original's player
     /// driver while it holds an Autopilot ([`Self::engage_opponent_autopilot`]),
-    /// where it otherwise absorbs the pickup. A measurement switch, off in
-    /// every race: it speeds an opponent up in every cell measured,
-    /// and at PHANTOM it also hits more walls and, on HD, gets rescued more
-    /// (`docs/gameplay/ai.md`, "An opponent's Autopilot, measured and not
-    /// wired").
+    /// where it otherwise absorbs the pickup. A race starts with the title's
+    /// per-class rule (`oag_title::RaceDefaults::opponent_autopilot`: on at
+    /// VENOM and FLASH, chosen); this overrides it, for the paired-fork sweep. It
+    /// speeds an opponent up in every cell measured, and at PHANTOM it also
+    /// hits more walls and, on HD, gets rescued more (`docs/gameplay/ai.md`,
+    /// "An opponent's Autopilot, wired below PHANTOM").
     pub fn set_opponent_autopilot(&mut self, on: bool) {
         self.sim.opponent_autopilot = on;
     }

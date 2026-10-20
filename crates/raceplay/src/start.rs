@@ -88,6 +88,7 @@ impl Race {
             hover_rig,
             craft_laws,
             autopilot_engine,
+            opponent_autopilot,
             #[cfg(feature = "view")]
             zoom_ring,
             #[cfg(feature = "view")]
@@ -640,7 +641,7 @@ impl Race {
                 autopilots: std::array::from_fn(|_| None),
                 autopilot_rail: [None; oag_gameplay::MAX_PLAYERS],
                 autopilot_ours: false,
-                opponent_autopilot: false,
+                opponent_autopilot,
                 world,
                 collision,
                 spline,

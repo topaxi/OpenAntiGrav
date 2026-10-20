@@ -1140,42 +1140,273 @@ this lane's tree, weapons off, seed 1:
 - HD Ubermall PHANTOM: 2 rescues, 143 wall ticks, lap ends 79.7, 78.2, 54.0,
   30.0, 6.3, end 6.3.
 
-### An opponent's Autopilot, measured and not wired (2026-10-19)
+### An opponent's Autopilot, wired below PHANTOM (2026-10-20)
 
-The maintainer's rule for an opponent on this project's driver holding an
-Autopilot: fly the original's player driver for the pickup's `time` "if
-autopilot helps them / speeds them up, otherwise no". The lead's brief added
-"no worse safety". Measured: it is faster in every cell run (VENOM on all five titles,
-PHANTOM on Pulse and HD; FLASH and RAPIER not run), and at PHANTOM it is less
-safe, so **nothing is wired**. The switch is
-`Race::set_opponent_autopilot` (off in every race); the result goes to the
-maintainer as a tradeoff, not as a yes.
+**An opponent on this project's driver that holds an Autopilot flies the
+original's player driver for the pickup's `time` at VENOM and FLASH (and
+Pure's VECTOR), and absorbs it at RAPIER and PHANTOM.** Chosen, not measured,
+no confidence score: the original's own field never fires one outside an
+Eliminator (below), so this is the maintainer's rule (2026-10-19: "if
+autopilot helps them / speeds them up", wired below PHANTOM), applied per
+class from the measurement of this engine below. RAPIER is held off by that
+measurement, not by the rule. The rule is title data,
+`oag_title::opponent_autopilot::BELOW_RAPIER` on all five titles
+(`RaceDefaults::opponent_autopilot`, every switch `Origin::Chosen`), read at
+load at the race's class; `Race::set_opponent_autopilot` overrides it for
+the sweep. The original-AI field (the campaign) keeps the absorb.
 
-**Today an opponent draws it and absorbs it.** The `ai` column gives the
-Autopilot 5.8 % of a draw on every Pulse class, 6.3 to 6.8 % on Pure's four
-lower classes and 11.6 % on its Phantom, and 14 % on HD, Omega and 2048. The
-weapon chain in `Race::spend_opponent_pickup` absorbs it on the tick it
-lands; until this change it reached the absorb through the default arm, not
-the named one its doc comment described. Stints a race with the switch on
-(whole races below): Pulse 0.4 Novice, 0.9 Ace; Pure 2.0, 2.4; HD 2.7, 3.6;
-Omega 3.5, 4.2; 2048 3.5, 7.0.
+**Today an opponent draws it.** The `ai` column gives the Autopilot 5.8 % of
+a draw on every Pulse class, 6.3 to 6.8 % on Pure's four lower classes and
+11.6 % on its Phantom, and 14 % on HD, Omega and 2048. The weapon chain in
+`Race::spend_opponent_pickup` engages it or absorbs it on the tick it lands.
 
-**Method: paired forks.** `opponent_autopilot_sweep` (`crates/raceplay`)
-snapshots a weapons-on single race (player on `--autopilot`) every 600
-ticks from tick 900, eight forks a seed on seeds 1 to 8, cycling the
-opponent slot. Branch A leaves the craft alone (the absorb's energy is not
-paid, so A's shield is given with and without it). Branch B arms the
-authored `time` (5 s on every title here) and flies
-`oag_ai::original::Autopilot`. Both run the stint plus 3 s. Reproduce:
+**Method: paired forks, judged over a distribution.** `opponent_autopilot_sweep`
+(`crates/raceplay`) snapshots a weapons-on single race (player on
+`--autopilot`) every 600 ticks from tick 900, eight forks a seed on seeds 1
+to 8, cycling the opponent slot. Branch A absorbs (the absorb's energy is not
+paid, so A's shield is given with and without it). Branch B arms the authored
+`time` (5 s on every title here) and flies `oag_ai::original::Autopilot`.
+Both run the stint plus 3 s. Each cell runs at the five
+`perturb::GATE` scales of airborne gravity (`crates/raceplay/tests/perturb`),
+so a cell is five runs of 64 forks, and the tables give the median run.
+Reproduce:
 
 ```sh
-OAG_SWEEP=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay \
-    --run-ignored all opponent_autopilot_sweep --no-capture
-# OAG_SWEEP_CLASS=PHANTOM, OAG_SWEEP_DIFFICULTY=ace, OAG_SWEEP_TRACK=05_,
-# OAG_SWEEP_NO_WEAPONS=1, OAG_SWEEP_TRACE=<seed>,<trigger tick> narrow it.
+OAG_SWEEP=1 OAG_SWEEP_GATE=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 \
+    OAG_SWEEP_CLASS=FLASH OAG_SWEEP_DIFFICULTY=ace OAG_SWEEP_TRACK=05_ \
+    cargo nextest run -p oag-raceplay --run-ignored all opponent_autopilot_sweep::pulse --no-capture
+# the hd, pure, omega and vita_2048 tests run the other titles;
+# OAG_SWEEP_NO_WEAPONS=1 and OAG_SWEEP_TRACE=<seed>,<trigger tick> narrow it.
 ```
 
-**Two fixes the first run needed**, both in the switch's path and both
+**The rule that decides a class** (chosen, not measured). A class flies the
+pickup when, over its cells: the median gain is positive on all but at most
+one cell, and that one loses under 0.1 s (FLASH: Pulse `14_Track` Ace,
+-0.04 s, all five runs at or under zero); the walls summed over cell medians
+do not rise; rescues summed over every run do not rise; and no cell whose
+absorb branch had no rescue in any run gets more than one (the threshold of
+one is chosen). VENOM passes and PHANTOM fails it, which is what the earlier
+VENOM and PHANTOM runs established; FLASH passes; RAPIER fails.
+
+| Class, level | Cells | Median gain > 0 | Median walls up | Walls A -> B (sum of medians) | Rescues A -> B (all runs) | Stints | Shield change a stint: A / A with the absorb / B |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| VECTOR Novice | 1 | 1 | 0 | 17 -> 0 | 0 -> 0 | 320 | -1.0 / +11.0 / -1.0 |
+| VECTOR Ace | 1 | 1 | 0 | 103 -> 38 | 1 -> 0 | 320 | -2.1 / +9.9 / -2.4 |
+| VENOM Novice | 19 | 19 | 1 | 10869 -> 4074 | 9 -> 2 | 6080 | -1.7 / +17.9 / -1.1 |
+| VENOM Ace | 19 | 19 | 2 | 1552 -> 721 | 22 -> 12 | 6080 | -1.9 / +17.7 / -1.8 |
+| FLASH Novice | 19 | 19 | 1 | 14200 -> 4374 | 40 -> 17 | 6080 | -2.0 / +17.6 / -1.1 |
+| FLASH Ace | 19 | 18 | 6 | 2114 -> 1416 | 21 -> 6 | 6080 | -1.8 / +17.8 / -1.9 |
+| RAPIER Novice | 19 | 19 | 1 | 17966 -> 7556 | 23 -> 7 | 6080 | -2.4 / +17.2 / -1.5 |
+| RAPIER Ace | 19 | 19 | 10 | 3321 -> 4406 | 26 -> 20 | 6080 | -1.6 / +18.0 / -1.9 |
+| PHANTOM Ace | 16 | 16 | 12 | 3193 -> 5337 | 40 -> 28 | 5120 | -1.4 / +18.6 / -2.1 |
+
+- **FLASH: on.** Faster on 37 of 38 cells (Pulse `14_Track` Ace loses
+  0.04 s); walls fall in total at both levels; rescues 40 -> 17 (Novice) and
+  21 -> 6 (Ace). What it pays: walls rise on 6 Ace cells, five of them Pulse
+  beyond the absorb's own maximum over the five runs (03 29 -> 55, 05 56 -> 103,
+  06 233 -> 291, 07 95 -> 161, 09 62 -> 116), and one rescue on HD Ubermall
+  Novice where the absorb had none.
+- **RAPIER: off, by the data.** Faster on every cell, but at Ace walls rise on
+  10 of 19 cells and 3,321 -> 4,406 in total, five beyond the absorb's maximum
+  (HD `12_sol_2` 217 -> 513, Omega 95 -> 167, Pulse 02 175 -> 471, 05
+  106 -> 268, 07 214 -> 739), and rescues appear where the absorb had none on
+  2048 (0 -> 4) and HD amphiseum (0 -> 1); at Novice Pulse 03 goes 0 -> 4.
+  That is PHANTOM's cost pattern. **RAPIER Novice alone was clean** in total
+  (walls 17,966 -> 7,556, rescues 23 -> 7), and is lost with it because the
+  switch has no difficulty axis.
+- **PHANTOM: off.** Walls rise on 12 of 16 cells (3,193 -> 5,337); HD rescues
+  0 -> 18 over 1,280 stints (12_sol_2 15, amphiseum 3), most in the 3 s after
+  the handback (`ResetZone`, 60 to 170 ticks after it in the first run): the
+  craft is handed back to our driver faster than its plan carries. Pulse's
+  rescues fall 40 -> 10.
+- **Shield is a cost by construction.** B forgoes the absorb, about 18 a
+  stint (10 on Pure), an upper bound because the pool caps.
+
+Per title (sums over the cells of the table below; walls are sums of cell
+medians, rescues sums over every run):
+
+| Class, level | Title | Cells | Faster (median) | Walls up | Walls A -> B | Rescues A -> B |
+| --- | --- | --- | --- | --- | --- | --- |
+| VECTOR Novice | Pure | 1 | 1 | 0 | 17 -> 0 | 0 -> 0 |
+| VECTOR Ace | Pure | 1 | 1 | 0 | 103 -> 38 | 1 -> 0 |
+| VENOM Novice | 2048 | 1 | 1 | 0 | 21 -> 9 | 0 -> 0 |
+| VENOM Novice | HD | 4 | 4 | 0 | 1467 -> 803 | 1 -> 0 |
+| VENOM Novice | Omega | 1 | 1 | 0 | 437 -> 281 | 0 -> 0 |
+| VENOM Novice | Pulse | 12 | 12 | 0 | 8881 -> 2903 | 8 -> 2 |
+| VENOM Novice | Pure | 1 | 1 | 1 | 63 -> 78 | 0 -> 0 |
+| VENOM Ace | 2048 | 1 | 1 | 0 | 3 -> 2 | 0 -> 0 |
+| VENOM Ace | HD | 4 | 4 | 1 | 337 -> 141 | 2 -> 0 |
+| VENOM Ace | Omega | 1 | 1 | 0 | 49 -> 19 | 1 -> 1 |
+| VENOM Ace | Pulse | 12 | 12 | 1 | 1038 -> 462 | 18 -> 10 |
+| VENOM Ace | Pure | 1 | 1 | 0 | 125 -> 97 | 1 -> 1 |
+| FLASH Novice | 2048 | 1 | 1 | 0 | 62 -> 18 | 0 -> 0 |
+| FLASH Novice | HD | 4 | 4 | 0 | 1784 -> 672 | 1 -> 1 |
+| FLASH Novice | Omega | 1 | 1 | 0 | 431 -> 129 | 0 -> 0 |
+| FLASH Novice | Pulse | 12 | 12 | 1 | 11838 -> 3475 | 39 -> 16 |
+| FLASH Novice | Pure | 1 | 1 | 0 | 85 -> 80 | 0 -> 0 |
+| FLASH Ace | 2048 | 1 | 1 | 1 | 10 -> 12 | 0 -> 0 |
+| FLASH Ace | HD | 4 | 4 | 0 | 428 -> 202 | 2 -> 1 |
+| FLASH Ace | Omega | 1 | 1 | 0 | 61 -> 18 | 0 -> 0 |
+| FLASH Ace | Pulse | 12 | 11 | 5 | 1479 -> 1120 | 18 -> 5 |
+| FLASH Ace | Pure | 1 | 1 | 0 | 136 -> 64 | 1 -> 0 |
+| RAPIER Novice | 2048 | 1 | 1 | 0 | 159 -> 119 | 0 -> 0 |
+| RAPIER Novice | HD | 4 | 4 | 0 | 3278 -> 1378 | 5 -> 1 |
+| RAPIER Novice | Omega | 1 | 1 | 0 | 679 -> 551 | 0 -> 0 |
+| RAPIER Novice | Pulse | 12 | 12 | 0 | 13740 -> 5358 | 18 -> 6 |
+| RAPIER Novice | Pure | 1 | 1 | 1 | 110 -> 150 | 0 -> 0 |
+| RAPIER Ace | 2048 | 1 | 1 | 1 | 58 -> 77 | 0 -> 4 |
+| RAPIER Ace | HD | 4 | 4 | 1 | 572 -> 794 | 1 -> 1 |
+| RAPIER Ace | Omega | 1 | 1 | 1 | 95 -> 167 | 0 -> 0 |
+| RAPIER Ace | Pulse | 12 | 12 | 7 | 2401 -> 3228 | 24 -> 15 |
+| RAPIER Ace | Pure | 1 | 1 | 0 | 195 -> 140 | 1 -> 0 |
+| PHANTOM Ace | HD | 4 | 4 | 3 | 613 -> 1029 | 0 -> 18 |
+| PHANTOM Ace | Pulse | 12 | 12 | 9 | 2580 -> 4308 | 40 -> 10 |
+
+Every cell (64 forks a run, five runs; walls are wall-contact ticks; HD's
+default circuit is Talon's Junction):
+
+| Class, level | Cell | runs | Median gain, s (min to max) | Wall ticks A -> B, median (max) | Rescues A -> B, median (max) | Rescues A -> B, sum over runs |
+| --- | --- | --- | --- | --- | --- | --- |
+| VECTOR Novice | Pure default | 5 | +1.56 (+1.19 to +1.69) | 17 -> 0 (45 -> 8) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VECTOR Ace | Pure default | 5 | +0.44 (+0.37 to +0.47) | 103 -> 38 (147 -> 79) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Novice | 2048 default | 5 | +0.66 (+0.65 to +0.67) | 21 -> 9 (26 -> 10) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | HD 05_ubermall | 5 | +0.78 (+0.72 to +0.80) | 123 -> 5 (237 -> 32) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | HD 12_sol_2 | 5 | +1.17 (+1.12 to +1.37) | 880 -> 519 (974 -> 543) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Novice | HD amphiseum | 5 | +0.63 (+0.60 to +0.68) | 154 -> 73 (202 -> 76) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | HD talons_junction | 5 | +0.87 (+0.78 to +0.89) | 310 -> 206 (333 -> 221) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Omega default | 5 | +0.70 (+0.65 to +0.83) | 437 -> 281 (532 -> 297) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 01 | 5 | +0.94 (+0.88 to +0.98) | 468 -> 23 (522 -> 33) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 02 | 5 | +1.06 (+0.95 to +1.13) | 1419 -> 90 (1534 -> 130) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 03 | 5 | +0.53 (+0.49 to +0.54) | 841 -> 403 (1004 -> 608) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 04 | 5 | +0.82 (+0.81 to +0.91) | 726 -> 548 (840 -> 608) | 0 -> 0 (2 -> 0) | 2 -> 0 |
+| VENOM Novice | Pulse 05 | 5 | +0.60 (+0.56 to +0.61) | 422 -> 4 (455 -> 80) | 0 -> 0 (1 -> 1) | 2 -> 1 |
+| VENOM Novice | Pulse 06 | 5 | +1.85 (+0.91 to +2.05) | 1061 -> 289 (1244 -> 358) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Novice | Pulse 07 | 5 | +3.73 (+3.48 to +4.29) | 1848 -> 627 (2252 -> 866) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Novice | Pulse 09 | 5 | +0.43 (+0.38 to +0.51) | 365 -> 228 (433 -> 233) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 10 | 5 | +0.58 (+0.56 to +0.63) | 618 -> 175 (627 -> 192) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| VENOM Novice | Pulse 13 | 5 | +0.86 (+0.71 to +0.96) | 115 -> 61 (201 -> 94) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Novice | Pulse 14 | 5 | +0.60 (+0.55 to +0.75) | 455 -> 103 (673 -> 183) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pulse 16 | 5 | +0.40 (+0.37 to +0.45) | 543 -> 352 (628 -> 442) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Novice | Pure default | 5 | +1.97 (+1.89 to +2.08) | 63 -> 78 (91 -> 86) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | 2048 default | 5 | +0.08 (+0.07 to +0.12) | 3 -> 2 (10 -> 4) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | HD 05_ubermall | 5 | +0.04 (+0.02 to +0.10) | 47 -> 11 (77 -> 21) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | HD 12_sol_2 | 5 | +0.54 (+0.47 to +0.58) | 81 -> 98 (129 -> 115) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| VENOM Ace | HD amphiseum | 5 | +0.22 (+0.14 to +0.27) | 92 -> 6 (140 -> 22) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | HD talons_junction | 5 | +0.11 (+0.06 to +0.14) | 117 -> 26 (134 -> 43) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Omega default | 5 | +0.27 (+0.25 to +0.28) | 49 -> 19 (102 -> 41) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| VENOM Ace | Pulse 01 | 5 | +0.06 (+0.01 to +0.15) | 66 -> 23 (162 -> 45) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 02 | 5 | +0.06 (+0.03 to +0.08) | 55 -> 46 (126 -> 85) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 03 | 5 | +0.19 (+0.09 to +0.21) | 41 -> 0 (49 -> 36) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 04 | 5 | +0.18 (+0.01 to +0.31) | 130 -> 4 (160 -> 46) | 0 -> 0 (2 -> 0) | 2 -> 0 |
+| VENOM Ace | Pulse 05 | 5 | +0.03 (+0.02 to +0.05) | 119 -> 63 (156 -> 101) | 3 -> 2 (4 -> 3) | 15 -> 10 |
+| VENOM Ace | Pulse 06 | 5 | +0.18 (+0.13 to +0.23) | 58 -> 98 (100 -> 157) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 07 | 5 | +1.32 (+1.08 to +1.53) | 140 -> 77 (194 -> 284) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 09 | 5 | +0.05 (+0.01 to +0.09) | 85 -> 17 (124 -> 25) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 10 | 5 | +0.28 (+0.22 to +0.46) | 97 -> 46 (190 -> 74) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| VENOM Ace | Pulse 13 | 5 | +0.37 (+0.29 to +0.40) | 69 -> 45 (75 -> 53) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 14 | 5 | +0.01 (+0.00 to +0.02) | 72 -> 21 (100 -> 31) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pulse 16 | 5 | +0.02 (+0.00 to +0.04) | 106 -> 22 (116 -> 39) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| VENOM Ace | Pure default | 5 | +0.91 (+0.73 to +1.11) | 125 -> 97 (160 -> 110) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| FLASH Novice | 2048 default | 5 | +0.68 (+0.66 to +0.73) | 62 -> 18 (228 -> 34) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | HD 05_ubermall | 5 | +0.71 (+0.63 to +0.76) | 121 -> 65 (160 -> 98) | 0 -> 0 (0 -> 1) | 0 -> 1 |
+| FLASH Novice | HD 12_sol_2 | 5 | +2.38 (+2.27 to +2.45) | 779 -> 264 (827 -> 302) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| FLASH Novice | HD amphiseum | 5 | +1.43 (+1.34 to +1.76) | 286 -> 106 (306 -> 141) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | HD talons_junction | 5 | +1.01 (+0.91 to +1.07) | 598 -> 237 (651 -> 272) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Omega default | 5 | +1.13 (+1.09 to +1.15) | 431 -> 129 (559 -> 149) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 01 | 5 | +0.79 (+0.76 to +0.85) | 285 -> 92 (294 -> 148) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 02 | 5 | +1.02 (+0.97 to +1.37) | 1492 -> 662 (1637 -> 740) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 03 | 5 | +1.50 (+1.36 to +1.58) | 1028 -> 306 (1074 -> 326) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 04 | 5 | +1.49 (+1.43 to +1.87) | 478 -> 42 (580 -> 120) | 0 -> 0 (2 -> 0) | 2 -> 0 |
+| FLASH Novice | Pulse 05 | 5 | +0.47 (+0.45 to +0.54) | 65 -> 106 (257 -> 113) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 06 | 5 | +2.36 (+2.06 to +2.39) | 1916 -> 547 (2114 -> 833) | 7 -> 3 (10 -> 4) | 35 -> 16 |
+| FLASH Novice | Pulse 07 | 5 | +5.14 (+4.78 to +5.75) | 1999 -> 756 (2689 -> 962) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| FLASH Novice | Pulse 09 | 5 | +1.71 (+1.61 to +1.79) | 1244 -> 55 (1541 -> 72) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 10 | 5 | +1.94 (+1.76 to +2.07) | 899 -> 46 (1004 -> 65) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 13 | 5 | +1.80 (+1.27 to +1.87) | 455 -> 123 (481 -> 182) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 14 | 5 | +0.83 (+0.78 to +0.87) | 990 -> 203 (1006 -> 327) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pulse 16 | 5 | +0.95 (+0.91 to +1.21) | 987 -> 537 (1254 -> 641) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Novice | Pure default | 5 | +2.41 (+2.10 to +2.50) | 85 -> 80 (129 -> 92) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | 2048 default | 5 | +0.09 (+0.08 to +0.12) | 10 -> 12 (40 -> 16) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | HD 05_ubermall | 5 | +0.11 (+0.05 to +0.16) | 60 -> 15 (107 -> 40) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | HD 12_sol_2 | 5 | +0.48 (+0.42 to +0.61) | 200 -> 121 (250 -> 174) | 0 -> 0 (1 -> 1) | 2 -> 1 |
+| FLASH Ace | HD amphiseum | 5 | +0.13 (+0.11 to +0.18) | 81 -> 20 (137 -> 41) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | HD talons_junction | 5 | +0.17 (+0.14 to +0.24) | 87 -> 46 (125 -> 71) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Omega default | 5 | +0.23 (+0.14 to +0.37) | 61 -> 18 (84 -> 62) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 01 | 5 | +0.07 (+0.04 to +0.09) | 146 -> 32 (202 -> 41) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 02 | 5 | +0.04 (+0.03 to +0.06) | 149 -> 140 (202 -> 170) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 03 | 5 | +0.16 (+0.15 to +0.19) | 29 -> 55 (53 -> 60) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 04 | 5 | +0.17 (+0.12 to +0.22) | 75 -> 31 (120 -> 67) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| FLASH Ace | Pulse 05 | 5 | +0.03 (+0.02 to +0.04) | 56 -> 103 (78 -> 142) | 3 -> 1 (5 -> 3) | 16 -> 5 |
+| FLASH Ace | Pulse 06 | 5 | +0.28 (+0.23 to +0.29) | 233 -> 291 (259 -> 313) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 07 | 5 | +1.17 (+0.98 to +1.34) | 95 -> 161 (140 -> 299) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| FLASH Ace | Pulse 09 | 5 | +0.04 (+0.02 to +0.07) | 62 -> 116 (82 -> 138) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 10 | 5 | +0.23 (+0.20 to +0.24) | 165 -> 30 (232 -> 56) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 13 | 5 | +0.60 (+0.52 to +0.67) | 218 -> 23 (254 -> 88) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 14 | 5 | -0.04 (-0.04 to +0.00) | 66 -> 52 (115 -> 82) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pulse 16 | 5 | +0.21 (+0.13 to +0.30) | 185 -> 86 (236 -> 95) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| FLASH Ace | Pure default | 5 | +1.02 (+0.72 to +1.06) | 136 -> 64 (189 -> 393) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| RAPIER Novice | 2048 default | 5 | +0.82 (+0.77 to +0.88) | 159 -> 119 (232 -> 185) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | HD 05_ubermall | 5 | +1.78 (+1.70 to +2.16) | 410 -> 172 (476 -> 282) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| RAPIER Novice | HD 12_sol_2 | 5 | +2.71 (+2.52 to +2.83) | 834 -> 669 (976 -> 756) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| RAPIER Novice | HD amphiseum | 5 | +1.17 (+1.17 to +1.38) | 694 -> 223 (745 -> 259) | 0 -> 0 (2 -> 0) | 3 -> 0 |
+| RAPIER Novice | HD talons_junction | 5 | +2.45 (+2.38 to +2.65) | 1340 -> 314 (1362 -> 315) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Omega default | 5 | +1.31 (+1.12 to +1.45) | 679 -> 551 (724 -> 629) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 01 | 5 | +1.91 (+1.79 to +2.12) | 369 -> 104 (513 -> 133) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 02 | 5 | +1.26 (+1.02 to +1.42) | 1059 -> 663 (1148 -> 811) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 03 | 5 | +2.37 (+2.26 to +2.52) | 855 -> 212 (935 -> 284) | 0 -> 1 (0 -> 2) | 0 -> 4 |
+| RAPIER Novice | Pulse 04 | 5 | +1.34 (+1.34 to +1.64) | 817 -> 576 (971 -> 712) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| RAPIER Novice | Pulse 05 | 5 | +0.65 (+0.62 to +0.71) | 308 -> 134 (333 -> 216) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| RAPIER Novice | Pulse 06 | 5 | +2.48 (+1.86 to +3.30) | 1009 -> 778 (1351 -> 858) | 0 -> 0 (2 -> 0) | 2 -> 0 |
+| RAPIER Novice | Pulse 07 | 5 | +6.16 (+5.76 to +7.35) | 2936 -> 954 (3311 -> 1056) | 1 -> 0 (7 -> 1) | 11 -> 1 |
+| RAPIER Novice | Pulse 09 | 5 | +0.75 (+0.71 to +0.79) | 1145 -> 649 (1263 -> 810) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 10 | 5 | +2.61 (+2.43 to +3.01) | 725 -> 167 (848 -> 231) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| RAPIER Novice | Pulse 13 | 5 | +3.09 (+2.90 to +3.32) | 460 -> 383 (618 -> 525) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 14 | 5 | +1.80 (+1.66 to +2.04) | 2011 -> 344 (2130 -> 419) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pulse 16 | 5 | +2.41 (+2.33 to +2.85) | 2046 -> 394 (2142 -> 469) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Novice | Pure default | 5 | +2.54 (+2.52 to +2.77) | 110 -> 150 (135 -> 209) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | 2048 default | 5 | +0.14 (+0.13 to +0.20) | 58 -> 77 (95 -> 82) | 0 -> 1 (0 -> 1) | 0 -> 4 |
+| RAPIER Ace | HD 05_ubermall | 5 | +0.28 (+0.27 to +0.33) | 84 -> 16 (112 -> 33) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| RAPIER Ace | HD 12_sol_2 | 5 | +0.85 (+0.76 to +0.97) | 217 -> 513 (301 -> 555) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | HD amphiseum | 5 | +0.28 (+0.21 to +0.34) | 147 -> 146 (257 -> 170) | 0 -> 0 (0 -> 1) | 0 -> 1 |
+| RAPIER Ace | HD talons_junction | 5 | +0.53 (+0.52 to +0.62) | 124 -> 119 (189 -> 129) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Omega default | 5 | +0.33 (+0.25 to +0.44) | 95 -> 167 (141 -> 235) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 01 | 5 | +0.19 (+0.17 to +0.30) | 144 -> 71 (211 -> 92) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 02 | 5 | +0.04 (+0.00 to +0.09) | 175 -> 471 (232 -> 593) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 03 | 5 | +0.39 (+0.37 to +0.44) | 92 -> 99 (128 -> 275) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 04 | 5 | +0.38 (+0.23 to +0.39) | 137 -> 258 (260 -> 293) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| RAPIER Ace | Pulse 05 | 5 | +0.04 (+0.02 to +0.06) | 106 -> 268 (165 -> 323) | 4 -> 2 (7 -> 5) | 19 -> 14 |
+| RAPIER Ace | Pulse 06 | 5 | +0.83 (+0.70 to +0.91) | 445 -> 515 (609 -> 681) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 07 | 5 | +1.82 (+1.53 to +2.19) | 214 -> 739 (284 -> 904) | 0 -> 0 (1 -> 0) | 2 -> 0 |
+| RAPIER Ace | Pulse 09 | 5 | +0.19 (+0.16 to +0.20) | 149 -> 175 (176 -> 201) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 10 | 5 | +0.53 (+0.44 to +0.63) | 196 -> 130 (244 -> 166) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 13 | 5 | +1.00 (+0.96 to +1.11) | 230 -> 151 (372 -> 223) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| RAPIER Ace | Pulse 14 | 5 | +0.11 (+0.06 to +0.12) | 237 -> 178 (275 -> 210) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pulse 16 | 5 | +0.37 (+0.34 to +0.43) | 276 -> 173 (290 -> 195) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| RAPIER Ace | Pure default | 5 | +1.20 (+1.00 to +1.77) | 195 -> 140 (556 -> 210) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| PHANTOM Ace | HD 05_ubermall | 5 | +0.85 (+0.76 to +0.91) | 80 -> 116 (127 -> 150) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | HD 12_sol_2 | 5 | +0.95 (+0.90 to +1.00) | 160 -> 422 (178 -> 453) | 0 -> 3 (0 -> 4) | 0 -> 15 |
+| PHANTOM Ace | HD amphiseum | 5 | +0.35 (+0.32 to +0.41) | 183 -> 317 (298 -> 371) | 0 -> 1 (0 -> 1) | 0 -> 3 |
+| PHANTOM Ace | HD talons_junction | 5 | +0.65 (+0.57 to +0.71) | 190 -> 174 (205 -> 206) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 01 | 5 | +0.55 (+0.43 to +0.59) | 125 -> 226 (165 -> 309) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 02 | 5 | +0.18 (+0.14 to +0.46) | 182 -> 548 (222 -> 628) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 03 | 5 | +0.81 (+0.73 to +0.92) | 144 -> 192 (192 -> 272) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 04 | 5 | +0.46 (+0.34 to +0.51) | 172 -> 290 (243 -> 378) | 2 -> 0 (3 -> 0) | 10 -> 0 |
+| PHANTOM Ace | Pulse 05 | 5 | +0.14 (+0.08 to +0.26) | 131 -> 266 (152 -> 306) | 6 -> 2 (9 -> 4) | 28 -> 9 |
+| PHANTOM Ace | Pulse 06 | 5 | +0.48 (+0.34 to +0.58) | 293 -> 721 (346 -> 796) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 07 | 5 | +3.09 (+2.75 to +3.45) | 375 -> 814 (501 -> 984) | 0 -> 0 (1 -> 0) | 1 -> 0 |
+| PHANTOM Ace | Pulse 09 | 5 | +0.22 (+0.14 to +0.25) | 276 -> 275 (341 -> 386) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 10 | 5 | +1.13 (+1.00 to +1.36) | 207 -> 206 (267 -> 386) | 0 -> 0 (1 -> 1) | 1 -> 1 |
+| PHANTOM Ace | Pulse 13 | 5 | +1.08 (+1.04 to +1.22) | 166 -> 252 (205 -> 418) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 14 | 5 | +0.52 (+0.41 to +0.56) | 304 -> 149 (355 -> 229) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+| PHANTOM Ace | Pulse 16 | 5 | +0.54 (+0.46 to +0.64) | 205 -> 369 (253 -> 427) | 0 -> 0 (0 -> 0) | 0 -> 0 |
+
+**One handback gate was tried and dropped** (2026-10-19): end the stint for
+good once `Driver::affords_boost` refuses the craft's current speed over the
+next 120 ticks. It took every cell's median gain to zero (PHANTOM and VENOM,
+all Pulse circuits and HD's four) because the plan almost never carries the
+original's speed two seconds out.
+
+**Two fixes the first run needed**, both in the opponent's path and both
 pinned by `autopilot_original_ground_truth`:
 
 1. **Keep the driver's place.** A cold stint searched the whole racing line
@@ -1183,7 +1414,10 @@ pinned by `autopilot_original_ground_truth`:
    `[-860, 41, -445]` that chose index 367 over the 2312 the opponent's
    driver held, and the original flew the craft into the wall (contact 42
    ticks in, rescued `Beneath` at 89). An opponent's driver is already
-   located, so its stint does not search.
+   located, so its stint does not search. Re-probed 2026-10-20 on the same
+   fork (seed 2, tick 3,000, slot 4, now at `[-908, 44, -417]`): the driver
+   is on route 1 at route index 2,349, and the ring's nearest point is index
+   403 at y 99.
 2. **Leave a jump's run-up to our driver** (`Driver::on_run_up`, the plan's
    own 450-unit reach). The original's player driver took `05_Track`'s jump
    at 125 where ours reaches 133 on the ramp, peaked at y 56 against 73, and
@@ -1192,58 +1426,84 @@ pinned by `autopilot_original_ground_truth`:
    Ace 5; the first fix alone, 5 and 2; both, 1 and 0 (the absorb branch 1
    and 0).
 
-**The paired forks, after both fixes** (64 forks a cell; walls are
-wall-contact ticks; HD's default circuit is Talon's Junction):
+**The player's own cold locate finds the route it is on (2026-10-20).** The
+first fix left the player's pickup (and every other cold locate of a
+person's craft: the finish-line handover, `--autopilot`, the network
+`autopilot_wants`) on `Race::locate_player_driver`'s whole-ring search. The
+ring's own search is never wrong on the ring: every opponent of a Pulse VENOM
+race, every 30 ticks on all twelve circuits, its warm driver against a cold
+ring search (a one-off probe, not kept), 0 of 32,027 wrong. The defect is the branches: on route 1 of
+`05_Track` (seed 2, tick 3,000, slot 4 at `[-908, 44, -417]`, route index
+2,349) the ring's nearest point is index 403 at y 99, 55 units above the
+craft, so a narrower ring search seeded near the craft's progress would still
+pick the wrong deck. So the locate also searches every route's own samples
+(`Race::nearest_route_sample`) and takes a route's point when it is nearer,
+setting the branching as past that route's split (`RouteLine::entered`, ours).
+Slot 0 of an autopiloted Pulse VENOM race (seed 1, weapons on), cold-located
+every 30 ticks and counted wrong when the located point is more than 10 units
+further from the craft than its warm driver's: `05_Track` 42 of 215 -> 0,
+`14_Track` 9 of 251 -> 0, the other ten circuits 0 -> 0
+(`cold_locate_sweep`; `a_cold_locate_on_a_route_stays_on_the_route` pins 05).
+**The after-count is near-automatic**: the fixed locate takes the nearest
+point over a set that holds the warm driver's own, so "further than warm"
+can hardly fire. The evidence is the point-against-point check: over the
+same twelve races, the cold and warm points are more than 20 units apart on
+five `05_Track` ticks (2,790, 2,820, 2,850, 4,860, 4,890), every one with the
+craft grounded (`time_airborne` 0) at y 27 to 32 on route 1, the cold point
+7 to 23 units from it and the warm driver's ring point 36 to 71 units away
+on the deck above. No locate put a craft on the ring onto a route, in the
+air or on the ground. Those five are a lead on the autopilot's own branch
+tracking, not followed here.
 
-{table}
+**Whole races are inconclusive again.** Switch off and on, same seed, 4 seeds
+a cell, Pulse 12 circuits, HD 4 and the default circuit of Pure, Omega and
+2048, at Novice and Ace (`races_pulse`, `races_others`, `OAG_SWEEP_CLASS`):
+the median lap change is at most 0.2 s in every row, and stints are too rare
+to move a race at this sample. Shield is each opponent's at the end of each
+lap (field mean) and at the end of the run, both labelled. A wreck is
+reported with the ticks since that craft's last stint. FLASH: of the 29
+on-branch wrecks logged (Pulse Ace 9, Novice 16, the other titles 4), five
+came after a stint of that craft, the nearest 1,678 ticks after it ended,
+so none falls inside a stint or its 180-tick tail; the rest are divergence.
+Pulse rescues, both levels: 107 off, 103 on.
 
-- **Faster everywhere.** Every cell's median is a gain: 0.4 to 4.1 s at
-  Novice, 0.01 to 1.2 s at VENOM Ace, 0.25 to 3.2 s at PHANTOM Ace.
-- **Safer at VENOM.** Rescues are no worse than A in any VENOM cell. Walls
-  fall in total, and rise on five VENOM Ace cells: Pulse 05 (8 -> 98), 06
-  (48 -> 91), 07 (76 -> 122), HD `12_sol_2` (59 -> 73), 2048 (19 -> 21).
-- **Less safe at PHANTOM.** Walls rise on 13 of 16 cells, roughly tripling on
-  Pulse 02 and 07; HD rescues go 0 -> 8 of 256 stints. Pulse's rescues fall
-  10 -> 6. Most rescues land in the 3 s after the stint, 60 to 170 ticks after
-  the handback (`ResetZone`): the craft is handed to our driver faster than
-  its plan carries. All four amphiseum ones start from one engage point.
-- **Shield is a cost by construction.** B forgoes the absorb, about 18 a
-  stint (10 on Pure), an upper bound because the pool caps.
+| Class | Title, level | Races | Stints a race | Lap change on - off, median | Walls off -> on | Rescues off -> on | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks, off -> on |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| FLASH | 2048 Ace | 4 | 6.0 | -0.10 s | 344 -> 270 | 0 -> 0 | 94.2, 88.3, 80.9 | 92.7, 84.2, 81.9 | 73.6 -> 77.6 | 0 -> 0 |
+| FLASH | 2048 Novice | 4 | 3.5 | -0.10 s | 1794 -> 1656 | 0 -> 0 | 105.5, 102.6, 99.8 | 106.6, 102.2, 97.7 | 97.1 -> 95.2 | 0 -> 0 |
+| FLASH | HD Ace | 16 | 4.6 | -0.10 s | 2340 -> 2298 | 6 -> 1 | 89.7, 84.5, 79.5 | 87.2, 81.9, 77.2 | 74.1 -> 75.2 | 2 -> 2 |
+| FLASH | HD Novice | 16 | 2.8 | -0.10 s | 16242 -> 15879 | 0 -> 0 | 92.0, 89.0, 83.1 | 90.3, 84.3, 79.2 | 76.0 -> 71.5 | 0 -> 1 |
+| FLASH | Omega Ace | 4 | 3.8 | +0.00 s | 526 -> 498 | 1 -> 1 | 93.5, 89.4, 80.0 | 92.4, 88.7, 86.2 | 79.8 -> 86.0 | 0 -> 0 |
+| FLASH | Omega Novice | 4 | 3.0 | -0.10 s | 4116 -> 4003 | 0 -> 0 | 93.7, 86.0, 80.4 | 91.5, 83.0, 78.3 | 74.6 -> 72.7 | 0 -> 0 |
+| FLASH | Pulse Ace | 47 | 0.9 | +0.00 s | 9462 -> 9139 | 36 -> 45 | 86.1, 79.2, 75.4 | 86.3, 78.7, 75.6 | 70.8 -> 70.4 | 6 -> 9 |
+| FLASH | Pulse Novice | 47 | 0.5 | +0.00 s | 102245 -> 101318 | 71 -> 58 | 84.9, 73.9, 63.9 | 84.4, 73.0, 62.6 | 51.6 -> 50.9 | 11 -> 15 |
+| FLASH | Pure Ace | 3 | 2.0 | +0.00 s | 743 -> 870 | 0 -> 0 | 78.3, 73.0, 63.4 | 76.6, 64.1, 59.6 | 53.2 -> 55.5 | 3 -> 1 |
+| FLASH | Pure Novice | 3 | 0.7 | +0.00 s | 535 -> 533 | 0 -> 0 | 88.8, 86.6, 84.6 | 88.3, 86.3, 84.5 | 84.5 -> 83.4 | 0 -> 0 |
+| RAPIER | 2048 Ace | 4 | 8.5 | -0.20 s | 545 -> 549 | 0 -> 0 | 92.4, 85.0, 88.8 | 87.6, 84.6, 74.8 | 74.6 -> 68.1 | 1 -> 1 |
+| RAPIER | 2048 Novice | 4 | 3.5 | +0.00 s | 2725 -> 2845 | 0 -> 0 | 103.8, 98.4, 91.0 | 101.6, 95.2, 87.0 | 84.4 -> 78.9 | 0 -> 0 |
+| RAPIER | HD Ace | 16 | 3.9 | -0.10 s | 3401 -> 3656 | 1 -> 1 | 89.9, 85.1, 82.0 | 89.7, 84.4, 80.3 | 79.1 -> 78.4 | 2 -> 2 |
+| RAPIER | HD Novice | 16 | 3.1 | -0.20 s | 31623 -> 31318 | 6 -> 6 | 88.2, 77.5, 66.2 | 85.0, 75.2, 64.9 | 52.0 -> 50.3 | 2 -> 3 |
+| RAPIER | Omega Ace | 4 | 3.2 | -0.10 s | 894 -> 735 | 2 -> 0 | 89.4, 83.1, 77.6 | 91.7, 83.8, 76.3 | 75.1 -> 74.6 | 0 -> 0 |
+| RAPIER | Omega Novice | 4 | 2.8 | -0.10 s | 6569 -> 5684 | 0 -> 1 | 89.3, 80.8, 72.0 | 91.8, 81.5, 73.1 | 61.0 -> 63.2 | 0 -> 0 |
+| RAPIER | Pulse Ace | 47 | 0.8 | +0.00 s | 13943 -> 13800 | 46 -> 46 | 85.4, 76.9, 74.9 | 84.8, 76.9, 74.8 | 70.5 -> 70.2 | 3 -> 6 |
+| RAPIER | Pulse Novice | 47 | 0.5 | +0.00 s | 118769 -> 116941 | 31 -> 32 | 84.4, 71.5, 59.9 | 83.9, 71.5, 59.8 | 46.0 -> 46.7 | 36 -> 33 |
+| RAPIER | Pure Ace | 4 | 2.2 | +0.00 s | 1792 -> 1572 | 1 -> 1 | 75.9, 66.5, 59.4 | 78.7, 72.7, 65.8 | 56.3 -> 54.4 | 0 -> 2 |
+| RAPIER | Pure Novice | 3 | 0.3 | +0.00 s | 677 -> 713 | 1 -> 1 | 82.8, 77.7, 75.7 | 88.5, 83.4, 81.1 | 73.7 -> 78.8 | 0 -> 0 |
 
-**One handback gate was tried and dropped**: end the stint for good once
-`Driver::affords_boost` refuses the craft's current speed over the next
-120 ticks. It took every cell's median gain to zero (PHANTOM and VENOM, all
-Pulse circuits and HD's four) because the plan almost never carries the
-original's speed two seconds out.
+The 2026-10-19 whole races at VENOM (the class now on) gave the same picture:
+lap change under 0.1 s on 33 of 38 cells, Pulse Ace wrecks 2 -> 6 over 48
+races and Pure Ace 1 -> 4 over 16, none of Pure's inside a stint or its 3 s
+tail.
 
-**Whole races are inconclusive.** Switch off and on, same seed, 4 seeds a
-cell (Pure Ace 16), Pulse 12 circuits, HD 4 and the default circuit of Pure,
-Omega and 2048, at Novice and Ace VENOM (`races_pulse`, `races_others`): the
-median lap-time change is under 0.1 s on 33 of 38 cells, and stints are too
-rare to move a race at this sample. Wrecks went 2 -> 6 on Pulse Ace (48
-races) and 1 -> 4 on Pure Ace (16 races); none of Pure's four falls inside a
-stint or its 3 s tail (the nearest 986 ticks after one), so they are
-divergence, not the stint. Shield is each opponent's at the end of each
-lap (field mean) and at the end of the run, both labelled:
-
-| Title, level | Races | Stints a race | Lap change on - off, median | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks, off -> on |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2048 Ace | 4 | 7.0 | -0.00 s | 89.8, 80.8, 82.1 | 90.5, 80.0, 80.2 | 82.9 -> 81.8 | 0 -> 0 |
-| 2048 Novice | 4 | 3.5 | -0.05 s | 107.5, 107.3, 101.9 | 106.4, 106.0, 98.6 | 106.9 -> 105.8 | 0 -> 0 |
-| HD Ace | 16 | 3.6 | -0.10 s | 90.6, 82.5, 78.9 | 90.2, 84.3, 82.2 | 78.1 -> 82.1 | 2 -> 0 |
-| HD Novice | 16 | 2.7 | -0.10 s | 89.9, 83.0, 79.9 | 89.7, 82.8, 78.2 | 79.1 -> 78.6 | 1 -> 0 |
-| Omega Ace | 4 | 4.2 | -0.10 s | 91.0, 84.6, 79.8 | 88.3, 77.7, 75.4 | 78.1 -> 73.2 | 1 -> 1 |
-| Omega Novice | 4 | 3.5 | -0.25 s | 94.4, 90.0, 85.8 | 93.3, 89.0, 84.0 | 85.6 -> 83.9 | 0 -> 0 |
-| Pulse Ace | 48 | 0.9 | +0.00 s | 86.1, 78.1, 74.8 | 86.8, 79.4, 75.6 | 74.4 -> 74.4 | 2 -> 6 |
-| Pulse Novice | 48 | 0.4 | +0.00 s | 86.1, 76.9, 68.2 | 85.8, 76.2, 67.2 | 66.5 -> 65.5 | 2 -> 2 |
-| Pure Ace | 16 | 2.4 | +0.00 s | 82.6, 71.4, 67.2 | 81.2, 69.1, 63.4 | 66.4 -> 60.7 | 1 -> 4 |
-| Pure Novice | 4 | 2.0 | -0.20 s | 95.0, 85.5, 84.7 | 90.2, 90.8, 88.2 | 84.7 -> 88.2 | 0 -> 0 |
-
-**2048 and Omega: checked, applies, not wired.** Both were measured on
-their own tables and physics (rows above), with the same direction as HD
-and the same 14 % draw; the decision is open in the handover thread. The original's 2048 and Omega player driver steers with the
-pilot assist's gains, unread, so the opponents' controller flies it there as
-for the player.
+**Cross-title.** Each title was measured on its own tables and physics and the
+same rule decides it, so the rule is **ported** to all five titles with its
+own sweep each (the per-title table above): Pulse 12 circuits, HD 4, Pure,
+Omega and 2048 on their default circuit. `an_opponent_flies_its_autopilot_below_rapier_only`
+pins the rule on all five at the four classes. 2048 and Omega agree (VENOM and FLASH
+faster with walls down; RAPIER Ace walls up on both, 2048's rescues 0 -> 4).
+The original's 2048 and Omega player driver steers with the pilot assist's
+gains, unread, so the opponents' controller flies it there as for the player.
+PHANTOM is unmeasured on Pure, Omega and 2048; it is off there by the rule.
 
 **What the original does with one, in an Eliminator** (the only mode it fires
 one): `Autopilot_Fire` (`0x088613bc`) sets bit `0x800` and the timer at
