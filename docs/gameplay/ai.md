@@ -1159,16 +1159,21 @@ on all five titles (`RaceDefaults::opponent_autopilot`, every switch
 campaign) keeps the absorb.
 
 **The difficulty is the race's own** `oag_ai::Difficulty` by name (`novice`,
-`skilled`, `elite`, `ace`), the same four levels on every title: that is what
-this project's driver reads, and no title-side spelling reaches it, so the
-switch keys on it. Elite is the default.
+`skilled`, `elite`, `ace`), the same four levels on every title, and the
+switch keys on it: the race box's `AI DIFFICULTY` row (`assets/ui/menu.toml`,
+setting `ai.difficulty`) offers all four by these names, Elite the default. A
+title's own `Easy`/`Medium`/`Hard` exist only as campaign rungs and reach only
+the original's pack shuffle (`oag_game::ai_choice::free_level`: Novice easy,
+Skilled and Elite medium, Ace hard, chosen).
 
 **Method** as in the next section: `opponent_autopilot_sweep`, paired forks
 every 600 ticks from tick 900, 8 seeds of 8 forks, each cell at the five
 `perturb::GATE` scales, so a cell is five runs of 64 forks. Every cell was
 re-run on one tree (`dd965b1b6`, after the Zone route re-commit changed the
-original's driver): 5 classes x 4 levels on Pulse (12 circuits), HD (4),
-Pure, Omega and 2048 (default circuit each), 317 cells of five runs.
+original's driver): every class a title offers at all four levels, Pulse
+(4 classes, 12 circuits) and HD (4 classes, 4 circuits), Pure (5 classes),
+Omega and 2048 (5 classes each, default circuit): 316 cells, of which the
+4 Omega SUPERPHANTOM cells cannot load (below), so 312 cells of five runs.
 
 ```sh
 OAG_SWEEP=1 OAG_SWEEP_GATE=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 \
@@ -1189,7 +1194,9 @@ numbers are the median of its five runs. It flies when all hold:
    summed is positive.
 
 It assumes the field is racing: every run of a cell must carry all 64 forks
-(a fork is skipped when the triggered craft is not racing). Every cell passes
+(a fork is skipped when the triggered craft is not racing). This precondition
+was added after the sweep, on SUPERPHANTOM's short runs, and changes no other
+cell's verdict. Every cell passes
 that except SUPERPHANTOM on 2048, which carries 44 to 64 a run with a window
 of 44 to 662 units against PHANTOM's 1,300 there: the field does not race at
 SUPERPHANTOM on 2048, so it is not judged and stays absorbing. Omega's
@@ -1361,10 +1368,15 @@ off and on, same seed, 4 seeds a circuit; `races_pulse`, `races_others`). The
 median lap change is at most 0.2 s in every row. Shield is the field's mean at
 the end of each of the first three laps, and at the end of the run, each
 labelled. Of the on-branch wrecks, two fall inside a stint, both slot 7 on
-Pulse `16_Track` (Elite seed 3 tick 7,794; Skilled seed 2 tick 9,014); the
-rest come from crafts that flew no stint or long after one (934 to 4,777
-ticks), the divergence of a changed race. Pulse Elite wrecks 6 -> 15 is that
-divergence plus the one in-stint wreck.
+Pulse `16_Track` (Elite seed 3 tick 7,794; Skilled seed 2 tick 9,014), and
+both are the shield cost, not the driving: traced tick by tick
+(`OAG_SWEEP_WRECK_TRACE=1 OAG_SWEEP_TRACK=16_`, `races_pulse`), the craft
+starts the stint on 9.1 and 15.8 shield, takes no wall contact in it (wall
+ticks flat at 41 and 293), and is drained to zero by weapon damage in its last
+second (12 and 40 ticks), where the forgone absorb (about 18) would have
+covered either hit. The rest come from crafts that flew no stint or long
+after one (934 to 4,777 ticks), the divergence of a changed race. Pulse Elite
+wrecks 6 -> 15 is that divergence plus the one in-stint wreck.
 
 | Title, level | Races | Stints a race | Lap on - off, median | Walls off -> on | Rescues off -> on | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks off -> on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

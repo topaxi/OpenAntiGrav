@@ -96,8 +96,11 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
       authors no SUPERPHANTOM class. Not judged, absorbs.
     - **Two in-stint wrecks** at RAPIER in whole races, both slot 7 on Pulse
       `16_Track` (Elite seed 3 tick 7,794; Skilled seed 2 tick 9,014,
-      `races_pulse`). Not traced: weapons on a craft that forwent the
-      absorb's shield, or the stint itself.
+      `races_pulse`). Traced (`OAG_SWEEP_WRECK_TRACE=1`): both are weapon
+      damage with no wall contact in the stint, on 9.1 and 15.8 shield that
+      the forgone absorb (about 18) would have covered. The shield cost every
+      flying class pays; the fork sweep cannot see a wreck, so a rule that
+      weighs the absorb's shield against a stint's exposure is open.
   - ~~**Lead, the player's own pickup:** a cold stint finds the craft with a
     whole-line search (`Race::locate_player_driver`).~~ Fixed 2026-10-20
     (lane `opponent-autopilot-wire`): the ring search is right on the ring

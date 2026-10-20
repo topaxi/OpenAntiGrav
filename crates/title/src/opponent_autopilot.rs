@@ -12,9 +12,12 @@
 //! `docs/gameplay/ai.md`, "An opponent's Autopilot, per class and difficulty".
 //!
 //! The difficulty is the race's own `oag_ai::Difficulty` by name (`novice`,
-//! `skilled`, `elite`, `ace`), the same four levels on every title: it is what
-//! this project's driver reads, and no title-side spelling reaches it. The
-//! original-AI field (the campaign) keeps absorbing the pickup.
+//! `skilled`, `elite`, `ace`), the same four levels on every title: the race
+//! box's `AI DIFFICULTY` row (`assets/ui/menu.toml`, `ai.difficulty`) offers
+//! all four by these names. A title's own `Easy`/`Medium`/`Hard` exist only
+//! as campaign rungs and reach only the original's pack shuffle
+//! (`oag_game::ai_choice::free_level`); the original-AI field (the campaign)
+//! keeps absorbing the pickup.
 //! Data, not a comparison on a title's, class's or level's name (ADR-0058).
 
 use crate::pre_race::Sourced;
