@@ -454,6 +454,20 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     state.grounded_prev = control_grounded;
     let control_contact = control_grounded > 0.0;
 
+    // `Ship_UpdateCraft` overwrites the control record's airbrakes with `100.0` while the
+    // Eliminator wrong-way bit is set (`0x088497e8`), ahead of the controls that ramp toward
+    // them.
+    let forced;
+    let input = if state.wrong_way_kill {
+        forced = ShipControls {
+            airbrake_left: 1.0,
+            airbrake_right: 1.0,
+            ..*input
+        };
+        &forced
+    } else {
+        input
+    };
     controls::update(state, input, handling, dt);
     // `Craft_UpdateThrottle` (`0x000efb50`) scales the throttle it has just written by
     // `PilotAssist_ThrustScale`, read here from the state the last tick left.

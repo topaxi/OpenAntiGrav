@@ -229,6 +229,13 @@ pub fn engine(
         return EngineForce::default();
     }
 
+    // The Eliminator wrong-way kill, `if (flags & 0x2000) { throttle = 0; T = 0; lift = 0 }`
+    // (`0x0884c954`), the last thing the original does: nothing survives it on either
+    // branch, so returning here is the same force. See [`ShipState::wrong_way_kill`].
+    if state.wrong_way_kill {
+        return EngineForce::default();
+    }
+
     // The four-corner branch (`0x0884c834`) replaces the whole throttle path: the target
     // is the output directly and the `0.5 * speed + accelcap` clamp does not apply.
     //

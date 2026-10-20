@@ -742,3 +742,30 @@ fn a_titles_grid_pitch_damping_applies_on_the_grid_alone() {
     assert_eq!(frame(pure, false), -1.5);
     assert_eq!(frame(crate::laws::Laws::PULSE, true), -1.5);
 }
+
+/// The Eliminator wrong-way bit overwrites the control record's airbrakes with full
+/// (`Ship_UpdateCraft`, `0x088497e8`) before the controls ramp toward them, so both airbrake
+/// states rise with no airbrake held. Fails if the override is dropped.
+#[test]
+fn the_wrong_way_kill_holds_both_airbrakes_full() {
+    let mut handling = test_handling();
+    handling.airbrake.gain = 300.0;
+    let world = flat_floor();
+    let after = |kill: bool| {
+        let mut ship = ship_at(4.0);
+        ship.wrong_way_kill = kill;
+        evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &Environment::default(),
+            &world,
+            1.0 / 60.0,
+        );
+        (ship.airbrake_left, ship.airbrake_right)
+    };
+    assert_eq!(after(false), (0.0, 0.0));
+    let (left, right) = after(true);
+    assert!(left > 0.0 && right > 0.0, "{left} {right}");
+    assert_eq!(left, right);
+}

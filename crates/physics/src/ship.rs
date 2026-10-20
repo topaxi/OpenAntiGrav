@@ -472,6 +472,18 @@ pub struct ShipState {
     /// ([`crate::launch`]); Zone's auto-speed uses the same multiplier. Written by the
     /// race, not hashed, for [`Self::on_grid`]'s reason.
     pub released: bool,
+    /// The craft is flying the wrong way in an Eliminator race, `craft+0x1c0 & 0x2000`: its
+    /// engine gives nothing and both airbrakes are held full.
+    ///
+    /// The entity update `FUN_088418e0` sets the bit at its end (`0x088428a4`-`0x08842924`)
+    /// when `dot(node forward, located tangent) < -0.4` and clears it otherwise, but only in
+    /// game modes 8 and 18 (`Elimination`, `Multiplayer Elimination`); in every other mode
+    /// the block is skipped and the bit is never set. `Ship_UpdateCraft` then forces the
+    /// control record's airbrakes to `100.0` (`0x088497e8`) and `Ship_UpdateEngine` zeroes
+    /// throttle, thrust and lift (`0x0884c954`). Static read, confidence 82: not watched
+    /// live (no Elimination state was captured). Written by the race every tick, not
+    /// hashed, for [`Self::on_grid`]'s reason: it is a function of the pose and the mode.
+    pub wrong_way_kill: bool,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
     /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the bank-to-yaw
@@ -695,6 +707,7 @@ impl Default for ShipState {
             pitch_gate: true,
             inertia_frame: InertiaFrame::World,
             released: true,
+            wrong_way_kill: false,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
             mag_lock_blend: 0.0,

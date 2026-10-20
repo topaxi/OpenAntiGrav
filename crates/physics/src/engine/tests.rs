@@ -186,6 +186,30 @@ fn a_running_turbo_keeps_the_engine_through_a_stun_and_a_slowdown() {
     }
 }
 
+/// The Eliminator wrong-way kill zeroes the engine whatever else is running, a Turbo included
+/// (`0x0884c954` is the last thing the original does to `T`).
+#[test]
+fn the_wrong_way_kill_zeroes_thrust_even_under_a_turbo() {
+    let handling = test_handling();
+    let mut state = ship_moving_forward(24.0);
+    state.thrust = 100.0;
+    state.turbo_timer = 0.5;
+    let run = |state: &ShipState| {
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+    };
+    assert!(run(&state).thrust > 0.0);
+    state.wrong_way_kill = true;
+    assert_eq!(run(&state), EngineForce::default());
+}
+
 #[test]
 fn no_throttle_is_no_thrust() {
     let handling = test_handling();

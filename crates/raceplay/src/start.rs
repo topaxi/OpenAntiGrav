@@ -166,6 +166,8 @@ impl Race {
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
         let pitch_gate = craft_laws.is_none_or(|laws| laws.pitch_gate.value);
+        let eliminator_wrong_way_kill =
+            craft_laws.is_none_or(|laws| laws.eliminator_wrong_way_kill.value);
         let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
         let mut physics_laws = crate::launch_hover::physics_laws(craft_laws);
         // The disc's own craft-wall restitution where its global handling file authors one
@@ -675,6 +677,7 @@ impl Race {
                 steer_ramp_clamped,
                 air_pitch_bias,
                 pitch_gate,
+                eliminator_wrong_way_kill,
                 inertia_frame,
                 physics_laws,
                 autopilot_engine,

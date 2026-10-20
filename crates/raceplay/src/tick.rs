@@ -124,6 +124,7 @@ impl Race {
             ship.physics.released = released;
             ship.physics.four_corner = four_corner;
         }
+        self.set_wrong_way_kill();
         self.set_hover_caps();
         // Every craft a person is flying this tick. Slot 0 alone under
         // `World::SINGLE_PLAYER`, which is every session this engine starts

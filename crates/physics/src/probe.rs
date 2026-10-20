@@ -353,6 +353,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         on_grid: _,
         // Not hashed, for `on_grid`'s reason.
         released: _,
+        // Not hashed, for `on_grid`'s reason.
+        wrong_way_kill: _,
         // Not hashed: the race writes it from the mode every tick.
         four_corner: _,
         // Not hashed, for `on_grid`'s reason.
