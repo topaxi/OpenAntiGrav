@@ -754,7 +754,7 @@ impl Race {
                 class_gravity_scale: self.sim.class_gravity_scale,
                 class_gravity_term: self.sim.class_gravity_term,
                 laws: self.sim.physics_laws,
-                start_boost: self.sim.start_boost,
+                start_boost: self.sim.field_start_boost,
                 damage_rules,
                 barrel_rolls: self.sim.barrel_rolls,
                 ..Environment::default()

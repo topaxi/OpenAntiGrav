@@ -708,6 +708,27 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !extents {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
+    // A title that compiles its launch in (Pure) flies its own, measured on its own disc.
+    let code_start_boost = craft_title
+        .race
+        .craft_laws
+        .and_then(|laws| laws.code_start_boost)
+        .map(|b| oag_physics::launch::StartBoost {
+            window_start: b.value.window_start,
+            window_end: b.value.window_end,
+            stall_end: b.value.stall_end,
+            overall_duration: b.value.overall_duration,
+            stall_mul: b.value.stall_mul,
+            normal_mul: b.value.normal_mul,
+            boost_mul: b.value.boost_mul,
+        });
+    if code_start_boost.is_some() && start_boost.is_none() {
+        report.push(
+            "launch boost: this title's own, compiled in (measured, docs/physics/pure-physics.md)"
+                .to_string(),
+        );
+    }
+    let start_boost = start_boost.or(code_start_boost);
     #[cfg(feature = "view")]
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let gtf = craft_title.effects.sprites.contains(&name);

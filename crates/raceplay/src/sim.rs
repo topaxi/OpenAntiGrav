@@ -364,6 +364,9 @@ pub struct RaceSim {
     pub(super) class_gravity_term: oag_physics::passive::ClassGravityTerm,
     /// The launch boost's parameters - see [`Setup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
+    /// The launch boost the AI field flies: [`Self::start_boost`], or `None` where the title's
+    /// engine boosts the player's craft alone.
+    pub(super) field_start_boost: Option<oag_physics::launch::StartBoost>,
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
     /// The level each person-flown slot flies with; the settings decide, and a network room

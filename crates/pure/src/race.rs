@@ -530,6 +530,30 @@ pub const CODE_PITCH: oag_title::craft_laws::CodePitch = oag_title::craft_laws::
     damping: 1.5,
 };
 
+/// Pure's launch boost, compiled in where Pulse authors `<StartBoost>`.
+///
+/// `Race_UpdateLaunchGrade` (`0x0880f870`) grades each craft's first throttle edge against a
+/// clock that starts at GO: before `0.1` s a stall, `0.1`-`0.4` s perfect, `0.4`-`0.5` s a
+/// stall, later normal (its last window ends at `1.3`, after the multiplier's). Then
+/// `Ship_UpdateStartBoost` (`0x089252e8`) holds `craft+0x24c` at `0.8`, `1.2` or `4.2` until the
+/// craft's own state-1 clock reaches `1.0`, and writes `1.0` up to `1.5`: Pulse's shape exactly,
+/// with the windows and multipliers as code literals. **Measured live** on Pure PSP (USA),
+/// 2026-10-20: a first press at `0.200` s read grade `2` and `4.2` until `1.0` s, then `1.0`; a
+/// press held through the countdown read `0.8`. The original applies it to the player's engine
+/// only (`0x0892f60c`), and so would ours: the field launches unboosted. Held out of
+/// [`CRAFT_LAWS`] until our AI flies it.
+pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
+    oag_title::craft_laws::CodeStartBoost {
+        window_start: 0.1,
+        window_end: 0.4,
+        stall_end: 0.5,
+        overall_duration: 1.0,
+        stall_mul: 0.8,
+        normal_mul: 1.2,
+        boost_mul: 4.2,
+        player_only: true,
+    };
+
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
 /// table existed; the in-air `weight_distribution` pitch torque is off: Pure authors no
 /// `<Misc weight_distribution>`.
@@ -557,6 +581,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `Ship_UpdateAirbrakes` (`0x0892f64c`) pushes `right * 200.0` while a shift's timer runs,
     // grounded; Pure's `<Airbrake>` has no `sideshift`. Live: `body+0x140 += right * 200.000`.
     code_sideshift: Some(oag_title::pre_race::Sourced::measured(200.0)),
+    // Measured (`START_BOOST`, the player's engine alone), held off until our AI flies it: on,
+    // against the speed laws, Pure's opponent sweep novice walls rose (A `23 -> 73`) and Ace
+    // races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`). It also
+    // rides on `engine_output_double`: Pure's multipliers apply to an engine with no doubling.
+    code_start_boost: None,
 };
 
 #[cfg(test)]
@@ -612,6 +641,28 @@ mod tests {
             super::CRAFT_LAWS.code_sideshift,
             Some(oag_title::pre_race::Sourced::measured(200.0))
         );
+    }
+
+    /// Pure's launch is its own compiled-in boost, measured live, the player's alone, and held
+    /// out of the table until our AI flies it. Releasing the hold is this test's change.
+    #[test]
+    fn the_launch_boost_is_measured_and_held() {
+        let boost = super::START_BOOST;
+        assert_eq!(
+            (
+                boost.window_start,
+                boost.window_end,
+                boost.stall_end,
+                boost.overall_duration
+            ),
+            (0.1, 0.4, 0.5, 1.0)
+        );
+        assert_eq!(
+            (boost.stall_mul, boost.normal_mul, boost.boost_mul),
+            (0.8, 1.2, 4.2)
+        );
+        assert!(boost.player_only);
+        assert_eq!(super::CRAFT_LAWS.code_start_boost, None);
     }
 
     #[test]

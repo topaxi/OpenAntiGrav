@@ -61,6 +61,7 @@ mod tests {
             bank_to_yaw: Sourced::chosen(30.0),
             code_pitch,
             code_sideshift: None,
+            code_start_boost: None,
         }
     }
 

@@ -38,6 +38,32 @@ pub struct CraftLaws {
     /// The sideshift force a title compiles into its engine, used where a `<Class>` authors no
     /// `<Airbrake sideshift>`: Wipeout Pure's `200`. `None`: the file's, or none at all.
     pub code_sideshift: Option<Sourced<f32>>,
+    /// A launch boost a title compiles into its engine rather than authoring as
+    /// `<Handling><Global><StartBoost>`: Wipeout Pure's. `None`: the file's, or none.
+    pub code_start_boost: Option<Sourced<CodeStartBoost>>,
+}
+
+/// A launch boost compiled into the engine: the seven figures Pulse's `<StartBoost>` authors,
+/// with the same meaning (`oag_physics::launch::StartBoost`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CodeStartBoost {
+    /// Seconds after GO at which the perfect window opens.
+    pub window_start: f32,
+    /// Seconds after GO at which the perfect window closes.
+    pub window_end: f32,
+    /// Seconds after GO at which the stall window closes.
+    pub stall_end: f32,
+    /// How long the multiplier is held, in seconds.
+    pub overall_duration: f32,
+    /// The multiplier for a stall (thrust before the window, or just after it).
+    pub stall_mul: f32,
+    /// The multiplier for a normal launch.
+    pub normal_mul: f32,
+    /// The multiplier for a perfect launch.
+    pub boost_mul: f32,
+    /// Only the player's engine reads the multiplier (Pure: `0x0892f60c` tests the craft's
+    /// entity against the race's player), so the field launches unboosted.
+    pub player_only: bool,
 }
 
 /// A pitch response compiled into the engine rather than authored as `<pitch>`.

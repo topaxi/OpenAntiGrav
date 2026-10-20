@@ -518,6 +518,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     code_pitch: None,
     code_sideshift: None,
+    code_start_boost: None,
 };
 
 #[cfg(test)]
