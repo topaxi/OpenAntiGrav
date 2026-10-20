@@ -398,13 +398,18 @@ fn the_spikes_scale_uniformly_from_their_own_law_not_the_groups() {
     assert_eq!(flame.boost_spike_scale(), BOOST_EXTRA_Z);
 }
 
+/// The five flame draws of Harimau classic at 0 km/h, read off RPCS3's draw list
+/// (2026-10-20, `hd-hull-nozzle`): the model matrix rows of the two `EF_Main`
+/// material draws are 0.75 x (1, 1, 0.25) and the three spikes' are 0.75 x 2.0 x a
+/// flicker in 0.65-0.85 (0.75 x 1.361, 1.606, 1.380 on that frame). The flame is
+/// drawn at rest, so these are what the rest scale has to be.
 #[test]
-fn a_flame_is_at_rest_until_the_throttle_or_boost_moves_it() {
-    let mut flame = Flame::new();
-    assert!(flame.at_rest());
-    flame.advance(true, false);
-    assert!(!flame.at_rest());
-    let mut flame = Flame::new();
-    flame.advance(false, true);
-    assert!(!flame.at_rest());
+fn the_rest_flame_scales_are_what_the_original_submits_at_0_kmh() {
+    let flame = Flame::new();
+    assert_eq!(flame.main_scale(), (1.0, 0.25));
+    assert_eq!(flame.main_spike_scale(), 2.0);
+    for read in [1.361_f32, 1.606, 1.380] {
+        let flicker = read / flame.main_spike_scale();
+        assert!((0.65..=0.85).contains(&flicker), "{flicker}");
+    }
 }

@@ -840,22 +840,6 @@ impl Flame {
         self.b > 1.0 / 255.0
     }
 
-    /// Whether the smoothed throttle and the boost blend have both settled
-    /// at zero - the flame's resting state, which a craft that has not
-    /// moved is in.
-    ///
-    /// One half of the gate that hides the flame at a standstill
-    /// (`oag_raceplay::Race::hd_flame_resting` is the other, the
-    /// speed). **Observed, not read:** RPCS3 frames of Harimau
-    /// classic at the Talon's start line draw no `flame_test` program at all
-    /// at 0 km/h, before the GO and 0.5 s after it, and draw the five flare
-    /// shapes at speed with the throttle held and with it released. What the
-    /// original's own condition is stays unread.
-    #[must_use]
-    pub fn at_rest(&self) -> bool {
-        self.s < 1.0 / 255.0 && self.b < 1.0 / 255.0
-    }
-
     /// The boost blend, exposed for tests and the trace capture.
     #[must_use]
     pub fn boost_blend(&self) -> f32 {
