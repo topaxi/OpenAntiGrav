@@ -167,6 +167,9 @@ pub struct Spline {
     /// parallel to [`Self::samples`]: the original's driver reads them off the
     /// craft's current point. See [`PointAi`].
     point_ai: Vec<PointAi>,
+    /// The collision cage over the same track, where the original runs one
+    /// ([`crate::cage`]). `None` from [`Self::from_track`]; the loader sets it.
+    cage: Option<oag_gameplay::cage::CageTrack>,
 }
 
 /// A control point's `unk_0x5c`/`unk_0x5d` (the lane exclusion band) and
@@ -214,7 +217,21 @@ impl Spline {
             samples,
             paths,
             point_ai,
+            cage: None,
         }
+    }
+
+    /// This table with the track's collision cage.
+    #[must_use]
+    pub fn with_cage(mut self, cage: Option<oag_gameplay::cage::CageTrack>) -> Self {
+        self.cage = cage;
+        self
+    }
+
+    /// The track's collision cage, if the original runs one here.
+    #[must_use]
+    pub fn cage(&self) -> Option<&oag_gameplay::cage::CageTrack> {
+        self.cage.as_ref()
     }
 
     /// How many samples the table holds.

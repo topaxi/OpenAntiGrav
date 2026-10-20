@@ -1383,3 +1383,16 @@
 0x08902b24	function	ViewCull_ViewDepth	80	mesh-draw.md
 # 2026-10-19 autopilot-crest-steering: the pitch gate (engine.md)
 0x088492bc	function	Ship_TestPitchAlignment	80	engine.md
+# 2026-10-20 wall-contact-miss: the collision cage (collision-cage.md)
+0x08831aa4	function	Cage_ResolveCraft	88	collision-cage.md
+0x0883191c	function	Cage_UpdateCraft	85	collision-cage.md
+0x08832464	function	Cage_BuildSection	88	collision-cage.md
+0x088327b8	function	Cage_TestPoint	88	collision-cage.md
+0x08831104	function	Cage_SectionLeft	85	collision-cage.md
+0x08831288	function	Cage_SectionRight	85	collision-cage.md
+0x0883140c	function	Cage_SectionTop	85	collision-cage.md
+0x0883158c	function	Cage_SectionBottom	85	collision-cage.md
+0x0887d36c	function	AiTrack_CageEnabled	72	collision-cage.md
+0x0897e140	function	fabsf	95	collision-cage.md
+0x08ab0c8c	data	g_cage_enabled	85	collision-cage.md
+0x08a7abd8	data	g_cage_max_depth	90	collision-cage.md

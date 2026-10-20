@@ -55,6 +55,7 @@
 
 pub mod airbrake;
 pub mod barrel_roll;
+pub mod cage;
 pub mod collide;
 pub mod controls;
 pub mod damage;

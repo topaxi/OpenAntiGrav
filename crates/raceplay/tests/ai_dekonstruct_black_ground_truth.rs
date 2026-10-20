@@ -180,7 +180,14 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("RAPIER", 2, 2, 2),
     ("RAPIER", 3, 3, 3),
     ("PHANTOM", 1, 1, 2),
-    ("PHANTOM", 2, 3, 3),
+    // 2026-10-20, reversed 3 -> 4: the collision cage (`oag_gameplay::cage`).
+    // Over seeds 1-8, every class, both layouts (`ai_dekonstruct_black_board`):
+    // destroyed 35 -> 31 (PHANTOM 29 -> 22, RAPIER 6 -> 9, VENOM and FLASH 0).
+    // The noise method (an airborne pitch torque eps of -1e-2, -1e-3, -1e-4,
+    // -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5; cells over the old bounds, of 12):
+    // cage off 0 1 1 0 0 2 1 0 1 (median 1, max 2), on 3 0 1 1 1 1 1 0 1
+    // (median 1, max 3), inside the bar of off + 2 on both.
+    ("PHANTOM", 2, 3, 4),
     ("PHANTOM", 3, 4, 3),
 ];
 
@@ -244,4 +251,34 @@ fn print_bounds() {
             println!("    (\"{class}\", {seed}, {forward}, {reversed}),");
         }
     }
+}
+
+/// Scratch sweep: destroyed craft per class and layout over seeds `1..=OAG_SEEDS`
+/// (default 8), the board a [`BOUND`] change is judged on.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn ai_dekonstruct_black_board() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let seeds: u64 = std::env::var("OAG_SEEDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
+    let mut total = 0;
+    for class in ["VENOM", "FLASH", "RAPIER", "PHANTOM"] {
+        let (mut forward, mut reversed) = (0, 0);
+        for seed in 1..=seeds {
+            let Some(f) = destroyed(class, seed, false) else {
+                return;
+            };
+            let r = destroyed(class, seed, true).expect("the reversed entry");
+            println!("BOARD {class} seed {seed}: forward {f} reversed {r}");
+            forward += f;
+            reversed += r;
+        }
+        println!("BOARD {class}: forward {forward} reversed {reversed}");
+        total += forward + reversed;
+    }
+    println!("BOARD total {total}");
 }

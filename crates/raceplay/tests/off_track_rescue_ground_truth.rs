@@ -282,7 +282,14 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
         race.respawns()
     );
 
-    assert!(race.respawns() > 0, "nothing put the craft back");
+    // **The collision cage holds it in** (2026-10-20): thrown sideways and up at
+    // 240, the craft meets the tube's top and side (`oag_gameplay::cage`) and
+    // falls back with no rescue at all, peaking about 35 off the line. A rescue
+    // is only owed when the craft actually got away.
+    assert!(
+        race.respawns() > 0 || peak < 50.0,
+        "nothing put the craft back (peak {peak:.1})"
+    );
     assert!(
         distance < 50.0,
         "the craft is {distance:.1} from the circuit ten seconds later"
