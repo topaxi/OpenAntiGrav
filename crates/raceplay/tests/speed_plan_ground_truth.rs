@@ -30,13 +30,7 @@ use crate::perturb;
 /// `(layout, class)` pairs whose plan does not verify clean, and why each is
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
-const NOT_CLEAN: &[(&str, &str)] = &[
-    // The gap landing at 1233-1241: walls at 1233-1239. Not clean under every
-    // offset of `perturb::BOUND_OFFSETS` (it read clean on the single
-    // unperturbed build from 2026-10-12 to 2026-10-20).
-    ("06_Track", "RAPIER"),
-    ("29_Track", "PHANTOM"),
-];
+const NOT_CLEAN: &[(&str, &str)] = &[("29_Track", "PHANTOM")];
 
 /// `(layout, class)` pairs whose majority flips between offsets of
 /// `perturb::BOUND_OFFSETS`, so neither verdict is asserted; each with the
@@ -44,8 +38,12 @@ const NOT_CLEAN: &[(&str, &str)] = &[
 /// change that settles one is visible. `14_Track` PHANTOM, on [`NOT_CLEAN`]
 /// before 2026-10-20 on its single build, is clean under all nine.
 const UNSETTLED: &[(&str, &str)] = &[
-    // 3 of 9: the gap landing, as `06_Track` RAPIER.
+    // 3 of 9: the gap landing at 1233-1241 (walls at 1233-1239).
     ("06_Track", "VENOM"),
+    // 8 of 9 (2026-10-20, lane `pulse-air-pitch`; 0 of 9 before, on `NOT_CLEAN`): the same
+    // gap landing, settled by the hover escape off a wall under a probe
+    // (`oag_physics::hover::Rig::escape_floor_only`). Only offset `5e-5` failed its majority.
+    ("06_Track", "RAPIER"),
     // 8 of 9: a rescue at 2402-2405.
     ("29_Track", "RAPIER"),
 ];

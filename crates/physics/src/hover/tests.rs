@@ -199,13 +199,14 @@ fn a_wall_is_not_a_hoverable_surface() {
     assert!(!probe.contact);
 }
 
-/// Penetration escape fires on `Floor` and on nothing else. **Narrower than contact, the part that
-/// is easy to get backwards**: the gate is `craft+0x208 == 1`, the `Floor` class, applied *before*
-/// the collider's type is looked at, so the ordering says "any surface" while the gate says "one".
-/// This module escaped on `Floor` or `MagFloor` until 2026-08-12 (an open divergence in
-/// `HANDOVER.md`) and briefly on everything, which was worse.
+/// Penetration escape fires off a `Floor` or a `Wall` on Pulse, and off `Floor` alone on a rig
+/// whose gate is floor-only (HD's reading); never off a magstrip (chosen, `Rig::escape_floor_only`). Pulse's gate, `craft+0x208 == 1`, is the hit
+/// record's shape tag, `1` for every mesh (`collision.md`), applied *before* the collider's
+/// type is looked at: a probe half a unit above a wall is lifted out though the wall carries
+/// no suspension. Measured on Talon's Junction's crest (`airborne-ground-truth.md`). This
+/// module escaped off `Floor` alone until 2026-10-20, reading the tag as the floor class.
 #[test]
-fn penetration_escape_fires_on_a_floor_and_on_nothing_else() {
+fn penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated() {
     let world = |surface| {
         let mut world = CollisionWorld::new();
         world.push(TriangleSoup::new(
@@ -222,9 +223,11 @@ fn penetration_escape_fires_on_a_floor_and_on_nothing_else() {
         world
     };
     // Half a unit above the surface, so inside `PENETRATION_LIMIT`.
-    let inside = |surface| {
+    let inside = |surface, floor_only| {
+        let mut state = state_at(0.5);
+        state.hover_rig.escape_floor_only = floor_only;
         probe(
-            &state_at(0.5),
+            &state,
             &test_handling(),
             &Environment::default(),
             &world(surface),
@@ -232,26 +235,35 @@ fn penetration_escape_fires_on_a_floor_and_on_nothing_else() {
             5.0,
         )
     };
+    let shortfall = PENETRATION_LIMIT - 0.5;
 
-    let floor = inside(Surface::Floor);
+    for floor_only in [false, true] {
+        let floor = inside(Surface::Floor, floor_only);
+        assert!(
+            (floor.escape.y - shortfall).abs() < 1e-5,
+            "a floor should push the body out by the shortfall, got {:?}",
+            floor.escape
+        );
+        assert!(floor.contact, "and it still carries the suspension");
+    }
+
+    // Pulse: a wall escapes too, and carries nothing.
+    let wall = inside(Surface::Wall, false);
     assert!(
-        (floor.escape.y - (PENETRATION_LIMIT - 0.5)).abs() < 1e-5,
-        "a floor should push the body out by the shortfall, got {:?}",
-        floor.escape
+        (wall.escape.y - shortfall).abs() < 1e-5,
+        "{:?}",
+        wall.escape
     );
-    assert!(floor.contact, "and it still carries the suspension");
-
-    // A magstrip holds the craft kinematically and needs no hard
-    // constraint, so it hovers without escaping.
-    let mag = inside(Surface::MagFloor);
-    assert!(mag.contact, "a magstrip is still a hoverable surface");
-    assert_eq!(mag.escape, Vec3::ZERO);
-
-    // And a wall is `crate::wall`'s business in both respects.
-    let wall = inside(Surface::Wall);
     assert!(!wall.contact, "a wall must never carry the suspension");
     assert_eq!(wall.force, Vec3::ZERO);
-    assert_eq!(wall.escape, Vec3::ZERO);
+    // A magstrip is held out on every rig.
+    let mag = inside(Surface::MagFloor, false);
+    assert_eq!(mag.escape, Vec3::ZERO);
+    assert!(mag.contact, "a magstrip is still a hoverable surface");
+
+    // A floor-only gate: neither escapes.
+    assert_eq!(inside(Surface::Wall, true).escape, Vec3::ZERO);
+    assert_eq!(inside(Surface::MagFloor, true).escape, Vec3::ZERO);
 
     // Clear of the floor there is nothing to escape from.
     let clear = probe(
@@ -263,6 +275,42 @@ fn penetration_escape_fires_on_a_floor_and_on_nothing_else() {
         5.0,
     );
     assert_eq!(clear.escape, Vec3::ZERO);
+}
+
+/// The escape reaches the body on a frame with no probe in contact: the original translates
+/// inside its probe loop, before it tests the collider's type (`Ship_HoverTwoPoint`; HD's
+/// `Craft_HoverFourPoint` the same). Talon's Junction's crest lifts off on exactly such a frame:
+/// the front probe's nearest hit is a wall, the derived rear hit sits `0.798` above it, and the
+/// recorded body rises `0.2026` with no contact (`airborne-ground-truth.md`). Until 2026-10-20 a
+/// frame without contact dropped every probe's escape.
+#[test]
+fn a_wall_under_the_probes_lifts_the_body_with_no_contact() {
+    let mut world = CollisionWorld::new();
+    world.push(TriangleSoup::new(
+        vec![
+            [-500.0, 0.0, -500.0],
+            [-500.0, 0.0, 500.0],
+            [500.0, 0.0, 0.0],
+        ],
+        vec![[0, 1, 2]],
+        Vec::new(),
+        Surface::Wall,
+        0,
+    ));
+    let state = state_at(0.5 + PROBE_DROP_RAW * TARGET_GLOBAL_SCALE);
+    let hover = evaluate(
+        &state,
+        &test_handling(),
+        &Environment::default(),
+        &world,
+        5.0,
+    );
+    assert_eq!(hover.contacts, 0, "a wall carries no suspension");
+    assert!(
+        hover.escape.y > 0.4,
+        "the probes under the wall's surface lift the body: {:?}",
+        hover.escape
+    );
 }
 
 #[test]

@@ -422,10 +422,15 @@ fn probe_from_hit(
     // `craft+0x208 == 1`, the `Floor` class, so escape is narrower than contact (a
     // magstrip holds kinematically, a wall is `crate::wall`'s business).
     let rig = &state.hover_rig;
-    let escape = if rig.probe_escape
-        && hit.surface == crate::collide::Surface::Floor
-        && height < PENETRATION_LIMIT
-    {
+    // A magstrip is held out by choice: the shape tag passes it too, but no live tick has
+    // shown one escaping, and our craft only reaches one inside a unit where it has drifted
+    // under the original's magnet hold (`Rig::escape_floor_only`).
+    let escapes_off = match hit.surface {
+        crate::collide::Surface::Floor => true,
+        crate::collide::Surface::Wall => !rig.escape_floor_only,
+        crate::collide::Surface::MagFloor | crate::collide::Surface::Reset => false,
+    };
+    let escape = if rig.probe_escape && escapes_off && height < PENETRATION_LIMIT {
         up * (PENETRATION_LIMIT - height)
     } else {
         Vec3::ZERO
@@ -707,10 +712,27 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     } else {
         Vec3::ZERO
     };
+    // HD's `Craft_HoverFourPoint` escapes every probe under `1.0` in turn off heights fixed
+    // before the loop, so the moves sum ([`Rig::sum_escapes`]; measured, `hover-four-point.md`).
+    // Pulse's two-point law takes the larger correction: whether its escapes re-cast between
+    // probes is unread, and that choice is ours, not a finding.
+    //
+    // Taken before the contact test: the original translates inside the probe loop, before
+    // it asks the collider's type, so a probe that hit a `Wall` within a unit escapes on a
+    // frame with no contact at all (`Ship_HoverTwoPoint`, measured on Talon's Junction's
+    // crest: a derived rear hit on a wall, `0.2017` predicted against `0.2026` recorded).
+    let mut escape = Vec3::ZERO;
+    for probe in active {
+        if rig.sum_escapes {
+            escape += probe.escape;
+        } else if probe.escape.length_squared() > escape.length_squared() {
+            escape = probe.escape;
+        }
+    }
     let contacts = active.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {
         return Hover {
-            escape: snap,
+            escape: escape + snap,
             ..Hover::airborne(probes, count)
         };
     }
@@ -757,19 +779,6 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // (`craft+0x2a4 != 0`, see `ShipState::on_grid`).
     let bank = bank::gain(state, &env.laws) * right.y * (1.0 - state.mag_lock_blend);
     let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
-
-    // HD's `Craft_HoverFourPoint` escapes every probe under `1.0` in turn off heights fixed
-    // before the loop, so the moves sum ([`Rig::sum_escapes`]; measured, `hover-four-point.md`).
-    // Pulse's two-point law takes the larger correction: whether its escapes re-cast between
-    // probes is unread, and that choice is ours, not a finding.
-    let mut escape = Vec3::ZERO;
-    for probe in active {
-        if rig.sum_escapes {
-            escape += probe.escape;
-        } else if probe.escape.length_squared() > escape.length_squared() {
-            escape = probe.escape;
-        }
-    }
 
     Hover {
         probes,

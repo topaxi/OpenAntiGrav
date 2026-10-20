@@ -170,7 +170,13 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// wall-contact ticks 84,770 -> 113,679: no more craft lost, more wall touched
 /// by a field of seven different hulls, some of them wider.
 const BOUND: &[(&str, u64, u32, u32)] = &[
-    ("VENOM", 1, 0, 0),
+    // 2026-10-20, forward 0 -> 1 (lane `pulse-air-pitch`): the hover escape off a wall under
+    // a probe (`oag_physics::hover::Rig::escape_floor_only`, measured on Talon's Junction).
+    // Noise method over `perturb::BOUND_OFFSETS` (0, 2e-3, -2e-5, 3e-6, -5e-4, 5e-5, -3e-6,
+    // 7e-4, -7e-6; cells over the old bounds, of 12): before 0 0 0 1 2 1 2 1 1 (median 1,
+    // max 2), after 1 0 0 1 1 1 1 1 1 (median 1, max 1). Destroyed per board, before
+    // 20 15 12 16 18 16 14 16 16 (143), after 16 14 16 11 15 17 14 16 16 (135).
+    ("VENOM", 1, 1, 0),
     ("VENOM", 2, 2, 1),
     ("VENOM", 3, 1, 0),
     ("FLASH", 1, 2, 1),

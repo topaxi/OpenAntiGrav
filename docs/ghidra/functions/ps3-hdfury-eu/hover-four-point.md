@@ -124,6 +124,15 @@ escapes is unread. **Omega and 2048: not checkable in this lane.** Both fly Puls
 Omega yet, and 2048's hover is not located. Omega's `Craft_UpdateSurfaceProbes` (`0x0131b510`) carries HD's probe layout forward, so
 the same loop is the expected reading there.
 
+**The escape does not wait for contact (2026-10-20, `pulse-air-pitch`).** The translate at
+`0x000ee6ac` comes before the contact test at `0x000ee268`, so a probe under `1.0` moves the body
+on a frame where no probe ends up in contact. Ours dropped every escape on such a frame until
+Pulse's crest showed the original lifting off one
+([airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch));
+HD now takes it too (read statically here, not seen live on HD). HD's own gate, `hit+0x28 == 1`,
+stays floor-only in ours by choice (`HoverRig::escape_floor_only`): Pulse's same-shaped field is
+the mesh-shape tag, HD's is unread.
+
 ## The grounded vertical residual was the harness (2026-10-20, hd-hover-residual)
 
 The `0.95` units/s per tick a grounded row landed lower than the original (2026-10-19) was the

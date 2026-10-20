@@ -778,6 +778,10 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     // the loop; live, the summed escape closes the position residual (`hover-four-point.md`).
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
     probe_escape: oag_title::pre_race::Sourced::measured(true),
+    // `hit+0x28 == 1` gates the escape (`0x000ee25c`); read as the floor class when the rig was
+    // ported, and what HD's tag holds is unread. Pulse's same-shaped gate is a mesh-shape tag
+    // (any track surface escapes, measured), so this keeps HD's previous behaviour by choice.
+    escape_floor_only: oag_title::pre_race::Sourced::chosen(true),
     four_corner_spring: oag_title::pre_race::Sourced::measured(false),
     plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
     alignment_pitches: oag_title::pre_race::Sourced::measured(false),

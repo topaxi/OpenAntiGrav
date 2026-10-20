@@ -72,6 +72,18 @@ pub struct Rig {
     /// no escape in its probe loop: the height store at `0x0884b2e0` goes straight to the
     /// surface-class test (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
     pub probe_escape: bool,
+    /// The escape fires only off a `Floor` hit, rather than off a `Wall` too.
+    ///
+    /// Pulse's gate, `craft+0x208 == 1`, is the hit record's shape tag: `Collision_RaycastMesh`
+    /// always writes `1` and `Collision_RaycastBox` `3` (`collision.md`), so every track
+    /// surface, a `Wall` included, escapes. A `MagFloor` would pass the tag too and is held out
+    /// on every rig by choice: no live tick has shown one, and with it on a single-seeded pad
+    /// replay on Talon's Junction drifted under a magstrip and escaped where the original holds. Measured live on Talon's Junction's crest (tick
+    /// 1594 of the clean lap): a derived rear hit on a wall at height `0.798` lifts the
+    /// recorded body `0.2026`, against `0.2017` predicted (`airborne-ground-truth.md`). Wipeout
+    /// HD's gate, `hit+0x28 == 1`, keeps the floor-only reading it was ported with: what HD's
+    /// tag means is unread.
+    pub escape_floor_only: bool,
     /// See [`SpringLaw`].
     pub spring: SpringLaw,
     /// The alignment torque has the right axis projected out, so it never pitches
@@ -119,6 +131,7 @@ impl Rig {
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
         probe_escape: true,
+        escape_floor_only: false,
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,

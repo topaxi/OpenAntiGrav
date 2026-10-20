@@ -324,6 +324,128 @@ difficulty) went from 62 to 24 rescues on Novice with the switch off and 68 to 1
 on, and from 29 to 24 and 34 to 24 on Ace; the opponents' paired-fork stints went from
 5,317 to 4,570 wall ticks.
 
+## The air pitch laws against a drop test (2026-10-20, `pulse-air-pitch`)
+
+No committed capture held the pitch axis in the air, and the Fort Gale check above read the
+driver's raw output (`ai_pitch`), not the control block the craft reads. These captures hold
+the control block's own axis.
+
+- **The capture.** PPSSPP v1.20.4, software renderer, muted, `pulse-psp-usa`, Time Trial,
+  Talon's Junction (`16_Track`), VENOM, the profile's team (Assegai's handling reproduces the
+  rows; shield `135`). `psp-drive.py menu`, then per run `psp-drive.py restart` and
+  `psp-trace.py --place 55.2,-41,-205.5,0.94,0.33,-0.18,110 --hold cross [--hold up|down]
+  --ticks 90`: at the first breakpoint hit the body is written about `9` units over the start
+  straight (`up.y` `0.9998`), nose up `19` degrees, `110` units/s along the nose, no rotation,
+  and every tick after it is recorded. `--place` exists because `psp-drive.py place` followed by
+  a capture loses about a second of free-running frames; placed `20` units up the craft was put
+  back on the track before tick 0 (not traced; the cage's top is about that high).
+- **The input.** The new `stick_pitch` column (`*(craft+0x78) + 0x10`,
+  `scripts/psp_trace_fields.py`) read `-100` on every row holding up, `+100` holding down and `0`
+  centred; `stick_steer` (`+0x00`) read `0` and the ramped `steer` `0` on every row of all four.
+- **The sweep.** `crates/trace/tests/crest_pitch_pose_walk.rs` seeds each row with
+  `oag_trace::replay::initial_state`, steps `oag_physics::step` and the cage once, and compares
+  the angular velocity with the next row's. The gate is taken from world down on this level
+  straight.
+
+Pitch-axis angular-acceleration residual on the rows airborne before, during and after the
+step (rad/s², ours minus the original's about the craft's lateral axis), against the full input
+torque `100 * 0.3 / I_xx = 1.92`:
+
+| run | rows | pitch term ours applied | residual mean | residual rms |
+| --- | ---: | ---: | ---: | ---: |
+| centred, two runs | 68 | `-0.513` (the bias alone) | `+0.008` | `0.147` |
+| d-pad up | 44 | `+1.410` (`-0.513 + 1.923`) | `+0.008` | `0.111` |
+| d-pad down | 37 | `-2.436` (`-0.513 - 1.923`) | `+0.001` | `0.137` |
+
+The up run's tick 7 (a one-tick `-12` rad/s² event, `+7.6` in yaw) is left out of its row.
+Regressing the residual on the input: coefficient `-0.004` (up) and `0.000` (down). So
+`pitch_air` (`0.3`), the axis' sign and `+/-100` scale, the in-air bias and the in-air pitch
+damping all hold on the control block's own axis to well under one percent of the input
+torque. **Confidence 90** for `pitch_air` as a plain gain on that axis (three inputs, both
+signs, the static read). These runs do not test the gate: the sweep gates on world down, and the
+lowest airborne `up.y` was `0.912` (the up run; `0.959` on the others), above the `0.9` threshold
+on every row, so ours and the original agree on an open gate throughout.
+
+**The weathervane is not settled by these.** It is a yaw term here (the craft is placed with
+its velocity along the nose, and the fall builds about `15` degrees of incidence): its yaw
+contribution is `0.16` rad/s² rms against a yaw residual of `0.23` rms, median `-0.004`. Fitting
+`residual = a + b * vane` puts the airborne coefficient at `-0.16`; without the constant, at
+`-0.37`. The `-0.3` is consistent with both and fitted by neither. What would settle it is a
+capture with sideslip in the air (a placed velocity off the nose).
+
+## The 1595 crest residual is a hover escape off a wall (2026-10-20, `pulse-air-pitch`)
+
+The measured residual on Talon's Junction's 1595 crest (clean lap, `oag-trace run --reseed 60`):
+our nose `3` to `32` mrad off the original's along its up axis from 1596 to 1610. It is not an
+air pitch law.
+
+- **One step from each recorded row** (the sweep above, on `talons-junction-clean-lap.csv`):
+  on the ten rows airborne on both sides the pitch residual is a steady `-0.34` rad/s², the
+  sign that *closes* the free-run gap, and on the six half-grounded rows (`0.5`, rear probe
+  only) it averages `-0.23`, also against the gap.
+- **Rolled forward from 1594 with one state component put back each tick:** nothing put back,
+  `-12.1` mrad at 1608; velocity, `-13.4`; **position alone, `+1.1`**; attitude, `-1.8`. So the
+  error grows through where the craft is.
+- **Where it is:** after one step from 1594 ours is `0.202` units below the record along up, and
+  at no other tick on the crest. The record's own `pos(t+1) - pos(t) - v(t+1) * dt` is `+0.2026`
+  along up on that tick and under `0.005` on the ticks around it: the original moved the body
+  without moving its velocity.
+- **The mechanism.** From the 1594 pose, above `50` units/s, the front probe's nearest hit is a
+  `Wall` (`2.652` down, its normal `0.06` off horizontal and `0.309` along the craft's forward).
+  The rear hit is derived from it, `6.0 * 0.309` higher: `0.798` above the derived point, inside
+  the one-unit penetration escape. The escape is `1 - 0.798 = 0.2017` against the recorded
+  `0.2026`. Neither probe is in contact (a wall carries no suspension), and the record's next
+  `grounded` is `0`.
+
+Ours missed it twice over: it escaped off `Floor` hits only, and a frame with no probe in
+contact dropped every probe's escape. Pulse's gate, `craft+0x208 == 1`, is the hit record's
+mesh-shape tag (`Collision_RaycastMesh` writes `1`, `Collision_RaycastBox` `3`;
+[collision.md](../ghidra/functions/psp-pulse-usa/collision.md#raycasts)), not the floor class,
+and the translate sits inside the probe loop before the type test
+([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
+**Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
+millimetre). A `MagFloor` hit would pass the shape tag too and is **held out, by choice**: no
+live magstrip tick has been checked, and with it on, `pad_crossing_ground_truth`'s single-seeded
+replay across the 1284 pad drifted under a magstrip and escaped off it seven times, gaining
+`+53.26` against the recording's `+46.24` (`+48.94` before; `+48.94` again with it held out). The floor-only gate this replaces (2026-08-12) was a reading of the field as
+the floor class, made the same day the shape tag was not yet recovered; nothing measured it
+against the original. **On** since
+2026-10-20 (`oag_physics::hover::Rig::escape_floor_only` false for Pulse; the escape summed
+before the contact test for every rig).
+
+| | before | after |
+| --- | --- | --- |
+| one step from 1594, height against the record | `-0.202` | `-0.0004` |
+| rolled from 1594, nose error at 1608 | `-14.6` mrad | `-1.5` mrad (peak) |
+| rolled from 1594, landing | one tick early (1608) | the original's tick (1609) |
+| one-step height misses over `0.05` on five captures (12,838 rows) | 391 | 390 (1594 alone moved) |
+| `race_ground_truth` lone craft | 12/12 clean | 12/12 clean (`06_Track` 36.1 -> 35.0 s, `02_Track` 35.1 -> 35.0 s) |
+
+Our AI's gates, with MagFloor held out: `ai_clean_lap_gate` unchanged; `speed_plan_ground_truth`'s
+`06_Track` RAPIER goes from clean under 0 of the nine `perturb::BOUND_OFFSETS` to 8 of 9 (moved
+from `NOT_CLEAN` to `UNSETTLED`); `ai_dekonstruct_black_ground_truth` VENOM seed 1 forward loses
+one craft at offset 0 (bound 0 -> 1). Noise method over the nine offsets, de Konstruct cells over
+the old bounds (of 12): before `0 0 0 1 2 1 2 1 1`, after `1 0 0 1 1 1 1 1 1` (median 1 both, max
+2 -> 1); destroyed per board, `143` -> `135` summed over the nine.
+
+Pinned by `hover_contact_ground_truth.rs`'s
+`the_crest_lifts_off_through_a_wall_escape_with_no_contact` and, in `oag-physics`,
+`penetration_escape_fires_off_floor_and_wall_and_off_floor_alone_when_gated` and
+`a_wall_under_the_probes_lifts_the_body_with_no_contact`.
+
+**What is left of the `--reseed 60` figure** is unchanged by this: at 1594 that run arrives
+carrying `+1.7` units/s of vertical velocity from 1580-1584 (`+0.3` to `+0.7` after the 1580
+landing, `+1.33` more on the 1584 cage tick), so its own 1594 step does not reach the wall
+escape and its 1595 contact disagrees. That residual belongs to the landing escape at 1579 and
+the cage response's vertical component, not to the air.
+
+| title | escape off any hit | escape without contact | origin |
+| --- | --- | --- | --- |
+| Pulse (PSP, PS2) | yes (`Floor`, `Wall`; `MagFloor` held out, chosen) | yes | measured |
+| Pure | yes | yes | inherited from Pulse (Pure's `Ship_HoverTwoPoint` lineage; its gate not read) |
+| Wipeout HD | no, `Floor` only | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the floor gate is HD's `hit+0x28 == 1`, whose meaning is unread, kept by choice |
+| Omega, 2048 | yes | yes | **changed by this port** (they had Pulse's floor-only gate too), inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |
+
 ## Wipeout HD: the class scale is on flight gravity (Ubermall)
 
 The question: our autopilot fell about `20` units/s² short of the original in
