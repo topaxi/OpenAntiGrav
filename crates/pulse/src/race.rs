@@ -40,6 +40,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
+    zone_hover_rig: Some(&ZONE_HOVER_RIG),
     craft_laws: None,
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,
@@ -523,3 +524,32 @@ mod team_identity_tests {
         assert_eq!(identity_of(super::TEAM_IDENTITIES, "Mantis"), "mirage");
     }
 }
+
+/// Pulse's Zone hover: [`oag_title::hover_rig::HoverRig`] for `Ship_HoverFourCorner`
+/// (`0x0884ae90`), which `Ship_UpdateHover` runs on game mode 6.
+///
+/// Four probes at `(+/-2.5, 0, +/-5.0)` times `g_craft_scale` (`0.75`), built at
+/// `0x0884aeec`-`0x0884b060`, with **no drop**: the racing law's probes hang `1.125` below the
+/// centre, these sit level with it. All four are cast every frame (no speed test, no derived
+/// hit), `0.15` of the load each (`0x3e19999a` at `0x0884b4c4`), the spring along the craft's
+/// up axis (`craft+0x160`). The original's row 0 is the craft's left and row 2 its forward, so
+/// probe 0, `(+2.5, 0, +5.0)`, is the left front in this engine's frame. Read live: every probe
+/// point equals the basis times the offset plus the position to the bit, on 340 frames
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`, confidence 92).
+pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    probes: oag_title::pre_race::Sourced::measured(&[
+        [-1.875, 0.0, -3.75],
+        [1.875, 0.0, -3.75],
+        [-1.875, 0.0, 3.75],
+        [1.875, 0.0, 3.75],
+    ]),
+    spring_share: oag_title::pre_race::Sourced::measured(0.15),
+    cast_every_probe: oag_title::pre_race::Sourced::measured(true),
+    along_hit_normal: oag_title::pre_race::Sourced::measured(false),
+    quarter_sum_normal: oag_title::pre_race::Sourced::measured(false),
+    // Moot: no probe escapes (`probe_escape`).
+    sum_escapes: oag_title::pre_race::Sourced::measured(false),
+    // The probe loop (`0x0884b11c`-`0x0884b564`) calls only the raycast and
+    // `Body_AddForceAtPoint`: nothing moves the body out of a penetrating probe.
+    probe_escape: oag_title::pre_race::Sourced::measured(false),
+};

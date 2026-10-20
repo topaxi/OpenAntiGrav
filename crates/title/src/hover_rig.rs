@@ -29,4 +29,7 @@ pub struct HoverRig {
     /// largest one alone. HD measures each probe's height off a hull point placed before the
     /// loop, so an escape does not change the next probe's height.
     pub sum_escapes: Sourced<bool>,
+    /// A probe under `1.0` unit moves the body out by `1 - h`. Pulse's Zone hover
+    /// (`Ship_HoverFourCorner`) has no such escape.
+    pub probe_escape: Sourced<bool>,
 }

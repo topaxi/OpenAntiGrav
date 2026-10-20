@@ -60,6 +60,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
             NormalMean::Normalised
         },
         sum_escapes: rig.sum_escapes.value,
+        probe_escape: rig.probe_escape.value,
     }
 }
 

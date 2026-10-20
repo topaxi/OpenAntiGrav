@@ -1075,7 +1075,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .countdown_voice
                 .is_some_and(|voice| voice.beat.is_some()),
             launch_hover: title.race.launch_hover,
-            hover_rig: title.race.hover_rig,
+            // Zone flies the title's Zone hover where it has one (Pulse's `Ship_HoverFourCorner`).
+            hover_rig: match (options.mode, title.race.zone_hover_rig) {
+                (oag_race::Mode::Zone, Some(zone)) => Some(zone),
+                _ => title.race.hover_rig,
+            },
             craft_laws: title.race.craft_laws,
             autopilot_engine: title.race.autopilot_engine,
             #[cfg(feature = "view")]

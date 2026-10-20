@@ -44,6 +44,7 @@ const RIG: HoverRig = HoverRig {
     along_hit_normal: Sourced::measured(true),
     quarter_sum_normal: Sourced::measured(true),
     sum_escapes: Sourced::measured(true),
+    probe_escape: Sourced::measured(true),
 };
 
 #[test]

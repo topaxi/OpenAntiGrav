@@ -420,7 +420,11 @@ fn probe_from_hit(
     // the collider type, so a probe inside a `Wall` is extruded too. The gate is
     // `craft+0x208 == 1`, the `Floor` class, so escape is narrower than contact (a
     // magstrip holds kinematically, a wall is `crate::wall`'s business).
-    let escape = if hit.surface == crate::collide::Surface::Floor && height < PENETRATION_LIMIT {
+    let rig = &state.hover_rig;
+    let escape = if rig.probe_escape
+        && hit.surface == crate::collide::Surface::Floor
+        && height < PENETRATION_LIMIT
+    {
         up * (PENETRATION_LIMIT - height)
     } else {
         Vec3::ZERO
@@ -445,7 +449,6 @@ fn probe_from_hit(
     let gravity = handling.physical.normal_gravity + handling.physical.track_gravity;
     let load = 0.75 * state.grounded_prev + 0.25;
     // Grouped left to right: operation order is part of the result. No `mul_add`.
-    let rig = &state.hover_rig;
     let spring = handling.physical.mass
         * rig.spring_share
         * (target_height - height)

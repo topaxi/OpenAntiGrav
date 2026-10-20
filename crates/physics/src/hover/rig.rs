@@ -50,6 +50,11 @@ pub struct Rig {
     /// Apply every penetrating probe's escape, summed (HD), rather than the largest alone (ours
     /// for Pulse, see [`super::Hover::escape`]).
     pub sum_escapes: bool,
+    /// A probe under `1.0` unit moves the body out (`Ship_HoverTwoPoint`, HD's
+    /// `Craft_HoverFourPoint`). Pulse's Zone hover, `Ship_HoverFourCorner` (`0x0884ae90`), has
+    /// no escape in its probe loop: the height store at `0x0884b2e0` goes straight to the
+    /// surface-class test (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+    pub probe_escape: bool,
 }
 
 impl Rig {
@@ -75,6 +80,7 @@ impl Rig {
         along_normal: false,
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
+        probe_escape: true,
     };
 
     /// The probes in use.

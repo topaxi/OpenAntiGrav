@@ -189,6 +189,10 @@ pub struct RaceDefaults {
     pub launch_hover: Option<&'static crate::launch_hover::LaunchHover>,
     /// The craft's hover probe set, `None` for Pulse's two-point law: [`crate::hover_rig::HoverRig`].
     pub hover_rig: Option<&'static crate::hover_rig::HoverRig>,
+    /// The hover probe set a Zone race flies instead of [`Self::hover_rig`], or `None` where the
+    /// title's Zone hover was not read (the race keeps [`Self::hover_rig`]). Pulse's
+    /// `Ship_UpdateHover` picks `Ship_HoverFourCorner` on game mode 6: [`crate::hover_rig::HoverRig`].
+    pub zone_hover_rig: Option<&'static crate::hover_rig::HoverRig>,
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
     /// What the Autopilot pickup does to the player's engine while it runs:

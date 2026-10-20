@@ -97,6 +97,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,
     hover_rig: None,
+    zone_hover_rig: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     original_opponent: true,

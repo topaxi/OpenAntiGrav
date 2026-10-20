@@ -24,6 +24,7 @@ fn four_point() -> Rig {
         along_normal: true,
         normal_mean: NormalMean::QuarterSum,
         sum_escapes: true,
+        probe_escape: true,
     }
 }
 
@@ -187,4 +188,46 @@ fn a_rig_that_sums_escapes_moves_the_body_by_every_penetrating_probe() {
     });
     assert!((summed - 1.6).abs() < 1e-4, "{summed}");
     assert!((largest - 0.4).abs() < 1e-4, "{largest}");
+}
+
+/// A rig shaped like Pulse's Zone hover, `Ship_HoverFourCorner`: four level probes, `0.15`
+/// each, all cast, the springs along up, and no escape in the probe loop.
+fn four_corner() -> Rig {
+    Rig {
+        offsets: [
+            Vec3::new(-1.875, 0.0, -3.75),
+            Vec3::new(1.875, 0.0, -3.75),
+            Vec3::new(-1.875, 0.0, 3.75),
+            Vec3::new(1.875, 0.0, 3.75),
+        ],
+        count: 4,
+        spring_share: 0.15,
+        derive_rear: false,
+        along_normal: false,
+        normal_mean: NormalMean::Normalised,
+        sum_escapes: false,
+        probe_escape: false,
+    }
+}
+
+/// **Zone's probes do not escape.** The same penetrating craft that the racing law's rig pushes
+/// out by `0.4` stays where it is under the four-corner law, whose loop moves nothing.
+#[test]
+fn the_four_corner_rig_has_no_escape_in_its_probe_loop() {
+    let escape = |rig: Rig| {
+        evaluate(
+            &craft(rig, 0.6, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .escape
+    };
+    assert_eq!(escape(four_corner()), Vec3::ZERO);
+    let with_escape = escape(Rig {
+        probe_escape: true,
+        ..four_corner()
+    });
+    assert!((with_escape.y - 0.4).abs() < 1e-4, "{with_escape:?}");
 }
