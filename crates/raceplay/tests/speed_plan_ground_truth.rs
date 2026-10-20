@@ -21,10 +21,8 @@ use oag_raceplay::catalogue;
 /// believed to be so. Every one is named on `docs/gameplay/ai.md`'s speed-plan
 /// section.
 const NOT_CLEAN: &[(&str, &str)] = &[
-    // The corner after the gap at 1196-1200: walls at 1234-1238, and a stall
-    // at 1217 once pad boosts are in the learning run. RAPIER left this list
-    // on 2026-10-12, on the hardened trough plan.
-    ("06_Track", "VENOM"),
+    // `06_Track` VENOM, the corner after the gap at 1196-1200, left this list on
+    // 2026-10-20 with Pulse's measured air laws on (RAPIER on 2026-10-12).
     // Rescued - in the air too long, or off the line - at 1247 and at
     // 2402-2441, with every ceiling the search tried.
     ("14_Track", "PHANTOM"),
