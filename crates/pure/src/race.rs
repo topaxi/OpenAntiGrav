@@ -570,19 +570,16 @@ pub const SIDESHIFT: f32 = 200.0;
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
 /// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
 /// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). All
-/// three are held at Pulse's until our AI flies them, as are the pitch, sideshift and launch.
+/// speed pair is on; the bank-to-yaw gain is held at Pulse's until our AI flies it.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    // Measured: Pure's engine does not double (`false`) and its grounded drag is `-0.0025`. Both
-    // held at Pulse's until this engine's AI flies them: on, the Pure pad replay test's driver
-    // (`replay_ground_truth::pure_replays_reproduce...`) pins itself on Vineta K's first wall and
-    // crawls too slowly to lap in 7200 ticks, as it pins on Pulse's laws too
-    // (`docs/physics/pure-physics.md`).
-    engine_output_double: oag_title::pre_race::Sourced::chosen(true),
-    drag_ground: oag_title::pre_race::Sourced::chosen(-0.005),
+    // Measured: Pure's engine does not double and its grounded drag is `-0.0025`, half Pulse's
+    // acceleration at the same top speed (`docs/physics/pure-physics.md`).
+    engine_output_double: oag_title::pre_race::Sourced::measured(false),
+    drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
     // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), held at Pulse's `30` until
     // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
     // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
@@ -608,17 +605,16 @@ mod tests {
     use super::{COUNTDOWN_VOICE, DEFAULT_TEAM, DEFAULT_TRACK};
 
     /// Pure's engine does not double its output and its grounded drag is `-0.0025`, both
-    /// measured live (`docs/physics/pure-physics.md`); the table holds Pulse's as a choice until
-    /// our AI flies them. Releasing the hold is this test's change.
+    /// measured live (`docs/physics/pure-physics.md`), and Pure flies them.
     #[test]
-    fn the_speed_laws_are_measured_and_held() {
+    fn the_speed_laws_are_measured_and_on() {
         assert_eq!(
             super::CRAFT_LAWS.engine_output_double,
-            oag_title::pre_race::Sourced::chosen(true)
+            oag_title::pre_race::Sourced::measured(false)
         );
         assert_eq!(
             super::CRAFT_LAWS.drag_ground,
-            oag_title::pre_race::Sourced::chosen(-0.005)
+            oag_title::pre_race::Sourced::measured(-0.0025)
         );
     }
 
