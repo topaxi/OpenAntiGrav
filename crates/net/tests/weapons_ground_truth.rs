@@ -198,8 +198,8 @@ fn four_firing_clients_position_trigger_only_at_100_ms() {
 /// 7722, 5695; with the cage off at 4383, 7920, 5750, 5223, 4849, 7586, 4016, 7285, 4014.
 /// 5400 ticks ended 2 of 9 and 5 of 9 of those races; 10800 ends all 18 with 2300 to spare.
 /// Every cage contact in the failing run was on a wreck between death and respawn (798 of
-/// 798, none on a racing craft), which the original also cages: `FUN_088418e0` reaches
-/// `Cage_UpdateCraft` (`0x08842384`) from every state but 6 after its state dispatch, for
+/// 798, none on a racing craft), which the original also cages: `FUN_088418e0` reaches its
+/// `Cage_UpdateCraft` call (`0x08842384`) from every state but 6 after its state dispatch, for
 /// `+0x368` of 0 or 2 (the player and every AI craft).
 #[test]
 #[ignore = "needs a disc image"]

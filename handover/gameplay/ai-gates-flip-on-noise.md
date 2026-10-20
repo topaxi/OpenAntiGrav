@@ -41,13 +41,16 @@ counts for every configuration and what changed in our AI:
   red, both inside the noise: `oag-net`'s Eliminator over the wire (now 10800 ticks; its doc
   comment has the 18 finish ticks) and Black's PHANTOM seed 1 (1 -> 2, the row comment has both
   lists). Destroyed per Black board over the 9 perturbations went from mean 11.9 (cage off) to
-  15.2 (on), about 2.6 standard errors: worth a look by whoever owns the cage's AI effect; the
-  cage-off runs used Airborne rescues the cage-on runs did not need. Margins on Black at
-  `eps = 0`, cage on (destroyed / bound, forward then reversed): at the bound VENOM 1 (0/0,
-  0/0), FLASH 2 forward 0/0, FLASH 3 forward 1/1, RAPIER 1 forward 1/1, RAPIER 2 reversed 2/2,
-  PHANTOM 1 forward 2/2; one under FLASH 1 forward 1/2, FLASH 2 reversed 0/1, VENOM 2 reversed
-  0/1, RAPIER 1 reversed 2/3, RAPIER 3 2/3 both, PHANTOM 1 reversed 1/2, PHANTOM 2 reversed
-  3/4, VENOM 3 forward 0/1. Not re-pinned.
+  15.2 (on), about 2.6 standard errors: worth a look by whoever owns the cage's AI effect (in
+  PHANTOM seed 1's forward race at `eps = 0` the cage-off run made 7 Airborne rescues, the
+  cage-on run none). Against the table as it now stands, the cage-on runs exceed a bound at
+  one perturbation each in RAPIER 2 reversed, VENOM 1 reversed and VENOM 3 forward (of 9),
+  nowhere else. Margins at `eps = 0`, cage on (destroyed / bound): at the bound VENOM 1 (0/0,
+  0/0), VENOM 3 reversed 0/0, FLASH 2 forward 0/0, FLASH 3 forward 1/1, RAPIER 1 forward 1/1,
+  RAPIER 2 reversed 2/2, PHANTOM 1 forward 2/2; one under FLASH 1 forward 1/2 and reversed
+  0/1, FLASH 2 reversed 0/1, VENOM 2 reversed 0/1, VENOM 3 forward 0/1, RAPIER 1 reversed 2/3,
+  RAPIER 3 2/3 both, PHANTOM 1 reversed 1/2, PHANTOM 2 reversed 3/4. Not re-pinned. Not
+  scanned: `ai_clean_lap_gate`, `speed_plan_ground_truth`, `ai_dekonstruct_symptoms`.
 - **2048's inherited bias is held** (chosen): `vita_2048_original_ai_ground_truth::the_field_finishes_park`
   respawns once at `eps = 0` with it (1 of 9 perturbations, 0 of 9 without). Measure the bias on
   2048 itself (Vita3K) to release it; Omega keeps HD's.
