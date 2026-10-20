@@ -202,10 +202,52 @@ def main():
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
     if pair.failed():
         pair.finish()
-    run(base + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--screenshot", out / "ours.png"],
-        stdout=subprocess.DEVNULL)
+    # Ours can turn slowly while it sits (a craft that rests on a banked or skewed grid yaws, the original's does
+    # not), so the row handed to `--pose-from` is turned about the craft's up axis until the heading MEASURED at the
+    # rendered tick (a second, trace-only run of the same command) is the original's.
     ours_csv = out / "ours-trace.csv"
-    run(base + ["--ticks", args.ours_ticks + 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    fixed_csv = out / "trace-corrected.csv"
+    lines = csv.read_text().splitlines()
+    start = next(i for i, ln in enumerate(lines) if ln.startswith("tick,"))
+    head = lines[start].split(",")
+    data = [ln.split(",") for ln in lines[start + 1:] if ln.count(",") == len(head) - 1]
+    first = dict(zip(head, data[0]))
+
+    def with_turn(deg):
+        cells = dict(first)
+        up = [float(first["up_" + a]) for a in "xyz"]
+        for name in ("right", "fwd"):
+            v = ce.rotate_about([float(first["%s_%s" % (name, a)]) for a in "xyz"], up, deg)
+            for a, x in zip("xyz", v):
+                cells["%s_%s" % (name, a)] = repr(x)
+        fixed_csv.write_text("\n".join([",".join(head)] + [",".join(cells[h] for h in head)]
+                                       + [",".join(r) for r in data[1:]]) + "\n")
+        cmd = [c if c != csv else fixed_csv for c in base]
+        run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks + 1, "--trace-out", ours_csv],
+            stdout=subprocess.DEVNULL)
+        row = ce.csv_row(ours_csv, args.ours_ticks)
+        return ce.signed_heading([row["fwd_" + a] for a in "xyz"], [row["up_" + a] for a in "xyz"], theirs["fwd"]), cmd
+
+    turn, sign = 0.0, 1.0
+    err, cmd = with_turn(turn)
+    corrections = [{"turn_deg": turn, "heading_error_deg": err}]
+    for _ in range(4):
+        if abs(err) <= plat["tolerance"]["heading_deg"] / 4:
+            break
+        trial = turn + sign * err
+        new_err, new_cmd = with_turn(trial)
+        if abs(new_err) > abs(err) and sign == 1.0:
+            sign = -1.0
+            trial = turn + sign * err
+            new_err, new_cmd = with_turn(trial)
+        turn, err, cmd = trial, new_err, new_cmd
+        corrections.append({"turn_deg": turn, "heading_error_deg": err})
+    pair.rec["ours"]["heading_corrections"] = corrections
+    pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
+    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--screenshot", out / "ours.png"],
+        stdout=subprocess.DEVNULL)
+    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks + 1, "--trace-out", ours_csv],
+        stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:

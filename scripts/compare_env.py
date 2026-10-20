@@ -138,6 +138,23 @@ def csv_row(path, tick):
     raise SystemExit("compare_env: %s has no tick %d" % (path, tick))
 
 
+def rotate_about(v, axis, deg):
+    """`v` turned by `deg` degrees about the unit `axis` (Rodrigues)."""
+    t = math.radians(deg)
+    c, sn = math.cos(t), math.sin(t)
+    k = sum(a * b for a, b in zip(axis, v))
+    cr = (axis[1] * v[2] - axis[2] * v[1], axis[2] * v[0] - axis[0] * v[2], axis[0] * v[1] - axis[1] * v[0])
+    return [v[i] * c + cr[i] * sn + axis[i] * k * (1 - c) for i in range(3)]
+
+
+def signed_heading(ours_fwd, ours_up, theirs_fwd):
+    """Degrees to turn ours about its own up axis to point along theirs (sign: positive = counter-clockwise
+    seen from above)."""
+    cr = (ours_fwd[1] * theirs_fwd[2] - ours_fwd[2] * theirs_fwd[1], ours_fwd[2] * theirs_fwd[0] - ours_fwd[0] * theirs_fwd[2],
+          ours_fwd[0] * theirs_fwd[1] - ours_fwd[1] * theirs_fwd[0])
+    return math.degrees(math.atan2(sum(a * b for a, b in zip(ours_up, cr)), sum(a * b for a, b in zip(ours_fwd, theirs_fwd))))
+
+
 def pose_of(row):
     return {"pos": [row["pos_x"], row["pos_y"], row["pos_z"]],
             "fwd": [row["fwd_x"], row["fwd_y"], row["fwd_z"]],
