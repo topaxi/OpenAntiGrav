@@ -541,8 +541,7 @@ pub const CODE_PITCH: oag_title::craft_laws::CodePitch = oag_title::craft_laws::
 /// with the windows and multipliers as code literals. **Measured live** on Pure PSP (USA),
 /// 2026-10-20: a first press at `0.200` s read grade `2` and `4.2` until `1.0` s, then `1.0`; a
 /// press held through the countdown read `0.8`. The original applies it to the player's engine
-/// only (`0x0892f60c`), and so would ours: the field launches unboosted. Held out of
-/// [`CRAFT_LAWS`] until our AI flies it.
+/// only (`0x0892f60c`), and so does ours: the field launches unboosted.
 pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
     oag_title::craft_laws::CodeStartBoost {
         window_start: 0.1,
@@ -569,7 +568,7 @@ pub const SIDESHIFT: f32 = 200.0;
 /// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
 /// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
-/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). All
+/// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). The
 /// speed pair is on; the bank-to-yaw gain is held at Pulse's until our AI flies it.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
@@ -593,11 +592,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // branch-A walls rose 38 -> 51 (`docs/physics/pure-physics.md`). `None`: no sideshift, as
     // before, since Pure's files author none.
     code_sideshift: None,
-    // Measured (`START_BOOST`, the player's engine alone), held off until our AI flies it: on,
-    // against the speed laws, Pure's opponent sweep novice walls rose (A `23 -> 73`) and Ace
-    // races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`). It also
-    // rides on `engine_output_double`: Pure's multipliers apply to an engine with no doubling.
-    code_start_boost: None,
+    // Measured (`START_BOOST`, the player's engine alone). Its multipliers apply to an engine
+    // with no doubling, so it rides on `engine_output_double` (`docs/physics/pure-physics.md`).
+    code_start_boost: Some(oag_title::pre_race::Sourced::measured(START_BOOST)),
 };
 
 #[cfg(test)]
@@ -646,10 +643,9 @@ mod tests {
         assert_eq!(super::CRAFT_LAWS.code_sideshift, None);
     }
 
-    /// Pure's launch is its own compiled-in boost, measured live, the player's alone, and held
-    /// out of the table until our AI flies it. Releasing the hold is this test's change.
+    /// Pure's launch is its own compiled-in boost, measured live, the player's alone, and on.
     #[test]
-    fn the_launch_boost_is_measured_and_held() {
+    fn the_launch_boost_is_measured_and_on() {
         let boost = super::START_BOOST;
         assert_eq!(
             (
@@ -665,7 +661,10 @@ mod tests {
             (0.8, 1.2, 4.2)
         );
         assert!(boost.player_only);
-        assert_eq!(super::CRAFT_LAWS.code_start_boost, None);
+        assert_eq!(
+            super::CRAFT_LAWS.code_start_boost,
+            Some(oag_title::pre_race::Sourced::measured(boost))
+        );
     }
 
     /// Pure's start voice is its own measurement, not Pulse's lent: a regression to `Chosen` would
