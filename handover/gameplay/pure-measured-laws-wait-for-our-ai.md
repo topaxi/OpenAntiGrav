@@ -18,15 +18,12 @@ end-of-run shields.
   `driver-vs-new-physics` is re-applying Pulse's held air laws, and the gate is one of them. Turned
   on for every title, it would give Pure a gate under the measured pitch it now flies. Make it a
   `CraftLaws` axis, as `air_pitch_bias` is, with Pure off (measured).
-- **Bank-to-yaw `50`** (confidence 92) is held at Pulse's `30`. The test was on top of the speed
-  pair, the launch and the sideshift, with 12 airborne-pitch perturbations of 8 seeds each.
-  - Ace race walls: 7 of 12 samples land past the base's worst (`3052`-`4338` against `2339`,
-    `P 0.002`), with Ace laps of `45`-`46` s and respawns.
-  - The median moves `1911 -> 2594` (Mann-Whitney p `0.13`). Half the perturbations go badly;
-    the other half come out slightly better.
-  - To re-apply, in `crates/pure/src/race.rs`:
-    1. set `CRAFT_LAWS.bank_to_yaw` to `Sourced::measured(50.0)`;
-    2. flip `the_bank_to_yaw_gain_is_measured_and_held`.
+- **Bank-to-yaw `50`** (confidence 92) is **on since 2026-10-21** (`deviations-to-original`, the
+  maintainer's "Original shall always be the default"). What it costs our driver, open for an AI
+  lane: the noise bar put 7 of 12 perturbed Ace race-wall samples past the base's worst
+  (`3052`-`4338` against `2339`, `P 0.002`); unperturbed, 8 seeds, Ace walls `1899 -> 2058` and
+  wrecks `1 -> 3`, novice per-lap shield `92.0 -> 87.4`
+  ([pure-physics.md](../../docs/physics/pure-physics.md#bank-to-yaw-on-2026-10-21-deviations-to-original)).
 - **Novice pays for the speed pair.** The pair landed on the lead's decision while outside noise
   in both directions.
   - Ace is better: race walls `-38 %`, sweep A `-75 %`.
@@ -53,15 +50,16 @@ end-of-run shields.
 
 ## Next Steps
 
-1. Once our driver handles a stronger yaw coupling, re-judge bank-to-yaw, about 15 minutes of
-   machine time. Use the bar in
+1. Teach our driver the stronger yaw coupling (bank-to-yaw `50`) and measure it, about 15 minutes
+   of machine time a state. Use the bar in
    [pure-physics.md](../../docs/physics/pure-physics.md#the-noise-bar):
    1. Apply the airborne `OAG_X_EPS` pitch knob as an uncommitted patch.
    2. Build the `it_m_o` test binary once per law state.
    3. Run `opponent_autopilot_sweep::pure` and `::races_others` with `OAG_SWEEP=1
       OAG_SWEEP_IMAGE=pure OAG_SWEEP_SEEDS=8`, per difficulty, over the twelve `eps` values. Each
       job takes 12-25 s, so a dozen run in parallel.
-   4. Hold if any metric regresses at `P < 0.01` (Mann-Whitney, or `k` past the base's worst).
+   4. A driver change is kept when no metric regresses at `P < 0.01` (Mann-Whitney, or `k` past
+      the base's worst) against the law-on base.
 2. Fix the bare driver's wall pin (step 1 of a driver lane): trace it with a per-120-tick print in
    `replay_ground_truth.rs`'s `record()` with the Pure pad set back to the bare driver. 1-2 hours.
 3. To measure another class: unlock it in a profile and rerun `scripts/psp-pure-force-capture.py`.

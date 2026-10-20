@@ -597,10 +597,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // acceleration at the same top speed (`docs/physics/pure-physics.md`).
     engine_output_double: oag_title::pre_race::Sourced::measured(false),
     drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
-    // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), held at Pulse's `30` until
-    // this engine's AI flies it: on, 7 of 12 perturbed samples put Pure's Ace race walls past the
-    // worst of the noise distribution (`P 0.002`, `docs/physics/pure-physics.md`).
-    bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
+    // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), live on 129 banked frames
+    // (`docs/physics/pure-physics.md`). On since 2026-10-21: the original's law is the default,
+    // and our AI adapts to it.
+    bank_to_yaw: oag_title::pre_race::Sourced::measured(50.0),
     // Pure's four-corner hover (`0x0892e5b8`) loads `50`, as Pulse's does
     // (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`); static read.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::measured(50.0),
@@ -639,14 +639,12 @@ mod tests {
         );
     }
 
-    /// Pure's two-point hover turns into a bank at `50`, measured live, and the table holds
-    /// Pulse's `30` as a choice until our AI flies it. Releasing the hold is this test's change.
+    /// Pure's two-point hover turns into a bank at `50`, measured live, and Pure flies it.
     #[test]
-    fn the_bank_to_yaw_gain_is_measured_and_held() {
-        assert_eq!(super::CRAFT_LAWS.bank_to_yaw.value, 30.0);
+    fn the_bank_to_yaw_gain_is_measured_and_on() {
         assert_eq!(
-            super::CRAFT_LAWS.bank_to_yaw.origin,
-            oag_title::Origin::Chosen
+            super::CRAFT_LAWS.bank_to_yaw,
+            oag_title::pre_race::Sourced::measured(50.0)
         );
     }
 

@@ -13,7 +13,7 @@ differ, and every one was read off `BOOT.BIN` and then measured live to float pr
 | --- | --- | --- | --- | --- | --- |
 | Engine output doubling | `T * 2.0` | **none** | `Ship_UpdateEngine` `0x0892f1f0` | 92 | **on**: `CraftLaws::engine_output_double` (see [the gates](#what-is-on-and-what-is-held)) |
 | Grounded quadratic drag | `-0.005` | **`-0.0025`** | `Ship_ApplyQuadraticDrag` `0x0892cba0` | 92 | **on**: `CraftLaws::drag_ground` |
-| Bank-to-yaw gain, two-point hover | `30.0` | **`50.0`** | `Ship_HoverTwoPoint` `0x0892dea8` | 92 | **held** at `30`: `CraftLaws::bank_to_yaw` |
+| Bank-to-yaw gain, two-point hover | `30.0` | **`50.0`** | `Ship_HoverTwoPoint` `0x0892dea8` | 92 | **on** since 2026-10-21: `CraftLaws::bank_to_yaw` |
 | Pitch torque per unit input | XML `pitch_air`/`pitch_ground` (`0.3`/`1.0` on every Pulse team) | **`0.1` air, `0.4` grounded**, code literals | `Ship_UpdatePitch` `0x0892caf8` | 92 | **on**: `oag_pure::race::CODE_PITCH`, `CraftLaws::code_pitch` |
 | Pitch damping | XML `pitch_damping` (`3`) | **`1.5`** racing, `0.6` on the grid (`3 / c`) | `Ship_ApplyAngularDamping` `0x0892cc2c` | 92 | **on**, with the pitch torque; the grid's `0.6` is `oag_physics::laws::Laws::pitch_damping_grid` |
 | Sideshift force | XML `Airbrake sideshift` | **`200.0`**, a code literal | `Ship_UpdateAirbrakes` `0x0892f64c` | 92 | **on**: `oag_pure::race::SIDESHIFT`, `CraftLaws::code_sideshift` |
@@ -155,7 +155,9 @@ arms the flare's boost at `0.8` and plays `TURBO`.
 ## What is on and what is held
 
 **On (2026-10-20, lane `pure-laws-on`): the speed pair, the launch, the sideshift and the pitch
-with its grid damping. Held: the bank-to-yaw gain**, at Pulse's `30`.
+with its grid damping. The bank-to-yaw gain was held at Pulse's `30` until 2026-10-21**, when the
+maintainer decided the original's law is always the default and our AI adapts to it
+([below](#bank-to-yaw-on-2026-10-21-deviations-to-original)).
 
 ### The noise bar
 
@@ -194,7 +196,7 @@ noise distribution, not one run.
 | Speed pair (Pulse's laws) | `2680 -> 1658` (p `0.001`) / `593 -> 786` (p `<0.001`) | `433 -> 106` / `124 -> 87` | novice race walls `k = 12`; novice end shield `88.2 -> 85.7`, `k = 6` (`P 0.007`); novice sweep B `16 -> 51`, `k = 6` | **on**, on the lead's decision: outside noise both ways |
 | Launch (speed, 24 samples a side) | `1823 -> 1826` / `769 -> 733` | `135 -> 128` / `93 -> 104` (p `0.060`) | novice sweep B `k = 3` (`P 0.12`) | **on**: inside |
 | Sideshift (speed, launch) | `1745 -> 1911` (p `0.21`) / identical | `109 -> 106` / `121 -> 112` | Ace race walls `k = 2` (`P 0.24`) | **on**: inside |
-| Bank-to-yaw `50` (speed, launch, sideshift) | `1911 -> 2594` (p `0.13`) / `747 -> 722` | `106 -> 151` / `112 -> 96` | **Ace race walls `k = 7` (`P 0.002`)**: `3052`-`4338` against a worst of `2339`; Ace laps `k = 5` | **held** |
+| Bank-to-yaw `50` (speed, launch, sideshift) | `1911 -> 2594` (p `0.13`) / `747 -> 722` | `106 -> 151` / `112 -> 96` | **Ace race walls `k = 7` (`P 0.002`)**: `3052`-`4338` against a worst of `2339`; Ace laps `k = 5` | held until 2026-10-21, **on** since |
 | Pitch with grid damping (speed, launch, sideshift) | `1911 -> 1683` / `747 -> 809` (p `0.18`) | `106 -> 140` / `112 -> 92` | sweep Ace A `k = 2` (`P 0.24`): `585` and `232` against `216`; the `585` is seed 7 at `eps = +1e-5`, `514` ticks of it | **on**: inside; laps `0.3`-`0.5` s faster (p `< 0.01`) |
 
 Under the 12/12 split the launch's sweep Ace B read p `0.011`; 24 samples a side put it at
@@ -238,6 +240,24 @@ Gates at every landing:
   12/12 clean, `no clean lap: []`, every circuit `lost at []`.
 - `pure_race_ground_truth`, `pure_original_ai_ground_truth` and the Pure replay test passed.
 - `test-data-affected` passed (FULL selection), and no golden or determinism reference moved.
+
+### Bank-to-yaw on (2026-10-21, `deviations-to-original`)
+
+The maintainer (2026-10-20): "Original shall always be the default." So the gain is `50`, the
+measured value, and the Ace walls the noise bar found are this engine's driver's to fix. Unperturbed,
+eight seeds, `opponent_autopilot_sweep::races_others` (Autopilot off is the field alone; on, the
+player's slot is flown by the race's Autopilot too):
+
+| State, level | Race walls | Wrecks | Laps | Per-lap shield | End-of-run shield |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `30`, novice | `690` | 1 | `52.9`-`54.2` s | `92.0` | `87.8` |
+| `50`, novice | `780` | 0 | `53.6`-`54.7` s | `87.4` | `84.2` |
+| `30`, Ace | `1899` | 1 | `43.4`-`43.9` s | `68.6` | `60.4` |
+| `50`, Ace | `2058` | 3 | `43.4`-`44.3` s | `68.5` | `57.4` |
+
+The Pulse lone-craft gate (`race_ground_truth`) stays twelve of twelve clean, `no clean lap: []`,
+and HD's twelve `hd_ai_craft_laws_ground_truth::lone_opponent_on_*` pass; neither reads Pure's
+table. `pure_race_ground_truth`, `pure_original_ai_ground_truth` and the Pure replay test pass.
 
 ### The first pass (4 seeds, one run a state)
 
