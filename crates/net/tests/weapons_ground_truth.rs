@@ -190,10 +190,21 @@ fn four_firing_clients_position_trigger_only_at_100_ms() {
 
 /// Eliminator needs weapons: two people race one over the wire, the ends agree, and the kills
 /// that decide it happen on the server.
+///
+/// **Three minutes, not ninety seconds (2026-10-20, lane `cage-laws-red`).** When the race
+/// reaches its five kills is seed spread, not a property of the mode. With the collision cage
+/// and the air laws both on, an airborne pitch torque eps of -1e-2, -1e-3, -1e-4, -1e-5, 0,
+/// 1e-2, 1e-3, 1e-4, 1e-5 ends the race at ticks 8492, 3579, 7191, 7267, 5549, 6285, 4501,
+/// 7722, 5695; with the cage off at 4383, 7920, 5750, 5223, 4849, 7586, 4016, 7285, 4014.
+/// 5400 ticks ended 2 of 9 and 5 of 9 of those races; 10800 ends all 18 with 2300 to spare.
+/// Every cage contact in the failing run was on a wreck between death and respawn (798 of
+/// 798, none on a racing craft), which the original also cages: `FUN_088418e0` reaches
+/// `Cage_UpdateCraft` (`0x08842384`) from every state but 6 after its state dispatch, for
+/// `+0x368` of 0 or 2 (the player and every AI craft).
 #[test]
 #[ignore = "needs a disc image"]
 fn an_eliminator_race_is_flown_over_the_wire_by_two() {
-    let activity = race_in_mode("eliminator", 2, hundred_ms(), 5400, true, false);
+    let activity = race_in_mode("eliminator", 2, hundred_ms(), 10_800, true, false);
     assert_weapons_were_used(&activity);
     assert!(activity.finished, "the kills ended the race: {activity:?}");
 }

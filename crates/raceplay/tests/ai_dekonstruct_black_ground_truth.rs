@@ -179,7 +179,14 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
     ("RAPIER", 2, 2, 2),
     ("RAPIER", 3, 3, 3),
-    ("PHANTOM", 1, 1, 2),
+    // 2026-10-20, forward 1 -> 2 (lane `cage-laws-red`): the cage and the air laws
+    // together. Both deaths are shield attrition on lap 6 (slot 2 at sample 2837, tick
+    // 12721; slot 6 at sample 1676, tick 16707), no cage reset in the race. Noise method
+    // (eps -1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5; cells over this table's
+    // old bounds, of 12): cage off 0 1 0 0 0 0 1 0 1 (median 0, max 1), on 0 0 0 1 1 2 0 0 2
+    // (median 0, max 2), inside the bar of off + 2 on both. Destroyed per board, off
+    // 7 14 16 14 13 11 9 12 11, on 13 16 14 16 20 16 10 15 17.
+    ("PHANTOM", 1, 2, 2),
     // 2026-10-20, reversed 3 -> 4: the collision cage (`oag_gameplay::cage`).
     // Over seeds 1-8, every class, both layouts (`ai_dekonstruct_black_board`):
     // destroyed 35 -> 31 (PHANTOM 29 -> 22, RAPIER 6 -> 9, VENOM and FLASH 0).
