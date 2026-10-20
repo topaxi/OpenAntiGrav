@@ -203,10 +203,13 @@ tick 7282), which passes with all three on; that test also fails under 2 of the 
 perturbations [above](#our-ai-against-the-air-laws) with every law off. The mechanism is
 `oag_physics::engine::pitch_aligned`,
 reading the located sample `Environment::track_sample` carries (the entity's `+0xaf0`,
-whose `down` is `+0xb10`); with no sample the gate is open, chosen. Every title runs it:
-Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same gate, read statically, not
-measured live ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); The PS2 inherits Pulse's; Pure is **inherited from Pulse,
-unmeasured** (a `pure-physics` lane is to measure it); Omega and 2048 inherit HD's. 2048/Omega: **not checkable** here, no executable read of
+whose `down` is `+0xb10`); with no sample the gate is open, chosen. It is a per-title craft
+law (`oag_title::craft_laws::CraftLaws::pitch_gate`, `ShipState::pitch_gate`): Pulse runs it
+(measured) and the PS2 with it; Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same
+gate, read statically, not seen closing live
+([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); Omega and 2048 inherit HD's;
+**Pure has none**: its `Ship_UpdatePitch` (`0x0892caf8`) never calls
+`Ship_TestPitchAlignment` (measured by the `pure-physics` lane, `pure-physics.md`). 2048/Omega: **not checkable** here, no executable read of
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
 every committed reference were unchanged by it: no scripted or lone-craft run pitches
 past the cone.

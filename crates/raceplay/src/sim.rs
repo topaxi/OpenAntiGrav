@@ -349,6 +349,8 @@ pub struct RaceSim {
     pub(super) steer_ramp_clamped: bool,
     /// Whether every craft adds the in-air `weight_distribution` torque - see [`Setup::craft_laws`].
     pub(super) air_pitch_bias: bool,
+    /// [`oag_physics::ShipState::pitch_gate`] for every craft, from the title.
+    pub(super) pitch_gate: bool,
     /// The frame every craft's inertia diagonal is applied in - see [`Setup::craft_laws`].
     pub(super) inertia_frame: oag_physics::InertiaFrame,
     /// What the Autopilot does to the player's engine - see [`Setup::autopilot_engine`].

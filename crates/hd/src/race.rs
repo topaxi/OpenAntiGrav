@@ -836,6 +836,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // airborne pitch residual on Ubermall closes from `+0.205` to `-0.026` with it
     // (`docs/physics/airborne-ground-truth.md`). Confidence 85.
     air_pitch_bias: oag_title::pre_race::Sourced::measured(true),
+    // `Craft_UpdatePitch` (`0x000f0980`) calls the same alignment gate: a static read, not seen
+    // closing live (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
+    pitch_gate: oag_title::pre_race::Sourced::measured(true),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table; measured on
     // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),

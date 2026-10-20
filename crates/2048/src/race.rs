@@ -514,6 +514,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // Inherited from HD, held: the original AI field respawns once on park at eps 0 (1 of 9
     // perturbations, `docs/physics/airborne-ground-truth.md`); measure on 2048 to release.
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     inertia_rotates: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
 };

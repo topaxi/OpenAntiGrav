@@ -525,6 +525,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    // Pure's `Ship_UpdatePitch` (`0x0892caf8`) has no `Ship_TestPitchAlignment` call
+    // (`docs/physics/pure-physics.md`).
+    pitch_gate: oag_title::pre_race::Sourced::measured(false),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     // Unchanged until a `pure-physics` lane measures Pure: Pulse's world-axis frame raised
     // Pure's opponent wall contact 5x (`docs/physics/airborne-ground-truth.md`). Chosen.

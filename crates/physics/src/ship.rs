@@ -492,6 +492,11 @@ pub struct ShipState {
     /// yet measured live. Written by the race from the title every tick, not hashed, for
     /// [`Self::on_grid`]'s reason.
     pub air_pitch_bias: bool,
+    /// Whether the pitch input is gated on the hull's alignment with the track
+    /// ([`crate::engine::pitch_aligned`]): Pulse, HD (Omega and 2048 inherit it); not Pure.
+    /// Written by the race from the title every tick, not hashed, for [`Self::on_grid`]'s
+    /// reason.
+    pub pitch_gate: bool,
     /// The frame the inertia diagonal is applied in ([`InertiaFrame`]): Pulse's world axes
     /// unless the title measured its own. Written by the race from the title every tick, not
     /// hashed, for [`Self::on_grid`]'s reason.
@@ -665,6 +670,7 @@ impl Default for ShipState {
             hover_rig: crate::hover::Rig::TWO_POINT,
             steer_ramp_clamped: false,
             air_pitch_bias: true,
+            pitch_gate: true,
             inertia_frame: InertiaFrame::World,
             released: true,
             launch: crate::launch::LaunchState::default(),

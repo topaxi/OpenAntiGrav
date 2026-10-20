@@ -97,6 +97,7 @@ impl Race {
             ship.physics.hover_rig = self.sim.hover_rig;
             ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
             ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
+            ship.physics.pitch_gate = self.sim.pitch_gate;
             ship.physics.inertia_frame = self.sim.inertia_frame;
         }
     }

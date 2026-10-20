@@ -362,6 +362,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         steer_ramp_clamped: _,
         // Not hashed: the race writes it from the title every tick.
         air_pitch_bias: _,
+        pitch_gate: _,
         // Not hashed: the race writes it from the title every tick.
         inertia_frame: _,
         launch,
