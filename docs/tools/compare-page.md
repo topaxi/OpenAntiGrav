@@ -108,10 +108,12 @@ runs `GO_TICK = 276` ticks (our countdown) plus the original's clock times 60 (`
 is read out of its RAM: PPSSPP f32 seconds at `0x08B344B0` (the CPU is stopped straight after the load so it stands
 still), HD f32 at craft `+0x7014` (read in the same pause as the pose), PS2 f32 at EE `0x70EE9C` of the state file
 (the HUD reads 0.19 s under it). With it the GO board, the record panel and the HUD clock match on the Pulse PSP and HD
-test pairs. **A stationary craft in ours yaws about 0.26 degrees a second on HD (Talon's: 26 degrees over 6,000
-ticks), the original's does not** - a simulation lead, not an environment one - so `rpcs3-hd-pair.py` corrects the
-yaw it hands to `--pose` until the heading measured at the rendered tick is the original's (`pair.json`
-`ours.yaw_corrections`). Pulse does not drift.
+test pairs. **A craft resting after GO turns, in the original as in ours** (bank-to-yaw; ours unposed lands within 0.10
+degrees of the original's heading on all 24 Pulse PSP pairs and 0.69 on all 13 HD pairs, see
+[grid state](../physics/grid-state.md#a-resting-craft-after-go-turns-in-the-original-too-2026-10-20-resting-yaw)).
+Posing ours on tick 0 at the original's already-turned pose and then simulating the clock again turns it twice, so
+`rpcs3-hd-pair.py` and `psp-pulse-pair.py` correct the yaw they hand to ours until the heading measured at the
+rendered tick is the original's (`pair.json` `ours.yaw_corrections`, `ours.heading_corrections`).
 
 ## Capturing a pair per title
 

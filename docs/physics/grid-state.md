@@ -256,6 +256,69 @@ measured), not done here.
 Other titles: Pulse PS2 and Pure not checkable here (no PS2 or Pure program is open in Ghidra); HD
 differs (above); Omega and 2048 not checkable for this branch.
 
+## A resting craft after GO turns, in the original too (2026-10-20, `resting-yaw`)
+
+The compare page recorded that "a resting craft in ours turns, the original's does not" (HD
+Talon's 0.26 degrees a second, Pulse Amphiseum Black 1.8 degrees over 14 s), and its pair
+scripts turn the pose they hand to ours to cancel it. **The original's resting craft turns
+too, at ours' rate.** It is the bank-to-yaw term of the table above, which state 1 applies
+after GO: a craft sitting on a banked slot (Amphiseum Black's right axis tipped `0.0079`)
+yaws at a steady rate where the torque and the angular damping balance, set by the bank.
+Nothing in the simulation was changed.
+
+**What the pairs measured is a double count.** A pair poses ours on tick 0 at the original's
+pose read out of RAM at race clock `T`, which has already turned for `T` seconds, then
+simulates `276 + 60 T` ticks: the countdown (where `on_grid` holds yaw) and `T` more seconds of
+the same resting turn. The heading correction undoes that second turn, and it equals ours' own
+drift from GO on every Pulse pair to 0.03 degrees (0.5 of 61 on Talon's White).
+
+**Evidence**, with ours run unposed from its own grid, no input, for each pair's own tick
+count (`scripts/compare-resting-yaw.py`), against the original's heading at the same race
+clock (the PSP pair's `trace.csv` row 0, HD's `pair.json` `original.pose`):
+
+| | Pairs | Ours' drift from GO | Ours minus the original at `T` | Position |
+| --- | --- | --- | --- | --- |
+| Pulse PSP USA, Venom Time Trial, default team | 24 (12 circuits, both layouts), `T` 9.6 to 216.7 s | `-60.89` to `+9.05` degrees | within **0.10** degrees on all 24 | under 0.37 units on 23; Amphiseum White 1.46 |
+| HD/Fury EU, Time Trial after `Restart Race`, Harimau (one Assegai_c1) | 13, `T` 12.0 to 51.7 s | `-12.69` to `+9.47` | within **0.69** degrees on all 13 | 0.07 to 2.92 units |
+
+Selected rows (degrees):
+
+| Pair | `T` (s) | Ours' drift from GO | The pair's correction | Ours minus the original |
+| --- | --- | --- | --- | --- |
+| Pulse Amphiseum Black | 14.13 | `-1.748` | `-1.750` | `-0.008` |
+| Pulse Platinum Rush Black | 16.95 | `-13.529` | `-13.561` | `-0.061` |
+| Pulse De-Konstruct Black | 24.72 | `+5.961` | `+5.965` | `+0.018` |
+| Pulse Talon's Junction White | 216.67 | `-60.891` | `-60.377` | `-0.093` |
+| HD Talon's Junction | 51.67 | `-12.692` | `-12.525` | `+0.435` |
+| HD Tech De Ra | 12.82 | `+9.467` | `+9.498` | `+0.112` |
+
+**The rate, live.** The original's craft is turning in the captures themselves:
+
+- Pulse PSP, Amphiseum Black at `T = 14.13` s, four ticks stepped in the PPSSPP debugger
+  (`psp-trace.py`): `avel_y -0.04725`, `omega_y -0.002188`, forward turning about `0.0021`
+  degrees a tick, at `right_y -0.00788` (the capture's right is the ship's left). Ours at the
+  same clock: `avel_y -0.0473`, `omega_y -0.00219`, `right_y +0.00788`.
+- HD Talon's Junction, two RPCS3 reads `0.130` s apart (race clock `51.669` and `51.799` s):
+  heading `77.066` then `77.030` degrees, `-0.00461` degrees a tick at `right_y -0.01901`.
+  Ours at tick 3376: `-0.00454` a tick at `0.01893`.
+- The countdown table above already had the original yawing from GO (`0.102` degrees in the
+  first 30 ticks).
+
+Confidence **90** that the resting turn is the original's own behaviour at ours' rate on Pulse
+PSP (24 pairs within 0.10 degrees, the live rate within 1 %); **85** on HD (13 pairs within
+0.69 degrees, the live rate within 2 %). The HD residual, 0.1 to 0.7 degrees and up to 2.9
+units, is open: pairs where ours does not turn at all (Chenghou Project, Metropia, Ubermall)
+still sit 0.5 to 0.7 degrees off, which points at HD's heading at GO after `Restart Race`
+rather than at the turn. Not separable without the original's heading at GO.
+
+**The position half is the same double count.** Pulse Talon's Junction White was refused for
+0.78 units of position drift at `T = 216.7` s; ours unposed lands 0.198 units from the
+original there.
+
+Other titles: Pure PSP, Omega and 2048 **not checkable** (no grid state for Pure, no race reached
+on shadPS4 or Vita3K, see [the compare page](../tools/compare-page.md)). Pulse PS2 not checked
+(one state, no second capture to read a rate from).
+
 ## Reproducing
 
 ```sh
@@ -265,4 +328,6 @@ python3 scripts/psp-start-pose.py --port 45681 --hold --release-at 120 --max-row
 python3 scripts/psp-start-pose.py --port 45681 --hold --full --after-go 150 --out ...             # the raw craft, every frame
 python3 scripts/psp-grid-pose.py --port 45681 --out ...                                          # all eight Single Race slots at placement
 OAG_REQUIRE_GAME_DATA=1 just test-data     # start_pose_ground_truth
+python3 scripts/compare-resting-yaw.py --title pulse-psp --image data/images/pulse-psp-usa.chd  # the resting turn against every pair
+python3 scripts/compare-resting-yaw.py --title hd --image data/images/hdfury-ps3-eu-dec.iso
 ```
