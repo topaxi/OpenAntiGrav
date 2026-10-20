@@ -166,6 +166,17 @@ impl Race {
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
         let pitch_gate = craft_laws.is_none_or(|laws| laws.pitch_gate.value);
         let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
+        let physics_laws = crate::launch_hover::physics_laws(craft_laws);
+        // A title whose engine reads the launch multiplier for the player's craft alone (Pure)
+        // launches its field unboosted.
+        let field_start_boost = if craft_laws
+            .and_then(|laws| laws.code_start_boost)
+            .is_some_and(|boost| boost.value.player_only)
+        {
+            None
+        } else {
+            start_boost
+        };
         let class_gravity_term =
             if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
                 oag_physics::passive::ClassGravityTerm::Airborne
@@ -657,6 +668,7 @@ impl Race {
                 air_pitch_bias,
                 pitch_gate,
                 inertia_frame,
+                physics_laws,
                 autopilot_engine,
                 weapon_pad_glow,
                 leach_drain,
@@ -692,6 +704,7 @@ impl Race {
                 class_gravity_scale,
                 class_gravity_term,
                 start_boost,
+                field_start_boost,
                 pilot_assist,
                 pilot_assist_levels: Default::default(),
                 barrel_rolls: true,

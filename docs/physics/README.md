@@ -44,6 +44,13 @@ law holds to `0.05` units/s a tick; Pulse applies its inertia diagonal in world
 axes and adds the in-air `weight_distribution` torque, and gates the pitch input
 (all measured and on since 2026-10-20, with this engine's AI changed to fly them).
 
+**Wipeout Pure's craft laws are measured on Pure PSP (2026-10-20).**
+[Pure's craft laws](pure-physics.md) diffs Pure's craft update against Pulse's and measures
+each difference live: no engine doubling, half the grounded drag, a bank-to-yaw gain of `50`,
+pitch from code literals (`0.1` air, `0.4` grounded, damping `1.5`, `0.6` on the grid), a
+sideshift force of `200` and its own launch boost. All but the bank-to-yaw gain are on, each judged
+against a noise distribution of our AI's gates; bank-to-yaw is held at Pulse's `30`.
+
 **A second part is measured rather than read**, and it is the rotational half of
 the same story. [What `body+0x160` holds](angular-velocity-column.md) settles the
 sign and the frame of the recorded angular-velocity column against five captures'

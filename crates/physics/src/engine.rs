@@ -111,7 +111,8 @@ pub struct EngineFlags {
     pub speedup: Option<f32>,
 }
 
-/// The fixed doubling on the engine's output, from the same expression.
+/// The fixed doubling on the engine's output, from the same expression. Pulse's; a title whose
+/// engine has none clears [`crate::laws::Laws::engine_output_double`] (Pure).
 pub const ENGINE_OUTPUT_DOUBLE: f32 = 2.0;
 
 /// The fraction of thrust available with no ground contact:
@@ -142,6 +143,17 @@ pub struct EngineForce {
 }
 
 impl EngineForce {
+    /// The same output without [`ENGINE_OUTPUT_DOUBLE`], for a title whose engine has none
+    /// ([`crate::laws::Laws::engine_output_double`], Pure). Halving undoes the doubling exactly:
+    /// both are powers of two, so the result is bit-identical to never having doubled.
+    #[must_use]
+    pub fn undoubled(self) -> Self {
+        Self {
+            thrust: self.thrust * (1.0 / ENGINE_OUTPUT_DOUBLE),
+            lift: self.lift,
+        }
+    }
+
     /// As a body-local force vector. Body forward is `-Z`, so thrust is negated into `.z`.
     #[must_use]
     pub fn as_local_force(self) -> Vec3 {

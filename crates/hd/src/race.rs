@@ -845,6 +845,12 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `body+0x50` holds the tensor rotated into world axes, read live
     // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
     inertia_rotates: oag_title::pre_race::Sourced::measured(true),
+    engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
+    bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    code_pitch: None,
+    code_sideshift: None,
+    code_start_boost: None,
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

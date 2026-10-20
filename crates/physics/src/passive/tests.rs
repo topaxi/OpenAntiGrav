@@ -7,14 +7,14 @@ use crate::params::{Physical, Pitch};
 #[test]
 fn drag_opposes_travel_while_moving_forward() {
     let velocity = Vec3::new(0.0, 0.0, -40.0);
-    let force = quadratic_drag(velocity, 40.0, true);
+    let force = quadratic_drag(velocity, 40.0, true, DRAG_GROUND);
     assert!(force.z > 0.0, "force was {force:?}");
 }
 
 #[test]
 fn drag_grows_with_the_square_of_speed() {
-    let slow = quadratic_drag(Vec3::new(0.0, 0.0, -10.0), 10.0, true).length();
-    let fast = quadratic_drag(Vec3::new(0.0, 0.0, -20.0), 20.0, true).length();
+    let slow = quadratic_drag(Vec3::new(0.0, 0.0, -10.0), 10.0, true, DRAG_GROUND).length();
+    let fast = quadratic_drag(Vec3::new(0.0, 0.0, -20.0), 20.0, true, DRAG_GROUND).length();
     assert!(
         (fast - slow * 4.0).abs() < 1e-4,
         "{fast} was not four times {slow}"
@@ -26,21 +26,24 @@ fn drag_grows_with_the_square_of_speed() {
 #[test]
 fn airborne_drag_is_weaker_than_grounded_drag() {
     let velocity = Vec3::new(0.0, 0.0, -40.0);
-    let ground = quadratic_drag(velocity, 40.0, true).length();
-    let air = quadratic_drag(velocity, 40.0, false).length();
+    let ground = quadratic_drag(velocity, 40.0, true, DRAG_GROUND).length();
+    let air = quadratic_drag(velocity, 40.0, false, DRAG_GROUND).length();
     assert!(air < ground, "air {air} was not below ground {ground}");
 }
 
 #[test]
 fn reversing_selects_a_much_larger_drag_coefficient() {
-    let forward = quadratic_drag(Vec3::new(0.0, 0.0, -40.0), 40.0, true).length();
-    let reversing = quadratic_drag(Vec3::new(0.0, 0.0, 40.0), -40.0, true).length();
+    let forward = quadratic_drag(Vec3::new(0.0, 0.0, -40.0), 40.0, true, DRAG_GROUND).length();
+    let reversing = quadratic_drag(Vec3::new(0.0, 0.0, 40.0), -40.0, true, DRAG_GROUND).length();
     assert!(reversing > forward * 10.0);
 }
 
 #[test]
 fn drag_is_zero_at_rest() {
-    assert_eq!(quadratic_drag(Vec3::ZERO, 0.0, true), Vec3::ZERO);
+    assert_eq!(
+        quadratic_drag(Vec3::ZERO, 0.0, true, DRAG_GROUND),
+        Vec3::ZERO
+    );
 }
 
 #[test]
@@ -129,7 +132,7 @@ fn angular_damping_opposes_rotation_on_every_axis() {
         },
         ..Handling::ZERO
     };
-    let damping = angular_damping(&handling, Vec3::new(1.0, 1.0, 1.0));
+    let damping = angular_damping(handling.pitch.pitch_damping, Vec3::new(1.0, 1.0, 1.0));
 
     assert!(damping.x < 0.0);
     assert!(damping.y < 0.0);
@@ -140,7 +143,7 @@ fn angular_damping_opposes_rotation_on_every_axis() {
 /// in the game, so a zeroed parameter set still damps them.
 #[test]
 fn only_the_pitch_axis_of_the_angular_damping_is_tunable() {
-    let damping = angular_damping(&Handling::ZERO, Vec3::ONE);
+    let damping = angular_damping(Handling::ZERO.pitch.pitch_damping, Vec3::ONE);
     assert_eq!(damping.x, 0.0);
     assert_eq!(damping.y, YAW_DAMPING);
     assert_eq!(damping.z, ROLL_DAMPING);
@@ -261,5 +264,21 @@ fn a_zero_parameter_set_has_no_gravity() {
     assert_eq!(
         gravity(&Handling::ZERO, 1.0, 1.0, ClassGravityTerm::Grounded, 0.0),
         Vec3::ZERO
+    );
+}
+
+/// Wipeout Pure's grounded drag is half Pulse's, measured live: the same craft at the same speed
+/// loses half the force on Pure.
+#[test]
+fn pures_grounded_drag_is_half_pulses() {
+    let velocity = Vec3::new(0.0, 0.0, -60.0);
+    let pulse = quadratic_drag(velocity, 60.0, true, DRAG_GROUND);
+    let pure = quadratic_drag(velocity, 60.0, true, DRAG_GROUND_PURE);
+    assert_eq!(pure * 2.0, pulse);
+    assert_eq!(pure.z, 60.0 * 60.0 * 0.0025);
+    // Airborne is unchanged: both titles read `-0.002`.
+    assert_eq!(
+        quadratic_drag(velocity, 60.0, false, DRAG_GROUND_PURE),
+        quadratic_drag(velocity, 60.0, false, DRAG_GROUND)
     );
 }

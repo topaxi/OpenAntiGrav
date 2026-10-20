@@ -209,7 +209,7 @@ law (`oag_title::craft_laws::CraftLaws::pitch_gate`, `ShipState::pitch_gate`): P
 gate, read statically, not seen closing live
 ([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); Omega and 2048 inherit HD's;
 **Pure has none**: its `Ship_UpdatePitch` (`0x0892caf8`) never calls
-`Ship_TestPitchAlignment` (measured by the `pure-physics` lane, `pure-physics.md`). 2048/Omega: **not checkable** here, no executable read of
+`Ship_TestPitchAlignment` (measured, [pure-physics.md](pure-physics.md#pitch-is-three-code-literals)). 2048/Omega: **not checkable** here, no executable read of
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
 every committed reference were unchanged by it: no scripted or lone-craft run pitches
 past the cone.
@@ -243,7 +243,7 @@ for a day while our AI's gates regressed; this engine's driver now holds it off 
 | Wipeout HD | on | measured: read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below) |
 | Omega | on | inherited from HD |
 | 2048 | off | inherited from HD, **held** (chosen): the original AI field respawns once on park at `eps = 0` (1 of 9 perturbations, 0 of 9 with the bias off); measure on 2048 to release |
-| Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
+| Pure | off | **measured**: Pure's `Ship_UpdatePitch` has no `weight_distribution` term, and Pure authors none ([pure-physics.md](pure-physics.md#pitch-is-three-code-literals)) |
 
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
 capture path).

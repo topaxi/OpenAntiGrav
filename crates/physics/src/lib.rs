@@ -63,6 +63,7 @@ pub mod forces;
 pub mod hover;
 pub mod integrate;
 pub mod launch;
+pub mod laws;
 pub mod maglock;
 pub mod pair;
 pub mod params;

@@ -1,6 +1,5 @@
 //! The bank-to-yaw coupling's gain, which depends on the hover variant.
 
-use super::BANK_TO_YAW_GAIN;
 use crate::ShipState;
 
 /// The same coupling in `Ship_HoverFourCorner`'s epilogue, which Zone runs where every
@@ -10,11 +9,17 @@ use crate::ShipState;
 /// [`crate::ShipState::four_corner`]. See `docs/ghidra/functions/psp-pulse-usa/zone-rest.md`.
 pub const BANK_TO_YAW_GAIN_FOUR_CORNER: f32 = 50.0;
 
-/// The gain this craft's hover variant uses.
-pub(super) fn gain(state: &ShipState) -> f32 {
+/// Wipeout Pure's two-point gain: its two-point hover (`0x0892dea8`) loads `50.0`, the gain
+/// Pulse keeps for its four-corner hover, and its four-corner hover (`0x0892e5b8`) loads `50.0`
+/// too. Measured live: `torque.y / right.y = 50.0000` on 129 banked frames
+/// (`docs/physics/pure-physics.md`). Pure has no mag strips, so the blend term is moot there.
+pub const BANK_TO_YAW_GAIN_PURE: f32 = 50.0;
+
+/// The gain this craft's hover variant uses, under the title's laws.
+pub(super) fn gain(state: &ShipState, laws: &crate::laws::Laws) -> f32 {
     if state.four_corner {
         BANK_TO_YAW_GAIN_FOUR_CORNER
     } else {
-        BANK_TO_YAW_GAIN
+        laws.bank_to_yaw
     }
 }
