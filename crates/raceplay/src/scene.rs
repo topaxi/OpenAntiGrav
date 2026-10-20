@@ -600,9 +600,7 @@ impl Scene {
         );
         // The circuit's baked environment probes, blended per craft each frame: only a
         // circuit that ships them (Wipeout HD's) has an array to bind.
-        let env_probes = probes
-            .filter(|_| std::env::var_os("OAG_TMP_NO_ENV").is_none())
-            .map(|probes| crate::env_probes::EnvProbes::new(device, probes));
+        let env_probes = probes.map(|probes| crate::env_probes::EnvProbes::new(device, probes));
         let shadow_maps = mesh_render::ShadowMaps {
             coverage: Some(shadow_map.view()),
             depth: Some(shadow_map.depth_view()),

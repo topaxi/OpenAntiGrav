@@ -59,7 +59,7 @@ fn every_probes_file_on_the_disc_closes_its_layout() {
             let bytes = archive.read_path(&path).expect("reads");
             let probes = Probes::parse(&bytes).unwrap_or_else(|e| panic!("{path}: {e}"));
             assert!(
-                probes.len() >= 2 && probes.len() % 2 == 0,
+                probes.len() >= 2 && probes.len().is_multiple_of(2),
                 "{path}: {} probes",
                 probes.len()
             );
@@ -99,7 +99,7 @@ fn pair(text: &str, key: &str) -> [f32; 3] {
 /// `A8R8G8B8`.
 fn rms(ours: &[u8], live: &[u8]) -> f32 {
     let mut sum = 0.0f32;
-    for (o, l) in ours.chunks_exact(4).zip(live.chunks_exact(4)) {
+    for (o, l) in ours.as_chunks::<4>().0.iter().zip(live.as_chunks::<4>().0) {
         for (oc, lc) in [(o[0], l[1]), (o[1], l[2]), (o[2], l[3])] {
             let d = f32::from(oc) - f32::from(lc);
             sum += d * d;

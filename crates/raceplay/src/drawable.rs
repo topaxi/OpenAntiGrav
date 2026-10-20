@@ -592,17 +592,17 @@ impl Drawable {
         model: Mat4,
         prev_mvp: Mat4,
     ) {
-        self.write_hull(queue, view_projection, model, prev_mvp, None, 0.0, None);
+        self.write_hull(
+            queue,
+            view_projection,
+            model,
+            prev_mvp,
+            HullLayers::default(),
+        );
     }
 
-    /// [`Self::write`] for a craft: `sun_occlusion_layer` names which layer
-    /// of the frame's per-craft sun-occlusion array this hull samples - a
-    /// craft under the `original` tier on Wipeout HD - or `None`, which is
-    /// what every other drawable writes. See `oag_render::shadow::occlusion`.
-    /// `hull_scale` is [`mesh_render::pack_hull_scale`]'s word for Pulse's
-    /// hull lights, `0.0` for the default. `env_layer` names the layer of the
-    /// environment-probe array this hull is lit from (Wipeout HD, see
-    /// [`crate::env_probes`]), or `None` for the constant ambient.
+    /// [`Self::write`] for a craft: what the hull names beyond its matrices, see
+    /// [`HullLayers`].
     #[track_caller]
     pub(super) fn write_hull(
         &self,
@@ -610,19 +610,9 @@ impl Drawable {
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
-        sun_occlusion_layer: Option<usize>,
-        hull_scale: f32,
-        env_layer: Option<usize>,
+        hull: HullLayers,
     ) {
-        self.write_uniforms(
-            queue,
-            view_projection,
-            model,
-            prev_mvp,
-            sun_occlusion_layer,
-            [0.0, 0.0, hull_scale],
-            env_layer,
-        );
+        self.write_uniforms(queue, view_projection, model, prev_mvp, hull, [0.0, 0.0]);
     }
 
     /// [`Self::write`] for a model whose materials read their own animation
@@ -642,9 +632,8 @@ impl Drawable {
             view_projection,
             model,
             prev_mvp,
-            None,
-            [clock, 0.0, 0.0],
-            None,
+            HullLayers::default(),
+            [clock, 0.0],
         );
     }
 
@@ -666,9 +655,8 @@ impl Drawable {
             view_projection,
             model,
             prev_mvp,
-            None,
-            [clock, colour, 0.0],
-            None,
+            HullLayers::default(),
+            [clock, colour],
         );
     }
 
@@ -679,18 +667,17 @@ impl Drawable {
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
-        sun_occlusion_layer: Option<usize>,
-        [clock, colour, hull_scale]: [f32; 3],
-        env_layer: Option<usize>,
+        hull: HullLayers,
+        [clock, colour]: [f32; 2],
     ) {
         let uniforms = Uniforms {
             view_projection: view_projection.to_cols_array_2d(),
             model: model.to_cols_array_2d(),
-            sun_occlusion_layer: sun_occlusion_layer.map_or(0.0, |layer| layer as f32 + 1.0),
+            sun_occlusion_layer: hull.sun_occlusion.map_or(0.0, |layer| layer as f32 + 1.0),
             model_clock: clock,
             model_colour: colour,
-            hull_scale,
-            env_layer: env_layer.map_or(0.0, |layer| layer as f32 + 1.0),
+            hull_scale: hull.scale,
+            env_layer: hull.env.map_or(0.0, |layer| layer as f32 + 1.0),
             env_pad: [0.0; 3],
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
@@ -1069,6 +1056,20 @@ pub(crate) fn lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, 
     mutex
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// What a craft's hull names in its model uniform beyond its matrices.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct HullLayers {
+    /// Which layer of the frame's per-craft sun-occlusion array the hull samples - a craft
+    /// under the `original` tier on Wipeout HD - or `None`, which is what every other
+    /// drawable writes. See `oag_render::shadow::occlusion`.
+    pub(crate) sun_occlusion: Option<usize>,
+    /// [`mesh_render::pack_hull_scale`]'s word for Pulse's hull lights, `0.0` for the default.
+    pub(crate) scale: f32,
+    /// The craft whose environment probes light the hull (Wipeout HD, see
+    /// [`crate::env_probes`]), or `None` for the constant ambient.
+    pub(crate) env: Option<usize>,
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.

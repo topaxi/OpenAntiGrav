@@ -2,8 +2,8 @@
 //!
 //! The circuit's own baked probes ([`oag_vex::probes`]) blended at each craft's
 //! position, two 128x64 layers per grid slot: the irradiance map (the original's
-//! `paraboloidIblTex`, 64x32, bilinearly resized to 128x64 here so one array holds both)
-//! and the reflection map (`paraboloidReflectionTex`). **Not a render of our scene**: the original's maps are a
+//! `paraboloidIblTex`, 64x32, in the layer's top-left corner) and the reflection map
+//! (`paraboloidReflectionTex`). **Not a render of our scene**: the original's maps are a
 //! blend of disc data too, so nothing here draws, and a circuit with no `.probes`
 //! binds no array and leaves every hull on its constant ambient.
 //!
@@ -12,9 +12,13 @@
 //! uniform; the shader reads layer `2 * craft` for the ambient and `2 * craft + 1` for the
 //! reflection of the materials that declare one.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use oag_gpu::writes::Writes;
 use oag_mesh::mesh_render::{ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE};
-use oag_vex::probes::{IRRADIANCE_SIZE, Probes, REFLECTION_SIZE};
+use oag_vex::probes::{self, IRRADIANCE_SIZE, Probes, REFLECTION_SIZE, Taps};
 
 /// The probes of a circuit and the array they are blended into.
 #[derive(Debug)]
@@ -22,7 +26,23 @@ pub struct EnvProbes {
     probes: Probes,
     texture: wgpu::Texture,
     view: wgpu::TextureView,
+    /// Decoded probes, by index: a craft blends the same few every frame, and decoding a
+    /// probe costs more than blending it. Cleared when it outgrows [`CACHE_LIMIT`].
+    decoded: RefCell<HashMap<usize, Arc<Decoded>>>,
+    /// What each craft's layers were last written from, so a craft that has not moved
+    /// uploads nothing.
+    written: RefCell<[Option<Taps>; ENV_PROBE_LAYERS as usize / 2]>,
 }
+
+/// One probe's two images decoded to `RGBA8`.
+#[derive(Debug)]
+struct Decoded {
+    irradiance: Vec<u8>,
+    reflection: Vec<u8>,
+}
+
+/// How many decoded probes to keep: 8 crafts blend four each, and 64 probes are 2.5 MB.
+const CACHE_LIMIT: usize = 64;
 
 impl EnvProbes {
     /// An array of [`ENV_PROBE_LAYERS`] layers, undefined until a craft writes its own.
@@ -50,6 +70,8 @@ impl EnvProbes {
             probes,
             texture,
             view,
+            decoded: RefCell::default(),
+            written: RefCell::new(Default::default()),
         }
     }
 
@@ -59,63 +81,82 @@ impl EnvProbes {
         &self.view
     }
 
+    fn decoded(&self, probe: usize) -> Arc<Decoded> {
+        let mut cache = self.decoded.borrow_mut();
+        if cache.len() >= CACHE_LIMIT && !cache.contains_key(&probe) {
+            cache.clear();
+        }
+        Arc::clone(cache.entry(probe).or_insert_with(|| {
+            Arc::new(Decoded {
+                irradiance: self.probes.irradiance(probe),
+                reflection: self.probes.reflection(probe),
+            })
+        }))
+    }
+
     /// Blends the probes at `position` into the craft's two layers; `craft` is its grid slot.
+    ///
+    /// The irradiance map goes into the corner of its layer at its own 64x32 size and the
+    /// shader addresses it there, so nothing is resized.
     pub fn write(&self, queue: &dyn Writes, craft: usize, position: [f32; 3]) {
         if craft * 2 + 1 >= ENV_PROBE_LAYERS as usize {
             return;
         }
         let taps = self.probes.locate(position);
-        let irradiance = resize_2x(&self.probes.blend_irradiance(&taps));
-        let reflection = self.probes.blend_reflection(&taps);
-        for (layer, texels) in [(craft * 2, &irradiance), (craft * 2 + 1, &reflection)] {
-            queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &self.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d {
-                        x: 0,
-                        y: 0,
-                        z: layer as u32,
-                    },
-                    aspect: wgpu::TextureAspect::All,
-                },
-                texels,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(ENV_PROBE_SIZE.0 * 4),
-                    rows_per_image: Some(ENV_PROBE_SIZE.1),
-                },
-                wgpu::Extent3d {
-                    width: ENV_PROBE_SIZE.0,
-                    height: ENV_PROBE_SIZE.1,
-                    depth_or_array_layers: 1,
-                },
-            );
+        if self.written.borrow()[craft].as_ref() == Some(&taps) {
+            return;
         }
+        let used: Vec<(Arc<Decoded>, f32)> = taps
+            .probes
+            .iter()
+            .zip(&taps.weights)
+            .filter(|(_, weight)| **weight > 0.0)
+            .map(|(&probe, &weight)| (self.decoded(probe), weight))
+            .collect();
+        let irradiance: Vec<(&[u8], f32)> = used
+            .iter()
+            .map(|(d, w)| (d.irradiance.as_slice(), *w))
+            .collect();
+        let reflection: Vec<(&[u8], f32)> = used
+            .iter()
+            .map(|(d, w)| (d.reflection.as_slice(), *w))
+            .collect();
+        self.upload(queue, craft * 2, &probes::mix(&irradiance), IRRADIANCE_SIZE);
+        self.upload(
+            queue,
+            craft * 2 + 1,
+            &probes::mix(&reflection),
+            REFLECTION_SIZE,
+        );
+        self.written.borrow_mut()[craft] = Some(taps);
     }
-}
 
-/// A 64x32 `RGBA8` image resized to 128x64 the way a linear sampler reads it at the new
-/// texel centres, clamped at the edges.
-fn resize_2x(src: &[u8]) -> Vec<u8> {
-    let (sw, sh) = IRRADIANCE_SIZE;
-    let (dw, dh) = REFLECTION_SIZE;
-    let mut out = vec![0u8; dw * dh * 4];
-    for y in 0..dh {
-        let fy = ((y as f32 + 0.5) * 0.5 - 0.5).clamp(0.0, (sh - 1) as f32);
-        let (y0, ty) = (fy as usize, fy.fract());
-        let y1 = (y0 + 1).min(sh - 1);
-        for x in 0..dw {
-            let fx = ((x as f32 + 0.5) * 0.5 - 0.5).clamp(0.0, (sw - 1) as f32);
-            let (x0, tx) = (fx as usize, fx.fract());
-            let x1 = (x0 + 1).min(sw - 1);
-            for c in 0..4 {
-                let at = |xx: usize, yy: usize| f32::from(src[(yy * sw + xx) * 4 + c]);
-                let top = at(x0, y0) + (at(x1, y0) - at(x0, y0)) * tx;
-                let bottom = at(x0, y1) + (at(x1, y1) - at(x0, y1)) * tx;
-                out[(y * dw + x) * 4 + c] = (top + (bottom - top) * ty + 0.5) as u8;
-            }
+    fn upload(&self, queue: &dyn Writes, layer: usize, texels: &[u8], size: (usize, usize)) {
+        if texels.is_empty() {
+            return;
         }
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: 0,
+                    y: 0,
+                    z: layer as u32,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            texels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.0 as u32 * 4),
+                rows_per_image: Some(size.1 as u32),
+            },
+            wgpu::Extent3d {
+                width: size.0 as u32,
+                height: size.1 as u32,
+                depth_or_array_layers: 1,
+            },
+        );
     }
-    out
 }

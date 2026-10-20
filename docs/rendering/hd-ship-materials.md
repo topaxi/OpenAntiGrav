@@ -427,6 +427,11 @@ byte-identical, see the thread).
 
 ## Finding 4 (2026-10-20, `hd-hull-reflection`): the original draws the hull with an IBL, shadowed, SVC1 variant, and the IBL is a live environment map
 
+> **Superseded in part by [Finding 5](#finding-5-2026-10-20-hd-craft-ibl-probe-the-environment-maps-are-baked-probes-blended-at-the-craft-and-now-wired).**
+> The variant, the law and the maps' sizes below hold. The claims that the maps are **built at runtime**, that
+> **`.probes` is not them (75)**, that the producer is the cube-to-paraboloid program, and that "nothing here was built"
+> are refuted: the maps are a blend of `track.probes`' baked images, and the hull now draws them.
+
 **Why the original's hull is pale and ours is dark and saturated.** Read live on RPCS3 (Harimau classic on Talon's
 Junction, `hd-timetrial-talons-harimau-classic-start`, Write Color Buffers on, one frame at rest, one after 10 s of
 thrust, and the Assegai classic start as the second craft). Hull-wing regions of the same framing, original against ours
@@ -485,7 +490,7 @@ term and is unchanged.
   caught (confidence 40 that they run on a slower cadence than the hull draw).
 - **Many draws read them, not only the hull.** The Assegai frame has 60 draws with unit 4 at `0x03498100`: the hull,
   other craft and props. It is an engine resource, not a ship material.
-- **`.probes` is not it (confidence 75).** `Pvs_LoadForTrack` (`0x003f5550`) calls `0x003c4d78`, which reads
+- **~~`.probes` is not it (confidence 75).~~ Refuted 2026-10-20: it is exactly them, see Finding 5.** `Pvs_LoadForTrack` (`0x003f5550`) calls `0x003c4d78`, which reads
   `<track>.probes` as `u32` count (`0x35e` = 862 for Talon's Junction), `u32 16`, then 862 records of 32 bytes (two
   `vec3` boxes, 12 units apart along the track) and builds a cell tree from them with `Pvs_BuildCellTree`; the ~6.6 MB
   that follow are about 7.7 KB per record at 7.6 bits of entropy per byte, with no zlib stream and no image in them.
@@ -515,12 +520,69 @@ score for why ours is black. Left open.
 
 **Other titles.**
 
-- 2048: checked, differs. `Environment_Load` loads an authored `skyParaboloid.gxt` per circuit (14 of them, 699,072
-  bytes each, `2048-sky.md`, `rcsmaterial.md`), so there the probe is disc data and decoding the `.gxt` would supply it;
-  HD's is built live. Whether 2048's hull materials sample it is unread.
+- 2048: checked, differs. It ships both an authored `skyParaboloid.gxt` per circuit (14 of them, 699,072
+  bytes each, `2048-sky.md`, `rcsmaterial.md`) **and** 28 `.probes`, in a different (little-endian, 1,112-byte
+  record) layout than HD's: [hd-probes.md](../formats/hd-probes.md), "Cross-title". Whether 2048's hull materials sample
+  either is unread.
 - Omega: checked, applies, not wired. It carries HD's engine, its fragment programs are a different, unread
-  container, and the PS4 has no emulator here, so whether its hull draws an IBL variant is not checkable.
+  container, and the PS4 has no emulator here, so whether its hull draws an IBL variant is not checkable; its two
+  2048-lineage circuits ship `.shprobes` instead.
 - Pulse, Pure: untouched, they do not use `.rcsmaterial`.
+
+## Finding 5 (2026-10-20, `hd-craft-ibl-probe`): the environment maps are baked probes blended at the craft, and now wired
+
+**What a player sees now.** An HD hull is pale and metallic where it was dark and saturated: at rest and at speed,
+on Harimau and Assegai. The silver of the yellow panels, the pastel orange and the pale blue wing tips are the
+reflection of the circuit's sky in the livery's gloss mask, and the ambient is the circuit's own light at the craft.
+
+**The producer is disc data** ([hd-probes.md](../formats/hd-probes.md), [env-probes.md](../ghidra/functions/ps3-hdfury-eu/env-probes.md)).
+`track.probes` holds, per probe, a `64x32` irradiance image and a `128x64` reflection image in a 12-byte-per-4x4-block
+format (two `BGR888` endpoints and sixteen 3-bit indices), and the original blends the probes around a craft by its
+position on an SPU. Read live on RPCS3: `0.652 * probe[852] + 0.340 * probe[854]` equals both maps of Harimau at rest to
+0.4-0.65 of 255, and 52 pauses of two drives round Talon's Junction fit to 0.4-0.6 where the weights are fitted and
+within 10 of 255 for 50 of 52 with the law ([hd-probes.md](../formats/hd-probes.md)). Confidence 85 the file and the blend,
+70 the weights' law, 55 that the `liveRsxPanXForm_*` programs are the offline bake.
+
+**What was wired** (`oag_vex::probes` reader, `oag_raceplay::env_probes`, `shade.wesl`):
+
+- the circuit's probes load with the race (`Loaded::probes`, 862 on Talon's Junction, forward and reversed), and each craft
+  blends its own at its position **one tick back** (measured, [hd-probes.md](../formats/hd-probes.md)) into two layers of
+  a 128x64 array bound beside the shadow maps: the irradiance map in the corner, the reflection map whole;
+- the hull's ambient is `4 * irradiance[n]` where the draw names a craft, the constant ambient elsewhere. The `4` is the
+  engine's probe tint `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction and on Metropia;
+- a hull material whose `IBL` variant declares `paraboloidReflectionTex` is tagged in the glow table
+  (`mesh::rcs::probe_lit`, `rate` 8) with its own reflectivity (`0xab31c2b1`, `0.5` on Harimau), and adds
+  `4 * reflection[reflect(-V, n)] * (albedo.a * reflectivity)` after the albedo multiply and before the fog;
+- **opponents**: the original binds a pair of maps per craft (the Metropia grid frame holds eight pairs, 0x8000 apart, and
+  every draw of a craft its own), so each craft here blends at its own position.
+
+**The decode domain was chosen by the pixels.** The unit's sampler word carries the gamma nibble `7`, but the project
+settled that the RSX multiplies raw bytes ([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)); the probe enters as a
+light, raw, and the reflection is **added raw**. Measured on the rest frame in four boxes of the hull (luma and
+saturation, 0-1; the original 0.56-0.91 and 0.08-0.27, boxes picked by eye, one frame, not pixel matched):
+
+| | luma | saturation |
+| --- | --- | --- |
+| original | 0.56-0.91 | 0.08-0.27 |
+| before (constant ambient) | 0.18-0.30 | 0.53-0.77 |
+| after, reflection decoded (sRGB) | 0.40-0.49 | 0.23-0.42 |
+| after, both maps hardware-sRGB | 0.31-0.41 | 0.21-0.29 |
+| **after, raw (shipped)** | **0.56-0.65** | **0.11-0.29** |
+
+Assegai (original 0.39-0.62 luma, 0.29-0.36 saturation over four boxes): before 0.11-0.22 and 0.32-0.49, after 0.29-0.46
+and 0.22-0.45: most of the gap closed, the wings and pods still a little low (their pose differs from the capture's).
+Chosen, not measured: the raw domain for the ambient (the sampler word says otherwise) and the one-tick lag, whose
+weight is the 41/52 count above.
+
+**Cost.** See "Cost" below.
+
+**Cross-title.** 2048: checked, differs (a different `.probes`, and an authored sky). Omega: checked, applies, not wired
+(not checkable). Pulse, Pure: no `.rcsmaterial`.
+
+**Open.** The nozzle jewel (`emissive_bloom`, `TC4`) is unread. The weights at two tight corners (a section pair two apart).
+The tail arrays of the file (24 + 4 + 3 bytes a probe) are read by the loader and unread here. The `Spot`/`SVC1` words of
+the IBL variants (`0x047`, `0x807`, `0x847`) are carried by the existing SPU light and the shadow path rather than resolved:
+the shader keys on the draw's craft layer and the material's own reflection sampler, which for the hull is the same set.
 
 ## What has not moved
 

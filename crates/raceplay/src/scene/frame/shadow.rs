@@ -6,6 +6,7 @@
 //! `frame/attachments.rs` already set; a move, with no behaviour change.
 
 use crate::Uploads;
+use crate::drawable::HullLayers;
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::Placement;
@@ -459,9 +460,11 @@ impl super::super::Scene {
                     view_projection,
                     race.ship_model_matrix_of(slot),
                     prev_vp * prev.ship(slot, race),
-                    self.sun_occlusion_layer(slot),
-                    race.ship_hull_scale(slot),
-                    env_layer,
+                    HullLayers {
+                        sun_occlusion: self.sun_occlusion_layer(slot),
+                        scale: race.ship_hull_scale(slot),
+                        env: env_layer,
+                    },
                 );
             }
         }

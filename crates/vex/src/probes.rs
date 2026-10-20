@@ -166,7 +166,7 @@ impl Probes {
                 found: bytes.len(),
             });
         }
-        if count % 2 != 0 {
+        if !count.is_multiple_of(2) {
             return Err(Error::OddCount(count));
         }
         let positions = (0..count)
@@ -298,7 +298,7 @@ fn decode(bytes: &[u8], width: usize) -> Vec<u8> {
     let blocks_per_row = width / 4;
     let height = bytes.len() / 12 / blocks_per_row * 4;
     let mut out = vec![255u8; width * height * 4];
-    for (block, data) in bytes.chunks_exact(12).enumerate() {
+    for (block, data) in bytes.as_chunks::<12>().0.iter().enumerate() {
         let (bx, by) = (block % blocks_per_row, block / blocks_per_row);
         let c0 = [f32::from(data[2]), f32::from(data[1]), f32::from(data[0])];
         let c1 = [f32::from(data[5]), f32::from(data[4]), f32::from(data[3])];
@@ -318,28 +318,41 @@ fn decode(bytes: &[u8], width: usize) -> Vec<u8> {
 }
 
 fn blend(set: &[u8], bytes: usize, size: (usize, usize), taps: &Taps) -> Vec<u8> {
-    let mut acc = vec![0.0f32; size.0 * size.1 * 4];
-    for (&probe, &weight) in taps.probes.iter().zip(&taps.weights) {
-        if weight <= 0.0 {
-            continue;
-        }
-        let image = decode(&set[probe * bytes..][..bytes], size.0);
-        for (a, &texel) in acc.iter_mut().zip(&image) {
-            *a += f32::from(texel) * weight;
+    let images: Vec<(Vec<u8>, f32)> = taps
+        .probes
+        .iter()
+        .zip(&taps.weights)
+        .filter(|(_, weight)| **weight > 0.0)
+        .map(|(&probe, &weight)| (decode(&set[probe * bytes..][..bytes], size.0), weight))
+        .collect();
+    let refs: Vec<(&[u8], f32)> = images.iter().map(|(i, w)| (i.as_slice(), *w)).collect();
+    mix(&refs)
+}
+
+/// The weighted blend of decoded `RGBA8` images of one size, normalised by the weights'
+/// sum, alpha 255. What [`Probes::blend_irradiance`] does after decoding; a caller that
+/// keeps decoded probes calls it directly.
+#[must_use]
+pub fn mix(images: &[(&[u8], f32)]) -> Vec<u8> {
+    let Some(&(first, _)) = images.first() else {
+        return Vec::new();
+    };
+    let total: f32 = images.iter().map(|(_, w)| w).sum();
+    let norm = if total > 0.0 { 1.0 / total } else { 0.0 };
+    // One accumulator over the whole slice, an image at a time: the inner loop is a plain
+    // widen-and-add the compiler vectorises, which a per-texel walk over the images is not.
+    let mut acc = vec![0.0f32; first.len()];
+    for &(image, weight) in images {
+        let scale = weight * norm;
+        for (sum, &byte) in acc.iter_mut().zip(image) {
+            *sum += f32::from(byte) * scale;
         }
     }
-    let total: f32 = taps.weights.iter().sum();
-    let norm = if total > 0.0 { 1.0 / total } else { 0.0 };
-    acc.chunks_exact(4)
-        .flat_map(|t| {
-            [
-                (t[0] * norm + 0.5) as u8,
-                (t[1] * norm + 0.5) as u8,
-                (t[2] * norm + 0.5) as u8,
-                255,
-            ]
-        })
-        .collect()
+    let mut out: Vec<u8> = acc.iter().map(|&v| (v + 0.5) as u8).collect();
+    for alpha in out.iter_mut().skip(3).step_by(4) {
+        *alpha = 255;
+    }
+    out
 }
 
 #[cfg(test)]

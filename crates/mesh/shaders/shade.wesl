@@ -29,10 +29,18 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
 // value is the one circuit's measurement.
 const ENV_PROBE_GAIN: f32 = 4.0;
 
-// The array holds two layers per craft: the irradiance map, resized to the reflection
-// map's 128x64 on the CPU, then the reflection map. `which` is 0 or 1.
+// The array holds two layers per craft, each 128x64: the irradiance map in its top-left
+// 64x32 corner, then the reflection map in all of its layer. `which` is 0 or 1.
 fn env_probe_layer(which: i32) -> i32 {
     return (i32(uniforms.env_layer + 0.5) - 1) * 2 + which;
+}
+
+// Where the irradiance map's own `0..1` coordinate lands in its layer: halved, and clamped
+// to the map's texel centres first, so the filter never reaches past the 64x32 corner (a
+// dedicated map's `ClampToEdge`).
+fn env_probe_irradiance_uv(uv: vec2<f32>) -> vec2<f32> {
+    let clamped = clamp(uv, vec2<f32>(0.5 / 64.0, 0.5 / 32.0), vec2<f32>(1.0 - 0.5 / 64.0, 1.0 - 0.5 / 32.0));
+    return clamped * 0.5;
 }
 
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
@@ -312,7 +320,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
             hull_ambient = ENV_PROBE_GAIN * textureSampleLevel(
-                env_probe_tex, shadow_sampler, env_probe_uv(n), env_probe_layer(0), 0.0,
+                env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n)), env_probe_layer(0), 0.0,
             ).rgb;
         }
         let lit_sum = select(
