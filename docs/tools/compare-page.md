@@ -93,8 +93,10 @@ It **refuses to run** unless the screenshot-policy ADR,
 has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
 constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
 exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
-`just publish-compare` rebuilds the page strictly from `data/reference/compare-page/` first, so a missing
-`platform` refuses it before anything uploads. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+`just publish-compare <dir>` rebuilds the page strictly from the curated manifest directory it is
+given first, so a missing `platform` refuses it before anything uploads. The directory is required:
+the seed and live manifests are developer material, ADR-0074 wants every published image picked by
+a person, and a default would publish them. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
 ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live

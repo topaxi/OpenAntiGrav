@@ -1067,11 +1067,12 @@ compare-page manifest="data/reference/compare-page" *ARGS:
 compare-seed:
     python3 scripts/compare-seed.py
 
-# Upload data/compare/ to the separate compare Pages project with wrangler. LOCKED: refuses
-# unless the screenshot-policy ADR's status reads Accepted; never run in CI.
-[doc("Publish the built comparison page (locked until the screenshot-policy ADR is Accepted)")]
-publish-compare:
-    python3 scripts/compare-page.py data/reference/compare-page --publish
+# Rebuild data/compare/ strictly from a curated manifest directory, then upload it to the
+# separate compare Pages project with wrangler. LOCKED: refuses unless the screenshot-policy
+# ADR's status reads Accepted; never run in CI. No default: the seed set is not a publishing set.
+[doc("Publish a curated comparison page (locked until the screenshot-policy ADR is Accepted)")]
+publish-compare manifests:
+    python3 scripts/compare-page.py {{manifests}} --publish
 
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
