@@ -846,19 +846,19 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TRACE.CSV", conflicts_with = "pose")]
     pub(crate) pose_from: Option<std::path::PathBuf>,
 
-    /// With `--pose-from`: also put the opponents where the original had them on that tick. A CSV
+    /// With `--pose-from` or `--pose` and `--camera-pose`: also put the opponents where the original had them on that tick. A CSV
     /// of one row per grid slot (`slot,team,left_x..,up_x..,fwd_x..,pos_x..`), what
     /// `scripts/psp-race-field.py` writes out of the emulator's RAM; each craft flies the team
     /// the row names and sits on the pose the row carries. A capture aid for a mid-race frame,
     /// single race only (the grid is what spawns the opponents).
-    #[arg(long, value_name = "FIELD.CSV", requires = "pose_from")]
+    #[arg(long, value_name = "FIELD.CSV")]
     pub(crate) field_from: Option<std::path::PathBuf>,
 
-    /// With `--pose-from`: the HUD's race state as the original's frame showed it,
-    /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD[,BEST_LAP_SECONDS]]]` (lap 1-based, the clocks in seconds), read out of the
+    /// With a posed craft (`--pose-from` or `--pose`): the HUD's race state as the original's frame showed it,
+    /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]` (lap 1-based, the clocks in seconds), read out of the
     /// emulator's RAM at the same stop as the pose. A posed capture runs no ticks, so without this
     /// the HUD reads the grid's place and zero clocks.
-    #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD[,BEST_S]]]", requires = "pose_from")]
+    #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S]]]")]
     pub(crate) hud_state: Option<String>,
 
     /// Which tick of `--pose-from` to take the pose off.

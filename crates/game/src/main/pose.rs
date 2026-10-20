@@ -95,16 +95,28 @@ pub(crate) struct FieldCraft {
     pub(crate) team: String,
 }
 
-/// Resolves `--field-from`: a CSV of the opponents the original had on one tick, one row per
+/// What `--field-from` carries: the opponents, and the player's own exact pose when the file has a
+/// slot 0 row.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Field {
+    /// Slot 0, when present: put the player exactly here, as `--pose-from` would.
+    pub(crate) player: Option<oag_gameplay::spawn::Pose>,
+    /// Slots 1..=N, the opponents.
+    pub(crate) opponents: Vec<FieldCraft>,
+}
+
+/// Resolves `--field-from`: a CSV of the craft the original had on one tick, one row per
 /// grid slot in slot order (`slot,team,left_x..left_z,up_x..up_z,fwd_x..fwd_z,pos_x..pos_z`),
-/// the rows `scripts/psp-race-field.py` writes out of the emulator's RAM.
+/// the rows `scripts/psp-race-field.py` and `rpcs3-hd-pair.py` write out of the emulator's RAM.
+/// An optional first row numbered 0 is the player's own exact pose, for a capture whose camera
+/// comes from `--camera-pose` and so has no `--pose-from` row to carry the player.
 ///
 /// The basis is the ship's own recorded one, read exactly as `--pose-from` reads it
 /// ([`oag_trace::replay::orientation_of_rows`], the measured left/up/forward reading), so a
 /// field craft and the player go through one reconciliation. The slot column is the grid slot
 /// 1-based; the rows must be exactly `1..=N` in order, because that is the index
 /// `race::Options::field` and `grid_teams` share.
-pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Vec<FieldCraft>> {
+pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
     use oag_core::math::Vec3;
     use oag_trace::replay::{self, Basis};
 
@@ -136,6 +148,7 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Vec<FieldCraft>> 
     };
     let (slot_at, team_at) = (column("slot")?, column("team")?);
     let mut field = Vec::new();
+    let mut player = None;
     for (row, line) in lines.enumerate() {
         let cells: Vec<&str> = line.split(',').map(str::trim).collect();
         ensure!(
@@ -149,36 +162,45 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Vec<FieldCraft>> 
         let slot: usize = cells[slot_at]
             .parse()
             .with_context(|| format!("row {}: slot {:?} is not a number", row + 1, cells[slot_at]))?;
+        let first = usize::from(row == 0 && slot == 0);
         ensure!(
-            slot == row + 1,
-            "{} row {}: slot {slot}, but rows must run 1, 2, 3 ... in order",
+            slot + usize::from(player.is_some() || first == 1) == row + 1,
+            "{} row {}: slot {slot}, but rows must run 1, 2, 3 ... in order (after an optional 0)",
             path.display(),
             row + 1
         );
-        field.push(FieldCraft {
-            pose: oag_gameplay::spawn::Pose {
-                position: vec3(&cells, "pos")?,
-                orientation: replay::orientation_of_rows(
-                    vec3(&cells, "left")?,
-                    vec3(&cells, "up")?,
-                    vec3(&cells, "fwd")?,
-                    Basis::LeftUpForward,
-                ),
-            },
-            team: cells[team_at].to_string(),
-        });
+        let pose = oag_gameplay::spawn::Pose {
+            position: vec3(&cells, "pos")?,
+            orientation: replay::orientation_of_rows(
+                vec3(&cells, "left")?,
+                vec3(&cells, "up")?,
+                vec3(&cells, "fwd")?,
+                Basis::LeftUpForward,
+            ),
+        };
+        if slot == 0 {
+            player = Some(pose);
+        } else {
+            field.push(FieldCraft {
+                pose,
+                team: cells[team_at].to_string(),
+            });
+        }
     }
-    ensure!(!field.is_empty(), "{} has no craft rows", path.display());
-    Ok(field)
+    ensure!(!field.is_empty(), "{} has no opponent rows", path.display());
+    Ok(Field {
+        player,
+        opponents: field,
+    })
 }
 
-/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD[,BEST_LAP_SECONDS]]]`,
+/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]`,
 /// the clocks rounded to the tick; a best lap of zero is none.
 pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
     let parts: Vec<&str> = text.split(',').map(str::trim).collect();
     ensure!(
         (4..=7).contains(&parts.len()),
-        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD[,BEST_LAP_SECONDS]]], not {} value(s)",
+        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]], not {} value(s)",
         parts.len()
     );
     let whole = |name: &str, text: &str| -> Result<u32> {
@@ -209,11 +231,11 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
                     .with_context(|| format!("--hud-state SPEED_KMH {text:?} is not a number"))
             })
             .transpose()?,
-        shield: parts
+        shield_percent: parts
             .get(5)
             .map(|text| {
                 text.parse::<f32>()
-                    .with_context(|| format!("--hud-state SHIELD {text:?} is not a number"))
+                    .with_context(|| format!("--hud-state SHIELD_PERCENT {text:?} is not a number"))
             })
             .transpose()?,
         best_lap_ticks: parts

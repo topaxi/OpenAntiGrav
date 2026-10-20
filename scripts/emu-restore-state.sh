@@ -2,7 +2,9 @@
 # Restore an RPCS3 save state into a long-lived, drivable `serve`: working virtual
 # pad, GDB proxy and /proc memory, in about 10 s.
 #
-#   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--interpreter] [--serial BCES00664]
+#   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--interpreter] [--pause] [--serial BCES00664]
+#   --pause holds the game on the state's own tick as soon as the stub answers (a mid-race state
+#   otherwise runs on for the 10 s the script takes to return); a capture then resumes for a moment.
 #
 # <lane> is the scratch dir of a private tree (scripts/emu-env.sh <lane> ...).
 # --restart then runs the pause menu's Restart Race (another ~8 s), which prints
@@ -12,12 +14,13 @@
 # Stop with `scripts/rpcs3-drive.py stop`. The state file is copied, never consumed.
 set -euo pipefail
 lane=${1:?lane}; state=${2:?state file}; shift 2
-restart=0; serial=BCES00664; nogdb=0; interp=""
+restart=0; serial=BCES00664; nogdb=0; interp=""; pause=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --restart) restart=1 ;;
     --no-gdb) nogdb=1 ;;
     --interpreter) interp=--interpreter ;;
+    --pause) pause=--pause-after-load ;;
     --serial) serial=$2; shift ;;
     *) echo "unknown $1" >&2; exit 2 ;;
   esac; shift
@@ -39,7 +42,7 @@ sleep 3
 t0=$(date +%s.%N)
 (nohup env -u WAYLAND_DISPLAY uv run --with evdev python3 -u scripts/rpcs3-drive.py \
    --image "$main/data/images/hdfury-ps3-eu-dec.iso" --log-dir "$W/serve" $interp serve \
-   --load-state "$state" --serial "$serial" > "$W/serve.log" 2>&1 &)
+   --load-state "$state" --serial "$serial" $pause > "$W/serve.log" 2>&1 &)
 for _ in $(seq 1 480); do
   grep -q "^serving\|Error\|Traceback" "$W/serve.log" && break
   sleep 0.25

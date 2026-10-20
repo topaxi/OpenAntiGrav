@@ -396,12 +396,14 @@ fn run(cli: Cli) -> Result<()> {
         ..camera
     });
 
-    let field = cli
-        .field_from
-        .as_deref()
-        .map(field_from_csv)
-        .transpose()?
-        .unwrap_or_default();
+    let field = cli.field_from.as_deref().map(field_from_csv).transpose()?;
+    // A field file with a slot 0 row carries the player's exact pose, which wins over `--pose`.
+    let pose = field
+        .as_ref()
+        .and_then(|field| field.player)
+        .map(race::PoseRequest::Exact)
+        .or(pose);
+    let field = field.map(|field| field.opponents).unwrap_or_default();
 
     let hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
 

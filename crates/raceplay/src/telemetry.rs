@@ -245,7 +245,9 @@ impl Race {
             readout.lap_ticks = hud.lap_ticks;
             readout.race_ticks = hud.race_ticks;
             readout.speed_kmh = hud.speed_kmh.unwrap_or(readout.speed_kmh);
-            readout.shield = hud.shield.unwrap_or(readout.shield);
+            if let Some(percent) = hud.shield_percent {
+                readout.shield = readout.shield_max * percent * 0.01;
+            }
             readout.best_lap_ticks = hud.best_lap_ticks.or(readout.best_lap_ticks);
         }
         if finished.is_some() {

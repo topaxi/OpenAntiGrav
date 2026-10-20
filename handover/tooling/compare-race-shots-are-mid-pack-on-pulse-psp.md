@@ -1,13 +1,13 @@
-# Race shots: Pulse PSP gives mid-pack pairs with the whole field; HD, trails and a closer pack are open
+# Race shots: Pulse PSP and HD give mid-pack pairs with the whole field; trails, a closer pack and more circuits are open
 
 The maintainer asked whether the original can be put "in the middle of the pack via automation" and shot there, with weapons off.
 **Pulse PSP can** (2026-10-20, `compare-race-shots`): a Single Race on the Racebox page with `WEAPONS` Off (`psp-drive.py menu
 --single-race --weapons-off`, `g_weapons_enabled` reads 0), the player flown by the original's Autopilot, a RAM hunt
 (`scripts/psp-race-field.py hunt`) for a tick with the player in a wanted place and other craft near and in view, a savestate
-saved right after, and `psp-pulse-pair.py --field` making the pair with ours posed from **all eight craft**, their teams, the
+saved right after, and `psp-pulse-pair.py --field` (HD: `rpcs3-hd-pair.py --field`) making the pair with ours posed from **all eight craft**, their teams, the
 camera and the HUD's place, lap, clocks, speed, shield and best lap, every one read out of the state's RAM at the same stop as
 the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../../docs/tools/compare-page.md), "Race shots".
-`just compare-rerender` re-makes these pairs (run once, drift 10 units / 2.5 degrees between two loads of one state).
+`just compare-rerender` re-makes these pairs (run once each; drift between two loads of one state 15 to 25 units on PSP, 16 on HD).
 
 ## Open
 
@@ -21,9 +21,10 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   built. `--field-from` keeps the grid's opponents alive and posed, with no tick run.
 - **The pickup row** (the Autopilot icon and its `1000000000.00` counter) is not drawn in ours: nothing in the pair carries the
   player's held pickup. `entity+0x1bc` holds it.
-- **HD**: see the report of the lane; the HD ship array (`0x0098d7c0`), place (`ship+0x994`), lap (`ship+0x7810`) and team string
-  (`*(*(ship+0x6298)+0x1b4)`) are documented, `rpcs3-hd-autopilot.py` flies a Racebox race on the Autopilot and reads RAM without a
-  stop, and `emu-save-state.sh` saves a state from the PS menu. Nothing of the HD race shot is wired.
+- **HD: one circuit.** Talon's Junction, 6th of 8 in lap 2, weapons off, the Autopilot; the walk, the hunt, the paused restore and the
+  pair are in the docs page. Open: more circuits and teams; the HUD record's word order flips between boots (see the docs, item 4:
+  decoded both ways, refused when ambiguous, not understood); the best-lap line (not located in the record); the Fury `Absorb`/`DAMAGE`
+  strips; `Pilot Assist` was left on (the profile's default, `0101`), the Autopilot flew with it.
 - **PS2, Pure**: not attempted.
 - **Layout is asserted, not probed** (`--layout forward`): the grid probe is a start-line test. A mid-race check of the layout would
   compare the player's pose with our spline.
@@ -34,4 +35,4 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
 
 1. Run the hunt on more circuits (`psp-drive.py menu --single-race --weapons-off --track-down N --any-track`, sidecar with the layout) for a set.
 2. Try the pack-closing options above, in the order given, only after a plain hunt has failed twice on a circuit.
-3. HD: a `--no-gdb` cold walk to a weapons-off Racebox Single Race, `/proc` polling for the place, the PS menu save, then a `rpcs3-hd-pair.py` mode that reads all eight ships at the pause.
+3. HD: more circuits with `emu-hd-race-walk.sh <lane> <index>` and `rpcs3-hd-race-hunt.py`; locate the best-lap word of the HUD record.

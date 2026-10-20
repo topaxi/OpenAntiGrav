@@ -209,6 +209,42 @@ def write_trace_row(path, values):
     Path(path).write_text(",".join(PSP_TRACE_COLUMNS) + "\n" + ",".join(repr(float(row[c])) for c in PSP_TRACE_COLUMNS) + "\n")
 
 
+FIELD_COLUMNS = ("slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").split(",")
+
+
+def write_field_csv(path, rows, with_player=False):
+    """`oag-game --field-from`'s CSV: the opponents in slot order, slot numbered 1..N, and with `with_player`
+    a first row numbered 0 that carries the player's own exact pose."""
+    lines = [",".join(FIELD_COLUMNS)]
+    if with_player:
+        p = next(r for r in rows if r["player"])
+        lines.append(",".join(["0", p["team"]] + [repr(v) for v in (*p["left"], *p["up"], *p["fwd"], *p["pos"])]))
+    others = sorted((r for r in rows if not r["player"]), key=lambda r: r["slot"])
+    for n, r in enumerate(others, 1):
+        cells = [str(n), r["team"]] + [repr(v) for v in (*r["left"], *r["up"], *r["fwd"], *r["pos"])]
+        lines.append(",".join(cells))
+    Path(path).write_text("\n".join(lines) + "\n")
+    return [r["team"] for r in others]
+
+
+def set_ours_weapons_off(profile_dir):
+    """`[race] weapons = "Off"` in the private settings file, whether or not an earlier run of `oag-game`
+    already rewrote the file with its own `[race]` table (a second `[race]` header is a TOML error)."""
+    path = settings_path(profile_dir)
+    lines = path.read_text().splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == "[race]"), None)
+    if start is None:
+        lines += ["", "[race]", 'weapons = "Off"']
+    else:
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
+        hit = next((i for i in range(start + 1, end) if lines[i].split("=")[0].strip() == "weapons"), None)
+        if hit is None:
+            lines.insert(start + 1, 'weapons = "Off"')
+        else:
+            lines[hit] = 'weapons = "Off"'
+    path.write_text("\n".join(lines) + "\n")
+
+
 def git_head():
     return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()

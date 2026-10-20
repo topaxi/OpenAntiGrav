@@ -175,12 +175,13 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    stop the CPU, `psp-trace.py --craft <player craft> --field-out field.json --camera --shot-every 2` captures at the first stop
    of the player's craft the player's row, the camera node, **every racer's body, team name, place, lap, lap time and best lap**
    (`psp-race-field.py` rows) and the screenshot. Ours is `oag-game --race --pose-from trace.csv --field-from field.csv
-   --hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST_S --ticks 0`:
+   --hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD_PERCENT,BEST_S --ticks 0`:
    - `--field-from` (`race::Options::field`, `grid_teams`) keeps the Single Race grid's seven opponents alive, puts each on the
      pose its row carries (the same left/up/forward reading `--pose-from` uses, `oag_trace::replay::orientation_of_rows`) and flies
      the team the row names; the original's slot `n` is our opponent `n + 1`. The craft are drawn at rest: no tick runs.
-   - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield and best lap on
-     the primary readout: all read from RAM, none derived. The lap on screen is `entity+0xacc - 1`.
+   - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
+     of the pool: HD's pool is 140, ours is the handling file's) and best lap on the primary readout: all read from RAM, none
+     derived. The lap on screen is `entity+0xacc - 1`.
    - Ours races with weapons off (`[race] weapons = "Off"` in the pair's private settings); the layout is **asserted** with
      `--layout` (the grid probe is a start-line test), and checked against the sidecar.
 6. **Checks.** Everything in "Environment parity" except the race-clock phase (there is no run-up: ours renders at tick 0 and
@@ -189,9 +190,40 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    one state differ by about 4 ticks (10 units, 2.5 degrees in the first rerender); the pose, camera and field of each capture are
    from its own stop, so ours matches whichever stop it was.
 
+**HD (works, one circuit).** The same four steps, with RPCS3's tools:
+
+1. **Weapons off, Autopilot.** `scripts/emu-hd-race-walk.sh <lane> 8` cold-boots in the state-saving flavour (stub off, Compatible
+   Savestate Mode) and walks `RACEBOX` (Single Race is the default), `down` x2 to `WEAPONS`, `right` (On to Off, the page was
+   screenshotted: `RACE TYPE, SPEED CLASS, WEAPONS, AI DIFFICULTY, NUMBER OF PLAYERS`), Track Select index 8 (Talon's Junction),
+   Ship Select. There is no stub in that flavour, so the Autopilot is armed through **`serve`'s memory, which can now be written**
+   (`RemoteMem.write`, op `memw`: `ptrace_scope` is 1, only `serve` may touch the emulator's `/proc/<pid>/mem`):
+   `*(ship+0x5edc)+0x200 |= 0x800`, `+0x158 = 10000`.
+2. **The hunt.** `scripts/rpcs3-hd-race-hunt.py` polls guest memory without stopping the game (a few ms a read): the HUD's
+   per-player record (found by matching the player's shield, `ship+0x5fa0`, bit for bit at `+0x48` with the pool maximum 140 at
+   `+0x50` and the race's laps at `+0x10`; the heap moves per boot) for the place, and the eight bodies (`rpcs3_hd_field.py`) for
+   a craft within `--near-dist` of the player and two in front. It then presses the PS menu's "Save Emulation State And Exit"
+   (`emu-save-state.sh`), which writes the state about a second later and ends the emulator. The Autopilot passes the field in
+   the first lap (8th at GO, 6th about 50 s in on `Novice`), so a match came on the first race.
+3. **The pair.** `emu-restore-state.sh <lane> <state> --pause` restores and **pauses on the state's own tick** (`serve
+   --pause-after-load`: the restored game otherwise runs on for the seconds the script takes), then `OAG_RPCS3_ATTACH=1
+   scripts/rpcs3-hd-pair.py --field --team feisar --track 'Data\Environments\Talons_Junction\track.vex' --state <state>`:
+   `rpcs3-drive.py capture --field --in-race --settle 0` takes the screenshot, the camera (from the push buffer, two shots 0.12 s
+   apart, the first used), the player's body and **every craft's body, team string and lap clock, plus the HUD record**, in the
+   same pause. Ours gets `field.csv` with the player as slot 0 (an exact pose, so no tilt is left uncarried) and the seven
+   opponents on `--field-from`, `--camera-pose`, `--hud-state`, `--ticks 0`, weapons off in the private settings
+   (`compare_env.set_ours_weapons_off`).
+4. **The HUD record's word order differs between states**: `(lap, laps, place)` at `+0xc`, `+0x10`, `+0x14` in the hunt's boot, and
+   `(place, laps, lap - 1)` in a state the capture read after the game had run on (lap 2 of 3, place 6 read `6, 3, 1`). `hud()`
+   decodes both and refuses (`place` is None, the pair stops) when both or neither is a valid reading. Not understood: it is a read
+   of one structure at one address in two boots. The restored-and-paused state reads `(2, 3, 6)`, which matches the frame.
+
+`just compare-rerender` re-makes a race pair only if the emulator is in the state it was made from: restore the state with
+`--pause` first (the capture lets the game run for 0.12 s, so a second rerender needs another restore). Measured drifts between two
+captures of one state: PSP 15 to 25 units and 4 to 5 degrees (the CPU stops a few ticks after the load), HD 16 units and 12 degrees.
+
 **What is not matched in a race shot** (the pair's caveat says it): the exhaust plume and the engine's light (a craft at rest in
 ours; stage 3, a frozen warm-up that gives every craft its trails, is not built), the Autopilot icon and its counter (the pickup
-row), the opponents' own trails and any weapon or effect in flight, and the scene objects that animate (the billboards).
+row), HD's `Absorb` and `DAMAGE` strips and its best-lap line, the opponents' own trails and any weapon or effect in flight, and the scene objects that animate (the billboards).
 
 ## Publishing is locked
 

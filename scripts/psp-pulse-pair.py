@@ -99,20 +99,6 @@ def race_field_module():
     return mod
 
 
-FIELD_COLUMNS = ("slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").split(",")
-
-
-def write_field_csv(path, rows):
-    """`oag-game --field-from`'s CSV: the opponents (not the player) in slot order, slot numbered 1..N."""
-    lines = [",".join(FIELD_COLUMNS)]
-    others = sorted((r for r in rows if not r["player"]), key=lambda r: r["slot"])
-    for n, r in enumerate(others, 1):
-        cells = [str(n), r["team"]] + [repr(v) for v in (*r["left"], *r["up"], *r["fwd"], *r["pos"])]
-        lines.append(",".join(cells))
-    Path(path).write_text("\n".join(lines) + "\n")
-    return [r["team"] for r in others]
-
-
 def detect_layout(oag, image, track, theirs_row, flags, tol):
     """Which of `track.vex` / `track_reversed.vex` the original loaded: our own start on each layout against
     the original's grid pose (position and heading). Returns (layout, report) or exits naming the circuit."""
@@ -137,7 +123,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     import json
     rows = json.loads((out / "field.json").read_text())["rows"]
     player = next(r for r in rows if r["player"])
-    teams = write_field_csv(out / "field.csv", rows)
+    teams = ce.write_field_csv(out / "field.csv", rows)
     pair.rec["original"]["field"] = [{k: r[k] for k in ("slot", "team", "place", "lap", "lap_time", "pos")} for r in rows]
     lap_number = player["lap"] - 1  # PlayerStatus_Update: the HUD's lap is `entity+0xacc - 1`
     pair.rec["original"]["hud"] = {"place": player["place"], "of": len(rows), "lap_number": lap_number,
@@ -229,8 +215,7 @@ def main():
     if args.field:
         # ours races with weapons off the way the original's Racebox row was set (checked below against
         # `g_weapons_enabled` in the state's own RAM); the saved WEAPONS row is what `Mode::SingleRace` reads.
-        with open(ce.settings_path(profile_dir), "a") as f:
-            f.write("\n[race]\nweapons = \"Off\"\n")
+        ce.set_ours_weapons_off(profile_dir)
     flags = ce.ours_flags(plat)
     mode = facts.get("mode", "single_race" if args.field else "time_trial")
     klass = facts.get("class", "venom")

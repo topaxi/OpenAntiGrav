@@ -42,8 +42,11 @@ pub struct CaptureHud {
     /// The speed readout in km/h, when the capture read it: a posed craft is at rest, so its own
     /// reads zero.
     pub speed_kmh: Option<f32>,
-    /// The shield pool, in the pool's own units, when the capture read it.
-    pub shield: Option<f32>,
+    /// The shield as a percentage of the full pool (0 to 100), when the capture read it. A
+    /// percentage rather than a pool value because the pool differs per title (HD's reads 140, ours
+    /// is the handling file's own): the original's value over the original's maximum is what a frame
+    /// shows.
+    pub shield_percent: Option<f32>,
     /// The best lap so far in ticks, when the capture read it (`None` also when there is none).
     pub best_lap_ticks: Option<u32>,
 }

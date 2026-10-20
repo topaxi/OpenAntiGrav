@@ -36,7 +36,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         lap_ticks: 1_740,
         race_ticks: 2_333,
         speed_kmh: Some(463.0),
-        shield: Some(99.0),
+        shield_percent: Some(99.0),
         best_lap_ticks: Some(3_380),
     };
     let start = |field: Vec<Pose>, hud: Option<race::CaptureHud>| {
@@ -70,7 +70,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
     assert_eq!((readout.lap_ticks, readout.race_ticks), (1_740, 2_333));
     assert_eq!(readout.best_lap_ticks, Some(3_380));
     assert!((readout.speed_kmh - 463.0).abs() < 1e-3);
-    assert!((readout.shield - 99.0).abs() < 1e-3);
+    assert!((readout.shield - readout.shield_max * 0.99).abs() < 1e-3);
 
     // Neither is a default: with no field a posed player races alone, and with no
     // HUD state the readout is the race's own.

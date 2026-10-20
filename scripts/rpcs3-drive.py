@@ -559,11 +559,11 @@ def control_call(path, **msg):
 
 
 class RemoteMem:
-    """A read-only stand-in for `open("/proc/<pid>/mem", "rb", 0)`.
+    """A stand-in for `open("/proc/<pid>/mem", "r+b", 0)` (reads, and `write` since 2026-10-20).
 
     Yama (`ptrace_scope=1`) lets only an ancestor read an emulator's memory, and
     a script attaching to `serve`'s emulator is not one; `serve` is, so it reads
-    on the script's behalf. `seek` and `read` are all the callers use.
+    on the script's behalf. `seek`, `read` and `write` are all the callers use.
     """
 
     def __init__(self, path):
@@ -580,6 +580,14 @@ class RemoteMem:
         data = base64.b64decode(reply["data"])
         self.pos += len(data)
         return data
+
+    def write(self, data):
+        """Write through `serve` (its `/proc/<pid>/mem` is opened read-write): the Autopilot's pickup
+        slot is armed this way in a race that has no GDB stub (the save-state flavour)."""
+        import base64
+        reply = control_call(self.path, op="memw", offset=self.pos, data=base64.b64encode(bytes(data)).decode())
+        self.pos += len(data)
+        return reply.get("n", len(data))
 
     def close(self):
         pass
@@ -670,6 +678,13 @@ def serve_pad(pad, path, stop, mem=None):
                     mem.seek(msg["offset"])
                     data = mem.read(msg["n"])
                 reply = {"ok": True, "data": base64.b64encode(data).decode()}
+            elif op == "memw":
+                import base64
+                payload = base64.b64decode(msg["data"])
+                with mem_lock:
+                    mem.seek(msg["offset"])
+                    mem.write(payload)
+                reply = {"ok": True, "n": len(payload)}
         except OSError as exc:
             reply = {"ok": False, "error": str(exc), "errno": exc.errno}
         except Exception as exc:
@@ -1258,6 +1273,21 @@ def cmd_serve(args):
             proxy.stop = stop
             proxy.start()
             print("gdb proxy on %d (stub on %d)" % (public, public + 1000), flush=True)
+            if args.load_state and args.pause_after_load:
+                # The restored game is still on RPCS3's linking splash for several seconds; a pause
+                # now holds it on the state's own tick, so a capture taken afterwards (resume, a
+                # short interval, pause) is the state itself and not 10 s of racing later.
+                from rpcs3_debugger import Debugger as _Dbg
+                for attempt in range(40):
+                    try:
+                        with _Dbg(port=public) as first:
+                            first.pause()
+                        break
+                    except OSError:
+                        time.sleep(0.5)  # the proxy's listener is not up yet
+                else:
+                    raise RuntimeError("the GDB proxy never accepted the pause")
+                print("paused straight after the load", flush=True)
         if args.load_state:
             # `Savestate has been moved (hidden)` is the last line of the load: the
             # stub listens at ~1.8 s and the pad binds at ~1.4 s, but the game
@@ -1273,7 +1303,7 @@ def cmd_serve(args):
         Path(SESSION_FILE).write_text(json.dumps(info))
         thread = threading.Thread(target=serve_pad,
                                   args=(session.pad, CONTROL_SOCKET, stop,
-                                        open("/proc/%d/mem" % session.proc.pid, "rb", 0)),
+                                        open("/proc/%d/mem" % session.proc.pid, "r+b", 0)),
                                   daemon=True)
         thread.start()
         session.guard.stage("serving", limit=10 ** 9)
@@ -1629,7 +1659,7 @@ def cmd_capture(args):
             screen, _, buttons = item.partition("=")
             plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
         # An attached emulator already in a race skips the walk; one in the front end walks it.
-        attached = os.environ.get("OAG_RPCS3_ATTACH") == "1" and session.in_race()
+        attached = os.environ.get("OAG_RPCS3_ATTACH") == "1" and (session.in_race() or args.in_race)
         if not attached and session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
@@ -1646,6 +1676,7 @@ def cmd_capture(args):
         # shot's candidates have to be in hand before any of them can be
         # picked - nothing is written to disk inside this loop.
         shots = []
+        field_record = None
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
@@ -1669,6 +1700,17 @@ def cmd_capture(args):
                     # equals the HUD's `current` time and counts 1:1 with emulated time), so a pair can
                     # run ours the same number of seconds after GO.
                     ship_pose["race_clock_s"] = struct.unpack(">f", gdb.read(player_ship + 0x7014, 4))[0]
+                    if args.field:
+                        # every craft of the field and the HUD's record, in the same pause (`rpcs3_hd_field`)
+                        import rpcs3_hd_field
+                        fm = rpcs3_hd_field.Mem(session.open_mem())
+                        if field_record is None:
+                            found = rpcs3_hd_field.find_record(fm, fm.f32(player_ship + 0x5FA0))
+                            if len(found) != 1:
+                                raise RuntimeError("%d HUD records found, wanted 1" % len(found))
+                            field_record = found[0]
+                        ship_pose["field"] = rpcs3_hd_field.field_rows(fm)
+                        ship_pose["hud"] = rpcs3_hd_field.hud(fm, field_record)
                 except Exception as error:  # noqa: BLE001 - the camera is still worth having
                     print("  %s: no player pose (%s)" % (stem, error), flush=True)
                     ship_pose = None
@@ -2377,6 +2419,9 @@ def main(argv=None):
     serve.add_argument("--serial", default="BCES00664",
                        help="title serial of the state (names its custom config); "
                             "default is HD/Fury EU")
+    serve.add_argument("--pause-after-load", action="store_true",
+                       help="with --load-state and the GDB stub: pause the game as soon as the stub "
+                            "answers, so the state does not run on before a capture takes it")
     serve.add_argument("--load-state", default="",
                        help="boot straight into this RPCS3 save state instead of "
                             "walking to the Main Menu")
@@ -2442,6 +2487,13 @@ def main(argv=None):
                           "EBOOT's data and BSS (DATA_SEGMENT) holds only "
                           "static cube-face/shadow matrices, never the live "
                           "camera.")
+    cap.add_argument("--field", action="store_true",
+                     help="also read every craft of the field (pose, team, lap clock) and the HUD's record "
+                          "(lap, place, speed, shield) at each pause, into the record's `ship.field` and "
+                          "`ship.hud` (`rpcs3_hd_field.py`); needs `serve` (attached)")
+    cap.add_argument("--in-race", action="store_true",
+                     help="attached to a restored race: skip the walk even though `TTY.log` has no screen "
+                          "lines yet (a restored state has none)")
     cap.add_argument("--nav-shots", action="store_true",
                      help="photograph every distinct screen on the way in, so "
                           "a --nav plan can be written from what is actually "
