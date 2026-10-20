@@ -16,6 +16,10 @@ pub struct Laws {
     /// The grounded quadratic drag coefficient: Pulse's [`crate::passive::DRAG_GROUND`],
     /// Pure's [`crate::passive::DRAG_GROUND_PURE`].
     pub drag_ground: f32,
+    /// The two-point hover's bank-to-yaw gain: Pulse's [`crate::hover::BANK_TO_YAW_GAIN`]
+    /// (`30`), Pure's [`crate::hover::BANK_TO_YAW_GAIN_PURE`] (`50`). The four-corner hover's
+    /// `50` is every title's.
+    pub bank_to_yaw: f32,
 }
 
 impl Laws {
@@ -23,6 +27,7 @@ impl Laws {
     pub const PULSE: Self = Self {
         engine_output_double: true,
         drag_ground: crate::passive::DRAG_GROUND,
+        bank_to_yaw: crate::hover::BANK_TO_YAW_GAIN,
     };
 }
 

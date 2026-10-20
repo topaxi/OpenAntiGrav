@@ -675,6 +675,7 @@ fn a_titles_laws_halve_the_thrust_and_the_grounded_drag() {
     let pure = frame(crate::laws::Laws {
         engine_output_double: false,
         drag_ground: crate::passive::DRAG_GROUND_PURE,
+        ..crate::laws::Laws::PULSE
     });
     assert!(pulse.engine.thrust > 0.0);
     assert_eq!(pure.engine.thrust * 2.0, pulse.engine.thrust);

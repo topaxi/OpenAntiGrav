@@ -466,6 +466,29 @@ fn the_bank_to_yaw_coupling_is_skipped_on_the_grid_and_only_there() {
     assert_eq!(held.alignment_torque, racing.alignment_torque);
 }
 
+/// Wipeout Pure's two-point hover turns into a bank at `50` where Pulse's turns at `30`
+/// (`docs/physics/pure-physics.md`): the title's law reaches the coupling through
+/// [`Environment::laws`].
+#[test]
+fn pures_bank_to_yaw_gain_is_five_thirds_of_pulses() {
+    let world = flat_floor();
+    let handling = test_handling();
+    let mut state = state_at(3.0);
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+    let pulse = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    let pure_env = Environment {
+        laws: crate::laws::Laws {
+            bank_to_yaw: BANK_TO_YAW_GAIN_PURE,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let pure = evaluate(&state, &handling, &pure_env, &world, 5.0);
+    let right_y = state.body.right().y;
+    assert_eq!(pulse.local_angular_torque.y, BANK_TO_YAW_GAIN * right_y);
+    assert_eq!(pure.local_angular_torque.y, BANK_TO_YAW_GAIN_PURE * right_y);
+}
+
 #[test]
 fn an_airborne_ship_gets_none_of_the_grounded_terms() {
     let world = flat_floor();

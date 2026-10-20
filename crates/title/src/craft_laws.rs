@@ -29,4 +29,7 @@ pub struct CraftLaws {
     /// The grounded quadratic drag coefficient, `Ship_ApplyQuadraticDrag`'s: Pulse `-0.005`,
     /// Wipeout Pure `-0.0025` (`oag_physics::laws::Laws::drag_ground`).
     pub drag_ground: Sourced<f32>,
+    /// The two-point hover's bank-to-yaw gain, `torque.y += gain * right.y`: Pulse `30`,
+    /// Wipeout Pure `50` (`oag_physics::laws::Laws::bank_to_yaw`).
+    pub bank_to_yaw: Sourced<f32>,
 }

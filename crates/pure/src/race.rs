@@ -525,7 +525,9 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 ///
 /// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), and
-/// its grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame).
+/// its grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame). Its
+/// two-point hover's bank-to-yaw gain is measured `50`, not `30` (`0x0892dea8`, 129 banked
+/// frames), and held at Pulse's until our AI flies it.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
@@ -533,6 +535,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     engine_output_double: oag_title::pre_race::Sourced::measured(false),
     drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
+    // Measured `50` (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`), held at Pulse's `30` until
+    // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
+    // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
+    bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
 };
 
 #[cfg(test)]
@@ -559,6 +565,17 @@ mod tests {
         assert_eq!(
             super::CRAFT_LAWS.drag_ground.origin,
             oag_title::Origin::Measured
+        );
+    }
+
+    /// Pure's two-point hover turns into a bank at `50`, measured live, and the table holds
+    /// Pulse's `30` as a choice until our AI flies it. Releasing the hold is this test's change.
+    #[test]
+    fn the_bank_to_yaw_gain_is_measured_and_held() {
+        assert_eq!(super::CRAFT_LAWS.bank_to_yaw.value, 30.0);
+        assert_eq!(
+            super::CRAFT_LAWS.bank_to_yaw.origin,
+            oag_title::Origin::Chosen
         );
     }
 
