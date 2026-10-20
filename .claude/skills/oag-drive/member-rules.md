@@ -95,6 +95,10 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
   zeroed framebuffers to a capture unless its config sets
   `[Graphics] SoftwareRenderer = True` (2026-10-11, `pulse-bloom`);
   `scripts/ppsspp-start.sh` sets it since 2026-10-12, a hand-written config must too.
+  RPCS3 frames for a comparison need `Write Color Buffers: true` in the private
+  `config.yml` **and** in `custom_configs/config_BCES00664.yml`: the stock config has it
+  off, and with it off the original read about 1.74x too bright at a matched camera, which
+  was the whole of a "the original's hull is brighter" gap (2026-10-20, `hd-hull-brightness`).
 - **Ghidra.** When the GUI bridge is up it listens on `127.0.0.1:8089` and is
   shared. Pass `program=` explicitly on every call (by path, e.g.
   `/pulse/BOOT-psp-pulse-usa.BIN`, `/hdfury/EBOOT-ps3-hdfury-eu.elf`), and
