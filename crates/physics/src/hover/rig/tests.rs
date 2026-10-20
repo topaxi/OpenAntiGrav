@@ -28,6 +28,7 @@ fn four_point() -> Rig {
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,
+        snap: false,
     }
 }
 
@@ -213,6 +214,7 @@ fn four_corner() -> Rig {
         spring: SpringLaw::FourCorner,
         align_projects_pitch_out: false,
         downforce_scaled: false,
+        snap: true,
     }
 }
 
@@ -360,4 +362,29 @@ fn the_four_corner_downforce_takes_no_grounded_factor() {
         ..four_corner()
     });
     assert_eq!(scaled, -70.0 * 0.5 * 0.5);
+}
+
+/// **Zone pulls a high craft down.** Its centre `5.0` above a flat floor, every level probe out
+/// of reach, the four-corner law moves the body `(3 - 5) * 0.25 = -0.5` along the floor's normal
+/// that frame; at `2.9` (inside `3.0`) or `10.5` (past the ray) it moves nothing.
+#[test]
+fn the_four_corner_snap_pulls_a_quarter_of_the_way_to_three() {
+    let escape = |rig: Rig, height: f32| {
+        let hover = evaluate(
+            &craft(rig, height, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        hover.escape
+    };
+    assert_eq!(escape(four_corner(), 5.0), Vec3::new(0.0, -0.5, 0.0));
+    assert_eq!(escape(four_corner(), 2.9), Vec3::ZERO);
+    assert_eq!(escape(four_corner(), 10.5), Vec3::ZERO);
+    let off = Rig {
+        snap: false,
+        ..four_corner()
+    };
+    assert_eq!(escape(off, 5.0), Vec3::ZERO);
 }

@@ -44,4 +44,7 @@ pub struct HoverRig {
     /// The downforce is `-track_gravity * mass` along the normal on any contact, with no
     /// grounded fraction and no magnet-lock fade (Pulse's Zone hover).
     pub downforce_unscaled: Sourced<bool>,
+    /// The trailing 10-unit ray that pulls the craft a quarter of the way down to `3.0` above
+    /// what it hits, every frame (Pulse's Zone hover).
+    pub snap: Sourced<bool>,
 }

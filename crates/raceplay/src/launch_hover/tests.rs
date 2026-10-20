@@ -49,6 +49,7 @@ const RIG: HoverRig = HoverRig {
     plain_mean_normal: Sourced::measured(false),
     alignment_pitches: Sourced::measured(false),
     downforce_unscaled: Sourced::measured(false),
+    snap: Sourced::measured(false),
 };
 
 #[test]

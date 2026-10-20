@@ -288,7 +288,8 @@ pub struct Hover {
     /// The grounded-only bank-to-yaw coupling, as a body-local angular
     /// acceleration.
     pub local_angular_torque: Vec3,
-    /// The penetration-escape position correction for the whole body.
+    /// The penetration-escape position correction for the whole body, plus the four-corner
+    /// law's trailing snap ([`Rig::snap`]).
     pub escape: Vec3,
 }
 
@@ -699,9 +700,19 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let active = &probes[..count];
 
+    // The four-corner law's trailing snap runs with or without contact: the no-contact branch
+    // at `0x0884b654` lands on it.
+    let snap = if rig.snap {
+        snap(state, env, raycaster)
+    } else {
+        Vec3::ZERO
+    };
     let contacts = active.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {
-        return Hover::airborne(probes, count);
+        return Hover {
+            escape: snap,
+            ..Hover::airborne(probes, count)
+        };
     }
 
     let mut normal_sum = Vec3::ZERO;
@@ -768,7 +779,33 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         alignment_torque,
         downforce,
         local_angular_torque,
-        escape,
+        escape: escape + snap,
+    }
+}
+
+/// How far down the four-corner snap ray reaches, `0x41200000` at `0x0884b824`.
+pub const SNAP_REACH: f32 = 10.0;
+/// The height the snap pulls toward, `0x40400000` at `0x0884b90c`: nothing moves at or below it.
+pub const SNAP_FLOOR: f32 = 3.0;
+/// The share of the gap closed per frame, `0x3e800000` at `0x0884b970`.
+pub const SNAP_GAIN: f32 = 0.25;
+
+/// `Ship_HoverFourCorner`'s trailing snap (`0x0884b824`-`0x0884b9c0`): a ray from the craft's
+/// centre [`SNAP_REACH`] along `-up`, hitting any surface; with `d = dot(pos - hit, hit.normal)`,
+/// a hit at `SNAP_FLOOR < d < SNAP_REACH` moves the body by `n * (3 - d) * 0.25` there and then
+/// (`Body_Translate`), no velocity change. Read live exactly on four frames
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+fn snap<R: Raycaster + ?Sized>(state: &ShipState, env: &Environment, raycaster: &R) -> Vec3 {
+    let position = state.body.position;
+    let ray = Ray::new(position, -state.body.up(), SNAP_REACH);
+    let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
+        return Vec3::ZERO;
+    };
+    let d = (position - hit.point).dot(hit.normal);
+    if d > SNAP_FLOOR && d < SNAP_REACH {
+        hit.normal * (SNAP_FLOOR - d) * SNAP_GAIN
+    } else {
+        Vec3::ZERO
     }
 }
 

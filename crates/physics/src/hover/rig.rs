@@ -82,6 +82,9 @@ pub struct Rig {
     /// `-track_gravity * mass` along the normal whatever the contact count
     /// (`0x0884b7b0`-`0x0884b818`).
     pub downforce_scaled: bool,
+    /// Pulse's Zone hover ends with a 10-unit ray down from the craft's centre and pulls the body
+    /// a quarter of the way to `3.0` above whatever it hits ([`super::snap`]).
+    pub snap: bool,
 }
 
 impl Rig {
@@ -111,6 +114,7 @@ impl Rig {
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,
+        snap: false,
     };
 
     /// The probes in use.

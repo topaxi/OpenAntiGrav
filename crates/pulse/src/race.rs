@@ -563,4 +563,7 @@ pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig:
     // `-(track_gravity * mass)` along the normal (`0x0884b7b0`-`0x0884b818`); live, the whole
     // `-80` on two-contact frames where the racing law would give half.
     downforce_unscaled: oag_title::pre_race::Sourced::measured(true),
+    // `0x0884b824`-`0x0884b9c0`: `n * (3 - d) * 0.25` for `3 < d < 10`, every frame; live
+    // exactly on four frames.
+    snap: oag_title::pre_race::Sourced::measured(true),
 };
