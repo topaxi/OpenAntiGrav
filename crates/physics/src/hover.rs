@@ -702,9 +702,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // The four-corner law's trailing snap runs with or without contact: the no-contact branch
     // at `0x0884b654` lands on it.
-    let snap = rig
-        .snap
-        .map_or(Vec3::ZERO, |gain| snap(state, env, raycaster, gain));
+    let snap = if rig.snap > 0.0 {
+        snap(state, env, raycaster, rig.snap)
+    } else {
+        Vec3::ZERO
+    };
     let contacts = active.iter().filter(|probe| probe.contact).count() as u32;
     if contacts == 0 {
         return Hover {

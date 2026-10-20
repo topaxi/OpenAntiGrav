@@ -992,7 +992,7 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
     let zone = rig(oag_race::Mode::Zone);
     assert_eq!(zone.count, 4);
     assert_eq!(zone.spring, oag_physics::hover::SpringLaw::FourCorner);
-    assert!(zone.snap == Some(0.25) && zone.brakes_off && !zone.probe_escape);
+    assert!(zone.snap == 0.25 && zone.brakes_off && !zone.probe_escape);
     assert_eq!(
         rig(oag_race::Mode::TimeTrial),
         oag_physics::hover::Rig::TWO_POINT
@@ -1023,13 +1023,13 @@ fn an_hd_zone_race_flies_the_racing_rig_with_the_half_gap_ray_and_a_time_trial_d
     };
     let zone = rig(oag_race::Mode::Zone);
     let racing = rig(oag_race::Mode::TimeTrial);
-    assert_eq!(zone.snap, Some(0.5));
+    assert_eq!(zone.snap, 0.5);
     assert!(zone.brakes_off);
-    assert_eq!(racing.snap, None);
+    assert_eq!(racing.snap, 0.0);
     assert!(!racing.brakes_off);
     assert_eq!(
         oag_physics::hover::Rig {
-            snap: None,
+            snap: 0.0,
             brakes_off: false,
             ..zone
         },

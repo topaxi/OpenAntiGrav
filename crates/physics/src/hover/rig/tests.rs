@@ -28,7 +28,7 @@ fn four_point() -> Rig {
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,
-        snap: None,
+        snap: 0.0,
         brakes_off: false,
     }
 }
@@ -215,7 +215,7 @@ fn four_corner() -> Rig {
         spring: SpringLaw::FourCorner,
         align_projects_pitch_out: false,
         downforce_scaled: false,
-        snap: Some(crate::hover::SNAP_GAIN),
+        snap: crate::hover::SNAP_GAIN,
         brakes_off: true,
     }
 }
@@ -385,7 +385,7 @@ fn the_four_corner_snap_pulls_a_quarter_of_the_way_to_three() {
     assert_eq!(escape(four_corner(), 2.9), Vec3::ZERO);
     assert_eq!(escape(four_corner(), 10.5), Vec3::ZERO);
     let off = Rig {
-        snap: None,
+        snap: 0.0,
         ..four_corner()
     };
     assert_eq!(escape(off, 5.0), Vec3::ZERO);
@@ -406,7 +406,7 @@ fn hds_zone_ray_pulls_half_of_the_way_to_three() {
         .escape
     };
     let half = Rig {
-        snap: Some(0.5),
+        snap: 0.5,
         ..four_corner()
     };
     assert_eq!(escape(half, 5.0), Vec3::new(0.0, -1.0, 0.0));
