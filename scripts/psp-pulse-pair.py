@@ -233,7 +233,7 @@ def main():
     turn, sign = 0.0, 1.0
     err, cmd = with_turn(turn)
     corrections = [{"turn_deg": turn, "heading_error_deg": err}]
-    for _ in range(4):
+    for _ in range(10):
         if abs(err) <= plat["tolerance"]["heading_deg"] / 4:
             break
         trial = turn + sign * err
