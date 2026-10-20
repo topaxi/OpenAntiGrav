@@ -22,12 +22,13 @@
 use oag_gameplay::{collision_world, handling_for};
 use oag_physics::{Environment, Handling};
 use oag_pulse as pulse;
+use oag_race::Course;
 use oag_tables::handling;
 use oag_trace::Trace;
 use oag_trace::replay::{Basis, DeltaSource, Inputs, Options, replay};
 use oag_trace::trace::AngularReading;
 use oag_vex::pads::PadVolume;
-use oag_vex::{collision, pads, vex};
+use oag_vex::{collision, pads, track, vex};
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";
@@ -85,13 +86,39 @@ fn load() -> Option<(Handling, Circuit, Vec<PadVolume>)> {
     let handling =
         handling_for(&stats, CLASS, speedup, global.special).expect("the team authors VENOM");
     let cage = oag_trace::replay::cage_of(&blob).expect("16_Track runs the cage");
-    Some((handling, Circuit { collision, cage }, volumes))
+    // The magstrip locator's samples, resampled exactly as `oag-trace run` resamples them:
+    // without them the hold never engages, and on the 1284 crossing, which is on a magstrip,
+    // our craft sinks toward its unheld hover height (`1.5` units below the recording in 17
+    // ticks) and reaches the penetration escape the original's hold never lets it near.
+    let ai_node = track::find_node(&blob, &nodes).expect("a WO Track node");
+    let ai = track::parse(blob.get(ai_node.payload()).expect("the payload")).expect("the spline");
+    let steps = Course::STEPS_PER_SEGMENT;
+    let samples: Vec<track::Sample> = ai
+        .paths
+        .iter()
+        .flat_map(|path| {
+            (0..path.points.len()).flat_map(move |segment| {
+                (0..steps).filter_map(move |step| path.sample(segment, step as f32 / steps as f32))
+            })
+        })
+        .collect();
+    Some((
+        handling,
+        Circuit {
+            collision,
+            cage,
+            samples,
+        },
+        volumes,
+    ))
 }
 
-/// The track's two contact sources: the mesh and the collision cage.
+/// The track's two contact sources, the mesh and the collision cage, and the spline the
+/// magstrip hold locates against.
 struct Circuit {
     collision: oag_physics::CollisionWorld,
     cage: oag_gameplay::cage::CageTrack,
+    samples: Vec<track::Sample>,
 }
 
 /// The recorded forward acceleration entering tick `t`, units/s^2.
@@ -185,7 +212,7 @@ fn gain(
         &Environment::default(),
         &circuit.collision,
         &options,
-        None,
+        Some(&circuit.samples),
     );
     ours.frames.last().expect("a row").speed - ours.frames.first().expect("a row").speed
 }
