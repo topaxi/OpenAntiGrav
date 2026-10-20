@@ -33,13 +33,14 @@ pub const EFFECTS: &Effects = &Effects::engine(Origin::Measured)
     .without(Trigger::LeachbeamAbsorb)
     .without(Trigger::MagstripSparks)
     .without(Trigger::MagstripZone)
-    // The PS2 authors an engine flare as a particle effect; the PSP does not,
-    // and `oag_fx::exhaust` draws the PSP's from its locator instead.
-    .with(
-        Trigger::EngineFlare,
-        EffectSpec::new(engine_effects::ENGINE_FLARE_EFFECT, Origin::Measured)
-            .with_platforms(Platforms::Only(&[Platform::Ps2])),
-    )
+    // The PS2 disc ships `WO_SHIP_ENGINEFLARE.POB` and nothing plays it: the
+    // executable names every `Data\Psys` effect it loads in one path list and this
+    // one is not in it (no name, no `0x0afe819a` hash), and GS dumps of the player's
+    // nozzle at rest and after four seconds of thrust hold one 128x64 flare quad per
+    // craft and no particle batch. The flare both pressings draw is the procedural
+    // quad `oag_fx::exhaust` builds from the locator; `engine-trail.md`, "The engine
+    // flare is one quad".
+    .without(Trigger::EngineFlare)
     // `Ship_Damage` (`0x088439ac`) weapon branch; `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     // The names are `WO_SHIP_COLL_SPARK_DAMAGE` and the LeachBeam variant.
     .with(

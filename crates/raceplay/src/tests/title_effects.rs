@@ -44,7 +44,8 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         let pure = !PURE_ABSENT.contains(&trigger);
         // HD drops the PS2 engine-flare particle too (`HD_ABSENT`).
         let hd = !HD_ABSENT.contains(&trigger);
-        assert_eq!(has(trigger), [true, pure, hd, false, false], "{trigger:?}");
+        let pulse = !PULSE_ABSENT.contains(&trigger);
+        assert_eq!(has(trigger), [pulse, pure, hd, false, false], "{trigger:?}");
     }
     for trigger in [Trigger::MagstripSparks, Trigger::MagstripZone] {
         // Pulse reads neither (`PULSE_ABSENT`) and neither does HD (`HD_ABSENT`);
@@ -113,7 +114,7 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
 
 /// The engine-table triggers whose effect no Pulse archive holds and no Pulse
 /// executable requests (`docs/formats/pulse-absent-effects.md`).
-const PULSE_ABSENT: [Trigger; 7] = [
+const PULSE_ABSENT: [Trigger; 8] = [
     Trigger::PlasmaLightningExpand,
     Trigger::PlasmaLightningCollapse,
     Trigger::TrailHitship,
@@ -121,6 +122,7 @@ const PULSE_ABSENT: [Trigger; 7] = [
     Trigger::LeachbeamAbsorb,
     Trigger::MagstripSparks,
     Trigger::MagstripZone,
+    Trigger::EngineFlare,
 ];
 
 /// The LeachBeam's three engine-table effects, which Pure does not ask for:
@@ -171,6 +173,9 @@ fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
             if title.name == oag_hd::TITLE.name && HD_ABSENT.contains(&trigger) {
                 continue;
             }
+            if title.name == oag_2048::TITLE.name && trigger == Trigger::EngineFlare {
+                continue;
+            }
             if title.name == oag_pure::TITLE.name && PURE_ABSENT.contains(&trigger) {
                 assert!(title.effect_on(trigger).is_none(), "Pure names {trigger:?}");
                 continue;
@@ -182,23 +187,16 @@ fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
             );
         }
     }
-    let flare = oag_pulse::TITLE
-        .effect_on(Trigger::EngineFlare)
-        .expect("the PS2 authors an engine flare");
-    assert!(flare.on.applies(Platform::Ps2));
-    assert!(!flare.on.applies(Platform::Psp));
-    assert!(
-        !oag_pulse::TITLE
-            .effects
-            .names_on(Platform::Psp)
-            .contains(&"WO_SHIP_ENGINEFLARE")
-    );
-    assert!(
-        oag_pulse::TITLE
-            .effects
-            .names_on(Platform::Ps2)
-            .contains(&"WO_SHIP_ENGINEFLARE")
-    );
+    // The PS2 disc ships `WO_SHIP_ENGINEFLARE.POB` and its executable never loads it
+    // (`engine-trail.md`, "The engine flare is one quad"): no pressing names it.
+    for platform in [Platform::Psp, Platform::Ps2] {
+        assert!(
+            !oag_pulse::TITLE
+                .effects
+                .names_on(platform)
+                .contains(&"WO_SHIP_ENGINEFLARE")
+        );
+    }
 }
 
 #[test]

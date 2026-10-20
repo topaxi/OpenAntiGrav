@@ -113,13 +113,11 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
 
 /// The eight the PS2 port authors, the PSP does not, and nothing triggers.
 ///
-/// The port's ninth extra is `WO_SHIP_ENGINEFLARE`, which **is** wired -
-/// [`oag_raceplay::ENGINE_FLARE_EFFECT`]. Its trigger needs no recovery
-/// (an engine flare is on while the craft is), so a PS2-sourced race plays
-/// the asset and `oag_fx::exhaust`'s procedural flare steps aside; a
-/// PSP-sourced one has no such asset and keeps the procedural flare. That
-/// asymmetry is the whole reason [`oag_raceplay::RACE_EFFECTS`] is a
-/// superset across sources rather than one list per disc.
+/// The port's ninth extra is `WO_SHIP_ENGINEFLARE`, which no Pulse pressing
+/// plays: the PS2 executable never requests it and a GS dump of the nozzle
+/// holds the procedural flare quad alone (`engine-trail.md`, "The engine flare
+/// is one quad"). It stays in [`oag_raceplay::RACE_EFFECTS`], a superset across
+/// sources rather than one list per disc.
 const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
     (
         "WO_CANNON_HIT_SHIP",

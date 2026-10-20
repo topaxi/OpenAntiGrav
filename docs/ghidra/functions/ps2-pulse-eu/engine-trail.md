@@ -20,12 +20,25 @@ The ribbon is the object at ship `+0x144`: built by `FUN_001d4310` (`FUN_001efbc
 
 `Looks::ps2_trail` (Pulse, PS2 only, Measured) -> `Race::trail_law()` -> `oag_fx::exhaust::TrailLaw::Baked`: layers from `PS2_FIRST_LAYER`, colours x `255/128`, no ramp, no glow stamp. PSP and every other title keep `Ramped`. Tests: `the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer`, `title_effects` rule test. Sheets: `data/reference/ps2-plume/` (not committed).
 
+## The engine flare is one quad, and `WO_SHIP_ENGINEFLARE` is never played (2026-10-20, `ps2-flare-halo`, confidence 85)
+
+The PS2 draws **one textured quad per craft** for the flare, not the particle effect the disc ships as `Data\Psys\WO_SHIP_ENGINEFLARE.POB`.
+
+- **Draw census.** Every GS draw group with a vertex in the player's nozzle box, in the rest dump (both fields) and in dumps at 0.2 s and 4 s of thrust: the hull, the ribbon's 64x64 groups (grey `210,147,...`, magenta `155,0,124`), a 32x32 engine-plate group, and exactly one `128x64` group (`ALPHA 0x48`, `TEST 0x7000d`, `TEX0.TFX 0`, four vertices `rgba 255`). Nothing else with a violet or multi-particle shape. The `.POB` has two looping emitters (`interval 4`, `life 20` ticks and a cone of `Flares`), so it would add several billboards per field.
+- **The quad's size follows the PSP law.** At rest it is 81 x 115 px, 110 x 157 px and 103 x 147 px of the 512 buffer in different fields; after 4 s of thrust 151 x 217 px. The PSP's half-size is `(intensity * 0.6 + 0.4) * 2.5` with a 0.75-1.25 flicker, a 2.5x span rest to thrust. Ours at the same pose is 79 px at rest against a hull 138 px wide (0.77 of the span); the original's is 0.63-0.86 of its own hull width (128 px). All four vertices are `rgba 255` in every dump: the PSP's alpha flicker (200-255) does not show on the PS2.
+- **The executable never loads the effect.** `SCES_547.48` lists every effect it plays as a `Data\Psys\<name>.POB` path (`0x1a90f8`-`0x1a93e0`, `0x1bebb8`-`0x1bec40`) and by name; `WO_SHIP_ENGINEFLARE` is in neither, and neither is its hash `0x0afe819a` in either byte order. The earlier wiring ("the trigger needs no recovery, an engine flare is on while the craft is") was an assumption, and it drew violet rays several times the plate's width that the original does not show.
+
+**Wired:** `oag_pulse::EFFECTS` no longer carries `Trigger::EngineFlare`, so a PS2 race draws the procedural flare quad as the PSP does (`Race::engine_flare_effect` is false). HD dropped the same trigger earlier. The `.POB` stays on the disc, unplayed.
+
+**Not matched yet.** The original's quad shows a violet halo round the plate that ours, now a quad too, draws far fainter. Tried and ruled out as the cause on a matched-pose sheet: a larger quad would overstate the extent (sizes agree), and four copies of the quad at the GS's `255/128` colour gain changed nothing visible. The GS law on this quad is `Cd + min(Cs * 255/128, 1) * min(As * 255/128, 2)` with `COLCLAMP 1`, up to about four times a texel; ours is `Cd + Cs * As` with `As <= 1`. A depth offset of the quad toward the camera (the quad's `z` 29862 sits above the plate group's 27418-27932 in the dump) brings glow out below the plate but not round it. Open: where the PS2 puts the quad in depth, and whether its alpha test (`ATST NOTEQUAL 0`) hides the ring.
+
 ## Open
 
 - The third term of the draw gate, `DAT_0027e7f0 != 0` (with ring full and count > 1): writers not read. It holds at rest in the state.
 - The ribbon's colours exceed 1.0 before the texel multiply (PS2 clamps per fragment before the add); ours does not clamp, so the core may read slightly hot. Judged on the pair sheet only.
 - `FUN_001f0780` (the colour bake) not read; unnamed.
-- Our ribbon is more speckled than the original's at the nozzle; the violet halo round the plate comes from the engine-flare `.POB` and is a separate comparison.
+- Our ribbon is more speckled than the original's at the nozzle (not compared; the ribbon's colour clamp above is its likely cause).
+- The violet halo round the plate is the flare quad, not the `.POB`: see "The engine flare is one quad". Other titles: Pure ships no PS2 pressing here and keeps the engine table's trigger, which finds no asset in its archive; 2048 and Omega name no such effect. Checked, not applicable.
 - Other titles: Pure has no PS2 pressing here; 2048/Omega not applicable (no `Trail`): checked, not applicable.
 
 ## Names

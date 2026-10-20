@@ -31,3 +31,17 @@ Neither capture is committed - both are derived evidence and gitignored, per the
 ## 2026-10-20 ps2-plume: the centred spike is the Trail ribbon (closed)
 
 The at-rest spike the PS2 draws is the `Trail` ribbon, not `shipboost.vex`: the PS2's draw (`0x001f0a08`) never applies the per-frame grey ramp that zeroes the PSP's ribbon at rest, and skips layer 0. Wired as `Looks::ps2_trail` -> `TrailLaw::Baked`; evidence in `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`. Still open: draw-gate global `DAT_0027e7f0`, the pre-texel colour clamp, the violet halo from the engine-flare `.POB` (a separate comparison).
+
+## 2026-10-20 ps2-flare-halo: the PS2 never plays the flare `.POB`
+
+The violet rays round ours' plate were the `WO_SHIP_ENGINEFLARE.POB` we played on PS2 sources. The original does not: its executable never requests the effect, and GS dumps at rest and at 4 s of thrust hold one `128x64` flare quad per craft (size on the PSP law, vertex `rgba 255`) and no particle batch. `oag_pulse::EFFECTS` now drops the trigger, so a PS2 race draws the procedural quad like the PSP. Evidence and numbers: `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`, "The engine flare is one quad". The lines above that say the `.POB` "is drawing" are superseded.
+
+## Open
+
+- The original's quad shows a violet halo round the plate that ours draws far fainter. Sizes agree (0.63-0.86 of the hull width against ours 0.77). A `255/128` colour and alpha gain did not change ours visibly; a depth offset toward the camera shows glow below the plate but not round it. Open: the quad's depth placement against the plate group, and the alpha test.
+- A cut-and-replay of the dump (`scripts/pcsx2-gsdump-alpha.py --plain` before and after the flare group) would give the original's exact pixel contribution; the replay's screenshot hotkey logged `Failed to render/download screenshot` on this Xvfb, so no replay image exists yet.
+- The ribbon's speckle and pre-texel colour clamp, `DAT_0027e7f0` and the bake `FUN_001f0780` are untouched.
+
+## Next Steps
+
+- Get the replay screenshot working, then diff the flare group's contribution against ours at the matched pose.
