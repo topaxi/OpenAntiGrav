@@ -557,8 +557,7 @@ pub const START_BOOST: oag_title::craft_laws::CodeStartBoost =
 /// Pure's sideshift force, compiled in where Pulse authors `<Airbrake sideshift>`:
 /// `Ship_UpdateAirbrakes` (`0x0892f64c`) pushes `right * 200.0` through `Body_AddForceWorld`
 /// while a shift's timer runs and the craft is grounded. **Measured live** on Pure PSP (USA),
-/// 2026-10-20: `body+0x140` gained `right * 200.000` on every update the shift flag was set. Held
-/// out of [`CRAFT_LAWS`] until our AI flies it.
+/// 2026-10-20: `body+0x140` gained `right * 200.000` on every update the shift flag was set.
 pub const SIDESHIFT: f32 = 200.0;
 
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
@@ -587,11 +586,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // sweep walls rose (Ace A `14 -> 53`, B `25 -> 72`) and Ace races wrecked twice where they
     // wrecked none (`docs/physics/pure-physics.md`). `None` flies Pulse's `<pitch>` stand-in.
     code_pitch: None,
-    // Measured (`SIDESHIFT`), held until our AI flies it: on, against Pulse's laws, Pure's Ace
-    // races walled 1104 -> 1650 ticks (one seed 405 -> 999, with a wreck) and the sweep's Ace
-    // branch-A walls rose 38 -> 51 (`docs/physics/pure-physics.md`). `None`: no sideshift, as
-    // before, since Pure's files author none.
-    code_sideshift: None,
+    // Measured (`SIDESHIFT`): Pure's files author no sideshift, its airbrake code pushes at `200`
+    // (`docs/physics/pure-physics.md`).
+    code_sideshift: Some(oag_title::pre_race::Sourced::measured(SIDESHIFT)),
     // Measured (`START_BOOST`, the player's engine alone). Its multipliers apply to an engine
     // with no doubling, so it rides on `engine_output_double` (`docs/physics/pure-physics.md`).
     code_start_boost: Some(oag_title::pre_race::Sourced::measured(START_BOOST)),
@@ -635,12 +632,14 @@ mod tests {
         assert_eq!(super::CRAFT_LAWS.code_pitch, None);
     }
 
-    /// Pure's sideshift pushes at `200`, a code literal measured live, held out of the table until
-    /// our AI flies it. Releasing the hold is this test's change.
+    /// Pure's sideshift pushes at `200`, a code literal measured live, and is on.
     #[test]
-    fn the_sideshift_is_measured_and_held() {
+    fn the_sideshift_is_measured_and_on() {
         assert_eq!(super::SIDESHIFT, 200.0);
-        assert_eq!(super::CRAFT_LAWS.code_sideshift, None);
+        assert_eq!(
+            super::CRAFT_LAWS.code_sideshift,
+            Some(oag_title::pre_race::Sourced::measured(200.0))
+        );
     }
 
     /// Pure's launch is its own compiled-in boost, measured live, the player's alone, and on.
