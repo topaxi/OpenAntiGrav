@@ -11,7 +11,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let team = args.next().unwrap_or_else(|| "Assegai".into());
     let only: Option<usize> = args.next().and_then(|a| a.parse().ok());
     let mut archives = oag_pulse::open(&image)?;
-    let blob = archives.read_name(&format!(r"Data\Ships\{team}\Ship.vex"))?;
+    let name = if team.ends_with(".vex") {
+        team.clone()
+    } else {
+        format!(r"Data\Ships\{team}\Ship.vex")
+    };
+    let blob = archives.read_name(&name)?;
+    let dump = std::env::var_os("DUMP_VERTICES").is_some();
     let nodes = vex::nodes(&blob)?;
     let classes = vex::classes_of(&blob)?;
     for (i, node) in nodes.iter().enumerate() {
@@ -45,6 +51,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     for k in 0..3 {
                         lo3[k] = lo3[k].min(v.position[k]);
                         hi3[k] = hi3[k].max(v.position[k]);
+                    }
+                }
+                if dump {
+                    for v in &batch.vertices {
+                        println!(
+                            "  v {:?} uv {:?} col {:?}",
+                            v.position, v.texcoord, v.colour
+                        );
                     }
                 }
                 println!("bbox {lo3:?} {hi3:?}");

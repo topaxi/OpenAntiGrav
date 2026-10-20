@@ -226,39 +226,50 @@ it, and our PS2 hull has never taken any of the rig: its vertices carry a colour
 ### De Konstruct, the 8-level residual (2026-10-20)
 
 The residual on the PSP hull (ours `(102,106,89)` against the original's `(94,98,78)` on
-the Time Trial grid) was read against the live list. PPSSPP, De Konstruct White (the
-reversed `05_Track`), the same Time Trial grid; the player's model at `entity + 0x8b4`
-(`entity` is the object holding the craft pointer at `+0x10`, not the craft the debugger
-script prints):
+the Time Trial grid) was read against the live lists. PPSSPP, De Konstruct White (the
+reversed `05_Track`), the same Time Trial grid. **Eleven GE light lists exist in
+memory** (found by scanning for the list's `0x5c`/`0x5d` ambient opening); three are
+*templates*, built with the craft at the origin and the default scale `255`, and one is
+the player's live hull:
 
 ```text
-5c  ambient (36, 32, 23)
-L0  vector (0.5845, 0.5568, 0.5902)   LDC0 (50, 85, 121)
-L1  vector (-0.5012, 0.6203, -0.6033) LDC1 (254, 217, 118)
-L2  vector (-15.0967, -19.7246, -0.8759) LDC2 (254, 246, 208)   LTYPE 0
-L3  off                                  scales (255, 255, 255, 255)
+live hull  (scales 179, 179, 250, 250)
+5c  ambient (25, 23, 16)
+L0  vector (0.584, 0.557, 0.590)   LDC0 (35, 60, 85)
+L1  vector (-0.501, 0.620, -0.603) LDC1 (178, 152, 83)
+L2, L3 off
+template   (scales 255, 255, 255, 255, model position (0, nan, 0))
+5c  ambient (36, 32, 23)    LDC0 (50, 85, 121)    LDC1 (254, 217, 118)
+L2  vector (-15.0967, -19.7246, -0.8759)  LDC2 (254, 246, 208)
 ```
 
-- **The rig matches ours to the byte.** The vectors are row 2 of the two
-  `DirectionalLight`s' world matrices (`light_rig_probe`, forward and reversed alike),
-  the colours are `trunc(c * 255) * 255 >> 8` with **no intensity** (`0.31` and `0.71` on
-  the ambient and the first directional do not enter, again), and the ambient is the sum.
-  The model's scale bytes are `255` here; ours reads `251` off the nearest spline point,
-  which makes ours about 1.5 % *darker*, the wrong way for the residual.
-- **L2 is a `wopoint` and our list has none.** `(-15.0967, -19.7246, -0.8759)` is the
-  node's **world position** to four decimals, i.e. `light - (0, 0, 0)`: the list was built
-  while the craft was at the origin, before the grid placed it, and not rebuilt (the
-  craft on the grid is 75.5 units from the node, outside its `50` outer radius, where
-  ours takes none). At the origin the node is 24.8 units away, inside the `30` inner
-  radius: strength 1, colour `(1.0, 0.9719, 0.82) * 255 * 255 >> 8 = (254, 246, 208)`, the
-  list's `LDC2` to the byte. **The `wopoint` law is confirmed a second time; the stale
-  position is a property of this state**, so the grid pair is not a fair test of the point
-  light here, and the vector points from below, where the hull's visible faces are not.
-- **The residual is not the list.** Ours is brighter by `(7, 7, 15)`, `(5, 6, 3)` and
-  `(10, 8, 7)` over three hull regions of the new pair, while the list ours builds matches
-  the original's except for that stale light. What remains, and was not isolated: the
-  original's hull is softer and flatter (a bloom or blur the hull does not escape), ours
-  has white edge highlights. **Open, confidence 40 that it is a post effect**, not a list.
+(The first read of this lane, `entity + 0x8b4`, landed on a template: it is the object
+with the craft pointer at `+0x10`, and its model holds no position. The earlier lane's
+`+0x8b4` read on Tech de Ra hit the live one.) What the lists say:
+
+- **The rig matches ours to the byte**, scale aside. The vectors are row 2 of the two
+  `DirectionalLight`s' world matrices (`light_rig_probe`), the colours are
+  `trunc(c * 255) * scale >> 8` with **no intensity** (`0.31` and `0.71` on the ambient
+  and the first directional do not enter, again), and the ambient is the sum.
+- **The live list takes no point light**: the craft on the grid is 75.5 units from the
+  `wopoint`, outside its `50` outer radius, which is what ours finds. The template's `L2`
+  is that node's **world position** to four decimals (`light - (0, 0, 0)`, strength 1 at
+  24.8 units, `(1.0, 0.9719, 0.82) * 255 * 255 >> 8 = (254, 246, 208)` to the byte): the
+  `wopoint` law again, on a list built before the craft was placed.
+- **The scale is the cause of part of the residual.** The live scales are `179`
+  (`(179, 179, 250, 250)`), the blend of a `255` control point and a `127` one at 0.59 of
+  the way between them (`127 + 0.41 * 128 = 179`; the craft's projection onto the chord
+  is 0.61). Ours read the nearest ring point's `187`. `Course::light_scale_at` now
+  projects the craft onto the chord to the neighbouring ring point and blends the two
+  (reads `(179, 179, 250, 250)` here, `hull_light_scale_ground_truth.rs`), and
+  `Race::ship_hull_scale`/`ship_hull_points` use it. Region means on the new pair
+  (ours before, after, original): `(123,132,111) (121,130,109) (116,125,96)`,
+  `(100,94,58) (97,90,56) (95,88,55)`, `(75,68,76) (73,67,75) (65,60,69)`.
+- **What is left is `(5,5,13)`, `(2,2,1)` and `(8,7,6)`**: the second region is closed
+  and the first and third keep most of their gap, which was not isolated. The
+  original's hull is softer and flatter (a bloom or blur the hull does not escape) and
+  ours has white edge highlights; both are suspects, neither measured.
+  Confidence 40 that the rest is a post effect and not the light list, which now matches.
 
 ## Applied names
 

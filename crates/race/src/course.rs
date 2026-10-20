@@ -305,6 +305,49 @@ impl Course {
         self.light_scales.get(index).copied()
     }
 
+    /// The four light-scale bytes at a craft's own place on the ring, `at`
+    /// being its position and `index` the ring point nearest it.
+    ///
+    /// The original blends the scale at the craft's own spline parameter, so a
+    /// craft between a bright and a dark stretch reads a value between the two
+    /// (live on De Konstruct, `05_Track` reversed: the craft 0.59 of the way
+    /// from a `255` point to a `127` one read `179`, where the nearest ring
+    /// point holds `187`). This takes the craft's projection onto the chord
+    /// to the neighbouring ring point it lies towards and blends the two
+    /// points' bytes by that fraction. At a point itself, or off the ring's
+    /// end, it is [`Self::light_scale`].
+    #[must_use]
+    pub fn light_scale_at(&self, index: usize, at: Vec3) -> Option<[u8; 4]> {
+        let here = self.light_scales.get(index).copied()?;
+        let from = self.positions.get(index).copied()?;
+        let count = self.positions.len();
+        let mut best: Option<(f32, [u8; 4])> = None;
+        for next in [(index + 1) % count, (index + count - 1) % count] {
+            let (Some(to), Some(scale)) = (self.positions.get(next), self.light_scales.get(next))
+            else {
+                continue;
+            };
+            let chord = *to - from;
+            let length_squared = chord.dot(chord);
+            if length_squared <= f32::EPSILON {
+                continue;
+            }
+            let t = (at - from).dot(chord) / length_squared;
+            if t > 0.0 && best.is_none_or(|(b, _)| t > b) {
+                best = Some((t.min(1.0), *scale));
+            }
+        }
+        let Some((t, there)) = best else {
+            return Some(here);
+        };
+        let mut out = here;
+        for k in 0..4 {
+            let blended = f32::from(here[k]) + (f32::from(there[k]) - f32::from(here[k])) * t;
+            out[k] = blended.round() as u8;
+        }
+        Some(out)
+    }
+
     /// The alternate paths off the ring, in junction order - see [`Branch`].
     #[must_use]
     pub fn branches(&self) -> &[Branch] {

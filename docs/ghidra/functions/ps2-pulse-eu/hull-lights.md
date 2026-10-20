@@ -102,7 +102,8 @@ The probe `crates/vex/examples/ship_colour_census.rs` prints the `253` census.
 Pure ships the nodes and its executable ships the importers. Every circuit-sized entry of
 `Data.wad` was scanned for the `wopoint` payload shape (`0x20` bytes: colour, a `1.0`,
 inner and outer radius): classes `0x381` (`wopoint`) and `0x380` (`wospot`) - Pulse's
-`0x3cf`/`0x3ce` less `0x4e`, the same offset as the rest of the class table
+`0x3cf`/`0x3ce` less `0x4e`, the offset `WO Track` (`0x3bb` against `0x36d`) and `Skycube` (`0x3c6`
+against `0x378`) carry
 ([pure-status.md](../../../formats/pure-status.md)) - in seven circuit files (148, 45,
 72, 100, 153, 130 and 14 nodes), `crates/pure/examples/pure_light_nodes.rs`. The
 executable's strings are `WOPoint_ImportNode`, `WOSpot_ImportNode` and
