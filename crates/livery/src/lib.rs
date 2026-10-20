@@ -391,8 +391,9 @@ fn one(
         .read_name(&hull_name)
         .with_context(|| format!("reading {hull_name}"))?;
     // **A PS3 hull's geometry is in the `.rcsmodel` beside it**, so it is read
-    // from the pair. Untextured and lit off computed face normals; see
-    // `oag_mesh::mesh::rcs` for what is decoded and what is not. A source
+    // from the pair: textured, with the file's own vertex normals where it
+    // authors them (Zone's hull reads 42,919); see `oag_mesh::mesh::rcs` for
+    // what is decoded and what is not. A source
     // with no sibling draws nothing and says so rather than substituting
     // anything.
     if oag_vex::vex::geometry_is_external(&blob) {
