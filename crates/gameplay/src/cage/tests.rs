@@ -151,10 +151,22 @@ fn caged(state: &mut oag_physics::ShipState, eliminator_route: bool) -> bool {
 #[test]
 fn a_wreck_leaves_the_cage_in_state_6() {
     use oag_physics::CraftState::{Destroyed, Eliminated, Racing};
-    assert!(caged(&mut far_off(Racing, 0.0), false), "the reset distance");
-    assert!(caged(&mut far_off(Destroyed, 0.3), false), "state 4 is caged");
-    assert!(caged(&mut far_off(Eliminated, 0.7), false), "state 5's dwell is caged");
-    assert!(!caged(&mut far_off(Eliminated, 0.0), false), "state 6 is skipped");
+    assert!(
+        caged(&mut far_off(Racing, 0.0), false),
+        "the reset distance"
+    );
+    assert!(
+        caged(&mut far_off(Destroyed, 0.3), false),
+        "state 4 is caged"
+    );
+    assert!(
+        caged(&mut far_off(Eliminated, 0.7), false),
+        "state 5's dwell is caged"
+    );
+    assert!(
+        !caged(&mut far_off(Eliminated, 0.0), false),
+        "state 6 is skipped"
+    );
     assert!(
         caged(&mut far_off(Eliminated, 0.0), true),
         "an Eliminator wreck goes to state 8, which is caged"

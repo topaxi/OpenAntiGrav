@@ -196,8 +196,16 @@ player and field, on a track whose header flag is set and whose points carry the
 bytes. The return of `2` is `oag_raceplay`'s `RespawnCause::Cage`, through the
 original's reset relocation (`Race::reset`). The race's own `Reset`-volume test now
 reads the step's pose before the cage moves the craft, as the original's `Reset`
-contact comes out of the narrowphase first. **Not ported:** the `entity+0x8c == 6`
-skip, and `CageEffect_Spawn`'s visual (the trigger is now known: one per cage
+contact comes out of the narrowphase first. **The `entity+0x8c == 6` skip is ported for
+a wreck (2026-10-20)**: `FUN_088418e0` loads `s1 = 6` at `0x0884193c`, and the cage block
+reads `lw a0, 0x8c(s2)` at `0x08842360` and branches past the `Cage_UpdateCraft` call on
+`beq a0, s1` at `0x08842364` (static; `s1` is callee-saved, no write to it was looked for
+between). Outside the Eliminator a wreck reaches state 6 1.5 s after it finishes exploding
+(measured live 2026-10-02, `shield.md`), so `oag_gameplay::cage::pass` skips a craft for
+which `oag_physics::damage::in_state_6` holds. On de Konstruct Black (12 forward cells by
+nine perturbation scales, `cage_effect_sweep`) it changes 5 of 108 races and moves
+destroyed 59 to 60: a wreck's pose decides nothing else. Still not ported: the finished
+player, which also reads `6`, and `CageEffect_Spawn`'s visual (the trigger is now known: one per cage
 contact, at the boundary point). Our own track format carries the cage bytes but
 not the header flag, so a track file runs no cage.
 
@@ -208,6 +216,30 @@ bytes on all 839 points, the other fifteen circuits neither
 **inherited, not measured**: HD's code is not read. 2048 and Omega (version
 `0x107`, 96-byte points): not checkable from data, as the points end before
 `+0x68`, so no cage; whether their code has one is not read.
+
+### What the cage does to our AI (2026-10-20, `ai-gate-robustness`)
+
+De Konstruct Black's forward field (four classes, seeds 1-3, seven Aces) over the nine
+scales of `oag-raceplay`'s `tests/perturb` (108 races each way), cage off against on
+(`cage_effect_sweep`, `OAG_SWEEP=1`):
+
+| | cage off | cage on |
+| --- | ---: | ---: |
+| destroyed per board of 12 cells, mean (sd) | 5.3 (2.9) | 6.6 (2.5) |
+| deaths where wall charge was the larger share | 39 | 39 |
+| deaths where weapons (the rest) were the larger share | 9 | 20 |
+| weapon damage taken, all craft | 18,336 | 20,715 |
+| wall charge, all craft | 20,308 | 21,099 |
+| `Airborne` rescues | 755 | 37 |
+| `ResetZone` rescues | 581 | 948 |
+| `Cage` resets | 0 | 208 |
+
+So the cage does not kill through the walls: a cage contact costs no shield (friction 0)
+and wall-dominant deaths are unchanged. It keeps craft in the tube that would have beached
+and been put back by the `Airborne` rescue, replacing those with reset-zone rescues and
+cage resets; the extra deaths are weapon deaths (7 of the 60 cage-on deaths came within
+10 s of a cage reset). Both the cage and the reset relocation are the original's; whether
+the original's field takes the same extra weapon deaths is not measured.
 
 ### The denominator on a rolled craft (contact-response.md's open question)
 

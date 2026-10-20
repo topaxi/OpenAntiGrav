@@ -204,6 +204,51 @@ opponent on this engine's driver that never flew an autopilot stint, not the ori
 driver. With `air_trim`, 12 seeds, novice and Ace (79 paired races): rescues `10 -> 11` with
 the switch off and `10 -> 10` on.
 
+### The gates judge a distribution (2026-10-20, `ai-gate-robustness`)
+
+The sweep above is now a tool that touches no simulation crate: `oag-raceplay`'s
+`tests/perturb` scales every craft's airborne gravity (`Physical::flight_gravity`, read
+only by `oag_physics::passive::gravity` while airborne) by `1 + eps` on the loaded
+`Setup`, so the race and every speed plan it learns see it, and `eps = 0` is the race bit
+for bit. The race seed was rejected as the knob: it re-draws the roster (a different team
+in the lone slot) and no plan build reads the generator. `OAG_PERTURB=<eps>` offsets
+every run of every hooked test, for sweeps. All of it is chosen, not measured.
+
+Calibration, every law on (the 58 AI-gate tests, regressions per scale):
+
+| `eps` | `0` | `1e-3` | `-1e-3` | `1e-4` | `-1e-4` | `1e-5` | `-1e-5` | `1e-6` | `-1e-6` | median | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| airborne gravity | 0 | 7 | 6 | 3 | 7 | 3 | 8 | 5 | 4 | 5 | 8 |
+
+against the force-term sweep's "all four + `air_trim`" row (median 6, max 8): the two
+knobs reach the same chaos. Nearly all of it is `ai_clean_lap_gate`'s `06_Track` and
+`07_Track` rows and `speed_plan_ground_truth`'s `06_Track` VENOM and RAPIER and
+`14_Track` PHANTOM, the gap landing at samples 1233-1241. The other AI gates
+(`ai_dekonstruct_black_ground_truth`, `ai_dekonstruct_symptoms_ground_truth`,
+`ai_fork_split_ground_truth`, the HD, Omega and 2048 original-field tests in
+`oag-raceplay`) failed 0, 5, 1, 0, 1, 1, 1, 0, 0 of 53 over the same scales, no test more
+than twice; they stay single runs. The quiet-replay moving pack never failed.
+
+Converted: `ai_clean_lap_gate` (each row the median of five races, one per scale of
+`perturb::GATE`), `speed_plan_ground_truth` (each layout the majority of five builds) and
+the autopilot's every-circuit run (twelve tests, a majority of five races each). A gate's
+median is itself a draw, so its bound is the worst median over the nine offsets of
+`perturb::BOUND_OFFSETS`; two speed-plan layouts whose majority flips between offsets
+(`06_Track` VENOM, 3 of 9 clean; `29_Track` RAPIER, 8 of 9) are printed and not asserted.
+`06_Track` RAPIER's lap ceiling is its slow mode (2,693 ticks, the plan not verifying;
+the fast mode, 1,750, in 4 of 9 medians): the plan-selection amplifier in one row.
+
+- **Held out** (`perturb::HELD_OUT`, eight offsets no bound was taken from), the 69
+  converted tests failed `2 0 0 0 1 1 0 0`: median 0, max 2, against the single runs'
+  median 5, max 8.
+- **Strength**: with `oag_ai::air_trim` returning `0` (a scratch edit; the force-term sweep
+  read "all four, no `air_trim`" median 8, max 11, which the interim bar rejects), the
+  converted gates failed 4, 2 and 4 tests at offsets `0`, `-1.5e-5` and `9e-4`:
+  `14_Track` PHANTOM and `speed_plan_phantom_forward` every time.
+
+Cost: five races where there was one, about `+30` s of the full suite's wall clock at its
+measured parallelism; the slowest converted test is a speed-plan slice at about 23 s.
+
 ## The pitch-input gate, live
 
 `Ship_UpdatePitch` (`0x08848d08`) applies the pitch axis only while
@@ -223,7 +268,7 @@ So the original drops the whole input exactly where the dot product crosses
 (`0.9022` open, `0.8984` closed) and 1297/1298, capture 3 ticks 1312/1313
 (`0.9009`, `0.8976`). **Confidence 90. On (2026-10-20)**, after the tensor and the bias: on its own it cost
 the original's autopilot driver two rescues on Pulse's `05_Track`
-(`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`,
+(`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`, twelve tests since 2026-10-20,
 tick 7282), which passes with all three on; that test also fails under 2 of the 9
 perturbations [above](#our-ai-against-the-air-laws) with every law off. The mechanism is
 `oag_physics::engine::pitch_aligned`,
