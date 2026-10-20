@@ -171,7 +171,7 @@ function render() {
   const cap = $("cap"); cap.innerHTML = "";
   const h3 = document.createElement("h3"); h3.textContent = e.game + ": " + e.title; cap.append(h3);
   const dl = document.createElement("dl");
-  const rows = [["Track", e.caption.track], ["Craft", e.caption.craft], ["State", e.caption.state], ["Setting", e.caption.setting]];
+  const rows = [["Track", e.caption.track], ["Craft", e.caption.craft], ["State", e.caption.state], ["Setting", e.caption.setting], ["Environment", e.caption.environment]];
   for (const [k, v] of rows) if (v) { const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); }
   cap.append(dl);
   if (e.note) { const n = document.createElement("div"); n.className = "note"; n.textContent = e.note; cap.append(n); }

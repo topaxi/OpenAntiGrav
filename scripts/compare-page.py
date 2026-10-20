@@ -44,7 +44,7 @@ MAIN_SITE_PROJECT = "openantigrav"
 
 SLOTS = ("original", "before", "ours")
 LABELS = {"original": "Original", "before": "Ours (before)", "ours": "Ours"}
-CAPTION_KEYS = ("title", "track", "craft", "state", "setting")
+CAPTION_KEYS = ("title", "track", "craft", "state", "setting", "environment")
 # `platform` names the console the original ran on; the credit under every image is
 # built from `game` and `platform`. Publishing refuses an entry without one.
 LEGAL = ROOT / "docs" / "overview" / "legal.md"

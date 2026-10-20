@@ -1,0 +1,141 @@
+# The environment of every original-vs-ours comparison pair, one table per platform.
+#
+# Read by `scripts/compare_env.py`, which `psp-pulse-pair.py`, `pcsx2-pulse-pair.py`
+# and `rpcs3-hd-pair.py` import: a pair whose recorded environment differs from this
+# file, or between its two sides beyond [tolerance], is REFUSED naming the mismatch,
+# and the environment is written into the manifest so the compare page shows it.
+# Developer file (ADR-0064 covers player-edited files), no [toml-schema] header.
+# Docs: docs/tools/compare-page.md.
+#
+# Resolutions are the maintainer's request of 2026-10-20: HD/Fury and Omega at full HD,
+# 2048 at the Vita's own 960x544, Pulse (and Pure) at the PSP's 480x272, and Pulse PS2
+# at 720p, which is a CHOSEN pick (not measured, not the PS2's own output), adjustable
+# here when the page looks wrong.
+
+[ours_defaults]
+# Every render setting that has an "original" value is set to it; the upscaler, FSR,
+# SMAA and the screen filter are off, motion blur is off (neither original has it), and
+# anisotropic filtering is off (no original forces it). These are written into the
+# pair's private settings.toml AND passed on the command line where a flag exists, and
+# the settings file the run rewrites is read back and compared (compare_env.read_back).
+render_scale = 100
+reconstruction = "off"
+msaa = "off"
+motion_blur = "off"
+shadows = "original"          # settings file only: `--shadows` takes off|blob
+model_detail = "original"
+texture_detail = "original"
+screen_filter = "off"
+anisotropy = "off"
+boost_fov_kick = 0            # our own effect, off for a comparison (settings.rs boost_fov_kick)
+fov_percent = 100             # [graphics] fov: 100 is the authored value
+presented = false             # an ungraded capture at exactly --size, never through the blit
+hud = "on"                    # both sides draw the HUD; the original cannot switch it off
+camera = "original"           # our camera is the original's own pose and fov, never ours
+brightness = 100
+gamma = 100
+
+[tolerance]
+# Ours at the rendered tick against the original's recorded state.
+pos_units = 0.5               # ship position, world units
+heading_deg = 1.0             # angle between the two ships' forward vectors
+fov_deg = 0.05                # field of view, vertical degrees
+camera_pos_units = 1.0       # the original camera between two captures of one state (rerender drift warning)
+
+[platform.pulse-psp]
+title = "Wipeout Pulse"
+game = "Wipeout Pulse (USA)"
+platform = "PSP"
+image = "data/images/pulse-psp-usa.chd"
+output = [480, 272]
+output_note = "the PSP's own 480x272"
+aspect = "psp"
+profile_key = "Wipeout Pulse (PSP)"
+[platform.pulse-psp.emulator]
+name = "PPSSPP"
+version = "v1.20.4"
+renderer = "software"         # the reference, never OpenGL
+internal_resolution = 1       # [Graphics] InternalResolution, 1 = 480x272
+anisotropy = "off"            # [Graphics] AnisotropyLevel = 0
+frameskip = 0
+post_shader = "none"
+capture = "window"
+capture_note = "the SDL window is 960x544 while the pause menu loads the state (psp-state.py clicks its pixel positions), then xdotool windowsize 480 272 and the Xvfb root is cropped at the window origin: the shot is the 1x frame, no scaling at any step"
+
+[platform.pure-psp]
+inherits = "pulse-psp"
+title = "Wipeout Pure"
+game = "Wipeout Pure (USA)"
+image = "data/images/pure-psp-usa.chd"
+profile_key = "Wipeout Pure (PSP)"
+status = "not reachable yet: no Pure grid state, camera node not located (docs/tools/compare-page.md)"
+
+[platform.pulse-ps2]
+title = "Wipeout Pulse"
+game = "Wipeout Pulse (EU)"
+platform = "PS2"
+image = "data/images/pulse-ps2-eu.chd"
+output = [960, 720]
+output_note = "CHOSEN, not measured: the maintainer's pick of 720 lines for the PS2 (the console outputs 640x448 or 512x448), at the game's own 4:3 because the saved state has no 16:9 option on (1280x720 would stretch or pillarbox); adjustable here"
+aspect = "ps2"
+profile_key = "Wipeout Pulse (PS2)"
+[platform.pulse-ps2.emulator]
+name = "PCSX2"
+renderer = "OpenGL hardware"  # the software renderer needs a Vulkan present queue Xvfb does not give (pcsx2-drive.py)
+upscale_multiplier = 2        # [EmuCore/GS] upscale_multiplier; 1 is the GS's own 512 lines
+screenshot_size = 1           # [EmuCore/GS] ScreenshotSize: internal resolution, aspect corrected
+widescreen = "off in the saved state (4:3 frame)"
+deinterlace = "none"
+capture = "gs-screenshot"
+capture_note = "PCSX2's own GS screenshot (2x internal, aspect corrected, 1365x1024), then ONE Lanczos resize to the output size, recorded in pair.json; ours is rendered at the output size natively"
+
+[platform.hd-fury]
+title = "Wipeout HD"
+game = "Wipeout HD Fury (EU)"
+platform = "PS3"
+image = "data/images/hdfury-ps3-eu-dec.iso"
+output = [1920, 1080]
+output_note = "full HD"
+aspect = "wide"
+profile_key = "Wipeout HD (PS3)"
+[platform.hd-fury.emulator]
+name = "RPCS3"
+renderer = "Vulkan"
+resolution = "1280x720"
+resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080
+write_color_buffers = true    # BOTH config.yml and custom_configs/config_BCES00664.yml
+output_scaling = "Nearest"
+msaa = "Disabled"
+anisotropic_override = 0      # 0 = the game's own
+stretch_to_display_area = false
+capture = "rpcs3-drive.py capture"
+capture_note = "the emulator's own frame; a black letterbox is trimmed, the size is checked against the output"
+
+[platform.omega]
+title = "Wipeout: Omega Collection"
+game = "Wipeout Omega Collection (EU)"
+platform = "PS4"
+output = [1920, 1080]
+output_note = "full HD"
+aspect = "wide"
+profile_key = "Wipeout: Omega Collection (PS4)"
+status = "no pair script: shadPS4 reaches MAIN MENU only, no race reached (2026-10-20)"
+[platform.omega.emulator]
+name = "shadPS4"
+version = "0.20"
+resolution = "1920x1080"
+capture = "grim on a headless sway"
+
+[platform.2048]
+title = "Wipeout 2048"
+game = "Wipeout 2048 (EU)"
+platform = "Vita"
+output = [960, 544]
+output_note = "the Vita's own 960x544"
+aspect = "psp"
+profile_key = "Wipeout 2048 (Vita)"
+status = "no pair script: Vita3K tap walk reached an intro cinematic, no race (2026-10-20)"
+[platform.2048.emulator]
+name = "Vita3K"
+resolution_multiplier = 1     # 1x native 960x544
+capture = "vita3k-drive.py race --screenshot"

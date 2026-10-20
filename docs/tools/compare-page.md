@@ -34,7 +34,7 @@ files a player or modder edits); a wrong shape is refused by name instead
 | `id`, `game`, `title` | required; `game` is the title and region (`Wipeout HD (EU)`) and groups the list |
 | `platform` | the console the original ran on (`PS3`, `PSP`, `PS4`, `Vita`); required to publish, a warning otherwise (see Credits) |
 | `original`, `before`, `ours` | image paths; at least two |
-| `track`, `craft`, `state`, `setting` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size |
+| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the environment line `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture) |
 | `note` | free text, shown under the caption (what is not matched) |
 | `not_captured` | why there is no original; shown as a warning |
 
@@ -65,23 +65,83 @@ ADR-0074 requires both on every published page, so every page carries them:
   --check-statement` runs only that check; `just check-docs` runs it, so the gate fails on
   drift. The ADR is immutable, so a mismatch is fixed in `legal.md`.
 
+## Environment parity: the profile and the checks (2026-10-20)
+
+**The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and
+our environment as close as possible *before* anything renders). The old pairs were taken at whatever size the
+emulator window had (PPSSPP 960x544, RPCS3 1760x990 with black bars, PCSX2 512 lines), with the original's race
+clock running on from the state and ours at its own tick 300, so the GO board, the record panel and the HUD clock
+differed by construction. None of them is a reference now.
+
+`scripts/compare-environment.toml` is the one **per-title environment profile**; `scripts/compare_env.py` reads
+it. A pair script builds a `compare_env.Pair`, records what each side actually ran with, and `Pair.finish` writes
+`pair.json` and **refuses** (exit 3, every mismatch named) when a check fails. `python3 scripts/compare_env.py
+manifest OUT.toml DIR...` turns the non-refused `pair.json` files into a page manifest whose `environment` line
+the page shows under each pair.
+
+| Platform | Output | Original's emulator settings (in the profile) | Ours |
+| --- | --- | --- | --- |
+| Pulse PSP (and Pure PSP, same values) | 480x272, the PSP's own | PPSSPP v1.20.4 software renderer, `InternalResolution = 1`, `AnisotropyLevel = 0`, no post shader | `--size 480x272`, aspect `psp` |
+| HD/Fury | 1920x1080 | RPCS3 Vulkan, `Resolution 1280x720`, `Resolution Scale 150`, `Output Scaling Mode Nearest`, `MSAA Disabled`, anisotropic override 0, `Write Color Buffers: true` in `config.yml` **and** the game's custom config | `--size 1920x1080`, aspect `wide` |
+| Pulse PS2 | **960x720, a chosen pick** (the maintainer asked for 720p; the saved state is the game's own 4:3, so 720 lines at 4:3, adjustable in the profile) | PCSX2 OpenGL hardware renderer (the software renderer needs a Vulkan present queue Xvfb does not give), `upscale_multiplier 2`, `ScreenshotSize 1` (internal, aspect corrected, 1365x1024), then ONE Lanczos resize to 960x720 | `--size 960x720`, aspect `ps2`, rendered natively |
+| Omega | 1920x1080 | shadPS4, no race reached, no pair script | not run |
+| 2048 | 960x544, the Vita's own | Vita3K 1x, no race reached, no pair script | not run |
+
+**Ours is the same on every platform** (`[ours_defaults]`): every render setting with an `original` value is set
+to it (shadows `original`, model and texture detail `original`), upscaler, FSR, SMAA, MSAA, motion blur and screen
+filter off, render scale 100, anisotropic filtering off (no original forces it), the boost fov kick off (our own
+effect), fov 100 %, an ungraded capture at exactly `--size` (no `--presented`), the HUD on (the original cannot
+switch it off), and the camera is the original's own pose and fov. The profile is written into the pair's private
+`settings.toml` **and** passed as flags where a flag exists, and the file the run rewrites is **read back** and
+compared with the profile (`read_back`).
+
+**State parity, recorded in `pair.json` on both sides:** circuit and layout file (our own start on each layout
+against the original's grid pose, `--layout auto`; refused beyond 25 units or 5 degrees), game mode and speed
+class (declared by the state's file name or sidecar; **not read from RAM**), team, **race clock** (below), ship
+position and heading **at the rendered tick** (measured from a second, `--trace-out` run of the same command,
+within 0.5 units and 1 degree, so a pose fed to ours is not echoed back as evidence), and the field of view. The
+binary that rendered ours is recorded by hash.
+
+**The race clock** is the state difference that mattered most: the original's HUD clock runs on from the state
+(PPSSPP 40 s after GO on the grid states) and its GO board fades and its record panel counts down with it, so ours
+runs `GO_TICK = 276` ticks (our countdown) plus the original's clock times 60 (`--ours-ticks`). The original's clock
+is read out of its RAM: PPSSPP f32 seconds at `0x08B344B0` (the CPU is stopped straight after the load so it stands
+still), HD f32 at craft `+0x7014` (read in the same pause as the pose), PS2 f32 at EE `0x70EE9C` of the state file
+(the HUD reads 0.19 s under it). With it the GO board, the record panel and the HUD clock match on the Pulse PSP and HD
+test pairs. **A stationary craft in ours yaws about 0.26 degrees a second on HD (Talon's: 26 degrees over 6,000
+ticks), the original's does not** - a simulation lead, not an environment one - so `rpcs3-hd-pair.py` corrects the
+yaw it hands to `--pose` until the heading measured at the rendered tick is the original's (`pair.json`
+`ours.yaw_corrections`). Pulse does not drift.
+
 ## Capturing a pair per title
 
-Every recipe runs in its own display and data directory, muted, and is stopped by
-PID. A pair is only a pair when the caption says what matched.
+Every recipe runs in its own display and data directory, muted, and is stopped by PID. A pair is only a pair when
+its `pair.json` has no failed check.
 
 | Title | Status | What matched | How |
 | --- | --- | --- | --- |
-| Pulse PSP | **works**, 2-3 min per circuit | ship pose, camera, clock not | `psp-state.py load` a Time Trial grid state (about 3 s, `data/saves/pulse-psp/time-trial-<circuit>-venom-grid.ppst`), then `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track NN_Track [--reversed] --state <state>`: it restores, waits out PPSSPP's "State loaded" toast, captures four ticks with `psp-trace.py --camera --shot-every 2`, crops the 960x544 window out of the Xvfb shot and renders ours with `oag-game --race --pose-from trace.csv --pose-tick 0 --ticks 300 --size 960x544` (`--ours-ticks`: the saved state is after GO, and tick 0 would draw the pre-countdown gantry, a dark board, and no engine glow). No state yet: `psp-drive.py menu --unlock --track-down N --any-track` (about 105 s from a fresh profile, N from [the table](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)), then `psp-state.py save 1 --keep`. Which layout the entry loaded is read from the start position against `oag-game`'s own start on `NN_Track` forward and reversed (five White entries load the reversed file, `docs/formats/track.md`). Full pipeline: [frame comparison](frame-compare.md) |
-| HD (PS3) | **works**, about 3 min per circuit | ship pose, camera and fov; clock not (ours runs `--ours-ticks 300` past its own countdown, as on Pulse PSP, so the gantry shows GO; `0` keeps the craft exactly on the pose but draws the pre-countdown board) | One state per circuit: `scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0\|1> <name>` cold-boots, walks Racebox Time Trial (Track Select index 0 is Vineta K, 8 Talon's Junction; Harimau classic is 9 `right`s and a `down`), starts the race and saves `data/saves/hd-fury/<name>.SAVESTAT.zst` (the emulator exits). Then `scripts/emu-restore-state.sh <lane> <state> --restart` and `OAG_RPCS3_ATTACH=1 scripts/rpcs3-hd-pair.py --out D --team harimau`: `rpcs3-drive.py capture --press none` (what `rpcs3-hd-pair.py` passes; the default holds `cross`, which is throttle in a running Time Trial) reads the camera and, in the same pause, the player body (`ship` in the JSON); ours is `oag-game --race --pose x,y,z,yaw --camera-pose <9 numbers> --camera-fov <deg> --ticks 0 --size 1760x990`, the yaw solved against our own attitude at that place (`rpcs3_place.our_attitude`). `pair.json` records the pitch and roll `--pose` cannot carry (spline attitude): 0.00 to 0.34 degrees on 12 circuits. **`--team` carries HD's variant** (`Assegai_c1` is the Fury Concept craft; `--variant _c1` loads nothing different). Ours at `--ours-ticks 0` shows the craft where the original has it but an unlit gantry board; later ticks light the board and the craft sinks (ours settles about 1.9 units below the original's body at Talon's, by tick 60). All 12 circuits plus an Assegai_c1 pair are in `data/reference/compare-page/hd.toml`, each caption built from its own `pair.json` (heading error, uncarried tilt, original's body speed); ours was the main checkout's `target/debug/oag-game` of 2026-10-20 13:18 |
-| Pulse PS2 | **works**, ship pose only | ship pose; our camera is our own | A `.p2s` is a zip holding EE RAM, so `scripts/pcsx2_state.py find STATE.p2s --write --circuit "..."` reads the craft pointer out of the file (the one struct with a body pointer at `+0x1ec`, a basis equal to the body's, and a camera rig pointing at the body) and records it, with the circuit, in `STATE.p2s.json`; `pcsx2-trace.py --state-file STATE.p2s` reads it in place of `--craft`. Pair: `scripts/pcsx2-pulse-pair.py --slot S --state <p2s> --track NN_Track` on a booted private instance (`OAG_PCSX2_DATA`, `OAG_PCSX2_DISPLAY`): restore, GS screenshot, three ticks of pose, ours from `--pose-from`. The saved state's circuit was not recorded; it is Moa Therma White (03_Track **forward**, Single Race, the player in grid slot 8 of 8: the start is 1.4 units from the *reversed* layout's start line but faces the forward direction, so a reversed render says WRONG WAY) |
-| Pure (PSP) | **not reachable, for now** | | `psp-drive.py menu` is Pulse's walk and stops at `the front end is in None`; `psp-trace.py --camera` breaks at Pulse USA's `Camera_UpdatePlayerView` (`0x0883c13c`), and Pure's counterpart is not located ([Pure camera rig](../ghidra/functions/psp-pure-usa/camera.md) is a static read of the rig only). Needs a hand walk to a grid, a save state and the camera node |
-| 2048 (Vita) | **partial** | nothing | `vita3k-drive.py race --screenshot` boots Vita3K on a private config, on its own weston and Xwayland display, and writes a frame; its fixed-timing tap walk never changed screen in the 2026-10-20 run and the frame was an intro cinematic, not a race |
-| Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. Ours is `oag-game <extracted> --menu-page main`, **our own menu**, so the pair is a layout comparison. No race was reached |
+| Pulse PSP | **works**, about 1.5 min per circuit | everything in the checks above | `PPSSPP_EXTRA_INI=<file from compare_env.py ppsspp-ini pulse-psp> scripts/ppsspp-start.sh <lane> <display> <port> <image>`, then `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track NN_Track --state <ppst>` (it resizes the SDL window to 960x544 for `psp-state.py`'s pause-menu clicks, loads the state, stops the CPU, resizes the window to the native 480x272 and crops the Xvfb root at the window origin: nothing is scaled), or `scripts/compare-pulse-psp-batch.py --out D` for all 24 kept states. No state yet: `psp-drive.py menu --unlock --track-down N --any-track` (about 105 s from a fresh profile, N from [the table](../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29)), then `psp-state.py save 1 --keep`. Full pipeline: [frame comparison](frame-compare.md) |
+| HD (PS3) | **works**, about 1.5 min per circuit | pose, camera, fov, clock | `export OAG_COMPARE_PLATFORM=hd-fury` before `scripts/emu-restore-state.sh` (so `rpcs3-drive.py` writes the profile's video settings into the private config **and** the game's custom config), restore the state with `--restart`, then `OAG_RPCS3_ATTACH=1 scripts/rpcs3-hd-pair.py --out D --team harimau --state <state>`: it resizes RPCS3's window to 1920x1080 (the default 1760x1072 window carries black bars), captures, and checks the frame is exactly 1920x1080. One state per circuit: `scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0\|1> <name>` (Track Select index 0 is Vineta K, 8 Talon's Junction; Harimau classic is 9 `right`s and a `down`). The state only names the circuit and craft: **the pair is taken after `Restart Race`, a few seconds into a fresh Time Trial**, so the clock is small and our drift small. `--team` carries HD's variant (`Assegai_c1` is the Fury Concept craft). |
+| Pulse PS2 | **works for Moa Therma White; the camera is not matched** | pose, clock, circuit and layout | PCSX2 booted by `pcsx2-drive.py boot` with `OAG_COMPARE_PLATFORM=pulse-ps2` in the environment (its ini carries the profile's upscale and screenshot size), then `scripts/pcsx2-pulse-pair.py --slot S --state <p2s> --track 03_Track --out D --allow-own-camera`. Pose, craft and clock are read out of the state file's own EE RAM (`pcsx2_state.py`), the frame is PCSX2's GS screenshot of the loaded state. **The PS2 camera is not recovered**: a node whose position matches the PSP's follow geometry (11.64 units behind and 3.0 above the craft) is in the state, but its orientation convention differs from the PSP's (the pitch sign is opposite) and the 4:3 fov is unmeasured; rendering the node with the pitch flipped and a fov sweep gives only an ambiguous best fit (RMSE 0.184 at 48 degrees against 0.217 at 60), so the pair is refused unless `--allow-own-camera` is given, and then names the camera in its note. Only Moa Therma White has a state; more need a menu route for `pcsx2-drive.py` |
+| Pure (PSP) | **not reachable, for now** | | `psp-drive.py menu` is Pulse's walk and stops at `the front end is in None`; `psp-trace.py --camera` breaks at Pulse USA's `Camera_UpdatePlayerView` (`0x0883c13c`), and Pure's counterpart is not located ([Pure camera rig](../ghidra/functions/psp-pure-usa/camera.md) is a static read of the rig only). Needs a hand walk to a grid, a save state and the camera node. The profile row `pure-psp` carries the PSP values |
+| 2048 (Vita) | **partial** | nothing | `vita3k-drive.py race --screenshot` boots Vita3K on a private config, on its own weston and Xwayland display, and writes a frame; its fixed-timing tap walk never changed screen in the 2026-10-20 run and the frame was an intro cinematic, not a race. Profile row `2048`: 960x544 at 1x |
+| Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. No race was reached. Profile row `omega`: 1920x1080 |
 
-`pulse.toml` holds both of each circuit's entries (White and Black, 24 pairs; the Black walk is `--track-down` 1, 3, ... 23 from a fresh profile, `menu --unlock`).
+**Re-making a pair in place.** When the renderer changes, `just compare-rerender [--only <substring>] [dir]`
+(`scripts/compare-rerender.py`, default `data/reference/compare-page`) re-runs each pair's script with the arguments
+recorded in its `pair.json` (`argv`): ours is therefore **always posed from the emulator's own savestate**, the ship
+pose, camera and race clock are read out of RAM fresh and the pose row and heading correction derived from that
+read, never taken from a stored `pair.json` or CSV. `theirs.png` is captured in the same run, every environment and
+parity check runs again, and on success the pair's files are replaced; the old values become a record in the new
+`pair.json` (`previous`), with `drift` (ship position and heading, camera, clock, the RMSE between the old and new
+`theirs.png`) and a WARNING printed when the drift is beyond the profile's tolerance. A pair whose fresh run is
+refused by a check is named, keeps its old files, and makes the exit status non-zero. The emulator has to be up
+exactly as when the pair was made (the per-title rows above); the pair's own script is the only place the capture
+is defined, so the command works for PSP, HD and PS2 alike. Then rebuild the page with `just compare-page`.
 
-The pairs in `live.toml` are Pulse PSP, HD (a Time Trial start, Harimau classic) and Omega's menu; `pulse.toml` holds the Pulse PSP circuits and the first Pulse PS2 pair, `hd.toml` the twelve HD circuits (Harimau classic) and one Fury craft, pose matched.
+The fresh set lives in `data/reference/compare-page/` (`pulse-psp/`, `hd/`, `pulse-ps2/`, one directory per pair
+holding `theirs.png`, `ours.png`, `side.png` and `pair.json`); the manifest is built with
+`python3 scripts/compare_env.py manifest data/reference/compare-page/fresh.toml data/reference/compare-page/<dirs>`.
 
 ## Publishing is locked
 
