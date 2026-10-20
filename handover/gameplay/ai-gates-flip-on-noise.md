@@ -37,6 +37,10 @@ counts for every configuration and what changed in our AI:
   held straight in the air is far worse (median 19 regressions with every law off); a landing-
   aware air steer is open.
 
+- **2048's inherited bias is held** (chosen): `vita_2048_original_ai_ground_truth::the_field_finishes_park`
+  respawns once at `eps = 0` with it (1 of 9 perturbations, 0 of 9 without). Measure the bias on
+  2048 itself (Vita3K) to release it; Omega keeps HD's.
+
 ## Next Steps
 
 1. Turn the perturbation sweep into a tool (a test-only hook that does not touch

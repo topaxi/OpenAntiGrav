@@ -238,7 +238,8 @@ for a day while our AI's gates regressed; this engine's driver now holds it off 
 | --- | --- | --- |
 | Pulse (PSP, PS2) | on | measured |
 | Wipeout HD | on | measured: read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below) |
-| Omega, 2048 | on | inherited from HD |
+| Omega | on | inherited from HD |
+| 2048 | off | inherited from HD, **held** (chosen): the original AI field respawns once on park at `eps = 0` (1 of 9 perturbations, 0 of 9 with the bias off); measure on 2048 to release |
 | Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
 
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
