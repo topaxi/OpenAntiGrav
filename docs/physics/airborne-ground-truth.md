@@ -415,10 +415,9 @@ mesh-shape tag (`Collision_RaycastMesh` writes `1`, `Collision_RaycastBox` `3`;
 and the translate sits inside the probe loop before the type test
 ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
 **Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
-millimetre). A `MagFloor` hit would pass the shape tag too and is **held out, by choice**: no
-live magstrip tick has been checked, and with it on, `pad_crossing_ground_truth`'s single-seeded
-replay across the 1284 pad drifted under a magstrip and escaped off it seven times, gaining
-`+53.26` against the recording's `+46.24` (`+48.94` before; `+48.94` again with it held out). The floor-only gate this replaces (2026-08-12) was a reading of the field as
+millimetre). A `MagFloor` hit passes the shape tag too, and since 2026-10-21 it escapes
+([below](#a-magstrip-passes-the-gate-and-the-hold-keeps-the-craft-clear-of-it-2026-10-21-deviations-to-original)); it was held out by choice
+until then. The floor-only gate this replaces (2026-08-12) was a reading of the field as
 the floor class, made the same day the shape tag was not yet recovered; nothing measured it
 against the original. **On** since
 2026-10-20 (`oag_physics::hover::Rig::escape_floor_only` false for Pulse, a field `oag_physics::hover::Rig::mag_floor_escape` replaced on 2026-10-21; the escape summed
@@ -450,9 +449,52 @@ landing, `+1.33` more on the 1584 cage tick), so its own 1594 step does not reac
 escape and its 1595 contact disagrees. That residual belongs to the landing escape at 1579 and
 the cage response's vertical component, not to the air.
 
+### A magstrip passes the gate, and the hold keeps the craft clear of it (2026-10-21, `deviations-to-original`)
+
+**Static.** `Ship_HoverTwoPoint`'s escape (`0x0884a800`-`0x0884a86c`) is `swc1 f12,0x308(s2)`,
+`c.lt.s f12,f20` against `1.0`, `lw a0,0x208(s1)` against `1`, then `Body_Translate`
+(`jal 0x0884d9f8`). No magnet-lock read and no class read sit between the height and the
+translate; the class (`*(*(craft+0x300) + 12 * craft+0x200 + 0x2454) + 0x6c`, `1` or `3`) is
+read only after it, for the contact (`0x0884a874`-`0x0884a8c4`). HD's loop has the magnet-lock
+test, Pulse's does not.
+
+**Live**, PPSSPP 1.20.4 software renderer, `time-trial-talons-venom-grid.ppst` (Talon's
+Junction, VENOM, Assegai), player input only: the throttle held and this project's
+pure-pursuit stick on the authored line, sent through the virtual pad, a breakpoint on
+`Ship_UpdateCraft` reading the previous update's hover state (`scripts/psp-magstrip-escape.py`).
+One lap, 4,000 updates, the magstrip section spline rows `1150`-`1320`:
+
+| Probe hits | Count | Tag `+0x208` | Lowest height |
+| --- | ---: | --- | ---: |
+| `Floor` | 7,392 | `1` on all | `1.393` |
+| `MagFloor` | 578 | `1` on all | `1.864` (blend `0.2`, entering) |
+| `MagFloor`, blend `1.0` | 564 | `1` on all | `2.194` (median `3.011`, max `4.093`) |
+
+So the original's gate admits a magstrip, and its hold never lets a probe near one: no
+magstrip tick of the lap had a height under `1.0`, and the escape never fired there. The
+position residuals over the strip (`-0.07` to `+0.19` along up a tick) are the hold's own
+`Body_Translate`, not an escape.
+
+**Ported** as `oag_physics::hover::MagFloorEscape::Always` on Pulse's two-point rig (the escape
+off a magstrip, whatever the lock), which Pure, Omega and 2048 fly too. Confidence **85**: the
+static read plus a live lap that shows the tag `1` on 578 magstrip hits, but never shows the
+escape itself firing on one, because the original never reaches it.
+
+**The drift it was held for was the harness.** `pad_crossing_ground_truth` replayed with no track
+locator (`replay(..., None)`), so our magstrip hold never engaged: over the 1284 crossing our
+craft sank `1.5` units below the recording in 17 ticks (body height `4.18 -> 2.44` above the
+strip, against the recording's `4.18 -> 3.93`) and reached the escape. With the locator the
+test now passes (`lap_window_ground_truth`'s resampled spline), the craft holds, and the gain
+reads the same with the escape held out or on:
+
+| 1284 crossing | before | locator, held out | locator, on |
+| --- | ---: | ---: | ---: |
+| single-seeded (recording `+46.24`) | `+48.94` (`+53.26` with it on) | `+46.82` | `+46.82` |
+| reseeded every 5 ticks | `+46.66` | `+46.67` | `+46.67` |
+
 | title | escape off any hit | escape without contact | origin |
 | --- | --- | --- | --- |
-| Pulse (PSP, PS2) | yes (`Floor`, `Wall`; `MagFloor` held out, chosen) | yes | measured |
+| Pulse (PSP, PS2) | yes (`Floor`, `Wall`, `MagFloor`) | yes | measured; `MagFloor` read and seen tagged `1` live, held out until 2026-10-21 |
 | Pure | yes | yes | inherited from Pulse (Pure's `Ship_HoverTwoPoint` lineage; its gate not read) |
 | Wipeout HD | yes (`Floor`, `Wall`; `MagFloor` below full magnet lock) | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the gate `hit+0x28 == 1` is the march's mesh-shape tag, read and seen constant live, `Floor` only before 2026-10-21 ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#hit0x28-is-the-marchs-mesh-shape-tag-2026-10-21-deviations-to-original)) |
 | Omega, 2048 | yes | yes | **changed by this port** (they had Pulse's floor-only gate too), inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |

@@ -200,12 +200,12 @@ fn a_wall_is_not_a_hoverable_surface() {
 }
 
 /// Penetration escape fires off a `Floor` and a `Wall` on every rig, and off a `MagFloor` as the
-/// rig's [`MagFloorEscape`] says: never while held, always on Pulse's reading, and below full
-/// magnet lock on HD's. Both engines gate the escape on the hit record's mesh-shape tag (Pulse
+/// rig's [`MagFloorEscape`] says: always on Pulse's, below full magnet lock on HD's. Both engines gate the escape on the hit record's mesh-shape tag (Pulse
 /// `craft+0x208 == 1`, HD `hit+0x28 == 1`), applied *before* the collider's type is looked at: a
 /// probe half a unit above a wall is lifted out though the wall carries no suspension. Measured
 /// on Talon's Junction's crest (`airborne-ground-truth.md`). This module escaped off `Floor`
-/// alone until 2026-10-20 (Pulse) and 2026-10-21 (HD), reading the tag as the floor class.
+/// alone until 2026-10-20 (Pulse) and 2026-10-21 (HD), reading the tag as the floor class, and
+/// held a magstrip out on Pulse's rig until 2026-10-21.
 #[test]
 fn penetration_escape_fires_off_floor_and_wall_and_off_a_magstrip_as_the_rig_says() {
     let world = |surface| {
@@ -238,11 +238,7 @@ fn penetration_escape_fires_off_floor_and_wall_and_off_a_magstrip_as_the_rig_say
         )
     };
     let shortfall = PENETRATION_LIMIT - 0.5;
-    let all = [
-        MagFloorEscape::Held,
-        MagFloorEscape::Always,
-        MagFloorEscape::BelowFullLock,
-    ];
+    let all = [MagFloorEscape::Always, MagFloorEscape::BelowFullLock];
 
     for mag in all {
         let floor = inside(Surface::Floor, mag, 0.0);
@@ -264,13 +260,12 @@ fn penetration_escape_fires_off_floor_and_wall_and_off_a_magstrip_as_the_rig_say
     }
 
     let escapes = |mag, lock| inside(Surface::MagFloor, mag, lock).escape != Vec3::ZERO;
-    assert!(!escapes(MagFloorEscape::Held, 0.0));
     assert!(escapes(MagFloorEscape::Always, 0.0));
     assert!(escapes(MagFloorEscape::Always, 1.0));
     assert!(escapes(MagFloorEscape::BelowFullLock, 0.5));
     assert!(!escapes(MagFloorEscape::BelowFullLock, 1.0));
     assert!(
-        inside(Surface::MagFloor, MagFloorEscape::Held, 0.0).contact,
+        inside(Surface::MagFloor, MagFloorEscape::BelowFullLock, 1.0).contact,
         "a magstrip is still a hoverable surface"
     );
 

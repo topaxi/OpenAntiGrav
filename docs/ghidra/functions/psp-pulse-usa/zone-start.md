@@ -92,8 +92,9 @@ a payout running gets `0 + turbo`. Confidence **85** (control flow read once, no
 **What fires it in Zone.** A Turbo pickup cannot: Zone hands out no weapons. The barrel roll can: its
 payout writer, `Ship_UpdateSideshiftInput_q` (`0x0884703c`, `craft+0x1c0 |= 0x400` while
 `entity+0x898 > 0`), reads `g_game_mode` only to send a network message (`> 0xd`), so a player's Zone
-roll arms the add. This project's driver never rolls, so no AI Zone run changes (the 119 Zone tests and
-the lone-craft gate read the same).
+roll arms the add, and so does one of this project's opponents: our AI rolls by the maintainer's directive
+(`ShipControls::roll_request`, `docs/gameplay/ai.md`), where the original's opponents never do. The 119
+Zone tests and the lone-craft gate pass with the port.
 
 **Pure: checked, applies, with a difference.** Pure's Zone branch stores at `0x0892f4f8` and falls into
 the same tail (`flags & 4` at `0x0892f4fc`, the add at `0x0892f528`, gated `craft+0x25c == 1`), so the

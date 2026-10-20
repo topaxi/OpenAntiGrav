@@ -13,8 +13,6 @@ use crate::pre_race::Sourced;
 /// Whether a probe inside a `MagFloor` moves the body out (`oag_physics::hover::MagFloorEscape`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MagFloorEscape {
-    /// Never: held out by choice.
-    Held,
     /// Whatever the magnet lock.
     Always,
     /// Unless the craft is at full magnet lock (Wipeout HD's `craft+0x2c0 != 1.0`).

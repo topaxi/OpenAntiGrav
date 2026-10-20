@@ -53,9 +53,11 @@ pub enum SpringLaw {
 /// (`Craft_HoverFourPoint`, `0x000ee634`-`0x000ee63c`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MagFloorEscape {
-    /// Never: held out by choice (Pulse's rig, until a live magstrip tick is read).
-    Held,
-    /// Whatever the magnet lock (Pulse's `Ship_HoverTwoPoint` reads none in its escape).
+    /// Whatever the magnet lock: Pulse's `Ship_HoverTwoPoint` tests nothing but the height and
+    /// the tag before it moves the body (`0x0884a808`-`0x0884a86c`). Live under player input on
+    /// Talon's Junction, all 578 magstrip probe hits carry the tag `1`; the hold keeps them
+    /// `2.19` or more above the strip, so the escape is reachable there only by a craft the
+    /// hold has lost (`airborne-ground-truth.md`).
     Always,
     /// Unless [`crate::ShipState::mag_lock_blend`] is `1.0` (HD).
     BelowFullLock,
@@ -143,7 +145,7 @@ impl Rig {
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
         probe_escape: true,
-        mag_floor_escape: MagFloorEscape::Held,
+        mag_floor_escape: MagFloorEscape::Always,
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,

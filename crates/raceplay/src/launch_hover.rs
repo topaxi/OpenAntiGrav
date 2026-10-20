@@ -64,7 +64,6 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         sum_escapes: rig.sum_escapes.value,
         probe_escape: rig.probe_escape.value,
         mag_floor_escape: match rig.mag_floor_escape.value {
-            oag_title::hover_rig::MagFloorEscape::Held => oag_physics::hover::MagFloorEscape::Held,
             oag_title::hover_rig::MagFloorEscape::Always => {
                 oag_physics::hover::MagFloorEscape::Always
             }

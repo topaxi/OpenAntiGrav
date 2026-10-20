@@ -425,7 +425,6 @@ fn probe_from_hit(
     let escapes_off = match hit.surface {
         crate::collide::Surface::Floor | crate::collide::Surface::Wall => true,
         crate::collide::Surface::MagFloor => match rig.mag_floor_escape {
-            crate::hover::MagFloorEscape::Held => false,
             crate::hover::MagFloorEscape::Always => true,
             crate::hover::MagFloorEscape::BelowFullLock => state.mag_lock_blend != 1.0,
         },
