@@ -69,6 +69,15 @@ ticks, `0.5` runs included - see
 - The `-0.3` airborne weathervane has no runtime leg - blocked on a capture that
   centres the stick while airborne, not on a longer jump.
 
+- **A measured airborne pitch residual on the 1595 crest (2026-10-20).** At
+  `oag-trace run --reseed 60` on the clean lap, with the replay now running the
+  collision cage, contact matches the original. Our forward axis still sits
+  `3` to `32` mrad off the original's along its up axis from 1596 to 1610. The
+  error grows through the airborne ticks and peaks at 1609-1610. It is the
+  first quantity that departs once the cage is in, so it is the cheapest
+  falsification target for the air pitch laws (`docs/physics/README.md`, "The
+  crest-phase drift traces to a wall event").
+
 ## Next Steps
 
 - **Cheapest first: find the pitch-axis craft field.** `steer` is `craft+0x2c0`
