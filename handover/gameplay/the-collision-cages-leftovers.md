@@ -17,6 +17,14 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
   on friction, so a cage contact costs no shield).
 - **The finished player keeps the cage in ours.** The original skips a craft
   whose `entity+0x8c` reads `6` (the finished player; AI craft read `2`).
+  **So does a single race's wreck** (2026-10-20, `cage-laws-red`): state 6 is also
+  where a destroyed craft goes 1.5 s after state 5 outside the Eliminator
+  (`crates/raceplay/src/eliminator.rs`'s module doc), and ours keeps caging
+  `CraftState::Eliminated` for good (not seen to matter: Black's PHANTOM seed 1
+  caged a wreck only during its explosion, 7 contacts in state 4). The Eliminator's wreck is caged in the original too: `FUN_088418e0`'s
+  state dispatch (`0x08841d44`) falls through to `0x08841e4c` for states 4, 5
+  and 8, and the cage block (`0x08842328`-`0x08842364`) gates only on `+0x368`
+  being 0 or 2 and `+0x8c != 6`. Static read, no live leg.
 - **The denominator** (contact-response.md's open question): Fort Gale 1341, a
   cage contact on a rolled craft, leans body-frame (share ratio `0.91` against
   the world-axis `0.82`, cosine `0.99` both). One capture, confidence 55.
