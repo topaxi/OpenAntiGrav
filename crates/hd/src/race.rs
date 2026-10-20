@@ -848,6 +848,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    // `Body_ResolveContact` (`0x000f7770`) returns at `0x000f7880` when `vn > 0`: four live
+    // calls with `vn` 2.6 to 10.4 left the velocity untouched
+    // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 88.
+    wall_one_sided: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

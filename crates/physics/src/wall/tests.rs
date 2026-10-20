@@ -918,3 +918,51 @@ fn a_floor_contact_keeps_pulses_restitution() {
     assert_eq!(floor.body.linear_velocity, pulse.body.linear_velocity);
     assert!(floor.body.linear_velocity.x < 0.0, "{:?}", floor.body);
 }
+
+/// Wipeout HD's wall contact is **one-sided**: the same hull leaving a wall it still overlaps,
+/// which Pulse pulls back (`a_ship_leaving_a_wall_it_still_overlaps_is_pulled_back`), is left
+/// alone, position included (`Body_ResolveContact` `0x000f7770` returns before
+/// `Body_Translate`; `docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). A floor contact,
+/// never measured on HD, stays two-sided.
+#[test]
+fn a_one_sided_wall_contact_leaves_a_ship_moving_out_alone() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_one_sided: true,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut state = ship_at(1.0, -10.0);
+    let response = resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(response.contacts, 1, "{response:?}");
+    assert_eq!(state.body.linear_velocity, Vec3::new(-10.0, 0.0, 0.0));
+    assert_eq!(state.body.position, Vec3::new(1.0, 0.0, 0.0));
+    assert_eq!(response.impulse_sum, 0.0);
+    assert_eq!(response.resolved, None, "a skipped contact is no record");
+
+    // An inbound contact is still resolved in full.
+    let mut inbound = ship_at(1.0, 10.0);
+    resolve(
+        &mut inbound,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert!((inbound.body.linear_velocity.x + 3.909).abs() < 1e-2);
+
+    // A floor contact moving out is still pulled back, as on Pulse.
+    let mut floor = ship_at(1.0, -10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert!(floor.body.linear_velocity.x > 0.0, "{:?}", floor.body);
+}

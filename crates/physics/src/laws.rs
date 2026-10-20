@@ -33,6 +33,12 @@ pub struct Laws {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Data, not a title's const:
     /// the race passes the file's value where it authors one.
     pub wall_restitution: f32,
+    /// A **wall** contact whose point already moves out (`vn > 0`) gets nothing: no impulse,
+    /// no push-out, no record. Pulse PSP's `Body_ResolveContact` has no such test (a
+    /// two-sided, "sticky" contact, [`crate::wall`]); Wipeout HD's returns at `0x000f7880`,
+    /// measured live on wall contacts (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`).
+    /// A floor contact stays two-sided, as [`Self::restitution_against`] keeps Pulse's there.
+    pub wall_one_sided: bool,
 }
 
 impl Laws {
@@ -56,6 +62,7 @@ impl Laws {
         bank_to_yaw: crate::hover::BANK_TO_YAW_GAIN,
         pitch_damping_grid: None,
         wall_restitution: crate::wall::BODY_RESTITUTION,
+        wall_one_sided: false,
     };
 }
 

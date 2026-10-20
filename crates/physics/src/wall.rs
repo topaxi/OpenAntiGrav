@@ -337,12 +337,11 @@ pub fn resolve<R: Raycaster + ?Sized>(
 
     for contact in contacts.iter().flatten().take(found) {
         let friction = combine_friction(SHIP_FRICTION, contact.surface.friction());
-        let applied = resolve_contact(
-            &mut state.body,
-            contact,
-            friction,
-            env.laws.restitution_against(contact.surface),
-        );
+        let applied = resolve_contact(&mut state.body, contact, friction, &env.laws);
+        if applied.skipped {
+            // Never applied, never recorded: the original's ring holds no such contact.
+            continue;
+        }
 
         response.resolved_count += 1;
         response.escape += applied.escape;
@@ -386,6 +385,8 @@ struct Applied {
     /// `|p|`, the length of the impulse actually applied. Zero on the
     /// degenerate-denominator path, which applies nothing.
     impulse_magnitude: f32,
+    /// Left alone by a one-sided resolver ([`crate::laws::Laws::wall_one_sided`]).
+    skipped: bool,
 }
 
 /// `Body_ResolveContact` (`0x0884e968`) for one contact, in full.
@@ -431,7 +432,7 @@ fn resolve_contact(
     body: &mut Body,
     contact: &WallContact,
     friction: f32,
-    restitution: f32,
+    laws: &crate::laws::Laws,
 ) -> Applied {
     let normal = contact.normal;
 
@@ -453,6 +454,20 @@ fn resolve_contact(
     let point_velocity = body.linear_velocity + body.angular_velocity.cross(lever);
     let normal_speed = point_velocity.dot(normal);
 
+    // Wipeout HD's resolver stops here for a wall contact already moving out (`0x000f7880`,
+    // `vcmpgefp.` against zero): no impulse, no push-out, no record
+    // ([`crate::laws::Laws::wall_one_sided`]). Pulse PSP's has no such test.
+    if laws.wall_one_sided && contact.surface == Surface::Wall && normal_speed > 0.0 {
+        return Applied {
+            escape: Vec3::ZERO,
+            velocity_delta: Vec3::ZERO,
+            angular_velocity_delta: Vec3::ZERO,
+            normal_speed,
+            impulse_magnitude: 0.0,
+            skipped: true,
+        };
+    }
+
     let angular_compliance = normal.dot(inverse_inertia(lever.cross(normal), body).cross(lever));
     let denominator = inverse_mass + angular_compliance;
     if denominator == 0.0 {
@@ -463,6 +478,7 @@ fn resolve_contact(
             angular_velocity_delta: Vec3::ZERO,
             normal_speed,
             impulse_magnitude: 0.0,
+            skipped: false,
         };
     }
 
@@ -475,7 +491,8 @@ fn resolve_contact(
     //
     // **The PS2 build does gate it** (`Body_ResolveContactPair`, `0x0015e600`, returns early
     // when `vn > 0`). PSP is the target; see the divergence table in `contact-response.md`.
-    let mut impulse = normal * (-(1.0 + restitution) * normal_speed / denominator);
+    let mut impulse =
+        normal * (-(1.0 + laws.restitution_against(contact.surface)) * normal_speed / denominator);
 
     // The tangential impulse, the headline: `-friction * v_t` is a raw impulse, **not**
     // scaled by the normal impulse and **not** Coulomb-clamped, so each frame of contact
@@ -509,6 +526,7 @@ fn resolve_contact(
         angular_velocity_delta,
         normal_speed,
         impulse_magnitude: impulse.length(),
+        skipped: false,
     }
 }
 

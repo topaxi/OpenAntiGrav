@@ -94,6 +94,7 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         engine_output_double: Sourced::chosen(true),
         drag_ground: Sourced::chosen(-0.005),
         bank_to_yaw: Sourced::chosen(30.0),
+        wall_one_sided: Sourced::chosen(false),
         code_pitch,
         code_sideshift: None,
         code_start_boost: None,
@@ -112,4 +113,15 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
     );
     assert_eq!(physics_laws(Some(&laws(None))).pitch_damping_grid, None);
     assert_eq!(physics_laws(None).pitch_damping_grid, None);
+}
+
+/// HD's measured one-sided contact reaches the physics' laws, inherited by Omega and 2048;
+/// Pulse (no laws) and Pure keep the two-sided one.
+#[test]
+fn the_one_sided_wall_contact_follows_the_title() {
+    assert!(physics_laws(Some(&oag_hd::race::CRAFT_LAWS)).wall_one_sided);
+    assert!(physics_laws(Some(&oag_omega::race::CRAFT_LAWS)).wall_one_sided);
+    assert!(physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).wall_one_sided);
+    assert!(!physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).wall_one_sided);
+    assert!(!physics_laws(None).wall_one_sided);
 }
