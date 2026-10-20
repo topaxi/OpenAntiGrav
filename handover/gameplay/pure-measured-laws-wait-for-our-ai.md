@@ -55,13 +55,15 @@ table per law. Evidence for the addresses:
 
 ## Next Steps
 
-1. Fix the pad first (step 2): it is what blocks the speed laws, the biggest felt difference.
+1. Fix the pad's pin at Vineta K's first corner (our driver, not physics) first: it is what
+   blocks the speed laws, the biggest felt difference. Trace it with a per-120-tick print in
+   `replay_ground_truth.rs`'s `record()` (position, speed, wall ticks). 1-2 hours.
 2. When our driver flies Pulse's held air laws (`driver-vs-new-physics`), re-run Pure's sweep with
    each hold released, one at a time:
    `OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay --run-ignored all -E
    'test(/opponent_autopilot_sweep::pure/) | test(/opponent_autopilot_sweep::races_others/)'
-   --no-capture` with `OAG_SWEEP_IMAGE=pure` (about 10 minutes). 1 hour a law.
-3. Fix the pad's pin at Vineta K's first corner (our driver, not physics): trace it with a
-   per-120-tick print in `record()` (position, speed, wall ticks). 1-2 hours.
-4. To measure another class: unlock it in a profile (or write the unlock flag) and rerun
+   --no-capture` with `OAG_SWEEP_IMAGE=pure` (about 10 minutes). 1 hour a law. Use more seeds
+   than four: a player-only launch moved the AI sweep's novice walls `23 -> 73`, so the columns
+   also measure the start's reshuffle, not only the law.
+3. To measure another class: unlock it in a profile (or write the unlock flag) and rerun
    `scripts/psp-pure-force-capture.py`. 30 minutes once unlocked.
