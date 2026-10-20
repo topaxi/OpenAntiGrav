@@ -485,3 +485,61 @@ fn a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage() {
         disagreements.len()
     );
 }
+
+/// The crest's liftoff tick escapes off a wall with no probe in contact.
+///
+/// From the recorded pose at 1594 the front probe's nearest hit is a `Wall`
+/// (normal `0.06` off horizontal, `2.652` down), so above
+/// [`oag_physics::hover::FAST_PROBE_SPEED`] the rear hit is derived from it,
+/// `0.798` above the derived point: inside the one-unit escape. The original
+/// moves the body `0.2026` along up beyond its velocity on that tick, with
+/// `grounded` reading `0` on the next row. One step of ours from 1594 lands on the
+/// recorded height to a millimetre with the escape gated on any hit and taken on a
+/// frame without contact; with the escape gated on `Floor` (or dropped when no
+/// probe holds) it lands `0.202` low and the nose then drifts 15 mrad off the
+/// original's over the crest.
+#[test]
+#[ignore = "needs data/images/"]
+fn the_crest_lifts_off_through_a_wall_escape_with_no_contact() {
+    let Some((handling, collision, trace, _)) = load() else {
+        return;
+    };
+    let at = trace
+        .frames
+        .iter()
+        .position(|frame| frame.tick == 1594)
+        .expect("the capture has tick 1594");
+    let (frame, next) = (&trace.frames[at], &trace.frames[at + 1]);
+    let mut state = initial_state(
+        frame,
+        &handling,
+        Basis::LeftUpForward,
+        AngularReading::NegatedLocal,
+    );
+    let controls = oag_physics::ShipControls {
+        steer_x: frame.steer / oag_physics::controls::CONTROL_RANGE,
+        thrust: frame.throttle / oag_physics::controls::CONTROL_RANGE,
+        ..oag_physics::ShipControls::default()
+    };
+    let evaluated = oag_physics::step(
+        &mut state,
+        &controls,
+        &handling,
+        &Environment::default(),
+        &collision,
+        frame.dt,
+    );
+    let lift = evaluated.hover.escape.dot(frame.up);
+    let rise = (state.body.position - next.position).dot(next.up);
+    println!(
+        "escape {lift:.4} contacts {} rise vs record {rise:.4}",
+        evaluated.hover.contacts
+    );
+    assert_eq!(next.grounded, 0.0, "the recording has no contact here");
+    assert_eq!(evaluated.hover.contacts, 0, "and ours has none");
+    assert!((lift - 0.2026).abs() < 0.005, "escape {lift}");
+    assert!(
+        rise.abs() < 0.005,
+        "ours lands {rise} off the recorded height"
+    );
+}

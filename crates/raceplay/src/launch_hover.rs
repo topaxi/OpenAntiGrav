@@ -63,6 +63,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         },
         sum_escapes: rig.sum_escapes.value,
         probe_escape: rig.probe_escape.value,
+        escape_floor_only: rig.escape_floor_only.value,
         spring: if rig.four_corner_spring.value {
             SpringLaw::FourCorner
         } else {
