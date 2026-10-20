@@ -122,8 +122,8 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     gap is the angular law (the world-axis inertia diagonal, about 5 of the 8.5
     units/s of launch `vy`), on HD the class gravity scale sits on flight gravity
     (ported). Pulse's tensor and in-air `weight_distribution` torque and HD's
-    torque are measured and held until our AI flies them:
-    [three-measured-air-laws-wait-for-our-ai.md](three-measured-air-laws-wait-for-our-ai.md).
+    torque are measured and on (2026-10-20); what is left of our AI against them:
+    [ai-gates-flip-on-noise.md](ai-gates-flip-on-noise.md).
     Fort Gale's second jump loses our autopilot to an airborne wall contact our
     hull misses (capture 3, tick 1341):
     [our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md](our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md).

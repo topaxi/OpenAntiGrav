@@ -69,6 +69,15 @@ pub(crate) fn craft_inertia(laws: Option<&CraftLaws>) -> Vec3 {
     })
 }
 
+/// The frame a title's [`CraftLaws`] apply the inertia diagonal in, Pulse's world axes for
+/// `None`.
+pub(crate) fn inertia_frame(laws: Option<&CraftLaws>) -> oag_physics::InertiaFrame {
+    if laws.is_some_and(|laws| laws.inertia_rotates.value) {
+        oag_physics::InertiaFrame::Body
+    } else {
+        oag_physics::InertiaFrame::World
+    }
+}
 /// The craft's force-law constants for a title's [`CraftLaws`], Pulse's for `None`.
 pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws {
     let pulse = oag_physics::laws::Laws::PULSE;
@@ -98,6 +107,8 @@ impl Race {
             ship.physics.hover_rig = self.sim.hover_rig;
             ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
             ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
+            ship.physics.pitch_gate = self.sim.pitch_gate;
+            ship.physics.inertia_frame = self.sim.inertia_frame;
         }
     }
 }

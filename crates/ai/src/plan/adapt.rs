@@ -13,7 +13,7 @@
 use oag_physics::Raycaster;
 
 use super::lower::Lowering;
-use super::{Course, Craft, MAX_PASSES, Pass, Report, SpeedPlan, brake};
+use super::{Course, Craft, MAX_PASSES, Pass, Report, STUCK_TICKS, SpeedPlan, brake};
 use crate::Tuning;
 
 impl SpeedPlan {
@@ -44,7 +44,8 @@ impl SpeedPlan {
         plan.decel = decel;
         plan.yaw = Some(yaw);
         plan.derive_targets();
-        let mut failures = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
+        let mut failures =
+            plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
         while failures > 0 && report.passes < MAX_PASSES && report.steps < budget {
             report.passes += 1;
             plan.learn(
@@ -55,11 +56,12 @@ impl SpeedPlan {
                 &mut report,
                 Pass {
                     budget,
+                    stuck: STUCK_TICKS,
                     lowering: Lowering::Window,
                     margin: 1.0,
                 },
             );
-            failures = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
+            failures = plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
         }
         (plan, report)
     }

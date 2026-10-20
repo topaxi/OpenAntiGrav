@@ -41,8 +41,8 @@ the authority on the lateral axis and on the airbrake terms' magnitudes.
 [Ramps and the air](airborne-ground-truth.md) steps the force law from every
 frame of the original's autopilot over Fort Gale Black's first jump: the linear
 law holds to `0.05` units/s a tick; Pulse applies its inertia diagonal in world
-axes and adds the in-air `weight_distribution` torque (both measured, held until this
-engine's AI flies with them); the pitch-input gate is read live and held the same way.
+axes and adds the in-air `weight_distribution` torque, and gates the pitch input
+(all measured and on since 2026-10-20, with this engine's AI changed to fly them).
 
 **Wipeout Pure's craft laws are measured on Pure PSP (2026-10-20).**
 [Pure's craft laws](pure-physics.md) diffs Pure's craft update against Pulse's and measures

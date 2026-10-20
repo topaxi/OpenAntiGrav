@@ -62,6 +62,8 @@ mod tests {
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,
+            pitch_gate: Sourced::chosen(true),
+            inertia_rotates: Sourced::chosen(true),
         }
     }
 

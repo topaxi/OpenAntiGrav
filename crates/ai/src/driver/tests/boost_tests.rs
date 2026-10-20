@@ -9,6 +9,7 @@ fn affords(line: &Line, plan: Option<&SpeedPlan>, peak: f32, ticks: f32) -> bool
     let tuning = Tuning::default();
     Driver::default().affords_boost(
         &Context {
+            air_trim: 0.0,
             line,
             tuning: &tuning,
             pilot: &Pilot::BALANCED,

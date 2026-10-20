@@ -832,13 +832,19 @@ const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
-    // `Craft_UpdatePitch` reads the same per-team bias statically, but switching it on raised
-    // this title's autopilot rescues (`docs/physics/airborne-ground-truth.md`); off until it is
-    // measured live. Chosen, not measured.
-    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    // `Craft_UpdatePitch` adds the team block's `+0x9c`, read live as `-4.0` (Feisar); the
+    // airborne pitch residual on Ubermall closes from `+0.205` to `-0.026` with it
+    // (`docs/physics/airborne-ground-truth.md`). Confidence 85.
+    air_pitch_bias: oag_title::pre_race::Sourced::measured(true),
+    // `Craft_UpdatePitch` (`0x000f0980`) calls the same alignment gate: a static read, not seen
+    // closing live (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
+    pitch_gate: oag_title::pre_race::Sourced::measured(true),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table; measured on
     // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),
+    // `body+0x50` holds the tensor rotated into world axes, read live
+    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
+    inertia_rotates: oag_title::pre_race::Sourced::measured(true),
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),

@@ -408,6 +408,7 @@ impl Race {
             // (`docs/gameplay/ai.md`, "The Turbo gate reads the plan").
             let route = ship.driver.branching.route;
             let context = oag_ai::Context {
+                air_trim: 0.0,
                 line: self.line_of(slot),
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
@@ -581,6 +582,7 @@ impl Race {
         };
         let ship = &self.sim.world.ships[slot];
         let context = oag_ai::Context {
+            air_trim: 0.0,
             line: self.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],

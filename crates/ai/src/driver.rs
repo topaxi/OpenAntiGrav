@@ -52,6 +52,9 @@ pub struct Context<'a> {
     /// The speed plan for this line and craft, when the race built one (see
     /// [`crate::plan`]). `None` keeps the corner model (`pace::corner_target`).
     pub plan: Option<&'a crate::SpeedPlan>,
+    /// The pitch command ([`ShipControls::steer_y`]) this driver holds while its
+    /// hull is airborne: [`air_trim`], or `0.0` for a caller with no craft to hand.
+    pub air_trim: f32,
 }
 
 impl<'a> Context<'a> {
@@ -65,8 +68,27 @@ impl<'a> Context<'a> {
             field: &Field::EMPTY,
             yaw_ceiling: None,
             plan: None,
+            air_trim: 0.0,
         }
     }
+}
+
+/// The pitch command that holds a hull's in-air `weight_distribution` torque off.
+///
+/// **Ours, chosen, not measured.** `Ship_UpdatePitch` adds `<Misc weight_distribution>`
+/// to the pitch torque on every airborne frame (`oag_physics::engine::pitch`, measured on
+/// Pulse and HD, `docs/physics/airborne-ground-truth.md`), so a hull left alone in the air
+/// rotates, nose up or down by team, and lands on its nose or tail. A player who knows their
+/// craft holds a little stick against it; this is that stick: `-bias / (100 * pitch_air)`,
+/// clamped to full deflection. The pitch-input gate drops it, as it drops a player's,
+/// past 26 degrees off the track's up. Zero where the title applies no bias.
+#[must_use]
+pub fn air_trim(handling: &oag_physics::Handling, bias_on: bool) -> f32 {
+    let gain = handling.pitch.pitch_air * oag_physics::controls::CONTROL_RANGE;
+    if !bias_on || gain <= 0.0 {
+        return 0.0;
+    }
+    (-handling.dimensions.weight_distribution / gain).clamp(-1.0, 1.0)
 }
 
 /// What a driver carries from one tick to the next.
@@ -398,6 +420,12 @@ impl Driver {
 
         ShipControls {
             steer_x: steer.command,
+            // `oag_physics::forces::evaluate` reads `grounded` (last frame's contacts) on entry, as this does.
+            steer_y: if state.grounded > 0.0 {
+                0.0
+            } else {
+                ctx.air_trim
+            },
             thrust,
             airbrake_left,
             airbrake_right,

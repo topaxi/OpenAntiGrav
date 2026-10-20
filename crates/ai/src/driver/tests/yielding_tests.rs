@@ -161,6 +161,7 @@ fn a_driver_lifts_for_a_craft_it_is_closing_on() {
         ..Field::EMPTY
     };
     let context = |field| Context {
+        air_trim: 0.0,
         line: &line,
         tuning: &tuning,
         pilot: &Pilot::BALANCED,
@@ -192,6 +193,7 @@ fn a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before() {
         let seen = with_sight.drive(
             &state,
             &Context {
+                air_trim: 0.0,
                 line: &line,
                 tuning: &tuning,
                 pilot: &pilot,
@@ -203,6 +205,7 @@ fn a_driver_that_sees_nobody_drives_exactly_the_line_it_did_before() {
         let unseen = blind.drive(
             &state,
             &Context {
+                air_trim: 0.0,
                 line: &line,
                 tuning: &tuning,
                 pilot: &pilot,

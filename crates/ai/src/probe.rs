@@ -431,6 +431,7 @@ pub fn run(scenario: Scenario, ticks: u32) -> RunResult {
             let controls = drivers[slot].drive(
                 &states[slot],
                 &Context {
+                    air_trim: 0.0,
                     line: &line,
                     tuning: &tuning,
                     pilot,

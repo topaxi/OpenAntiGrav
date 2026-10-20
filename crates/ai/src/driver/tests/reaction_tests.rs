@@ -67,6 +67,7 @@ fn thrust_over(reaction_ticks: u16, ticks: usize) -> Vec<f32> {
                 .drive(
                     &state,
                     &Context {
+                        air_trim: 0.0,
                         line: &line,
                         tuning: &tuning,
                         pilot: &pilot,
@@ -131,6 +132,7 @@ fn a_driver_does_not_fire_at_a_rival_it_has_not_noticed() {
     let mut driver = Driver::seeded(11);
     let state = craft(Vec3::ZERO, 100.0);
     let context = Context {
+        air_trim: 0.0,
         line: &line,
         tuning: &tuning,
         pilot: &pilot,
@@ -169,6 +171,7 @@ fn a_driver_does_not_lay_mines_at_a_craft_ahead() {
     let mut driver = Driver::seeded(11);
     let state = craft(Vec3::ZERO, 100.0);
     let context = Context {
+        air_trim: 0.0,
         line: &line,
         tuning: &tuning,
         pilot: &pilot,
@@ -223,6 +226,7 @@ fn a_driver_does_not_fire_forward_at_a_craft_behind() {
     let mut driver = Driver::seeded(11);
     let state = craft(Vec3::ZERO, 100.0);
     let context = Context {
+        air_trim: 0.0,
         line: &line,
         tuning: &tuning,
         pilot: &pilot,

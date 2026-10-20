@@ -34,6 +34,7 @@ fn stewing(driver: &mut Driver, line: &Line, field: &Field, personality: &Person
     let tuning = Tuning::default();
     driver.stew(
         &Context {
+            air_trim: 0.0,
             line,
             tuning: &tuning,
             pilot: &Pilot::BALANCED,
@@ -73,6 +74,7 @@ fn shove(driver: &Driver, state: &ShipState, line: &Line, field: &Field, ram: f3
     driver.ram(
         state,
         &Context {
+            air_trim: 0.0,
             line,
             tuning: &tuning,
             pilot: &Pilot::BALANCED,
@@ -110,6 +112,7 @@ fn across(personality: &Personality, line: &Line, field: &Field) -> f32 {
             &aim,
             40.0,
             &Context {
+                air_trim: 0.0,
                 line,
                 tuning: &tuning,
                 pilot: &Pilot::BALANCED,

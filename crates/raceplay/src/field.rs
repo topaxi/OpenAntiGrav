@@ -502,6 +502,7 @@ impl Race {
                 pilot: &pilot,
                 field: &field,
                 yaw_ceiling: Some(yaw_ceiling),
+                air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
                     &self.sim.routes,
                     self.sim.speed_plan.as_ref(),
@@ -649,6 +650,7 @@ impl Race {
                     pilot: &pilot,
                     field: &field,
                     yaw_ceiling: None,
+                    air_trim: 0.0,
                     plan: None,
                 });
                 rail = flown_rail;
@@ -667,6 +669,7 @@ impl Race {
                     pilot: &pilot,
                     field: &field,
                     yaw_ceiling: None,
+                    air_trim: 0.0,
                     plan: None,
                 });
                 let output = self.drive_original(slot, lane_slot, &places);
@@ -676,6 +679,7 @@ impl Race {
                 ship.driver.drive(
                     &ship.physics,
                     &oag_ai::Context {
+                        air_trim: oag_ai::air_trim(&handling, ship.physics.air_pitch_bias),
                         line: super::routes::line_for(
                             &self.sim.routes,
                             &self.sim.racing_line,

@@ -544,7 +544,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // 4. Steering and 5. pitch, both body-local angular.
     let steering = engine::steering(state, handling);
     let aligned =
-        !engine::PITCH_GATE_ON || engine::pitch_aligned(state.body.up(), env.track_sample.as_ref());
+        !state.pitch_gate || engine::pitch_aligned(state.body.up(), env.track_sample.as_ref());
     let pitch = engine::pitch(
         input,
         handling,
@@ -679,9 +679,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let weathervane = passive::weathervane(forward, velocity, contact);
     // `Ship_ApplyAngularDamping` loads `body+0x160`, angular **momentum**, so it reads
     // `I * omega` in the body frame, not `omega`; that is why the inertia survives to the
-    // observable (`Accumulators::local_angular`).
-    let local_angular_velocity = state.body.orientation.inverse() * state.body.angular_velocity;
-    let local_angular_momentum = local_angular_velocity * state.body.inertia;
+    // observable (`Accumulators::local_angular`). The momentum is built in the title's
+    // `InertiaFrame`: Pulse's `+0x160` is the world-axis `I * omega` rotated into the body.
+    let local_angular_momentum = match state.inertia_frame {
+        crate::ship::InertiaFrame::World => {
+            state.body.orientation.inverse() * (state.body.angular_velocity * state.body.inertia)
+        }
+        crate::ship::InertiaFrame::Body => {
+            (state.body.orientation.inverse() * state.body.angular_velocity) * state.body.inertia
+        }
+    };
     let pitch_damping = match env.laws.pitch_damping_grid {
         Some(grid) if state.on_grid => grid,
         _ => handling.pitch.pitch_damping,

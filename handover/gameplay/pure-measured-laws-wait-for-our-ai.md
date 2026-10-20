@@ -43,8 +43,10 @@ end-of-run shields.
     in `2206`-`2250` ticks. Pulse, HD and 2048 keep the bare pad.
   - This is a driver bug: with no plan, the bare driver does not back off a wall it is pressed
     against.
-- **The inertia frame.** Pure's `Body_Integrate` (`0x089345e8`) is Pulse's, so Pure's world-axis
-  tensor is held with Pulse's (`three-measured-air-laws-wait-for-our-ai.md`).
+- **The inertia frame.** Pure's `Body_Integrate` (`0x089345e8`) is Pulse's, so Pure's tensor is
+  world-axis too. Pulse's is on since 2026-10-20; Pure's `CraftLaws::inertia_rotates` stays
+  `chosen(true)` (rotated) until it is judged against our AI the way Pulse's was
+  ([airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md#our-ai-against-the-air-laws)).
 - **Not separated live:** the brakes, lateral grip, weathervane and speed-pad functions (Pulse's
   laws, by reading). The EU pressing was not compared.
 - **Classes beyond Vector and Venom were not run.** Both available profiles are rookie saves.

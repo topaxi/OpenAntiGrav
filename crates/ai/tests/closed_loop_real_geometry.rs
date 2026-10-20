@@ -250,6 +250,7 @@ fn drive_the_oval_as(
         let controls = driver.drive(
             &state,
             &Context {
+                air_trim: 0.0,
                 line,
                 tuning: &tuning,
                 pilot,

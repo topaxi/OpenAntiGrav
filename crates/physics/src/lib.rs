@@ -86,5 +86,5 @@ pub use integrate::{clamp_dt, integrate, step};
 pub use maglock::{Hold, MagContact, TrackSample};
 pub use params::Handling;
 pub use reset::ResetContact;
-pub use ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState, Sideshift};
+pub use ship::{Body, InertiaFrame, MAX_DT, SUBSTEPS, ShipControls, ShipState, Sideshift};
 pub use wall::{WallContact, WallResponse};

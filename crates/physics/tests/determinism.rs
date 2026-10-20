@@ -140,24 +140,36 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   contact with other craft, `Ship_SetState` cases 6 and 7 clearing the collider byte). The
 ///   scripts wreck the craft on the circuit's walls, so the hashed timer is non-zero for 90 ticks
 ///   after the explosion where it used to sit at zero. No field added.
+/// - **2026-10-19, behaviour (all three rows; maintainer-approved physics port).**
+///   `Ship_UpdatePitch`'s in-air `<Misc weight_distribution>` pitch torque, measured on Pulse
+///   (`docs/physics/airborne-ground-truth.md`), on by default (`ShipState::air_pitch_bias`). The
+///   probe's handling authors `weight_distribution 0.5`, so every airborne tick of every script
+///   gains a pitch torque. No field hashed. The parent commit (law off, gate in) reproduced the
+///   previous constants.
+/// - **2026-10-20, behaviour (all three rows; maintainer-approved physics port).** Pulse's
+///   inertia diagonal in world axes (`ShipState::inertia_frame`, default `World`;
+///   `docs/physics/airborne-ground-truth.md`): `integrate` divides a world torque by the
+///   world-axis diagonal and angular damping reads the world-axis momentum. Every tick the
+///   probe is not level moves. No field hashed; `InertiaFrame::Body` reproduces the previous
+///   constants.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x7e0e_8ab7_7ca6_7b3b,
-        0x67fa_c2e0_9bb5_db28,
+        0xe7c8_5a81_7d6a_904e,
+        0x5a70_12ce_802d_241f,
     ),
     (
         3_600,
         Script::Corridor,
-        0x0475_b934_4503_366e,
-        0x3812_e781_243b_a589,
+        0x748f_2c1e_c1e5_a041,
+        0x2090_aba1_2a31_e235,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xccf3_51b3_110c_e688,
-        0xb42a_a3ee_ed86_25b4,
+        0x1ab1_29bc_df4a_a853,
+        0x229a_4cc1_aaba_9687,
     ),
 ];
 

@@ -52,6 +52,8 @@ const TROUGH_WIN: (u64, u64) = (49, 50);
 struct Pass {
     /// The build's step budget.
     budget: u64,
+    /// [`Run::stuck_limit`] for this pass's runs.
+    stuck: u32,
     lowering: Lowering,
     /// The share of the plan the craft drives, one but in [`Self::harden`].
     margin: f32,
@@ -207,6 +209,15 @@ const STALL_TICKS: u32 = 120;
 
 /// Forward speed under which a craft counts as stopped. **Chosen.**
 const STALL_SPEED: f32 = 4.0;
+
+/// Ticks a craft may go without reaching a new furthest point on the line before
+/// the plan calls it stalled whatever its velocity reads ([`Run::best`]). Ten
+/// seconds: a hull wedged on `01_Track` at RAPIER with every law off frees
+/// itself inside that. **Chosen, not measured.**
+const STUCK_TICKS: u32 = 600;
+
+/// A [`Run::stuck_limit`] that never fires.
+const NEVER_STUCK: u32 = u32::MAX;
 
 /// Ticks from the grid before a stall can be called, for the standing start.
 const STALL_GRACE: u32 = 240;
@@ -460,6 +471,18 @@ struct Run {
     tick: u32,
     /// Consecutive ticks under [`STALL_SPEED`].
     slow: u32,
+    /// The furthest [`Self::progress`] reached: a craft that stops gaining it is
+    /// stalled whatever its velocity reads. Chosen, not measured: a hull wedged
+    /// into the floor after a landing kept a forward velocity of 165 while its
+    /// line index stood still for a whole verification (`01_Track` PHANTOM,
+    /// Triakis, world-axis inertia), so no failure fired and `adapt` never learned.
+    best: i64,
+    /// The tick [`Self::best`] was reached on.
+    best_tick: u32,
+    /// Ticks without a new [`Self::best`] after which the run is stalled:
+    /// [`STUCK_TICKS`] in [`SpeedPlan::adapt`], [`NEVER_STUCK`] elsewhere, where a
+    /// wedged hull that frees itself was already part of every committed plan.
+    stuck_limit: u32,
     /// Where the craft started the previous tick, for the pad sweep; `None`
     /// on the grid and after a rescue, as the race's own is.
     last_position: Option<oag_core::math::Vec3>,
@@ -514,6 +537,7 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
     ) -> Tick {
         let ctx = Context {
             yaw_ceiling: Some(ceiling),
+            air_trim: crate::air_trim(&craft.handling, run.state.air_pitch_bias),
             ..Context::new(self.line, tuning)
         };
         let before = run.driver.index;
@@ -545,6 +569,10 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
 
         let speed = forward_speed(&run.state);
         run.slow = if speed < STALL_SPEED { run.slow + 1 } else { 0 };
+        if run.progress > run.best {
+            run.best = run.progress;
+            run.best_tick = run.tick;
+        }
         let contact = evaluated.wall.contacts > evaluated.wall.floor_contacts;
         let away = run.state.body.position.distance(self.line.point(index));
         let failure = if run.state.craft_state != CraftState::Racing {
@@ -561,7 +589,9 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
             // `01_Track` at PHANTOM clean in isolation and was rescued four
             // times in the race, in the air off a crest.
             Some(Failure::Rescued)
-        } else if run.tick > STALL_GRACE && run.slow > STALL_TICKS {
+        } else if run.tick > STALL_GRACE
+            && (run.slow > STALL_TICKS || run.tick - run.best_tick > run.stuck_limit)
+        {
             Some(Failure::Stalled)
         } else {
             None
@@ -657,6 +687,7 @@ impl SpeedPlan {
                 &mut report,
                 Pass {
                     budget,
+                    stuck: NEVER_STUCK,
                     lowering,
                     margin: 1.0,
                 },
@@ -679,6 +710,9 @@ impl SpeedPlan {
             progress: 0,
             tick: 0,
             slow: 0,
+            best: 0,
+            best_tick: 0,
+            stuck_limit: NEVER_STUCK,
             last_position: None,
         }
     }
@@ -694,8 +728,24 @@ impl SpeedPlan {
         report: &mut Report,
         margin: f32,
     ) -> u32 {
+        self.verify_stuck(course, craft, tuning, yaw, report, margin, NEVER_STUCK)
+    }
+
+    /// [`Self::verify`] with its runs stalled after `stuck` ticks without progress.
+    #[allow(clippy::too_many_arguments)]
+    fn verify_stuck<R: Raycaster + ?Sized>(
+        &mut self,
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        yaw: f32,
+        report: &mut Report,
+        margin: f32,
+        stuck: u32,
+    ) -> u32 {
         let n = self.len() as i64;
         let mut run = Self::start_run(craft);
+        run.stuck_limit = stuck;
         let (mut failures, mut contacts) = (0u32, 0u32);
         let mut lap_mark: Option<u32> = None;
         report.verify_lap_ticks = None;
@@ -752,6 +802,9 @@ impl SpeedPlan {
                 progress: run.progress + RESPAWN_SKIP as i64,
                 tick: run.tick,
                 slow: 0,
+                best: run.progress + RESPAWN_SKIP as i64,
+                best_tick: run.tick,
+                stuck_limit: run.stuck_limit,
                 last_position: None,
             };
         }
@@ -799,12 +852,14 @@ impl SpeedPlan {
     ) {
         let Pass {
             budget,
+            stuck,
             lowering,
             margin,
         } = pass;
         let n = self.len();
         let goal = 2 * n as i64;
         let mut run = Self::start_run(craft);
+        run.stuck_limit = stuck;
         let mut checkpoints: Vec<Run> = vec![run];
         // What each recent tick did, so a failure knows what led to it.
         let mut recent: Vec<Trace> = Vec::new();
@@ -868,6 +923,9 @@ impl SpeedPlan {
                     progress: run.progress + RESPAWN_SKIP as i64,
                     tick: run.tick,
                     slow: 0,
+                    best: run.progress + RESPAWN_SKIP as i64,
+                    best_tick: run.tick,
+                    stuck_limit: run.stuck_limit,
                     last_position: None,
                 };
                 recent.clear();

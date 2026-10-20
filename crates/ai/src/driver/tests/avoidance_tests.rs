@@ -102,6 +102,7 @@ fn the_lean_reaches_the_steering_command() {
     let state = craft(Vec3::ZERO, 100.0);
 
     let clear = Context {
+        air_trim: 0.0,
         line: &line,
         tuning: &tuning,
         pilot: &pilot,

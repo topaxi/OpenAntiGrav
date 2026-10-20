@@ -370,8 +370,10 @@ pub const TEAM_IDENTITIES: oag_title::team::Roster = &[
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    air_pitch_bias: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+    air_pitch_bias: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    inertia_rotates: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
