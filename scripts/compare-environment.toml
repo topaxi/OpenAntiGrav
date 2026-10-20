@@ -40,6 +40,7 @@ gamma = 100
 pos_units = 0.5               # ship position, world units
 heading_deg = 1.0             # angle between the two ships' forward vectors
 fov_deg = 0.05                # field of view, vertical degrees
+camera_pos_units = 1.0       # the original camera between two captures of one state (rerender drift warning)
 
 [platform.pulse-psp]
 title = "Wipeout Pulse"
