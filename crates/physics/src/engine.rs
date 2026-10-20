@@ -457,14 +457,6 @@ pub fn pitch_aligned(up: Vec3, track_sample: Option<&crate::maglock::TrackSample
     track_sample.is_none_or(|sample| up.dot(-sample.down) > PITCH_ALIGNMENT)
 }
 
-/// Whether [`pitch_aligned`] gates the input in a race. **Held off (2026-10-20)**: measured
-/// (confidence 90), but on, the original's autopilot driver flown through our physics is
-/// rescued twice on Pulse's `05_Track`
-/// (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`),
-/// so it waits for this engine's AI with the other held air laws
-/// (`docs/physics/airborne-ground-truth.md`).
-pub const PITCH_GATE_ON: bool = false;
-
 /// The gate's threshold, `0x3f666666`.
 pub const PITCH_ALIGNMENT: f32 = 0.9;
 
