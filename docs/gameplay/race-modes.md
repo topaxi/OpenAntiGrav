@@ -292,8 +292,10 @@ player's team numbers **is** the original's behaviour on Pulse, and the file is 
 What Zone does replace, inside that handling: the engine (the auto-speed law), the brakes (disabled) and the hover
 variant (`Ship_HoverFourCorner`, whose bank-to-yaw gain is `50.0` against the two-point law's `30.0`; ported).
 
-**Pure and HD are unread.** Pure's definition marks `Zone_01` as `type="Zone"`, so a Pure Zone race presumably flies
-that block; neither that executable nor HD's was read. Watch the near-miss on Pulse: `Data\Ships\Zone` is
+**Pure is unread; HD reads its file (2026-10-20).** Pure's definition marks `Zone_01` as `type="Zone"`, so a Pure Zone
+race presumably flies that block; that executable was not read. HD's Zone modes read `/data/ships/zone` as the team's
+file, its blocks land in class 0 and a mode-6 race flies class 0, read live; this engine flies it on HD's Zone
+(`oag_hd::race::ZONE_HANDLING`, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling)). Watch the near-miss on Pulse: `Data\Ships\Zone` is
 `<Stats team="Zone">` **with** classes and is the unlockable Zone *livery*, a raceable team; `Zone_01` is the leftover.
 
 ### What Zone's escalating speed steps are: names over one scale (2026-10-12)
@@ -306,7 +308,7 @@ per step, and `Super Phantom` and everything above it are labels, not tables.
 | Title | The scale | The names | Handling |
 | --- | --- | --- | --- |
 | Pulse | `g_autospeed_base + g_autospeed_step * zone` (`34.0 + 4.4 * zone`, `craft+0x28c` the zone counter, [zone-start.md](../ghidra/functions/psp-pulse-usa/zone-start.md), confidence 88) | `FUN_0881ad10` (`0x0881ad10`, unnamed: HUD widget) maps the zone counter `n` to ten string ids: `n<2` Sub-Venom, 2 Venom, 3-4 Sub-Flash, 5-6 Flash, 7-11 Sub-Rapier, 12-13 Rapier, 14-19 Sub-Phantom, 20-21 Phantom, 22-34 Super-Phantom, 35+ Zen. Static decompile, confidence **80** (thresholds read from the compare chain; that the compared word is the zone counter follows from the HUD printing it first with `%d`, 70). No Mach/Supersonic string exists in Pulse | the player's own team's `<Class>` block for the race class, unchanged by step (zone-rest.md, 82); the `Zone_01`/`ZoneMode` file authors no `<Class>` and nothing reads it |
-| HD/Fury | fourteen thresholds, `14 - i` indexes `zonemode.effectsettings` ([zone-speed-class-table.md](../ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md), 86) | Sub Venom .. Supersonic, Super Phantom at zones 27-34 (HD's thresholds differ from Pulse's) | `/data/ships/zone`: `<Stats team="ZoneMode">`, no `<Class>` |
+| HD/Fury | fourteen thresholds, `14 - i` indexes `zonemode.effectsettings` ([zone-speed-class-table.md](../ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md), 86) | Sub Venom .. Supersonic, Super Phantom at zones 27-34 (HD's thresholds differ from Pulse's) | `/data/ships/zone`: `<Stats team="ZoneMode">`, no `<Class>`; HD reads it into class 0 and a Zone race flies class 0, so every class flies this file (live, 90, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling)); wired as `oag_hd::race::ZONE_HANDLING` |
 | 2048 | seventeen thresholds (`Hud_UpdateZoneSpeedClassWidget`, 78) | `MX_CLASS` .. `D_CLASS` ids, stage `0`..`16`; grade palettes in `.effectSettings` | `Zone`, `Zone Battle`, `Detonator` author no `<Class>` (measured on both regions, `speed_ladder_ground_truth.rs`); the five native teams' `SUPERPHANTOM` block is for ordinary races |
 
 So no title makes a Zone step select a different `<Class>`; the maintainer's

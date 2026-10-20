@@ -51,8 +51,9 @@ pub struct Rig {
     /// Body-space probe offsets; only the first [`Self::count`] are used. Body forward is
     /// `-Z`, front first.
     pub offsets: [Vec3; MAX_PROBES],
-    /// How many of [`Self::offsets`] are probes.
-    pub count: usize,
+    /// How many of [`Self::offsets`] are probes. A `u8` so the rig, which every craft in the
+    /// `World` carries, stays 72 bytes.
+    pub count: u8,
     /// Each spring's share of `mass * (normal_gravity + track_gravity)` per unit of
     /// compression, before `HOVER_K`: `0.3` on Pulse's two-point law, `0.15` on HD.
     pub spring_share: f32,
@@ -82,9 +83,12 @@ pub struct Rig {
     /// `-track_gravity * mass` along the normal whatever the contact count
     /// (`0x0884b7b0`-`0x0884b818`).
     pub downforce_scaled: bool,
-    /// Pulse's Zone hover ends with a 10-unit ray down from the craft's centre and pulls the body
-    /// a quarter of the way to `3.0` above whatever it hits ([`super::snap`]).
-    pub snap: bool,
+    /// The Zone hover's trailing ray: a 10-unit ray down from the craft's centre that pulls the
+    /// body this share of the way to `3.0` above whatever it hits, every frame ([`super::snap`]).
+    /// Pulse's `Ship_HoverFourCorner` closes a quarter ([`super::SNAP_GAIN`]); Wipeout HD's
+    /// `Craft_HoverFourPoint` with its second argument set closes half (`0x008a918c`). `0.0`:
+    /// no ray (a plain `f32` rather than an `Option`, which would grow the hashed `World`).
+    pub snap: f32,
     /// The craft update skips the brakes: `Ship_UpdateCraft` calls `Ship_UpdateBrakes` only outside
     /// game mode 6 (`0x08849ab8`-`0x08849ac4`), the mode whose hover this rig is. Not a hover
     /// term, but it is selected by the same mode, so it rides on the mode's rig.
@@ -118,14 +122,14 @@ impl Rig {
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,
-        snap: false,
+        snap: 0.0,
         brakes_off: false,
     };
 
     /// The probes in use.
     #[must_use]
     pub fn offsets(&self) -> &[Vec3] {
-        &self.offsets[..self.count.min(MAX_PROBES)]
+        &self.offsets[..usize::from(self.count).min(MAX_PROBES)]
     }
 
     /// This frame's groundedness from its contact count: `0.5` a probe on Pulse's two,

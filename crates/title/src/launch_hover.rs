@@ -25,4 +25,8 @@ pub struct LaunchHover {
     ///
     /// Measured: `entry+0x348` advances `1.00` per game second on three boots.
     pub release_rate: Sourced<f32>,
+    /// The grid clamp and its release run in a Zone race too. Wipeout HD's `Craft_Update` skips
+    /// both on game modes 6, 13 and 14 (`0x000f2390`-`0x000f23a8`), so its Zone craft hovers at
+    /// the race's own target through the flyby and the countdown.
+    pub in_zone: Sourced<bool>,
 }

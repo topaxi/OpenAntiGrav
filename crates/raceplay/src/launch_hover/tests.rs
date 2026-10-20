@@ -7,6 +7,7 @@ const DT: f32 = 1.0 / 60.0;
 const HOVER: LaunchHover = LaunchHover {
     grid_cap: Sourced::chosen(3.0),
     release_rate: Sourced::measured(1.0),
+    in_zone: Sourced::chosen(true),
 };
 
 #[test]
@@ -49,7 +50,7 @@ const RIG: HoverRig = HoverRig {
     plain_mean_normal: Sourced::measured(false),
     alignment_pitches: Sourced::measured(false),
     downforce_unscaled: Sourced::measured(false),
-    snap: Sourced::measured(false),
+    snap: Sourced::measured(None),
     brakes_off: Sourced::measured(false),
 };
 
@@ -103,6 +104,7 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         engine_output_double: Sourced::chosen(true),
         drag_ground: Sourced::chosen(-0.005),
         bank_to_yaw: Sourced::chosen(30.0),
+        bank_to_yaw_zone: Sourced::chosen(50.0),
         wall_one_sided: Sourced::chosen(false),
         wall_steer_away: Sourced::chosen(false),
         wall_point_rate_body_local: Sourced::chosen(false),

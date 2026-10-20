@@ -56,7 +56,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
-    zone_hover_rig: None,
+    zone_hover_rig: Some(&ZONE_HOVER_RIG),
+    zone_handling: Some(&ZONE_HANDLING),
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // HD's own driver, Pulse's with five gated branches, flown in the
@@ -745,6 +746,10 @@ pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
         // The mean of the original's `3.0 + rand8 * 0.0003`; the mean is chosen.
         grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
         release_rate: oag_title::pre_race::Sourced::measured(1.0),
+        // `Craft_Update` branches past the grid clamp and the ramp on modes 6, 13 and 14
+        // (`0x000f2390`-`0x000f23a8`); live, a mode-6 grid holds `entry+0x344 = 4.125` (the race
+        // target) through flyby and countdown with the entry in state 0 (`hover-target.md`).
+        in_zone: oag_title::pre_race::Sourced::measured(false),
     };
 
 /// HD's hover probe set: [`oag_title::hover_rig::HoverRig`].
@@ -776,8 +781,44 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
     alignment_pitches: oag_title::pre_race::Sourced::measured(false),
     downforce_unscaled: oag_title::pre_race::Sourced::measured(false),
-    snap: oag_title::pre_race::Sourced::measured(false),
+    snap: oag_title::pre_race::Sourced::measured(None),
     brakes_off: oag_title::pre_race::Sourced::measured(false),
+};
+
+/// HD's Zone handling: [`oag_title::zone_handling::ZoneHandling`].
+///
+/// `Team_LoadHandlingStats` (`0x001e6ff8`) reads `Data\Ships\Zone\handlingstats.xml` for the
+/// team on the Zone modes' mask, and the file authors no `<Class>`. Live (RPCS3, a cold boot to
+/// mode 6 on Vineta K): `craft+0x7c` is the team block plus `0xa0`, class 0, and holds the Zone
+/// file's numbers (accelcap `20`, engine `900`/`0.3`/`500`, grip `16`, track gravity `100`,
+/// sideshift `550`); class 1 is empty. The file has no `landing_rebound` or `rebound_jump_time`;
+/// the Antigrav reader (`0x000c6550`) writes them to class `+0x08` and `+0x0c`, which read `0.0`
+/// and `2.0` live, the values class 1's untouched block holds too. Confidence 90:
+/// `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+pub const ZONE_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured("/data/ships/zone/handlingstats.xml"),
+        landing_rebound: oag_title::pre_race::Sourced::measured(0.0),
+        rebound_jump_time: oag_title::pre_race::Sourced::measured(2.0),
+    };
+
+/// HD's Zone hover: [`HOVER_RIG`] with the trailing ray on, and no brakes.
+///
+/// `Craft_UpdateHover` (`0x000f18b8`) calls `Craft_HoverFourPoint` with its second argument set
+/// when the game mode's bit is in `0x206040` (6 Zone, 13 Zone Battle, 14 Detonator, 21) and the
+/// debug byte is clear. That argument gates one thing, the trailing ray (`0x000ee510`-
+/// `0x000ee614`): `10` units from the craft's centre `craft+0x240` along `-up` (`craft+0x200`),
+/// and for `3 < d < 10`, `d = dot(pos - hit, hit.normal)`, `Body_Translate` by
+/// `hit.normal * (3 - d) * 0.5` (`0.5` at `0x008a918c`), every frame, contact or none. Live, a
+/// mode-6 race on Vineta K rests at a mean probe height of `2.04`-`2.08` against the racing rig's
+/// `2.85` on the same `4.125` target: the centre held just above `3.0`, which is what a half-gap
+/// pull every frame gives. `Craft_Update` (`0x000f1958`) skips `Craft_UpdateBrake` under the same
+/// mask (`0x000f1e78`-`0x000f27e0`). Confidence 85:
+/// `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    snap: oag_title::pre_race::Sourced::measured(Some(0.5)),
+    brakes_off: oag_title::pre_race::Sourced::measured(true),
+    ..HOVER_RIG
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].
@@ -865,6 +906,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    // HD's Zone (mask `0x206040`) runs the racing `Craft_HoverFourPoint` with its trailing ray
+    // on, and the epilogue's `30` (`0x008a9198`, read at `0x000ee6cc`) is the same either way:
+    // not Pulse's four-corner `50` (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`).
+    bank_to_yaw_zone: oag_title::pre_race::Sourced::measured(30.0),
     // `Body_ResolveContact` (`0x000f7770`) returns at `0x000f7880` when `vn > 0`: four live
     // calls with `vn` 2.6 to 10.4 left the velocity untouched
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 88.
@@ -920,6 +965,16 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's Zone banks into a turn at its racing hover's `30`, read off the executable, not at
+    /// Pulse's four-corner `50`.
+    #[test]
+    fn the_zone_bank_to_yaw_gain_is_hds_own_thirty() {
+        assert_eq!(
+            CRAFT_LAWS.bank_to_yaw_zone,
+            oag_title::pre_race::Sourced::measured(30.0)
+        );
+    }
 
     /// **The two Zone tables cannot drift apart.**
     ///

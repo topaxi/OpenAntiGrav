@@ -777,3 +777,28 @@ fn the_four_corner_bank_coupling_is_fifty_over_thirty_and_keeps_the_grid_guard()
     let held = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
     assert_eq!(held.local_angular_torque, Vec3::ZERO);
 }
+
+/// The Zone gain is the title's: Wipeout HD's Zone runs its racing `Craft_HoverFourPoint`, whose
+/// epilogue loads `30.0` (`0x008a9198`), so a Zone craft under HD's laws banks into a turn as its
+/// racing craft does, and Pulse's `50.0` stays Pulse's.
+#[test]
+fn the_zone_bank_coupling_is_the_titles_own_gain() {
+    let world = flat_floor();
+    let handling = test_handling();
+    let mut state = state_at(3.0);
+    state.body.orientation = oag_core::math::Quat::from_rotation_z(0.2);
+    state.four_corner = true;
+    let hd = Environment {
+        laws: crate::laws::Laws {
+            bank_to_yaw_zone: 30.0,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let right_y = state.body.right().y;
+
+    let pulse = evaluate(&state, &handling, &Environment::default(), &world, 5.0);
+    let zone = evaluate(&state, &handling, &hd, &world, 5.0);
+    assert_eq!(pulse.local_angular_torque.y, 50.0 * right_y);
+    assert_eq!(zone.local_angular_torque.y, 30.0 * right_y);
+}

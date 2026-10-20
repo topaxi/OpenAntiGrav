@@ -555,17 +555,42 @@ pub struct Antigrav {
 impl Antigrav {
     const ELEMENT: &'static str = "Antigrav";
 
-    fn from_node(node: &Node) -> Result<Self> {
+    /// Reads the block, taking the two attributes a classless file may leave out from
+    /// `unauthored` when it is given; without it every attribute is required.
+    fn from_node_or(node: &Node, unauthored: Option<Unauthored>) -> Result<Self> {
         let e = Self::ELEMENT;
+        let or = |attribute: &'static str, fallback: Option<f32>| match fallback {
+            Some(value) => Ok(optional_number(node, e, attribute)?.unwrap_or(value)),
+            None => number(node, e, attribute),
+        };
         Ok(Self {
             grip_air: number(node, e, "grip_air")?,
             grip_ground: number(node, e, "grip_ground")?,
-            landing_rebound: number(node, e, "landing_rebound")?,
+            landing_rebound: or(
+                "landing_rebound",
+                unauthored.map(|block| block.landing_rebound),
+            )?,
             rebound: number(node, e, "rebound")?,
-            rebound_jump_time: number(node, e, "rebound_jump_time")?,
+            rebound_jump_time: or(
+                "rebound_jump_time",
+                unauthored.map(|block| block.rebound_jump_time),
+            )?,
             ride_height: number(node, e, "ride_height")?,
         })
     }
+}
+
+/// What a title's engine holds for the `<Antigrav>` attributes a classless file leaves out.
+///
+/// Wipeout HD's `Data\Ships\Zone\handlingstats.xml` authors no `landing_rebound` and no
+/// `rebound_jump_time`; HD's block reader then leaves the stats block's constructed values in
+/// place. The numbers are the title's, so the caller passes them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Unauthored {
+    /// `<Antigrav landing_rebound>` where the file has none.
+    pub landing_rebound: f32,
+    /// `<Antigrav rebound_jump_time>` where the file has none.
+    pub rebound_jump_time: f32,
 }
 
 /// Mass and the three gravity values.
@@ -683,7 +708,22 @@ impl Class {
         Self::parse(None, raw_name, node)
     }
 
+    /// The blocks a classless `<Stats>` authors directly, as the class `raw_name`.
+    fn parse_classless(raw_name: &str, stats: &Node, unauthored: Unauthored) -> Result<Self> {
+        let name = SpeedClass::census(raw_name);
+        Self::parse_or(name, raw_name, stats, Some(unauthored))
+    }
+
     fn parse(name: Option<SpeedClass>, raw_name: &str, node: &Node) -> Result<Self> {
+        Self::parse_or(name, raw_name, node, None)
+    }
+
+    fn parse_or(
+        name: Option<SpeedClass>,
+        raw_name: &str,
+        node: &Node,
+        unauthored: Option<Unauthored>,
+    ) -> Result<Self> {
         Ok(Self {
             name,
             raw_name: raw_name.to_string(),
@@ -691,7 +731,7 @@ impl Class {
             brakes: Brakes::from_node(child(node, Brakes::ELEMENT)?)?,
             turning: Turning::from_node(child(node, Turning::ELEMENT)?)?,
             airbrake: Airbrake::from_node(child(node, Airbrake::ELEMENT)?)?,
-            antigrav: Antigrav::from_node(child(node, Antigrav::ELEMENT)?)?,
+            antigrav: Antigrav::from_node_or(child(node, Antigrav::ELEMENT)?, unauthored)?,
             physical: Physical::from_node(child(node, Physical::ELEMENT)?)?,
             // Absent from every Pure `<Class>`. A *malformed* one still fails:
             // `transpose` propagates a parse error, so a typo cannot pass as an
@@ -796,6 +836,31 @@ impl Stats {
 /// Reads an **already expanded** `handlingstats.xml`; use [`from_blob`] for raw
 /// archive bytes.
 pub fn parse(expanded: &str) -> Result<Stats> {
+    parse_with(expanded, None)
+}
+
+/// Reads a **classless** `handlingstats.xml`, one whose `<Stats>` authors the per-class blocks
+/// (`Engine`, `Brakes`, `Turning`, `Airbrake`, `Antigrav`, `Physical`, `Pitch`) directly, as
+/// the one class `class`. The Zone files every title ships are this shape. `unauthored` fills
+/// the `<Antigrav>` attributes the file leaves out.
+pub fn parse_classless(expanded: &str, class: &str, unauthored: Unauthored) -> Result<Stats> {
+    parse_with(expanded, Some((class, unauthored)))
+}
+
+/// [`parse_classless`] over an archive blob, expanding it first if needed.
+pub fn from_blob_classless(data: &[u8], class: &str, unauthored: Unauthored) -> Result<Stats> {
+    if fexml::is_fexml(data) {
+        parse_classless(&fexml::expand(data)?, class, unauthored)
+    } else {
+        parse_classless(
+            std::str::from_utf8(data).map_err(|_| fexml::Error::NotText)?,
+            class,
+            unauthored,
+        )
+    }
+}
+
+fn parse_with(expanded: &str, classless: Option<(&str, Unauthored)>) -> Result<Stats> {
     let root = fexml::parse(expanded);
     let handling = descendant(&root, "Handling").ok_or(Error::MissingElement {
         element: "Handling",
@@ -828,7 +893,10 @@ pub fn parse(expanded: &str) -> Result<Stats> {
             Some(node) => Some(Fe::from_node(node)?),
             None => None,
         },
-        classes: classes(stats)?,
+        classes: match classless {
+            Some((class, unauthored)) => vec![Class::parse_classless(class, stats, unauthored)?],
+            None => classes(stats)?,
+        },
     })
 }
 

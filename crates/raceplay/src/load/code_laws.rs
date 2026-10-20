@@ -59,6 +59,7 @@ mod tests {
             engine_output_double: Sourced::chosen(true),
             drag_ground: Sourced::chosen(-0.005),
             bank_to_yaw: Sourced::chosen(30.0),
+            bank_to_yaw_zone: Sourced::chosen(50.0),
             wall_one_sided: Sourced::chosen(false),
             wall_steer_away: Sourced::chosen(false),
             wall_point_rate_body_local: Sourced::chosen(false),

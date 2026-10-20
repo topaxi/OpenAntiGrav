@@ -87,6 +87,7 @@ const TITLE: &Title = &Title {
         launch_hover: None,
         hover_rig: None,
         zone_hover_rig: None,
+        zone_handling: None,
         craft_laws: None,
         autopilot_engine: oag_title::autopilot_engine::MEASURED,
         original_opponent: false,

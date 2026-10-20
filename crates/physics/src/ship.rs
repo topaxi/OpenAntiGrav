@@ -491,10 +491,10 @@ pub struct ShipState {
     pub wrong_way_kill: bool,
     /// The craft runs `Ship_HoverFourCorner` rather than `Ship_HoverTwoPoint`:
     /// `Ship_UpdateHover` (`0x0884870c`) picks it each frame on
-    /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the bank-to-yaw
-    /// gain (`50.0` against `30.0`, [`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]) for every
-    /// title's Zone race; the rest of the four-corner law rides on the title's Zone
-    /// [`Self::hover_rig`]. Written by the race, not hashed.
+    /// `g_game_mode == 6 && g_debug_mode_override == 0` (Zone). It selects the title's Zone
+    /// bank-to-yaw gain ([`crate::laws::Laws::bank_to_yaw_zone`]: Pulse's `50.0` against its
+    /// racing `30.0`, HD's `30.0` throughout) for every title's Zone race; the rest of the Zone
+    /// law rides on the title's Zone [`Self::hover_rig`]. Written by the race, not hashed.
     pub four_corner: bool,
     /// The grid clamp on the pre-scale hover target, `craft+0x348`: `Some` where the title holds
     /// the craft's hover low on the grid and releases it after the green light

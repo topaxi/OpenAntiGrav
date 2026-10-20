@@ -100,12 +100,14 @@ was reached 30 times in a row. Confidence **92**.
 - **HD/Fury: checked, differs.** HD's Zone keeps its racing four-point hover and adds only the
   trailing ray, at gain `0.5`; see
   [hover-four-point.md](../ps3-hdfury-eu/hover-four-point.md#zone-the-same-law-plus-the-trailing-ray-and-the-handling-files-one-class-2026-10-20-zone-hover).
-  Not wired (this engine's HD Zone flies HD's racing rig without the ray). HD's Zone handling
-  file fills class 0 only (confidence 70, same section).
+  HD's Zone handling file fills class 0 only (confidence 70, same section). **Ported
+  2026-10-20** (`hd-zone-handling`): the ray at `0.5`, the brakes off, the Zone file as the craft's
+  class and no grid clamp, each read live ([hover-four-point.md](../ps3-hdfury-eu/hover-four-point.md#zone-read-live-the-ray-the-class-the-grid-and-the-brakes-2026-10-20-hd-zone-handling)).
 - **Omega and 2048: not checkable in this lane.** Neither has its racing hover read yet
   (`hover_rig: None` on both), so there is no Zone variant to compare against.
 
-**`ShipState::four_corner` stays title-blind**: every title's Zone race still flies bank-to-yaw
-`50`, as before this lane. That is Pulse's four-corner gain and Pure's two-point and four-corner
-gain, but HD's Zone runs `Craft_HoverFourPoint`, whose gain is `30` in every mode: on HD the `50`
-is a known divergence, left as it was and recorded on the lane's handover thread.
+**`ShipState::four_corner` stayed title-blind in this lane**: every title's Zone race flew
+bank-to-yaw `50`. That is Pulse's four-corner gain and Pure's two-point and four-corner gain, but
+HD's Zone runs `Craft_HoverFourPoint`, whose gain is `30` in every mode. **Closed 2026-10-20**
+(`hd-zone-handling`): the Zone gain is `CraftLaws::bank_to_yaw_zone`, HD `30`, Omega and 2048
+inheriting HD's.

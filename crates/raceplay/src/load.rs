@@ -162,10 +162,32 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
 
-    let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
+    // A Zone race on a title that reads a Zone file of its own flies that file's one class
+    // (`oag_title::zone_handling`); every other race flies the team's own.
+    let zone_handling = craft_title
+        .race
+        .zone_handling
+        .filter(|_| options.mode == oag_race::Mode::Zone);
+    let stats_name = match zone_handling {
+        Some(zone) => zone.entry.value.to_string(),
+        None => handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team),
+    };
     let stats_blob = read(craft_of(&mut craft, &mut archives), &stats_name)?;
-    let stats =
-        handling::from_blob(&stats_blob).map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
+    let stats = match zone_handling {
+        Some(zone) => {
+            let unauthored = handling::Unauthored {
+                landing_rebound: zone.landing_rebound.value,
+                rebound_jump_time: zone.rebound_jump_time.value,
+            };
+            report.push(format!(
+                "zone: flying {stats_name}'s classless block as {}, in place of {team}'s file",
+                options.class
+            ));
+            handling::from_blob_classless(&stats_blob, &options.class, unauthored)
+        }
+        None => handling::from_blob(&stats_blob),
+    }
+    .map_err(|e| anyhow::anyhow!("{stats_name}: {e}"))?;
     // **A borrowed pitch response is never silent.** Pure authors no `<pitch>` in
     // any `<Class>`, so `handling_for` substitutes
     // `oag_gameplay::handling::PITCH_STAND_IN` - another title's tuning on a ship
@@ -248,8 +270,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push("weapon pads hand nothing out this run".to_string());
     }
     #[cfg(feature = "view")]
-    let (chase, chase_close, internal) =
-        cameras::resolve(&stats, &stats_name, options, &handling, &team, &mut report);
+    let (chase, chase_close, internal) = cameras::resolve(
+        &stats,
+        &stats_name,
+        options,
+        &handling,
+        &team,
+        zone_handling.is_some(),
+        &mut report,
+    );
     // The lock-on's rig, which is all of the cameras the simulation reads.
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);
@@ -1078,7 +1107,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .race
                 .countdown_voice
                 .is_some_and(|voice| voice.beat.is_some()),
-            launch_hover: title.race.launch_hover,
+            // A title whose grid hover skips Zone (HD's `Craft_Update`, modes 6, 13 and 14) races
+            // Zone at the race target from the grid.
+            launch_hover: title
+                .race
+                .launch_hover
+                .filter(|hover| options.mode != oag_race::Mode::Zone || hover.in_zone.value),
             // Zone flies the title's Zone hover where it has one (Pulse's `Ship_HoverFourCorner`).
             hover_rig: match (options.mode, title.race.zone_hover_rig) {
                 (oag_race::Mode::Zone, Some(zone)) => Some(zone),

@@ -65,6 +65,7 @@ pub mod team;
 pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
+pub mod zone_handling;
 pub mod zoom;
 
 pub use boot::{BootProfile, BootStep, Provenance};

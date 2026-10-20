@@ -702,8 +702,8 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // The four-corner law's trailing snap runs with or without contact: the no-contact branch
     // at `0x0884b654` lands on it.
-    let snap = if rig.snap {
-        snap(state, env, raycaster)
+    let snap = if rig.snap > 0.0 {
+        snap(state, env, raycaster, rig.snap)
     } else {
         Vec3::ZERO
     };
@@ -787,15 +787,23 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 pub const SNAP_REACH: f32 = 10.0;
 /// The height the snap pulls toward, `0x40400000` at `0x0884b90c`: nothing moves at or below it.
 pub const SNAP_FLOOR: f32 = 3.0;
-/// The share of the gap closed per frame, `0x3e800000` at `0x0884b970`.
+/// Pulse's share of the gap closed per frame, `0x3e800000` at `0x0884b970`. Wipeout HD's is
+/// `0.5` (`0x3f000000` at `0x008a918c`), the rig's [`Rig::snap`].
 pub const SNAP_GAIN: f32 = 0.25;
 
 /// `Ship_HoverFourCorner`'s trailing snap (`0x0884b824`-`0x0884b9c0`): a ray from the craft's
 /// centre [`SNAP_REACH`] along `-up`, hitting any surface; with `d = dot(pos - hit, hit.normal)`,
-/// a hit at `SNAP_FLOOR < d < SNAP_REACH` moves the body by `n * (3 - d) * 0.25` there and then
+/// a hit at `SNAP_FLOOR < d < SNAP_REACH` moves the body by `n * (3 - d) * gain` there and then
 /// (`Body_Translate`), no velocity change. Read live exactly on four frames
-/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
-fn snap<R: Raycaster + ?Sized>(state: &ShipState, env: &Environment, raycaster: &R) -> Vec3 {
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`). Wipeout HD's Zone ray
+/// (`0x000ee510`-`0x000ee614`) is the same ray, reach, floor and axis with `gain = 0.5`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`).
+fn snap<R: Raycaster + ?Sized>(
+    state: &ShipState,
+    env: &Environment,
+    raycaster: &R,
+    gain: f32,
+) -> Vec3 {
     let position = state.body.position;
     let ray = Ray::new(position, -state.body.up(), SNAP_REACH);
     let Some(hit) = raycaster.raycast(ray, env.self_collider, false) else {
@@ -803,7 +811,7 @@ fn snap<R: Raycaster + ?Sized>(state: &ShipState, env: &Environment, raycaster: 
     };
     let d = (position - hit.point).dot(hit.normal);
     if d > SNAP_FLOOR && d < SNAP_REACH {
-        hit.normal * (SNAP_FLOOR - d) * SNAP_GAIN
+        hit.normal * (SNAP_FLOOR - d) * gain
     } else {
         Vec3::ZERO
     }

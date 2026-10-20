@@ -50,7 +50,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
     }
     Rig {
         offsets,
-        count: probes.len().min(MAX_PROBES),
+        count: u8::try_from(probes.len().min(MAX_PROBES)).expect("at most MAX_PROBES"),
         spring_share: rig.spring_share.value,
         derive_rear: !rig.cast_every_probe.value,
         along_normal: rig.along_hit_normal.value,
@@ -70,7 +70,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         },
         align_projects_pitch_out: !rig.alignment_pitches.value,
         downforce_scaled: !rig.downforce_unscaled.value,
-        snap: rig.snap.value,
+        snap: rig.snap.value.unwrap_or(0.0),
         brakes_off: rig.brakes_off.value,
     }
 }
@@ -98,6 +98,7 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
         engine_output_double: laws.engine_output_double.value,
         drag_ground: laws.drag_ground.value,
         bank_to_yaw: laws.bank_to_yaw.value,
+        bank_to_yaw_zone: laws.bank_to_yaw_zone.value,
         wall_one_sided: laws.wall_one_sided.value,
         wall_steer_away: laws.wall_steer_away.value,
         wall_point_rate_body_local: laws.wall_point_rate_body_local.value,
