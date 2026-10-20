@@ -967,3 +967,34 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
          (held case reached {held_intensity})"
     );
 }
+
+/// Pulse's Zone race flies `Ship_HoverFourCorner`'s rig and every other mode the racing one:
+/// `Ship_UpdateHover` picks the variant on game mode 6
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
+    let Some(path) = image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let rig = |mode| {
+        let loaded = race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let mut race = race::Race::start(loaded.setup);
+        race.tick(&PlayerInputs::none());
+        race.ship().physics.hover_rig
+    };
+    let zone = rig(oag_race::Mode::Zone);
+    assert_eq!(zone.count, 4);
+    assert_eq!(zone.spring, oag_physics::hover::SpringLaw::FourCorner);
+    assert!(zone.snap && zone.brakes_off && !zone.probe_escape);
+    assert_eq!(
+        rig(oag_race::Mode::TimeTrial),
+        oag_physics::hover::Rig::TWO_POINT
+    );
+}
