@@ -27,9 +27,16 @@ Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, plat
   not change screen and the frame was an intro cinematic.
 - **Omega (shadPS4): menu only.** MAIN MENU is reached unattended in about 45 s; no
   race was walked. The pair is the original's menu against our own menu page.
-- **Pulse PSP: all 12 circuits have a pair** (White entry of each, Time Trial grid after GO, Assegai/Venom;
-  `data/reference/compare-page/pulse.toml`) and a state under `data/saves/pulse-psp/time-trial-<circuit>-white-venom-grid.ppst`
-  (Talon's Junction's is the older file name). The Black entries are the same circuits' other layouts, not captured.
+- **Pulse PSP: all 12 circuits have two pairs** (Time Trial grid after GO, Assegai/Venom;
+  `data/reference/compare-page/pulse.toml`): the White entry of each (2026-10-20, `compare-pairs-pulse`) and the
+  Black entry of each (2026-10-20, `compare-pulse-black`). States:
+  `data/saves/pulse-psp/time-trial-<circuit>-{white,black}-venom-grid.ppst` (Talon's Junction's White is the older
+  file name `time-trial-talons-venom-grid.ppst`). Black walks are `psp-drive.py menu --unlock --track-down N --any-track`
+  with N odd, 1 (Talon's) to 23 (Outpost 7); every entry loaded the layout `docs/formats/track.md` lists for it, by start
+  position (Talon's 16 reversed, Moa Therma 03 reversed, Metropia 02 forward, Arc Prime 10 reversed, De Konstruct 05
+  forward, Tech de Ra 04 reversed, Amphiseum 09 forward, Fort Gale 14 forward, Basilico 01 forward, Platinum Rush 13
+  reversed, Vertica 06 reversed, Outpost 7 07 reversed). The manifest's White entries now carry `before` (the 2026-10-20
+  morning render) and `ours` (re-rendered on main `a5470adfe`, the original is unchanged).
 
 ### Visible differences (`pulse-pair-diffs`, 2026-10-20)
 
@@ -44,6 +51,33 @@ Seen on the PSP pairs unless noted. Items 1-4 are closed; 5-8 are still leads.
 6. **Tech de Ra**: a lit box at the top left that the original does not draw.
 7. **Race clock**: not matched by design (the original has run since GO).
 8. **PS2**: the original's hull fills about 1.35x the width ours does (our PSP-shape fit and our own camera), the original shows "pos 8/8" where ours shows no position, and a faint `(UT EDIT)` string sits at the bottom left of the original (a debug string).
+
+### Recheck on main a5470adfe and the Black pairs (`compare-pulse-black`, 2026-10-20)
+
+Ours only was re-rendered for the 12 White pairs (`oag-game --race --pose-from` the stored `trace.csv`, 300 ticks); the
+originals did not change. **Now gone**: the hull's brown or orange cast on Tech de Ra and The Amphiseum (the hull is blue-white as
+in the original on all 24 pairs); Platinum Rush's distant sign is red as in the original (yellow before); Outpost 7's top-left panel
+is blue as in the original (white before), so lead 5 is closed for those two. **Still there**: the rest of 5 (Vertica: the panel is
+white with a yellow logo where the original is plain white, an animated billboard, phase unmatched) and 6 (see below).
+Items 1 and 4 hold: the GO board is green with GO on all 24, and the record panel plus the clock agrees to 0.1 s (Talon's
+Black `1:31.0 + 0:24.9 = 1:55.9`, ours `1:55.5`). Seen as a player would, every Black pair is the same picture as its
+White pair in shape: pose, camera, hull colour and the HUD match; what differs is listed here as leads, none investigated.
+
+9. **A lit slab floats at the top left**, a 3D box on the gantry tower: ours draws it where the original draws none or a small
+   dark sign. Tan on Tech de Ra White, white on De Konstruct White and Outpost 7 Black, pure white on Moa Therma Black, pale
+   yellow-green on Metropia Black, a white 3D cube on Amphiseum Black. It is lead 6 generalised: the same box on seven circuits,
+   so a model (a sign or scoreboard mesh) drawn lit or unlit wrongly, not one circuit's light.
+10. **A bright cyan strip on the left wall rail** in ours on De Konstruct Black, Platinum Rush Black and Fort Gale Black, dark in the
+    original at the same pose (the original draws a cyan strip on Moa Therma and Arc Prime). Maybe an animated emissive whose phase
+    is not matched; unchecked against two states.
+11. **Chevrons in the far tunnel are pink-violet in ours, red-orange in the original** (De Konstruct White and Black, Arc Prime).
+12. **Fort Gale**: the original has a lit white-blue cloud in the tunnel (White) and a glare at the top left (Black); ours draws
+    the Black one brighter and with two faint translucent rings near the hull (bubbles at the bottom right), and no cloud on White.
+13. **Vertica Black**: a thin white rim round the tunnel mouth in ours, absent in the original.
+14. **The GO board's fade**: the original's GO is semi-transparent on the grid pairs taken 0.1 to 0.3 s after GO (a fade), ours is
+    solid white at tick 300. By design the clock is not matched, so this is the pairing, not a difference: re-pair at a matched
+    race time before reading it as one.
+15. **Arc Prime Black**: the top-left panel is deeper cyan in ours, light blue with a white edge in the original.
 
 ## Next Steps
 
