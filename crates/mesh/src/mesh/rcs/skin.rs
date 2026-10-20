@@ -142,7 +142,10 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// `diffuse_spec_constant` takes with `diffuse`. Other families that carry
 /// `0x7611a2d8` use it in other places (`m_diffuse_normal_constantspecular`
 /// scales a `.w` term with it) and are left out until read.
-const DIFFUSE_PARAMETER: &[(&str, u32)] = &[("constantdiffuse_specular_normal", 0x7611_a2d8)];
+const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
+    ("constantdiffuse_specular_normal", 0x7611_a2d8),
+    ("ds_booth_glass", 0x7611_a2d8),
+];
 
 /// The constant diffuse colour of a material whose program samples no colour
 /// texture, as the one-texel picture the shader multiplies the light by.

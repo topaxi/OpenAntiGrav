@@ -16,6 +16,9 @@
 //!   so the needle that follows up on it has to be an ordinal too. Ordinals
 //!   are `oag_rcs::rcsmodel::Mesh::material`, the same numbering
 //!   `crates/render/examples/hd_slot_list.rs` prints.
+//! - `OAG_SKIP_SLOT=331,341` drops those ordinals and keeps the rest, the
+//!   inverse of `OAG_ONLY_SLOT`: "which slot is this pixel" answered by
+//!   watching it vanish.
 //! - `OAG_OPAQUE_ONLY=1` drops every chunk the material asks to be blended,
 //!   which is the one-run answer to "is there anything solid behind all this
 //!   see-through geometry at this camera pose".
@@ -50,6 +53,7 @@ struct Filter {
     skip: Vec<String>,
     only: Vec<String>,
     only_slots: Vec<u32>,
+    skip_slots: Vec<u32>,
     opaque_only: bool,
 }
 
@@ -76,6 +80,10 @@ fn filter() -> &'static Filter {
             .iter()
             .filter_map(|s| s.parse().ok())
             .collect(),
+        skip_slots: needles("OAG_SKIP_SLOT")
+            .iter()
+            .filter_map(|s| s.parse().ok())
+            .collect(),
         opaque_only: std::env::var_os("OAG_OPAQUE_ONLY").is_some(),
     })
 }
@@ -90,11 +98,15 @@ pub(super) fn excludes(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh) -> bool {
     if filter.skip.is_empty()
         && filter.only.is_empty()
         && filter.only_slots.is_empty()
+        && filter.skip_slots.is_empty()
         && !filter.opaque_only
     {
         return false;
     }
     if !filter.only_slots.is_empty() && !filter.only_slots.contains(&mesh.material) {
+        return true;
+    }
+    if filter.skip_slots.contains(&mesh.material) {
         return true;
     }
     let material = model.materials.get(mesh.material as usize);

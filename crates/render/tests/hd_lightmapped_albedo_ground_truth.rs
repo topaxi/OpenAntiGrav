@@ -248,3 +248,56 @@ fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
     assert!(checked > 0, "Talon's Junction carries the start line slots");
     assert!(report.constant_diffuse > 0, "{}", report.describe());
 }
+
+/// Sebenco Climb's booth glass: `ds_booth_glass` samples its `Texture1` as a
+/// tangent-space normal map (`MAD 2, -1` on all three channels, block #7 of
+/// its `.rcsmaterial`) and never as colour, so the surface is its authored
+/// constant (`0x7611a2d8`) times the light. Binding the map as the picture
+/// drew the arch's glass band pure white, where the original's is dark.
+/// Dropping the family from `skin::DIFFUSE_PARAMETER` fails this.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/10_sebenco_climb/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Sebenco Climb builds");
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/ds_booth_glass.rcsmaterial") {
+            continue;
+        }
+        let texture = model.textures[slot]
+            .as_ref()
+            .expect("the authored constant is bound");
+        assert_eq!(
+            (texture.width, texture.height),
+            (1, 1),
+            "slot {slot} binds {} instead of its constant",
+            texture.label
+        );
+        let rgba = texture.to_rgba().expect("a one-texel picture");
+        let want = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x7611_a2d8)
+            .expect("the glass authors 0x7611a2d8")
+            .value;
+        let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+        assert_eq!(
+            [rgba[0], rgba[1], rgba[2]],
+            [byte(want[0]), byte(want[1]), byte(want[2])],
+            "slot {slot}"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "Sebenco Climb carries booth glass slots");
+}
