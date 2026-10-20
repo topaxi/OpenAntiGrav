@@ -375,6 +375,9 @@ pub(crate) fn write_trace(
     use oag_trace::{Flare, Frame, Trace};
 
     let mut race = started_race(loaded, cli, scheme);
+    let start_pose = cli
+        .pose_hold
+        .then(|| oag_game::race_capture::pose_hold::StartPose::of(&race));
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
@@ -450,6 +453,9 @@ pub(crate) fn write_trace(
     }
     if let Some(age) = cli.pose_boost {
         race.force_boost_state(age, cli.pose_intensity, cli.pose_speed);
+    }
+    if let Some(pose) = start_pose {
+        pose.restore(&mut race);
     }
     trace.frames.push(frame_of(&race, dt));
 
@@ -669,6 +675,7 @@ pub(crate) fn run_race(
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
+                pose_hold: cli.pose_hold,
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {
