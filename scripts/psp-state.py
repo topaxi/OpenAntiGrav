@@ -129,12 +129,28 @@ def do_save(dbg, home, slot):
 
 
 def do_load(dbg, slot):
+    """Press Load on `slot`, then leave the menu only if it is still open.
+
+    PPSSPP may close the pause menu itself once a state has loaded, so an
+    unconditional `Escape` could reopen it (seen 2026-10-20: "could not close
+    the pause menu" after a load that had worked). The CPU is also stood still
+    while the state is read, so one reading of `paused()` straight after the
+    click cannot tell the two apart: wait for it to run, and press `Escape`
+    only when it has not within a few seconds.
+    """
     set_menu(dbg, True)
     began = time.time()
     click(LOAD_X, SLOT_Y0 + SLOT_DY * (slot - 1))
-    time.sleep(1.0)
-    set_menu(dbg, False)
-    return time.time() - began
+    time.sleep(1.5)
+    for attempt in range(2):
+        for _ in range(8):
+            if not paused(dbg):
+                return time.time() - began
+            time.sleep(0.5)
+        if attempt == 0:
+            xdo("key", "Escape")
+            time.sleep(1.2)
+    raise SystemExit("the game did not resume after the load")
 
 
 def pose(port):
@@ -143,7 +159,13 @@ def pose(port):
     spec.loader.exec_module(drive)
     with Debugger(port) as dbg:
         craft = drive.find_craft(dbg)
-        return drive.read_progress(dbg, craft)
+        try:
+            return drive.read_progress(dbg, craft)
+        finally:
+            # find_craft stops the CPU at a breakpoint. Left stopped, every
+            # later `paused()` reading is true, so the pause menu's state can no
+            # longer be told from the debugger's own stop.
+            dbg.resume()
 
 
 def main():
