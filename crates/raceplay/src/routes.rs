@@ -60,6 +60,26 @@ pub(super) struct RouteLine {
     pub(super) plan: Option<oag_ai::SpeedPlan>,
 }
 
+impl RouteLine {
+    /// `branching` for a craft found on this route's own samples (route
+    /// number `route`, `k + 1`): past the split, its fork decided. The visit
+    /// count is kept, so the next coin is fresh. Ours, as
+    /// [`oag_ai::branch::Branching::on_ring`] is.
+    pub(super) fn entered(
+        &self,
+        branching: oag_ai::branch::Branching,
+        route: u16,
+    ) -> oag_ai::branch::Branching {
+        oag_ai::branch::Branching {
+            route,
+            decided_at: self.pre_fork + 1,
+            entered: true,
+            visits: branching.visits,
+            pending: 0,
+        }
+    }
+}
+
 /// One line per route of `course`, built the way the ring's own line is.
 ///
 /// Empty when there is no course or no fork. A route whose samples cannot be
@@ -359,6 +379,24 @@ impl Race {
         }
         driver.branching = branching;
         self.recommit(slot);
+    }
+
+    /// The nearest point of any route's own samples (past its ring stretch)
+    /// to `position`: the route number (`k + 1`), the line index and the
+    /// squared distance. For a cold locate, which otherwise only sees the ring.
+    pub(super) fn nearest_route_sample(&self, position: Vec3) -> Option<(u16, usize, f32)> {
+        let mut best: Option<(u16, usize, f32)> = None;
+        for (k, r) in self.sim.routes.iter().enumerate() {
+            let route = u16::try_from(k + 1).unwrap_or(0);
+            for i in r.kept..r.line.len() {
+                let distance = r.line.point(i).distance_squared(position);
+                // Strictly nearer, so a tie keeps the earlier candidate.
+                if best.is_none_or(|(_, _, b)| distance < b) {
+                    best = Some((route, i, distance));
+                }
+            }
+        }
+        best
     }
 
     /// A craft knocked off its side of a fork onto another follows the side it

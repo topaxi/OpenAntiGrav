@@ -573,6 +573,7 @@ pub fn replay<R: Raycaster + ?Sized>(
             &mut ship.physics,
             &ship.handling,
             &evaluated.wall,
+            false,
         );
         world.tick += 1;
     }

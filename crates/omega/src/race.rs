@@ -102,6 +102,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_handling: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
+    opponent_autopilot: oag_title::opponent_autopilot::BELOW_RAPIER,
     original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: None,

@@ -36,7 +36,8 @@
 //! # The three columns, and how each is asserted
 //!
 //! - **`status`** ([`Status`]): `CleanLap`, `NoCleanLap`, `Died` or
-//!   `Eliminated`, asserted **exactly** - not as a ceiling. `Died` joined on
+//!   `Eliminated`, asserted **exactly** - not as a ceiling (until 2026-10-20; a
+//!   floor since, see the last bullet). `Died` joined on
 //!   2026-09-16, when a wrecked opponent started coming back after the
 //!   original's own 2.3 s: every row that read `Eliminated` before then reads
 //!   `Died` now, for the same driving, and `Eliminated` is reserved for a
@@ -52,6 +53,10 @@
 //!   clean lap. The failure message says which way the row moved: a regression
 //!   reads as a regression, and an improvement reads as an instruction to
 //!   tighten [`BASELINE`] rather than as a bug.
+//!   **Since 2026-10-20 it is a floor on the median of five perturbed runs**
+//!   (`tests/perturb`), the worst median status over nine offsets: a row that
+//!   is a coin between two categories cannot be asserted exactly, so nothing
+//!   reads as "improved" any more, and a row moving up is a cue to regenerate.
 //! - **`lap_ticks`** (`Option<u64>`): the fastest clean lap, as a **ceiling**
 //!   with [`LAP_TOLERANCE_TICKS`] of slack, asserted whenever the baseline
 //!   recorded a time - which includes some `Eliminated` rows, because a craft
@@ -90,6 +95,11 @@
 //! commit `8f5070ef` (158.9s, then 157.7s) and the two 48-row outputs `diff`
 //! byte-for-byte identical - every `lap_ticks` and every `contact_ticks`, not
 //! only the ones that made it into [`BASELINE`]. Spread was zero.
+//!
+//! **Repeat runs have no spread; perturbed runs do.** Since 2026-10-20 the
+//! bounds come from the spread of the median over small perturbations of the
+//! airborne gravity ([`BASELINE`]'s own doc comment), and the tolerances below
+//! sit on top of that.
 //!
 //! So the tolerance is **chosen, not measured** (no confidence score - this is
 //! an engineering choice, not an RE claim), from what a *legitimate* AI change
@@ -287,6 +297,9 @@ use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 use oag_raceplay::catalogue;
 
+use crate::in_parallel;
+use crate::perturb;
+
 fn image() -> Option<PathBuf> {
     oag_testdata::image("data/images/pulse-psp-usa.chd")
 }
@@ -332,7 +345,11 @@ struct Solo {
 /// anything - caught by running the tests, not by reading the code. `race::load`
 /// now panics loudly on any failure other than a missing image, so a load
 /// error can never again read as a green, empty test again.
-fn solo_on(track: &str, class: &str) -> Option<Solo> {
+///
+/// Loaded once and raced once per scale in [`perturb::GATE`]
+/// (`tests/perturb/mod.rs`), in that order: the gate judges the median, not
+/// one chaotic run.
+fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -343,7 +360,21 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
         ..race::Options::default()
     })
     .unwrap_or_else(|error| panic!("loading {track} at {class}: {error}"));
-    let mut race = race::Race::start(loaded.setup);
+    Some(
+        perturb::GATE
+            .iter()
+            .map(|&eps| {
+                let mut setup = loaded.setup.clone();
+                perturb::apply_at(&mut setup, eps, offset);
+                solo(setup)
+            })
+            .collect(),
+    )
+}
+
+/// One lone race from `setup`.
+fn solo(setup: race::Setup) -> Solo {
+    let mut race = race::Race::start(setup);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
     }
@@ -371,12 +402,36 @@ fn solo_on(track: &str, class: &str) -> Option<Solo> {
         }
     }
 
-    Some(Solo {
+    Solo {
         best,
         contact_ticks: race.wall_contact_ticks_of(LONE),
         state: race.sim.world.ships[LONE].physics.craft_state,
         deaths: race.sim.world.ships[LONE].standing.deaths,
-    })
+    }
+}
+
+/// The three columns of one row over its runs, each the median of its own
+/// column: the status by rank, the clean lap with a missing one ranked
+/// slowest, the contact ticks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Median {
+    status: Status,
+    lap_ticks: Option<u64>,
+    contact_ticks: u32,
+}
+
+impl Median {
+    fn of(solos: &[Solo]) -> Self {
+        let statuses: Vec<Status> = solos.iter().map(Status::of).collect();
+        let laps: Vec<u64> = solos.iter().map(|s| s.best.unwrap_or(u64::MAX)).collect();
+        let contacts: Vec<u32> = solos.iter().map(|s| s.contact_ticks).collect();
+        let lap = perturb::median(&laps);
+        Self {
+            status: perturb::median(&statuses),
+            lap_ticks: (lap != u64::MAX).then_some(lap),
+            contact_ticks: perturb::median(&contacts),
+        }
+    }
 }
 
 /// Every forward circuit on the disc, as `(id, entry name)`. Reversed circuits
@@ -500,100 +555,125 @@ struct Row {
 ///   ticks (lap 1,772); `07_Track` RAPIER 0 to 36 (lap 2,467). `06_Track` RAPIER
 ///   regresses under 4 of the 9 perturbations with every law off.
 ///
+/// **Regenerated 2026-10-20 from a distribution (lane `ai-gate-robustness`).**
+/// Each row is now raced once per scale of `perturb::GATE` (every craft's
+/// airborne gravity times `1 + eps`, `eps` in `0, 1e-3, -1e-4, 1e-5, -1e-6`;
+/// `tests/perturb/mod.rs`) and asserted on the median of its five runs. A
+/// median is itself a draw, so each bound is the **worst** of nine medians, one
+/// per offset of `perturb::BOUND_OFFSETS` (`0, 2e-3, -2e-5, 3e-6, -5e-4, 5e-5,
+/// -3e-6, 7e-4, -7e-6` on top of every run); the trailing comment lists those
+/// nine medians as `lap/contact` in that order. Over the nine scales of
+/// `perturb::SCALES` the single-run gates had regressed 0, 3, 3, 4, 5, 6, 7, 7
+/// and 8 of the 58 AI-gate tests (the force-term sweep in
+/// `docs/physics/airborne-ground-truth.md` read median 6, max 8). Against the
+/// single-run ceilings before it, 28 rows are no looser and these 20 are
+/// (lap, contact, old -> new): `07_Track` VENOM 2956 -> 2964, 0 -> 1; `03_Track`
+/// FLASH 2114 -> 2185; `04_Track` FLASH 2064 -> 2074; `06_Track` FLASH
+/// 1924 -> 1979, 0 -> 89 (one offset's median); `07_Track` FLASH 2836 -> 2833,
+/// 2 -> 13; `03_Track` RAPIER 1940 -> 1952; `04_Track` RAPIER 1768 -> 1789;
+/// `14_Track` RAPIER 1959 -> 1961, 141 -> 57; `01_Track` RAPIER 1462 -> 1551,
+/// 0 -> 1; `13_Track` RAPIER 2013 -> 1873, 0 -> 1; `06_Track` RAPIER
+/// 1772 -> 2693, 156 -> 154 (the plan-selection amplifier: its plan verifies in
+/// 4 of the 9 medians, lapping about 1,750, and not in the rest, about 2,690);
+/// `07_Track` RAPIER 2467 -> 2777, 36 -> 19; `16_Track` PHANTOM 1636 -> 1664;
+/// `03_Track` PHANTOM 1792 -> 1803; `10_Track` PHANTOM 0 -> 1 contact; `05_Track`
+/// PHANTOM 1329 -> 1326, 0 -> 4; `04_Track` PHANTOM 1570 -> 1608; `01_Track`
+/// PHANTOM 1472 -> 1495, 27 -> 32; `06_Track` PHANTOM 1424 -> 1460, 0 -> 53;
+/// `07_Track` PHANTOM 2453 -> 2486, 2 -> 10. The status column is every row's
+/// `CleanLap`, now a floor. **Chosen, not measured**: the method is ours.
+///
 /// The frozen board: 12 circuits x 4 classes, generated the way this file's
 /// own doc comment describes. **May only improve** - see that doc comment for
 /// what "improve" means per field and how each is asserted.
 #[rustfmt::skip]
 const BASELINE: &[Row] = &[
-    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2349), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2388), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2123), contact_ticks: 0 },
-    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2391), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2091), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2313), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2764), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2548), contact_ticks: 0 },
-    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1945), contact_ticks: 3 },
-    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2264), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2642), contact_ticks: 97 },
-    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2956), contact_ticks: 0 },
-    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2095), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2114), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1938), contact_ticks: 306 },
-    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2160), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1833), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2064), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2443), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2239), contact_ticks: 0 },
-    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1712), contact_ticks: 0 },
-    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2043), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1924), contact_ticks: 0 },
-    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2836), contact_ticks: 2 },
-    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1824), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1940), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1728), contact_ticks: 290 },
-    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1904), contact_ticks: 0 },
-    // 2026-10-13, 0 -> 16 contact ticks: the lone Ace overshoots off the road at
-    // idx 318, is airborne-reset to idx 89 and scrapes on the way back. A
-    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
-    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1554), contact_ticks: 16 },
-    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1768), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2094), contact_ticks: 0 },
-    Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1959), contact_ticks: 141 },
-    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1462), contact_ticks: 0 },
-    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2013), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1772), contact_ticks: 156 },
-    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2467), contact_ticks: 36 },
-    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1636), contact_ticks: 0 },
-    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1792), contact_ticks: 0 },
-    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1609), contact_ticks: 0 },
-    Row { circuit: "10_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1778), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1329), contact_ticks: 0 },
-    Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1570), contact_ticks: 0 },
-    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1840), contact_ticks: 21 },
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2222), contact_ticks: 521 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1472), contact_ticks: 27 },
-    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1852), contact_ticks: 13 },
-    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1424), contact_ticks: 0 },
-    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2453), contact_ticks: 2 },
+    Row { circuit: "16_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2328), contact_ticks: 0 }, // 2324/0 2325/0 2324/0 2328/0 2325/0 2324/0 2325/0 2327/0 2324/0
+    Row { circuit: "03_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2325), contact_ticks: 0 }, // 2324/0 2325/0 2325/0 2324/0 2323/0 2325/0 2325/0 2324/0 2325/0
+    Row { circuit: "02_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2102), contact_ticks: 0 }, // 2100/0 2101/0 2100/0 2100/0 2100/0 2102/0 2101/0 2101/0 2100/0
+    Row { circuit: "10_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2356), contact_ticks: 0 }, // 2355/0 2350/0 2351/0 2350/0 2299/0 2353/0 2353/0 2356/0 2354/0
+    Row { circuit: "05_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2007), contact_ticks: 0 }, // 2005/0 2004/0 2004/0 2003/0 2002/0 2007/0 1996/0 2005/0 2004/0
+    Row { circuit: "04_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2237), contact_ticks: 0 }, // 2234/0 2237/0 2234/0 2234/0 2233/0 2234/0 2235/0 2233/0 2235/0
+    Row { circuit: "09_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2687), contact_ticks: 0 }, // 2683/0 2687/0 2685/0 2684/0 2683/0 2683/0 2682/0 2686/0 2683/0
+    Row { circuit: "14_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2530), contact_ticks: 0 }, // 2520/0 2530/0 2524/0 2523/0 2523/0 2522/0 2521/0 2521/0 2521/0
+    Row { circuit: "01_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(1910), contact_ticks: 0 }, // 1904/0 1906/0 1904/0 1904/0 1906/0 1905/0 1903/0 1906/0 1910/0
+    Row { circuit: "13_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2216), contact_ticks: 0 }, // 2208/0 2209/0 2207/0 2207/0 2213/0 2216/0 2212/0 2212/0 2212/0
+    Row { circuit: "06_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2109), contact_ticks: 0 }, // 2093/0 2094/0 2089/0 2093/0 2109/0 2094/0 2098/0 2091/0 2100/0
+    Row { circuit: "07_Track", class: "VENOM", status: Status::CleanLap, lap_ticks: Some(2964), contact_ticks: 1 }, // 2964/0 2956/0 2949/0 2934/0 2873/0 2949/0 2942/0 2937/0 2951/1
+    Row { circuit: "16_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2083), contact_ticks: 0 }, // 2082/0 2083/0 2078/0 2079/0 2082/0 2081/0 2079/0 2080/0 2081/0
+    Row { circuit: "03_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2185), contact_ticks: 0 }, // 2177/0 2185/0 2183/0 2183/0 2180/0 2178/0 2184/0 2183/0 2176/0
+    Row { circuit: "02_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1910), contact_ticks: 30 }, // 1909/27 1908/25 1908/28 1907/27 1909/30 1909/29 1907/23 1910/30 1908/30
+    Row { circuit: "10_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2139), contact_ticks: 0 }, // 2139/0 2136/0 2134/0 2137/0 2134/0 2134/0 2134/0 2134/0 2132/0
+    Row { circuit: "05_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1760), contact_ticks: 0 }, // 1760/0 1760/0 1760/0 1759/0 1758/0 1758/0 1758/0 1760/0 1758/0
+    Row { circuit: "04_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2074), contact_ticks: 0 }, // 2069/0 2068/0 2069/0 2069/0 2070/0 2069/0 2069/0 2074/0 2070/0
+    Row { circuit: "09_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2385), contact_ticks: 0 }, // 2382/0 2379/0 2381/0 2383/0 2377/0 2379/0 2385/0 2381/0 2381/0
+    Row { circuit: "14_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2202), contact_ticks: 0 }, // 2202/0 2195/0 2201/0 2201/0 2201/0 2200/0 2202/0 2200/0 2200/0
+    Row { circuit: "01_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1666), contact_ticks: 0 }, // 1664/0 1666/0 1664/0 1664/0 1666/0 1663/0 1666/0 1665/0 1666/0
+    Row { circuit: "13_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2003), contact_ticks: 0 }, // 1997/0 2002/0 1998/0 2001/0 2003/0 1991/0 1998/0 1998/0 2001/0
+    Row { circuit: "06_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(1979), contact_ticks: 89 }, // 1922/0 1913/4 1920/0 1922/0 1917/0 1922/0 1920/0 1979/89 1917/0
+    Row { circuit: "07_Track", class: "FLASH", status: Status::CleanLap, lap_ticks: Some(2833), contact_ticks: 13 }, // 2823/4 2821/10 2826/3 2833/12 2822/1 2820/13 2826/5 2820/4 2823/2
+    Row { circuit: "16_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1788), contact_ticks: 0 }, // 1784/0 1785/0 1785/0 1786/0 1786/0 1788/0 1783/0 1785/0 1786/0
+    Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1952), contact_ticks: 0 }, // 1952/0 1944/0 1952/0 1950/0 1945/0 1947/0 1949/0 1948/0 1947/0
+    Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1689), contact_ticks: 0 }, // 1689/0 1687/0 1686/0 1683/0 1682/0 1684/0 1688/0 1680/0 1682/0
+    Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1882), contact_ticks: 0 }, // 1870/0 1882/0 1870/0 1878/0 1882/0 1877/0 1881/0 1880/0 1876/0
+    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1504), contact_ticks: 13 }, // 1503/0 1500/0 1503/12 1503/0 1503/0 1504/13 1504/0 1504/0 1504/1
+    Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1789), contact_ticks: 0 }, // 1787/0 1788/0 1786/0 1789/0 1787/0 1788/0 1787/0 1786/0 1788/0
+    Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2059), contact_ticks: 0 }, // 2056/0 2056/0 2059/0 2056/0 2056/0 2055/0 2054/0 2056/0 2056/0
+    Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1961), contact_ticks: 57 }, // 1931/48 1928/28 1930/24 1928/30 1930/25 1931/53 1930/28 1961/57 1929/19
+    Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1551), contact_ticks: 1 }, // 1462/0 1447/0 1447/0 1551/0 1472/1 1448/0 1447/1 1449/0 1447/0
+    Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1873), contact_ticks: 1 }, // 1871/0 1864/0 1870/0 1864/1 1873/0 1871/1 1868/0 1869/0 1808/0
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2693), contact_ticks: 154 }, // 1750/62 2692/143 2687/137 1869/126 2687/132 2686/154 1788/121 2693/144 1847/137
+    Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2777), contact_ticks: 19 }, // 2466/2 2777/0 2460/19 2455/1 2475/2 2482/5 2476/15 2459/1 2462/2
+    Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1664), contact_ticks: 0 }, // 1664/0 1661/0 1661/0 1654/0 1648/0 1655/0 1657/0 1651/0 1654/0
+    Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1803), contact_ticks: 0 }, // 1793/0 1796/0 1796/0 1795/0 1803/0 1790/0 1791/0 1789/0 1792/0
+    Row { circuit: "02_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1606), contact_ticks: 0 }, // 1598/0 1599/0 1595/0 1606/0 1603/0 1601/0 1599/0 1596/0 1604/0
+    Row { circuit: "10_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1778), contact_ticks: 1 }, // 1777/0 1777/0 1778/0 1776/1 1775/1 1775/1 1774/1 1778/0 1772/1
+    Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1326), contact_ticks: 4 }, // 1325/4 1326/2 1326/2 1325/0 1326/2 1325/0 1325/2 1326/4 1325/3
+    Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1608), contact_ticks: 0 }, // 1581/0 1581/0 1594/0 1600/0 1585/0 1587/0 1603/0 1608/0 1586/0
+    Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1832), contact_ticks: 0 }, // 1824/0 1831/0 1829/0 1832/0 1829/0 1831/0 1826/0 1830/0 1831/0
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2001), contact_ticks: 272 }, // 1978/267 1982/256 1991/245 2001/266 1975/269 1999/0 1980/272 1983/252 1981/256
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1495), contact_ticks: 32 }, // 1453/7 1421/5 1318/2 1310/3 1317/2 1313/2 1495/32 1456/15 1467/30
+    Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1842), contact_ticks: 0 }, // 1839/0 1837/0 1841/0 1839/0 1842/0 1835/0 1839/0 1834/0 1835/0
+    Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1460), contact_ticks: 53 }, // 1454/13 1460/0 1456/0 1459/0 1455/2 1454/2 1459/0 1459/53 1460/1
+    Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2486), contact_ticks: 10 }, // 2468/5 2476/9 2470/5 2476/10 2486/5 2483/2 2470/3 2462/6 2484/4
 ];
 
-/// Runs one row and asserts it against its frozen [`BASELINE`] entry.
+/// Runs one row over [`perturb::GATE`] and asserts its [`Median`] against its
+/// frozen [`BASELINE`] entry.
 ///
-/// `entry` is the WAD entry name [`solo_on`] needs - see its own doc comment
+/// `entry` is the WAD entry name [`solos_on`] needs - see its own doc comment
 /// for why this takes one instead of resolving `baseline.circuit` itself.
 ///
 /// Three assertions, in the order described in the file doc comment: `status`
 /// exactly, `lap_ticks` as a ceiling when the baseline has one, `contact_ticks`
-/// always as a ceiling.
+/// always as a ceiling, each on the median of the runs. A failure lists every
+/// run, so a row at the edge of its distribution reads as one.
 fn check_row(baseline: &Row, entry: &str) {
-    let Some(solo) = solo_on(entry, baseline.class) else {
+    let Some(solos) = solos_on(entry, baseline.class, perturb::offset()) else {
         return;
     };
-    let status = Status::of(&solo);
-    let direction = if status > baseline.status {
-        "IMPROVED - tighten BASELINE in crates/raceplay/tests/ai_clean_lap_gate.rs"
-    } else {
-        "regressed"
-    };
-    assert_eq!(
-        status, baseline.status,
-        "{} {}: status {status:?}, baseline says {:?} ({direction})",
-        baseline.circuit, baseline.class, baseline.status
+    let median = Median::of(&solos);
+    let runs = runs_text(&solos);
+    let status = median.status;
+    assert!(
+        status >= baseline.status,
+        "{} {}: median status {status:?}, worse than the baseline's {:?}; runs {runs}",
+        baseline.circuit,
+        baseline.class,
+        baseline.status
     );
 
     if let Some(ceiling) = baseline.lap_ticks {
-        let actual = solo.best.unwrap_or_else(|| {
+        let actual = median.lap_ticks.unwrap_or_else(|| {
             panic!(
-                "{} {}: status matched {status:?} but no clean lap was recorded, \
-                 though the baseline carries one",
+                "{} {}: status matched {status:?} but the median run has no clean lap, \
+                 though the baseline carries one; runs {runs}",
                 baseline.circuit, baseline.class
             )
         });
         assert!(
             actual <= ceiling + LAP_TOLERANCE_TICKS,
-            "{} {}: clean lap took {actual} ticks ({:.1}s), baseline {ceiling} ticks \
-             ({:.1}s) + {LAP_TOLERANCE_TICKS} tolerance",
+            "{} {}: median clean lap {actual} ticks ({:.1}s), baseline {ceiling} ticks \
+             ({:.1}s) + {LAP_TOLERANCE_TICKS} tolerance; runs {runs}",
             baseline.circuit,
             baseline.class,
             actual as f32 / 60.0,
@@ -602,11 +682,12 @@ fn check_row(baseline: &Row, entry: &str) {
     }
 
     assert!(
-        solo.contact_ticks <= baseline.contact_ticks + CONTACT_TOLERANCE_TICKS,
-        "{} {}: {} contact ticks, baseline {} + {CONTACT_TOLERANCE_TICKS} tolerance{}",
+        median.contact_ticks <= baseline.contact_ticks + CONTACT_TOLERANCE_TICKS,
+        "{} {}: median {} contact ticks, baseline {} + {CONTACT_TOLERANCE_TICKS} tolerance{}; \
+         runs {runs}",
         baseline.circuit,
         baseline.class,
-        solo.contact_ticks,
+        median.contact_ticks,
         baseline.contact_ticks,
         if baseline.contact_ticks == 0 {
             " - this was a zero-contact row"
@@ -616,13 +697,29 @@ fn check_row(baseline: &Row, entry: &str) {
     );
 }
 
+/// Every run of a row as `status/lap/contact`, in [`perturb::GATE`] order.
+fn runs_text(solos: &[Solo]) -> String {
+    solos
+        .iter()
+        .map(|solo| {
+            format!(
+                "{:?}/{}/{}",
+                Status::of(solo),
+                solo.best.map_or("-".to_string(), |t| t.to_string()),
+                solo.contact_ticks
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Looks a row up in [`BASELINE`] by name, resolves its WAD entry name off
 /// the disc's own catalogue, and runs [`check_row`] against it.
 ///
 /// Resolving through `circuits()` rather than reconstructing the entry name
 /// from the id is deliberate: it is the same lookup `check_named_row`'s own
 /// membership assertion already needs, and it means a track renamed or
-/// removed upstream fails loudly here instead of `solo_on` silently loading
+/// removed upstream fails loudly here instead of `solos_on` silently loading
 /// nothing for a path that no longer exists.
 fn check_named_row(circuit: &str, class: &str) {
     let circuits = circuits();
@@ -737,9 +834,11 @@ row_test!(track_13_phantom, "13_Track", "PHANTOM");
 row_test!(track_14_phantom, "14_Track", "PHANTOM");
 row_test!(track_16_phantom, "16_Track", "PHANTOM");
 
-/// Regenerates [`BASELINE`] from a real run. Never run in `just test-data` -
-/// `#[ignore]`d and gated on `OAG_SWEEP`, the same contract every scratch
-/// sweep in this crate uses. See the file doc comment for the command.
+/// Regenerates [`BASELINE`] from a real run: every row's [`Median`] over
+/// [`perturb::GATE`], with its runs as a trailing comment. Never run in
+/// `just test-data` - `#[ignore]`d and gated on `OAG_SWEEP`, the same contract
+/// every scratch sweep in this crate uses. See the file doc comment for the
+/// command. Rows run side by side (`in_parallel`), twelve at a time.
 #[test]
 #[ignore = "a generator: set OAG_SWEEP, paste the printed rows into BASELINE"]
 fn print_baseline_source() {
@@ -750,31 +849,58 @@ fn print_baseline_source() {
     if circuits.is_empty() {
         return;
     }
+    let cells: Vec<(&str, &String, &String)> = CLASSES
+        .iter()
+        .flat_map(|&class| circuits.iter().map(move |(id, entry)| (class, id, entry)))
+        .collect();
+    let jobs: Vec<(usize, f32)> = (0..cells.len())
+        .flat_map(|cell| {
+            perturb::BOUND_OFFSETS
+                .iter()
+                .map(move |&offset| (cell, offset))
+        })
+        .collect();
+    let medians = in_parallel::map(&jobs, 16, |&(cell, offset)| {
+        let (class, _, entry) = cells[cell];
+        Median::of(&solos_on(entry, class, offset).expect("the image is present"))
+    });
     println!("#[rustfmt::skip]\nconst BASELINE: &[Row] = &[");
-    for class in CLASSES {
-        for (id, entry) in &circuits {
-            let start = std::time::Instant::now();
-            let Some(solo) = solo_on(entry, class) else {
-                continue;
-            };
-            let elapsed = start.elapsed();
-            let status = Status::of(&solo);
-            let status_src = match status {
-                Status::Eliminated => "Status::Eliminated",
-                Status::Died => "Status::Died",
-                Status::NoCleanLap => "Status::NoCleanLap",
-                Status::CleanLap => "Status::CleanLap",
-            };
-            let lap_src = solo
-                .best
-                .map_or_else(|| "None".to_string(), |t| format!("Some({t})"));
-            eprintln!("// {id} {class}: {:.1}s wall", elapsed.as_secs_f32());
-            println!(
-                "    Row {{ circuit: \"{id}\", class: \"{class}\", status: {status_src}, \
-                 lap_ticks: {lap_src}, contact_ticks: {} }},",
-                solo.contact_ticks
-            );
-        }
+    for (k, (class, id, _)) in cells.iter().enumerate() {
+        let row = &medians[k * perturb::BOUND_OFFSETS.len()..][..perturb::BOUND_OFFSETS.len()];
+        let worst = Median {
+            status: row.iter().map(|m| m.status).min().expect("offsets"),
+            lap_ticks: row
+                .iter()
+                .map(|m| m.lap_ticks.unwrap_or(u64::MAX))
+                .max()
+                .filter(|&t| t != u64::MAX),
+            contact_ticks: row.iter().map(|m| m.contact_ticks).max().expect("offsets"),
+        };
+        let status_src = match worst.status {
+            Status::Eliminated => "Status::Eliminated",
+            Status::Died => "Status::Died",
+            Status::NoCleanLap => "Status::NoCleanLap",
+            Status::CleanLap => "Status::CleanLap",
+        };
+        let lap_src = worst
+            .lap_ticks
+            .map_or_else(|| "None".to_string(), |t| format!("Some({t})"));
+        let spread: Vec<String> = row
+            .iter()
+            .map(|m| {
+                format!(
+                    "{}/{}",
+                    m.lap_ticks.map_or("-".to_string(), |t| t.to_string()),
+                    m.contact_ticks
+                )
+            })
+            .collect();
+        println!(
+            "    Row {{ circuit: \"{id}\", class: \"{class}\", status: {status_src}, \
+             lap_ticks: {lap_src}, contact_ticks: {} }}, // {}",
+            worst.contact_ticks,
+            spread.join(" ")
+        );
     }
     println!("];");
 }

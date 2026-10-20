@@ -9,16 +9,19 @@ counts for every configuration and what changed in our AI:
 
 ## Open
 
-- **The gates are a single exact run.** With every law off, an airborne pitch torque of `1e-5`
-  to `1e-2` (the bias is `8`) regresses 0 to 7 of the 58 AI-gate tests (median 4):
-  `ai_clean_lap_gate`'s 48 rows, `speed_plan_ground_truth`'s 8 slices,
-  `quiet_replay_ground_truth`'s moving pack and
-  `autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`.
-  The same holds outside them: `ai_fork_split_ground_truth`, `ai_dekonstruct_black_ground_truth`,
-  `original_ai_ground_truth`'s Talon's field (`oag-game`) and `oag-net`'s Eliminator over the
-  wire flip on 0 to 3 of 16 tests per perturbation with every law off. A gate should judge over
-  seeds or perturbations, as the lead's interim bar does (median at most laws-off + 2, max at
-  most laws-off max + 2), not one bit-exact run.
+- **The flippiest gates now judge a distribution (2026-10-20, `ai-gate-robustness`)**:
+  `ai_clean_lap_gate`, `speed_plan_ground_truth` and the autopilot's every-circuit run
+  race each row over five airborne-gravity scales (`oag-raceplay`'s `tests/perturb`) and
+  assert a median or majority against a bound taken as the worst median over nine offsets.
+  Held out: median 0, max 2 failures per offset, against the single runs' median 5, max 8;
+  `air_trim` off still fails them (method, tables:
+  [airborne-ground-truth.md, "The gates judge a distribution"](../../docs/physics/airborne-ground-truth.md#the-gates-judge-a-distribution-2026-10-20-ai-gate-robustness)).
+  **Still single runs**: `ai_dekonstruct_black_ground_truth`, `ai_dekonstruct_symptoms_ground_truth`,
+  `ai_fork_split_ground_truth`, the HD/Omega/2048 original-field tests (hooked to
+  `OAG_PERTURB`, each failed at most 2 of 9 scales), and, not hooked at all,
+  `oag-game`'s `original_ai_ground_truth` Talon's field and `oag-net`'s Eliminator over the
+  wire (other crates; `tests/perturb` would need a home both reach). Unsettled, not
+  asserted: `06_Track` VENOM and `29_Track` RAPIER plans.
 - **Plan selection is the amplifier.** Whether `oag_ai::SpeedPlan::adapt` verifies a hull's plan
   decides whether a craft follows it, the reference at its yaw share (`0.77` for Triakis on
   Assegai's plan) or nothing; it flips on tiny trajectory changes. A graded fallback (verify the
@@ -37,27 +40,21 @@ counts for every configuration and what changed in our AI:
   held straight in the air is far worse (median 19 regressions with every law off); a landing-
   aware air steer is open.
 
-- **The cage and the air laws together (2026-10-20, `cage-laws-red`)** turned two single runs
-  red, both inside the noise: `oag-net`'s Eliminator over the wire (now 10800 ticks; its doc
-  comment has the 18 finish ticks) and Black's PHANTOM seed 1 (1 -> 2, the row comment has both
-  lists). Destroyed per Black board over the 9 perturbations went from mean 11.9 (cage off) to
-  15.2 (on), about 2.6 standard errors: worth a look by whoever owns the cage's AI effect (in
-  PHANTOM seed 1's forward race at `eps = 0` the cage-off run made 7 Airborne rescues, the
-  cage-on run none). Against the table as it now stands, the cage-on runs exceed a bound at
-  one perturbation each in RAPIER 2 reversed, VENOM 1 reversed and VENOM 3 forward (of 9),
-  nowhere else. Margins at `eps = 0`, cage on (destroyed / bound): at the bound VENOM 1 (0/0,
-  0/0), VENOM 3 reversed 0/0, FLASH 2 forward 0/0, FLASH 3 forward 1/1, RAPIER 1 forward 1/1,
-  RAPIER 2 reversed 2/2, PHANTOM 1 forward 2/2; one under FLASH 1 forward 1/2 and reversed
-  0/1, FLASH 2 reversed 0/1, VENOM 2 reversed 0/1, VENOM 3 forward 0/1, RAPIER 1 reversed 2/3,
-  RAPIER 3 2/3 both, PHANTOM 1 reversed 1/2, PHANTOM 2 reversed 3/4. Not re-pinned. Not
-  scanned: `ai_clean_lap_gate`, `speed_plan_ground_truth`, `ai_dekonstruct_symptoms`.
+- **The cage's AI effect is weapon deaths, not walls** (2026-10-20): over 108 Black races
+  each way, wall-dominant deaths 39 and 39, weapon-dominant 9 to 20; `Airborne` rescues 755
+  to 37, replaced by reset-zone rescues and cage resets
+  ([collision-cage.md](../../docs/ghidra/functions/psp-pulse-usa/collision-cage.md#what-the-cage-does-to-our-ai-2026-10-20-ai-gate-robustness)).
+  Whether the original's field takes the same extra weapon deaths is not measured. The
+  2026-10-20 margins `cage-laws-red` listed for Black's table are not re-pinned.
 - **2048's inherited bias is held** (chosen): `vita_2048_original_ai_ground_truth::the_field_finishes_park`
   respawns once at `eps = 0` with it (1 of 9 perturbations, 0 of 9 without). Measure the bias on
   2048 itself (Vita3K) to release it; Omega keeps HD's.
 
 ## Next Steps
 
-1. Turn the perturbation sweep into a tool (a test-only hook that does not touch
-   `oag_physics`'s determinism, e.g. seeds on the race rather than a force term) and gate the
-   AI on its distribution. About a day.
-2. The graded fallback in `oag_raceplay::speed_plan::hull_plans_for`. Half a day, measured with (1).
+1. Convert Black's board and the other single-run AI gates the same way if they start to
+   flip (each about `+4x` its test time); give `tests/perturb` a home `oag-game` and
+   `oag-net` can reach. Half a day.
+2. The graded fallback in `oag_raceplay::speed_plan::hull_plans_for`: measure it on
+   `06_Track` RAPIER (fast mode in 4 of 9 medians) with `print_baseline_source` and the
+   held-out offsets. Half a day. Chosen work.

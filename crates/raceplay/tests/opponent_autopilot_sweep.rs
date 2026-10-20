@@ -37,6 +37,7 @@ fn load(
     class: &str,
     difficulty: oag_ai::Difficulty,
     seed: u64,
+    eps: f32,
 ) -> Option<oag_raceplay::Race> {
     let path = if image.starts_with("data/") {
         oag_testdata::exact(image)?
@@ -54,7 +55,9 @@ fn load(
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
-    Some(oag_raceplay::Race::start(loaded.setup))
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, eps);
+    Some(oag_raceplay::Race::start(setup))
 }
 
 fn run_branch(race: &mut oag_raceplay::Race, slot: usize, stint: u64, trace: bool) -> Branch {
@@ -142,13 +145,14 @@ fn sweep(
     difficulty: oag_ai::Difficulty,
     seeds: std::ops::RangeInclusive<u64>,
     triggers: usize,
+    eps: f32,
 ) -> Vec<(Branch, Branch)> {
     let mut pairs = Vec::new();
     let mut natural = 0u32;
     let mut absorb = 0.0;
     let mut window_ticks = 0;
     for seed in seeds {
-        let Some(mut race) = load(image, track, class, difficulty, seed) else {
+        let Some(mut race) = load(image, track, class, difficulty, seed, eps) else {
             return pairs;
         };
         if seed == 1 {
@@ -263,7 +267,7 @@ fn sweep(
     let speed = window_mean_a / (window_ticks as f32 / 60.0);
     let mw = median(&mut window);
     println!(
-        "SUMMARY {image} {track:?} {class} {difficulty} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} = {:+.2} s | wall A {wall_a} B {wall_b} (stint A {wall_stint_a} B {wall_stint_b}) | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} (absorbing {:+.1}) B {shield_b:+.1}",
+        "SUMMARY {image} {track:?} {class} {difficulty} eps {eps:e} n {n} natural pickups {natural} | window A mean {window_mean_a:.0} | B-A stint median {ms:+.1} [{:+.1}, {:+.1}] window median {mw:+.1} [{:+.1}, {:+.1}] (q1 {:+.1} q3 {:+.1}) B faster {faster}/{n} = {:+.2} s | wall A {wall_a} B {wall_b} (stint A {wall_stint_a} B {wall_stint_b}) | respawns A {resp_a} B {resp_b} | shield mean A {shield_a:+.1} (absorbing {:+.1}) B {shield_b:+.1}",
         stint[0],
         stint[n - 1],
         window[0],
@@ -280,6 +284,17 @@ fn difficulties() -> Vec<oag_ai::Difficulty> {
     match std::env::var("OAG_SWEEP_DIFFICULTY") {
         Ok(name) => vec![name.parse().expect("a difficulty")],
         Err(_) => vec![oag_ai::Difficulty::Novice, oag_ai::Difficulty::Ace],
+    }
+}
+
+/// The perturbations each cell runs at: `OAG_SWEEP_GATE=1` runs
+/// `perturb::GATE`'s five and a cell is judged on their median; unset, the
+/// unperturbed run alone.
+fn scales() -> Vec<f32> {
+    if std::env::var_os("OAG_SWEEP_GATE").is_some() {
+        crate::perturb::GATE.to_vec()
+    } else {
+        vec![0.0]
     }
 }
 
@@ -309,7 +324,9 @@ fn title(image: &str, tracks: &[Option<&str>]) {
             {
                 continue;
             }
-            sweep(image, *track, &class, difficulty, 1..=seeds(), 8);
+            for eps in scales() {
+                sweep(image, *track, &class, difficulty, 1..=seeds(), 8, eps);
+            }
         }
     }
 }
@@ -471,10 +488,10 @@ fn races(image: &str, tracks: &[Option<&str>]) {
             let mut lap_delta = Vec::new();
             let mut finish_delta = Vec::new();
             for seed in 1..=seeds() {
-                let Some(mut off) = load(image, *track, &class, difficulty, seed) else {
+                let Some(mut off) = load(image, *track, &class, difficulty, seed, 0.0) else {
                     return;
                 };
-                let Some(mut on) = load(image, *track, &class, difficulty, seed) else {
+                let Some(mut on) = load(image, *track, &class, difficulty, seed, 0.0) else {
                     return;
                 };
                 let a = whole_race(&mut off, false);

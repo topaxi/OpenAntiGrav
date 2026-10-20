@@ -70,16 +70,26 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     faster in every cell run (VENOM on all five titles, PHANTOM on Pulse and
     HD; FLASH and RAPIER not run), but at PHANTOM walls rise on 13 of 16
     cells and HD rescues go 0 -> 8 of 256 stints, mostly in the 3 s after the
-    handback. Not wired; `Race::set_opponent_autopilot` (off) and
-    `opponent_autopilot_sweep` reproduce it. **Open for the maintainer:**
-    wire it below PHANTOM only (that rests on VENOM data alone), wire it
-    everywhere and accept the PHANTOM cost, or leave it.
-  - **Lead, the player's own pickup:** a cold stint finds the craft with a
-    whole-line search (`Race::locate_player_driver`). On Pulse `05_Track` at
-    `[-860, 41, -445]` it chose racing-line index 367 where the craft's own
-    position follows 2312, and an opponent flown from there hit the wall 42
-    ticks in and was rescued onto the deck above. A player collecting an
-    Autopilot there may get the same; not measured for slot 0.
+    handback. ~~Not wired.~~ **Wired 2026-10-20, lane
+    `opponent-autopilot-wire`** (docs/gameplay/ai.md, "An opponent's
+    Autopilot, wired below PHANTOM"): on at VENOM and FLASH, off at RAPIER
+    (by the data: walls up on 10 of 19 Ace cells, rescues from zero on 2048
+    and HD amphiseum) and PHANTOM, as `oag_title::opponent_autopilot::BELOW_RAPIER`
+    on all five titles, each measured on its own sweep over `perturb::GATE`.
+    Open: RAPIER Novice alone was clean (walls 17,966 -> 7,556, rescues
+    23 -> 7); a difficulty axis on the switch would let it fly, not decided.
+    PHANTOM was never run on Pure, Omega or 2048 (off by the rule).
+  - ~~**Lead, the player's own pickup:** a cold stint finds the craft with a
+    whole-line search (`Race::locate_player_driver`).~~ Fixed 2026-10-20
+    (lane `opponent-autopilot-wire`): the ring search is right on the ring
+    (0 of 32,027 wrong); on a route the ring's nearest point is another deck,
+    so the locate also searches each route's own samples. Slot 0 cold-located
+    every 30 ticks: Pulse 05 42 of 215 wrong -> 0, 14 9 of 251 -> 0.
+  - **Lead, the autopilot's own branch tracking:** on three Pulse `05_Track`
+    ticks (seed 1, ticks 2,790 to 2,850) slot 0's warm driver under
+    `--autopilot` sat on the ring 32 to 55 units above a craft driving route 1
+    (found by `cold_locates` in `autopilot_original_ground_truth` while it
+    still compared the cold point against the warm one). Not followed.
   - **Lead, PHANTOM handback:** the rescues land 60-170 ticks after the stint
     ends, our driver taking the craft faster than its plan carries. A
     plan-based early handback (`affords_boost` over 120 ticks) removed the
@@ -175,10 +185,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   - Not measured: a pickup-shaped stint engaged off the line, against the
     original (`scripts/psp-autopilot-rail.py --stint --steer` exists for it).
     De Konstruct Black was captured for laps 1-2 and part of 3 only.
-  - The opponent stint sweep with the port: PHANTOM's extra walls do not
-    shrink (B over A on 14 of 16 cells, HD B rescues 6), as expected for a
-    player-only engine law; `opponent-autopilot-wire` decides on the same
-    picture as before.
+  - ~~The opponent stint sweep with the port~~ decided 2026-10-20 (above).
   - HD scales the player's `100` by `SplitScreenMultiplier` with more than one
     person; not applied.
   - Pure's player lane `0` is inherited from Pulse (`0x08919b6c` unread for it).

@@ -48,7 +48,9 @@ fn race(event: &str, skill: Option<f32>) -> Option<oag_raceplay::Race> {
         .as_ref()
         .and_then(|event| event.ai)
         .expect("a race event with the original's AI");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = oag_raceplay::Race::start(setup);
     assert!(
         race.use_original_ai(Some(skill.unwrap_or(ai.skill_scale)), ai.level),
         "2048 flies the original driver"
@@ -361,7 +363,9 @@ fn super_phantom_challenges_fly_the_original_driver() {
             .as_ref()
             .and_then(|event| event.ai)
             .unwrap_or_else(|| panic!("{event} authors the original's AI"));
-        let mut race = oag_raceplay::Race::start(loaded.setup);
+        let mut setup = loaded.setup;
+        crate::perturb::apply(&mut setup, 0.0);
+        let mut race = oag_raceplay::Race::start(setup);
         assert!(
             race.use_original_ai(Some(ai.skill_scale), ai.level),
             "{event}: the Super Phantom tables read, so the original driver flies"
@@ -435,7 +439,14 @@ fn a_super_phantom_race_box_race_runs_without_opponents() {
             ..oag_raceplay::Options::default()
         };
         let loaded = oag_raceplay::load(&options).expect("loads");
-        oag_raceplay::Race::start(loaded.setup).sim.world.ship_count
+        {
+            let mut setup = loaded.setup;
+            crate::perturb::apply(&mut setup, 0.0);
+            oag_raceplay::Race::start(setup)
+        }
+        .sim
+        .world
+        .ship_count
     };
     assert_eq!(ship_count("PHANTOM"), 8);
     assert_eq!(ship_count("SUPERPHANTOM"), 1);

@@ -28,7 +28,9 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
         ..oag_raceplay::Options::default()
     })
     .expect("loading Talon's Junction");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = oag_raceplay::Race::start(setup);
     assert!(
         race.use_original_ai(Some(skill), level),
         "HD flies the original driver"
@@ -225,7 +227,9 @@ fn ubermall(class: &str) -> Option<Option<(f32, f32)>> {
         ..oag_raceplay::Options::default()
     })
     .expect("loading Ubermall");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut setup = loaded.setup;
+    crate::perturb::apply(&mut setup, 0.0);
+    let mut race = oag_raceplay::Race::start(setup);
     assert!(race.use_original_ai(Some(2.0), 1));
     Some(race.original_ai_field()?.laws().halved_lookahead)
 }

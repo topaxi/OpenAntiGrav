@@ -22,6 +22,12 @@ struct Run {
 }
 
 fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Race> {
+    let mut setup = setup(image, track, weapons)?;
+    crate::perturb::apply(&mut setup, 0.0);
+    Some(oag_raceplay::Race::start(setup))
+}
+
+fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::Setup> {
     let image = oag_testdata::image(image)?;
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
@@ -33,7 +39,7 @@ fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay:
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    Some(oag_raceplay::Race::start(loaded.setup))
+    Some(loaded.setup)
 }
 
 /// The opponents on this project's driver (no `use_original_ai`), and the
@@ -69,21 +75,95 @@ fn the_autopilot_flies_the_original_player_driver_whatever_the_opponents_fly() {
 /// The autopilot gets round every Pulse circuit against the original field
 /// with no rescue (weapons off, so a hit does not decide it): the
 /// round-the-lap check the original field's thread asked for.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue() {
-    let mut failed = Vec::new();
-    for id in CIRCUITS {
-        let track = format!(r"Data\Environments\{id}_Track\track.vex");
-        let Some(r) = run("pulse-psp-usa.chd", &track, 15_000, Some(false)) else {
-            return;
-        };
-        if r.finish.is_none() || r.respawns != 0 {
-            failed.push((id, r.finish, r.respawns));
-        }
-    }
-    assert!(failed.is_empty(), "{failed:?}");
+///
+/// **One test per circuit, judged on the majority of five races**
+/// (2026-10-20, lane `ai-gate-robustness`), one per scale of `perturb::GATE`
+/// (`tests/perturb/mod.rs`). As one twelve-circuit run it failed under 4 of 8
+/// sweep offsets with every law on, and under 2 of 9 force-term perturbations
+/// with every law off (`docs/physics/airborne-ground-truth.md`).
+fn finishes_without_a_rescue(id: &str) {
+    let track = format!(r"Data\Environments\{id}_Track\track.vex");
+    let Some(setup) = setup("pulse-psp-usa.chd", &track, Some(false)) else {
+        return;
+    };
+    let runs: Vec<(Option<u64>, u32)> = crate::perturb::GATE
+        .iter()
+        .map(|&eps| {
+            let mut setup = setup.clone();
+            crate::perturb::apply(&mut setup, eps);
+            let r = run_from(oag_raceplay::Race::start(setup), 15_000);
+            (r.finish, r.respawns)
+        })
+        .collect();
+    let good = runs
+        .iter()
+        .filter(|(finish, respawns)| finish.is_some() && *respawns == 0)
+        .count();
+    assert!(
+        good * 2 > runs.len(),
+        "{id}: {good} of {} runs finished without a rescue: {runs:?}",
+        runs.len()
+    );
 }
+
+macro_rules! finishes_test {
+    ($name:ident, $id:expr) => {
+        #[test]
+        #[ignore = "needs a disc image in data/images/"]
+        fn $name() {
+            finishes_without_a_rescue($id);
+        }
+    };
+}
+
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_01,
+    "01"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_02,
+    "02"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_03,
+    "03"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_04,
+    "04"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_05,
+    "05"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_06,
+    "06"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_07,
+    "07"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_09,
+    "09"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_10,
+    "10"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_13,
+    "13"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_14,
+    "14"
+);
+finishes_test!(
+    the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_16,
+    "16"
+);
 
 /// Every Pulse circuit, forward.
 const CIRCUITS: [&str; 12] = [
@@ -91,7 +171,10 @@ const CIRCUITS: [&str; 12] = [
 ];
 
 fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Run> {
-    let mut race = race(image, track, weapons)?;
+    Some(run_from(race(image, track, weapons)?, ticks))
+}
+
+fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
     assert!(race.use_original_ai(None, 1), "the AI tables read");
     race.set_autopilot(true);
     let mut out = Run::default();
@@ -113,7 +196,7 @@ fn run(image: &str, track: &str, ticks: u64, weapons: Option<bool>) -> Option<Ru
     out.place = race.places()[0];
     out.respawns = race.respawns_of(0);
     out.shield_end = ship.physics.shield;
-    Some(out)
+    out
 }
 
 /// A scratch sweep: prints each Pulse circuit's autopiloted race, for the
@@ -504,6 +587,143 @@ fn wall_sweep() {
                 r.shield_per_lap,
                 r.shield_end
             );
+        }
+    }
+}
+
+/// Slot 0's warm driver against a cold locate of the same craft
+/// (`Race::set_autopilot` re-locates it, as a pickup does), every `every`
+/// ticks over `ticks` of an autopiloted Pulse VENOM race, seed 1, weapons on.
+/// Returns (located, of them on a route, wrong: the cold point more than 10
+/// units further from the craft than the warm one), and the first wrong tick.
+fn cold_locates(track: &str, ticks: u64, every: u64) -> Option<(u32, u32, u32, Option<u64>)> {
+    let mut race = race("pulse-psp-usa.chd", track, None)?;
+    race.set_autopilot(true);
+    let (mut n, mut on_route, mut wrong, mut first) = (0, 0, 0, None);
+    for tick in 1..=ticks {
+        race.tick_sim_only(&PlayerInputs::none());
+        let ship = &race.sim.world.ships[0];
+        if !tick.is_multiple_of(every)
+            || ship.physics.craft_state != oag_physics::CraftState::Racing
+            || ship.standing.finished()
+        {
+            continue;
+        }
+        let warm = ship.driver;
+        let warm_point = race.line_of(0).point(warm.index as usize);
+        let snapshot = race.snapshot_sim();
+        race.set_autopilot(true);
+        let cold = race.sim.world.ships[0].driver;
+        let cold_point = race.line_of(0).point(cold.index as usize);
+        race.restore_sim(&snapshot);
+        n += 1;
+        on_route += u32::from(warm.branching.route != 0);
+        let craft = race.sim.world.ships[0].physics.body.position;
+        if cold_point.distance(craft) > warm_point.distance(craft) + 10.0 {
+            wrong += 1;
+            {
+                let ship = &race.sim.world.ships[0];
+                println!(
+                    "  tick {tick} craft {:?} air {:.2} grounded {} warm {} {:?} at {warm_point:?}, cold {} {:?} at {cold_point:?}",
+                    ship.physics.body.position,
+                    ship.physics.time_airborne,
+                    ship.physics.grounded,
+                    warm.index,
+                    warm.branching,
+                    cold.index,
+                    cold.branching
+                );
+            }
+            first.get_or_insert(tick);
+        }
+    }
+    Some((n, on_route, wrong, first))
+}
+
+/// A cold locate of the player's craft on a route's own samples finds that
+/// route, not the ring's nearest point on another deck: Pulse `05_Track`,
+/// where the ring passes 55 units above route 1 (`docs/gameplay/ai.md`, "An
+/// opponent's Autopilot"). Fails if `Race::locate_player_driver` searches the
+/// ring alone.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_cold_locate_on_a_route_stays_on_the_route() {
+    let Some((n, on_route, wrong, first)) =
+        cold_locates(r"Data\Environments\05_Track\track.vex", 4_000, 30)
+    else {
+        return;
+    };
+    println!("located {n}, on a route {on_route}, wrong {wrong} (first {first:?})");
+    assert!(
+        on_route > 10,
+        "slot 0 never took the route: {on_route} of {n}"
+    );
+    assert_eq!(wrong, 0, "first wrong at tick {first:?}");
+}
+
+/// [`cold_locates`] on every Pulse circuit for a whole race.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn cold_locate_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    for id in [
+        "01", "02", "03", "04", "05", "06", "07", "09", "10", "13", "14", "16",
+    ] {
+        let track = format!(r"Data\Environments\{id}_Track\track.vex");
+        let Some((n, on_route, wrong, first)) = cold_locates(&track, 12_000, 30) else {
+            return;
+        };
+        println!("LOCATE {id} located {n} on a route {on_route} wrong {wrong} first {first:?}");
+    }
+}
+
+/// The Autopilot's opponent switch is the title's per-class rule
+/// (`oag_title::opponent_autopilot::BELOW_RAPIER`): an opponent at VENOM or
+/// FLASH flies the pickup, one at RAPIER or PHANTOM absorbs it, on all five
+/// titles, weapons on. Fails if a race starts with the switch the other way.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_flies_its_autopilot_below_rapier_only() {
+    for (image, track) in [
+        (
+            "pulse-psp-usa.chd",
+            Some(r"Data\Environments\01_Track\track.vex"),
+        ),
+        (
+            "hdfury-ps3-eu-dec.iso",
+            Some("/data/environments/talons_junction/track.vex"),
+        ),
+        ("pure-psp-usa.chd", None),
+        ("omega-ps4-eu.pkg", None),
+        ("data/test-vpk/2048-PCSF00007-dlc1.vpk", None),
+    ] {
+        let path = if image.starts_with("data/") {
+            oag_testdata::exact(image)
+        } else {
+            oag_testdata::image(image)
+        };
+        let Some(path) = path else {
+            return;
+        };
+        for (class, flies) in [
+            ("VENOM", true),
+            ("FLASH", true),
+            ("RAPIER", false),
+            ("PHANTOM", false),
+        ] {
+            let loaded = oag_raceplay::load(&oag_raceplay::Options {
+                source: path.display().to_string(),
+                class: class.to_string(),
+                mode: oag_race::Mode::SingleRace,
+                track: track.map(str::to_string),
+                seed: Some(1),
+                ..oag_raceplay::Options::default()
+            })
+            .expect("loading the track");
+            let mut race = oag_raceplay::Race::start(loaded.setup);
+            assert_eq!(race.engage_opponent_autopilot(1), flies, "{image} {class}");
         }
     }
 }

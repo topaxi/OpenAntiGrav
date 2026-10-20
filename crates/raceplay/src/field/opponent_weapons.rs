@@ -298,10 +298,13 @@ impl Race {
     /// - **A forward weapon is fired or absorbed when `Race::opponent_decides`
     ///   says so**, and kept rather than spent when it says hold, or when the
     ///   weapon itself declines (no lock, no authored stats, no free slot).
-    /// - **An Autopilot is absorbed**, a choice: the original's field never
-    ///   fires one outside an Eliminator. `Race::set_opponent_autopilot` (off)
-    ///   flies the original's player driver for its `time` instead, which was
-    ///   measured faster and, at PHANTOM, less safe (`docs/gameplay/ai.md`).
+    /// - **An Autopilot flies the original's player driver for its `time` at
+    ///   VENOM and FLASH and is absorbed at RAPIER and PHANTOM**, a choice: the
+    ///   original's field never fires one outside an Eliminator. The rule is
+    ///   the title's `oag_title::RaceDefaults::opponent_autopilot` at the
+    ///   race's class, measured faster on every class and, at RAPIER and
+    ///   PHANTOM, less safe (`docs/gameplay/ai.md`);
+    ///   `Race::set_opponent_autopilot` overrides it.
     ///   It is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
@@ -471,7 +474,7 @@ impl Race {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Autopilot {
-            // Absorbed, unless the measurement switch hands the craft to the
+            // Absorbed, unless the class's switch hands the craft to the
             // original's player driver (`Race::set_opponent_autopilot`).
             if !self.engage_opponent_autopilot(slot) {
                 self.absorb_opponent_pickup(slot, absorb);
