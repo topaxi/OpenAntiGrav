@@ -70,13 +70,13 @@ to a **separate** Cloudflare Pages project (`openantigrav-compare`, never the ma
 site's `openantigrav`; the script refuses if the two names are ever equal). It runs
 only from the workstation, never in CI, and nothing in `.github/` calls it.
 
-It **refuses to run** until the screenshot-policy ADR that allows publishing curated
-screenshots exists and its `## Status` line **starts with** `Accepted`. The ADR's
-number is one constant, `POLICY_ADR` in `scripts/compare-page.py`, unset until that
-ADR is written; until then the recipe prints `screenshot-policy ADR not found` and
-exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what
-you see. `python3 scripts/compare-page.py --check-publish-lock` prints the verdict
-without publishing.
+It **refuses to run** unless the screenshot-policy ADR,
+[ADR-0074](../architecture/adr/0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md),
+has a `## Status` line that **starts with** `Accepted` (markdown emphasis ignored). Its number is one
+constant, `POLICY_ADR` in `scripts/compare-page.py`. A missing or non-Accepted ADR prints the reason and
+exits 2. The lock is checked before `wrangler` is looked up, so the refusal is what you see.
+`python3 scripts/compare-page.py --check-publish-lock` prints the verdict without publishing; with
+ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live
 manifests are developer material, not a publishing set.

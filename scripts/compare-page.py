@@ -36,8 +36,8 @@ DEFAULT_OUT = ROOT / "data" / "compare"
 
 # The screenshot-policy ADR that allows publishing curated screenshots, and the
 # Pages project it may go to. The number is filled in once the ADR exists; until
-# then the lock refuses by name.
-POLICY_ADR = None
+# the lock refuses by name if the file is missing or not Accepted.
+POLICY_ADR = "0074"
 PUBLISH_PROJECT = "openantigrav-compare"
 MAIN_SITE_PROJECT = "openantigrav"
 
@@ -271,6 +271,7 @@ def publish_lock() -> str | None:
         if line.strip() == "## Status":
             status = next((l.strip() for l in text[i + 1:] if l.strip()), "")
             break
+    status = status.lstrip("*_ ")  # ADR-0074 writes **Accepted (date)**
     if not status.startswith("Accepted"):
         return f"{matches[0].name} status reads {status!r}, not Accepted: publishing stays locked"
     return None

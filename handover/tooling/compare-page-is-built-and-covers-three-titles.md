@@ -1,4 +1,4 @@
-# The compare page is built; HD and Pulse PSP give pairs, four titles are partial, publishing is locked
+# The compare page is built; HD and Pulse PSP give pairs, four titles are partial, publishing is unlocked
 
 `just compare-page` builds a static page of original-vs-ours pairs (split slider,
 onion skin, side by side, difference) from manifests under
@@ -8,10 +8,7 @@ Landed 2026-10-20 (`compare-page` lane).
 
 ## Open
 
-- **`POLICY_ADR` in `scripts/compare-page.py` is unset.** `just publish-compare` refuses
-  with "screenshot-policy ADR not found" until the screenshot-policy ADR exists and its
-  `## Status` line starts with `Accepted`; set that one constant to its number then. It
-  was never run past the lock, and `wrangler` is not installed here.
+- **`just publish-compare` is unlocked (ADR-0074 Accepted) and has never been run.** The maintainer runs it; `wrangler` is not installed on the lane host.
 - **HD: the craft pose is not carried.** `rpcs3-drive.py capture` gives the camera, so
   our craft sits a little off (the original has moved a few frames on). `frame-shot`
   for HD wants a ship pose row too (the autopilot capture `scripts/rpcs3-hd-autopilot.py`
@@ -33,8 +30,7 @@ Landed 2026-10-20 (`compare-page` lane).
 
 ## Next Steps
 
-1. Fill `POLICY_ADR` when the ADR number is known, then `python3 scripts/compare-page.py --check-publish-lock`.
-2. Make a Time Trial state for each title the maintainer wants reviewed and capture
+1. Make a Time Trial state for each title the maintainer wants reviewed and capture
    one pair per circuit with the recipes in the doc.
-3. HD ship pose: add the player body pose to `rpcs3-drive.py capture`'s JSON and let
+2. HD ship pose: add the player body pose to `rpcs3-drive.py capture`'s JSON and let
    `render_with` carry it, so a pair is pose-matched as on Pulse PSP.
