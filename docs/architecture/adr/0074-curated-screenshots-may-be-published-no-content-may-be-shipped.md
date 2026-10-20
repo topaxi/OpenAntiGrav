@@ -2,9 +2,7 @@
 
 ## Status
 
-**Proposed (2026-10-20)**, for the maintainer to accept or change. Nothing in
-this ADR is in force until it is Accepted, and the publishing command it
-describes must not publish before then.
+**Accepted (2026-10-20)** by the maintainer, proposed the same day.
 
 It does not supersede [ADR-0006](0006-no-copyrighted-content.md), which stands
 in full: no game content in the repository. It adds a separate, narrower

@@ -111,8 +111,8 @@ implement the well-known one.
 
 ## Published screenshots
 
-**Decision (proposed in [ADR-0074](../architecture/adr/0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md);
-in force only once the maintainer marks it Accepted).** Curated, credited
+**Decision ([ADR-0074](../architecture/adr/0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md),
+accepted 2026-10-20).** Curated, credited
 screenshots and comparison frames of the original games, and of this engine
 running a player's own copy, may be published on the project's pages as
 illustration and commentary. Nothing in the repository or in a build changes:
@@ -126,7 +126,7 @@ The limits:
 - Published images never enter git. `--screenshot` output and `data/` stay
   gitignored and `scripts/check-leakage.py` is unchanged.
 - Publishing is a manual step the maintainer runs from the workstation, never
-  CI, and not before the ADR is Accepted.
+  CI.
 - Any image is removed on request (below).
 
 ## Screenshots and rights holders
