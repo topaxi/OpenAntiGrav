@@ -681,32 +681,43 @@ fn cold_locate_sweep() {
 
 /// The Autopilot's opponent switch is the title's per-class rule
 /// (`oag_title::opponent_autopilot::BELOW_RAPIER`): an opponent at VENOM or
-/// FLASH flies the pickup, one at RAPIER or PHANTOM absorbs it. Pulse and HD,
-/// weapons on. Fails if a race starts with the switch the other way.
+/// FLASH flies the pickup, one at RAPIER or PHANTOM absorbs it, on all five
+/// titles, weapons on. Fails if a race starts with the switch the other way.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_opponent_flies_its_autopilot_below_rapier_only() {
     for (image, track) in [
-        ("pulse-psp-usa.chd", r"Data\Environments\01_Track\track.vex"),
+        (
+            "pulse-psp-usa.chd",
+            Some(r"Data\Environments\01_Track\track.vex"),
+        ),
         (
             "hdfury-ps3-eu-dec.iso",
-            "/data/environments/talons_junction/track.vex",
+            Some("/data/environments/talons_junction/track.vex"),
         ),
+        ("pure-psp-usa.chd", None),
+        ("omega-ps4-eu.pkg", None),
+        ("data/test-vpk/2048-PCSF00007-dlc1.vpk", None),
     ] {
+        let path = if image.starts_with("data/") {
+            oag_testdata::exact(image)
+        } else {
+            oag_testdata::image(image)
+        };
+        let Some(path) = path else {
+            return;
+        };
         for (class, flies) in [
             ("VENOM", true),
             ("FLASH", true),
             ("RAPIER", false),
             ("PHANTOM", false),
         ] {
-            let Some(path) = oag_testdata::image(image) else {
-                return;
-            };
             let loaded = oag_raceplay::load(&oag_raceplay::Options {
                 source: path.display().to_string(),
                 class: class.to_string(),
                 mode: oag_race::Mode::SingleRace,
-                track: Some(track.to_string()),
+                track: track.map(str::to_string),
                 seed: Some(1),
                 ..oag_raceplay::Options::default()
             })

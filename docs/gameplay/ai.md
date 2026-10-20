@@ -1179,12 +1179,14 @@ OAG_SWEEP=1 OAG_SWEEP_GATE=1 OAG_SWEEP_SEEDS=8 OAG_REQUIRE_GAME_DATA=1 \
 # OAG_SWEEP_NO_WEAPONS=1 and OAG_SWEEP_TRACE=<seed>,<trigger tick> narrow it.
 ```
 
-**The rule that decides a class.** A class flies the pickup when, over its
-cells: every cell's median gain is positive (all but noise), the walls summed
-over cell medians do not rise, rescues summed over every run do not rise, and
-no cell whose absorb branch had no rescue in any run gets more than one. VENOM
-passes and PHANTOM fails it, which is what the earlier VENOM and PHANTOM runs
-established; FLASH passes; RAPIER fails.
+**The rule that decides a class** (chosen, not measured). A class flies the
+pickup when, over its cells: the median gain is positive on all but at most
+one cell, and that one loses under 0.1 s (FLASH: Pulse `14_Track` Ace,
+-0.04 s, all five runs at or under zero); the walls summed over cell medians
+do not rise; rescues summed over every run do not rise; and no cell whose
+absorb branch had no rescue in any run gets more than one (the threshold of
+one is chosen). VENOM passes and PHANTOM fails it, which is what the earlier
+VENOM and PHANTOM runs established; FLASH passes; RAPIER fails.
 
 | Class, level | Cells | Median gain > 0 | Median walls up | Walls A -> B (sum of medians) | Rescues A -> B (all runs) | Stints | Shield change a stint: A / A with the absorb / B |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1409,10 +1411,13 @@ pinned by `autopilot_original_ground_truth`:
 
 1. **Keep the driver's place.** A cold stint searched the whole racing line
    for the craft, as the player's pickup does. On Pulse `05_Track` at
-   `[-860, 41, -445]` that chose ring index 367 over the craft's place on
-   route 1, and the original flew it into the wall (contact 42 ticks in,
-   rescued `Beneath` at 89). An opponent's driver is already located, so its
-   stint does not search.
+   `[-860, 41, -445]` that chose index 367 over the 2312 the opponent's
+   driver held, and the original flew the craft into the wall (contact 42
+   ticks in, rescued `Beneath` at 89). An opponent's driver is already
+   located, so its stint does not search. Re-probed 2026-10-20 on the same
+   fork (seed 2, tick 3,000, slot 4, now at `[-908, 44, -417]`): the driver
+   is on route 1 at route index 2,349, and the ring's nearest point is index
+   403 at y 99.
 2. **Leave a jump's run-up to our driver** (`Driver::on_run_up`, the plan's
    own 450-unit reach). The original's player driver took `05_Track`'s jump
    at 125 where ours reaches 133 on the ramp, peaked at y 56 against 73, and
@@ -1439,9 +1444,16 @@ every 30 ticks and counted wrong when the located point is more than 10 units
 further from the craft than its warm driver's: `05_Track` 42 of 215 -> 0,
 `14_Track` 9 of 251 -> 0, the other ten circuits 0 -> 0
 (`cold_locate_sweep`; `a_cold_locate_on_a_route_stays_on_the_route` pins 05).
-On three `05_Track` ticks the warm driver itself was on the ring 32 units
-above a craft driving route 1, and the cold locate was the nearer one; that
-is a lead on the autopilot's own branch tracking, not followed here.
+**The after-count is near-automatic**: the fixed locate takes the nearest
+point over a set that holds the warm driver's own, so "further than warm"
+can hardly fire. The evidence is the point-against-point check: over the
+same twelve races, the cold and warm points are more than 20 units apart on
+five `05_Track` ticks (2,790, 2,820, 2,850, 4,860, 4,890), every one with the
+craft grounded (`time_airborne` 0) at y 27 to 32 on route 1, the cold point
+7 to 23 units from it and the warm driver's ring point 36 to 71 units away
+on the deck above. No locate put a craft on the ring onto a route, in the
+air or on the ground. Those five are a lead on the autopilot's own branch
+tracking, not followed here.
 
 **Whole races are inconclusive again.** Switch off and on, same seed, 4 seeds
 a cell, Pulse 12 circuits, HD 4 and the default circuit of Pure, Omega and
@@ -1449,8 +1461,11 @@ a cell, Pulse 12 circuits, HD 4 and the default circuit of Pure, Omega and
 the median lap change is at most 0.2 s in every row, and stints are too rare
 to move a race at this sample. Shield is each opponent's at the end of each
 lap (field mean) and at the end of the run, both labelled. A wreck is
-reported with the ticks since that craft's last stint; at 0.5 to 0.9 stints
-a Pulse race most are divergence, not the stint.
+reported with the ticks since that craft's last stint. FLASH: of the 29
+on-branch wrecks logged (Pulse Ace 9, Novice 16, the other titles 4), five
+came after a stint of that craft, the nearest 1,678 ticks after it ended,
+so none falls inside a stint or its 180-tick tail; the rest are divergence.
+Pulse rescues, both levels: 107 off, 103 on.
 
 | Class | Title, level | Races | Stints a race | Lap change on - off, median | Walls off -> on | Rescues off -> on | Field shield at each lap end, off | Field shield at each lap end, on | End shield, off -> on | Wrecks, off -> on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1483,7 +1498,8 @@ tail.
 **Cross-title.** Each title was measured on its own tables and physics and the
 same rule decides it, so the rule is **ported** to all five titles with its
 own sweep each (the per-title table above): Pulse 12 circuits, HD 4, Pure,
-Omega and 2048 on their default circuit. 2048 and Omega agree (VENOM and FLASH
+Omega and 2048 on their default circuit. `an_opponent_flies_its_autopilot_below_rapier_only`
+pins the rule on all five at the four classes. 2048 and Omega agree (VENOM and FLASH
 faster with walls down; RAPIER Ace walls up on both, 2048's rescues 0 -> 4).
 The original's 2048 and Omega player driver steers with the pilot assist's
 gains, unread, so the opponents' controller flies it there as for the player.
