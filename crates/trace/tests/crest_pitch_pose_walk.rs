@@ -66,6 +66,23 @@ fn pitch_column(text: &str) -> Option<Vec<f32>> {
     let mut lines = text.lines();
     let header: Vec<&str> = lines.next()?.split(',').collect();
     let at = |name: &str| header.iter().position(|h| *h == name);
+    // The control block's own pitch axis (`*(craft+0x78) + 0x10`, `psp_trace_fields.py`),
+    // gated against world down: only for a capture over level track, which the
+    // drop tests on the start straight are (`up.y` `0.9998` there).
+    if let (Some(stick), Some(up_y)) = (at("stick_pitch"), at("up_y")) {
+        return Some(
+            lines
+                .map(|line| {
+                    let f: Vec<f32> = line.split(',').map(|v| v.parse().unwrap()).collect();
+                    if f[up_y] > 0.9 {
+                        f[stick] / CONTROL_RANGE
+                    } else {
+                        0.0
+                    }
+                })
+                .collect(),
+        );
+    }
     let pitch = at("ai_pitch")?;
     let hull = [at("hull_up_x")?, at("hull_up_y")?, at("hull_up_z")?];
     let down = [
@@ -157,6 +174,7 @@ fn the_crest_stepped_once_per_row() {
             ..ShipControls::default()
         };
         let lat0 = state.body.up().cross(state.body.forward());
+        let state_up0 = state.body.up();
         let inertia = state.body.inertia;
 
         let mut probe = state;
@@ -244,7 +262,7 @@ fn the_crest_stepped_once_per_row() {
             state.body.angular_velocity.dot(lat0),
         );
         println!(
-            "ROW,{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "ROW,{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             frame.tick,
             frame.grounded,
             next.grounded,
@@ -258,6 +276,8 @@ fn the_crest_stepped_once_per_row() {
             omega_next.dot(lat0),
             frame.velocity.length(),
             controls.steer_y,
+            dw.dot(state_up0),
+            (terms.weathervane / inertia).dot(state_up0),
         );
     }
 }

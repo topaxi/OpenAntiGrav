@@ -45,6 +45,21 @@ CRAFT_FIELDS = [
     ("stun_timer", 0x290), ("timer_2e0", 0x2E0),
 ]
 
+# The control block the craft's update reads its stick from, one hop out at
+# `craft+0x78`. **Not `FLARE_POINTER`**, which is the same `0x78` off the *racer*
+# (`craft+0x1c4`), a different object: this one is off the craft `Ship_UpdateCraft`
+# takes in `a0`. `Ship_UpdateSteering` loads the steering target from `+0x00`
+# (`0x088487a0`) and ramps `craft+0x2c0` toward it; `Ship_UpdatePitch` reads the
+# pitch axis from `+0x10`. Both on the `+/-100` scale, the pitch axis
+# negative-nose-up (d-pad up `-100`), read live: engine.md, "The pitch axis, read
+# at runtime". The ramped `steer` column cannot stand in for either: it lags the
+# stick, and pitch has no craft-side copy at all.
+CONTROLS_POINTER = 0x78
+CONTROL_FIELDS = [
+    ("stick_steer", 0x00),
+    ("stick_pitch", 0x10),
+]
+
 # The **ship entity**, one hop out at `craft+0x1c4` - the object `Ship_Shield`,
 # `Ship_Damage` and `FUN_088418e0` all take, and *not* the craft `CRAFT_FIELDS`
 # is indexed off. See docs/ghidra/functions/psp-pulse-usa/shield.md.

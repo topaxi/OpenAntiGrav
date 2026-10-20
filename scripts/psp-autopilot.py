@@ -42,6 +42,8 @@ from niri_shot import find_window, screenshot
 from ppsspp_debugger import Debugger
 from psp_trace_fields import (
     BODY_FIELDS,
+    CONTROL_FIELDS,
+    CONTROLS_POINTER,
     CRAFT_FIELDS,
     ENTITY_FIELDS,
     ENTITY_OWNER,
@@ -316,7 +318,24 @@ def main():
         default=1200,
         help="give up after this many ticks with no progress along the spline",
     )
+    parser.add_argument(
+        "--hold-near",
+        action="append",
+        default=[],
+        metavar="X,Y,Z,R,BUTTONS",
+        help="while the craft is within R units of (X, Y, Z), hold BUTTONS (joined "
+        "by '+', e.g. 'cross+up', or 'cross' alone for a centred stick) instead of "
+        "what the controller chose. Repeatable. For a capture that needs one input "
+        "held over one feature of the track, wherever the closed loop reaches it.",
+    )
     args = parser.parse_args()
+    holds = []
+    for text in args.hold_near:
+        *numbers, buttons = text.split(",")
+        if len(numbers) != 4:
+            parser.error("--hold-near is X,Y,Z,R,BUTTONS")
+        x, y, z, radius = (float(n) for n in numbers)
+        holds.append(((x, y, z), radius, buttons.split("+")))
 
     gate = parse_vec(parser, "--gate", args.gate)
     gate_dir = parse_vec(parser, "--gate-dir", args.gate_dir)
@@ -349,6 +368,7 @@ def main():
                 [n for n, _ in CRAFT_FIELDS]
                 + [n for n, _ in ENTITY_FIELDS]
                 + [n for n, _ in BODY_FIELDS]
+                + [n for n, _ in CONTROL_FIELDS]
             )
             + "\n"
         )
@@ -464,6 +484,9 @@ def main():
                     break
 
             held, error, look = steer_for(state, line, index, args)
+            for centre, radius, buttons in holds:
+                if length(sub(state["position"], centre)) < radius:
+                    held = list(buttons)
             script_state = input_script.parse("1 %s\n" % (" ".join(held) or "none"))[0]
             recorded.append(script_state)
 
@@ -491,6 +514,11 @@ def main():
                     for _, at in ENTITY_FIELDS
                 ]
                 values += [struct.unpack_from("<f", body_blob, at)[0] for _, at in BODY_FIELDS]
+                controls = struct.unpack_from("<I", craft_blob, CONTROLS_POINTER)[0]
+                controls_blob = dbg.read(controls, 0x20)
+                values += [
+                    struct.unpack_from("<f", controls_blob, at)[0] for _, at in CONTROL_FIELDS
+                ]
                 trace.write("%d,%s\n" % (tick, ",".join("%.7g" % v for v in values)))
 
             if sent is None or script_state != sent:
