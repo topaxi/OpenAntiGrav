@@ -71,6 +71,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import input_script
+import pcsx2_state
 from pcsx2_pine import Pine, PineError
 from pcsx2_trace_fields import (
     BODY_FIELDS,
@@ -247,9 +248,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--slot", type=int, default=28011, help="PINE slot")
     parser.add_argument(
-        "--craft", required=True, type=lambda v: int(v, 0), metavar="ADDRESS",
+        "--craft", type=lambda v: int(v, 0), metavar="ADDRESS",
         help="the craft's EE RAM address for this savestate - see "
-             "scripts/pcsx2_trace_fields.py for how to find one",
+             "scripts/pcsx2_trace_fields.py for how to find one, or give "
+             "--state-file and let `pcsx2_state.py` read it out of the file",
+    )
+    parser.add_argument(
+        "--state-file", type=Path, metavar="STATE.p2s",
+        help="the .p2s the run starts from (the file --from-state loads): its "
+             "craft pointer is read from STATE.p2s.json, or found in the file's "
+             "own EE RAM when no sidecar is written (scripts/pcsx2_state.py)",
     )
     parser.add_argument(
         "--from-state", type=int, default=None, metavar="SLOT",
@@ -273,6 +281,19 @@ def main():
                              "against; defaults to its own FRAME_COUNTER")
     parser.add_argument("--out", type=Path, help="write here instead of stdout")
     args = parser.parse_args()
+
+    if args.craft is None:
+        if not args.state_file:
+            parser.error("--craft ADDRESS or --state-file STATE.p2s is required")
+        side = pcsx2_state.read_sidecar(args.state_file)
+        if side:
+            args.craft = int(side["craft"], 0)
+        else:
+            found = pcsx2_state.player_craft(args.state_file)
+            if found is None:
+                parser.error("no player craft found in %s" % args.state_file)
+            args.craft = found[0]
+        print("craft 0x%x (from %s)" % (args.craft, args.state_file), file=sys.stderr)
 
     if args.script and args.hold:
         parser.error("--hold and --script cannot both drive the capture; "

@@ -60,7 +60,37 @@ def set_menu(dbg, want_open):
     raise SystemExit("could not %s the pause menu" % ("open" if want_open else "close"))
 
 
+def window_origin():
+    """Root coordinates of the emulator window's top-left corner.
+
+    The button positions are relative to the 960x544 window, and `xdotool`
+    moves the pointer in root coordinates. On an Xvfb exactly as large as the
+    window the two agree; on the 1280x800 screen `ppsspp-start.sh` declares
+    there is no window manager, so the window is centred at (160, 128) and every
+    click landed in the black margin, outside it (found 2026-10-20: `load`
+    reported success on a fresh instance and nothing loaded).
+    """
+    out = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", ""],
+                         capture_output=True, text=True, env=os.environ).stdout.split()
+    best = None
+    for wid in out:
+        geo = subprocess.run(["xdotool", "getwindowgeometry", "--shell", wid],
+                             capture_output=True, text=True, env=os.environ).stdout
+        vals = dict(line.split("=") for line in geo.split() if "=" in line)
+        try:
+            x, y, w, h = (int(vals[k]) for k in ("X", "Y", "WIDTH", "HEIGHT"))
+        except (KeyError, ValueError):
+            continue
+        if (w, h) == (960, 544):
+            return x, y
+        if best is None and w >= 400 and h >= 300:
+            best = (x, y)
+    return best or (0, 0)
+
+
 def click(x, y):
+    ox, oy = window_origin()
+    x, y = x + ox, y + oy
     xdo("mousemove", str(x), str(y))
     time.sleep(0.3)
     xdo("mousedown", "1")
@@ -99,12 +129,28 @@ def do_save(dbg, home, slot):
 
 
 def do_load(dbg, slot):
+    """Press Load on `slot`, then leave the menu only if it is still open.
+
+    PPSSPP may close the pause menu itself once a state has loaded, so an
+    unconditional `Escape` could reopen it (seen 2026-10-20: "could not close
+    the pause menu" after a load that had worked). The CPU is also stood still
+    while the state is read, so one reading of `paused()` straight after the
+    click cannot tell the two apart: wait for it to run, and press `Escape`
+    only when it has not within a few seconds.
+    """
     set_menu(dbg, True)
     began = time.time()
     click(LOAD_X, SLOT_Y0 + SLOT_DY * (slot - 1))
-    time.sleep(1.0)
-    set_menu(dbg, False)
-    return time.time() - began
+    time.sleep(1.5)
+    for attempt in range(2):
+        for _ in range(8):
+            if not paused(dbg):
+                return time.time() - began
+            time.sleep(0.5)
+        if attempt == 0:
+            xdo("key", "Escape")
+            time.sleep(1.2)
+    raise SystemExit("the game did not resume after the load")
 
 
 def pose(port):
@@ -113,7 +159,13 @@ def pose(port):
     spec.loader.exec_module(drive)
     with Debugger(port) as dbg:
         craft = drive.find_craft(dbg)
-        return drive.read_progress(dbg, craft)
+        try:
+            return drive.read_progress(dbg, craft)
+        finally:
+            # find_craft stops the CPU at a breakpoint. Left stopped, every
+            # later `paused()` reading is true, so the pause menu's state can no
+            # longer be told from the debugger's own stop.
+            dbg.resume()
 
 
 def main():
