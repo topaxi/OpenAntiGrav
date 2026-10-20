@@ -739,3 +739,39 @@ fn the_census_four_keep_their_slots_and_the_rungs_around_them_have_none() {
         assert!(SpeedClass::named(outside.as_str()).is_some());
     }
 }
+
+/// HD's file writes the restitution as a C literal, `"0.80f"`, and the original reads `0.8`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`): a strict parse would refuse
+/// the whole `<Global>` block over the suffix.
+#[test]
+fn collision_reads_the_wall_restitution_through_its_trailing_f() {
+    let global = parse_global(&global_with_start_boost(
+        r#"<Collision weaponHitMassFactor="0.9" shipShipCofR="1.0f" shipWallCofR="0.80f"/>"#,
+    ))
+    .expect("parses")
+    .expect("has a <Global>");
+    assert_eq!(
+        global.collision,
+        Some(Collision {
+            ship_wall_cof_r: 0.8
+        })
+    );
+}
+
+#[test]
+fn a_global_without_collision_has_none() {
+    let global = parse_global(&global_document(&FOUR))
+        .expect("parses")
+        .expect("has a <Global>");
+    assert_eq!(global.collision, None);
+}
+
+#[test]
+fn a_collision_restitution_that_is_not_a_number_is_an_error() {
+    assert!(
+        parse_global(&global_with_start_boost(
+            r#"<Collision shipWallCofR="0.8ff"/>"#
+        ))
+        .is_err()
+    );
+}

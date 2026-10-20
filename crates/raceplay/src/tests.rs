@@ -198,6 +198,7 @@ fn setup(handling: Handling) -> Setup {
         weapons_override: None,
         difficulty: oag_ai::Difficulty::default(),
         class: "VENOM".to_string(),
+        wall_restitution: None,
         opponents: false,
         no_opponents: false,
         people: 1,

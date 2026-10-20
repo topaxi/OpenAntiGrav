@@ -159,3 +159,30 @@ fn a_ship_thrown_at_a_real_track_wall_does_not_pass_through_it() {
         "the ship never gained any velocity back along the wall normal"
     );
 }
+
+/// The craft-wall restitution is the disc's: Wipeout HD's global `handlingstats.xml`
+/// authors `<Collision shipWallCofR="0.80f"/>` and the race carries `0.8`; Pulse and Pure
+/// author no `<Collision>` and keep the engine's `0.4`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Fails if the element stops
+/// parsing (the `f` suffix) or stops reaching the setup.
+#[test]
+#[ignore = "needs disc images in data/images/"]
+fn the_wall_restitution_is_the_one_the_disc_authors() {
+    for (image, expected) in [
+        ("data/images/hdfury-ps3-eu-dec.iso", Some(0.8)),
+        ("data/images/pulse-psp-usa.chd", None),
+        ("data/images/pure-psp-usa.chd", None),
+    ] {
+        let Some(path) = oag_testdata::image(image) else {
+            continue;
+        };
+        let loaded = race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        assert_eq!(loaded.setup.wall_restitution, expected, "{image}");
+    }
+}

@@ -346,6 +346,11 @@ pub struct ShipState {
     /// and an unnamed second writer from what reads like a rival-contact path (no port).
     /// So `apply_pending_impulse` is a correct no-op until a producer is wired.
     pub pending_impulse: Vec3,
+    /// The wall torque queued by this step's contacts for the **next** step's integration
+    /// ([`crate::wall::steer_away_torque`], Wipeout HD's). The original adds it to the body's
+    /// torque accumulator after the integrator has run and cleared it, so the next integrate
+    /// is the one that turns it into yaw. Zero on a title without the law.
+    pub wall_torque: Vec3,
     /// Seconds left on the **weapon slowdown timer** at `craft+0x2e0`.
     ///
     /// While it runs the victim gets no engine thrust and a zeroed throttle state
@@ -645,6 +650,7 @@ impl Default for ShipState {
             stun_timer: 0.0,
             wall_contact_prev: false,
             pending_impulse: Vec3::ZERO,
+            wall_torque: Vec3::ZERO,
             slowdown_timer: 0.0,
             grounded: 0.0,
             grounded_prev: 0.0,

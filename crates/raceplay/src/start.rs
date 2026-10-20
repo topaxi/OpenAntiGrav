@@ -102,6 +102,7 @@ impl Race {
             class_gravity_scale,
             start_boost,
             pilot_assist,
+            wall_restitution,
             pose_override,
             #[cfg(feature = "view")]
             camera_override,
@@ -166,7 +167,12 @@ impl Race {
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
         let pitch_gate = craft_laws.is_none_or(|laws| laws.pitch_gate.value);
         let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
-        let physics_laws = crate::launch_hover::physics_laws(craft_laws);
+        let mut physics_laws = crate::launch_hover::physics_laws(craft_laws);
+        // The disc's own craft-wall restitution where its global handling file authors one
+        // (Wipeout HD, 2048, Omega): data, so no title is named here.
+        if let Some(restitution) = wall_restitution {
+            physics_laws.wall_restitution = restitution;
+        }
         // A title whose engine reads the launch multiplier for the player's craft alone (Pure)
         // launches its field unboosted.
         let field_start_boost = if craft_laws

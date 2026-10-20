@@ -70,8 +70,8 @@ use crate::fexml::{self, Node};
 mod global;
 
 pub use global::{
-    ForeignGlobalClass, GLOBAL_ENTRY, Global, GravityMul, Special, SpeedupPads, StartBoost,
-    WeaponPad, global_from_blob, parse_global,
+    Collision, ForeignGlobalClass, GLOBAL_ENTRY, Global, GravityMul, Special, SpeedupPads,
+    StartBoost, WeaponPad, global_from_blob, parse_global,
 };
 
 /// A speed class: a name a title's `handlingstats.xml` authors, as data.

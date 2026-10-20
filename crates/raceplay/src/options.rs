@@ -569,6 +569,9 @@ pub struct Setup {
     /// The laws of the player's two Pilot Assist levels: the disc's where it authors
     /// them, a labelled stand-in where it does not (`load::pilot_assist`).
     pub pilot_assist: oag_physics::pilot_assist::Laws,
+    /// The disc's `<Collision shipWallCofR>`, the craft-wall restitution; `None` where it
+    /// authors none, which leaves the engine's ([`oag_physics::laws::Laws::wall_restitution`]).
+    pub wall_restitution: Option<f32>,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two

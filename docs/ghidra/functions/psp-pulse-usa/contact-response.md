@@ -2229,3 +2229,15 @@ a clean negative; details on
 [ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md#the-wall-response-is-not-in-the-pair-narrowphase-2026-10-19).
 HD keeps Pulse's response in `crates/physics` (`docs/physics/README.md`,
 inherited, not measured).
+
+### HD's resolver is found (2026-10-20)
+
+This supersedes "HD: the resolver is not where Pulse's is" above. HD's wall response is
+`Body_ResolveContact` (`0x000f7770`), reached from `Physics_StepWorld`'s contact loop, and
+was measured live on RPCS3. Its friction (`0.035`), world-axis denominator, `0.1` angular
+scale, push-out and shield drain are Pulse's. Four things differ, and all four are ported for
+wall contacts: restitution `0.8` from the disc's `<Collision shipWallCofR>`, a one-sided
+impulse, a steer-away yaw torque and a body-local point rate. Omega and 2048 inherit them,
+and 2048 holds the point rate. The collision cage keeps this page's Pulse law on every
+title. Evidence:
+[ps3-hdfury-eu/wall-response.md](../ps3-hdfury-eu/wall-response.md).

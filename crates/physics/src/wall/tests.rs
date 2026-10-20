@@ -860,3 +860,215 @@ fn a_held_heading_makes_the_bounce_the_cost_not_the_friction() {
     // and only a quarter of that is the friction coefficient.
     assert!((speed - 7.3437).abs() < 1e-3, "{speed}");
 }
+
+/// The restitution is the title's law, not Pulse's constant: Wipeout HD's resolver reads
+/// `0.8`, which its global `handlingstats.xml` writes over a compiled `0.4`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`, 26 of 26 live contacts). The
+/// headline hit at `e = 0.8`: `j = 1.8 * 10 / 1.006510 = 17.884`, so `10` in is `7.884` out
+/// where Pulse's `0.4` gives `3.909`.
+#[test]
+fn the_wall_restitution_comes_from_the_laws() {
+    let mut state = ship_at(1.0, 10.0);
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_restitution: 0.8,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let response = resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(response.contacts, 1, "{response:?}");
+    assert!(
+        (state.body.linear_velocity.x + 7.884).abs() < 1e-2,
+        "{:?}",
+        state.body.linear_velocity
+    );
+}
+
+/// The title's restitution is a **wall** law: it was measured on wall contacts alone, so a hull
+/// sample crossing a floor keeps Pulse's `0.4` (`crate::laws::Laws::restitution_against`).
+#[test]
+fn a_floor_contact_keeps_pulses_restitution() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_restitution: 0.8,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut floor = ship_at(1.0, 10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    let mut pulse = ship_at(1.0, 10.0);
+    resolve(
+        &mut pulse,
+        &handling(),
+        &Environment::default(),
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert_eq!(floor.body.linear_velocity, pulse.body.linear_velocity);
+    assert!(floor.body.linear_velocity.x < 0.0, "{:?}", floor.body);
+}
+
+/// Wipeout HD's wall contact is **one-sided**: the same hull leaving a wall it still overlaps,
+/// which Pulse pulls back (`a_ship_leaving_a_wall_it_still_overlaps_is_pulled_back`), is left
+/// alone, position included (`Body_ResolveContact` `0x000f7770` returns before
+/// `Body_Translate`; `docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). A floor contact,
+/// never measured on HD, stays two-sided.
+#[test]
+fn a_one_sided_wall_contact_leaves_a_ship_moving_out_alone() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_one_sided: true,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut state = ship_at(1.0, -10.0);
+    let response = resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(response.contacts, 1, "{response:?}");
+    assert_eq!(state.body.linear_velocity, Vec3::new(-10.0, 0.0, 0.0));
+    assert_eq!(state.body.position, Vec3::new(1.0, 0.0, 0.0));
+    assert_eq!(response.impulse_sum, 0.0);
+    assert_eq!(response.resolved, None, "a skipped contact is no record");
+
+    // An inbound contact is still resolved in full.
+    let mut inbound = ship_at(1.0, 10.0);
+    resolve(
+        &mut inbound,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert!((inbound.body.linear_velocity.x + 3.909).abs() < 1e-2);
+
+    // A floor contact moving out is still pulled back, as on Pulse.
+    let mut floor = ship_at(1.0, -10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert!(floor.body.linear_velocity.x > 0.0, "{:?}", floor.body);
+}
+
+/// Wipeout HD's steer-away torque off the headline hit: `j = 13.909` along the wall's normal
+/// `-x`, which is `+(up x forward)` for an unrotated craft, so `5 * 13.909 = 69.5` about `+up`;
+/// a hit three times as hard is clamped at `5 * 20 = 100`. Either turns the nose away from the
+/// wall: `torque x forward` points along the normal. Pulse queues nothing.
+#[test]
+fn a_wall_hit_queues_a_yaw_torque_that_turns_the_nose_away() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_steer_away: true,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut state = ship_at(1.0, 10.0);
+    resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert!(
+        (state.wall_torque - Vec3::new(0.0, 69.545, 0.0)).length() < 0.05,
+        "{:?}",
+        state.wall_torque
+    );
+    let normal = Vec3::new(-1.0, 0.0, 0.0);
+    assert!(state.wall_torque.cross(state.body.forward()).dot(normal) > 0.0);
+
+    let mut hard = ship_at(1.0, 30.0);
+    resolve(
+        &mut hard,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(hard.wall_torque, Vec3::new(0.0, 100.0, 0.0));
+
+    let mut pulse = ship_at(1.0, 10.0);
+    resolve(
+        &mut pulse,
+        &handling(),
+        &Environment::default(),
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(pulse.wall_torque, Vec3::ZERO);
+
+    // A floor contact queues nothing: the law was measured on walls.
+    let mut floor = ship_at(1.0, 10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert_eq!(floor.wall_torque, Vec3::ZERO);
+}
+
+/// The queued torque is integrated on the next step, as the original's accumulator is, and
+/// then gone.
+#[test]
+fn the_next_step_integrates_the_queued_wall_torque_once() {
+    let world = CollisionWorld::new();
+    let mut with = ship_at(0.0, 0.0);
+    with.wall_torque = Vec3::new(0.0, 100.0, 0.0);
+    let mut without = ship_at(0.0, 0.0);
+    let controls = crate::ShipControls::default();
+    let env = Environment::default();
+    crate::step(&mut with, &controls, &handling(), &env, &world, 1.0 / 60.0);
+    crate::step(
+        &mut without,
+        &controls,
+        &handling(),
+        &env,
+        &world,
+        1.0 / 60.0,
+    );
+    assert_eq!(with.wall_torque, Vec3::ZERO);
+    let gained = with.body.angular_velocity.y - without.body.angular_velocity.y;
+    assert!(gained > 0.0, "{gained}");
+}
+
+/// Wipeout HD's point velocity crosses the world lever with the **body-local** rate. A craft
+/// yawed a quarter turn pitching at `omega = (2, 0, 0)` has `R^T omega = (0, 0, 2)`: against the
+/// lever `(0, 1, 0)` that is `(-2, 0, 0)` where the textbook gives `(0, 0, 2)`.
+#[test]
+fn a_body_local_point_rate_crosses_the_unrotated_rate() {
+    let body = Body {
+        orientation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+        angular_velocity: Vec3::new(2.0, 0.0, 0.0),
+        ..Body::default()
+    };
+    let lever = Vec3::new(0.0, 1.0, 0.0);
+    let local = body.orientation.inverse() * body.angular_velocity;
+    assert!(
+        (local - Vec3::new(0.0, 0.0, 2.0)).length() < 1e-5,
+        "{local:?}"
+    );
+    let hd = contact_point_velocity(&body, lever, true);
+    assert!((hd - Vec3::new(-2.0, 0.0, 0.0)).length() < 1e-5, "{hd:?}");
+    let pulse = contact_point_velocity(&body, lever, false);
+    assert!(
+        (pulse - Vec3::new(0.0, 0.0, 2.0)).length() < 1e-5,
+        "{pulse:?}"
+    );
+}
