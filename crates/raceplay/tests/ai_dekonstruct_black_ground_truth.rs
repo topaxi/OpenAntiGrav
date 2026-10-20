@@ -175,7 +175,13 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 3, 1, 0),
     ("FLASH", 1, 2, 1),
     ("FLASH", 2, 0, 1),
-    ("FLASH", 3, 1, 2),
+    // 2026-10-20, forward 1 -> 2 (lane `ai-gate-robustness`): a wreck in state 6 leaves
+    // the collision cage (`oag_physics::damage::in_state_6`). Slot 3 is wrecked at tick
+    // 6620 as before; past it the race diverges and slot 6 dies at 15344 (wall 51, rolls
+    // 34, weapons 40, 8 cage resets). Forward over `tests/perturb`'s nine scales (0, 1e-3,
+    // -1e-3, 1e-4, -1e-4, 1e-5, -1e-5, 1e-6, -1e-6): before 1 0 1 0 1 0 0 0 0, after
+    // 2 0 1 0 1 0 0 0 0 (median 0 both, max 1 -> 2).
+    ("FLASH", 3, 2, 2),
     ("RAPIER", 1, 1, 3),
     // 2026-10-13, forward 1 -> 2: a
     // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
