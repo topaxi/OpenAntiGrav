@@ -244,6 +244,16 @@ after the countdown:
 | restored pose | `(5.65, -50.08, -196.67)` on both loads, after driving the craft 5-6 m away in between (two loads, one boot: confidence 55). Not compared against the menu walk here; `verification-protocol.md`'s 2026-07-30 figure (0.031 units between two loads, no tighter than the walk) stands untouched |
 | load from a file | `psp-state.py load 2 --file data/saves/pulse-psp/time-trial-talons-venom-grid.ppst` copies it into the slot name and loads it |
 
+**A fresh instance restores a state too (2026-10-20, `compare-pairs-pulse`; two separate boots, each
+loaded `time-trial-talons-venom-grid.ppst` from the title screen in 2.4 s and read the pose
+`(5.64, -50.08, -196.67)`).** An earlier run reported "loaded" and stayed on the title screen. Two
+causes, both in `psp-state.py`: (1) the clicks were made in the window's own coordinates but
+`xdotool` moves the pointer in **root** coordinates; with no window manager on the 1280x800 Xvfb
+`ppsspp-start.sh` declares, the 960x544 window sits at (160, 128), so every click landed in the black
+margin (the script now reads the window's origin); (2) `pose`/`find_craft` stops the CPU at a
+breakpoint and left it stopped, so `paused()` read true forever and the next `Escape` toggled the menu
+the wrong way (`pose` now resumes, and `load` waits for the game to run before it touches `Escape`).
+
 So for a **weapon or visual capture, where the craft's exact tick matters less**, a grid
 state is a fast start: 2 s instead of 90 s. For a **trace compared tick for tick**, the
 verification protocol's built start (`--start-heading`) still stands. The state is tied to
