@@ -46,6 +46,8 @@ def main():
     ap.add_argument("--seconds", type=float, default=300.0)
     ap.add_argument("--no-arm", action="store_true")
     ap.add_argument("--skip-walk", action="store_true")
+    ap.add_argument("--ramp", action="store_true",
+                    help="sample from the grid on, through GO and the hover release ramp, unarmed")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -63,7 +65,7 @@ def main():
             if session.walk_to_race() not in drive.RACE_ARRIVED:
                 sys.exit("no race")
             session.wait_for_load(70)
-        time.sleep(8)
+        time.sleep(0 if args.ramp else 8)
         gdb.pause()
         ship, body = place.find_player(gdb)
         slot = struct.unpack(">I", gdb.read(ship + SLOT, 4))[0]
@@ -73,7 +75,7 @@ def main():
         mem = session.open_mem()
         # Tap cross (START RACE) until the craft leaves its grid state (flag 0x2)
         # and is moving.
-        deadline = time.time() + 120
+        deadline = time.time() + (0 if args.ramp else 120)
         while time.time() < deadline:
             mem.seek(GUEST + craft + 0x264)
             fl = struct.unpack(">I", mem.read(4))[0]
@@ -87,7 +89,8 @@ def main():
                 time.sleep(0.15)
                 session.pad.set("cross", False)
             time.sleep(4)
-        time.sleep(2)
+        if not args.ramp:
+            time.sleep(2)
 
         def read(addr, n):
             mem.seek(GUEST + addr)
@@ -99,25 +102,35 @@ def main():
         def u32(addr):
             return struct.unpack(">I", read(addr, 4))[0]
 
-        if not args.no_arm:
+        if not (args.no_arm or args.ramp):
             gdb.pause()
             w = struct.unpack(">I", gdb.read(slot + 0x200, 4))[0]
             gdb.write(slot + 0x200, struct.pack(">I", w | 0x800))
             gdb.write(slot + 0x158, struct.pack(">f", 10000.0))
             gdb.resume()
-        print("armed" if not args.no_arm else "not armed", "slot flags %#x timer %.1f" % (u32(slot + 0x200), f32(slot + 0x158)), flush=True)
+        print("armed" if not (args.no_arm or args.ramp) else "not armed", "slot flags %#x timer %.1f" % (u32(slot + 0x200), f32(slot + 0x158)), flush=True)
         rows = []
         if getattr(session, "guard", None) is not None:
             session.guard.stage("capture", limit=args.seconds + 120)
         fh = open(out / "samples.csv", "w")
         fh.write("t,clock,flags,mult,blend,speed,throttle,grounded,px,py,pz,vx,vy,vz,shield,slot_flags,slot_timer,c0,c1,c2,c3,c4,ctlptr_minus_craft,"
-                 "wx,wy,wz,r0x,r0y,r0z,upx,upy,upz,fwx,fwy,fwz,hupx,hupy,hupz,sdx,sdy,sdz,team_wd\n")
+                 "wx,wy,wz,r0x,r0y,r0z,upx,upy,upz,fwx,fwy,fwz,hupx,hupy,hupz,sdx,sdy,sdz,team_wd,"
+                 "target,timer,height,state\n")
         team = u32(craft + 0x78)
         print("team block %#x weight_distribution (+0x9c) %.3f" % (team, f32(team + 0x9c)), flush=True)
         t0 = time.time()
         last_pos = None
         last_print = 0
+        last_tap = 0.0
         while time.time() - t0 < args.seconds:
+            # `--ramp`: tap START RACE from inside the sampler, so the countdown, GO and the
+            # release ramp are all rows (`hover-target.md`: the target `+0x344`, its clamp
+            # `+0x348`, the height `+0x260` and the entry state `+0x2f8`).
+            if args.ramp and u32(craft + 0x264) & 0x2 and time.time() - last_tap > 4:
+                last_tap = time.time()
+                session.pad.set("cross", True)
+                time.sleep(0.15)
+                session.pad.set("cross", False)
             clock = f32(craft + 0x308)
             pos_bytes = read(body + 0x200, 12)
             if pos_bytes == last_pos:
@@ -148,7 +161,8 @@ def main():
             pose = (struct.unpack_from(">3f", b, 0x10) + struct.unpack_from(">3f", b, 0x40)
                     + struct.unpack_from(">3f", b, 0x50) + struct.unpack_from(">3f", b, 0x60)
                     + struct.unpack(">3f", read(craft + 0x200, 12))
-                    + struct.unpack(">3f", read(ship + 0x7850, 12)) + (f32(team + 0x9c),))
+                    + struct.unpack(">3f", read(ship + 0x7850, 12)) + (f32(team + 0x9c),)
+                    + (f32(craft + 0x344), f32(craft + 0x348), f32(craft + 0x260), u32(craft + 0x2f8)))
             rows.append((time.time() - t0, clock, flags, mult, blend, speed, throttle, grounded,
                          *pos, *vel, shield, sflags, stimer, *ctl, *pose))
             fh.write(",".join(str(x) for x in rows[-1]) + "\n")

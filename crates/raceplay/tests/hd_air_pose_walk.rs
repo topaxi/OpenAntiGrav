@@ -58,7 +58,11 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: env_or("OAG_HD_CLASS", "PHANTOM"),
-        mode: oag_race::Mode::SingleRace,
+        mode: if env_or("OAG_HD_MODE", "") == "tt" {
+            oag_race::Mode::TimeTrial
+        } else {
+            oag_race::Mode::SingleRace
+        },
         track: Some(env_or(
             "OAG_HD_TRACK",
             "/data/environments/05_ubermall/track.vex",
@@ -71,15 +75,32 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
     .expect("loading the race");
     let gravity = loaded.setup.class_gravity_scale;
     let mut race = oag_raceplay::Race::start(loaded.setup);
+    // `OAG_HD_OPENLOOP=<ticks>`: fly our own race with no input and print the player's clamp and
+    // body height per tick, to set against a `--ramp` capture's `timer` and `py`.
+    if let Ok(ticks) = std::env::var("OAG_HD_OPENLOOP") {
+        for _ in 0..ticks.parse::<u64>().unwrap_or(600) {
+            race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
+            let ship = &race.sim.world.ships[0].physics;
+            println!(
+                "ol {} {:?} {:.4}",
+                race.sim.world.tick, ship.hover_cap, ship.body.position.y
+            );
+        }
+        return;
+    }
     // One tick so the per-tick craft laws (hover rig, steering clamp) are written.
     race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
     let mut template = race.sim.world.ships[0].physics;
     // The tick above ran on the grid, where HD caps the hover target low (`hover_cap`); the
-    // capture is flown long after GO, when the cap has released (`hover-target.md`).
+    // capture starts after GO and fits no cap from its row 20, when the cap has released (`hover-target.md`).
     if std::env::var_os("OAG_HD_GRID_CAP").is_none() {
         template.hover_cap = None;
     }
-    let handling = race.sim.world.ships[0].handling;
+    let mut handling = race.sim.world.ships[0].handling;
+    // `OAG_HD_RIDE=<delta>`: the handling's ride height moved by `delta`, a sensitivity probe.
+    if let Ok(delta) = std::env::var("OAG_HD_RIDE") {
+        handling.antigrav.ride_height += delta.parse::<f32>().unwrap_or(0.0);
+    }
     let world = race.collision();
     let term = match std::env::var("OAG_HD_GRAV").as_deref() {
         Ok("ground") => oag_physics::passive::ClassGravityTerm::Grounded,
@@ -111,7 +132,14 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         let (r, n) = (&rows[i], &rows[i + 1]);
         let (p0, p1) = (v3(r, "px", "py", "pz"), v3(n, "px", "py", "pz"));
         let v = v3(r, "vx", "vy", "vz");
-        let dt = (p1 - p0).dot(v) / v.dot(v);
+        // A `--ramp` capture carries the hover clamp `craft+0x348`, a game-seconds timer
+        // once the grid state ends: its step is the frame's own `dt`.
+        let timer = header.iter().position(|h| *h == "timer");
+        let raced = |row: &[f32]| row[at("state")] as u32 != 0;
+        let dt = match timer {
+            Some(t) if raced(r) && raced(n) => n[t] - r[t],
+            _ => (p1 - p0).dot(v) / v.dot(v),
+        };
         if !(0.005..0.05).contains(&dt) {
             continue;
         }
@@ -129,6 +157,20 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
             0.0
         };
         let mut state = template;
+        // `OAG_HD_RAMP=<lag>`: the release ramp `3.03825 + game seconds since GO`, taking the
+        // capture's `clock` (`craft+0x308`, which runs at game time while grounded) from row 0
+        // plus `lag` seconds as the time since GO.
+        // `OAG_HD_RAMP=row`: the row's own clamp `+0x348` and grid state; `next`, the clamp
+        // the next row reads (the timer steps before the target is built).
+        let ramp = std::env::var("OAG_HD_RAMP");
+        if let (Ok("row" | "next"), Some(t)) = (ramp.as_deref(), timer) {
+            let source = if ramp.as_deref() == Ok("next") { n } else { r };
+            state.hover_cap = Some(source[t]);
+            state.on_grid = !raced(r);
+        } else if let Ok(lag) = ramp {
+            let lag: f32 = lag.parse().unwrap_or(0.0);
+            state.hover_cap = Some(3.038_25 + lag + (r[at("clock")] - rows[0][at("clock")]));
+        }
         state.body.position = p0;
         state.body.orientation = orientation;
         state.body.linear_velocity = v;
@@ -169,7 +211,8 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
                 })
                 .collect();
             println!(
-                "diag {i} c{} h[{}] spring {:.2} down {:.2} grav {:.2} vdamp {:.2} wall {} floor {} wdv {:.3} wesc {:.3} hesc {:.3} tsl {:.3} gp {:.2} cap {:?}",
+                "diag {i} dp_up {:.4} c{} h[{}] spring {:.2} down {:.2} grav {:.2} vdamp {:.2} wall {} floor {} wdv {:.3} wesc {:.3} hesc {:.3} tsl {:.3} gp {:.2} cap {:?}",
+                (state.body.position - p1).dot(up),
                 ev.hover.contacts,
                 hs.join(" "),
                 spring.dot(up) / m,
