@@ -56,6 +56,9 @@ def main():
                     help="the instance's own HOME (`PP_HOME` from ppsspp-start.sh's env.sh); "
                     "the state is copied into its memstick, so there is no default to fall back on")
     ap.add_argument("--image", default=str(ROOT / "data/images/pulse-psp-usa.chd"))
+    ap.add_argument("--ours-ticks", type=int, default=300,
+                    help="ticks our race runs before the frame: the saved state is after GO, so "
+                         "0 would show the pre-countdown gantry (dark board) and no engine glow")
     ap.add_argument("--toast-wait", type=float, default=6.0)
     args = ap.parse_args()
     if "OAG_SHOT_DISPLAY" not in os.environ or "DISPLAY" not in os.environ:
@@ -82,7 +85,7 @@ def main():
          args.out / "theirs.png"])
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if args.reversed else "")
     cmd = [ROOT / "target/debug/oag-game", args.image, "--no-audio", "--race", "--track", entry,
-           "--screenshot", args.out / "ours.png", "--ticks", 0, "--size", "960x544",
+           "--screenshot", args.out / "ours.png", "--ticks", args.ours_ticks, "--size", "960x544",
            "--pose-from", csv, "--pose-tick", 0]
     if args.team:
         cmd += ["--team", args.team]
