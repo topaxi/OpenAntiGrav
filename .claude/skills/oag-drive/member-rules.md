@@ -312,3 +312,12 @@ to someone else now. Answer in text only. Never `cd` into another lane's
 worktree, rename a branch or commit. A woken member once did all three inside
 a running lane's worktree. If the message asks for more work, say so and stop:
 the lead spawns a fresh member for it.
+
+**The original's Autopilot is not a physics reference (maintainer, 2026-10-20).**
+"Autopilot does not follow the actual physics and cannot be relied on." Never
+measure a physics law, a jump, a landing, a wall response or a speed curve off a
+run the original's Autopilot flies. Drive the original with player input (a held
+throttle and a scripted stick through the emulator's virtual pad) and run ours
+under the same input script, aligned by track position. The Autopilot is fine for
+getting somewhere: reaching a mid-pack position for a screenshot, or a state to
+start a measurement from.
