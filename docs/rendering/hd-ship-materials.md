@@ -556,7 +556,7 @@ within 10 of 255 for 50 of 52 with the law ([hd-probes.md](../formats/hd-probes.
 - **opponents**: the original binds a pair of maps per craft (the Metropia grid frame holds eight pairs, 0x8000 apart, and
   every draw of a craft its own), so each craft here blends at its own position.
 
-**The decode domain was chosen by the pixels.** The unit's sampler word carries the gamma nibble `7`, but the project
+**The decode domain was chosen by the pixels - superseded by ["Hull brightness"](#hull-brightness-2026-10-20-hd-hull-brightness-the-brighter-and-whiter-gap-was-a-capture-artefact-and-the-probe-maps-are-srgb): the reference was WCB-off, the maps are sRGB.** The unit's sampler word carries the gamma nibble `7`, but the project
 settled that the RSX multiplies raw bytes ([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)); the probe enters as a
 light, raw, and the reflection is **added raw**. Measured on the rest frame in four boxes of the hull (luma and
 saturation, 0-1; the original 0.56-0.91 and 0.08-0.27, boxes picked by eye, one frame, not pixel matched):
@@ -772,7 +772,7 @@ camera could not be placed on the original's ship), and `zone/` (ours before and
 small at this size. Before against after differs across the whole hull (wings, nose, the probe's reflection tint; a
 difference image scaled x6 shows it, the raw pictures a few levels), none of it a change of look; the
 lighting level and the probe colour, not the normal, are what still separate the frames (the original is brighter and
-whiter, the bloom halo ours draws around the paint is not there). **Not claimed a match**; the claim is the data path:
+whiter - **retracted: that reference was a `Write Color Buffers`-off capture, see "Hull brightness" below**, the bloom halo ours draws around the paint is not there). **Not claimed a match**; the claim is the data path:
 authored tangent, authored map, the program's own formula.
 
 **Zone hull brightness (the brief's item 5): not a clear data miss, left open.** Ours feeds the stage's authored
@@ -787,3 +787,64 @@ materials, and 2048's reader `psp2` already decodes the `tangent` stream (`unpac
 of vertices; the `w` convention differs from HD's `0`/`255`), but Omega's hulls build through the PS4 path, which reads
 no material program and fills no `GpuVertex::tangent`; wiring is the PS4 lit path's lane. 2048: **not checkable**
 (PFS-encrypted `.pkg`).
+
+## Hull brightness (2026-10-20, `hd-hull-brightness`): the "brighter and whiter" gap was a capture artefact, and the probe maps are sRGB
+
+The brief: HD hulls read darker and greyer than the original on Harimau classic and Assegai_c1 (Talon's Junction) and
+on the Zone hull. **Two findings, one a retraction.**
+
+**1. The reference frames were taken with `Write Color Buffers` off.** The sheets of `hd-hull-normals` and
+`hd-zone-material` came from an RPCS3 whose config had it off, which reads 1.6-1.8x too bright
+(`docs/reverse-engineering/rpcs3-capture.md`, "A screenshot's brightness depends on `Write Color Buffers` too"). Re-shot
+with it on (`Used configuration:` lines beside the frames: `Write Color Buffers: true`, `Resolution Scale: 150`),
+Harimau classic on Talon's Junction at four matched camera and craft poses (`hd-grid-capture.py` plus the craft pose
+off `rpcs3_place.read_pose`, ours rendered with `--camera-pose` and `--pose`, comparison setting, shadows `original`):
+
+| mean luma, frame without HUD | original | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| rest, grid (clock 0.24) | 0.347 | 0.379 | 0.364 |
+| speed, 398 km/h | 0.418 | 0.444 | 0.438 |
+| speed, 427 km/h | 0.387 | 0.435 | 0.431 |
+
+The whole picture is within 5-12 % of the original and **brighter** than it, not darker: there is no global brightness
+gap, so no exposure, tone-map or albedo-decode term is missing on a race hull (the exposure `scale` and the bloom were
+already measured unity, renderer.md, "The exposure is unity").
+
+**2. Every lit term on a race hull equals the authored value.** Read live on the same hull (draw dump of the rest
+frame, `rsx-draw-list.py`, `ps3-fp-live.py`, fragment block 17 of `diffuse_with_specular_from_alpha_n`): sun colour
+`(2, 1.82745, 0.886275)`, sun direction `(-0.7776, 0.58152, -0.23911)`, fog `(0.2627, 0.2157, 0.3804)` at density 0.001,
+`iblScalePower (4, 4, 4, 0)`, all equal to Talon's `track.envsettings`; the scene target is `0x3148`, A8R8G8B8 2x MSAA, with
+the sRGB write on (`SET_SHADER_PACKER`, the register `hd-exposure` read), so nothing is HDR and nothing is missing after
+the hull. The Zone hull's live sun colour `(1.144, 1.091, 1.906)` is a constant, not a capture artefact, and stays
+unexplained (it is a Zone-stage value; the Zone brightness comparison itself needs a re-shoot with the option on, below).
+
+**3. The one real hull-specific term: the probe maps are sRGB-decoded.** Both probe units of the live hull draw (4 and 5)
+carry the address word `0x60730303`, gamma nibble 7, the same decode the albedo (`0x60710101`) has. Finding 5 read them
+raw ("chosen by pixel match") against the too-bright reference; against the correct one the raw read is the pale,
+pastel hull and the decoded one the original's saturation. The array is now `Rgba8UnormSrgb`
+(`mesh_render::ENV_PROBE_FORMAT`), the engine's tint of 4 scaling linear light.
+Hand-boxed hull regions of the matched frames (mean over pixels above 0.25 luma; boxes picked by eye, the poses not
+pixel exact, a rough figure):
+
+| | luma | saturation |
+| --- | ---: | ---: |
+| original, rest | 0.461 | 0.313 |
+| before (raw probes), rest | 0.609 | 0.282 |
+| **after (sRGB probes), rest** | **0.436** | **0.326** |
+| original, 398 km/h | 0.461 | 0.433 |
+| before, 398 km/h | 0.605 | 0.333 |
+| **after, 398 km/h** | **0.508** | **0.446** |
+
+Judged as a player would (`data/reference/hd-hull-brightness/harimau-classic/`: the original over before and after, three
+poses, and a hull-crop sheet): the orange and yellow panels and the blue wing tips read saturated like the original, not
+chalky. Pinned by `hd_hull_env_probe::the_probe_maps_are_decoded_as_srgb` (a stored byte of 128 must light a hull to byte
+238, the raw read saturates at 255).
+
+**Open.** The Zone hull's brightness (the brief's third case): the two Zone frames of `hd-zone-material` are WCB-off, so
+its "original is brighter" is unproven; Zone needs a re-shoot with the option on, and its probe maps are now decoded too
+(the draw's units carry the same word on the Zone dump). The Assegai_c1 sheet of `hd-hull-normals` is WCB-off as well. The
+hand-boxed hull numbers above are rough; a pose-matched pair with a hull mask would tighten them.
+
+**Cross-title.** Omega: checked, not wired (ships no `.probes`; its hulls build through the PS4 path, so the decode has
+nothing to touch). 2048: checked, differs (a different `.probes` layout the reader names and refuses, so no hull reads a
+probe array). Pulse and Pure: not touched (no probes).

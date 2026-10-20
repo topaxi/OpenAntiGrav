@@ -187,13 +187,14 @@ fn gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 /// What the probe arrays hold. Craft 0's irradiance (layer 0) lives in the top-left 64x32
 /// corner, as the engine writes it: a dim blue-grey over its top half, a dim brown over its
 /// bottom half, and a loud red everywhere outside the corner, which a hull must never see. Its
-/// reflection (layer 1) is a dim red throughout. Craft 1's two layers are black.
+/// reflection (layer 1) is a dim red throughout. Craft 1's two layers are black. The bytes are
+/// stored sRGB-encoded, as the original's sampler word (gamma nibble 7) decodes them.
 fn fill(layer: u32, x: u32, y: u32) -> [u8; 4] {
     match layer {
         0 if x >= 64 || y >= 32 => [200, 0, 0, 255],
-        0 if y < 16 => [13, 26, 38, 255],
-        0 => [38, 26, 13, 255],
-        1 => [64, 0, 0, 255],
+        0 if y < 16 => [64, 84, 104, 255],
+        0 => [104, 84, 64, 255],
+        1 => [128, 0, 0, 255],
         _ => [0, 0, 0, 255],
     }
 }
@@ -232,7 +233,7 @@ fn a_hull_is_lit_from_its_crafts_probe_and_reflects_where_tagged() {
         "{constant:?}"
     );
 
-    // Craft 0, facing up: the paraboloid's top row, `4 * (0.05, 0.1, 0.15)` of the blue-grey
+    // Craft 0, facing up: the paraboloid's top row, `4 * srgb(64, 84, 104)` of the blue-grey
     // half, so the hull takes its hue and is brighter than the ambient it replaces. A shader
     // that addressed the corner without halving its coordinate would read the loud red.
     let lit = draw(&device, &queue, &plain(UP), rig(), maps, 1.0);
@@ -468,4 +469,26 @@ fn a_zone_race_tints_the_probe_grey_and_dim() {
         zone[1] > 0 && zone[1] < engine[2] / 2,
         "{zone:?} against {engine:?}"
     );
+}
+
+/// The probe maps are decoded as sRGB on fetch: the original's units 4 and 5 carry the gamma
+/// nibble `7` (`0x60730303`, read off the live draw), so a stored byte of 128 is the linear
+/// light `0.2159`, and the engine's tint of 4 makes it `0.8636`, which encodes to byte 238. Read
+/// raw it would be `4 * 0.502`, saturated at 255 - the pale, washed hull this replaced.
+#[test]
+fn the_probe_maps_are_decoded_as_srgb() {
+    let Some((device, queue)) = gpu() else { return };
+    let plain = model(slots::DEFAULT, Vec::new(), UP);
+    let view = array(&device, &queue, |layer, x, y| match layer {
+        0 if x < 64 && y < 32 => [128, 128, 128, 255],
+        _ => [0, 0, 0, 255],
+    });
+    let maps = ShadowMaps {
+        env_probes: Some(&view),
+        ..ShadowMaps::NONE
+    };
+    let lit = draw(&device, &queue, &plain, rig(), maps, 1.0);
+    for channel in &lit[..3] {
+        assert!((236..=240).contains(channel), "{lit:?}");
+    }
 }

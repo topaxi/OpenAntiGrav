@@ -731,11 +731,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // the probe tint, the livery's alpha (the gloss mask) and the material's own
         // reflectivity, added after the albedo multiply and before the fog - read off
         // the live microcode, `@0x5c`-`@0x70` of `diffuse_with_specular_from_alpha_n`'s
-        // `IBL` block. **Added raw, not sRGB-decoded**, as the RSX adds its bytes: chosen by
-        // pixel match against the original's hull, no score (luma 0.56-0.91, saturation
-        // 0.08-0.27 over four boxes), the decoded add reads 0.40-0.49 and 0.23-0.42, the
-        // raw one 0.56-0.65 and 0.11-0.29 (`docs/rendering/hd-ship-materials.md`,
-        // "Finding 5").
+        // `IBL` block. The probe array is `Rgba8UnormSrgb`, so both probe fetches are linear
+        // light, as the original's gamma-nibble-7 units 4 and 5 give it; the raw read this
+        // replaced was a fit to a capture with `Write Color Buffers` off
+        // (`docs/rendering/hd-ship-materials.md`, "Hull brightness").
         var probe_reflection = vec3<f32>(0.0);
         let probe_entry = in.slots >> 24u;
         if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
