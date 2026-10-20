@@ -124,9 +124,9 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
     (ported). Pulse's tensor and in-air `weight_distribution` torque and HD's
     torque are measured and on (2026-10-20); what is left of our AI against them:
     [ai-gates-flip-on-noise.md](ai-gates-flip-on-noise.md).
-    Fort Gale's second jump loses our autopilot to an airborne wall contact our
-    hull misses (capture 3, tick 1341):
-    [our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md](our-hull-misses-some-wall-hits-and-hds-resolver-is-unread.md).
+    Fort Gale's second jump lost our autopilot to an airborne contact our hull
+    missed (capture 3, tick 1341): it was the collision cage, ported 2026-10-20;
+    what is left: [the-collision-cages-leftovers.md](the-collision-cages-leftovers.md).
     - ~~**Pulse:** the gap opens before the *first* jump~~ answered above. The gap opens before the *first* jump (x `-536`), at launch `vy`
       75.5 against 67. In the air both fall at about `-137`. Next: a
       single-step residual of our physics seeded from the original's frames on

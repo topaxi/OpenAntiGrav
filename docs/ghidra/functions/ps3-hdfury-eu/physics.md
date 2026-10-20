@@ -511,3 +511,15 @@ No names applied: every function above is at or below a single static read,
 and none of them is the resolver. Until it is found, `crates/physics` runs
 Pulse's response on HD, and Omega and 2048 inherit from HD. Pure takes
 Pulse's directly. All four are **inherited, not measured**.
+
+## The wall response is found (2026-10-20)
+
+`hd-wall-resolver` lane. The section above was right that the resolver is not in the
+pair narrowphase, and wrong about where the response consumes its inputs: it is not
+the SPU hull rays. `Physics_StepWorld` walks the narrowphase's contact array right
+after `Collision_ProcessPairs` (`0x000f88d0`-`0x000f8964`) and calls
+`Body_ResolveContact` (`0x000f7770`) for a craft against static geometry and
+`Body_ResolveContactPair_q` (`0x000f7bc0`) for two bodies. The law, its sixteen live
+hits and the restitution table that the global `handlingstats.xml` sets are on
+[wall-response.md](wall-response.md): Pulse's resolver with `e = 0.8`, a one-sided
+normal impulse, a steer-away yaw torque and a frame-mixed point velocity.

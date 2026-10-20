@@ -38,6 +38,18 @@ pub struct CraftLaws {
     /// The two-point hover's bank-to-yaw gain, `torque.y += gain * right.y`: Pulse `30`,
     /// Wipeout Pure `50` (`oag_physics::laws::Laws::bank_to_yaw`).
     pub bank_to_yaw: Sourced<f32>,
+    /// `Body_ResolveContact` applies no impulse to a wall contact whose point already moves out
+    /// (`vn > 0`): Wipeout HD's (`0x000f7770`), measured live. Pulse PSP's is two-sided
+    /// (`oag_physics::laws::Laws::wall_one_sided`).
+    pub wall_one_sided: Sourced<bool>,
+    /// Each resolved wall contact queues a yaw torque turning the nose away from the wall,
+    /// integrated on the next step: Wipeout HD's `Body_ResolveContact` tail, measured live
+    /// (`oag_physics::wall::steer_away_torque`). Pulse has none.
+    pub wall_steer_away: Sourced<bool>,
+    /// `Body_ResolveContact` crosses the world lever arm with the craft's **body-local** rate,
+    /// `v + (R^T omega) x r`, where Pulse's is textbook: Wipeout HD's, measured live
+    /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
+    pub wall_point_rate_body_local: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

@@ -36,6 +36,9 @@ pub(super) struct GlobalTunables {
     /// Both Pilot Assist levels' laws for the player's craft, with their sources
     /// ([`pilot_assist`]).
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
+    /// `<Collision shipWallCofR>`, or `None` where the file authors none (Pulse, Pure):
+    /// the craft-wall restitution then stays the engine's own.
+    pub(super) wall_restitution: Option<f32>,
 }
 
 /// Reads the file and resolves the rung `options.class` names.
@@ -197,6 +200,18 @@ pub(super) fn resolve(
         None => "<StartBoost>: absent, so no launch boost this run".to_string(),
     });
 
+    let wall_restitution = global
+        .as_ref()
+        .and_then(|global| global.collision)
+        .map(|collision| collision.ship_wall_cof_r);
+    report.push(match wall_restitution {
+        Some(e) => format!("<Collision shipWallCofR>: a craft rebounds off a wall at {e}"),
+        None => format!(
+            "<Collision>: absent, so the wall restitution is the engine's {}",
+            oag_physics::wall::BODY_RESTITUTION
+        ),
+    });
+
     let ship = stats.class_named(&options.class);
     let pilot_assist = pilot_assist::resolve(global.as_ref(), ship, &options.class, report);
 
@@ -208,5 +223,6 @@ pub(super) fn resolve(
         start_boost,
         zone,
         weapon_pad_refresh,
+        wall_restitution,
     }
 }

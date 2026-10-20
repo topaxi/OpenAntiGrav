@@ -237,6 +237,10 @@ pub fn step<R: Raycaster + ?Sized>(
     let dt = clamp_dt(measured_dt);
 
     state.body.clear_accumulators();
+    // Last step's wall contacts' torque, which the original's integrator reads after its
+    // accumulators were cleared ([`ShipState::wall_torque`]).
+    state.body.torque += state.wall_torque;
+    state.wall_torque = Vec3::ZERO;
     wall::pre_integration_clip(state, handling, env, raycaster, dt);
     let mut evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
 

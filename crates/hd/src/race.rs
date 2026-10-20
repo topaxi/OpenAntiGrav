@@ -848,6 +848,18 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    // `Body_ResolveContact` (`0x000f7770`) returns at `0x000f7880` when `vn > 0`: four live
+    // calls with `vn` 2.6 to 10.4 left the velocity untouched
+    // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 88.
+    wall_one_sided: oag_title::pre_race::Sourced::measured(true),
+    // `Body_AddTorque(up * 5 * -clamp(dot(right, p), -20, 20))` after every resolved contact,
+    // exact on 16 of 16 live hits (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`).
+    // Confidence 85.
+    wall_steer_away: oag_title::pre_race::Sourced::measured(true),
+    // `cross(r, body+0x1a0)` with `+0x1a0` the negated body-local rate: implied denominators
+    // match the geometry on 16 of 16 hits this way and miss on three with the textbook form
+    // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 85.
+    wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

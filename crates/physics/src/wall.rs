@@ -352,7 +352,14 @@ pub fn resolve<R: Raycaster + ?Sized>(
 
     for contact in contacts.iter().flatten().take(found) {
         let friction = combine_friction(SHIP_FRICTION, contact.surface.friction());
-        let applied = resolve_contact(&mut state.body, contact, friction);
+        let applied = resolve_contact(&mut state.body, contact, friction, &env.laws);
+        if applied.skipped {
+            // Never applied, never recorded: the original's ring holds no such contact.
+            continue;
+        }
+        if env.laws.wall_steer_away && contact.surface == Surface::Wall {
+            state.wall_torque += steer_away_torque(&state.body, applied.impulse);
+        }
 
         response.resolved_count += 1;
         response.escape += applied.escape;
@@ -386,6 +393,43 @@ pub fn resolve<R: Raycaster + ?Sized>(
     response
 }
 
+/// The yaw gain on the clamped lateral impulse, `5.0` at TOC `-0x4188` of Wipeout HD's
+/// `Body_ResolveContact`.
+pub const STEER_AWAY_GAIN: f32 = 5.0;
+
+/// The clamp on the lateral impulse, `-20.0`/`20.0` at TOC `-0x4180`/`-0x417c`.
+pub const STEER_AWAY_CLAMP: f32 = 20.0;
+
+/// The yaw torque one resolved wall contact queues on Wipeout HD:
+/// `up * 5 * clamp(dot(up x forward, p), -20, 20)`.
+///
+/// `Body_ResolveContact` (`0x000f7770`) ends with `s = -clamp(dot(row0, p), -20, 20)` and
+/// `Body_AddTorque(body, row1 * s * 5.0)`, `row0 = up x forward`, `row1 = up`: exact on 16 of
+/// 16 live hits, three of them clamped. HD stores torque, momentum and rate negated, so the
+/// torque the craft feels is the negation, fitted over twelve integrator steps
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). A positive turn about `up`
+/// carries `forward` toward `up x forward`, so an impulse along it, a wall on the other side,
+/// turns the nose away from the wall. Confidence 85.
+#[must_use]
+pub fn steer_away_torque(body: &Body, impulse: Vec3) -> Vec3 {
+    let up = body.up();
+    let lateral = up.cross(body.forward()).dot(impulse);
+    up * (STEER_AWAY_GAIN * lateral.clamp(-STEER_AWAY_CLAMP, STEER_AWAY_CLAMP))
+}
+
+/// The velocity of the contact point at `lever` from the body's centre: textbook `v + omega x
+/// r`, or with `body_local` Wipeout HD's `v + (R^T omega) x r`, which crosses the world lever
+/// with the body-local rate (`0x000f77e0`-`0x000f7850`, no rotation back to world;
+/// [`crate::laws::Laws::wall_point_rate_body_local`]).
+fn contact_point_velocity(body: &Body, lever: Vec3, body_local: bool) -> Vec3 {
+    let rate = if body_local {
+        body.orientation.inverse() * body.angular_velocity
+    } else {
+        body.angular_velocity
+    };
+    body.linear_velocity + rate.cross(lever)
+}
+
 /// What resolving one contact did to the body.
 struct Applied {
     escape: Vec3,
@@ -396,6 +440,10 @@ struct Applied {
     /// `|p|`, the length of the impulse actually applied. Zero on the
     /// degenerate-denominator path, which applies nothing.
     impulse_magnitude: f32,
+    /// Left alone by a one-sided resolver ([`crate::laws::Laws::wall_one_sided`]).
+    skipped: bool,
+    /// `p`, the impulse applied (normal and tangential), zero when nothing was.
+    impulse: Vec3,
 }
 
 /// `Body_ResolveContact` (`0x0884e968`) for one contact, in full.
@@ -437,7 +485,12 @@ struct Applied {
 /// (the basis transpose; the rotation the denominator omits), then multiplies by
 /// `body+0x394 = 0.1`. The sign is a subtraction there and an addition here, for the
 /// `w_game = -w_physics` reason in [`crate::integrate`].
-fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> Applied {
+fn resolve_contact(
+    body: &mut Body,
+    contact: &WallContact,
+    friction: f32,
+    laws: &crate::laws::Laws,
+) -> Applied {
     let normal = contact.normal;
 
     // Push out along the normal exactly as far as the hull is past the surface. No skin:
@@ -455,8 +508,24 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
 
     // The lever arm and the *contact point's* velocity, not the body's.
     let lever = contact.point - body.position;
-    let point_velocity = body.linear_velocity + body.angular_velocity.cross(lever);
+    let body_local = laws.wall_point_rate_body_local && contact.surface == Surface::Wall;
+    let point_velocity = contact_point_velocity(body, lever, body_local);
     let normal_speed = point_velocity.dot(normal);
+
+    // Wipeout HD's resolver stops here for a wall contact already moving out (`0x000f7880`,
+    // `vcmpgefp.` against zero): no impulse, no push-out, no record
+    // ([`crate::laws::Laws::wall_one_sided`]). Pulse PSP's has no such test.
+    if laws.wall_one_sided && contact.surface == Surface::Wall && normal_speed > 0.0 {
+        return Applied {
+            escape: Vec3::ZERO,
+            velocity_delta: Vec3::ZERO,
+            angular_velocity_delta: Vec3::ZERO,
+            normal_speed,
+            impulse_magnitude: 0.0,
+            skipped: true,
+            impulse: Vec3::ZERO,
+        };
+    }
 
     let angular_compliance = normal.dot(inverse_inertia(lever.cross(normal), body).cross(lever));
     let denominator = inverse_mass + angular_compliance;
@@ -468,6 +537,8 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
             angular_velocity_delta: Vec3::ZERO,
             normal_speed,
             impulse_magnitude: 0.0,
+            skipped: false,
+            impulse: Vec3::ZERO,
         };
     }
 
@@ -480,7 +551,8 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
     //
     // **The PS2 build does gate it** (`Body_ResolveContactPair`, `0x0015e600`, returns early
     // when `vn > 0`). PSP is the target; see the divergence table in `contact-response.md`.
-    let mut impulse = normal * (-(1.0 + BODY_RESTITUTION) * normal_speed / denominator);
+    let mut impulse =
+        normal * (-(1.0 + laws.restitution_against(contact.surface)) * normal_speed / denominator);
 
     // The tangential impulse, the headline: `-friction * v_t` is a raw impulse, **not**
     // scaled by the normal impulse and **not** Coulomb-clamped, so each frame of contact
@@ -514,14 +586,18 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
         angular_velocity_delta,
         normal_speed,
         impulse_magnitude: impulse.length(),
+        skipped: false,
+        impulse,
     }
 }
 
 /// A collision-cage contact through [`resolve_contact`], friction `0`: the cage hands
 /// `Body_ResolveContact` (`0x0884e968`) a contact whose `+0x34` is zero (`0x08831ff0`).
+/// The cage is Pulse's, so it takes Pulse's laws whatever the title: restitution
+/// [`BODY_RESTITUTION`], a two-sided impulse, the world-frame point rate, no yaw kick.
 /// Returns the velocity, angular velocity and position changes.
 pub(crate) fn resolve_cage_contact(body: &mut Body, contact: &WallContact) -> (Vec3, Vec3, Vec3) {
-    let applied = resolve_contact(body, contact, 0.0);
+    let applied = resolve_contact(body, contact, 0.0, &crate::laws::Laws::PULSE);
     (
         applied.velocity_delta,
         applied.angular_velocity_delta,

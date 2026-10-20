@@ -331,6 +331,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         stun_timer,
         wall_contact_prev,
         pending_impulse,
+        wall_torque,
         slowdown_timer,
         grounded,
         grounded_prev,
@@ -391,6 +392,11 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // Zero through every probe script (no producer yet, `ShipState::pending_impulse`): a fixed
     // run of bytes, like `pad_direction` before a script crosses a pad.
     hasher.write_vec3(pending_impulse);
+    // Only when set, so a title without the law (every committed reference) hashes the bytes
+    // it always did, as `roll_armed` does below.
+    if wall_torque != Vec3::ZERO {
+        hasher.write_vec3(wall_torque);
+    }
     hasher.write_f32(slowdown_timer);
     hasher.write_f32(grounded);
     hasher.write_f32(grounded_prev);
