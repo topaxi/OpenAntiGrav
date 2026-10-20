@@ -6,7 +6,7 @@
 The pose, camera and race clock are NEVER taken from a stored `pair.json` or a stored CSV: for each pair this
 re-runs the pair script with the arguments recorded in `pair.json` (`argv`) into a scratch directory, which loads
 the savestate in the emulator, reads the ship pose, camera and race clock out of RAM fresh, derives the pose row
-and the heading correction from that read, renders ours with the CURRENT oag-game, runs every environment and
+from that read, renders ours with the CURRENT oag-game, runs every environment and
 parity check, and captures `theirs.png`. The emulator must be up exactly as when the pair was made (PPSSPP started
 with the profile's ini, PCSX2 booted with `OAG_COMPARE_PLATFORM`, RPCS3 restored into the state with `--restart`;
 docs/tools/compare-page.md, "Capturing a pair per title").

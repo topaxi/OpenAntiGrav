@@ -239,48 +239,17 @@ def main():
                              "pose_arg": pose, "camera_pose": numbers, "yaw_agreement": agree})
     pair.rec["original"]["camera"] = camera
     pair.rec["original"]["ship"] = ship
-    # Ours drifts in heading while it sits (about 0.26 deg/s on Talon's, a simulation difference recorded as
-    # a lead, the original's craft does not turn), so the pose handed to ours is corrected until the
-    # heading MEASURED at the rendered tick (a second, trace-only run of the same command) is the original's.
+    # A craft resting after GO turns, in the original as in ours (bank-to-yaw, docs/physics/grid-state.md), and the
+    # original's pose has already turned for the clock it was read at. Running that clock again from it turned ours
+    # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
+    # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none.
     ours_csv = out / "ours-trace.csv"
-
-    def trace_at(yaw_deg):
-        cmd = [c for c in base]
-        cmd[cmd.index("--pose=" + pose)] = "--pose=%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw_deg)
-        run(cmd + ["--ticks", args.ours_ticks + 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
-        row = ce.csv_row(ours_csv, args.ours_ticks)
-        theirs_f = list(forward)
-        ours_f = [row["fwd_x"], row["fwd_y"], row["fwd_z"]]
-        ours_u = [row["up_x"], row["up_y"], row["up_z"]]
-        cr = (ours_f[1] * theirs_f[2] - ours_f[2] * theirs_f[1], ours_f[2] * theirs_f[0] - ours_f[0] * theirs_f[2],
-              ours_f[0] * theirs_f[1] - ours_f[1] * theirs_f[0])
-        signed = math.degrees(math.atan2(sum(a * b for a, b in zip(ours_u, cr)), sum(a * b for a, b in zip(ours_f, theirs_f))))
-        return signed, cmd
-
-    yaw_now = yaw
-    sign = 1.0
-    if args.field:
-        cmd, signed, corrections = base, 0.0, []
-    else:
-        signed, cmd = trace_at(yaw_now)
-        corrections = [{"yaw": yaw_now, "heading_error_deg": signed}]
-    for _ in range(0 if args.field else 4):
-        if abs(signed) <= pair.plat["tolerance"]["heading_deg"] / 4:
-            break
-        trial = yaw_now + sign * signed
-        new_signed, new_cmd = trace_at(trial)
-        if abs(new_signed) > abs(signed) and sign == 1.0:
-            sign = -1.0
-            trial = yaw_now + sign * signed
-            new_signed, new_cmd = trace_at(trial)
-        yaw_now, signed, cmd = trial, new_signed, new_cmd
-        corrections.append({"yaw": yaw_now, "heading_error_deg": signed})
-    pair.rec["ours"]["yaw_corrections"] = corrections
-    pair.rec["ours"]["pose_arg"] = ("exact, slot 0 of field.csv" if args.field
-                                    else "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw_now))
+    cmd = base if args.field else base + ["--pose-hold"]
+    pair.rec["ours"]["pose_hold"] = not args.field
+    pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
-    run(cmd + ["--ticks", args.ours_ticks + 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    run(cmd + ["--ticks", args.ours_ticks, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, scratch / "profile")
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:
