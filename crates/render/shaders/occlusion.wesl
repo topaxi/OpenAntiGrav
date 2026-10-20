@@ -57,5 +57,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // the colour set's fourth byte.
     let atlas = textureSample(lightmap, albedo_sampler, in.lightmap_texcoord);
     let baked_alpha = select(1.0, atlas.a, (in.slots & 1u) != 0u);
-    return vec4<f32>(baked_alpha * in.sun_mask, 0.0, 0.0, 1.0);
+    let mask = baked_alpha * in.sun_mask;
+    // **The map holds the mask sRGB-encoded.** Read off RPCS3 (Talon's Junction start, the
+    // hull's unit-3 map, 256x256 `B8`): the road holds 61 where its lightmap alpha is the byte
+    // 12, and the map's smallest texel is 13 where the lightmap's smallest alpha is 1 -
+    // `encode(12 / 255)` and `encode(1 / 255)` to the byte. The hull's unit 3 has no gamma
+    // decode (its address word is `0x60030303`), so it reads these bytes as the gate: a road at
+    // alpha 12 passes a quarter of the sun, not a twentieth. The encode is the pass's own
+    // (the target is written through it); only the lightmap carrier is measured, and the vertex
+    // carrier goes through the same write. See `docs/rendering/shadows.md`.
+    let encoded = select(1.055 * pow(mask, 1.0 / 2.4) - 0.055, mask * 12.92, mask <= 0.0031308);
+    return vec4<f32>(encoded, 0.0, 0.0, 1.0);
 }
