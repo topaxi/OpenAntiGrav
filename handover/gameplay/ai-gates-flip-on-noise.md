@@ -46,9 +46,9 @@ counts for every configuration and what changed in our AI:
   ([collision-cage.md](../../docs/ghidra/functions/psp-pulse-usa/collision-cage.md#what-the-cage-does-to-our-ai-2026-10-20-ai-gate-robustness)).
   Whether the original's field takes the same extra weapon deaths is not measured. The
   2026-10-20 margins `cage-laws-red` listed for Black's table are not re-pinned.
-- **2048's inherited bias is held** (chosen): `vita_2048_original_ai_ground_truth::the_field_finishes_park`
-  respawns once at `eps = 0` with it (1 of 9 perturbations, 0 of 9 without). Measure the bias on
-  2048 itself (Vita3K) to release it; Omega keeps HD's.
+- ~~**2048's inherited bias is held**~~: on since 2026-10-20 (`hd-air-player-input`), inherited
+  from HD via Omega once HD's was re-measured under player input; `vita_2048_original_ai_ground_truth`
+  passes 18 of 18 with it at `eps = 0`. 2048's own pitch update is still unread.
 
 ## Next Steps
 

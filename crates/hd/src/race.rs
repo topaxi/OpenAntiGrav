@@ -775,7 +775,8 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     quarter_sum_normal: oag_title::pre_race::Sourced::measured(true),
     // `Craft_HoverFourPoint` escapes each probe under `1.0` in turn (`bl 0x000f5ca0` at
     // `0x000ee6ac`, then on to the next probe) off heights from the hull array it built before
-    // the loop; live, the summed escape closes the position residual (`hover-four-point.md`).
+    // the loop; live, the summed escape closes the position residual, under player input too
+    // (131 escape rows, `hover-four-point.md`).
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
     probe_escape: oag_title::pre_race::Sourced::measured(true),
     // `hit+0x28 == 1` gates the escape (`0x000ee25c`); read as the floor class when the rig was
@@ -890,20 +891,24 @@ const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
-    // `Craft_UpdatePitch` adds the team block's `+0x9c`, read live as `-4.0` (Feisar); the
-    // airborne pitch residual on Ubermall closes from `+0.205` to `-0.026` with it
-    // (`docs/physics/airborne-ground-truth.md`). Confidence 85.
+    // `Craft_UpdatePitch` adds the team block's `+0x9c` in the air. Under player input with the
+    // stick centred, the airborne pitch residual is `-0.002` to `-0.007` rad/s^2 with it and
+    // `+0.224` to `+0.229` without (Feisar `-4`, Harimau `-4`); Assegai's `+4` flips the sign
+    // (`-0.221` to `-0.231` without). `docs/physics/airborne-ground-truth.md`. Confidence 92.
     air_pitch_bias: oag_title::pre_race::Sourced::measured(true),
-    // `Craft_UpdatePitch` (`0x000f0980`) calls the same alignment gate: a static read, not seen
-    // closing live (`docs/ghidra/functions/ps3-hdfury-eu/physics.md`).
+    // `Craft_UpdatePitch` (`0x000f0980`) calls the same alignment gate, seen closing live under a
+    // held stick: the input drops at `0.8988` and below and returns at `0.9016` and above, and
+    // the bias stays on (`docs/physics/airborne-ground-truth.md`). Confidence 90.
     pitch_gate: oag_title::pre_race::Sourced::measured(true),
     // Not read on HD: its flag word (`craft+0x264`) numbers its bits differently and the
     // mapping is open (`docs/ghidra/functions/psp-pulse-usa/craft-flags.md`), so HD inherits Pulse's.
     eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table; measured on
-    // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
+    // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table. Under player
+    // input the airborne vy residual is `-0.02` to `+0.02` per frame on PHANTOM (scale `1.2`) and
+    // `0.000` on Venom (`0.85`), against `+0.41` to `+0.51` and `-0.27` on the grounded term
+    // (`docs/physics/airborne-ground-truth.md`). Confidence 92.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),
     // `body+0x50` holds the tensor rotated into world axes, read live
     // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).

@@ -451,6 +451,14 @@ but not seen to close. Pulse's grounded law is the same product
 `engine.rs` lists as not implemented. **Confidence 80** (static reading; the input and
 the block values are live, the torque is not).
 
+**Seen live under player input (2026-10-20, hd-air-player-input), confidence 90.** With the
+stick held back over Ubermall's long jump the product falls below `0.9`, and the airborne
+pitch residual shows the whole input gone on exactly those rows (open at `0.9016` and above,
+closed at `0.8988` and below) with the `+0x9c` bias still applied; with the stick centred the
+bias alone closes the residual, for Feisar and Harimau (`-4`) and Assegai (`+4`). Both are
+implemented now (`oag_physics::engine::pitch`). Numbers in
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input).
+
 ### What the four hull points are (live, confidence 85)
 
 The craft's `+0x120..+0x150` and `+0x160..+0x190` hold four hull points and their query

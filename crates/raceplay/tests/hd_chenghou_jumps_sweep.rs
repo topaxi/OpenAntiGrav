@@ -44,7 +44,7 @@ fn chenghou_jumps_per_tick() {
         loaded.setup.spline = loaded.setup.spline.clone().with_cage(None);
     }
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    // `OAG_PLACE=x,y,z,fx,fy,fz,ux,uy,uz,speed`: after 300 idle ticks (past GO), put the
+    // `OAG_PLACE=x,y,z,fx,fy,fz,ux,uy,uz,speed`: after the idle ticks (past GO), put the
     // player there, velocity along forward, no spin, then hold thrust alone, as
     // `scripts/rpcs3_place.py` does on the original.
     let place: Option<Vec<f32>> = std::env::var("OAG_PLACE")
@@ -52,9 +52,18 @@ fn chenghou_jumps_per_tick() {
         .map(|v| v.split(',').map(|x| x.parse().unwrap()).collect());
     let mut thrust = oag_gameplay::input::Input::new();
     if let Some(p) = &place {
-        for _ in 0..300 {
+        // `OAG_IDLE=<ticks>` idle ticks before the placement. The default, 1500, is past the
+        // hover cap's release (`hover-target.md`): at 300 the cap still read `3.52`, so the
+        // placed craft found no floor on the ramp and took off about 2 units low, which read as
+        // a takeoff residual (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`).
+        let idle: u64 = env_or("OAG_IDLE", "1500").parse().unwrap();
+        for _ in 0..idle {
             race.tick_sim_only(&oag_gameplay::PlayerInputs::none());
         }
+        println!(
+            "placed after {idle} idle ticks: hover cap {:?}, on grid {}",
+            race.sim.world.ships[0].physics.hover_cap, race.sim.world.ships[0].physics.on_grid
+        );
         let forward = Vec3::new(p[3], p[4], p[5]).normalize();
         let up0 = Vec3::new(p[6], p[7], p[8]);
         let up = (up0 - forward * up0.dot(forward)).normalize();

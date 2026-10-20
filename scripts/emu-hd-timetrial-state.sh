@@ -2,17 +2,19 @@
 # Cold-boot HD Fury EU, walk Racebox Time Trial to one circuit and craft, and save the
 # race as a state under data/saves/hd-fury/. The emulator exits when the state is written.
 #
-#   scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0|1> <state-name>
+#   scripts/emu-hd-timetrial-state.sh <lane> <circuit-index> <team-rights> <classic 0|1> <state-name> [class-rights]
 #
 # <circuit-index> is the number of `right`s from the first Track Select circuit (Vineta K
 # is 0, Anulpha Pass 1, Talon's Junction 8); <team-rights> the number from Ship Select's
 # first row (Feisar): Assegai 7, Harimau 9; <classic> adds the `down` that picks the
 # classic hull over the Fury `_c1` one (docs/reverse-engineering/emulator-recipes.md).
+# [class-rights] is the number of `right`s on the Racebox page's SPEED CLASS row (one `down`
+# below RACE TYPE) from Venom, the default; the page is screenshotted to `$W/class-<name>.png`.
 # Needs `scripts/emu-env.sh <lane> ...` run first. Stub off, Compatible Savestate Mode on,
 # the recipe that writes a state. Read the circuit off the TTY log afterwards
 # (`Loading World`), not off the press count: a dropped press picks the neighbour.
 set -euo pipefail
-lane=${1:?lane}; circuit=${2:?circuit index}; team=${3:?team rights}; classic=${4:?0|1}; name=${5:?state name}
+lane=${1:?lane}; circuit=${2:?circuit index}; team=${3:?team rights}; classic=${4:?0|1}; name=${5:?state name}; speed=${6:-0}
 main=/home/topaxi/projects/OpenAntiGrav
 repo=$(cd "$(dirname "$0")/.." && pwd)
 W=$main/data/scratch/$lane
@@ -42,6 +44,12 @@ for _ in 1 2 3 4; do
 done
 [ "$(screen)" = "Single Player" ] || { echo "never reached Racebox setup: $(screen)" >&2; exit 3; }
 press right --wait 2                      # RACE TYPE: Time Trial
+if [ "$speed" -gt 0 ]; then
+  press down --wait 1                     # SPEED CLASS
+  for _ in $(seq 1 "$speed"); do press right --wait 1; done
+  import -display "127.0.0.1:${OAG_RPCS3_DISPLAY}" -window root "$W/class-$name.png"
+  press up --wait 1                       # back to RACE TYPE, where `cross` was measured to go on
+fi
 press cross --wait 3                      # Track Select (the screen reads `Track Creation`)
 [ "$(screen)" = "Track Creation" ] || { echo "not on Track Select: $(screen)" >&2; exit 3; }
 for _ in $(seq 1 "$circuit"); do press right --wait 0.8; done
@@ -54,6 +62,6 @@ for _ in $(seq 1 60); do [ "$(screen)" = HUD ] && break; sleep 2; done
 sleep 12
 for _ in 1 2 3; do press cross --wait 4; done   # START RACE
 sleep 8
-grep -a "Loading World" "$W/xdg/cache/rpcs3/TTY.log" | tail -1 || { echo "no race loaded: $(screen)" >&2; exit 3; }
+grep -a "Loading World" "${XDG_CACHE_HOME:-$W/xdg/cache}/rpcs3/TTY.log" | tail -1 || { echo "no race loaded: $(screen)" >&2; exit 3; }
 import -display "127.0.0.1:${OAG_RPCS3_DISPLAY}" -window root "$W/state-$name.png"
 MENU_OPEN=0 "$repo/scripts/emu-save-state.sh" "$lane" "$name"

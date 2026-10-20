@@ -86,7 +86,7 @@ four springs at `0.15` carry what two at `0.3` carry).
 
 ## The escapes sum (2026-10-20, hd-hover-residual)
 
-Confidence **88** (static loop read plus a live position residual; one circuit, one class).
+Confidence **90** (static loop read plus a live position residual; under player input on two classes since 2026-10-20, below).
 
 The loop at `0x000edfd0`-`0x000ee000` takes each probe whose hit byte is set to `0x000ee218`,
 where `h = dot(craft+0x120 + 0x10 * i - hit.point, up)` (`0x000ee220`-`0x000ee250`, stored to
@@ -106,7 +106,8 @@ loop: the moves **sum**. Ours took the largest alone (a choice, for Pulse's two 
 **Live.** One `oag_physics::step` per row of an RPCS3 capture of the original's Autopilot on
 Ubermall PHANTOM (Feisar, rows 400-1260, `crates/raceplay/tests/hd_air_pose_walk.rs` with
 `OAG_HD_DIAG=1`, `OAG_HD_AIR=data/reference/hd-hover-residual/ubermall-phantom-autopilot.csv
-OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1`): 87 of 447 rows escape. Our position residual along up on those rows fit
+OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1 OAG_HD_AUTOPILOT=1`; the walk refuses Autopilot rows without
+the last since 2026-10-20): 87 of 447 rows escape. Our position residual along up on those rows fit
 `dp_up = -0.954 * (sum - max) + 0.015`, correlation `-0.996`, where `sum - max` is what summing
 adds. Ported as `oag_title::hover_rig::HoverRig::sum_escapes` (HD measured `true`), carried into
 `oag_physics::hover::Rig::sum_escapes`:
@@ -116,7 +117,17 @@ adds. Ported as `oag_title::hover_rig::HoverRig::sum_escapes` (HD measured `true
 | largest only (before) | `+0.0118` | `-0.3412` | `+0.0241` | `0.0480` |
 | summed (after) | `+0.0148` | `+0.0096` | `+0.0346` | `0.0177` |
 
-A `+0.015` bias stays on escape rows (non-escape rows: `+0.0017`); not attributed. The material
+A `+0.015` bias stays on escape rows (non-escape rows: `+0.0017`); not attributed.
+
+**Re-measured under player input (2026-10-20, hd-air-player-input).** The run above was flown
+by the original's Autopilot, whose rail writes the craft's velocity. Fourteen placed
+Time Trial captures with the throttle held and no Autopilot
+(`data/reference/hd-air-player-input/`, method in
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input))
+give 131 escape rows (PHANTOM Feisar and Venom Harimau on Ubermall). Largest-only fits
+`dp_up = -0.955 * (sum - max) + 0.034`, correlation `-0.874`; summed, the median is `+0.025`
+(p5 `+0.006`, p95 `+0.093`, mean abs `0.042` against `0.227`). The sum stands; **confidence
+90**. The `+0.02` escape-row bias is there too. The material
 type `2` skip and the magnet-lock gate are not ported (no row of this capture reaches them).
 Pulse and Pure keep the largest-only choice: whether Pulse's loop re-reads its heights between
 escapes is unread. **Omega and 2048: not checkable in this lane.** Both fly Pulse's two-point rig

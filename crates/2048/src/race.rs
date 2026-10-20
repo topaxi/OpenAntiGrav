@@ -511,13 +511,14 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 };
 
 /// The craft-body laws. The box mass and the steering ramp are Pulse's, as before this
-/// table existed; the in-air `weight_distribution` pitch torque is held off (below), HD's otherwise.
+/// table existed; the rest is HD's, inherited via Omega.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
-    // Inherited from HD, held: the original AI field respawns once on park at eps 0 (1 of 9
-    // perturbations, `docs/physics/airborne-ground-truth.md`); measure on 2048 to release.
-    air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
+    // HD's in-air `weight_distribution` torque, inherited via Omega: held off until HD's was
+    // re-measured under player input (2026-10-20, `docs/physics/airborne-ground-truth.md`), then
+    // switched to the original's by the maintainer's decision. 2048's own pitch update is unread.
+    air_pitch_bias: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),

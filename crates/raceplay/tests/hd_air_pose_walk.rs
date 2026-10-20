@@ -1,12 +1,13 @@
-//! A scratch sweep: one `oag_physics::step` from each row of a Wipeout HD capture of the
-//! original's autopilot (`scripts/rpcs3-hd-autopilot.py`), against the next row.
+//! A scratch sweep: one `oag_physics::step` from each row of a Wipeout HD capture, against the
+//! next row. The capture is player input (`scripts/rpcs3-hd-air-hold.py`: placed, throttle held);
+//! rows flown by the original's Autopilot (`scripts/rpcs3-hd-autopilot.py`) are refused, see below.
 //!
 //! The race is loaded (`oag_raceplay::load`, Ubermall PHANTOM by default) only for what it seats
 //! on the player's craft: HD's craft laws, hover rig and handling, and the collision world. Each
 //! row then seeds that state's body (position, the basis from the up and forward rows, velocity,
 //! and `body+0x1a0`, which is the negated body-local rate as on Pulse) and steps once with the
-//! row's own controls (`craft+0x4c`: steer, thrust, left, right, pitch) and the autopilot's
-//! engine flags. The frame's `dt` is not recorded, so it is read off the position change along
+//! row's own controls (the record `craft+0x84` points at: steer, thrust, left, right, pitch) and
+//! the row's own engine flags (`craft+0x264`). The frame's `dt` is not recorded, so it is read off the position change along
 //! the velocity. Rows are one per new body position, so a missed frame shows as a long `dt`
 //! and is skipped.
 //!
@@ -19,7 +20,9 @@
 //!
 //! `OAG_HD_GRAV=ground` puts the class gravity scale on Pulse's grounded term instead of HD's
 //! airborne one. `OAG_HD_TEAM` (default `Feisar`, HD's default team) picks the handling. `OAG_HD_BIAS=0` steps with the in-air `weight_distribution` torque off, `1` with it on
-//! (default: the title's own craft law).
+//! (default: the title's own craft law). `OAG_HD_MODE=tt` loads a Time Trial, `OAG_HD_CLASS` the
+//! class (default `PHANTOM`), `OAG_HD_AUTOPILOT=1` admits Autopilot rows, `OAG_HD_SUM=0` takes the
+//! largest hover escape alone, `OAG_HD_GATE=0` leaves the pitch gate open.
 
 use oag_core::math::{Mat3, Quat, Vec3};
 use oag_physics::engine::EngineFlags;
@@ -31,7 +34,7 @@ fn env_or(name: &str, default: &str) -> String {
 
 #[test]
 #[ignore = "scratch sweep: OAG_SWEEP=1 with OAG_HD_AIR, needs data/images/"]
-fn the_original_hd_autopilot_stepped_once_per_row() {
+fn the_original_hd_capture_stepped_once_per_row() {
     if std::env::var_os("OAG_SWEEP").is_none() {
         return;
     }
@@ -96,6 +99,10 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
     if std::env::var_os("OAG_HD_GRID_CAP").is_none() {
         template.hover_cap = None;
     }
+    // `OAG_HD_SUM=0`: the hover escapes take the largest alone instead of HD's sum.
+    if std::env::var("OAG_HD_SUM").as_deref() == Ok("0") {
+        template.hover_rig.sum_escapes = false;
+    }
     let mut handling = race.sim.world.ships[0].handling;
     // `OAG_HD_RIDE=<delta>`: the handling's ride height moved by `delta`, a sensitivity probe.
     if let Ok(delta) = std::env::var("OAG_HD_RIDE") {
@@ -106,15 +113,15 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         Ok("ground") => oag_physics::passive::ClassGravityTerm::Grounded,
         _ => oag_physics::passive::ClassGravityTerm::Airborne,
     };
-    let env = Environment {
+    let base_env = Environment {
         class_gravity_scale: gravity,
         class_gravity_term: term,
-        engine_flags: EngineFlags {
-            uncapped: true,
-            speedup: Some(1.2),
-        },
         ..Environment::default()
     };
+    // A row from the original's Autopilot (slot bit `0x800`) carries its rail, which writes the
+    // craft's velocity, so a law cannot be read off it: such rows are refused unless
+    // `OAG_HD_AUTOPILOT=1` asks for them (the 2026-10-19 capture predates this rule).
+    let autopilot_ok = std::env::var_os("OAG_HD_AUTOPILOT").is_some();
     let bias = std::env::var("OAG_HD_BIAS").ok().map(|v| v == "1");
     println!(
         "gravity_mul {gravity} mass {} body mass {} normal_gravity {} flight_gravity {} wd {} bias {:?}",
@@ -126,7 +133,7 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         bias
     );
     println!(
-        "row  g  dt     | vy_meas  vy_ours  dvy  | dv_up  dv_fwd | dw_pitch dw_yaw dw_roll | w_pitch"
+        "row  g  dt     | vy_meas  vy_ours  dvy  | dv_up  dv_fwd | dw_pitch dw_yaw dw_roll | w_pitch | dv_side dp_side"
     );
     for i in lo..hi.min(rows.len() - 1) {
         let (r, n) = (&rows[i], &rows[i + 1]);
@@ -151,11 +158,20 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         let left = v3(r, "r0x", "r0y", "r0z");
         let w = v3(r, "wx", "wy", "wz");
         let omega = -(left * w.x + up * w.y + fw * w.z);
-        let grounded = if (r[at("flags")] as u32) & 1 != 0 {
-            1.0
-        } else {
-            0.0
+        if (r[at("slot_flags")] as u32) & 0x800 != 0 && !autopilot_ok {
+            continue;
+        }
+        // The engine bits off the row's own `craft+0x264`: `0x8` uncapped thrust, `0x4` the
+        // multiplier `craft+0x2f0` (both set only by the Autopilot's branch, `autopilot.md`).
+        let row_flags = r[at("flags")] as u32;
+        let env = Environment {
+            engine_flags: EngineFlags {
+                uncapped: row_flags & 0x8 != 0,
+                speedup: (row_flags & 0x4 != 0).then_some(r[at("mult")]),
+            },
+            ..base_env
         };
+        let grounded = if row_flags & 1 != 0 { 1.0 } else { 0.0 };
         let mut state = template;
         // `OAG_HD_RAMP=<lag>`: the release ramp `3.03825 + game seconds since GO`, taking the
         // capture's `clock` (`craft+0x308`, which runs at game time while grounded) from row 0
@@ -181,12 +197,24 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         if let Some(bias) = bias {
             state.air_pitch_bias = bias;
         }
+        // The walk carries no track sample, so `step`'s pitch gate reads open; the gate is taken
+        // here off the row's own located down (`ship+0x7850`) instead: a closed gate drops the
+        // whole pitch input and keeps the bias (`oag_physics::engine::pitch`).
+        // `OAG_HD_GATE=0` leaves it open.
+        let located_down = v3(r, "sdx", "sdy", "sdz");
+        let gate_closed = state.pitch_gate
+            && std::env::var("OAG_HD_GATE").as_deref() != Ok("0")
+            && up.dot(-located_down) <= oag_physics::engine::PITCH_ALIGNMENT;
         let controls = ShipControls {
             steer_x: r[at("c0")] / 100.0,
             thrust: r[at("c1")] / 100.0,
             airbrake_left: r[at("c2")] / 100.0,
             airbrake_right: r[at("c3")] / 100.0,
-            steer_y: r[at("c4")] / 100.0,
+            steer_y: if gate_closed {
+                0.0
+            } else {
+                r[at("c4")] / 100.0
+            },
             ..ShipControls::default()
         };
         let ev = step(&mut state, &controls, &handling, &env, world, dt);
@@ -238,7 +266,7 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
         let dw = (state.body.angular_velocity - omega_next) / dt;
         let right = -left;
         println!(
-            "{i:>4} {grounded:.0} {dt:.4} | {:7.2} {:7.2} {:6.2} | {:6.2} {:6.2} | {:7.3} {:7.3} {:7.3} | {:6.3}",
+            "{i:>4} {grounded:.0} {dt:.4} | {:7.2} {:7.2} {:6.2} | {:6.2} {:6.2} | {:7.3} {:7.3} {:7.3} | {:6.3} | {:6.3} {:7.4}",
             v_next.y,
             state.body.linear_velocity.y,
             dv.y,
@@ -248,6 +276,10 @@ fn the_original_hd_autopilot_stepped_once_per_row() {
             dw.dot(up),
             dw.dot(fw),
             omega_next.dot(right),
+            // Sideways: the velocity and position residual along the craft's left, where a rail
+            // (`Ai_SnapToLane`) would show.
+            dv.dot(left),
+            (state.body.position - p1).dot(left),
         );
     }
 }

@@ -50,6 +50,19 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
   included. Found on the way and ported: HD sums its hover escapes (`HoverRig::sum_escapes`).
   Evidence: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`, "The grounded vertical
   residual was the harness" and "The escapes sum"; `docs/physics/hd-ride-height.md`.
+- ~~HD's air laws rest on one Autopilot run~~: closed 2026-10-20 (`hd-air-player-input`).
+  Re-measured with player input alone (placed Time Trial runs, throttle held, the Autopilot bit
+  clear on all 3,875 rows): class gravity on flight gravity (PHANTOM and Venom), the in-air bias
+  as each team's own `+0x9c` (Feisar and Harimau `-4`, Assegai `+4`), the escape sum (131 rows),
+  and the pitch gate seen closing at `0.9` for the first time. All four stand, confidence 90-92.
+  Chenghou's "2 units low" takeoff was the sweep placing ours under the hover cap's release
+  ramp. Evidence: `docs/physics/airborne-ground-truth.md`, "Wipeout HD under player input".
+- **A forward residual in the pose walk** (2026-10-20): stepped once from the original's rows,
+  ours ends faster along forward by `+0.12` to `+0.16` u/s per frame in the air on PHANTOM (about
+  `8` u/s²), `+0.04` on Venom, `+0.15` to `+0.44` on the ground. Unattributed. First check the
+  walk itself (`hd_air_pose_walk.rs` copies `craft+0x30c` into `ShipState::thrust`), then HD's
+  engine doubling and ground drag, both inherited from Pulse and unread on HD. It may be the
+  same thing as the late-speed item above, with the opposite sign.
 - **Not measured**: barrel roll, weapon slowdown, sideshift's gesture timing (as before).
 - HD's hover pieces not ported: the trailing 10-unit ray (`0x000ee510`), the escape's class
   gates (material type `2` skips a probe, a full magnet lock skips the escape), `craft+0x358`.
