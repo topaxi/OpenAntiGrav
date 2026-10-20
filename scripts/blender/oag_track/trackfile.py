@@ -203,6 +203,10 @@ def write_glb(track):
                         _byte(name, "AI byte", v)
                     rows.append((*q.ai_bytes, 1))
             attrs["_OAG_AI_BYTES"] = b.bytes4(rows)
+        if any(q.cage is not None and any(q.cage) for q in p):
+            raw = [tuple(v & 0xFF for v in (q.cage or (0,) * 8)) for q in p]
+            attrs["_OAG_CAGE_A"] = b.bytes4([r[:4] for r in raw])
+            attrs["_OAG_CAGE_B"] = b.bytes4([r[4:] for r in raw])
         push(name, [{"attributes": attrs, "mode": POINTS}])
 
     for name, pads in ((SPEEDUP, track.speedup_pads), (WEAPON, track.weapon_pads)):
@@ -423,9 +427,14 @@ def _read_spline(g, node, name):
     half, bound = v2("_OAG_HALF_WIDTH"), v2("_OAG_AI_BOUND")
     sf, light = b4("_OAG_SECTION_FLAGS"), b4("_OAG_LIGHT_SCALE")
     ai = b4("_OAG_AI_BYTES") if "_OAG_AI_BYTES" in a else None
+    cage_a = b4("_OAG_CAGE_A") if "_OAG_CAGE_A" in a else None
+    cage_b = b4("_OAG_CAGE_B") if "_OAG_CAGE_B" in a else None
     out = []
     for i in range(len(pos)):
         ai_bytes = tuple(ai[i][:3]) if ai is not None and ai[i][3] == 1 else None
+        cage = None
+        if cage_a is not None and cage_b is not None:
+            cage = tuple(v - 256 if v > 127 else v for v in (*cage_a[i], *cage_b[i]))
         out.append(
             SplinePoint(
                 pos[i],
@@ -442,6 +451,7 @@ def _read_spline(g, node, name):
                 sf[i][1],
                 tuple(light[i]),
                 ai_bytes,
+                cage,
             )
         )
     return out

@@ -34,6 +34,11 @@ pub enum RespawnCause {
     /// the original's own rescue for a craft beached upside down or on its
     /// flank, `FUN_088418e0` at `0x08841d30`.
     Airborne,
+    /// The collision cage sent the craft to its reset state: the located control
+    /// point more than 200 units away, a corner more than 15 outside the tube,
+    /// or a corner under its floor (`Cage_ResolveCraft`, `0x08831aa4`, returning
+    /// `2` to `Ship_SetState(3)` at `0x08842394`). The original's own.
+    Cage,
     /// The craft was wrecked and is being brought back by the destroyed-craft
     /// pass, not rescued from anywhere: a shield running out is not a fall.
     Destroyed,
@@ -45,7 +50,7 @@ impl RespawnCause {
     /// project's racing-line pose ([`Race::respawn`]).
     #[must_use]
     pub fn is_the_originals(self) -> bool {
-        matches!(self, Self::ResetZone | Self::Airborne)
+        matches!(self, Self::ResetZone | Self::Airborne | Self::Cage)
     }
 
     /// A short lowercase label for a survey line.
@@ -58,6 +63,7 @@ impl RespawnCause {
             Self::Stalled => "stalled",
             Self::OffTrack => "offtrack",
             Self::Airborne => "airborne",
+            Self::Cage => "cage",
             Self::Destroyed => "wrecked",
         }
     }
@@ -211,14 +217,22 @@ impl Race {
             && self.sim.lost_ticks[slot] >= PLAYER_RESCUE_TICKS
     }
 
-    /// Whether this tick ended in contact with `Reset` geometry.
+    /// Whether a `Reset` contact this tick (`contact`, [`Self::reset_zone_contact`])
+    /// counts.
     ///
     /// Suppressed while the cooldown runs and once respawning has given up, so
     /// the two guards live in one place rather than at the call site.
-    pub(super) fn reset_zone_touched(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
-        if self.sim.respawn_disabled[slot] || self.sim.respawn_cooldown[slot] > 0 {
-            return false;
-        }
+    pub(super) fn reset_zone_touched(&self, slot: usize, contact: bool) -> bool {
+        !self.sim.respawn_disabled[slot] && self.sim.respawn_cooldown[slot] == 0 && contact
+    }
+
+    /// Whether this tick's step ended in contact with `Reset` geometry.
+    ///
+    /// Read right after the step, **before the collision cage moves the craft**:
+    /// the original's `Reset` contact comes out of the narrowphase inside
+    /// `Body_StepWorld`, and the cage (`oag_gameplay::cage::pass`) runs after it, in
+    /// the entity update that then reads the contact ring.
+    pub(super) fn reset_zone_contact(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
         let ship = &self.sim.world.ships[slot];
         // The same `env` the force law just ran with, so the self-collider
         // exclusion cannot differ between the two.

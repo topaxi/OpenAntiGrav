@@ -91,8 +91,9 @@ impl CageTrack {
 /// Corners and locate from the pose the hull was tested at, impulses on the body as the
 /// hull left it (`oag_physics::cage::resolve`). A track with no cage does nothing.
 ///
-/// **Not ported here:** the reset the response can ask for (`CageResponse::reset`,
-/// `Ship_SetState(3)`), and the original's skip of a craft whose `entity+0x8c` reads `6`.
+/// The response's `reset` is the original's `Ship_SetState(3)`; the caller turns it
+/// into a reset. **Not ported:** the original's skip of a craft whose `entity+0x8c`
+/// reads `6` (the finished player).
 pub fn pass(
     cage: Option<&CageTrack>,
     state: &mut oag_physics::ShipState,

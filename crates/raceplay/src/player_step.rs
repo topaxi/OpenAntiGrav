@@ -82,8 +82,8 @@ impl std::ops::Deref for Evaluations {
 /// moved, and want the environment and the position the force law ran against.
 pub(super) struct PlayerStep {
     pub(super) evaluated: Evaluated,
-    env: Environment,
-    before: Vec3,
+    /// [`Race::reset_zone_contact`], read before the collision cage moved the craft.
+    reset_contact: bool,
     spline_distance: Option<f32>,
 }
 
@@ -263,6 +263,15 @@ impl Race {
             &self.sim.collision,
             self.sim.dt,
         );
+        let reset_contact = self.reset_zone_contact(slot, &env, before);
+        let ship = &mut self.sim.world.ships[slot];
+        self.sim.cage_reset[slot] = oag_gameplay::cage::pass(
+            self.sim.spline.cage(),
+            &mut ship.physics,
+            &ship.handling,
+            &evaluated.wall,
+        )
+        .reset;
         self.lay_crumb(slot, crumb_flags);
         self.count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
         // The contact half of the same edge as the blast one, and the one a
@@ -274,8 +283,7 @@ impl Race {
         }
         PlayerStep {
             evaluated,
-            env,
-            before,
+            reset_contact,
             spline_distance,
         }
     }
@@ -314,13 +322,16 @@ impl Race {
         // with an empty pool. In a single race the ending has already fired.
         let alive =
             self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-        let reset = self.reset_zone_touched(slot, &step.env, step.before);
+        let reset = self.reset_zone_touched(slot, step.reset_contact);
         let airborne = self.airborne_too_long(slot);
-        if alive && (off_the_track || airborne || reset) {
+        let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
+        if alive && (off_the_track || airborne || reset || cage) {
             let cause = if off_the_track {
                 respawn::RespawnCause::OffTrack
             } else if airborne {
                 respawn::RespawnCause::Airborne
+            } else if cage {
+                respawn::RespawnCause::Cage
             } else {
                 respawn::RespawnCause::ResetZone
             };

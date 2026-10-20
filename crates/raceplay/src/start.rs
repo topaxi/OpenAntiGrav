@@ -632,6 +632,7 @@ impl Race {
                 respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
                 respawns: [0; oag_gameplay::MAX_SHIPS],
                 last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
+                cage_reset: [false; oag_gameplay::MAX_SHIPS],
                 breadcrumbs,
                 weapons_on,
                 eliminator_kill_target: eliminator_kill_target

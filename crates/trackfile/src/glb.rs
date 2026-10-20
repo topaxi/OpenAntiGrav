@@ -234,6 +234,17 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
                 .collect::<Vec<_>>();
             attrs["_OAG_AI_BYTES"] = json!(bin.bytes4(&bytes));
         }
+        // Optional: the collision cage's eight signed bytes, as two u8 VEC4s,
+        // written only when a point authors any.
+        if p.iter().any(|q| q.cage != [0; 8]) {
+            let half = |from: usize| {
+                p.iter()
+                    .map(|q| std::array::from_fn(|k| q.cage[from + k] as u8))
+                    .collect::<Vec<[u8; 4]>>()
+            };
+            attrs["_OAG_CAGE_A"] = json!(bin.bytes4(&half(0)));
+            attrs["_OAG_CAGE_B"] = json!(bin.bytes4(&half(4)));
+        }
         push(
             &name,
             vec![json!({ "attributes": attrs, "mode": POINTS })],
@@ -633,6 +644,14 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
     } else {
         None
     };
+    let cage = if prim
+        .get(&Semantic::Extras("OAG_CAGE_A".to_string()))
+        .is_some()
+    {
+        Some((b4("_OAG_CAGE_A")?, b4("_OAG_CAGE_B")?))
+    } else {
+        None
+    };
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
         if sf[i][2] != 0 || sf[i][3] != 0 {
@@ -659,7 +678,9 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
             unk_0x5c: ai_present(&ai_bytes, i).map(|b| b[0]),
             unk_0x5d: ai_present(&ai_bytes, i).map(|b| b[1]),
             unk_0x66: ai_present(&ai_bytes, i).map(|b| b[2]),
-            cage: [0; 8],
+            cage: cage.as_ref().map_or([0; 8], |(a, b)| {
+                std::array::from_fn(|k| if k < 4 { a[i][k] } else { b[i][k - 4] } as i8)
+            }),
         };
         finite(
             name,
