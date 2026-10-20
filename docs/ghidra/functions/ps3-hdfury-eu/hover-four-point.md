@@ -145,7 +145,9 @@ HD now takes it too (read statically here, not seen live on HD).
 
 ## `hit+0x28` is the march's mesh-shape tag (2026-10-21, `deviations-to-original`)
 
-Confidence **88** that the gate passes every mesh hit, a wall and a magstrip included.
+Confidence **88** that `+0x28` is a constant mesh-shape tag (one writer, `1` on 247 of 247 live
+hits); **80** that HD's escape therefore fires off a wall, which also rests on class `0` being the
+wall class (the numbering below) and was not seen live.
 
 **Static.** `Collision_MarchSegment` (`0x000364c0`) copies its result into the caller's record
 at `0x00036cbc`-`0x00036d84`: `+0x00` from its local `sp+0x170`, `+0x20` from `sp+0x1a0` (the

@@ -307,7 +307,8 @@ measured on Pulse's; no Pure capture separates the frames (a flat-ground run can
 
 **On** (`CraftLaws::inertia_rotates` `measured(false)`); it was `chosen(true)`, HD's rotated frame,
 because the world-axis frame once raised Pure's opponent stint walls `69 -> 541`. On today's tree,
-with every other Pure law on, it does not. Eight seeds, unperturbed:
+with every other Pure law on, one unperturbed run (eight seeds) shows no such rise; the noise bar
+above was not rerun on it, so this is one draw, not a verdict on our AI:
 
 | Metric | Rotated (before) | World-axis (after) |
 | --- | ---: | ---: |
