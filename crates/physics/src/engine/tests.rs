@@ -152,6 +152,31 @@ fn a_weapon_slowed_ship_produces_no_thrust_either() {
     );
 }
 
+/// A running Turbo pickup escapes both arms of the early return (`craft+0x1c0 & 0x200`,
+/// `0x0884c678`), and the barrel roll's payout does not. Fails if the escape is dropped or
+/// widened to the roll.
+#[test]
+fn a_running_turbo_keeps_the_engine_through_a_stun_and_a_slowdown() {
+    let handling = test_handling();
+    let run = |state: &ShipState| {
+        engine(state, &handling, 1.0, 24.0, None, 1.0, EngineFlags::default()).thrust
+    };
+    for (stun, slow) in [(0.5, 0.0), (0.0, 1.0)] {
+        let mut state = ship_moving_forward(24.0);
+        state.thrust = 100.0;
+        state.stun_timer = stun;
+        state.slowdown_timer = slow;
+        assert_eq!(run(&state), 0.0, "gated without a turbo");
+
+        state.roll_payout_timer = 0.5;
+        assert_eq!(run(&state), 0.0, "the roll payout is not the escape");
+
+        state.roll_payout_timer = 0.0;
+        state.turbo_timer = 0.5;
+        assert!(run(&state) > 0.0, "a running turbo escapes the gate");
+    }
+}
+
 #[test]
 fn no_throttle_is_no_thrust() {
     let handling = test_handling();

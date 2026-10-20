@@ -184,10 +184,11 @@ impl EngineForce {
 /// `speed` is `|dot(velocity, forward)|`, not `|velocity|`. `grounded` is the previous
 /// frame's 0/0.5/1 fraction.
 ///
-/// The early return **is** implemented, on both timers. Its `0x0200` escape and the
-/// slowdown arm's `0x0010` escape are not (nothing decodes those flags), so a stunned
-/// ship here always loses its engine where the original might not. The slowdown arm is
-/// live: [`crate::slowdown::add`] arms [`ShipState::slowdown_timer`] from a weapon impact.
+/// The early return **is** implemented, on both timers, with its `0x0200` escape: a
+/// running Turbo pickup ([`ShipState::turbo_timer`]) keeps the engine through a stun or a
+/// slowdown. The slowdown arm's `0x0010` escape is dead in the original (no store sets
+/// that bit), so it is not an input. The slowdown arm is live: [`crate::slowdown::add`]
+/// arms [`ShipState::slowdown_timer`] from a weapon impact.
 ///
 /// **The one-shot scale at `craft+0x31c` is implemented, as `thrust_scale`.** A value
 /// test, not a flag test: below `1.0` it multiplies the doubled thrust once on both the
@@ -217,7 +218,14 @@ pub fn engine(
     // `controls::update` rewrites `ShipState::thrust` every tick, so it would be
     // overwritten before anything read it, and only the HUD throttle display sees it.
     // Keeping `engine` a function of `&ShipState` is worth more than a cosmetic store.
-    if state.stun_timer > 0.0 || state.slowdown_timer > 0.0 {
+    //
+    // A running Turbo pickup escapes it: the test is skipped while `craft+0x1c0 & 0x200`
+    // (`0x0884c678`), and that bit is the pickup object's running bit `0x200` mirrored by
+    // `Ship_UpdateStartBoost` (`0x0883fe14`/`0x0883fe2c`) every frame, which is
+    // `ShipState::turbo_timer` here (live 2026-10-20, `psp-craft-flags.py`). The barrel
+    // roll's payout (`0x400`) does not escape it. The `0x10` escape of the slowdown arm has
+    // no writer anywhere in the image, so the slowdown arm always applies.
+    if (state.stun_timer > 0.0 || state.slowdown_timer > 0.0) && state.turbo_timer <= 0.0 {
         return EngineForce::default();
     }
 
