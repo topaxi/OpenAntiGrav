@@ -77,6 +77,11 @@ pub struct Rig {
     /// (`Ship_HoverTwoPoint`, `0x0884ac94`-`0x0884acfc`; HD). Pulse's Zone hover sends
     /// `-400 * (up x n)` to the body whole (`0x0884b704`-`0x0884b758`).
     pub align_projects_pitch_out: bool,
+    /// The downforce is scaled by the grounded fraction and by `1 - magLockBlend`
+    /// (`Ship_HoverTwoPoint`, `0x0884ad78`-`0x0884ae18`; HD). Pulse's Zone hover applies
+    /// `-track_gravity * mass` along the normal whatever the contact count
+    /// (`0x0884b7b0`-`0x0884b818`).
+    pub downforce_scaled: bool,
 }
 
 impl Rig {
@@ -105,6 +110,7 @@ impl Rig {
         probe_escape: true,
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
+        downforce_scaled: true,
     };
 
     /// The probes in use.

@@ -41,4 +41,7 @@ pub struct HoverRig {
     /// The alignment torque keeps its pitch component: no right-axis projection (Pulse's Zone
     /// hover).
     pub alignment_pitches: Sourced<bool>,
+    /// The downforce is `-track_gravity * mass` along the normal on any contact, with no
+    /// grounded fraction and no magnet-lock fade (Pulse's Zone hover).
+    pub downforce_unscaled: Sourced<bool>,
 }

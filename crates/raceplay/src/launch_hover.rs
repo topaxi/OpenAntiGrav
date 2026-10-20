@@ -69,6 +69,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
             SpringLaw::Racing
         },
         align_projects_pitch_out: !rig.alignment_pitches.value,
+        downforce_scaled: !rig.downforce_unscaled.value,
     }
 }
 

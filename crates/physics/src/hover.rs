@@ -729,12 +729,17 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // original accumulates `craft+0x2b0` in this function, half per contacting probe,
     // before the epilogue reads it). `mass` is the body's.
     let grounded = rig.grounded(contacts);
-    let downforce = -average_normal
-        * (handling.physical.track_gravity
-            * state.body.mass
-            * grounded
-            * (1.0 - state.mag_lock_blend)
-            * DOWNFORCE_SCALE);
+    let downforce = if rig.downforce_scaled {
+        -average_normal
+            * (handling.physical.track_gravity
+                * state.body.mass
+                * grounded
+                * (1.0 - state.mag_lock_blend)
+                * DOWNFORCE_SCALE)
+    } else {
+        // `Ship_HoverFourCorner`: `vscl(n, -(track_gravity * mass))`, nothing else.
+        average_normal * -(handling.physical.track_gravity * state.body.mass)
+    };
 
     // Bank-to-yaw: body-local yaw proportional to how far the right axis has tipped out
     // of the horizontal, cancelled by a magstrip lock. Skipped on the grid

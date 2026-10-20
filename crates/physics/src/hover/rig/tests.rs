@@ -27,6 +27,7 @@ fn four_point() -> Rig {
         probe_escape: true,
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
+        downforce_scaled: true,
     }
 }
 
@@ -211,6 +212,7 @@ fn four_corner() -> Rig {
         probe_escape: false,
         spring: SpringLaw::FourCorner,
         align_projects_pitch_out: false,
+        downforce_scaled: false,
     }
 }
 
@@ -331,4 +333,31 @@ fn the_plain_mean_normal_is_not_normalised() {
     let mean = two * (1.0 / 2.0_f32);
     assert!((mean.length() - 0.5_f32.sqrt()).abs() < 1e-6);
     assert_eq!(NormalMean::Mean, four_corner().normal_mean);
+}
+
+/// **Zone's downforce is the whole `track_gravity * mass` on any contact.** With two of four
+/// probes down (a craft lifted and pitched so its rear pair touches) the racing law's downforce
+/// is half, the four-corner law's is all of it: read live on two-contact frames,
+/// `-80 * 1 * n` with `craft+0x2b0 = 0.5`.
+#[test]
+fn the_four_corner_downforce_takes_no_grounded_factor() {
+    let downforce = |rig: Rig| {
+        let mut state = craft(rig, 3.8, 0.3, 0.0);
+        state.mag_lock_blend = 0.5;
+        let hover = evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        );
+        assert_eq!(hover.contacts, 2);
+        hover.downforce.y
+    };
+    assert_eq!(downforce(four_corner()), -70.0);
+    let scaled = downforce(Rig {
+        downforce_scaled: true,
+        ..four_corner()
+    });
+    assert_eq!(scaled, -70.0 * 0.5 * 0.5);
 }

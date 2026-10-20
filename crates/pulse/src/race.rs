@@ -560,4 +560,7 @@ pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig:
     // `-400 * (up x n)` straight to `Body_AddTorqueWorld` (`0x0884b704`-`0x0884b758`); live, its
     // component along the right axis reads `-3.80`..`+2.76`.
     alignment_pitches: oag_title::pre_race::Sourced::measured(true),
+    // `-(track_gravity * mass)` along the normal (`0x0884b7b0`-`0x0884b818`); live, the whole
+    // `-80` on two-contact frames where the racing law would give half.
+    downforce_unscaled: oag_title::pre_race::Sourced::measured(true),
 };
