@@ -393,9 +393,9 @@ fn the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index() 
 
 /// HD's tracks set the collision cage's header flag on one circuit only,
 /// `04_chenghou_project`, and that one authors the cage bytes on every point;
-/// the other fifteen leave both at zero. Whether HD's own code runs a cage is
-/// not read: our race runs Pulse's on the one flagged circuit, inherited
-/// (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`).
+/// the other fifteen leave both at zero. HD's original runs no cage off that flag,
+/// measured live on the circuit's jumps, so our race runs none there either
+/// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`).
 #[test]
 #[ignore = "needs the decrypted PS3 image"]
 fn one_circuit_asks_for_the_collision_cage() {

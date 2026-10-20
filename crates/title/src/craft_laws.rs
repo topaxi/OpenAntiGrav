@@ -67,6 +67,11 @@ pub struct CraftLaws {
     /// `v + (R^T omega) x r`, where Pulse's is textbook: Wipeout HD's, measured live
     /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
     pub wall_point_rate_body_local: Sourced<bool>,
+    /// The track header's flag turns on the collision cage, Pulse's `AiTrack_CageEnabled`
+    /// (`*(track + 4) + 0x18 & 1`, `oag_gameplay::cage`). Wipeout HD runs no cage off it
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`). A title with no `CraftLaws`
+    /// (Pulse) runs it.
+    pub cage_from_track_header: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

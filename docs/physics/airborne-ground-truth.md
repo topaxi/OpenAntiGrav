@@ -80,6 +80,15 @@ rescued `0` times. Reproduce with
 `OAG_SWEEP=1 OAG_SWEEP_TRACK='Data\Environments\14_Track\track.vex' OAG_SWEEP_CLASS=PHANTOM
 OAG_CAGE_CSV=<capture 3> OAG_CAGE_TICKS=1341,1342,1343`.
 
+### HD runs no cage (2026-10-20)
+
+Wipeout HD's Chenghou Project is the one HD circuit whose header sets the cage flag.
+Our race ran Pulse's cage there and capped both jumps at about 16.5 above the spline,
+with a single-tick vy step of `-35` and `-23`. The original, placed at the same pose and
+speed on RPCS3, falls smoothly through the same spot: its largest per-frame vy drop is
+`-2.3`. The cage is off for HD by the title
+([ps3-hdfury-eu/collision-cage.md](../ghidra/functions/ps3-hdfury-eu/collision-cage.md)).
+
 ## The tensor is applied in world axes: measured dynamically
 
 [cornering-ground-truth.md](cornering-ground-truth.md#the-tensor-is-a-world-axis-diagonal-and-that-answers-a-not-c)

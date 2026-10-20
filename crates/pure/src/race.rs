@@ -608,6 +608,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    // Pure's binary is not read for the cage; its own headers clear the flag on all 16 tracks.
+    cage_from_track_header: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),

@@ -204,8 +204,7 @@ between). Outside the Eliminator a wreck reaches state 6 1.5 s after it finishes
 (measured live 2026-10-02, `shield.md`), so `oag_gameplay::cage::pass` skips a craft for
 which `oag_physics::damage::in_state_6` holds. On de Konstruct Black (12 forward cells by
 nine perturbation scales, `cage_effect_sweep`) it changes 5 of 108 races and moves
-destroyed 59 to 60: a wreck's pose decides nothing else. HD's `04_chenghou_project`, which runs Pulse's cage, gets the
-same skip: **inherited, not measured**. Still not ported: the finished
+destroyed 59 to 60: a wreck's pose decides nothing else. HD runs no cage (below). Still not ported: the finished
 player, which also reads `6`, and `CageEffect_Spawn`'s visual (the trigger is now known: one per cage
 contact, at the boundary point). Our own track format carries the cage bytes but
 not the header flag, so a track file runs no cage.
@@ -213,10 +212,11 @@ not the header flag, so a track file runs no cage.
 **Other titles.** Pure: off by its own data (header word `0`), and Pure's
 binary is not read. HD: `04_chenghou_project` alone sets the flag and authors the
 bytes on all 839 points, the other fifteen circuits neither
-(`crates/hd/tests/hd_title_ground_truth.rs`); our race runs Pulse's cage there,
-**inherited, not measured**: HD's code is not read. 2048 and Omega (version
+(`crates/hd/tests/hd_title_ground_truth.rs`), but HD's original runs **no** cage
+there: measured live on both of its jumps, and ours holds it off by the title since
+2026-10-20 ([ps3-hdfury-eu/collision-cage.md](../ps3-hdfury-eu/collision-cage.md)). 2048 and Omega (version
 `0x107`, 96-byte points): not checkable from data, as the points end before
-`+0x68`, so no cage; whether their code has one is not read.
+`+0x68`, so no cage; their executables keep the `collisionCageEnabled` string but no definition sets it (ps3-hdfury-eu page).
 
 ### What the cage does to our AI (2026-10-20, `ai-gate-robustness`)
 

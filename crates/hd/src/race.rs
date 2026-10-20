@@ -927,6 +927,12 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // match the geometry on 16 of 16 hits this way and miss on three with the textbook form
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 85.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::measured(true),
+    // No cage from the track header: HD's `CollisionCageFx` module (`0x0007bf40`-`0x0007d0f0`,
+    // Pulse's literals) has no static caller, the track's `collisionCageEnabled` definition
+    // attribute (`+0x1b7`, default `0`) is set by no HD definition, and on Chenghou Project, the
+    // one circuit whose header sets Pulse's flag, the original's craft flies both jumps with no
+    // cage push (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`). Confidence 85.
+    cage_from_track_header: oag_title::pre_race::Sourced::measured(false),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
