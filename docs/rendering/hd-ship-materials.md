@@ -608,17 +608,29 @@ the draw's craft layer (a hull that names one is lit from its probe) and `probe_
 `constantAmbientColour`, so a `NO_AMBIENT` gate keyed on the resolved variant would have switched the probe off; keying on
 the layer avoids that. The `Spot`/`SVC1`/`ShadowMap` words (`0x047`, `0x807`, `0x847`) are carried by the existing SPU light and shadow paths.
 
-**The nozzle jewel, read** (draws 521-522 of the Harimau rest frame; `scripts/rsx-draw-list.py` and the vertex programs out of
-the same capture): the vertex program is `TC4 = (u, v + c[207].x * c[208].x)` with `c[207].x = 1.0` the material's rate and
-`c[208]` the engine `time` (192.65 at the capture), `TC4.z` the clip `w`; the fragment program is
-`fog(tex(unit 0, TC4)) / 2`, and the draw is **additive** (`SRC_ALPHA, ONE`, depth test on, no write). So the jewel is the
-`colours_flashing_glow` strip scrolled one texture a second through a wrapping sampler, glowing where a column is coloured.
-That scroll is already ours (`mesh::rcs::vertex_scroll` admits `emissive_bloom`). **The earlier lane's "ours draws it and
-shows black" is wrong: ours does not draw these chunks at all.** `OAG_ONLY_MATERIAL=emissive_bloom` draws Harimau's cockpit
-dots and the exhaust rings and nothing in the nozzle, at any `--anim-seconds`. Why the two chunks (258 and 24 indices) are
-missing from our hull is open: not in `Ship.vex`'s drawn chunks, or culled, or a different model.
+**The nozzle jewel, resolved (2026-10-20, `hd-hull-nozzle`): it is the engine flare's shapes, not the `emissive_bloom` chunks.**
+Both earlier readings above are wrong. (1) Ours does draw the two `emissive_bloom` chunks (Harimau `ship.vex` chunks 6 and 7,
+`LightsShape` 444 indices and `LightsShape1` 24; `oag-view --draws` lists both). (2) The original draws the same two chunks
+(258 and 24 indices, texture `colours_flashing_glow`): their vertex buffers are the file's own (240 and 16 vertices, 14-byte
+stride, the buffers sit `0x11b0` apart in the capture and in the file), but the index buffer is rebuilt every frame and submits
+only 86 of the 148 triangles of `LightsShape`: the cockpit and wing lights that are on. Projected with the draw's own
+`viewProj` and model matrices, none of the 16 surviving pieces lands on the jewel; they are the two rings at x +-1.5, the
+small blocks at z -3.09 and -3.37 beside the vents, and four cockpit dots. The jewel's pixels are covered by the five draws
+right after them: the flame shapes (`flame_test` program, unit 0 `flame_01`, additive), whose projected box is 45 x 45 px at
+the jewel. At 0 km/h their model matrices are body 0.75 x (1, 1, 0.25) and spikes 0.75 x 2.0 x a flicker in 0.65-0.85
+(1.361, 1.606, 1.380 / 2.0), exactly `Flame::new()`'s rest scales. Confidence 90 (draw lists, projection, matrices; two boots).
+**The flame is drawn from the first frame of a race, countdown included**: a Restart Race walked at 0.1 s steps shows the jewel
+from the first visible frame through the countdown and after GO, flickering between cyan and pink (Harimau classic and
+Assegai classic, 0 km/h). The earlier "no `flame_test` draw at 0 km/h" (`engine-trail.md`) was a miss, and
+`Race::hd_flame_resting`, built on it, hid the flame at a standstill. Removed: ours now draws the jewel at rest
+(`data/reference/hd-hull-nozzle/{harimau,assegai}-rest-orig-before-after.png`, original / before / after). Residual: ours
+reads a little larger and sits lower than the original's, which stays inside the nozzle opening; the poses are matched to a
+few pixels only (the original start sits 1.8 m higher than ours), so size is not measured. Whether the `LightsShape` index
+rebuild is a flash schedule (it is why the hull lights blink in the original) is unread; ours draws all 148 triangles.
+Cross-title: Omega ships HD's hulls on its `.rcsmodel`s; checked, applies (flare shapes are the same `ef_*` nodes in
+`engineflare.vex`), not measured (no PS4 capture); 2048 inherits the same wiring, not compared.
 
-**Open.** Why the nozzle chunks are not drawn (above). The weights at two tight corners (a section pair two apart).
+**Open.** The `LightsShape` per-frame light schedule (above). The weights at two tight corners (a section pair two apart).
 The tail arrays of the file (24 + 4 + 3 bytes a probe) are read by the loader and unread here. The word resolution is
 the one the previous paragraph names.
 Whether 2048's hull programs sample its `.probes` or its authored sky paraboloid.

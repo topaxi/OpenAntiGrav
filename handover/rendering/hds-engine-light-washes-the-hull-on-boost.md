@@ -36,9 +36,10 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
   [hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "Finding 5"; the file:
   [hd-probes.md](../../docs/formats/hd-probes.md); the engine side:
   [env-probes.md](../../docs/ghidra/functions/ps3-hdfury-eu/env-probes.md). Still open, in order:
-  - the nozzle "jewel" is **not drawn at all** in ours (the earlier note said it drew black): the two `emissive_bloom` chunks
-    (258 and 24 indices) of the Harimau nozzle are missing from our hull, and the material's vertex law is read
-    (`TC4 = (u, v + 1.0 * time)`, additive `SRC_ALPHA, ONE`);
+  - **Landed 2026-10-20 (`hd-hull-nozzle`): the nozzle "jewel" is the engine flare's five shapes, drawn at rest by the original from
+    the first race frame; ours hid them at a standstill (`hd_flame_resting`, removed).** The `emissive_bloom` chunks are drawn by
+    both (the original rebuilds their index list per frame, 258 of 444). Evidence and residuals (ours a little larger and lower;
+    the `LightsShape` light schedule unread): hd-ship-materials.md, "The nozzle jewel, resolved";
   - two tight corners blend a section pair two apart where `Probes::locate` takes neighbours (weights, 70);
   - 2048 ships 28 `.probes` in a different layout (and an authored sky paraboloid), Omega `.shprobes`: unread;
   - the Steam Deck cost is estimated, not measured; the lever is blending an opponent every second tick;
@@ -48,9 +49,8 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Next Steps
 
-1. **Nozzle jewel.** Find why the two `emissive_bloom` chunks of the Harimau nozzle are not in our hull's draws
-   (`OAG_ONLY_MATERIAL=emissive_bloom` shows the cockpit dots and exhaust rings, nothing in the nozzle); the shader
-   side is read and the scroll is wired. Compare the chunk list of `Ship.vex` against the capture's draws 521-522.
+1. **Rest flame size.** Match the pose exactly (the original start is 1.8 m higher than ours) and measure the rest flame's
+   projected box against the original's 45 x 45 px; then read the `LightsShape` per-frame index schedule (which lights are on).
 2. **Deck cost.** One `just bench-render hd` on the Deck, with and without the probes (the build has no switch: a
    one-line `Option::filter` in `Scene::new` was the A/B), then decide whether an opponent's blend needs a cadence.
 3. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in

@@ -29,6 +29,7 @@ mod hd_movie_ground_truth;
 mod hd_music_ground_truth;
 mod hd_plasma_ball_ground_truth;
 mod hd_psn_campaign_ground_truth;
+mod hd_rest_flame_ground_truth;
 mod hd_ship_preview_ground_truth;
 mod hd_track_model_ground_truth;
 mod hd_weapon_scene_ground_truth;
