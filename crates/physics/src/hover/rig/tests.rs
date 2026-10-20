@@ -28,7 +28,7 @@ fn four_point() -> Rig {
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,
-        snap: false,
+        snap: None,
         brakes_off: false,
     }
 }
@@ -215,7 +215,7 @@ fn four_corner() -> Rig {
         spring: SpringLaw::FourCorner,
         align_projects_pitch_out: false,
         downforce_scaled: false,
-        snap: true,
+        snap: Some(crate::hover::SNAP_GAIN),
         brakes_off: true,
     }
 }
@@ -385,8 +385,30 @@ fn the_four_corner_snap_pulls_a_quarter_of_the_way_to_three() {
     assert_eq!(escape(four_corner(), 2.9), Vec3::ZERO);
     assert_eq!(escape(four_corner(), 10.5), Vec3::ZERO);
     let off = Rig {
-        snap: false,
+        snap: None,
         ..four_corner()
     };
     assert_eq!(escape(off, 5.0), Vec3::ZERO);
+}
+
+/// **HD's Zone ray closes half the gap.** The same ray, reach and floor with `0.5` for Pulse's
+/// `0.25` (`0x008a918c`): from `5.0` above a flat floor the body moves `(3 - 5) * 0.5 = -1.0`.
+#[test]
+fn hds_zone_ray_pulls_half_of_the_way_to_three() {
+    let escape = |rig: Rig, height: f32| {
+        evaluate(
+            &craft(rig, height, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .escape
+    };
+    let half = Rig {
+        snap: Some(0.5),
+        ..four_corner()
+    };
+    assert_eq!(escape(half, 5.0), Vec3::new(0.0, -1.0, 0.0));
+    assert_eq!(escape(half, 2.9), Vec3::ZERO);
 }

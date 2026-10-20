@@ -56,7 +56,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
-    zone_hover_rig: None,
+    zone_hover_rig: Some(&ZONE_HOVER_RIG),
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     // HD's own driver, Pulse's with five gated branches, flown in the
@@ -776,8 +776,27 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
     alignment_pitches: oag_title::pre_race::Sourced::measured(false),
     downforce_unscaled: oag_title::pre_race::Sourced::measured(false),
-    snap: oag_title::pre_race::Sourced::measured(false),
+    snap: oag_title::pre_race::Sourced::measured(None),
     brakes_off: oag_title::pre_race::Sourced::measured(false),
+};
+
+/// HD's Zone hover: [`HOVER_RIG`] with the trailing ray on, and no brakes.
+///
+/// `Craft_UpdateHover` (`0x000f18b8`) calls `Craft_HoverFourPoint` with its second argument set
+/// when the game mode's bit is in `0x206040` (6 Zone, 13 Zone Battle, 14 Detonator, 21) and the
+/// debug byte is clear. That argument gates one thing, the trailing ray (`0x000ee510`-
+/// `0x000ee614`): `10` units from the craft's centre `craft+0x240` along `-up` (`craft+0x200`),
+/// and for `3 < d < 10`, `d = dot(pos - hit, hit.normal)`, `Body_Translate` by
+/// `hit.normal * (3 - d) * 0.5` (`0.5` at `0x008a918c`), every frame, contact or none. Live, a
+/// mode-6 race on Vineta K rests at a mean probe height of `2.04`-`2.08` against the racing rig's
+/// `2.85` on the same `4.125` target: the centre held just above `3.0`, which is what a half-gap
+/// pull every frame gives. `Craft_Update` (`0x000f1958`) skips `Craft_UpdateBrake` under the same
+/// mask (`0x000f1e78`-`0x000f27e0`). Confidence 85:
+/// `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    snap: oag_title::pre_race::Sourced::measured(Some(0.5)),
+    brakes_off: oag_title::pre_race::Sourced::measured(true),
+    ..HOVER_RIG
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

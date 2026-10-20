@@ -992,9 +992,47 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
     let zone = rig(oag_race::Mode::Zone);
     assert_eq!(zone.count, 4);
     assert_eq!(zone.spring, oag_physics::hover::SpringLaw::FourCorner);
-    assert!(zone.snap && zone.brakes_off && !zone.probe_escape);
+    assert!(zone.snap == Some(0.25) && zone.brakes_off && !zone.probe_escape);
     assert_eq!(
         rig(oag_race::Mode::TimeTrial),
         oag_physics::hover::Rig::TWO_POINT
+    );
+}
+
+/// HD's Zone race flies its racing rig with the trailing ray at `0.5` and no brakes;
+/// `Craft_UpdateHover` sets `Craft_HoverFourPoint`'s ray argument on the Zone modes' mask
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`). A time trial flies no ray.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_zone_race_flies_the_racing_rig_with_the_half_gap_ray_and_a_time_trial_does_not() {
+    let Some(path) = image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let rig = |mode| {
+        let loaded = race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            track: Some(oag_hd::race::DEFAULT_TRACK.to_string()),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let mut race = race::Race::start(loaded.setup);
+        race.tick(&PlayerInputs::none());
+        race.ship().physics.hover_rig
+    };
+    let zone = rig(oag_race::Mode::Zone);
+    let racing = rig(oag_race::Mode::TimeTrial);
+    assert_eq!(zone.snap, Some(0.5));
+    assert!(zone.brakes_off);
+    assert_eq!(racing.snap, None);
+    assert!(!racing.brakes_off);
+    assert_eq!(
+        oag_physics::hover::Rig {
+            snap: None,
+            brakes_off: false,
+            ..zone
+        },
+        racing
     );
 }

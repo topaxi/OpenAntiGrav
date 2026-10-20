@@ -44,9 +44,10 @@ pub struct HoverRig {
     /// The downforce is `-track_gravity * mass` along the normal on any contact, with no
     /// grounded fraction and no magnet-lock fade (Pulse's Zone hover).
     pub downforce_unscaled: Sourced<bool>,
-    /// The trailing 10-unit ray that pulls the craft a quarter of the way down to `3.0` above
-    /// what it hits, every frame (Pulse's Zone hover).
-    pub snap: Sourced<bool>,
+    /// The trailing 10-unit ray that pulls the craft down toward `3.0` above what it hits, every
+    /// frame, closing this share of the gap: Pulse's Zone hover `0.25`, Wipeout HD's `0.5`.
+    /// `None`: no ray.
+    pub snap: Sourced<Option<f32>>,
     /// The craft update skips the brakes in the mode this rig flies (Pulse's Zone).
     pub brakes_off: Sourced<bool>,
 }
