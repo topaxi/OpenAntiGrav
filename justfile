@@ -1051,6 +1051,27 @@ frame-compare theirs ours out="/tmp":
     echo "side-by-side: {{out}}/oag-side.png"
     echo "difference:   {{out}}/oag-diff.png"
 
+# One static page of original-vs-ours pairs: split slider, onion skin, side by side, difference.
+# Output and images stay under data/compare/ (gitignored). `--serve` serves it on the LAN.
+# See docs/tools/compare-page.md.
+#
+#   just compare-page                                  # the seed manifest
+#   just compare-page data/reference/mine.toml --serve
+[doc("Build the original-vs-ours comparison page from a manifest (--serve for the LAN)")]
+compare-page manifest="data/reference/compare-page/seed.toml" *ARGS:
+    python3 scripts/compare-page.py {{manifest}} {{ARGS}}
+
+# Rebuild the seed manifest from the reference sheets under data/reference/.
+[doc("Split the HD lanes' reference sheets into the compare-page seed manifest")]
+compare-seed:
+    python3 scripts/compare-seed.py
+
+# Upload data/compare/ to the separate compare Pages project with wrangler. LOCKED: refuses
+# unless the screenshot-policy ADR's status reads Accepted; never run in CI.
+[doc("Publish the built comparison page (locked until the screenshot-policy ADR is Accepted)")]
+publish-compare:
+    python3 scripts/compare-page.py --publish
+
 # Build the Allegrex processor module against the installed Ghidra.
 # Stock Ghidra mis-decodes PSP vector code; see docs/psp/allegrex-vfpu.md.
 build-allegrex *ARGS:
