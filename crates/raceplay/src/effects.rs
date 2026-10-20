@@ -792,6 +792,46 @@ impl Race {
         }
     }
 
+    /// Ticks of exhaust history a race shot's warm-up lays down: the intensity's full climb
+    /// ([`exhaust::INTENSITY_RISE`] per second from cold) plus a full HD tube, so the plume has
+    /// reached the level a craft already racing holds and both ribbons are full.
+    #[must_use]
+    pub fn field_warm_up_ticks(&self) -> u32 {
+        (1.0 / exhaust::INTENSITY_RISE / self.sim.dt).ceil() as u32 + exhaust::hd::SAMPLES as u32
+    }
+
+    /// Gives every craft the exhaust history of a craft that has been flying at `velocities[slot]`
+    /// - `--field-warmup`, for a race shot of a mid-race frame of the original.
+    ///
+    /// A posed capture runs no tick, so a craft has no trail and a cold plume however fast the
+    /// original's was flying. This replays the exhaust alone (no physics, AI, pad, lap or
+    /// weapon step, no clock) for `ticks` steps, each craft on a straight path that ends exactly
+    /// on the pose it holds now, at its captured velocity, so `trail_head_of` and the drawn hull
+    /// agree and nothing but the exhaust has moved.
+    ///
+    /// **Chosen, not measured:** the straight path and the fixed heading (the original's craft
+    /// had curved), and full thrust for every craft: the player's throttle reads 100 in the
+    /// capture, an opponent's is not read from RAM. The velocities are read.
+    pub fn warm_up_field(&mut self, velocities: &[Vec3], ticks: u32) {
+        let count = (self.sim.world.ship_count as usize).min(velocities.len());
+        let at: Vec<Vec3> = (0..count)
+            .map(|slot| self.sim.world.ships[slot].physics.body.position)
+            .collect();
+        for slot in 0..count {
+            self.view.exhaust[slot] = Exhaust::new();
+            self.view.hd_trail[slot].clear();
+        }
+        for behind in (0..ticks).rev() {
+            for slot in 0..count {
+                let ship = &mut self.sim.world.ships[slot].physics;
+                ship.body.position = at[slot] - velocities[slot] * (self.sim.dt * behind as f32);
+                ship.body.linear_velocity = velocities[slot];
+                ship.thrust = Self::FULL_THRUST;
+            }
+            self.advance_exhausts();
+        }
+    }
+
     /// Runs the circuit's placed effects one step on the scenery clock - see
     /// `race::scenery_fx`.
     pub(super) fn advance_scenery_fx(&mut self, dt: f32) {

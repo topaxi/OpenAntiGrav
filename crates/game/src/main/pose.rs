@@ -93,6 +93,8 @@ pub(crate) fn pose_from_trace(
 pub(crate) struct FieldCraft {
     pub(crate) pose: oag_gameplay::spawn::Pose,
     pub(crate) team: String,
+    /// The `vel_x..vel_z` columns, when the file has them: `--field-warmup` flies the craft at it.
+    pub(crate) velocity: Option<oag_core::math::Vec3>,
 }
 
 /// What `--field-from` carries: the opponents, and the player's own exact pose when the file has a
@@ -101,6 +103,8 @@ pub(crate) struct FieldCraft {
 pub(crate) struct Field {
     /// Slot 0, when present: put the player exactly here, as `--pose-from` would.
     pub(crate) player: Option<oag_gameplay::spawn::Pose>,
+    /// Slot 0's `vel_x..vel_z`, when the file has them.
+    pub(crate) player_velocity: Option<oag_core::math::Vec3>,
     /// Slots 1..=N, the opponents.
     pub(crate) opponents: Vec<FieldCraft>,
 }
@@ -149,6 +153,7 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
     let (slot_at, team_at) = (column("slot")?, column("team")?);
     let mut field = Vec::new();
     let mut player = None;
+    let mut player_velocity = None;
     for (row, line) in lines.enumerate() {
         let cells: Vec<&str> = line.split(',').map(str::trim).collect();
         ensure!(
@@ -178,20 +183,42 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
                 Basis::LeftUpForward,
             ),
         };
+        let velocity = if header.contains(&"vel_x") {
+            Some(vec3(&cells, "vel")?)
+        } else {
+            None
+        };
         if slot == 0 {
             player = Some(pose);
+            player_velocity = velocity;
         } else {
             field.push(FieldCraft {
                 pose,
                 team: cells[team_at].to_string(),
+                velocity,
             });
         }
     }
     ensure!(!field.is_empty(), "{} has no opponent rows", path.display());
     Ok(Field {
         player,
+        player_velocity,
         opponents: field,
     })
+}
+
+impl Field {
+    /// Every craft's velocity in slot order, the player first: what `--field-warmup` flies them at.
+    /// Refused when the file lacks the `vel_*` columns or a player row, because a warm-up with a
+    /// velocity guessed for a craft would be an invented one.
+    pub(crate) fn velocities(&self) -> Result<Vec<oag_core::math::Vec3>> {
+        let missing = "--field-warmup needs the field file's `vel_x,vel_y,vel_z` columns and a slot 0 row for the player";
+        let mut out = vec![self.player_velocity.context(missing)?];
+        for craft in &self.opponents {
+            out.push(craft.velocity.context(missing)?);
+        }
+        Ok(out)
+    }
 }
 
 /// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]`,

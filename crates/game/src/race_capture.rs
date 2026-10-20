@@ -244,6 +244,10 @@ pub struct CaptureOptions {
     /// `--pose-hold`: put ship 0 back on its start pose before the frame is drawn. See
     /// [`pose_hold`].
     pub pose_hold: bool,
+    /// `--field-warmup`: each craft's captured velocity, slot order, the player first. The
+    /// exhaust of every craft is replayed on a straight path to its pose before the frame
+    /// ([`Race::warm_up_field`]).
+    pub field_warmup: Option<Vec<oag_core::math::Vec3>>,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -438,6 +442,9 @@ pub fn capture(
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
     let start_pose = options.pose_hold.then(|| pose_hold::StartPose::of(&race));
+    if let Some(velocities) = &options.field_warmup {
+        race.warm_up_field(velocities, race.field_warm_up_ticks());
+    }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).
     if options.net.is_some() {
