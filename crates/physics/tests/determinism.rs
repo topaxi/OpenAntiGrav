@@ -140,24 +140,30 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   contact with other craft, `Ship_SetState` cases 6 and 7 clearing the collider byte). The
 ///   scripts wreck the craft on the circuit's walls, so the hashed timer is non-zero for 90 ticks
 ///   after the explosion where it used to sit at zero. No field added.
+/// - **2026-10-19, behaviour (all three rows; maintainer-approved physics port).**
+///   `Ship_UpdatePitch`'s in-air `<Misc weight_distribution>` pitch torque, measured on Pulse
+///   (`docs/physics/airborne-ground-truth.md`), on by default (`ShipState::air_pitch_bias`). The
+///   probe's handling authors `weight_distribution 0.5`, so every airborne tick of every script
+///   gains a pitch torque. No field hashed. The parent commit (law off, gate in) reproduced the
+///   previous constants.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
         Script::Corridor,
-        0x7e0e_8ab7_7ca6_7b3b,
-        0x67fa_c2e0_9bb5_db28,
+        0x44f3_ff55_0277_73fd,
+        0x7f67_bcaa_7369_70cd,
     ),
     (
         3_600,
         Script::Corridor,
-        0x0475_b934_4503_366e,
-        0x3812_e781_243b_a589,
+        0xcf38_448d_6d2e_2c5c,
+        0xd462_1a5a_583c_5030,
     ),
     (
         3_600,
         Script::Aerobatic,
-        0xccf3_51b3_110c_e688,
-        0xb42a_a3ee_ed86_25b4,
+        0x5b24_c769_4a27_908f,
+        0x728c_447f_e260_af36,
     ),
 ];
 
