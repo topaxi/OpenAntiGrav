@@ -777,6 +777,7 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     alignment_pitches: oag_title::pre_race::Sourced::measured(false),
     downforce_unscaled: oag_title::pre_race::Sourced::measured(false),
     snap: oag_title::pre_race::Sourced::measured(false),
+    brakes_off: oag_title::pre_race::Sourced::measured(false),
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

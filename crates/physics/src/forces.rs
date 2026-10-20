@@ -503,7 +503,8 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     // 2. Brakes. Called only while the contact flag is set, so groundedness gates the
     //    whole term: braking does nothing in the air.
-    let brakes = if control_contact {
+    //    Zone skips the call outright (`hover::Rig::brakes_off`).
+    let brakes = if control_contact && !state.hover_rig.brakes_off {
         engine::brakes(state, handling)
     } else {
         Vec3::ZERO

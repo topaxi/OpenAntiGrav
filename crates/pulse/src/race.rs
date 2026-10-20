@@ -566,4 +566,7 @@ pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig:
     // `0x0884b824`-`0x0884b9c0`: `n * (3 - d) * 0.25` for `3 < d < 10`, every frame; live
     // exactly on four frames.
     snap: oag_title::pre_race::Sourced::measured(true),
+    // `Ship_UpdateCraft` skips `Ship_UpdateBrakes` on mode 6 (`0x08849ab8`-`0x08849ac4`); live,
+    // never entered with the mode at 6, entered every frame at 1.
+    brakes_off: oag_title::pre_race::Sourced::measured(true),
 };

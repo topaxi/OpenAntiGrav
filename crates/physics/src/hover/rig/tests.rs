@@ -29,6 +29,7 @@ fn four_point() -> Rig {
         align_projects_pitch_out: true,
         downforce_scaled: true,
         snap: false,
+        brakes_off: false,
     }
 }
 
@@ -215,6 +216,7 @@ fn four_corner() -> Rig {
         align_projects_pitch_out: false,
         downforce_scaled: false,
         snap: true,
+        brakes_off: true,
     }
 }
 

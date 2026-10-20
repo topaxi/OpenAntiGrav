@@ -85,6 +85,10 @@ pub struct Rig {
     /// Pulse's Zone hover ends with a 10-unit ray down from the craft's centre and pulls the body
     /// a quarter of the way to `3.0` above whatever it hits ([`super::snap`]).
     pub snap: bool,
+    /// The craft update skips the brakes: `Ship_UpdateCraft` calls `Ship_UpdateBrakes` only outside
+    /// game mode 6 (`0x08849ab8`-`0x08849ac4`), the mode whose hover this rig is. Not a hover
+    /// term, but it is selected by the same mode, so it rides on the mode's rig.
+    pub brakes_off: bool,
 }
 
 impl Rig {
@@ -115,6 +119,7 @@ impl Rig {
         align_projects_pitch_out: true,
         downforce_scaled: true,
         snap: false,
+        brakes_off: false,
     };
 
     /// The probes in use.

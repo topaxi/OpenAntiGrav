@@ -50,6 +50,7 @@ const RIG: HoverRig = HoverRig {
     alignment_pitches: Sourced::measured(false),
     downforce_unscaled: Sourced::measured(false),
     snap: Sourced::measured(false),
+    brakes_off: Sourced::measured(false),
 };
 
 #[test]

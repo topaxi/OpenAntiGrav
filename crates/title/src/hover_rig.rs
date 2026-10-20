@@ -47,4 +47,6 @@ pub struct HoverRig {
     /// The trailing 10-unit ray that pulls the craft a quarter of the way down to `3.0` above
     /// what it hits, every frame (Pulse's Zone hover).
     pub snap: Sourced<bool>,
+    /// The craft update skips the brakes in the mode this rig flies (Pulse's Zone).
+    pub brakes_off: Sourced<bool>,
 }

@@ -71,6 +71,7 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         align_projects_pitch_out: !rig.alignment_pitches.value,
         downforce_scaled: !rig.downforce_unscaled.value,
         snap: rig.snap.value,
+        brakes_off: rig.brakes_off.value,
     }
 }
 
