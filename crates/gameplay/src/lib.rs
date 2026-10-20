@@ -13,6 +13,7 @@
 //! become a determinism hazard. See
 //! `docs/architecture/adr/0003-no-ecs.md`.
 
+pub mod cage;
 pub mod collision;
 pub mod controls;
 pub mod craft;

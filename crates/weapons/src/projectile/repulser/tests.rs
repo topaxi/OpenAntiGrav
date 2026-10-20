@@ -32,6 +32,7 @@ fn circle_course(count: usize) -> oag_race::Course {
                 unk_0x5c: None,
                 unk_0x5d: None,
                 unk_0x66: None,
+                cage: [0; 8],
             }
         })
         .collect();

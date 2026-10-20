@@ -233,6 +233,7 @@ fn padding_draws_the_neighbours_but_not_what_they_see() {
         unk_0x5c: None,
         unk_0x5d: None,
         unk_0x66: None,
+        cage: [0; 8],
     };
     let track = AiTrack {
         version: 0x105,

@@ -22,6 +22,7 @@ fn point(section_id: u8) -> SplinePoint {
         unk_0x5c: None,
         unk_0x5d: None,
         unk_0x66: None,
+        cage: [0; 8],
     }
 }
 

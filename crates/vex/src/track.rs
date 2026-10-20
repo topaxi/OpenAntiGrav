@@ -231,7 +231,21 @@ pub struct SplinePoint {
     /// speed floor when below `35`. Raw: no default is applied. `None` on the
     /// short points, which end at `+0x60`.
     pub unk_0x66: Option<u8>,
+    /// `+0x68..+0x6f`, the collision cage's eight authored offsets, as signed
+    /// bytes. The cage (`FUN_08831aa4`) turns each into `s * |s| * 250` units,
+    /// `s = byte / 127`, around the cross-section's base extents: `+0x68`/`+0x69`
+    /// move the left extreme along `lateral`/`down`, `+0x6a`/`+0x6b` the right,
+    /// `+0x6c`/`+0x6d` the top and `+0x6e`/`+0x6f` the bottom
+    /// (`FUN_08831104`, `FUN_08831288`, `FUN_0883140c`, `FUN_0883158c`). Zero
+    /// before [`CAGE_VERSION`], which the loader forces, and on the short points
+    /// of [`SHORT_POINT_VERSION`] onwards, which end at `+0x60`. See
+    /// `docs/ghidra/functions/psp-pulse-usa/collision-cage.md`.
+    pub cage: [i8; 8],
 }
+
+/// The first spline version whose authored [`SplinePoint::cage`] bytes the
+/// original keeps; older points are zeroed at load (`docs/formats/track.md`).
+pub const CAGE_VERSION: u32 = 0x104;
 
 /// The first spline version whose authored `+0x5c`/`+0x5d` the original
 /// reads; older points are forced to `0xff`/`0x00`.
@@ -564,6 +578,32 @@ pub fn byte_order(payload: &[u8]) -> Option<ByteOrder> {
         .find(|&order| order.u32(payload, 0) == MAGIC)
 }
 
+/// Whether the original runs its collision cage on this track: bit 0 of the header
+/// word at `+0x18`.
+///
+/// `FUN_0887d36c` reads `*(track_object + 4) + 0x18 & 1`, the header this payload is,
+/// and `FUN_08831aa4` turns the cage off for the rest of the race when it is clear.
+/// The word is `1` on every Pulse track and `0` on all 16 Pure ones
+/// (`docs/formats/track.md`). `false` for a payload too short to hold a header.
+#[must_use]
+pub fn cage_flag(payload: &[u8]) -> bool {
+    let Some(order) = byte_order(payload) else {
+        return false;
+    };
+    payload.len() >= HEADER_LEN && u32_at(order, payload, 0x18) & 1 == 1
+}
+
+/// [`cage_flag`] of a whole `.vex` file's `WO Track` node; `false` for a file with none.
+#[must_use]
+pub fn cage_flag_in_vex(data: &[u8]) -> bool {
+    let Ok(nodes) = vex::nodes(data) else {
+        return false;
+    };
+    find_node(data, &nodes)
+        .and_then(|node| data.get(node.payload()))
+        .is_some_and(cage_flag)
+}
+
 /// Whether a payload carries the `WO Track` magic, in either byte order.
 #[must_use]
 pub fn has_magic(payload: &[u8]) -> bool {
@@ -777,6 +817,11 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> Spline
             }
         }),
         unk_0x66: (!short).then(|| payload[at + 0x66]),
+        cage: if (CAGE_VERSION..SHORT_POINT_VERSION).contains(&version) {
+            std::array::from_fn(|i| payload[at + 0x68 + i] as i8)
+        } else {
+            [0; 8]
+        },
     }
 }
 

@@ -659,6 +659,7 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
             unk_0x5c: ai_present(&ai_bytes, i).map(|b| b[0]),
             unk_0x5d: ai_present(&ai_bytes, i).map(|b| b[1]),
             unk_0x66: ai_present(&ai_bytes, i).map(|b| b[2]),
+            cage: [0; 8],
         };
         finite(
             name,
