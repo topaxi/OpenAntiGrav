@@ -81,3 +81,33 @@ fn a_titles_craft_laws_build_its_inertia_and_none_keeps_pulses() {
     assert!((hd.y - 24.0).abs() < 1.0e-3, "I_yy {}", hd.y);
     assert!((hd.x - 17.333).abs() < 1.0e-3, "I_xx {}", hd.x);
 }
+
+/// A title's compiled-in pitch carries its grid damping into the physics' laws, and a title
+/// with none keeps the handling's damping on the grid too (Pulse's).
+#[test]
+fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
+    let laws = |code_pitch| CraftLaws {
+        inertia_mass: Sourced::chosen(0.9),
+        steer_ramp_clamped: Sourced::chosen(false),
+        air_pitch_bias: Sourced::chosen(false),
+        class_gravity_on_flight: Sourced::chosen(false),
+        engine_output_double: Sourced::chosen(true),
+        drag_ground: Sourced::chosen(-0.005),
+        bank_to_yaw: Sourced::chosen(30.0),
+        code_pitch,
+        code_sideshift: None,
+        code_start_boost: None,
+    };
+    let pitch = oag_title::craft_laws::CodePitch {
+        air: 0.1,
+        ground: 0.4,
+        damping: 1.5,
+        grid_damping: 0.6,
+    };
+    assert_eq!(
+        physics_laws(Some(&laws(Some(Sourced::measured(pitch))))).pitch_damping_grid,
+        Some(0.6)
+    );
+    assert_eq!(physics_laws(Some(&laws(None))).pitch_damping_grid, None);
+    assert_eq!(physics_laws(None).pitch_damping_grid, None);
+}

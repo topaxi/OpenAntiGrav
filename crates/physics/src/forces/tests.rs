@@ -682,3 +682,47 @@ fn a_titles_laws_halve_the_thrust_and_the_grounded_drag() {
     assert!(pulse.drag.length() > 0.0);
     assert_eq!(pure.drag * 2.0, pulse.drag);
 }
+
+/// Wipeout Pure damps pitch at `0.6` in the grid state and `1.5` racing
+/// ([`crate::laws::Laws::pitch_damping_grid`], `docs/physics/pure-physics.md`). Pulse's laws keep
+/// the handling's damping on the grid too.
+#[test]
+fn a_titles_grid_pitch_damping_applies_on_the_grid_alone() {
+    let handling = Handling {
+        pitch: crate::params::Pitch {
+            pitch_damping: 1.5,
+            ..test_handling().pitch
+        },
+        ..test_handling()
+    };
+    let world = flat_floor();
+    let pure = crate::laws::Laws {
+        pitch_damping_grid: Some(0.6),
+        ..crate::laws::Laws::PULSE
+    };
+    let frame = |laws: crate::laws::Laws, on_grid: bool| {
+        let mut ship = ship_at(4.0);
+        ship.on_grid = on_grid;
+        ship.body.angular_velocity = Vec3::new(0.5, 0.0, 0.0);
+        let local_x =
+            (ship.body.orientation.inverse() * ship.body.angular_velocity).x * ship.body.inertia.x;
+        let env = Environment {
+            laws,
+            ..Environment::default()
+        };
+        let damping = evaluate(
+            &mut ship,
+            &ShipControls::default(),
+            &handling,
+            &env,
+            &world,
+            1.0 / 60.0,
+        )
+        .angular_damping
+        .x;
+        damping / local_x
+    };
+    assert_eq!(frame(pure, true), -0.6);
+    assert_eq!(frame(pure, false), -1.5);
+    assert_eq!(frame(crate::laws::Laws::PULSE, true), -1.5);
+}

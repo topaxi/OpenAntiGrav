@@ -20,6 +20,12 @@ pub struct Laws {
     /// (`30`), Pure's [`crate::hover::BANK_TO_YAW_GAIN_PURE`] (`50`). The four-corner hover's
     /// `50` is every title's.
     pub bank_to_yaw: f32,
+    /// The pitch damping while the craft is in the grid state ([`crate::ShipState::on_grid`]),
+    /// in place of the racing `pitch_damping`. Pulse's is the racing value throughout
+    /// (`None`). Pure's `Ship_ApplyAngularDamping` (`0x0892cc2c`) damps pitch at `3 / c` with
+    /// `c` the roll coefficient, `-5` on the grid and `-2` racing, so `0.6` on the grid
+    /// against `1.5`: measured live to `2e-6` (`docs/physics/pure-physics.md`).
+    pub pitch_damping_grid: Option<f32>,
 }
 
 impl Laws {
@@ -28,6 +34,7 @@ impl Laws {
         engine_output_double: true,
         drag_ground: crate::passive::DRAG_GROUND,
         bank_to_yaw: crate::hover::BANK_TO_YAW_GAIN,
+        pitch_damping_grid: None,
     };
 }
 

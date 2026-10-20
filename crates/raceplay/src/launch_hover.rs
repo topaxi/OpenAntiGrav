@@ -76,6 +76,7 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
         engine_output_double: laws.engine_output_double.value,
         drag_ground: laws.drag_ground.value,
         bank_to_yaw: laws.bank_to_yaw.value,
+        pitch_damping_grid: laws.code_pitch.map(|pitch| pitch.value.grid_damping),
     })
 }
 

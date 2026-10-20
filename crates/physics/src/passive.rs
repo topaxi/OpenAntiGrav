@@ -201,8 +201,9 @@ pub fn weathervane(forward: Vec3, velocity: Vec3, grounded: bool) -> Vec3 {
 /// angularLocal += (-pitch_damping, -5.0, -2.0) * bodyAngularMomentumLocal
 /// ```
 ///
-/// Only the pitch axis is tunable per ship. `pitch_damping` is negated here and expected
-/// positive in the data, unlike `Brakes.amount`, whose sign is in the parameter.
+/// Only the pitch axis is tunable per ship. `pitch_damping` (the handling's, or a title's grid
+/// value, [`crate::laws::Laws::pitch_damping_grid`]) is negated here and expected positive in
+/// the data, unlike `Brakes.amount`, whose sign is in the parameter.
 ///
 /// # It reads the momentum, not the velocity
 ///
@@ -218,8 +219,8 @@ pub fn weathervane(forward: Vec3, velocity: Vec3, grounded: bool) -> Vec3 {
 /// unchanged; what changes is that the drives are divided by `I` and the damping is not, the
 /// original's arrangement.
 #[must_use]
-pub fn angular_damping(handling: &Handling, local_angular_momentum: Vec3) -> Vec3 {
-    let coefficients = Vec3::new(-handling.pitch.pitch_damping, YAW_DAMPING, ROLL_DAMPING);
+pub fn angular_damping(pitch_damping: f32, local_angular_momentum: Vec3) -> Vec3 {
+    let coefficients = Vec3::new(-pitch_damping, YAW_DAMPING, ROLL_DAMPING);
 
     coefficients * local_angular_momentum
 }

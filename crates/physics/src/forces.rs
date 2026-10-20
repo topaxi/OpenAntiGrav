@@ -682,7 +682,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     // observable (`Accumulators::local_angular`).
     let local_angular_velocity = state.body.orientation.inverse() * state.body.angular_velocity;
     let local_angular_momentum = local_angular_velocity * state.body.inertia;
-    let angular_damping = passive::angular_damping(handling, local_angular_momentum);
+    let pitch_damping = match env.laws.pitch_damping_grid {
+        Some(grid) if state.on_grid => grid,
+        _ => handling.pitch.pitch_damping,
+    };
+    let angular_damping = passive::angular_damping(pitch_damping, local_angular_momentum);
     let rolling_resistance = passive::rolling_resistance(velocity, cached_speed);
     let vertical_damping = passive::vertical_damping(up, velocity, contact_grounded);
 

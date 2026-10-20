@@ -75,4 +75,6 @@ pub struct CodePitch {
     pub ground: f32,
     /// The racing pitch damping (Pulse's `pitch_damping`).
     pub damping: f32,
+    /// The pitch damping in the grid state (`oag_physics::laws::Laws::pitch_damping_grid`).
+    pub grid_damping: f32,
 }

@@ -72,6 +72,7 @@ mod tests {
             air: 0.1,
             ground: 0.4,
             damping: 1.5,
+            grid_damping: 0.6,
         })));
         let stand_in = oag_gameplay::handling::PITCH_STAND_IN;
         let mut handling = oag_physics::Handling {

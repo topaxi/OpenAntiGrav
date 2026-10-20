@@ -132,7 +132,7 @@ fn angular_damping_opposes_rotation_on_every_axis() {
         },
         ..Handling::ZERO
     };
-    let damping = angular_damping(&handling, Vec3::new(1.0, 1.0, 1.0));
+    let damping = angular_damping(handling.pitch.pitch_damping, Vec3::new(1.0, 1.0, 1.0));
 
     assert!(damping.x < 0.0);
     assert!(damping.y < 0.0);
@@ -143,7 +143,7 @@ fn angular_damping_opposes_rotation_on_every_axis() {
 /// in the game, so a zeroed parameter set still damps them.
 #[test]
 fn only_the_pitch_axis_of_the_angular_damping_is_tunable() {
-    let damping = angular_damping(&Handling::ZERO, Vec3::ONE);
+    let damping = angular_damping(Handling::ZERO.pitch.pitch_damping, Vec3::ONE);
     assert_eq!(damping.x, 0.0);
     assert_eq!(damping.y, YAW_DAMPING);
     assert_eq!(damping.z, ROLL_DAMPING);
