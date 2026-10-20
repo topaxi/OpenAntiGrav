@@ -41,7 +41,8 @@ def run(cmd, **kw):
 
 
 def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
-    """The `--pose` yaw (degrees) whose attitude points along `theirs_forward`."""
+    """`(yaw, agreement, up)`: the `--pose` yaw (degrees) whose attitude points along
+    `theirs_forward`, the dot of the two forwards, and our `up` there."""
     base, up = rpcs3_place.our_attitude(oag_game, image, track, list(pos), scratch)
     cross = (base[1] * theirs_forward[2] - base[2] * theirs_forward[1],
              base[2] * theirs_forward[0] - base[0] * theirs_forward[2],
@@ -50,10 +51,10 @@ def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
                                   sum(a * b for a, b in zip(base, theirs_forward))))
     best = None
     for candidate in (yaw, -yaw):
-        fwd, _ = rpcs3_place.our_attitude(oag_game, image, track, list(pos) + [candidate], scratch)
+        fwd, up = rpcs3_place.our_attitude(oag_game, image, track, list(pos) + [candidate], scratch)
         agree = sum(a * b for a, b in zip(fwd, theirs_forward))
         if best is None or agree > best[1]:
-            best = (candidate, agree)
+            best = (candidate, agree, up)
     return best
 
 
@@ -100,8 +101,15 @@ def main():
                XDG_DATA_HOME=str(scratch / "profile/data"),
                XDG_STATE_HOME=str(scratch / "profile/state"))
     os.environ.update(env)
-    yaw, agree = solve_yaw(args.oag_game, args.image, track, pos, forward, scratch)
+    yaw, agree, our_up = solve_yaw(args.oag_game, args.image, track, pos, forward, scratch)
     print("yaw %.3f deg, forward agreement %.6f" % (yaw, agree), file=sys.stderr)
+    # What `--pose` cannot carry: the angle between the original's body up and ours (the
+    # spline's), i.e. the pitch and roll off the track surface, in degrees.
+    theirs_up = ship["rows"][1]
+    dot = sum(a * b for a, b in zip(theirs_up, our_up)) / (
+        math.dist(theirs_up, (0, 0, 0)) * math.dist(our_up, (0, 0, 0)))
+    tilt = math.degrees(math.acos(max(-1.0, min(1.0, dot))))
+    print("attitude not carried (body up vs spline up): %.3f deg" % tilt, file=sys.stderr)
     cam = [camera["eye"], camera["forward"], camera["up"]]
     numbers = ",".join("%.6f" % v for part in cam for v in part)
     pose = "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw)
@@ -119,6 +127,7 @@ def main():
          "-geometry", "+2+2", out / "side.png"])
     (out / "pair.json").write_text(json.dumps(
         {"capture": record, "ours": {"pose": pose, "camera_pose": numbers, "yaw_agreement": agree,
+                                     "uncarried_tilt_deg": tilt,
                                      "command": [str(c) for c in cmd]}}, indent=2) + "\n")
     print("wrote", out / "side.png")
 
