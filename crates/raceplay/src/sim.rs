@@ -139,7 +139,8 @@ pub struct RaceSim {
     pub(super) autopilot_ours: bool,
     /// An opponent on this project's driver flies the original's player
     /// driver while it holds an Autopilot, instead of absorbing it
-    /// ([`Race::set_opponent_autopilot`]). Off by default: a measurement switch.
+    /// ([`Race::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
+    /// the title's per-class rule.
     pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
     pub(super) course: Option<Course>,

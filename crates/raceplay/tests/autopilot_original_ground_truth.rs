@@ -678,3 +678,41 @@ fn cold_locate_sweep() {
         println!("LOCATE {id} located {n} on a route {on_route} wrong {wrong} first {first:?}");
     }
 }
+
+/// The Autopilot's opponent switch is the title's per-class rule
+/// (`oag_title::opponent_autopilot::BELOW_PHANTOM`): an opponent below PHANTOM
+/// flies the pickup, one at PHANTOM absorbs it. Pulse and HD, weapons on.
+/// Fails if a race starts with the switch off below PHANTOM or on at it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_opponent_flies_its_autopilot_below_phantom_only() {
+    for (image, track) in [
+        ("pulse-psp-usa.chd", r"Data\Environments\01_Track\track.vex"),
+        (
+            "hdfury-ps3-eu-dec.iso",
+            "/data/environments/talons_junction/track.vex",
+        ),
+    ] {
+        for (class, flies) in [
+            ("VENOM", true),
+            ("FLASH", true),
+            ("RAPIER", true),
+            ("PHANTOM", false),
+        ] {
+            let Some(path) = oag_testdata::image(image) else {
+                return;
+            };
+            let loaded = oag_raceplay::load(&oag_raceplay::Options {
+                source: path.display().to_string(),
+                class: class.to_string(),
+                mode: oag_race::Mode::SingleRace,
+                track: Some(track.to_string()),
+                seed: Some(1),
+                ..oag_raceplay::Options::default()
+            })
+            .expect("loading the track");
+            let mut race = oag_raceplay::Race::start(loaded.setup);
+            assert_eq!(race.engage_opponent_autopilot(1), flies, "{image} {class}");
+        }
+    }
+}

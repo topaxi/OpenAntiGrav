@@ -54,6 +54,7 @@ pub mod loading;
 pub mod loyalty;
 pub mod main_menu;
 pub mod menu;
+pub mod opponent_autopilot;
 pub mod original_driver;
 pub mod pre_race;
 pub mod pressing;

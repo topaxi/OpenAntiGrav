@@ -360,6 +360,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_handling: None,
     craft_laws: None,
     autopilot_engine: crate::autopilot_engine::MEASURED,
+    opponent_autopilot: crate::opponent_autopilot::ABSORBED,
     original_opponent: false,
     original_driver: None,
     zone_class_announcer: None,

@@ -323,6 +323,7 @@ fn setup(handling: Handling) -> Setup {
         hover_rig: None,
         craft_laws: None,
         autopilot_engine: oag_title::autopilot_engine::MEASURED,
+        opponent_autopilot: false,
         zoom_ring: None,
         zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,

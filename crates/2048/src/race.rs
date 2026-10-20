@@ -69,6 +69,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_handling: None,
     craft_laws: Some(&CRAFT_LAWS),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
+    opponent_autopilot: oag_title::opponent_autopilot::BELOW_PHANTOM,
     // The campaign's events fly the original opponent (the maintainer's AI
     // mode 3); race box and remix keep this project's driver.
     original_opponent: true,
