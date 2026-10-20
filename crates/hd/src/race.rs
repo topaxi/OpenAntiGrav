@@ -865,6 +865,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
+    // HD's Zone (mask `0x206040`) runs the racing `Craft_HoverFourPoint` with its trailing ray
+    // on, and the epilogue's `30` (`0x008a9198`, read at `0x000ee6cc`) is the same either way:
+    // not Pulse's four-corner `50` (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`).
+    bank_to_yaw_zone: oag_title::pre_race::Sourced::measured(30.0),
     // `Body_ResolveContact` (`0x000f7770`) returns at `0x000f7880` when `vn > 0`: four live
     // calls with `vn` 2.6 to 10.4 left the velocity untouched
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 88.
@@ -920,6 +924,16 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's Zone banks into a turn at its racing hover's `30`, read off the executable, not at
+    /// Pulse's four-corner `50`.
+    #[test]
+    fn the_zone_bank_to_yaw_gain_is_hds_own_thirty() {
+        assert_eq!(
+            CRAFT_LAWS.bank_to_yaw_zone,
+            oag_title::pre_race::Sourced::measured(30.0)
+        );
+    }
 
     /// **The two Zone tables cannot drift apart.**
     ///

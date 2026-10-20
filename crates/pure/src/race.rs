@@ -599,6 +599,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // this engine's AI flies it: on, 7 of 12 perturbed samples put Pure's Ace race walls past the
     // worst of the noise distribution (`P 0.002`, `docs/physics/pure-physics.md`).
     bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
+    // Pure's four-corner hover (`0x0892e5b8`) loads `50`, as Pulse's does
+    // (`oag_physics::hover::BANK_TO_YAW_GAIN_PURE`); static read.
+    bank_to_yaw_zone: oag_title::pre_race::Sourced::measured(50.0),
     // Pure's resolver is not read: Pulse's two-sided contact.
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),

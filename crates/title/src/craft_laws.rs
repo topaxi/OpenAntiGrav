@@ -51,6 +51,10 @@ pub struct CraftLaws {
     /// The two-point hover's bank-to-yaw gain, `torque.y += gain * right.y`: Pulse `30`,
     /// Wipeout Pure `50` (`oag_physics::laws::Laws::bank_to_yaw`).
     pub bank_to_yaw: Sourced<f32>,
+    /// The bank-to-yaw gain in a Zone race: Pulse's and Pure's four-corner hovers load `50`,
+    /// Wipeout HD's Zone keeps its racing hover's `30`
+    /// (`oag_physics::laws::Laws::bank_to_yaw_zone`).
+    pub bank_to_yaw_zone: Sourced<f32>,
     /// `Body_ResolveContact` applies no impulse to a wall contact whose point already moves out
     /// (`vn > 0`): Wipeout HD's (`0x000f7770`), measured live. Pulse PSP's is two-sided
     /// (`oag_physics::laws::Laws::wall_one_sided`).

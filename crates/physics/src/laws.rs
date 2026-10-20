@@ -17,9 +17,13 @@ pub struct Laws {
     /// Pure's [`crate::passive::DRAG_GROUND_PURE`].
     pub drag_ground: f32,
     /// The two-point hover's bank-to-yaw gain: Pulse's [`crate::hover::BANK_TO_YAW_GAIN`]
-    /// (`30`), Pure's [`crate::hover::BANK_TO_YAW_GAIN_PURE`] (`50`). The four-corner hover's
-    /// `50` is every title's.
+    /// (`30`), Pure's [`crate::hover::BANK_TO_YAW_GAIN_PURE`] (`50`).
     pub bank_to_yaw: f32,
+    /// The bank-to-yaw gain a Zone craft ([`crate::ShipState::four_corner`]) flies: Pulse's
+    /// and Pure's four-corner hovers load `50` ([`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]);
+    /// Wipeout HD's Zone runs its racing `Craft_HoverFourPoint`, whose epilogue loads `30`
+    /// (`0x008a9198`, `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`).
+    pub bank_to_yaw_zone: f32,
     /// The pitch damping while the craft is in the grid state ([`crate::ShipState::on_grid`]),
     /// in place of the racing `pitch_damping`. Pulse's is the racing value throughout
     /// (`None`). Pure's `Ship_ApplyAngularDamping` (`0x0892cc2c`) damps pitch at `3 / c` with
@@ -68,6 +72,7 @@ impl Laws {
         engine_output_double: true,
         drag_ground: crate::passive::DRAG_GROUND,
         bank_to_yaw: crate::hover::BANK_TO_YAW_GAIN,
+        bank_to_yaw_zone: crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER,
         pitch_damping_grid: None,
         wall_restitution: crate::wall::BODY_RESTITUTION,
         wall_one_sided: false,

@@ -98,6 +98,7 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
         engine_output_double: laws.engine_output_double.value,
         drag_ground: laws.drag_ground.value,
         bank_to_yaw: laws.bank_to_yaw.value,
+        bank_to_yaw_zone: laws.bank_to_yaw_zone.value,
         wall_one_sided: laws.wall_one_sided.value,
         wall_steer_away: laws.wall_steer_away.value,
         wall_point_rate_body_local: laws.wall_point_rate_body_local.value,
