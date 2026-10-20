@@ -141,6 +141,13 @@ from the attribute whose name pointer sits at `sp+0x578`, set to `0x08a7b3cc` at
 So it is `<Special turbo_jump>`. The lift goes into the local accumulator's `.y`
 (`0x0884c990`) and is taken before the launch multiplier and the doubling.
 
+**The AI gets the bit too.** `Ship_UpdateEntity` calls `Ship_UpdateStartBoost` in
+state 1 when `entity+0x368` is `0` (the human) or `2` (every AI craft,
+`0x08841d7c`-`0x08841db8`), so an opponent's Turbo escapes a stun and fades its
+pads as the player's does. The lift's button is a held-mask bit the AI never
+writes (it fills the analog record only), so no opponent lifts: ported as
+`ShipControls::dpad_up`, which only the pad fills.
+
 ## The sideshift gate: `& 0x2`
 
 `Ship_UpdateSideshiftInput_q` (`0x088472bc`) wraps the whole gesture block in
@@ -174,8 +181,9 @@ read.
   four reads (`0x0892f1f8` prologue, `0x0892f298`/`0x0892f2b0` early-return escape,
   `0x0892f52c` turbo add). The pad clock is `craft+0x284` (written `0x0892f210`,
   read twice in `FUN_0892ccd0`). **Checked, applies, ported**: the sideshift gate,
-  the Turbo escape, the pad fade and the lift run on Pure through the same generic
-  code (confidence 75, reads only). `masked 0x1c0 0x2000` returns **zero**, so
+  the Turbo escape, the pad fade and the lift run on Pure (confidence 75, reads
+  only), as the `CraftLaws` axes `sideshift_grid_gate` and `turbo_running_laws`,
+  `measured` on Pure, `inherited` from Pulse on HD and from HD on Omega and 2048. `masked 0x1c0 0x2000` returns **zero**, so
   Pure has no wrong-way kill: **checked, differs** (`CraftLaws::eliminator_wrong_way_kill`
   measured `false`).
 - **HD (PS3):** the flag word is `craft+0x264` (`autopilot.md`) and numbers its bits

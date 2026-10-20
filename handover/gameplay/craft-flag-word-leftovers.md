@@ -22,6 +22,15 @@ Dead in the original and left out on purpose: `0x10`, `0x20`, `0x40`, `0x80`, `0
 - **`craft+0x2a4 == 1`** gates the turbo add and the lift; ours has no racing-state enum.
 - **`Entity_SetGridState`'s other callers** (`FUN_08826044` through two wrappers, and
   `FUN_0889683c` in modes 14 and above) hold a craft in the grid state for a reason not read.
+- **The AI gates moved, inside the noise bar, at its edge.** Failures among the 49
+  `*_original_ai_ground_truth` tests per airborne pitch-torque perturbation (-1e-2 .. 1e-5):
+  off `0 0 1 1 0 0 0 2 0`, on `1 2 0 1 4 2 0 0 0`; 10 against 4. Bounds moved in one
+  commit (Omega Talon's and Pure Vineta K: one destroyed opponent; 2048 Square: two respawns a
+  craft; 2048 Park: one). Per title the rise is Omega and 2048 (pad fade) and Pure (stun
+  escape). Worth a seed-based sweep once the tool from `ai-gates-flip-on-noise.md` exists.
+- **`speedup_pad`'s tilt** reads the pitch axis (`steer_y <= -0.5`) for the same d-pad Up
+  bit the lift now reads from `ShipControls::dpad_up`; so our AI tilts its pad boosts and
+  the original's cannot. Another lane's judgement call, left as it was.
 - **Pure** carries the sideshift gate, the Turbo escape, the pad clock (`craft+0x284`) and the
   lift in the same shape, read but not watched live.
 
