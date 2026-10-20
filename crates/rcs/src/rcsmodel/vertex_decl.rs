@@ -86,6 +86,9 @@ pub const RSX_SHORT: u8 = 5;
 /// before this declaration was.
 pub const RSX_COMPRESSED: u8 = 6;
 
+/// `~crc32("tangent")` - see [`Attribute::name`].
+pub const TANGENT_HASH: u32 = 0xdbe5_f417;
+
 /// One attribute of a vertex, as the declaration spells it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Attribute {
@@ -237,6 +240,20 @@ impl VertexDecl {
             .filter(|a| a.is_texcoord())
             .find(named)
             .or_else(|| self.attributes.iter().find(|a| a.is_texcoord()))
+    }
+
+    /// The attribute named `tangent` (`0xdbe5f417`): four normalised bytes, `xyz`
+    /// a unit vector as `2b - 1` and `w` the byte the vertex program multiplies
+    /// the binormal by (`0` or `255` on every hull measured).
+    ///
+    /// Present on every chunk of every ship hull whose material reads a texture
+    /// as a normal map (`hd_hull_normal_census`: 100 % of 2,000+ chunks), and
+    /// perpendicular to the vertex normal (median `|dot|` 0.004).
+    #[must_use]
+    pub fn tangent(&self) -> Option<&Attribute> {
+        self.attributes.iter().find(|a| {
+            a.name_hash == TANGENT_HASH && a.components == 4 && a.rsx_type == RSX_UBYTE_NORM
+        })
     }
 
     /// The chunk's second diffuse coordinate set, `Uv2`.

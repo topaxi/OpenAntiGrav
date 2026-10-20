@@ -42,6 +42,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
+        material_tangent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -214,6 +215,7 @@ mod merge_tests {
                     specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                     glow: 0.0,
                     texcoord2: [0.0, 0.0],
+                    tangent: 0,
                 })
                 .collect(),
             indices: (0..vertices as u32).collect(),
@@ -244,6 +246,7 @@ mod merge_tests {
             material_specular_exponent: Vec::new(),
             material_colour_factor: Vec::new(),
             material_quake: Vec::new(),
+            material_tangent: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),

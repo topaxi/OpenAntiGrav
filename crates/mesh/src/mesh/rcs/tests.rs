@@ -155,6 +155,8 @@ fn the_report_names_both_kinds_of_absence() {
         vertex_scrolls: 0,
         light_cone_bound: 0,
         probe_lit_bound: 0,
+        hull_normal_bound: 0,
+        hull_normal_unread: 0,
         probe_lit_blocked: 0,
         probe_lit_unread: 0,
         holo_billboard_bound: 0,

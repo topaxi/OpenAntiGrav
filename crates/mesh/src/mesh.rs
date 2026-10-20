@@ -104,6 +104,10 @@ pub struct Model {
     /// program, which is what makes its vertices carry
     /// [`GpuVertex::quake`]. Empty for every title but Wipeout HD.
     pub material_quake: Vec<bool>,
+    /// Per material slot: whether its chunks carry the authored `tangent`
+    /// ([`GpuVertex::tangent`]), because the material's program reads a normal
+    /// map bound third - see `rcs::hull_normal`.
+    pub material_tangent: Vec<bool>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -263,6 +267,7 @@ impl Model {
             material_specular_exponent: Vec::new(),
             material_colour_factor: Vec::new(),
             material_quake: Vec::new(),
+            material_tangent: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),
@@ -730,6 +735,7 @@ fn build_class(
                         specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                         glow: glow::batch_value(&batch, material_texture, &glow_bytes),
                         texcoord2: [0.0, 0.0],
+                        tangent: 0,
                     });
                 }
                 for tri in batch.triangles() {
@@ -884,6 +890,7 @@ fn build_class(
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
+        material_tangent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
 

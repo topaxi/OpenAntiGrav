@@ -245,6 +245,11 @@ pub struct Report {
     /// Hull materials whose `IBL` variant reads the reflection probe, tagged in
     /// the glow table - see `super::probe_lit`.
     pub probe_lit_bound: usize,
+    /// Ship hull materials whose `_n` normal map was bound and whose chunks
+    /// carry their tangent - see `super::hull_normal`.
+    pub hull_normal_bound: usize,
+    /// Hull materials that read a normal map whose picture did not decode.
+    pub hull_normal_unread: usize,
     /// Reflective materials left untagged because their glow index was taken or
     /// the table was full.
     pub probe_lit_blocked: usize,
@@ -430,6 +435,12 @@ impl Report {
         } + &match self.probe_lit_bound {
             0 => String::new(),
             n => format!(", {n} hull material(s) reading the reflection probe"),
+        } + &match self.hull_normal_bound {
+            0 => String::new(),
+            n => format!(", {n} hull material(s) sampling their normal map"),
+        } + &match self.hull_normal_unread {
+            0 => String::new(),
+            n => format!(", {n} hull material(s) whose normal map did not decode (drawn without)"),
         } + &match self.probe_lit_blocked + self.probe_lit_unread {
             0 => String::new(),
             n => format!(

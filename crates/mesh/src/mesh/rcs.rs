@@ -187,6 +187,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 mod cutout;
 mod damage_lights;
 mod holo_billboard;
+mod hull_normal;
 mod isolate;
 mod light_cone;
 mod mag_wave;
@@ -261,6 +262,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
     let material_specular_exponent = &tables.material_specular_exponent;
     let material_colour_factor = &tables.material_colour_factor;
     let material_quake = &tables.material_quake;
+    let material_tangent = &tables.material_tangent;
     let material_anim = &tables.material_anim;
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
@@ -306,6 +308,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
         specular_exponent,
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
         quake: material_quake.get(slot).copied().unwrap_or(false),
+        tangent: material_tangent.get(slot).copied().unwrap_or(false),
         anim,
     }
 }
@@ -368,6 +371,9 @@ struct Geometry<'a> {
     /// split: a chunk bakes into the lightmap atlas **or** its vertices, never
     /// both.
     vertex_light: Option<&'a [[f32; 4]]>,
+    /// The chunk's authored `tangent` bytes, read only where
+    /// [`Surface::tangent`] is set.
+    tangents: Option<&'a [[u8; 4]]>,
     indices: &'a [u16],
     /// Which chunk of the `.rcsmodel` this geometry is, in file order.
     ///
@@ -396,6 +402,9 @@ struct Surface {
     /// Whether the material ships a `StaticQuake` vertex program - see
     /// `GpuVertex::quake`.
     quake: bool,
+    /// Whether the chunk's vertices carry their authored `tangent` - see
+    /// `GpuVertex::tangent` and [`hull_normal`].
+    tangent: bool,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -441,6 +450,24 @@ fn authored(normals: &[[f32; 3]]) -> usize {
         .count()
 }
 
+/// A tangent's four authored bytes, turned by the node transform the vertex
+/// positions went through and packed again (`GpuVertex::tangent`).
+///
+/// The bytes are `2b - 1` on `xyz` and a raw `w`. A rigid node transform
+/// leaves their length alone, so nothing is renormalised, and the identity
+/// (every ship hull measured) returns the file's own bytes exactly. Never `0`:
+/// a unit vector has no all-zero encoding, which is the shader's "no tangent".
+fn baked_tangent(bytes: [u8; 4], to_world: &Mat4) -> u32 {
+    let decoded = |b: u8| f32::from(b) / 255.0 * 2.0 - 1.0;
+    let t = to_world.transform_vector3(Vec3::new(
+        decoded(bytes[0]),
+        decoded(bytes[1]),
+        decoded(bytes[2]),
+    ));
+    let pack = |v: f32| ((v.clamp(-1.0, 1.0) * 0.5 + 0.5) * 255.0).round() as u8;
+    u32::from_le_bytes([pack(t.x), pack(t.y), pack(t.z), bytes[3]])
+}
+
 /// Appends one submesh's geometry to a model, as its own draw call.
 ///
 /// `normals` are the file's own, already decoded; `None` leaves the vertex
@@ -466,6 +493,7 @@ fn emit(
         lightmap_texcoords,
         texcoords2,
         vertex_light,
+        tangents,
         indices,
         chunk,
     } = mesh;
@@ -554,6 +582,10 @@ fn emit(
             specular_exponent: surface.specular_exponent,
             glow: 0.0,
             quake: f32::from(u8::from(surface.quake)),
+            tangent: tangents
+                .and_then(|t| t.get(k))
+                .filter(|_| surface.tangent)
+                .map_or(0, |&bytes| baked_tangent(bytes, &to_world)),
             texcoord2: texcoords2
                 .and_then(|t| t.get(k))
                 .map_or([0.0, 0.0], |&[u, v]| [finite(u), finite(v)]),
@@ -716,6 +748,7 @@ fn build_with_options(
         material_colour_factor,
         material_variants,
         material_quake,
+        material_tangent,
         emissive,
         alpha_test_ref,
         mag_emissive,
@@ -746,6 +779,7 @@ fn build_with_options(
     out.material_specular_exponent = material_specular_exponent;
     out.material_colour_factor = material_colour_factor;
     out.material_quake = material_quake;
+    out.material_tangent = material_tangent;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;
 
@@ -873,6 +907,11 @@ fn build_with_options(
                         ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
                     ),
                 );
+                let tangents = if surface.tangent {
+                    mesh.tangents(model_blob, submesh, stride).ok().flatten()
+                } else {
+                    None
+                };
                 report.authored_normals += normals.as_deref().map_or(0, authored);
                 emit(
                     &mut out,
@@ -883,6 +922,7 @@ fn build_with_options(
                         lightmap_texcoords: lightmap_texcoords.as_deref(),
                         texcoords2: texcoords2.as_deref(),
                         vertex_light: vertex_light.as_deref(),
+                        tangents: tangents.as_deref(),
                         indices: &indices,
                         chunk: u32::try_from(chunk_index).ok(),
                     },

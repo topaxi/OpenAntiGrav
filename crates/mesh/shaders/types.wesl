@@ -311,6 +311,10 @@ struct VertexInput {
     // `1.0` for a surface the Quake's displacement reaches - see
     // `oag_mesh::mesh::GpuVertex::quake` and `quake.wesl`.
     @location(13) quake: f32,
+    // The hull's authored tangent, `Unorm8x4` - see `oag_mesh::mesh::GpuVertex::tangent`.
+    // `xyz` is `2b - 1`, `w` the factor on the binormal; all zero where the
+    // material reads no normal map.
+    @location(14) tangent: vec4<f32>,
 };
 
 struct VertexOutput {
@@ -348,6 +352,9 @@ struct VertexOutput {
     @location(12) spu_light: vec3<f32>,
     // `VertexInput::glow`, flat: a batch stamps one value.
     @location(13) @interpolate(flat) glow: f32,
+    // The hull's tangent in world space in `xyz` (zero where the material has
+    // none) and the binormal's factor in `w` - see `shade.wesl`'s `hull_normal`.
+    @location(14) tangent: vec4<f32>,
 };
 
 // Colour and screen-space velocity together, for the pipelines built against

@@ -6,6 +6,7 @@ import package::bindings::{emissives, env_probe_tex, scene, shadow_sampler, sun_
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::holo::{holo_billboard};
+import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
 import oag_shaders::target::linear_out;
 import package::shading_modes::{colour_is_light, nova_prelit};
@@ -80,6 +81,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if pad_ne {
         pad_ne_texel = textureSample(pad_mask, albedo_sampler, in.texcoord);
         n_lit = pad_normal(pad_ne_texel, n, in.world, in.texcoord);
+    }
+
+    // **A hull's normal map** (`GpuVertex::tangent`, bound third like the pad
+    // mask): the program's own `N = nx T + ny B + nz N0`, with `B = N0 x T * w`.
+    // The mapped normal feeds the sun's `N.L`, the specular's `N.H` and the probe
+    // lookups; a pad takes its own frame above and has no tangent.
+    var n_hull = n;
+    if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
+        n_hull = hull_normal(textureSample(pad_mask, albedo_sampler, in.texcoord), n, in.tangent);
+        n_lit = n_hull;
     }
 
     // The stand-in: two invented directions, kept for every title whose own
@@ -326,7 +337,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
             hull_ambient = probe_tint(textureSampleLevel(
-                env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n)), env_probe_layer(0), 0.0,
+                env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n_hull)), env_probe_layer(0), 0.0,
             ).rgb);
         }
         let lit_sum = select(
@@ -728,7 +739,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         var probe_reflection = vec3<f32>(0.0);
         let probe_entry = in.slots >> 24u;
         if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
-            let r = reflect(-to_eye, n);
+            let r = reflect(-to_eye, n_hull);
             let probe = textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
             ).rgb;

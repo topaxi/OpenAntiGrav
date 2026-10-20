@@ -30,6 +30,9 @@ pub(super) struct MaterialSetup {
     /// program, so the Quake's displacement reaches it - see
     /// [`crate::mesh::GpuVertex::quake`].
     pub(super) material_quake: Vec<bool>,
+    /// Per material slot: whether the hull's chunks carry their tangent - see
+    /// [`super::hull_normal`].
+    pub(super) material_tangent: Vec<bool>,
     pub(super) emissive: Vec<crate::mesh::Emissive>,
     pub(super) alpha_test_ref: Option<f32>,
     /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
@@ -57,6 +60,7 @@ impl MaterialSetup {
             material_colour_factor: model.material_colour_factor.clone(),
             material_variants: model.material_variants.clone(),
             material_quake: model.material_quake.clone(),
+            material_tangent: model.material_tangent.clone(),
             emissive: model.emissive.clone(),
             alpha_test_ref: model.alpha_test_ref,
             mag_emissive: model.pad_masks.clone(),
@@ -189,6 +193,11 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, ice_masks);
+    // A hull's normal map rides the same third binding, and its materials are
+    // none of the families above.
+    let (hull_maps, material_tangent) =
+        super::hull_normal::hull_normal(model, &material_variants, textures, report);
+    super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(
         model,
@@ -236,6 +245,7 @@ pub(super) fn material_setup(
         material_colour_factor,
         material_variants,
         material_quake,
+        material_tangent,
         emissive,
         alpha_test_ref,
         mag_emissive,

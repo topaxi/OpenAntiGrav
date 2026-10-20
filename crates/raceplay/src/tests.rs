@@ -119,6 +119,7 @@ fn model(slots: usize, decoded: usize) -> Model {
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
+        material_tangent: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
