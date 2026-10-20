@@ -175,7 +175,7 @@ fn forces_are_evaluated_once_per_frame_and_not_once_per_sub_step() {
             &raycaster,
             TICK,
         );
-        oag_physics::integrate(&mut state.body, TICK);
+        oag_physics::integrate(&mut state.body, state.inertia_frame, TICK);
     }
     assert_eq!(raycaster.casts.get(), 20);
 }

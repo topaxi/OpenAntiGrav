@@ -164,6 +164,7 @@ impl Race {
         let rig = crate::launch_hover::physics_rig(hover_rig);
         let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         let air_pitch_bias = craft_laws.is_none_or(|laws| laws.air_pitch_bias.value);
+        let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
         let class_gravity_term =
             if craft_laws.is_some_and(|laws| laws.class_gravity_on_flight.value) {
                 oag_physics::passive::ClassGravityTerm::Airborne
@@ -224,6 +225,7 @@ impl Race {
         ship.physics.hover_rig = rig;
         ship.physics.steer_ramp_clamped = steer_ramp_clamped;
         ship.physics.air_pitch_bias = air_pitch_bias;
+        ship.physics.inertia_frame = inertia_frame;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
@@ -451,6 +453,7 @@ impl Race {
                 opponent.physics.hover_rig = rig;
                 opponent.physics.steer_ramp_clamped = steer_ramp_clamped;
                 opponent.physics.air_pitch_bias = air_pitch_bias;
+                opponent.physics.inertia_frame = inertia_frame;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
                 // the race's own and the craft's slot, so the same race fields
@@ -649,6 +652,7 @@ impl Race {
                 hover_rig: rig,
                 steer_ramp_clamped,
                 air_pitch_bias,
+                inertia_frame,
                 autopilot_engine,
                 weapon_pad_glow,
                 leach_drain,

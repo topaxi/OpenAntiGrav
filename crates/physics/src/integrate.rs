@@ -44,7 +44,7 @@ use crate::collide::Raycaster;
 use crate::forces::{self, Environment, Evaluated};
 use crate::hover;
 use crate::params::Handling;
-use crate::ship::{Body, MAX_DT, SUBSTEPS, ShipControls, ShipState};
+use crate::ship::{Body, InertiaFrame, MAX_DT, SUBSTEPS, ShipControls, ShipState};
 use crate::wall;
 
 /// Clamps a measured frame delta to what the original will integrate:
@@ -100,33 +100,34 @@ pub fn clamp_dt(measured_dt: f32) -> f32 {
 /// first. Angular damping is excluded: `tau = -c * w` is a negative multiple of `w` under
 /// either convention, so [`crate::passive::angular_damping`] is right and must not be flipped.
 ///
-/// # Angular integration
+/// # Angular integration, in the title's [`InertiaFrame`]
 ///
-/// Torque is world space and this crate treats the inertia tensor as a body-space diagonal, so
-/// the torque is rotated into the body, divided component-wise and rotated back once, using the
-/// frame's starting orientation. A zero inertia component contributes zero acceleration, not
-/// infinity, so a zeroed parameter set is safe.
+/// Torque is world space. A zero inertia component contributes zero acceleration, not
+/// infinity, so a zeroed parameter set is safe. The diagonal is applied in one of two frames:
 ///
-/// **The original's diagonal is fixed in world axes and this crate declines to follow it:
-/// chosen, not measured.** `Body_Integrate`'s `R I R^T` is only the trip in and out of the frame
-/// its fields are stored in, so the engine multiplies by a world-axis constant, which explains
-/// `100.00 %` of the recorded momentum column on three captures. Not adopted: the gap it was
-/// proposed to close belongs to a different identity with no tensor in it, and it is a
-/// four-site convention change ([`crate::wall`]'s contact denominator and angular response,
-/// here, [`crate::forces::YAW_INVERSE_INERTIA`]) for no measured payoff, moving the committed
-/// reference hash as early as tick 600 of `Corridor`. **A real divergence, carried
-/// knowingly**: at mild bank off a magstrip the original drives attitude through this path with
-/// a world-axis tensor. Measurement, decision and the condition to revisit:
-/// `docs/physics/cornering-ground-truth.md`, "The tensor is a world-axis diagonal". What is here
-/// is not the textbook treatment either: no gyroscopic `omega x (I omega)` term, and the
-/// rotation is evaluated once per frame.
+/// - [`InertiaFrame::World`], Pulse's: `Body_Integrate`'s `R I R^T` is only the trip in and out
+///   of the frame its fields are stored in, so the engine divides a world torque by a
+///   world-axis constant. It explains `100.00 %` of the recorded momentum column on three
+///   Talon's Junction captures (`docs/physics/cornering-ground-truth.md`, "The tensor is a
+///   world-axis diagonal"), and on Fort Gale Black's banked ramp and jump it halves the
+///   one-step yaw and roll residual of the original's own frames and takes an open-loop
+///   rollout's vertical velocity error 30 ticks after lift-off from `12.4` to `1.5`
+///   (`docs/physics/airborne-ground-truth.md`). Confidence 90.
+/// - [`InertiaFrame::Body`], Wipeout HD's: it rotates the body tensor, `body+0x50` read live as
+///   `R I R^T` (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`). The torque is rotated
+///   into the body, divided component-wise and rotated back once, using the frame's starting
+///   orientation.
+///
+/// On a level craft the two agree exactly (`diag(a, b, a)` is yaw-invariant); they part under
+/// pitch and roll. Neither carries a gyroscopic `omega x (I omega)` term, and the rotation is
+/// evaluated once per frame.
 ///
 /// The orientation advances by `q + 0.5 * (omega as a pure quaternion) * q * h` and is
 /// **renormalised every sub-step**: explicit Euler grows a quaternion's norm, and drifting for
 /// three sub-steps would put the error into the next sub-step's `up` axis. `sin`/`cos` of the
 /// angle would be more accurate but transcendentals resolve to the platform's libm, a
 /// portability risk (`docs/architecture/determinism.md`).
-pub fn integrate(body: &mut Body, dt: f32) {
+pub fn integrate(body: &mut Body, frame: InertiaFrame, dt: f32) {
     // A `NaN` or infinite delta is a no-op, not a body full of `NaN`. `clamp_dt` preserves a
     // `NaN` so a broken clock is visible at the boundary; past this point it would poison the
     // snapshot with no way back to its cause.
@@ -140,13 +141,13 @@ pub fn integrate(body: &mut Body, dt: f32) {
         Vec3::ZERO
     };
 
-    let local_torque = body.orientation.inverse() * body.torque;
-    let local_angular_acceleration = Vec3::new(
-        divide_or_zero(local_torque.x, body.inertia.x),
-        divide_or_zero(local_torque.y, body.inertia.y),
-        divide_or_zero(local_torque.z, body.inertia.z),
-    );
-    let angular_acceleration = body.orientation * local_angular_acceleration;
+    let angular_acceleration = match frame {
+        InertiaFrame::World => divide_by_inertia(body.torque, body.inertia),
+        InertiaFrame::Body => {
+            let local_torque = body.orientation.inverse() * body.torque;
+            body.orientation * divide_by_inertia(local_torque, body.inertia)
+        }
+    };
 
     let h = dt / (SUBSTEPS as f32);
 
@@ -167,6 +168,15 @@ pub fn integrate(body: &mut Body, dt: f32) {
         body.orientation = normalise_or_identity(body.orientation + derivative * h);
         body.angular_velocity = angular_velocity + angular_acceleration * h;
     }
+}
+
+/// `torque / inertia` component-wise, a zero axis giving zero.
+fn divide_by_inertia(torque: Vec3, inertia: Vec3) -> Vec3 {
+    Vec3::new(
+        divide_or_zero(torque.x, inertia.x),
+        divide_or_zero(torque.y, inertia.y),
+        divide_or_zero(torque.z, inertia.z),
+    )
 }
 
 /// Component-wise division that treats a zero denominator as a zero result.
@@ -231,7 +241,7 @@ pub fn step<R: Raycaster + ?Sized>(
     let mut evaluated = forces::evaluate(state, controls, handling, env, raycaster, dt);
 
     let before_integration = state.body.position;
-    integrate(&mut state.body, dt);
+    integrate(&mut state.body, state.inertia_frame, dt);
 
     // **Ours, the only mechanism this crate adds rather than reproduces.** The recovered
     // contact test casts downward only, so a hull that crosses a surface between ticks stays
@@ -295,7 +305,7 @@ mod tests {
             force: Vec3::new(0.0, 3.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, 3.0);
+        integrate(&mut body, InertiaFrame::World, 3.0);
 
         // Three sub-steps of h = 1.0 at an acceleration of 3. Position advances by
         // the velocity the sub-step *started* with, so by 0, then 3, then 6: nine
@@ -315,7 +325,7 @@ mod tests {
             ..Body::default()
         };
         let mut after = before;
-        integrate(&mut after, 0.0);
+        integrate(&mut after, InertiaFrame::World, 0.0);
         assert_eq!(after, before);
     }
 
@@ -326,7 +336,7 @@ mod tests {
             ..Body::default()
         };
         let mut after = before;
-        integrate(&mut after, -0.5);
+        integrate(&mut after, InertiaFrame::World, -0.5);
         assert_eq!(after, before);
     }
 
@@ -337,7 +347,7 @@ mod tests {
             force: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, 1.0 / 60.0);
+        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
         assert_eq!(body.linear_velocity, Vec3::ZERO);
         assert!(body.position.is_finite());
     }
@@ -349,7 +359,7 @@ mod tests {
             torque: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, 1.0 / 60.0);
+        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
         assert_eq!(body.angular_velocity, Vec3::ZERO);
         assert_eq!(body.orientation, Quat::IDENTITY);
     }
@@ -361,7 +371,7 @@ mod tests {
             ..Body::default()
         };
         for _ in 0..6000 {
-            integrate(&mut body, 1.0 / 60.0);
+            integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
         }
         assert!(
             (body.orientation.length() - 1.0).abs() < 1e-4,
@@ -376,7 +386,7 @@ mod tests {
             angular_velocity: Vec3::new(0.0, 1.0, 0.0),
             ..Body::default()
         };
-        integrate(&mut body, 1.0 / 60.0);
+        integrate(&mut body, InertiaFrame::World, 1.0 / 60.0);
         assert_eq!(body.angular_velocity, Vec3::new(0.0, 1.0, 0.0));
     }
 
@@ -391,11 +401,11 @@ mod tests {
         };
 
         let mut one_frame = start;
-        integrate(&mut one_frame, 0.03);
+        integrate(&mut one_frame, InertiaFrame::World, 0.03);
 
         let mut three_frames = start;
         for _ in 0..3 {
-            integrate(&mut three_frames, 0.01);
+            integrate(&mut three_frames, InertiaFrame::World, 0.01);
         }
 
         assert_ne!(one_frame.position, three_frames.position);
