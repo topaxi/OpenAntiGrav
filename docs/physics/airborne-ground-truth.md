@@ -138,9 +138,10 @@ per-title law.
 
 **On (2026-10-20), a per-title craft law** (`oag_physics::InertiaFrame`,
 `oag_title::craft_laws::CraftLaws::inertia_rotates`): Pulse and the PS2 world axes, measured;
-HD rotated, measured; Omega and 2048 inherit HD's; Pure rotated, chosen, unchanged until a
-`pure-physics` lane measures it (with Pulse's frame Pure's opponent stint walls rose
-`69 -> 541`). It was ported and held twice (`9a2c5b017`, held by `c6116853b`) because this
+HD rotated, measured; Omega and 2048 inherit HD's; Pure world axes since 2026-10-21, read off
+its own `Body_Integrate` (Pulse's instruction sequence,
+[pure-physics.md](pure-physics.md#the-inertia-frame-is-pulses-world-axes-2026-10-21-deviations-to-original));
+it flew HD's rotated frame by choice before. It was ported and held twice (`9a2c5b017`, held by `c6116853b`) because this
 engine's own AI gates regressed under it; how they were judged, and what was changed in our
 AI, is [below](#our-ai-against-the-air-laws).
 

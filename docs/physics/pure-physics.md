@@ -289,8 +289,36 @@ Pure's pad is now the race's own driver for the player's craft (`Race::autopilot
 held laws and `2234`-`2250` with the laws on. The tampered stick is still caught at tick `420`.
 Pulse, HD and 2048 keep the bare pad. The bare driver's pin is open for the driver lane.
 
-The inertia frame is Pulse's: the integrator is the same code (above), so Pure's world-axis
-tensor is held with Pulse's ([airborne-ground-truth.md](airborne-ground-truth.md)).
+## The inertia frame is Pulse's world axes (2026-10-21, `deviations-to-original`)
+
+Pure's `Body_Integrate` (`0x089345e8`) against Pulse's (`0x0884e230`), read off both
+disassemblies: the same 87-instruction loop. It loads the body's inertia block (`body+0x40`) into
+a matrix (Pulse `E700`, Pure `E600`), forms `M200 * (I * basis)`, stores it to `body+0x80`, and
+takes the angular rate from that product times the momentum (`vtfm3.t C310,E600,C510`, Pulse
+`0x0884e39c`, Pure `0x08934774`). The differences are the register bank, Pure's body offsets
+`0x40` higher from the velocity on (`+0x180`/`+0x190`/`+0x1a0` against `+0x140`/`+0x150`/`+0x160`),
+Pulse's step counter (`0x08ab0e98`, which Pure lacks), and two cosmetic stores (Pulse zeroes the
+`w` of `body+0x90` and the translation row of the inverse basis at `body+0xc0`; Pure leaves them).
+None touches the rate. So Pure's tensor frame is whatever Pulse's is, and Pulse's is world-axis,
+measured ([airborne-ground-truth.md](airborne-ground-truth.md#the-tensor-is-applied-in-world-axes-measured-dynamically),
+confidence 90). **Confidence 85** for Pure: a full instruction match on Pure's own binary to a law
+measured on Pulse's; no Pure capture separates the frames (a flat-ground run cannot: the `(12, 8,
+12)` diagonal commutes with a yaw).
+
+**On** (`CraftLaws::inertia_rotates` `measured(false)`); it was `chosen(true)`, HD's rotated frame,
+because the world-axis frame once raised Pure's opponent stint walls `69 -> 541`. On today's tree,
+with every other Pure law on, it does not. Eight seeds, unperturbed:
+
+| Metric | Rotated (before) | World-axis (after) |
+| --- | ---: | ---: |
+| Race walls, novice / Ace (`races_others`, field alone) | `780` / `2058` | `767` / `1860` |
+| Wrecks, novice / Ace | `0` / `3` | `0` / `0` (Ace one respawn) |
+| Per-lap shield, novice / Ace | `87.4` / `68.5` | `92.2` / `73.4` |
+| End-of-run shield, novice / Ace | `84.2` / `57.4` | `90.4` / `66.2` |
+| Stint walls A (our driver), novice / Ace (`opponent_autopilot_sweep::pure`) | `70` / `74` | `40` / `113` |
+| Stint walls B (the original's driver), novice / Ace | `5` / `6` | `1` / `0` |
+
+The Pulse lone-craft gate stays twelve of twelve clean and HD's twelve lone opponents pass.
 
 ## Cross-title
 
