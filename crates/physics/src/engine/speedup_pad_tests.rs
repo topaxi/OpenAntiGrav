@@ -1,7 +1,9 @@
 //! What the speed-up pad boost in [`super`] is asserted to do. Split out of `engine.rs` under the
 //! 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
-use super::{PAD_RAMP_FLOOR, PAD_RAMP_RATE, SPEEDPAD_JUMP_THRESHOLD, speedup_pad};
+use super::{
+    PAD_RAMP_FLOOR, PAD_RAMP_RATE, SPEEDPAD_JUMP_THRESHOLD, advance_pad_fade, speedup_pad,
+};
 use crate::params::{Handling, SpeedupPads};
 use crate::ship::{ShipControls, ShipState};
 use oag_core::math::Vec3;
@@ -229,4 +231,54 @@ fn a_zero_jump_changes_nothing() {
             DT
         )
     );
+}
+
+/// A pad gives nothing while a Turbo runs and fades back in over the second after it
+/// (`craft+0x2cc`, reset under `craft+0x1c0 & 0x200`). Fails if the scale or the clock is
+/// dropped: a running Turbo would get the pad's full force.
+#[test]
+fn a_pad_gives_nothing_under_a_turbo_and_fades_back_in_over_a_second() {
+    let handling = Handling {
+        speedup_pads: SpeedupPads {
+            amount: 2.0,
+            time: 0.05,
+        },
+        ..Handling::ZERO
+    };
+    let full = {
+        let mut state = ShipState::default();
+        advance_pad_fade(&mut state, DT);
+        speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT).length()
+    };
+    assert!(full > 0.0);
+
+    let mut state = ShipState {
+        turbo_timer: 0.5,
+        ..ShipState::default()
+    };
+    advance_pad_fade(&mut state, DT);
+    assert_eq!(state.pad_fade_clock, 0.0);
+    assert_eq!(
+        speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT),
+        Vec3::ZERO,
+        "no pad force while the Turbo runs"
+    );
+
+    state.turbo_timer = 0.0;
+    for _ in 0..30 {
+        advance_pad_fade(&mut state, DT);
+    }
+    let half = speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT).length();
+    assert!(
+        (half - full * state.pad_fade_clock).abs() < 1e-5,
+        "{half} vs {full}"
+    );
+    assert!(state.pad_fade_clock > 0.45 && state.pad_fade_clock < 0.55);
+
+    for _ in 0..40 {
+        advance_pad_fade(&mut state, DT);
+    }
+    assert_eq!(state.pad_fade_clock, 1.0, "clamped at one second");
+    let back = speedup_pad(&mut state, &centred(), &handling, UP, Some(Vec3::NEG_Z), DT).length();
+    assert_eq!(back, full);
 }

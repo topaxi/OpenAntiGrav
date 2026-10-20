@@ -560,7 +560,10 @@ fn no_sideshift_gesture_is_read_on_the_grid() {
     };
     tap(&mut state, true, 4);
     tap(&mut state, true, 0);
-    assert_eq!(state.shift_tap_windows[0], 0.0, "no tap window opens on the grid");
+    assert_eq!(
+        state.shift_tap_windows[0], 0.0,
+        "no tap window opens on the grid"
+    );
     assert_eq!(state.sideshift_timers, [0.0, 0.0]);
     flick(&mut state, 0.0);
     assert!(!state.shift_armed, "the flick does not arm on the grid");
@@ -568,7 +571,10 @@ fn no_sideshift_gesture_is_read_on_the_grid() {
     state.on_grid = false;
     tap(&mut state, true, 4);
     tap(&mut state, true, 0);
-    assert_eq!(state.sideshift_timers[0], SIDESHIFT_DURATION, "released, the same taps shift");
+    assert_eq!(
+        state.sideshift_timers[0], SIDESHIFT_DURATION,
+        "released, the same taps shift"
+    );
 }
 
 /// The window closes, and a slow second tap opens a new one instead.

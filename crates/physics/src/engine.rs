@@ -314,6 +314,21 @@ pub fn advance_turbo(state: &mut ShipState, dt: f32) {
     state.turbo_timer = (state.turbo_timer - dt).max(0.0);
 }
 
+/// Runs the speed-pad fade clock, [`ShipState::pad_fade_clock`]: `0.0` while a Turbo runs,
+/// otherwise `+ dt`, clamped at `1.0`.
+///
+/// `Ship_UpdateEngine`'s first act (`0x0884c5cc`-`0x0884c5f4`), before its early return, so
+/// a stunned craft's clock still runs. Called from [`crate::forces::evaluate`] just before
+/// [`engine`], and so before [`speedup_pad`] reads it the same tick, as in the original's
+/// `Ship_UpdateCraft`.
+pub fn advance_pad_fade(state: &mut ShipState, dt: f32) {
+    state.pad_fade_clock = if state.turbo_timer > 0.0 {
+        0.0
+    } else {
+        (state.pad_fade_clock + dt).min(1.0)
+    };
+}
+
 /// The brake, as a world-space force.
 ///
 /// ```text
@@ -543,15 +558,15 @@ pub const SPEEDPAD_JUMP_THRESHOLD: f32 = 0.5;
 /// `steer_y <= -threshold`. Backwards would tilt the boost upward whenever the player
 /// pitches down, behaviour that looks deliberate (see `crate::controls`' module docs).
 ///
-/// # Deliberately not here: the `craft+0x2cc` scale
+/// # The fade after a Turbo: `craft+0x2cc`
 ///
-/// `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, a one-second fade-in. `craft+0x2cc` is
-/// written only in `Ship_UpdateEngine`'s prologue (`flags & 0x200 ? 0.0 : craft+0x2cc +
-/// dt`), so it is **seconds since flag `0x200` was last set**, one of the eleven
-/// undecoded bits of `craft+0x1c0`; it is not the contact ratio an earlier reading assumed
-/// (an unbounded accumulator cannot be a groundedness). Omitting it gives full strength
-/// from the first tick, which the trace measures: `0x200` is evidently clear during
-/// ordinary racing.
+/// `if (craft+0x2cc < 1.0) f *= craft+0x2cc`, after the speed-pad-jump tilt and before the
+/// scale onto the direction. `craft+0x2cc` is [`ShipState::pad_fade_clock`], seconds since
+/// the Turbo pickup's running bit `0x200` was last set ([`advance_pad_fade`]); it is not the
+/// contact ratio an earlier reading assumed. So a pad gives nothing while a Turbo runs and
+/// fades back in linearly over the next second. Ordinary racing never sees it, which is
+/// what the pad traces measured at full strength. Confidence 85 (the multiply read in the
+/// decompile; the clock and the bit live).
 pub fn speedup_pad(
     state: &mut ShipState,
     controls: &ShipControls,
@@ -590,6 +605,11 @@ pub fn speedup_pad(
         state.pad_direction + up * handling.speedpad_jump
     } else {
         state.pad_direction
+    };
+    let force = if state.pad_fade_clock < 1.0 {
+        force * state.pad_fade_clock
+    } else {
+        force
     };
 
     direction * force

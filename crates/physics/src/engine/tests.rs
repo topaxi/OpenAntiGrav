@@ -159,7 +159,16 @@ fn a_weapon_slowed_ship_produces_no_thrust_either() {
 fn a_running_turbo_keeps_the_engine_through_a_stun_and_a_slowdown() {
     let handling = test_handling();
     let run = |state: &ShipState| {
-        engine(state, &handling, 1.0, 24.0, None, 1.0, EngineFlags::default()).thrust
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+        .thrust
     };
     for (stun, slow) in [(0.5, 0.0), (0.0, 1.0)] {
         let mut state = ship_moving_forward(24.0);

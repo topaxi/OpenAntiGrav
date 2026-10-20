@@ -475,7 +475,9 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 
     let mut acc = Accumulators::default();
 
-    // 1. Engine, into the local force accumulator.
+    // 1. Engine, into the local force accumulator. Its prologue runs the pad fade clock
+    //    first, ahead of the early return.
+    engine::advance_pad_fade(state, dt);
     let engine_force = engine::engine(
         state,
         handling,

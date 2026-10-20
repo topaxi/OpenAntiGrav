@@ -606,6 +606,22 @@ pub struct ShipState {
     /// force law. The *inventory* is not here, because it is an
     /// `oag_tables::weapons::Weapon` and this crate depends on nothing but `oag-core`.
     pub turbo_timer: f32,
+    /// Seconds since a Turbo pickup last ran, `craft+0x2cc`, clamped at `1.0`.
+    ///
+    /// `Ship_UpdateEngine`'s prologue (`0x0884c5cc`-`0x0884c5f4`) writes
+    /// `craft+0x2cc = (craft+0x1c0 & 0x200) ? 0.0 : craft+0x2cc + dt` every frame, and
+    /// `Ship_ApplySpeedupPad` scales the pad force by it while it is below `1.0`, so a pad
+    /// gives nothing while a Turbo runs and fades back in over the second after it ends.
+    /// Bit `0x200` is the Turbo pickup's running bit ([`Self::turbo_timer`]); read live on
+    /// Pulse PSP 2026-10-20 (the clock held at `0.0` for the 47 frames the bit was set and
+    /// counted from `0.017` the frame it cleared). See [`crate::engine::advance_pad_fade`].
+    ///
+    /// **Two choices, neither observable:** the clamp at `1.0` (the original's accumulator
+    /// is unbounded and only ever compared against `1.0`), and the default of `1.0` where
+    /// `Ship_InitCraft` writes `0.0` (`0x08849524`): every race places its craft more than
+    /// a second before the release and a craft cannot reach a pad on the grid. Hashed only
+    /// while below `1.0`, so a run that never fires a Turbo hashes as it did before.
+    pub pad_fade_clock: f32,
     /// Seconds left on a fired Shield pickup.
     ///
     /// While positive the craft takes no damage: [`crate::damage::apply_contact`] returns
@@ -691,6 +707,7 @@ impl Default for ShipState {
             craft_state: crate::damage::CraftState::Racing,
             state_timer: 0.0,
             turbo_timer: 0.0,
+            pad_fade_clock: 1.0,
             shield_pickup_timer: 0.0,
             pilot_assist: crate::pilot_assist::State::default(),
         }
