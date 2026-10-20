@@ -105,7 +105,8 @@ loop: the moves **sum**. Ours took the largest alone (a choice, for Pulse's two 
 
 **Live.** One `oag_physics::step` per row of an RPCS3 capture of the original's Autopilot on
 Ubermall PHANTOM (Feisar, rows 400-1260, `crates/raceplay/tests/hd_air_pose_walk.rs` with
-`OAG_HD_DIAG=1`): 87 of 447 rows escape. Our position residual along up on those rows fit
+`OAG_HD_DIAG=1`, `OAG_HD_AIR=data/reference/hd-hover-residual/ubermall-phantom-autopilot.csv
+OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1`): 87 of 447 rows escape. Our position residual along up on those rows fit
 `dp_up = -0.954 * (sum - max) + 0.015`, correlation `-0.996`, where `sum - max` is what summing
 adds. Ported as `oag_title::hover_rig::HoverRig::sum_escapes` (HD measured `true`), carried into
 `oag_physics::hover::Rig::sum_escapes`:
