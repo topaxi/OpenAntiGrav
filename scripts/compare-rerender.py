@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
-"""Re-render OURS of every recorded comparison pair with the current oag-game build, in place, no emulator.
+"""Re-make comparison pairs in place from the emulator's own savestate, so ours always takes its pose from the original.
 
     just compare-rerender [--only <substring>] [DIR]       # DIR default data/reference/compare-page
 
-For each `pair.json` (written by psp-pulse-pair.py, rpcs3-hd-pair.py, pcsx2-pulse-pair.py) this re-runs
-`ours.flags` with the current build: the pose CSV is the pair's own stored `trace-corrected.csv` / `state-row.csv`
-(a path in the flags is resolved by its file name inside the pair's directory, so the command works from any
-worktree), the tick count is `ours.ticks`, and the heading is NOT re-solved. `theirs.png` and the `original` block
-are untouched. The checks that need only ours are re-run (settings read back, image size, pose at the rendered tick
-against the stored original pose); a pair that fails is named, keeps its old `ours.png` and the exit status counts
-it. `--recapture-original` first re-runs the emulator side (see its help). On success `ours.png` and `side.png` are rewritten and `ours.binary` and `rerendered_at` updated.
+The pose, camera and race clock are NEVER taken from a stored `pair.json` or a stored CSV: for each pair this
+re-runs the pair script with the arguments recorded in `pair.json` (`argv`) into a scratch directory, which loads
+the savestate in the emulator, reads the ship pose, camera and race clock out of RAM fresh, derives the pose row
+and the heading correction from that read, renders ours with the CURRENT oag-game, runs every environment and
+parity check, and captures `theirs.png`. The emulator must be up exactly as when the pair was made (PPSSPP started
+with the profile's ini, PCSX2 booted with `OAG_COMPARE_PLATFORM`, RPCS3 restored into the state with `--restart`;
+docs/tools/compare-page.md, "Capturing a pair per title").
+
+On success `theirs.png`, `ours.png`, `side.png`, the pose CSVs and `pair.json` are replaced and the stored values
+become a record: `previous` in the new `pair.json` holds the old pose, camera, clock and binary, and `drift`
+the differences (ship position, heading, camera, clock, and the RMSE between the old and new `theirs.png`); a drift
+beyond the profile's tolerance is printed as a WARNING. A pair whose fresh run is refused by a check is named, keeps
+its old files, and counts in the exit status.
 """
 
 import argparse
 import datetime
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,150 +33,76 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 
-
-def resolve_flags(flags, pair_dir):
-    """The recorded flags with every path-looking token mapped to the file of that name in the pair's directory;
-    `--ticks N` pairs are dropped (re-added from `ours.ticks`)."""
-    out, skip = [], False
-    for i, tok in enumerate(flags):
-        if skip:
-            skip = False
-            continue
-        if tok == "--ticks":
-            skip = True
-            continue
-        if "/" in tok and not tok.startswith("-"):
-            here = pair_dir / Path(tok).name
-            tok = str(here) if here.exists() else tok
-        elif tok.startswith("--pose-from="):
-            tok = tok
-        out.append(tok)
-    return out
+RUNNER = ["uv", "run", "--with", "websocket-client", "--with", "evdev", "--with", "python-xlib", "python3"]
 
 
-def recapture(pj, rec):
-    """Run the pair's own script again into a scratch directory and, when the new capture's pose, camera and
-    clock are the stored ones within the profile's tolerances, replace `theirs.png` and record the drift.
-    Returns a list of problems (empty: replaced)."""
+def camera_of(c):
+    if not c:
+        return None
+    return (c.get("pos") or c.get("eye"), c.get("fwd") or c.get("forward"))
+
+
+def drift_of(old, new, tol):
+    out, warn = {}, []
+    if old.get("pose") and new.get("pose"):
+        out["ship_units"] = ce.math.dist(old["pose"]["pos"], new["pose"]["pos"])
+        out["ship_heading_deg"] = ce.vec_angle(old["pose"]["fwd"], new["pose"]["fwd"])
+        if out["ship_units"] > tol["pos_units"] or out["ship_heading_deg"] > tol["heading_deg"]:
+            warn.append("ship pose moved %.3f units, %.3f deg" % (out["ship_units"], out["ship_heading_deg"]))
+    oc, nc = camera_of(old.get("camera")), camera_of(new.get("camera"))
+    if oc and nc:
+        out["camera_units"] = ce.math.dist(oc[0], nc[0])
+        out["camera_heading_deg"] = ce.vec_angle(oc[1], nc[1])
+        if out["camera_units"] > tol["camera_pos_units"] or out["camera_heading_deg"] > tol["heading_deg"]:
+            warn.append("camera moved %.3f units, %.3f deg" % (out["camera_units"], out["camera_heading_deg"]))
+    if old.get("race_clock_s") is not None and new.get("race_clock_s") is not None:
+        out["race_clock_s"] = new["race_clock_s"] - old["race_clock_s"]
+    return out, warn
+
+
+def remake(pj):
+    rec = json.loads(pj.read_text())
     argv = rec.get("argv")
     if not argv:
-        return ["pair.json has no argv (made before recapture was recorded)"]
+        return ["pair.json has no argv (made before it was recorded)"], []
     plat = ce.platform(rec["profile"])
-    tol = plat["tolerance"]
-    tmp = Path(tempfile.mkdtemp(prefix="recapture-", dir=pj.parent))
-    cmd = [sys.executable if argv[0].endswith(".py") else argv[0]]
+    tmp = Path(tempfile.mkdtemp(prefix="rerender-", dir=pj.parent.parent))
     args = list(argv)
-    if "--out" in args:
-        args[args.index("--out") + 1] = str(tmp)
-    cmd = [str(HERE / args[0])] + args[1:]
-    runner = ["uv", "run", "--with", "websocket-client", "--with", "evdev", "--with", "python-xlib", "python3"]
-    subprocess.run(runner + cmd, capture_output=True, text=True)
+    args[args.index("--out") + 1] = str(tmp)
+    done = subprocess.run(RUNNER + [str(HERE / args[0])] + args[1:], capture_output=True, text=True)
     new_pj = tmp / "pair.json"
-    if not new_pj.exists():
-        return ["the recapture wrote no pair.json (emulator not up in the pair's state?)"]
-    new = json.loads(new_pj.read_text())["original"]
-    old = rec["original"]
-    problems = []
-    if "pose" in new and "pose" in old:
-        d = ce.math.dist(new["pose"]["pos"], old["pose"]["pos"])
-        a = ce.vec_angle(new["pose"]["fwd"], old["pose"]["fwd"])
-        if d > tol["pos_units"] or a > tol["heading_deg"]:
-            problems.append("the new ship pose is %.3f units and %.3f deg from the stored one" % (d, a))
-    else:
-        problems.append("no original pose in the recapture")
-    oc, nc = old.get("camera"), new.get("camera")
-    if oc and nc:
-        def cam(c):
-            return (c.get("pos") or c.get("eye"), c.get("fwd") or c.get("forward"))
-        (op, of), (np_, nf) = cam(oc), cam(nc)
-        if ce.math.dist(op, np_) > tol["camera_pos_units"] or ce.vec_angle(of, nf) > tol["heading_deg"]:
-            problems.append("the new camera is %.3f units and %.3f deg from the stored one"
-                            % (ce.math.dist(op, np_), ce.vec_angle(of, nf)))
-    elif bool(oc) != bool(nc):
-        problems.append("a camera is recorded on only one side")
-    if old.get("race_clock_s") is not None and new.get("race_clock_s") is not None \
-            and abs(old["race_clock_s"] - new["race_clock_s"]) > 0.25:
-        problems.append("the new race clock %.2f s differs from the stored %.2f s (ours would be at another phase)"
-                        % (new["race_clock_s"], old["race_clock_s"]))
-    if problems:
-        return problems
-    out = subprocess.run(["compare", "-metric", "RMSE", str(pj.parent / "theirs.png"), str(tmp / "theirs.png"), "null:"],
+    if not new_pj.exists() or json.loads(new_pj.read_text()).get("refused"):
+        why = [ln for ln in done.stderr.splitlines() if ln.startswith(("REFUSED", "MISMATCH"))] or done.stderr.splitlines()[-1:]
+        shutil.rmtree(tmp, ignore_errors=True)
+        return ["the fresh run was refused or failed (old files kept): " + " | ".join(why)], []
+    new = json.loads(new_pj.read_text())
+    drift, warn = drift_of(rec["original"], new["original"], plat["tolerance"])
+    cmp = subprocess.run(["compare", "-metric", "RMSE", str(pj.parent / "theirs.png"), str(tmp / "theirs.png"), "null:"],
                          capture_output=True, text=True)
-    os.replace(tmp / "theirs.png", pj.parent / "theirs.png")
-    rec["original"]["recapture"] = {"at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-                                    "rmse_against_previous": out.stderr.strip(), "pose_drift_units": d,
-                                    "emulator": new.get("emulator")}
-    import shutil
+    drift["theirs_rmse_vs_previous"] = cmp.stderr.strip()
+    new["previous"] = {"original": {k: rec["original"].get(k) for k in ("pose", "camera", "race_clock_s", "emulator")},
+                       "ours_binary": rec["ours"].get("binary"), "rerendered_from": rec.get("rerendered_at")}
+    new["drift"] = drift
+    new["rerendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    new["argv"] = rec["argv"]
+    new["argv"][new["argv"].index("--out") + 1] = str(pj.parent)
+    new_pj.write_text(json.dumps(new, indent=2) + "\n")
+    # the new run's files replace the old ones, the scratch shots directory included
+    for f in tmp.iterdir():
+        dst = pj.parent / f.name
+        if dst.is_dir():
+            shutil.rmtree(dst)
+        elif dst.exists():
+            dst.unlink()
+        shutil.move(str(f), str(dst))
     shutil.rmtree(tmp, ignore_errors=True)
-    pj.write_text(json.dumps(rec, indent=2) + "\n")
-    return []
-
-
-def rerender(pj, oag, profile_root, recapture_original=False):
-    rec = json.loads(pj.read_text())
-    pair_dir = pj.parent
-    if recapture_original:
-        problems = recapture(pj, rec)
-        if problems:
-            return ["recapture refused, old images kept: " + "; ".join(problems)]
-        rec = json.loads(pj.read_text())
-    plat = ce.platform(rec["profile"])
-    image = ROOT / plat["image"]
-    flags = resolve_flags(rec["ours"]["flags"], pair_dir)
-    ticks = rec["ours"]["ticks"]
-    profile = profile_root / rec["profile"]
-    ce.write_ours_settings(plat, profile)
-    env = dict(os.environ, **ce.ours_env(profile))
-    new_png = pair_dir / "ours.new.png"
-    csv = pair_dir / "ours-rerender-trace.csv"
-    base = [str(oag), str(image)] + flags
-    problems = []
-    for tail in (["--ticks", str(ticks), "--screenshot", str(new_png)],
-                 ["--ticks", str(ticks + 1), "--trace-out", str(csv)]):
-        done = subprocess.run(base + tail, env=env, capture_output=True, text=True)
-        if done.returncode:
-            return ["oag-game failed: " + done.stderr.strip().splitlines()[-1]]
-    got, bad = ce.read_back(plat, profile)
-    problems += bad
-    size = ce.image_size(new_png)
-    if size != list(plat["output"]):
-        problems.append("ours image is %dx%d, profile %s" % (size[0], size[1], ce.size_text(plat)))
-    row = ce.pose_of(ce.csv_row(csv, ticks))
-    theirs = rec["original"]["pose"]
-    tol = plat["tolerance"]
-    d = ce.math.dist(theirs["pos"], row["pos"])
-    a = ce.vec_angle(theirs["fwd"], row["fwd"])
-    if d > tol["pos_units"]:
-        problems.append("ship %.3f units off at the rendered tick (tolerance %.2f)" % (d, tol["pos_units"]))
-    if a > tol["heading_deg"]:
-        problems.append("heading %.3f deg off at the rendered tick (tolerance %.2f)" % (a, tol["heading_deg"]))
-    if problems:
-        new_png.unlink(missing_ok=True)
-        return problems
-    os.replace(new_png, pair_dir / "ours.png")
-    subprocess.run(["magick", "montage", str(pair_dir / "theirs.png"), str(pair_dir / "ours.png"), "-tile", "2x1",
-                    "-geometry", "+2+2", str(pair_dir / "side.png")], check=True)
-    rec["ours"]["binary"] = ce.binary_record(oag)
-    rec["ours"]["settings_readback"] = got
-    rec["ours"]["pose"] = row
-    rec["rerendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-    rec["rerender_checks"] = {"pos_units": d, "heading_deg": a, "image_size": size}
-    rec["environment"] = ce.environment_text(plat, rec)
-    pj.write_text(json.dumps(rec, indent=2) + "\n")
-    return []
+    return [], warn
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("dir", nargs="?", type=Path, default=ROOT / "data/reference/compare-page")
     ap.add_argument("--only", help="substring of the pair directory path")
-    ap.add_argument("--recapture-original", action="store_true",
-                    help="also run the emulator again from the stored state (the emulator must be up as when the "
-                         "pair was made) and replace theirs.png when the new capture's pose, camera and clock "
-                         "match the stored ones; ours is rendered from the STORED pose either way")
-    ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
-    ap.add_argument("--profile-dir", type=Path, default=ROOT / "data/compare-rerender-profile",
-                    help="private XDG tree oag-game writes its settings into")
     args = ap.parse_args()
     failed = 0
     for pj in sorted(args.dir.rglob("pair.json")):
@@ -177,12 +110,12 @@ def main():
             continue
         if json.loads(pj.read_text()).get("refused"):
             continue
-        problems = rerender(pj, args.oag_game, args.profile_dir, args.recapture_original)
+        problems, warn = remake(pj)
         if problems:
             failed += 1
             print("FAILED %s: %s" % (pj.parent, "; ".join(problems)))
         else:
-            print("ok     %s" % pj.parent)
+            print("ok     %s%s" % (pj.parent, "".join("  WARNING: " + w for w in warn)))
     sys.exit(failed)
 
 

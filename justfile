@@ -1062,9 +1062,9 @@ frame-compare theirs ours out="/tmp":
 compare-page *ARGS:
     python3 scripts/compare-page.py {{ARGS}}
 
-# Re-render OURS of every recorded pair with the current build, in place, no emulator (docs/tools/compare-page.md).
+# Re-make every recorded pair in place from the emulator's savestate, so ours takes its pose from the original (docs/tools/compare-page.md).
 #   just compare-rerender [--only moa] [data/reference/compare-page]
-[doc("Re-render the 'ours' half of every comparison pair with the current build, in place")]
+[doc("Re-make every comparison pair in place from the savestate (ours posed from the original's RAM)")]
 compare-rerender *ARGS:
     python3 scripts/compare-rerender.py {{ARGS}}
 

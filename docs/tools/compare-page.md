@@ -127,21 +127,17 @@ its `pair.json` has no failed check.
 | 2048 (Vita) | **partial** | nothing | `vita3k-drive.py race --screenshot` boots Vita3K on a private config, on its own weston and Xwayland display, and writes a frame; its fixed-timing tap walk never changed screen in the 2026-10-20 run and the frame was an intro cinematic, not a race. Profile row `2048`: 960x544 at 1x |
 | Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. No race was reached. Profile row `omega`: 1920x1080 |
 
-**Re-rendering ours in place.** Every `pair.json` stores what ours ran with (`ours.flags`, `ours.ticks`, the corrected pose
-CSV beside it, the binary hash), so when the renderer changes `just compare-rerender [--only <substring>] [dir]`
-(`scripts/compare-rerender.py`, default `data/reference/compare-page`) re-runs ours with the current `oag-game` and
-rewrites `ours.png` and `side.png` with no emulator; `theirs.png` and the `original` block are untouched. The
-heading is not re-solved. It re-runs the checks that need only ours (settings read back, image size, ship position
-and heading at the rendered tick against the stored original pose); a pair that fails is named, keeps its old
-`ours.png`, and makes the exit status non-zero. A success updates `ours.binary` and `rerendered_at`. **`just compare-rerender --recapture-original`**
-also runs the emulator side again (the same pair script and arguments, stored in `pair.json` as `argv`, with the
-emulator up exactly as when the pair was made) and replaces `theirs.png` only when the new capture's ship pose,
-camera and race clock equal the stored ones within the profile's tolerances; the pixel drift against the previous
-`theirs.png` is recorded under `original.recapture`. A capture that does not match is refused by name and the old
-images are kept; ours is rendered from the stored pose either way, so the two halves never come from different
-poses. Paths in the
-flags are resolved by file name inside the pair's directory, so it works from any worktree. Then rebuild the
-page with `just compare-page`.
+**Re-making a pair in place.** When the renderer changes, `just compare-rerender [--only <substring>] [dir]`
+(`scripts/compare-rerender.py`, default `data/reference/compare-page`) re-runs each pair's script with the arguments
+recorded in its `pair.json` (`argv`): ours is therefore **always posed from the emulator's own savestate**, the ship
+pose, camera and race clock are read out of RAM fresh and the pose row and heading correction derived from that
+read, never taken from a stored `pair.json` or CSV. `theirs.png` is captured in the same run, every environment and
+parity check runs again, and on success the pair's files are replaced; the old values become a record in the new
+`pair.json` (`previous`), with `drift` (ship position and heading, camera, clock, the RMSE between the old and new
+`theirs.png`) and a WARNING printed when the drift is beyond the profile's tolerance. A pair whose fresh run is
+refused by a check is named, keeps its old files, and makes the exit status non-zero. The emulator has to be up
+exactly as when the pair was made (the per-title rows above); the pair's own script is the only place the capture
+is defined, so the command works for PSP, HD and PS2 alike. Then rebuild the page with `just compare-page`.
 
 The fresh set lives in `data/reference/compare-page/` (`pulse-psp/`, `hd/`, `pulse-ps2/`, one directory per pair
 holding `theirs.png`, `ours.png`, `side.png` and `pair.json`); the manifest is built with
