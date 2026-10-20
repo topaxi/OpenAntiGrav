@@ -528,6 +528,7 @@ pub const CODE_PITCH: oag_title::craft_laws::CodePitch = oag_title::craft_laws::
     air: 0.1,
     ground: 0.4,
     damping: 1.5,
+    grid_damping: 0.6,
 };
 
 /// Pure's launch boost, compiled in where Pulse authors `<StartBoost>`.
