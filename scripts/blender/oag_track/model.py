@@ -31,6 +31,8 @@ class SplinePoint:
     light_scale: tuple
     # (lane band low, lane band high, speed floor) or None.
     ai_bytes: tuple = None
+    # The collision cage's eight signed bytes, or None when the point authors none.
+    cage: tuple = None
 
 
 @dataclass

@@ -390,3 +390,33 @@ fn the_speed_class_announcer_names_the_disc_s_own_dedicated_bank_by_cue_index() 
         );
     }
 }
+
+/// HD's tracks set the collision cage's header flag on one circuit only,
+/// `04_chenghou_project`, and that one authors the cage bytes on every point;
+/// the other fifteen leave both at zero. Whether HD's own code runs a cage is
+/// not read: our race runs Pulse's on the one flagged circuit, inherited
+/// (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`).
+#[test]
+#[ignore = "needs the decrypted PS3 image"]
+fn one_circuit_asks_for_the_collision_cage() {
+    let Some(mut archives) = opened() else { return };
+    let mut flagged = Vec::new();
+    for env in names::ENVIRONMENTS {
+        let blob = archives
+            .read_name(&names::track(env))
+            .unwrap_or_else(|e| panic!("{env}: {e}"));
+        let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
+        let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
+        let payload = &blob[node.payload()];
+        let ai = oag_vex::track::parse(payload).expect("the spline");
+        let points: Vec<_> = ai.paths.iter().flat_map(|p| &p.points).collect();
+        let caged = points.iter().filter(|p| p.cage != [0; 8]).count();
+        if oag_vex::track::cage_flag(payload) {
+            assert_eq!(caged, points.len(), "{env}");
+            flagged.push(*env);
+        } else {
+            assert_eq!(caged, 0, "{env}");
+        }
+    }
+    assert_eq!(flagged, ["04_chenghou_project"]);
+}

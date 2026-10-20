@@ -26,7 +26,9 @@ seconds with no hover probe touching anything (`RespawnCause::Airborne`,
 45 ticks). See `oag_race::recovery`. **The original has a distance trigger too**,
 read but not ported: more than 200 units from the craft's tracked spline position
 for half a second (`0x08841cec`), which is where our invented dwells stand; and a
-fourth caller of the same reset state whose test (`FUN_0883191c`) is not read.
+fourth caller of the same reset state, the collision cage (`Cage_UpdateCraft`,
+`0x0883191c`), read and ported 2026-10-20 as `RespawnCause::Cage`
+([collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20)).
 All four are on [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-3-is-the-reset-and-four-things-enter-it-2026-09-29).
 (This section used to say three of four triggers were inventions: the airborne
 and distance triggers were not known.) The

@@ -669,6 +669,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
         Spline::STEPS_PER_SEGMENT,
         spline.max_half_width()
     ));
+    // The collision cage, where the track's own header asks for it and its points
+    // carry the bytes: every Pulse circuit; on HD the one circuit that sets the
+    // flag, inherited from Pulse and not measured; never a foreign or own-format
+    // track, which has no header word to read (`crate::cage`).
+    let cage =
+        oag_gameplay::cage::CageTrack::new(&ai, oag_vex::track::cage_flag_in_vex(&track_blob));
+    report.push(match &cage {
+        Some(cage) => format!(
+            "collision cage: on, {} control point(s)",
+            cage.point_count()
+        ),
+        None => "collision cage: off (no header flag, or no cage bytes)".to_string(),
+    });
+    let spline = spline.with_cage(cage);
 
     #[cfg(feature = "view")]
     let collision_model = if options.collision {

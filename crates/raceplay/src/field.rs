@@ -782,6 +782,14 @@ impl Race {
                 &self.sim.collision,
                 self.sim.dt,
             );
+            let reset_contact = self.reset_zone_contact(slot, &env, position);
+            self.sim.cage_reset[slot] = oag_gameplay::cage::pass(
+                self.sim.spline.cage(),
+                &mut self.sim.world.ships[slot].physics,
+                &handling,
+                &evaluated.wall,
+            )
+            .reset;
             self.lay_crumb(
                 slot,
                 self.ai_sample_for(slot, index).map(|sample| sample.flags),
@@ -865,9 +873,10 @@ impl Race {
             // so a craft that comes back stalled is rescued on time.
             let alive =
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-            let reset = self.reset_zone_touched(slot, &env, position);
+            let reset = self.reset_zone_touched(slot, reset_contact);
             let airborne = self.airborne_too_long(slot);
-            if alive && (lost || stalled || airborne || reset) {
+            let cage = std::mem::take(&mut self.sim.cage_reset[slot]);
+            if alive && (lost || stalled || airborne || reset || cage) {
                 let cause = if lost && self.beneath_the_line(slot) {
                     respawn::RespawnCause::Beneath
                 } else if lost {
@@ -876,6 +885,8 @@ impl Race {
                     respawn::RespawnCause::Stalled
                 } else if airborne {
                     respawn::RespawnCause::Airborne
+                } else if cage {
+                    respawn::RespawnCause::Cage
                 } else {
                     respawn::RespawnCause::ResetZone
                 };

@@ -509,6 +509,7 @@ fn without_light_scale(paths: &[Path]) -> Vec<Vec<SplinePoint>> {
                     unk_0x5c: None,
                     unk_0x5d: None,
                     unk_0x66: None,
+                    cage: [0; 8],
                     ..*p
                 })
                 .collect()

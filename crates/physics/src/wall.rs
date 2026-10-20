@@ -89,7 +89,7 @@
 //! (617.5 to 618.6 units, from a spawn `oag_raceplay` no longer uses), as expected since
 //! 99.6 % of `16_Track`'s wall triangles already face the circuit.
 
-use oag_core::math::Vec3;
+use oag_core::math::{Quat, Vec3};
 
 use crate::collide::{Ray, Raycaster, Surface, combine_friction};
 use crate::forces::Environment;
@@ -237,6 +237,13 @@ pub struct WallResponse {
     /// per-contact impulse magnitude by `0.05` and `0.0125` for its own non-visual
     /// reactions, the anchor a spark effect's intensity curve borrows.
     pub impact_speed: f32,
+    /// The pose the hull was tested at, before any contact moved it: the original's box
+    /// collider as `Body_SyncBoxCollider` (`0x0884db20`) left it after `Body_Integrate`.
+    /// The collision cage reads its corners and its locate from here, not from the body the
+    /// hull pushed ([`crate::cage::resolve`]).
+    pub synced_position: Vec3,
+    /// The orientation half of [`Self::synced_position`].
+    pub synced_orientation: Quat,
 }
 
 /// The box support function: how far the hull reaches along `direction`.
@@ -299,17 +306,25 @@ pub fn resolve<R: Raycaster + ?Sized>(
         .width
         .max(dimensions.height)
         .max(dimensions.length);
+    let synced_position = state.body.position;
+    let synced_orientation = state.body.orientation;
     // A bound bool so a `NaN` dimension lands in the degenerate branch.
     let usable = largest > MIN_HULL_EXTENT;
     if !usable {
         state.wall_contact_prev = false;
         return WallResponse {
             hull_degenerate: true,
+            synced_position,
+            synced_orientation,
             ..WallResponse::default()
         };
     }
 
-    let mut response = WallResponse::default();
+    let mut response = WallResponse {
+        synced_position,
+        synced_orientation,
+        ..WallResponse::default()
+    };
 
     // No swept query: a ship crossing a zero-thickness wall shell within one frame is
     // caught *before* integration by `Body_StepWorld`'s pass 1 ([`pre_integration_clip`],
@@ -574,6 +589,18 @@ fn resolve_contact(
         skipped: false,
         impulse,
     }
+}
+
+/// A collision-cage contact through [`resolve_contact`], friction `0`: the cage hands
+/// `Body_ResolveContact` (`0x0884e968`) a contact whose `+0x34` is zero (`0x08831ff0`).
+/// Returns the velocity, angular velocity and position changes.
+pub(crate) fn resolve_cage_contact(body: &mut Body, contact: &WallContact) -> (Vec3, Vec3, Vec3) {
+    let applied = resolve_contact(body, contact, 0.0);
+    (
+        applied.velocity_delta,
+        applied.angular_velocity_delta,
+        applied.escape,
+    )
 }
 
 /// `I^-1 * v` with the **body-space** tensor applied straight to a world vector: the

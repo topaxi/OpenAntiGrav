@@ -2210,6 +2210,18 @@ the sample point and the triangle it crossed. The scratch sweep
 `gates_at_the_clean_lap_redirect` in the same test file prints our side of it
 at any tick (`OAG_SWEEP=1 OAG_GATE_TICK=<n> OAG_GATE_SCALE=<s>`).
 
+**Resolved 2026-10-20: it is not a hull contact at all.** The original's
+narrowphase makes no contact at tick 1583 either; the redirect is the
+**collision cage** (`Cage_ResolveCraft`, `0x08831aa4`), an invisible elliptical
+tube along the AI track data that resolves the box's corners through this same
+`Body_ResolveContact` with friction `0`, after `Body_StepWorld`. Our step from
+1583 plus the cage lands `0.18` units/s from tick 1584 (`38.43` without), and
+the same law matches Fort Gale's airborne redirect at tick 1341. At the
+original's own narrowphase pose our hull reproduces 818 of 818 and 1,466 of
+1,466 of the original's contacts on two captures, so contact generation is not
+the miss. Evidence and the law:
+[collision-cage.md](collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20).
+
 ### HD: the resolver is not where Pulse's is
 
 Checked against `EBOOT-ps3-hdfury-eu.elf`. The answer is **not determined**, as

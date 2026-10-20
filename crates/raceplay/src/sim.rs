@@ -170,6 +170,10 @@ pub struct RaceSim {
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
     /// [`Race::last_respawn_cause_of`].
     pub(super) last_respawn_cause: [Option<respawn::RespawnCause>; oag_gameplay::MAX_SHIPS],
+    /// The collision cage asked for each craft's reset this tick
+    /// (`oag_physics::cage::CageResponse::reset`). Set by the craft's step and
+    /// consumed by its rescue the same tick, so it never outlives one.
+    pub(super) cage_reset: [bool; oag_gameplay::MAX_SHIPS],
     /// Each craft's grounded positions and latched speed, which the original's
     /// reset state reads to put a craft back ([`crate::breadcrumbs`]). Seeded
     /// with the grid pose at [`Race::start`] and laid after every step.
