@@ -289,14 +289,13 @@ pub const BOMB_RAYS_EFFECT: &str = "WO_BOMB_RAYS";
 /// from the rocket's impact point.
 pub const CRAFT_BLAST_DROP: f32 = 2.5;
 
-/// The engine flare the **PS2** port authors as a particle effect.
+/// The engine flare particle effect the **PS2 disc** ships.
 ///
-/// Two looping emitters, and there is no PSP counterpart - the PSP release
-/// authors no `Data\Psys` engine flare at all, which is why
-/// `oag_fx::exhaust` draws one procedurally from the `Engine Flare`
-/// locator and the behaviour measured off the PSP. Where the source *does*
-/// ship one, playing it beats approximating it, so a PS2-sourced race gets
-/// the asset and the procedural flare quad steps aside - see
+/// Two looping emitters, no PSP counterpart. **No title plays it on Pulse:**
+/// the PS2 executable never requests it (no path, name or hash) and a GS dump
+/// of the nozzle shows one flare quad, the same one `oag_fx::exhaust` draws
+/// from the `Engine Flare` locator; `docs/ghidra/functions/ps2-pulse-eu/engine-trail.md`.
+/// A title whose table names it plays it if its archive holds the asset - see
 /// `Race::engine_flare_effect`.
 pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
 

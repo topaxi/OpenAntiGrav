@@ -514,16 +514,14 @@ impl Race {
     /// Keeps an [`Trigger::EngineFlare`] instance on every active craft's
     /// nozzle, where the source authors one.
     ///
-    /// **The PS2 port authors an engine flare as a particle effect and the
-    /// PSP does not.** On a PSP-sourced race the effect is absent from the
-    /// library, nothing attaches, and [`oag_fx::exhaust`]'s procedural
-    /// flare draws as it always has. On a PS2-sourced one the asset plays
-    /// and the procedural quad steps aside - see
-    /// [`Race::engine_flare_effect`], which is what the renderer asks.
-    ///
-    /// The trigger needs no reverse-engineering: an engine flare is on for
-    /// as long as the craft is, which is why this one is wired where the
-    /// other PS2-only effects are not. Both its emitters are
+    /// **No Pulse pressing plays one**: the PS2 disc ships
+    /// `WO_SHIP_ENGINEFLARE.POB` but its executable never requests it, and
+    /// the nozzle's GS draws are the procedural quad alone (`engine-trail.md`,
+    /// "The engine flare is one quad"). The pulse table therefore names no
+    /// engine flare, nothing attaches, and [`oag_fx::exhaust`]'s quad draws.
+    /// A title whose table names the effect and whose archive holds it gets
+    /// the asset and the quad steps aside - see [`Race::engine_flare_effect`],
+    /// which is what the renderer asks. Both emitters are
     /// [`oag_pob::flags::LOOPING`], so it runs until detached.
     ///
     /// Anchored at the `Engine Flare` locator under the craft's *current*
