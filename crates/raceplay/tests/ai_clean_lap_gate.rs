@@ -484,6 +484,18 @@ struct Row {
 ///
 /// The other 45 rows held inside their ceilings; 30 of them read faster.
 ///
+/// **Rows regenerated for the measured air laws (2026-10-20, lane
+/// `driver-vs-new-physics`), each only when the law's distribution showed no
+/// shift.** This board flips on noise: with every law off, a constant airborne
+/// pitch torque of `1e-5` to `1e-2` (the bias is `8`) regresses 0 to 7 of the 58
+/// AI-gate tests. A law may move rows here when, over the same nine
+/// perturbations, its regression count has a median at most laws-off + 2 and a
+/// max at most laws-off max + 2 (`docs/physics/airborne-ground-truth.md`, "Our AI
+/// against the air laws"). Rows moved:
+/// - `01_Track` PHANTOM, `CleanLap` to `NoCleanLap`: Pulse's in-air
+///   `weight_distribution` torque (with `oag_ai::air_trim`). The same row
+///   regresses under 3 of the 9 perturbations with every law off.
+///
 /// The frozen board: 12 circuits x 4 classes, generated the way this file's
 /// own doc comment describes. **May only improve** - see that doc comment for
 /// what "improve" means per field and how each is asserted.
@@ -536,7 +548,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1570), contact_ticks: 0 },
     Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1840), contact_ticks: 21 },
     Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2222), contact_ticks: 521 },
-    Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1320), contact_ticks: 2 },
+    Row { circuit: "01_Track", class: "PHANTOM", status: Status::NoCleanLap, lap_ticks: None, contact_ticks: 1 },
     Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1852), contact_ticks: 13 },
     Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1424), contact_ticks: 0 },
     Row { circuit: "07_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2453), contact_ticks: 2 },
