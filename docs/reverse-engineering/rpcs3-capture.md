@@ -896,6 +896,14 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
         --oag-game <abs>/target/release/oag-game --out <dir> --pose=-839.8,-146.6,215.0 --countdown 35 \
         --dump 0x40000000:0x20000 --dump-attempts 12 --hook scripts/rpcs3_draw_hook.py
 
+`scripts/rpcs3_draw_hook.py` reads two more knobs (2026-10-21, `hd-hull-colour`). `HOOK_FP_LEN=0x800` dumps each fragment
+program to 2 KiB instead of 1.5 KiB: a hull's `diffuse_with_specular_from_alpha_n` block is `0x740` bytes of code behind a
+header, so the default cut it at instruction `0x60` and its last constants (the exponent at slot `0x58`, the reflectivity at
+`0x6f`) were never read. `HOOK_TEX_RE=unit[45]` is a regular expression over a program's disassembly that picks which draws'
+textures stage 3 dumps (the default keeps the normal-map programs); with it the live reflection and irradiance maps
+(units 5 and 4, `A8R8G8B8`, main memory) come out beside the frame. With `HOOK_LIGHT=1 HOOK_NO_HEADS=1` a constants-only
+frame took about one minute; the full one with textures about seven (`hd-draw-dump.py`, `--pause`d restore).
+
 `lapboard` takes the same `--hook`, `--hook-shots N` (the first N shots of each window or lap), `--dump` and
 `--dump-attempts`, so one boot can hook a frame in the gantry's FINAL LAP window (`--window 9.5,9.9`) and its chequered
 window (`--window 12.35,13.3`): `HOOK_LIGHT=1 HOOK_NEED_SCREEN=1 ... lapboard --window 9.5,9.9 --window 12.35,13.3 --hook

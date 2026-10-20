@@ -70,7 +70,7 @@ fn a_hulls_specular_exponent_is_its_materials_own_parameter() {
     let exponents = &model.material_specular_exponent;
     for authored in [160.0, 80.0] {
         assert!(
-            exponents.iter().any(|&e| e == authored),
+            exponents.contains(&authored),
             "no material of feisar_c1 resolved the instance's {authored}: {exponents:?}"
         );
     }

@@ -112,8 +112,11 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
             zero += 1;
-            if let Some(hash) = program.specular_exponent_parameter() {
-                if hash != rcsmaterial::SPECULAR_POWER {
+            if let Some(hash) = program
+                .specular_exponent_parameter()
+                .filter(|&hash| hash != rcsmaterial::SPECULAR_POWER)
+            {
+                {
                     let value = material
                         .parameters
                         .iter()
