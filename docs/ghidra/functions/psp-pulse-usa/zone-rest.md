@@ -54,6 +54,9 @@ from the mode each tick. The effect is `50/30` on the same torque: a banked Zone
 
 ## Not ported: the other differences in the four-corner epilogue
 
+**Superseded 2026-10-20**: the whole function is read, verified live and ported on
+[zone-hover.md](zone-hover.md); the section below is kept as it was written.
+
 Read in the same disassembly (`0x0884b7b0 - 0x0884b81c`), unported because this engine has no four-probe layout to
 hang them on and the difference is small where all four probes touch:
 

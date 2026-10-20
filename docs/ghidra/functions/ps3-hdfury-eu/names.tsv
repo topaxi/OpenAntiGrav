@@ -769,3 +769,5 @@
 0x008c1564	data	g_ShipShipCofR	88	wall-response.md
 0x008c156c	data	g_ShipWallCofR	92	wall-response.md
 0x008c1738	data	g_WeaponHitMassFactor	80	wall-response.md
+0x000f18b8	function	Craft_UpdateHover	82	hover-four-point.md
+0x000c8330	function	Handling_ParseFile	72	hover-four-point.md

@@ -184,3 +184,33 @@ under `speed * R * 9 * 0.001 / 21.6` (`I_yy`) less `5 * w` damping: HD's `I_yy` 
   until they are.
 - **2048**: not checked in this pass (the Vita executable is open in Ghidra; its hover was not
   located).
+
+## Zone: the same law plus the trailing ray, and the handling file's one class (2026-10-20, zone-hover)
+
+Static read, for the cross-title check of Pulse's Zone hover
+([zone-hover.md](../psp-pulse-usa/zone-hover.md)).
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | ---: | --- |
+| `0x000f18b8` | `Craft_UpdateHover` | 82 | clears bit 0 of `craft+0x264`, then calls `Craft_HoverFourPoint` with `r4 = 0`, or with `r4 = 1` when the debug byte (`-0x4328(r2)`) is clear and the game mode (`*(-0x43ac(r2)) + 0xe0`) is under `0x16` with its bit set in `0x206040`; the shape of Pulse's `Ship_UpdateHover` |
+| `0x000c8330` | `Handling_ParseFile` | 72 | `Team_LoadHandlingStats`'s only parse call; walks `<Stats>`'s children through one name dispatch (`Handling_ReadGlobalClasses` among them) and, for `<Class>`, sets the current class index and walks its children through the same block readers |
+
+**HD's Zone hover is its racing hover plus the trailing ray.** The mask `0x206040` is modes 6, 13,
+14 and 21; 6 is Zone, 13 Zone Battle and 14 Detonator (read live, [billboards.md](billboards.md)), 21
+not identified. `Craft_HoverFourPoint`'s second argument gates only the trailing 10-unit ray
+(`0x000ee510`, `(3 - d) * 0.5` for a hit between 3 and 10, above): HD keeps its four-point probes,
+its `0.15` spring with load factor and rebound, its projected alignment and its scaled downforce in
+Zone. The ray's gain is `0.5` where Pulse's is `0.25`; its axis was not re-read here. Not wired:
+this engine's HD Zone flies HD's racing rig without the ray.
+
+**Which class HD's classless Zone file fills.** `Team_LoadHandlingStats` reads
+`Data\Ships\Zone\handlingstats.xml` for the same mask ([opponent-handling.md](opponent-handling.md)),
+and that file authors every block (`Physical`, `Antigrav`, `Engine`, `Brakes`, `Turning`,
+`Airbrake`, `Tilt`, `Pitch`) directly under `<Stats>`. `Handling_ParseFile` zeroes the current class
+index (`*(-0x4e64(r2)) + 0x10`) before the walk, the block readers write at
+`stats + index * 0x80 + offset` (`0x000c6310` is one: `+0xc0..+0xd4`), and only a `<Class>` element
+moves the index. So a classless file fills **class 0 alone**; classes 1 to 3 keep whatever the
+stats block held before. Confidence **70** for that (decompile of the parser and one block reader).
+Which class index a Zone race then reads, and so whether a Zone craft flies these numbers in every
+class, is **not determined**: the next read is the class index `Craft_Update` uses for the stats
+block in mode 6, or an RPCS3 read of `engine->stats` in a Zone race.

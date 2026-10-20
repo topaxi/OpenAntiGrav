@@ -78,3 +78,31 @@ carries it, and `oag_raceplay::load` flies it when the mode is `Mode::Zone`.
 also tests the contact flag at `0x08849acc`, [engine.md](engine.md), step 2). Live: with the mode
 written to `6`, a breakpoint on `Ship_UpdateBrakes` was not reached in 3 s, twice; written to `1`, it
 was reached 30 times in a row. Confidence **92**.
+
+## The other titles
+
+- **Pure (PSP): checked, applies, not wired.** `FUN_0892c6b0` is Pulse's `Ship_UpdateHover` shape
+  (`DAT_002884b3 == 0 && _DAT_00053534 == 6` picks `0x0892e5b8`, else the two-point `0x0892dea8`),
+  and `0x0892e5b8` is this law constant for constant: the four probes built from
+  `0x40200000`/`0x40a00000` with `y = 0` and scaled by a global, all cast, no escape, grounded
+  `+0.25`, the spring with `0x3e19999a`, `0xbdcccccd`, `-1`/`1` and `0x3f4ccccd`, the unprojected
+  `-400` torque, the unscaled `-(track_gravity * mass)` downforce and the `10`/`3`/`0.25` snap.
+  Three differences, all static: contact accepts surface class `1` only (Pure ships no magnet
+  floor), the normal mean multiplies by `vrcp.s` of the count (the VFPU's reciprocal) rather than
+  dividing, and bank-to-yaw is `50 * right.y` with neither the grid-state guard nor the magnet-lock
+  factor. Not wired because two things a Pure Zone race needs are unread: whether Pure's mode 6 is
+  its Zone (the selector is the same shape; the mode table was not read), and whether Pure's craft
+  update skips the brakes there. Pure's Zone craft also flies its own `Zone_01` handling file,
+  which is the separate question of what a classless file means.
+- **HD/Fury: checked, differs.** HD's Zone keeps its racing four-point hover and adds only the
+  trailing ray, at gain `0.5`; see
+  [hover-four-point.md](../ps3-hdfury-eu/hover-four-point.md#zone-the-same-law-plus-the-trailing-ray-and-the-handling-files-one-class-2026-10-20-zone-hover).
+  Not wired (this engine's HD Zone flies HD's racing rig without the ray). HD's Zone handling
+  file fills class 0 only (confidence 70, same section).
+- **Omega and 2048: not checkable in this lane.** Neither has its racing hover read yet
+  (`hover_rig: None` on both), so there is no Zone variant to compare against.
+
+**`ShipState::four_corner` stays title-blind**: every title's Zone race still flies bank-to-yaw
+`50`, as before this lane. That is Pulse's four-corner gain and Pure's two-point and four-corner
+gain, but HD's Zone runs `Craft_HoverFourPoint`, whose gain is `30` in every mode: on HD the `50`
+is a known divergence, left as it was and recorded on the lane's handover thread.

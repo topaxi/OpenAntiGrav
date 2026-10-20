@@ -669,6 +669,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | The per-class gravity scale, `g_class_gravity_scale`, supplied from the disc rather than defaulted | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md, [handling stats](../formats/handling-stats.md) |
 | Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
 | The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
+| Pulse's Zone hover, `Ship_HoverFourCorner` (game mode 6): four level probes all cast, no escape, its own spring (no load factor, no rebound, no magnet-lock fade, damper `0.8` clamped at `1`), `sum * (1/n)` normal, alignment torque with its pitch, unscaled downforce, the trailing 10-unit snap, bank-to-yaw `50`, and no brakes; read live to the bit in PPSSPP | [`hover/rig.rs`](../../crates/physics/src/hover/rig.rs), [`hover.rs`](../../crates/physics/src/hover.rs) | [zone-hover.md](../ghidra/functions/psp-pulse-usa/zone-hover.md), [zone-rest.md](../ghidra/functions/psp-pulse-usa/zone-rest.md) |
 | Wipeout HD's wall response (Omega and 2048 inherit it, 2048 holding the point rate), wall contacts only: restitution from the disc's `<Collision shipWallCofR>`, a one-sided normal impulse, a steer-away yaw torque integrated next step, a body-local point rate | [`wall.rs`](../../crates/physics/src/wall.rs), [`laws.rs`](../../crates/physics/src/laws.rs) | [wall-response.md](../ghidra/functions/ps3-hdfury-eu/wall-response.md) |
 
 **Implemented as a shape with the coefficient left at the identity or zero**, because the
@@ -739,11 +740,6 @@ Three consequences, and the first is the interesting one:
 - **The `craft+0x2a4` mode enum**, which selects a `-0.9` drag coefficient, a `-5.0` roll
   damping and a disabled `rebound` in mode 0, and skips the control block entirely in 4,
   5, 6 and 8. Naming it is a guess at confidence 40, so the racing values are used.
-- **The four-corner hover variant.** The selector is known (`Ship_UpdateHover`, every frame:
-  `g_game_mode == 6`, confidence 95) and the epilogue's bank-to-yaw gain `50.0` is ported
-  (`ShipState::four_corner`, [zone-rest.md](../ghidra/functions/psp-pulse-usa/zone-rest.md),
-  confidence 90). Still unported: the four-probe layout, and the downforce without a
-  groundedness or magstrip factor.
 - **One branch of the speed-pad boost** (`Ship_ApplySpeedupPad`, `0x08848f9c`), down from
   two. `if (craft+0x2cc < 1.0) f *= craft+0x2cc` fades the boost in over a second after
   flag `0x200` clears, and `0x200` is one of the eleven undecoded bits of `craft+0x1c0`,
