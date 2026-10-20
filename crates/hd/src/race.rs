@@ -766,6 +766,10 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     cast_every_probe: oag_title::pre_race::Sourced::measured(true),
     along_hit_normal: oag_title::pre_race::Sourced::measured(true),
     quarter_sum_normal: oag_title::pre_race::Sourced::measured(true),
+    // `Craft_HoverFourPoint` escapes each probe under `1.0` in turn (`bl 0x000f5ca0` at
+    // `0x000ee6ac`, then on to the next probe) off heights from the hull array it built before
+    // the loop; live, the summed escape closes the position residual (`hover-four-point.md`).
+    sum_escapes: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

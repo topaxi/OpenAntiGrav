@@ -25,4 +25,8 @@ pub struct HoverRig {
     /// The contact normals are summed and scaled by `0.25` (the one normal alone when a single
     /// probe touches) rather than averaged and normalised.
     pub quarter_sum_normal: Sourced<bool>,
+    /// Every penetrating probe's escape moves the body, the moves summed, rather than the
+    /// largest one alone. HD measures each probe's height off a hull point placed before the
+    /// loop, so an escape does not change the next probe's height.
+    pub sum_escapes: Sourced<bool>,
 }

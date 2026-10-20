@@ -15,7 +15,10 @@ the point rate. Evidence and the sweep:
   has no row to regenerate. It turns on once 2048's field is flown against it.
 - **HD's floor contacts are unmeasured.** Every live hit was material `3` (wall). HD's
   pair table gives the craft's `(0, 2)` and `(0, 4)` pairs restitution `1.0`; nothing shows
-  HD's floors reaching this resolver, so floors keep Pulse's law.
+  HD's floors reaching this resolver, so floors keep Pulse's law. 2026-10-20 (`hd-hover-residual`):
+  on Ubermall PHANTOM's 447 autopilot rows and Talon's Junction's 718 grid and ramp rows not one
+  step put a floor contact (or a wall contact) through our resolver, and the grounded residual
+  closes without one. A floor contact needs a craft that bottoms out.
 - **The two-body resolver is unread.** `Body_ResolveContactPair` (`0x000f7bc0`,
   confidence 60) and `shipShipCofR = 1.0` drive craft-craft contacts; ours keeps Pulse's.
 - **Mode-masked friction.** `Collision_PairFriction` (`0x000be068`) returns `0.025`

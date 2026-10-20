@@ -43,6 +43,7 @@ const RIG: HoverRig = HoverRig {
     cast_every_probe: Sourced::measured(true),
     along_hit_normal: Sourced::measured(true),
     quarter_sum_normal: Sourced::measured(true),
+    sum_escapes: Sourced::measured(true),
 };
 
 #[test]
@@ -69,6 +70,7 @@ fn a_titles_rig_reaches_the_physics_field_for_field() {
     );
     assert!(rig.along_normal);
     assert_eq!(rig.normal_mean, NormalMean::QuarterSum);
+    assert!(rig.sum_escapes);
 }
 
 /// HD's craft laws reach the tensor (`(17.333, 24, 17.333)`, `Ship_Construct`'s mass `1.0`); a

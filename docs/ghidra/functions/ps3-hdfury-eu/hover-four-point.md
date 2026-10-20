@@ -84,6 +84,67 @@ into `oag_physics::hover::Rig`; titles with `None` fly Pulse's two-point law. Pi
 `oag_physics::hover::rig::tests` (the derived rear hit leaves `2/3` of the cast pitch stiffness;
 four springs at `0.15` carry what two at `0.3` carry).
 
+## The escapes sum (2026-10-20, hd-hover-residual)
+
+Confidence **88** (static loop read plus a live position residual; one circuit, one class).
+
+The loop at `0x000edfd0`-`0x000ee000` takes each probe whose hit byte is set to `0x000ee218`,
+where `h = dot(craft+0x120 + 0x10 * i - hit.point, up)` (`0x000ee220`-`0x000ee250`, stored to
+`craft+0x364 + 4i`). The hull points `craft+0x120..0x150` are written by `Craft_IntegrateHull`
+before the loop and nothing in it rewrites them. Under `1.0` (`0x000ee25c`, `blt 0x000ee628`):
+
+- `hit+0x28 != 1` (not the floor class) or `craft+0x2c0 == 1.0` (full magnet lock): no escape,
+  on to the contact test at `0x000ee268`;
+- the hit triangle's material type (`+0x74`, through `*(craft+0x35c)`) is `2`: the probe is
+  skipped outright, no escape and no spring (`beq 0x000edfec` at `0x000ee668`);
+- otherwise the body moves by `up * (1 - h)` (`bl 0x000f5ca0` at `0x000ee6ac`), then on to the
+  contact test (`b 0x000ee268`) and the next probe.
+
+So every penetrating probe moves the body by its own `1 - h`, all off heights fixed before the
+loop: the moves **sum**. Ours took the largest alone (a choice, for Pulse's two probes).
+
+**Live.** One `oag_physics::step` per row of an RPCS3 capture of the original's Autopilot on
+Ubermall PHANTOM (Feisar, rows 400-1260, `crates/raceplay/tests/hd_air_pose_walk.rs` with
+`OAG_HD_DIAG=1`, `OAG_HD_AIR=data/reference/hd-hover-residual/ubermall-phantom-autopilot.csv
+OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1`): 87 of 447 rows escape. Our position residual along up on those rows fit
+`dp_up = -0.954 * (sum - max) + 0.015`, correlation `-0.996`, where `sum - max` is what summing
+adds. Ported as `oag_title::hover_rig::HoverRig::sum_escapes` (HD measured `true`), carried into
+`oag_physics::hover::Rig::sum_escapes`:
+
+| Escape rows (87) | dp_up median | p5 | p95 | mean abs |
+| --- | ---: | ---: | ---: | ---: |
+| largest only (before) | `+0.0118` | `-0.3412` | `+0.0241` | `0.0480` |
+| summed (after) | `+0.0148` | `+0.0096` | `+0.0346` | `0.0177` |
+
+A `+0.015` bias stays on escape rows (non-escape rows: `+0.0017`); not attributed. The material
+type `2` skip and the magnet-lock gate are not ported (no row of this capture reaches them).
+Pulse and Pure keep the largest-only choice: whether Pulse's loop re-reads its heights between
+escapes is unread. **Omega and 2048: not checkable in this lane.** Both fly Pulse's two-point rig
+(`hover_rig: None`) until their own springs are read; the sum rides on the rig, so it waits for that: the loop the law lives in is not read on
+Omega yet, and 2048's hover is not located. Omega's `Craft_UpdateSurfaceProbes` (`0x0131b510`) carries HD's probe layout forward, so
+the same loop is the expected reading there.
+
+## The grounded vertical residual was the harness (2026-10-20, hd-hover-residual)
+
+The `0.95` units/s per tick a grounded row landed lower than the original (2026-10-19) was the
+pose walk seeding every row from a craft ticked once **on the grid**, where HD caps the hover
+target at `0.75 * 3.0x` ([hover-target.md](hover-target.md)): every probe reached `2.28` instead
+of `4.125`, so 191 of 423 grounded rows found no floor and the rest sprang from the wrong target.
+The capture itself is past the release from its row 20 (no cap fits rows 20-300 at `0.000`; a
+ramp from row 0 at `-0.53`). With the cap released:
+
+| Rows 400-1260, Ubermall PHANTOM | grounded (423) dv_up median | airborne (24) |
+| --- | ---: | ---: |
+| grid cap seeded (2026-10-19) | `-0.950` | `0.000` |
+| cap released | `-0.010` (IQR `-0.03..+0.01`) | `0.000` |
+| cap released, `OAG_HD_GRAV=ground` | `-0.020` | `+0.380` |
+
+No hover law was missing. The two class-gravity readings do not separate on grounded rows (inside
+the IQR); the airborne rows keep the airborne term. No wall or floor contact reached the resolver
+on any of the 447 rows, so HD's floor restitution is not exercised here. `craft+0x358`, the
+trailing 10-unit ray (`0x000ee510`) and the escape's class gates are not needed to close the
+median, and stay unported.
+
 ## The terms the one-airbrake gap is not in
 
 Read to find why one airbrake turns HD about 10% less than this engine. Closed 2026-10-09: the gap

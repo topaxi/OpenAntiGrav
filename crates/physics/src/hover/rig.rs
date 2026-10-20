@@ -47,6 +47,9 @@ pub struct Rig {
     pub along_normal: bool,
     /// See [`NormalMean`].
     pub normal_mean: NormalMean,
+    /// Apply every penetrating probe's escape, summed (HD), rather than the largest alone (ours
+    /// for Pulse, see [`super::Hover::escape`]).
+    pub sum_escapes: bool,
 }
 
 impl Rig {
@@ -71,6 +74,7 @@ impl Rig {
         derive_rear: true,
         along_normal: false,
         normal_mean: NormalMean::Normalised,
+        sum_escapes: false,
     };
 
     /// The probes in use.

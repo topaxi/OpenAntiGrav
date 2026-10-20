@@ -703,13 +703,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let bank = bank::gain(state, &env.laws) * right.y * (1.0 - state.mag_lock_blend);
     let local_angular_torque = Vec3::new(0.0, if state.on_grid { 0.0 } else { bank }, 0.0);
 
-    // Two penetrating probes would each ask for a teleport; applying both would move the
-    // body twice as far. The larger correction is taken. The original applies them in
-    // sequence against a moving position, which needs re-casting between probes. This is
-    // a choice, not a finding.
+    // HD's `Craft_HoverFourPoint` escapes every probe under `1.0` in turn off heights fixed
+    // before the loop, so the moves sum ([`Rig::sum_escapes`]; measured, `hover-four-point.md`).
+    // Pulse's two-point law takes the larger correction: whether its escapes re-cast between
+    // probes is unread, and that choice is ours, not a finding.
     let mut escape = Vec3::ZERO;
     for probe in active {
-        if probe.escape.length_squared() > escape.length_squared() {
+        if rig.sum_escapes {
+            escape += probe.escape;
+        } else if probe.escape.length_squared() > escape.length_squared() {
             escape = probe.escape;
         }
     }

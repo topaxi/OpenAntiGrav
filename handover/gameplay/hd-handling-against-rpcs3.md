@@ -44,20 +44,18 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
   sits on the craft.
 - **Omega**: `Craft_UpdateSurfaceProbes` (`0x0131b510`) marches HD's four hull segments; its
   spring share and offsets are unread, so Omega keeps `hover_rig: None`. 2048 not checked.
-- **HD's grounded craft carries a vertical residual our hover does not explain** (2026-10-19,
-  `airborne-capture`). One `oag_physics::step` from each grounded row of an RPCS3 capture of
-  the original's autopilot on Ubermall PHANTOM (Feisar; rows 400-1260, 422 grounded ticks)
-  lands the craft about `0.95` units/s a tick lower along its up than the original's next
-  row (median `dv_up -0.95`, `dvy -0.78`), under either reading of the class gravity scale
-  (the two differ by `0.02` a tick there). The airborne rows of the same capture close to
-  `0.000`, so it is the grounded half: the four-probe spring, its seeding (`time_since_landing`,
-  the hover cap, the `+0x358` field this page lists as unported) or the ride height. Reproduce:
-  `scripts/rpcs3-hd-autopilot.py --out <dir>` on Racebox Ubermall PHANTOM, then
-  `OAG_SWEEP=1 OAG_HD_AIR=<dir>/samples.csv OAG_HD_ROWS=400..1260 OAG_HD_BIAS=1 cargo nextest run
-  -p oag-raceplay hd_air_pose_walk --run-ignored all --no-capture`. Its own physics lane.
+- ~~HD's grounded craft carries a vertical residual our hover does not explain~~: closed
+  2026-10-20 (`hd-hover-residual`). It was the pose walk seeding every row with the grid's hover
+  cap; released, the grounded median is `dv_up -0.010`. The ride height matches too, ramp
+  included. Found on the way and ported: HD sums its hover escapes (`HoverRig::sum_escapes`).
+  Evidence: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`, "The grounded vertical
+  residual was the harness" and "The escapes sum"; `docs/physics/hd-ride-height.md`.
 - **Not measured**: barrel roll, weapon slowdown, sideshift's gesture timing (as before).
 - HD's hover pieces not ported: the trailing 10-unit ray (`0x000ee510`), the escape's class
-  gates, `craft+0x358`.
+  gates (material type `2` skips a probe, a full magnet lock skips the escape), `craft+0x358`.
+  None is needed to close the grounded median; a `+0.015` position bias stays on escape rows.
+- **Omega and 2048 escapes**: they fly Pulse's two-point rig until their springs are read; the
+  summed escape rides on HD's rig and waits for theirs.
 
 ## Next Steps
 
@@ -68,7 +66,8 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
    hours.
 2. Omega: reach the craft update through `Craft_UpdateSurfaceProbes`'s vtable slot, then read its
    steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.
-3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig. 1 hour.
+3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig, and whether its escapes
+   sum as HD's do (`HoverRig::sum_escapes`). 1 hour.
 4. The 1% late-speed gap: find what scales `amount` past `accelcap`. **Not Pilot Assist**
    (2026-10-10): with the flag clear `PilotAssist_ThrustScale` returns the literal `1.0` and the
    throttle reads `100` live (`docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`). 1-2 hours.

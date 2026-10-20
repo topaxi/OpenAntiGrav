@@ -23,6 +23,7 @@ fn four_point() -> Rig {
         derive_rear: false,
         along_normal: true,
         normal_mean: NormalMean::QuarterSum,
+        sum_escapes: true,
     }
 }
 
@@ -162,4 +163,28 @@ fn below_the_fast_probe_speed_the_two_point_law_casts_both_probes() {
     ))
     .1;
     assert_eq!(derived, cast);
+}
+
+/// **HD sums its escapes.** A level craft whose four probes sit `0.6` above the floor (the body
+/// at `1.725`) escapes `0.4` per probe: `1.6` in all on HD's rig, `0.4` taking the largest alone.
+#[test]
+fn a_rig_that_sums_escapes_moves_the_body_by_every_penetrating_probe() {
+    let escape = |rig: Rig| {
+        evaluate(
+            &craft(rig, 1.725, 0.0, 0.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .escape
+        .y
+    };
+    let summed = escape(four_point());
+    let largest = escape(Rig {
+        sum_escapes: false,
+        ..four_point()
+    });
+    assert!((summed - 1.6).abs() < 1e-4, "{summed}");
+    assert!((largest - 0.4).abs() < 1e-4, "{largest}");
 }
