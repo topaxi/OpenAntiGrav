@@ -495,4 +495,4 @@ is now measured: at this pose the original submits 51 track chunks, this project
 - Where the behind-glass projection's 4/3 enters, whether it holds at speed, and who rewrites the kind-2 spheres.
 - The five other callers of `Pvs_NearestCellCached`: `0x003e63c0`, `0x003e9660`,
   `0x00401ba8`, `0x00402a88`, `0x004053e0`.
-- The `.probes` loader at `0x003c4d78`, unexamined.
+- ~~The `.probes` loader at `0x003c4d78`, unexamined.~~ Read 2026-10-20: [env-probes.md](env-probes.md).

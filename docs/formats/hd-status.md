@@ -88,7 +88,7 @@ just psarc info data/images/hdfury-ps3-eu-dec.iso
 | 37 | 101.2 MiB | `.bik` | Bink video |
 | 36 | 175.9 MiB | `.mp3` | Music |
 | 33 | 24.0 MiB | `.fnt` | Fonts |
-| 28 | 176.0 MiB | `.probes` | Lighting probes |
+| 28 | 176.0 MiB | `.probes` | Baked environment probes: per-probe 64x32 and 128x64 images a hull is lit from, **decoded and wired 2026-10-20** ([hd-probes.md](hd-probes.md)) |
 | 28 | 3.2 MiB | `.pvs` | Visibility, moved out of the `.vex` |
 | 24 | 0.1 MiB | `.nnt` | Dormant AI networks, see [hd-ai-netconfigs.md](hd-ai-netconfigs.md) |
 
@@ -795,6 +795,8 @@ progression and it is **not a measurement** of what the original gates - what
 - **`.pvs`, `.pvspatch`, `.probes`** - one of each per circuit direction, 28
   apiece. `talons_junction/track.pvs` is 114 KiB against 19 `section` nodes, so
   it is a finer structure than the mask in the `.vex`, not the same table moved.
+  **`.probes` is not visibility data**: it is the baked environment images a hull's
+  ambient and reflection are blended from, [hd-probes.md](hd-probes.md).
 - **`.xfx`** - no longer unknown: the per-team engine crossfade table, read by
   `oag_formats::xfx` on all 13 files and played as HD's engine note since
   2026-10-05 (`crates/sound/src/sfx/xfade.rs`); see [hd-xfx](hd-xfx.md).

@@ -574,15 +574,39 @@ and 0.22-0.45: most of the gap closed, the wings and pods still a little low (th
 Chosen, not measured: the raw domain for the ambient (the sampler word says otherwise) and the one-tick lag, whose
 weight is the 41/52 count above.
 
-**Cost.** See "Cost" below.
+**Cost.** `just bench-render hd` (release, one fixed race, 1280x720, RX 7800 XT, one binary run with and without the
+probes; load 12-16, so the numbers are relative; `data/bench/ibl-before`, `ibl-after`, `ibl-after2`, `ibl-after3`):
+
+| | cpu p50 / p99 | frame p50 / p99 | gpu p50 |
+| --- | --- | --- | --- |
+| before (no probes) | 1,604 / 2,382 us | 1,906 / 2,751 us | 669 us |
+| first cut: decode, blend and resize per craft per frame | 3,594 / 4,718 us | 3,895 / 5,085 us | 678 us |
+| decoded probes cached, no resize | 2,413 / 3,663 us | 2,721 / 4,043 us | 678 us |
+| **shipped: vectorised blend, a craft that has not moved uploads nothing** | **2,024 / 3,033 us** | **2,323 / 3,397 us** | **682 us** |
+
+**+0.42 ms of CPU a frame at the median, +22 % of the frame, nothing on the GPU** (one more array fetch). On the Steam
+Deck the CPU is two to three times slower per thread, so about 1 ms a frame: not measured there (no Deck run was offered),
+and affordable against a 16.6 ms frame, so the original's cadence (every tick, the position one tick old) is kept and no
+render-profile setting was added. If a Deck run says otherwise, the lever is blending an opponent every second tick.
 
 **Cross-title.** 2048: checked, differs (a different `.probes`, and an authored sky). Omega: checked, applies, not wired
 (not checkable). Pulse, Pure: no `.rcsmaterial`.
 
-**Open.** The nozzle jewel (`emissive_bloom`, `TC4`) is unread. The weights at two tight corners (a section pair two apart).
+**The nozzle jewel, read** (draws 521-522 of the Harimau rest frame; `scripts/rsx-draw-list.py` and the vertex programs out of
+the same capture): the vertex program is `TC4 = (u, v + c[207].x * c[208].x)` with `c[207].x = 1.0` the material's rate and
+`c[208]` the engine `time` (192.65 at the capture), `TC4.z` the clip `w`; the fragment program is
+`fog(tex(unit 0, TC4)) / 2`, and the draw is **additive** (`SRC_ALPHA, ONE`, depth test on, no write). So the jewel is the
+`colours_flashing_glow` strip scrolled one texture a second through a wrapping sampler, glowing where a column is coloured.
+That scroll is already ours (`mesh::rcs::vertex_scroll` admits `emissive_bloom`). **The earlier lane's "ours draws it and
+shows black" is wrong: ours does not draw these chunks at all.** `OAG_ONLY_MATERIAL=emissive_bloom` draws Harimau's cockpit
+dots and the exhaust rings and nothing in the nozzle, at any `--anim-seconds`. Why the two chunks (258 and 24 indices) are
+missing from our hull is open: not in `Ship.vex`'s drawn chunks, or culled, or a different model.
+
+**Open.** Why the nozzle chunks are not drawn (above). The weights at two tight corners (a section pair two apart).
 The tail arrays of the file (24 + 4 + 3 bytes a probe) are read by the loader and unread here. The `Spot`/`SVC1` words of
 the IBL variants (`0x047`, `0x807`, `0x847`) are carried by the existing SPU light and the shadow path rather than resolved:
 the shader keys on the draw's craft layer and the material's own reflection sampler, which for the hull is the same set.
+Whether 2048's hull programs sample its `.probes` or its authored sky paraboloid.
 
 ## What has not moved
 

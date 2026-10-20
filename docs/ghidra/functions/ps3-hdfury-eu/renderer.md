@@ -888,9 +888,11 @@ names its exact pass structure. `psys_lit`/`psys_normal`/`psys_simplegeom` are a
 three-way split of the particle shading that
 [`oag_fx::psys`](../../../../crates/fx/shaders/psys.wesl) currently does one
 way. And `liveRsxPanXForm_CubemapConvolve_fp` plus
-`liveRsxPanXForm_CubemapToDualParaboloide_fp` are almost certainly what the
-disc's 28 `.probes` files are produced or consumed by, which is the first thread
-anyone has on that format.
+`liveRsxPanXForm_CubemapToDualParaboloide_fp` read as the **offline bake** of the
+disc's 28 `.probes` files (confidence 55): the running game does not run them. The
+file is baked dual-paraboloid images the engine blends at each craft, decoded
+2026-10-20 - [hd-probes.md](../../../formats/hd-probes.md),
+[env-probes.md](env-probes.md).
 
 ### Where the microcode is: measured, and it is the `.rcsmaterial`'s own container
 

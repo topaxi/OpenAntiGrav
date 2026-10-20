@@ -28,6 +28,7 @@ way. Three rules follow, each backed by a tool.
 | `scripts/psp-state.py` | PPSSPP save and load through the pause menu. |
 | `scripts/emu-rebuild-states.sh <lane> pulse-grid\|hd-grid [name]` | Rebuilds a state from the user's own disc into `data/saves/`. |
 | `scripts/emu-restore-state.sh <lane> <state> [--restart] [--no-gdb]` | Restores an RPCS3 state into a long-lived `serve` with pad, GDB proxy and memory, in about 10 s. `scripts/emu-save-state.sh <lane> <name>` takes one from a running `serve`; `scripts/rpcs3-state-probe.py` checks GDB and memory after a restore. |
+| `scripts/hd-ibl-poll.py <ibl> <refl> [s] [button...]`, `hd-ibl-sample.py`, `hd-ibl-catch.py`, `hd-draw-dump.py` | HD environment-probe reads on an attached RPCS3: poll the two live maps at ~100 Hz without pausing and print when they change; pause on a drive and write the player's position and velocity with both maps (the `data/reference/hd-craft-ibl-probe/` set); pause on the first change and dump the frame's draws; dump any frame's draws. See [hd-probes.md](../formats/hd-probes.md). |
 
 ### How attaching works, and what it costs
 
