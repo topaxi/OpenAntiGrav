@@ -46,6 +46,10 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
   Zone circuits end at shield 95. Left open: the Zone branch's turbo/roll-payout add (static, not
   ported); a lone craft's coin never offers route 1 (the original's does); HD's own Zone engine
   (`0x000efb50`) not compared, HD inherits the speedup from Pulse.
+- **Pure's Zone autopilot loses shield on every circuit** (`zone_hover_sweep`-style run, 7,200 ticks:
+  02_Zone ends at 77.4, 01_Zone 81.3; 93.9 and 91.6 before the Autopilot's x1.2 reached Zone), with no
+  fork involved. Pre-existing; Pure flies the two-point hover in Zone (its four-corner law is unwired)
+  and this project's driver. Not investigated.
 - **Zone grid height**: a Zone craft now spawns at the four-corner law's own rest point
   (`oag_gameplay::spawn::rig_spawn_height`, `target - 1.25`, about 2.9), derived; Pulse's Zone grid
   height was not measured. HD's is (centre `3.20` above the floor, `hd_zone_hover_ground_truth.rs`);

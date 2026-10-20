@@ -63,9 +63,11 @@ launch multiplier at `0x0884c918`. Read off the disassembly (Ghidra, `/pulse/BOO
 
 **Live**, PPSSPP 1.20.4 software renderer, `time-trial-de-konstruct-black-venom-grid.ppst`
 (forward `05_Track`), `g_game_mode` written to 6 and the Autopilot armed one frame after GO
-(`scripts/psp-zone-autopilot.py`): `craft+0x328` reads **`81.6` = `34 * 1.2 * 2`** on every one of
-1,500 logged frames after the first, with `craft+0x294` at `1.0` and the zone counter `craft+0x28c`
-at `0`. So the x1.2 Autopilot speedup ([autopilot.md](autopilot.md)) multiplies the Zone target.
+(`scripts/psp-zone-autopilot.py`): `craft+0x328` reads **`81.6` = `34 * 1.2 * 2`** on 1,499 of
+1,500 logged frames, with `craft+0x294` at `1.0` and the zone counter `craft+0x28c` at `0`. The one
+`0.0` (frame 448) is one of the 34 half-grounded frames at the ramp's lip, the branch's own
+`(flags & 1)` ground gate. The `1.2` is not a held launch grade: that one lives in `craft+0x294`,
+which reads `1.0` here. So the x1.2 Autopilot speedup ([autopilot.md](autopilot.md)) multiplies the Zone target.
 Confidence **88** (two sources: the control flow and the live word).
 
 Ported for that one term (`oag_physics::engine::engine`, the auto-speed branch applies
@@ -82,7 +84,20 @@ and nothing fires a Turbo in Zone; a Zone barrel roll's payout would reach it. O
 Cross-title: HD's Zone engine (`Craft_UpdateThrottle`, `0x000efb50`) is not this shape (its Zone mask
 only ramps `craft+0x2d4`, and it reads no `+0x2f0`), so HD's Zone keeps flying Pulse's auto-speed with
 the speedup **inherited from Pulse**; it reaches only an Autopilot in Zone, which Zone never hands out
-(the `--autopilot` aid alone). Pure, 2048, Omega: not checked here.
+(the `--autopilot` aid alone): **checked, differs** (HD's engine), HD's Zone inherits Pulse's.
+**Pure: checked, applies** (static): its `Ship_UpdateEngine` (`0x0892f1f0`) has the same mode-6
+branch (`g_autospeed` base plus step times `craft+0x244`) falling into the same `flags & 4` multiply,
+by `craft+0x258` there. Pure's mode 6 being Zone is the zone-hover thread's open question, so this is
+static only. **2048 and Omega: not checkable here**: no Zone race of either runs in this engine yet.
+
+**The fork re-commit, per title** (the driver half of this lane, `docs/gameplay/ai.md`). Route counts
+of every Zone circuit as loaded here: HD `zone_1`, `zone_2`, `zone_4`, Vineta K 0, `zone_3` 1;
+Pure `01_Zone`, `02_Zone`, `04_Zone` 0, `03_Zone` 1. Where there are no routes the failure cannot
+happen: checked, not reachable. HD `zone_3` under the original's driver ends 7,200 ticks at shield 100.
+Pure has no original driver (`original_driver` unset), so its Autopilot is this project's driver and
+the re-commit stays plan-gated there; `03_Zone` ended at 94.6 to 98.2, no deck failure seen.
+**Pure's Zone drains shield on every circuit** (02_Zone 93.9 before this lane's speedup and 77.4 after,
+01_Zone 91.6 and 81.3), gradually and on circuits with no fork: a different class, open.
 
 ## On 05_Track a Zone craft falls short of the first jump in the original too (2026-10-20)
 

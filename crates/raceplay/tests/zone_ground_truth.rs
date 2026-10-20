@@ -1002,8 +1002,9 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
 /// A Zone craft on autopilot that falls short of Pulse `05_Track`'s first jump lands on route
 /// 1's deck and its driver follows it there, as `Ai_ChooseBranch`'s re-commit does.
 ///
-/// Zone's speed at the lip (about 110) is under what the jump needs (about 120), so the craft
-/// lands on the deck below. A lone craft builds no route plans, and the re-commit used to offer
+/// The craft reaches the ring's ramp at Zone's zone-0 speed (about 125 under the Autopilot) and
+/// lands on the deck below, as the original's does at 121-125 (`docs/ghidra/functions/
+/// psp-pulse-usa/zone-start.md`). A lone craft builds no route plans, and the re-commit used to offer
 /// only planned routes: the driver stayed on the ring 60 units above, ground the wall from tick
 /// 886 and was still short of lap 2 at tick 7,200 with the shield at 0. Two laps and the
 /// shield untouched is what the fixed race does (`docs/gameplay/ai.md`).
