@@ -366,8 +366,14 @@ credited tick 1583 with about 12% of the shift and the wrong sign, was wrong:
 including that one event closes the gap.** The force-term result stands. What is
 left on this crest does not move contact: from 1597 to 1610 our nose sits up to
 about `32` mrad off the original's in the air, and our vertical velocity carries
-about `2` units/s of residual from the 1580 landing. Both are leads for the
-airborne pitch laws, not for the cushion.
+about `2` units/s of residual from the 1580 landing. **Measured 2026-10-20: the nose
+is a hover escape, not an air pitch law.** At 1594 the original escapes off a
+wall under the derived rear probe (`0.2026` along up, no contact), which ours did
+not do; with it ported, a run seeded at 1594 holds the nose within `1.5` mrad and
+lands on the original's tick, while the `--reseed 60` run keeps its figure because
+it reaches 1594 carrying the vertical-velocity residual. The air pitch laws
+themselves reproduce the original to `0.008` rad/s² on a drop test. See
+[airborne-ground-truth.md](airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch).
 Cross-title: **not checkable**. `oag-trace run` replays Pulse PSP captures
 only (`oag_pulse::open`), and no Pure, HD, 2048 or Omega capture of a cage
 circuit exists. The race already runs the cage wherever a track's header asks

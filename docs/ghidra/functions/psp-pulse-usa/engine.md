@@ -1809,6 +1809,14 @@ Both are visible in `data/traces/talons-junction-pitch-both-ways.csv`; the
 scenario is `verification/scenarios/pitch-both-ways.inputs` and the analysis is
 in [angular-velocity-column.md](../../../physics/angular-velocity-column.md#the-input-measured-rather-than-assumed).
 
+**Every capture carries it since 2026-10-20**: `scripts/psp_trace_fields.py`'s `CONTROL_FIELDS`
+writes `stick_pitch` (`+0x10`) and `stick_steer` (`+0x00`, the steering target `craft+0x2c0`
+ramps toward) off `CONTROLS_POINTER` (`craft+0x78`), in `psp-trace.py` and `psp-autopilot.py`.
+Read live again on that day: `-100` holding up, `+100` holding down, `0` centred. Held in the air,
+the gain `pitch_air` reproduces the original's next rate to `0.008` rad/s² on average against a
+`1.92` input
+([airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-air-pitch-laws-against-a-drop-test-2026-10-20-pulse-air-pitch)).
+
 ## The sideshift is a force, and its direction is read rather than guessed
 
 Two questions closed together: what a sideshift *is* (this page and
@@ -2304,6 +2312,19 @@ longer an open question. Confidence **90** on the mechanism (up from 80, the
 missing-gate deduction that lowered it no longer applies); the `1 = Floor`
 identity itself keeps whatever confidence the pass that first asserted it
 carries, unchanged by this one.
+
+**Corrected 2026-10-20 (`pulse-air-pitch`): the gate is the shape tag, and ours was wrong
+twice.** The paragraph above defends `hit.surface == Surface::Floor` as the gate. With `+0x28`
+recovered as the narrowphase's own literal (`1` for every mesh), `craft+0x208 == 1` passes for
+every track surface, a `Wall` included, and the translate runs inside the probe loop before the
+type test, so it also fires on a frame where no probe is in contact. Both are seen live: on
+Talon's Junction's crest (clean lap, tick 1594) the front probe's nearest hit is a wall, the
+derived rear hit sits `0.798` above it, and the recorded body rises `0.2026` along up beyond its
+velocity with `grounded` reading `0` next; `1 - 0.798 = 0.2017`. Ours escaped off `Floor` only and
+dropped every escape when nothing was in contact, so it stayed `0.202` low and the rear probe's
+spring then pitched the nose `15` mrad off the original's by landing. Confidence **85**; on
+(`oag_physics::hover::Rig::escape_floor_only`, false on Pulse). Evidence and the before/after:
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch).
 
 ### Resolved: neither reading was refuted, the load was
 

@@ -64,67 +64,58 @@ ticks, `0.5` runs included - see
 
 - `grip_air` has no runtime leg. Falsifiable off the existing captures by a pose
   walk over the airbrake term; not fittable off them.
-- The airborne pitch gain has no runtime leg **and no input column** - blocked on
-  the craft's pitch-axis offset, not on a track.
-- The `-0.3` airborne weathervane has no runtime leg - blocked on a capture that
-  centres the stick while airborne, not on a longer jump.
-
-- **A measured airborne pitch residual on the 1595 crest (2026-10-20).** At
-  `oag-trace run --reseed 60` on the clean lap, with the replay now running the
-  collision cage, contact matches the original. Our forward axis still sits
-  `3` to `32` mrad off the original's along its up axis from 1596 to 1610. The
-  error grows through the airborne ticks and peaks at 1609-1610. It is the
-  first quantity that departs once the cage is in, so it is the cheapest
-  falsification target for the air pitch laws (`docs/physics/README.md`, "The
-  crest-phase drift traces to a wall event").
+- ~~The airborne pitch gain has no runtime leg and no input column.~~ **Closed
+  2026-10-20 (`pulse-air-pitch`).** The axis was already located
+  (`*(craft+0x78) + 0x10`, engine.md "The pitch axis, read at runtime"); every
+  capture now writes it as `stick_pitch`, with `stick_steer` (`+0x00`). Four drop
+  tests (`psp-trace.py --place`, Talon's start straight) put the pitch residual at
+  `+0.008`, `+0.008` and `+0.001` rad/s² centred, up and down against a `1.92`
+  input (`docs/physics/airborne-ground-truth.md`, "The air pitch laws against a
+  drop test"). Gain, sign, scale, bias and in-air pitch damping hold.
+- **The `-0.3` airborne weathervane is still open.** The drops were placed with
+  velocity along the nose, so its yaw term is `0.16` rad/s² rms against a `0.23`
+  rms yaw residual; the fit gives `-0.16` or `-0.37` depending on the constant.
+- ~~The measured airborne pitch residual on the 1595 crest.~~ **Closed
+  2026-10-20: a hover escape off a wall at 1594, not an air pitch law** (same
+  page, "The 1595 crest residual is a hover escape off a wall"). Ported; seeded at
+  1594 the nose stays within `1.5` mrad and the landing is the original's tick.
+  The `--reseed 60` run keeps its `32` mrad because it reaches 1594 with `+1.7`
+  units/s of vertical velocity from 1580-1584.
+- The air pitch residual on the clean lap's own ten fully airborne crest rows is
+  a steady `-0.34` rad/s² (against `+0.008` on the drops), and `-0.23` on its
+  six half-grounded rows. Small, and the opposite sign to the old free-run gap;
+  unattributed.
 
 ## Next Steps
 
-- **Cheapest first: find the pitch-axis craft field.** `steer` is `craft+0x2c0`
-  and the airbrakes are `+0x2c4`/`+0x2c8`, so the input block is contiguous and
-  small; the pitch axis is very likely inside it or beside it. Add it to
-  `scripts/psp_trace_fields.py` and every future capture carries it.
-- **Then re-capture Talon's Junction with a script that centres the stick over
-  the 1595 crest.** No track unlock is needed - `16_Track` is one of the three
-  always-free entries - and the crest is dated to the tick by
-  `crates/trace/tests/hover_contact_ground_truth.rs`. That is the whole
-  weathervane experiment, on a circuit already reachable.
-- **`13_Track`, the circuit with the clean authored jump, is not reachable from a
-  fresh profile - measured, not assumed.** 2026-08-26.
-  `Data\Plugins\PI001\Definition.xml`'s `PI_Track name="13_Track"` carries
-  `<Unlock Grid="Grid6">`, and Race Campaign's own progression screen showed only
-  Grid 1 of 16 unlocked, needing 12 of 24 points to open Grid 2 - so five more
-  grids stand between a fresh profile and 13_Track. Reaching it means either
-  grinding five Race Campaign grids first (real races, real placements, not a
-  Time Trial capture) or editing the profile's own progression state, neither of
-  which is a next step to take unattended.
-- **RaceBox's own Custom Race → Track Select is not a free track picker.**
-  Confirmed live (PPSSPP SDL under Xvfb, `47811`/websocket debugger, screenshots
-  via `magick import -window root`): it is a wrapping list of exactly **three**
-  entries, moved with **up/down**, not left/right
-  (`docs/reverse-engineering/ppsspp-debugger.md` already said so; that session
-  re-derived it by watching `right` do nothing). Those three are exactly the
-  `PI_Track` entries with **no `<Unlock>` element at all** - `16_Track` (Talon's
-  Junction, always first), `03_Track` (Moa Therma) and `18_Track` (Metropia
-  reversed) - everything else needs its own `<Unlock Grid="N">` cleared first.
-  None of the three has a clean authored jump, which is what made this thread
-  look blocked; the three events above are what it has instead.
-- **The nearer locked target is `10_Track`, not `13_Track`.** Its own `<Unlock
-  Grid="Grid0">` is the shallowest gate of any locked track (`Grid0` is the
-  currently-active grid, not a future one), and `docs/gameplay/ai.md`'s own table
-  already flags 40 of its 72 unsupported-line samples as the same "nothing within
-  sixty reaches" shape as `13_Track`'s jump - a partial rather than a clean case,
-  but real and much closer. Reaching it still needs at least one Race Campaign
-  cell cleared (a real race, opponents and weapons on, placed well enough for the
-  cell's medal), which `scripts/psp-autopilot.py` was not built or tested for -
-  it flies a Time Trial line, not a contested race.
+- **The weathervane: a drop with sideslip.** `psp-trace.py --place` takes the
+  velocity along the tangent it faces; give it a velocity off the nose (a
+  `--place` variant, or a write of `body+0x140` after the place) and hold the
+  stick centred. Ten degrees of slip at `110` units/s is about `0.6` rad/s² of
+  airborne weathervane yaw, several times the residual. Run it with
+  `crates/trace/tests/crest_pitch_pose_walk.rs` (`OAG_CREST_TRACE=<csv>`), whose
+  `ROW` lines carry the yaw residual and the weathervane's yaw term.
+- **The `--reseed 60` crest's vertical velocity.** It enters 1594 `+1.7` units/s
+  fast: `+0.3` to `+0.7` after the 1579 landing escape (a `1.7`-unit lift) and
+  `+1.33` more on the 1584 cage tick. One step from each recorded row matches
+  there (`0.18` units/s from 1583), so this is accumulated state; roll forward
+  from 1575 with one component restored per tick (the sweep's second test,
+  `OAG_ROLL_FROM`) to find which.
+- **Drop-test caveat.** Placed `20` units up the craft was back on the track by
+  tick 0; at `9` it flew. The reset was not traced (the cage top is the
+  suspect).
+- `13_Track`/`10_Track` reachability notes below stand, and matter less now
+  that a drop test gives clean airborne ticks on any always-free circuit.
 - Whichever track is reached, the loop is: `oag-trace track --source <image>
-  --track 'Data\Environments\<NN>_Track\track.vex'` for the spline (accepts any
-  track, not just the default), `scripts/psp-autopilot.py --spline ...
-  --trace-out data/traces/<name>.csv` for the capture, then read the airborne
-  terms off the airborne ticks the same way
-  `docs/physics/cornering-ground-truth.md`'s `scripts/trace-cornering.py` reads
-  the grounded ones.
+  --track 'Data\Environments\<NN>_Track\track.vex'` for the spline,
+  `scripts/psp-autopilot.py --spline ... --trace-out data/traces/<name>.csv`
+  (`--hold-near X,Y,Z,R,BUTTONS` holds an input over one feature) for the
+  capture, then the crest sweep above.
+- **`13_Track`, the circuit with the clean authored jump, is not reachable from a
+  fresh profile - measured, not assumed** (2026-08-26): `<Unlock Grid="Grid6">`;
+  Race Campaign showed Grid 1 of 16 open. RaceBox Custom Race offers exactly
+  `16_Track`, `03_Track` and `18_Track` (the three with no `<Unlock>`), moved with
+  up/down. The nearer locked target is `10_Track` (`<Unlock Grid="Grid0">`).
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
