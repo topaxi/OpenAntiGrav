@@ -28,6 +28,12 @@ if [ ! -d "$dst" ]; then
     esac
   done
 fi
+# Comparison frames need the colour buffers written back: with the stock setting off, a
+# capture of the original reads about 1.74x too bright (docs/reverse-engineering/rpcs3-capture.md).
+# The per-game config overrides the global one, so both are set.
+for cfg in "$dst/config.yml" "$dst"/custom_configs/config_*.yml; do
+  [ -f "$cfg" ] && sed -i 's/Write Color Buffers: false/Write Color Buffers: true/' "$cfg"
+done
 pad="OAG Pad $lane"
 mkdir -p "$dst/input_configs/global"
 printf 'Player 1 Input:\n  Handler: Evdev\n  Device: %s\n' "$pad" > "$dst/input_configs/global/oag.yml"

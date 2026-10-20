@@ -198,7 +198,7 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
     configuration rather than overlaying it - a three-line file would reset
     `Miscellaneous: GDB Server` and `Core: Assume External Debugger` to their
     defaults, and the failure would read as "breakpoints never fire". So this
-    copies every line of the stock file and edits exactly two keys, each
+    copies every line of the stock file and edits a few keys, each
     matched inside its own top-level section (`Video:` has a `Renderer:` too):
 
     - `Audio: Renderer` -> `"Null"`, always, **with the quotes**: a bare
@@ -207,6 +207,8 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
       unquoted form. The stock file quotes its own `"Null"`s (`Keyboard`,
       `Microphone Type`) for the same reason. A scripted run on the virtual
       display has no business on the user's speakers.
+    - `Video: Write Color Buffers` -> `true`, unless `OAG_RPCS3_WCB=0`: off, a frame of
+      the original reads about 1.74x too bright (2026-10-20).
     - `Core: PPU Decoder` -> `Interpreter (static)` when `interpreter` is
       set. `Z0` breakpoints only fire under it; the stock `Recompiler (LLVM)`
       answers `OK` and never stops (rpcs3-debugger.md). Boot takes ~75 s
@@ -218,6 +220,11 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
     `Session.config_report()` pulls the two lines out of it.
     """
     edits = {("Audio", "Renderer"): "\"Null\""}
+    # Colour buffers written back, unless `OAG_RPCS3_WCB=0`: with the stock `false` a
+    # capture of the original reads about 1.74x too bright, and a comparison against it is
+    # wrong by that much (rpcs3-capture.md, 2026-10-20).
+    if os.environ.get("OAG_RPCS3_WCB") != "0":
+        edits[("Video", "Write Color Buffers")] = "true"
     if GDB_SERVER:
         edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
     elif os.environ.get("OAG_RPCS3_NO_GDB") == "1":
