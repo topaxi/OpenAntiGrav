@@ -13,12 +13,16 @@ pub struct Laws {
     /// ([`crate::engine::ENGINE_OUTPUT_DOUBLE`]). Pure's engine (`0x0892f1f0`) has no such
     /// factor, measured live on 374 frames to `3e-6`.
     pub engine_output_double: bool,
+    /// The grounded quadratic drag coefficient: Pulse's [`crate::passive::DRAG_GROUND`],
+    /// Pure's [`crate::passive::DRAG_GROUND_PURE`].
+    pub drag_ground: f32,
 }
 
 impl Laws {
     /// Pulse's laws, every title's unless it measured its own.
     pub const PULSE: Self = Self {
         engine_output_double: true,
+        drag_ground: crate::passive::DRAG_GROUND,
     };
 }
 

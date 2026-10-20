@@ -524,13 +524,15 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 /// `<Misc weight_distribution>`.
 ///
 /// **Measured on Pure PSP (USA)**, 2026-10-20 (`docs/physics/pure-physics.md`): the engine does
-/// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`).
+/// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), and
+/// its grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame).
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::chosen(false),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     engine_output_double: oag_title::pre_race::Sourced::measured(false),
+    drag_ground: oag_title::pre_race::Sourced::measured(-0.0025),
 };
 
 #[cfg(test)]
@@ -546,6 +548,16 @@ mod tests {
         assert!(!super::CRAFT_LAWS.engine_output_double.value);
         assert_eq!(
             super::CRAFT_LAWS.engine_output_double.origin,
+            oag_title::Origin::Measured
+        );
+    }
+
+    /// Pure's grounded drag is half Pulse's, measured live.
+    #[test]
+    fn the_grounded_drag_is_pures_own() {
+        assert_eq!(super::CRAFT_LAWS.drag_ground.value, -0.0025);
+        assert_eq!(
+            super::CRAFT_LAWS.drag_ground.origin,
             oag_title::Origin::Measured
         );
     }

@@ -74,6 +74,7 @@ pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws 
     let pulse = oag_physics::laws::Laws::PULSE;
     laws.map_or(pulse, |laws| oag_physics::laws::Laws {
         engine_output_double: laws.engine_output_double.value,
+        drag_ground: laws.drag_ground.value,
     })
 }
 

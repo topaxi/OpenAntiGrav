@@ -840,6 +840,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // Ubermall PHANTOM, `docs/physics/airborne-ground-truth.md`.
     class_gravity_on_flight: oag_title::pre_race::Sourced::measured(true),
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

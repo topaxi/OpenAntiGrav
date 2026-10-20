@@ -556,7 +556,12 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     acc.local_angular.x += pitch;
 
     // 6. Quadratic drag and 7. gravity.
-    let drag = passive::quadratic_drag(velocity, cached_speed, control_contact);
+    let drag = passive::quadratic_drag(
+        velocity,
+        cached_speed,
+        control_contact,
+        env.laws.drag_ground,
+    );
     let gravity = passive::gravity(
         handling,
         state.body.mass,

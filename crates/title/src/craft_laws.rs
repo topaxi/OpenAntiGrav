@@ -26,4 +26,7 @@ pub struct CraftLaws {
     /// `Ship_UpdateEngine` doubles its output, `T * craft+0x294 * 2.0`, as Pulse's does.
     /// Wipeout Pure's engine has no doubling (`oag_physics::laws::Laws::engine_output_double`).
     pub engine_output_double: Sourced<bool>,
+    /// The grounded quadratic drag coefficient, `Ship_ApplyQuadraticDrag`'s: Pulse `-0.005`,
+    /// Wipeout Pure `-0.0025` (`oag_physics::laws::Laws::drag_ground`).
+    pub drag_ground: Sourced<f32>,
 }
