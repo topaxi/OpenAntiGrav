@@ -102,40 +102,82 @@ rotates its tensor (`body+0x50` read live as `R I R^T`,
 [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md)), so the frame is a
 per-title law.
 
-**Measured, held (2026-10-20).** Ported twice as a per-title craft law (Pulse and PS2 world
-axes; HD rotated, measured; Omega and 2048 inheriting HD's; Pure chosen rotated, unchanged until
-it is measured) and reverted twice; the second port is commit `9a2c5b017` with its references
-in `3ee2b2bae`, reverted by `c6116853b` and `9d4c1fb45`, so a follow-up re-applies it by
-reverting the reverts.
+**On (2026-10-20), a per-title craft law** (`oag_physics::InertiaFrame`,
+`oag_title::craft_laws::CraftLaws::inertia_rotates`): Pulse and the PS2 world axes, measured;
+HD rotated, measured; Omega and 2048 inherit HD's; Pure rotated, chosen, unchanged until a
+`pure-physics` lane measures it (with Pulse's frame Pure's opponent stint walls rose
+`69 -> 541`). It was ported and held twice (`9a2c5b017`, held by `c6116853b`) because this
+engine's own AI gates regressed under it; how they were judged, and what was changed in our
+AI, is [below](#our-ai-against-the-air-laws).
 
 - On the tree before the pitch gate and the bias, the player's whole-race autopilot in
   `opponent_autopilot_sweep` (4 seeds, 48 races per Pulse difficulty) gained rescues: novice
   `62 -> 106` with the switch off and `68 -> 91` on.
 - On the tree with the gate, the bias and HD's gravity law it lowered them: novice
   `24 -> 14` and `16 -> 7`, Ace `24 -> 22` and `24 -> 25`, opponent stint rescues `6 -> 1`
-  and `3 -> 2`; Pure's opponent stint walls rose `69 -> 541` (why Pure stays rotated). The
-  lone craft's `race_ground_truth` stayed twelve of twelve clean.
-- **But `just test-data` regressed four of this engine's own AI gates under it** (the table
-  below), and that is what holds it: the fix belongs in our driver and speed plan, not in the
-  measured law or the gates.
+  and `3 -> 2`. The lone craft's `race_ground_truth` stayed twelve of twelve clean.
 
-## Held: what the two Pulse laws break in our AI's disc-backed gates
+## Our AI against the air laws
 
-Found by `just test-data-affected` (full suite, 9,097 tests) on the tree with both laws on.
-Causes separated by rerunning the eight tests with the inertia frame forced to `Body` (six
-pass, so the tensor breaks them), then also with the bias forced off (the last two pass, so
-the bias breaks them). The tensor alone with the bias off was not run.
+The three Pulse laws and HD's bias were measured on 2026-10-19 and held a day because this
+engine's AI gates regressed under them (`ai_clean_lap_gate`, `speed_plan_ground_truth`,
+`quiet_replay_ground_truth`'s moving pack, `autopilot_original_ground_truth`'s every-circuit
+run). Lane `driver-vs-new-physics` found two things.
 
-| test (`oag-raceplay`) | under the bias | under the tensor |
-| --- | --- | --- |
-| `ai_clean_lap_gate::track_01_phantom` | **regresses**: `NoCleanLap`, baseline `CleanLap` | not separated (fails with both on) |
-| `speed_plan_ground_truth::speed_plan_flash_forward` | **regresses**: `06_Track FLASH` no longer clean (unresolved walls at samples 1236, 1237) | not separated (fails with both on) |
-| `ai_clean_lap_gate::track_07_flash` | passes | **regresses**: 20 contact ticks, baseline 2 + 10 |
-| `ai_clean_lap_gate::track_07_venom` | passes | **regresses**: clean lap 51.4 s, baseline 49.3 s + 1.5 s |
-| `ai_clean_lap_gate::track_14_phantom` | passes | **regresses**: 532 contact ticks, baseline 521 + 10 |
-| `quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack` | passes | **regresses**: slot 0's Missile never carries a lock in the pack |
-| `speed_plan_ground_truth::speed_plan_rapier_reversed` | passes | **improves**: `29_Track RAPIER` now clean (remove from `NOT_CLEAN`) |
-| `speed_plan_ground_truth::speed_plan_venom_forward` | passes | **improves**: `06_Track VENOM` now clean (remove from `NOT_CLEAN`) |
+**The gates flip on noise.** With every law off, a constant airborne pitch torque `eps`
+added to the force law (`acc.local_angular.x += eps` while the contact flag is clear, a
+scratch switch, not in the tree; the bias is `8`) regresses this many of the 58 AI-gate tests
+(48 clean-lap rows, 8 speed-plan slices, the moving-pack replay, the original's every-circuit
+autopilot), against `0` at `eps = 0`:
+
+| `eps` | `-1e-2` | `-1e-3` | `-1e-4` | `-1e-5` | `0` | `1e-2` | `1e-3` | `1e-4` | `1e-5` | median | max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| laws off | 1 | 4 | 6 | 7 | 0 | 2 | 7 | 4 | 1 | 4 | 7 |
+| gate | 1 | 4 | 5 | 6 | 1 | 2 | 8 | 4 | 1 | 4 | 8 |
+| tensor | 7 | 4 | 5 | 4 | 7 | 5 | 5 | 8 | 4 | 5 | 8 |
+| gate + tensor | 7 | 4 | 5 | 4 | 7 | 5 | 5 | 7 | 4 | 5 | 7 |
+| bias + `air_trim` | 3 | 5 | 5 | 3 | 1 | 5 | 7 | 8 | 1 | 5 | 8 |
+| bias + tensor + `air_trim` | 9 | 3 | 5 | 6 | 4 | 6 | 7 | 6 | 6 | 6 | 9 |
+| all four + `air_trim` | 8 | 6 | 6 | 4 | 2 | 5 | 4 | 7 | 8 | 6 | 8 |
+| bias, no `air_trim` | 5 | 2 | 5 | 8 | 5 | 8 | 9 | 6 | 7 | 6 | 9 |
+| all four, no `air_trim` | 10 | 8 | 11 | 8 | 6 | 9 | 6 | 9 | 8 | 8 | 11 |
+
+(Improvements, a row newly clean, are not counted.) The mechanism is plan selection: whether
+a re-learned hull plan verifies (`oag_ai::SpeedPlan::adapt`), and so whether a craft follows
+it, the reference at its yaw share, or no plan, turns on trajectory differences far below
+anything a law changes. A single run of a gate row is a coin. **The bar the lead set**
+(2026-10-20): a law may regenerate `ai_clean_lap_gate::BASELINE` and
+`speed_plan_ground_truth::NOT_CLEAN` when its median is at most laws-off + 2 and its max at
+most laws-off max + 2. Each law met it with our AI changed as below; the regenerating
+commits carry the counts. The same sweep on `ai_dekonstruct_symptoms`' 05_Track RAPIER field:
+dead stops laws off `2 1 1 2 1 1 1 6 2`, all four with `air_trim` `2 2 2 3 4 0 4 4 3`; every
+stop follows a `ResetZone` rescue at samples 88-103 by about 70 ticks (the short relaunch,
+[ai.md](../gameplay/ai.md)), in either inertia frame.
+
+**What changed in our AI** (ours, chosen, not measured):
+
+- `oag_ai::air_trim`: the driver holds `-weight_distribution / (100 * pitch_air)` of pitch
+  while the contact flag the force law reads is clear, the stick a player who knows their craft
+  holds against it. Our driver sent no pitch input at all before. Zero with the bias off.
+  Read the contact flag the force law reads on entry (`ShipState::grounded`), not
+  `grounded_prev`: one frame late, the trim missed every takeoff and landing frame and the
+  bias row read `7` rather than `5`.
+- `oag_ai::SpeedPlan::adapt`'s runs fail as `Stalled` after 600 ticks without a new furthest
+  point on the line. Under the tensor a Triakis hull wedged into the floor after
+  `01_Track`'s jump landing (sample ~150, `1.3` units under the surface) with a forward
+  velocity of 165 and its index frozen for the whole 22,688-tick verification: no failure
+  fired, `adapt` never ran a learning pass, and the race fell back to the reference plan at
+  `0.77`. Scoped to `adapt`: the reference build tolerates a hull that wedges and frees
+  itself (`01_Track` RAPIER, every law off).
+- Tried and dropped, each failing the laws-off check (58 of 58 at `eps = 0`): pitching in
+  the air toward the line's tangent (the original's `Ai_ComputePitch` law) and a rate-only
+  pitch damper; and steering held straight in the air (median `19` with every law off).
+
+**HD's `12_sol_2` rescues**, the reason HD's bias was held: traced with
+`opponent_autopilot_sweep::races_others`, every extra rescue is a `ResetZone` hit by an
+opponent on this engine's driver that never flew an autopilot stint, not the original's
+driver. With `air_trim`, 12 seeds, novice and Ace (79 paired races): rescues `10 -> 11` with
+the switch off and `10 -> 10` on.
 
 ## The pitch-input gate, live
 
@@ -154,11 +196,11 @@ input torque (`input * 0.3 / I_xx`, `1.92` rad/s² at full deflection) is:
 So the original drops the whole input exactly where the dot product crosses
 `0.9`, on three crossings and both input signs: capture 2 ticks 1236/1237
 (`0.9022` open, `0.8984` closed) and 1297/1298, capture 3 ticks 1312/1313
-(`0.9009`, `0.8976`). **Confidence 90. Measured, held (2026-10-20)**: committed on in `6cb7830a6`, then
-switched off (`oag_physics::engine::PITCH_GATE_ON`) because on its own it costs the original's
-autopilot driver two rescues on Pulse's `05_Track`
+(`0.9009`, `0.8976`). **Confidence 90. On (2026-10-20)**, after the tensor and the bias: on its own it cost
+the original's autopilot driver two rescues on Pulse's `05_Track`
 (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`,
-tick 7282); with the tensor and the bias also on that test passed. The mechanism is
+tick 7282), which passes with all three on; that test also fails under 2 of the 9
+perturbations [above](#our-ai-against-the-air-laws) with every law off. The mechanism is
 `oag_physics::engine::pitch_aligned`,
 reading the located sample `Environment::track_sample` carries (the entity's `+0xaf0`,
 whose `down` is `+0xb10`); with no sample the gate is open, chosen. Every title runs it:
@@ -186,18 +228,17 @@ on both captures. A regression of the residual on pitch rate, yaw rate and input
 puts the remaining constant at `+0.009` (capture 2) and `+0.226` (capture 3) with
 the bias: a pitch-rate term the bias does not explain is still in the air.
 **Confidence 85** for the bias (static read, the live register on every airborne
-frame, and the residual). **Measured, held (2026-10-20)** on every title: the mechanism is in
+frame, and the residual). **On (2026-10-20)**: the mechanism is in
 `oag_physics::engine::pitch` (`Dimensions::weight_distribution`, behind
-`oag_title::craft_laws::CraftLaws::air_pitch_bias` and `ShipState::air_pitch_bias`), and it
-is off by default; on, it regresses two of our AI's gates (the table above). Committed on as
-`34639304f` (references `91b5112dd`, reverted by `7e1743a9e`); the hold is one commit that
-switches the default off, so a follow-up reverts that to put it back:
+`oag_title::craft_laws::CraftLaws::air_pitch_bias` and `ShipState::air_pitch_bias`). Held
+for a day while our AI's gates regressed; this engine's driver now holds it off with pitch
+(`oag_ai::air_trim`, [above](#our-ai-against-the-air-laws)).
 
 | title | bias | origin |
 | --- | --- | --- |
-| Pulse (PSP, PS2) | off | **measured, held**: on, our AI's gates regress (above) |
-| Wipeout HD | off | **measured, not yet on: our driver regresses.** Read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below); on, HD's autopilot rescues rise by a net 4 over 32 races (twice, before and after HD's gravity law), so it waits for this engine's driver to fly HD with it |
-| Omega, 2048 | off | inherited from HD |
+| Pulse (PSP, PS2) | on | measured |
+| Wipeout HD | on | measured: read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below) |
+| Omega, 2048 | on | inherited from HD |
 | Pure | off | Pure authors no `weight_distribution`; inherited from Pulse otherwise and unmeasured (a `pure-physics` lane is to measure Pure) |
 
 2048/Omega: **not checkable** here (no executable read of their pitch update, no Omega
@@ -260,5 +301,5 @@ tick along the craft's up, the same under either law: open, not this law.
 **The in-air `weight_distribution` torque on HD, live.** The team block reads
 `-4.0` (Feisar). With the bias off, the airborne pitch residual is `+0.205` and
 `+0.176` rad/s² (median, the two jumps) against `4 / 17.33 = 0.231` predicted; on, it
-is `-0.026`. **Confidence 85**; held off, as the table above says. The pitch gate never closed over this jump (the product stayed at or
+is `-0.026`. **Confidence 85**; on, as the table above says. The pitch gate never closed over this jump (the product stayed at or
 above `0.926`), so HD's gate is still read, not seen.

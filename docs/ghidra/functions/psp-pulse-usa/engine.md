@@ -1770,10 +1770,10 @@ and bias ([ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md)). The bias is
 `<Misc weight_distribution>` (the PS2 parser, below); the PSP disc authors
 `8.0` on Assegai, Qirex and Triakis, `-8.0` on AG Systems, Feisar and Piranha, and
 `0.0` on EGX and Goteki. It was read live as `8.0` on a captured craft
-(PPSSPP, 2026-10-19). **The gate is measured** (`oag_physics::engine::pitch_aligned`, held off by
-`PITCH_GATE_ON` until this engine's AI flies with it; live on three crossings, confidence 90,
+(PPSSPP, 2026-10-19). **The gate is measured** (`oag_physics::engine::pitch_aligned`, on; live on three
+crossings, confidence 90,
 [airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-pitch-input-gate-live));
-the bias is measured (confidence 85) and held off until this engine's AI flies with it
+the bias is measured (confidence 85) and on
 ([the same page](../../../physics/airborne-ground-truth.md#the-in-air-weight_distribution-torque-live)).
 
 Confidence **82**. `pitch_air` and `pitch_ground` are plain gains on the input
