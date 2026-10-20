@@ -537,6 +537,7 @@ impl<R: Raycaster + ?Sized> Course<'_, R> {
     ) -> Tick {
         let ctx = Context {
             yaw_ceiling: Some(ceiling),
+            air_trim: crate::air_trim(&craft.handling, run.state.air_pitch_bias),
             ..Context::new(self.line, tuning)
         };
         let before = run.driver.index;

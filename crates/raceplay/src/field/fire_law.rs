@@ -91,6 +91,7 @@ impl Race {
     /// [`FireLaw::Ours`]: `oag_ai::Driver::wants_to_fire`.
     fn wants_to_fire(&self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
+            air_trim: 0.0,
             line: self.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],

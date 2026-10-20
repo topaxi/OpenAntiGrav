@@ -80,7 +80,7 @@ pub mod weapon_ai;
 pub use difficulty::Difficulty;
 pub use driver::{
     AVOIDANCE_LOOKAHEAD, AWARENESS_RANGE, Context, Driver, PAD_LOOKAHEAD, Personality, Reflex,
-    Tuning, hull_yaw_ceiling,
+    Tuning, air_trim, hull_yaw_ceiling,
 };
 pub use field::{Field, Hazard, Pad, Rival};
 pub use line::{Aim, Frame, Line, shift as line_shift};

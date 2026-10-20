@@ -101,6 +101,7 @@ fn a_provoked_driver_covers_harder_than_a_calm_one() {
                 &aim,
                 40.0,
                 &Context {
+                    air_trim: 0.0,
                     line: &line,
                     tuning: &tuning,
                     pilot: &Pilot::BALANCED,
