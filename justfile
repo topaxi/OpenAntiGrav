@@ -1055,10 +1055,10 @@ frame-compare theirs ours out="/tmp":
 # Output and images stay under data/compare/ (gitignored). `--serve` serves it on the LAN.
 # See docs/tools/compare-page.md.
 #
-#   just compare-page                                  # the seed manifest
+#   just compare-page                                  # every manifest in data/reference/compare-page/
 #   just compare-page data/reference/mine.toml --serve
 [doc("Build the original-vs-ours comparison page from a manifest (--serve for the LAN)")]
-compare-page manifest="data/reference/compare-page/seed.toml" *ARGS:
+compare-page manifest="data/reference/compare-page" *ARGS:
     python3 scripts/compare-page.py {{manifest}} {{ARGS}}
 
 # Rebuild the seed manifest from the reference sheets under data/reference/.

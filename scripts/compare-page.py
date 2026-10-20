@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`just compare-page`: original and ours side by side, on one static page.
 
-    scripts/compare-page.py MANIFEST [--out DIR] [--serve [--port N]]
+    scripts/compare-page.py MANIFEST_OR_DIR... [--out DIR] [--serve [--port N]]
     scripts/compare-page.py --check-publish-lock      (used by `just publish-compare`)
 
 MANIFEST is TOML (docs/tools/compare-page.md): a `[page]` table and one `[[entry]]`
@@ -54,6 +54,35 @@ def refuse(msg):
     raise ManifestError(msg)
 
 
+def manifest_files(args: list[str]) -> list[Path]:
+    """Each argument is a manifest or a directory of them (every *.toml in it, sorted)."""
+    files = []
+    for a in args:
+        p = Path(a).resolve()
+        files += sorted(p.glob("*.toml")) if p.is_dir() else [p]
+    if not files:
+        refuse(f"no manifest found in {args}")
+    return files
+
+
+def load_all(paths: list[Path]) -> dict:
+    """The first manifest's [page]; every file's entries, each remembering its own directory."""
+    merged = None
+    ids = set()
+    for path in paths:
+        doc = load_manifest(path)
+        for e in doc["entry"]:
+            if e["id"] in ids:
+                refuse(f"{path}: entry id {e['id']!r} already used by an earlier manifest")
+            ids.add(e["id"])
+            e["_base"] = path.parent
+        if merged is None:
+            merged = doc
+        else:
+            merged["entry"] += doc["entry"]
+    return merged
+
+
 def load_manifest(path: Path) -> dict:
     try:
         doc = tomllib.loads(path.read_text())
@@ -81,7 +110,7 @@ def load_manifest(path: Path) -> dict:
             p = path.parent / e[s]
             if not p.is_file():
                 refuse(f"{where}: `{s}` image {p} does not exist")
-        unknown = set(e) - {"id", "game", "note", "not_captured", *SLOTS, *CAPTION_KEYS}
+        unknown = set(e) - {"_base", "id", "game", "note", "not_captured", *SLOTS, *CAPTION_KEYS}
         if unknown:
             refuse(f"{where}: unknown key(s) {sorted(unknown)}")
     return doc
@@ -171,11 +200,11 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
     }
 
 
-def build(manifest: Path, out: Path) -> Path:
-    doc = load_manifest(manifest)
+def build(manifests: list[Path], out: Path) -> Path:
+    doc = load_all(manifests)
     img = out / "img"
     img.mkdir(parents=True, exist_ok=True)
-    records = [normalise(e, manifest.parent, img) for e in doc["entry"]]
+    records = [normalise(e, e["_base"], img) for e in doc["entry"]]
     # Drop images no entry references any more, so a rebuilt page carries nothing stale.
     used = {Path(p).name for r in records for p in [*r["images"].values(), *r["diffs"].values()]}
     for f in img.glob("*.png"):
@@ -267,7 +296,7 @@ TEMPLATE = (Path(__file__).with_name("compare-page.html")).read_text()
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("manifest", nargs="?")
+    ap.add_argument("manifest", nargs="*", help="manifest files or directories of them")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--serve", action="store_true", help="serve the built page on every interface")
     ap.add_argument("--port", type=int, default=8097)
@@ -284,7 +313,7 @@ def main():
     if not a.manifest:
         ap.error("a manifest is required")
     try:
-        index = build(Path(a.manifest).resolve(), a.out.resolve())
+        index = build(manifest_files(a.manifest), a.out.resolve())
     except ManifestError as e:
         print(f"compare-page: {e}", file=sys.stderr)
         sys.exit(1)
