@@ -119,6 +119,7 @@ impl SpeedPlan {
             report.passes += 1;
             let pass = Pass {
                 budget,
+                stuck: super::NEVER_STUCK,
                 lowering: Lowering::FromTrough,
                 margin: MARGIN,
             };

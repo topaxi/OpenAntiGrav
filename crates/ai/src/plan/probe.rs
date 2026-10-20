@@ -92,6 +92,9 @@ pub fn drive<R: Raycaster + ?Sized>(
                 progress: run.progress + skip as i64,
                 tick: run.tick,
                 slow: 0,
+                best: run.progress + skip as i64,
+                best_tick: run.tick,
+                stuck_limit: run.stuck_limit,
                 last_position: None,
             };
         }
