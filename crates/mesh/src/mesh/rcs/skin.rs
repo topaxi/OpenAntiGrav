@@ -269,7 +269,7 @@ fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4])> {
 fn scale_alpha(map: &ModelTexture, colour: [f32; 4]) -> Option<ModelTexture> {
     let texels = map.to_rgba()?;
     let mut out = Vec::with_capacity(texels.len());
-    for texel in texels.chunks_exact(4) {
+    for texel in texels.as_chunks::<4>().0 {
         let alpha = f32::from(texel[3]) / 255.0;
         for c in &colour[..3] {
             out.push(raw_to_texel(alpha * c));

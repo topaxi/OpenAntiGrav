@@ -359,7 +359,13 @@ fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
             texture.to_rgba().expect("one-texel-per-texel picture"),
         );
         assert_eq!(map.len(), got.len(), "slot {slot}: same size as its map");
-        for (m, g) in map.chunks_exact(4).zip(got.chunks_exact(4)).step_by(97) {
+        for (m, g) in map
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(got.as_chunks::<4>().0)
+            .step_by(97)
+        {
             let alpha = f32::from(m[3]) / 255.0;
             for lane in 0..3 {
                 // The raw product, bound as the byte its sRGB decode returns.
