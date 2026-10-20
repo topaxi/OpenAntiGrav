@@ -99,7 +99,8 @@ Talon's Junction, Venom, grid slot 0), then the sampler with `OAG_RPCS3_ATTACH=1
 another `rpcs3-drive.py restart`: a Time Trial restart goes to the countdown with no flyby, and
 the sampler's usual 8 s settle misses the ramp. (The restore's own `--restart` timed out once on
 this machine with presses lost; `press start` twice, then `restart`, worked.) 1001 rows, the flip
-at row ~290; this boot's grid clamp read `3.0033`.
+at row ~290; this boot's grid clamp read `3.0033`. Kept as
+`data/reference/hd-hover-residual/talons-venom-tt-ramp.csv` (gitignored, local).
 
 Ours is `hd_air_pose_walk.rs` with `OAG_HD_OPENLOOP=900 OAG_HD_MODE=tt OAG_HD_CLASS=VENOM` on the
 same circuit, no input. Heights above the floor `-54.080`, at equal tau (clamp minus its grid

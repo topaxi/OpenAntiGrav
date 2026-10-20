@@ -120,8 +120,8 @@ A `+0.015` bias stays on escape rows (non-escape rows: `+0.0017`); not attribute
 type `2` skip and the magnet-lock gate are not ported (no row of this capture reaches them).
 Pulse and Pure keep the largest-only choice: whether Pulse's loop re-reads its heights between
 escapes is unread. **Omega and 2048: not checkable in this lane.** Both fly Pulse's two-point rig
-(`hover_rig: None`) until their own springs are read; the sum rides on the rig, so it waits for
-that. Omega's `Craft_UpdateSurfaceProbes` (`0x0131b510`) carries HD's probe layout forward, so
+(`hover_rig: None`) until their own springs are read; the sum rides on the rig, so it waits for that: the loop the law lives in is not read on
+Omega yet, and 2048's hover is not located. Omega's `Craft_UpdateSurfaceProbes` (`0x0131b510`) carries HD's probe layout forward, so
 the same loop is the expected reading there.
 
 ## The grounded vertical residual was the harness (2026-10-20, hd-hover-residual)

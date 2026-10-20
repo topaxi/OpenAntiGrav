@@ -66,7 +66,8 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
    hours.
 2. Omega: reach the craft update through `Craft_UpdateSurfaceProbes`'s vtable slot, then read its
    steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.
-3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig. 1 hour.
+3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig, and whether its escapes
+   sum as HD's do (`HoverRig::sum_escapes`). 1 hour.
 4. The 1% late-speed gap: find what scales `amount` past `accelcap`. **Not Pilot Assist**
    (2026-10-10): with the flag clear `PilotAssist_ThrustScale` returns the literal `1.0` and the
    throttle reads `100` live (`docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`). 1-2 hours.
