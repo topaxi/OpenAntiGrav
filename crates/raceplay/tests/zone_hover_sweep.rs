@@ -52,10 +52,11 @@ fn zone_hover_sweep() {
                 lap = ship.standing.lap;
                 lap_shield.push(ship.physics.shield);
             }
-            match ship.physics.grounded {
-                g if g == 0.0 => airborne += 1,
-                g if g < 1.0 => partial += 1,
-                _ => {}
+            let grounded = ship.physics.grounded;
+            if grounded <= 0.0 {
+                airborne += 1;
+            } else if grounded < 1.0 {
+                partial += 1;
             }
             speed += f64::from(ship.physics.body.linear_velocity.length());
             if !ship.active {
