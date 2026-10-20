@@ -257,13 +257,45 @@ def git_head():
                           capture_output=True, text=True).stdout.strip()
 
 
+def git_dirty():
+    out = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
+                         capture_output=True, text=True).stdout
+    return bool(out.strip())
+
+
+def build_hash(path):
+    """The commit hash the binary itself reports (`oag-game --version` reads `0.1.0 (abc1234)`), or None
+    when it embedded none (`unknown`, or `test-data` from a `just test-data` build)."""
+    try:
+        out = subprocess.run([str(path), "--version"], capture_output=True, text=True, timeout=30).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if "(" not in out or ")" not in out:
+        return None
+    h = out[out.rindex("(") + 1:out.rindex(")")].strip()
+    return None if h in ("", "unknown", "test-data") else h
+
+
 def binary_record(path):
     p = Path(path)
     h = hashlib.sha256()
     with open(p, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 22), b""):
             h.update(chunk)
-    return {"path": str(p), "sha256_12": h.hexdigest()[:12], "tree_head": git_head()}
+    return {"path": str(p), "sha256_12": h.hexdigest()[:12], "tree_head": git_head(), "tree_dirty": git_dirty(),
+            "build": build_hash(p)}
+
+
+def build_text(binary):
+    """`build abc1234` from the binary's own hash, else the tree's HEAD at render time (`+dirty` when the
+    tracked tree had changes), so a pair names the code that drew it."""
+    h = binary.get("build")
+    if h:
+        return "build %s" % h
+    head = binary.get("tree_head")
+    if not head:
+        return None
+    return "build %s%s (tree at render)" % (head, "+dirty" if binary.get("tree_dirty") else "")
 
 
 def image_size(path):
@@ -371,8 +403,12 @@ def environment_text(plat, rec):
     ov = rec.get("overlap") or {}
     if "edge_ncc" in ov:
         bits.append("overlap: edge correlation %.2f, RMSE %.3f" % (ov["edge_ncc"], ov["rmse"]))
-    if rec.get("ours", {}).get("binary"):
-        bits.append("binary %s" % rec["ours"]["binary"]["sha256_12"])
+    binary = rec.get("ours", {}).get("binary")
+    if binary:
+        build = build_text(binary)
+        if build:
+            bits.append(build)
+        bits.append("binary %s" % binary["sha256_12"])
     return "; ".join(bits)
 
 
@@ -394,7 +430,10 @@ def manifest(out_path, dirs):
             base = pj.parent
             if "overlap" not in rec:
                 rec["overlap"] = overlap_score(base / "theirs.png", base / "ours.png")
-                rec["environment"] = environment_text(plat, rec)
+            # Re-spelled every run, so a pair made before a field joined the line (the build hash) gains it.
+            environment = environment_text(plat, rec)
+            if rec.get("environment") != environment:
+                rec["environment"] = environment
                 pj.write_text(json.dumps(rec, indent=2) + "\n")
             rel = lambda name: Path(__import__("os").path.relpath(base / name, out.parent))
             m = rec.get("meta", {})

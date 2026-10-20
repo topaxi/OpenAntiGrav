@@ -34,7 +34,7 @@ files a player or modder edits); a wrong shape is refused by name instead
 | `id`, `game`, `title` | required; `game` is the title and region (`Wipeout HD (EU)`) and groups the list |
 | `platform` | the console the original ran on (`PS3`, `PSP`, `PS4`, `Vita`); required to publish, a warning otherwise (see Credits) |
 | `original`, `before`, `ours` | image paths; at least two |
-| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the environment line `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture) |
+| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the environment line `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture, and the build that drew ours: the commit `oag-game --version` reports, else the tree's `HEAD` at render time marked `(tree at render)` and `+dirty` when tracked files had changes; the line is re-spelled on every `manifest` run) |
 | `note` | free text, shown under the caption (what is not matched) |
 | `not_captured` | why there is no original; shown as a warning |
 
