@@ -68,9 +68,17 @@ falling smoothly. Compared by track position (`pz`), with vy in units per second
 | B | -340 | 32.07 / -67.0 | 38.24 / -53.9 | 39.28 / -54.7 |
 
 Each cell is `py / vy`. After the change, ours' vy follows the original's to within
-1 to 5 along both arcs. **Still open:** ours flies about 2 units lower, and the gap
-is already there at the takeoff (`pz -100`: py 54.58 against 55.59, vy 8.8 against
-13.0). That is a takeoff or ramp residual, not the cage.
+1 to 5 along both arcs. Ours flew about 2 units lower, the gap already there at the
+takeoff (`pz -100`: py 54.58 against 55.59, vy 8.8 against 13.0). **That gap was the
+sweep, not a law (2026-10-20, hd-air-player-input).** Both "ours" columns were placed after
+300 idle ticks, while HD's hover cap was still on its release ramp (`3.52`): the placed
+craft found no floor on the ramp and flew from its first tick. Placed after 1500 ticks
+(the sweep's default since), ours sits inside the original's own spread on both jumps, for
+example `55.32 / 14.18` at `pz -100` against `55.56 / 15.05` and `55.48 / 13.86` on two
+repetitions; the full table is in
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input).
+The cage verdict is unaffected: the pull-down was first seen on the unplaced Piranha runs
+above.
 
 ## Static: where HD's cage would be, and why it does not run
 

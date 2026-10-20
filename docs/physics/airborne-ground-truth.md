@@ -286,8 +286,9 @@ reading the located sample `Environment::track_sample` carries (the entity's `+0
 whose `down` is `+0xb10`); with no sample the gate is open, chosen. It is a per-title craft
 law (`oag_title::craft_laws::CraftLaws::pitch_gate`, `ShipState::pitch_gate`): Pulse runs it
 (measured) and the PS2 with it; Wipeout HD's `Craft_UpdatePitch` (`0x000f0980`) has the same
-gate, read statically, not seen closing live
-([physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); Omega and 2048 inherit HD's;
+gate, seen closing live under a held stick (confidence 90,
+[below](#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input);
+[physics.md](../ghidra/functions/ps3-hdfury-eu/physics.md)); Omega and 2048 inherit HD's;
 **Pure has none**: its `Ship_UpdatePitch` (`0x0892caf8`) never calls
 `Ship_TestPitchAlignment` (measured, [pure-physics.md](pure-physics.md#pitch-is-three-code-literals)). 2048/Omega: **not checkable** here, no executable read of
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
@@ -320,7 +321,7 @@ for a day while our AI's gates regressed; this engine's driver now holds it off 
 | title | bias | origin |
 | --- | --- | --- |
 | Pulse (PSP, PS2) | on | measured |
-| Wipeout HD | on | measured: read live as `-4.0` (Feisar), confidence 85, the airborne pitch residual closing to `-0.026` with it (below) |
+| Wipeout HD | on | measured under player input: each team's own `+0x9c` (`-4` Feisar and Harimau, `+4` Assegai), the airborne pitch residual closing to `-0.007`..`+0.009` with it, confidence 92 ([below](#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input)) |
 | Omega | on | inherited from HD |
 | 2048 | off | inherited from HD, **held** (chosen): the original AI field respawns once on park at `eps = 0` (1 of 9 perturbations, 0 of 9 with the bias off); measure on 2048 to release |
 | Pure | off | **measured**: Pure's `Ship_UpdatePitch` has no `weight_distribution` term, and Pure authors none ([pure-physics.md](pure-physics.md#pitch-is-three-code-literals)) |
@@ -460,7 +461,10 @@ the cage response's vertical component, not to the air.
 The question: our autopilot fell about `20` units/s² short of the original in
 Ubermall's jump. Measured on RPCS3 `0.0.42`, HD EU (`BCES00664`), Racebox Single
 Race, PHANTOM, weapons off, Ubermall forward, Feisar, the original's autopilot
-armed after GO. `scripts/rpcs3-hd-autopilot.py` logs every new body position with
+armed after GO. **Superseded** as evidence by the player-input captures
+[below](#wipeout-hd-under-player-input-2026-10-20-hd-air-player-input): the Autopilot's rail
+writes the craft's velocity, so the pose walk now refuses these rows unless
+`OAG_HD_AUTOPILOT=1` asks for them. `scripts/rpcs3-hd-autopilot.py` logs every new body position with
 the basis rows `body+0x1d0..+0x1f0`, the rate `body+0x1a0` (negated body-local, as on
 Pulse: a median `0.006` error against the basis' own motion, against `0.7` or worse
 for the other three readings), the craft's up `craft+0x200`, the located sample's
@@ -486,7 +490,9 @@ falls short by `0.380` units/s a tick (median, 117 and 115 rows on the two jumps
 `22.9` units/s², almost all of it along the craft's up. Feisar's `flight_gravity`
 is `115` and PHANTOM's scale `1.2`, so moving the scale to flight gravity predicts
 `115 * 0.2 = 23.0`; with it there, the median residual is `0.000` on both jumps.
-**Confidence 85** (static read, and the residual closes on two jumps of one boot).
+**Confidence 85** (static read, and the residual closes on two jumps of one boot);
+**92** since the player-input re-measure below (two classes whose scales sit either side of
+`1.0`).
 Ported as `oag_title::craft_laws::CraftLaws::class_gravity_on_flight` and
 `oag_physics::passive::ClassGravityTerm`: HD measured; Omega and 2048 inherit HD's;
 Pulse and the PS2 keep the grounded term (measured); Pure inherits Pulse's,
@@ -508,4 +514,135 @@ tick along the craft's up, the same under either law: open, not this law.
 `-4.0` (Feisar). With the bias off, the airborne pitch residual is `+0.205` and
 `+0.176` rad/s² (median, the two jumps) against `4 / 17.33 = 0.231` predicted; on, it
 is `-0.026`. **Confidence 85**; on, as the table above says. The pitch gate never closed over this jump (the product stayed at or
-above `0.926`), so HD's gate is still read, not seen.
+above `0.926`), so HD's gate was still read, not seen. Both are now measured under player
+input, below.
+
+## Wipeout HD under player input (2026-10-20, hd-air-player-input)
+
+The three HD air laws above were first measured on one run the original's Autopilot flew,
+and the Autopilot is not a physics reference: its rail (`Ai_SnapToLane`, `0x000ff9b0`) writes
+the craft's velocity and position. All three are re-measured here with player input alone,
+and all three stand. The pitch gate is seen closing live for the first time on HD.
+
+**Method.** RPCS3 `0.0.42`, HD EU (`BCES00664`), Racebox **Time Trial** (no opponents, no
+Autopilot). `scripts/rpcs3-hd-air-hold.py` holds cross (and the stick, when asked) for
+`2.5` s, pauses, writes the craft's pose and speed with `rpcs3_place.write_pose`, resumes
+with the input still held and logs every new body position for a few seconds. A row reads
+the control record through `craft+0x84` (thrust `100`, pitch `+/-99.9` with the stick held,
+`0` centred) and the pickup slot's flags: **the Autopilot's running bit `0x800` is clear on
+every row** (3,875 rows). The placements:
+
+| Captures (`data/reference/hd-air-player-input/`) | Class, team | Placed |
+| --- | --- | --- |
+| `ubermall-phantom-feisar-centred-{1,2,3}.csv` | PHANTOM (scale `1.2`), Feisar (`-4`) | Ubermall's long jump, 0.5 s before the lip, at the old capture's pose and 219 u/s |
+| `ubermall-phantom-feisar-stick-back-{1,2}.csv` | the same, stick held back (`+99.9`) | the same |
+| `ubermall-phantom-feisar-stick-forward-{1,2}.csv` | the same, stick held forward (`-99.9`) | the same |
+| `ubermall-venom-harimau-centred-{1,2}.csv` | Venom (scale `0.85`), classic Harimau (`-4`) | the same |
+| `chenghou-venom-harimau-jump-{a-1,a-2,b-1}.csv` | Venom, classic Harimau | Chenghou Project's two jumps, the poses below |
+| `talons-venom-assegai-drop-{1,2,3}.csv` | Venom, classic Assegai (`+4`) | Talon's start straight, lifted 30 units, 60 u/s |
+
+The PHANTOM state is `data/saves/hd-fury/hd-timetrial-ubermall-feisar-phantom-start`
+(`emu-hd-timetrial-state.sh <lane> 6 0 0 <name> 3`); the others are the existing
+`hd-timetrial-*-start` states. `crates/raceplay/tests/hd_air_pose_walk.rs` steps ours once
+from every row (one call per capture):
+
+```text
+OAG_SWEEP=1 OAG_HD_AIR=data/reference/hd-air-player-input/<capture>.csv OAG_HD_ROWS=0..400 \
+OAG_HD_MODE=tt OAG_HD_CLASS=PHANTOM OAG_HD_TEAM=Feisar [OAG_HD_GRAV=ground] [OAG_HD_BIAS=0] \
+[OAG_HD_DIAG=1 [OAG_HD_SUM=0]] [OAG_HD_TRACK=/data/environments/04_chenghou_project/track.vex] \
+    cargo nextest run -p oag-raceplay hd_air_pose_walk --run-ignored all --no-capture
+```
+
+Each figure below is the median over airborne rows (the third airborne row of a stretch
+on), per capture, of ours minus the original after one step.
+
+**Class gravity is on flight gravity.**
+
+| Capture | `vy` residual, flight term (ours) | `vy` residual, grounded term | predicted, grounded term |
+| --- | ---: | ---: | ---: |
+| PHANTOM, 7 captures | `-0.02` to `+0.02` | `+0.41` to `+0.51` | `+115 * 0.2 / 60 = +0.38` |
+| Venom, 2 captures | `0.000` | `-0.270` | `-110 * 0.15 / 60 = -0.275` |
+
+Two scales either side of `1.0` move the grounded-term residual in opposite directions, and
+the flight term closes both. **Confidence 92** (static read plus a runtime trace on two
+classes; one binary).
+
+**The in-air bias is the team's own `+0x9c`.** Stick centred, so nothing else torques pitch:
+
+| Captures | `+0x9c` live | pitch residual, bias on | bias off | predicted off |
+| --- | ---: | ---: | ---: | ---: |
+| PHANTOM Feisar, 7 | `-4.0` | `-0.007` to `-0.002` | `+0.224` to `+0.229` | `+4 / 17.33 = +0.231` |
+| Venom Harimau, 2 | `-4.0` | `-0.002` | `+0.228`, `+0.229` | `+0.231` |
+| Venom Assegai, 3 drops | `+4.0` | `0.000` to `+0.009` | `-0.231` to `-0.221` | `-0.231` |
+
+Assegai's opposite sign separates a per-team field from a constant `-4`. HD's teams author
+three values (our loader's `<Misc weight_distribution>`): `-4` AG Systems, Feisar, Harimau,
+Piranha; `+4` Assegai, Auricom, Qirex, Triakis; `0` EG-X, Goteki, Icaras, Mirage.
+**Confidence 92.**
+
+**The pitch gate closes live, at 0.9, and keeps the bias.** With the stick held back, the
+product `dot(up, -down)` (the craft's up against the located sample's down, `ship+0x7850`)
+falls below `0.9` over the long jump. On those rows the original drops the whole input:
+ours stepped with the gate open leaves `+1.148` rad/s² of pitch the original does not have,
+on every row from the crossing until the product climbs back. Closed (the walk applies it
+off the row's own down, since it carries no track sample of its own; the race fills
+`Environment::track_sample` every tick, airborne too), the residual is `-0.003`, and turning
+the bias off still moves it by `+0.227`: the bias stays on with the gate closed, as on Pulse.
+The crossings: open at `0.9016`, `0.9072`, `0.9075`, `0.9152`; closed at `0.8988`, `0.8982`
+and below (one row at `0.9015` reads closed, its hull up `craft+0x200` not yet updated for
+the frame). Held forward, the product stays above `0.9` and the residual is `-0.004` to
+`-0.007`. **Confidence 90.**
+
+**HD sums its hover escapes.** `OAG_HD_DIAG=1` with and without `OAG_HD_SUM=0`, rows where
+summing adds more than `0.005`: 131 escape rows (111 PHANTOM, 20 Venom). With the largest
+escape alone, the position residual along up fits `-0.955 * (sum - max) + 0.034`
+(correlation `-0.874`; the Autopilot run gave `-0.954`, `-0.996`). Summed, the median is
+`+0.025` (p5 `+0.006`, p95 `+0.093`, mean abs `0.042` against `0.227`). The `+0.02` bias on
+escape rows the Autopilot run left is here too, unattributed. **Confidence 90.**
+
+**The rail, and why the old capture is set aside rather than undone.** The pose walk adds
+the residual along the craft's left. On the old Autopilot rows (Ubermall PHANTOM, rows
+1000-1600) the airborne median is `0.022` u/s in velocity and `0.0075` in position per
+frame; on the player-input rows it is `0.000` and `0.0007`-`0.0010`. The rail shows on the
+Autopilot rows and is absent under player input. Statically, the rail's weight is
+`driver+0x52 ? a * b : 0` ([ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md#the-rail)),
+and `+0x52` is the controls-consumed byte the Autopilot's handover sets. The walk now
+refuses Autopilot rows (`slot+0x200 & 0x800`) and takes the engine bits off each row's own
+`craft+0x264`: the old walk stepped every row with uncapped thrust and the `x1.2` speedup,
+which are the Autopilot's alone.
+
+**Chenghou Project's takeoff was the harness.** The hd-chenghou-jumps lane recorded ours
+about 2 units low off Chenghou's first jump (`pz -100`: vy `8.8` against `13.0`). The
+sweep placed ours after 300 idle ticks, while HD's hover cap was still on its release ramp
+(`3.52`): the placed craft found no floor on the ramp and flew from the first tick, where
+the original's probes hold it up the ramp for six frames. Placed after 1500 ticks (cap
+`23.5`, released), ours sits inside the original's own spread (two repetitions of jump A,
+one of B; cells `py / vy`):
+
+| Jump | pz | Original | Ours, placed at 300 | Ours, placed at 1500 |
+| --- | ---: | --- | --- | --- |
+| A | -100 | `55.56 / 15.05`, `55.48 / 13.86` | `54.61 / 8.43` | `55.32 / 14.18` |
+| A | -125 | `56.89 / -3.21`, `56.57 / -4.56` | `54.59 / -8.88` | `56.38 / -4.05` |
+| A | -150 | `54.52 / -20.40`, `53.85 / -21.90` | `51.00 / -25.16` | `53.76 / -21.19` |
+| A | -170 | `49.97 / -33.41`, `48.94 / -35.03` | `45.59 / -37.56` | `49.02 / -34.16` |
+| B | -260 | `59.81 / 7.13` | `58.79 / 3.01` | `59.64 / 7.77` |
+| B | -300 | `56.62 / -24.19` | `54.13 / -27.08` | `56.65 / -23.23` |
+| B | -340 | `41.42 / -52.21` | `38.15 / -54.06` | `42.20 / -50.88` |
+
+`hd_chenghou_jumps_sweep.rs` now idles 1500 ticks by default (`OAG_IDLE`). One step at a
+time over the original's own rows, ours matches it in the air on Chenghou too (`vy` residual
+`0.000`, pitch `-0.002`); at the lip, the two frames with only the rear probes in contact
+leave ours `+0.66` and `+0.87` u/s higher, small and the other way.
+
+**Open: a forward residual, not an air law.** Ours ends each step faster along the craft's
+forward than the original: in the air by `+0.12` to `+0.16` u/s per frame on PHANTOM (about
+`8` u/s²) and `+0.04` on Venom, on the ground by `+0.15` to `+0.44`. Unattributed. The first
+suspect is the walk's own seeding: it copies the row's throttle `craft+0x30c` into
+`ShipState::thrust`, which may not be the same quantity. After that, HD's engine doubling
+and ground drag, which are inherited from Pulse and unread on HD.
+
+**Cross-title.** Omega already flies HD's bias, gate and gravity term, inherited (**checked,
+applies, wired**: the same `CraftLaws` values; not re-measured, no Omega capture path). The
+escape sum does not reach Omega or 2048: both fly Pulse's two-point rig until their own hover
+loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)).
+2048's gate and gravity term were already HD's; its bias was held off until this re-measure.
