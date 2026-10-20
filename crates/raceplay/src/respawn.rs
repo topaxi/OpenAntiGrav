@@ -291,7 +291,8 @@ impl Race {
             return;
         };
 
-        let height = spawn_height(&self.sim.world.ships[slot].handling);
+        let ship = &self.sim.world.ships[slot];
+        let height = rig_spawn_height(&ship.handling, None, &ship.physics.hover_rig);
         let pose = Pose::from_sample(&sample, sample.racing_line, height);
         self.put_back(slot, pose, Vec3::ZERO);
     }

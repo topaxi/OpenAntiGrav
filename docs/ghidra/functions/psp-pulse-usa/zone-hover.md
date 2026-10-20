@@ -69,7 +69,10 @@ missing escape (instruction read; nothing live can show an absence better than t
 
 `oag_physics::hover::Rig` carries each difference as an axis whose default is the racing law;
 Pulse's `oag_pulse::race::ZONE_HOVER_RIG` sets them, `oag_title::RaceDefaults::zone_hover_rig`
-carries it, and `oag_raceplay::load` flies it when the mode is `Mode::Zone`.
+carries it, and `oag_raceplay::load` flies it when the mode is `Mode::Zone`. A craft spawns at its
+rig's own rest point (`oag_gameplay::spawn::rig_spawn_height`): with no probe drop a Zone craft's
+centre starts `target - 1.25` above the floor, about `2.9`, where the live run rests it. Derived from
+the law; the original's Zone grid height was not measured.
 
 ## Also gated on mode 6 in the craft update
 

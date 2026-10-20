@@ -25,10 +25,13 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
 - **Pure's four-corner hover** (`0x0892e5b8`) is Pulse's law with three small differences
   (zone-hover.md, "The other titles"); not wired until Pure's mode 6 is confirmed as Zone and its
   brake gate is read.
-- **Pulse `05_Track` (and four circuits that do not load) in Zone**: in a 7200-tick autopilot run
-  on main and on this lane alike, `05_Track` ends one lap in at shield 0 with a mean speed of 12;
-  `02_Track`, `09_Track`, `06_Track` and `07_Track` fail `race::load` in Zone. Not investigated
-  (`crates/raceplay/tests/zone_hover_sweep.rs`, `OAG_SWEEP=1`).
+- **Pulse `05_Track` in Zone**: in a 7200-tick autopilot run on main and on this lane alike, it ends
+  one lap in at shield 0 with a mean speed of 12. Not investigated
+  (`crates/raceplay/tests/zone_hover_sweep.rs`, `OAG_SWEEP=1`; the sweep walks every forward race
+  circuit, so the four without `availableInZone` fail to load there, as they should).
+- **Zone grid height**: a Zone craft now spawns at the four-corner law's own rest point
+  (`oag_gameplay::spawn::rig_spawn_height`, `target - 1.25`, about 2.9), derived; the original's
+  Zone grid height was not measured.
 - Pure ships no boost plume under any recovered name.
 - HD draws its Zone hulls untextured off `.rcsmodel` with computed normals.
 - Both PSP titles' Zone HUD draws labels with no values (the `IG_HUD_*` substitution gap).

@@ -179,7 +179,7 @@ impl Race {
         let respawn = |index: usize| {
             let mut placed = *ship;
             if let Some(sample) = sample_at(index) {
-                let height = spawn_height(&placed.handling);
+                let height = rig_spawn_height(&placed.handling, None, &placed.physics.hover_rig);
                 placed.place_at(Pose::from_sample(sample, sample.racing_line, height));
             }
             placed.physics

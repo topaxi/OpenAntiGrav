@@ -294,6 +294,7 @@ impl Race {
             &collision,
             &handling,
             grid_cap,
+            &rig,
         );
         // Pulse PSP lays its grid out the way `Race_ComputeGridLayout` does: a walk of the
         // located curve, not of resampled samples. `None` where the track has no node, off
@@ -343,7 +344,7 @@ impl Race {
                     base,
                     &spline,
                     &collision,
-                    capped_spawn_height(&handling, grid_cap),
+                    rig_spawn_height(&handling, grid_cap, &rig),
                     grid_frame_from_sample,
                     walked.as_ref(),
                 )[0]
@@ -365,7 +366,7 @@ impl Race {
                 base,
                 &spline,
                 &collision,
-                capped_spawn_height(&handling, grid_cap),
+                rig_spawn_height(&handling, grid_cap, &rig),
                 grid_frame_from_sample,
                 walked.as_ref(),
             )[player_row - 1]
@@ -430,7 +431,7 @@ impl Race {
                 base,
                 &spline,
                 &collision,
-                capped_spawn_height(&handling, grid_cap),
+                rig_spawn_height(&handling, grid_cap, &rig),
                 grid_frame_from_sample,
                 walked.as_ref(),
             );
