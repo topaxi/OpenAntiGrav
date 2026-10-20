@@ -552,4 +552,7 @@ pub const ZONE_HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig:
     // The probe loop (`0x0884b11c`-`0x0884b564`) calls only the raycast and
     // `Body_AddForceAtPoint`: nothing moves the body out of a penetrating probe.
     probe_escape: oag_title::pre_race::Sourced::measured(false),
+    // `((((t - h) * K) * gravity) * 0.15) * mass * (1 + 0.8 * clamp(-0.1 vn, -1, 1))`
+    // (`0x0884b4a8`-`0x0884b538`), live to one ulp on 340 probe calls.
+    four_corner_spring: oag_title::pre_race::Sourced::measured(true),
 };

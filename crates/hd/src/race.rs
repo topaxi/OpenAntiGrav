@@ -772,6 +772,7 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     // the loop; live, the summed escape closes the position residual (`hover-four-point.md`).
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
     probe_escape: oag_title::pre_race::Sourced::measured(true),
+    four_corner_spring: oag_title::pre_race::Sourced::measured(false),
 };
 
 /// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].

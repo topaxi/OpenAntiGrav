@@ -29,6 +29,19 @@ pub enum NormalMean {
     QuarterSum,
 }
 
+/// Which spring law a probe in contact pushes with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpringLaw {
+    /// `Ship_HoverTwoPoint` and HD's `Craft_HoverFourPoint`:
+    /// `mass * share * (t - h) * K * (0.75 g' + 0.25) * gravity`, damped by
+    /// `1 + rebound * clamp(-0.1 vn, -1, 2)`, faded by `1 - magLockBlend`.
+    Racing,
+    /// Pulse's Zone hover, `Ship_HoverFourCorner` (`0x0884b4a8`-`0x0884b538`):
+    /// `(((t - h) * K) * gravity) * share * mass * (1 + 0.8 * clamp(-0.1 vn, -1, 1))`. No load
+    /// factor, no rebound, no magnet-lock fade ([`super::FOUR_CORNER_DAMPER`]).
+    FourCorner,
+}
+
 /// One title's hover probe set.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rig {
@@ -55,6 +68,8 @@ pub struct Rig {
     /// no escape in its probe loop: the height store at `0x0884b2e0` goes straight to the
     /// surface-class test (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
     pub probe_escape: bool,
+    /// See [`SpringLaw`].
+    pub spring: SpringLaw,
 }
 
 impl Rig {
@@ -81,6 +96,7 @@ impl Rig {
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
         probe_escape: true,
+        spring: SpringLaw::Racing,
     };
 
     /// The probes in use.

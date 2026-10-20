@@ -447,6 +447,17 @@ fn probe_from_hit(
     let normal_velocity = velocity.dot(hit.normal);
 
     let gravity = handling.physical.normal_gravity + handling.physical.track_gravity;
+    if rig.spring == SpringLaw::FourCorner {
+        return HoverProbe {
+            point,
+            force: up
+                * four_corner_spring(state, rig, target_height, height, gravity, normal_velocity),
+            contact: true,
+            normal: hit.normal,
+            height,
+            escape,
+        };
+    }
     let load = 0.75 * state.grounded_prev + 0.25;
     // Grouped left to right: operation order is part of the result. No `mul_add`.
     let spring = handling.physical.mass
@@ -475,6 +486,28 @@ fn probe_from_hit(
         height,
         escape,
     }
+}
+
+/// The four-corner damper's gain, `0x3f4ccccd` at `0x0884b08c`: `1 + 0.8 * clamp(-0.1 vn, -1, 1)`
+/// in place of the racing law's `1 + rebound * clamp(-0.1 vn, -1, 2)`.
+pub const FOUR_CORNER_DAMPER: f32 = 0.8;
+
+/// One probe's spring magnitude under [`SpringLaw::FourCorner`], `Ship_HoverFourCorner`
+/// (`0x0884b4a8`-`0x0884b538`), in the original's multiply order:
+/// `((((t - h) * K) * gravity) * share) * mass`, then `* (1 + 0.8 * clamp(-0.1 vn, -1, 1))`.
+/// `mass` is the body's (`body+0x374`). Read live to one ulp on 340 probe calls
+/// (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
+fn four_corner_spring(
+    state: &ShipState,
+    rig: &Rig,
+    target_height: f32,
+    height: f32,
+    gravity: f32,
+    normal_velocity: f32,
+) -> f32 {
+    let spring = (target_height - height) * HOVER_K * gravity * rig.spring_share * state.body.mass;
+    let damping = (-0.1 * normal_velocity).clamp(-1.0, 1.0) * FOUR_CORNER_DAMPER;
+    spring * (damping + 1.0)
 }
 
 /// Above this forward speed the rear probe is **derived rather than cast**.
@@ -734,7 +767,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
 mod bank;
 mod rig;
 pub use bank::{BANK_TO_YAW_GAIN_FOUR_CORNER, BANK_TO_YAW_GAIN_PURE};
-pub use rig::{MAX_PROBES, NormalMean, Rig};
+pub use rig::{MAX_PROBES, NormalMean, Rig, SpringLaw};
 
 /// `0.25` at `TOC-0x4358` (`0x008a9180`): HD's scale on the summed contact normals.
 const QUARTER: f32 = 0.25;

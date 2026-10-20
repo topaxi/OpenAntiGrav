@@ -25,6 +25,7 @@ fn four_point() -> Rig {
         normal_mean: NormalMean::QuarterSum,
         sum_escapes: true,
         probe_escape: true,
+        spring: SpringLaw::Racing,
     }
 }
 
@@ -207,6 +208,7 @@ fn four_corner() -> Rig {
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
         probe_escape: false,
+        spring: SpringLaw::FourCorner,
     }
 }
 
@@ -230,4 +232,43 @@ fn the_four_corner_rig_has_no_escape_in_its_probe_loop() {
         ..four_corner()
     });
     assert!((with_escape.y - 0.4).abs() < 1e-4, "{with_escape:?}");
+}
+
+/// **Zone's spring carries no load factor, no rebound and no magnet-lock fade**, and its damper
+/// is a fixed `0.8` clamped at `1`: `((((t - h) * K) * g) * 0.15) * m * (1 + 0.8 * clamp(-0.1 vn,
+/// -1, 1))`. The same probe under the racing law moves with every one of those.
+#[test]
+fn the_four_corner_spring_is_its_own_law() {
+    let probe = |rig: Rig, grounded_prev: f32, mag_lock: f32, sink: f32| {
+        let mut state = craft(rig, 3.0, 0.0, 0.0);
+        state.grounded_prev = grounded_prev;
+        state.mag_lock_blend = mag_lock;
+        state.body.linear_velocity = Vec3::new(0.0, -sink, 0.0);
+        evaluate(
+            &state,
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .probes[0]
+        .force
+    };
+    // h = 3.0 with level probes: (4.125 - 3.0) * 4/3 * 80 * 0.15 * 1.0.
+    let spring = (TARGET - 3.0) * crate::hover::HOVER_K * 80.0 * 0.15 * 1.0;
+    let at_rest = probe(four_corner(), 1.0, 0.0, 0.0);
+    assert_eq!(at_rest, Vec3::new(0.0, spring, 0.0));
+    assert_eq!(probe(four_corner(), 0.0, 0.0, 0.0), at_rest, "no load factor");
+    assert_eq!(probe(four_corner(), 1.0, 0.5, 0.0), at_rest, "no magnet-lock fade");
+    // Closing at 5 units/s: 1 + 0.8 * 0.5; at 30 units/s the clamp holds it at 1 + 0.8.
+    let closing = probe(four_corner(), 1.0, 0.0, 5.0).y;
+    assert!((closing / spring - 1.4).abs() < 1e-5, "{}", closing / spring);
+    let fast = probe(four_corner(), 1.0, 0.0, 30.0).y;
+    assert!((fast / spring - 1.8).abs() < 1e-5, "{}", fast / spring);
+
+    let racing = Rig {
+        spring: SpringLaw::Racing,
+        ..four_corner()
+    };
+    assert_ne!(probe(racing, 0.0, 0.0, 0.0), probe(racing, 1.0, 0.0, 0.0));
 }

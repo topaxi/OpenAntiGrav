@@ -32,4 +32,7 @@ pub struct HoverRig {
     /// A probe under `1.0` unit moves the body out by `1 - h`. Pulse's Zone hover
     /// (`Ship_HoverFourCorner`) has no such escape.
     pub probe_escape: Sourced<bool>,
+    /// The spring is Pulse's Zone law, `Ship_HoverFourCorner`'s: no load factor, no rebound,
+    /// no magnet-lock fade, and a fixed `0.8` damper clamped at `1`.
+    pub four_corner_spring: Sourced<bool>,
 }
