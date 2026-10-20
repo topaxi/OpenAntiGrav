@@ -7,8 +7,9 @@
 //! cargo run -p oag-render --example hd_ship_material_dump -- data/images/hdfury-ps3-eu-dec.iso /data/ships/feisar_c1/ship.vex diffuse_with_specular_from_alpha_n_vcol.rcsmaterial
 //! ```
 //!
-//! `OAG_PASS=0x847` (hex) resolves the variant of that pass word instead of the
-//! lit race pass's, e.g. the `IBL` permutation a live hull draw uses.
+//! `OAG_PASS=<hex pass word>` resolves the variant of that word instead of the
+//! lit race pass's (`Features::chunk_word` still folds in the chunk's own
+//! declaration, so `0x847` did not land on the live `IBL` permutation here).
 //!
 //! With a third argument (a material's leaf file name), only that one
 //! material prints its full instruction listing; otherwise every resolved

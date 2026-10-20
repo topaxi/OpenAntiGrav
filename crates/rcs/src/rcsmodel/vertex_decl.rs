@@ -246,9 +246,10 @@ impl VertexDecl {
     /// a unit vector as `2b - 1` and `w` the byte the vertex program multiplies
     /// the binormal by (`0` or `255` on every hull measured).
     ///
-    /// Present on every chunk of every ship hull whose material reads a texture
-    /// as a normal map (`hd_hull_normal_census`: 100 % of 2,000+ chunks), and
-    /// perpendicular to the vertex normal (median `|dot|` 0.004).
+    /// Present on every chunk of every ship hull whose material reads unit 1
+    /// as a normal map (`hd_hull_normal_census`: 240 of 240 chunks over the 32
+    /// `/data/ships/*/ship.vex` hulls), and perpendicular to the vertex normal
+    /// (mean `|dot|` 0.004).
     #[must_use]
     pub fn tangent(&self) -> Option<&Attribute> {
         self.attributes.iter().find(|a| {

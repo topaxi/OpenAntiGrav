@@ -718,9 +718,11 @@ The lit hull programs (`diffuse_with_specular_from_alpha_n`, `_vcol`, `carbonfib
 `detonator_*` kin) read **texture unit 1 as a tangent-space normal** and light with it. Until this lane ours bound the
 map and ignored it, on every HD ship.
 
-**What the program does** (`diffuse_with_specular_from_alpha_n.rcsmaterial`, fragment block 17 against the vertex blocks
-that write `TC2` as `cross * w`, blocks 5, 6, 9 and 10; `scripts/ps3-microcode.py fp-file|vp-file`; read statically, not
-from a live dump of the draw):
+**What the program does** (`diffuse_with_specular_from_alpha_n.rcsmaterial`, `scripts/ps3-microcode.py fp-file|vp-file`;
+read statically, **not from a live dump of the draw**). The fragment combine reads three interpolators the same way in
+blocks 0 and 17 (`x * A + y * B + z * C`, `A`, `B`, `C` the tangent, the binormal and the normal); every vertex block
+that writes a binormal (5, 6, 9 and 10 of the same file) computes `cross(N0, T) * w`, so that is `B`. Which vertex block
+pairs with which fragment block, and so which `TC` is which, was not traced (the numbering below is block 5's):
 
 ```text
 t   = tex(unit 1, uv)                         plain RGB, not DXT5nm: MAD x*2-1 on x, y and z
@@ -734,8 +736,10 @@ vertex program:  T = 2 v[tangent].xyz - 1                  attribute 0xdbe5f417,
 (`-N.y * 0.5 + 0.5` of the irradiance map, `reflect(-V, N)` of the reflection map). The frame is **object space** in
 the original (no matrix on `T` in these blocks); ours turns `T` by the node and model matrices like the normal.
 
-**The tangent is authored on every normal-reading hull chunk** (`hd_hull_normal_census`, all 32 `/data/ships/*`
-hulls, 2,000+ chunks): the `tangent` attribute `0xdbe5f417` is four normalised bytes in 100 % of them, perpendicular
+**The tangent is authored on every normal-reading hull chunk** (`hd_hull_normal_census` over the 32
+`/data/ships/*/ship.vex` hulls: 240 chunks of materials that read unit 1 as a normal, 117 of them
+`diffuse_with_specular_from_alpha_n_vcol`, 25 `nitro_body_new`, 13 `diffuse_with_specular_from_alpha_n`): the `tangent`
+attribute `0xdbe5f417` is four normalised bytes in all 240, perpendicular
 to the authored normal (mean `|T.N0|` 0.004), unit length on average (0.99 to 1.04 per material; a few vertices are
 short, and a few padding vertices decode to `(-1,-1,-1)`, the shader's off value). The fourth byte `w` is **`0` or
 `255`** (about 45 % `255` on the paint materials), so `B` is the zero vector on the `w = 0` vertices and only the
@@ -747,6 +751,10 @@ slot (`Model::pad_masks`, the pad mask's), the material is marked `Model::materi
 their authored tangent as four raw bytes (`Unorm8x4`, 4 bytes a vertex, zero = none, the shader's off switch). A
 node transform that is not the identity rotates the tangent like the position and the normal and packs it again.
 
+- **Binding and gamma.** The map is the sampler the program declares on unit 1, found by hash in the model's sampler
+  table (`nitro_body_new`'s model lists its diffuse second and the `_n` third; the hash picks `assegai_c1_livery_n.gtf`,
+  checked on `assegai_n1`). It uploads raw (`Rgba8Unorm`, `Bc*Unorm`; ADR-0020), which is what `x * 2 - 1` needs; the
+  original sets texture gamma `0` on normal maps (`rcsmaterial.md`).
 - **Scope: opaque `data/materials/ships/*` materials whose resolved program reads unit 1 as a normal.** Left as they
   drew, unmeasured: the blended ones (`glass_texture_n`, `nitro_perspex_new`), `detonator_shield` (normal on unit 2),
   `detonator_ship_rich_iridescent` (unit 0), and every circuit material that reads a normal map

@@ -11,8 +11,9 @@
 // `T`**, where the original's vertex program builds it per vertex and
 // interpolates it. They agree at every vertex and differ inside a triangle by
 // the second-order change of the frame, which a hull's smooth normals make
-// small. It saves a varying (the vertex stage is at wgpu's sixteen-location
-// default with it).
+// small. It saves a varying (the vertex stage uses locations 0 to 14 with the
+// tangent, one more than `lightmap_texcoord`'s packing was avoiding; the GL
+// backend, best effort, has the least room).
 fn hull_normal(texel: vec4<f32>, n: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {
     let t = tangent.xyz;
     let b = cross(n, t) * tangent.w;
