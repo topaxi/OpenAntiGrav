@@ -131,8 +131,13 @@ fn check(source: &Path, tag: &str, mode: &str) {
     // since `ZoneCraft::OwnShipAt` put it on that hull (it was over 200
     // each on the player's own craft). A flap off its hinge puts almost
     // nothing on the sides, so 100 still catches the defect; the
-    // mid-hull check below is the one that names it.
-    let floor = if mode == "zone" { 100 } else { 200 };
+    // mid-hull check below is the one that names it. HD's Zone skips the brakes as
+    // the original does (`Craft_Update`, `0x000f27c8`), so holding both airbrakes
+    // no longer slows the craft and only the flaps change: 390 left and 100 right
+    // (x 286-310 and 409-430, the same rows; the right flap is white on white),
+    // centre band 0. Before, the brake's slowdown moved the whole scene
+    // (8,341 / 15,084 / centre 1,292) and the floor measured that, not the flaps.
+    let floor = if mode == "zone" { 50 } else { 200 };
     assert!(
         left > floor && right > floor,
         "{tag} {mode}: the brake changed {left} pixels left and {right} right of centre"

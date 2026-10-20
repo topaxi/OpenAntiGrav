@@ -22,13 +22,16 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
   handling question.
 - **HD's Zone wall friction** (`Collision_PairFriction` `+0x38` against `+0x2c` under the mask) is
   not measured: next, an interpreter boot to mode 6 and a `Z0` on `0x000be068`'s return during a
-  wall scrape (also in `hd-wall-response-leftovers.md`).
+  wall scrape (also in `hd-wall-response-leftovers.md`). `scripts/rpcs3-hd-zone-probe.py` is the cold walk
+  into mode 6 (`--rights 5`) that reached Zone; add the breakpoint there.
 - **HD's Zone engine**: `Craft_UpdateThrottle` (`0x000efb50`) tests the mask at `0x000efeb8`; not
   compared with this engine's auto-speed law.
 - **Omega's Zone**: the file is HD's (checked, applies, not wired: Omega's racing hover is Pulse's
   two-point here, so neither the ray nor the file is wired); its hover selector is unlocated, the
   mask survives at `0x0150bb28` and two more sites. Omega and 2048 fly Zone bank-to-yaw `30`,
   inherited from HD. 2048's mask is not found as a literal (ARM `movw`/`movt` not searched).
+- **HD Zone ride height**: ours rests `0.09` high on the grid (`3.29` against `3.20`) and `0.04` in flight
+  (`3.28` against `3.24`), `hd_zone_hover_ground_truth.rs`; not chased.
 - **HD sweep shield**: `hd_zone_hover_sweep` reports the shield unchanged at 100 on every circuit (it
   read 95, the team file's, before the Zone file was wired); the autopilot takes no damage in 7200
   ticks, so the sweep says nothing about Zone damage.

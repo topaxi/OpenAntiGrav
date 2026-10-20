@@ -59,6 +59,7 @@ fn an_hd_zone_craft_waits_on_the_grid_at_the_rays_height_not_the_lowered_hover()
     let Some(mut race) = zone() else { return };
     run_to(&mut race, GO - 2);
     let grid = height(&race);
+    println!("hd zone grid centre height {grid} (original 3.20)");
     assert!((3.1..3.3).contains(&grid), "end of the countdown {grid}");
 }
 
@@ -75,6 +76,7 @@ fn an_hd_zone_craft_flies_at_the_rays_height() {
     }
     heights.sort_by(f32::total_cmp);
     let median = heights[heights.len() / 2];
+    println!("hd zone flight median centre height {median} (original 3.24)");
     assert!(
         (3.1..3.4).contains(&median),
         "median {median} of {heights:?}"
