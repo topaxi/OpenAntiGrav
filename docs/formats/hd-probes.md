@@ -57,7 +57,7 @@ a **weighted blend of the probes around it**, equal to this file's images:
   across it by the projection on the left-right axis, both clamped
   (`Probes::locate`). One craft on one side of the track blends two probes; one between
   them blends four. The position the original uses is **one tick old** (lag 1 fits best on
-  39 of 52 pauses).
+  41 of 52 pauses, lag 0 on 4 and lag 2 on 7).
 - Two of the 52 pauses (tight corners) blend a section pair **two apart** where the law
   takes neighbours; held in the test as named exceptions. So the law is 70, not 85.
 

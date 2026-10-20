@@ -120,6 +120,7 @@ fn the_blend_reproduces_the_maps_the_original_binds() {
     let probes = Probes::parse(&archive.read_path(TALONS).expect("reads")).expect("parses");
     let mut worst = 0.0f32;
     let mut misses = Vec::new();
+    let mut lags = [0usize; 3];
     for n in 0..SAMPLES {
         let pose = std::fs::read_to_string(dir.join(format!("{n:02}.pose.txt"))).expect("pose");
         let (pos, vel) = (pair(&pose, "pos"), pair(&pose, "vel"));
@@ -127,7 +128,7 @@ fn the_blend_reproduces_the_maps_the_original_binds() {
         let refl = std::fs::read(dir.join(format!("{n:02}-refl.bin"))).expect("refl");
         assert_eq!(ibl.len(), IRRADIANCE_SIZE.0 * IRRADIANCE_SIZE.1 * 4);
         assert_eq!(refl.len(), REFLECTION_SIZE.0 * REFLECTION_SIZE.1 * 4);
-        let best = (0..3)
+        let errors: Vec<f32> = (0..3)
             .map(|lag| {
                 let k = lag as f32 / 60.0;
                 let p = [
@@ -139,13 +140,17 @@ fn the_blend_reproduces_the_maps_the_original_binds() {
                 rms(&probes.blend_irradiance(&taps), &ibl)
                     .max(rms(&probes.blend_reflection(&taps), &refl))
             })
-            .fold(f32::INFINITY, f32::min);
-        println!("sample {n:02}: best-lag RMS {best:.2}");
+            .collect();
+        let best = errors.iter().copied().fold(f32::INFINITY, f32::min);
+        let lag = errors.iter().position(|&e| e == best).unwrap_or(0);
+        lags[lag] += 1;
+        println!("sample {n:02}: best-lag RMS {best:.2} at {lag} tick(s) back");
         if best >= CLOSE {
             misses.push((n, best));
         }
         worst = worst.max(best);
     }
+    println!("best lag, in ticks back (0, 1, 2): {lags:?} of {SAMPLES}");
     // Two tight corners: the original blends a section pair two apart where the
     // nearest-centre law takes neighbours (probes 789/793 and 452/456 against
     // 789/791 and 454/456), a one-in-twenty miss, held at exactly these samples.

@@ -32,9 +32,9 @@
 //!
 //! Confidence: layout, block format and the blend **85** (the file holds at least
 //! the layout on all 28 files, closes exactly on Talon's Junction, and the decoded
-//! blend reproduces the live maps); the locate law **70** (it fits six of twelve drive samples to 0.06 in
-//! weight at one frame of position lag and the rest at zero or two frames of lag,
-//! and one sample, at a corner, names a section pair this law does not).
+//! blend reproduces the live maps); the locate law **70** (over 52 pauses of two drives the best position lag is
+//! 0, 1 or 2 ticks for 4, 41 and 7 of them, 50 land within 10 of 255, and two, at tight
+//! corners, blend a section pair this law does not: `tests/probes_ground_truth.rs`).
 //!
 //! The tail (`24n + 4n + 3n` bytes) is not read: the first `3n` look like an
 //! average colour per probe and the `24n` like twelve half floats. Nothing here
