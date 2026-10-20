@@ -245,11 +245,14 @@ fn cage_after_step_against_the_next_tick() {
             continue;
         }
         let s = step_and_cage(&c, &pair[0]);
-        if s.cage.contacts == 0 && !s.cage.reset {
+        if s.cage.contacts == 0 && !s.cage.reset && only.is_none() {
             continue;
         }
         let without = (pair[1].velocity - s.without.linear_velocity).length();
         let with = (pair[1].velocity - s.with.linear_velocity).length();
+        let v = pair[1].velocity.length();
+        let marked = (pair[1].speed / v - 1.0).abs() > 0.002;
+        println!("tick {} recorded contact mark {marked}", pair[0].tick);
         println!(
             "tick {} cage {} reset {} hull {} |v - recorded| {without:.2} -> {with:.2}; \
              cage dw {} w {} recorded {}",
@@ -272,7 +275,7 @@ fn cage_after_step_against_the_next_tick() {
 ///
 /// `OAG_CONTACTS_FLAT` is one line per tick: tick, collider centre (3), basis
 /// rows (9), the ten sample points (30), a contact count and per contact its
-/// point (3), normal (3) and depth, flattened from
+/// point (3), normal (3) and depth: `scripts/psp-contacts-flat.py` of
 /// `scripts/psp-autopilot-contacts.py`'s `.contacts.jsonl`.
 #[test]
 #[ignore = "scratch sweep; set OAG_SWEEP and OAG_CONTACTS_FLAT"]

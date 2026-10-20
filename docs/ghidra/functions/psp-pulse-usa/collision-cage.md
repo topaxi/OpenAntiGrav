@@ -172,7 +172,18 @@ mesh reproduces **818 of 818** of the original's contacts on the weave run and
 with 2 and 0 extras (two at depth `0.000`). The capture also fixes the sample
 order: the body's row 0 is its left, so the original's sample 0 is lower left
 front, and ours (`oag_physics::wall::hull_sample_points`) lists the mirror image
-first.
+first. The two captures are kept (gitignored) at `data/reference/wall-contact-miss/`
+(`talons-weave1`, `talons-pulse1`: the CSV and the `.contacts.jsonl`); flatten with
+`scripts/psp-contacts-flat.py` and run
+`collision_cage_ground_truth::the_originals_contacts_against_our_mesh` with
+`OAG_SWEEP=1 OAG_CONTACTS_FLAT=<file>`.
+
+**And the hull is on time.** `wall_contact_ground_truth.rs` records our first
+contact 3-5 ticks after the original's. Stepped from each recorded row instead
+(`collision_cage_ground_truth`'s sweep with `OAG_CAGE_TICKS`), our hull makes a
+contact on exactly the ticks the original's `speed / |v|` marks one, onset included:
+standing start ticks 183-190, time-trial lap 166-176. The lateness is that test's
+method (it tests the row pose, before the frame's integration), not the hull.
 
 ### Ported
 

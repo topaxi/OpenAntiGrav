@@ -182,8 +182,11 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("PHANTOM", 1, 1, 2),
     // 2026-10-20, reversed 3 -> 4: the collision cage (`oag_gameplay::cage`).
     // Over seeds 1-8, every class, both layouts (`ai_dekonstruct_black_board`):
-    // destroyed 35 -> 31 (PHANTOM 29 -> 22, RAPIER 6 -> 9, VENOM and FLASH 0);
-    // this cell's 3 -> 4 is inside that spread.
+    // destroyed 35 -> 31 (PHANTOM 29 -> 22, RAPIER 6 -> 9, VENOM and FLASH 0).
+    // The noise method (an airborne pitch torque eps of -1e-2, -1e-3, -1e-4,
+    // -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5; cells over the old bounds, of 12):
+    // cage off 0 1 1 0 0 2 1 0 1 (median 1, max 2), on 3 0 1 1 1 1 1 0 1
+    // (median 1, max 3), inside the bar of off + 2 on both.
     ("PHANTOM", 2, 3, 4),
     ("PHANTOM", 3, 4, 3),
 ];

@@ -33,6 +33,13 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 - **The 200-unit and 15-unit resets were never exercised live**; the up-facing
   normal one is what fires in our races (a craft under the tube's floor).
 
+- **`wall_contact_ground_truth.rs`'s "3-5 ticks late" is its own method**: it
+  tests the recorded row pose, before the frame's integration. Stepped from the
+  row, our hull's contacts match the original's tick for tick (collision-cage.md).
+  The test's bound and doc comment still describe a residual that is not there.
+- **The four disagreeing angular ticks** (time-trial 2458, clean lap 1257, 1681,
+  2724): unchanged, the cage does not fire there, not examined further.
+
 ## Next Steps
 
 1. The hull sample order: swap to the original's order in
@@ -41,4 +48,7 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
    and the wall-angular test. An hour, plus gates.
 2. Re-capture with `scripts/psp-autopilot-contacts.py --weave 100 --pulse 12` on
    other circuits for the contact-by-contact check (only Talon's Junction is
-   done).
+   done; its two runs are at `data/reference/wall-contact-miss/`, flattened by
+   `scripts/psp-contacts-flat.py`).
+3. Re-base `wall_contact_ground_truth.rs` on a stepped pose and tighten its bound
+   to the zero-tick onset. An hour.
