@@ -1,8 +1,8 @@
 //! Does our hover cushion let go of a crest where the original's does?
 //!
-//! `handover/`'s hover thread measured a **seven-tick phase lag** on one crest of
+//! A reseeded replay once read a **seven-tick phase lag** on one crest of
 //! `talons-junction-clean-lap.csv`: reseeded every 60 ticks, the original is
-//! airborne on ticks 1595-1608 and we are airborne on 1602-1614 - nearly the same
+//! airborne on ticks 1595-1608 and we were airborne on 1602-1614 - nearly the same
 //! duration, started late. Two candidates, and a whole-lap replay cannot separate
 //! them, because a reseed restores position and not the phase of the crest the
 //! craft is climbing: either our probe reach is too generous, or the lag is
@@ -39,12 +39,12 @@
 //! so only the odd rows carry a stepped verdict. The odd rows do cover the
 //! transitions - 1595, 1601, 1603, 1605, 1607 - which is what the claim needs.
 //!
-//! **So the lag at `--reseed 60` is crest phase, not reach.** Measured here
-//! rather than inherited: at reseed 60 our airborne run on this crest is
-//! 1603-1615 against the original's 1595-1608, liftoff eight ticks late, plus a
-//! three-tick event at 1590-1592 the original does not have at all. Nothing in
-//! the cushion needs shortening; what is left is the force-law drift that moves
-//! the craft off the recording's phase between one reseed and the next.
+//! **So the lag at `--reseed 60` was crest phase, not reach.** Nothing in the
+//! cushion needs shortening. The phase was the collision cage (2026-10-20): the
+//! replay never ran it, so the original's tick-1584 cage hit was missing and the
+//! craft reached the crest ten units/s fast. With the cage in the replay the crest
+//! lifts off on the original's tick; see
+//! `a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage`.
 //!
 //! # A correction that falls out: `grounded` does read `0.5` at speed
 //!
@@ -78,9 +78,9 @@ use oag_physics::{Environment, Handling, hover};
 use oag_pulse as pulse;
 use oag_tables::handling;
 use oag_trace::Trace;
-use oag_trace::replay::{Basis, initial_state};
+use oag_trace::replay::{Basis, DeltaSource, Inputs, Options, initial_state, replay};
 use oag_trace::trace::AngularReading;
-use oag_vex::collision;
+use oag_vex::{collision, vex};
 
 const IMAGE: &str = "data/images/pulse-psp-usa.chd";
 const TRACK: &str = r"Data\Environments\16_Track\track.vex";
@@ -98,7 +98,8 @@ const CLASS: &str = "VENOM";
 const WINDOW: std::ops::RangeInclusive<u64> = 1560..=1625;
 
 /// The crest itself, isolated from that earlier event: it holds the original's
-/// airborne ticks (1595-1608) and ours (1602-1614) and nothing else.
+/// airborne ticks (1595-1608), and the late 1604-1615 a replay without the cage
+/// read, and nothing else.
 const CREST: std::ops::RangeInclusive<u64> = 1585..=1625;
 
 /// The tick the **original** first leaves the ground on this crest, read off the
@@ -166,7 +167,9 @@ struct Sample {
     fast_path: bool,
 }
 
-fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
+/// The handling, the collision mesh, the capture, and the circuit's collision cage
+/// with its speed pads (what `oag-trace run` reads off the same `.vex`).
+fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace, Track)> {
     let trace = capture();
     let image = workspace(IMAGE);
     if !image.exists() {
@@ -196,7 +199,18 @@ fn load() -> Option<(Handling, oag_physics::CollisionWorld, Trace)> {
     )
     .expect("this team's file authors the class under test");
 
-    Some((handling, collision, trace))
+    let vex_nodes = vex::nodes(&track_blob).expect("walking the node tree");
+    let on_track = Track {
+        cage: oag_trace::replay::cage_of(&track_blob),
+        pads: oag_vex::pads::volumes(&track_blob, &vex_nodes, vex::CLASS_SPEEDUP_PAD),
+    };
+    Some((handling, collision, trace, on_track))
+}
+
+/// What a replay reads off the track besides its mesh.
+struct Track {
+    cage: Option<oag_gameplay::cage::CageTrack>,
+    pads: Vec<oag_vex::pads::PadVolume>,
 }
 
 /// Walks the recorded poses over [`WINDOW`] and asks our probes about each one.
@@ -260,7 +274,7 @@ fn the_capture_still_dates_its_own_crest_the_way_this_test_assumes() {
 #[test]
 #[ignore = "needs data/images/"]
 fn the_pose_walk_dates_the_crest_within_a_tick() {
-    let Some((handling, collision, trace)) = load() else {
+    let Some((handling, collision, trace, _)) = load() else {
         return;
     };
     let samples = pose_walk(&handling, &collision, &trace);
@@ -333,7 +347,7 @@ fn the_pose_walk_dates_the_crest_within_a_tick() {
 #[test]
 #[ignore = "needs data/images/"]
 fn the_pose_walk_reproduces_the_whole_grounded_column_one_tick_shifted() {
-    let Some((handling, collision, trace)) = load() else {
+    let Some((handling, collision, trace, _)) = load() else {
         return;
     };
     let environment = Environment::default();
@@ -388,4 +402,86 @@ fn the_original_reads_half_grounded_above_the_fast_probe_speed() {
              fast-probe threshold - the refutation this test records no longer holds"
         );
     }
+}
+
+/// How many ticks of the whole lap a reseed-60 replay may read a different
+/// `grounded` from the recording: **measured 2** (2026-10-20), on the recorded
+/// inputs with no locator. Tick 1595, the crest's first, where ours still reads
+/// `0.5` against the original's `0`; and tick 439, the first hop's last, which
+/// reads the same with the cage off (`oag-trace run` on the scripted inputs with
+/// the locator matches it, and reads only 1595).
+///
+/// Without the collision cage the same replay reads 26: the original's tick-1584
+/// cage hit (`collision_cage_ground_truth.rs`) never happens, the craft reaches
+/// the crest ten units/s faster, takes a three-tick hop at 1590-1593 the original
+/// does not and lifts off the crest at 1604, nine ticks late.
+const MAX_RESEEDED_DISAGREEMENTS: usize = 2;
+
+/// **The crest lifts off on time once the replay runs the collision cage.**
+///
+/// `oag_trace::replay` stepped the physics and nothing after it until 2026-10-20,
+/// while the race (`oag_raceplay`'s craft step) has run the cage after the step
+/// since it was ported. At `--reseed 60` that left the lag this file's thread was
+/// opened for: ours airborne 1602-1613 against the original's 1595-1608. With the
+/// cage the crest reads the original's shape to the tick but one, and the whole
+/// lap's `grounded` column with it. Fails if the cage is dropped from the replay
+/// (26 disagreements) or if anything else moves the crest's phase.
+#[test]
+#[ignore = "needs data/images/"]
+fn a_reseeded_replay_lifts_off_the_crest_on_time_with_the_cage() {
+    let Some((handling, collision, trace, on_track)) = load() else {
+        return;
+    };
+    assert!(on_track.cage.is_some(), "16_Track runs the cage");
+    let options = Options {
+        inputs: Inputs::FromTrace,
+        dt: DeltaSource::Trace,
+        basis: Basis::LeftUpForward,
+        angular: AngularReading::NegatedLocal,
+        scheme: Default::default(),
+        reseed: std::num::NonZeroUsize::new(60),
+        pads: on_track.pads,
+        cage: on_track.cage,
+    };
+    let ours = replay(
+        &trace,
+        &handling,
+        &Environment::default(),
+        &collision,
+        &options,
+        None,
+    );
+    let disagreements: Vec<(u64, f32, f32)> = trace
+        .frames
+        .iter()
+        .zip(&ours.frames)
+        .filter(|(recorded, ours)| recorded.grounded != ours.grounded)
+        .map(|(recorded, ours)| (recorded.tick, recorded.grounded, ours.grounded))
+        .collect();
+    println!("{} disagreements: {disagreements:?}", disagreements.len());
+    let airborne: Vec<u64> = ours
+        .frames
+        .iter()
+        .filter(|frame| CREST.contains(&frame.tick) && frame.grounded < 1.0)
+        .map(|frame| frame.tick)
+        .collect();
+    let liftoff = airborne
+        .first()
+        .copied()
+        .expect("ours never leaves the crest");
+    let landing = airborne
+        .last()
+        .copied()
+        .expect("ours never leaves the crest")
+        + 1;
+    assert_eq!(
+        (liftoff, landing),
+        (RECORDED_LIFTOFF, RECORDED_LANDING),
+        "the reseeded crest is airborne {airborne:?}"
+    );
+    assert!(
+        disagreements.len() <= MAX_RESEEDED_DISAGREEMENTS,
+        "{} grounded disagreements over the lap: {disagreements:?}",
+        disagreements.len()
+    );
 }

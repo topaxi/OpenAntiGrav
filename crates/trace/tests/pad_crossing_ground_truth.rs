@@ -52,7 +52,7 @@ fn capture() -> Trace {
     Trace::parse(&text).expect("parsing the capture")
 }
 
-fn load() -> Option<(Handling, oag_physics::CollisionWorld, Vec<PadVolume>)> {
+fn load() -> Option<(Handling, Circuit, Vec<PadVolume>)> {
     let image = workspace(IMAGE);
     if !image.exists() {
         assert!(
@@ -84,7 +84,14 @@ fn load() -> Option<(Handling, oag_physics::CollisionWorld, Vec<PadVolume>)> {
     let (speedup, _, _) = global.class_named(CLASS).expect("VENOM's <GlobalClass>");
     let handling =
         handling_for(&stats, CLASS, speedup, global.special).expect("the team authors VENOM");
-    Some((handling, collision, volumes))
+    let cage = oag_trace::replay::cage_of(&blob).expect("16_Track runs the cage");
+    Some((handling, Circuit { collision, cage }, volumes))
+}
+
+/// The track's two contact sources: the mesh and the collision cage.
+struct Circuit {
+    collision: oag_physics::CollisionWorld,
+    cage: oag_gameplay::cage::CageTrack,
 }
 
 /// The recorded forward acceleration entering tick `t`, units/s^2.
@@ -148,7 +155,7 @@ fn the_pose_walk_finds_a_pad_exactly_where_the_recording_boosts() {
 fn gain(
     trace: &Trace,
     handling: &Handling,
-    collision: &oag_physics::CollisionWorld,
+    circuit: &Circuit,
     pads: &[PadVolume],
     from: u64,
     to: u64,
@@ -170,12 +177,13 @@ fn gain(
         scheme: Default::default(),
         reseed: reseed.and_then(std::num::NonZeroUsize::new),
         pads: pads.to_vec(),
+        cage: Some(circuit.cage.clone()),
     };
     let ours = replay(
         &slice,
         handling,
         &Environment::default(),
-        collision,
+        &circuit.collision,
         &options,
         None,
     );
@@ -185,7 +193,7 @@ fn gain(
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_replay_gains_the_speed_the_original_gains_crossing_a_pad() {
-    let Some((handling, collision, volumes)) = load() else {
+    let Some((handling, circuit, volumes)) = load() else {
         return;
     };
     let trace = capture();
@@ -196,11 +204,11 @@ fn a_replay_gains_the_speed_the_original_gains_crossing_a_pad() {
     for tick in CROSSINGS.into_iter().filter(|&tick| tick != 2409) {
         let (from, to) = (tick - 3, tick + 14);
         let recorded = trace.frames[to as usize].speed - trace.frames[from as usize].speed;
-        let with = gain(&trace, &handling, &collision, &volumes, from, to, None);
-        let without = gain(&trace, &handling, &collision, &[], from, to, None);
+        let with = gain(&trace, &handling, &circuit, &volumes, from, to, None);
+        let without = gain(&trace, &handling, &circuit, &[], from, to, None);
         // Reseeded every five ticks, so two window boundaries land inside the
         // boost: the restored timer is what keeps them from cutting it off.
-        let reseeded = gain(&trace, &handling, &collision, &volumes, from, to, Some(5));
+        let reseeded = gain(&trace, &handling, &circuit, &volumes, from, to, Some(5));
         println!(
             "tick {tick}: recorded +{recorded:.2}, ours +{with:.2}, reseeded +{reseeded:.2}, \
              without pads +{without:.2}"

@@ -32,7 +32,11 @@ fn workspace(relative: &str) -> std::path::PathBuf {
         .join(relative)
 }
 
-fn load() -> Option<(Handling, oag_physics::CollisionWorld)> {
+fn load() -> Option<(
+    Handling,
+    oag_physics::CollisionWorld,
+    oag_gameplay::cage::CageTrack,
+)> {
     let image = workspace(IMAGE);
     if !image.exists() {
         assert!(
@@ -57,7 +61,8 @@ fn load() -> Option<(Handling, oag_physics::CollisionWorld)> {
         handling::Special::default(),
     )
     .expect("this team's file authors the class under test");
-    Some((handling, collision))
+    let cage = oag_trace::replay::cage_of(&track_blob).expect("16_Track runs the cage");
+    Some((handling, collision, cage))
 }
 
 fn trace(name: &str) -> Trace {
@@ -99,7 +104,7 @@ fn windows(trace: &Trace) -> Vec<(u64, u64)> {
 }
 
 fn run(name: &str) {
-    let Some((handling, collision)) = load() else {
+    let Some((handling, collision, cage)) = load() else {
         return;
     };
     let recorded = trace(name);
@@ -132,6 +137,7 @@ fn run(name: &str) {
             // No speed pads, as before 2026-09-30: this measures the hover, and
             // `pad_crossing_ground_truth.rs` is where the boost is checked.
             pads: Vec::new(),
+            cage: Some(cage.clone()),
         };
         let ours = replay(
             &slice,
