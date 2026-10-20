@@ -23,11 +23,17 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
     return vec2<f32>(u, 0.5 - 0.5 * n.y);
 }
 
-// The engine's probe tint, parameter `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction
-// (read live on RPCS3, `.w` the desaturation lerp, zero there): both probe maps are
-// multiplied by it. Its source is an engine table with no authored preimage, so the
-// value is the measurement of two circuits (Talon's Junction, Metropia).
-const ENV_PROBE_GAIN: f32 = 4.0;
+// The engine's probe tint, parameter `0x7480de6d` (`iblScalePower`), `(4, 4, 4, 0)` on
+// Talon's Junction and Metropia and `(0.698, 0.698, 0.698, 1)` in a Zone race (read live on
+// RPCS3 at zones 3 and 4 of Zone mode): both probe maps are multiplied by it, and `.w` lerps
+// the result towards its own luma, so a Zone hull's probe light is grey and a fifth the
+// strength. The draw names it: `uniforms.env_gain` is the rgb scale and `uniforms.env_desat`
+// the `.w` (`oag_raceplay::env_probes::ProbeTint`).
+fn probe_tint(texel: vec3<f32>) -> vec3<f32> {
+    let scaled = texel * uniforms.env_gain;
+    let grey = vec3<f32>(dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985)) * uniforms.env_gain);
+    return mix(scaled, grey, uniforms.env_desat);
+}
 
 // The array holds two layers per craft, each 128x64: the irradiance map in its top-left
 // 64x32 corner, then the reflection map in all of its layer. `which` is 0 or 1.
@@ -319,9 +325,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // IBL variant of their own block.
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
-            hull_ambient = ENV_PROBE_GAIN * textureSampleLevel(
+            hull_ambient = probe_tint(textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_irradiance_uv(env_probe_uv(n)), env_probe_layer(0), 0.0,
-            ).rgb;
+            ).rgb);
         }
         let lit_sum = select(
             hull_ambient + prelit + vertex_light_term + sun_diffuse + in.spu_light,
@@ -702,7 +708,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             let probe = textureSampleLevel(
                 env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
             ).rgb;
-            probe_reflection = probe * ENV_PROBE_GAIN
+            probe_reflection = probe_tint(probe)
                 * (texel.a * emissives.tint_offset[probe_entry].x);
         }
 

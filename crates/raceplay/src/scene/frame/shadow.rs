@@ -465,6 +465,11 @@ impl super::super::Scene {
                         scale: race.ship_hull_scale(slot),
                         point: race.ship_hull_points(slot),
                         env: env_layer,
+                        env_tint: if self.zone_grade.is_some() {
+                            crate::env_probes::ProbeTint::ZONE
+                        } else {
+                            crate::env_probes::ProbeTint::ENGINE
+                        },
                     },
                 );
             }

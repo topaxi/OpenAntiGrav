@@ -136,6 +136,7 @@ impl Scene {
                         scale: race.ship_hull_scale(slot),
                         point: race.ship_hull_points(slot),
                         env: None,
+                        env_tint: crate::env_probes::ProbeTint::ENGINE,
                     },
                 );
             }

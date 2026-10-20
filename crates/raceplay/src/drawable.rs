@@ -678,7 +678,8 @@ impl Drawable {
             model_colour: colour,
             hull_scale: hull.scale,
             env_layer: hull.env.map_or(0.0, |layer| layer as f32 + 1.0),
-            env_pad: [0.0; 3],
+            env_tint: hull.env_tint.to_array(),
+            env_pad: 0.0,
             hull_point: hull.point,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
@@ -1073,6 +1074,8 @@ pub(crate) struct HullLayers {
     /// The craft whose environment probes light the hull (Wipeout HD, see
     /// [`crate::env_probes`]), or `None` for the constant ambient.
     pub(crate) env: Option<usize>,
+    /// The tint those probes are multiplied by, see [`crate::env_probes::ProbeTint`].
+    pub(crate) env_tint: crate::env_probes::ProbeTint,
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.
@@ -1100,7 +1103,8 @@ pub(crate) struct Uniforms {
     hull_scale: f32,
     /// See `mesh_render`'s own mirror: the environment-probe layer plus one, `0.0` for none.
     env_layer: f32,
-    env_pad: [f32; 3],
+    env_tint: [f32; 2],
+    env_pad: f32,
     /// See `mesh_render`'s own mirror: Pulse's point and spot lights for a hull.
     hull_point: [[f32; 4]; mesh_render::HULL_POINT_SLOTS],
     /// The previous tick's `view_projection * model`, premultiplied - one

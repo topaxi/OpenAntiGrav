@@ -20,6 +20,38 @@ use oag_gpu::writes::Writes;
 use oag_mesh::mesh_render::{ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE};
 use oag_vex::probes::{self, IRRADIANCE_SIZE, Probes, REFLECTION_SIZE, Taps};
 
+/// The engine's probe tint, parameter `0x7480de6d` (`iblScalePower`): what both probe maps
+/// are multiplied by, and how far the result is pulled towards its own luma.
+///
+/// Read live on RPCS3 (Zone mode, zones 3 and 4, two frames; Talon's Junction and Metropia
+/// before): the engine writes `(4, 4, 4, 0)` in a race and `(0.698, 0.698, 0.698, 1)` in a
+/// Zone race. What moves it inside a Zone race (the stage, the zone number) is not read:
+/// both frames were at the `Sub Flash` stage, so the one value is carried for the whole mode.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ProbeTint {
+    /// The rgb scale, the same on all three channels everywhere it was read.
+    pub(crate) gain: f32,
+    /// The `.w`: `0` keeps the colour, `1` replaces it by its luma.
+    pub(crate) desaturate: f32,
+}
+
+impl ProbeTint {
+    /// A race outside Zone mode.
+    pub(crate) const ENGINE: Self = Self {
+        gain: 4.0,
+        desaturate: 0.0,
+    };
+    /// A Zone race: `0.69804` is `178 / 255`.
+    pub(crate) const ZONE: Self = Self {
+        gain: 178.0 / 255.0,
+        desaturate: 1.0,
+    };
+
+    pub(crate) const fn to_array(self) -> [f32; 2] {
+        [self.gain, self.desaturate]
+    }
+}
+
 /// The probes of a circuit and the array they are blended into.
 #[derive(Debug)]
 pub struct EnvProbes {
