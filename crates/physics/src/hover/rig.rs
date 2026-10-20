@@ -45,6 +45,24 @@ pub enum SpringLaw {
     FourCorner,
 }
 
+/// Whether a probe inside a `MagFloor` moves the body out.
+///
+/// The escape's gate is the hit record's mesh-shape tag on both engines (Pulse
+/// `craft+0x208 == 1`, HD `hit+0x28 == 1`), so a magstrip passes it as a floor or a wall does.
+/// HD adds `craft+0x2c0 != 1.0`: a craft at full magnet lock does not escape
+/// (`Craft_HoverFourPoint`, `0x000ee634`-`0x000ee63c`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MagFloorEscape {
+    /// Whatever the magnet lock: Pulse's `Ship_HoverTwoPoint` tests nothing but the height and
+    /// the tag before it moves the body (`0x0884a808`-`0x0884a86c`). Live under player input on
+    /// Talon's Junction, all 578 magstrip probe hits carry the tag `1`; the hold keeps them
+    /// `2.19` or more above the strip, so the escape is reachable there only by a craft the
+    /// hold has lost (`airborne-ground-truth.md`).
+    Always,
+    /// Unless [`crate::ShipState::mag_lock_blend`] is `1.0` (HD).
+    BelowFullLock,
+}
+
 /// One title's hover probe set.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rig {
@@ -72,18 +90,14 @@ pub struct Rig {
     /// no escape in its probe loop: the height store at `0x0884b2e0` goes straight to the
     /// surface-class test (`docs/ghidra/functions/psp-pulse-usa/zone-hover.md`).
     pub probe_escape: bool,
-    /// The escape fires only off a `Floor` hit, rather than off a `Wall` too.
-    ///
-    /// Pulse's gate, `craft+0x208 == 1`, is the hit record's shape tag: `Collision_RaycastMesh`
-    /// always writes `1` and `Collision_RaycastBox` `3` (`collision.md`), so every track
-    /// surface, a `Wall` included, escapes. A `MagFloor` would pass the tag too and is held out
-    /// on every rig by choice: no live tick has shown one, and with it on a single-seeded pad
-    /// replay on Talon's Junction drifted under a magstrip and escaped where the original holds. Measured live on Talon's Junction's crest (tick
-    /// 1594 of the clean lap): a derived rear hit on a wall at height `0.798` lifts the
-    /// recorded body `0.2026`, against `0.2017` predicted (`airborne-ground-truth.md`). Wipeout
-    /// HD's gate, `hit+0x28 == 1`, keeps the floor-only reading it was ported with: what HD's
-    /// tag means is unread.
-    pub escape_floor_only: bool,
+    /// Whether a probe inside a `MagFloor` escapes ([`MagFloorEscape`]). A `Floor` and a `Wall`
+    /// always do: the gate is the hit record's mesh-shape tag, not a floor class. Pulse's
+    /// `Collision_RaycastMesh` writes `1` and `Collision_RaycastBox` `3` (`collision.md`), and
+    /// HD's `Collision_MarchSegment` writes `1` on its mesh path and nowhere else
+    /// (`0x00036bb4`-`0x00036bb8`, read through to `hit+0x28` at `0x00036d44`). Measured live on
+    /// Pulse: a derived rear hit on a wall at height `0.798` lifts the recorded body `0.2026`,
+    /// against `0.2017` predicted (`airborne-ground-truth.md`).
+    pub mag_floor_escape: MagFloorEscape,
     /// See [`SpringLaw`].
     pub spring: SpringLaw,
     /// The alignment torque has the right axis projected out, so it never pitches
@@ -131,7 +145,7 @@ impl Rig {
         normal_mean: NormalMean::Normalised,
         sum_escapes: false,
         probe_escape: true,
-        escape_floor_only: false,
+        mag_floor_escape: MagFloorEscape::Always,
         spring: SpringLaw::Racing,
         align_projects_pitch_out: true,
         downforce_scaled: true,

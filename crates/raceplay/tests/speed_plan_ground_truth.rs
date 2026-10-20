@@ -42,7 +42,7 @@ const UNSETTLED: &[(&str, &str)] = &[
     ("06_Track", "VENOM"),
     // 8 of 9 (2026-10-20, lane `pulse-air-pitch`; 0 of 9 before, on `NOT_CLEAN`): the same
     // gap landing, settled by the hover escape off a wall under a probe
-    // (`oag_physics::hover::Rig::escape_floor_only`). Only offset `5e-5` failed its majority.
+    // (the wall escape, `oag_physics::hover::Rig::mag_floor_escape`). Only offset `5e-5` failed its majority.
     ("06_Track", "RAPIER"),
     // 8 of 9: a rescue at 2402-2405.
     ("29_Track", "RAPIER"),

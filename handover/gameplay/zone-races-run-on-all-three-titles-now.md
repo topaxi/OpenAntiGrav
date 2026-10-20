@@ -43,8 +43,9 @@ directly under `<Stats>`; HD's parser fills **class 0 alone** from such a file (
   routes, so the Autopilot steered at the ring above the deck it fell to
   ([ai.md](../../docs/gameplay/ai.md)). Same run: Zone's auto-speed now carries the Autopilot's x1.2
   (live 81.6, [zone-start.md](../../docs/ghidra/functions/psp-pulse-usa/zone-start.md)); all Pulse
-  Zone circuits end at shield 95. Left open: the Zone branch's turbo/roll-payout add (static, not
-  ported); a lone craft's coin never offers route 1 (the original's does); HD's own Zone engine
+  Zone circuits end at shield 95. The Zone branch's turbo/roll-payout add is ported since 2026-10-21
+  (`deviations-to-original`). Left open: Pure's add is scaled by an unread `craft+0x288` while it
+  is below `1.0` (`0x0892f568`), on both of its branches, which ours does not do; a lone craft's coin never offers route 1 (the original's does); HD's own Zone engine
   (`0x000efb50`) not compared, HD inherits the speedup from Pulse.
 - **Pure's Zone autopilot loses shield on every circuit** (`zone_hover_sweep`-style run, 7,200 ticks:
   02_Zone ends at 77.4, 01_Zone 81.3; 93.9 and 91.6 before the Autopilot's x1.2 reached Zone), with no

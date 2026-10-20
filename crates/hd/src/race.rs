@@ -779,10 +779,14 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     // (131 escape rows, `hover-four-point.md`).
     sum_escapes: oag_title::pre_race::Sourced::measured(true),
     probe_escape: oag_title::pre_race::Sourced::measured(true),
-    // `hit+0x28 == 1` gates the escape (`0x000ee25c`); read as the floor class when the rig was
-    // ported, and what HD's tag holds is unread. Pulse's same-shaped gate is a mesh-shape tag
-    // (any track surface escapes, measured), so this keeps HD's previous behaviour by choice.
-    escape_floor_only: oag_title::pre_race::Sourced::chosen(true),
+    // `hit+0x28 == 1` gates the escape (`0x000ee628`), and `hit+0x28` is the march's mesh-shape
+    // tag: `Collision_MarchSegment` writes `1` on its mesh path and nowhere else
+    // (`0x00036bb4`), so a floor, a wall and a magstrip all pass it. Then `craft+0x2c0 != 1.0`
+    // (`0x000ee63c`) and class `!= 2` (`0x000ee664`). Live under player input, 247 of 247 probe
+    // hits read the tag `1` (`hover-four-point.md`).
+    mag_floor_escape: oag_title::pre_race::Sourced::measured(
+        oag_title::hover_rig::MagFloorEscape::BelowFullLock,
+    ),
     four_corner_spring: oag_title::pre_race::Sourced::measured(false),
     plain_mean_normal: oag_title::pre_race::Sourced::measured(false),
     alignment_pitches: oag_title::pre_race::Sourced::measured(false),

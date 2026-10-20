@@ -63,7 +63,14 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
         },
         sum_escapes: rig.sum_escapes.value,
         probe_escape: rig.probe_escape.value,
-        escape_floor_only: rig.escape_floor_only.value,
+        mag_floor_escape: match rig.mag_floor_escape.value {
+            oag_title::hover_rig::MagFloorEscape::Always => {
+                oag_physics::hover::MagFloorEscape::Always
+            }
+            oag_title::hover_rig::MagFloorEscape::BelowFullLock => {
+                oag_physics::hover::MagFloorEscape::BelowFullLock
+            }
+        },
         spring: if rig.four_corner_spring.value {
             SpringLaw::FourCorner
         } else {

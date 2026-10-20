@@ -33,7 +33,7 @@ to `*(craft+0x2b4) + i`, hit records to `*(craft+0x2b8) + 0x60 * i` (`+0x00` poi
 `Craft_HoverFourPoint` loops over the four (`0x000edfd0`-`0x000ee000`):
 
     h       = dot(hull_i - hit.point, up)                     -> craft+0x364 + 4i
-    escape  : h < 1.0 and hit+0x28 == 1 and maglock != 1.0 and class != 2
+    escape  : h < 1.0 and hit+0x28 == 1 (mesh tag) and maglock != 1.0 and class != 2
               -> body moved by up * (1 - h)                    (0x000f5ca0)
     contact : surface class 1 or 3
       grounded (craft+0x304) += 0.25                         (0x008a9180)
@@ -93,7 +93,8 @@ where `h = dot(craft+0x120 + 0x10 * i - hit.point, up)` (`0x000ee220`-`0x000ee25
 `craft+0x364 + 4i`). The hull points `craft+0x120..0x150` are written by `Craft_IntegrateHull`
 before the loop and nothing in it rewrites them. Under `1.0` (`0x000ee25c`, `blt 0x000ee628`):
 
-- `hit+0x28 != 1` (not the floor class) or `craft+0x2c0 == 1.0` (full magnet lock): no escape,
+- `hit+0x28 != 1` (not a mesh hit, which no probe hit is; see below) or `craft+0x2c0 == 1.0`
+  (full magnet lock): no escape,
   on to the contact test at `0x000ee268`;
 - the hit triangle's material type (`+0x74`, through `*(craft+0x35c)`) is `2`: the probe is
   skipped outright, no escape and no spring (`beq 0x000edfec` at `0x000ee668`);
@@ -140,9 +141,54 @@ the same loop is the expected reading there.
 on a frame where no probe ends up in contact. Ours dropped every escape on such a frame until
 Pulse's crest showed the original lifting off one
 ([airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch));
-HD now takes it too (read statically here, not seen live on HD). HD's own gate, `hit+0x28 == 1`,
-stays floor-only in ours by choice (`HoverRig::escape_floor_only`): Pulse's same-shaped field is
-the mesh-shape tag, HD's is unread.
+HD now takes it too (read statically here, not seen live on HD).
+
+## `hit+0x28` is the march's mesh-shape tag (2026-10-21, `deviations-to-original`)
+
+Confidence **88** that `+0x28` is a constant mesh-shape tag (one writer, `1` on 247 of 247 live
+hits); **80** that HD's escape therefore fires off a wall, which also rests on class `0` being the
+wall class (the numbering below) and was not seen live.
+
+**Static.** `Collision_MarchSegment` (`0x000364c0`) copies its result into the caller's record
+at `0x00036cbc`-`0x00036d84`: `+0x00` from its local `sp+0x170`, `+0x20` from `sp+0x1a0` (the
+triangle id), `+0x24` from `sp+0x1a4`, and **`+0x28` from `sp+0x1a8`** (`lwz r0,0x1a8(r1)` at
+`0x00036d1c`, `stw r0,0x28(r11)` at `0x00036d44`). The one store to `sp+0x1a8` in the function is
+`li r0,0x1` / `stw r0,0x1a8(r1)` at `0x00036bb4`-`0x00036bb8`, on the path where a triangle test
+(`bl 0x0007a900`) found a nearer hit. That path is reached only for an object whose shape type
+`+0xc` is `1` (`0x0003677c`-`0x00036784`); a type-`3` object branches to `0x00036c80` and
+`bl 0x000336b0`, which never touches the local record. So `+0x28` is a constant `1` on every hit
+the march returns, the same shape tag Pulse's `Collision_RaycastMesh` writes into `craft+0x208`
+([collision.md](../psp-pulse-usa/collision.md#raycasts)), and not a floor class.
+
+The class the hover tests separately is the hit object's `+0x74`, resolved through
+`*(craft+0x35c)` and the record's `+0x20`: contact on `1` or `3` (`0x000ee290`-`0x000ee2a0`),
+the escape skipped on `2` (`0x000ee660`-`0x000ee668`). The march itself skips class-`2` objects
+unless its byte argument at `sp+0x600` is set (`0x000367c8`-`0x000367d4`). That is Pulse's
+`Surface` numbering, `1` Floor, `3` MagFloor, `2` Reset (excluded from ordinary raycasts), `0`
+Wall; the numbering is read off the two uses, not off HD's loader (confidence 80).
+
+**Live**, RPCS3, `hd-timetrial-talons-venom-start` (Racebox Time Trial, Venom, Feisar), PPU
+interpreter, cross held and the stick swung left and right every 1.5-2 s, Autopilot never armed
+(`scripts/rpcs3-hd-escape-gate.py`):
+
+| Breakpoint | Stops | `+0x28` | class `+0x74` | shape `+0xc` |
+| --- | ---: | --- | --- | --- |
+| `0x000ee628`, the escape gate (`h < 1.0`) | 13 | `1` on all | `1` on all | `1` on all |
+| `0x000ee294`, the contact class test (`--contacts`) | 234 | `1` on all | `1` on all | `1` on all |
+
+Every hit was a floor: the run never put a wall or a magstrip under a probe, so the live leg
+shows the tag constant across 247 hits and the static read carries the claim that a wall's
+would read the same. Magnet lock read `0.0` on all 13 escape stops.
+
+**Ported.** HD escapes off a `Wall` as off a `Floor`, and off a `MagFloor` unless the magnet lock
+is full (`oag_title::hover_rig::MagFloorEscape::BelowFullLock`, carried into
+`oag_physics::hover::Rig::mag_floor_escape`). It escaped off `Floor` alone before, a choice made
+while the field was unread. The material-type-2 skip needs no port: our raycasts already leave
+out `Reset`. Gates, before and after: the Pulse lone-craft gate twelve of twelve clean both
+times (Pulse's rig is unchanged); HD's twelve `lone_opponent_on_*` pass with no wall tick before
+or after, two first laps moving `0.02` s (The Amphiseum `53.85 -> 53.83`, Talon's Junction
+`46.70 -> 46.68`); all 247 `hd_` tests in `oag-raceplay` pass. **Omega and 2048: unaffected**:
+both fly Pulse's two-point rig (`hover_rig: None`), whose gate was already Pulse's.
 
 ## The grounded vertical residual was the harness (2026-10-20, hd-hover-residual)
 
