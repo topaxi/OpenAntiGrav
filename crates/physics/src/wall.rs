@@ -342,6 +342,9 @@ pub fn resolve<R: Raycaster + ?Sized>(
             // Never applied, never recorded: the original's ring holds no such contact.
             continue;
         }
+        if env.laws.wall_steer_away && contact.surface == Surface::Wall {
+            state.wall_torque += steer_away_torque(&state.body, applied.impulse);
+        }
 
         response.resolved_count += 1;
         response.escape += applied.escape;
@@ -375,6 +378,30 @@ pub fn resolve<R: Raycaster + ?Sized>(
     response
 }
 
+/// The yaw gain on the clamped lateral impulse, `5.0` at TOC `-0x4188` of Wipeout HD's
+/// `Body_ResolveContact`.
+pub const STEER_AWAY_GAIN: f32 = 5.0;
+
+/// The clamp on the lateral impulse, `-20.0`/`20.0` at TOC `-0x4180`/`-0x417c`.
+pub const STEER_AWAY_CLAMP: f32 = 20.0;
+
+/// The yaw torque one resolved wall contact queues on Wipeout HD:
+/// `up * 5 * clamp(dot(up x forward, p), -20, 20)`.
+///
+/// `Body_ResolveContact` (`0x000f7770`) ends with `s = -clamp(dot(row0, p), -20, 20)` and
+/// `Body_AddTorque(body, row1 * s * 5.0)`, `row0 = up x forward`, `row1 = up`: exact on 16 of
+/// 16 live hits, three of them clamped. HD stores torque, momentum and rate negated, so the
+/// torque the craft feels is the negation, fitted over twelve integrator steps
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). A positive turn about `up`
+/// carries `forward` toward `up x forward`, so an impulse along it, a wall on the other side,
+/// turns the nose away from the wall. Confidence 85.
+#[must_use]
+pub fn steer_away_torque(body: &Body, impulse: Vec3) -> Vec3 {
+    let up = body.up();
+    let lateral = up.cross(body.forward()).dot(impulse);
+    up * (STEER_AWAY_GAIN * lateral.clamp(-STEER_AWAY_CLAMP, STEER_AWAY_CLAMP))
+}
+
 /// What resolving one contact did to the body.
 struct Applied {
     escape: Vec3,
@@ -387,6 +414,8 @@ struct Applied {
     impulse_magnitude: f32,
     /// Left alone by a one-sided resolver ([`crate::laws::Laws::wall_one_sided`]).
     skipped: bool,
+    /// `p`, the impulse applied (normal and tangential), zero when nothing was.
+    impulse: Vec3,
 }
 
 /// `Body_ResolveContact` (`0x0884e968`) for one contact, in full.
@@ -465,6 +494,7 @@ fn resolve_contact(
             normal_speed,
             impulse_magnitude: 0.0,
             skipped: true,
+            impulse: Vec3::ZERO,
         };
     }
 
@@ -479,6 +509,7 @@ fn resolve_contact(
             normal_speed,
             impulse_magnitude: 0.0,
             skipped: false,
+            impulse: Vec3::ZERO,
         };
     }
 
@@ -527,6 +558,7 @@ fn resolve_contact(
         normal_speed,
         impulse_magnitude: impulse.length(),
         skipped: false,
+        impulse,
     }
 }
 

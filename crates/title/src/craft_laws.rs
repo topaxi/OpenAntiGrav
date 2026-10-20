@@ -42,6 +42,10 @@ pub struct CraftLaws {
     /// (`vn > 0`): Wipeout HD's (`0x000f7770`), measured live. Pulse PSP's is two-sided
     /// (`oag_physics::laws::Laws::wall_one_sided`).
     pub wall_one_sided: Sourced<bool>,
+    /// Each resolved wall contact queues a yaw torque turning the nose away from the wall,
+    /// integrated on the next step: Wipeout HD's `Body_ResolveContact` tail, measured live
+    /// (`oag_physics::wall::steer_away_torque`). Pulse has none.
+    pub wall_steer_away: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

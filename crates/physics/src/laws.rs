@@ -39,6 +39,9 @@ pub struct Laws {
     /// measured live on wall contacts (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`).
     /// A floor contact stays two-sided, as [`Self::restitution_against`] keeps Pulse's there.
     pub wall_one_sided: bool,
+    /// Each resolved wall contact queues [`crate::wall::steer_away_torque`] for the next
+    /// step's integration: Wipeout HD's. Pulse's resolver ends at the record.
+    pub wall_steer_away: bool,
 }
 
 impl Laws {
@@ -63,6 +66,7 @@ impl Laws {
         pitch_damping_grid: None,
         wall_restitution: crate::wall::BODY_RESTITUTION,
         wall_one_sided: false,
+        wall_steer_away: false,
     };
 }
 

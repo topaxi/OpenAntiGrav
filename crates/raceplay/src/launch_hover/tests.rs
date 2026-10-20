@@ -95,6 +95,7 @@ fn a_titles_code_pitch_carries_its_grid_damping_into_the_laws() {
         drag_ground: Sourced::chosen(-0.005),
         bank_to_yaw: Sourced::chosen(30.0),
         wall_one_sided: Sourced::chosen(false),
+        wall_steer_away: Sourced::chosen(false),
         code_pitch,
         code_sideshift: None,
         code_start_boost: None,
@@ -124,4 +125,15 @@ fn the_one_sided_wall_contact_follows_the_title() {
     assert!(physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).wall_one_sided);
     assert!(!physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).wall_one_sided);
     assert!(!physics_laws(None).wall_one_sided);
+}
+
+/// HD's measured steer-away torque reaches the physics' laws, inherited by Omega and 2048;
+/// Pulse and Pure queue none.
+#[test]
+fn the_wall_steer_away_torque_follows_the_title() {
+    assert!(physics_laws(Some(&oag_hd::race::CRAFT_LAWS)).wall_steer_away);
+    assert!(physics_laws(Some(&oag_omega::race::CRAFT_LAWS)).wall_steer_away);
+    assert!(physics_laws(Some(&oag_2048::race::CRAFT_LAWS)).wall_steer_away);
+    assert!(!physics_laws(Some(&oag_pure::race::CRAFT_LAWS)).wall_steer_away);
+    assert!(!physics_laws(None).wall_steer_away);
 }

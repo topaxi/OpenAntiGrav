@@ -966,3 +966,84 @@ fn a_one_sided_wall_contact_leaves_a_ship_moving_out_alone() {
     );
     assert!(floor.body.linear_velocity.x > 0.0, "{:?}", floor.body);
 }
+
+/// Wipeout HD's steer-away torque off the headline hit: `j = 13.909` along the wall's normal
+/// `-x`, which is `+(up x forward)` for an unrotated craft, so `5 * 13.909 = 69.5` about `+up`;
+/// a hit three times as hard is clamped at `5 * 20 = 100`. Either turns the nose away from the
+/// wall: `torque x forward` points along the normal. Pulse queues nothing.
+#[test]
+fn a_wall_hit_queues_a_yaw_torque_that_turns_the_nose_away() {
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_steer_away: true,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let mut state = ship_at(1.0, 10.0);
+    resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert!(
+        (state.wall_torque - Vec3::new(0.0, 69.545, 0.0)).length() < 0.05,
+        "{:?}",
+        state.wall_torque
+    );
+    let normal = Vec3::new(-1.0, 0.0, 0.0);
+    assert!(state.wall_torque.cross(state.body.forward()).dot(normal) > 0.0);
+
+    let mut hard = ship_at(1.0, 30.0);
+    resolve(
+        &mut hard,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(hard.wall_torque, Vec3::new(0.0, 100.0, 0.0));
+
+    let mut pulse = ship_at(1.0, 10.0);
+    resolve(
+        &mut pulse,
+        &handling(),
+        &Environment::default(),
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(pulse.wall_torque, Vec3::ZERO);
+
+    // A floor contact queues nothing: the law was measured on walls.
+    let mut floor = ship_at(1.0, 10.0);
+    resolve(
+        &mut floor,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Floor),
+    );
+    assert_eq!(floor.wall_torque, Vec3::ZERO);
+}
+
+/// The queued torque is integrated on the next step, as the original's accumulator is, and
+/// then gone.
+#[test]
+fn the_next_step_integrates_the_queued_wall_torque_once() {
+    let world = CollisionWorld::new();
+    let mut with = ship_at(0.0, 0.0);
+    with.wall_torque = Vec3::new(0.0, 100.0, 0.0);
+    let mut without = ship_at(0.0, 0.0);
+    let controls = crate::ShipControls::default();
+    let env = Environment::default();
+    crate::step(&mut with, &controls, &handling(), &env, &world, 1.0 / 60.0);
+    crate::step(
+        &mut without,
+        &controls,
+        &handling(),
+        &env,
+        &world,
+        1.0 / 60.0,
+    );
+    assert_eq!(with.wall_torque, Vec3::ZERO);
+    let gained = with.body.angular_velocity.y - without.body.angular_velocity.y;
+    assert!(gained > 0.0, "{gained}");
+}

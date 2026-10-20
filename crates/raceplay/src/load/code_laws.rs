@@ -60,6 +60,7 @@ mod tests {
             drag_ground: Sourced::chosen(-0.005),
             bank_to_yaw: Sourced::chosen(30.0),
             wall_one_sided: Sourced::chosen(false),
+            wall_steer_away: Sourced::chosen(false),
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,

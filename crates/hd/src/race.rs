@@ -852,6 +852,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // calls with `vn` 2.6 to 10.4 left the velocity untouched
     // (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Confidence 88.
     wall_one_sided: oag_title::pre_race::Sourced::measured(true),
+    // `Body_AddTorque(up * 5 * -clamp(dot(right, p), -20, 20))` after every resolved contact,
+    // exact on 16 of 16 live hits (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`).
+    // Confidence 85.
+    wall_steer_away: oag_title::pre_race::Sourced::measured(true),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

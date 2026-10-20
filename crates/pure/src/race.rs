@@ -592,6 +592,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
     // Pure's resolver is not read: Pulse's two-sided contact.
     wall_one_sided: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
+    wall_steer_away: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),
