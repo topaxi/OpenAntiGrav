@@ -679,6 +679,7 @@ impl Drawable {
             hull_scale: hull.scale,
             env_layer: hull.env.map_or(0.0, |layer| layer as f32 + 1.0),
             env_pad: [0.0; 3],
+            hull_point: hull.point,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
         self.put_uniforms(queue, uniforms);
@@ -1067,6 +1068,8 @@ pub(crate) struct HullLayers {
     pub(crate) sun_occlusion: Option<usize>,
     /// [`mesh_render::pack_hull_scale`]'s word for Pulse's hull lights, `0.0` for the default.
     pub(crate) scale: f32,
+    /// [`mesh_render::HullPointLights::at`]'s slots for Pulse's hull lights, all zero for none.
+    pub(crate) point: [mesh_render::HullPoint; mesh_render::HULL_POINT_SLOTS],
     /// The craft whose environment probes light the hull (Wipeout HD, see
     /// [`crate::env_probes`]), or `None` for the constant ambient.
     pub(crate) env: Option<usize>,
@@ -1098,6 +1101,8 @@ pub(crate) struct Uniforms {
     /// See `mesh_render`'s own mirror: the environment-probe layer plus one, `0.0` for none.
     env_layer: f32,
     env_pad: [f32; 3],
+    /// See `mesh_render`'s own mirror: Pulse's point and spot lights for a hull.
+    hull_point: [[f32; 4]; mesh_render::HULL_POINT_SLOTS],
     /// The previous tick's `view_projection * model`, premultiplied - one
     /// matrix rather than a second pair, per `mesh.wgsl`'s own mirror: fog
     /// and lighting need world position, velocity needs only clip position.

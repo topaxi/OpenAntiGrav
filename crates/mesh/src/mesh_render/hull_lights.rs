@@ -38,7 +38,9 @@
 //!   light list live; the other 97 were never rebuilt, so the GE drew them
 //!   unlit. Which models those are is not mapped, so everything but the hull
 //!   keeps the stand-in rig.
-//! - The point-light slots are not reproduced: none reach a hull on the grid.
+//! - The slots the directionals leave are the circuit's `wopoint`/`wospot` lights,
+//!   chosen per craft: see [`super::HullPointLights`]. They reach the grid hull on Tech
+//!   de Ra, The Amphiseum and Fort Gale, and none does on Talon's Junction.
 
 use oag_vex::{lighting, vex};
 

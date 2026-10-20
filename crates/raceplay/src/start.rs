@@ -62,6 +62,8 @@ impl Race {
             #[cfg(feature = "view")]
             spu_vertex_lights,
             #[cfg(feature = "view")]
+            hull_points,
+            #[cfg(feature = "view")]
             spark_anchors,
             #[cfg(feature = "view")]
             collision_fx,
@@ -780,6 +782,7 @@ impl Race {
                 nozzles,
                 engine_lights,
                 spu_vertex_lights,
+                hull_points,
                 hd_weapon_lights: true,
                 engine_light_jitter: [super::engine_light::Jitter::default(); MAX_SHIPS],
                 engine_light_rng: std::array::from_fn(|slot| {

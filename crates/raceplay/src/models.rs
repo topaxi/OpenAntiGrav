@@ -143,6 +143,34 @@ impl Race {
             })
     }
 
+    /// The point and spot lights Pulse's GE list gives a craft's hull in the slots its
+    /// directionals leave, for the craft where it is drawn: two unit-vector-plus-packed-colour
+    /// slots, all zero for none. `oag_mesh::mesh_render::HullPointLights::at`, with the third
+    /// and fourth spline scale bytes the craft sits under (`255` where the course has not
+    /// located it).
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_hull_points(
+        &self,
+        slot: usize,
+    ) -> [oag_mesh::mesh_render::HullPoint; oag_mesh::mesh_render::HULL_POINT_SLOTS] {
+        if self.view.hull_points.is_empty() {
+            return Default::default();
+        }
+        let at = self.ship_model_matrix_of(slot).w_axis;
+        let [.., point, spot] = self
+            .sim
+            .course
+            .as_ref()
+            .zip(self.sim.world.ships[slot].standing.course_index)
+            .and_then(|(course, index)| course.light_scale(index as usize))
+            .unwrap_or([255; 4]);
+        self.view.hull_points.at([at.x, at.y, at.z], [point, spot])
+    }
+
     /// Where a craft's environment probes are blended: its body, one tick back.
     ///
     /// The original's SPU job takes the previous frame's position (one tick fits best

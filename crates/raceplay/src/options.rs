@@ -606,6 +606,11 @@ pub struct Setup {
     /// on two HD circuits. See `race::load::engine_light`.
     #[cfg(feature = "view")]
     pub spu_vertex_lights: bool,
+    /// The circuit's `wopoint`/`wospot` lights and how many hull light slots its
+    /// directionals leave them - Pulse's hull lights only, empty everywhere else.
+    /// See [`mesh_render::HullPointLights`] and [`Race::ship_hull_points`].
+    #[cfg(feature = "view")]
+    pub hull_points: mesh_render::HullPointLights,
     /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
     ///
     /// The disc's own hull spark anchors - the set the original picks the

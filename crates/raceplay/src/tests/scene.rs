@@ -621,3 +621,29 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
     assert_eq!(race.view.projectile_flare[0], None);
     assert_eq!(race.stage().playing_count(), 0);
 }
+
+/// Pulse's hull takes the point light standing over it, and a circuit with none gives it
+/// nothing: `Race::ship_hull_points` is what `Scene` writes to every hull's uniform.
+#[test]
+fn a_hull_takes_the_point_light_standing_over_it() {
+    use oag_mesh::mesh_render::HullPointLights;
+    use oag_vex::world_lights::WorldLight;
+
+    let mut race = race_with_a_grid();
+    assert_eq!(race.ship_hull_points(0), [[0.0; 4]; 2], "no rig, no slot");
+    let at = race.ship_model_matrix_of(0).w_axis;
+    let over = WorldLight {
+        position: [at.x, at.y + 3.0, at.z],
+        colour: [1.0, 0.5, 0.0],
+        inner_radius: 7.0,
+        outer_radius: 15.0,
+        cone: None,
+    };
+    race.view.hull_points = HullPointLights::from_lights(vec![over], 3);
+    let slots = race.ship_hull_points(0);
+    assert!(slots[0][1] > 0.99, "straight up: {:?}", slots[0]);
+    let w = slots[0][3] as u32;
+    // Full strength, no spline under the synthetic course, so the scale is 255.
+    assert_eq!([w & 255, w >> 8 & 255, w >> 16 & 255], [254, 126, 0]);
+    assert_eq!(slots[1], [0.0; 4], "three directionals leave one slot");
+}

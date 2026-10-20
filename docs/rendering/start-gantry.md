@@ -2688,3 +2688,11 @@ advert quad beside ours; the PS2 advert quads' UV extents (`wrap` for them). **P
 **Tooling added.** `scripts/pcsx2-drive.py`: `OAG_PCSX2_DISPLAY`, `OAG_PCSX2_DATA` (own display, data path, log, pid file;
 `stop` kills only the recorded pid there), `GSDumpSingleFrame` bound to `F9` and a `gsdump` subcommand. Trap: a save
 state loaded while the VM is paused leaves it paused; `press pause` resumes.
+
+## A dark board in a Pulse comparison pair is the pre-countdown clock (2026-10-20, `pulse-pair-diffs`)
+
+The 12 pose-matched Pulse PSP pairs first showed the board dark in ours and green with `GO` in
+the original. Both are right: the pair script rendered ours at `--ticks 0`, where the gantry clock
+reads 0 (`3 2 1` unlit, dark red texels), while the original's state is after the release. Ours at
+`--ticks 300` with the same pose shows the green `GO` board on all 12 circuits; no gantry change was
+needed. `scripts/psp-pulse-pair.py` and `scripts/pcsx2-pulse-pair.py` now render at 300 ticks.

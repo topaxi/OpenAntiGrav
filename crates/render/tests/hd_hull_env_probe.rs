@@ -281,6 +281,7 @@ fn uniforms(env_layer: f32) -> Vec<u8> {
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // model
     bytes.extend_from_slice(&[0u8; 16]); // sun-occlusion layer, clock, colour, hull scale
     bytes.extend_from_slice(bytemuck::cast_slice(&[env_layer, 0.0, 0.0, 0.0]));
+    bytes.extend_from_slice(&[0u8; 32]); // hull point lights
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // prev_mvp
     assert_eq!(bytes.len() as u64, UNIFORMS_SIZE);
     bytes
