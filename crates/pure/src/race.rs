@@ -521,9 +521,10 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 
 /// Pure's compiled-in pitch: `Ship_UpdatePitch` (`0x0892caf8`) adds `pitch * 0.1` airborne and
 /// `pitch * 0.4` grounded, `Ship_ApplyAngularDamping` (`0x0892cc2c`) damps pitch at `1.5` while
-/// racing. **Measured live** on Pure PSP (USA), 2026-10-20: input `-100` adds `-10` and `-40`,
-/// and the damping reproduces `-1.5 * omega.x` to `2e-6` (`docs/physics/pure-physics.md`). Held
-/// out of [`CRAFT_LAWS`] until our AI flies it.
+/// racing and `0.6` in the grid state (`3 / c`, `c` the roll coefficient `-2` or `-5`).
+/// **Measured live** on Pure PSP (USA), 2026-10-20: input `-100` adds `-10` and `-40`, and the
+/// damping reproduces `-1.5 * omega.x` racing and `-0.6 * omega.x` on the grid to `2e-6`
+/// (`docs/physics/pure-physics.md`).
 pub const CODE_PITCH: oag_title::craft_laws::CodePitch = oag_title::craft_laws::CodePitch {
     air: 0.1,
     ground: 0.4,
@@ -568,7 +569,8 @@ pub const SIDESHIFT: f32 = 200.0;
 /// not double its output (`Ship_UpdateEngine`, `0x0892f1f0`, live on 374 frames to `3e-6`), its
 /// grounded drag is `-0.0025`, half Pulse's (`0x0892cba0`, every grounded frame), and its
 /// two-point hover's bank-to-yaw gain is `50`, not `30` (`0x0892dea8`, 129 banked frames). The
-/// speed pair is on; the bank-to-yaw gain is held at Pulse's until our AI flies it.
+/// speed pair, the pitch, the sideshift and the launch are on; the bank-to-yaw gain is held at
+/// Pulse's until our AI flies it.
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::inherited(0.9, "Pulse"),
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
@@ -582,10 +584,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // this engine's AI flies it: on, Pure's opponent sweep walls rose (Ace B `25 -> 265`) and
     // Ace races wrecked four times where they wrecked none (`docs/physics/pure-physics.md`).
     bank_to_yaw: oag_title::pre_race::Sourced::chosen(30.0),
-    // Measured (`CODE_PITCH`), held off until this engine's AI flies it: on, Pure's opponent
-    // sweep walls rose (Ace A `14 -> 53`, B `25 -> 72`) and Ace races wrecked twice where they
-    // wrecked none (`docs/physics/pure-physics.md`). `None` flies Pulse's `<pitch>` stand-in.
-    code_pitch: None,
+    // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
+    // (`docs/physics/pure-physics.md`).
+    code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),
     // Measured (`SIDESHIFT`): Pure's files author no sideshift, its airbrake code pushes at `200`
     // (`docs/physics/pure-physics.md`).
     code_sideshift: Some(oag_title::pre_race::Sourced::measured(SIDESHIFT)),
@@ -623,13 +624,18 @@ mod tests {
         );
     }
 
-    /// Pure's pitch is three code literals, measured live, and held out of the table until our
-    /// AI flies it. Releasing the hold is this test's change.
+    /// Pure's pitch is four code literals, measured live, and on.
     #[test]
-    fn the_pitch_is_measured_and_held() {
+    fn the_pitch_is_measured_and_on() {
         let pitch = super::CODE_PITCH;
-        assert_eq!((pitch.air, pitch.ground, pitch.damping), (0.1, 0.4, 1.5));
-        assert_eq!(super::CRAFT_LAWS.code_pitch, None);
+        assert_eq!(
+            (pitch.air, pitch.ground, pitch.damping, pitch.grid_damping),
+            (0.1, 0.4, 1.5, 0.6)
+        );
+        assert_eq!(
+            super::CRAFT_LAWS.code_pitch,
+            Some(oag_title::pre_race::Sourced::measured(pitch))
+        );
     }
 
     /// Pure's sideshift pushes at `200`, a code literal measured live, and is on.
