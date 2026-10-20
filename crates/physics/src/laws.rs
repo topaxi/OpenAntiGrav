@@ -26,6 +26,13 @@ pub struct Laws {
     /// `c` the roll coefficient, `-5` on the grid and `-2` racing, so `0.6` on the grid
     /// against `1.5`: measured live to `2e-6` (`docs/physics/pure-physics.md`).
     pub pitch_damping_grid: Option<f32>,
+    /// The craft-wall restitution `e` in `j = -(1 + e) vn / D`: Pulse's
+    /// [`crate::wall::BODY_RESTITUTION`] (`0.4`, `body+0x388`). Wipeout HD reads it from its
+    /// pair table, which the global `handlingstats.xml`'s `<Collision shipWallCofR>`
+    /// overwrites to `0.8`, measured live on 26 of 26 contact records
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`). Data, not a title's const:
+    /// the race passes the file's value where it authors one.
+    pub wall_restitution: f32,
 }
 
 impl Laws {
@@ -35,6 +42,7 @@ impl Laws {
         drag_ground: crate::passive::DRAG_GROUND,
         bank_to_yaw: crate::hover::BANK_TO_YAW_GAIN,
         pitch_damping_grid: None,
+        wall_restitution: crate::wall::BODY_RESTITUTION,
     };
 }
 

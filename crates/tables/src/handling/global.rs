@@ -239,6 +239,55 @@ impl StartBoost {
     }
 }
 
+/// `<Collision weaponHitMassFactor shipShipCofR shipWallCofR/>`, of which the craft-wall
+/// restitution is read.
+///
+/// Wipeout HD's `Handling_ParseCollision` (`0x000c67a8`) stores the three into
+/// `g_WeaponHitMassFactor`, `g_ShipShipCofR` and `g_ShipWallCofR`, overwriting compiled
+/// defaults (`0.4` for the wall) in the pair table `Body_ResolveContact` reads. Read live
+/// as `0.8` from `"0.80f"` (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`), so a
+/// trailing `f` is accepted as the original's parser accepts it. Confidence **92**. The
+/// other two have no consumer here: the craft-craft resolver is not read.
+///
+/// **HD, 2048 and Omega author it** (byte-identical files); Pulse and Pure do not, and
+/// their executables carry none of the three names.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Collision {
+    /// `shipWallCofR`, the craft-wall restitution.
+    pub ship_wall_cof_r: f32,
+}
+
+impl Collision {
+    const ELEMENT: &'static str = "Collision";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        Ok(Self {
+            ship_wall_cof_r: c_number(node, Self::ELEMENT, "shipWallCofR")?,
+        })
+    }
+}
+
+/// [`number`], also taking a C float literal's trailing `f` (`"0.80f"`), which the file
+/// writes and the original reads as `0.8`.
+fn c_number(node: &Node, element: &'static str, attribute: &'static str) -> Result<f32> {
+    let raw = node
+        .value(attribute)
+        .ok_or(Error::MissingAttribute { element, attribute })?;
+    let bad = || Error::NotANumber {
+        element,
+        attribute,
+        value: raw.to_string(),
+    };
+    let trimmed = raw.trim();
+    let digits = trimmed.strip_suffix(['f', 'F']).unwrap_or(trimmed);
+    let parsed: f32 = digits.parse().map_err(|_| bad())?;
+    if parsed.is_finite() {
+        Ok(parsed)
+    } else {
+        Err(bad())
+    }
+}
+
 /// A `<GlobalClass>` whose `name` is outside [`SpeedClass`]: [`super::Class`]'s
 /// `raw_name` one level up. `VECTOR` is the only one any measured disc carries.
 #[derive(Debug, Clone, PartialEq)]
@@ -267,6 +316,8 @@ pub struct Global {
     pub special: Special,
     /// `<StartBoost/>`, `None` where the file authors none (Pure).
     pub start_boost: Option<StartBoost>,
+    /// `<Collision/>`, `None` where the file authors none (Pulse, Pure).
+    pub collision: Option<Collision>,
     /// `<GlobalClass><SpeedupPads/></GlobalClass>`, indexed by [`SpeedClass`].
     pub speedup_pads: [SpeedupPads; 4],
     /// `<GlobalClass><GravityMul/></GlobalClass>`, indexed by [`SpeedClass`].
@@ -378,6 +429,10 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
         start_boost: child(global, StartBoost::ELEMENT)
             .ok()
             .map(StartBoost::from_node)
+            .transpose()?,
+        collision: child(global, Collision::ELEMENT)
+            .ok()
+            .map(Collision::from_node)
             .transpose()?,
         speedup_pads,
         gravity_mul,

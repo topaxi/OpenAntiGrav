@@ -860,3 +860,32 @@ fn a_held_heading_makes_the_bounce_the_cost_not_the_friction() {
     // and only a quarter of that is the friction coefficient.
     assert!((speed - 7.3437).abs() < 1e-3, "{speed}");
 }
+
+/// The restitution is the title's law, not Pulse's constant: Wipeout HD's resolver reads
+/// `0.8`, which its global `handlingstats.xml` writes over a compiled `0.4`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/wall-response.md`, 26 of 26 live contacts). The
+/// headline hit at `e = 0.8`: `j = 1.8 * 10 / 1.006510 = 17.884`, so `10` in is `7.884` out
+/// where Pulse's `0.4` gives `3.909`.
+#[test]
+fn the_wall_restitution_comes_from_the_laws() {
+    let mut state = ship_at(1.0, 10.0);
+    let env = Environment {
+        laws: crate::laws::Laws {
+            wall_restitution: 0.8,
+            ..crate::laws::Laws::PULSE
+        },
+        ..Environment::default()
+    };
+    let response = resolve(
+        &mut state,
+        &handling(),
+        &env,
+        &narrow_wall(1.6, Surface::Wall),
+    );
+    assert_eq!(response.contacts, 1, "{response:?}");
+    assert!(
+        (state.body.linear_velocity.x + 7.884).abs() < 1e-2,
+        "{:?}",
+        state.body.linear_velocity
+    );
+}

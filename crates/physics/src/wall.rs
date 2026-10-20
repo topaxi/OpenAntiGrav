@@ -337,7 +337,12 @@ pub fn resolve<R: Raycaster + ?Sized>(
 
     for contact in contacts.iter().flatten().take(found) {
         let friction = combine_friction(SHIP_FRICTION, contact.surface.friction());
-        let applied = resolve_contact(&mut state.body, contact, friction);
+        let applied = resolve_contact(
+            &mut state.body,
+            contact,
+            friction,
+            env.laws.wall_restitution,
+        );
 
         response.resolved_count += 1;
         response.escape += applied.escape;
@@ -422,7 +427,12 @@ struct Applied {
 /// (the basis transpose; the rotation the denominator omits), then multiplies by
 /// `body+0x394 = 0.1`. The sign is a subtraction there and an addition here, for the
 /// `w_game = -w_physics` reason in [`crate::integrate`].
-fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> Applied {
+fn resolve_contact(
+    body: &mut Body,
+    contact: &WallContact,
+    friction: f32,
+    restitution: f32,
+) -> Applied {
     let normal = contact.normal;
 
     // Push out along the normal exactly as far as the hull is past the surface. No skin:
@@ -465,7 +475,7 @@ fn resolve_contact(body: &mut Body, contact: &WallContact, friction: f32) -> App
     //
     // **The PS2 build does gate it** (`Body_ResolveContactPair`, `0x0015e600`, returns early
     // when `vn > 0`). PSP is the target; see the divergence table in `contact-response.md`.
-    let mut impulse = normal * (-(1.0 + BODY_RESTITUTION) * normal_speed / denominator);
+    let mut impulse = normal * (-(1.0 + restitution) * normal_speed / denominator);
 
     // The tangential impulse, the headline: `-friction * v_t` is a raw impulse, **not**
     // scaled by the normal impulse and **not** Coulomb-clamped, so each frame of contact
