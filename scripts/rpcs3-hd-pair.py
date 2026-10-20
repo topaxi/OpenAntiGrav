@@ -201,7 +201,7 @@ def main():
     field_flags = []
     if args.field:
         rows = [{"slot": r["slot"], "player": r["player"], "team": r["team"], "left": r["rows"][0],
-                 "up": r["rows"][1], "fwd": r["rows"][2], "pos": r["pos"]} for r in ship["field"]]
+                 "up": r["rows"][1], "fwd": r["rows"][2], "pos": r["pos"], "vel": r["vel"]} for r in ship["field"]]
         teams = ce.write_field_csv(out / "field.csv", rows, with_player=True)
         hud = ship["hud"]
         player_row = next(r for r in ship["field"] if r["player"])
@@ -219,12 +219,14 @@ def main():
         if pair.failed():
             pair.finish()
         pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
-        field_flags = ["--field-from", out / "field.csv", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
+        field_flags = ["--field-from", out / "field.csv", "--field-warmup", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
             hud["place"], hud["lap"], player_row["clock"], player_row["clock"], hud["speed"],
             100.0 * hud["shield"] / hud["shield_max"])]
         # ours races with weapons off the way the original's Racebox row was set
         ce.set_ours_weapons_off(scratch / "profile")
-        pair.caveat("trails and exhaust history start from nothing in ours (a craft at rest); the HUD's place, lap, "
+        pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft flown on "
+                    "a straight path to its captured pose at its captured velocity (RAM, body+0x190), full thrust for all, "
+                    "the path and the heading chosen, not measured; the HUD's place, lap, "
                     "clock, speed and shield are imposed from the original's RAM (%d/8, lap %d, %.1f s), the best-lap "
                     "line, the pickup row and the sight are ours" % (hud["place"], hud["lap"], player_row["clock"]))
     base = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(),

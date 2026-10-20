@@ -125,7 +125,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     import json
     rows = json.loads((out / "field.json").read_text())["rows"]
     player = next(r for r in rows if r["player"])
-    teams = ce.write_field_csv(out / "field.csv", rows)
+    teams = ce.write_field_csv(out / "field.csv", rows, with_player=True)
     pair.rec["original"]["field"] = [{k: r[k] for k in ("slot", "team", "place", "lap", "lap_time", "pos")} for r in rows]
     lap_number = player["lap"] - 1  # PlayerStatus_Update: the HUD's lap is `entity+0xacc - 1`
     pair.rec["original"]["hud"] = {"place": player["place"], "of": len(rows), "lap_number": lap_number,
@@ -143,7 +143,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     pair.rec["original"]["layout"] = layout
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
-            "--field-from", out / "field.csv",
+            "--field-from", out / "field.csv", "--field-warmup",
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
                 theirs_row["speed"] * SPEED_TO_KMH, 100.0 * player["shield"] / player["shield_max"],
@@ -151,10 +151,12 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
-    pair.caveat("trails and exhaust history start from nothing in ours (stage 3, a frozen warm-up, is not run); the "
-                "HUD's place, lap and clocks are imposed from the original's RAM (%d/%d, lap %d, %.1f s), "
-                "the speed and shield bars read the original's own values; the pickup row (the Autopilot icon) and the "
-                "exhaust plume are not drawn" %
+    pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft "
+                "flown on a straight path to its captured pose at its captured velocity (RAM, body+0x140), full "
+                "thrust for all (the player's reads 100, an opponent's is not read), the path and the heading chosen, "
+                "not measured; the HUD's place, lap and clocks are imposed from the original's RAM (%d/%d, lap %d, "
+                "%.1f s), the speed and shield bars read the original's own values; the pickup row (the Autopilot icon) "
+                "is not drawn" %
                 (player["place"], len(rows), lap_number, player["lap_time"]))
     ours_csv = out / "ours-trace.csv"
     run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)

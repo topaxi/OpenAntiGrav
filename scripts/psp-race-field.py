@@ -106,6 +106,8 @@ class Field:
                 "slot": s["slot"], "player": s["player"], "team": self.team_name(s),
                 "left": list(pose[0:3]), "up": list(pose[4:7]), "fwd": list(pose[8:11]),
                 "pos": list(pose[12:15]),
+                #: `Body` linear velocity, units per second (`psp_trace_fields.BODY_FIELDS`, `vel_x` at +0x140)
+                "vel": rail.f32s(self.dbg, s["body"] + 0x140, 3),
                 "place": self.dbg.read_u32(s["entity"] + PLACE),
                 "lap": struct.unpack("<I", craft_words)[0],
                 "best_lap_cs": self.dbg.read_u32(s["entity"] + 0x930),

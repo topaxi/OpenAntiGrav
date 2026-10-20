@@ -676,6 +676,10 @@ pub(crate) fn run_race(
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
                 pose_hold: cli.pose_hold,
+                field_warmup: match (cli.field_warmup, cli.field_from.as_deref()) {
+                    (true, Some(path)) => Some(super::pose::field_from_csv(path)?.velocities()?),
+                    _ => None,
+                },
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {

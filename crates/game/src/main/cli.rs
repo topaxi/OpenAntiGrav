@@ -854,6 +854,15 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "FIELD.CSV")]
     pub(crate) field_from: Option<std::path::PathBuf>,
 
+    /// With `--field-from` and `--screenshot`: give every craft the exhaust history of a craft
+    /// that has been flying at its captured velocity, so the frame has each craft's trail and
+    /// a plume at the level a racing craft holds (a posed capture runs no tick and draws neither).
+    /// The file needs `vel_x,vel_y,vel_z` columns and a slot 0 row for the player. Only the exhaust
+    /// is stepped, the craft ending exactly on their captured poses; the straight path and full
+    /// thrust are chosen, not measured (`Race::warm_up_field`).
+    #[arg(long, requires = "field_from")]
+    pub(crate) field_warmup: bool,
+
     /// With a posed craft (`--pose-from` or `--pose`): the HUD's race state as the original's frame showed it,
     /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]` (lap 1-based, the clocks in seconds), read out of the
     /// emulator's RAM at the same stop as the pose. A posed capture runs no ticks, so without this
