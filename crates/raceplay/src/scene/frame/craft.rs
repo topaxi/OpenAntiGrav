@@ -34,8 +34,9 @@ pub(super) fn cockpit_shield_visible(race: &Race) -> bool {
     !race.draws_own_ship() && race.shield_of(0).visible() && race.ship_active(0)
 }
 
-/// The scale HD's flame groups breathe with, about the nozzle the flare model
-/// is baked at - identity on every other source and where no locator exists.
+/// The scale HD's flame groups breathe with, about the origin the group is
+/// baked at (`origin`, else the locator) - identity on every other source and
+/// where neither exists.
 ///
 /// `EF_Main` scales its cross-section and length from the smoothed throttle
 /// plus the boost blend; `EF_Boost` only its length, by `blend * 2.0`. The five

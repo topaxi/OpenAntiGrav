@@ -63,12 +63,13 @@ pub struct Spike {
 
 /// Loads a team's authored flare and splits it into its two groups.
 ///
-/// **Placed by baking the nozzle translation into the vertices**, rather than
-/// by a draw-time offset. The model is authored about its own origin - every
-/// node transform in the file is the identity, so nothing in the file places
-/// it, and the craft's `Engine Flare` locator is what says where on the hull it
-/// hangs. Baking keeps the draw path identical to the plume's, which already
-/// takes the craft's own model matrix and nothing else.
+/// **Placed by baking each group's origin into its vertices**, rather than by a
+/// draw-time offset. The shapes are authored about their group's origin and the
+/// group nodes say where that is on the hull (`EF_Main` is an `Anim Transform`),
+/// which is where the original draws them; the craft's `Engine Flare` locator is
+/// the fallback for a node the file lacks and for 2048's container. Baking keeps
+/// the draw path identical to the plume's, which already takes the craft's own
+/// model matrix and nothing else.
 ///
 /// **No locator, nothing drawn**, on the same rule the flare quad follows: a
 /// flare at the hull's origin sits in the middle of the fuselage, and a

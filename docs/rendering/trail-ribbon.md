@@ -285,10 +285,13 @@ root
 ```
 
 Five shapes each, on all fourteen craft; 350-961 triangles for `EF_Main` and
-616-1,492 for `EF_Boost` across the eight teams that reach a grid. Every node
-transform in the file is the identity, so the model is authored about its own
-origin and the craft's `Engine Flare` locator is what places it. Confidence 90
-on the split - the group names say what they are and nothing else in the file
+616-1,492 for `EF_Boost` across the eight teams that reach a grid. The shapes are
+authored about their own group's origin, and **the group nodes place them**: `EF_Main` is an
+`Anim Transform` keyed to a point ahead of the craft's `Engine Flare` locator (Harimau
+(0, -0.178, -5.911) against the locator's -6.447), which is where the running game draws the
+model (2026-10-20, `engine-trail.md`, "The flare model's origin is its own node"; an earlier
+reading of this page took the nodes for identities and placed the model at the locator).
+Confidence 90 on the split - the group names say what they are and nothing else in the file
 distinguishes the ten shapes.
 
 **`EF_Main` is confirmed on screen and `EF_Boost` is not.** Five HD frames
