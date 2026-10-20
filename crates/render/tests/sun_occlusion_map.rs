@@ -76,8 +76,8 @@ fn read_back(device: &wgpu::Device, queue: &wgpu::Queue, maps: &Maps, layer: u32
 }
 
 /// A material bind group in `mesh_render`'s albedo layout: a white albedo
-/// and a 2x1 lightmap whose left texel has alpha 0 and right texel alpha 255.
-fn material(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::BindGroup {
+/// and a 2x1 lightmap whose left texel has alpha `left` and right texel alpha 255.
+fn material(device: &wgpu::Device, queue: &wgpu::Queue, left: u8) -> wgpu::BindGroup {
     let make = |width: u32, rgba: &[u8], label: &str| {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -110,7 +110,7 @@ fn material(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::BindGroup {
         texture.create_view(&Default::default())
     };
     let albedo = make(1, &[255, 255, 255, 255], "albedo");
-    let lightmap = make(2, &[0, 0, 0, 0, 255, 255, 255, 255], "lightmap");
+    let lightmap = make(2, &[0, 0, 0, left, 255, 255, 255, 255], "lightmap");
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -160,18 +160,22 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
 
     let mut maps = Maps::new(&device, &material_bind_group_layout(&device));
 
-    // Three quads in one buffer: the lightmapped road under the craft, a
-    // vertex-masked road just beside it at half sun, and a lightmapped road
-    // far down the circuit that the cull must leave out.
+    // Four quads in one buffer: the lightmapped road under the craft, a
+    // vertex-masked road just beside it at half sun, a lightmapped road
+    // far down the circuit that the cull must leave out, and a road on the
+    // other side whose lightmap alpha is the byte 12 that most of Talon's
+    // Junction's lightmaps hold.
     let (road, road_indices) = quad([0.0, 0.0, 0.0], 2.0, 1.0, slots::SECOND_IS_LIGHTMAP);
     let (beside, beside_indices) = quad([0.0, 0.0, 6.0], 2.0, 0.5, slots::DEFAULT);
     let (far, far_indices) = quad([0.0, 0.0, 60.0], 2.0, 1.0, slots::SECOND_IS_LIGHTMAP);
-    let vertices: Vec<GpuVertex> = [road, beside, far].concat();
+    let (shade, shade_indices) = quad([0.0, 0.0, -6.0], 2.0, 1.0, slots::SECOND_IS_LIGHTMAP);
+    let vertices: Vec<GpuVertex> = [road, beside, far, shade].concat();
     let indices: Vec<u32> = road_indices
         .iter()
         .copied()
         .chain(beside_indices.iter().map(|i| i + 4))
         .chain(far_indices.iter().map(|i| i + 8))
+        .chain(shade_indices.iter().map(|i| i + 12))
         .collect();
     let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("track vertices"),
@@ -191,10 +195,18 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
         draw(0..6, [0.0, 0.0, 0.0], 3.0, false),
         draw(6..12, [0.0, 0.0, 6.0], 3.0, false),
         draw(12..18, [0.0, 0.0, 60.0], 3.0, false),
+        DrawCall {
+            texture: Some(1),
+            ..draw(18..24, [0.0, 0.0, -6.0], 3.0, false)
+        },
     ];
     // `texture: Some(0)` indexes `materials[1]`, as the main pass does; slot 0
     // is the untextured placeholder's and is never reached here.
-    let materials = [material(&device, &queue), material(&device, &queue)];
+    let materials = [
+        material(&device, &queue, 0),
+        material(&device, &queue, 0),
+        material(&device, &queue, 12),
+    ];
     let track = Track {
         vertices: &vertex_buffer,
         indices: &index_buffer,
@@ -216,8 +228,8 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     let drawn = maps.render(&queue, &mut encoder, 3, &fit, &track);
     queue.submit([encoder.finish()]);
-    assert_eq!(drawn, 2, "the road and the road beside it, not the far one");
-    assert_eq!(maps.drawn(3), 2);
+    assert_eq!(drawn, 3, "the three roads in reach, not the far one");
+    assert_eq!(maps.drawn(3), 3);
     const {
         assert!(
             60.0 - 3.0 > RADIUS,
@@ -245,18 +257,21 @@ fn the_road_under_the_craft_writes_its_own_mask_and_the_far_road_is_culled() {
     // two roads, stay at the black clear - what the hull reads as no sun.
     assert_eq!(at(0, 0), 0, "the corner");
     assert_eq!(at(SIZE - 1, SIZE - 1), 0, "the far corner");
-    // The vertex-masked road beside it, centred at `z = 6` in a box of
-    // radius 8: seven eighths of the way across, in whichever row direction
-    // `z` maps to. Half sun, from `sun_mask` alone.
-    let beside_row = if at(middle, SIZE * 7 / 8) != 0 {
-        SIZE * 7 / 8
-    } else {
-        SIZE / 8
-    };
-    let half = at(middle, beside_row);
+    // The two roads at `z = +6` and `z = -6`, seven eighths and one eighth of
+    // the way across a box of radius 8 in whichever row direction `z` maps to:
+    // the vertex-masked one at half sun, and the lightmapped one whose alpha is
+    // the byte 12.
+    let rows = [at(middle, SIZE * 7 / 8), at(middle, SIZE / 8)];
+    // **The map holds the mask sRGB-encoded** (`occlusion.wesl`): half sun is
+    // `encode(0.5)` = 188, not 128.
+    // The byte 12 of Talon's Junction's lightmaps, which the original's own map
+    // holds as 61 (read off RPCS3, `docs/rendering/shadows.md`): `encode(12 / 255)`.
+    // Reading 12 here is the pass writing the mask linear, which is what darkened
+    // the hull's sun to a fifth of the original's.
+    let near = |value: u8, want: u8| value.abs_diff(want) <= 1;
     assert!(
-        (0x7f..=0x81).contains(&half),
-        "the vertex-masked road reads half sun, got {half:#x}"
+        (near(rows[0], 188) && near(rows[1], 61)) || (near(rows[0], 61) && near(rows[1], 188)),
+        "half sun reads 188 and a lightmap alpha of 12 reads 61, got {rows:?}"
     );
 
     // Clearing the layer empties it and forgets the count.

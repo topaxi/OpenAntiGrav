@@ -20,15 +20,21 @@
 //!
 //! **The original's**: the mechanism - the road's own mask re-sampled along
 //! the sun through the craft - the 10-unit cull radius ([`RADIUS`]), the
-//! black clear, the two carriers, and that the sun term alone is gated.
+//! black clear, the two carriers, that the sun term alone is gated, and that
+//! **the mask is written sRGB-encoded** (a lightmap alpha of 12 is stored as
+//! 61, read off RPCS3 on Talon's Junction) and read raw by the hull.
 //!
 //! **Ours**: the map's size (the original's slot-0 map is 256 texels and the
 //! rest smaller, by a slot assignment not read - every layer here is
 //! [`SIZE`]), the fit (the original's box is fitted to the ship's bbox
 //! from 70 units up the sun; this one is [`super::map::Fit`], centred on the
-//! craft), and that the clear stays black on the six tracks and in Zone,
-//! where the original clears white - what those names map to on the disc
-//! was not resolved.
+//! craft), and that the clear stays black on the six track names and in Zone,
+//! where the original clears white. The six names are three circuits both
+//! ways - `17_Track`/`18_Track` Talon's Junction, `23_Track`/`24_Track` Tech De
+//! Ra, `07_Track`/`15_Track` Sol 2 (`DATA00`'s `definition.xml`) - and the white
+//! clear is read, not wired: it only shows where no chunk covers a craft's box.
+//! It also draws every chunk in reach, where the original draws only the two
+//! carrier families and skips the flat-ambient one.
 //!
 //! The other factor of the original's gate - the craft's own depth map, its
 //! self-shadow - is [`super::self_shadow`], owned by [`Maps`] so the two are

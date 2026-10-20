@@ -855,3 +855,41 @@ set it before any brightness capture.
 **Cross-title.** Omega: checked, differs (it ships no `.probes`, and its hulls build through the PS4 path, so the decode
 has nothing to touch). 2048: checked, differs (a different `.probes` layout the reader names and refuses, so no hull reads
 a probe array). Pulse and Pure: no probes, nothing to check.
+
+## The hull's sun gate (2026-10-20, `hd-hull-pearl`): the occlusion map is sRGB-encoded
+
+The fresh WCB-on pairs (`data/reference/compare-page/hd/`) read "the hull is a saturated orange with blue wing tips where the
+original's is pearlescent". Cropped at 1:1 that is not the whole picture: on the Talon's pair (Harimau classic) the original's
+wing tops are **warm orange-khaki**, `(114, 103, 71)` on the left wing top, where ours was a cool grey, `(80, 89, 75)`; the blue
+tips are in both. The cause is the sun, not the paint or the reflection: with the hull's occlusion map forced to 1 the same
+facets read `(188, 146, 79)` (too bright), forced to 0 `(80, 89, 75)` (ours), and the original sits between, at a gate near 0.24.
+
+**Read off the original** ([ship-sun-occlusion.md](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md), "Read live on RPCS3"):
+the hull's occlusion map (unit 3, 256x256 `B8`, pitch 512) holds **61** on the road where the lightmap alpha is the byte **12**, and
+13 where it is 1: the pass writes the mask sRGB-encoded and the hull reads the byte raw. Ours wrote it linear, so the gate was 0.047.
+**Fixed** (`crates/render/shaders/occlusion.wesl`): the left wing top is now `(112, 104, 75)` against the original's `(114, 103, 71)`.
+
+| facet, Talon's Harimau | original | before | after |
+| --- | --- | --- | --- |
+| left wing top | (114, 103, 71) | (80, 89, 75) | (112, 104, 75) |
+| right wing top | (156, 160, 145) | (140, 155, 146) | (157, 163, 148) |
+| right wing tip | (127, 163, 200) | (123, 160, 206) | (129, 170, 214) |
+| fuselage, left | (121, 117, 112) | (100, 108, 108) | (117, 116, 110) |
+| nose, green | (54, 63, 54) | (50, 62, 61) | (61, 69, 63) |
+| right upper wing | (106, 131, 131) | (100, 124, 125) | (108, 130, 126) |
+
+Mean absolute difference over the six, **8.5 before and 4.1 after**. Circuits whose road lightmaps are fully lit (alpha 255) do not
+move (`sol-2`, `tech-de-ra`, `modesto-heights`, `metropia`, `chenghou-project`, `vineta-k`: 0 changed pixels; the encode of 1 is 1).
+
+**What is not closed.** Over the whole hull the mean luma went from matched to about 10 levels bright (`talons` 109.4 to 119.9 against
+the original's 108.9; `talons-assegai-c1` 62.8 to 72.1 against 62.4; `the-amphiseum` 81.1 to 86.6 against 81.3), and the facets
+that got brighter are not the ones where the original is: the gate is right, the sun term it multiplies is not wholly. Not specular
+(zeroed, the six facets move 4.1 to 3.4). Open: the self-shadow tap (its depth map cannot be read back), the `x8` on the specular's
+saturate, and the hull-wide silhouette offset that makes a pixel metric unusable. **Open-air circuits keep the pearl gap**: on
+Sebenco Climb and the Amphiseum our sun-facing facets read whiter than the original's orange and yellow, and the sun gate does not
+reach them (their lightmap alpha is 255). Overlap scores (whole frame, hull is a small part of it): Talon's Harimau stored pair
+0.18252 to 0.18289 (same `theirs.png`), a live rerender 0.1854 to 0.1810 RMSE and edge NCC 0.2524 to 0.2362 (two different
+captures).
+
+**Cross-title.** Omega: checked, not checkable (its original shadow tier is `Unbuilt`, hulls build through the PS4 path). 2048: checked,
+differs. The ground ring and the pearl on open-air circuits stay open.
