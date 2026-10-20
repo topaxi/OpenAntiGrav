@@ -16,6 +16,8 @@ camera, and the `oag-game` command line that renders this project from it.
 `--keep-dumps` and out of everything tracked - see
 [legal.md](../overview/legal.md).
 
+**From a restored race (2026-10-20).** With `OAG_RPCS3_ATTACH=1` (a `serve` session from `scripts/emu-restore-state.sh`), `capture` skips the Main Menu wait and the walk and captures from the race the emulator is already in: `capture --shots 2 --interval 0.12 --load 0 --team <team>`. It needs two shots to pick the camera. The `render_with` line it writes is `oag-game --race [--track <circuit>.vex] --camera-pose=<9 numbers> --camera-fov <deg> --screenshot ours.png <image>`.
+
 ## Reaching a circuit other than the one every default row leads to
 
 The walk into a race presses cross and takes the highlighted row every time,

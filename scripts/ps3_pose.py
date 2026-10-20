@@ -204,12 +204,15 @@ def command_line(pose, track=None):
     """
     numbers = ",".join(
         "%.6f" % v for v in list(pose["eye"]) + pose["forward"] + pose["up"])
-    parts = ["target/release/oag-game", "--race", "<image>"]
+    # `--race` takes the image as its positional source and the track as the `.vex` entry
+    # (TTY.log names the `.rcsmodel` sibling); `=` keeps a negative first number from
+    # reading as a flag.
+    parts = ["target/release/oag-game", "--race"]
     if track:
-        parts += ["--track", track]
-    parts += ["--camera-pose", numbers,
+        parts += ["--track", track.replace(".rcsmodel", ".vex")]
+    parts += ["--camera-pose=" + numbers,
               "--camera-fov", "%.4f" % pose["fov_y_deg"],
-              "--screenshot", "ours.png"]
+              "--screenshot", "ours.png", "<image>"]
     return " ".join(parts)
 
 

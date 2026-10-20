@@ -1585,7 +1585,13 @@ def cmd_capture(args):
 
     with open_session(args) as session:
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+        # Attached to a restored race (`emu-restore-state.sh`, `OAG_RPCS3_ATTACH=1`):
+        # the emulator is already in the race, so there is no Main Menu to wait for
+        # and nothing to walk.
+        attached = os.environ.get("OAG_RPCS3_ATTACH") == "1"
+        if attached:
+            print("attached: capturing from the race the emulator is in", flush=True)
+        elif not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
@@ -1600,7 +1606,7 @@ def cmd_capture(args):
         for item in args.nav:
             screen, _, buttons = item.partition("=")
             plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
-        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
+        if not attached and session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1
@@ -1770,7 +1776,7 @@ def cmd_place(args):
         for item in args.nav:
             screen, _, buttons = item.partition("=")
             plan[screen] = [b.strip() for b in buttons.split(",") if b.strip()]
-        if session.walk_to_race(plan=plan) not in RACE_ARRIVED:
+        if not attached and session.walk_to_race(plan=plan) not in RACE_ARRIVED:
             print("ended on %r rather than in a race" % current_screen(),
                   file=sys.stderr)
             return 1
