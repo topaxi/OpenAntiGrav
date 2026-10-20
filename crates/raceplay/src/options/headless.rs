@@ -155,6 +155,8 @@ impl Setup {
             #[cfg(feature = "view")]
             spu_vertex_lights: true,
             #[cfg(feature = "view")]
+            hull_points: oag_mesh::mesh_render::HullPointLights::none(),
+            #[cfg(feature = "view")]
             spark_anchors: Vec::new(),
             #[cfg(feature = "view")]
             collision_fx: Vec::new(),

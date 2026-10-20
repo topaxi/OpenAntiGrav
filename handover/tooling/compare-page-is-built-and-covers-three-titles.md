@@ -31,14 +31,14 @@ Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, plat
   `data/reference/compare-page/pulse.toml`) and a state under `data/saves/pulse-psp/time-trial-<circuit>-white-venom-grid.ppst`
   (Talon's Junction's is the older file name). The Black entries are the same circuits' other layouts, not captured.
 
-### Visible differences, a lead for fidelity lanes (not fixed here)
+### Visible differences (`pulse-pair-diffs`, 2026-10-20)
 
-Seen on the PSP pairs unless noted; each is in at least two circuits unless it says otherwise.
+Seen on the PSP pairs unless noted. Items 1-4 are closed; 5-8 are still leads.
 
-1. **The gantry's GO board is dark in ours** (all 12): the original's start gantry shows a green board with GO after the countdown.
-2. **Hull colour under strong coloured light**: Tech de Ra and The Amphiseum show a brown/orange hull in ours against blue-white in the original; Arc Prime and De Konstruct are close.
-3. **Engine glow at rest**: a purple glow in the original, none in ours (all PSP pairs); the PS2 original has a magenta flame, ours a dim purple one.
-4. **Record panel**: the original shows each circuit's own record (1:24.7, 1:07.3, 0:57.x, 1:09.2 ...), ours shows 1:57.0, 1:40.0, 1:27.x, 1:42.0, so the record value differs per circuit.
+1. ~~**The gantry's GO board is dark in ours**~~ **A pair artifact, closed.** `psp-pulse-pair.py` rendered ours at `--ticks 0`, the pre-countdown clock, and the state is after GO. At `--ticks 300` (now `--ours-ticks`, default 300) the board is green with GO on all 12, from the disc's own clock (`start-gantry.md`).
+2. ~~**Engine glow at rest**~~ **The same artifact on the PSP, closed**: ours draws the purple glow at tick 300 on the PSP pairs. **PS2 still differs**: the original's flame is a narrow magenta plume of sprites below a white-hot nozzle, ours the PSP-style purple star. Lead: how `WO_SHIP_ENGINEFLARE.POB` (the PS2's authored flare, `pulse-absent-effects.md`) is played at rest; not read.
+3. ~~**Hull colour under strong coloured light**~~ **Fixed**: the GE's fourth hull light is the circuit's nearest `wopoint`/`wospot`, not modelled before. Mean wing colour on Tech de Ra now `(87,106,115)` against the original's `(87,105,115)`, The Amphiseum `(107,129,144)` against `(108,131,145)`. The law, read live and reproduced on three circuits' lists: [`scene-light.md`](../../docs/ghidra/functions/psp-pulse-usa/scene-light.md) "The point and spot lights". De Konstruct is `(102,106,89)` against `(94,98,78)`: a residual of about 8 levels that these lights do not explain (ours takes none there; whether the original's list holds one was not read live).
+4. ~~**Record panel**~~ **Matches, closed.** The panel is a countdown: the original's `1:46.3` on The Amphiseum at a clock of `0:20.7` is the authored `<RaceTimes>` figure `2:07.0`, ours reads `2:07.0` at clock 0. Every circuit agrees to 0.1 s once the clock is added (Arc Prime `1:24.7 + 0:32.2 = 1:56.9`, ours `1:56.5 + 0:00.4`).
 5. **Outpost 7**: a white panel at the top left of ours where the original shows blue sky; Platinum Rush and Vertica: a distant sign is yellow or red in ours against red or orange in the original (animated billboards, phase not matched).
 6. **Tech de Ra**: a lit box at the top left that the original does not draw.
 7. **Race clock**: not matched by design (the original has run since GO).

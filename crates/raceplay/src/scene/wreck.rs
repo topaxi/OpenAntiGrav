@@ -134,6 +134,7 @@ impl Scene {
                     HullLayers {
                         sun_occlusion: self.sun_occlusion_layer(slot),
                         scale: race.ship_hull_scale(slot),
+                        point: race.ship_hull_points(slot),
                         env: None,
                     },
                 );

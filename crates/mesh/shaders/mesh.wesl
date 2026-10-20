@@ -81,6 +81,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
             let diffuse = floor(floor(scene.light.hull_diffuse[i].rgb * 255.0 + 0.5) * directional_scale / 256.0) / 255.0;
             sum = sum + diffuse * max(dot(n, l.xyz), 0.0) * l.w;
         }
+        // The slots the directionals leave: the strongest wopoint/wospot at the
+        // craft, handed to the GE as one more directional light. Its colour is
+        // already the bytes the list holds, scale and strength applied.
+        for (var i = 0u; i < 2u; i = i + 1u) {
+            let p = uniforms.hull_point[i];
+            let packed = u32(p.w);
+            let colour = vec3<f32>(f32(packed & 255u), f32((packed >> 8u) & 255u), f32((packed >> 16u) & 255u)) / 255.0;
+            sum = sum + colour * max(dot(n, p.xyz), 0.0);
+        }
         out.colour = vec4<f32>(clamp(sum, vec3<f32>(0.0), vec3<f32>(1.0)), in.colour.a);
         out.lit = 0.0;
     }

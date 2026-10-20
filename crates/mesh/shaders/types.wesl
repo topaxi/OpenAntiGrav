@@ -37,6 +37,10 @@ struct Uniforms {
     env_pad0: f32,
     env_pad1: f32,
     env_pad2: f32,
+    // Pulse's point and spot lights for a hull, `mesh_render::HullPointLights`:
+    // per slot the unit vector towards the light, `.w` its colour bytes packed
+    // `r | g << 8 | b << 16` as an integer-valued float, `0.0` for none.
+    hull_point: array<vec4<f32>, 2>,
     // The previous simulation tick's `view_projection * model`, premultiplied.
     // **Deliberately not symmetric with the pair above**: fog and lighting
     // need world position, so the current camera and model stay separate;

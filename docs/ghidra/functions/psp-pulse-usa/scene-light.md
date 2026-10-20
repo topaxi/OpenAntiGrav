@@ -52,7 +52,8 @@ vertex colour.
   colour `min(255, trunc(c * 255)) * scale >> 8`;
 - the remaining slots from the two point classes (`+0x4c`/`+0x8c`,
   `+0x50`/`+0x3ac`), sorted by strength, with their own two scales. None
-  reach the player's hull on Talon's Junction.
+  reach the player's hull on Talon's Junction, but they do on Tech de Ra and
+  Fort Gale: see "The point and spot lights" below.
 
 ## Read live
 
@@ -141,6 +142,82 @@ Confidence **85** for the copy and the accumulate (bodies read, writers
 named live), **75** for `Spline_SampleSegment`'s role (the basis constants
 and the call order are read; the caller that selects the segment is not).
 
+## The point and spot lights (2026-10-20, `pulse-pair-diffs`)
+
+Found by reading the grid hull's list on Tech de Ra live (PPSSPP, the Time Trial
+grid state), because our hull was brown/orange where the original's is blue-white.
+That circuit authors three `DirectionalLight`s and no ambient, and the list the GE
+held had a **fourth** light the three nodes do not account for:
+
+```text
+LIGHT3  LTYPE3 = 0  vector (-0.0030, 4.0426, 9.4211)  LDC3 (61, 142, 157)   scales 249
+```
+
+The two lists `World_CollectMarkerLists` fills at `+0x4c`/`+0x8c` (43 objects here) and
+`+0x50`/`+0x3ac` (1) are the **`wopoint` `0x3cf`** and **`wospot` `0x3ce`** nodes, not
+`PointLight` `0x132` (which has no registration site and is authored on `13_Track`
+only). The object whose position (`obj+0x50`, the node's world translation) is 10.25
+units from the craft - the vector's length - is a `wopoint` at
+`(-58.024, -5.471, 89.360)`. Its runtime struct (`obj+0x60`) is the payload: colour
+`(0.388, 0.907, 1.0, 1.0)`, inner radius `7.0`, outer radius `15.0`
+(`oag_vex::world_lights`).
+
+The vtable methods the builder calls (`obj+0x38`, then the slot), all read from the
+disassembly:
+
+| Slot | `wopoint` | `wospot` | Does |
+| --- | --- | --- | --- |
+| `+0x8c` | `0x0892cb54` | `0x0892d400` | copies the colour vec4 (`struct+0x00`, `+0x70` for a spot) |
+| `+0x94` | `0x0892cb64` | `0x0892d410` | strength `0..1` at a position |
+| `+0x9c` | `0x0892cc50` | `0x0892d640` | `position - light` (the builder negates it: light minus craft) |
+| `+0xac` | `0x0892cc98` | `0x0892d688` | `distance - outer radius`, the countdown to the next re-check |
+
+**Strength.** With `d = |craft - light|`: `1` inside the inner radius; between the radii
+`t = (outer - d) / (outer - inner)`, `t^2 (3 - 2t)`; `0` beyond. A spot multiplies that
+by a cone term over `cos` of the angle between its axis (the negated row 1 of its matrix,
+`obj+0x60`) and the direction light-to-craft: `1` above `cos(inner/2)`, `0` below
+`cos(outer/2)`, a smoothstep of `(cos - cos(outer/2)) / (cos(inner/2) - cos(outer/2))`
+between (the angles are the payload's words at `+0x18`/`+0x1c`, halved by the code).
+
+**Selection and colour.** The builder keeps the strongest `4 - directionals` candidates
+(points first, then spots, in node order; a strictly stronger one replaces the first
+weakest, a tie keeps the earlier). Each takes `trunc(c * strength * 255)` clamped to 255
+per channel, then `(byte * scale) >> 8`, the scale being the craft's **third** spline
+scale byte for a point and the **fourth** for a spot. The light is written as a GE
+light of type 0 (directional) with the **unnormalised** vector `light - craft`.
+
+**Checked three ways.** (1) Arithmetic: Tech de Ra, `d = 10.25`, `t = 0.594`, strength
+`0.639`, `(0.388, 0.907, 1.0) * 163 = (63, 147, 162)`, `* 249 >> 8 = (61, 142, 157)` -
+the live bytes. (2) Fort Gale's grid (the reversed layout, two directionals, scales 251),
+read live: `LDC2 (5, 19, 31)` at `(-34.6, 4.97, -8.64)` and `LDC3 (245, 245, 219)` at
+`(-0.147, 25.89, 9.27)` - both reproduced to the byte, vectors to 2e-3, slot order
+included, by `oag_mesh::mesh_render::HullPointLights` from the disc
+(`crates/render/tests/hull_lights_ground_truth.rs`). (3) Talon's Junction took none live
+and none reaches the grid in ours. **Normalised or not**: the reference renderer
+normalises the vector of a type-0 light. Rendered both ways against the original's
+Tech de Ra hull (mean colour over three regions of the wings and fuselage): normalised
+`(87,106,114) (62,74,86) (102,115,107)` against the original's `(87,105,115) (62,73,86)
+(101,114,107)`; unnormalised `(100,120,134) (71,85,99) (133,149,136)`, 15-30 levels bright.
+Wired: `Race::ship_hull_points` per craft per frame into the model uniform's `hull_point`,
+`mesh.wesl` adds each as one more `N . L` term.
+
+Confidence **90** for the point law (two live lists, both to the byte), **85** for the
+spot's cone (one live list, which has a spot in it only if one of Fort Gale's two lights
+is one - the cone's branches were not isolated), **80** for the `+0xac` countdown role
+(read, not exercised: it only gates when a far light is re-tested).
+
+Before and after, same pose, Tech de Ra hull mean colour (wing, wing, fuselage):
+before `(78,76,74) (61,70,81) (91,85,75)`, original `(87,105,115) (62,73,86)
+(101,114,107)`, after `(87,106,115) (62,74,87) (102,116,108)`; The Amphiseum before
+`(93,102,115) (75,96,111) (87,82,82)`, original `(108,131,145) (90,123,142)
+(119,133,129)`, after `(107,129,144) (87,120,140) (121,136,131)`.
+
+Not reproduced: the countdown timers (a pure function of distance is equivalent, since a
+light cannot come into range before the craft has moved the remaining distance), and
+non-player craft use the same list from their own position (the original rebuilds each
+craft's list; the player's was the only one read live). PS2 shares the rule through
+`hull_lights` (the same `.vex` nodes) and was not read on its own executable.
+
 ## Applied names
 
 Mirrored in [`names.tsv`](names.tsv).
@@ -151,6 +228,12 @@ Mirrored in [`names.tsv`](names.tsv).
 | `0x0883e444` | function | `Craft_ApplyHullLightScale` | 85 |
 | `0x0887c11c` | function | `Spline_AccumulateLightScale` | 85 |
 | `0x0887c7e8` | function | `Spline_SampleSegment` | 75 |
+| `0x0892cb64` | function | `WoPoint_GetStrength` | 90 |
+| `0x0892cc50` | function | `WoPoint_GetVectorFromLight` | 90 |
+| `0x0892cc98` | function | `WoPoint_GetDistanceBeyondRadius` | 80 |
+| `0x0892d410` | function | `WoSpot_GetStrength` | 85 |
+| `0x0892d640` | function | `WoSpot_GetVectorFromLight` | 90 |
+| `0x0892d688` | function | `WoSpot_GetDistanceBeyondRadius` | 80 |
 
 `SceneLight_BuildLightingList` loses its `_q`: its return value is still not
 read, but the list it writes is now matched to the disc field by field.
@@ -162,5 +245,5 @@ read, but the list it writes is now matched to the disc field by field.
   `FUN_089307b4` opens with `Gu_Disable(10)`, so unlit, white material, the
   raw texel. Which models those are (weapons, pickups, scenery) was not
   mapped.
-- The point-light slots and their two scales are not reproduced; none reach
-  the grid.
+- The point and spot slots are reproduced for a craft's own position (see above);
+  the AI craft's lists and the PS2 executable's own were not read.

@@ -90,6 +90,14 @@ fn light_hulls(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::vex::No
                 "hull lights: the circuit's own, ambient {:?}, diffuse {:?}",
                 hull.ambient, hull.diffuse
             ));
+            let directionals = hull.direction.iter().filter(|d| d[3] > 0.5).count();
+            loaded.setup.hull_points =
+                mesh_render::HullPointLights::from_track(track_blob, nodes, directionals);
+            loaded.report.push(format!(
+                "hull point lights: {} wopoint/wospot nodes, {} free slot(s) after {directionals} directional(s)",
+                loaded.setup.hull_points.len(),
+                4 - directionals.min(4),
+            ));
             loaded.light.hull = hull;
         }
         None => loaded

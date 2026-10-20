@@ -1044,6 +1044,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
             #[cfg(feature = "view")]
             spu_vertex_lights,
+            #[cfg(feature = "view")]
+            hull_points: oag_mesh::mesh_render::HullPointLights::none(),
             // Positions only: this list feeds the trail-hit sparks' nearest-of search
             // (`RaceView::spark_anchor_of`), which has no live hull orientation to aim along today
             // - see `collision_fx` below for the field that does.

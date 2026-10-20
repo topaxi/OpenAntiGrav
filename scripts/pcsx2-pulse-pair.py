@@ -77,7 +77,7 @@ def main():
     size = subprocess.run(["magick", "identify", "-format", "%wx%h", args.out / "theirs.png"],
                           capture_output=True, text=True, check=True).stdout
     cmd = [ROOT / "target/debug/oag-game", args.image, "--no-audio", "--race", "--track", entry,
-           "--screenshot", args.out / "ours.png", "--ticks", 0, "--size", size,
+           "--screenshot", args.out / "ours.png", "--ticks", 300, "--size", size,
            "--pose-from", csv, "--pose-tick", 0]
     if args.team:
         cmd += ["--team", args.team]
