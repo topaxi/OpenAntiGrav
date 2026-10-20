@@ -333,6 +333,15 @@ the next step (a `Collision_AddContact` breakpoint on that tick) are in
 The same pass confirms the angular half of the wall response against the
 original's own rotation on three captures (`0.990`-`1.035`; same page).
 
+**Measured 2026-10-20: it is the collision cage, not the hull.** The original's
+own narrowphase makes no contact on that tick either. The redirect comes from
+`Cage_ResolveCraft` (`0x08831aa4`), an invisible elliptical tube along the AI
+track data that pushes the box's corners back in through `Body_ResolveContact`
+with friction `0`. The craft is outside the tube's side, over the top of a lower
+wall. Our step from tick 1583 plus the cage (`oag_physics::cage`, run by the race
+after every step) lands `0.18` units/s from tick 1584. See
+[collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20).
+
 ### The cross-product signs: a contradiction here, resolved
 
 This page originally recorded that term as `-400 * cross(up, avgNormal)` *and*, in

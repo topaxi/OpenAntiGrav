@@ -55,6 +55,27 @@ OAG_RAMP_GATE=1 OAG_RAMP_BIAS=8 cargo nextest run -p oag-trace autopilot_ramp_po
 `OAG_RAMP_GATE` and `OAG_RAMP_BIAS` emulate the two pitch terms in the sweep's
 input, before they were ported.
 
+## Capture 3's redirect over the second crest is the collision cage
+
+Between ticks 1341 and 1342 of capture 3 (`(-296, 127, 691)`, `up.y 0.65`, no
+stun, rail blend 0) the airborne craft takes a one-tick `dv` of about 31 units/s
+and then two decaying corrections. No collision mesh is involved: it is the
+collision cage, the AI track data's invisible tube
+([collision-cage.md](../ghidra/functions/psp-pulse-usa/collision-cage.md#the-cage-is-a-contact-source-live-2026-10-20)).
+Our step plus the cage, from each recorded row (`14_Track`, PHANTOM):
+
+| tick | `\|v - next\|` without -> with the cage |
+| ---: | --- |
+| 1341 | `29.72 -> 0.12` |
+| 1342 | `5.07 -> 0.13` |
+| 1343 | `2.71 -> 0.13` |
+
+That is the air contact our autopilot missed every lap on Fort Gale's second
+jump; since 2026-10-20 the race runs the cage for every craft. Reproduce with
+`crates/trace/tests/collision_cage_ground_truth.rs`'s sweep:
+`OAG_SWEEP=1 OAG_SWEEP_TRACK='Data\Environments\14_Track\track.vex' OAG_SWEEP_CLASS=PHANTOM
+OAG_CAGE_CSV=<capture 3> OAG_CAGE_TICKS=1341,1342,1343`.
+
 ## The tensor is applied in world axes: measured dynamically
 
 [cornering-ground-truth.md](cornering-ground-truth.md#the-tensor-is-a-world-axis-diagonal-and-that-answers-a-not-c)
