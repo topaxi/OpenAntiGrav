@@ -85,15 +85,26 @@ shape.
 
 Across the 32 circuits the length of `Lighting.Sun direction` takes **eight
 distinct values**: 0.000, 1.000, 1.208, 1.784, 2.375, 4.743, 7.348 and 34.641.
-Most circuits are unit and several are not, and **four are degenerate** -
-`modesto_heights` writes `-0.000030 0.000040 -0.000060`, which is an off switch
-rather than a direction.
+Most circuits are unit and several are not, and **two circuits write a tiny
+triple**: `tech_de_ra` `0.000040 0.000040 -0.000050` and `modesto_heights`
+`-0.000030 0.000040 -0.000060` (and their reversed files), lengths of about
+`1e-4`, which is the `0.000` above.
 
-So a reader that assumes a unit vector is wrong on most of the corpus and one
-that uses the raw triple as a direction scales its light by an accident.
-`EnvSettings::direction` normalises and answers `None` below a length of `1e-3`,
-which is what keeps a degenerate triple out of a shader as a NaN. **Whether the
-length carries an intensity is not established**; that needs HD's executable.
+**A tiny triple is a direction, not an off switch (2026-10-20, `hd-scene-light`).**
+`Scene_PrepareFrame` stores `Sun direction` normalised
+([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md), "`Constant ambient color`
+(`+0x420`) is confirmed wired"), so the length is not an intensity and a short vector
+points the same way a long one does. This reader had treated a length under `1e-3` as an
+off switch, which sent both circuits to the stand-in rig and dropped their authored
+ambient, prelit curve and specular along with the sun. Measured on the HD compare page
+(mean grey difference, original against ours, 1920x1080, same state): **Modesto Heights
+42.1 to 26.3, Tech de Ra 54.5 to 40.9**, the other eleven pairs byte-identical. The lit
+stands, the sun shadows and the blue ambient on Modesto are the original's again; the
+sun at zero was tried first (Modesto 38.3, Tech de Ra 42.2) and refused by the frame:
+the original's stands and shadows on Modesto are sun-lit. `EnvSettings::direction`
+answers `None` only below one quantisation step of the file's six decimals (`1e-6`), the
+case where a normalise would be a NaN. Evidence:
+`crates/raceplay/tests/hd_tiny_sun_direction_ground_truth.rs`.
 
 ## It is authored for a linear HDR pipeline, and this project's now is one
 
@@ -151,7 +162,7 @@ has.
 
 | Key | State |
 | --- | --- |
-| `Lighting.Sun direction` | **Drawn.** Normalised; the stand-in rig is used where it is degenerate |
+| `Lighting.Sun direction` | **Drawn.** Normalised, a tiny triple included (the engine normalises it); only an all-zero triple has no direction |
 | `Lighting.Constant ambient color` | **Drawn**, clamped to `0..=1` |
 | `Lighting.Sun color` | **Drawn at the authored magnitude** into the linear scene target, per [ADR-0026](../architecture/adr/0026-hd-authored-lighting-is-linear.md); the "hue drawn, magnitude dropped" reduction above is retired |
 | `Lighting.Sky colour` | **Drawn**: the sky cube's vertex colour, `byte / 255`, in linear light - **measured**: the original's six sky draws carry the authored bytes unchanged as `COL0`, the fragment program is `tex * COL0`, the faces are sRGB-decoded on fetch, and the live scene target reads `texel * (byte/255)^(1/2.2)` on four circuits (255 gives x1.00; the earlier `byte / 128` fit and its "x2 at 255" were the race-start exposure, not the sky) - [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md#the-sky-law-read-off-live-draws-byte--255-in-linear-light-the-factor-of-two-was-not-the-skys-2026-10-08-hd-sky-law). The fourth byte is 0 on every circuit read live and is written to the scene's alpha |
@@ -231,8 +242,9 @@ do with a circuit.
   No handler has been read, and nothing has been checked against a running
   frame - the ceiling the [confidence rubric](../reverse-engineering/confidence-rubric.md)
   puts on a static reading.
-- **Whether the sun direction's length is an intensity.** Eight lengths across
-  32 circuits; normalising is this project's choice.
+- ~~**Whether the sun direction's length is an intensity.**~~ Closed 2026-10-20: the engine
+  stores the direction normalised, and the frame agrees (a tiny triple lit as a normalised one
+  matches Modesto Heights, above).
 - **The sky is drawn now, and `Sky colour` still is not understood.** HD's
   circuits author **no `Skycube` node** - class `0x3c6` is in the class table
   and zero nodes carry it - and the sky is `sky.gtf` beside the track, a
