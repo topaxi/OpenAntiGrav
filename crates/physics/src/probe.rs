@@ -183,6 +183,8 @@ pub fn handling() -> Handling {
         },
         // `<Special speedpad_jump>`, a round number, **not** the disc's.
         speedpad_jump: 0.2,
+        // No probe script fires a Turbo, so the boost lift never runs.
+        turbo_jump: 0.1,
         // `<Special roll_cost/roll_speed/roll_turbotime>`: round numbers, **not** the disc's.
         // No probe script taps out a roll, so these hold their defaults every tick
         // (`crates/physics/tests/determinism.rs`).

@@ -253,6 +253,9 @@ pub struct Handling {
     /// sits beside the boost it modifies. Unscaled, like both `<SpeedupPads>` fields; see
     /// `crate::engine::speedup_pad`.
     pub speedpad_jump: f32,
+    /// `<Global><Special turbo_jump>`, `g_boost_lift`: the boost lift's share of thrust while
+    /// a Turbo or a roll payout runs and d-pad Up is held ([`crate::engine::engine`]).
+    pub turbo_jump: f32,
     /// `<Global><Special roll_cost>`: what a completed barrel roll costs, as a percentage of
     /// [`Dimensions::shield`] ([`crate::barrel_roll::arm`]).
     pub roll_cost: f32,
@@ -326,6 +329,7 @@ impl Handling {
             time: 0.0,
         },
         speedpad_jump: 0.0,
+        turbo_jump: 0.0,
         roll_cost: 0.0,
         roll_speed: 0.0,
         roll_turbotime: 0.0,

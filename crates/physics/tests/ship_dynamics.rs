@@ -111,6 +111,7 @@ fn fixture() -> Handling {
         // `evaluate` a pad hit, so a magnitude could only mask a stray boost.
         speedup_pads: SpeedupPads::default(),
         speedpad_jump: 0.0,
+        turbo_jump: 0.0,
         roll_cost: 0.0,
         roll_speed: 0.0,
         roll_turbotime: 0.0,

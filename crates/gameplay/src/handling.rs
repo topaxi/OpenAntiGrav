@@ -260,6 +260,7 @@ pub fn handling_for(
             time: speedup_pads.time,
         },
         speedpad_jump: special.speedpad_jump,
+        turbo_jump: special.turbo_jump,
         roll_cost: special.roll_cost,
         roll_speed: special.roll_speed,
         roll_turbotime: special.roll_turbotime,

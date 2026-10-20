@@ -506,6 +506,16 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     } else {
         engine_force.undoubled()
     };
+    // The boost lift's d-pad Up gate, `*(craft+0x78)+0x24 & 1`, read the way
+    // `engine::speedup_pad` reads the same bit for its tilt.
+    let engine_force = if input.steer_y <= -engine::SPEEDPAD_JUMP_THRESHOLD {
+        engine_force
+    } else {
+        engine::EngineForce {
+            lift: 0.0,
+            ..engine_force
+        }
+    };
     acc.local_force += engine_force.as_local_force();
     // After the engine, which has just read last tick's multiplier: the grader and boost
     // writer run behind it in the original's frame (`crate::launch`).

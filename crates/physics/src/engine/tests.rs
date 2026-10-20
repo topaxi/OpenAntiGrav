@@ -210,6 +210,44 @@ fn the_wrong_way_kill_zeroes_thrust_even_under_a_turbo() {
     assert_eq!(run(&state), EngineForce::default());
 }
 
+/// The boost lift: `<Special turbo_jump> * T` on the thrust just after the turbo add, under a
+/// Turbo or a roll payout, and nothing otherwise (`0x0884c8d8`-`0x0884c910`). Fails if the lift
+/// is dropped, ungated, or taken from the doubled thrust.
+#[test]
+fn a_turbo_lifts_by_turbo_jump_times_the_thrust_after_the_add() {
+    let handling = Handling {
+        turbo_jump: 0.1,
+        ..test_handling()
+    };
+    let mut state = ship_moving_forward(24.0);
+    state.thrust = 100.0;
+    let run = |state: &ShipState| {
+        engine(
+            state,
+            &handling,
+            1.0,
+            24.0,
+            None,
+            1.0,
+            EngineFlags::default(),
+        )
+    };
+    let plain = run(&state);
+    assert_eq!(plain.lift, 0.0, "no lift without a turbo");
+
+    let before_double = plain.thrust / ENGINE_OUTPUT_DOUBLE + handling.engine.turbo;
+    for roll in [false, true] {
+        let mut boosted = state;
+        if roll {
+            boosted.roll_payout_timer = 0.5;
+        } else {
+            boosted.turbo_timer = 0.5;
+        }
+        let lift = run(&boosted).lift;
+        assert!((lift - 0.1 * before_double).abs() < 1e-3, "{lift}");
+    }
+}
+
 #[test]
 fn no_throttle_is_no_thrust() {
     let handling = test_handling();

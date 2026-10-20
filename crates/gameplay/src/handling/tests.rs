@@ -30,6 +30,7 @@ fn special() -> fmt::Special {
         roll_cost: 3001.0,
         roll_speed: 3002.0,
         roll_turbotime: 3003.0,
+        turbo_jump: 3004.0,
     }
 }
 

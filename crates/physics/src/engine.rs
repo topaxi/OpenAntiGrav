@@ -131,10 +131,10 @@ pub struct EngineForce {
     /// Thrust along body forward, the accumulator's `.z`.
     pub thrust: f32,
     /// Boost lift along body up, the accumulator's `.y`.
-    /// Boost lift along body up, the accumulator's `.y`.
     ///
-    /// **Always zero here.** It is non-zero only under the turbo flags (bits of the
-    /// undecoded `craft+0x1c0`) and the boost scale is a global that was not read.
+    /// `<Special turbo_jump> * T` while a Turbo (`craft+0x1c0 & 0x200`) or a roll payout
+    /// (`0x400`) runs, `T` being the thrust just after the turbo add. [`engine`] returns it
+    /// as if d-pad Up were held; [`crate::forces::evaluate`] zeroes it otherwise.
     ///
     /// The original's final accumulate reads a VFPU register for this lane that the
     /// function never loads; the reading is that the caller's `vzero.q` left it at zero,
@@ -199,10 +199,11 @@ impl EngineForce {
 ///
 /// **The Autopilot's two bits are implemented**, as `flags` ([`EngineFlags`]).
 ///
-/// **Not implemented**, flag-gated on `craft+0x1c0`: turbo's boost lift and the kill
-/// switch at bit `0x2000`. Implementing them would mean inventing their triggers. (The
-/// four-corner mode's `(flags & 1) && !(flags & 2)` gate is groundedness and
-/// [`ShipState::on_grid`].)
+/// **The boost lift and the Eliminator kill are implemented** (`craft+0x1c0` bits
+/// `0x200`/`0x400` and `0x2000`). The four-corner mode's `(flags & 1) && !(flags & 2)` gate
+/// is groundedness and [`ShipState::on_grid`]. The `craft+0x2a4 == 1` gate on the turbo add
+/// is not reproduced: `ShipState` has no racing-state enum, and a craft outside state 1 has
+/// no running Turbo in any race measured.
 #[must_use]
 pub fn engine(
     state: &ShipState,
@@ -287,8 +288,16 @@ pub fn engine(
     // `(flags & 0x200) || (flags & 0x400)` reads: a fired Turbo pickup
     // ([`ShipState::turbo_timer`]) or a barrel roll's landing payout
     // ([`ShipState::roll_payout_timer`]); see `input-bindings.md`.
+    //
+    // The boost lift sits in the same branch (`0x0884c8d8`-`0x0884c910`): `turbo_jump * T`
+    // on the thrust just after the add, so neither the launch multiplier nor the doubling
+    // reaches it. Its d-pad Up gate (`*(craft+0x78)+0x24 & 1`) is an input this function
+    // does not see: [`EngineForce::lift`] is the lift with Up held, and
+    // [`crate::forces::evaluate`] drops it when Up is not.
+    let mut lift = 0.0;
     if state.turbo_timer > 0.0 || state.roll_payout_timer > 0.0 {
         thrust += handling.engine.turbo;
+        lift = handling.turbo_jump * thrust;
     }
 
     thrust = one_shot_scale(
@@ -296,7 +305,7 @@ pub fn engine(
         thrust_scale,
     );
 
-    EngineForce { thrust, lift: 0.0 }
+    EngineForce { thrust, lift }
 }
 
 /// `if (craft+0x31c < 1.0) T *= craft+0x31c`, after the doubling, on both branches; the

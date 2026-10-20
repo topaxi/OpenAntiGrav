@@ -126,12 +126,11 @@ impl GravityMul {
     }
 }
 
-/// Four of `<Special>`'s five attributes.
+/// `<Special>`'s five attributes.
 ///
 /// The element carries `roll_cost roll_speed roll_turbotime speedpad_jump
-/// turbo_jump`; `turbo_jump` is left until something needs it (probably not the
-/// barrel roll's; see `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`).
-/// The other four are the **barrel roll**'s tunables, read by
+/// turbo_jump`. `turbo_jump` is the Turbo's boost lift; the other four are the
+/// **barrel roll**'s and the speed pad's tunables, read by
 /// `Xml_ReadGlobalSettings` (`0x0883a970`) into one contiguous `.bss` run,
 /// confidence **90**. Both PSP pressings author:
 ///
@@ -174,6 +173,13 @@ pub struct Special {
     /// for the bit's other source. Confidence 90; see the `input-bindings.md`
     /// page above.
     pub roll_turbotime: f32,
+    /// The Turbo's boost lift: while a Turbo or a barrel roll's payout runs and
+    /// d-pad Up is held, the engine adds `turbo_jump * T` along the hull's up
+    /// axis. `0.1` on both PSP discs. `g_boost_lift` (`0x08b36be8`), written by
+    /// `Xml_ReadGlobalSettings` (`0x0883ac54`) from the attribute named at
+    /// `0x08a7b3cc`; read by `Ship_UpdateEngine` (`0x0884c908`). See
+    /// `oag_physics::engine::engine`.
+    pub turbo_jump: f32,
 }
 
 impl Special {
@@ -185,6 +191,7 @@ impl Special {
             roll_cost: number(node, Self::ELEMENT, "roll_cost")?,
             roll_speed: number(node, Self::ELEMENT, "roll_speed")?,
             roll_turbotime: number(node, Self::ELEMENT, "roll_turbotime")?,
+            turbo_jump: number(node, Self::ELEMENT, "turbo_jump")?,
         })
     }
 }
