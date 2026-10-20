@@ -28,7 +28,6 @@ const NOT_CLEAN: &[(&str, &str)] = &[
     // Rescued - in the air too long, or off the line - at 1247 and at
     // 2402-2441, with every ceiling the search tried.
     ("14_Track", "PHANTOM"),
-    ("29_Track", "RAPIER"),
     ("29_Track", "PHANTOM"),
 ];
 
