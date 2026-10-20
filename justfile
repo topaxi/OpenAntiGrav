@@ -1062,6 +1062,12 @@ frame-compare theirs ours out="/tmp":
 compare-page *ARGS:
     python3 scripts/compare-page.py {{ARGS}}
 
+# Re-render OURS of every recorded pair with the current build, in place, no emulator (docs/tools/compare-page.md).
+#   just compare-rerender [--only moa] [data/reference/compare-page]
+[doc("Re-render the 'ours' half of every comparison pair with the current build, in place")]
+compare-rerender *ARGS:
+    python3 scripts/compare-rerender.py {{ARGS}}
+
 # Rebuild the seed manifest from the reference sheets under data/reference/.
 [doc("Split the HD lanes' reference sheets into the compare-page seed manifest")]
 compare-seed:
