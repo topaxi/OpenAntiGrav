@@ -7,7 +7,7 @@ The draws (`rsx-draw-list.py <out-dir> <stem>`) give the hull and flare model ma
 that frame; `<stem>_trail<N>.bin` (the 0x1230 trail block of craft slot N, ring head first)
 and `<stem>_flare<N>.bin` (0x800 bytes of its `EngineFlare`, found at `craft + 0x5f70`)
 belong to the same paused instant. Used to place the flare's origin against the hull and the
-`Engine Flare` locator (engine-trail.md, "The flare's origin at thrust").
+`Engine Flare` locator (engine-trail.md, "The flare model's origin is its own node").
 """
 import importlib.util, os, struct, sys, time, types
 from pathlib import Path

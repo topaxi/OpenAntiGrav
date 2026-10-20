@@ -2234,7 +2234,7 @@ speedometer reads 0 km/h (`Race::hd_flame_resting`; **only the measured corner i
 Open: the gate's true condition. **Superseded 2026-10-20 (`hd-flare-thrust`)**: the jewel is the
 flame (see the note in the table), the block "inside the nozzle opening" is the authored node
 origin ("The flare model's origin is its own node, not the locator", below), and the Fury hue
-is the Fury skin's own `engineflare` files ("Feisar Fury's plume hue", below).
+was a craft mismatch, not a data gap ("Feisar Fury's plume hue", below).
 Cross-title: Omega and 2048 `front_faces_only` **checked, not measured** (no capture path
 for PS4; no Vita capture), left `false`; the particle trigger was already dropped on both.
 Reproduce: `OAG_RPCS3_ATTACH=1 HOOKPY=<keep wrapper> ... place --hook`; `python3 scripts/rsx-flare-shapes.py <dir> <stem>`.
@@ -2266,12 +2266,19 @@ holds the locator and does not place the flame with it. A second craft confirms 
 (`feisar_c1`, Metropia, 270 km/h) draws its body at hull-local (0, 0.1688, -5.8044) against the
 authored `EF_Main` (0, 0.1688, -5.8045).
 
-**The same file, every team.** `EF_Main`'s authored origin sits ahead of the locator on all eight
-base teams: AG Systems -6.763 vs -7.013, Assegai -6.809 vs -7.182, EGX -6.266 vs -6.491, Feisar
--4.814 vs -4.929, Goteki -5.758 vs -6.324, Harimau -5.911 vs -6.447, Icaras -6.946 vs -7.074,
-Piranha -6.817 vs -8.027 (z in hull units; Icaras and Piranha also differ in y by 0.08 and 0.12).
-`EF_Boost` and the spike nodes carry their own origins (Icaras spikes y 0.693 and 0.749, boost
-(0.003, 0, -5.064)).
+**The same file, every team.** `EF_Main`'s authored origin sits ahead of the locator on all twelve
+base teams (z in hull units, node against locator): AG Systems -6.763 / -7.013, Assegai -6.809 /
+-7.182, Auricom -6.036 / -6.361, EGX -6.266 / -6.491, Feisar -4.814 / -4.929, Goteki -5.758 /
+-6.324, Harimau -5.911 / -6.447, Icaras -6.946 / -7.074, Mirage -6.477 / -6.750, Piranha -6.817 /
+-8.027, Qirex -6.896 / -7.350, Triakis -6.695 / -7.534 (the Fury, Zone and `_n1` skins likewise
+by the file census; some name the nodes `ef_Main`, matched case-insensitively). Icaras and
+Piranha also differ from their locator in y by 0.08 and 0.12; the spike nodes of Icaras carry
+y 0.693 and 0.749. **Only `EF_Main` and its spikes are placed this way (confidence 90 for
+Harimau and Feisar Fury, two craft, two boots, read live; 75 for the other ten, the same node
+rule read from the file, not drawn live).** `EF_Boost` hangs `Joint_BoostLeft/Right`,
+`Joint_Diamonds` and `Joint_BoostRot` nodes with offsets of their own (Triakis' joints sit at
+x = +-2.16 against `EF_Boost`'s 0), and no boost frame of the original has been read, so the
+boost group and its spikes keep the locator: not verified live, the same node rule would apply.
 
 **Scale law, a third reading.** The same frames give the body a uniform 1.527 (xy) and 1.538 (z)
 times the hull's 0.75 at thrust, which is `lerp(1, 1.5, s) + 1.4 b` and `1.5 + 2.0 b` with the
@@ -2280,11 +2287,11 @@ times the hull's 0.75 at thrust, which is `lerp(1, 1.5, s) + 1.4 b` and `1.5 + 2
 (85 -> 90 for the thrust terms; the b = 0.019 is the tail of the afterburner blend, left unwired
 with it). Ours reads 1.5 and 2.5 x flicker.
 
-**Wired.** `oag_livery::flare::per_team` places each group at its node's world translation
+**Wired.** `oag_livery::flare::per_team` places `EF_Main` and its spikes at their nodes' world translations
 (`vex::world_transforms`, which composes the `Anim Transform`), `Livery::flare_origins` and
 `Spike::origin` carry the pivots and `scene::frame::craft::hd_flame_transform` / `hd_spike_transform`
-scale about them. A node the file does not carry, and the whole of 2048's container, keep the
-locator. Pinned by `hd_engine_flare_ground_truth` (Harimau's two origins, and "ahead of the
+scale about them. The boost group, a node the file does not carry and the whole of 2048's
+container keep the locator. Pinned by `hd_engine_flare_ground_truth` (Harimau's two origins, and "ahead of the
 locator" on the grid). Everything else the locator feeds (the sprite flare, the trail head, the SPU
 light) is unchanged and unmeasured here.
 
@@ -2299,15 +2306,16 @@ locator is **not read** (no Vita3K or PS4 draw capture of a flame, and the Vita 
 transforms are not composed by `world_transforms`), so both keep the locator: checked, applies by
 shared lineage, not wired.
 
-## Feisar Fury's plume hue is the Fury skin's own files (2026-10-20, `hd-flare-thrust`)
+## Feisar Fury's plume hue was a craft mismatch (2026-10-20, `hd-flare-thrust`)
 
 The "orange-pink in the original, blue-white in ours" comparison was Fury `feisar_c1` against
 ours at `--team feisar` (a classic hull, a different pair of `engineflare` files). Matched craft to
 craft, ours at `--team feisar_c1` reads orange with the violet core of the original (sheet
 `feisar-fury-sheet-base-fury-original.png`: ours base Feisar | ours `feisar_c1` | original). The hue
-is data: each skin directory (`Data\Ships\feisar_c1\engineflare.*`) authors its own flame
-colours, and the trail's ramp is the Fury flag's (already wired, "The vertex colour ramp is per
-skin"). Nothing to change. One real gap found beside it: the Fury skins (`feisar_c1`, `feisar_n1`)
+is not read as a field: ours plays the `feisar_c1` files and matches the original by eye, one frame
+each on different circuits (seen once; the carrying data is the skin's own `engineflare` pair or
+the flame material's constants, not separated), and the trail's ramp is the Fury flag's (already
+wired, "The vertex colour ramp is per skin"). Nothing to change. One real gap found beside it: the Fury skins (`feisar_c1`, `feisar_n1`)
 name their spike shapes `ef_SpikesShape1..3` where the base teams say `ef_Spikes1Shape..3Shape`, so
 `Authored::main_spikes` finds none and the load report says "authors no geometry for
 ef_Spikes1Shape" - the original draws extra flame draws on that craft. Unread whether those are the

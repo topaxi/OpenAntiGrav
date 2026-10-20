@@ -258,16 +258,25 @@ fn harimaus_flame_groups_sit_at_the_origins_the_game_draws_them_at() {
     }
 }
 
-/// On every craft the authored `EF_Main` origin is ahead of the locator, inside
-/// the nozzle opening: 0.1 to 1.1 units on the eight base teams.
+/// On every craft the authored `EF_Main` origin is a real placement: ahead of
+/// the locator, inside the nozzle opening (0.1 to 1.2 units on the twelve base
+/// teams), and nowhere near the hull's origin - a node whose transform failed to
+/// decode would come back at (0, 0, 0), which "ahead of the locator" alone would
+/// not catch.
 fn every_flame_group_sits_ahead_of_its_locator(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         let (Some(always), Some(nozzle)) = (livery.flare_origins.always, livery.nozzle) else {
             continue;
         };
         assert!(
-            always.z > nozzle.z - 1.0e-3,
-            "{}: EF_Main at {always:?} is behind the locator {nozzle:?}",
+            always.z > nozzle.z - 1.0e-3 && always.z < -1.0 && (always - nozzle).length() < 1.5,
+            "{}: EF_Main at {always:?}, the locator at {nozzle:?}",
+            livery.team
+        );
+        assert_eq!(
+            livery.flare_origins.boost,
+            Some(nozzle),
+            "{}: the boost group keeps the locator",
             livery.team
         );
     }

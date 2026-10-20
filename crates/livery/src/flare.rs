@@ -66,8 +66,9 @@ pub struct Spike {
 /// **Placed by baking each group's origin into its vertices**, rather than by a
 /// draw-time offset. The shapes are authored about their group's origin and the
 /// group nodes say where that is on the hull (`EF_Main` is an `Anim Transform`),
-/// which is where the original draws them; the craft's `Engine Flare` locator is
-/// the fallback for a node the file lacks and for 2048's container. Baking keeps
+/// which is where the original draws the main flame and its spikes; the craft's
+/// `Engine Flare` locator places the boost group, a node the file lacks and
+/// 2048's container. Baking keeps
 /// the draw path identical to the plume's, which already takes the craft's own
 /// model matrix and nothing else.
 ///
@@ -173,15 +174,19 @@ pub(super) fn per_team(
             return Flare::default();
         }
     };
-    // **Each group is placed by its own node, not by the `Engine Flare` locator.**
-    // The `.vex` authors the model's origin: `EF_Main` is an `Anim Transform`
-    // whose single key puts it at Harimau's (0, -0.178, -5.911) in the hull's
-    // model space, and the three spikes hang one level lower at -0.052 on z.
-    // The running game's draws put every flame shape's matrix translation
-    // exactly there (hull-local, four captures on two boots, at rest and at
-    // thrust), 0.54 units ahead of the locator - inside the nozzle opening
-    // where the locator sits behind it. 2048's container and a node the file
-    // does not carry keep the locator.
+    // **`EF_Main` and its spikes are placed by their own nodes, not by the
+    // `Engine Flare` locator.** The `.vex` authors the model's origin: `EF_Main`
+    // is an `Anim Transform` whose single key puts it at Harimau's
+    // (0, -0.178, -5.911) in the hull's model space, and the three spikes hang
+    // one level lower at -0.052 on z. The running game's draws put every flame
+    // shape's matrix translation exactly there (hull-local, four captures on
+    // two boots, at rest and at thrust; Feisar Fury's body matches its own node
+    // too), 0.54 units ahead of the locator - inside the nozzle opening where
+    // the locator sits behind it. **`EF_Boost` and its spikes keep the
+    // locator**: they hang under `Joint_*` nodes with offsets of their own (up
+    // to two units on Triakis) and no boost frame of the original has been read.
+    // 2048's container and a node the file does not carry keep the locator too.
+    let main_spikes = authored.main_spikes.len();
     let origins: Vec<Vec3> = if vita {
         vec![nozzle; groups.len()]
     } else {
@@ -189,7 +194,12 @@ pub(super) fn per_team(
         let world = vex::world_transforms(&blob, &nodes);
         groups
             .iter()
-            .map(|group| {
+            .enumerate()
+            .map(|(index, group)| {
+                let authored_group = index == 0 || (2..2 + main_spikes).contains(&index);
+                if !authored_group {
+                    return nozzle;
+                }
                 nodes
                     .iter()
                     .position(|n| {
