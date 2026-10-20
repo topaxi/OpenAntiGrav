@@ -42,6 +42,11 @@ pub struct Laws {
     /// Each resolved wall contact queues [`crate::wall::steer_away_torque`] for the next
     /// step's integration: Wipeout HD's. Pulse's resolver ends at the record.
     pub wall_steer_away: bool,
+    /// A wall contact's point velocity is `v + (R^T omega) x r`, the craft's body-local rate
+    /// crossed with a world lever arm, where Pulse's is the textbook `v + omega x r`. Wipeout
+    /// HD's `Body_ResolveContact` reads its stored rate (negated, body-local) straight into
+    /// `cross(r, rate)`; the two agree for a level craft and part with pitch or roll.
+    pub wall_point_rate_body_local: bool,
 }
 
 impl Laws {
@@ -67,6 +72,7 @@ impl Laws {
         wall_restitution: crate::wall::BODY_RESTITUTION,
         wall_one_sided: false,
         wall_steer_away: false,
+        wall_point_rate_body_local: false,
     };
 }
 

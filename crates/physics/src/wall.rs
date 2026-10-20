@@ -402,6 +402,19 @@ pub fn steer_away_torque(body: &Body, impulse: Vec3) -> Vec3 {
     up * (STEER_AWAY_GAIN * lateral.clamp(-STEER_AWAY_CLAMP, STEER_AWAY_CLAMP))
 }
 
+/// The velocity of the contact point at `lever` from the body's centre: textbook `v + omega x
+/// r`, or with `body_local` Wipeout HD's `v + (R^T omega) x r`, which crosses the world lever
+/// with the body-local rate (`0x000f77e0`-`0x000f7850`, no rotation back to world;
+/// [`crate::laws::Laws::wall_point_rate_body_local`]).
+fn contact_point_velocity(body: &Body, lever: Vec3, body_local: bool) -> Vec3 {
+    let rate = if body_local {
+        body.orientation.inverse() * body.angular_velocity
+    } else {
+        body.angular_velocity
+    };
+    body.linear_velocity + rate.cross(lever)
+}
+
 /// What resolving one contact did to the body.
 struct Applied {
     escape: Vec3,
@@ -480,7 +493,8 @@ fn resolve_contact(
 
     // The lever arm and the *contact point's* velocity, not the body's.
     let lever = contact.point - body.position;
-    let point_velocity = body.linear_velocity + body.angular_velocity.cross(lever);
+    let body_local = laws.wall_point_rate_body_local && contact.surface == Surface::Wall;
+    let point_velocity = contact_point_velocity(body, lever, body_local);
     let normal_speed = point_velocity.dot(normal);
 
     // Wipeout HD's resolver stops here for a wall contact already moving out (`0x000f7880`,

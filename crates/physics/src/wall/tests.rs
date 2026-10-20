@@ -1047,3 +1047,28 @@ fn the_next_step_integrates_the_queued_wall_torque_once() {
     let gained = with.body.angular_velocity.y - without.body.angular_velocity.y;
     assert!(gained > 0.0, "{gained}");
 }
+
+/// Wipeout HD's point velocity crosses the world lever with the **body-local** rate. A craft
+/// yawed a quarter turn pitching at `omega = (2, 0, 0)` has `R^T omega = (0, 0, 2)`: against the
+/// lever `(0, 1, 0)` that is `(-2, 0, 0)` where the textbook gives `(0, 0, 2)`.
+#[test]
+fn a_body_local_point_rate_crosses_the_unrotated_rate() {
+    let body = Body {
+        orientation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+        angular_velocity: Vec3::new(2.0, 0.0, 0.0),
+        ..Body::default()
+    };
+    let lever = Vec3::new(0.0, 1.0, 0.0);
+    let local = body.orientation.inverse() * body.angular_velocity;
+    assert!(
+        (local - Vec3::new(0.0, 0.0, 2.0)).length() < 1e-5,
+        "{local:?}"
+    );
+    let hd = contact_point_velocity(&body, lever, true);
+    assert!((hd - Vec3::new(-2.0, 0.0, 0.0)).length() < 1e-5, "{hd:?}");
+    let pulse = contact_point_velocity(&body, lever, false);
+    assert!(
+        (pulse - Vec3::new(0.0, 0.0, 2.0)).length() < 1e-5,
+        "{pulse:?}"
+    );
+}

@@ -46,6 +46,10 @@ pub struct CraftLaws {
     /// integrated on the next step: Wipeout HD's `Body_ResolveContact` tail, measured live
     /// (`oag_physics::wall::steer_away_torque`). Pulse has none.
     pub wall_steer_away: Sourced<bool>,
+    /// `Body_ResolveContact` crosses the world lever arm with the craft's **body-local** rate,
+    /// `v + (R^T omega) x r`, where Pulse's is textbook: Wipeout HD's, measured live
+    /// (`oag_physics::laws::Laws::wall_point_rate_body_local`).
+    pub wall_point_rate_body_local: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

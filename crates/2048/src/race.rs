@@ -522,6 +522,13 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     wall_one_sided: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     wall_steer_away: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    // HD's measured body-local point rate, held at Pulse's textbook one (chosen) until this
+    // engine's AI flies it on 2048. Failing gates of the HD/2048/Omega AI set (28 tests) under an
+    // airborne pitch perturbation eps = -1e-2 -1e-3 -1e-4 -1e-5 0 1e-2 1e-3 1e-4 1e-5: off
+    // `1 0 1 1 0 0 0 0 0`, on `1 0 1 0 1 0 0 0 0`. Within the bar, but the eps = 0 run puts
+    // `the_field_finishes_tower`'s whole field a lap down at 300 s (292.3 s to finish without it),
+    // and the gate has no row to regenerate; the inherited air bias is held the same way.
+    wall_point_rate_body_local: oag_title::pre_race::Sourced::chosen(false),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

@@ -61,6 +61,7 @@ mod tests {
             bank_to_yaw: Sourced::chosen(30.0),
             wall_one_sided: Sourced::chosen(false),
             wall_steer_away: Sourced::chosen(false),
+            wall_point_rate_body_local: Sourced::chosen(false),
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,
