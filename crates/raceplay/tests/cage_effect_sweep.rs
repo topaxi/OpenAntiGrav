@@ -196,3 +196,61 @@ fn cage_effect_sweep() {
         );
     }
 }
+
+/// Scratch sweep: the lone Ace of `race_ground_truth`'s
+/// `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` (slot 1,
+/// VENOM, 18,000 ticks, every other slot off), printing its shield at each lap
+/// line and at the end of the run, per circuit.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1"]
+fn lone_craft_shield() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+    let tracks: Vec<(String, String)> = catalogue::tracks(&definition)
+        .into_iter()
+        .filter(|track| !track.reversed)
+        .map(|track| (track.id.clone(), track.entry_name()))
+        .collect();
+    let rows = in_parallel::map(&tracks, tracks.len(), |(_, entry)| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            difficulty: oag_ai::Difficulty::Ace,
+            track: Some(entry.clone()),
+            ..race::Options::default()
+        })
+        .expect("loading");
+        let mut race = race::Race::start(loaded.setup);
+        for slot in 2..8 {
+            race.sim.world.ships[slot].active = false;
+        }
+        race.sim.world.ships[0].active = false;
+        let mut lap = race.sim.world.ships[1].standing.lap;
+        let mut per_lap = Vec::new();
+        for _ in 0..TICKS {
+            race.tick(&PlayerInputs::none());
+            let ship = &race.sim.world.ships[1];
+            if ship.standing.lap != lap {
+                lap = ship.standing.lap;
+                per_lap.push(format!("{:.1}", ship.physics.shield));
+            }
+        }
+        (per_lap, race.sim.world.ships[1].physics.shield)
+    });
+    for ((id, _), (per_lap, end)) in tracks.iter().zip(&rows) {
+        println!(
+            "SHIELD {id}: per lap [{}], end of run {end:.1}",
+            per_lap.join(", ")
+        );
+    }
+}
