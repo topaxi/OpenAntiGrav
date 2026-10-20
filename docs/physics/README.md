@@ -660,6 +660,7 @@ tuning, per the [roadmap](../overview/roadmap.md).
 | The per-class gravity scale, `g_class_gravity_scale`, supplied from the disc rather than defaulted | [`passive.rs`](../../crates/physics/src/passive.rs) | engine.md, [handling stats](../formats/handling-stats.md) |
 | Segment-triangle narrowphase as a plane sign change plus three edge half-space tests | [`collide.rs`](../../crates/physics/src/collide.rs) | [collision](../ghidra/functions/psp-pulse-usa/collision.md) |
 | The magstrip hold: blend ramp, mag-floor probe, two-sample axis blend, reposition, velocity projection and the **kinematic basis rewrite** | [`maglock.rs`](../../crates/physics/src/maglock.rs) | engine.md |
+| Wipeout HD's wall response (Omega and 2048 inherit it, 2048 holding the point rate), wall contacts only: restitution from the disc's `<Collision shipWallCofR>`, a one-sided normal impulse, a steer-away yaw torque integrated next step, a body-local point rate | [`wall.rs`](../../crates/physics/src/wall.rs), [`laws.rs`](../../crates/physics/src/laws.rs) | [wall-response.md](../ghidra/functions/ps3-hdfury-eu/wall-response.md) |
 
 **Implemented as a shape with the coefficient left at the identity or zero**, because the
 evidence records that the term exists and not how large it is. That is deliberate: a

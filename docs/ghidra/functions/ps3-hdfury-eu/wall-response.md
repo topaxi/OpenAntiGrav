@@ -266,3 +266,50 @@ between packets: a bare `resume`/`pause` pair leaves a queued stop reply that ti
 the next command). Read `r30` (contact) and `r31` (body) at the first, the body's
 `+0x180..+0x210` at both, and `sp+0x80..+0xb0` at the second. A killed run leaves a
 breakpoint armed and the stub wedged; restore the state again.
+
+## Ported (2026-10-20)
+
+Four laws, one commit each, every one scoped to **wall** contacts (`Surface::Wall`, the
+measured material `3`). Our hull's contacts also reach the resolver against `Floor` and
+`MagFloor`; HD's pair table gives those other values and nothing measured shows HD's floors
+reaching this resolver at all, so they keep Pulse's law. The first, unscoped attempt at the
+one-sided law failed `hd_ai_craft_laws_ground_truth::lone_opponent_on_amphiseum` (one wall
+tick) through floor contacts; scoped, it is clean.
+
+| Law | Where | Title data | Confidence |
+| --- | --- | --- | ---: |
+| Restitution `0.8` | `oag_physics::laws::Laws::wall_restitution`, `restitution_against` | the disc's `<Collision shipWallCofR>` (`oag_tables::handling::Collision`), Pulse's `0.4` where absent | 92 |
+| One-sided normal impulse | `Laws::wall_one_sided` | `CraftLaws::wall_one_sided`: HD measured, Omega and 2048 inherited, Pure Pulse's | 88 |
+| Steer-away yaw torque | `oag_physics::wall::steer_away_torque`, `ShipState::wall_torque` | `CraftLaws::wall_steer_away` | 85 |
+| Body-local point rate | `Laws::wall_point_rate_body_local` | `CraftLaws::wall_point_rate_body_local` | 85 |
+
+Unchanged because they are Pulse's: friction `0.035`, the world-axis denominator, the `0.1`
+angular scale, the push-out by depth and the `0.035 * |p|` shield drain.
+
+HD `opponent_autopilot_sweep::races_others` (the off branch; 12_sol_2, Talon's Junction,
+Ubermall, Amphiseum; novice and Ace; four seeds), before the lane and with all four laws:
+
+| circuit | difficulty | lap s, median | wall ticks | rescues | wrecks | shield per lap, mean | shield end, mean |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 12_sol_2 | novice | 47.5 -> 47.3 | 7964 -> 7716 | 0 -> 1 | 0 -> 0 | 78.8 -> 77.4 | 69.4 -> 66.6 |
+| 12_sol_2 | ace | 39.3 -> 39.2 | 358 -> 401 | 1 -> 1 | 0 -> 0 | 92.0 -> 90.5 | 90.6 -> 85.1 |
+| talons_junction | novice | 50.6 -> 50.2 | 3127 -> 1616 | 0 -> 0 | 0 -> 0 | 87.3 -> 88.9 | 85.0 -> 86.7 |
+| talons_junction | ace | 43.3 -> 43.5 | 512 -> 280 | 0 -> 0 | 0 -> 0 | 85.0 -> 86.3 | 80.5 -> 80.8 |
+| 05_ubermall | novice | 45.6 -> 45.4 | 761 -> 501 | 0 -> 0 | 0 -> 0 | 90.4 -> 93.8 | 88.0 -> 91.8 |
+| 05_ubermall | ace | 39.9 -> 39.9 | 433 -> 324 | 1 -> 0 | 1 -> 2 | 75.4 -> 80.1 | 64.0 -> 69.1 |
+| amphiseum | novice | 58.3 -> 57.9 | 3502 -> 3527 | 0 -> 0 | 1 -> 1 | 84.1 -> 85.5 | 76.3 -> 78.2 |
+| amphiseum | ace | 50.4 -> 50.3 | 403 -> 450 | 0 -> 0 | 0 -> 1 | 81.3 -> 80.8 | 73.0 -> 71.8 |
+
+Totals: wall ticks 17,060 -> 14,815, rescues 2 -> 2, wrecks 2 -> 4, laps within 0.4 s.
+"Shield per lap" is the mean of each lap's end-of-lap shield; "shield end" is the shield at
+the end of the run. The two extra wrecks are open: the sweep does not say what wrecked them.
+
+**Wipeout 2048 holds the body-local point rate.** With it on,
+`vita_2048_original_ai_ground_truth::the_field_finishes_tower` fails: the law-off field
+finishes in 292.3 s, the law-on field is still on lap 3 at 300 s. The noise method over the
+28 HD, 2048 and Omega original-AI tests (nine fixed perturbations of `eps`,
+`-1e-2 -1e-3 -1e-4 -1e-5 0 1e-2 1e-3 1e-4 1e-5`) gives failures `1 0 1 1 0 0 0 0 0` law off
+and `1 0 1 0 1 0 0 0 0` law on: within the bar, but a finish-by-timeout assertion has no
+row to regenerate, so the law is held on 2048 (`Sourced::chosen(false)`) until the 2048
+field is flown against it, the same hold the inherited air bias carries. Omega inherits it from
+HD and passes.
