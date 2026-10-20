@@ -240,8 +240,8 @@ fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
         let rgba = texture.to_rgba().expect("a one-texel picture");
         assert_eq!(
             [rgba[0], rgba[1], rgba[2]],
-            [9, 14, 20],
-            "slot {slot}: 0.037, 0.054, 0.077 as unorm bytes"
+            [57, 68, 80],
+            "slot {slot}: 0.037, 0.054, 0.077 as the texel bytes the sRGB decode turns back into them"
         );
         checked += 1;
     }
@@ -306,7 +306,8 @@ fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
 /// `ds_pipe_nc.gtf`'s RGB as a normal and multiplies its **alpha** by the
 /// authored `0x7611a2d8` (`MUL H2.xyz, R1.w, C`) to get the diffuse. Unsampled
 /// as a colour, the slot drew pure white (a tunnel's pipe and stairs, 211 where
-/// the original reads 50). Every texel is checked against that product.
+/// the original reads 50; 24 before the product was sRGB-encoded, 46 after).
+/// Every sampled texel is checked against that product.
 /// Dropping `skin::ALPHA_DIFFUSE` fails this.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
@@ -358,11 +359,12 @@ fn the_pipe_diffuse_is_the_maps_alpha_times_its_constant() {
             texture.to_rgba().expect("one-texel-per-texel picture"),
         );
         assert_eq!(map.len(), got.len(), "slot {slot}: same size as its map");
-        let byte = |c: f32| c.clamp(0.0, 1.0);
         for (m, g) in map.chunks_exact(4).zip(got.chunks_exact(4)).step_by(97) {
             let alpha = f32::from(m[3]) / 255.0;
             for lane in 0..3 {
-                let want = (alpha * byte(constant[lane]) * 255.0).round() as u8;
+                // The raw product, bound as the byte its sRGB decode returns.
+                let raw = (alpha * constant[lane]).clamp(0.0, 1.0);
+                let want = (raw.powf(1.0 / 2.2) * 255.0).round() as u8;
                 assert_eq!(g[lane], want, "slot {slot} lane {lane}");
             }
         }

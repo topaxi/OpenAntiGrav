@@ -68,6 +68,12 @@ pub(super) fn skin(
             })
             .clone()
     };
+    let mut alpha_maps: std::collections::HashMap<String, Option<ModelTexture>> =
+        Default::default();
+    let mut alpha_pictures: std::collections::HashMap<
+        (String, [u32; 4]),
+        Option<Arc<ModelTexture>>,
+    > = Default::default();
     let mut skins = Vec::with_capacity(model.materials.len());
     let mut seconds = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
@@ -90,15 +96,28 @@ pub(super) fn skin(
                 // Deliberately unbound: the program samples no colour texture,
                 // so the surface is its constants and light alone.
                 report.picture_unsampled += 1;
+                // One picture per (map, constant): a circuit names a family's
+                // map in a dozen slots and the product is a full-size copy.
                 let alpha = alpha_diffuse(material).and_then(|(path, colour)| {
-                    let blob = textures(path)?;
-                    let map = ModelTexture::from_gtf(path, &blob)?;
-                    scale_alpha(&map, colour)
+                    let key = (path.to_string(), colour.map(f32::to_bits));
+                    alpha_pictures
+                        .entry(key)
+                        .or_insert_with(|| {
+                            let map = alpha_maps
+                                .entry(path.to_string())
+                                .or_insert_with(|| {
+                                    textures(path)
+                                        .and_then(|blob| ModelTexture::from_gtf(path, &blob))
+                                })
+                                .as_ref()?;
+                            scale_alpha(map, colour).map(Arc::new)
+                        })
+                        .clone()
                 });
-                match alpha.or_else(|| constant_diffuse(material)) {
+                match alpha.or_else(|| constant_diffuse(material).map(Arc::new)) {
                     Some(colour) => {
                         report.constant_diffuse += 1;
-                        skins.push(Some(Arc::new(colour)));
+                        skins.push(Some(colour));
                     }
                     None => skins.push(None),
                 }
@@ -144,9 +163,13 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// read off the microcode: `constantdiffuse_specular_normal`'s lightmapped
 /// block ends `MAD H0.xyz, H0, C, H1` with `C` patched from `0x7611a2d8`, and
 /// `H0` the vertex colour plus the light - the same final step
-/// `diffuse_spec_constant` takes with `diffuse`. Other families that carry
-/// `0x7611a2d8` use it in other places (`m_diffuse_normal_constantspecular`
-/// scales a `.w` term with it) and are left out until read.
+/// `diffuse_spec_constant` takes with `diffuse`, and `ds_booth_glass`'s lit
+/// block (#7, traced 2026-10-20) multiplies the same light sum by it - the
+/// constant is black on Sebenco Climb, so the glass is its reflection alone
+/// (`paraboloidReflectionTex`, not drawn). The pipe family reads it times a
+/// map's alpha instead ([`ALPHA_DIFFUSE`]); other families that carry
+/// `0x7611a2d8` use it in other places (`dc_*glow`, the pads) and are left out
+/// until read.
 const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
     ("constantdiffuse_specular_normal", 0x7611_a2d8),
     ("ds_booth_glass", 0x7611_a2d8),
@@ -155,10 +178,13 @@ const DIFFUSE_PARAMETER: &[(&str, u32)] = &[
 /// The constant diffuse colour of a material whose program samples no colour
 /// texture, as the one-texel picture the shader multiplies the light by.
 ///
-/// Unorm bytes, no sRGB step: the constant is a shader value and every
-/// texture here is sampled the same way. `None` where the family's diffuse
-/// parameter is not one of the two read above, which leaves the surface white
-/// times its light and says so in the report's `picture_unsampled`.
+/// **Encoded with [`raw_to_texel`].** The constant is a raw shader value the
+/// program multiplies the light by; this renderer's albedo binding decodes
+/// sRGB, so the bytes bound have to be the encoding of the value or it reads
+/// `x^2.2` too dark (the Sebenco tunnel pipes: 24 against the original's 50,
+/// 2 against 21, before the encode; 46 and 15 after). `None` where the
+/// family's diffuse parameter is not one of those read above, which leaves the
+/// surface white times its light and says so in the report's `picture_unsampled`.
 fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
     let family = super::emissive::family(material);
     let hash = DIFFUSE_PARAMETER
@@ -166,7 +192,7 @@ fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
         .find_map(|&(name, hash)| (name == family).then_some(hash))
         .unwrap_or(DIFFUSE);
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
-    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let byte = raw_to_texel;
     Some(crate::mesh_render::offer_to_texture_sink(
         ModelTexture::rgba8(
             format!("constant diffuse {hash:08x}"),
@@ -176,6 +202,14 @@ fn constant_diffuse(material: &rcsmodel::Material) -> Option<ModelTexture> {
             None,
         ),
     ))
+}
+
+/// The texel byte whose sRGB decode is the raw shader value `c`: what a
+/// program-computed diffuse (a constant, or a constant times a map's alpha)
+/// has to be bound as, because the albedo binding decodes sRGB and the RSX
+/// multiplies raw 8-bit values.
+fn raw_to_texel(c: f32) -> u8 {
+    (c.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8
 }
 
 /// `Texture1`'s sampler name hash, the one unit 0 of the lightmapped blocks.
@@ -215,7 +249,7 @@ fn scale_alpha(map: &ModelTexture, colour: [f32; 4]) -> Option<ModelTexture> {
     for texel in texels.chunks_exact(4) {
         let alpha = f32::from(texel[3]) / 255.0;
         for c in &colour[..3] {
-            out.push((alpha * c.clamp(0.0, 1.0) * 255.0).round() as u8);
+            out.push(raw_to_texel(alpha * c));
         }
         out.push(255);
     }
