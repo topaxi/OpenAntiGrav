@@ -137,9 +137,9 @@ or any other rights holder; *Wipeout* and related names are trademarks of their
 owners. This project ships no game content. Some pages show screenshots of the
 original games and of this engine running a player's own copy, to document and
 compare behaviour; they are credited and shown for commentary. If you hold
-rights to anything shown here and want it removed, contact us through **GitHub's
-private vulnerability/issue reporting on this repository** (fallback: open a
-GitHub issue). Name the page or image. We will take it down without argument,
+rights to anything shown here and want it removed, contact us through GitHub's
+private vulnerability reporting on this repository (fallback: open a GitHub
+issue). Name the page or image. We will take it down without argument,
 usually within a few days. The same channel works for any other concern about
 this project.
 

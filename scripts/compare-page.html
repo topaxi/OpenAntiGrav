@@ -41,6 +41,10 @@ main { flex:1; min-width:0; padding:12px 16px 40px; }
 .cap dl { display:grid; grid-template-columns:max-content 1fr; gap:2px 14px; margin:0; }
 .cap dt { color:var(--dim); } .cap dd { margin:0; }
 .cap .note { margin-top:8px; color:var(--dim); }
+.credits { display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:6px; max-width:1600px; font-size:12px; color:var(--dim); }
+.credits span b { color:var(--fg); font-weight:600; }
+.credits[hidden] { display:none; }
+.rights { margin:28px 0 0; padding-top:12px; border-top:1px solid var(--line); max-width:900px; font-size:12px; line-height:1.5; color:var(--dim); }
 .warn { margin-top:8px; padding:6px 10px; border-left:3px solid #e0a030; background:#2a2316; max-width:900px; }
 @media (max-width:760px) {
   body { display:block; }
@@ -59,8 +63,10 @@ main { flex:1; min-width:0; padding:12px 16px 40px; }
     <div class="seg" id="views"></div>
   </div>
   <div class="stagewrap"><div class="stage" id="stage"></div></div>
+  <div class="credits" id="credits"></div>
   <div class="onion" id="onion" hidden><span>A</span><input type="range" id="opacity" min="0" max="100" value="50"><span>B</span><output id="opout">50%</output></div>
   <div class="cap" id="cap"></div>
+  <footer class="rights" id="rights"><!--STATEMENT--></footer>
 </main>
 <script>
 const DATA = /*DATA*/;
@@ -74,6 +80,12 @@ const pairsOf = e => PAIRS.filter(([a,b]) => e.images[a] && e.images[b]);
 const pairName = ([a,b]) => NAMES[a] + " | " + NAMES[b];
 // With no original, "before | ours" is the whole story: label it as before and after.
 const sideName = (e, slot) => (slot === "before" && !e.images.original) ? "Before" : (slot === "ours" && !e.images.original ? "After" : NAMES[slot]);
+
+// The credit under an image: title, platform, and whether it is the original or this engine.
+function credit(e, slot) {
+  const src = slot === "original" ? "Original game" : (slot === "before" ? "OpenAntiGrav engine, before" : "OpenAntiGrav engine");
+  return e.game + " \u00b7 " + (e.platform || "platform not recorded") + " \u00b7 " + src;
+}
 
 function buildNav() {
   const nav = $("nav");
@@ -143,7 +155,7 @@ function render() {
     stage.style.aspectRatio = "auto";
     const g = document.createElement("div"); g.className = "side";
     for (const s of [a, b]) {
-      const f = document.createElement("figure"); const c = document.createElement("figcaption"); c.textContent = sideName(e, s);
+      const f = document.createElement("figure"); const c = document.createElement("figcaption"); c.textContent = sideName(e, s) + ": " + credit(e, s);
       f.append(imgA(e.images[s]), c); g.append(f);
       f.querySelector("img").style.position = "static";
     }
@@ -151,6 +163,8 @@ function render() {
   } else {
     stage.append(imgA(e.diffs[a + "|" + b]), tag("|" + sideName(e, a) + " - " + sideName(e, b) + "| x2", "l"));
   }
+  const cr = $("credits"); cr.innerHTML = ""; cr.hidden = st.view === "side";
+  for (const s of [a, b]) { const c = document.createElement("span"), l = document.createElement("b"); l.textContent = sideName(e, s) + ": "; c.append(l, credit(e, s)); cr.append(c); }
   const cap = $("cap"); cap.innerHTML = "";
   const h3 = document.createElement("h3"); h3.textContent = e.game + ": " + e.title; cap.append(h3);
   const dl = document.createElement("dl");
