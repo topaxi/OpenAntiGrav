@@ -71,7 +71,11 @@ Our step plus the cage, from each recorded row (`14_Track`, PHANTOM):
 | 1343 | `2.71 -> 0.13` |
 
 That is the air contact our autopilot missed every lap on Fort Gale's second
-jump; since 2026-10-20 the race runs the cage for every craft. Reproduce with
+jump; since 2026-10-20 the race runs the cage for every craft. A whole race of our
+autopilot on the original driver's port (`autopilot_original_ground_truth::wall_sweep`,
+PHANTOM, `14_Track`), cage off -> on: respawns `5 -> 0`, lateral offset max `202.5 ->
+17.0`, end shield `64.6 -> 95.0`, finish `8,423 -> 7,892` ticks. The original is
+rescued `0` times. Reproduce with
 `crates/trace/tests/collision_cage_ground_truth.rs`'s sweep:
 `OAG_SWEEP=1 OAG_SWEEP_TRACK='Data\Environments\14_Track\track.vex' OAG_SWEEP_CLASS=PHANTOM
 OAG_CAGE_CSV=<capture 3> OAG_CAGE_TICKS=1341,1342,1343`.
