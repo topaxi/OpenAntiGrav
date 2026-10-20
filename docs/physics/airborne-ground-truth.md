@@ -532,24 +532,23 @@ the control record through `craft+0x84` (thrust `100`, pitch `+/-99.9` with the 
 `0` centred) and the pickup slot's flags: **the Autopilot's running bit `0x800` is clear on
 every row** (3,875 rows). The placements:
 
-| Captures (`data/reference/hd-air-player-input/`) | Class, team | Placed |
-| --- | --- | --- |
-| `ubermall-phantom-feisar-centred-{1,2,3}.csv` | PHANTOM (scale `1.2`), Feisar (`-4`) | Ubermall's long jump, 0.5 s before the lip, at the old capture's pose and 219 u/s |
-| `ubermall-phantom-feisar-stick-back-{1,2}.csv` | the same, stick held back (`+99.9`) | the same |
-| `ubermall-phantom-feisar-stick-forward-{1,2}.csv` | the same, stick held forward (`-99.9`) | the same |
-| `ubermall-venom-harimau-centred-{1,2}.csv` | Venom (scale `0.85`), classic Harimau (`-4`) | the same |
-| `chenghou-venom-harimau-jump-{a-1,a-2,b-1}.csv` | Venom, classic Harimau | Chenghou Project's two jumps, the poses below |
-| `talons-venom-assegai-drop-{1,2,3}.csv` | Venom, classic Assegai (`+4`) | Talon's start straight, lifted 30 units, 60 u/s |
+| Captures (`data/reference/hd-air-player-input/`) | Class, team | Placed | Walk env |
+| --- | --- | --- | --- |
+| `ubermall-phantom-feisar-centred-{1,2,3}.csv` | PHANTOM (scale `1.2`), Feisar (`-4`) | Ubermall's long jump, 0.5 s before the lip, at the old capture's pose and 219 u/s | `OAG_HD_CLASS=PHANTOM OAG_HD_TEAM=Feisar` |
+| `ubermall-phantom-feisar-stick-back-{1,2}.csv` | the same, stick held back (`+99.9`) | the same | the same |
+| `ubermall-phantom-feisar-stick-forward-{1,2}.csv` | the same, stick held forward (`-99.9`) | the same | the same |
+| `ubermall-venom-harimau-centred-{1,2}.csv` | Venom (scale `0.85`), classic Harimau (`-4`) | the same | `OAG_HD_CLASS=VENOM OAG_HD_TEAM=Harimau` |
+| `chenghou-venom-harimau-jump-{a-1,a-2,b-1}.csv` | Venom, classic Harimau | Chenghou Project's two jumps, the poses below | the same plus `OAG_HD_TRACK=/data/environments/04_chenghou_project/track.vex` |
+| `talons-venom-assegai-drop-{1,2,3}.csv` | Venom, classic Assegai (`+4`) | Talon's start straight, lifted 30 units, 60 u/s | `OAG_HD_CLASS=VENOM OAG_HD_TEAM=Assegai OAG_HD_TRACK=/data/environments/talons_junction/track.vex` |
 
 The PHANTOM state is `data/saves/hd-fury/hd-timetrial-ubermall-feisar-phantom-start`
 (`emu-hd-timetrial-state.sh <lane> 6 0 0 <name> 3`); the others are the existing
 `hd-timetrial-*-start` states. `crates/raceplay/tests/hd_air_pose_walk.rs` steps ours once
-from every row (one call per capture):
+from every row (one call per capture, with that capture's walk env from the table):
 
 ```text
 OAG_SWEEP=1 OAG_HD_AIR=data/reference/hd-air-player-input/<capture>.csv OAG_HD_ROWS=0..400 \
-OAG_HD_MODE=tt OAG_HD_CLASS=PHANTOM OAG_HD_TEAM=Feisar [OAG_HD_GRAV=ground] [OAG_HD_BIAS=0] \
-[OAG_HD_DIAG=1 [OAG_HD_SUM=0]] [OAG_HD_TRACK=/data/environments/04_chenghou_project/track.vex] \
+OAG_HD_MODE=tt <walk env> [OAG_HD_GRAV=ground] [OAG_HD_BIAS=0] [OAG_HD_DIAG=1 [OAG_HD_SUM=0]] \
     cargo nextest run -p oag-raceplay hd_air_pose_walk --run-ignored all --no-capture
 ```
 
@@ -603,10 +602,11 @@ escape rows the Autopilot run left is here too, unattributed. **Confidence 90.**
 **The rail, and why the old capture is set aside rather than undone.** The pose walk adds
 the residual along the craft's left. On the old Autopilot rows (Ubermall PHANTOM, rows
 1000-1600) the airborne median is `0.022` u/s in velocity and `0.0075` in position per
-frame; on the player-input rows it is `0.000` and `0.0007`-`0.0010`. The rail shows on the
-Autopilot rows and is absent under player input. Statically, the rail's weight is
-`driver+0x52 ? a * b : 0` ([ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md#the-rail)),
-and `+0x52` is the controls-consumed byte the Autopilot's handover sets. The walk now
+frame; on the player-input rows it is `0.000` and `0.0007`-`0.0010`. That residual is the
+evidence: the rail shows on the Autopilot rows and is absent under player input. The static
+reading agrees without proving it: the rail's weight is `driver+0x52 ? a * b : 0`
+([ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md#the-rail)), and `+0x52` is
+the "controls consumed" byte (Pulse's `driver+0x21`), whose writer was not read here. The walk now
 refuses Autopilot rows (`slot+0x200 & 0x800`) and takes the engine bits off each row's own
 `craft+0x264`: the old walk stepped every row with uncapped thrust and the `x1.2` speedup,
 which are the Autopilot's alone.
