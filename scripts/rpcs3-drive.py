@@ -1628,11 +1628,15 @@ def cmd_capture(args):
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
-                session.pad.set("cross", True)
+                # `cross` is throttle in a running Time Trial: `--press none` leaves the pad alone
+                # so a pair shows the craft at rest.
+                if args.press != "none":
+                    session.pad.set(args.press, True)
                 gdb.resume()
                 time.sleep(args.interval)
                 gdb.pause()
-                session.pad.set("cross", False)
+                if args.press != "none":
+                    session.pad.set(args.press, False)
 
                 stem = "%02d" % n
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
@@ -2397,6 +2401,10 @@ def main(argv=None):
     cap.add_argument("--load", type=float, default=50.0)
     cap.add_argument("--shots", type=int, default=3,
                      help="how many poses to capture in this one boot")
+    cap.add_argument("--press", default="cross",
+                     help="the button held across each frame interval (default cross, which "
+                     "starts a race from its prompt but is throttle once it runs); `none` for "
+                     "no press")
     cap.add_argument("--interval", type=float, default=6.0,
                      help="seconds of thrust between poses")
     cap.add_argument("--out", default="data/reference/hd-capture",

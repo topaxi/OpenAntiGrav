@@ -73,6 +73,8 @@ def main():
                          "board is then unlit (the state is after GO): see the docs")
     ap.add_argument("--size", default="1760x990")
     ap.add_argument("--load", type=float, default=0)
+    ap.add_argument("--press", default="none",
+                    help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
@@ -84,7 +86,8 @@ def main():
         record_path = args.json
     else:
         cap = [sys.executable, HERE / "rpcs3-drive.py", "capture", "--out", out / "capture",
-               "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team]
+               "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team,
+               "--press", args.press]
         run(cap)
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())

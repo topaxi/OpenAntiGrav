@@ -144,6 +144,17 @@ OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-state-probe.py   # 
 | `hd-timetrial-talons-assegai-start` | Racebox Time Trial, Venom, `Assegai_c1` (the row Team Selection opens on), at rest just after `GO` | drive at once |
 | `hd-timetrial-talons-assegai-classic-start` | the same with the classic `Assegai` hull (Team Selection `down` once) | drive at once |
 | `hd-timetrial-talons-harimau-classic-start` | the same with the classic `Harimau` (nine `right`s from `Feisar`, then `down`) | drive at once |
+| `hd-timetrial-vineta-k-harimau-classic-start` | Racebox Time Trial, Vineta K, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-anulpha-pass-harimau-classic-start` | Racebox Time Trial, Anulpha Pass, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-moa-therma-harimau-classic-start` | Racebox Time Trial, Moa Therma (`03_Track`), Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-chenghou-project-harimau-classic-start` | Racebox Time Trial, Chenghou Project, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-metropia-harimau-classic-start` | Racebox Time Trial, Metropia (`02_Track`), Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-sebenco-climb-harimau-classic-start` | Racebox Time Trial, Sebenco Climb, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-ubermall-harimau-classic-start` | Racebox Time Trial, Ubermall, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-sol-2-harimau-classic-start` | Racebox Time Trial, Sol 2, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-the-amphiseum-harimau-classic-start` | Racebox Time Trial, The Amphiseum, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-modesto-heights-harimau-classic-start` | Racebox Time Trial, Modesto Heights, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
+| `hd-timetrial-tech-de-ra-harimau-classic-start` | Racebox Time Trial, Tech de Ra, Venom, classic `Harimau`, started and about 9 s after `GO`, at rest (`emu-hd-timetrial-state.sh`, 2026-10-20) | `--restart`, then `rpcs3-hd-pair.py` |
 
 **A new team needs a cold boot, not a restore (2026-10-12, `hd-hull-wash-2`).** Restoring
 `hd-timetrial-talons-venom-start` with the stub off, quitting to the Main Menu and walking
