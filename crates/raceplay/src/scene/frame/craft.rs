@@ -40,11 +40,16 @@ pub(super) fn cockpit_shield_visible(race: &Race) -> bool {
 /// `EF_Main` scales its cross-section and length from the smoothed throttle
 /// plus the boost blend; `EF_Boost` only its length, by `blend * 2.0`. The five
 /// spikes are split out of both groups and take [`hd_spike_transform`] instead.
-pub(super) fn hd_flame_transform(race: &Race, slot: usize, boost: bool) -> Mat4 {
+pub(super) fn hd_flame_transform(
+    race: &Race,
+    slot: usize,
+    boost: bool,
+    origin: Option<Vec3>,
+) -> Mat4 {
     if !race.hd_trail_active() {
         return Mat4::IDENTITY;
     }
-    let Some(nozzle) = race.nozzle_local_of(slot) else {
+    let Some(nozzle) = origin.or_else(|| race.nozzle_local_of(slot)) else {
         return Mat4::IDENTITY;
     };
     let flame = race.hd_flame_of(slot);
@@ -66,13 +71,16 @@ pub(super) fn hd_flame_transform(race: &Race, slot: usize, boost: bool) -> Mat4 
 /// `EF_Boost`'s two by `b * 2.0`, then by one draw of `RandRange(0.65, 0.85)`
 /// each (`oag_fx::exhaust::hd::spike_flicker`, chosen, not measured). The
 /// group's own anisotropic scale does not touch them.
-pub(super) fn hd_spike_transform(race: &Race, slot: usize, boost: bool, index: u32) -> Mat4 {
+pub(super) fn hd_spike_transform(
+    race: &Race,
+    slot: usize,
+    boost: bool,
+    index: u32,
+    nozzle: Vec3,
+) -> Mat4 {
     if !race.hd_trail_active() {
         return Mat4::IDENTITY;
     }
-    let Some(nozzle) = race.nozzle_local_of(slot) else {
-        return Mat4::IDENTITY;
-    };
     let flame = race.hd_flame_of(slot);
     let group = if boost {
         flame.boost_spike_scale()

@@ -735,7 +735,7 @@ impl Scene {
             // about the nozzle the model is baked at. Identity when the HD
             // exhaust is not active - the flame then draws as authored, and
             // the load report already carries what is missing.
-            let flame = hd_flame_transform(race, slot, false);
+            let flame = hd_flame_transform(race, slot, false, self.flare_origins[slot].always);
             let model = race.ship_model_matrix_of(slot) * flame;
             // This frame's flame scale on the previous pose, like the shell's
             // swell: the flame's velocity is its craft's.
@@ -756,7 +756,7 @@ impl Scene {
                 if spike.boost && !spike_boost_visible(race, slot) {
                     continue;
                 }
-                let flame = hd_spike_transform(race, slot, spike.boost, spike.index);
+                let flame = hd_spike_transform(race, slot, spike.boost, spike.index, spike.origin);
                 spike.drawable.write(
                     queue,
                     view_projection,
@@ -789,7 +789,7 @@ impl Scene {
             } else if !race.exhaust_of(slot).plume_visible() {
                 continue;
             }
-            let flame = hd_flame_transform(race, slot, true);
+            let flame = hd_flame_transform(race, slot, true, self.flare_origins[slot].boost);
             let model = race.ship_model_matrix_of(slot) * flame;
             boost.write(
                 queue,

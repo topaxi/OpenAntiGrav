@@ -177,6 +177,9 @@ pub struct Scene {
     /// a fresh `Spikes Random Scale` draw per frame. Empty for a slot whose
     /// title splits none out.
     flare_spikes: Vec<Vec<boost_flare::SpikeDrawable>>,
+    /// Each slot's `EF_Main` and `EF_Boost` origins, the points the flare's
+    /// length and cross-section scale are about.
+    flare_origins: Vec<oag_livery::FlareOrigins>,
     /// One shield shell per craft, on the same additive pipeline as
     /// [`Self::boost`] and for the same reason: both textures carry the artists'
     /// `_ADD` suffix.
@@ -792,6 +795,9 @@ impl Scene {
                 )
             })
             .transpose()?;
+        let flare_origins = (0..GRID_SLOTS as usize)
+            .map(|slot| liveries[slot.min(liveries.len().saturating_sub(1))].flare_origins)
+            .collect();
         let (boost, boost_uv_transforms, flares, flare_spikes) = boost_flare::build(
             device,
             queue,
@@ -1056,6 +1062,7 @@ impl Scene {
             boost,
             flares,
             flare_spikes,
+            flare_origins,
             shield,
             shield_cockpit,
             absorb_overlay,

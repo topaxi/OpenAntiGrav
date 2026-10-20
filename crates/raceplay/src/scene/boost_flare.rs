@@ -160,6 +160,8 @@ pub(super) struct SpikeDrawable {
     pub boost: bool,
     /// Its index among the five: the flicker stream it draws from.
     pub index: u32,
+    /// Where its node sits in the hull's model space, which its scale is about.
+    pub origin: Vec3,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -243,6 +245,7 @@ pub(super) fn build(
                         )?,
                         boost: spike.boost,
                         index: spike.index,
+                        origin: spike.origin,
                     })
                 })
                 .collect::<Result<Vec<_>>>()?,

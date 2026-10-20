@@ -62,6 +62,7 @@ fn the_loaded_race_holds_every_flare_and_trail_hit_claim() {
     every_craft_on_the_grid_carries_both_halves_of_its_flare(&loaded);
     every_craft_splits_five_spikes_out_of_its_flare(&loaded);
     the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(&loaded);
+    every_flame_group_sits_ahead_of_its_locator(&loaded);
     the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(&loaded);
     every_flare_carries_the_flames_own_shader_parameters(&loaded);
     the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not(&loaded);
@@ -186,7 +187,7 @@ fn every_craft_splits_five_spikes_out_of_its_flare(loaded: &race::Loaded) {
 /// The model is authored about its own origin - every transform in the file is
 /// the identity - so a flare that was *not* moved would sit in the middle of
 /// the fuselage, which is a picture that reads as "no flare" rather than as a
-/// misplaced one. Asserted against the locator the same report names.
+/// misplaced one. Asserted against the node origin the flare is placed at.
 fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         let (Some(flame), Some(nozzle)) = (livery.flare.as_ref(), livery.nozzle) else {
@@ -200,12 +201,74 @@ fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(loaded: &race::L
             "{}: the nozzle locator is at {nozzle:?}",
             livery.team
         );
+        // Moved to its own authored origin, not the locator (see
+        // `the_flame_groups_sit_at_the_origins_the_file_authors`): within its
+        // radius of that origin, and nowhere near the hull's.
+        let origin = livery.flare_origins.always.unwrap_or(nozzle);
         let centre = oag_core::math::Vec3::from_array(flame.centre);
         assert!(
-            (centre - nozzle).length() < flame.radius,
-            "{}: flame centred at {centre:?}, nozzle at {nozzle:?}, radius {:.2}",
+            (centre - origin).length() < flame.radius,
+            "{}: flame centred at {centre:?}, origin at {origin:?}, radius {:.2}",
             livery.team,
             flame.radius
+        );
+    }
+}
+
+/// Each flare group sits at its own node's origin, which the running game draws
+/// it at, ahead of the `Engine Flare` locator.
+///
+/// Harimau's `EF_Main` is an `Anim Transform` keyed to (0, -0.178028, -5.910664)
+/// and its three spikes hang 0.052129 behind that. Read from RPCS3 on Talon's
+/// Junction, four frames over two boots at rest and at thrust: the five flame
+/// draws' matrix translations, taken into the hull's own space through the
+/// hull draws, are (0, -0.178, -5.911) for the body and (0, -0.178, -5.963)
+/// for the spikes, while the locator is at (0, -0.193, -6.447). A flare baked at
+/// the locator sits 0.54 units behind the opening the original's flame fills.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn harimaus_flame_groups_sit_at_the_origins_the_game_draws_them_at() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: Some("harimau".to_string()),
+        opponent_teams: Vec::new(),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let harimau = &loaded.liveries[0];
+    let always = harimau.flare_origins.always.expect("EF_Main has an origin");
+    let close = |a: f32, b: f32| (a - b).abs() < 1.0e-3;
+    assert!(
+        close(always.x, 0.0) && close(always.y, -0.178_028) && close(always.z, -5.910_664),
+        "EF_Main at {always:?}"
+    );
+    assert!(!harimau.flare_spikes.is_empty());
+    for spike in &harimau.flare_spikes {
+        assert!(
+            close(spike.origin.y, -0.178_028) && close(spike.origin.z, -5.962_793),
+            "spike {} at {:?}",
+            spike.index,
+            spike.origin
+        );
+    }
+}
+
+/// On every craft the authored `EF_Main` origin is ahead of the locator, inside
+/// the nozzle opening: 0.1 to 1.1 units on the eight base teams.
+fn every_flame_group_sits_ahead_of_its_locator(loaded: &race::Loaded) {
+    for livery in &loaded.liveries {
+        let (Some(always), Some(nozzle)) = (livery.flare_origins.always, livery.nozzle) else {
+            continue;
+        };
+        assert!(
+            always.z > nozzle.z - 1.0e-3,
+            "{}: EF_Main at {always:?} is behind the locator {nozzle:?}",
+            livery.team
         );
     }
 }

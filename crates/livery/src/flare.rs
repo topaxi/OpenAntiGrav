@@ -33,6 +33,11 @@ pub(super) struct Flare {
     /// The five spike shapes, each split out of its group so it can take its
     /// own flicker scale; see [`Spike`].
     pub spikes: Vec<Spike>,
+    /// Where `EF_Main` sits in the hull's model space: the point its shapes
+    /// are baked at and the group's length and cross-section scale about.
+    pub always_origin: Option<Vec3>,
+    /// The same for `EF_Boost`.
+    pub boost_origin: Option<Vec3>,
 }
 
 /// One spike shape of the flare: a part of its own, and the group it left.
@@ -51,6 +56,9 @@ pub struct Spike {
     /// Its index among the five, in the executable's order (`Spikes1` to
     /// `Spikes3`, then `Left`, `Right`): the stream the flicker is keyed on.
     pub index: u32,
+    /// Where the shape's own node sits in the hull's model space, which is the
+    /// point it is baked at and its flicker scale is about.
+    pub origin: Vec3,
 }
 
 /// Loads a team's authored flare and splits it into its two groups.
@@ -139,7 +147,6 @@ pub(super) fn per_team(
             front_faces_only(&mut model);
         }
     }
-    translate(&mut model, nozzle);
     let spike_names: Vec<&str> = authored
         .main_spikes
         .iter()
@@ -165,8 +172,38 @@ pub(super) fn per_team(
             return Flare::default();
         }
     };
+    // **Each group is placed by its own node, not by the `Engine Flare` locator.**
+    // The `.vex` authors the model's origin: `EF_Main` is an `Anim Transform`
+    // whose single key puts it at Harimau's (0, -0.178, -5.911) in the hull's
+    // model space, and the three spikes hang one level lower at -0.052 on z.
+    // The running game's draws put every flame shape's matrix translation
+    // exactly there (hull-local, four captures on two boots, at rest and at
+    // thrust), 0.54 units ahead of the locator - inside the nozzle opening
+    // where the locator sits behind it. 2048's container and a node the file
+    // does not carry keep the locator.
+    let origins: Vec<Vec3> = if vita {
+        vec![nozzle; groups.len()]
+    } else {
+        let nodes = vex::nodes(&blob).unwrap_or_default();
+        let world = vex::world_transforms(&blob, &nodes);
+        groups
+            .iter()
+            .map(|group| {
+                nodes
+                    .iter()
+                    .position(|n| {
+                        n.name
+                            .as_deref()
+                            .is_some_and(|name| name.eq_ignore_ascii_case(group))
+                    })
+                    .and_then(|i| world.get(i))
+                    .map_or(nozzle, |m| Vec3::new(m[12], m[13], m[14]))
+            })
+            .collect()
+    };
     let mut out = Flare::default();
-    for (index, part) in parts.into_iter().enumerate() {
+    for (index, mut part) in parts.into_iter().enumerate() {
+        translate(&mut part.model, origins[index]);
         let triangles = part.triangles();
         if index >= 2 {
             let spike = index as u32 - 2;
@@ -181,6 +218,7 @@ pub(super) fn per_team(
                     model: part.model,
                     boost,
                     index: spike,
+                    origin: origins[index],
                 });
             }
             continue;
@@ -222,8 +260,10 @@ pub(super) fn per_team(
         ));
         if index == 0 {
             out.always = Some(part.model);
+            out.always_origin = Some(origins[0]);
         } else {
             out.boost = Some(part.model);
+            out.boost_origin = Some(origins[1]);
         }
     }
     out

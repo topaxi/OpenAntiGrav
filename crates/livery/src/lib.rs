@@ -97,6 +97,11 @@ pub struct Livery {
     /// The five spike shapes of that flare, each split out of its group for
     /// its own per-frame flicker scale. Empty where the title authors none.
     pub flare_spikes: Vec<Spike>,
+    /// Where the flare model's `EF_Main` and `EF_Boost` groups sit in this
+    /// hull's model space, and so what each group's length scale is about. The
+    /// `engineflare.vex` authors them, ahead of the [`Self::nozzle`] locator;
+    /// see [`flare::per_team`]. `None` where the title authors no flare model.
+    pub flare_origins: FlareOrigins,
     /// The additive shell a fired Shield pickup raises,
     /// `shipshield.vex` beside the hull - or `Data\Weapons\shield.vex` on a
     /// source that carries no per-team one, which is every Pure source.
@@ -299,6 +304,7 @@ pub fn load(
                 boost_uv: source.boost_uv.clone(),
                 flare: source.flare.clone(),
                 flare_spikes: source.flare_spikes.clone(),
+                flare_origins: source.flare_origins,
                 shield: source.shield.clone(),
                 engine_light: source.engine_light,
                 cannon_flash: source.cannon_flash,
@@ -345,6 +351,7 @@ pub fn load(
                     boost_uv: player.boost_uv.clone(),
                     flare: player.flare.clone(),
                     flare_spikes: player.flare_spikes.clone(),
+                    flare_origins: player.flare_origins,
                     shield: player.shield.clone(),
                     engine_light: player.engine_light,
                     cannon_flash: player.cannon_flash,
@@ -354,6 +361,16 @@ pub fn load(
         }
     }
     Ok(out)
+}
+
+/// Where a team's flare groups sit in its hull's model space: the point each
+/// group's model is baked at, which its scale is about.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct FlareOrigins {
+    /// `EF_Main`.
+    pub always: Option<Vec3>,
+    /// `EF_Boost`.
+    pub boost: Option<Vec3>,
 }
 
 /// One team's hull, nozzle and plume.
@@ -445,6 +462,7 @@ fn one(
                     boost_uv: None,
                     flare: None,
                     flare_spikes: Vec::new(),
+                    flare_origins: FlareOrigins::default(),
                     shield: None,
                     engine_light: None,
                     cannon_flash: [None, None],
@@ -488,6 +506,10 @@ fn one(
             boost: lit.boost,
             flare: lit.always,
             flare_spikes: lit.spikes,
+            flare_origins: FlareOrigins {
+                always: lit.always_origin,
+                boost: lit.boost_origin,
+            },
             boost_uv: None,
             // **The shell is loaded on PS3 too**, unlike the plume: HD carries a
             // per-team `shipshield.vex` with its geometry in the `.rcsmodel`
@@ -569,6 +591,10 @@ fn one(
         boost_uv,
         flare: lit.always,
         flare_spikes: lit.spikes,
+        flare_origins: FlareOrigins {
+            always: lit.always_origin,
+            boost: lit.boost_origin,
+        },
         shield,
         engine_light,
         cannon_flash: [None, None],
