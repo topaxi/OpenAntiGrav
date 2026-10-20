@@ -377,3 +377,27 @@ fn opening_a_capture_releases_whatever_confirmed_it() {
         "the swallowed key-up must not leave Cross stuck held"
     );
 }
+
+#[test]
+fn a_warm_up_needs_every_velocity_and_never_guesses_one() {
+    let path = fixture_file("field-novel", FIELD);
+    let field = pose::field_from_csv(&path).expect("a field without velocities");
+    assert!(field.velocities().is_err(), "no vel columns, no warm-up");
+
+    let text = "\
+slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z
+0,Player,0,0,-1,0,1,0,1,0,0,7,8,9,1,2,3
+1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,4,5,6
+";
+    let path = fixture_file("field-vel", text);
+    let velocities = pose::field_from_csv(&path)
+        .and_then(|field| field.velocities())
+        .expect("a complete field");
+    assert_eq!(
+        velocities,
+        [
+            oag_core::math::Vec3::new(1.0, 2.0, 3.0),
+            oag_core::math::Vec3::new(4.0, 5.0, 6.0)
+        ]
+    );
+}

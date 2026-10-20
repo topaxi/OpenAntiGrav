@@ -78,3 +78,67 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
     assert_eq!(alone.sim.world.ship_count, 1, "a pose alone drops the grid");
     assert_ne!(alone.readout().race_ticks, 2_333);
 }
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_alone() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let field: Vec<Pose> = (1..=7u8)
+        .map(|n| pose_at(f32::from(n) * 11.0, f32::from(n) * 5.0))
+        .collect();
+    let start = || {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            pose: Some(race::PoseRequest::Exact(pose_at(-100.0, -170.0))),
+            field: field.clone(),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup)
+    };
+    let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
+
+    // The control: a posed race has no exhaust history at all.
+    let cold = start();
+    for slot in 0..8 {
+        assert!(
+            !cold.exhaust_of(slot).trail_ready(),
+            "slot {slot} starts cold"
+        );
+        assert_eq!(cold.exhaust_of(slot).intensity(), 0.0);
+    }
+
+    let mut warm = start();
+    let poses: Vec<(Vec3, Quat)> = (0..8)
+        .map(|slot| {
+            let body = &warm.sim.world.ships[slot].physics.body;
+            (body.position, body.orientation)
+        })
+        .collect();
+    let ticks = warm.field_warm_up_ticks();
+    warm.warm_up_field(&velocities, ticks);
+    for (slot, (position, orientation)) in poses.into_iter().enumerate() {
+        let body = &warm.sim.world.ships[slot].physics.body;
+        assert_eq!(
+            body.position, position,
+            "slot {slot} ends on its captured pose"
+        );
+        assert_eq!(body.orientation, orientation);
+        let exhaust = warm.exhaust_of(slot);
+        assert!(exhaust.trail_ready(), "slot {slot} has a full trail ring");
+        assert!(
+            exhaust.intensity() > 0.99,
+            "slot {slot}'s plume is at the level a racing craft holds"
+        );
+        assert!(warm.nozzle_of(slot).is_some(), "slot {slot} has a nozzle");
+        assert!(
+            warm.trail_head_of(slot).is_none(),
+            "slot {slot} is drawn at its tick, so its newest sample is already at the nozzle"
+        );
+    }
+    assert_eq!(warm.sim.world.tick, 0, "no simulation tick ran");
+}
