@@ -645,7 +645,7 @@ fn the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer() {
     let head = ps2.iter().map(|v| v.colour[0]).fold(0.0, f32::max);
     assert!((head - 210.0 / 128.0).abs() < 1e-5, "{head}");
     assert!(
-        ps2.iter().all(|v| !(v.colour[2] > v.colour[0] * 2.0)),
+        ps2.iter().all(|v| v.colour[2] <= v.colour[0] * 2.0),
         "layer 0 is blue"
     );
     assert!(
