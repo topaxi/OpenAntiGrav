@@ -1,7 +1,6 @@
 //! The circuit's baked environment probes, `<track>.probes`: what a Wipeout HD hull's
 //! ambient is blended from. See [`oag_vex::probes`].
 
-
 /// The probes beside `track`, or `None`.
 ///
 /// **Silent where the circuit ships none**, which is every title but Wipeout HD: an

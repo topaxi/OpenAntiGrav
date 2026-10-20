@@ -346,7 +346,7 @@ fn uniforms(depth: f32) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(bytemuck::cast_slice(&projection)); // view_projection
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // model
-    bytes.extend_from_slice(&[0u8; 16]); // the four pad floats
+    bytes.extend_from_slice(&[0u8; 32]); // the four pad floats, then the environment-probe layer and its padding
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // prev_mvp
     assert_eq!(bytes.len() as u64, UNIFORMS_SIZE);
     bytes

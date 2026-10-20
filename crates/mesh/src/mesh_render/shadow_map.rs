@@ -49,8 +49,12 @@ pub const OCCLUSION_LAYERS: u32 = 8;
 /// constant ambient's `0.4`, which is the pale hull the original shows.
 pub const ENV_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-/// One layer per craft, the same count as the sun-occlusion array.
-pub const ENV_PROBE_LAYERS: u32 = OCCLUSION_LAYERS;
+/// Two layers per craft: its irradiance map (resized to the reflection map's size) and
+/// its reflection map.
+pub const ENV_PROBE_LAYERS: u32 = OCCLUSION_LAYERS * 2;
+
+/// The environment-probe array's texel size: the reflection map's, `128x64`.
+pub const ENV_PROBE_SIZE: (u32, u32) = (128, 64);
 
 /// The self-shadow maps' texel format: real depth, for the same reason
 /// [`SHADOW_DEPTH_FORMAT`] is - a comparison needs it, and eight bits

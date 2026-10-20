@@ -196,6 +196,7 @@ pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
 mod ice;
+mod probe_lit;
 pub mod psp2;
 mod rim_glow;
 mod skin;

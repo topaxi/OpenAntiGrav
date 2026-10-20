@@ -23,6 +23,18 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
     return vec2<f32>(u, 0.5 - 0.5 * n.y);
 }
 
+// The engine's probe tint, parameter `0x7480de6d`, `(4, 4, 4, 0)` on Talon's Junction
+// (read live on RPCS3, `.w` the desaturation lerp, zero there): both probe maps are
+// multiplied by it. Its source is an engine table with no authored preimage, so the
+// value is the one circuit's measurement.
+const ENV_PROBE_GAIN: f32 = 4.0;
+
+// The array holds two layers per craft: the irradiance map, resized to the reflection
+// map's 128x64 on the CPU, then the reflection map. `which` is 0 or 1.
+fn env_probe_layer(which: i32) -> i32 {
+    return (i32(uniforms.env_layer + 0.5) - 1) * 2 + which;
+}
+
 // **A branch on `slots` keeps its derivatives.** `slots` is a flat varying,
 // and a 2x2 fragment quad - helper lanes included - is always shaded for one
 // primitive, so every lane of a quad reads the same flat value and takes the
@@ -299,9 +311,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // IBL variant of their own block.
         var hull_ambient = ambient_term;
         if uniforms.env_layer > 0.5 && !no_ambient {
-            let layer = i32(uniforms.env_layer + 0.5) - 1;
-            hull_ambient = 4.0 * textureSampleLevel(
-                env_probe_tex, shadow_sampler, env_probe_uv(n), layer, 0.0,
+            hull_ambient = ENV_PROBE_GAIN * textureSampleLevel(
+                env_probe_tex, shadow_sampler, env_probe_uv(n), env_probe_layer(0), 0.0,
             ).rgb;
         }
         let lit_sum = select(
@@ -611,7 +622,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let zone_weight = select(
         scene.zone.enabled,
         0.0,
-        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5,
+        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5 && emissives.scale[zone_entry].y < 7.5,
     );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
@@ -666,6 +677,27 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
 
+        // **The reflection probe**, on the hull materials whose `IBL` variant declares it
+        // (`slots` index into the glow table, `rate` 8): `probe(reflect(-V, N))` times
+        // the probe tint, the livery's alpha (the gloss mask) and the material's own
+        // reflectivity, added after the albedo multiply and before the fog - read off
+        // the live microcode, `@0x5c`-`@0x70` of `diffuse_with_specular_from_alpha_n`'s
+        // `IBL` block. **Added raw, not sRGB-decoded**, as the RSX adds its bytes: measured
+        // on the rest frame against the original's hull (luma 0.56-0.91, saturation
+        // 0.08-0.27 over four boxes), the decoded add reads 0.40-0.49 and 0.23-0.42, the
+        // raw one 0.56-0.65 and 0.11-0.29 (`docs/rendering/hd-ship-materials.md`,
+        // "Finding 5").
+        var probe_reflection = vec3<f32>(0.0);
+        let probe_entry = in.slots >> 24u;
+        if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
+            let r = reflect(-to_eye, n);
+            let probe = textureSampleLevel(
+                env_probe_tex, shadow_sampler, env_probe_uv(r), env_probe_layer(1), 0.0,
+            ).rgb;
+            probe_reflection = probe * ENV_PROBE_GAIN
+                * (texel.a * emissives.tint_offset[probe_entry].x);
+        }
+
         // The authored path shades in linear light, as the RSX does: the samples
         // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
         // the result is saturated (the stand-in for HD's exposure stage) and
@@ -708,7 +740,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // program ends on a /2 output scale"), so the sum below is what the
         // arithmetic states and the scene holds half of it.
         let lit_linear = scene.light.output_scale
-            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow);
+            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow
+                + probe_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

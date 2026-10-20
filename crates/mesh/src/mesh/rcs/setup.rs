@@ -164,6 +164,16 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The hulls that read the reflection probe claim a slot's glow index too, after
+    // everything above has had its pick of them.
+    super::probe_lit::probe_lit(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // The glass sheen's `c` rides in the table too.
     super::glass_sheen::bias(model, &mut material_slots, &mut emissive);
     // The Sebenco ice pool writes three entries into the table and binds its
