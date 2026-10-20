@@ -297,7 +297,7 @@ circuit!(
 // 2026-10-20: failures among the 49 `*_original_ai_ground_truth` tests per airborne pitch-torque
 // perturbation (-1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5), laws off `0 0 1 1 0 0 0 2 0`
 // (median 0, max 2), laws on `1 2 0 1 4 2 0 0 0` (median 1, max 4): inside the bar.
-// At `eps = 0` slot 1 is destroyed (per-lap shield `[80.0, 40.0]`, end-of-run shield
+// In the unperturbed run slot 1 is destroyed (per-lap shield `[80.0, 40.0]`, end-of-run shield
 // `0.0`); before the laws every opponent finished.
 circuit!(
     the_field_finishes_talons_junction,

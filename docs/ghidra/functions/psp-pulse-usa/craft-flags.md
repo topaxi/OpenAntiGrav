@@ -110,7 +110,15 @@ locates (`race-progress.md`). Two readers act on the bit:
   throttle state, the thrust and the lift.
 
 A craft turned more than about 114 degrees off the track's direction in an
-Eliminator race coasts with its airbrakes out until it turns back. Pure USA's
+Eliminator race coasts with its airbrakes out until it turns back.
+
+**Census of ours (2026-10-20, a scratch test not kept):** an Eliminator field with
+the player parked, seed 1, 90 s on each of the twelve Pulse circuits forward and
+reversed, set the bit on **no tick at all**; a craft turned round by hand at tick
+900 on `16_Track` and `03_Track` had it set on the next tick. Ours reads the
+nearest sample's tangent rather than the lap-progress record's (chosen, see
+`oag_raceplay`'s `wrong_way_kill`); the census found no tick where the two could
+disagree, and the scan runs only in Eliminator. Pure USA's
 image has no masked read of the word against `0x2000` at all.
 
 ## `0x200`, the Turbo, and what reads it
@@ -128,7 +136,8 @@ reads the copy four times:
 1. **Prologue** (`0x0884c5cc`): `craft+0x2cc = (flags & 0x200) ? 0.0 : craft+0x2cc + dt`.
    `Ship_ApplySpeedupPad` scales the pad force by `craft+0x2cc` while it is below
    `1.0`. A pad gives nothing while a Turbo runs and fades back in over the second
-   after it. `Ship_InitCraft` writes `0.0`.
+   after it. `Ship_InitCraft` writes `0.0`; its one caller is `Craft_Construct_q`
+   (`0x088412d4`), so a respawn does not reset the clock.
 2. **Early return** (`0x0884c678`, `0x0884c690`): the stun/slowdown return is skipped
    while `0x200` is set. A running Turbo keeps the engine through a stun.
 3. **Turbo add** (`0x0884c89c`): `(flags & 0x200 || flags & 0x400) && craft+0x2a4 == 1`

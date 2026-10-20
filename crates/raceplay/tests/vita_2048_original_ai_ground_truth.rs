@@ -313,9 +313,9 @@ circuit!(the_field_finishes_tower, "2048 - Event 1", 0);
 circuit!(the_field_finishes_mall, "2048 - Event 2", 0);
 circuit!(the_field_finishes_bridge, "2048 - Event 2-1", 0);
 circuit!(the_field_finishes_square, "2048 - Event 4", 0);
-// One respawn since the Turbo's running laws (2026-10-20): at `eps = 0` slot 5 respawns once
+// One respawn since the Turbo's running laws (2026-10-20): in the unperturbed run slot 5 respawns once
 // after 23 wall-contact ticks. Park fails 1 of 9 perturbations either way (laws off at
-// `-1e-5`, on at `0`); the field's totals over the 49 `*_original_ai_ground_truth` tests are
+// `-1e-5`, on at `0`, the patched `+0.0`); the field's totals over the 49 `*_original_ai_ground_truth` tests are
 // off `0 0 1 1 0 0 0 2 0`, on `1 2 0 1 4 2 0 0 0` (-1e-2 .. 1e-5), inside the noise bar.
 circuit!(the_field_finishes_park, "2048 - Event 4-1", 1);
 // Arena puts most of the field back on the track one to three times a craft.
@@ -406,8 +406,8 @@ fn the_super_phantom_field_runs_square_clean() {
         // 2026-10-20: failures among the 49 `*_original_ai_ground_truth` tests per airborne pitch-torque
         // perturbation (-1e-2, -1e-3, -1e-4, -1e-5, 0, 1e-2, 1e-3, 1e-4, 1e-5), laws off `0 0 1 1 0 0 0 2 0`
         // (median 0, max 2), laws on `1 2 0 1 4 2 0 0 0` (median 1, max 4): inside the bar.
-        // At `eps = 0` slot 1 respawns twice (per-lap shield `[88.7, 79.7]`, end-of-run
-        // shield `63.8`).
+        // In the unperturbed run slot 1 respawns twice (per-lap shield `[88.7, 130.7]`,
+        // end-of-run shield `114.6`).
         assert!(race.respawns_of(slot) <= 2, "slot {slot}");
         assert!(
             ship.standing.lap >= 3,

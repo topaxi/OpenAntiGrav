@@ -647,8 +647,9 @@ pub struct ShipState {
     ///
     /// **Two choices, neither observable:** the clamp at `1.0` (the original's accumulator
     /// is unbounded and only ever compared against `1.0`), and the default of `1.0` where
-    /// `Ship_InitCraft` writes `0.0` (`0x08849524`): every race places its craft more than
-    /// a second before the release and a craft cannot reach a pad on the grid. Hashed only
+    /// `Ship_InitCraft` writes `0.0` (`0x08849524`): its one caller is `Craft_Construct_q`
+    /// (`0x088412d4`), not the respawn, every race places its craft more than a second
+    /// before the release, and a craft cannot reach a pad on the grid. Hashed only
     /// while below `1.0`, so a run that never fires a Turbo hashes as it did before.
     pub pad_fade_clock: f32,
     /// Seconds left on a fired Shield pickup.
