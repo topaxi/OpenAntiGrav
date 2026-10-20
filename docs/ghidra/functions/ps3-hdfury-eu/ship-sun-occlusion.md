@@ -326,3 +326,62 @@ and friends are manifest names of a different vocabulary).
   value, and what `format 9` is.
 - Whether the six named tracks are in fact the tracks with no usable
   occlusion carrier, which is what a white clear would be for.
+
+## Read live on RPCS3: the map is sRGB-encoded, and the six names are three circuits (2026-10-20, `hd-hull-pearl`)
+
+Harimau classic at the Talon's Junction Time Trial start (`hd-timetrial-talons-harimau-classic-start`, Write Color Buffers on),
+one paused frame, the hull's draws (498-530 of 615). The hull's `diffuse_with_specular_from_alpha_n` draw binds the livery
+on unit 0, its normal map on 1, **a 512x512 depth texture on unit 2** (`0x01f50000`, format byte `0xb2`, `DEPTH16`, linear, pitch
+1024: the self-shadow map) and **a 256x256 one-byte texture on unit 3** (`0x01fd0000`, format byte `0xa1`, `B8`, linear, **pitch 512**:
+the occlusion map), then the two probe maps on 4 and 5. Both unit words carry gamma nibble 0 (`0x60030303`).
+
+**What the map holds.** Read at `0xC1FD0000`, 256 rows of 512 bytes (the right 256 bytes of every row are padding: read at
+a pitch of 256 and every other row looks black):
+
+| | texels |
+| --- | --- |
+| the road under the craft | **61** in 95 % of the map (percentiles 5 to 99: 59, 61, 61, 61, 62), mean 60.1 |
+| smallest | **13** |
+| largest | 68 |
+
+and the lightmap those chunks sample (`ile_mesh_combine_track01_01-lmap.gtf`, 1024x1024, decoded with `hd_gtf_png`) has a
+dominant alpha of **12** (392,312 of 1,048,576 texels) and a smallest of **1**. `encode(12/255) * 255` is 61.4 and
+`encode(1/255) * 255` is 12.9, both to the byte. So the occlusion pass writes the mask **through the sRGB encode** (the colour target
+is written in sRGB) and the hull reads the stored byte raw, with no decode, as its sun gate: the road under a Talon's start gates the
+sun at **0.24**. Confidence 85 for the law on the lightmap carrier (two exact byte matches over a whole map); the vertex carrier goes
+through the same write and is unmeasured. Our pass wrote the mask linear (12 where the original holds 61), a fifth of the original's
+gate. Fixed in `crates/render/shaders/occlusion.wesl`; pinned by `sun_occlusion_map` (half sun reads 188, alpha 12 reads 61) and by
+`hd_sun_occlusion_ground_truth` (the Talon's start map's median texel is 61).
+
+What it changes on screen, six hand-picked flat facets of the Talon's hull (the original and ours at the same pose, mean RGB, the
+pose not pixel exact so only large flat facets are read): left wing top **(114, 103, 71) against (80, 89, 75) before and (112, 104, 75)
+after**, right wing top (156, 160, 145) against (140, 155, 146) and (157, 163, 148), fuselage left (121, 117, 112) against (100, 108, 108)
+and (117, 116, 110), the right upper wing (106, 131, 131) against (100, 124, 125) and (108, 130, 126); the right wing tip got worse,
+(127, 163, 200) against (123, 160, 206) and (129, 170, 214), and the green nose (54, 63, 54) against (50, 62, 61) and (61, 69, 63). Mean
+absolute difference over the six: **8.5 before, 4.1 after**. The warm orange of the wings, grey before, is back.
+**What does not hold up:** over the whole hull (every pixel the change touched, `talons`, `talons-assegai-c1`, `the-amphiseum`) mean
+luma is 108.9 / 62.4 / 81.3 for the original and 109.4 / 62.8 / 81.1 before, 119.9 / 72.1 / 86.6 after: the hull got about 10 levels
+brighter on average while the original's mean was already matched. A block regression of (original - before) on (after - before) over
+eroded interior blocks has a slope of -0.59, -0.35 and -0.31 (correlation -0.2): the added light does not land where the original has
+more. The ship's silhouette is a few pixels off in these pairs (the resting heading lead), so a pixel or block metric is dominated by
+misalignment, and the six facets are the only valid read; but the hull-wide mean says the encode is not the whole of the sun term.
+Specular is not it: zeroing it moves the six facets from 4.1 to 3.4 only. Open: the self-shadow tap (the depth map reads back as zeros
+over the GDB read, the RSX keeps a depth target on the host), the `x8` on the specular's saturate in block 17 (`MOV_SAT x8 R0.w, R0`),
+and whether the extra light is where the original is shadowed by the wing.
+
+**The six names are three circuits.** `DATA00`'s `Data\Plugins\frontend\definition.xml` pairs every `PI_Track` with its
+environment: `17_Track` and `18_Track` load `Data\Environments\Talons_Junction`, `23_Track` and `24_Track` `Tech_De_Ra`, `07_Track`
+and `15_Track` `12_Sol_2` (the forward and the reversed entry each). So the white clear
+(`0xffffffff`) of `Shadow_RenderShipSunOcclusionMaps` is Talon's Junction, Tech De Ra and Sol 2 in both directions, and Zone.
+**Read, not wired**: it only shows where no chunk covers a craft's 12-unit box, which the Talon's grid frame never does (the
+original's map above holds no texel over 68). The earlier page's "what those names map to was not resolved" is closed.
+
+**A second divergence, not changed.** The original draws only chunks whose lighting family has a carrier (`SunOcclusionLightmap`
+for the lightmap flag, `SunOcclusionVertex` for the vertex flag, nothing for the flat-`Ambient` family). Ours draws every chunk in
+reach, and an Ambient-family chunk with no lightmap and no colour set writes `1 * 1`: a white line crosses our map at the Talon's
+start (`talons_junction` chunks with `lightmap=-`, variant `0x56c94426`), where the original's holds none. It lies outside the hull's
+footprint on that frame.
+
+**Cross-title.** Omega: checked, applies, not checkable (it carries HD's engine, but its original shadow tier is `Unbuilt`, its
+hulls build through the PS4 path, and no PS4 capture exists). 2048: checked, differs (its shadows are a different mechanism,
+`Unbuilt`). Pulse, Pure: no sun-occlusion map.

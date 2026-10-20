@@ -1140,7 +1140,9 @@ through each craft, through a sun-view [`Fit`](../../crates/render/src/shadow/ma
 centred on that craft, 12 units wide (the original's fallback bbox cube
 plus the coverage map's margin) and 70 deep either side (the original's
 near 1 / far 140), writing `lightmap.a * sun_mask` (the two carriers
-`mesh.wgsl` already multiplies as the road's own gate) over black into one
+`mesh.wgsl` already multiplies as the road's own gate) **sRGB-encoded** (the original's map holds 61 where the
+lightmap alpha is 12, read off RPCS3 on Talon's Junction, 2026-10-20: [`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md),
+"Read live on RPCS3") over black into one
 layer of an 8-layer `R8Unorm` array - and `mesh.wgsl` gates the hull's sun
 term, diffuse and specular, by a projective sample of its layer.
 `OAG_DUMP_SUN_OCCLUSION=<png>` beside `--screenshot` writes the player's
