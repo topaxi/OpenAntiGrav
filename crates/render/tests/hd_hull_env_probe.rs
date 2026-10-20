@@ -269,7 +269,7 @@ fn a_hull_is_lit_from_its_crafts_probe_and_reflects_where_tagged() {
 }
 
 /// Identity camera and model, so clip space is model space.
-fn uniforms(env_layer: f32) -> Vec<u8> {
+fn uniforms(env_layer: f32, tint: [f32; 2]) -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [
         [1.0, 0.0, 0.0, 0.0],
         [0.0, 1.0, 0.0, 0.0],
@@ -280,14 +280,14 @@ fn uniforms(env_layer: f32) -> Vec<u8> {
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // view_projection
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // model
     bytes.extend_from_slice(&[0u8; 16]); // sun-occlusion layer, clock, colour, hull scale
-    bytes.extend_from_slice(bytemuck::cast_slice(&[env_layer, 4.0, 0.0, 0.0]));
+    bytes.extend_from_slice(bytemuck::cast_slice(&[env_layer, tint[0], tint[1], 0.0]));
     bytes.extend_from_slice(&[0u8; 32]); // hull point lights
     bytes.extend_from_slice(bytemuck::cast_slice(&identity)); // prev_mvp
     assert_eq!(bytes.len() as u64, UNIFORMS_SIZE);
     bytes
 }
 
-/// Draws the model once into a `SIZE`x`SIZE` target and reads the centre back.
+/// [`draw_tinted`] with the engine's probe tint outside Zone mode, `(4, 4, 4, 0)`.
 fn draw(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -295,6 +295,18 @@ fn draw(
     scene: Scene,
     maps: ShadowMaps<'_>,
     env_layer: f32,
+) -> [u8; 4] {
+    draw_tinted(device, queue, model, scene, maps, (env_layer, [4.0, 0.0]))
+}
+
+/// Draws the model once into a `SIZE`x`SIZE` target and reads the centre back.
+fn draw_tinted(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    scene: Scene,
+    maps: ShadowMaps<'_>,
+    (env_layer, tint): (f32, [f32; 2]),
 ) -> [u8; 4] {
     let built = mesh_render::build(
         device,
@@ -320,7 +332,7 @@ fn draw(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&uniform_buffer, 0, &uniforms(env_layer));
+    queue.write_buffer(&uniform_buffer, 0, &uniforms(env_layer, tint));
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("glow uniforms"),
         layout: &built.pipeline.get_bind_group_layout(0),
@@ -423,4 +435,35 @@ fn draw(
     // Dead centre of the triangle.
     let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
     [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+}
+
+/// A Zone race writes the probe tint `(0.698, 0.698, 0.698, 1)`: the probe's light is its
+/// own luma, grey, at a fifth of the strength `(4, 4, 4, 0)` gives it (read live on RPCS3).
+#[test]
+fn a_zone_race_tints_the_probe_grey_and_dim() {
+    let Some((device, queue)) = gpu() else { return };
+    let plain = model(slots::DEFAULT, Vec::new(), UP);
+    let view = array(&device, &queue, fill);
+    let maps = ShadowMaps {
+        env_probes: Some(&view),
+        ..ShadowMaps::NONE
+    };
+    let engine = draw(&device, &queue, &plain, rig(), maps, 1.0);
+    let zone = draw_tinted(
+        &device,
+        &queue,
+        &plain,
+        rig(),
+        maps,
+        (1.0, [178.0 / 255.0, 1.0]),
+    );
+    assert!(
+        engine[2] > engine[1] && engine[1] > engine[0],
+        "coloured: {engine:?}"
+    );
+    assert_eq!((zone[0], zone[1]), (zone[1], zone[2]), "grey: {zone:?}");
+    assert!(
+        zone[1] > 0 && zone[1] < engine[2] / 2,
+        "{zone:?} against {engine:?}"
+    );
 }
