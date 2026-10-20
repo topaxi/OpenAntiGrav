@@ -542,6 +542,12 @@ def menu(args):
     tap(dbg, "left", SATURATE, wait=0.3)  # -> VENOM
     if args.class_right:
         tap(dbg, "right", args.class_right, wait=0.4)  # -> FLASH, RAPIER, PHANTOM
+    if args.weapons_on:
+        # The row persists in the profile, so a walk that leaves it alone races with whatever the last
+        # walk set: this one pins it On (the first entry) so a reading of `g_weapons_enabled` can be a control.
+        tap(dbg, "down")  # SPEED CLASS -> WEAPONS
+        tap(dbg, "left", SATURATE, wait=0.3)  # -> On
+        tap(dbg, "up")
     if args.weapons_off:
         # The Racebox page's rows are RACE TYPE, SPEED CLASS, WEAPONS, AI DIFFICULTY (screenshotted
         # 2026-10-20); WEAPONS' list is On, then Off. The result is read back from
@@ -920,6 +926,12 @@ def main():
         "--weapons-off",
         action="store_true",
         help="set the Racebox page's WEAPONS row to Off (a single race, where it is editable)",
+    )
+    p.add_argument(
+        "--weapons-on",
+        action="store_true",
+        help="pin the Racebox page's WEAPONS row to On (the control for --weapons-off: the byte at "
+        "g_weapons_enabled must then read 1)",
     )
     p.add_argument(
         "--unlock",

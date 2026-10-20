@@ -80,7 +80,7 @@ def main():
     ap.add_argument("--log", type=Path)
     args = ap.parse_args()
     t0 = time.time()
-    with drive.Session(args.image, "/tmp/oag-hd-race-hunt-logs") as session:
+    with drive.Session(args.image, str(Path("/home/topaxi/projects/OpenAntiGrav/data/scratch") / args.lane / "hunt-logs")) as session:
         m = Mem(session.open_mem())
         ships = ships_of(m)
         player = next(s for s in ships if s["player"])

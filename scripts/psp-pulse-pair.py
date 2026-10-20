@@ -128,8 +128,12 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     lap_number = player["lap"] - 1  # PlayerStatus_Update: the HUD's lap is `entity+0xacc - 1`
     pair.rec["original"]["hud"] = {"place": player["place"], "of": len(rows), "lap_number": lap_number,
                                    "lap_time_s": player["lap_time"], "race_clock_s": clock,
+                                   "shield": player["shield"], "shield_max": player["shield_max"],
                                    "best_lap_s": player["best_lap_cs"] / 100}
     pair.check_equal("original field size", len(rows), 8)
+    ce.pack_check(pair, player["place"], [theirs_row["cam_pos_" + a] for a in "xyz"],
+                  [-theirs_row["cam_right_z"], -theirs_row["cam_up_z"], -theirs_row["cam_fwd_z"]], player["pos"],
+                  [r["pos"] for r in rows if not r["player"]], near=args.pack_near)
     pair.check("every craft has a team name", all(t and not t.startswith("?") for t in teams), ", ".join(teams))
     pair.rec["ours"].update({"mode": facts.get("mode", "single_race"), "class": facts.get("class", "venom"),
                              "team": args.team or "default", "layout": layout, "opponent_teams": teams,
@@ -140,7 +144,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
             "--field-from", out / "field.csv",
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
-                theirs_row["speed"] * SPEED_TO_KMH, theirs_row["shield"], player["best_lap_cs"] / 100)] + flags + [
+                theirs_row["speed"] * SPEED_TO_KMH, 100.0 * player["shield"] / player["shield_max"],
+                player["best_lap_cs"] / 100)] + flags + [
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
@@ -189,6 +194,9 @@ def main():
                          "(pose, team) and the camera from the same stop of the original as the shot, renders at that "
                          "tick (--ticks 0) and the layout must be asserted with --layout forward|reversed (the grid "
                          "probe is meaningless mid-race); the HUD race state is recorded as a caveat")
+    ap.add_argument("--pack-near", type=float, default=45.0,
+                    help="with --field: how close to the player a craft in view must be (units); the pair is "
+                         "refused when the frame is not a pack")
     ap.add_argument("--toast-wait", type=float, default=6.0)
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     args = ap.parse_args()

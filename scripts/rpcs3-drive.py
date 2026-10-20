@@ -1684,8 +1684,9 @@ def cmd_capture(args):
                 # so a pair shows the craft at rest.
                 if args.press != "none":
                     session.pad.set(args.press, True)
-                gdb.resume()
-                time.sleep(args.interval)
+                if not (n == 0 and args.first_at_pause):
+                    gdb.resume()
+                    time.sleep(args.interval)
                 gdb.pause()
                 if args.press != "none":
                     session.pad.set(args.press, False)
@@ -2491,6 +2492,11 @@ def main(argv=None):
                      help="also read every craft of the field (pose, team, lap clock) and the HUD's record "
                           "(lap, place, speed, shield) at each pause, into the record's `ship.field` and "
                           "`ship.hud` (`rpcs3_hd_field.py`); needs `serve` (attached)")
+    cap.add_argument("--first-at-pause", action="store_true",
+                     help="the first shot is taken where the emulator already stands, without running "
+                          "for `--interval` first: a state restored with `emu-restore-state.sh --pause` "
+                          "is then captured on its own tick, and the frame, the pose, the field and the "
+                          "HUD record are one instant (the later shots still run, for the camera pick)")
     cap.add_argument("--in-race", action="store_true",
                      help="attached to a restored race: skip the walk even though `TTY.log` has no screen "
                           "lines yet (a restored state has none)")

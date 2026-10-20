@@ -50,6 +50,9 @@ LAP = 0xACC
 RACE_TIME = 0x920
 RACER_COUNT = 0x08B35FA0
 WEAPONS_ENABLED = 0x08B30FA8
+SKILL_LEVEL = 0x08B31044
+#: `Ship_SetShield`: the pool `entity+0x88` is clamped to `*(*(craft+0x6c) + g_skill_level*4 + 0x84)` (shield.md).
+SHIELD = 0x88
 
 
 def ram(pointer):
@@ -86,6 +89,14 @@ class Field:
                 s["team"] = "?%s" % error
         return s["team"]
 
+    def shield_max(self, s):
+        """The pool's maximum for this craft and the race's skill level, the same formula the game clamps with."""
+        if "shield_max" not in s:
+            stats = self.dbg.read_u32(s["craft"] + 0x6C)
+            skill = self.dbg.read_u32(SKILL_LEVEL)
+            s["shield_max"] = rail.f32s(self.dbg, stats + skill * 4 + 0x84, 1)[0]
+        return s["shield_max"]
+
     def rows(self):
         out = []
         for s in self.slots:
@@ -98,6 +109,8 @@ class Field:
                 "place": self.dbg.read_u32(s["entity"] + PLACE),
                 "lap": struct.unpack("<I", craft_words)[0],
                 "best_lap_cs": self.dbg.read_u32(s["entity"] + 0x930),
+                "shield": rail.f32s(self.dbg, s["entity"] + SHIELD, 1)[0],
+                "shield_max": self.shield_max(s),
                 "lap_time": rail.f32s(self.dbg, s["entity"] + RACE_TIME, 1)[0],
             })
         return out
@@ -121,9 +134,15 @@ def learn_camera_node(dbg):
     return node
 
 
+def look_of(cam):
+    """The camera's look direction: the node stores its rotation transposed, so the look is the NEGATED third
+    COLUMN of the recorded rows (`oag_trace::replay::camera_orientation_of`), not the `cam_fwd` row."""
+    return [-cam["cam_right_z"], -cam["cam_up_z"], -cam["cam_fwd_z"]]
+
+
 def in_view(cam, pos, max_dist, half_fov_deg):
     eye = [cam["cam_pos_" + a] for a in "xyz"]
-    fwd = [cam["cam_fwd_" + a] for a in "xyz"]
+    fwd = look_of(cam)
     d = [p - e for p, e in zip(pos, eye)]
     dist = math.sqrt(sum(x * x for x in d))
     if dist < 6 or dist > max_dist:

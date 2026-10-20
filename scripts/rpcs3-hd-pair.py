@@ -118,6 +118,13 @@ def main():
                          "shield from the SAME pause as the screenshot (`rpcs3-drive.py capture --field --in-race`), "
                          "renders at that tick (--ticks 0), and the HUD state is imposed. Restore the state with "
                          "`emu-restore-state.sh <lane> <state> --pause` first")
+    ap.add_argument("--pack-near", type=float, default=45.0,
+                    help="with --field: how close to the player a craft in view must be (units); the pair is "
+                         "refused when the frame is not a pack")
+    ap.add_argument("--pack-max-dist", type=float, default=160.0, help="with --field: craft this far from the camera count as in view")
+    ap.add_argument("--pack-half-fov", type=float, default=45.0,
+                    help="with --field: half the angle of the cone around the look direction that counts as in view "
+                         "(HD's 16:9 frame is about 100 degrees wide)")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -142,7 +149,7 @@ def main():
                "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team,
                "--press", args.press]
         if args.field:
-            cap += ["--field", "--in-race", "--settle", "0"]
+            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
         run(cap)
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())
@@ -205,6 +212,11 @@ def main():
         pair.check("HUD record decodes to one place and lap", hud["place"] is not None,
                    "words %s: place %s lap %s of %d" % (hud["words"], hud["place"], hud["lap"], hud["laps"]))
         if hud["place"] is None:
+            pair.finish()
+        ce.pack_check(pair, hud["place"], camera["eye"], camera["forward"], player_row["pos"],
+                      [r["pos"] for r in ship["field"] if not r["player"]], near=args.pack_near,
+                      max_dist=args.pack_max_dist, half_fov=args.pack_half_fov)
+        if pair.failed():
             pair.finish()
         pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
         field_flags = ["--field-from", out / "field.csv", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (

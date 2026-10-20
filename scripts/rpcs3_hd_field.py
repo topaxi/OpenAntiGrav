@@ -70,8 +70,9 @@ def find_record(m, shield, laps_wanted=3):
 
 def hud(m, record):
     """The record's readable fields. `w0, laps, w2` at +0xc, +0x10, +0x14 are `(lap, laps, place)` in the
-    hunt's boot and `(place, laps, lap - 1)` in a restored state's (screenshotted: lap 2 of 3, place 6 read
-    `6, 3, 1`), so both readings are decoded and only a state where exactly one is valid answers: `place` and
+    hunt's boot, and one read after a restored game had run on gave `(6, 3, 1)`, which fits `(place, laps, lap - 1)`
+    but matched no frame (the only reading matched to a frame is the paused restore's `(2, 3, 6)`: lap 2 of 3, place 6),
+    so both readings are decoded and only a state where exactly one is valid answers: `place` and
     `lap` are None otherwise and the pair is refused rather than guessed."""
     b = m.rd(record, 0x58)
     w0, laps, w2 = struct.unpack(">3I", b[0xC:0x18])

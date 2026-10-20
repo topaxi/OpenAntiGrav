@@ -7,7 +7,7 @@ The maintainer asked whether the original can be put "in the middle of the pack 
 saved right after, and `psp-pulse-pair.py --field` (HD: `rpcs3-hd-pair.py --field`) making the pair with ours posed from **all eight craft**, their teams, the
 camera and the HUD's place, lap, clocks, speed, shield and best lap, every one read out of the state's RAM at the same stop as
 the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../../docs/tools/compare-page.md), "Race shots".
-`just compare-rerender` re-makes these pairs (run once each; drift between two loads of one state 15 to 25 units on PSP, 16 on HD).
+`just compare-rerender` re-makes these pairs (drift between two loads of one state is up to 90 units on PSP, so a rerender can be refused by the pack check and kept as it was; HD restores landed on 14.0 to 14.2 s five times in six).
 
 ## Open
 
@@ -26,6 +26,9 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
   decoded both ways, refused when ambiguous, not understood); the best-lap line (not located in the record); the Fury `Absorb`/`DAMAGE`
   strips; `Pilot Assist` was left on (the profile's default, `0101`), the Autopilot flew with it.
 - **PS2, Pure**: not attempted.
+- **An opponent's driver lane index is its grid row's, not its field pose's** (`start.rs`, `opponent.driver.index`): harmless at `--ticks 0`, but a stage 3 that
+  runs ticks would steer the AI at the wrong part of the circuit; set the index from the field pose first.
+- **A second Pulse pair** (`talons-p6`, a loose pack) was dropped: its state never passed the pack check again; only `race-talons-venom-alongside` is kept.
 - **Layout is asserted, not probed** (`--layout forward`): the grid probe is a start-line test. A mid-race check of the layout would
   compare the player's pose with our spline.
 - **Two captures of one state differ by about 4 ticks** (the CPU stops wall-clock after the load): the pose and camera of each

@@ -155,7 +155,8 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    DIFFICULTY` (screenshotted, 2026-10-20), and `WEAPONS` is editable in a Single Race (a Time Trial forces it off, Head to Head
    locks it). `psp-drive.py menu --single-race --weapons-off` sets it (`down` to `WEAPONS`, `right` once: On, then Off) and prints
    `g_weapons_enabled` (`0x08b30fa8`, a byte) once the race is up: it reads `0` ([shield.md](../ghidra/functions/psp-pulse-usa/shield.md)).
-   The pair script reads the same byte out of the loaded state and **refuses** a state where it is not `0`.
+   **The control, measured:** `--weapons-on` (the row pinned to On) reads `1` at the same address, so the byte is the setting and not
+   a constant. The pair script reads the byte out of the loaded state and **refuses** a state where it is not `0`.
 2. **Autopilot.** `psp-race-field.py hunt` arms the player's Autopilot the way `psp-autopilot-rail.py` does (fire bit `0x1000`, timer
    `record+0x148` written huge); the original's driver then flies the race. It also works with weapons off.
 3. **The hunt.** One conditional breakpoint on `Ship_UpdateCraft` (`0x08849618`) for the player's craft, once a tick; the update
@@ -165,7 +166,8 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    (`--half-fov`, `--max-dist` from the eye) and at least `--min-near` of them within `--near-dist` of the player. The player
    starts eighth and is on the grid's back for the first lap; with weapons off the autopilot reaches 6th to 5th only late in lap 1
    or in lap 2, and the field is spread out (the grid alone spans 344 units), so a hunt takes one to nine minutes and some
-   races never match. **The criteria are the brief's (place 3 to 6, craft close and in view); where a hunt had to settle for less,
+   races never match. **The camera's look direction is the negated third COLUMN of the recorded rows** (the node stores its rotation
+   transposed), not the `cam_fwd` row: using the row put craft behind the camera "in view" in the first hunts. **The criteria are the brief's (place 3 to 6, craft close and in view); where a hunt had to settle for less,
    the state's note says so.**
 4. **The state.** The pause menu cannot be opened while the debugger holds the CPU (its `paused()` reads the stop as the menu), so
    the hunt resumes, presses Escape at once and saves slot 3: the saved tick is a few frames after the match. The pair script
@@ -180,11 +182,17 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
      pose its row carries (the same left/up/forward reading `--pose-from` uses, `oag_trace::replay::orientation_of_rows`) and flies
      the team the row names; the original's slot `n` is our opponent `n + 1`. The craft are drawn at rest: no tick runs.
    - `--hud-state` (`race::CaptureHud`) imposes the original's place, lap, lap time, race clock, speed, shield (as a percentage
-     of the pool: HD's pool is 140, ours is the handling file's) and best lap on the primary readout: all read from RAM, none
+     of the pool: PSP's maximum is `*(*(craft+0x6c) + g_skill_level*4 + 0x84)`, 135 here, so the 134.5 pool reads 99 %, and
+     HD's is 140; ours is the handling file's) and best lap on the primary readout: all read from RAM, none
      derived. The lap on screen is `entity+0xacc - 1`.
    - Ours races with weapons off (`[race] weapons = "Off"` in the pair's private settings); the layout is **asserted** with
      `--layout` (the grid probe is a start-line test), and checked against the sidecar.
-6. **Checks.** Everything in "Environment parity" except the race-clock phase (there is no run-up: ours renders at tick 0 and
+6. **Checks.** A race shot is refused unless **the frame is a pack**, measured on the captured RAM (`compare_env.pack_check`, recorded
+   as `pair.json` `pack`): the player 3rd to 6th, at least two craft in the camera's cone (28 degrees half-angle, up to 110 units from
+   the eye; HD: 45 degrees, 160 units, a 16:9 frame) and at least one within `--pack-near` (45) units of the player. The capture
+   instant cannot be chosen (the state runs a few ticks before the CPU stops, PSP loads differ by up to about 90 units), so a miss is
+   a refusal and a rerun; a rerender that lands off the pack keeps the old files and counts as failed. Everything in "Environment
+   parity" except the race-clock phase (there is no run-up: ours renders at tick 0 and
    takes the clocks from `--hud-state`), plus `weapons off in the original's own RAM`, eight craft, a team name for each, and the
    pose and fov at the rendered tick. The re-capture drifts: the state loads, the CPU stops a few ticks after, so two captures of
    one state differ by about 4 ticks (10 units, 2.5 degrees in the first rerender); the pose, camera and field of each capture are
@@ -209,17 +217,19 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    scripts/rpcs3-hd-pair.py --field --team feisar --track 'Data\Environments\Talons_Junction\track.vex' --state <state>`:
    `rpcs3-drive.py capture --field --in-race --settle 0` takes the screenshot, the camera (from the push buffer, two shots 0.12 s
    apart, the first used), the player's body and **every craft's body, team string and lap clock, plus the HUD record**, in the
-   same pause. Ours gets `field.csv` with the player as slot 0 (an exact pose, so no tilt is left uncarried) and the seven
+   same pause (`--first-at-pause`: the first shot is taken where the restored game stands, with no run-up, so the frame, pose, field and HUD record are
+   one instant; the second shot runs 0.12 s, for the camera pick). Ours gets `field.csv` with the player as slot 0 (an exact pose, so no tilt is left uncarried) and the seven
    opponents on `--field-from`, `--camera-pose`, `--hud-state`, `--ticks 0`, weapons off in the private settings
    (`compare_env.set_ours_weapons_off`).
 4. **The HUD record's word order differs between states**: `(lap, laps, place)` at `+0xc`, `+0x10`, `+0x14` in the hunt's boot, and
-   `(place, laps, lap - 1)` in a state the capture read after the game had run on (lap 2 of 3, place 6 read `6, 3, 1`). `hud()`
+   `(place, laps, lap - 1)` in one read taken after the game had run on (`6, 3, 1`, which fits that order but matched no frame: no shot was taken at that instant). `hud()`
    decodes both and refuses (`place` is None, the pair stops) when both or neither is a valid reading. Not understood: it is a read
    of one structure at one address in two boots. The restored-and-paused state reads `(2, 3, 6)`, which matches the frame.
 
 `just compare-rerender` re-makes a race pair only if the emulator is in the state it was made from: restore the state with
 `--pause` first (the capture lets the game run for 0.12 s, so a second rerender needs another restore). Measured drifts between two
-captures of one state: PSP 15 to 25 units and 4 to 5 degrees (the CPU stops a few ticks after the load), HD 16 units and 12 degrees.
+captures of one state: PSP 15 to 90 units (the CPU stops a few ticks after the load; two direct runs agreed exactly, a rerender did not),
+HD 14.0 to 14.2 s on the lap clock in five restores and 19.7 s in one (the pause after the load did not hold).
 
 **What is not matched in a race shot** (the pair's caveat says it): the exhaust plume and the engine's light (a craft at rest in
 ours; stage 3, a frozen warm-up that gives every craft its trails, is not built), the Autopilot icon and its counter (the pickup
