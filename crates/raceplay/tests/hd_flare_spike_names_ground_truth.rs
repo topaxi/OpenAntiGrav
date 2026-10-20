@@ -57,7 +57,7 @@ fn every_hd_and_fury_flare_draws_every_spike_it_authors() {
             let mut report = Vec::new();
             let liveries = oag_livery::load(
                 &mut archives,
-                &[dir.clone()],
+                std::slice::from_ref(&dir),
                 &oag_livery::LoadContext {
                     race: oag_hd::TITLE.race,
                     mode: oag_race::Mode::SingleRace,
