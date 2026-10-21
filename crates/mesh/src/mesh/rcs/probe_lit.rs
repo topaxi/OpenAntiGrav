@@ -84,7 +84,7 @@ pub(super) fn probe_lit(
             report.probe_lit_unread += 1;
             continue;
         };
-        if *word >> slots::MATERIAL_SHIFT != 0 {
+        if slots::material_index(*word) != 0 {
             report.probe_lit_blocked += 1;
             continue;
         }

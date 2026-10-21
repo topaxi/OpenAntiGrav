@@ -363,13 +363,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         );
         // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
         // prelit term added (the vertex colour is the picture there).
-        if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 24u].y > 1.5 {
+        if (in.slots & 4194304u) != 0u && emissives.scale[(in.slots >> 24u) & 127u].y > 1.5 {
             authored = ambient_term + sun_diffuse;
             sun_light = sun_diffuse;
         }
         // `cf_vex_billboard` (`Emissive::program` mode 1): `ambient + sun * sat(N.L)`, no
         // prelit term, no sun mask and no shadow - `oag_mesh::mesh::rcs::billboard_glass`.
-        if emissives.scale[in.slots >> 24u].z > 0.5 && emissives.scale[in.slots >> 24u].z < 1.5 {
+        if emissives.scale[(in.slots >> 24u) & 127u].z > 0.5 && emissives.scale[(in.slots >> 24u) & 127u].z < 1.5 {
             authored = ambient_term + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
@@ -470,14 +470,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // consecutive glow-table entries. Chosen, not measured: `F` uses the
     // vertex normal, and the constants are display values decoded to the
     // domain the textures are sampled in.
-    if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 24u].y > 1.5 {
+    if (in.slots & 4194304u) != 0u && emissives.scale[(in.slots >> 24u) & 127u].y > 1.5 {
         // **`water_test_2`** (`mesh::rcs::water`): the program's picture is the
         // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
         // the gamma domain the branch below decodes. The light is set where
         // `authored` is built.
         picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
     } else if (in.slots & 4194304u) != 0u {
-        let ice_slot = in.slots >> 24u;
+        let ice_slot = (in.slots >> 24u) & 127u;
         let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
         let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));
         let pale = pow(emissives.tint_offset[ice_slot + 2u].rgb, vec3<f32>(2.2));
@@ -496,7 +496,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // rate its offset and `shift` its scale. The program adds the picture itself unlit
     // as well (`out = P * (light + 1)`), which `mag_glow` carries below.
     var cell_picture = vec3<f32>(0.0);
-    let cell_entry = in.slots >> 24u;
+    let cell_entry = (in.slots >> 24u) & 127u;
     let is_cell = (in.slots & 131072u) != 0u && cell_entry != 0u
         && emissives.scale[cell_entry].y > 2.5 && emissives.scale[cell_entry].y < 3.5;
     if is_cell {
@@ -545,7 +545,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 24u;
+    let glow_slot = (in.slots >> 24u) & 127u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     let ramp_sun = scene.light.sun * ndl;
@@ -722,7 +722,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // **A surface the Zone grade is switched off for** (`ZONE_EXEMPT_RATE`): the
     // glow-table entry its material index names says so. Applied to the three
     // mix weights and not to the `enabled` branch below, which has to stay uniform.
-    let zone_entry = in.slots >> 24u;
+    let zone_entry = (in.slots >> 24u) & 127u;
     let zone_weight = select(
         scene.zone.enabled,
         0.0,
@@ -775,9 +775,21 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // `pow(N.H, e)` in it; any other draw keeps the shared stand-in there.
         let no_specular = in.specular_exponent <= 0.0 && colour_factor;
         let specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
+        // **`slots::LIT_ALPHA`**: the program lights the albedo's alpha and tints the
+        // specular with its RGB (`light * albedo.a + spec * albedo.rgb`, read off
+        // `reversed_diffuse_specular_normal` and `cf_chevron_pulse` on Anulpha Pass);
+        // every other lit program is the other way round (`light * albedo.rgb +
+        // spec * albedo.a`). The albedo unit decodes its RGB (gamma nibble 7) and
+        // not its alpha, so the tint is the decoded colour and the grey albedo the
+        // raw alpha. `docs/rendering/hd-track-tone.md`, "The blue cast".
+        let lit_alpha = (in.slots & 2147483648u) != 0u;
+        let albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
+        let specular_mask = select(texel.a, 1.0, lit_alpha);
+        let specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
         let specular = scene.light.sun
-            * (pow(ndh, specular_exponent) * ndl_spec * mask * texel.a * scene.light.specular_scale
+            * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
+            * specular_tint
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
 
@@ -791,7 +803,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // replaced was a fit to a capture with `Write Color Buffers` off
         // (`docs/rendering/hd-ship-materials.md`, "Hull brightness").
         var probe_reflection = vec3<f32>(0.0);
-        let probe_entry = in.slots >> 24u;
+        let probe_entry = (in.slots >> 24u) & 127u;
         if uniforms.env_layer > 0.5 && probe_entry != 0u && emissives.scale[probe_entry].y > 7.5 {
             let r = reflect(-to_eye, n_hull);
             let probe = textureSampleLevel(
@@ -812,7 +824,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // light terms and multiplies the albedo once. It stays a factor on the
         // stand-in path below, where it is a tint and every other title authors
         // it as one.
-        let texel_linear = pow(texel.rgb, vec3<f32>(2.2));
+        let texel_linear = select(albedo_linear, vec3<f32>(texel.a), lit_alpha);
         // `surface = zoneCol`, then `colour = light * surface` - the microcode's
         // own order, and on this path both terms are linear. The Zone surface
         // **replaces** the albedo rather than adding to it, so `enabled` is the

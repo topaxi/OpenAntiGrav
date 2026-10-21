@@ -284,7 +284,7 @@ pub fn exempt_served_placeholders_from_zone(model: &mut Model, served: &[u32]) -
                 }
                 let word = &mut model.vertices[vertex].slots;
                 match index {
-                    Some(index) if *word >> slots::MATERIAL_SHIFT == 0 => {
+                    Some(index) if slots::material_index(*word) == 0 => {
                         *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
                         exempted += 1;
                     }

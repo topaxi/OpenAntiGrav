@@ -397,7 +397,7 @@ fn a_served_card_quad_is_exempted_from_the_zone_grade_and_nothing_else_is() {
     );
     assert_eq!(model.emissive.len(), 1);
     assert_eq!(model.emissive[0].rate, ZONE_EXEMPT_RATE);
-    let index = |v: usize| model.vertices[v].slots >> slots::MATERIAL_SHIFT;
+    let index = |v: usize| slots::material_index(model.vertices[v].slots);
     assert_eq!([index(0), index(1), index(2)], [1, 1, 1]);
     assert_eq!(
         [index(3), index(4), index(5)],
@@ -418,5 +418,5 @@ fn a_quad_vertex_with_its_own_glow_entry_is_reported_not_overwritten() {
         exempt_served_placeholders_from_zone(&mut model, &[8]),
         (2, 1)
     );
-    assert_eq!(model.vertices[1].slots >> slots::MATERIAL_SHIFT, 5);
+    assert_eq!(slots::material_index(model.vertices[1].slots), 5);
 }

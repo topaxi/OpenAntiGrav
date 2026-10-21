@@ -1004,5 +1004,151 @@ impl Program {
     }
 }
 
+/// Which part of the albedo sample a lit program multiplies its diffuse light by.
+///
+/// The answer [`Program::lit_albedo`] gives, read off the program's own
+/// multiply rather than off the texture's file name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LitAlbedo {
+    /// `light * albedo.rgb`: the sample's colour is the surface's colour, and
+    /// its alpha is the specular mask (`diffuse_normal_specular`,
+    /// `diffuse_specular`, `track_surface`).
+    Colour,
+    /// `light * albedo.a`: the sample's **alpha** is the surface's (grey)
+    /// colour and its RGB tints the specular instead
+    /// (`reversed_diffuse_specular_normal`, `cf_chevron_pulse`). Lighting
+    /// the RGB of such a texture paints its specular tint as the surface.
+    Alpha,
+}
+
+impl Program {
+    /// Which lanes of `albedo`'s sample the program's diffuse light multiplies:
+    /// `None` when the program carries no prelit-scale or constant-ambient
+    /// patch (it is not a lit circuit program), or when no multiply of the
+    /// light by that unit's sample is found.
+    ///
+    /// **The light register is the one the prelit scale is patched into**
+    /// (`MAD light.xyz, pow(lightmap, power), {scale}, sun * lightmap.a * N.L`),
+    /// or, in the variant with no lightmap, the one the constant ambient is
+    /// added into. Its lanes are then followed forward per lane, the same way
+    /// [`Self::output_texels`] follows a sample, and the first `MUL`/`MAD`
+    /// whose operands pair a light lane with the albedo unit's sample answers
+    /// by the swizzle that sample is read through: `H0.wwww` is
+    /// [`LitAlbedo::Alpha`], a straight `.xyz` is [`LitAlbedo::Colour`].
+    /// Per lane rather than per register, because the same register's `.w`
+    /// routinely carries the specular scalar (`MUL H1.w, spec, sun.w` into
+    /// the light register's spare lane) and a per-register taint would read
+    /// the specular's `albedo.rgb` tint as the diffuse multiply.
+    ///
+    /// Read on Anulpha Pass's `reversed_diffuse_specular_normal` (`@0x3e MAD
+    /// H0.xyz, H1, H0.wwww, H0`), `cf_chevron_pulse` (`@0x43 ADD H6.xyz,
+    /// H4.wwww, H6` then `@0x44 MAD H5.xyz, H2, H6, H7`), `diffuse_specular`
+    /// (`@0x28 MUL H1.xyz, H0, H4`) and `diffuse_normal_specular` (`@0x37 MUL
+    /// H2.xyz, H2, H1`); `docs/rendering/hd-track-tone.md`, "The blue cast".
+    /// Straight-line code is assumed, as everywhere in this module.
+    #[must_use]
+    pub fn lit_albedo(&self, albedo: u8) -> Option<LitAlbedo> {
+        // A unit read one lane at a time is a mask or a scalar, not the
+        // surface's colour: `2diffuse_plus_spec_blend_via_alpha_n` fetches
+        // its blend mask as `TEX H0.w` and lerps two pictures by it, which
+        // would otherwise read as "the light multiplies the mask's alpha".
+        if !self.samples_colour(albedo) {
+            return None;
+        }
+        let light_slots: Vec<u16> = self
+            .patches(super::PRELIT_SCALE)
+            .chain(self.patches(super::CONSTANT_AMBIENT))
+            .collect();
+        // Per lane: does this register lane carry the diffuse light, and which
+        // channel of `albedo`'s sample does it carry: `None` for none,
+        // `Some(MIXED)` where two channels of the sample met in one lane
+        // (`lambertemissive`'s `albedo * (1 - albedo.a)`), which is neither
+        // the colour nor the alpha.
+        const MIXED: u8 = 0xff;
+        let merge = |held: Option<u8>, read: Option<u8>| match (held, read) {
+            (None, x) | (x, None) => x,
+            (Some(a), Some(b)) if a == b => Some(a),
+            _ => Some(MIXED),
+        };
+        let mut light = [[[false; 4]; 64]; 2];
+        let mut albedo_lane = [[[None::<u8>; 4]; 64]; 2];
+        let mut light_seen = false;
+        for insn in &self.instructions {
+            let dst = (usize::from(insn.dst_half), usize::from(insn.dst) & 63);
+            let scalar = matches!(insn.name(), Some("DP3" | "DP4" | "DP2A" | "RFL"));
+            let mut lanes_light = [false; 4];
+            let mut lanes_albedo = [None::<u8>; 4];
+            if insn.is_texture() {
+                if insn.unit == albedo {
+                    for (i, lane) in lanes_albedo.iter_mut().enumerate() {
+                        *lane = Some(i as u8);
+                    }
+                }
+            } else {
+                let mut light_operand = [false; 3];
+                let mut albedo_operand = [None::<u8>; 3];
+                for (slot, source) in insn.operands().enumerate() {
+                    let Source::Register { index, half } = source else {
+                        continue;
+                    };
+                    let (h, r) = (usize::from(half), usize::from(index) & 63);
+                    for (i, (lane_light, lane_albedo)) in lanes_light
+                        .iter_mut()
+                        .zip(lanes_albedo.iter_mut())
+                        .enumerate()
+                    {
+                        if scalar {
+                            *lane_light |= light[h][r].iter().any(|&l| l);
+                        } else {
+                            let pick = usize::from(insn.swizzles[slot][i]);
+                            *lane_light |= light[h][r][pick];
+                            *lane_albedo = merge(*lane_albedo, albedo_lane[h][r][pick]);
+                        }
+                    }
+                    // The xyz lanes this operand reads, as the multiply sees them.
+                    light_operand[slot] =
+                        (0..3).any(|i| !scalar && light[h][r][usize::from(insn.swizzles[slot][i])]);
+                    let channels: Vec<Option<u8>> = (0..3)
+                        .map(|i| albedo_lane[h][r][usize::from(insn.swizzles[slot][i])])
+                        .collect();
+                    albedo_operand[slot] = match channels.as_slice() {
+                        [Some(3), Some(3), Some(3)] => Some(3),
+                        [Some(0), Some(1), Some(2)] => Some(0),
+                        _ => None,
+                    };
+                }
+                // The two factors of a `MUL`/`MAD` (its first two operands), one
+                // carrying the light and the other the albedo.
+                if light_seen && matches!(insn.name(), Some("MUL" | "MAD")) {
+                    let factors = [(0usize, 1usize), (1, 0)];
+                    for (a, b) in factors {
+                        if light_operand[a] {
+                            match albedo_operand[b] {
+                                Some(3) => return Some(LitAlbedo::Alpha),
+                                Some(0) => return Some(LitAlbedo::Colour),
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            let marks_light = insn
+                .const_slot
+                .is_some_and(|slot| light_slots.contains(&slot))
+                && insn.mask & 0b0111 == 0b0111;
+            if marks_light {
+                light_seen = true;
+            }
+            for i in 0..4 {
+                if insn.mask & (1 << i) != 0 {
+                    light[dst.0][dst.1][i] = lanes_light[i] || marks_light;
+                    albedo_lane[dst.0][dst.1][i] = lanes_albedo[i];
+                }
+            }
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests;

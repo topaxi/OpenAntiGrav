@@ -933,3 +933,113 @@ fn a_unit_sampled_one_lane_wide_is_not_a_colour() {
     assert!(program.samples_colour(2), "TEX H3.xyz is a colour");
     assert!(!program.samples_colour(1), "never sampled");
 }
+
+/// The two lit shapes `lit_albedo` tells apart, built the way Wipeout HD's
+/// circuit programs are: the prelit scale patched into the `MAD` that forms
+/// the diffuse light, then one multiply of that light by the albedo sample.
+fn lit_program(reversed: bool, patched: bool) -> Program {
+    // TEX H0, f[TC4].zwzz unit2 - the lightmap.
+    let mut lightmap = insn(0x17);
+    lightmap.dst = 0;
+    lightmap.dst_half = true;
+    lightmap.unit = 2;
+    // MAD H1.xyz, H0, {scale}, H1 - the diffuse light, `pow(lightmap, power)
+    // * scale + sun * lightmap.a * N.L`.
+    let mut light = insn(0x04);
+    light.dst = 1;
+    light.dst_half = true;
+    light.mask = 0b0111;
+    light.sources = [reg(0, true), Source::Constant, reg(1, true)];
+    light.const_slot = Some(5);
+    // TEX H4, f[TC4] unit0 - the albedo.
+    let mut albedo = insn(0x17);
+    albedo.dst = 4;
+    albedo.dst_half = true;
+    albedo.unit = 0;
+    let mut body = vec![lightmap, light, albedo];
+    if reversed {
+        // MUL H1.w, R2.zzzz, {sun} - the specular scalar parked in the light
+        // register's spare lane: not light, and a per-register taint would
+        // say it was.
+        let mut spec = insn(0x02);
+        spec.dst = 1;
+        spec.dst_half = true;
+        spec.mask = 0b1000;
+        spec.sources = [reg(2, false), Source::Constant, Source::Input];
+        spec.swizzles[0] = [2, 2, 2, 2];
+        // MUL H2.xyz, H1.wwww, {sun} - the specular colour.
+        let mut spec_colour = insn(0x02);
+        spec_colour.dst = 2;
+        spec_colour.dst_half = true;
+        spec_colour.mask = 0b0111;
+        spec_colour.sources = [reg(1, true), Source::Constant, Source::Input];
+        spec_colour.swizzles[0] = [3, 3, 3, 3];
+        // MUL H4.xyz, H4, H2 - albedo.rgb tints the specular.
+        let mut tint = insn(0x02);
+        tint.dst = 4;
+        tint.dst_half = true;
+        tint.mask = 0b0111;
+        tint.sources = [reg(4, true), reg(2, true), Source::Input];
+        // MAD H4.xyz, H1, H4.wwww, H4 - light times the albedo's **alpha**.
+        let mut out = insn(0x04);
+        out.dst = 4;
+        out.dst_half = true;
+        out.mask = 0b0111;
+        out.sources = [reg(1, true), reg(4, true), reg(4, true)];
+        out.swizzles[1] = [3, 3, 3, 3];
+        out.end = true;
+        body.extend([spec, spec_colour, tint, out]);
+    } else {
+        // MUL H4.xyz, H4, H1 - light times the albedo's colour.
+        let mut out = insn(0x02);
+        out.dst = 4;
+        out.dst_half = true;
+        out.mask = 0b0111;
+        out.sources = [reg(4, true), reg(1, true), Source::Input];
+        out.end = true;
+        body.push(out);
+    }
+    Program {
+        declared: Declared::default(),
+        parameter_patches: if patched {
+            vec![(5, crate::rcsmaterial::PRELIT_SCALE)]
+        } else {
+            Vec::new()
+        },
+        instructions: body,
+    }
+}
+
+/// `reversed_diffuse_specular_normal`'s shape: the light multiplies the
+/// albedo's `.wwww`, and the earlier `albedo.rgb * specular` multiply must not
+/// be mistaken for it just because the specular rode in the light register.
+#[test]
+fn a_light_times_the_albedo_alpha_is_lit_alpha() {
+    assert_eq!(
+        lit_program(true, true).lit_albedo(0),
+        Some(LitAlbedo::Alpha)
+    );
+}
+
+/// `diffuse_normal_specular`'s shape: a straight `.xyz` multiply.
+#[test]
+fn a_light_times_the_albedo_colour_is_lit_colour() {
+    assert_eq!(
+        lit_program(false, true).lit_albedo(0),
+        Some(LitAlbedo::Colour)
+    );
+}
+
+/// With no prelit-scale or constant-ambient patch there is no light register
+/// to follow, and the reading says so rather than guessing.
+#[test]
+fn a_program_with_no_light_patch_reads_as_none() {
+    assert_eq!(lit_program(true, false).lit_albedo(0), None);
+    assert_eq!(lit_program(false, false).lit_albedo(0), None);
+}
+
+/// Asking about a unit the program never samples finds no multiply.
+#[test]
+fn a_unit_the_program_never_samples_is_none() {
+    assert_eq!(lit_program(true, true).lit_albedo(1), None);
+}

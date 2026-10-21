@@ -599,3 +599,179 @@ fn every_known_parameter_name_is_a_hash_the_disc_actually_authors() {
         "these names' hashes are not authored by any material parameter on the disc: {missing:?}"
     );
 }
+
+/// Which part of the albedo the diffuse light multiplies, read off the
+/// lit-race block of four Anulpha Pass materials by hand
+/// (`docs/rendering/hd-track-tone.md`, "The blue cast") and here by
+/// [`fragment::Program::lit_albedo`]: `reversed_diffuse_specular_normal` and
+/// `cf_chevron_pulse` end on `MAD H.xyz, light, albedo.wwww, albedo.rgb *
+/// specular` (the alpha is the surface, the RGB tints the specular), where
+/// `diffuse_normal_specular` and `diffuse_specular` end on `MUL albedo.rgb,
+/// light`. The block offsets are the `HalfBrightIleLightmapSunSpot0SVC0`
+/// variant each material ships, the one the circuit's lightmapped chunks
+/// resolve to, and unit 0 is the albedo on all four.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn anulphas_reversed_programs_light_the_albedo_alpha_and_the_others_its_colour() {
+    let Some(image) = image() else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let Ok(mut archive) = oag_assets::psarc::Archive::open(&spec) else {
+        return;
+    };
+    let read: &[(&str, usize, Option<fragment::LitAlbedo>)] = &[
+        (
+            "reversed_diffuse_specular_normal",
+            0xe9d0,
+            Some(fragment::LitAlbedo::Alpha),
+        ),
+        ("cf_chevron_pulse", 0xf6d0, Some(fragment::LitAlbedo::Alpha)),
+        (
+            "diffuse_specular",
+            0xf030,
+            Some(fragment::LitAlbedo::Colour),
+        ),
+        (
+            "diffuse_normal_specular",
+            0x5430,
+            Some(fragment::LitAlbedo::Colour),
+        ),
+        // Lights `constant * normal.a`: unit 0 is a normal map whose alpha the
+        // light does multiply, which is what the reading says of it.
+        (
+            "m_diffuse_normal_constantspecular",
+            0x55a0,
+            Some(fragment::LitAlbedo::Alpha),
+        ),
+    ];
+    for &(name, offset, expected) in read {
+        let path = format!("/data/environments/15_anulpha_pass/materials/{name}.rcsmaterial");
+        let bytes = archive
+            .read_path(&path)
+            .unwrap_or_else(|_| panic!("{path} reads"));
+        let parsed = RcsMaterial::parse(&bytes).unwrap_or_else(|e| panic!("{name}: {e}"));
+        // `HalfBrightIleLightmapSunSpot0SVC0`: the lit-race pass word with the
+        // `IleLightmap` field, what a chunk declaring `lightmapUV` resolves to.
+        let word = (oag_rcs::rcsmaterial::LIT_RACE_PASS & !0b110) | (2 << 1);
+        assert_eq!(word, 0x005);
+        let variant = parsed
+            .variant(Class::Static, Features::from_pass_word(word))
+            .unwrap_or_else(|| panic!("{name}: no lightmapped sun variant"));
+        assert_eq!(
+            variant.fragment.offset, offset,
+            "{name}: the lightmapped sun variant moved - the block read by hand was at {offset:#x}"
+        );
+        let program = fragment::Program::parse(&bytes, offset)
+            .unwrap_or_else(|| panic!("{name}: block at {offset:#x} decodes"));
+        assert_eq!(
+            program
+                .declared
+                .samplers
+                .iter()
+                .find(|(_, unit)| *unit == 0)
+                .map(|(h, _)| *h),
+            Some(if name == "cf_chevron_pulse" {
+                0x28e9_81a4
+            } else {
+                0x3bdc_0403
+            }),
+            "{name}: unit 0 is not the albedo sampler the reading assumed"
+        );
+        assert_eq!(program.lit_albedo(0), expected, "{name} at {offset:#x}");
+    }
+}
+
+/// Disc-wide, over every chunk of every `.rcsmodel` resolved to its lit-race
+/// `Static` variant and asked at the unit its slot's first texture reaches,
+/// the alpha-lit reading reaches exactly four material families, every one of
+/// them Anulpha Pass's (`crates/render/examples/hd_lit_albedo_census.rs` is
+/// the long form, with chunk counts). A fifth family here is a detector that
+/// widened; a lost one is a detector that narrowed.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_alpha_lit_reading_reaches_four_families_disc_wide() {
+    let Some(image) = image() else {
+        return;
+    };
+    let mut families: BTreeSet<String> = BTreeSet::new();
+    for archive in ARCHIVES {
+        let spec = format!("{}:PS3_GAME/USRDIR/{archive}.PSARC", image.display());
+        let Ok(mut open) = oag_assets::psarc::Archive::open(&spec) else {
+            continue;
+        };
+        let paths: Vec<String> = open
+            .paths()
+            .iter()
+            .filter(|p| p.ends_with(".rcsmodel"))
+            .cloned()
+            .collect();
+        let mut blobs: BTreeMap<String, Option<Vec<u8>>> = BTreeMap::new();
+        let mut seen: BTreeSet<(String, usize)> = BTreeSet::new();
+        for path in paths {
+            let Ok(data) = open.read_path(&path) else {
+                continue;
+            };
+            let Ok(model) = oag_rcs::rcsmodel::Model::parse(&data) else {
+                continue;
+            };
+            for mesh in model
+                .meshes
+                .iter()
+                .flat_map(oag_rcs::rcsmodel::Mesh::surfaces)
+            {
+                let (Some(decl), Some(material)) = (
+                    mesh.decl.as_ref(),
+                    model.materials.get(mesh.material as usize),
+                ) else {
+                    continue;
+                };
+                let blob = blobs
+                    .entry(material.name.clone())
+                    .or_insert_with(|| open.read_path(&format!("/{}", material.name)).ok())
+                    .clone();
+                let Some(blob) = blob else { continue };
+                let Ok(parsed) = RcsMaterial::parse(&blob) else {
+                    continue;
+                };
+                let word = Features::chunk_word(oag_rcs::rcsmaterial::LIT_RACE_PASS, Some(decl));
+                let Some(variant) = parsed.variant(Class::Static, Features::from_pass_word(word))
+                else {
+                    continue;
+                };
+                if !seen.insert((material.name.clone(), variant.fragment.offset)) {
+                    continue;
+                }
+                let Some(program) = fragment::Program::parse(&blob, variant.fragment.offset) else {
+                    continue;
+                };
+                let unit = program
+                    .declared
+                    .samplers
+                    .iter()
+                    .find(|(hash, _)| *hash == material.texture_sampler)
+                    .and_then(|(_, unit)| u8::try_from(*unit).ok())
+                    .unwrap_or(0);
+                if program.lit_albedo(unit) == Some(fragment::LitAlbedo::Alpha) {
+                    let family = material
+                        .name
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or("")
+                        .trim_end_matches(".rcsmaterial")
+                        .to_string();
+                    families.insert(family);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        families.into_iter().collect::<Vec<_>>(),
+        [
+            "cf_chevron_pulse",
+            "chevron_pulse",
+            "m_diffuse_normal_constantspecular",
+            "reversed_diffuse_specular_normal",
+        ]
+    );
+}

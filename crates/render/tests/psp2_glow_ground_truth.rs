@@ -88,7 +88,7 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
             model.lightmaps.get(texture).is_some_and(Option::is_some),
             "layered draw has no emissive texture bound"
         );
-        let slot = (vertex.slots >> slots::MATERIAL_SHIFT) as usize;
+        let slot = slots::material_index(vertex.slots) as usize;
         assert!((1..=model.emissive.len()).contains(&slot));
     }
     // `TimeScaler` as authored on the three: 0.05, 1.0 and 3.0.
