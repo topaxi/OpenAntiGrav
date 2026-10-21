@@ -665,6 +665,9 @@ pub struct HudArt {
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
+    /// The boost's multi-copy smear and the glow stamp under the speed bar: `None` where
+    /// unmeasured, which draws each widget once and stamps nothing. See [`BoostSmear`].
+    pub boost_smear: Option<BoostSmear>,
     /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
     /// HUD fixed on the screen. See [`HudSway`].
     pub sway: Option<crate::pre_race::Sourced<HudSway>>,
@@ -770,6 +773,23 @@ pub struct BarTip {
     pub idle_kmh: u16,
     /// The bars this law drives.
     pub bars: &'static [TipBar],
+}
+
+/// What a speed pad's boost does to the HUD (Pulse PSP, `Hud_Update` `0x0881bf50`).
+///
+/// While the exhaust flare's boost timer runs, the game counts `n = trunc(peak * w)`, `w` a
+/// triangle of `timer / seconds` that is `0` at both ends and `1` at the middle, and draws every
+/// widget `n` times, each at `alpha / n` and each shifted a little further from the screen's
+/// centre along the line through it; the speed bar's fill also stamps the bloom's glow mask with
+/// `n / peak * 255`, so the bloom the frame already has blooms the bar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BoostSmear {
+    /// The copy count at the middle of the timer, and the divisor of the stamp: `10`.
+    pub peak: u8,
+    /// The point the copies spread away from, in the layout's grid: `[240, 136]`.
+    pub centre: [i16; 2],
+    /// The widget whose fill stamps the glow mask.
+    pub stamp: &'static str,
 }
 
 /// One bar of a [`BarTip`] law.

@@ -128,6 +128,8 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             speed_kmh: None,
             shield_percent: None,
             best_lap_ticks: None,
+            best_lap_centiseconds: None,
+            boost_phase: None,
             zone: None,
         }
     );
@@ -135,6 +137,10 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
     assert_eq!((full.speed_kmh, full.shield_percent), (Some(571.5), Some(99.0)));
     let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
     assert_eq!(best.best_lap_ticks, Some(3375));
+    // The original keeps a best lap in whole centiseconds, which a 60 Hz tick count cannot hold:
+    // `56.34` is 3380.4 ticks, and the frame printed `0.56.34`.
+    let hundredth = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.34").expect("seven values");
+    assert_eq!(hundredth.best_lap_centiseconds, Some(5634));
     let zone = pose::parse_hud_state("1,1,0,0,500.0,99.0,0,12,151921,2.5").expect("ten values");
     assert_eq!(
         zone.zone,

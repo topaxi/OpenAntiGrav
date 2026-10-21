@@ -405,7 +405,10 @@ fn run(cli: Cli) -> Result<()> {
         .or(pose);
     let field = field.map(|field| field.opponents).unwrap_or_default();
 
-    let hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
+    let mut hud_state = cli.hud_state.as_deref().map(parse_hud_state).transpose()?;
+    if let Some(hud) = hud_state.as_mut() {
+        hud.boost_phase = cli.hud_boost_phase;
+    }
 
     let leg = if cli.reel {
         frontend::Leg::DevPubReel

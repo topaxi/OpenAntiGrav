@@ -160,6 +160,14 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             },
         ],
     }),
+    // Measured live on PPSSPP, `docs/ghidra/functions/psp-pulse-usa/hud-boost-smear.md`: the copy
+    // count `0x0881c2cc`-`0x0881c3b0`, the 10 and the stamp `0x0881a4e4`-`0x0881a530`, the copies'
+    // shifts `0x088a8688`-`0x088a86f8`.
+    boost_smear: Some(oag_title::hud::BoostSmear {
+        peak: 10,
+        centre: [240, 136],
+        stamp: "SpeedBar",
+    }),
     // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
     sway: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in

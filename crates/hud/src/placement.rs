@@ -129,6 +129,14 @@ impl Frame {
                 clip: p.clip,
                 start: [0; 5],
             }],
+            glow: self
+                .glow
+                .iter()
+                .map(|stamp| super::boost_smear::GlowStamp {
+                    rect: moved(stamp.rect, p),
+                    value: stamp.value,
+                })
+                .collect(),
         }
     }
 
@@ -151,6 +159,7 @@ impl Frame {
         self.small_text.extend(other.small_text);
         self.default_text.extend(other.default_text);
         self.skin_text.extend(other.skin_text);
+        self.glow.extend(other.glow);
     }
 }
 

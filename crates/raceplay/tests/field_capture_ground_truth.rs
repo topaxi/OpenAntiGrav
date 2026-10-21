@@ -38,6 +38,8 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         speed_kmh: Some(463.0),
         shield_percent: Some(99.0),
         best_lap_ticks: Some(3_380),
+        best_lap_centiseconds: None,
+        boost_phase: None,
         zone: None,
     };
     let start = |field: Vec<Pose>, hud: Option<race::CaptureHud>| {

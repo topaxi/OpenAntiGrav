@@ -130,6 +130,15 @@ AUTOPILOT_TIMER_SANE_S = 600.0
 AUTOPILOT_AUTHORED_S = 5.0
 
 
+def boost_phase(dbg):
+    """The player's exhaust flare's boost timer over its length (`*(craft+0x78)+0xb8 / +0xb4`), what `Hud_Update`
+    (0x0881bf50) turns into the HUD's copy count and the speed bar's glow stamp: 0 with no boost running."""
+    craft = dbg.read_u32(dbg.read_u32(RACE_MANAGER) + 0x2C0)  # `g_race_manager + 0x2c0`, the player's craft
+    flare = dbg.read_u32(craft + 0x78)
+    length, timer = dbg.read_f32(flare + 0xB4), dbg.read_f32(flare + 0xB8)
+    return timer / length if length > 0.0 and timer > 0.0 else 0.0
+
+
 def restore_autopilot_timer(port, pair):
     """Put the authored timer back over one armed forever, so the HUD prints what a player's own pickup prints
     (`5.00` counting down) rather than `1000000000.00`. The CPU does not run, so the moment (clock, pose, field,
@@ -353,7 +362,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
-                player["best_lap_cs"] / 100)] + flags + [
+                player["best_lap_cs"] / 100),
+            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + flags + [
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
@@ -493,7 +503,8 @@ def main():
                    "g_weapons_enabled byte at %#x reads %d (0 = off)" % (WEAPONS_ENABLED, wp))
         trace_extra = ["--craft", hex(player_craft), "--field-out", out / "field.json"]
         fr = [r for r in rf.Field(probe).rows() if r["player"]][0]
-        pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6}
+        pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6,
+                                                 "boost_phase": boost_phase(probe)}
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shots = out / "shots"
