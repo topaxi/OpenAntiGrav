@@ -70,3 +70,51 @@ fn a_zone_sky_is_not_tinted() {
     };
     assert_eq!(tint, [1.0; 3]);
 }
+
+/// The fourth byte of `Sky colour` is the glow mask the sky writes: Metropia authors
+/// `255 255 255 122` and the original's live scene target reads alpha 122 on its sky
+/// (RPCS3, 2026-10-21). A Zone sky masks alpha off, so it writes none.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_sky_writes_its_fourth_byte_as_the_glow_mask() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mask = |track: &str, mode| {
+        let loaded = race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            track: Some(track.to_string()),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let sky = loaded.sky_model.as_ref().expect("the circuit's sky loads");
+        assert!(sky.glow_from_program, "the sky's mask is its own program's");
+        sky.vertices[0].glow
+    };
+    assert_eq!(
+        mask(
+            r"Data\Environments\02_Track\track.vex",
+            oag_race::Mode::SingleRace
+        ),
+        122.0 / 255.0,
+        "Metropia's sky"
+    );
+    assert_eq!(
+        mask(
+            r"Data\Environments\12_sol_2\track.vex",
+            oag_race::Mode::SingleRace
+        ),
+        0.0,
+        "Sol 2 authors a fourth byte of 0"
+    );
+    assert_eq!(
+        mask(
+            r"Data\Environments\02_Track\track.vex",
+            oag_race::Mode::Zone
+        ),
+        0.0,
+        "the Zone sky's branch masks alpha off"
+    );
+}

@@ -216,3 +216,6 @@ fn write_lanes(register: &mut [Lane; 4], insn: &Instruction, result: [Lane; 4]) 
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
