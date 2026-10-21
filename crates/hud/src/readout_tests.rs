@@ -347,11 +347,15 @@ fn the_shield_readout_drops_the_percent_on_a_title_that_measures_none() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, false, false),
+        text_for(
+            label, &readout, &strings, false, true, None, None, false, false
+        ),
         Some("98".to_string())
     );
     assert_eq!(
-        text_for(label, &readout, &strings, false, true, None, true, false),
+        text_for(
+            label, &readout, &strings, false, true, None, None, true, false
+        ),
         Some("98%".to_string())
     );
 }
@@ -387,6 +391,7 @@ fn pickup_damage_and_absorb_draw_nothing_without_a_tracked_hit() {
                 false,
                 true,
                 None,
+                None,
                 false,
                 false
             ),
@@ -415,7 +420,9 @@ fn position_txt2_never_draws_a_second_pos_caption() {
     };
     let label = &layout.labels[0];
     assert_eq!(
-        text_for(label, &readout, &strings, true, true, None, false, false),
+        text_for(
+            label, &readout, &strings, true, true, None, None, false, false
+        ),
         None
     );
 }
@@ -508,6 +515,7 @@ fn the_lap_hexagon_draws_the_lap_number_from_the_authored_literal() {
             &strings,
             false,
             true,
+            None,
             None,
             false,
             false,

@@ -494,6 +494,15 @@ pub struct HudArt {
     /// because the one title that has both recovered them from different
     /// places.
     pub zone_speed_classes: Option<&'static ZoneSpeedClasses>,
+    /// A text widget of the Zone layout that nothing on the disc ever writes, and
+    /// the text its buffer was left holding: `(widget name, text)`.
+    ///
+    /// Pulse's `SubWeapon` is bound and never updated in Zone, and its buffer
+    /// reads `1000000000.00` (the float formatter's scratch, found live on the
+    /// original, byte for byte on both Zone captures), so the original draws that
+    /// line under the class name for the whole run. `None` where no such widget
+    /// has been measured.
+    pub zone_stale_text: Option<(&'static str, &'static str)>,
     /// Whether `ShieldBarText` carries a `%` after its digits.
     ///
     /// Pulse's own reference frame reads `100%`, which is what
@@ -893,6 +902,18 @@ pub struct SegmentArc {
 pub struct ZoneSpeedClasses {
     /// One entry per rung, in stage order from zero. See the type's docs.
     pub ids: &'static [Option<&'static str>],
+    /// Where each rung begins, as a zone number, for a title whose HUD names
+    /// the class **off the zone** instead of off the grade's stage.
+    ///
+    /// Pulse is that title: `FUN_0881ad10` walks the zone counter down a
+    /// ladder of thresholds with no stage in between (Pulse has no grade, so no
+    /// stage). Rung `n` begins at `rung_zones[n]`, ascending, the same length as
+    /// [`Self::ids`]. `None` keeps the stage-keyed reading HD uses.
+    pub rung_zones: Option<&'static [u32]>,
+    /// From this zone on the `SpeedClassTxt` caption (`speed class`) is blanked.
+    ///
+    /// Pulse's top rung writes an empty string over it. `None` never blanks.
+    pub caption_hidden_from_zone: Option<u32>,
 }
 
 impl ZoneSpeedClasses {
@@ -904,6 +925,20 @@ impl ZoneSpeedClasses {
         let rung = usize::try_from(stage).unwrap_or(last);
         self.ids.get(rung.min(last)).copied().flatten()
     }
+
+    /// The rung the HUD names at `stage` and `zone`: the zone's own rung where
+    /// the title keys the class on the zone ([`Self::rung_zones`]), the grade's
+    /// `stage` otherwise.
+    #[must_use]
+    pub fn rung(&self, stage: u32, zone: u32) -> u32 {
+        match self.rung_zones {
+            Some(starts) => {
+                let began = starts.iter().take_while(|&&start| start <= zone).count();
+                u32::try_from(began.saturating_sub(1)).unwrap_or(0)
+            }
+            None => stage,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -912,6 +947,8 @@ mod tests {
 
     const LADDER: ZoneSpeedClasses = ZoneSpeedClasses {
         ids: &[None, Some("A"), Some("B")],
+        rung_zones: None,
+        caption_hidden_from_zone: None,
     };
 
     /// The bottom rung has no name, and saying so is the point of the `Option`:
@@ -934,7 +971,11 @@ mod tests {
     /// bounds.
     #[test]
     fn an_empty_ladder_names_nothing() {
-        let empty = ZoneSpeedClasses { ids: &[] };
+        let empty = ZoneSpeedClasses {
+            ids: &[],
+            rung_zones: None,
+            caption_hidden_from_zone: None,
+        };
         assert_eq!(empty.id_for(0), None);
         assert_eq!(empty.id_for(7), None);
     }

@@ -138,6 +138,7 @@ pub(super) fn text_for(
     place_shown: bool,
     speed_unit: bool,
     classes: Option<&oag_title::ZoneSpeedClasses>,
+    stale_text: Option<(&str, &str)>,
     shield_percent: bool,
     position_combined: bool,
 ) -> Option<String> {
@@ -301,8 +302,27 @@ pub(super) fn text_for(
         // circuit's grade wrong together or right together. Nothing on a title
         // with no ladder, and nothing on rung zero, which has no name.
         "SpeedClass" => classes
-            .and_then(|classes| classes.id_for(readout.zone_stage))
+            .and_then(|classes| {
+                // Pulse names the class off the zone and, like `Zone`, not before
+                // the first one; HD's rung is the grade's own stage.
+                if classes.rung_zones.is_some() && readout.zone == 0 {
+                    return None;
+                }
+                classes.id_for(classes.rung(readout.zone_stage, readout.zone))
+            })
             .map(|id| strings.get_or_id(id).to_string()),
+        // The caption over the class name. Pulse's top rung writes an empty
+        // string over it (`FUN_0881ad10`, zone 35 on), so it goes with the
+        // Zen rung; below that it is the authored `RC_SC` like any caption.
+        "SpeedClassTxt"
+            if classes.is_some_and(|classes| {
+                classes
+                    .caption_hidden_from_zone
+                    .is_some_and(|from| readout.zone >= from)
+            }) =>
+        {
+            None
+        }
         // The rung above it, on the row [`zone_next_row`] puts the bar. Both
         // gates matter: with no next rung there is no name, and with no row
         // there is nowhere honest to put it.
@@ -330,6 +350,13 @@ pub(super) fn text_for(
             .time_gap
             .as_ref()
             .and_then(|line| line.text(strings)),
+
+        // Zone only (`zone > 0` like the counters): the widget the original binds and
+        // never writes, drawn with the text its buffer holds. See
+        // [`oag_title::HudArt::zone_stale_text`].
+        name if readout.zone > 0 && stale_text.is_some_and(|(widget, _)| widget == name) => {
+            stale_text.map(|(_, text)| literal(text))
+        }
 
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {
@@ -935,6 +962,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 place_shown,
                 speed_unit,
                 cx.art.zone_speed_classes,
+                cx.art.zone_stale_text,
                 cx.art.shield_percent,
                 position_combined,
             )

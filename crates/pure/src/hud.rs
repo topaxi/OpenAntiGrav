@@ -159,6 +159,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: None,
     // `None`: no Zone speed-class ladder has been read on this title.
     zone_speed_classes: None,
+    zone_stale_text: None,
     // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather
     // than guessing a change. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,

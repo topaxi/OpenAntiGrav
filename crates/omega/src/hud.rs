@@ -240,6 +240,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_backdrop_model: None,
     pickup_icon_uv: None,
     zone_speed_classes: None,
+    zone_stale_text: None,
     shield_percent: false,
     speed_full_kmh: 700,
     hud_font_role: "HUD",

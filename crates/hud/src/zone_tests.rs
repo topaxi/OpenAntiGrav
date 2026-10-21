@@ -102,6 +102,7 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
                     false,
                     true,
                     None,
+                    None,
                     true,
                     false,
                 )
@@ -132,4 +133,86 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
             Some("17".to_string()),
         ]
     );
+}
+
+/// Pulse's Zone line names the class off the zone, in ten bands, and blanks the
+/// caption over it from zone 35 - `FUN_0881ad10`'s own thresholds.
+///
+/// Without `rung_zones` the class would read the grade's stage, which Pulse
+/// leaves at zero: every zone would say `sub-venom`. The widget text is the
+/// string id, as the empty table here leaves it; the two Zone pairs
+/// (`sub-rapier` at zone 8, no caption at zone 50) are the live check.
+#[test]
+fn pulse_names_the_speed_class_off_the_zone_and_blanks_the_caption_from_zen() {
+    let layout = Layout::from_xml(
+        r#"<Screen>
+             <Text name="SpeedClassTxt"><Values idstring="RC_SC" font="HUDSmall" x="0" y="0"/></Text>
+             <Text name="SpeedClass"><Values font="HUD" x="0" y="0"/></Text>
+           </Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let art = oag_pulse::hud::ART;
+    let text = |zone: u32, widget: usize| {
+        text_for(
+            &layout.labels[widget],
+            &Readout {
+                zone,
+                ..Readout::blank()
+            },
+            &strings,
+            false,
+            true,
+            art.zone_speed_classes,
+            art.zone_stale_text,
+            true,
+            false,
+        )
+    };
+    let class = |zone| text(zone, 1);
+    assert_eq!(class(0), None, "not before the first zone, like `Zone`");
+    assert_eq!(class(1).as_deref(), Some("MSC_SVENOM"));
+    assert_eq!(class(2).as_deref(), Some("Venom"));
+    assert_eq!(class(7).as_deref(), Some("MSC_SRAPIER"));
+    assert_eq!(class(8).as_deref(), Some("MSC_SRAPIER"), "the Talon's pair");
+    assert_eq!(class(11).as_deref(), Some("MSC_SRAPIER"));
+    assert_eq!(class(12).as_deref(), Some("Rapier"));
+    assert_eq!(class(21).as_deref(), Some("Phantom"));
+    assert_eq!(class(34).as_deref(), Some("MSC_SPPHANTOM"));
+    assert_eq!(class(35).as_deref(), Some("MSC_ZEN"));
+    assert_eq!(class(50).as_deref(), Some("MSC_ZEN"), "the Moa pair");
+    assert!(text(34, 0).is_some(), "the caption is up below zone 35");
+    assert_eq!(text(35, 0), None, "and gone from it");
+}
+
+/// The widget the original binds and never writes draws its leftover text from
+/// the first zone, and only that widget does.
+#[test]
+fn pulse_draws_the_unwritten_sub_weapon_widget_with_its_leftover_text() {
+    let layout = Layout::from_xml(
+        r#"<Screen>
+             <Text name="SubWeapon"><Values font="HUD" align="centre" x="240" y="45"/></Text>
+             <Text name="Info"><Values font="HUD" x="240" y="70"/></Text>
+           </Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let art = oag_pulse::hud::ART;
+    let text = |zone: u32, widget: usize| {
+        text_for(
+            &layout.labels[widget],
+            &Readout {
+                zone,
+                ..Readout::blank()
+            },
+            &strings,
+            false,
+            true,
+            art.zone_speed_classes,
+            art.zone_stale_text,
+            true,
+            false,
+        )
+    };
+    assert_eq!(text(8, 0).as_deref(), Some("1000000000.00"));
+    assert_eq!(text(0, 0), None, "outside Zone it stays undrawn");
+    assert_eq!(text(8, 1), None, "no other widget borrows it");
 }
