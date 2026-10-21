@@ -107,7 +107,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `diffuse_with_specular_from_alpha_*` and the track's, which share the snippet; the
     // track keeps `N.L` here until the track is matched on its own (it moved four of
     // thirteen pairs the wrong way).
-    let ndl_spec = select(clamp(8.0 * ndl_raw, 0.0, 1.0), ndl, receives_shadow == 2.0);
+    let ndl_spec = clamp(8.0 * ndl_raw, 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
     // runs when the rig is on.** Off - `Light::stand_in`, which is every

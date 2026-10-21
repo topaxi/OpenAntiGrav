@@ -20,11 +20,13 @@
 //! chunks; `shade.wesl` reads both. Every vertex of every other material
 //! carries a zero tangent, which is the shader's off switch.
 //!
-//! **Scope: opaque ship materials whose program reads unit 1 as a normal.** A
-//! material whose normal sits on another unit (`detonator_shield`'s unit 2,
-//! `detonator_ship_rich_iridescent`'s unit 0) or that blends (the canopy glass,
-//! `nitro_perspex_new`) is a different program and is left as it drew; the
-//! circuits' own normal-mapped materials are not ships and are not touched.
+//! **Scope: opaque materials whose program reads unit 1 as a normal and whose third
+//! binding no other family claimed.** A material whose normal sits on another unit
+//! (`detonator_shield`'s unit 2, `detonator_ship_rich_iridescent`'s unit 0) or that
+//! blends (the canopy glass, `nitro_perspex_new`) is a different program and is left
+//! as it drew. Since 2026-10-21 (`hd-track-surface`) this includes a circuit's own
+//! normal-mapped surfaces - `track_surface`'s road and the walls - whose vertex
+//! program derives the same frame from the same `tangent` attribute.
 
 use std::sync::Arc;
 
@@ -44,6 +46,7 @@ pub(super) fn hull_normal(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
+    third: &TextureSlots,
     report: &mut Report,
 ) -> (TextureSlots, Vec<bool>) {
     let mut maps: TextureSlots = vec![None; model.materials.len()];
@@ -51,7 +54,11 @@ pub(super) fn hull_normal(
     let mut decoded: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         Default::default();
     for (slot, material) in model.materials.iter().enumerate() {
-        if material.blend() != rcsmodel::Blend::Opaque {
+        // A material another family already gave the third binding (a magstrip's emissive picture,
+        // a pad's mask, the ice's pond) reads that, not a normal map.
+        if material.blend() != rcsmodel::Blend::Opaque
+            || third.get(slot).is_some_and(Option::is_some)
+        {
             continue;
         }
         let Some(variant) = variants.get(slot).copied().flatten() else {

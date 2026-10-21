@@ -200,7 +200,7 @@ pub(super) fn material_setup(
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, material_tangent) =
-        super::hull_normal::hull_normal(model, &material_variants, textures, report);
+        super::hull_normal::hull_normal(model, &material_variants, textures, &mag_emissive, report);
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(
