@@ -100,3 +100,16 @@ before the loop, and the escapes add, as on Pulse
   `Ship_ApplySpeedupPad` were not separated live (the capture's VFPU diff does not see the grip,
   which writes the body directly, and no brake or pad was taken). They are Pulse's laws by
   reading.
+
+## The drawn steering lean (2026-10-21, `ship-lean`)
+
+| Address | Name | Conf. | Evidence |
+| --- | --- | --- | --- |
+| `0x08925054` | `Ship_UpdateSteerLeans` | 85 | static: Pulse's `0x0883fab4` instruction for instruction. Camera lean `entity+0x978`/`+0x974` (`0.01`, clamps `0.6`/`0.3`, `5.4`, `4.0`); drawn lean `entity+0x988`/`+0x984` (`stick * 0.01 - left * 0.005 + right * 0.005` at `0x089251a8`-`0x089251e0`, clamps `0.5`/`0.3` on the raw stick's side, follower `5.0` at `0x089252a4`, smooth `3.0` at `0x089252b0`). Pulse's two flag bits are bytes here: the negate is `entity+0x991`, the destroyed gate `entity+0xb95`. Not run live |
+
+The display angle is composed at `0x0892718c`-`0x089271a4` in `FUN_08926ae4`:
+`entity[0x984] * f20 + entity[0x9b8] * 6.28` (`lui 0x40c8; ori 0xf5c3`), `f20` being `0.5`
+(`lui 0x3f00` at `0x08926b00`, `mtc1` at `0x08926b0c`), so Pure draws Pulse's lean exactly.
+**Checked, same law**: `oag_pure::race::CRAFT_LAWS.tilt_steer_lean` is `None`, Pulse's gains
+(`oag_physics::SteerLean::PULSE`), and Pure's files author no `<Tilt>`. See
+[`../psp-pulse-usa/camera.md`, "The drawn lean"](../psp-pulse-usa/camera.md#the-drawn-lean-entity0x854-read-and-measured-2026-10-21).

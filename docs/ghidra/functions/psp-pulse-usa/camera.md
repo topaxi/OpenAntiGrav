@@ -1277,6 +1277,13 @@ input it has, and a second live leg on its consumer). Ported as
 drawn through `oag_render::roll::display_angle` and pinned by
 `crates/trace/tests/steer_lean_ground_truth.rs`.
 
+**Other titles.** Pure's `0x08925054` is this function literal for literal
+([psp-pure-usa/craft-physics.md](../psp-pure-usa/craft-physics.md)). Wipeout HD runs the same
+drawn-lean filter with the stick gain and follower rate read from the team's `<Tilt>` and a
+`10.0` smooth, measured on RPCS3
+([ps3-hdfury-eu/ship-lean.md](../ps3-hdfury-eu/ship-lean.md)); Omega and 2048 inherit HD's.
+Ours carries the gains per craft as `oag_physics::SteerLean`.
+
 **`FUN_0883fab4` is named `Ship_UpdateSteerLeans`** at confidence 90: both its
 outputs are now identified and measured, the cockpit camera's lean (`+0x844`,
 confidence 90) and the drawn lean (`+0x854`, confidence 95). The first filter's
