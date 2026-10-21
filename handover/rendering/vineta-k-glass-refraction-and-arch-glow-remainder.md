@@ -32,6 +32,10 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
   draw counts are unchanged and neither fragment entry point's old code removes it. Cause not isolated.
 - `cl_tunnelrefraction`'s own diffuse-colour scale (0.2549) and doubled grab are read off the disassembly, not pinned
   by a test.
+- **Tech de Ra's glass road: ours is too wide a rainbow, not wrongly rainbow** (2026-10-21, `hd-rainbow-glass`). A cold-boot original is lilac and
+  blue with a pink band; ours adds a yellow-green far band and a rainbow wedge. Read `rpcs3-capture.md`, "Tech de Ra's glass road is iridescent
+  in the original too", for what is ruled out (the ramp sign). Not yet read: the bias/light scaling of the ramp, the undrawn `paraboloidReflectionTex`
+  tint, fog at distance. Talon's far track has no cold-boot capture yet (`rpcs3-hd-cold-pair.sh <lane> 8 <out>`).
 
 ## Next Steps
 

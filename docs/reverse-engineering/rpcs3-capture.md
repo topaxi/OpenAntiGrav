@@ -1252,6 +1252,34 @@ remedy. (3) The patch for `rpcs3-hd-pair.py`: its `set_window` resizes RPCS3's w
 
 **Omega: not checkable** (no PS4 capture path); the original-frame artifact is RPCS3's, specific to HD's capture here. 2048 on Vita3K was not tried.
 
+## Tech de Ra's glass road is iridescent in the original too (2026-10-21, `hd-rainbow-glass`)
+
+**The "original draws the road light grey" reading was the savestate artifact, not the material (confidence 90).** The 13 stored
+HD pairs show Tech de Ra's glass road grey with a white grid; a cold-booted original (`scripts/rpcs3-hd-cold-pair.sh`, circuit index 11,
+an unlocked team because a fresh private RPCS3 config has Harimau locked) shows the same road **lilac and blue with a pink band and a
+faint rainbow sweep**, the white grid and the hex insets laid over it. Ours (`etched_glass_tech`, the facing-ramp combine in
+`mesh/shaders/shade.wesl`) paints the same lilac and blue on the same road, with a stronger yellow-green band at the far end and a
+rainbow wedge that the original draws more muted. So the claim "our rainbow is wrong" is **false** as stated: the sheen is authored.
+
+What was read, so nobody retries the obvious fix:
+
+- The fragment program (`ps3-microcode.py fp-file etched_glass_tech.rcsmaterial 7`) samples the ramp at `-R2.w` with
+  `R2.w = DP3(-R1, N)`; its vertex program writes `TC0..2.w = c[209] - position` (`c[209]` is `eyePositionWorldSpace`), so `R1` points
+  **at the eye** and the coordinate is `+dot(V, N)`, which is what `shade.wesl` already computes. Raw vertex normals on the road are
+  `+y` (towards the camera), facing 0.13 to 0.74 near the Tech de Ra grid.
+- Flipping the coordinate to `-facing` (wraps to the ramp's black half) makes the road grey: whole-frame grey difference against
+  the stored restored frame improved 32.63 to 32.13, and the road crop against the **cold** frame read RMSE 41.5 to 36.4 (near)
+  and 53.4 to 45.3 (far) - but the picture is then wrong (no lilac, no pink), RMSE rewards the flatter colour. It was reverted. A grey road
+  is a worse likeness, not a better one.
+- `dc_iridescent_gradient.gtf` is 512x16: cyan, yellow-green (u 0.09), purple (0.15), blue (0.25), olive (0.34), then fading to black
+  by u 0.72; the road's facing spans about 0.13 to 0.3 there, hence the green-purple-blue sweep.
+
+**Open.** Ours' sweep is wider and more saturated than the original's (yellow-green at the far end, a bright rainbow wedge). Candidates not
+yet read: the `0x512f8e65` bias and the light term `H7` (lightmap on this variant) scale the ramp; the reflection tint
+(`paraboloidReflectionTex`, unit 1, still undrawn); fog (`EX2_SAT` of `TC5.y`) at distance. Talon's Junction's far track was not
+cold-captured (only the stored, restored frame, which shows lilac with yellow lines, not grey either). Omega and 2048: the shared
+`etched_glass` family is read only for the three HD circuits; not checked on the PS4/Vita files.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
