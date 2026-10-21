@@ -46,6 +46,7 @@ fn insn(opcode: u8) -> Instruction {
         const_slot: None,
         negate: [false; 3],
         cond: 0x727,
+        scale: 0,
         end: false,
     }
 }

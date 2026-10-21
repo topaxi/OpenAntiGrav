@@ -49,6 +49,17 @@ pub enum GlowMask {
     /// it, blended ones leave it to a second stamp draw - and only the value
     /// differs, which `shaders/glow.wesl`'s `glow_texel` override switches.
     StampedByTexel,
+    /// **Wipeout HD's mask: what the material's own fragment program writes
+    /// into the output alpha.** The scene target is `A8R8G8B8` and the bloom's
+    /// gate reads its alpha, so each program decides: a constant (`1` for the
+    /// neon signs, `0` for the lit road), or a texture's alpha (the emissive
+    /// pads and lights). `oag_rcs`'s `Program::output_alpha` reads which off
+    /// the microcode and `mesh::rcs::skin::roles` hands the result to
+    /// [`crate::mesh::GpuVertex::glow`]. A **blended** draw leaves the mask
+    /// alone, as the original's colour mask does on all but a handful of its
+    /// blended draws (`docs/rendering/hd-glow-mask.md`), so only the opaque
+    /// and cutout pipelines write it and there is no second stamp draw.
+    StampedByProgram,
 }
 
 impl GlowMask {
@@ -56,6 +67,17 @@ impl GlowMask {
     /// whichever rule gives the value.
     #[must_use]
     pub fn stamps(self) -> bool {
+        matches!(
+            self,
+            Self::Stamped | Self::StampedByTexel | Self::StampedByProgram
+        )
+    }
+
+    /// Whether a **blended** batch is stamped by a second draw: the PSP's and
+    /// the PS2's rules, not the program-written one, whose blended draws
+    /// simply do not touch the mask.
+    #[must_use]
+    pub fn stamps_blended(self) -> bool {
         matches!(self, Self::Stamped | Self::StampedByTexel)
     }
 
@@ -64,7 +86,9 @@ impl GlowMask {
     pub fn writes(self) -> wgpu::ColorWrites {
         match self {
             Self::Protected => wgpu::ColorWrites::COLOR,
-            Self::Written | Self::Stamped | Self::StampedByTexel => wgpu::ColorWrites::ALL,
+            Self::Written | Self::Stamped | Self::StampedByTexel | Self::StampedByProgram => {
+                wgpu::ColorWrites::ALL
+            }
         }
     }
 
@@ -74,7 +98,9 @@ impl GlowMask {
     #[must_use]
     pub fn blend_writes(self) -> wgpu::ColorWrites {
         match self {
-            Self::Stamped | Self::StampedByTexel => wgpu::ColorWrites::COLOR,
+            Self::Stamped | Self::StampedByTexel | Self::StampedByProgram => {
+                wgpu::ColorWrites::COLOR
+            }
             other => other.writes(),
         }
     }

@@ -319,6 +319,7 @@ pub(super) fn build_pad_class(
         lightmaps: seconds,
         material_slots,
         material_specular_exponent,
+        material_glow,
         material_variants,
         emissive,
         alpha_test_ref,
@@ -341,6 +342,8 @@ pub(super) fn build_pad_class(
         &mut report,
     );
     out.material_specular_exponent = material_specular_exponent;
+    out.material_glow = material_glow;
+    out.glow_from_program = true;
     out.material_variants = material_variants;
     out.alpha_test_ref = alpha_test_ref;
     out.material_anim = material_anim;

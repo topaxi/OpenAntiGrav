@@ -17,6 +17,15 @@ override glow_stamp: f32 = 0.0;
 // `GlowMask::StampedByTexel` and docs/rendering/ps2-bloom.md.
 override glow_texel: f32 = 0.0;
 
+// **Whether the mask is what the material's own program writes** - 1.0 only for
+// a drawable built with `mesh_render::GlowMask::StampedByProgram`, Wipeout HD's
+// rule. The per-vertex `glow` carries the program's alpha lane: `>= 0` is a
+// constant the program writes, `< 0` is the picture's alpha times `-glow` (the
+// program multiplies a texture's alpha channel by a constant). See
+// `oag_rcs::rcsmaterial::fragment::Program::output_alpha` and
+// docs/rendering/hd-glow-mask.md.
+override glow_program: f32 = 0.0;
+
 // `slots::GLOW_BATCH`: the batch carries the glow bits.
 const SLOT_GLOW_BATCH: u32 = 8192u;
 
@@ -24,7 +33,8 @@ const SLOT_GLOW_BATCH: u32 = 8192u;
 // PSP's rule, the fragment's own alpha on a glow batch on the PS2's.
 fn stamp_value(in: VertexOutput, shaded_alpha: f32) -> f32 {
     let ps2 = select(0.0, shaded_alpha, (in.slots & SLOT_GLOW_BATCH) != 0u);
-    return mix(in.glow, ps2, glow_texel);
+    let program = select(in.glow, -in.glow * shaded_alpha, in.glow < 0.0);
+    return mix(mix(in.glow, ps2, glow_texel), clamp(program, 0.0, 1.0), glow_program);
 }
 
 // The opaque and cutout pipelines' alpha: `1.0` as it always was, or the

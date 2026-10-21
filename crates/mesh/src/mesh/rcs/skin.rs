@@ -671,6 +671,7 @@ pub(super) fn roles(
     let mut out = Vec::with_capacity(model.materials.len());
     let mut specular_exponent = Vec::with_capacity(model.materials.len());
     let mut colour_factor = Vec::with_capacity(model.materials.len());
+    let mut glow = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
         let mut packed = slots::DEFAULT;
         if material.lightmap_entry().is_some() {
@@ -749,7 +750,10 @@ pub(super) fn roles(
         // black surface, the loudest possible way to be wrong. Caught by the
         // picture on the first run of this reading.
         let bound = seconds.get(slot).is_some_and(Option::is_some);
-        if let (Some(program), true) = (program, bound) {
+        // The (unit, channel) the shader's coverage alpha samples: the first
+        // texture's alpha unless the reading below re-points it.
+        let mut routed = (u8::try_from(first_unit).unwrap_or(u8::MAX), 3u8);
+        if let (Some(program), true) = (program.as_ref(), bound) {
             let texels = program.output_texels();
             let colour = texels[0].merge(texels[1]).merge(texels[2]);
             // **Never the lightmap.** When the second slot is the circuit's
@@ -777,11 +781,19 @@ pub(super) fn roles(
                 if is_second(u32::from(unit)) {
                     packed |= slots::ALPHA_FROM_SECOND;
                 }
+                routed = (unit, channel);
             }
         }
+        glow.push(super::glow::glow_of(
+            program.as_ref(),
+            material,
+            routed,
+            report,
+        ));
         out.push(packed);
     }
     Roles {
+        glow,
         packed: out,
         specular_exponent,
         colour_factor,
@@ -796,6 +808,8 @@ pub(super) fn roles(
 /// every material's microcode twice for no reason.
 pub(super) struct Roles {
     pub(super) packed: Vec<u32>,
+    /// The glow mask each material's program writes - see [`super::glow`].
+    pub(super) glow: Vec<f32>,
     pub(super) specular_exponent: Vec<f32>,
     /// Whether each material's program takes `VertexColour1` as a factor on
     /// its light - see `light_inputs`.

@@ -350,6 +350,8 @@ pub fn build(
     model.lightmaps.clear();
     model.material_slots.clear();
     model.material_specular_exponent.clear();
+    model.material_glow.clear();
+    model.glow_from_program = false;
     model.material_variants.clear();
     model.material_anim.clear();
     model.anim_tracks.clear();

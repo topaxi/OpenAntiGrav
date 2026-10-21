@@ -24,6 +24,7 @@ pub(super) struct MaterialSetup {
     pub(super) lightmaps: TextureSlots,
     pub(super) material_slots: Vec<u32>,
     pub(super) material_specular_exponent: Vec<f32>,
+    pub(super) material_glow: Vec<f32>,
     pub(super) material_colour_factor: Vec<bool>,
     pub(super) material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
     /// Per material slot: whether the material ships a `StaticQuake` vertex
@@ -57,6 +58,7 @@ impl MaterialSetup {
             lightmaps: model.lightmaps.clone(),
             material_slots: model.material_slots.clone(),
             material_specular_exponent: model.material_specular_exponent.clone(),
+            material_glow: model.material_glow.clone(),
             material_colour_factor: model.material_colour_factor.clone(),
             material_variants: model.material_variants.clone(),
             material_quake: model.material_quake.clone(),
@@ -89,6 +91,7 @@ pub(super) fn material_setup(
         packed: mut material_slots,
         specular_exponent: material_specular_exponent,
         colour_factor: material_colour_factor,
+        glow: material_glow,
     } = roles(
         model,
         &material_variants,
@@ -246,6 +249,7 @@ pub(super) fn material_setup(
         lightmaps: seconds,
         material_slots,
         material_specular_exponent,
+        material_glow,
         material_colour_factor,
         material_variants,
         material_quake,

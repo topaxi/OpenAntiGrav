@@ -22,6 +22,8 @@
 use super::Declared;
 
 mod alpha_gate;
+mod glow_alpha;
+pub use glow_alpha::Lane;
 mod normal_read;
 mod opcode;
 
@@ -180,6 +182,10 @@ pub struct Instruction {
     /// (`TR` on every lane) is the unconditional default - see
     /// `scripts/ps3-microcode.py`'s `fp_cond`, confidence 80 there.
     pub cond: u16,
+    /// The instruction's output scale code, `SRC1` word bits 28-30: `0` none,
+    /// `1` x2, `2` x4, `3` x8, `5` /2, `6` /4, `7` /8. `5` is measured
+    /// (`scripts/ps3-microcode.py`, `FP_SCALE`); the rest follow nouveau.
+    pub scale: u8,
     /// Whether this instruction ends the program.
     pub end: bool,
 }
@@ -306,6 +312,7 @@ impl Program {
                     bits[2] & (1 << 17) != 0,
                 ],
                 cond: ((bits[0] >> 18) & 0x7ff) as u16,
+                scale: ((bits[1] >> 28) & 7) as u8,
                 end: d0 & 1 != 0,
             };
             let done = insn.end;

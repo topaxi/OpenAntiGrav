@@ -197,6 +197,7 @@ mod refraction;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
+mod glow;
 mod ice;
 mod probe_lit;
 pub mod psp2;
@@ -261,6 +262,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
     let material_slots = &tables.material_slots;
     let material_specular_exponent = &tables.material_specular_exponent;
     let material_colour_factor = &tables.material_colour_factor;
+    let material_glow = &tables.material_glow;
     let material_quake = &tables.material_quake;
     let material_tangent = &tables.material_tangent;
     let material_anim = &tables.material_anim;
@@ -306,6 +308,7 @@ fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Su
         cutout,
         roles,
         specular_exponent,
+        glow: material_glow.get(slot).copied().unwrap_or(0.0),
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
         quake: material_quake.get(slot).copied().unwrap_or(false),
         tangent: material_tangent.get(slot).copied().unwrap_or(false),
@@ -395,6 +398,9 @@ struct Surface {
     /// This material's specular exponent, handed to every vertex this
     /// surface emits - see `mesh::vertex::GpuVertex::specular_exponent`.
     specular_exponent: f32,
+    /// The glow mask this material's program writes, `GpuVertex::glow`'s
+    /// encoding - see [`glow`].
+    glow: f32,
     /// Whether the material's program takes `VertexColour1` as a factor on its
     /// light - see `skin::light_inputs`. Marks the chunk's vertices through
     /// `GpuVertex::sun_mask`.
@@ -580,7 +586,7 @@ fn emit(
                 None => 1.0,
             },
             specular_exponent: surface.specular_exponent,
-            glow: 0.0,
+            glow: surface.glow,
             quake: f32::from(u8::from(surface.quake)),
             tangent: tangents
                 .and_then(|t| t.get(k))
@@ -745,6 +751,7 @@ fn build_with_options(
         lightmaps: seconds,
         material_slots,
         material_specular_exponent,
+        material_glow,
         material_colour_factor,
         material_variants,
         material_quake,
@@ -777,6 +784,9 @@ fn build_with_options(
     out.material_variants = material_variants;
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
+    // Wipeout HD's mask is what each program writes - see `glow`.
+    out.material_glow = material_glow;
+    out.glow_from_program = true;
     out.material_colour_factor = material_colour_factor;
     out.material_quake = material_quake;
     out.material_tangent = material_tangent;
