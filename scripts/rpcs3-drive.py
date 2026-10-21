@@ -239,6 +239,12 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
         edits[("Video", "Anisotropic Filter Override")] = str(e["anisotropic_override"])
         edits[("Video", "Stretch To Display Area")] = str(e["stretch_to_display_area"]).lower()
         edits[("Video", "Write Color Buffers")] = str(e["write_color_buffers"]).lower()
+    # Experiment overrides, `Section:Key=value;Section:Key=value` (a setting study such as the HD
+    # artifact sweep): applied last, so they win over the profile, and a key with no line refuses.
+    for item in filter(None, os.environ.get("OAG_RPCS3_EXTRA_EDITS", "").split(";")):
+        sk, _, val = item.partition("=")
+        sec, _, key = sk.partition(":")
+        edits[(sec.strip(), key.strip())] = val.strip()
     if GDB_SERVER:
         edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
     elif os.environ.get("OAG_RPCS3_NO_GDB") == "1":

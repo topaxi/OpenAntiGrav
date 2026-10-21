@@ -91,6 +91,8 @@ PS2: the original's hull fills about 1.35 times the width ours does (the camera 
 
 2. ~~**Engine glow at rest**~~ **The same artifact on the PSP, closed**: ours draws the purple glow at tick 300 on the PSP pairs. **PS2 still differs**: the original's flame is a narrow magenta plume of sprites below a white-hot nozzle, ours the PSP-style purple star. **Looked at 2026-10-20 (`hull-points-ps2`), not closed**: the original draws one narrow four-fin spike on the centre line (two passes, grey and `(155,0,124)`, fading) under a white-hot plate; ours plays the `.POB` (halo, plate) and hides the plume at rest. The spike has `shipboost.vex`'s shape and size but sits on the centre line, where that file's anchors are at `+-0.9`; forcing the plume on draws its two side flares. Not identified: [trail-ribbon.md](../../docs/rendering/trail-ribbon.md) "Pulse PS2 at rest". Next: try the `engine_flare` locator as the anchor, and read the draw's colour source.
 
+- HD Moa Therma's original carries green noise on its stand glass; ten RPCS3 setting variants do not remove it and the pair profile stays. Open: pin the band's draw and dump the bound texture (`docs/reverse-engineering/rpcs3-capture.md`, "Green noise on Moa Therma's stand glass"). Until then Moa Therma's pair is a glass-region outlier, not a bug in ours.
+
 ## Next Steps
 
 1. ~~Recover the PS2 camera~~ **Done 2026-10-21** (see the PS2 bullet above). Open: more PS2 states (a menu route for `pcsx2-drive.py`), a race shot with the field.

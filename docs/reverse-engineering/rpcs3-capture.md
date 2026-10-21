@@ -1163,6 +1163,43 @@ keyed on it misses every airborne frame. Results:
 [ps3-hdfury-eu/autopilot.md](../ghidra/functions/ps3-hdfury-eu/autopilot.md).
 **Omega: not checkable** (no PS4 capture path).
 
+## Green noise on Moa Therma's stand glass: no RPCS3 setting removes it (2026-10-21, `hd-reference-artifacts`)
+
+The maintainer read the HD reference frames as carrying texture artifacts ("greenish noisy windows" on Moa Therma). Measured on
+`hd-timetrial-moa-therma-harimau-classic-start`, restored and `Restart Race`d under the compare profile, one setting changed per
+boot with `scripts/rpcs3-hd-variant.sh <lane> moa-therma <out> 'Video:Key=value;...'` (overrides through `OAG_RPCS3_EXTRA_EDITS`,
+written into the private config and the game's custom config; read the effective value back from `RPCS3.log`).
+
+**What it looks like (seen on every boot, confidence 85).** Smooth, low-resolution colour blobs with a green cast and the window
+frames' vertical seams, in the glass band under the grandstand crowd (left of the frame, 0,270 to 640,360 at 1920x1080) and on the
+right balcony (1344,0 to 1920,250). Ours draws that band dark blue. It is not a decoded disc texture's look: the circuit's
+`glass_reflect` window texture (`and_1cruisewindow.gtf`, 128x64) decodes clean.
+
+**Deterministic, not memory garbage (confidence 80).** The same camera on five boots (the shipped pair, scale 100, strict, CPU blit,
+texture flushing, shader precision High) differs inside the band by 1.8 to 8 grey levels mean absolute against noise of about 22
+(green-excess standard deviation), and the differences are the clock and the ship's lap-time-dependent pose, not the pattern.
+
+**Settings tried, none changes it (one boot each, so seen once; the noise statistics are within 0.3 of the baseline, green-excess
+std 21.4 to 22.1 against 22.1):** `Resolution Scale` 100, `Strict Rendering Mode`, `Shader Precision` High (stock here is Ultra),
+`Force CPU Blit`, `Strict Texture Flushing`, `Read Color Buffers`, `Read Depth Buffer` + `Write Depth Buffer`, `Accurate RSX
+reservation access`, `Disable On-Disk Shader Cache`, `Multithreaded RSX` off. `Write Color Buffers` off makes it worse (green-excess
+std 28 and 38). **OpenGL could not be compared**: on the private Xvfb RPCS3 gets llvmpipe and produced no frame inside the capture
+window; not retried. Not tried: an async shader mode other than the stock, `Asynchronous Texture Streaming` off.
+
+**Which pairs show it.** Share of 24 px blocks whose green excess is above 12 in the original and below 5 in ours, over the 13
+shipped pairs: Moa Therma 0.090, Anulpha Pass 0.028, Sol 2 0.026, Tech de Ra 0.022, Ubermall 0.021, the others 0.004 to 0.019.
+Moa Therma is the one outlier; no other pair carries a patch this large.
+
+**Authored or emulator: not settled.** The shape (a smooth low-resolution picture of the surroundings, window seams) is what a
+runtime paraboloid/planar probe sampled by the glass looks like, the engine-supplied `paraboloidReflectionTex` the
+[rcsmaterial](../formats/rcsmaterial.md) glass families declare and ours does not draw; the sea's probe at `0xc4065380` read as the
+same dither until `Write Color Buffers` was on (above). Which slot paints the band was not pinned: tint renders put it at slot 227
+(`mar_diffuse_specular`, `dc_whiteconcretewall_b`), 604 or 460 (`glass_reflect`, `martin_alum_grill`), and skipping `glass_reflect`
+changes ours' band by under 1 grey. What would settle it: pause on the frame, read the texture the band's draw binds (the
+bound-texture recipe in "Racing a chosen race type" below) and dump its VRAM. A clean probe with a green screen means a sampling or
+format problem in RPCS3; a green probe means the original wrote it (or RPCS3 never filled it). Confidence that no profile setting
+tried removes it: 75. The profile in `scripts/compare-environment.toml` is unchanged.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.
