@@ -119,6 +119,7 @@ pub(super) fn damage_lights(
             offset: SCROLL_RATE,
             scale: STATE_STEP * DAMAGE_STATE,
             rate: DAMAGE_LIGHTS_RATE,
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == entry).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

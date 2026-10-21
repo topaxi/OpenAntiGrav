@@ -28,6 +28,7 @@ mod hd_airbrake_flaps_ground_truth;
 mod hd_ambient_role_census_ground_truth;
 mod hd_amphiseum_wall_material_ground_truth;
 mod hd_behind_glass_ground_truth;
+mod hd_billboard_glass_ground_truth;
 mod hd_emissive_glow_ground_truth;
 mod hd_emissive_lit_path;
 mod hd_gantry_curve_replay_ground_truth;

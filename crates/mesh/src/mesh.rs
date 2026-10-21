@@ -317,7 +317,9 @@ mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
-pub use emissive::{Emissive, REFLECTION_RATE, ZONE_EXEMPT_RATE};
+pub use emissive::{
+    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, REFLECTION_RATE, ZONE_EXEMPT_RATE,
+};
 
 mod flap;
 pub use flap::Flap;

@@ -247,6 +247,15 @@ pub struct Report {
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
+    /// Lit billboards drawn as the picture times `k * (glow.a + light * glow.rgb)`
+    /// rather than with the glow added - see `super::billboard_glass`.
+    pub billboard_multiplied: usize,
+    /// Stand glass whose `bwgradient` multiplies the lit sum rather than being
+    /// added; its probe reflection and its facing-ratio alpha are NOT drawn - see
+    /// `super::billboard_glass`.
+    pub glass_bw_multiplied: usize,
+    /// Billboards and stand glass that matched but found the glow table full.
+    pub billboard_glass_unbound: usize,
     /// Hull materials whose `IBL` variant reads the reflection probe, tagged in
     /// the glow table - see `super::probe_lit`.
     pub probe_lit_bound: usize,
@@ -459,6 +468,20 @@ impl Report {
             n => format!(
                 ", {n} reflective hull material(s) NOT tagged (glow index taken, table full \
                  or no reflectivity)"
+            ),
+        } + &match self.billboard_multiplied {
+            0 => String::new(),
+            n => format!(", {n} lit billboard material(s) drawn as the picture times the glow"),
+        } + &match self.glass_bw_multiplied {
+            0 => String::new(),
+            n => format!(
+                ", {n} stand-glass material(s) with bwgradient multiplied in (probe reflection and \
+                 facing-ratio alpha NOT drawn)"
+            ),
+        } + &match self.billboard_glass_unbound {
+            0 => String::new(),
+            n => format!(
+                ", {n} billboard or stand-glass material(s) left additive (glow table full)"
             ),
         } + &match self.light_cone_bound {
             0 => String::new(),

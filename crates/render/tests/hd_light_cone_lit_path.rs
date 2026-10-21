@@ -117,6 +117,7 @@ fn entry(k: f32, rate: f32) -> Emissive {
         offset: 0.0,
         scale: 1.0,
         rate,
+        program: [0.0; 2],
     }
 }
 

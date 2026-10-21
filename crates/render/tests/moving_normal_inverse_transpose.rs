@@ -217,6 +217,7 @@ fn flat(diffuse_alpha: u8, layered: bool) -> Model {
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,
+            program: [0.0; 2],
         }];
     }
     m.vertices = vertices;

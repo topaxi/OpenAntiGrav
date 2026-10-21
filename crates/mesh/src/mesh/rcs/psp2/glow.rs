@@ -179,6 +179,7 @@ fn layer_of(material: &Material) -> Option<(Emissive, String, String)> {
             offset,
             scale,
             rate,
+            program: [0.0; 2],
         },
         emissive.to_string(),
         diffuse.to_string(),

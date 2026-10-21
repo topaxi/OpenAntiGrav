@@ -148,6 +148,7 @@ pub(super) fn water(
                     offset: 0.0,
                     scale: 0.0,
                     rate: WATER_FLAG,
+                    program: [0.0; 2],
                 };
                 let index = table.iter().position(|seen| *seen == layer).or_else(|| {
                     (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

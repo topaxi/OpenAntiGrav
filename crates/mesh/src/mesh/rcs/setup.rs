@@ -128,6 +128,17 @@ pub(super) fn material_setup(
     // After the glow table, because it clears a slot's `ADD_SECOND` and
     // writes its own entry into the same table.
     let mut emissive = emissive;
+    // The billboard and the stand glass keep `ADD_SECOND` and swap the shared
+    // additive entry for their program's own.
+    super::billboard_glass::billboard_glass(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &seconds,
+        &mut emissive,
+        report,
+    );
     let (mut mag_emissive, mut wave_maps) = super::mag_wave::mag_wave(
         model,
         &material_variants,

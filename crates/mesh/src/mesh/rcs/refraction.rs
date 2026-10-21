@@ -137,6 +137,7 @@ pub(super) fn refraction(
             },
             scale: if picture { 1.0 } else { 2.0 },
             rate: f32::from(u8::from(picture)),
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

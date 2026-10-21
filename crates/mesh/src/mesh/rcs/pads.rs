@@ -477,7 +477,14 @@ pub(super) fn emit_chunk(
                 (mesh, model_blob, submesh, stride),
                 (
                     lightmap_texcoords,
-                    super::ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
+                    super::billboard_glass::second_uv(
+                        surface.roles,
+                        &out.emissive,
+                        mesh,
+                        model_blob,
+                        submesh,
+                        stride,
+                    ),
                 ),
             );
             // The authored tangent, where the material reads a normal map (`hull_normal`); the

@@ -256,6 +256,7 @@ pub fn exempt_served_placeholders_from_zone(model: &mut Model, served: &[u32]) -
         offset: 0.0,
         scale: 1.0,
         rate: ZONE_EXEMPT_RATE,
+        program: [0.0; 2],
     };
     let index = match model.emissive.iter().position(|seen| *seen == entry) {
         Some(index) => Some(index),

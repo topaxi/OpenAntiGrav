@@ -100,6 +100,7 @@ fn model(pad: &Pad) -> Model {
         offset: 0.0,
         scale: 1.0,
         rate: 0.0,
+        program: [0.0; 2],
     }];
     model.vertices = vec![
         vertex([-0.9, -0.9, 0.5], slots),
