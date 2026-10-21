@@ -1112,7 +1112,16 @@ figures, `scale` reading exactly `0.75` throughout (see above). `dot(D1,right)`
 and `dot(D1,up)` mirror this (`-scale*sin(angle)` and `scale*cos(angle)`
 respectively) at every sample and are omitted from the table for space.
 
-**What this means for the ship's own roll:** for a positive `entity+0x880`
+**Corrected 2026-10-21: the paragraph below read row 0 as the right wing, and it is
+the left.** Row 0 of the recorded basis is the hull's left (`Basis::LeftUpForward`,
+measured: forward rotates toward row 0 on a left turn; `right x up = forward` in a
+right-handed Y-up frame puts that row on the left). So for a positive `entity+0x880` the
+**left** wingtip rises, and a `[1, 2, 1]` gesture (tap LEFT first, `+0x87c` toward `-1.0`,
+measured live in the table above) drops the **left** wing, which is what a player's own
+gesture suggests. `ROLL_DIRECTION` is `+1.0`; the `-1.0` it shipped as drew the roll and the
+steering lean mirrored. What follows is the original reading, kept for its numbers.
+
+**What this means for the ship's own roll (superseded as above):** for a positive `entity+0x880`
 (same sign as `roll_phase`, since `ease` is odd and monotone), the physics-
 right axis gains a positive `up` component - **the right wingtip rises**.
 Since `right`, `up` and `forward` are a right-handed triple here
