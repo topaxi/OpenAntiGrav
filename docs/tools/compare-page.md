@@ -105,10 +105,10 @@ binary that rendered ours is recorded by hash.
 
 **The race clock** is the state difference that mattered most: the original's HUD clock runs on from the state
 (PPSSPP 40 s after GO on the grid states) and its GO board fades and its record panel counts down with it, so ours
-runs `GO_TICK = 272` ticks (our countdown, `oag_race::COUNTDOWN_TICKS`; Pulse PSP's pair script until 2026-10-21 used 276, which put ours' clock 0.067 s ahead; HD's and PS2's still do, unmeasured) plus the original's clock times 60 (`--ours-ticks`). The original's clock
+runs `GO_TICK` ticks (our countdown, `oag_race::COUNTDOWN_TICKS`, 272: every pair script and `compare-resting-yaw.py` reads it from the source with `compare_env.go_tick()` since 2026-10-21, `rerender-all`, where HD's, PS2's and the resting-yaw script's own copies still said 276; ours has one countdown for every title, so there is one number, and a platform table may carry a `go_tick` of its own once a title's is measured to differ) plus the original's clock times 60 (`--ours-ticks`). The original's clock
 is read out of its RAM: PPSSPP f32 seconds at `0x08B344B0` (the CPU is stopped straight after the load so it stands
 still), HD f32 at craft `+0x7014` (read in the same pause as the pose), PS2 f32 at EE `0x70EE9C` of the state file
-(the HUD reads 0.19 s under it). With it the GO board, the record panel and the HUD clock match on the Pulse PSP and HD
+(the HUD reads it **less 4.25 s**, not 0.19: see "The presented frame" below). With it the GO board, the record panel and the HUD clock match on the Pulse PSP and HD
 test pairs. **A craft resting after GO turns, in the original as in ours** (bank-to-yaw; ours unposed lands within 0.101
 degrees of the original's heading on all 24 Pulse PSP pairs and 0.694 on all 13 HD pairs, see
 [grid state](../physics/grid-state.md#a-resting-craft-after-go-turns-in-the-original-too-2026-10-20-resting-yaw)).
@@ -146,6 +146,32 @@ difference over the 24 pairs **9.24 to 6.67** (every pair lower, Fort Gale Black
 original's; table in the handover thread). Pulse PS2: the camera is now the original's own (2026-10-21, `ps2-widescreen-pairs`: eye, axes and fov
 read from the camera object in the state's EE RAM, fed as `cam_*` columns and `--camera-fov`); `pcsx2-pulse-pair.py` still reads no world clock; the one PS2 pair is a chase view.
 
+## The presented frame lags the stop, per platform (2026-10-21, `rerender-all`)
+
+A screenshot is the last PRESENTED frame, which is a little older than the RAM read next to it. Measured per platform, and what each pair script does about it:
+
+- **Pulse PSP: one tick.** `scripts/psp-presented-lag.py` loads the race state (Autopilot flying at about 163 units/s, the camera moving several pixels a tick), records `psp-trace.py --camera` rows with a screenshot at every stop and
+  renders ours at each of the five rows before a shot (`--pose-from trace.csv --pose-tick k`); the row with the smallest mean grey difference to the shot is `i - 1` on **all seven shots** (21.3 against 26.6 and up for every other row;
+  the sharp minimum is what makes it a measurement). The older "about two frames" was a fire-and-look estimate. `psp-pulse-pair.py` reads the pose, camera, field and HUD at stop 0 and takes the screenshot at stop
+  `PRESENTED_LAG = 1` (`--shot-every 1`), recorded in `pair.json` `original.presented_lag_ticks`. Not measured: a lag other than 1 on a state that loads in a different phase (all runs were one state).
+- **The HUD text is one tick older again than the picture.** `Hud_Update` reads `PLAYER_HUD` before this tick's `PlayerStatus_Update`, so the frame's speed text is the block as the previous tick left it. Live, 3 of 3 runs: the frame
+  read 390, 383 and 377 km/h, the block read at the CPU stop one tick before the pose's stop (the freeze after the state load) held 390.66, 383.24 and 377.20, and body `|velocity| * 3.6` at the pose's stop read 392.08, 384.52 and 378.15.
+  **That is the 572 against 587 of `pulse-psp-race/talons-alongside`**: `--hud-state` imposes whatever the pair script passes (`CaptureHud::speed_kmh` replaces the readout's own), and the script passed `|v| * 3.6` of the row read at
+  the stop. It now reads the `PLAYER_HUD` block itself (the registry entry whose `+0x24` is the player's lap time bit for bit, `psp-race-field.py` `Field.hud_kmh`) at the freeze and imposes that
+  (`original.hud.speed_kmh`, the body value kept beside it as `body_speed_kmh`); the bar width follows (the frame's bar and text agree). Not done: the other `--hud-state` fields (place, lap, lap time, shield) are read at the pose's
+  stop, so they can be a tick ahead of the frame's text too; the lap clock tenths matched on every pair looked at.
+- **Pulse PS2: the grab is a separate process seconds after the load, and the HUD clock is the RAM clock less 4.25 s.** The RAM race clock (EE `0x70EE9C`) runs from the start of the countdown, the HUD's lap clock from GO. Three grabs of one
+  state, the HUD digit read off the frame against the RAM clock at the key press and at the file's appearance (`grab_with_clock`, in-process, a few tenths of a second wide where the old `shot` subprocess plus a clock read either side
+  spanned 0.7 to 1.65 s): 0:20.9 in 25.10..25.77, 0:22.2 in 26.24..27.89, 0:21.6 in 25.73..25.89, so the offset is **4.2 to 4.29 s**; it was `0.19` (read off a state where the two were not compared at one instant), which put ours' HUD clock 4.4 to
+  4.7 s ahead of the frame's (`0:25.3` against `0:20.9`). 4.25 s is 255 ticks, **not our countdown (272) and not measured anywhere else**: the PS2's own countdown or clock start differs, recorded as `CLOCK_HUD_OFFSET_S`, and it is the one place a title's
+  own countdown shows up. The craft rests on the grid in this state, so its pose from the state file is the grab's; a moving PS2 craft would need the pose read live at the grab. The state is frame-deterministic (the same bracket twice) but
+  the grab's offset from it is not (it moved with the machine's load).
+  The profile's PS2 aspect was `ps2` (4:3), which fits the picture inside a 16:9 window with black bars: ours came out pillarboxed against an original that fills the 1280x720 frame (mean grey difference 13.4 to 27.6 on that alone);
+  it is `wide` now.
+- **HD: no lag to correct after the wait for the RSX.** `rpcs3-drive.py capture` reads the pose in the pause and `OAG_CAPTURE_FLUSH=3` lets the RSX present what it was handed, so frame and RAM are one instant: the existing `hd-race/talons-pack`
+  hull check (holding the player back by one tick, 2.4 units, already makes the hull far too large) is the measurement, and the refresh's HUD lap clock against RAM below is the second. `presented_lag_ticks` is not applied for HD.
+  HD's window opens at x = 240 on the 2000-pixel Xvfb, so a 1920-wide frame was clipped to 1760 and every pair refused ("original image size 1760x1080"); `rpcs3-hd-pair.py` waits for the resize to land and moves the window to the origin.
+
 ## Capturing a pair per title
 
 Every recipe runs in its own display and data directory, muted, and is stopped by PID. A pair is only a pair when
@@ -161,6 +187,21 @@ its `pair.json` has no failed check.
 | Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. No race was reached. Profile row `omega`: 1920x1080 |
 
 **HD pairs run with Pilot Assist on** (`pilot_assist = "on"` in the `hd-fury` profile): the original's states have it on, and its indicator (the bracket under the craft) is part of the frame; ours takes `--pilot-assist on` and the environment line says so (2026-10-21, [pilot-assist.md](../ghidra/functions/ps3-hdfury-eu/pilot-assist.md)).
+
+**Re-making every pair with one command (2026-10-21, `rerender-all`).** `just compare-rerender-all [--out DIR] [--platform psp|rpcs3|pcsx2] [--only SUBSTRING] [--resume] [--dry-run]`
+(`scripts/compare-rerender-all.py`) does what the next paragraph needs a person to do per title: per platform it boots the emulator
+headless on its own Xvfb, HOME, port and config from the profile (`--lane` names `data/scratch/<lane>/`; `--psp-display 93 --psp-port 9317`, `--rpcs3-display 94 --rpcs3-gdb 2349`,
+`--pcsx2-display 92 --pcsx2-slot 28015` are the defaults), restores each pair's state (RPCS3: `emu-restore-state.sh`, `--pause` for a pair whose argv has `--field`, `--restart` for a
+Time Trial taken after `Restart Race`, with `OAG_COMPARE_PLATFORM=hd-fury`; PPSSPP and PCSX2 load the state inside the pair script), re-runs the pair script from the `argv` in its `pair.json`
+with the current `oag-game` (`compare-rerender.py`'s `remake`, which remaps a `--state` kept in another lane's worktree to `data/saves/<title>/` and the recorded `--port`, `--home` and `--slot` to this
+instance's), stops the emulator by the PID its start script recorded, rebuilds `fresh.toml` and `race-shots.toml` next to the pairs, and prints and writes (`DIR/rerender-all.md`) one table: per pair the drift of the
+original's own state between the two captures, and `edge_ncc`, `rmse` and the **mean grey difference** (the mean absolute grey difference over the frame, 0-255, now recorded in `pair.json` `overlap.mean_grey`)
+before and after, with the mean per platform. `--out DIR` copies the set there and re-makes the copy (nothing under the source is written; the recorded `--out` of each re-made pair is the copy's, so adopt a
+pair by copying its directory and setting `--out` back, and regenerate the manifest with `compare_env.py manifest`); `--resume` skips pairs `DIR/rerender-all.json` already holds. A pair refused by a parity check,
+failed, or timed out (540 s; an emulator that stalls is retried once, a refusal is final) keeps its old files and makes the exit status non-zero. A pair made before `--meta` existed gets its hand-written
+manifest fields (id, title, track, craft, state, note) copied from the manifest entry that lists it into `pair.json` `meta` and into `argv`, so a regenerated manifest and every later re-make carry them.
+The PPSSPP state load is not tick-exact (the CPU stops a few ticks to a second after the load), so two captures of one state differ in clock and, in a race pair, in pose: the table's drift column says by how much,
+and ours follows whichever stop was captured.
 
 **Re-making a pair in place.** When the renderer changes, `just compare-rerender [--only <substring>] [dir]`
 (`scripts/compare-rerender.py`, default `data/reference/compare-page`) re-runs each pair's script with the arguments
