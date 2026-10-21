@@ -55,6 +55,19 @@ def platform(key):
     return out
 
 
+def go_tick(plat=None):
+    """Our race's tick at which the race clock leaves zero: the countdown's length, read from the source of truth
+    (`oag_race::COUNTDOWN_TICKS`, `crates/race/src/state.rs`) rather than copied into each pair script. A platform
+    table may carry its own `go_tick` once a title's countdown is measured to differ; today ours has one length
+    for every title, so every platform reads the same number."""
+    if plat and "go_tick" in plat:
+        return int(plat["go_tick"])
+    m = re.search(r"pub const COUNTDOWN_TICKS: u64 = (\d+);", (ROOT / "crates/race/src/state.rs").read_text())
+    if not m:
+        sys.exit("compare_env: COUNTDOWN_TICKS not found in crates/race/src/state.rs")
+    return int(m.group(1))
+
+
 def size_text(plat):
     return "%dx%d" % tuple(plat["output"])
 
@@ -346,6 +359,10 @@ def overlap_score(theirs, ours):
         saa = sum((x - ma) ** 2 for x in a)
         sbb = sum((y - mb) ** 2 for y in b)
         out["edge_ncc"] = sab / ((saa * sbb) ** 0.5) if saa and sbb else 0.0
+        # mean absolute grey difference over the frame, 0-255 (the number the handover threads quote)
+        g = subprocess.run(["magick", str(theirs), str(ours), "-colorspace", "Gray", "-compose", "difference", "-composite",
+                            "-format", "%[fx:mean*255]", "info:"], capture_output=True, text=True, check=True)
+        out["mean_grey"] = float(g.stdout)
     except Exception as exc:  # noqa: BLE001 - a score is a convenience, never a reason to lose a pair
         out["error"] = str(exc)
     return out

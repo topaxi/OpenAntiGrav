@@ -34,6 +34,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+
+#: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
+#: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
+GO_TICK = ce.go_tick()
 import pcsx2_pine  # noqa: E402
 import pcsx2_state  # noqa: E402
 
@@ -43,8 +47,6 @@ CLOCK_ADDRESS = 0x70EE9C
 CLOCK_TOLERANCE_S = 0.1
 #: The HUD's clock reads 0.19 s under the RAM float (0:23.2 against 23.39, one state), so ours runs to the HUD's.
 CLOCK_HUD_OFFSET_S = 0.19
-#: Our race's tick at which the clock leaves 0 (Pulse's own countdown, measured on PSP and HD alike).
-GO_TICK = 276
 
 
 def run(cmd, **kw):

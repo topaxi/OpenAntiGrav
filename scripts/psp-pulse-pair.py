@@ -20,6 +20,7 @@ of the basis, convention and fov, not of the simulation (`scripts/compare-restin
 """
 
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -33,7 +34,6 @@ CLOCK_ADDRESS = 0x08B344B0
 #: on the original: the lap clock is 0.0 until the tick the thrust gate opens). It was 276 here until 2026-10-21,
 #: fitted to `0:00.4` at tick 300 and `0:40.4` at tick 2700, which truncated tenths cannot tell from 272; that put
 #: ours' HUD clock 4 ticks (0.067 s) ahead of the original's in every pair (ours showed `0.13.3` against `0.13.2`).
-GO_TICK = 272
 
 #: `g_weapons_enabled` (byte, 0 = off), docs/ghidra/functions/psp-pulse-usa/shield.md.
 WEAPONS_ENABLED = 0x08B30FA8
@@ -50,6 +50,17 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+
+#: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
+#: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
+GO_TICK = ce.go_tick()
+
+#: How many stops of the player's `Ship_UpdateCraft` the presented frame lags the stop it is taken at: the
+#: screenshot at stop `i` shows the game state read at stop `i - 1`. Measured 2026-10-21 by `scripts/psp-presented-lag.py`
+#: on a moving craft (the race state's Autopilot, 163 units/s): ours rendered at each of the six rows before a shot, the
+#: smallest mean grey difference named row `i - 1` on all seven shots (21.3 against 26.6 and up for every other row).
+#: So the pose, camera, field and HUD are read at stop 0 and the screenshot taken at stop `PRESENTED_LAG`.
+PRESENTED_LAG = 1
 
 
 def run(cmd, **kw):
@@ -173,7 +184,7 @@ def detect_layout(oag, image, track, theirs_row, flags, tol):
     return best, report
 
 
-def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, layout, profile_dir, clock):
+def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, layout, profile_dir, clock, view_flags):
     """Ours for a race shot: every craft of the original's field, the player's pose and the camera from the
     one stop (`field.json`, `trace.csv`), rendered at that tick with no ticks run."""
     import json
@@ -181,11 +192,25 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     player = next(r for r in rows if r["player"])
     teams = ce.write_field_csv(out / "field.csv", rows, with_player=True)
     pair.rec["original"]["field"] = [{k: r[k] for k in ("slot", "team", "place", "lap", "lap_time", "pos")} for r in rows]
+    # The frame's HUD text is one tick OLDER than its 3D: `Hud_Update` reads `PLAYER_HUD` before this tick's
+    # `PlayerStatus_Update`, so the frame shows the block as the previous tick left it. The CPU is stopped one tick
+    # before the pose's stop, where the block holds exactly that value (3 of 3 live runs: the frame read 390, 383 and
+    # 377 km/h against the block's 390.66, 383.24 and 377.20; body |velocity| * 3.6 at the pose's stop read 392.08,
+    # 384.52 and 378.15, which was the 572 against 587 of the first race pair).
+    hud_speed = pair.rec["original"].get("hud_at_freeze", {}).get("speed_kmh")
     lap_number = player["lap"] - 1  # PlayerStatus_Update: the HUD's lap is `entity+0xacc - 1`
     pair.rec["original"]["hud"] = {"place": player["place"], "of": len(rows), "lap_number": lap_number,
                                    "lap_time_s": player["lap_time"], "race_clock_s": clock,
                                    "shield": player["shield"], "shield_max": player["shield_max"],
-                                   "best_lap_s": player["best_lap_cs"] / 100}
+                                   "best_lap_s": player["best_lap_cs"] / 100,
+                                   "speed_kmh": hud_speed,
+                                   "speed_kmh_at_pose_stop": player.get("hud_kmh"),
+                                   "body_speed_kmh": theirs_row["speed"] * SPEED_TO_KMH}
+    pair.check("the HUD's own speed readout (PLAYER_HUD+0) was found in the registry", hud_speed is not None,
+               "the block whose lap time (+0x24) is the player's; at the pose's stop it reads %s, body |velocity| * 3.6 %.2f"
+               % (player.get("hud_kmh"), theirs_row["speed"] * SPEED_TO_KMH))
+    if hud_speed is None:
+        pair.finish()
     pair.check_equal("original field size", len(rows), 8)
     ce.pack_check(pair, player["place"], [theirs_row["cam_pos_" + a] for a in "xyz"],
                   [-theirs_row["cam_right_z"], -theirs_row["cam_up_z"], -theirs_row["cam_fwd_z"]], player["pos"],
@@ -200,7 +225,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
             "--field-from", out / "field.csv", "--field-warmup",
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
-                theirs_row["speed"] * SPEED_TO_KMH, 100.0 * player["shield"] / player["shield_max"],
+                hud_speed, 100.0 * player["shield"] / player["shield_max"],
                 player["best_lap_cs"] / 100)] + flags + [
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
@@ -301,6 +326,7 @@ def main():
     if not 0.0 <= clock <= 3600.0:
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
+    pair.rec["original"]["presented_lag_ticks"] = PRESENTED_LAG
     if args.ours_ticks is None:
         args.ours_ticks = GO_TICK + ce.tenths_matched_ticks(clock)
     pair.rec["ours"]["ticks"] = args.ours_ticks
@@ -319,15 +345,17 @@ def main():
         pair.check("weapons off in the original's own RAM", wp == 0,
                    "g_weapons_enabled byte at %#x reads %d (0 = off)" % (WEAPONS_ENABLED, wp))
         trace_extra = ["--craft", hex(player_craft), "--field-out", out / "field.json"]
+        fr = [r for r in rf.Field(probe).rows() if r["player"]][0]
+        pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6}
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shots = out / "shots"
     csv = out / "trace.csv"
     with open(csv, "w") as f:
-        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--shot-every", 2,
+        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--shot-every", 1,
                   "--shot-dir", shots] + trace_extra, stdout=f)
     set_window(960, 544)
-    run(["magick", shots / "tick00000.png", "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", out / "theirs.png"])
+    run(["magick", shots / ("tick%05d.png" % PRESENTED_LAG), "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", out / "theirs.png"])
     theirs_row = ce.csv_row(csv, 0)
     theirs = ce.pose_of(theirs_row)
     view = camera_view_of(theirs_row)
@@ -370,7 +398,7 @@ def main():
         pair.check("layout asserted matches the state's declared layout", declared in (None, layout),
                    "asserted %s, sidecar declares %s" % (layout, declared))
         return field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, layout, profile_dir,
-                          clock)
+                          clock, view_flags)
     layout, rep = detect_layout(args.oag_game, image, args.track, theirs_row, flags, {"scratch": str(out)})
     pair.rec["ours"]["layout_probe"] = rep
     asserted = {"forward": False, "reversed": True}.get(args.layout)

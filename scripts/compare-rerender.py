@@ -23,6 +23,7 @@ import datetime
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+
+#: A profile's directory under `data/saves/`.
+SAVES_DIR = {"pulse-psp": "pulse-psp", "pulse-ps2": "pulse-ps2", "hd-fury": "hd-fury", "pure-psp": "pure-psp"}
 
 RUNNER = ["uv", "run", "--with", "websocket-client", "--with", "evdev", "--with", "python-xlib", "python3"]
 
@@ -60,7 +64,31 @@ def drift_of(old, new, tol):
     return out, warn
 
 
-def remake(pj):
+def before_overlap(rec, d):
+    """The old pair's overlap score with the mean grey difference filled in from its own images (pairs made
+    before that number was recorded do not carry it)."""
+    ov = dict(rec.get("overlap") or {})
+    if "mean_grey" not in ov and (d / "theirs.png").exists() and (d / "ours.png").exists():
+        ov["mean_grey"] = ce.overlap_score(d / "theirs.png", d / "ours.png").get("mean_grey")
+    return ov
+
+
+def run_child(cmd, env, timeout):
+    """The pair script as a child in its own process group; a timeout kills that group (our own child, by its pid)."""
+    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        out, err = proc.communicate()
+        err += "\nREFUSED: timed out after %s s (the stalled child was killed)" % timeout
+    return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+
+
+def remake(pj, env=None, remap=None, timeout=None):
+    """Re-make one pair in place. `env` is the pair script's environment (the emulator instance's own display,
+    port and home), `remap` replaces recorded flags (`--port`, `--home`, `--slot`) that name another lane's
+    emulator, `timeout` bounds the child. Returns `(problems, warnings)`."""
     rec = json.loads(pj.read_text())
     argv = rec.get("argv")
     if not argv:
@@ -74,7 +102,17 @@ def remake(pj):
     for flag, var in (("--port", "OAG_PPSSPP_PORT"), ("--home", "PP_HOME")):
         if rec["profile"] == "pulse-psp" and flag in args and os.environ.get(var):
             args[args.index(flag) + 1] = os.environ[var]
-    done = subprocess.run(RUNNER + [str(HERE / args[0])] + args[1:], capture_output=True, text=True)
+    for flag, value in (remap or {}).items():
+        if flag in args:
+            args[args.index(flag) + 1] = str(value)
+    # A state kept in another lane's worktree is the same file in the main checkout's `data/saves/<title>/`.
+    if "--state" in args:
+        st = Path(args[args.index("--state") + 1])
+        if not st.exists():
+            alt = ce.MAIN / "data/saves" / SAVES_DIR.get(rec["profile"], rec["profile"]) / st.name
+            if alt.exists():
+                args[args.index("--state") + 1] = str(alt)
+    done = run_child(RUNNER + [str(HERE / args[0])] + args[1:], env, timeout)
     new_pj = tmp / "pair.json"
     if not new_pj.exists() or json.loads(new_pj.read_text()).get("refused"):
         why = [ln for ln in done.stderr.splitlines() if ln.startswith(("REFUSED", "MISMATCH"))] or done.stderr.splitlines()[-1:]
@@ -86,7 +124,8 @@ def remake(pj):
                          capture_output=True, text=True)
     drift["theirs_rmse_vs_previous"] = cmp.stderr.strip()
     new["previous"] = {"original": {k: rec["original"].get(k) for k in ("pose", "camera", "race_clock_s", "emulator")},
-                       "ours_binary": rec["ours"].get("binary"), "rerendered_from": rec.get("rerendered_at")}
+                       "ours_binary": rec["ours"].get("binary"), "rerendered_from": rec.get("rerendered_at"),
+                       "overlap": before_overlap(rec, pj.parent)}
     new["drift"] = drift
     new["rerendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     new["argv"] = rec["argv"]

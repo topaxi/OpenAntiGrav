@@ -34,6 +34,10 @@ MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 
+#: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
+#: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
+GO_TICK = ce.go_tick()
+
 # The RSX presents the frames it was handed after the game is paused, so a grab taken at once is older than the
 # memory read (the HUD's lap clock lagged RAM's by 0.1 to 0.3 s); 3 s lets it catch up (`rpcs3-drive.py capture`).
 os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
@@ -45,8 +49,6 @@ def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
-#: Our race's tick at which the lap clock leaves 0 (the countdown's length), measured on HD (see the docs).
-GO_TICK = 276
 
 
 def shutil_copy(src, dst):
