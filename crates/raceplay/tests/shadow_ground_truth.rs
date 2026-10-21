@@ -138,7 +138,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
         &oag_render::shadow::Cast {
             hull,
             model: race.ship_model_matrix_of(0),
-            axis: Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS),
+            axis: Vec3::from_array(oag_pulse::shadow::WORLD_AXIS),
             contact: placement.contact,
             normal: placement.normal,
             strength: placement.strength,
@@ -184,16 +184,21 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
     );
     // The ring itself, in the plane, so a bad *outline* can be told from a bad
     // *fill*: shoelace area against the area of its own convex hull.
-    let outline = hull.outline(oag_pulse::shadow::AUTHORED_AXIS);
+    let model = race.ship_model_matrix_of(0);
+    let world_axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
+    let outline = hull.outline(
+        model
+            .inverse()
+            .transform_vector3(world_axis)
+            .normalize()
+            .to_array(),
+    );
     println!(
         "{} ring(s), lengths {:?}",
         outline.len(),
         outline.iter().map(|r| r.len()).collect::<Vec<_>>()
     );
-    let model = race.ship_model_matrix_of(0);
-    let direction = model
-        .transform_vector3(Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS))
-        .normalize();
+    let direction = world_axis.normalize();
     let facing = direction.dot(placement.normal);
     let flat: Vec<[f32; 2]> = outline[0]
         .iter()

@@ -220,11 +220,12 @@ pub struct Cast<'a> {
     pub hull: &'a Occluder,
     /// Model to world for the craft the hull belongs to.
     pub model: Mat4,
-    /// The **local** axis to project along, before [`Self::model`] rotates it:
-    /// `oag_pulse::shadow::AUTHORED_AXIS` on Pulse.
+    /// The **world** axis to project along: `oag_pulse::shadow::WORLD_AXIS` on
+    /// Pulse. Not turned by [`Self::model`]; the hull's silhouette is found
+    /// against the same axis in the hull's own space.
     ///
-    /// A local axis and not a light, which is what the original does - see
-    /// that constant, and `shadow-occluder.md` for the read.
+    /// Fixed in the world and not a light of any rig - see that constant for
+    /// what was measured and `shadow-occluder.md` for what was read.
     pub axis: Vec3,
     /// Where the craft's own downward cast hit the surface.
     pub contact: Vec3,
@@ -253,9 +254,14 @@ pub struct Cast<'a> {
 /// plane - which is skipped rather than drawn folded over.
 pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
     let normal = cast.normal.normalize_or_zero();
-    // The direction in world space: the authored local axis through the
-    // craft's own rotation, as `Shadow_RenderOccluderVolume` does it.
-    let direction = cast.model.transform_vector3(cast.axis).normalize_or_zero();
+    // The direction in world space is the axis itself; the hull's own space
+    // sees it through the craft's inverse rotation.
+    let direction = cast.axis.normalize_or_zero();
+    let local_axis = cast
+        .model
+        .inverse()
+        .transform_vector3(cast.axis)
+        .normalize_or_zero();
     let facing = direction.dot(normal);
     // Parallel to the surface, or pointing away from it: there is no
     // intersection to draw, and forcing one puts a shadow behind the craft.
@@ -263,7 +269,7 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
         return 0;
     }
     let mut rings = 0;
-    for ring in cast.hull.outline(cast.axis.to_array()) {
+    for ring in cast.hull.outline(local_axis.to_array()) {
         let projected: Vec<Vec3> = ring
             .iter()
             .map(|slot| {

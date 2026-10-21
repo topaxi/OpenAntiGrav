@@ -67,7 +67,7 @@ pub enum Shadows {
     ///
     /// On Pulse it is the craft's own `Dynamic Shadow Occluder` `0x3c3` hull -
     /// 119 of them across the disc - projected along the direction the
-    /// executable authors (`oag_pulse::shadow::AUTHORED_AXIS`) onto the
+    /// executable authors (`oag_pulse::shadow::WORLD_AXIS`) onto the
     /// surface under the craft. See `oag_render::shadow::hull_triangles` for
     /// what that shares with the original's stencil volume and what it does
     /// not.

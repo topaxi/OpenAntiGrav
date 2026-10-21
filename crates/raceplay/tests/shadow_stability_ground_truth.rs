@@ -74,7 +74,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
             &oag_render::shadow::Cast {
                 hull: &hull,
                 model: race.ship_model_matrix_of(0),
-                axis: Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS),
+                axis: Vec3::from_array(oag_pulse::shadow::WORLD_AXIS),
                 contact: p.contact,
                 normal: p.normal,
                 strength: p.strength,
