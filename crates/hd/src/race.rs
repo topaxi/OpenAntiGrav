@@ -904,9 +904,12 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // held stick: the input drops at `0.8988` and below and returns at `0.9016` and above, and
     // the bias stays on (`docs/physics/airborne-ground-truth.md`). Confidence 90.
     pitch_gate: oag_title::pre_race::Sourced::measured(true),
-    // Not read on HD: its flag word (`craft+0x264`) numbers its bits differently and the
-    // mapping is open (`docs/ghidra/functions/psp-pulse-usa/craft-flags.md`), so HD inherits Pulse's.
-    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // HD's flag word `craft+0x264` numbers Pulse's bits from `0x20` up shifted right by four
+    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Pulse's wrong-way kill `0x2000` is
+    // HD's `0x200`: the engine still reads it, nothing in the image writes it, and nothing forces
+    // the airbrakes. Live in an Eliminator (mode 8), a craft flipped with L1 and driven back down
+    // the track under held throttle kept its engine and never set the bit. Confidence 90.
+    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::measured(false),
     // `Ship_UpdateSideshiftInput` (`0x000d9e18`) skips the gesture block while `craft+0x264 & 2`
     // (`0x000da04c`). Live on RPCS3: double taps of L1, R1, L2 and R2 through the countdown arm
     // no tap window and no shift; after GO, L2 and R2 set `0x80` and `0x100`
@@ -1043,6 +1046,16 @@ mod tests {
         assert_eq!(
             CRAFT_LAWS.turbo_running_laws,
             oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD has no Eliminator wrong-way kill: the bit has no writer, and a flipped craft keeps its
+    /// engine live.
+    #[test]
+    fn hd_has_no_eliminator_wrong_way_kill() {
+        assert_eq!(
+            CRAFT_LAWS.eliminator_wrong_way_kill,
+            oag_title::pre_race::Sourced::measured(false)
         );
     }
 

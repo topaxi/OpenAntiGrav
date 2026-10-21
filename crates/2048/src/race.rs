@@ -520,7 +520,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // switched to the original's by the maintainer's decision. 2048's own pitch update is unread.
     air_pitch_bias: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    // HD has none (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`), and 2048 v1.04 has no
+    // store that sets `craft+0x264 & 0x200` either (census on the same page).
+    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
