@@ -1292,6 +1292,61 @@ cold-captured (only the stored, restored frame, which shows lilac with yellow li
 
 Cross-title: the glass family is not in 2048 or Omega (checked, differs, `omega-status.md`); Modesto's and Amphiseum's sheen slots were not checked against the skip rule.
 
+### The grid's coordinate is right and its mip level is the structure; `c` lands on the road (2026-10-21, `hd-glass-fable`)
+
+**Claim: "ours draws the sweep wider and more saturated than the original" is true; the saturation's cause is found and fixed; the structure's
+cause is found and its fix is the held LOD-bias rule; the far band's hue is not fully closed.** Measured against the stored cold-boot originals
+(the old scale-150 profile; the brief says to judge hue, saturation and structure, not raw brightness).
+
+1. **The grid is sampled at the program's own coordinate; the earlier "`in.texcoord` about 27" reading is withdrawn (confidence 95).** Tech de
+   Ra's lit block (vertex block 7, `vp-file` of `tech_de_ra/materials/etched_glass_tech.rcsmaterial`) writes `MOV o[TC5].zw, v[2].xxxy`, the raw
+   `Uv1`, and the fragment block samples the grid at `f[TC5].zw`; ours feeds the same `Uv1` (`hd_glass_vertex_dump`: the start-grid chunk, draw
+   1888, spans `u -0.88..3.47` over 172 world units and `v 0..2` across the road's 42, so about two tiles across the width, and a debug render of
+   `fract(in.texcoord)` on the road shows 0 to 3 wraps across 800 px). With the grid taken at mip 0 the hex insets and the panel outlines land where the
+   original's are (the near band's crop matches cell for cell). What differs is the **mip level**: `u` runs along the road, so under perspective the
+   derivative footprint on the road is level 3 to 6 (a binary `dpdx` map: 57 % of the road box over level 2, 19 % over level 4), and at those levels
+   the 1024x512 texture's 16-texel cells and 2-texel lines are gone. High-pass energy of the mid band (`(650,540)-(1400,600)`, Laplacian of the 0.7-blurred
+   grey): original 0.0345, ours at bias 0 0.0214, at `-1.5` 0.0278, at `-3` 0.0400, at mip 0 0.0462, so the original sits 2 to 2.5 levels finer than
+   our derivative level. That is the game's requested `-1.5` (`0x02063e80`, "The LOD bias, wired and held") plus the stored frame's `Resolution
+   Scale 150` supersampling (log2 1.5 = 0.58 levels); RPCS3 reported `Anisotropic Filter Override: 0` and `Texture LOD Bias Addend: 0` in the profile's
+   runs, and the texture control word `0x80078000` is min LOD 0, max LOD 15, anisotropy 0, so nothing else sharpens it. **Nothing is wired for this
+   here**: the sheen's grid tap already goes through `material_sample` (the lightmapped variant's `textureSampleGrad` scales by `exp2(material_lod_bias)`),
+   so the held rule in `crates/hd/src/effects.rs` is the fix, to be re-judged against the scale-100 originals as that section already plans; a
+   glass-only bias would be a chosen number.
+2. **Fixed: `c` was never on Tech de Ra's road because `emissive` claimed the sheen slot (confidence 95).** `Program::accumulates(1)` is true of block
+   #7 (its unit 1 is the reflection probe, added as `probe * grid.r` inside the sheen's own combine), so `emissive` wrote the `tint 1, offset 0` entry
+   the sweep found on slots 436, 449 and 463, and `glass_sheen::bias` left them alone. `emissive` now skips `FACING_RAMP_SHEEN` slots; `bias` writes the
+   material's own `0x512f8e65` (0.26562 on `etched_glass_tech`, 0.22916 on The Amphiseum's `etched_glass_amph`, **0 on Modesto Heights' `etched_glass`**,
+   read off the records with `hd_glass_sheen_census --params`). Test: `hd_track_surface_ground_truth::every_glass_sheen_slot_carries_its_c` (the four
+   circuits, `ADD_SECOND` clear on every sheen slot). The sheen path ignores the glow add (it replaces `shaded` whole), so nothing else moves.
+   Measured, Tech de Ra road box `(600,480)-(1450,640)`, before / after / original: mean HSV saturation 0.310 / **0.259** / 0.241, share over 0.30
+   0.529 / **0.250** / 0.254, far pixel `(950,520)` G/R 1.24 / **1.02** / 1.01 and B/G 0.58 / 0.86 / 0.92, mid `(950,600)` G/R 0.81 / 0.85 / 0.88,
+   hue histogram (8 bins) `[.07 .13 .05 .11 .25 .19 .13 .07]` against the original's `[.04 .15 .06 .09 .25 .16 .20 .04]`. Talon's far wedge
+   `(1005,425)-(1165,475)`: saturation 0.369 / **0.315** / 0.296, share over 0.30 0.755 / **0.509** / 0.463 (its slots had carried the entry too).
+   **Brightness**: clipped share (any channel 250 or more) 0.063 / 0.140 / 0.004, road mean RGB 0.458 / 0.497 / 0.406, and the pair's whole-frame mean
+   grey difference 15.87 to **16.28 (+0.41)**; the other 12 time trials and the Talon's race pair are unchanged at the printed 0.01. The grey rise is
+   the one the sweep held the same change for. It is reported, not hidden: `c` is the material's own constant, the hue and saturation acceptance passes
+   with it, and the excess brightness has the separate cause below.
+3. **The residual is the ramp's coordinate on the mid and far road, not the light and not the probe.** Ours' light term on the road reads `L` 1.3 to
+   2.4 per channel (debug render; sun `(4, 3.47, 2.04)` at `N.L` 0.53 times the vertex sun mask 0.749, prelit `4 * colour^2.5`), the background seen
+   through the glass is dark (sheen drawn black: 0.004 to 0.04 linear), and the reflection probe layer is dark too (the per-craft blended reflection map
+   at `env_probe_uv(reflect(-V, N))` reads 0.01 to 0.03 linear on the road, times the glass's own tint `{1, 1, 1, 0}`; note the live draw binds a
+   512x256 render target there, `tex 04065380` of draw 354, not the baked map). Solving the original's displayed pixel for the ramp texel it implies
+   (`ramp = (2 * own - L * c - grid) / (L + 1)`, `own = (displayed - background) / grid.r`): mid band `(0.20, 0.17, 0.00)`, the ramp's olive at
+   `u 0.36` (error 0.04); near band `(0.04, 0.01, 0.07)`, its dark purple at `u 0.41..0.52` (error 0.10); ours samples `u 0.10..0.12` (yellow-green,
+   sum 1.2) and `0.15..0.20` (purple) there. So the original reads the ramp about 0.25 further along, or 2.5 to 3.6 times further, on this road; with
+   the block's own coordinate (`-R2.w = V.N`, `V = c[209] - position` normalised, `N = normalize(f[TC3])`, read again instruction by instruction) that
+   means either `c[209]` (`eyePositionWorldSpace`, register 465) or the road's normal is not what ours feeds. The ramp decoded (`dc_iridescent_gradient.gtf`,
+   DXT1 512x16, every row identical): cyan 0 to 0.05, green 0.05 to 0.1, yellow 0.1 to 0.13, purple 0.15 to 0.18, blue 0.2 to 0.25, olive 0.3 to 0.4,
+   dark from 0.42, black from 0.72.
+
+**Next address**: dump draw 354's vertex constants at the cold pair's tick (`hd-draw-dump.py` with the ring on, the slot of `0x3466fc0e`) and compare
+`c[209]` with the view matrix's eye; the earlier dump's ring missed it. If they agree, read the chunk's packed normal against ours. The far band's
+`a` is too small for the solve above to hold there (grid.r 0.31 at `(950,520)`), so it is judged on the mid and near bands.
+
+**Cross-title**: the `etched_glass` family is in neither 2048 nor Omega (checked, differs, `omega-status.md`); Modesto Heights and The Amphiseum are
+covered by the test above.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

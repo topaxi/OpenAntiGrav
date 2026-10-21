@@ -245,6 +245,16 @@ pub(super) fn emissive(
         if *packed & slots::SECOND_IS_LIGHTMAP != 0 {
             continue;
         }
+        // The glass sheen's unit 1 is the engine's reflection probe, not an additive
+        // layer: block #7 adds it as `probe * grid.r` inside its own combine
+        // (`glass_sheen`), and the grid this slot holds second is that combine's
+        // alpha and additive term, never a glow. Claiming the slot here gave Tech de
+        // Ra's road (slot 449, and 436 and 463) a `tint 1, offset 0` entry that
+        // `glass_sheen::bias` then would not overwrite, so the road ran with `c = 0`
+        // (2026-10-21, `hd-glass-fable`; `rpcs3-capture.md`, "What the sweep found").
+        if *packed & slots::FACING_RAMP_SHEEN != 0 {
+            continue;
+        }
         let Some(variant) = variants.get(slot).copied().flatten() else {
             continue;
         };
