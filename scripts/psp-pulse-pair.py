@@ -170,6 +170,34 @@ def restore_autopilot_timer(port, pair):
                "record+0x148 reads %.3g s" % after)
 
 
+def run_to_clock(port, target):
+    """Run the stopped original on to the first player tick whose race clock reaches `target` (a stored pair's own
+    moment), in ONE resume: a breakpoint on `Ship_UpdateCraft` conditional on the player's craft and on the clock's float
+    bits (`[CLOCK_ADDRESS] >= bits(target)`, valid for a positive float). Stepping tick by tick instead (`each_hit`, a stop
+    and a resume per hit) landed the same state on clocks 11 ulp apart in 1 of 3 runs; one resume gave the same bits in 4
+    of 4. Returns the clock it stopped at."""
+    import struct
+    from ppsspp_debugger import Debugger
+    dbg = Debugger(port)
+    craft = race_field_module().Field(dbg).player["craft"]
+    clock = dbg.read_f32(CLOCK_ADDRESS)
+    if clock >= target - 0.0005:
+        return clock
+    bits = struct.unpack("<I", struct.pack("<f", target - 0.0005))[0]
+    dbg.brk()
+    dbg.add_breakpoint(SHIP_UPDATE_CRAFT, "a0 == 0x%08x && [0x%08x] >= 0x%08x" % (craft, CLOCK_ADDRESS, bits))
+    dbg.call("cpu.status")
+    dbg.pending = []
+    dbg.call("cpu.resume")
+    try:
+        dbg.wait_for_break(SHIP_UPDATE_CRAFT, timeout=120)
+    finally:
+        if not dbg.is_stepping():
+            dbg.brk()
+        dbg.remove_breakpoint(SHIP_UPDATE_CRAFT)
+    return dbg.read_f32(CLOCK_ADDRESS)
+
+
 def race_field_module():
     """`psp-race-field.py` (a hyphenated name cannot be imported): the original's whole field out of RAM."""
     import importlib.util
@@ -429,6 +457,10 @@ def main():
     ap.add_argument("--run-ticks", type=int, default=0,
                     help="after the load and the Autopilot timer restore, run this many of the player's ticks first (a trace "
                          "with no shots) so the frame is taken that far into the state, e.g. onto a speed pad")
+    ap.add_argument("--target-clock", type=float, default=None,
+                    help="after the load stop and the Autopilot timer restore, run the player's ticks on to the first one whose "
+                         "race clock reaches this many seconds (a stored pair's own moment, e.g. 38.4082), instead of "
+                         "--run-ticks")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -473,7 +505,12 @@ def main():
     from ppsspp_debugger import Debugger
     if args.field or args.zone:
         restore_autopilot_timer(args.port, pair)
-    if args.run_ticks > 0:
+    if args.target_clock is not None:
+        reached = run_to_clock(args.port, args.target_clock)
+        pair.rec["original"]["target_clock_s"] = args.target_clock
+        pair.check("the original reached the target race clock", abs(reached - args.target_clock) < 0.02,
+                   "stopped at %.4f for a target of %.4f" % (reached, args.target_clock))
+    elif args.run_ticks > 0:
         run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
