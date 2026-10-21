@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_provenance as cp  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -126,6 +127,7 @@ def main():
     ap.add_argument("--serial", default="SCES-54748 (F8AE6FF2)",
                     help="the state file name's game part in PCSX2's sstates directory")
     ap.add_argument("--meta", default="")
+    cp.add_arguments(ap)
     args = ap.parse_args()
     data = os.environ.get("OAG_PCSX2_DATA")
     if not data or "OAG_PCSX2_DISPLAY" not in os.environ:
@@ -219,6 +221,8 @@ def main():
     grab_clock = (live_before + live_after) / 2
     pair.rec["original"]["presented_lag"] = {"hud_clock_offset_s": CLOCK_HUD_OFFSET_S, "grab_bracket_s": [live_before, live_after],
                                               "note": "ours runs to the bracket's mean less the HUD offset; the craft rests, so its pose needs no lag"}
+    cp.build(pair, args, "scenery", "savestate_restore", str(args.state),
+             {"value": CLOCK_HUD_OFFSET_S, "unit": "seconds", "basis": "measured", "what": "HUD lap clock is the RAM race clock less this; the craft rests"})
     pair.rec["original"]["race_clock_live_s"] = {"before_grab": live_before, "after_grab": live_after, "state_file": clock}
     pair.check("the grab is of a running VM near the state's frame", 0.0 <= grab_clock - clock <= 3.0,
                "RAM clock %.2f s before and %.2f s after the grab, %.2f s in the state file" % (live_before, live_after, clock))

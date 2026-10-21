@@ -349,6 +349,53 @@ roll). Not wired: ours keeps the body as read, with the skew recorded in the han
 
 A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.
 
+## Provenance: the trust model (2026-10-21, `ref-provenance`)
+
+A pair is only as good as the original frame in it, and three things made a bad original look fine on
+2026-10-21: HD originals restored from an RPCS3 savestate paint garbage on glass
+([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Savestate restore paints garbage on glass"), an
+armed Autopilot showed `1000000000.00` on the original's HUD, and emulators present frames late. So every
+`pair.json` carries `original.provenance` (`scripts/compare_provenance.py`), written by the pair script:
+
+| Field | Records |
+| --- | --- |
+| `capture_path` | `cold_boot`, `savestate_restore` or `unknown`, and the state file |
+| `presented_lag` | `value`, `unit` (ticks or seconds), `basis` (`measured`, `platform_measurement`, `assumed`, `unknown`), `what` |
+| `autopilot` | `armed` (true, false or `"unknown"`), `timer_written`, `timer_authored`, where it was read from |
+| `ram_writes` | every memory write made before the grab (the state's making included), `ram_writes_complete`, and `pair_script_ram_writes` (the pair scripts write none; they only read) |
+| `emulator` | name, version, a hash of the settings recorded |
+| `twin` | the RMSE against the previous capture of the same state; `agreed` stays `null` because no threshold is documented |
+| `pair_kind` | `scenery` (grid, Time Trial), `race` or `zone` |
+
+Each refusal is one more `pair.check`, so a pair that breaks one exits 3 like every other mismatch, and
+`manifest` skips it:
+
+| Rule | Refuses |
+| --- | --- |
+| `hd_savestate_scenery` | an HD `scenery` or `zone` pair whose original is not a `cold_boot`; the HD `race` pair is the labelled exception |
+| `autopilot_timer` | an armed Autopilot whose timer was not the authored one, and a `race` or `zone` state (always flown on the Autopilot) whose arming was not recorded |
+| `unknown_lag` | a presented-frame lag that is missing or `unknown` |
+
+An override is `--accept-provenance RULE=REASON`, written into `provenance.overrides` and as a caveat; a reason is
+required. The state-making flags are `--autopilot off|authored|timer`, `--autopilot-timer SECONDS` and
+`--ram-write TARGET=VALUE:WHY`, all recorded in `argv`, so a re-make repeats them. `compare-rerender-all.py` tells
+`rpcs3-hd-pair.py` how the emulator was brought up through `OAG_HD_CAPTURE_KIND`; unset reads `unknown`.
+
+A record made before the field is backfilled from its `pair.json`, its `argv`, its state sidecar and this page, and
+what none of them says is `unknown` (`compare_provenance.py backfill SRC DST`, on a copy; `table DIR` prints the
+census). The HD grid pairs are backfilled as `savestate_restore` by inference (their state is a `SAVESTAT` and the
+re-make restored it; the cold flag came afterwards), and each is refused until it is recaptured cold.
+
+**Paths.** No `pair.json` or manifest names `OpenAntiGrav-worktrees/` or `data/scratch/`: a worktree and the main
+checkout are written as the repository-relative path, scratch as `{scratch}/` (`Pair.finish` and `compare-rerender`
+do it; `compare_provenance.py portable DIR` does it to a copy), and manifests hold paths relative to their own
+directory. A worktree is reaped after its merge and a manifest that named it broke the page. `just
+check-pair-provenance` (in the gate) runs the refusal rules against constructed bad records (`selftest`), scans
+`$OAG_PAIR_DIR` (default `data/reference/compare-page`; skipped, loudly, when absent, as in CI) for missing
+provenance, a broken rule or a reaped path, and holds a ratchet over tracked files outside `scripts/` and `.claude/`:
+`scripts/provenance-path-baseline.txt` is the frozen count per file and a file may shrink but not grow. A re-made
+`argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
+
 ## Publishing is locked
 
 `just publish-compare` uploads the built `data/compare/` with `wrangler pages deploy`

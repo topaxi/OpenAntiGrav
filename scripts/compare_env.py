@@ -430,6 +430,8 @@ class Pair:
         return self.check(name, theirs == ours, "original %r, ours %r" % (theirs, ours))
 
     def finish(self):
+        import compare_provenance as cp  # the provenance rules are pair checks like the rest
+        cp.finish(self)
         bad = self.failed()
         if (self.out / "theirs.png").exists() and (self.out / "ours.png").exists():
             self.rec["overlap"] = overlap_score(self.out / "theirs.png", self.out / "ours.png")

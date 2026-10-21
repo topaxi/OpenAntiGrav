@@ -162,11 +162,13 @@ class Rpcs3(Emulator):
             sh(["uv", "run", "--with", "evdev", "python3", HERE / "emu-run.py", "--", "python3", "-u", HERE / "rpcs3-drive.py",
                 "--log-dir", self.scratch / "restart", "restart"], env=attach, timeout=300)
             path = "cold boot (no savestate): the glass stays clean"
+            kind = "cold_boot"
         else:
             flag = "--pause" if "--field" in argv else "--restart"
             sh([HERE / "emu-restore-state.sh", self.args.lane, state, flag], env=env, timeout=300)
             path = "restored savestate (RPCS3 paints garbage on the glass of a restored state; the original is no reference there)"
-        return dict(self.env, OAG_RPCS3_ATTACH="1", OAG_HD_CAPTURE_PATH=path), self.remap
+            kind = "savestate_restore"
+        return dict(self.env, OAG_RPCS3_ATTACH="1", OAG_HD_CAPTURE_PATH=path, OAG_HD_CAPTURE_KIND=kind), self.remap
 
     def stop(self):
         sh(["python3", HERE / "rpcs3-drive.py", "stop"], env=self.env, check=False)
