@@ -290,6 +290,19 @@
 //! down to `-0.21` (`docs/physics/airborne-ground-truth.md`, "On Vertica's crest the original
 //! escapes too"). Every other row moved inside the tolerances.
 //!
+//! **Regenerated 2026-10-21 for the verified fallback plan** (lane
+//! `ai-rejudge-after-switches`): a hull whose adapted plan fails no longer follows
+//! the reference plan at its yaw share unchecked (`Race::fallback_ring`). Two rows
+//! moved. `06_Track` RAPIER, worst median contact `419` to `154`: the lone Triakis
+//! had followed the reference at `0.774` in 14 of its 45 runs and ground the wall at
+//! samples 800-960, not on Vertica's crest (`docs/gameplay/ai.md`, "The fallback plan
+//! is verified"). `14_Track` PHANTOM, worst median lap `2001` to `2098` ticks with
+//! contact unchanged at `272`: it now follows the reference at `0.657`-`0.743` in 19
+//! of 45 runs, where the yaw share's verification scraped. Failures of the 107
+//! Pulse AI-gate tests per `perturb::BOUND_OFFSETS` offset: before `0 0 0 1 1 2 1 2 1`
+//! (median 1, max 2), after `0 0 0 1 2 2 2 2 1` (median 1, max 2), inside the bar.
+//! Every other row regenerated identical.
+//!
 //! Before that, [`BASELINE`] was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
 //! 2026-09-12, and cross-checked field by field against a board printed
@@ -634,7 +647,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1961), contact_ticks: 57 }, // 1931/48 1928/28 1930/24 1928/30 1930/25 1931/53 1930/28 1961/57 1929/19
     Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1550), contact_ticks: 2 }, // 1445/1 1446/1 1455/0 1455/1 1447/1 1446/0 1449/0 1550/2 1443/2
     Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1873), contact_ticks: 2 }, // 1871/0 1864/0 1869/0 1864/2 1873/0 1871/0 1868/1 1869/0 1808/0
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2693), contact_ticks: 419 }, // 1767/303 1850/419 1877/327 1882/324 1787/122 1764/304 2693/147 2686/146 1849/160
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2694), contact_ticks: 154 }, // 1767/53 1869/154 1883/153 1881/6 1787/122 1764/123 2694/143 2686/146 1873/57
     Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2776), contact_ticks: 21 }, // 2750/17 2776/3 2459/21 2766/16 2468/2 2470/18 2756/16 2762/16 2485/19
     Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1667), contact_ticks: 0 }, // 1653/0 1660/0 1667/0 1657/0 1664/0 1656/0 1655/0 1654/0 1661/0
     Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1803), contact_ticks: 0 }, // 1793/0 1796/0 1796/0 1795/0 1803/0 1790/0 1791/0 1789/0 1792/0
@@ -643,7 +656,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "05_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1327), contact_ticks: 4 }, // 1325/2 1327/3 1326/0 1326/0 1326/0 1325/0 1326/2 1326/4 1326/3
     Row { circuit: "04_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1608), contact_ticks: 0 }, // 1581/0 1581/0 1594/0 1600/0 1585/0 1587/0 1603/0 1608/0 1586/0
     Row { circuit: "09_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1833), contact_ticks: 0 }, // 1832/0 1827/0 1833/0 1830/0 1833/0 1831/0 1828/0 1829/0 1830/0
-    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2001), contact_ticks: 272 }, // 1978/267 1978/263 1991/245 2001/266 1975/269 1999/0 1980/272 1983/252 1981/256
+    Row { circuit: "14_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(2098), contact_ticks: 272 }, // 2000/261 2009/220 2001/187 2003/223 2095/212 1999/0 2098/272 2007/174 2001/219
     Row { circuit: "01_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1466), contact_ticks: 31 }, // 1450/13 1306/6 1466/31 1315/6 1310/22 1314/8 1419/6 1306/6 1313/3
     Row { circuit: "13_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1841), contact_ticks: 0 }, // 1836/0 1838/0 1841/0 1839/0 1838/0 1838/0 1839/0 1834/0 1835/0
     Row { circuit: "06_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1463), contact_ticks: 33 }, // 1453/1 1463/0 1452/3 1460/21 1449/0 1451/0 1458/0 1460/2 1457/33
