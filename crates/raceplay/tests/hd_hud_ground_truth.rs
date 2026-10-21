@@ -1032,3 +1032,200 @@ fn the_speed_bar_fill_is_authored_beside_its_background_in_the_three_race_layout
         assert!(layout.sprite("SpeedBar").is_none(), "{root}");
     }
 }
+
+/// **A race layout is the one `<Screen name="HUD">`, so the screen `Hud_Update` slides is all of it.**
+///
+/// `Hud_Update` (`0x0009e704`-`0x0009e754`) stores its lean translation into the screen it
+/// looked up as `"HUD"` at load (`Hud_LoadDefinition`, `0x00097ef0`). What that moves is every
+/// widget under the element, so the claim "the whole race HUD slides" is the claim that every
+/// race layout hangs its widgets from that one element. Seventeen of the eighteen roots do: a
+/// single `<Screen name="HUD">` under the file's own `<Screen>`, nothing beside it. The
+/// eighteenth, `mptag_hud.xml`, is `<Screen name="MPTag_HUD">` (eight name tags and no sprite),
+/// which `Hud_Update` does not move and which no mode here draws (`oag_hd::hud::ROOTS`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn every_race_layout_hangs_all_its_widgets_from_the_one_hud_screen() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    for (root, ..) in EXPECTED {
+        let blob = archives
+            .read_name(root)
+            .unwrap_or_else(|_| panic!("{root} is on the disc"));
+        let tree = fexml::parse(&fexml::text(&blob).expect("a layout is text"));
+        let [file] = tree.children.as_slice() else {
+            panic!("{root}: the file's own <Screen> is the only top-level element");
+        };
+        assert!(
+            file.name.eq_ignore_ascii_case("Screen"),
+            "{root}: {}",
+            file.name
+        );
+        let named: Vec<(&str, Option<&str>)> = file
+            .children
+            .iter()
+            .map(|child| (child.name.as_str(), child.attr("name")))
+            .collect();
+        let screen = if root.ends_with("mptag_hud.xml") {
+            "MPTag_HUD"
+        } else {
+            "HUD"
+        };
+        assert_eq!(
+            named,
+            [("Screen", Some(screen))],
+            "{root}: every widget sits under the one screen"
+        );
+    }
+}
+
+/// **A held stick slides every draw of a real HD race frame by the same `-15` per unit of lean.**
+///
+/// Measured on RPCS3 (`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`, "The HUD sway"): a
+/// full stick, follower `1.39815`, moved the bars, clocks, pickup slot and reticle by the same
+/// 13.3 px at 1280x720 (`-15 * 1.39815 = -20.97` layout units, scaled by the frame's
+/// `1280/1920` and the instance's safe-area setting). Here the real Time Trial layout is drawn
+/// twice, still and leaning, and every draw of the second is the first moved by that many units
+/// along x and not at all along y. Dropping `oag_hud`'s `sway::slide` call, or `readout_for`
+/// filling the follower, fails this.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, "/data/xml/timetrial_hud.xml").layout;
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings =
+        oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
+    let blobs: Vec<(String, Vec<u8>)> = layout
+        .textures()
+        .iter()
+        .map(|reference| {
+            let entry = oag_hd::hud::texture_entry(reference);
+            (
+                (*reference).to_string(),
+                archives.read_name(&entry).expect("a HUD texture"),
+            )
+        })
+        .collect();
+    let mut notes = Vec::new();
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut notes);
+    let cx = hud::Context {
+        layout: &layout,
+        strings: &strings,
+        sheet: &sheet,
+        art: oag_hd::hud::ART,
+        hud_line_height: 92.0,
+        small_line_height: 34.0,
+        default_line_height: 34.0,
+        skin_line_height: 34.0,
+        default_border: layout.default_border(),
+    };
+
+    const FOLLOWER: f32 = 1.39815;
+    let still = oag_hud::Readout {
+        speed_kmh: 420.0,
+        shield: 50.0,
+        shield_max: 100.0,
+        lap: 2,
+        laps: 3,
+        ..Default::default()
+    };
+    let leaning = oag_hud::Readout {
+        steer_lean_follower: FOLLOWER,
+        ..still.clone()
+    };
+    let before = hud::draw_list(&cx, &still);
+    let after = hud::draw_list(&cx, &leaning);
+
+    let moved = |draw: &oag_ui::frontend::Draw| {
+        use oag_ui::frontend::Draw;
+        let mut draw = draw.clone();
+        match &mut draw {
+            Draw::Sprite { rect, .. }
+            | Draw::GradientSprite { rect, .. }
+            | Draw::BlendedSprite { rect, .. }
+            | Draw::RotatedSprite { rect, .. }
+            | Draw::TiledSprite { rect, .. }
+            | Draw::Fill { rect, .. }
+            | Draw::GradientFill { rect, .. } => rect[0] -= 15.0 * FOLLOWER,
+            Draw::Text { x, .. } | Draw::FacedText { x, .. } => *x -= 15.0 * FOLLOWER,
+            other => panic!("a draw this test does not move: {other:?}"),
+        }
+        draw
+    };
+    let lists = |frame: &hud::Frame| {
+        [
+            frame.sprites.clone(),
+            frame.hud_text.clone(),
+            frame.small_text.clone(),
+            frame.default_text.clone(),
+            frame.skin_text.clone(),
+        ]
+    };
+    let mut total = 0;
+    for (was, now) in lists(&before).into_iter().zip(lists(&after)) {
+        let expected: Vec<_> = was.iter().map(moved).collect();
+        assert_eq!(expected, now);
+        total += now.len();
+    }
+    assert!(
+        total >= 20,
+        "a Time Trial HUD draws a screenful, not {total}"
+    );
+}
+
+/// **The HUD gets the follower the hull is drawn with, and `HudArt::sway` makes it slide.**
+///
+/// A Time Trial on Talon's Junction with cross and the stick held right: once the lean has
+/// settled the readout of the player's view carries the follower the simulation runs for the
+/// hull (`steer_lean_follower`, the original's `ship+0x6a58`, which settles at the team's
+/// `<Tilt shipAmount>`), and with the stick centred it is zero. Dropping `readout_for`'s
+/// `steer_lean_follower` fails this.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_held_stick_reaches_the_hud_as_the_drawn_leans_follower() {
+    use oag_core::buttons::{Button, Input};
+    use oag_gameplay::{InputSnapshot, PlayerInputs};
+
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        weapons_override: Some(false),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let held = |stick_x: f32| {
+        let mut buttons = Input::new();
+        buttons.begin_frame(Button::Cross.bit());
+        PlayerInputs::single(InputSnapshot {
+            buttons,
+            stick_x,
+            ..InputSnapshot::EMPTY
+        })
+    };
+    for _ in 0..400 {
+        race.tick(&held(0.0));
+    }
+    assert_eq!(race.readout().steer_lean_follower, 0.0, "a centred stick");
+    for _ in 0..240 {
+        race.tick(&held(1.0));
+    }
+    let follower = race.readout().steer_lean_follower;
+    assert_eq!(
+        follower, race.sim.world.ships[0].physics.steer_lean_follower,
+        "the HUD reads the hull's own follower"
+    );
+    assert!(
+        follower > 1.0,
+        "a held stick leans the hull, not {follower}"
+    );
+}

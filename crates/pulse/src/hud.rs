@@ -160,6 +160,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             },
         ],
     }),
+    // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
+    sway: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.

@@ -665,6 +665,9 @@ pub struct HudArt {
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
+    /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
+    /// HUD fixed on the screen. See [`HudSway`].
+    pub sway: Option<crate::pre_race::Sourced<HudSway>>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -727,6 +730,23 @@ pub struct LapOneShift {
     pub widgets: &'static [&'static str],
     /// Added to their authored `x` on lap one.
     pub dx: i32,
+}
+
+/// The race HUD slides across the screen with the ship's drawn lean, as a whole.
+///
+/// Wipeout HD's `Hud_Update` (`0x0009e704`-`0x0009e754`) writes one translation into the
+/// top-level `"HUD"` and `"InGame"` screens it looked up by name at load, and every layout's
+/// root element is `<Screen name="HUD">`, so every widget the race draws moves with it: the
+/// bars, the clocks, the message lines, the pickup slot and the fixed reticle. On a
+/// running original a held full stick moved the whole HUD by 13.3 px at 1280x720, all five
+/// regions measured alike, and each plateau of the drawn lean's follower (`ship+0x6a58`) did
+/// the same at its own size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HudSway {
+    /// Layout units the HUD moves along **x** per unit of the drawn lean's follower
+    /// (`oag_physics::ShipState::steer_lean_follower`): HD's `-15.0` literal, so a stick to the right
+    /// slides the HUD to the left.
+    pub x_per_lean: i16,
 }
 
 /// The speed and shield bars' fill law: the tip of the fill is where the marker

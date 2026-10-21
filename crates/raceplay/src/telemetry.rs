@@ -238,6 +238,9 @@ impl Race {
                 .as_ref()
                 .filter(|_| primary)
                 .and_then(|split| split.display.line().cloned()),
+            // The drawn lean's follower, which a title with a measured sway slides its whole HUD
+            // by (`oag_hud::Readout::steer_lean_follower`). Display state, never hashed.
+            steer_lean_follower: ship.physics.steer_lean_follower,
         };
         if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
             readout.place = hud.place;

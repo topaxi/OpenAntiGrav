@@ -1005,6 +1005,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         }
     }
 
+    // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
+    // measured it - see `sway`.
+    super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
     frame
 }
 

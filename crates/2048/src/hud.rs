@@ -209,6 +209,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
     bar_tip: None,
+    // Inherited from HD through Omega, which ships this title's own HUD set under the same
+    // `<Screen name="HUD">` root. The Vita executable's `Hud_Update` was not read.
+    sway: Some(oag_title::pre_race::Sourced::inherited(
+        oag_title::hud::HudSway { x_per_lean: -15 },
+        "hd",
+    )),
     resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: None,
 };
