@@ -134,7 +134,7 @@ impl Frame {
                 .iter()
                 .map(|stamp| super::boost_smear::GlowStamp {
                     rect: moved(stamp.rect, p),
-                    value: stamp.value,
+                    ..*stamp
                 })
                 .collect(),
         }

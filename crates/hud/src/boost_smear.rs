@@ -64,6 +64,10 @@ pub struct GlowStamp {
     pub rect: [f32; 4],
     /// The mask byte written there.
     pub value: u8,
+    /// The colour the widget is drawn in, `rgb` in `0..=1`.
+    pub colour: [f32; 3],
+    /// One copy's alpha, `0..=1`.
+    pub opacity: f32,
 }
 
 /// Copy `i`'s shift along `dir`: the GE offset `base - d * i` truncated, moved to whole pixels.
@@ -158,7 +162,7 @@ pub(super) fn smear(
     frame: &mut Frame,
     art: &oag_title::HudArt,
     readout: &Readout,
-    fill: &[[f32; 4]],
+    fill: &[([f32; 4], [f32; 4])],
 ) {
     let Some(law) = art.boost_smear else {
         return;
@@ -171,13 +175,15 @@ pub(super) fn smear(
     let value = stamp(art, readout);
     if value > 0 {
         let base = [1808.0, 1912.0];
-        for rect in fill {
+        for (rect, colour) in fill {
             let dir = direction([rect[0], rect[1]], centre);
             for i in 0..n {
                 let by = shift(dir, i, base);
                 frame.glow.push(GlowStamp {
                     rect: [rect[0] + by[0], rect[1] + by[1], rect[2], rect[3]],
                     value,
+                    colour: [colour[0], colour[1], colour[2]],
+                    opacity: (colour[3] * 255.0 / n as f32).trunc() / 255.0,
                 });
             }
         }

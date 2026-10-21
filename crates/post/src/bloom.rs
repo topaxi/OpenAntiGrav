@@ -127,6 +127,13 @@ struct Constants {
     /// read the fixed scratch buffers, which are always whole.
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
+    /// [`Bloom::stamp_glow`]'s rectangles, as fractions of the drawn rectangle: `x, y, width,
+    /// height`. Only the stamp pass reads these three fields; every other pass is handed zeros.
+    stamps: [[f32; 4]; stamps::MAX],
+    /// The stamped colour, `rgb` in `0..=1`.
+    stamp_colour: [f32; 4],
+    /// `count, value, opacity` of the stamps and a pad.
+    stamp_meta: [f32; 4],
 }
 
 /// One frame's worth of input to [`Bloom::render`].
@@ -220,6 +227,9 @@ impl Lane {
             _pad: 0.0,
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
+            stamps: [[0.0; 4]; stamps::MAX],
+            stamp_colour: [0.0; 4],
+            stamp_meta: [0.0; 4],
         };
         // The one buffer here that is not a compile-time constant: the bright
         // pass's rectangle moves whenever a resolution controller moves the
@@ -295,6 +305,11 @@ pub struct Bloom {
     bright: wgpu::RenderPipeline,
     blur: wgpu::RenderPipeline,
     composite: wgpu::RenderPipeline,
+    /// The glow of [`Bloom::stamp_glow`]'s rectangles in place of a scene's bright pass.
+    stamp: wgpu::RenderPipeline,
+    /// The scratch buffers [`Bloom::stamp_glow`] runs in, apart from the scene's so a frame can
+    /// stamp after the scene's glow was prepared.
+    stamp_lane: Lane,
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     format: wgpu::TextureFormat,
@@ -423,7 +438,15 @@ impl Bloom {
             wgpu::ColorWrites::COLOR,
         );
 
+        let stamp = pipeline("bloom stamp", "fs_stamp", None, wgpu::ColorWrites::ALL);
         let base = Lane::new(
+            device,
+            format,
+            &layout,
+            &sampler,
+            (BLOOM_WIDTH, BLOOM_HEIGHT),
+        )?;
+        let stamp_lane = Lane::new(
             device,
             format,
             &layout,
@@ -434,6 +457,8 @@ impl Bloom {
             bright,
             blur,
             composite,
+            stamp,
+            stamp_lane,
             layout,
             sampler,
             format,
@@ -547,6 +572,9 @@ impl Bloom {
             _pad: 0.0,
             uv_scale,
             uv_max,
+            stamps: [[0.0; 4]; stamps::MAX],
+            stamp_colour: [0.0; 4],
+            stamp_meta: [0.0; 4],
         };
         if lane.written.get() != Some(wanted) {
             queue.write_buffer(&lane.constants_bright, 0, bytemuck::bytes_of(&wanted));
@@ -688,6 +716,9 @@ impl Bloom {
         pass.draw(0..3, 0..1);
     }
 }
+
+mod stamps;
+pub use stamps::{MAX as MAX_STAMPS, Stamps};
 
 #[cfg(test)]
 mod tests;

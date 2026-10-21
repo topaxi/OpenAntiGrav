@@ -284,7 +284,7 @@ impl Overlay {
         readout: &Readout,
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
-    ) {
+    ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         let mut frame = draw_list(&self.context(), readout);
         if let Some(text) = countdown {
             frame.extend(crate::hud_views::countdown_frame(
@@ -296,7 +296,9 @@ impl Overlay {
                 self.space,
             ));
         }
+        let glow = frame.glow.clone();
         self.paint(device, queue, encoder, view, frame, viewport);
+        glow
     }
 
     /// Draws one HUD per split-screen view, `readouts[i]` into view `i` - see
@@ -319,7 +321,7 @@ impl Overlay {
         countdown: Option<&str>,
         cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
-    ) {
+    ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         let count = readouts.len();
         let mut frame = views_frame(&crate::hud_views::view_draws(
             self.context(),
@@ -341,7 +343,9 @@ impl Overlay {
                 self.space,
             ));
         }
+        let glow = frame.glow.clone();
         self.paint(device, queue, encoder, view, frame, viewport);
+        glow
     }
 
     fn paint(

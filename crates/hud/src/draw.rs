@@ -788,7 +788,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         &ungated
     };
     let mut frame = Frame::default();
-    let mut stamped: Vec<[f32; 4]> = Vec::new();
+    let mut stamped: Vec<([f32; 4], [f32; 4])> = Vec::new();
 
     // An always-on name draws **once**, even where the layout authors it twice.
     // See `ONE_WIDGET_PER_NAME`.
@@ -869,9 +869,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             .art
             .boost_smear
             .is_some_and(|law| law.stamp == sprite.name)
-            && let Some(Draw::Sprite { rect, .. }) = &drawn
+            && let Some(Draw::Sprite { rect, color, .. }) = &drawn
         {
-            stamped.push(*rect);
+            stamped.push((*rect, *color));
         }
         frame.sprites.extend(drawn);
         frame.sprites.extend(fill);
