@@ -112,8 +112,8 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// the original, whose `row1` offsets both before this rotation is taken.
 /// See `oag_render::roll`.
 ///
-/// This call site inherits [`crate::roll::ROLL_DIRECTION`]'s measured sign
-/// on the argument that the VFPU register-naming ambiguity it settles is one
+/// This call site inherits [`crate::roll::ROLL_DIRECTION`]'s sign (a left roll tips
+/// the up vector left, as the hull rolls) on the argument that the VFPU register-naming ambiguity it settles is one
 /// binary-wide fact rather than a per-call-site choice - `FUN_088455ec`'s own
 /// `up = Rot(...) * up` was not itself captured, only the ship's display
 /// matrix in `FUN_088418e0` was. Labelled here so that distinction is not

@@ -10,6 +10,12 @@ into the barrel roll's own angle, `lean * 0.5 + roll * 6.28`. Evidence:
 Per title: Pulse measured, Pure checked (same literals, static), HD measured, Omega and 2048
 inherited from HD (both parse `<Tilt>`; consumer not located).
 
+**Direction corrected 2026-10-21 (`lean-sign-fix`):** the lean and the barrel roll drew
+mirrored (right stick raised the right wingtip) because the captured row 0 is the hull's
+left and the sign test mapped it onto our right. `ROLL_DIRECTION` is `+1.0`; a right stick banks
+right on every title. Open: a PPSSPP/RPCS3 photograph of the hull under a held stick (the fix rests
+on the recorded rows and `Basis::LeftUpForward`, not on a new capture).
+
 ## Open
 
 - ~~**HD's cockpit lean is its own and ours runs Pulse's on it.**~~ Ported 2026-10-21

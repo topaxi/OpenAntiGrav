@@ -1125,15 +1125,21 @@ pub(crate) struct Uniforms {
 /// keeps it independent of whatever `vmmul.q`'s unresolved operand order
 /// would otherwise carry through a following scale. See `oag_render::roll`.
 pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
-    let body = &ship.physics.body;
+    Mat4::from_rotation_translation(display_orientation(ship), ship.physics.body.position)
+        * Mat4::from_rotation_y(MODEL_YAW)
+        * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
+}
+
+/// The drawn hull's rotation: the body's orientation with the barrel roll and the
+/// steering lean turned about its nose ([`model_matrix_of`] without the model-space
+/// yaw and scale). Its local `+X` is the hull's right wingtip, `-Z` its nose.
+pub(super) fn display_orientation(ship: &Ship) -> Quat {
     let roll = oag_render::roll::display_rotation(
         Vec3::NEG_Z,
         ship.physics.roll_phase,
         ship.physics.steer_lean,
     );
-    Mat4::from_rotation_translation(body.orientation * roll, body.position)
-        * Mat4::from_rotation_y(MODEL_YAW)
-        * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
+    ship.physics.body.orientation * roll
 }
 
 #[cfg(test)]
@@ -1185,6 +1191,66 @@ mod tests {
         );
     }
 
+    /// The orientation of a body the original recorded as rows `(row0, row1, row2)`, which
+    /// are the hull's LEFT, up and nose (`oag_trace::replay::Basis::LeftUpForward`, the
+    /// measured reading: holding right turns the nose away from row 0). Ours has right `+X`,
+    /// up `+Y` and the nose at `-Z`, so the columns are `(-row0, row1, -row2)`. Building
+    /// them straight from the rows puts the nose at `+Z` and mirrors every roll sense.
+    fn original_body(row0: Vec3, row1: Vec3, row2: Vec3) -> Quat {
+        Quat::from_mat3(&oag_core::math::Mat3::from_cols(-row0, row1, -row2))
+    }
+
+    /// Where the original's row 0 (the hull's left) lands for a hull rotated by `rotation`.
+    fn original_row0_of(rotation: Quat) -> Vec3 {
+        rotation * Vec3::NEG_X
+    }
+
+    /// The right wingtip's height over the hull's own level, after a stick held for a
+    /// second through the real lean filter. Negative: the right wing is down.
+    fn right_wing_height_after_holding(steer_x: f32, craft_state_ticks: usize) -> f32 {
+        let mut ship = level_ship();
+        let controls = oag_physics::ShipControls {
+            steer_x,
+            ..Default::default()
+        };
+        for _ in 0..craft_state_ticks {
+            oag_physics::controls::update_steer_lean(
+                &mut ship.physics,
+                &controls,
+                &oag_physics::SteerLean::PULSE,
+                1.0 / 60.0,
+            );
+        }
+        (display_orientation(&ship) * Vec3::X).dot(Vec3::Y)
+    }
+
+    /// Steering right banks the hull into the turn: the right wingtip drops and the left
+    /// rises, and the reverse for left. The original's own display matrix agrees: its
+    /// "row 0" is the hull's LEFT (its basis rows run left, up, nose, `right x up =
+    /// forward`), and it gains height for a positive lean, which is a right bank. An
+    /// earlier test mapped that row onto our `+X` (the right) and so shipped the sign
+    /// backwards for the lean and the barrel roll together.
+    #[test]
+    fn a_held_right_steer_drops_the_right_wing_and_left_raises_it() {
+        let right = right_wing_height_after_holding(1.0, 120);
+        let left = right_wing_height_after_holding(-1.0, 120);
+        assert!(right < -0.1, "right steer: right wingtip height {right}");
+        assert!(left > 0.1, "left steer: right wingtip height {left}");
+    }
+
+    /// A barrel roll started by tapping left rolls left: `roll_phase` heads negative and
+    /// the left wing goes down, the right one up.
+    #[test]
+    fn a_left_barrel_roll_drops_the_left_wing() {
+        let mut ship = level_ship();
+        ship.physics.roll_phase = -0.25;
+        let right_wing = (display_orientation(&ship) * Vec3::X).dot(Vec3::Y);
+        assert!(right_wing > 0.1, "{right_wing}");
+        ship.physics.roll_phase = 0.25;
+        let right_wing = (display_orientation(&ship) * Vec3::X).dot(Vec3::Y);
+        assert!(right_wing < -0.1, "{right_wing}");
+    }
+
     /// [`oag_render::roll::ROLL_DIRECTION`] against the original's own
     /// display matrix, captured live 2026-09-08 - see
     /// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll
@@ -1210,7 +1276,7 @@ mod tests {
         let forward = Vec3::new(-0.495_188, -0.088_432_48, 0.864_273_5);
         let original_row0 = Vec3::new(0.168_767_69, 0.710_852_6, 0.169_427_96);
 
-        let orientation = Quat::from_mat3(&oag_core::math::Mat3::from_cols(right, up, forward));
+        let orientation = original_body(right, up, forward);
         // `entity+0x880` is the *eased* phase the display matrix reads
         // directly (`angle = entity[0x880] * 6.28`, no second `ease()`
         // pass) - not `roll_phase` itself, so the angle is built straight
@@ -1218,12 +1284,12 @@ mod tests {
         // routed back through `oag_render::roll::ease`.
         let angle = 0.2 * oag_render::roll::FULL_TURN;
         let roll = Quat::from_axis_angle(Vec3::NEG_Z, angle * oag_render::roll::ROLL_DIRECTION);
-        let ours_row0 = orientation * roll * Vec3::X;
+        let ours_row0 = original_row0_of(orientation * roll);
 
         assert_eq!(
             ours_row0.dot(Vec3::Y).signum(),
             original_row0.dot(Vec3::Y).signum(),
-            "our right axis's world height must rise/fall the same way the \
+            "the hull's left wingtip (the original's row 0) must rise/fall the same way the \
              original's did for the same body and the same positive phase: \
              ours={ours_row0} original={original_row0}"
         );
@@ -1242,9 +1308,9 @@ mod tests {
         let forward = Vec3::new(0.9688, -0.0170, 0.2471);
         let original_row0 = Vec3::new(0.1337, 0.5472, -0.4949);
 
-        let orientation = Quat::from_mat3(&oag_core::math::Mat3::from_cols(right, up, forward));
+        let orientation = original_body(right, up, forward);
         let roll = oag_render::roll::display_rotation(Vec3::NEG_Z, 0.0, 1.3981);
-        let ours_row0 = orientation * roll * Vec3::X;
+        let ours_row0 = original_row0_of(orientation * roll);
 
         assert_eq!(
             ours_row0.dot(Vec3::Y).signum(),

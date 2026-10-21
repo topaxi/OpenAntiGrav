@@ -1271,6 +1271,14 @@ the rollsign capture's law: residual **0.00000** on four ticks at
 `angle = +0.488` (stick right) and four at `-0.492` (stick left), against `0.70`
 for the opposite sign. So the lean shares the roll's composition and its sign.
 
+**Which way that draws, corrected 2026-10-21.** The captured row 0 is the hull's
+**left** (`oag_trace::replay::Basis::LeftUpForward`, measured), so a positive angle (a
+right stick, lean `> 0`) lifts the left wingtip and drops the right: a right bank into a
+right turn. Our first port drew the opposite (right wingtip up on a right stick) because
+the test mapped the captured row 0 onto our `+X`, the right. `ROLL_DIRECTION` is `+1.0`
+now; the capture's own residuals above are unaffected, only the mapping into our frame
+changed. Left on the table: the PPSSPP photograph of the hull under a held stick.
+
 Confidence **95** for the law (instruction-level read, an exact fit over every
 input it has, and a second live leg on its consumer). Ported as
 `oag_physics::controls::update_steer_lean` (unhashed `ShipState::steer_lean`),

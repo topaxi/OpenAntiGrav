@@ -93,7 +93,11 @@ row 2 `0.75` on the nose; with the stick left the mirror, `(+0.5741, -0.4823, 0)
 sin * body_row1)`. `crates/raceplay/src/drawable.rs`'s
 `hds_lean_turns_the_hull_the_way_its_captured_display_matrix_does` reproduces the captured row 0's
 world height through our own composition (sign and size, within `0.02`) and fails with
-`ROLL_DIRECTION` flipped. Confidence 92 for the sign on HD.
+`ROLL_DIRECTION` flipped. Confidence 92 for the form on HD. **Corrected 2026-10-21**: the test now builds our body from
+the captured rows as `(-row0, row1, -row2)` (row 0 is the hull's left, as on Pulse - the
+captured triple is right-handed with `right x up = forward` on both) and compares the left
+wingtip, so a right stick banks right (right wingtip down) with `ROLL_DIRECTION` `+1.0`.
+The handedness on HD is read from the triple, not from a second steering capture on RPCS3.
 
 **Ported**: `oag_physics::SteerLean` per craft, filled from `<Tilt>` by
 `oag_raceplay::load::code_laws` under `CraftLaws::tilt_steer_lean` (`oag_hd::race::CRAFT_LAWS`,
