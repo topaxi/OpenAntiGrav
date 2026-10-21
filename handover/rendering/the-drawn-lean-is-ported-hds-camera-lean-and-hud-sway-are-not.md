@@ -29,6 +29,10 @@ inherited from HD (both parse `<Tilt>`; consumer not located).
   folded `-l * 0.005 + r * 0.005`). Both inherit HD's law.
 - **`& 2` on Pulse's `entity+0x860`** negates the stick term of both filters; no writer was
   identified and it read clear in the capture. Treated as clear (chosen).
+- **HD's lean sign is inherited, not measured.** HD composes the same angle through its own
+  rotation builder (`bl 0x006776e8` at `0x000ebb68`); ours applies Pulse's measured
+  `ROLL_DIRECTION` to it, as it already did for HD's barrel roll. A read of HD's drawn node
+  matrix against the body under a held stick (RPCS3, `*(ship+0x6adc)`) would settle it.
 - **The stick shape.** Ours feeds the lean the unshaped stick; the original's record goes
   through a `0.2` deadzone and an S-curve (camera.md), so a partial stick leans less there.
   The maintainer's decision keeps our linear deadzone, so this is a known difference, not a bug.
