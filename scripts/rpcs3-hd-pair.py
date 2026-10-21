@@ -129,6 +129,11 @@ def main():
     ap.add_argument("--pack-half-fov", type=float, default=45.0,
                     help="with --field: half the angle of the cone around the look direction that counts as in view "
                          "(HD's 16:9 frame is about 100 degrees wide)")
+    ap.add_argument("--zone", metavar="ZONE,SCORE[,STAGE]",
+                    help="a Zone frame: ours renders at tick 0 on the original's pose and camera with this zone number and score "
+                         "(HD's Zone counters are not located in RAM, so the caller reads them off the original's own HUD in the "
+                         "paused frame; recorded as read off the frame) and, with STAGE, the colour-grade stage pinned "
+                         "(`--zone-stage`)")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -167,7 +172,7 @@ def main():
     track = track.replace(".rcsmodel", ".vex")
     pos, forward = ship["pos"], ship["rows"][2]
     clock = ship.get("race_clock_s")
-    if args.field:
+    if args.field or args.zone:
         args.ours_ticks = 0
     if args.ours_ticks is None:
         if clock is None:
@@ -178,7 +183,7 @@ def main():
     pair.rec["original"]["gantry_seconds"] = gantry
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
-    if clock is not None and not args.field:
+    if clock is not None and not args.field and not args.zone:
         pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,
                    "original %.2f s on its lap clock, ours %.2f s (ticks %d, GO at tick %d)"
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
@@ -209,6 +214,16 @@ def main():
     if gantry is not None:
         flags += ["--gantry-seconds", "%.6f" % gantry]
     field_flags = []
+    if args.zone:
+        zbits = args.zone.split(",")
+        zone_n, zone_score = int(zbits[0]), int(zbits[1])
+        field_flags = ["--hud-state", "1,1,0,0,0,100,0,%d,%d,0" % (zone_n, zone_score)]
+        if len(zbits) > 2:
+            field_flags += ["--zone-stage", zbits[2]]
+        pair.rec["original"]["zone"] = {"zone": zone_n, "score": zone_score, "stage_pinned": zbits[2] if len(zbits) > 2 else None,
+                                        "source": "read off the original's own HUD in the paused frame (HD's Zone counters are not located in RAM)"}
+        pair.caveat("Zone state read off the original's HUD by eye (zone %d, score %d), not from RAM; ours runs no ticks, so every effect "
+                    "that needs history (exhaust, trail) starts cold; speed readout shows 0 in ours" % (zone_n, zone_score))
     if args.field:
         rows = [{"slot": r["slot"], "player": r["player"], "team": r["team"], "left": r["rows"][0],
                  "up": r["rows"][1], "fwd": r["rows"][2], "pos": r["pos"], "vel": r["vel"]} for r in ship["field"]]
@@ -256,8 +271,8 @@ def main():
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
     # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none.
     ours_csv = out / "ours-trace.csv"
-    cmd = base if args.field else base + ["--pose-hold"]
-    pair.rec["ours"]["pose_hold"] = not args.field
+    cmd = base if args.field or args.zone else base + ["--pose-hold"]
+    pair.rec["ours"]["pose_hold"] = not (args.field or args.zone)
     pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     run(cmd + ["--ticks", args.ours_ticks, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)

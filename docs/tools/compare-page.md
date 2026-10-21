@@ -298,6 +298,10 @@ ahead). The display matrix (`entity+0x8b0`, two hops) is not the cause of a posi
 last digit for all eight craft, and its rotation rows are scaled by 0.75 with an up axis tilted about 10 degrees from the body's (a visual
 roll). Not wired: ours keeps the body as read, with the skew recorded in the handover thread.
 
+## Zone pairs (Pulse PSP, 2026-10-21, `zone-pairs`)
+
+A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.
+
 ## Publishing is locked
 
 `just publish-compare` uploads the built `data/compare/` with `wrangler pages deploy`
