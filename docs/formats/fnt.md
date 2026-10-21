@@ -370,7 +370,8 @@ shows the original outlining **every** HUD-font widget, `CurrentTime` and
 `BestTime` included, so drawing no outline is wrong. This project defaults to the
 layout's own `HudBGColour` (`0x40000000`), which is what every widget that *does*
 name a border points at. The original's outline reads crisper than 25 % alpha
-produces, so the exact colour is still approximate - see
+produces, so the exact colour is still approximate (2026-10-21: the crispness was the original's **two passes**, not the colour - the
+silhouette's alpha in the border colour, then the grey level as alpha in the text colour; see [the HUD](../ui/hud.md)) - see
 [the HUD](../ui/hud.md#still-open-after-the-frame).
 
 Read 48 bytes early the same fonts have four or five distinct alphas and a dozen

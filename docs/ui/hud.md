@@ -1311,7 +1311,44 @@ Pure unmeasured) rounds the pen's step and the width an aligned string is placed
 pairs' mean grey difference (0-255, `compare_env.overlap_score` edge correlation beside it) fell 0.08 to
 0.17 on each but Moa Therma Black (0.00, no text in its error), the Zone pairs moved +0.01 and +0.02.
 
-Checked and not taken: the glyph rect is the box grown 0.5 px each side and the uv 0.5 texel (`225.5..249.5`
-for the box `226..249`), in the PSP's pixel-centre convention (a rect edge at `x.5` covers from pixel
-`ceil(x)`). Drawing ours that way, in every offset combination, did not lower the grid pairs' difference
-(7.555 against 7.561 on the 15 white pairs at best), so it is not wired. Not checked against Pure or the PS2.
+**Taken 2026-10-21 (`pulse-hud-finish`).** The glyph rect is the box grown 0.5 px each side and the uv 0.5 texel
+(`225.5..249.5` for the box `226..249`), in the PSP's pixel-centre convention (a rect edge at `x.5` covers from pixel
+`ceil(x)`). The earlier attempt scored the whole frame, where the text is two percent of the pixels, and saw 7.555
+against 7.561; against the HUD boxes, once the strokes were right (next sections), it lowers every one of the 24 grid
+pairs (5.86 to 5.63 mean grey difference). Wired for a raster HUD (`set_whole_pixel_advances`, Pulse and Pure
+unmeasured), text only. Not checked against Pure; the PS2 pair reads +0.003.
+
+## An outlined HUD font is two passes (2026-10-21, `pulse-hud-finish`)
+
+Read off the same GE list (Moa Therma White grid; `scripts/psp-ge-dump.py`, the prims' texture, CLUT and state): each HUD
+string is **two** `RECTANGLES` prims over one 4-bit font texture under **two CLUTs**, vertex type `0x183`, linear filter,
+blend `SRC_ALPHA, 1 - SRC_ALPHA`. `PulseHud.fnt`'s first CLUT is white with the `.fnt` palette's **alpha** per index
+(`0, 10, 21, 34, ...`, the silhouette); the second is white with the palette's **grey level** as alpha (`1, 5, 77, 209,
+255` on the body's indices, 0 elsewhere, `ffffffff` at index 12). So the original draws the silhouette's alpha in the
+border colour first, then the body's grey as alpha in the text colour, each pass filtered on its own alpha.
+
+Ours mixed the two colours by the filtered grey and then multiplied by the filtered alpha, so a stroke under a pixel
+wide, which a 0.6 scale makes of most of them, came out grey and dim (a one-pixel vertical stroke read 183 where the
+original's read 228 over the same ground; the summed coverage of the best-lap row was 82.5 against 140.4). `ui.wesl`
+now composites the two passes for an outlined atlas (`Atlas::is_outlined`, `hud.z`): `a1 = border.a * coverage`, `a2 =
+color.a * mask`, `over(color, a2)` over `over(border, a1)`. The menu fonts (one white, no outline) keep their one pass.
+This is why the labels were "slightly less sharp": every sub-pixel offset (+-0.5 px in both axes), uv shift, quad
+size and the `integer`/`nearest` sampler modes measured **worse** than the placement already had, so it was never
+placement. Gradient energy of the HUD text boxes against the original's: best-lap row 24.6 to 29.1 (original 30.3),
+shield text 22.8 to 28.7 (27.8), speed text 26.8 to 33.0 (31.3). The border colour's alpha (`HudBGColour`, 0.25) is
+still the layout's; the second CLUT does not carry it, so its exact value in the original is unread.
+
+## Right-aligned HUD text ends on the ink (2026-10-21, `pulse-hud-finish`)
+
+The same list places `0 kmh` at `268.5, 274.5, 277.5, 284.5, 291.5` where ours stood 2 px left, `100%` 1 px left and
+the `Record` caption 1 px left: each string's last glyph sits where its **ink** ends at the authored `x`, the advance
+less the cell width (`h` 7 less 5, `%` 6 less 5, `d` 6 less 5) shifted right, while the record time (`8`: advance 16,
+cell 16) never moved. Confidence 75 (three strings and a control, one list; the speed text matches the race pair
+`talons-alongside` too, 0.3 grey over the box). `Renderer::push_text` subtracts that trailing bearing from the width of a
+right-aligned string when the HUD advances whole pixels. **Centred text is unmeasured and unchanged.**
+
+Over the 26 `pulse-psp` pairs (24 grid, 2 Zone) the HUD boxes' mean grey difference (lap, record, best, current, speed text, shield
+text, bar; 480x272) went 9.46 to 5.63 over these three changes, speed text 15.8 to 7.3, shield text 13.4 to 5.4,
+record 10.8 to 7.4. Moa Therma Black (a tilted HUD in the original), the Zone Talon's pair and `talons-boost` (text the
+original draws mid-fade) are not text errors any more and keep their scene-bound scores.
+

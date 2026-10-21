@@ -610,6 +610,9 @@ pub struct Atlas {
     pub border_extend: u32,
     /// Whether this came off the disc.
     real: bool,
+    /// Whether the font bakes an outline into its atlas (`fnt::Font::is_outlined`): the two HUD
+    /// fonts. Its `luma` plane then names the body and the renderer draws the text in two passes.
+    outlined: bool,
 }
 
 impl Atlas {
@@ -654,6 +657,7 @@ impl Atlas {
             texel_scale: 1.0,
             border_extend: 0,
             real: false,
+            outlined: false,
         }
     }
 
@@ -721,6 +725,7 @@ impl Atlas {
             texel_scale: 1.0,
             border_extend: 0,
             real: true,
+            outlined: font.is_outlined(),
         }
     }
 
@@ -743,6 +748,12 @@ impl Atlas {
     #[must_use]
     pub fn is_real(&self) -> bool {
         self.real
+    }
+
+    /// Whether the font bakes an outline into its atlas, so its `luma` plane is a body mask.
+    #[must_use]
+    pub fn is_outlined(&self) -> bool {
+        self.outlined
     }
 
     /// The cell for `ch`, folding case and then accents.

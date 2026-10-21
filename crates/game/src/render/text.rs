@@ -107,7 +107,7 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let width = if self.hud.whole_advances {
+        let width: f32 = if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
                 .map(|cell| self.hud.advance(cell.advance * scale * atlas.texel_scale))
@@ -116,10 +116,26 @@ impl Renderer {
             font::measure(atlas, text) * scale
         };
         let texel = atlas.texel_scale;
+        // **A right-aligned HUD string ends on its last glyph's ink, not on its advance.** Read off
+        // the GE lists of the Pulse grid: `0 kmh`, `100%` and `Record` sit 2, 1 and 1 px further
+        // right than the advance-aligned pens, the last glyph's trailing bearing (its advance less
+        // its cell width) in each, where the record time's last glyph has none and sits where it
+        // always did. `docs/ui/hud.md`, "Right-aligned HUD text ends on the ink".
+        let trailing = if self.hud.whole_advances && align == Align::Right {
+            text.chars()
+                .next_back()
+                .and_then(|c| atlas.cell(c))
+                .map_or(0.0, |cell| {
+                    let advance = self.hud.advance(cell.advance * scale * texel);
+                    (advance - cell.width as f32 * scale * texel).max(0.0)
+                })
+        } else {
+            0.0
+        };
         let mut pen = self.hud.snap(match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
-            Align::Right => x - width,
+            Align::Right => x - width + trailing,
         });
         let y = self.hud.snap(y);
 
@@ -138,6 +154,17 @@ impl Renderer {
                 continue;
             };
             let (mut rect, mut uv) = atlas.glyph_quad(&cell, pen, y, scale);
+            if self.hud.whole_advances {
+                // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
+                // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of
+                // the Pulse grid, every glyph of every string), in its pixel-centre convention.
+                for quad in [&mut rect, &mut uv] {
+                    quad[0] -= 0.5;
+                    quad[1] -= 0.5;
+                    quad[2] += 1.0;
+                    quad[3] += 1.0;
+                }
+            }
             if let Some((left, right)) = clip {
                 let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
                 if glyph_right <= left || glyph_left >= right {

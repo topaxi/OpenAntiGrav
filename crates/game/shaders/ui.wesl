@@ -252,7 +252,19 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // translucent border colour - which is what the HUD authors, 0x40000000 -
     // leaves the outline fainter than the glyph rather than opaque black.
     let ink = mix(in.border, in.color, mask);
-    let from_atlas = vec4<f32>(ink.rgb, ink.a * coverage);
+    // **An outlined font is two passes**, as the PSP draws it: the same texture drawn twice under two
+    // palettes (read off a GE list of the Moa Therma grid, `PulseHud.fnt`'s two CLUTs), first the
+    // silhouette's alpha in the border colour, then the body's grey level as alpha in the text colour.
+    // Each pass filters its own alpha, so a stroke thinner than a pixel keeps the body's full
+    // white where mixing the two colours first, as the menu fonts' one pass does, greyed it.
+    let border_alpha = in.border.a * coverage;
+    let body_alpha = in.color.a * mask;
+    let pass_alpha = body_alpha + border_alpha * (1.0 - body_alpha);
+    let pass_rgb = (in.color.rgb * body_alpha + in.border.rgb * border_alpha * (1.0 - body_alpha))
+        / max(pass_alpha, 1.0e-6);
+    let two_pass = vec4<f32>(pass_rgb, pass_alpha);
+    let one_pass = vec4<f32>(ink.rgb, ink.a * coverage);
+    let from_atlas = select(one_pass, two_pass, uniforms.hud.z > 0.5);
     let from_sheet = sprite * in.color;
     // The face atlas mixes the same way the main one does - the menu faces
     // this build has loaded through it all carry a constant mask, same as
