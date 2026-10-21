@@ -74,6 +74,9 @@ PRESENTED_LAG = 1
 #: `Ship_UpdateCraft`: the load stops at its first hit, the state's own first frame (bit-identical run to run), where the
 #: old load-then-freeze landed 0.6 s of race clock late and differently each time (`psp-state.py do_load_stopped`).
 SHIP_UPDATE_CRAFT = 0x08849618
+#: The flare node's boost length (`+0xb4`, 0.8 s, `exhaust.md`): its `+0xb8` timer counts down from it, `--pose-boost` is the
+#: elapsed time, so the age of a boost with `t` seconds left is `BOOST_SECONDS - t`.
+BOOST_SECONDS = 0.8
 
 
 def run(cmd, **kw):
@@ -131,6 +134,21 @@ AUTOPILOT_TIMER_SANE_S = 600.0
 #: `<Weapon type="Autopilot"><Stats time>`: the timer the pickup arms with (4.9666 read two dispatches after arming,
 #: `scripts/psp-autopilot-rail.py` logs it as `authored_timer`), which is what a player who just took the pickup sees.
 AUTOPILOT_AUTHORED_S = 5.0
+
+
+def lean_and_boost_flags(pair, theirs_row):
+    """`--pose-lean` and `--pose-boost` for the frame, from the pose row's own columns (`psp-trace.py --flare`): the drawn
+    lean (`steer_lean`) and barrel-roll phase the original's per-tick update had written, and the exhaust flare's boost
+    timer. The boost age is `BOOST_SECONDS - timer`; a timer of 0 carries no boost."""
+    lean, roll, timer = theirs_row.get("steer_lean"), theirs_row.get("roll_phase"), theirs_row.get("boost_timer")
+    pair.check("the trace row carries the drawn lean, the roll phase and the flare's boost timer",
+               None not in (lean, roll, timer), "steer_lean %s, roll_phase %s, boost_timer %s" % (lean, roll, timer))
+    pair.rec["original"]["pose_row_display"] = {"steer_lean": lean, "roll_phase": roll, "boost_timer": timer,
+                                                "intensity": theirs_row.get("intensity")}
+    flags = ["--pose-lean"]
+    if timer is not None and timer > 0.0:
+        flags += ["--pose-boost", "%.6f" % (BOOST_SECONDS - timer)]
+    return flags
 
 
 def boost_phase(dbg):
@@ -288,7 +306,7 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
         zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"])
     if shield_percent is None:
         pair.caveat("the original's shield read %.1f against the assumed pool of %.1f: ours shows a full bar" % (shield, args.shield_max))
-    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--pose-lean",
             "--field-from", out / "field.csv", "--field-warmup", "--hud-state", hud] + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
@@ -314,6 +332,16 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
         pair.rec["meta"] = json.loads(args.meta)
     pair.finish()
     print("wrote", out / "side.png")
+
+
+def display_checks(pair, theirs_row, ours_row):
+    """Ours' own `--trace-out` row against the original's at the pose's tick: the drawn lean and roll phase equal, and the
+    exhaust's boost timer within one tick of the original's (the arm and its `aged` advances are whole ticks)."""
+    for col, tol in (("steer_lean", 1e-5), ("roll_phase", 1e-5), ("boost_timer", 1.0 / 60.0)):
+        t, o = theirs_row.get(col), ours_row.get(col)
+        pair.rec["ours"].setdefault("display_row", {})[col] = o
+        pair.check("ours' %s equals the original's (tolerance %g)" % (col, tol),
+                   t is not None and o is not None and abs(t - o) <= tol, "original %s, ours %s" % (t, o))
 
 
 def camera_craft_distance(row):
@@ -394,8 +422,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 player["place"], lap_number, player["lap_time"], clock,
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
                 player["best_lap_cs"] / 100),
-            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + flags + [
-        "--camera-fov", "%.4f" % fov]
+            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + lean_and_boost_flags(
+                pair, theirs_row) + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
     pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft "
@@ -406,7 +434,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 "is not drawn" %
                 (player["place"], len(rows), lap_number, player["lap_time"]))
     ours_csv = out / "ours-trace.csv"
-    run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    # `--ticks 0` writes the one row the frame is drawn from (after the warm-up, the boost and the lean), so the display columns checked below are the picture's
+    run(base + ["--ticks", 0, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
     run(base + ["--ticks", 0] + view_flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got
@@ -415,6 +444,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
     ours_row = ce.csv_row(ours_csv, 0)
     pair.check_pose(theirs, ce.pose_of(ours_row), fov, fov)
+    display_checks(pair, theirs_row, ours_row)
     pair.rec["ours"]["shield"] = ours_row.get("shield")
     pair.check_size("ours", out / "ours.png")
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
@@ -551,7 +581,7 @@ def main():
     shots = out / "shots"
     csv = out / "trace.csv"
     with open(csv, "w") as f:
-        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--shot-every", 1,
+        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--flare", "--shot-every", 1,
                   "--shot-dir", shots] + trace_extra, stdout=f)
     set_window(960, 544)
     run(["magick", shots / ("tick%05d.png" % PRESENTED_LAG), "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", out / "theirs.png"])

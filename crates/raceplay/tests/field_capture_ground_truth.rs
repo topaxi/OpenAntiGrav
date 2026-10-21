@@ -129,7 +129,7 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
         })
         .collect();
     let ticks = warm.field_warm_up_ticks();
-    warm.warm_up_field(&velocities, ticks);
+    warm.warm_up_field(&velocities, ticks, None);
     for (slot, (position, orientation)) in poses.into_iter().enumerate() {
         let body = &warm.sim.world.ships[slot].physics.body;
         assert_eq!(
@@ -158,4 +158,53 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
         );
     }
     assert_eq!(warm.sim.world.tick, 0, "no simulation tick ran");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_field_warm_up_arms_the_players_boost_at_its_age_and_nobody_elses() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let field: Vec<Pose> = (1..=7u8)
+        .map(|n| pose_at(f32::from(n) * 11.0, f32::from(n) * 5.0))
+        .collect();
+    let start = || {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            pose: Some(race::PoseRequest::Exact(pose_at(-100.0, -170.0))),
+            field: field.clone(),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup)
+    };
+    let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
+
+    let mut plain = start();
+    let ticks = plain.field_warm_up_ticks();
+    plain.warm_up_field(&velocities, ticks, None);
+    assert_eq!(plain.exhaust_of(0).boost_timer(), 0.0, "no age, no boost");
+
+    // The original's flare read 0.349 s left on a boost that runs 0.8 s: an age of 0.451 s, 27 whole ticks.
+    let mut boosted = start();
+    boosted.warm_up_field(&velocities, ticks, Some(0.8 - 0.349_067));
+    let left = boosted.exhaust_of(0).boost_timer();
+    assert!(
+        (left - 0.349_067).abs() <= 1.0 / 60.0,
+        "the player's flare has {left} s of boost left, the original's row read 0.349"
+    );
+    assert!(
+        boosted.exhaust_of(0).trail_ready(),
+        "the boost rides the warmed trail"
+    );
+    for slot in 1..8 {
+        assert_eq!(
+            boosted.exhaust_of(slot).boost_timer(),
+            0.0,
+            "slot {slot} is not on the pad"
+        );
+    }
 }

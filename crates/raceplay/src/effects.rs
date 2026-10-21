@@ -812,7 +812,13 @@ impl Race {
     /// **Chosen, not measured:** the straight path and the fixed heading (the original's craft
     /// had curved), and full thrust for every craft: the player's throttle reads 100 in the
     /// capture, an opponent's is not read from RAM. The velocities are read.
-    pub fn warm_up_field(&mut self, velocities: &[Vec3], ticks: u32) {
+    ///
+    /// `boost_age` is the player's boost, as `--pose-boost` states it: seconds since the pad was entered (the flare's
+    /// timer counts *down* from [`exhaust::BOOST_SECONDS`], so the original's remaining `t` is an age of `0.8 - t`).
+    /// It arms [`Exhaust::boost`] on the player's exhaust that many ticks before the replay ends, so the plume's reveal
+    /// timer, the flare and the ribbon's layers run on the same warmed trail a real crossing leaves, where
+    /// [`Self::force_boost_state`] clears that trail and lays a straight one. `None` leaves every craft unboosted.
+    pub fn warm_up_field(&mut self, velocities: &[Vec3], ticks: u32, boost_age: Option<f32>) {
         let count = (self.sim.world.ship_count as usize).min(velocities.len());
         let at: Vec<Vec3> = (0..count)
             .map(|slot| self.sim.world.ships[slot].physics.body.position)
@@ -829,7 +835,12 @@ impl Race {
             self.view.exhaust[slot] = Exhaust::new();
             self.view.hd_trail[slot].clear();
         }
+        // `force_boost_state`'s order: arm, then `aged` advances (the first is the entry tick).
+        let aged = boost_age.map(|age| (age / self.sim.dt).round() as u32);
         for behind in (0..ticks).rev() {
+            if aged == Some(behind + 1) {
+                self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
+            }
             for slot in 0..count {
                 let ship = &mut self.sim.world.ships[slot].physics;
                 ship.body.position = at[slot] - velocities[slot] * (self.sim.dt * behind as f32);
@@ -837,6 +848,12 @@ impl Race {
                 ship.thrust = Self::FULL_THRUST;
             }
             self.advance_exhausts();
+        }
+        if aged == Some(0) {
+            self.view.exhaust[0].boost(exhaust::BOOST_SECONDS);
+        }
+        if let (Some(age), Some(pulse)) = (boost_age, &mut self.view.zoom) {
+            pulse.pose_boost(age, self.sim.dt);
         }
         for (slot, (velocity, thrust)) in before.into_iter().enumerate() {
             let ship = &mut self.sim.world.ships[slot].physics;
