@@ -239,6 +239,14 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
         edits[("Video", "Anisotropic Filter Override")] = str(e["anisotropic_override"])
         edits[("Video", "Stretch To Display Area")] = str(e["stretch_to_display_area"]).lower()
         edits[("Video", "Write Color Buffers")] = str(e["write_color_buffers"]).lower()
+        # No native overlays in a captured frame: the pause toast and the compile-hint spinner are drawn into the
+        # emulator's window, which a screenshot of the display includes. The home menu (SaveState) is a native
+        # overlay too, so a run that takes a save state keeps the native interface on.
+        if "show_hints" in e:
+            for key in ("Show PPU compilation hint", "Show shader compilation hint"):
+                edits[("Miscellaneous", key)] = str(e["show_hints"]).lower()
+        if "native_ui" in e and (os.environ.get("OAG_RPCS3_SUSPEND_STATE") != "1" or os.environ.get("OAG_RPCS3_NATIVE_UI") == "0"):
+            edits[("Miscellaneous", "Use native user interface")] = str(e["native_ui"]).lower()
     # Experiment overrides, `Section:Key=value;Section:Key=value` (a setting study such as the HD
     # artifact sweep): applied last, so they win over the profile, and a key with no line refuses.
     for item in filter(None, os.environ.get("OAG_RPCS3_EXTRA_EDITS", "").split(";")):
@@ -1232,6 +1240,9 @@ def prepare_state_boot(serial, interpreter=False):
                          "and the default pad profile); set XDG_CONFIG_HOME to a "
                          "private tree (scripts/emu-env.sh) first")
     root = Path(xdg_config()) / "rpcs3"
+    if "OAG_RPCS3_SUSPEND_STATE" not in os.environ:
+        # A restore only: the home menu is never opened, so the native interface (and its pause toast) stay off.
+        os.environ["OAG_RPCS3_NATIVE_UI"] = "0"
     os.environ.setdefault("OAG_RPCS3_SUSPEND_STATE", "1")
     os.environ.setdefault("OAG_RPCS3_COMPAT_STATE", "1")
     config = scratch_config(interpreter=interpreter)

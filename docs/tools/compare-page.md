@@ -77,8 +77,8 @@ so a state keeps flying, and the HUD **prints that timer**: the PSP race and bot
 0.3 s so the HUD redraws, the frame, pose, field and HUD record are from that moment). The HUD shows a pickup's own countdown
 (`5.00`, `4.95`), the manifest carries a caveat, `pair.json` records the timer before and after, and a pair whose timer at the stop
 is still above 600 s is refused. A run to let the pickup expire instead was tried on PSP and rejected: after 0.8 s the craft had
-left its line and the pack was gone. Known and not fixed here: the HD frames carry RPCS3's "Press and hold the START button to
-resume" toast (the pause the restore holds), and a PSP state loads a different number of emulated frames before the stop on
+left its line and the pack was gone. (The HD frames carried RPCS3's "Press and hold the START button to
+resume" toast until 2026-10-21, `hd-capture-profile`: the profile now turns the native interface off.) A PSP state loads a different number of emulated frames before the stop on
 a slower instance (a Zone 8 frame moved from zone second 1.5 to 2.1, where its HUD is mid-fade).
 
 ## Environment parity: the profile and the checks (2026-10-20)
@@ -112,7 +112,7 @@ the page never shows a directory name. `manifest` no longer rewrites `pair.json`
 | Platform | Output | Original's emulator settings (in the profile) | Ours |
 | --- | --- | --- | --- |
 | Pulse PSP (and Pure PSP, same values) | 480x272, the PSP's own | PPSSPP v1.20.4 software renderer, `InternalResolution = 1`, `AnisotropyLevel = 0`, no post shader | `--size 480x272`, aspect `psp` |
-| HD/Fury | 1920x1080 | RPCS3 Vulkan, `Resolution 1280x720`, `Resolution Scale 150`, `Output Scaling Mode Nearest`, `MSAA Disabled`, anisotropic override 0, `Write Color Buffers: true` in `config.yml` **and** the game's custom config | `--size 1920x1080`, aspect `wide` |
+| HD/Fury | 1920x1080 | RPCS3 Vulkan, `Resolution 1920x1080`, `Resolution Scale 100` (2026-10-21: 150 corrupts the exposure readback, see `rendering/hd-track-tone.md`), `Use native user interface` off and both compile hints off (no pause toast, no spinner in a frame), `Output Scaling Mode Nearest`, `MSAA Disabled`, anisotropic override 0, `Write Color Buffers: true` in `config.yml` **and** the game's custom config | `--size 1920x1080`, aspect `wide` |
 | Pulse PS2 | **1280x720, a chosen pick** (the maintainer asked for 720p; the game's own `Aspect Ratio` option is on `16:9` in the state and PCSX2 shows it at 16:9, so 1280x720 is the whole frame; adjustable in the profile) | PCSX2 OpenGL hardware renderer (the software renderer needs a Vulkan present queue Xvfb does not give), `upscale_multiplier 2`, `ScreenshotSize 1` (internal, aspect corrected), `AspectRatio 16:9` (1820x1024), then ONE Lanczos resize to 1280x720 | `--size 1280x720`, aspect **`wide`** (it was `ps2`, which is 4:3 and pillarboxes ours inside the 16:9 frame; 2026-10-21), rendered natively |
 | Omega | 1920x1080 | shadPS4, no race reached, no pair script | not run |
 | 2048 | 960x544, the Vita's own | Vita3K 1x, no race reached, no pair script | not run |
