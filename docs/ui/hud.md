@@ -1121,9 +1121,33 @@ circuit, mode and class - chosen, not measured.** The original keys its store
 by team (`FUN_088091a0`, `Profile_GetBestRaceTime` in
 [race-progress.md](../ghidra/functions/psp-pulse-usa/race-progress.md#the-stored-best-fun_088091a0-and-the-record-branch-closed-2026-09-30)),
 which `oag_game::records::Key` has no field for, so a run in one team's ship
-races the best of any team's. A track whose `stats.xml` does not read (any source but Pulse on a PSP disc; the load
-report says so) draws the plain elapsed clock in a plain race, as the original does when
+races the best of any team's. A track whose `stats.xml` does not read (the load
+report says so; Pulse on either pressing and HD read it, see below) draws the plain elapsed clock in a plain race, as the original does when
 its track record is null; a campaign cell still races its own ladder.
+
+### HD's RECORD, 2026-10-21 (`hd-go-board-hud`)
+
+**The original's HD Time Trial reads `RECORD`, and ours read `TOTAL`: the loader read `stats.xml` on Pulse only.**
+All thirteen HD Time Trial pairs show `RECORD` in the top-right panel with a time that, added to the race clock,
+is 599.0 s (Ubermall `9.46.1` at `0.12.9`; Modesto Heights `9.46.2` at `0.12.7`; Chenghou Project `9.47.0` at `0.12.0`).
+Live on RPCS3 (Modesto Heights state, one boot): the HUD's record struct holds, at `+0x3c`, `53040` while its `+0x30`
+(the race clock, f32) reads `68.606`; `53040 + 6860.6 = 59900.6` centiseconds, so the cluster counts down from
+59900 cs. That is HD's own `/data/environments/<dir>/stats.xml`: every one of its thirteen Time Trial circuits (and
+`_reversed`) authors `<RaceTimes Flash="599" Phantom="599" Rapier="599" Venom="599"/>` and `<LapTimes ... "59">`. Pulse's
+reader (`oag_tables::track_stats`, `oag_hud::RecordTarget`) parses it unchanged, and HD's HUD layout already
+carries the `TotalTime`/`TotalTimeTxt` widgets the pace drives, so the whole fix was the load: **every title but
+Pulse on a PSP disc now reads the file out of the race's own archives** (`oag_raceplay::load::track_stats`), and the
+caption becomes the disc's own `IG_HUD_RECORD`. Ours then reads `9.46.0` at `0.12.9` on Ubermall against the
+original's `9.46.1` (the one-tick difference of the clock readout both sides share). The stored best is chosen as on
+Pulse (this build's own, per circuit, mode and class; no profile in the pairs has one).
+The code is HD's `FUN_00094598` (`Hud_UpdateTimeCluster`, [hud-readouts.md](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md#the-time-cluster-hud_updatetimecluster-0x00094598)),
+fed by `PlayerStatus_Update`'s branch for modes `5`/`0x13`/`10`: with no ladder it chases `min(stored best,
+<RaceTimes>)`, as Pulse's does.
+**Cross-title: ported to the title family.** 2048 and Omega read through the same path (`stats.xml` under
+`data/environments/<dir>` in their archives where it exists; the load report names the entry or says it did not
+read), which is the HD law they inherit; not measured on either, no capture path. Pure: its stats do not sit under
+the race's archives, so it keeps `TOTAL` (checked, differs: unmeasured here).
+`crates/raceplay/tests/hd_record_target_ground_truth.rs` pins 599 s on Ubermall and on `DEFAULT_TRACK`.
 
 ### Medal messages, 2026-10-06
 

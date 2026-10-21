@@ -773,3 +773,4 @@
 0x000c8330	function	Handling_ParseFile	72	hover-four-point.md
 0x000c6550	function	Handling_ReadAntigrav	85	hover-four-point.md
 0x0007c588	function	CageEffect_Spawn	62	collision-cage.md
+0x00094598	function	Hud_UpdateTimeCluster	70	hud-readouts.md
