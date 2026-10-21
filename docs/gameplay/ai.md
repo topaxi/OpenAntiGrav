@@ -6017,7 +6017,8 @@ ratio of the yaw ceilings. **Ours, chosen, not measured.**
    instead of once. A route copy must also touch no wall, as a route plan must.
 4. **Otherwise the reference, at its share**: `SpeedPlan::share_for`, the ratio of the
    hull's yaw ceiling to the one the plan was learned on (a plan now records it), in
-   corners only, never on a takeoff run-up.
+   corners only, never on a takeoff run-up. Since 2026-10-21 only at a share that
+   laps on this hull ([below](#the-fallback-plan-is-verified-2026-10-21)).
 
 **Measured on `ai_clean_lap_gate`** (lone slot 1, Triakis): 36 rows red on one shared
 plan, 15 on adapted ring plans, 13 with the rescue-from-the-grid rule and adapted route
@@ -6078,6 +6079,76 @@ tick 9,000; **per-lap** is the worst single lap's loss per craft:
 The player's slot 0 (on the reference plan in both) was destroyed on `01_Track` on
 this branch and survived on main: with weapons on, a changed field is a different race.
 Slot 1 (Triakis) carries 151 of the branch's 305 contact ticks on `01_Track`.
+
+### The fallback plan is verified (2026-10-21)
+
+Lane `ai-rejudge-after-switches`, opened for `ai_clean_lap_gate`'s `06_Track` RAPIER row,
+whose worst median contact rose `154` to `419` when Pulse's magstrip escape was switched on
+(the original's law, [airborne-ground-truth.md](../physics/airborne-ground-truth.md#on-verticas-crest-the-original-escapes-too-2026-10-21-pulse-magstrip-hold)).
+**The contact was not on Vertica's crest.** A scratch sweep
+(`crates/raceplay/tests/ai_contact_where.rs`, `OAG_SWEEP=1`) bins the lone craft's wall
+ticks by line sample over the row's 45 perturbed runs (`perturb::BOUND_OFFSETS` by
+`perturb::GATE`): none at spline rows `2750`-`2768`. All of it is at samples 770-970 (a long
+left-hander after speed pad 4) and, on runs where no plan verifies, at 1230-1250, 1370-1385
+and 1840-1870.
+
+**Which plan the lone Triakis follows decides it.** Three modes, by run (escape on):
+
+| Plan followed | Runs | Contact ticks | Best lap |
+| --- | ---: | --- | --- |
+| None (the reference did not verify): the corner model | 10 | 122-163 | ~2,690 ticks |
+| Its own, the reference adapted (`SpeedPlan::adapt`) | 18 | 28-454 | 1,734-1,787 |
+| The reference at share 1 (Triakis is the reference) | 3 | 0, 66, 303 | 1,716-1,741 |
+| **The reference at its yaw share `0.774`, unchecked** | **14** | **106-846** | 1,839-1,892 |
+
+With the escape held the same modes occur; the unchecked one took 9 of 45 runs, 28-2,390
+contact. The escape moves the plan search, not the crest: it changes which runs end on
+that path. On it the craft runs samples 800-960 at 137-155 units/s at full lock and
+drifts from 15 units off the line to 29 and the wall, where the reference hull's own
+verification lap went 160-183. The share scales the plan's *targets*, and the targets there
+are 190-270 units/s (the reference never failed there), so a slower-turning hull is held to
+no speed it can carry. It was the one plan a race drove that had never lapped on the hull
+driving it.
+
+**The change** (`Race::fallback_ring`, `SpeedPlan::verify_at`, `SpeedPlan::at_share`).
+Where a hull's adapted ring plan fails, the reference is verified as it stands on that hull:
+two laps of the neutral driver at its yaw share, the share left off takeoff run-ups as
+`Driver::drive` leaves it. Followed there if it laps touching the wall at most 10 ticks
+(`FALLBACK_SCRAPE`, the gate's own contact tolerance); else at the first of `0.96`,
+`0.9216`, `0.8847`, `0.8493` of it that does; else at the share whose verification lapped
+with the fewest wall ticks; else at the yaw share, as before. Every other path is
+bit-identical. **Chosen, not measured.**
+
+**Measured and not kept:**
+
+- **The corner model** where no share is clean: `01_Track` PHANTOM `Eliminated` at offset 0
+  (525-559 contact), `07_Track` RAPIER and `14_Track` PHANTOM 180-240 ticks a lap slower.
+- **No scrape allowance**: `07_Track` RAPIER's yaw-share verification scrapes 0-7 ticks and
+  the race drives it at 0-8; held to clean, it dropped to `0.657`-`0.713` and lapped
+  3,000-3,115 ticks against 2,776. `06_Track`'s scrapes 55-94.
+- **A deeper ladder** (eight steps to `0.72`): identical results. Below about `0.88` of
+  `0.774` the verification stalls in `06_Track`'s gap at 1196-1200 (a 5-sample gap, not a
+  marked takeoff): too slow to clear it.
+
+**What it bought**, `06_Track` RAPIER over the 45 runs, before and after:
+
+| | per-offset median contact | worst | summed contact | shield lost per lap (mean) | end-of-run shield (mean) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| before | 303 419 327 324 122 304 147 146 160 | 419 | 10,371 | 2.07 | 81.7 |
+| after | 53 154 153 6 122 123 143 146 57 | 154 | 7,263 | 1.54 | 85.6 |
+
+Of the 14 unchecked runs, 11 now verify at `0.713`-`0.743` and touch the wall 0-6 ticks (one
+451, one 36); three find no share that laps and keep the old path. `ai_clean_lap_gate`
+regenerated two rows: `06_Track` RAPIER contact `419` to `154`, `14_Track` PHANTOM lap
+`2001` to `2098` ticks (+1.6 s, contact unchanged at `272`; 19 of its 45 runs now follow
+the reference at `0.657`-`0.743`). Summed contact over the 48 rows 911 to 646. Failures of
+the 107 Pulse AI-gate tests per `BOUND_OFFSETS` offset: before `0 0 0 1 1 2 1 2 1`, after
+`0 0 0 1 2 2 2 2 1` (median 1 and max 2 both), inside the noise bar. The lone-craft gate
+(`race_ground_truth`, VENOM) reads identically, 12 of 12 clean.
+
+**Open:** the three runs with no share that laps (`06_Track`'s gap stalls a slow share);
+`14_Track` PHANTOM's slower lap, where a lower share buys no less contact; the route plans
+keep the unchecked fallback (`hull_plans_for`'s routes).
 
 ## Where this sits
 
