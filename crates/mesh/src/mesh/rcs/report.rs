@@ -113,6 +113,9 @@ pub struct Report {
     /// Of [`Self::picture_unsampled`], the materials whose authored constant
     /// diffuse colour is bound as a one-texel picture.
     pub constant_diffuse: usize,
+    /// Materials whose picture is multiplied by an authored tint the program
+    /// reads (`picture_tint`): the product is bound as the picture.
+    pub picture_tinted: usize,
     /// Materials that carry the circuit's baked lighting atlas in their second
     /// texture slot, and are therefore drawn multiplied by it.
     ///
@@ -366,6 +369,9 @@ impl Report {
                 ", {n} material(s) whose program samples no colour texture (normal map and lightmap only), drawn without a picture ({} of them with their authored constant diffuse)",
                 self.constant_diffuse
             ),
+        } + &match self.picture_tinted {
+            0 => String::new(),
+            n => format!(", {n} material(s) whose picture is multiplied by its authored tint"),
         } + &match self.glow_unread {
             0 => String::new(),
             n => format!(

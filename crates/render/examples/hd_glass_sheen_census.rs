@@ -30,7 +30,9 @@
 //! A second mode, `--params <material substring>`, prints one material's own
 //! parameter table (hash, value) against `<image>:<archive>` and `<track>` -
 //! how this page's own `c` value (`0x512f8e65`) was read off the disc rather
-//! than guessed.
+//! than guessed. Two optional arguments follow the substring: an index into
+//! the archive list and a `track.vex` path (Talon's Junction in `DATA00` by
+//! default), so another circuit's instance can be read.
 
 use oag_mesh::mesh;
 use oag_rcs::rcsmaterial::{self, fragment::Texel};
@@ -60,8 +62,15 @@ fn main() -> anyhow::Result<()> {
         && flag == "--params"
     {
         let want = args.next().unwrap_or_default();
-        let spec = format!("{image}:{}", ARCHIVES[0]);
-        let name = "/data/environments/talons_junction/track.vex";
+        let archive = args
+            .next()
+            .and_then(|n| n.parse::<usize>().ok())
+            .map_or(ARCHIVES[0], |n| ARCHIVES[n]);
+        let spec = format!("{image}:{archive}");
+        let name = args
+            .next()
+            .unwrap_or_else(|| "/data/environments/talons_junction/track.vex".into());
+        let name = name.as_str();
         let data = mesh::read_blob(&spec, name)?;
         let geometry = mesh::rcs::sibling_geometry(&spec, name, &data)
             .ok_or_else(|| anyhow::anyhow!("no sibling .rcsmodel"))?;
