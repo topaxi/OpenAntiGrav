@@ -46,9 +46,14 @@ def xdo(*args):
 
 
 def paused(dbg):
-    first = dbg.call("cpu.status")["ticks"]
+    """Whether emulation stands still: the debugger's own `paused` flag (true with the pause menu open, 2026-10-21, v1.20.4),
+    or the CPU cycle counter not moving over 0.4 s. The `rerender-cold` lane saw the counter keep advancing with the menu
+    open and could not load a state at all; the flag does not depend on it."""
+    first = dbg.call("cpu.status")
+    if first.get("paused"):
+        return True
     time.sleep(0.4)
-    return dbg.call("cpu.status")["ticks"] == first
+    return dbg.call("cpu.status")["ticks"] == first["ticks"]
 
 
 def set_menu(dbg, want_open):
