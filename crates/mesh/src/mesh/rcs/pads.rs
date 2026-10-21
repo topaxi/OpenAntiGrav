@@ -475,6 +475,13 @@ pub(super) fn emit_chunk(
                     super::ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
                 ),
             );
+            // The authored tangent, where the material reads a normal map (`hull_normal`); the
+            // circuits' road and walls are world-pass chunks and carried none until this read it.
+            let tangents = if surface.tangent {
+                mesh.tangents(model_blob, submesh, stride).ok().flatten()
+            } else {
+                None
+            };
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 out,
@@ -484,7 +491,7 @@ pub(super) fn emit_chunk(
                     texcoords: texcoords.as_deref(),
                     lightmap_texcoords: lightmap_texcoords.as_deref(),
                     texcoords2: texcoords2.as_deref(),
-                    tangents: None,
+                    tangents: tangents.as_deref(),
                     vertex_light: vertex_light.as_deref(),
                     indices: &indices,
                     chunk: u32::try_from(chunk_index).ok(),

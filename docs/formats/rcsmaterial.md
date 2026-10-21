@@ -3215,3 +3215,85 @@ sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but n
 **Result, matched camera (hook-time matrix) against `01.png`, mean luma of two floor boxes (`py/stats.py`, ours before / after, reference):** right box 190 / 109 / 79, left box 217 / 188 / 143. Chroma (max-min) right 20 / 28 / 27. The rainbow is still visibly stronger than the original's in the far floor; the clamp to 8 bits was tried and changed nothing measurable (left out).
 
 **Open:** the `paraboloidReflectionTex` term (unit 1, 512x256 A8R8G8B8 render target at VRAM `0x04065380`, clamp, gamma `0x7`) adds `probe * grid.r` and is not drawn; the original frame was a few units off the hook-time camera (the craft slides 1-3 units after the shot), so no per-pixel diff exists. Which of the probe, the gamma bit order or a post stage closes the rest is unmeasured. `mag_effect_loop` has the same `in.texcoord.x` sun weight (`light`/`loop_light`) and was **not** changed: no reference. Circuits sharing the classifier: Talon's Junction, `tech_de_ra`, Modesto Heights (`etched_glass`); none has a reference frame. Omega lineage: not checked (a `just unpack list` of the Omega package shows no `etched_glass` entry; its archives were not opened).
+
+## The track's road and the lightmapped glass (2026-10-21, `hd-track-surface`)
+
+**What a player sees.** Tech de Ra's floor ahead painted a rainbow wedge and its right-hand lane a blown-white stripe; Modesto Heights' road drew its bump-less
+concrete with a white stripe on the right; Talon's race floor glowed cyan with a hard craft shadow on it. Three causes are closed here and two are named open.
+
+**How it was read.** A frame of the original on RPCS3 (`hd-draw-dump.py`, `HOOK_FP_LEN=0x800`, the Tech de Ra time-trial state and the Talon's race state)
+gives every draw's fragment program as it runs, with the patched constants. The glass draws of Tech de Ra's frame are two draws, two programs:
+
+| Draw | Fragment | Declares | Light |
+| --- | --- | --- | --- |
+| 354 (216 indices) | `0x76fac0` | grid (unit 0), paraboloid probe (1), ramp (2) | `TC0 + TC1 + TC5.x * sat(N.L) * sun` |
+| 355 (51 indices) | `0x7704c0` | grid (0), **atlas (1)**, probe (2), ramp (3) | `TC0 + prelit_scale * atlas^power + atlas.a * N.L * sun` |
+
+Both end `ADD /2 H0.xyz, ..., H2` and write `MOV H0.w, H6.x` (the grid's red). Neither samples a shadow map. The ramp is unit 2 of draw 354: its first DXT1 blocks
+equal `dc_iridescent_gradient.gtf`'s, so the binding is the disc's file (confidence 95); the grid is `glass_etched_tech.gtf` (same).
+
+1. **The sheen skipped the program's `/2` (confidence 95).** The authored path multiplies by `Light::output_scale` (0.5) because every lit HD program ends on a
+   `/2`; the glass branch returned the unscaled sum, twice the original's light. It now carries `scene.light.output_scale`. Test:
+   `hd_shadowed_track_redraw::the_glass_sheen_carries_the_programs_output_scale`.
+2. **A fourth shape was the same combine and drew as a lightmapped surface with the ramp as its picture (confidence 90).** `0x7704c0` declares `lightmap` as well, so
+   `glass_sheen::classify` (exactly three samplers) refused it and `skin::picks` took the generic lightmapped route: the ramp was the albedo, which is the blown white
+   stripe. `classify` now accepts the three plus `lightmap` (the atlas entry is carried in `GlassSheen::lightmap_entry`), the grid rides the **third** binding
+   (`glass_sheen::lightmapped_grids`, merged beside the magstrips' and the ice's) and `shade.wesl` lights it as `0x7704c0` does, the atlas raw (its address word's gamma
+   field is 0, the ramp's and grid's are 7). Census (`hd_glass_sheen_census`, all four archives): **9 materials, 18 chunks** against 6 and 15; the three new ones are
+   Tech de Ra slots 450 and 451 and Amphiseum slot 617 (`etched_glass_amph`). Test: `hd_track_surface_ground_truth::tech_de_ras_lightmapped_glass_is_the_sheen_with_its_grid_bound_third`.
+   `TC0` for this variant stays the vertex-colour term the other variant reads: its vertex program was not read (chosen, not measured).
+3. **The craft's shadow is not drawn on these floors (confidence 85).** The fallback `colour * (1 - coverage * strength)` darkened the glass and the magstrip floor under the
+   craft; the glass programs have no shadow lookup, and the magstrip floor's `ShadowToAlpha` redraw (`0x78d0c0`, Talon's race frame, three draws with `TXP unit5`) lights with
+   `TC1 + TC2`, no sun, so it draws the very colour the lit pass does and the original's frame shows no shadow there. `shade.wesl` sets a private `shadow_exempt` for the sheen
+   and the (non-Zone) magstrip floor and `shadowed` returns their colour untouched. Test: `hd_shadowed_track_redraw::a_glass_sheen_chunk_is_not_shadowed`.
+4. **The magstrip floor carries the `/2` too (confidence 90)**, `MAD /2 H0.xyz, fog, H1, fogColour` at its end. On the Talon's race frame the mean grey error over ours' cyan
+   panels fell **87 to 47**. The floor *outside* the panels reads 42 to 52 against the original, which is brighter: its frame has the player's Absorb effect lighting the floor
+   purple through the vertex-light terms `TC1 + TC2` (the lightning arcs and the lilac tint), which ours has no input for. Decoding the emissive picture and the wave as sRGB, as
+   the live address words say, was tried on top and made it worse (65 against 113 in the red of those panels); it is not wired and the dodge stays on raw taps (open).
+5. **The road is normal-mapped, and its chunks never carried a tangent (confidence 90).** `track_surface` (Modesto's block `#7` at `0x5930`, read from the disc and its twin in
+   the live Tech de Ra frame) decodes unit 1 as `2 t - 1` into `N = nx B + ny T + nz N0`, then
+   `diffuse = (lm^p * scale + lm.a * N.L * sun + TC0) * albedo` and
+   `spec = albedo.a * specColour * sunScale * sun * lm.a * pow(N.H, exponent) * sat(8 N.L)` with `exponent` the material's `SpecularPower` (70 on Modesto: the exponent was already
+   read right, the hull lane's `0x4232e459` census did not reach the road). `hull_normal` read that map only for `/ships/`; the circuits' chunks go through the world
+   pass (`pads::emit_chunk`), which passed `tangents: None`. Both are lifted (a material another family gave the third binding keeps it: the magstrip's emissive picture rode
+   there and a first cut overwrote it, which made Amphiseum's far floor a lilac slab). The track's specular now takes `sat(8 N.L)` like the hull's (it was held at `N.L`
+   "until the track is matched on its own"; with the bump in `N` it moved no pair the wrong way by more than 0.03 and Vineta K's bottom band 17.74 to 14.29). Test:
+   `hd_track_surface_ground_truth::modesto_heights_road_carries_its_authored_tangent`.
+
+**Measured** on the 13 HD pairs (the re-made set, each rendered by the previous `main` binary and by this tree against **the same new `theirs.png`**, mean absolute grey difference,
+whole frame and bottom half, the band the brief averaged):
+
+| Pair | Whole before | after | Bottom before | after |
+| --- | ---: | ---: | ---: | ---: |
+| Anulpha Pass | 25.60 | 24.98 | 27.52 | 26.41 |
+| Chenghou Project | 16.54 | 16.58 | 13.56 | 13.56 |
+| Metropia | 21.76 | 21.79 | 14.34 | 14.34 |
+| Moa Therma | 25.60 | 25.59 | 19.77 | 19.76 |
+| Modesto Heights | 24.81 | 24.47 | 22.62 | 21.15 |
+| Sebenco Climb | 23.29 | 22.36 | 16.41 | 14.95 |
+| Sol 2 | 28.49 | 26.75 | 22.88 | 19.46 |
+| Talon's Junction | 21.86 | 21.85 | 22.17 | 22.21 |
+| Talon's, Assegai_c1 | 22.86 | 22.85 | 22.00 | 22.02 |
+| Tech de Ra | 33.91 | 31.62 | 39.50 | 35.07 |
+| The Amphiseum | 25.53 | 25.59 | 28.33 | 28.36 |
+| Ubermall | 17.59 | 17.27 | 15.07 | 14.39 |
+| Vineta K | 26.10 | 25.43 | 17.74 | 14.29 |
+| **Mean of 13** | **24.149** | **23.625** | **21.686** | **20.459** |
+| HD race pair (Talon's pack) | 54.94 | 54.88 | 44.75 | 48.07 |
+
+**Worse, and why.** The race pair's bottom half is 3.3 worse because the floor off the lanes is now darker while the original's is lit purple by the Absorb effect (item 4),
+which ours does not draw; its whole frame is level and the lanes themselves improved. Chenghou, Metropia, The Amphiseum and Talon's move by +0.03 to +0.06 in the whole frame
+(Talon's +0.04 in the bottom half), diffuse blocks of the upper structure: the road's normal map and the specular term, whose other effects are the gains above.
+
+**Open, each traced.** (a) **Tech de Ra's rainbow wedge (slot 449, `0x76fac0`) remains.** The program samples the ramp at `V.N` with `V` toward the eye (`c[209] - position`, the
+vertex program's `TC0.w/TC1.w/TC2.w`), ours does the same and reads `N.V = 0.2 to 0.4` there, where the ramp is blue, green and purple; the original's frame shows a grey tint
+with olive and lilac, as if the lookup landed on the ramp's black end. The binding (equal to the disc), the unit's repeat addressing, the sign (a flip lands on the black end and
+reads close to the original's saturation but not its level) and the lack of mip blur at that slope were each checked; what puts the original's coordinate there is unread (the frame's
+constants `c[209]`..`c[211]` were not in the dumped ring). (b) **Modesto's white stripe on the right (a `track_surface` lane)** is still 255: ours reads a lightmap sum of about 4
+(`prelit_scale` 4 times a lit atlas texel) times a 0.35 diffuse plus a 0.33 specular, where the original's frame is a bluish 200 to 235; whether the atlas texel or the diffuse differs
+there is unread. (c) The paraboloid probe term (`probe * grid.r`, weight `0xe93dfe2c` 0.6 on the magstrip floor, 1 on the glass) is still not drawn, and the purple dynamic light
+above.
+
+**2048 and Omega.** The glass family: **checked, differs** (no `etched_glass*` entry in either, `omega-status.md`). The road's normal map and the world-pass tangent: **checked, applies,
+not wired** - both titles ship a `track_surface*` family (Omega's `track_surface_displacement2out`, `omega-status.md`) read by the PSARC/`psp2` readers, whose chunks set
+`tangent: 0`, with no frame compared. The `/2` is an RSX program fact and says nothing about their recompiled shaders.

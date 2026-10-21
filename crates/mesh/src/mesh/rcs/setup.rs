@@ -181,6 +181,10 @@ pub(super) fn material_setup(
     );
     // The glass sheen's `c` rides in the table too.
     super::glass_sheen::bias(model, &mut material_slots, &mut emissive);
+    // Its lightmapped variant binds the grid third, the atlas holding `lightmap`.
+    let glass_grids =
+        super::glass_sheen::lightmapped_grids(model, &material_variants, textures, report);
+    super::mag_wave::merge(&mut mag_emissive, glass_grids);
     // The Sebenco ice pool writes three entries into the table and binds its
     // pond mask third, beside what the magstrips and pads bind there.
     let ice_masks = super::ice::ice(
@@ -196,7 +200,7 @@ pub(super) fn material_setup(
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
     let (hull_maps, material_tangent) =
-        super::hull_normal::hull_normal(model, &material_variants, textures, report);
+        super::hull_normal::hull_normal(model, &material_variants, textures, &mag_emissive, report);
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(

@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{emissives, env_probe_tex, scene, shadow_sampler, sun_delta, sun_known, uniforms};
+import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -104,10 +104,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The specular's facing term in every HD lit program: `MOV_SAT x8` of the unsaturated
     // `N.L` (`MUL R1.w, pow, sat(8 N.L)`), so the highlight is full strength from about
     // seven degrees off the horizon, not scaled by `N.L` itself. Read on the hull's own
-    // `diffuse_with_specular_from_alpha_*` and the track's, which share the snippet; the
-    // track keeps `N.L` here until the track is matched on its own (it moved four of
-    // thirteen pairs the wrong way).
-    let ndl_spec = select(clamp(8.0 * ndl_raw, 0.0, 1.0), ndl, receives_shadow == 2.0);
+    // `diffuse_with_specular_from_alpha_*` and the track's (`@0x3d` of `track_surface`'s lit block, live
+    // on Modesto Heights' disc copy), which share the snippet. The track kept `N.L` here until its
+    // normal map was read (2026-10-21, `hd-track-surface`): with the road's bump in `N` the original's
+    // term moved Vineta K's bottom band 17.59 to 14.16 and no pair the wrong way by more than 0.03.
+    let ndl_spec = clamp(8.0 * ndl_raw, 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
     // runs when the rig is on.** Off - `Light::stand_in`, which is every
@@ -542,17 +543,42 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let glow_scale = emissives.scale[glow_slot];
     let ramp_sun = scene.light.sun * ndl;
     let sheen_prelit = scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power);
-    let vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
+    // **The lightmapped variant** (`SECOND_IS_LIGHTMAP` beside the sheen bit, fragment `0x7704c0`
+    // on Tech de Ra, read live): the atlas takes `lightmap`, the grid moves to the third binding,
+    // and the light is `TC0 + scale * atlas^power + atlas.a * N.L * sun` - the atlas alpha is the
+    // sun mask, where the unlit-by-atlas variant weights the sun by the colour set's fourth byte.
+    // The atlas is raw (its address word's gamma field is 0). Fetched under explicit gradients so
+    // the branch stays out of the derivative-uniform flow.
+    let sheen_lightmapped = ramp_sheen && (in.slots & 1u) != 0u;
+    let sheen_dx = dpdx(in.texcoord);
+    let sheen_dy = dpdy(in.texcoord);
+    var vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
+    var sheen_grid = second.r;
+    if sheen_lightmapped {
+        let atlas_dx = dpdx(in.lightmap_texcoord.xy);
+        let atlas_dy = dpdy(in.lightmap_texcoord.xy);
+        let glass_atlas = textureSampleGrad(
+            lightmap, albedo_sampler, in.lightmap_texcoord.xy, atlas_dx, atlas_dy,
+        );
+        vertex_light_sheen = sheen_prelit
+            + scene.light.prelit_scale * pow(glass_atlas.rgb, scene.light.prelit_power)
+            + glass_atlas.a * ramp_sun;
+        sheen_grid = textureSampleGrad(pad_mask, albedo_sampler, in.texcoord, sheen_dx, sheen_dy).r;
+    }
     // **Both taps are sRGB-decoded**, as the RSX does: the capture of this
     // material's draw on RPCS3 has `SET_TEXTURE_ADDRESS` bits 20-23 (the
     // gamma field) at `0x7` on the ramp (unit 2) and the grid (unit 0) and
     // `0x0` on the normal maps, so the arithmetic below runs on linear values
     // and so does the output alpha (`MOV H0.w, H6.x`).
     let ramp_linear = pow(first.rgb, vec3<f32>(2.2));
-    let grid_linear = pow(second.r, 2.2);
-    let sheen_linear = vertex_light_sheen * (ramp_linear + vec3<f32>(glow_tint_offset.w))
-        + ramp_linear
-        + vec3<f32>(grid_linear);
+    let grid_linear = pow(sheen_grid, 2.2);
+    // **Times the program's output scale**, as the authored path above is: block #7 ends on
+    // `ADD /2 H0.xyz, R0, H2` (read live on Tech de Ra, fragment `0x76fac0`), so the scene holds
+    // half of the sum. The output alpha, `MOV H0.w, H6.x`, is not scaled.
+    let sheen_linear = scene.light.output_scale
+        * (vertex_light_sheen * (ramp_linear + vec3<f32>(glow_tint_offset.w))
+            + ramp_linear
+            + vec3<f32>(grid_linear));
     // Unclamped on the linear target, whose bloom gate reads values above 1;
     // clamped and encoded on a gamma one, as the authored path does.
     let sheen_rgb = mix(
@@ -952,9 +978,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if (in.slots & 262144u) != 0u && scene.zone.enabled == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
-        let loop_light = in.colour.rgb + in.texcoord.x * ramp_sun;
-        let loop_rgb = loop_light * grid * (ramp + vec3<f32>(glow_tint_offset.w))
-            + (vec3<f32>(grid) + ramp) * mag_glow;
+        let loop_light = in.colour.rgb;
+        // Times the program's output scale: the live floor program (Talon's `0x78d0c0`, the shadowed
+        // pass of `mag_effect_loop_opaque`) ends `MAD /2 H0.xyz, fog, H1, fogColour`.
+        let loop_rgb = scene.light.output_scale
+            * (loop_light * grid * (ramp + vec3<f32>(glow_tint_offset.w))
+                + (vec3<f32>(grid) + ramp) * mag_glow);
         mag_floor = vec4<f32>(loop_rgb, grid * in.colour.a);
     }
 
@@ -1206,6 +1235,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     }
     let rim_glow_on = (in.slots & 2048u) != 0u;
     let rim_edge_on = (in.slots & 4096u) != 0u;
+    // The magstrip floor's `ShadowToAlpha` redraw (`0x78d0c0`) draws the very colour the lit pass
+    // does - its light is `TC1 + TC2`, no sun in it - so the original's craft shadow is invisible
+    // on it; the stand-in multiply would show one.
+    shadow_exempt = select(
+        0.0,
+        1.0,
+        ramp_sheen || ((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0),
+    );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip

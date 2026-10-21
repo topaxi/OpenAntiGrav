@@ -53,6 +53,7 @@ mod hd_shadowed_track_redraw;
 mod hd_ship_hull_material_ground_truth;
 mod hd_speed_pad_owner_ground_truth;
 mod hd_spu_vertex_light;
+mod hd_track_surface_ground_truth;
 mod hd_vertex_scroll_ground_truth;
 mod hd_vineta_ceiling_ground_truth;
 mod hd_water_ground_truth;

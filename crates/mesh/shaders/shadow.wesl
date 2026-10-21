@@ -1,6 +1,6 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
-import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
+import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
 // whose material declares the whole parameter set it reads - see
@@ -262,15 +262,19 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // strength`**, and `strength` is chosen, not measured: a scene with no authored
 // rig (no sun exists to take out), the `mapped` tier (this project's, not the
 // original's), and a track chunk whose colour is a special combine rather than
-// the generic one - the glass floor's facing ramp, the magstrip floor, a light
-// cone - because `sun_known` is clear there. Those materials' own `ShadowToAlpha`
-// programs are unread.
+// the generic one - a light cone, and the like - because `sun_known` is clear
+// there. Those materials' own `ShadowToAlpha` programs are unread. **The glass
+// floor's facing ramp and the magstrip floor are exempt** (`shadow_exempt`): the
+// first has no shadow lookup, the second's redraw has no sun to take out.
 //
 // **Called from every entry point that draws a lit surface**, which is five of
 // them and not one: a race draws through the `_velocity` pair, so a version of
 // this that only reached `fs_main` shadowed the scenery a blended material drew
 // and left the road untouched. That is exactly what the first cut did.
 fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    if shadow_exempt > 0.5 {
+        return colour;
+    }
     let coverage = shadow_coverage(world);
     if scene.shadow.mode < 1.5 && sun_known > 0.5 {
         return max(colour - coverage * sun_delta, vec3<f32>(0.0));
