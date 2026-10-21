@@ -24,7 +24,8 @@ impl SpeedPlan {
     /// it with nothing lowered. Otherwise up to [`MAX_PASSES`] whole-window
     /// learning passes lower the ceilings where this hull fails, each followed
     /// by a verification. The caller decides what an unclean result means; the
-    /// race follows the reference plan at [`Self::share_for`] instead.
+    /// race checks the reference plan on this hull ([`Self::verify_at`]) and
+    /// follows it at the share that laps.
     #[must_use]
     pub fn adapt<R: Raycaster + ?Sized>(
         &self,

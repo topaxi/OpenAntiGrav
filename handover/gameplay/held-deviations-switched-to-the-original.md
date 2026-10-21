@@ -32,7 +32,7 @@ for our AI or an unread field now runs the original's:
 - ~~**Pure's AI under bank-to-yaw `50`.**~~ Closed 2026-10-21 (`ai-rejudge-after-switches`): the
   noise bar on the combined state (bank-to-yaw `50` and the world-axis frame) is inside on every
   metric; the Ace walls (`k = 7`) are gone with the frame on. Laps `0.2`-`0.3` s longer (p
-  `0.02`-`0.05`), the physics' own
+  `0.02`-`0.05`), physics against driver not separated
   ([pure-physics.md](../../docs/physics/pure-physics.md#the-noise-bar-on-the-combined-state-2026-10-21-ai-rejudge-after-switches)).
   Left: an Ace grinding tail (two seeds at one torque, `2175` and `1617` wall ticks; the base has one
   at `1099`).

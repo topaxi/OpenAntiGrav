@@ -396,7 +396,8 @@ impl Race {
     /// ([`oag_ai::SpeedPlan::adapt`]: ceilings and takeoff run-ups kept, braking
     /// re-measured, lowered only where this hull fails), followed where it
     /// verifies clean; a hull whose copy does not follows the reference at
-    /// [`oag_ai::SpeedPlan::share_for`]. A hull's own plan searched from
+    /// [`oag_ai::SpeedPlan::share_for`] or below it ([`Self::fallback_ring`]).
+    /// A hull's own plan searched from
     /// scratch was measured as the better plan where it verifies (Pulse
     /// Triakis at RAPIER: 0 wall contact ticks on `02_Track` against 288
     /// adapted) but costs a whole search per hull: 12 to 24 times the CPU of a

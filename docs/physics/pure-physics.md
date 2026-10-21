@@ -351,9 +351,9 @@ driver (`oag_ai::original`), not ours.
 
 **Verdict: inside the bar.** No metric regresses at `P < 0.01` by either test. The Ace walls that
 held bank-to-yaw (`k = 7`) are gone once the world-axis frame is on with it. The laps are `0.2`-`0.3` s
-longer, the physics' own: the Pure pad's replay lap reads `2206` ticks on the held laws and
-`2234`-`2250` with them on ([above](#the-pure-pad-replay-test)). So no driver change for Pure. Left
-open: the Ace grinding tail (two seeds at `eps = -1e-5`, one in the base too).
+longer (p `0.02`-`0.05`), above the `0.01` hold line; whether that is the physics or our driver on
+it was not separated. So no driver change for Pure. Left open: the Ace grinding tail (two seeds at
+`eps = -1e-5`, one in the base too) and the lap split.
 
 ## Cross-title
 
