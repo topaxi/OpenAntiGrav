@@ -1955,6 +1955,51 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   gap above - that was the model scale, and a camera preset would have moved the
   background with the craft, which it did not.
 
+### A boosting plume at speed: the warm-up drops the boost, and the boost is not what is missing (2026-10-21, `pulse-boost-plume`)
+
+The claim was that on `talons-alongside` (Assegai Venom, 427 km/h on the HUD, the
+original's Autopilot pickup armed) the original's plume and its bloom are much
+bigger than ours because ours is not in the boost state. Read off the stopped
+original with `psp-trace.py --flare` (flare node at `craft+0x1c4 -> +0x78`), ticks 0-3
+of the pair's state:
+
+| | `boost_timer` | `plume_timer` | `intensity` | `half_size` | flare speed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| original, tick 0 / 1 | 0.2991 / 0.2824 | 0.484 / 0.501 | 1 | 4.37 / 5.10 | 553.9 / 551.6 km/h |
+| ours, `--field-warmup` | 0 | 0 | 1 | 2.5 x flicker | |
+
+**The state half is true, and the cause is the warm-up.** `Race::warm_up_field` resets
+the exhaust and replays `advance` at full thrust, so intensity saturates but
+`Exhaust::boost` is never called: `boost_timer` and the `<Team>boost.vex` reveal are
+0 on every warmed frame, and `psp-pulse-pair.py` passes no `--pose-boost`. The
+original is 0.50 s into a pad boost (0.8 - 0.30). The plume law itself is fine: the
+original's 4.37 and 5.10 are `(1 * 0.6 + 0.4) * 2.5 + 0.30 * 8.0 = 4.9` times the
+0.75-1.25 flicker. (The flare's own speed, 153.9 u/s, is not the craft velocity the
+field file holds, 119.2 u/s; only the saturated ramp reaches the picture, so it was
+not chased.)
+
+**The size half is false.** Boxes on the 480x272 frame, ours as the pair recorded it
+against the original (`theirs.png`), mean grey and pixels over 230 grey:
+
+| box | original | ours (boost 0) | ours with `--pose-boost 0.501` |
+| --- | ---: | ---: | ---: |
+| nozzle disc (185,190) 40x44 | 193.0, 582 px | 219.6, 1029 px | 246.6, 1527 px |
+| ribbon tail (190,236) 90x36 | 37.1, 0 px | 69.1, 412 px | 115.2, 441 px |
+| whole frame | 46.68 | 54.05 | 61.49 |
+
+Ours is already brighter and wider than the original in both boxes with the boost
+dropped, and giving it the original's boost age moves it further away (box RMSE vs
+original: disc 51.5 -> 79.2, ribbon 76.4 -> 104.3). So the boost wiring is correct
+but must not be turned on for this pair until the excess is explained:
+the original draws its ribbon (`Trail_DrawRibbon` `0x0892acc8` is hit on the stop,
+width scale `+0x1c` reads 0.550, the same as ours at intensity 1) and still shows
+almost none of it below the craft, and its nozzle ball is smaller than the
+flare's `half_size` would draw in ours. What differs is not read.
+
+Cross-title: HD's flame (`exhaust::hd`) and Pure's flare share the law's shape but
+neither has a warm-up pair at speed, so **checked, applies, not wired**
+(`--field-warmup` drops the boost on any title). Not ported.
+
 ## Open
 
 - **`engine_fire` (`0x3e5`) and `exitglow` (`0x3e4`) have no registration call
