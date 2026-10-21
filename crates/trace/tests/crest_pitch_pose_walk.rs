@@ -69,7 +69,8 @@ fn pitch_column(text: &str) -> Option<Vec<f32>> {
     let at = |name: &str| header.iter().position(|h| *h == name);
     // `OAG_CREST_UNGATED` applies the stick on every row, so the rows where the
     // original dropped it show the whole input torque as residual.
-    let ungated = std::env::var_os("OAG_CREST_UNGATED").is_some();
+    let ungated = std::env::var_os("OAG_CREST_UNGATED").is_some()
+        || std::env::var_os("OAG_CREST_OURS_GATE").is_some();
     // The control block's own pitch axis (`*(craft+0x78) + 0x10`, `psp_trace_fields.py`),
     // gated against the located sample's down where `psp-trace.py` recorded it, and
     // against world down otherwise: only right for a capture over level track, which
@@ -125,6 +126,26 @@ fn pitch_column(text: &str) -> Option<Vec<f32>> {
     )
 }
 
+/// `psp-trace.py`'s `spline_down_*` columns per row, where the capture has them.
+fn spline_down_column(text: &str) -> Option<Vec<Vec3>> {
+    let mut lines = text.lines();
+    let header: Vec<&str> = lines.next()?.split(',').collect();
+    let at = |name: &str| header.iter().position(|h| *h == name);
+    let d = [
+        at("spline_down_x")?,
+        at("spline_down_y")?,
+        at("spline_down_z")?,
+    ];
+    Some(
+        lines
+            .map(|line| {
+                let f: Vec<f32> = line.split(',').map(|v| v.parse().unwrap()).collect();
+                Vec3::new(f[d[0]], f[d[1]], f[d[2]])
+            })
+            .collect(),
+    )
+}
+
 #[test]
 #[ignore = "scratch sweep: OAG_SWEEP=1, needs data/images/"]
 fn the_crest_stepped_once_per_row() {
@@ -159,7 +180,18 @@ fn the_crest_stepped_once_per_row() {
         handling::Special::default(),
     )
     .expect("class handling");
-    let env = Environment::default();
+    // `OAG_CREST_OURS_GATE`: the stick goes in ungated and our own
+    // `engine::pitch_aligned` gates it, off a `TrackSample` built from the recorded
+    // located down. `OAG_CREST_FRAME=body` steps HD's rotated inertia frame instead of
+    // Pulse's world axes; `OAG_CREST_NO_BIAS` drops the in-air `weight_distribution` term.
+    let ours_gate = std::env::var_os("OAG_CREST_OURS_GATE").is_some();
+    let downs = spline_down_column(&text);
+    assert!(
+        !ours_gate || downs.is_some(),
+        "OAG_CREST_OURS_GATE needs spline_down columns"
+    );
+    let body_frame = env_or("OAG_CREST_FRAME", "world") == "body";
+    let no_bias = std::env::var_os("OAG_CREST_NO_BIAS").is_some();
     let timers = ground_timers(&trace.frames, handling.antigrav.rebound_jump_time);
     println!(
         "team {team} class {class} weight_distribution {} pitch_air {} pitch_damping {}",
@@ -175,12 +207,28 @@ fn the_crest_stepped_once_per_row() {
             continue;
         }
         let next = &trace.frames[i + 1];
+        let env = Environment {
+            track_sample: match (&downs, ours_gate) {
+                (Some(downs), true) => Some(oag_physics::TrackSample {
+                    position: frame.position,
+                    down: downs[i],
+                }),
+                _ => None,
+            },
+            ..Environment::default()
+        };
         let mut state = initial_state(
             frame,
             &handling,
             Basis::LeftUpForward,
             AngularReading::NegatedLocal,
         );
+        if body_frame {
+            state.inertia_frame = oag_physics::InertiaFrame::Body;
+        }
+        if no_bias {
+            state.air_pitch_bias = false;
+        }
         state.stun_timer = frame.stun_timer.unwrap_or(0.0);
         state.slowdown_timer = frame.timer_2e0.unwrap_or(0.0);
         (state.time_since_landing, state.time_airborne) = timers[i];
@@ -193,6 +241,7 @@ fn the_crest_stepped_once_per_row() {
             ..ShipControls::default()
         };
         let lat0 = state.body.up().cross(state.body.forward());
+        let fwd0 = state.body.forward();
         let state_up0 = state.body.up();
         let inertia = state.body.inertia;
 
@@ -281,7 +330,7 @@ fn the_crest_stepped_once_per_row() {
             state.body.angular_velocity.dot(lat0),
         );
         println!(
-            "ROW,{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "ROW,{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             frame.tick,
             frame.grounded,
             next.grounded,
@@ -297,6 +346,8 @@ fn the_crest_stepped_once_per_row() {
             controls.steer_y,
             dw.dot(state_up0),
             (terms.weathervane / inertia).dot(state_up0),
+            dw.dot(fwd0),
+            (next.position - frame.position - next.velocity * frame.dt).length(),
         );
     }
 }

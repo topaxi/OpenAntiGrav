@@ -200,6 +200,16 @@ def main():
         "start-line countdown. Warm up first, then capture the part that matters.",
     )
     parser.add_argument(
+        "--place-repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="write --place's pose on N consecutive hits and record from the next. "
+        "One write leaves whatever the craft carried from where it was before "
+        "(about 6 s down the track after --warmup), and the first stepped tick "
+        "kicked the body to tens of rad/s on every such placement (2026-10-21).",
+    )
+    parser.add_argument(
         "--start-heading",
         type=float,
         metavar="DEGREES",
@@ -425,7 +435,7 @@ def main():
         tick = 0
         hits = 0
         waited = 0
-        placed = False
+        placed = 0
         # The ticks spent waiting for --start-heading are breakpoint hits too, so
         # the budget has to cover them or the loop runs out before tick 0.
         allowance = args.start_heading_timeout if args.start_heading is not None else 0
@@ -452,10 +462,10 @@ def main():
 
             craft_blob = dbg.read(craft, CRAFT_BYTES)
             body = struct.unpack("<I", craft_blob[BODY_POINTER : BODY_POINTER + 4])[0]
-            if args.place is not None and not placed:
+            if args.place is not None and placed < args.place_repeat:
                 place_body(dbg, body, args.place)
-                placed = True
-                print("placed at %s" % args.place, file=sys.stderr)
+                placed += 1
+                print("placed at %s (%d)" % (args.place, placed), file=sys.stderr)
                 continue
             body_blob = dbg.read(body, CRAFT_BYTES)
 
