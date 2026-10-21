@@ -47,6 +47,10 @@ SCRATCH_RE = re.compile(r"(?:/[^\s\"']*?)?data/scratch/[^/\s\"']+/?")
 WORKTREE_RE = re.compile(r"/[^\s\"']*?OpenAntiGrav-worktrees/[^/\s\"']+/")
 
 
+#: The pickup's authored Autopilot time is 5.0 s; a timer at or under this at the stop is the authored one running down.
+AUTHORED_TIMER_MAX_S = 5.0
+
+
 def refusals(prov, profile, pair_kind=None):
     """`[(rule, detail)]` for every rule the record breaks and does not override. An override is
     `{"rule": name, "reason": text}` in `prov["overrides"]`, recorded in the pair, never silent."""
@@ -119,6 +123,19 @@ def add_arguments(ap):
     return g
 
 
+def timer_put_back(original):
+    """The Autopilot timer at the stop when the pair script wrote the pickup's authored one back over the state's
+    (`psp-pulse-pair.py` records `autopilot_timer_at_stop_s`, `rpcs3-hd-pair.py --field` `autopilot_timer`), else None."""
+    at_stop = original.get("autopilot_timer_at_stop_s")
+    note = original.get("autopilot_timer") or {}
+    if at_stop is None and note.get("written"):
+        at_stop = note.get("after_s")
+    if at_stop is None or at_stop > AUTHORED_TIMER_MAX_S:
+        return None
+    return {"armed": True, "timer_written": "authored", "timer_authored": True, "at_stop_s": at_stop,
+            "source": "the pair script wrote the pickup's authored timer back before the grab (%.2f s at the stop)" % at_stop}
+
+
 def build(pair, args, kind, capture_kind, state_file=None, lag=None):
     """Fill `pair.rec["original"]["provenance"]` from what the script knows. `lag` is the script's own record:
     `{"value", "unit", "basis", "what"}`."""
@@ -132,6 +149,8 @@ def build(pair, args, kind, capture_kind, state_file=None, lag=None):
     elif args.autopilot == "timer":
         ap = {"armed": True, "timer_written": args.autopilot_timer if args.autopilot_timer is not None else "huge (value not recorded)",
               "timer_authored": False, "source": "--autopilot timer"}
+    if args.autopilot is None:
+        ap = timer_put_back(rec["original"]) or ap
     writes = []
     for item in args.ram_write:
         target, _, rest = item.partition("=")
@@ -229,6 +248,8 @@ def backfill_pair(rec, rel):
     elif kind == "zone":
         ap = {"armed": True, "timer_written": None, "timer_authored": None,
               "source": "docs/tools/compare-page.md, Zone pairs: the state is made flying on the Autopilot; timer not recorded"}
+    if kind in ("race", "zone"):
+        ap = timer_put_back(o) or ap
     elif profile == "pulse-ps2":
         writes = [{"target": "DAT_00284fe8 (EE RAM)", "value": "1", "why": "the game's widescreen option on", "when": "state making, over PINE, 4 frames advanced",
                    "source": "state sidecar"}]
@@ -264,7 +285,7 @@ def backfill(src, dst):
         argv = rec.get("argv", [])
         if "--out" in argv:
             argv[argv.index("--out") + 1] = "%s/%s" % (DEFAULT_DIR, pj.parent.relative_to(dst))
-        if prov["pair_kind"] == "race" and "--autopilot" not in argv:
+        if prov["pair_kind"] == "race" and "--autopilot" not in argv and not prov["autopilot"].get("timer_authored"):
             argv += ["--autopilot", "timer"] + (["--autopilot-timer", "10000"] if rec["profile"] == "hd-fury" else [])
         pj.write_text(json.dumps(portable(rec), indent=2) + "\n")
         n += 1
