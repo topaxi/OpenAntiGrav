@@ -565,7 +565,7 @@ def manifest(out_path, dirs):
                 "state = %s" % toml_str(m.get("state", "")),
                 "setting = %s" % toml_str("%s %s, %s; ours %s" % (plat["emulator"]["name"], plat["emulator"].get("version", ""),
                                                                  size_text(plat), size_text(plat))),
-                "note = %s" % toml_str(" ".join([m.get("note", "")] + [("Not matched: " + c) for c in rec.get("caveats", [])]).strip()),
+                "note = %s" % toml_str(" ".join([m.get("note", "")] + [("Not matched: " + c.rstrip(".") + ".") for c in rec.get("caveats", [])]).strip()),
                 "",
                 "[entry.environment]",
                 *("%s = %s" % (k, toml_str(v)) for k, v in environment_fields(rec).items()),

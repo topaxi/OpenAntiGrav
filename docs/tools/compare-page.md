@@ -65,6 +65,20 @@ ADR-0074 requires both on every published page, so every page carries them:
   --check-statement` runs only that check; `just check-docs` runs it, so the gate fails on
   drift. The ADR is immutable, so a mismatch is fixed in `legal.md`.
 
+## Autopilot timer in a race state (2026-10-21)
+
+The rail and the hunts arm the player's Autopilot pickup with a huge timer (PSP `record+0x148 = 1.0e9`, HD slot `+0x158 = 10000`)
+so a state keeps flying, and the HUD **prints that timer**: the PSP race and both Zone pairs showed `1000000000.00`, the HD race pair
+`9945.79`. The pair scripts now put the pickup's authored timer back after the load (`<Weapon type="Autopilot"><Stats time>`,
+5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, the moment
+is exactly the state's), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
+0.3 s so the HUD redraws, the frame, pose, field and HUD record are from that moment). The HUD shows a pickup's own countdown
+(`5.00`, `4.95`), the manifest carries a caveat, `pair.json` records the timer before and after, and a pair whose timer at the stop
+is still above 600 s is refused. A run to let the pickup expire instead was tried on PSP and rejected: after 0.8 s the craft had
+left its line and the pack was gone. Known and not fixed here: the HD frames carry RPCS3's "Press and hold the START button to
+resume" toast (the pause the restore holds), and a PSP state loads a different number of emulated frames before the stop on
+a slower instance (a Zone 8 frame moved from zone second 1.5 to 2.1, where its HUD is mid-fade).
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and

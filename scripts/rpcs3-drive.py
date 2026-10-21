@@ -599,6 +599,34 @@ class RemoteMem:
         pass
 
 
+AUTOPILOT_TIMER_SANE_S = 600.0
+
+
+def restore_autopilot_timer(gdb, session, seconds, run_s):
+    """Put the pickup's authored timer (`<Weapon type="Autopilot"><Stats time>`, 5 s on HD) back over one armed for
+    good, then run the game `run_s` so the HUD prints it. The slot is `*(ship+0x5edc)`, its timer `+0x158`
+    (`docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`). A timer already sane is left alone. Returns the record
+    for `ship.autopilot_timer`, or None when the player's slot is not there."""
+    import rpcs3_hd_field
+    import rpcs3_place
+    ship, _body = rpcs3_place.find_player(gdb)
+    m = rpcs3_hd_field.Mem(session.open_mem())
+    slot = m.u32(ship + 0x5EDC)
+    if not slot:
+        return None
+    before = m.f32(slot + 0x158)
+    note = {"before_s": before, "authored_s": seconds, "written": False}
+    if before > AUTOPILOT_TIMER_SANE_S:
+        m.wr(slot + 0x158, struct.pack(">f", seconds))
+        gdb.resume()
+        time.sleep(run_s)
+        gdb.pause()
+        note["written"] = True
+        note["run_s"] = run_s
+    note["after_s"] = m.f32(slot + 0x158)
+    return note
+
+
 class RemotePad:
     """`rpcs3_pad.Pad`'s interface, spoken to the pad the `serve` process owns.
 
@@ -1683,6 +1711,7 @@ def cmd_capture(args):
         # picked - nothing is written to disk inside this loop.
         shots = []
         field_record = None
+        autopilot_note = None
         with Debugger(port=int(GDB_SERVER.rsplit(":", 1)[1]) if GDB_SERVER
                       else Debugger.__init__.__defaults__[0]) as gdb:
             for n in range(args.shots):
@@ -1698,6 +1727,8 @@ def cmd_capture(args):
                     session.pad.set(args.press, False)
 
                 stem = "%02d" % n
+                if n == 0 and args.autopilot_timer is not None:
+                    autopilot_note = restore_autopilot_timer(gdb, session, args.autopilot_timer, args.autopilot_run)
                 # The RSX runs behind the PPU: with the game paused it is still presenting the frames it was
                 # handed, so a grab taken at once shows an older moment than the memory read below (the HUD's
                 # lap clock lagged RAM's by 0.1 to 0.3 s on the 2026-10-21 HD pairs). `OAG_CAPTURE_FLUSH`
@@ -1712,6 +1743,8 @@ def cmd_capture(args):
                     # equals the HUD's `current` time and counts 1:1 with emulated time), so a pair can
                     # run ours the same number of seconds after GO.
                     ship_pose["race_clock_s"] = struct.unpack(">f", gdb.read(player_ship + 0x7014, 4))[0]
+                    if autopilot_note:
+                        ship_pose["autopilot_timer"] = autopilot_note
                     try:
                         # The gantry node's animation time, so ours can show the board's phase (`--gantry-seconds`).
                         import rpcs3_hd_field
@@ -2515,6 +2548,13 @@ def main(argv=None):
                           "for `--interval` first: a state restored with `emu-restore-state.sh --pause` "
                           "is then captured on its own tick, and the frame, the pose, the field and the "
                           "HUD record are one instant (the later shots still run, for the camera pick)")
+    cap.add_argument("--autopilot-timer", type=float, metavar="SECONDS",
+                     help="a state saved with the Autopilot pickup's timer armed for good (`ship+0x5edc` slot `+0x158` "
+                          "reads thousands of seconds, which the HUD prints) gets this authored timer written back, "
+                          "and the game then runs `--autopilot-run` seconds so the HUD redraws it, before the first "
+                          "shot; the timer read before and after goes into `ship.autopilot_timer`")
+    cap.add_argument("--autopilot-run", type=float, default=0.3, metavar="SECONDS",
+                     help="with --autopilot-timer: how long the game runs after the timer is written back")
     cap.add_argument("--in-race", action="store_true",
                      help="attached to a restored race: skip the walk even though `TTY.log` has no screen "
                           "lines yet (a restored state has none)")
