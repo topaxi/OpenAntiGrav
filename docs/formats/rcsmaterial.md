@@ -3279,8 +3279,12 @@ equal `dc_iridescent_gradient.gtf`'s, so the binding is the disc's file (confide
    `TC1 + TC2`, no sun, so it draws the very colour the lit pass does and the original's frame shows no shadow there. `shade.wesl` sets a private `shadow_exempt` for the sheen
    and the (non-Zone) magstrip floor and `shadowed` returns their colour untouched. Test: `hd_shadowed_track_redraw::a_glass_sheen_chunk_is_not_shadowed`.
 4. **The magstrip floor carries the `/2` too (confidence 90)**, `MAD /2 H0.xyz, fog, H1, fogColour` at its end. On the Talon's race frame the mean grey error over ours' cyan
-   panels fell **87 to 47**. The floor *outside* the panels reads 42 to 52 against the original, which is brighter: its frame has the player's Absorb effect lighting the floor
-   purple through the vertex-light terms `TC1 + TC2` (the lightning arcs and the lilac tint), which ours has no input for. Decoding the emissive picture and the wave as sRGB, as
+   panels fell **87 to 47**. The floor *outside* the panels reads 42 to 52 against the original, which is brighter: its frame shows purple lightning arcs and a lilac wash on the floor around the craft. **The
+   "Absorb effect's vertex light" reading is retracted (2026-10-21, `hd-race-floor`):** the SPU vertex-light list read at the pair's own tick (the
+   `hd-race-talons-venom-pack` state restored paused, `0x00f4b300 + 0x2098`/`+0x20a0`) holds only the craft engine lights (4 records, `(40, 10, 4)`, one boosted
+   `(360, 90, 36)`; 3 on a later running read), no purple record, so the wash is not an `EdgeGeom` vertex light. What draws the arcs and the wash is **unidentified**
+   (a particle or sprite pass is the open candidate; the `HUD` word `Absorb` is the idle pickup bar and the state flies the original's Autopilot with weapons off).
+   The frame's 413 draws were dumped (`hd-draw-dump.py`, `HOOK_LIGHT=1`); the purple draws are not yet picked out. Decoding the emissive picture and the wave as sRGB, as
    the live address words say, was tried on top and made it worse (65 against 113 in the red of those panels); it is not wired and the dodge stays on raw taps (open).
 5. **The road is normal-mapped, and its chunks never carried a tangent (confidence 90).** `track_surface` (Modesto's block `#7` at `0x5930`, read from the disc and its twin in
    the live Tech de Ra frame) decodes unit 1 as `2 t - 1` into `N = nx B + ny T + nz N0`, then
