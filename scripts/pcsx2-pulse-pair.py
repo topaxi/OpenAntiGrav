@@ -217,6 +217,8 @@ def main():
     pair.rec["original"]["craft"] = hex(craft)
 
     grab_clock = (live_before + live_after) / 2
+    pair.rec["original"]["presented_lag"] = {"hud_clock_offset_s": CLOCK_HUD_OFFSET_S, "grab_bracket_s": [live_before, live_after],
+                                              "note": "ours runs to the bracket's mean less the HUD offset; the craft rests, so its pose needs no lag"}
     pair.rec["original"]["race_clock_live_s"] = {"before_grab": live_before, "after_grab": live_after, "state_file": clock}
     pair.check("the grab is of a running VM near the state's frame", 0.0 <= grab_clock - clock <= 3.0,
                "RAM clock %.2f s before and %.2f s after the grab, %.2f s in the state file" % (live_before, live_after, clock))

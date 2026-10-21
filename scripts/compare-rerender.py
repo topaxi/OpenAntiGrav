@@ -87,10 +87,10 @@ def run_child(cmd, env, timeout):
     return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
 
 
-def remake(pj, env=None, remap=None, timeout=None):
+def remake(pj, env=None, remap=None, timeout=None, record_dir=None):
     """Re-make one pair in place. `env` is the pair script's environment (the emulator instance's own display,
     port and home), `remap` replaces recorded flags (`--port`, `--home`, `--slot`) that name another lane's
-    emulator, `timeout` bounds the child. Returns `(problems, warnings)`."""
+    emulator, `timeout` bounds the child, `record_dir` is the directory `argv` records as `--out` (the source set's, when re-making a copy). Returns `(problems, warnings)`."""
     rec = json.loads(pj.read_text())
     argv = rec.get("argv")
     if not argv:
@@ -131,7 +131,7 @@ def remake(pj, env=None, remap=None, timeout=None):
     new["drift"] = drift
     new["rerendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     new["argv"] = rec["argv"]
-    new["argv"][new["argv"].index("--out") + 1] = str(pj.parent)
+    new["argv"][new["argv"].index("--out") + 1] = str(record_dir or pj.parent)
     new_pj.write_text(json.dumps(new, indent=2) + "\n")
     # the new run's files replace the old ones, the scratch shots directory included
     for f in tmp.iterdir():

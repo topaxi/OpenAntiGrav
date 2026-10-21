@@ -38,6 +38,13 @@ import compare_env as ce  # noqa: E402
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
 GO_TICK = ce.go_tick()
 
+#: The frame's HUD lap clock lags the RAM clock read in the pause by this many ticks. Measured 2026-10-21 (`rerender-all`) on the
+#: 13 refreshed grid pairs: the tenths digit the frame shows against `trunc(RAM clock * 10)`: 9 of 13 one tenth low, and every
+#: pair's fractional tenth brackets the lag between 0.054 s (modesto-heights shows 13.2 at RAM 13.354) and 0.055 s (anulpha-pass
+#: shows 13.9 at RAM 13.955), so 0.055 s = 3.3 ticks; 3 ticks is used. (The RSX has presented what it was handed, `OAG_CAPTURE_FLUSH`;
+#: this is the HUD text's own lag, as on PSP where the speed text is one tick older than the picture.)
+HUD_LAG_TICKS = 3
+
 # The RSX presents the frames it was handed after the game is paused, so a grab taken at once is older than the
 # memory read (the HUD's lap clock lagged RAM's by 0.1 to 0.3 s); 3 s lets it catch up (`rpcs3-drive.py capture`).
 os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
@@ -189,14 +196,16 @@ def main():
     if args.ours_ticks is None:
         if clock is None:
             sys.exit("the capture has no race clock (ship.race_clock_s): pass --ours-ticks")
-        args.ours_ticks = GO_TICK + round(clock * 60)
+        args.ours_ticks = GO_TICK + round(clock * 60) - HUD_LAG_TICKS
     pair.rec["original"]["race_clock_s"] = clock
+    pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction: the RSX had presented the paused frame "
+                                              "(hull check on hd-race/talons-pack), not measured per tick"}
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
     if clock is not None and not args.field:
-        pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,
+        pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - (clock - HUD_LAG_TICKS / 60)) <= 0.05,
                    "original %.2f s on its lap clock, ours %.2f s (ticks %d, GO at tick %d)"
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
@@ -247,7 +256,7 @@ def main():
             pair.finish()
         pair.check("every craft has a team name", all(teams) and bool(player_row["team"]), ", ".join(teams))
         field_flags = ["--field-from", out / "field.csv", "--field-warmup", "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f" % (
-            hud["place"], hud["lap"], player_row["clock"], player_row["clock"], hud["speed"],
+            hud["place"], hud["lap"], player_row["clock"] - HUD_LAG_TICKS / 60, player_row["clock"] - HUD_LAG_TICKS / 60, hud["speed"],
             100.0 * hud["shield"] / hud["shield_max"])]
         # ours races with weapons off the way the original's Racebox row was set
         ce.set_ours_weapons_off(scratch / "profile")

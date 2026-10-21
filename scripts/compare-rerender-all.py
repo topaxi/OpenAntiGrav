@@ -310,7 +310,8 @@ def main():
                 for attempt in range(1, args.attempts + 1):
                     try:
                         env, remap = emu.prepare(rec)
-                        problems, warn = rerender.remake(pj, env=env, remap=remap, timeout=args.timeout)
+                        problems, warn = rerender.remake(pj, env=env, remap=remap, timeout=args.timeout,
+                                                          record_dir=(args.src.resolve() / name) if args.out else None)
                     except (subprocess.SubprocessError, OSError) as exc:
                         problems, warn = ["emulator step failed: %s" % exc], []
                     if not problems:
