@@ -912,7 +912,13 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // no tap window and no shift; after GO, L2 and R2 set `0x80` and `0x100`
     // (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
     sideshift_grid_gate: oag_title::pre_race::Sourced::measured(true),
-    turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // HD's running Turbo is `craft+0x264 & 0x20` (`Ship_UpdateTurboFlag`, `0x000cf7a8`), read by
+    // Pulse's three laws: the stun return's escape (`0x000efbc0`), the pad fade clock
+    // `craft+0x320` held at `0` (`0x000efb84`, read by the pad force at `0x000eec48`), and the
+    // turbo add with its d-pad Up lift. Live: the bit one frame behind the slot's, the clock at
+    // `0` while it runs and `+dt` after (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`).
+    // Confidence 92; the escape and the lift were read, not exercised.
+    turbo_running_laws: oag_title::pre_race::Sourced::measured(true),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table. Under player
     // input the airborne vy residual is `-0.02` to `+0.02` per frame on PHANTOM (scale `1.2`) and
     // `0.000` on Venom (`0.85`), against `+0.41` to `+0.51` and `-0.27` on the grounded term
@@ -1026,6 +1032,16 @@ mod tests {
     fn the_sideshift_grid_gate_is_hds_own_measured_law() {
         assert_eq!(
             CRAFT_LAWS.sideshift_grid_gate,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD's running Turbo escapes the stun return, holds the pad fade and adds the lift, read and
+    /// watched live on HD's own flag bit.
+    #[test]
+    fn the_turbo_running_laws_are_hds_own_measured_laws() {
+        assert_eq!(
+            CRAFT_LAWS.turbo_running_laws,
             oag_title::pre_race::Sourced::measured(true)
         );
     }
