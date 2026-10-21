@@ -705,6 +705,22 @@ pub struct RuntimeHud {
     /// last place shows one and first place shows all of them. `segments`
     /// is the executable's own literal, not the field size.
     pub place_arc: SegmentArc,
+    /// The pickup bar's idle look, `None` where unmeasured.
+    pub pickup_idle: Option<PickupIdle>,
+}
+
+/// The dim the pickup bar is drawn in while it has nothing to show: the
+/// executable resets its widgets to white each tick and writes this colour
+/// over the ones with no content (HD's `0x0008df30`, `0x5affffff`, alpha 0.35).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PickupIdle {
+    /// The hexagon behind a held pickup's icon: dim while nothing is held.
+    pub backdrop: &'static str,
+    /// The two pills beside it that carry the recent damage and absorb
+    /// readouts: dim while no hit is showing.
+    pub hit_pills: &'static [&'static str],
+    /// The dim, as `0xAARRGGBB`.
+    pub argb: u32,
 }
 
 /// Pilot Assist's four indicator widgets; an arrow lists its child images too, which

@@ -308,6 +308,14 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         prefix: "PosBar",
         segments: 8,
     },
+    // `Hud_UpdatePickup` (`0x0008df30`) resets `PickupBackground`, `PickupDamageBG` and
+    // `PickupAbsorbBG` to white each tick and writes `0x5affffff` over them with nothing to
+    // show (hud-readouts.md, "The pickup bar's idle dim"). Omega inherits HD's.
+    pickup_idle: Some(oag_title::hud::PickupIdle {
+        backdrop: "PickupBackground",
+        hit_pills: &["PickupDamageBG", "PickupAbsorbBG"],
+        argb: 0x5aff_ffff,
+    }),
 };
 
 /// Widgets drawn in every frame whatever the race state, HD's list. **Chosen,

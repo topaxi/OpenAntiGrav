@@ -786,3 +786,5 @@
 # 2026-10-21 ship-lean: the <Tilt> reader and the ship update that draws the lean (ship-lean.md)
 0x000c58d8	function	Handling_ReadTilt	85	ship-lean.md
 0x000eadb8	function	Ship_UpdateEntity	72	ship-lean.md
+# 2026-10-21 hud-leftovers: the pickup bar update (hud-readouts.md)
+0x0008df30	function	Hud_UpdatePickupBar	70	hud-readouts.md
