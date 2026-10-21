@@ -920,14 +920,19 @@ Each step is a landing that can be reviewed on its own.
    (`the_shadow_hull_is_the_shape_of_the_ship_it_belongs_to`). The hull *is* a
    simplified ship: same wingspan, same taper, same forked tail.
 
-   **One number in it is ours and has no evidence behind it**:
-   `HULL_DARKNESS`, how dark the polygon is drawn. What a stencil volume is
-   *darkened by* is decided by the pass that fills it, and that pass is unread.
-   At full alpha the first capture of this tier was a black hole in the road,
-   and `0.35` is what it draws at now. **That number is not derived from
-   anything** - an earlier note here read as though it came from HD's own
-   `ambient_shadow.gtf` peak of `212/255`, which it does not; that asset is a
-   different title's, a different mechanism's, and half again as dark.
+   **The darkness is the original's (2026-10-21, `pulse-zone-render`).**
+   `HULL_DARKNESS` was `0.35`, "picked to read as a shadow". A GE dump of the
+   original's Moa Therma Zone frame (`scripts/psp-ge-dump.py`) shows the pass:
+   two colour-masked stencil-volume draws (`Shadow_RenderOccluderVolume`, ops
+   `0x400`/`0x500`, 456 vertices apiece) and then a clip-space wipe quad, test
+   `0xff0406`, blending `src * 0x60 + dst * 0x9f` (`BLENDMODE` `0xaa`,
+   `BLENDFIXEDA` `0x606060`, `BLENDFIXEDB` `0x9f9f9f`) with a black source: the
+   marked pixels keep `159/255`, so the constant is `1 - 159/255` = `0.3765`.
+   Same frame, same finding: **the original runs the whole shadow pass in
+   Zone** (the attached occluder is called every frame, `parent+0x94->+0x2f8`
+   reading 1.6 to 2.1 live). Its picture shows no dark polygon under the craft
+   because the plume and bloom there are white, on this circuit's pale track and
+   on the mid-race Talon's frame alike - not because Zone turns the shadow off.
 
    **HD landed 2026-09-04 too, and its mechanism is a different one.** 2048:
    the `track_proximity_shadow` pair plus the precomputed environment shadows,

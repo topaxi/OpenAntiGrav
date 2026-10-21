@@ -63,6 +63,35 @@ craft had flown 24 laps. Zone runs on until the shield is gone, so the lap keeps
 `--hud-state` a lap of `1` (their own caveat says "Zone_HUD authors none of them", which is wrong for `Lap`);
 re-rendered with the original's lap the counter matches. This is a capture input, not a law.
 
+## The speed readout reads the same in Zone
+
+The Zone pairs' note of "1244 km/h against 1020" was read off the 480-pixel side-by-side by eye. At 1x the
+original's `SpeedBarText` reads `1249 kmh` and ours `1250 kmh`: the same scale (`Hud_UpdateSpeedBar` divides by
+700 and writes `(int)v`), and the one km/h is the HUD reading the speed one tick behind the trace row.
+Nothing differs in Zone.
+
+## The craft's shadow is drawn in Zone
+
+A GE dump of the original on the zone-50 state (`psp-ge-dump.py`) holds the shadow pass: two stencil-volume
+draws (`0x400`/`0x500`, 456 vertices) and the wipe quad blending `dst * 0x9f/255`; a breakpoint on
+`Shadow_RenderOccluderVolume` hits every frame with the craft's own attached occluder (`parent+0x94->+0x2f8` =
+1.6 to 2.1). So Zone does **not** turn the shadow off. The dark polygon the original does not show under the
+craft is washed out by the plume and the bloom around it. Ours' darkness is now the measured `1 - 159/255`
+(`oag_render::shadow::HULL_DARKNESS`, was `0.35`). Residual: ours' plume bloom is narrower than the original's
+at tick 0 (the original's white-out reaches about twice as wide), so a strip of the polygon still shows on either
+side.
+
+## The plume at tick 0
+
+Ours renders at tick 0 with no exhaust history, so the plume is cold. `--field-warmup` replays the exhaust at the
+captured velocity, but it wanted a field file with opponents, and it left each craft at the replay's velocity and
+thrust, which moved the frame (the camera reads them). Both fixed: a player-only `--field-from` is accepted (a Zone
+run has no opponents) and `warm_up_field` hands the velocity and thrust back
+(`field_capture_ground_truth.rs`). Zone pairs re-rendered with a one-row `field.csv` (slot 0 and its `vel_*` from
+the pair's `trace.csv`) and the original's lap: mean grey difference Moa z50 10.58 to 7.98, Talon's z8 17.68 to
+15.18 (their own metric reads about 0.5 lower). `psp-pulse-pair.py --zone` owns the pair flow; it should write that
+`field.csv` and the lap into `--hud-state` (handover thread).
+
 ## Cross-title (static)
 
 - **Pure PSP:** no `MSC_SRAPIER` string in `BOOT.BIN`, so no class ladder of this shape (checked, differs); it has

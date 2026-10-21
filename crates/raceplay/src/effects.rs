@@ -817,6 +817,14 @@ impl Race {
         let at: Vec<Vec3> = (0..count)
             .map(|slot| self.sim.world.ships[slot].physics.body.position)
             .collect();
+        // What the replay borrows from each craft and hands back, so the frame is drawn
+        // from the craft the capture posed and not from one flying at the replay's speed.
+        let before: Vec<(Vec3, f32)> = (0..count)
+            .map(|slot| {
+                let ship = &self.sim.world.ships[slot].physics;
+                (ship.body.linear_velocity, ship.thrust)
+            })
+            .collect();
         for slot in 0..count {
             self.view.exhaust[slot] = Exhaust::new();
             self.view.hd_trail[slot].clear();
@@ -829,6 +837,11 @@ impl Race {
                 ship.thrust = Self::FULL_THRUST;
             }
             self.advance_exhausts();
+        }
+        for (slot, (velocity, thrust)) in before.into_iter().enumerate() {
+            let ship = &mut self.sim.world.ships[slot].physics;
+            ship.body.linear_velocity = velocity;
+            ship.thrust = thrust;
         }
     }
 

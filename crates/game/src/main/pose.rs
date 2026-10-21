@@ -199,7 +199,13 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
             });
         }
     }
-    ensure!(!field.is_empty(), "{} has no opponent rows", path.display());
+    // A player row alone is a field of one: a Zone run has no opponents, and `--field-warmup`
+    // still has the player's own exhaust to warm.
+    ensure!(
+        !field.is_empty() || player.is_some(),
+        "{} has no opponent rows",
+        path.display()
+    );
     Ok(Field {
         player,
         player_velocity,
