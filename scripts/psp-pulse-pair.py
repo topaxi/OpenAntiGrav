@@ -197,19 +197,28 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
                              "team": args.team or "default", "layout": layout})
     pair.rec["original"]["layout"] = layout
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
-    hud = "1,1,%.4f,%.4f,%.4f,%s,0,%d,%d,%.4f" % (
-        clock, clock, theirs_row["speed"] * SPEED_TO_KMH, "%.2f" % shield_percent if shield_percent is not None else "100",
+    # The top-left counter of a Zone frame is the lap: read the player's own (`entity+0xacc - 1`, as the race pair does), and
+    # hand the player alone to `--field-from` so `--field-warmup` gives the exhaust the velocity and thrust history it has at speed.
+    rf = race_field_module()
+    # (read at the pose's own stop by `psp-trace.py --field-out`, not after the trace: four ticks later the craft is 20 units on)
+    player = next(r for r in json.loads((out / "field.json").read_text())["rows"] if r["player"])
+    lap_number = max(1, player["lap"] - 1)
+    pair.rec["original"]["lap_number"] = lap_number
+    ce.write_field_csv(out / "field.csv", [player], with_player=True)
+    hud = "1,%d,%.4f,%.4f,%.4f,%s,0,%d,%d,%.4f" % (
+        lap_number, clock, clock, theirs_row["speed"] * SPEED_TO_KMH, "%.2f" % shield_percent if shield_percent is not None else "100",
         zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"])
     if shield_percent is None:
         pair.caveat("the original's shield read %.1f against the assumed pool of %.1f: ours shows a full bar" % (shield, args.shield_max))
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
-            "--hud-state", hud] + flags + ["--camera-fov", "%.4f" % fov]
+            "--field-from", out / "field.csv", "--field-warmup", "--hud-state", hud] + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
     pair.caveat("Zone state read from the original's RAM and imposed on ours: zone %d, score %d, %.2f s into the zone; ours runs no "
-                "ticks, so its exhaust, trail and every effect that needs history start cold (no field warm-up in Zone); the HUD's "
-                "place, lap and clocks are imposed from the original's RAM but Zone_HUD authors none of them; the world meshes' clock is "
-                "the original's own mesh clock, imposed" % (zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"]))
+                "ticks, so its exhaust and trail are an exhaust-only warm-up on the player alone (`--field-warmup` with a one-row field.csv: the "
+                "captured velocity and full thrust, the path chosen); the lap counter is the original's lap (%d) and the clocks are imposed from the "
+                "original's RAM but Zone_HUD authors none of them; the world meshes' clock is "
+                "the original's own mesh clock, imposed" % (zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"], lap_number))
     ours_csv = out / "ours-trace.csv"
     run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
     run(base + ["--ticks", 0] + view_flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
@@ -422,6 +431,9 @@ def main():
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     trace_extra = []
     zone_ram = read_zone_ram(args.port) if args.zone else None
+    if args.zone and not args.field:
+        zone_craft = race_field_module().Field(Debugger(args.port)).player["craft"]
+        trace_extra = ["--craft", hex(zone_craft), "--field-out", out / "field.json"]
     if args.field:
         rf = race_field_module()
         from ppsspp_debugger import Debugger as _D
