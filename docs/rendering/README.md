@@ -55,6 +55,10 @@
 - **Pulse's frame against the original's, matched and ranked** (2026-09-30): sky,
   fog and tone agree within 5 %; scenery textures now use the disc's mip levels picked by the GE slope law, as the
   original's do. See [`frame-audit.md`](frame-audit.md)
+- **Why HD's floor reads 23 darker than the original, and what HD's sampler asks for** (2026-10-21,
+  `hd-track-tone`): the floor matches before the resolve; the gap is the original's exposure, an
+  emulator artefact at `Resolution Scale 150`; HD requests no anisotropy and a `-1.5` LOD bias - see
+  [`hd-track-tone.md`](hd-track-tone.md)
 - **Where HD's race frame spends its GPU time** (2026-10-15, Intel iGPU and NVIDIA dGPU): the
   per-piece costs at 1080p, one cut landed (craft outside the frustum are no longer drawn,
   byte-identical), the velocity attachment's "10 %" measured as noise, and three suspects cleared -

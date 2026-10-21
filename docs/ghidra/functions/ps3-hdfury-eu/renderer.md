@@ -7926,6 +7926,12 @@ at steady state). The stock-config artefact: measured on one pose, three boots, 
 
 ## The adaptation is the encoded linear mean, and ours read a biased one (2026-10-09, `hd-bloom-adapt`)
 
+**Qualified 2026-10-21 (`hd-track-tone`, [`hd-track-tone.md`](../../../rendering/hd-track-tone.md)).** The PPU's readback was read live
+(`FunkLayer + 0x25c`, `0xc50ee0`) on three circuits at `Resolution Scale 100`: 0.224, 0.266 and 0.382, the mean of the *encoded*
+per-pixel luma of the scene target (0.227, 0.271, 0.379), not this section's encode of the linear mean (0.322, 0.329, 0.449). At
+`Resolution Scale 150`, which the compare profile uses, Anulpha reads 0.12 and its exposure 1.6, an emulator artefact. Whether the
+hardware's ladder filters linear or encoded light is unknown; the law below is unchanged.
+
 Closes the open end of "Metropia's white lamp blobs": why our `adapted` read 0.09-0.13 where the gate needs 0.267.
 **Two causes, both in our reduction, neither in the gate or the settings; fixed in `oag_post::hd_bloom`. The coupling that
 makes the fix cost something is stated first: `adapted` is also the exposure, `scale = 4 - min(adapted x 20, 3)`, which is 1.0 for
