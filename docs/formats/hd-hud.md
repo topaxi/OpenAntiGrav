@@ -1188,6 +1188,23 @@ reads that slot is `FUN_0008fbf0`, which shows or hides it with the five widgets
 carries per-vertex alpha is the open lead. The original's whole HUD also sits 20 px lower than ours in this frame, which is
 the cockpit sway (`hd-cockpit-lean`'s), not this. Not wired: ours keeps the authored opaque texel.
 
+## The whole HUD slides with the drawn lean (`hd-hud-sway`, 2026-10-21)
+
+`Hud_Update` writes `(-15 * ship+0x6a58, 15 * ship+0x6a5c)` into the translation of the `"HUD"` screen
+every tick, and every race layout *is* that screen (seventeen of the eighteen roots; `mptag_hud.xml`'s is
+`MPTag_HUD`), so the bars, clocks, messages, pickup slot and reticle move as one. A held full stick
+moved a 1280x720 frame by 13.3 px (the follower is the one the hull is drawn with), a half stick by
+2.7 px, all regions alike. **Ported (x only)**: `oag_title::HudArt::sway`, applied at the end of
+`oag_hud::draw_list`; HD measured, Omega and 2048 inherited, Pulse and Pure none. The y term
+(`15 * ship+0x6a5c`, the far camera rig's spring lag, up to `+/-20` px on a rough stretch, the
+"20 px lower" of the frame above) is read but drawn as zero: two of its inputs are unread. The
+evidence, the writer and the measurements are in
+[ps3-hdfury-eu/ship-lean.md](../ghidra/functions/ps3-hdfury-eu/ship-lean.md#the-hud-sway-read-and-measured-2026-10-21-hd-cockpit-lean-hd-hud-sway).
+One more finding on the way: that RPCS3 instance draws the whole HUD at about `0.966` of the frame about
+its centre (the widgets sit `18` px nearer the middle than ours), which is probably HD's `Safe Area Setting`
+option (a user setting, [hd-frontend.md](hd-frontend.md) open item 12) rather than the layout; ours is at
+`1.0`, open.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of

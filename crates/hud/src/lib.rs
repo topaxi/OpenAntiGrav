@@ -62,6 +62,7 @@ mod shield_bar;
 mod sight_draw;
 pub mod split_hud;
 pub mod sprite;
+mod sway;
 pub mod time_gap;
 mod time_trial_pace;
 mod widget;
@@ -749,6 +750,12 @@ pub struct Readout {
     /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.
     /// See [`time_gap`].
     pub time_gap: Option<time_gap::GapLine>,
+    /// The ship's drawn lean, as its follower: `ship+0x6a58` on HD, the number
+    /// `oag_physics`'s `steer_lean_follower` runs. A title with a measured
+    /// [`oag_title::HudArt::sway`] slides its whole HUD by `x_per_lean` times this
+    /// (`sway`). Display only: zero for a view with no craft of its own, and for
+    /// every title with no sway the HUD ignores it.
+    pub steer_lean_follower: f32,
 }
 
 impl Readout {
