@@ -34,7 +34,7 @@ capture behind it. What is known now, by title, with the evidence:
 | Title | Original has a motion blur or speed blur? | Evidence |
 | --- | --- | --- |
 | HD/Fury (PS3) | **No.** No pass of its post chain samples a previous frame or a velocity, at rest, at 440 km/h or through a Turbo. The one boost-driven pass, `FunkLayerZoom`, draws a radial zoom-streak ring over the screen edge for about a second after a boost starts (and on damage); it is a pulse on an event, not a blur driven by speed or velocity. | Measured on RPCS3, full draw lists of complete frames with the live parameters read at the pause, four boots, plus the executable read: [funklayer-zoom.md](../ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md). Confidence 85 (four boots with live reads). |
-| Pulse PSP | None recorded. One recorded frame's screen-space prims hold the bloom and no frame-blend prim. | [bloom.md](../ghidra/functions/psp-pulse-usa/bloom.md), one frame at rest, not re-read at speed. |
+| Pulse PSP | None. Re-read at speed and in a boost 2026-10-21: the GE list ends HUD, bloom and nothing else. The one boost-driven smear is the HUD's own: every widget drawn `n` times at `alpha / n` for the 0.8 s of a speed pad's boost, which is not a screen pass and not a function of speed. | [hud-boost-smear.md](../ghidra/functions/psp-pulse-usa/hud-boost-smear.md), two GE lists of boost frames. |
 | Pulse PS2, Pure, 2048 | Unread. | Open; tracked in `HANDOVER.md`'s thread index. |
 | Omega (PS4) | Unread. Its settings registrar names a `MotionBlur` group beside Vignette and DepthOfField, so HD's answer does not carry over. | [lightmap-prelit.md](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md) (strings only). |
 
