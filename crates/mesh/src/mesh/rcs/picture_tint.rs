@@ -5,7 +5,7 @@
 //! each read `TEX H, Texture1` then `MUL H.xyz, H, C` with `C` patched from
 //! parameter `0x6d0178af`, and everything after that (light, specular, fog)
 //! works on the product. The authored instances hold `(1, 1, 1)` on 37 of
-//! Tech de Ra's 76 slots and a tint on the rest: `(0.078, 0.1296, 0.26)` on
+//! Tech de Ra's 68 slots and a tint on the rest: `(0.078, 0.1296, 0.26)` on
 //! `whitehexagon_colour_spec`, `(0.096, 0.1408, 0.32)` on
 //! `bluewhite_band_colour_spec`, `0.8` and `1.8` greys. Without it the
 //! hexagon panels behind the stand glass drew `(124, 133, 160)` where the
@@ -16,8 +16,9 @@
 //! size, with the constant encoded by `skin::raw_to_texel`'s rule so the
 //! renderer's multiply by the light sees the value the program does. A value
 //! above 1 clips at a texel of 255, which the original's half-float register
-//! does not; no authored texel is near that on the one `1.8` instance read
-//! (`startdarkouter01`, a dark texture).
+//! does not; the `1.8` instances bind `startdarkouter01` and
+//! `startdarkline01`, whose brightest texel is `(132, 125, 132)`, so nothing clips.
+//! Of the 16 HD circuits only Tech de Ra carries the family.
 
 use oag_rcs::rcsmodel;
 

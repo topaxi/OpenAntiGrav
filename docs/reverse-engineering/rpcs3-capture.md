@@ -1238,8 +1238,8 @@ The crops were read by eye next to the numbers; recapture with the script above.
 
 **What the clean frame says about ours.** Moa Therma's grandstand glass in the original is pale and translucent (sky and surroundings reflected, the crowd and the floor behind it visible); ours draws it
 nearly black, so the band is still the largest difference on that pair (grey difference over the ground-floor glass 67.9 cold against 73.1 restored: the garbage was not most of it). The tower glass is
-opaque teal in both. Whether the pale tone is the engine's reflection probe (`paraboloidReflectionTex`, `rcsmaterial.md`) is **open**: nothing measured here shows it. Tech de Ra's stand glass, read on the clean frame,
-is **warm and dark** where ours carries a **blue sheen** that the original does not; ours is the one with an extra term there. Tech de Ra's floor wedge (`rcsmaterial.md`, "Open", (a)) reads the same on restored and cold frames (grey with lilac), so that finding stands.
+opaque teal in both. The pale tone is `dc_windows_a`'s `paraboloidReflectionTex` term (`rcsmaterial.md`, `hd-stand-glass`; weight 0.8, program read); which map that unit holds for a scenery draw is still **open**. Tech de Ra's stand glass, read on the clean frame,
+is **warm and dark** where ours carries a **blue sheen** that the original does not; ours is the one with an extra term there (found 2026-10-21, `hd-stand-glass`: the opaque `lambert_spec_mult` panels behind the glass drawn without their `0x6d0178af` tint, `rcsmaterial.md`). Tech de Ra's floor wedge (`rcsmaterial.md`, "Open", (a)) reads the same on restored and cold frames (grey with lilac), so that finding stands.
 
 **Same pair, whole frame, ours rendered at each frame's own camera** (grey difference over the frame, restored against cold): Moa Therma 25.7 against 24.5; Tech de Ra 30.3 cold (33.7 for the stored restored pair, a different ours build); Anulpha Pass 24.6 cold (25.0 stored).
 The whole-frame score barely moves: the garbage covers a few percent of the frame. It matters for judging the glass, not for the score.
