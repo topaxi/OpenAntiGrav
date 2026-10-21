@@ -532,3 +532,63 @@ at `Resolution Scale 100` once `hd-capture-profile` lands. Pulse and Pure carry
 no such rule (the GE's slope law selects the level). **Omega and 2048: not
 checkable** (a Vita or PS4 sampler state, no capture path), so neither carries
 the rule: an inherited bias would change two tracks nobody has measured.
+
+## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
+
+**Target**: the HD pair with the largest difference, `hd/moa-therma` (cold original, 1920x1080, Resolution Scale 100; mean grey 15.05
+on main `027182103`). **Cause found, ranked by pixels times error**: the window glass (`dc_windows_a`, slots 541, 560, 577, 596, 599,
+605, 609, 629: the ground-floor grandstand, the upper stand and the tower) is near black in ours and pale teal in the original. The
+frame's regional ranking before the fix: lower-left grandstand cell 49 grey, top-middle tower 40, right stand 34; after it the top
+seven cells hold under 3 of the 10.3 and the rest is spread over structure (the cast shadow, texture sharpness).
+
+**What `paraboloidReflectionTex` is (measured, confidence 90).** On RPCS3 cold boots (`Write Color Buffers` on, no savestate, a GDB read
+of the VRAM range) the engine-wide `paraboloidReflectionTex` is **one 512x256 `A8R8G8B8` target at `0xc4065380`, bound on units
+1 to 3 of 443 draws of one Moa frame** (the glass, the water sheets, the mag floors; the same address the Vineta K sea's probe
+sat at). Its sampler word is `0x60730303`, the gamma-nibble-7 word the hull's probe units carry. It is **not** the hull's 128x64 map (a `.probes`
+blend in main memory) and it is **not** filled by any draw of the frame. Its bytes are the circuit's own `sky.gtf`: on four cold boots
+(Moa Therma 2048 cubemap, Anulpha Pass, Metropia, Talon's Junction 1024) the read equals the cube's raw bytes averaged over each texel
+to 0.008-0.014 rms (correlation 0.99-0.998), against 0.19 rms for any other circuit's sky:
+
+- two discs, `x < 0` on the left half and `x > 0` on the right, each 256 texels across; in a disc `a` runs across it `-1..1`,
+  `b = 1 - 2v` up it, the direction is `(+-sqrt(1 - a^2 - b^2), b, z)` with `z = a` on the left and `z = -a` on the right;
+- the cube is sampled with GL addressing (the table `sky_cube` draws the faces from), **no gamma step, no `Sky colour` tint and no `Sky
+  rotation`**: Talon's Junction (tint 128, rotation 17) fits at rotation 0 with correlation 0.98 and at 17 degrees with 0.55, Moa Therma
+  (rotation 300) at 0;
+- static: two reads seconds apart are byte-identical, and nothing in the frame writes the target.
+
+The lookup law the programs apply to it is the hull's (`u = 0.25 + (d.x > 0 ? 0.5 + d.z / 4 : -d.z / 4)`, `v = 0.5 - 0.5 d.y`), so the composite a
+pane shows is the sky mirrored in `z`. Both halves are measured; the mirror is not chosen. The producer (`liveRsxPanXForm_CubemapToDualParaboloide_fp`) was
+**not decoded**: the law is fitted to four reads, not read off its microcode, so no confidence above the fit's is claimed for the corner
+region (the original's corners hold a chevron of overshoot nothing reads; ours writes the nearest disc edge, **chosen, not measured**).
+**A trap**: a read taken after the draw hook's pause (`rpcs3_draw_hook.py`) came back as `sky^2.2` (a gamma-decoded map) where three fresh
+boots read raw bytes; Moa's own fresh re-read is raw. Do not trust a render target read after a hook dump.
+
+**The glass program (`dc_windows_a`, lit block `@0x43d0`, read with `ps3-microcode.py fp-file`, confidence 85).**
+`N = nz N0 + nx T + ny B` from a tangent-space normal map (unit 0), `E = normalise(TC1)` towards the eye,
+`d = reflect(-E, N)`, `uv = env_probe_uv(d)` (the hull's law), `R = probeTint(tex(unit 2, uv))` (the luma lerp the hull's `probe_tint` is),
+`rgb = fog(0.8 R + light Texture1 + specular) / 2`, alpha the diffuse's. The live Moa program (lightmapped variant `0x78c841`, unit 3 for the map)
+carries the tint `0x7480de6d` as **`{1, 1, 1, 0}`, where the hulls beside it in the same frame read `{4, 4, 4, 0}`**: one circuit and
+one family measured, so `ProbeTint::SCENERY` is that value for every race (Zone mode's is unread). The weight `0x5e5b1937` is `0.8` on every instance
+(parameter read per slot, not transcribed).
+
+**Wired (`mesh::sky_paraboloid`, `rcs::window_glass`, `shade.wesl`).** The map is built once at load from the sky model's six faces (a 4x4
+box per texel, 0.0104 rms against the original on Moa), uploaded `Rgba8UnormSrgb` and bound at group 2, binding 17; `dc_windows_a` slots take a glow-table
+entry of rate 9 carrying the weight; the shader adds `probe_tint(sky(reflect(-V, N))) * weight` before the fog, like the hull's term. **Left out, named**:
+the program's normal map (a track vertex carries no tangent frame here), so the reflection reads the vertex normal; the specular and
+light terms stay the renderer's own. The other families that declare the map (`glass_reflect`, `ds_booth_glass`, `glasstest`, `mt_windows_a`, the water
+sheets, the mag floors, the pipe family, the ice) read it with their own programs and are **not** wired: each needs its block read first.
+
+| HD pair (mean grey vs the cold original) | main | now |
+| --- | ---: | ---: |
+| moa-therma | 15.05 | 10.32 |
+| the other twelve | unchanged | 0.00 each (only Moa Therma carries `dc_windows_a`) |
+
+Pinned by `hd_sky_reflection_ground_truth` (ten texels of the original's map rebuilt from Moa's `sky.gtf` within 8 bytes; Moa's glass slots tagged with weight 0.8).
+
+**Cross-title (2048, Omega).** 2048 authors `skyParaboloid.gxt` per circuit at **699,072 bytes, which is exactly a 512x256 `A8R8G8B8` map with a full mip chain**
+(`512*256*4*4/3 = 699,051` plus a header): the same map HD builds at load, shipped baked. **Checked, applies, not wired**: whether 2048's glass samples it is
+unread (its fragment programs are declared-interface only) and its layout and `z` sign were not compared (its sky is a dome mesh, not a cube).
+Omega: **not checkable** (no capture path; its HD-lineage circuits ship the cube, so the map would build from it, but its materials were not read).
+
+**Open**: the shadows under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell, a material not found by slot
+bisection this lane), the normal map on the glass, and the other reflection-reading families above.

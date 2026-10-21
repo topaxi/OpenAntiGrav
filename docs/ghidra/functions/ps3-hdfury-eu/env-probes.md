@@ -113,6 +113,14 @@ out   = fog(out) / 2
 
 ## What the producer is not
 
+**Corrected 2026-10-21 (`hd-one-pair-moa`): the same two names are the producer of the other map.** The engine's
+`paraboloidReflectionTex` that scenery glass, water and floors read is one 512x256 target at `0xc4065380`, and it is
+the circuit's `sky.gtf` resampled to a dual hemisphere map (four cold-boot reads, 0.008-0.014 rms against the cube's
+raw bytes); it is written once at load, not in any frame caught, which is why the frame captures below found no draw
+into it. The hull's 128x64 maps stay the `.probes` blend described here. See
+[hd-track-tone.md](../../../rendering/hd-track-tone.md), "The reflection map is the sky". Confidence for the
+producer's *program* stays unread (the law is fitted to the target's bytes, not read off its microcode).
+
 `liveRsxPanXForm_CubemapToDualParaboloide_fp` and `liveRsxPanXForm_CubemapConvolve_fp` (names
 in the executable) draw nothing in any frame caught: two Talon's Junction draw captures (601 and 471 draws) name
 no probe address as a render target and issue no blit or transfer into one. They
