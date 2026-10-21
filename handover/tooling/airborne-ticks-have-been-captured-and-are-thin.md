@@ -81,6 +81,23 @@ ticks, `0.5` runs included - see
   1594 the nose stays within `1.5` mrad and the landing is the original's tick.
   The `--reseed 60` run keeps its `32` mrad because it reaches 1594 with `+1.7`
   units/s of vertical velocity from 1580-1584.
+- **2026-10-21 (`pulse-wall-escape-census`): the 1579 landing escape is closed; the
+  two probes' escapes add.** `Ship_HoverTwoPoint` measures both heights off points cached
+  before its loop, so the moves sum (`1.698` recorded, `1.691` summed, `1.221` the larger).
+  Ported (`Rig::TWO_POINT.sum_escapes`). The one-step census
+  (`crates/trace/tests/height_miss_census.rs`) splits the old `391` misses: Autopilot rail
+  writes, the magstrip hold (which a one-step walk cannot run;
+  `crates/raceplay/tests/magstrip_jump_census.rs` runs it), and 1579. Under player input, 3,597
+  weave rows with 1,950 wall contacts show no wall escape on either side. Evidence:
+  `docs/physics/airborne-ground-truth.md`, "The two-point escapes sum".
+- **Open from the census.** (a) With the landing closed, a roll from 1578 shows the nose
+  drifting `-6` mrad between the 1584 cage tick and 1594 (position restored each tick, not
+  with omega restored): an angular residual on the cage response. It now makes the free roll
+  miss the 1594 wall escape. (b) Fort Gale player ramp `1190` tick 58: ours escapes `0.21`
+  off the rear probe right after a wall hit, the original does not. (c) Magstrip hold at full
+  blend: the original sits a median `+0.034` higher (282 rows), the spline locator's height.
+  (d) Weave run 700, tick 804: a wall-contact row where the original moves the body `0.053`
+  down along up.
 - **A `MagFloor` hit does not escape (chosen).** Pulse's shape tag would pass
   it; with it on, a single-seeded pad replay (`pad_crossing_ground_truth`, 1284)
   drifted under a magstrip and escaped seven times. Settle it with a live tick of
@@ -99,9 +116,15 @@ ticks, `0.5` runs included - see
   airborne weathervane yaw, several times the residual. Run it with
   `crates/trace/tests/crest_pitch_pose_walk.rs` (`OAG_CREST_TRACE=<csv>`), whose
   `ROW` lines carry the yaw residual and the weathervane's yaw term.
+- **The 1584 cage tick's angular response** (census item (a), 1-2 hours). Roll from 1578
+  with `OAG_ROLL_FROM=1578 OAG_ROLL_TO=1612` (`crest_pitch_pose_walk.rs`): the `position` row
+  drifts `-1.5` to `-6.1` mrad from 1585 to 1594 and the `omega` row does not, so ours'
+  angular impulse on the 1584 cage tick differs. Compare `oag_gameplay::cage::pass`'s
+  angular term against the original's `Body_ResolveContact` at 1584
+  (`docs/ghidra/functions/psp-pulse-usa/collision-cage.md`).
 - **The `--reseed 60` crest's vertical velocity.** It enters 1594 `+1.7` units/s
-  fast: `+0.3` to `+0.7` after the 1579 landing escape (a `1.7`-unit lift) and
-  `+1.33` more on the 1584 cage tick. One step from each recorded row matches
+  fast: `+0.3` to `+0.7` after the 1579 landing escape (a `1.7`-unit lift, now summed
+  as the original does, 2026-10-21) and `+1.33` more on the 1584 cage tick. One step from each recorded row matches
   there (`0.18` units/s from 1583), so this is accumulated state; roll forward
   from 1575 with one component restored per tick (the sweep's second test,
   `OAG_ROLL_FROM`) to find which.

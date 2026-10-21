@@ -196,6 +196,32 @@ fn a_rig_that_sums_escapes_moves_the_body_by_every_penetrating_probe() {
     assert!((largest - 0.4).abs() < 1e-4, "{largest}");
 }
 
+/// **Pulse's two-point law sums its escapes too.** `Ship_HoverTwoPoint` takes each probe's
+/// height off the probe point and hit cached before its loop (`0x0884a798`-`0x0884ab90`), so the
+/// first probe's `Body_Translate` does not shorten the second's: both probes `0.6` above the
+/// floor move the body `0.8`, not `0.4`. Below the fast-probe speed so both rays are cast.
+#[test]
+fn the_two_point_law_sums_both_probes_escapes() {
+    let escape = |rig: Rig| {
+        evaluate(
+            &craft(rig, 1.725, 0.0, 20.0),
+            &handling(),
+            &Environment::default(),
+            &flat_floor(),
+            TARGET,
+        )
+        .escape
+        .y
+    };
+    let summed = escape(Rig::TWO_POINT);
+    let largest = escape(Rig {
+        sum_escapes: false,
+        ..Rig::TWO_POINT
+    });
+    assert!((summed - 0.8).abs() < 1e-4, "{summed}");
+    assert!((largest - 0.4).abs() < 1e-4, "{largest}");
+}
+
 /// A rig shaped like Pulse's Zone hover, `Ship_HoverFourCorner`: four level probes, `0.15`
 /// each, all cast, the springs along up, and no escape in the probe loop.
 fn four_corner() -> Rig {

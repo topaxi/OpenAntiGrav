@@ -2327,6 +2327,16 @@ spring then pitched the nose `15` mrad off the original's by landing. Confidence
 (`escape_floor_only`, false on Pulse; since 2026-10-21 every rig escapes off a wall and `oag_physics::hover::Rig::mag_floor_escape` decides a magstrip). Evidence and the before/after:
 [airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-1595-crest-residual-is-a-hover-escape-off-a-wall-2026-10-20-pulse-air-pitch).
 
+**The two escapes add (2026-10-21, `pulse-wall-escape-census`).** The loop runs twice
+(`0x0884a798`-`0x0884ab90`, `s5 < 2`). Each pass reads the probe point at `craft+0xe0 + 0x10 i`
+(`s4`) and the hit at `craft+0x1e0 + 0x30 i` (`fp`), both written by `Ship_CastHoverProbes` before
+the loop. `Body_Translate` (`0x0884d9f8`) adds to `body+0x30` and nothing else, and the pass writes
+neither pointer's target. So the second probe's height is measured as if the first had not moved
+the body, and both moves apply. Live on Talon's Junction's 1579 landing (player input): `1.698`
+recorded, `0.473 + 1.218 = 1.691` summed, `1.218` the larger alone. Confidence **92**. Ported as
+`oag_physics::hover::Rig::TWO_POINT.sum_escapes`; evidence and before/after in
+[airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census).
+
 ### Resolved: neither reading was refuted, the load was
 
 The two readings this section used to record as contradicted by

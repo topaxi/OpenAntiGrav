@@ -359,3 +359,15 @@ it was not separated. So no driver change for Pure. Left open: the Ace grinding 
 
 Pure is not in the 2048/Omega lineage; the HD, Omega and 2048 tables carry each new field as
 `inherited` from Pulse.
+
+## The hover escapes sum, as on Pulse (2026-10-21, `pulse-wall-escape-census`)
+
+`Ship_HoverTwoPoint`'s probe loop (`0x0892e00c`-`0x0892e358`, two passes) has Pulse's shape. It
+reads each probe point (`s4`, `craft+0xe0`) and hit (`s7`, `+0x1e0`) cached before the loop and
+takes the height against the craft's up (`craft+0x160`). Under `1.0` it escapes through the
+unrelocated `jal 0x0012f8c8`, i.e. `0x089338c8`, which adds the move to `body+0x30` and writes
+nothing else. So a first probe's escape never shortens the second's, and both apply. Pure flies
+`oag_physics::hover::Rig::TWO_POINT`, which sums since this change. **Checked, applies, ported**
+(through the shared rig). It is static on Pure; Pulse's runtime tick is in
+[airborne-ground-truth.md](airborne-ground-truth.md#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census).
+Confidence 85 for Pure: an unambiguous read, not run live.

@@ -232,3 +232,5 @@
 0x0891f93c	function	HandlingXml_ParsePhysical	88	craft-physics.md
 0x089204b4	function	HandlingXml_ParseAirbrakeGraphics	80	craft-physics.md
 0x089205c0	function	HandlingXml_ParseMisc	85	craft-physics.md
+# 2026-10-21, pulse-wall-escape-census: the hover escape's translate.
+0x089338c8	function	Body_Translate	85	craft-physics.md

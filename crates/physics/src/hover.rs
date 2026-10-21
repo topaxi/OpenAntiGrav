@@ -712,10 +712,11 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     } else {
         Vec3::ZERO
     };
-    // HD's `Craft_HoverFourPoint` escapes every probe under `1.0` in turn off heights fixed
-    // before the loop, so the moves sum ([`Rig::sum_escapes`]; measured, `hover-four-point.md`).
-    // Pulse's two-point law takes the larger correction: whether its escapes re-cast between
-    // probes is unread, and that choice is ours, not a finding.
+    // Every probe under `1.0` escapes in turn off heights fixed before the loop, so the moves
+    // sum ([`Rig::sum_escapes`]): HD's `Craft_HoverFourPoint` (`hover-four-point.md`), and
+    // Pulse's `Ship_HoverTwoPoint`, whose loop (`0x0884a798`-`0x0884ab90`) reads the probe point
+    // `craft+0xe0` and the hit `craft+0x1e0` cached before it while `Body_Translate` moves only
+    // `body+0x30` (`engine.md`; live on Talon's 1579 landing, `airborne-ground-truth.md`).
     //
     // Taken before the contact test: the original translates inside the probe loop, before
     // it asks the collider's type, so a probe that hit a `Wall` within a unit escapes on a

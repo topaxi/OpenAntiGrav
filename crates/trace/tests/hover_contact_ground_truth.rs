@@ -543,3 +543,70 @@ fn the_crest_lifts_off_through_a_wall_escape_with_no_contact() {
         "ours lands {rise} off the recorded height"
     );
 }
+
+/// The landing before the crest escapes off both probes at once, and the moves add.
+///
+/// At 1579 the craft comes down with the front probe `0.527` and the rear `-0.218` above the
+/// floor, both inside the one-unit escape. The original moves the body `1.698` along up beyond
+/// its velocity on that tick: `0.473 + 1.218 = 1.691` summed, where the deeper alone is `1.218`.
+/// `Ship_HoverTwoPoint` takes each height off the probe point and hit cached before its loop
+/// (`0x0884a798`-`0x0884ab90`), so the first probe's `Body_Translate` does not shorten the
+/// second's. With the larger escape alone ours lands `0.477` low.
+#[test]
+#[ignore = "needs data/images/"]
+fn the_landing_escapes_off_both_probes_and_the_moves_add() {
+    let Some((handling, collision, trace, _)) = load() else {
+        return;
+    };
+    let at = trace
+        .frames
+        .iter()
+        .position(|frame| frame.tick == 1579)
+        .expect("the capture has tick 1579");
+    let (frame, next) = (&trace.frames[at], &trace.frames[at + 1]);
+    let mut state = initial_state(
+        frame,
+        &handling,
+        Basis::LeftUpForward,
+        AngularReading::NegatedLocal,
+    );
+    let controls = oag_physics::ShipControls {
+        steer_x: frame.steer / oag_physics::controls::CONTROL_RANGE,
+        thrust: frame.throttle / oag_physics::controls::CONTROL_RANGE,
+        ..oag_physics::ShipControls::default()
+    };
+    let evaluated = oag_physics::step(
+        &mut state,
+        &controls,
+        &handling,
+        &Environment::default(),
+        &collision,
+        frame.dt,
+    );
+    let probes: Vec<f32> = evaluated
+        .hover
+        .active()
+        .iter()
+        .map(|p| p.escape.length())
+        .collect();
+    let lift = evaluated.hover.escape.dot(frame.up);
+    let recorded = (next.position - frame.position - next.velocity * frame.dt).dot(next.up);
+    let rise = (state.body.position - next.position).dot(next.up);
+    println!("probe escapes {probes:?} lift {lift:.4} recorded {recorded:.4} rise {rise:.4}");
+    assert!(
+        probes.iter().all(|e| *e > 0.4),
+        "both probes escape: {probes:?}"
+    );
+    assert!(
+        (recorded - 1.698).abs() < 0.001,
+        "the recording's jump {recorded}"
+    );
+    assert!(
+        (lift - recorded).abs() < 0.01,
+        "escape {lift} against {recorded}"
+    );
+    assert!(
+        rise.abs() < 0.02,
+        "ours lands {rise} off the recorded height"
+    );
+}

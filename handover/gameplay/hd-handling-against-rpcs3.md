@@ -67,8 +67,10 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 - HD's hover pieces not ported: the trailing 10-unit ray (`0x000ee510`), the escape's class
   gates (material type `2` skips a probe, a full magnet lock skips the escape), `craft+0x358`.
   None is needed to close the grounded median; a `+0.015` position bias stays on escape rows.
-- **Omega and 2048 escapes**: they fly Pulse's two-point rig until their springs are read; the
-  summed escape rides on HD's rig and waits for theirs.
+- **Omega and 2048 escapes**: they fly Pulse's two-point rig until their springs are read. That
+  rig sums its escapes too since 2026-10-21 (Pulse's own loop read and measured,
+  `docs/physics/airborne-ground-truth.md`), so both now sum by inheritance; their own loops are
+  unread.
 
 ## Next Steps
 

@@ -82,6 +82,17 @@ All offsets are `stats + class * 0x6c` for the class blocks and `stats` for the 
 class stride is `0x6c` against Pulse's `0x80` because Pure has no `sideshift` and no `<pitch>`
 block.
 
+## The hover escape's translate (2026-10-21, `pulse-wall-escape-census`)
+
+| Address | Name | Confidence | Evidence |
+| --- | --- | --- | --- |
+| `0x089338c8` | `Body_Translate` | 85 | adds `f12`, `f13`, `f14` to the vector at `a0+0x30` (`lv.q C400,0x30(a0)` ... `sv.q C400,0x30(a0)`, `jr ra`) and writes nothing else. That is Pulse's `Body_Translate` (`0x0884d9f8`) instruction for instruction, in VFPU form. Its call site is `Ship_HoverTwoPoint`'s escape (`0x0892e0b8`, the unrelocated `jal 0x0012f8c8`), with `a0 = craft+0x1cc`, the body, and the move `up * (1 - h)`. Static only. |
+
+Because it moves only the position, the two passes of `Ship_HoverTwoPoint`'s probe loop
+(`0x0892e00c`-`0x0892e358`) each escape off a height taken from the probe point and hit cached
+before the loop, and the escapes add, as on Pulse
+([pure-physics.md](../../../physics/pure-physics.md#the-hover-escapes-sum-as-on-pulse-2026-10-21-pulse-wall-escape-census)).
+
 ## Not established
 
 - The EU pressing was not compared; these are the USA addresses.

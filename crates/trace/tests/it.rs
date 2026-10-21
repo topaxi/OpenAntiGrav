@@ -15,6 +15,7 @@ mod camera_lean_ground_truth;
 mod collision_cage_ground_truth;
 mod crest_pitch_pose_walk;
 mod force_term_pose_walk_ground_truth;
+mod height_miss_census;
 mod hover_contact_ground_truth;
 mod lap_capture_ground_truth;
 mod lap_window_ground_truth;

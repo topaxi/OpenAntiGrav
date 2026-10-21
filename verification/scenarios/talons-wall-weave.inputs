@@ -1,0 +1,45 @@
+# Talon's Junction, thrust held throughout, from a placed pose at racing speed
+# (`psp-trace.py --place`, the clean lap's pose at a chosen tick): 20-tick pulses
+# of full left and full right with 40 straight ticks between, so the craft meets
+# the walls at speed under player input. For the hover escape census
+# (`crates/trace/tests/height_miss_census.rs`); see docs/physics/airborne-ground-truth.md.
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross
+20 cross left
+40 cross
+20 cross right
+40 cross

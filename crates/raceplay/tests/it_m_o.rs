@@ -16,6 +16,7 @@ mod perturb;
 
 mod maglock_ground_truth;
 mod magstrip_anchor_ground_truth;
+mod magstrip_jump_census;
 mod main_menu_ground_truth;
 mod menu_disabled_and_restart;
 mod mine_ground_truth;
