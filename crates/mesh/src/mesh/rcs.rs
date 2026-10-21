@@ -194,6 +194,7 @@ mod light_cone;
 mod mag_wave;
 mod pad_ne;
 mod pads;
+mod picture_tint;
 mod refraction;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;

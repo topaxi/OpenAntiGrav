@@ -133,6 +133,7 @@ fn the_report_names_both_kinds_of_absence() {
         picture_unsampled: 0,
         glow_unread: 0,
         constant_diffuse: 0,
+        picture_tinted: 0,
         lightmapped: 4,
         lightmap_undecoded: 0,
         second_texture_loaded: 6,
