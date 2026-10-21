@@ -89,6 +89,14 @@ pub(super) struct Drawable {
     /// `Anim Transform` at all - which is every ship, every sky and every
     /// synthetic overlay.
     node_anims: wgpu::Buffer,
+    /// The `seconds` [`Self::anims`] was last written for, as `bits + 1` (zero: never), so a frame at the
+    /// same race clock - a paused race, or a second frame inside one tick - uploads nothing.
+    anims_at: std::sync::atomic::AtomicU64,
+    /// The same for [`Self::node_anims`].
+    node_anims_at: std::sync::atomic::AtomicU64,
+    /// The craft pose and flap angles (as bits) a hull's shine pass last wrote its coordinates
+    /// for, so a craft that has not moved since the last frame uploads nothing.
+    shine_pose: std::sync::Mutex<Option<[u32; 18]>>,
     /// The glow table's own buffer, binding 2 of the same group 3. Rewritten
     /// by [`Self::glow_weapon_pads`] only; every other drawable leaves what
     /// [`mesh_render::Emissives::of`] wrote at build time.
@@ -373,6 +381,9 @@ impl Drawable {
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
+            anims_at: std::sync::atomic::AtomicU64::new(0),
+            node_anims_at: std::sync::atomic::AtomicU64::new(0),
+            shine_pose: std::sync::Mutex::default(),
             emissive: emissive_buffer,
             zone_vis: zone_vis_texture,
             zone_rebind: std::sync::Arc::new(zone_rebind),
@@ -725,6 +736,9 @@ impl Drawable {
         if self.model.anim_tracks.is_empty() {
             return;
         }
+        if !remember(&self.anims_at, seconds) {
+            return;
+        }
         let anims = mesh_render::TexAnims::sample(&self.model, seconds);
         oag_gpu::perfprobe::write_buffer(queue, &self.anims, 0, bytemuck::bytes_of(&anims));
     }
@@ -742,6 +756,9 @@ impl Drawable {
     #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
         if self.model.anim_nodes.is_empty() {
+            return;
+        }
+        if !remember(&self.node_anims_at, seconds) {
             return;
         }
         let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
@@ -1388,3 +1405,31 @@ const _: () = {
     const fn shared<T: Sync>() {}
     shared::<Drawable>();
 };
+
+/// Records that a table was written for `seconds`, and says whether it was a new value.
+///
+/// A table is a function of the model and the clock alone and no other code writes its buffer, so
+/// a second write at the same clock would put the same bytes where they already are.
+fn remember(at: &std::sync::atomic::AtomicU64, seconds: f32) -> bool {
+    use std::sync::atomic::Ordering::Relaxed;
+    let bits = u64::from(seconds.to_bits()) + 1;
+    at.swap(bits, Relaxed) != bits
+}
+
+#[cfg(test)]
+mod remember_tests {
+    use super::remember;
+    use std::sync::atomic::AtomicU64;
+
+    /// A table is written the first time, again when the clock moves, and not when it repeats -
+    /// including a clock of zero, which the "never written" state must not swallow.
+    #[test]
+    fn a_table_is_written_once_per_clock_value() {
+        let at = AtomicU64::new(0);
+        assert!(remember(&at, 0.0));
+        assert!(!remember(&at, 0.0));
+        assert!(remember(&at, 1.5));
+        assert!(!remember(&at, 1.5));
+        assert!(remember(&at, 0.0));
+    }
+}

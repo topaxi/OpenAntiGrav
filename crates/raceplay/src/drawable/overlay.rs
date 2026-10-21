@@ -162,6 +162,21 @@ impl Drawable {
         flaps: [f32; 2],
         scratch: &mut Vec<mesh::GpuVertex>,
     ) {
+        // The coordinates are a function of the pose and the flaps alone, and nothing else writes
+        // this buffer: a craft that has not moved (a paused race, the grid) has them already.
+        let mut pose = [0_u32; 18];
+        for (bits, value) in pose
+            .iter_mut()
+            .zip(ship.to_cols_array().into_iter().chain(flaps))
+        {
+            *bits = value.to_bits();
+        }
+        if let Ok(mut last) = self.shine_pose.lock() {
+            if *last == Some(pose) {
+                return;
+            }
+            *last = Some(pose);
+        }
         oag_render::shine::write(&self.model, scratch, ship, flaps);
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(scratch));
     }
