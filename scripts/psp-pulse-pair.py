@@ -537,8 +537,6 @@ def main():
     freeze(args.port)
     time.sleep(args.toast_wait)
     from ppsspp_debugger import Debugger
-    if args.field or args.zone:
-        restore_autopilot_timer(args.port, pair)
     if args.target_clock is not None:
         reached = run_to_clock(args.port, args.target_clock)
         pair.rec["original"]["target_clock_s"] = args.target_clock
@@ -546,6 +544,10 @@ def main():
                    "stopped at %.4f for a target of %.4f" % (reached, args.target_clock))
     elif args.run_ticks > 0:
         run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
+    if args.field or args.zone:
+        # After the run to the frame's moment: the timer is written at the stop the frame is taken at (CPU not run
+        # after it), so the HUD prints the pickup's own `5.00`, not a countdown the run itself already spent.
+        restore_autopilot_timer(args.port, pair)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:

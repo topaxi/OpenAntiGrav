@@ -191,6 +191,6 @@ race pair is not boosting"). So:
 2. **Done 2026-10-21 (`pose-lean-boost`):** `psp-pulse-pair.py` reads the flare at its own stop and passes `--pose-boost
    (0.8 - boost_timer)` with the warmed trail kept (`Race::warm_up_field` arms the boost), the load stops at the state's own
    first frame and `--target-clock` lands re-makes on one instant (docs/tools/compare-page.md, "A deterministic stop").
-   `talons-boost` whole-frame RMSE 0.143 to 0.108, craft crop 0.304 to 0.157 against the same `theirs.png`.
+   `talons-boost` whole-frame RMSE 0.140 to 0.113, craft crop 0.292 to 0.179 against the same `theirs.png`.
 3. **Done:** the `--trace-out` row of a `--field-warmup` run is written with the warm-up now, so it reads ours' exhaust at
    the rendered tick.

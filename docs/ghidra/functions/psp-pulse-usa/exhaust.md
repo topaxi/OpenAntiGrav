@@ -2083,9 +2083,9 @@ against the original's 0.349067 (one tick allowed). The `talons-alongside` pair 
 no boost, as measured above.
 
 The old "boosting widens the gap" objection does not hold on the re-made pair: against the same new `theirs.png`, ours
-without the flags, with the lean only and with both read whole-frame RMSE 0.143, 0.140 and 0.108 (page metric 0.108, mean
-grey difference 10.55 against the stored pair's 12.63), and the craft crop (130x110 at 150,140) 0.304, 0.291 and 0.157;
-the boosted plume's magenta spread and the ribbon's tail now match by eye. Ribbon draw order (the section below) was
+without the flags, with the lean only and with both read whole-frame RMSE 0.140, 0.136 and 0.113 (the page's mean grey
+difference 11.11 against the stored pair's 12.63), and the craft crop (130x110 at 150,140) RMSE 0.292, 0.276 and 0.179 (mean
+absolute grey difference 42.6, 37.5, 29.9); the boosted plume's magenta spread and the ribbon's tail now match by eye. Ribbon draw order (the section below) was
 already in. Confidence 90: the frame and the flare are the same stop, the crop numbers are one pair.
 
 ### The ribbon is queued first: a translucent circuit mesh paints over it (2026-10-21, `pulse-ribbon-colour`)

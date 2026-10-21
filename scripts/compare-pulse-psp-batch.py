@@ -39,6 +39,10 @@ def main():
     ap.add_argument("--only", help="substring of the state file name")
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 0)))
     ap.add_argument("--home", default=os.environ.get("PP_HOME"))
+    ap.add_argument("--match", type=Path, default=ROOT / "data/reference/compare-page/pulse-psp",
+                    help="a compare-page directory of stored pairs: each state is run on to that pair's own race clock "
+                         "(`psp-pulse-pair.py --target-clock`), so a re-make lands on the stored moment. Without a stored "
+                         "pair, or with --match none, the state's own first frame is the frame")
     args = ap.parse_args()
     refused = 0
     for state in sorted(args.states.glob("time-trial-*.ppst")):
@@ -56,6 +60,11 @@ def main():
                 "state": "Time Trial start, race clock matched to the original's (read from its RAM); ship and camera pose read from the original, ours rendered from that row"}
         cmd = ["uv", "run", "--with", "websocket-client", "python3", HERE / "psp-pulse-pair.py", "--port", args.port,
                "--home", args.home, "--out", out, "--track", track, "--state", state, "--meta", json.dumps(meta)]
+        stored = args.match / out.name / "pair.json"
+        if str(args.match) != "none" and stored.exists():
+            clock = json.loads(stored.read_text())["original"].get("race_clock_s")
+            if clock is not None:
+                cmd += ["--target-clock", "%.4f" % clock]
         print("== %s" % name, flush=True)
         done = subprocess.run([str(c) for c in cmd], capture_output=True, text=True)
         (out.parent / (out.name + ".log")).write_text(done.stderr) if out.parent.exists() else None

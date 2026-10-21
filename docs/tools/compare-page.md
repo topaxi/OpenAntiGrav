@@ -73,8 +73,7 @@ ADR-0074 requires both on every published page, so every page carries them:
 The rail and the hunts arm the player's Autopilot pickup with a huge timer (PSP `record+0x148 = 1.0e9`, HD slot `+0x158 = 10000`)
 so a state keeps flying, and the HUD **prints that timer**: the PSP race and both Zone pairs showed `1000000000.00`, the HD race pair
 `9945.79`. The pair scripts now put the pickup's authored timer back after the load (`<Weapon type="Autopilot"><Stats time>`,
-5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, the moment
-is exactly the state's), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
+5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, at the frame's own moment, after any `--target-clock`/`--run-ticks`), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
 0.3 s so the HUD redraws, the frame, pose, field and HUD record are from that moment). The HUD shows a pickup's own countdown
 (`5.00`, `4.95`), the manifest carries a caveat, `pair.json` records the timer before and after, and a pair whose timer at the stop
 is still above 600 s is refused. A run to let the pickup expire instead was tried on PSP and rejected: after 0.8 s the craft had
@@ -190,6 +189,10 @@ read from the camera object in the state's EE RAM, fed as `cam_*` columns and `-
   grey rise). `paused()` reads the debugger's own `paused` flag first (true with the menu open) and the cycle counter only as the fallback.
   The `rerender-cold` lane's "could not open the pause menu" did not reproduce on a fresh instance with the OpenGL backend
   (menu open: `paused` true, ticks still; load 2.4 s); the cause there is not known, only that the flag no longer depends on it.
+- **A re-make without `--target-clock` lands on the state's own first frame** (not the old late freeze), `--run-ticks` counts
+  from that frame, and `compare-pulse-psp-batch.py` passes each stored pair's `race_clock_s` (`--match`, default `data/reference/compare-page/pulse-psp`; `--match none` for the
+  first frame). To reproduce a stored pair pass `--target-clock <its race_clock_s>`. The Autopilot timer is written **after** the run to that moment, so the
+  HUD prints the pickup's own `5.00` at the frame's stop. `talons-black` through the batch: theirs.png and overlap bit-identical to the stored pair.
 - **The lean.** `--pose-lean` (needs `--pose-from`) puts the pose row's `steer_lean` and `roll_phase` on ship 0 after the ticks:
   the drawn lean (`entity+0x854`, the hull turns by `steer_lean * 0.5` about its nose) is written by the original's per-tick
   update and a posed capture runs none, so ours was drawn flat. The follower behind it (`entity+0x858`, read by the HUD
