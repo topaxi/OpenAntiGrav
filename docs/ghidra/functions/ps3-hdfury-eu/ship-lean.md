@@ -178,7 +178,7 @@ Time Trial, Talon's Junction, from `hd-timetrial-talons-venom-start`, player inp
 and the left stick through the virtual pad), `scripts/rpcs3-hd-sway-shots.py`: the game paused
 over GDB, `ship+0x6a54/58/5c` read, three seconds for the RSX to present, a root screenshot,
 1280x720. The shift of each HUD region against a reference frame is a gradient cross-correlation
-with a parabolic sub-pixel fit.
+with a parabolic sub-pixel fit (`scripts/hud-shift.py`).
 
 | Stick | `ship+0x6a58` | HUD shift in x (px) | per unit |
 | --- | ---: | ---: | ---: |
@@ -242,6 +242,12 @@ bumps, `+/-20` px on a rough stretch) and `ship+0x6b00`. Without them the lag a 
 is well under a pixel, so a ported spring would draw almost nothing and look like the law. Open:
 the writer of `body+0x1b0` (`FUN_000d80e0` reads it as `lvx v30, body, 0x1b0`).
 
+**What slides in ours.** Everything `draw_list` builds: the bars, text, message lines, the pickup
+slot (an `<Image>` on HD, `pickup_icon_models` is `None`; measured to slide by the same `-13.96`
+px in the top-centre region of our frame) and the lock-on sight. The sight slides **by structure**
+(it is a widget of the HUD screen, so the screen's translation carries it); the fixed reticle was
+measured, a world-anchored lock never captured.
+
 ### Ported
 
 `HudArt::sway` (`Sourced<HudSway { x_per_lean: -15 }>`): HD **measured**; Omega and 2048 **inherited
@@ -265,7 +271,11 @@ from `ship.physics.steer_lean_follower`, the number the hull is drawn with. Disp
   is HD's own files (`Data/xml/timetrial_hud.xml` read out of `data00.psarc` is HD's, the same
   `<Screen name="HUD">` root and fragment list), and its `2048_hud` set carries the same root;
   `oag_omega::hud::ART` and `oag_2048::hud::ART` carry `HudArt::sway` as inherited from HD. Neither
-  executable's `Hud_Update` was read for the store (no PS4 emulator; the Vita's not located).
+  executable's `Hud_Update` was read for the store (no PS4 emulator; the Vita's not located). What
+  is inherited is the **literal** `-15`, and it acts in each title's own grid: Omega's is HD's
+  1920x1080, so the same on-screen slide; 2048's `setResolution="544"` HUD is 960x544, so the same
+  literal slides it **twice HD's fraction of the screen** (15/960 against 15/1920). If the Vita
+  code scales for the smaller grid the right number is about `-7.5`; unread.
 - **2048: checked, applies, inherited.** The data ships `<Tilt>` in every team file (HD ships at
   `1.4`/`6`, 2048's own at `1.3`/`5`) and the executable carries both strings (`0x814900d8`,
   `0x814900e4`); the consumer was not located. `oag_2048::race::CRAFT_LAWS` inherits HD's law.

@@ -1132,6 +1132,7 @@ fn a_leaning_hd_frame_is_the_still_frame_slid_along_x() {
         shield_max: 100.0,
         lap: 2,
         laps: 3,
+        pickup: Some(oag_tables::weapons::Weapon::Turbo),
         ..Default::default()
     };
     let leaning = oag_hud::Readout {

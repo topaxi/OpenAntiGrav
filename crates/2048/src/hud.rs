@@ -210,7 +210,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     lap_one_shift: None,
     bar_tip: None,
     // Inherited from HD through Omega, which ships this title's own HUD set under the same
-    // `<Screen name="HUD">` root. The Vita executable's `Hud_Update` was not read.
+    // `<Screen name="HUD">` root. The Vita executable's `Hud_Update` was not read. The **literal**
+    // is inherited, and it acts in this title's own 960x544 grid (`Space::VITA`), so on screen it
+    // slides the HUD 15/960 of the width, twice HD's 15/1920: if the Vita code scales it for the
+    // smaller grid the answer is `-7`/`-8`, which nobody has read.
     sway: Some(oag_title::pre_race::Sourced::inherited(
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",

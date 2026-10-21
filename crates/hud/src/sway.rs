@@ -15,6 +15,12 @@
 //! craft's up axis, and is drawn as **zero**: its law is read there but it rides on
 //! `body+0x1b0` and `ship+0x6b00`, two terms nobody has read.
 //!
+//! The pickup slot is an `<Image>` of the layout on HD (`pickup_icon_models` is `None`) and a
+//! sprite in `draw_list` on every title, so it slides with the rest. The lock-on sight, which
+//! `draw_list` also builds and which follows its target through the world, slides **by
+//! structure** only: it is a widget of the HUD screen, so the translation of the screen carries
+//! it, and no lock was ever captured with the stick held.
+//!
 //! Display only. Nothing here is hashed or read back by the simulation.
 
 use oag_ui::frontend::Draw;
