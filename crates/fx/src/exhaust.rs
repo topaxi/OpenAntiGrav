@@ -1115,13 +1115,8 @@ pub use law::{PS2_FIRST_LAYER, PS2_GS_COLOUR_SCALE, TrailLaw};
 mod texture;
 pub use texture::FlareTexture;
 
-/// What the last upload left to draw, as a value: a split screen records its views at once, so
-/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Drawn {
-    count: u32,
-    trail_count: u32,
-}
+mod drawn;
+pub use drawn::Drawn;
 
 /// What [`Pipeline::draw`] binds: handles no upload replaces, so a view's recording can hold a
 /// clone while a later view's upload runs beside it (a split's overlapped recording).
