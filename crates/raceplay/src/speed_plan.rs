@@ -22,11 +22,42 @@ const ROUTE_PLAN_BUDGET: u64 = 40_000;
 /// ([`oag_ai::SpeedPlan::adapt`]). **Chosen, not measured.**
 const HULL_PLAN_BUDGET: u64 = 40_000;
 
+/// The step budget checking the reference's ring plan on a hull its adapted
+/// copy failed on ([`Race::fallback_ring`]) gets, on top of
+/// [`HULL_PLAN_BUDGET`]. Two laps at each of [`FALLBACK_SHARES`] is about
+/// 20,000 steps on Pulse. **Chosen, not measured.**
+const FALLBACK_BUDGET: u64 = 40_000;
+
+/// The further shares of the reference's ring plan a hull its adapted copy
+/// failed on is verified at, in order, after the yaw ratio alone: steps of
+/// `0.96`, the margin a hardened plan is learned at (`oag_ai::plan::harden`).
+/// **Chosen, not measured.**
+const FALLBACK_SHARES: [f32; 4] = [0.96, 0.9216, 0.884_736, 0.849_346_6];
+
+/// The wall ticks a fallback verification may scrape and still be followed
+/// at its share ([`Race::fallback_ring`]): the clean-lap gate's own contact
+/// tolerance. Over the gate's 45 perturbed runs a Triakis on the reference at
+/// its yaw share scraped 0-7 ticks on Pulse `07_Track` RAPIER, which the race
+/// drives cleanly (0-8), and 55-94 on `06_Track` RAPIER, which it does not
+/// (260-850). **Chosen, not measured.**
+const FALLBACK_SCRAPE: u32 = 10;
+
+/// What a hull drives round the ring, where [`Race::adapt_hull_plans`] decided.
+#[derive(Debug, Clone, Default)]
+pub(super) enum HullRing {
+    /// The reference's plan at [`oag_ai::SpeedPlan::share_for`].
+    #[default]
+    Reference,
+    /// A plan of its own: the reference's adapted, or the reference's at a
+    /// lower share ([`oag_ai::SpeedPlan::at_share`]).
+    Own(Box<oag_ai::SpeedPlan>),
+}
+
 /// One hull's own plans, where [`Race::adapt_hull_plans`] made them: the ring's
 /// and each route's, `None` where this hull follows the reference's.
 #[derive(Debug, Clone, Default)]
 pub(super) struct HullPlans {
-    pub(super) ring: Option<oag_ai::SpeedPlan>,
+    pub(super) ring: HullRing,
     pub(super) routes: Vec<Option<oag_ai::SpeedPlan>>,
 }
 
@@ -365,7 +396,8 @@ impl Race {
     /// ([`oag_ai::SpeedPlan::adapt`]: ceilings and takeoff run-ups kept, braking
     /// re-measured, lowered only where this hull fails), followed where it
     /// verifies clean; a hull whose copy does not follows the reference at
-    /// [`oag_ai::SpeedPlan::share_for`]. A hull's own plan searched from
+    /// [`oag_ai::SpeedPlan::share_for`] or below it ([`Self::fallback_ring`]).
+    /// A hull's own plan searched from
     /// scratch was measured as the better plan where it verifies (Pulse
     /// Triakis at RAPIER: 0 wall contact ticks on `02_Track` against 288
     /// adapted) but costs a whole search per hull: 12 to 24 times the CPU of a
@@ -406,6 +438,78 @@ impl Race {
         self.sim.ship_plan = owner;
     }
 
+    /// What a hull whose adapted ring plan failed drives: the reference's at
+    /// its yaw share where that laps on this hull touching the wall no more
+    /// than [`FALLBACK_SCRAPE`] ticks, else at the first of [`FALLBACK_SHARES`]
+    /// below it that does. Where none does, the share whose verification laps
+    /// with the fewest wall ticks, the yaw share alone on a tie or where none
+    /// laps at all.
+    ///
+    /// Until 2026-10-21 the reference at its yaw share was followed unchecked.
+    /// On Pulse `06_Track` RAPIER the lone Triakis followed it at `0.774` in 14
+    /// of the clean-lap gate's 45 perturbed runs and touched the wall 260-850
+    /// ticks at samples 800-960, at full lock and drifting wide, where the
+    /// reference hull's own verification lap went 160-183 units/s
+    /// (`docs/gameplay/ai.md`, "The fallback plan is verified"). The corner
+    /// model in place of an unclean share was measured and is worse: `01_Track`
+    /// PHANTOM `Eliminated`, `07_Track` RAPIER and `14_Track` PHANTOM 180-240
+    /// ticks a lap slower. **Chosen, not measured.**
+    fn fallback_ring(
+        sim: &RaceSim,
+        reference_plan: &oag_ai::SpeedPlan,
+        handling: oag_physics::Handling,
+    ) -> HullRing {
+        let tuning = oag_ai::Tuning::default();
+        let mut steps = 0;
+        // The least-failing share that lapped, as `(failures, share)`.
+        let mut best: Option<(u32, f32)> = None;
+        for share in std::iter::once(1.0).chain(FALLBACK_SHARES) {
+            let report = Self::with_plan_course_on(
+                sim,
+                &sim.racing_line,
+                &sim.ai_order,
+                1,
+                None,
+                Some(handling),
+                |course, craft| reference_plan.verify_at(course, craft, &tuning, share),
+            );
+            steps += report.steps;
+            let clean = adapted_clean(&report);
+            info!(
+                "ai speed plan for a hull of turn {:.3}, the reference's at {share} of its yaw \
+                 share: lap {:?} ticks, {} wall ticks, verification {}",
+                handling.turning.amount,
+                report.verify_lap_ticks,
+                report.verify_failures,
+                if clean {
+                    "clean, followed"
+                } else {
+                    "not clean"
+                },
+            );
+            if clean
+                || report.verify_lap_ticks.is_some() && report.verify_failures <= FALLBACK_SCRAPE
+            {
+                best = Some((0, share));
+                break;
+            }
+            if report.verify_lap_ticks.is_some()
+                && best.is_none_or(|(failures, _)| report.verify_failures < failures)
+            {
+                best = Some((report.verify_failures, share));
+            }
+            if steps >= FALLBACK_BUDGET {
+                break;
+            }
+        }
+        match best {
+            Some((_, share)) if share < 1.0 => {
+                HullRing::Own(Box::new(reference_plan.at_share(share)))
+            }
+            _ => HullRing::Reference,
+        }
+    }
+
     /// One hull's plans: see [`Self::adapt_hull_plans`].
     fn hull_plans_for(
         sim: &RaceSim,
@@ -434,10 +538,14 @@ impl Race {
                 if clean {
                     "followed"
                 } else {
-                    "the reference's followed at its yaw share"
+                    "the reference's checked at its yaw share"
                 }
             );
-            clean.then_some(adapted)
+            if clean {
+                HullRing::Own(Box::new(adapted))
+            } else {
+                Self::fallback_ring(sim, reference_plan, handling)
+            }
         };
         let routes = sim
             .routes

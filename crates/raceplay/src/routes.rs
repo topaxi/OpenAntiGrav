@@ -167,7 +167,10 @@ pub(super) fn plan_for<'a>(
     route: u16,
 ) -> Option<&'a oag_ai::SpeedPlan> {
     match route.checked_sub(1) {
-        None => hull.and_then(|h| h.ring.as_ref()).or(ring),
+        None => match hull.map(|h| &h.ring) {
+            Some(super::speed_plan::HullRing::Own(plan)) => Some(plan),
+            Some(super::speed_plan::HullRing::Reference) | None => ring,
+        },
         Some(k) => {
             let k = usize::from(k);
             hull.and_then(|h| h.routes.get(k).and_then(Option::as_ref))

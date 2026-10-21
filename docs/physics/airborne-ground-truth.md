@@ -523,8 +523,11 @@ RAPIER at `179` on a line near `z = -1`, the original `100` and `88`-`131` near 
 probe heights agree within about `0.2` over the whole crest at VENOM: the nose falls from `2.73`
 to `1.21` (original) and `2.58` to `1.06` (ours) over rows `2740`-`2758`, the rear dips under
 zero at row `2758`-`2759` in both (`-0.21`, ours `-0.33`), and both recover above `2.2` by row
-`2776`. So **the 06_Track escapes are the original's law**, and the `ai_clean_lap_gate` contact
-rise on that row (`154` to `419`) is our driver meeting an escape the original makes too.
+`2776`. So **the 06_Track escapes are the original's law**. The `ai_clean_lap_gate` contact
+rise on that row (`154` to `419`) did not come from the crest at all: no wall tick lands at rows
+`2750`-`2768`. The escape changed which perturbed runs fall back to an unchecked plan, which
+grinds samples 800-960; with that plan verified the row is back at `154`
+([ai.md](../gameplay/ai.md#the-fallback-plan-is-verified-2026-10-21)).
 
 Two negatives:
 

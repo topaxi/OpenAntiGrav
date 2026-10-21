@@ -307,8 +307,8 @@ measured on Pulse's; no Pure capture separates the frames (a flat-ground run can
 
 **On** (`CraftLaws::inertia_rotates` `measured(false)`); it was `chosen(true)`, HD's rotated frame,
 because the world-axis frame once raised Pure's opponent stint walls `69 -> 541`. On today's tree,
-with every other Pure law on, one unperturbed run (eight seeds) shows no such rise; the noise bar
-above was not rerun on it, so this is one draw, not a verdict on our AI:
+with every other Pure law on, one unperturbed run (eight seeds) shows no such rise. This table is
+one draw; the noise bar on the combined state is [below](#the-noise-bar-on-the-combined-state-2026-10-21-ai-rejudge-after-switches):
 
 | Metric | Rotated (before) | World-axis (after) |
 | --- | ---: | ---: |
@@ -320,6 +320,40 @@ above was not rerun on it, so this is one draw, not a verdict on our AI:
 | Stint walls B (the original's driver), novice / Ace | `5` / `6` | `1` / `0` |
 
 The Pulse lone-craft gate stays twelve of twelve clean and HD's twelve lone opponents pass.
+
+## The noise bar on the combined state (2026-10-21, `ai-rejudge-after-switches`)
+
+Bank-to-yaw `50` and the world-axis frame together, judged the way [the noise bar](#the-noise-bar)
+judged each law: twelve samples a side, the same twelve airborne pitch torques (`0`, `+-1e-5`,
+`+-2e-5`, `5e-5`, `+-1e-4`, `+-3e-4`, `+-1e-3`, the scratch `OAG_X_EPS` knob, never committed),
+eight seeds a level, `opponent_autopilot_sweep::races_others`. **Base** is today's tree with both
+switches undone by a scratch patch (gain `30`, HD's rotated frame); **law** is today's tree. Both
+carry every other Pure law and the verified fallback plan
+([ai.md](../gameplay/ai.md#the-fallback-plan-is-verified-2026-10-21)). Field alone (Autopilot off):
+
+| Metric | Novice, median base -> law | Ace, median base -> law | Worst tail |
+| --- | --- | --- | --- |
+| Race walls | `780 -> 772` (p `0.56`) | `1719 -> 1774` (p `0.38`) | Ace `k = 1` (`P 0.5`): one sample at `5567`, two seeds grinding (`2175`, `1617`); the base's worst is `3065`, one seed at `1099` |
+| Wrecks | `0 -> 0` | `2 -> 1.5` | none |
+| Laps | `53.9 -> 54.2` s (p `0.034`) | `43.8 -> 44.0` s (p `0.050`) | novice `k = 5` (`P 0.019`), Ace `k = 4` (`P 0.047`) |
+| Per-lap shield (mean pool at each lap line) | `90.2 -> 89.5` (p `0.33`) | `71.4 -> 72.7` (better) | none |
+| End-of-run shield | `87.2 -> 87.2` (p `0.44`) | `61.7 -> 64.4` (better) | novice `k = 1` |
+
+With the opponents flying their Autopilot pickups (`Race::set_opponent_autopilot`, the sweep's "on" half) the picture is the same: race walls novice
+`757 -> 766`, Ace `1748 -> 1803` (p `0.10`, `k = 1`); laps `+0.2`-`0.3` s (p `0.025`-`0.028`,
+`k = 5`); end-of-run shield novice `87.0 -> 86.8`, Ace `59.5 -> 63.5`.
+
+Pure's AI gates over the same twelve torques: `pure_race_ground_truth`, `pure_original_ai_ground_truth`
+and the Pure replay test, 17 tests, failed none in any base sample and one in two law samples
+(`pure_original_ai_ground_truth::the_field_finishes_chenghou_project`, one opponent destroyed, at
+`2e-5` and `-3e-4`): median `0` both, max `0 -> 1`. That test flies the recovered original
+driver (`oag_ai::original`), not ours.
+
+**Verdict: inside the bar.** No metric regresses at `P < 0.01` by either test. The Ace walls that
+held bank-to-yaw (`k = 7`) are gone once the world-axis frame is on with it. The laps are `0.2`-`0.3` s
+longer (p `0.02`-`0.05`), above the `0.01` hold line; whether that is the physics or our driver on
+it was not separated. So no driver change for Pure. Left open: the Ace grinding tail (two seeds at
+`eps = -1e-5`, one in the base too) and the lap split.
 
 ## Cross-title
 
