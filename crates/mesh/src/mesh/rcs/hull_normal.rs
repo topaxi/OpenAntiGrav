@@ -51,7 +51,7 @@ pub(super) fn hull_normal(
     let mut decoded: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         Default::default();
     for (slot, material) in model.materials.iter().enumerate() {
-        if !material.name.contains("/ships/") || material.blend() != rcsmodel::Blend::Opaque {
+        if material.blend() != rcsmodel::Blend::Opaque {
             continue;
         }
         let Some(variant) = variants.get(slot).copied().flatten() else {
