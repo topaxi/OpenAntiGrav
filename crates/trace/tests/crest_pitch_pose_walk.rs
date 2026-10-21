@@ -15,7 +15,8 @@
 //! ```
 //!
 //! `OAG_CREST_TRACE` (default the clean lap), `OAG_CREST_TEAM` (`Assegai`) and
-//! `OAG_CREST_CLASS` (`VENOM`) choose the capture.
+//! `OAG_CREST_CLASS` (`VENOM`) choose the capture; `OAG_CREST_UNGATED` applies a
+//! `stick_pitch` capture's stick on every row instead of only above `up.y` `0.9`.
 
 use oag_core::math::Vec3;
 use oag_gameplay::{collision_world, handling_for};
@@ -66,15 +67,33 @@ fn pitch_column(text: &str) -> Option<Vec<f32>> {
     let mut lines = text.lines();
     let header: Vec<&str> = lines.next()?.split(',').collect();
     let at = |name: &str| header.iter().position(|h| *h == name);
+    // `OAG_CREST_UNGATED` applies the stick on every row, so the rows where the
+    // original dropped it show the whole input torque as residual.
+    let ungated = std::env::var_os("OAG_CREST_UNGATED").is_some();
     // The control block's own pitch axis (`*(craft+0x78) + 0x10`, `psp_trace_fields.py`),
-    // gated against world down: only for a capture over level track, which the
-    // drop tests on the start straight are (`up.y` `0.9998` there).
-    if let (Some(stick), Some(up_y)) = (at("stick_pitch"), at("up_y")) {
+    // gated against the located sample's down where `psp-trace.py` recorded it, and
+    // against world down otherwise: only right for a capture over level track, which
+    // the drop tests on the start straight are (`up.y` `0.9998` there).
+    if let (Some(stick), Some(up)) = (
+        at("stick_pitch"),
+        (|| Some([at("up_x")?, at("up_y")?, at("up_z")?]))(),
+    ) {
+        let down = (|| {
+            Some([
+                at("spline_down_x")?,
+                at("spline_down_y")?,
+                at("spline_down_z")?,
+            ])
+        })();
         return Some(
             lines
                 .map(|line| {
                     let f: Vec<f32> = line.split(',').map(|v| v.parse().unwrap()).collect();
-                    if f[up_y] > 0.9 {
+                    let alignment = match down {
+                        Some(d) => -(f[up[0]] * f[d[0]] + f[up[1]] * f[d[1]] + f[up[2]] * f[d[2]]),
+                        None => f[up[1]],
+                    };
+                    if ungated || alignment > 0.9 {
                         f[stick] / CONTROL_RANGE
                     } else {
                         0.0

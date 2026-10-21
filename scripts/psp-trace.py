@@ -65,6 +65,8 @@ from psp_trace_fields import (
 CRAFT_REGISTER = "a0"
 CRAFT_BYTES = 0x400
 BODY_POINTER = 0x1CC
+SPLINE_DOWN = 0xB10
+SPLINE_DOWN_FIELDS = ["spline_down_x", "spline_down_y", "spline_down_z"]
 
 
 def place_body(dbg, body, text):
@@ -74,7 +76,9 @@ def place_body(dbg, body, text):
     transpose at `0xc0`, position `0x30`, velocity `0x140`, and zeroed rates at
     `0x150`/`0x160`.
     """
-    x, y, z, tx, ty, tz, speed = (float(v) for v in text.split(","))
+    values = [float(v) for v in text.split(",")]
+    x, y, z, tx, ty, tz, speed = values[:7]
+    roll = math.radians(values[7]) if len(values) > 7 else 0.0
     norm = math.sqrt(tx * tx + ty * ty + tz * tz)
     row2 = (tx / norm, ty / norm, tz / norm)
     lean = row2[1]
@@ -85,6 +89,13 @@ def place_body(dbg, body, text):
         row1[1] * row2[2] - row1[2] * row2[1],
         row1[2] * row2[0] - row1[0] * row2[2],
         row1[0] * row2[1] - row1[1] * row2[0],
+    )
+    # An optional eighth value rolls rows 0 and 1 about the nose by that many
+    # degrees (positive turns row 1 towards row 0).
+    c, s_ = math.cos(roll), math.sin(roll)
+    row0, row1 = (
+        tuple(c * a - s_ * b for a, b in zip(row0, row1)),
+        tuple(s_ * a + c * b for a, b in zip(row0, row1)),
     )
     dbg.write_f32s(body + 0x000, row0)
     dbg.write_f32s(body + 0x010, row1)
@@ -204,10 +215,10 @@ def main():
     )
     parser.add_argument(
         "--place",
-        metavar="X,Y,Z,TX,TY,TZ,SPEED",
+        metavar="X,Y,Z,TX,TY,TZ,SPEED[,ROLL]",
         help="at the followed craft's first breakpoint hit, write its rigid body to "
         "this position, facing this tangent with world up orthogonalised against "
-        "it, at SPEED along it and with no rotation, then record from the next "
+        "it (then rolled ROLL degrees about the nose, if given), at SPEED along it and with no rotation, then record from the next "
         "hit. `psp-drive.py place` does the same write, but the free-running "
         "frames between that command and this script's first breakpoint go "
         "unrecorded (about a second): a drop test placed a few units above the "
@@ -386,6 +397,7 @@ def main():
             + [name for name, _ in ENTITY_FIELDS]
             + [name for name, _ in BODY_FIELDS]
             + [name for name, _ in CONTROL_FIELDS]
+            + SPLINE_DOWN_FIELDS
         )
         if args.camera:
             names += [name for name, _ in CAMERA_FIELDS]
@@ -513,6 +525,9 @@ def main():
             values += [
                 struct.unpack("<f", controls_blob[at : at + 4])[0] for _, at in CONTROL_FIELDS
             ]
+            # The located spline sample's down (`*(craft+0x1c4) + 0xb10`), the
+            # vector `Ship_TestPitchAlignment` dots the hull up against.
+            values += list(struct.unpack("<3f", dbg.read(entity + SPLINE_DOWN, 12)))
             if camera_node is not None:
                 # Read at the ship stop: the node holds whatever the last
                 # camera update wrote, so its phase against this row is a
