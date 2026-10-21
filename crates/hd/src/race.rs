@@ -917,7 +917,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `body+0x50` holds the tensor rotated into world axes, read live
     // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
     inertia_rotates: oag_title::pre_race::Sourced::measured(true),
-    engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // `Craft_UpdateThrottle` doubles its output, `fadds f0,f12,f12` at `0x000efd5c` on the only
+    // path to the force store. Under player input, the pose walk's median forward residual per
+    // frame on Ubermall PHANTOM is `+0.03` airborne and grounded with it and `-0.37` and `-1.76`
+    // without (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
+    engine_output_double: oag_title::pre_race::Sourced::measured(true),
     drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
     // HD's own: `Craft_HoverFourPoint`'s epilogue reads `30` (`0x008a9198`, at `0x000ee6cc`) for
     // racing and Zone alike (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`); the same
@@ -988,6 +992,16 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's engine doubles its output, read off `Craft_UpdateThrottle` and measured under
+    /// player input, not inherited from Pulse.
+    #[test]
+    fn the_engine_doubling_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.engine_output_double,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
 
     /// HD's Zone banks into a turn at its racing hover's `30`, read off the executable, not at
     /// Pulse's four-corner `50`.
