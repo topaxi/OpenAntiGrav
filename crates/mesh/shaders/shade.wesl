@@ -367,6 +367,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             authored = ambient_term + sun_diffuse;
             sun_light = sun_diffuse;
         }
+        // `cf_vex_billboard` (`Emissive::program` mode 1): `ambient + sun * sat(N.L)`, no
+        // prelit term, no sun mask and no shadow - `oag_mesh::mesh::rcs::billboard_glass`.
+        if emissives.scale[in.slots >> 24u].z > 0.5 && emissives.scale[in.slots >> 24u].z < 1.5 {
+            authored = ambient_term + scene.light.sun * ndl;
+            sun_light = scene.light.sun * ndl;
+        }
     }
 
     // **Which texture is the picture and which is the coverage, off the
@@ -600,13 +606,23 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // Fetched only where `ADD_SECOND` is set: everywhere else `glow_gate`
     // below is zero and the sample is multiplied away. A branch on `slots`,
     // which `lit_texel`'s own attribute explains.
+    //
+    // **Two materials multiply this sample instead of adding it**
+    // (`Emissive::program`, `oag_mesh::mesh::rcs::billboard_glass`): mode 1, the lit
+    // billboard, whose glow tap's `u` is scaled too, and mode 2, Tech de Ra's stand glass,
+    // which reads `bwgradient` at the chunk's second coordinate set.
+    let glow_program = emissives.scale[glow_slot].z;
+    let glow_is_billboard = glow_program > 0.5 && glow_program < 1.5;
+    let glow_is_bw_glass = glow_program > 1.5 && glow_program < 2.5;
+    let glow_u_scale = select(1.0, emissives.scale[glow_slot].w, emissives.scale[glow_slot].w > 0.0);
+    let glow_uv = select(
+        vec2<f32>(in.texcoord.x * glow_u_scale, glow_v),
+        in.lightmap_texcoord.zw,
+        glow_is_bw_glass,
+    );
     var glow_sample = vec4<f32>(0.0);
     if (in.slots & 256u) != 0u {
-        glow_sample = textureSample(
-            lightmap,
-            albedo_sampler,
-            vec2<f32>(in.texcoord.x, glow_v),
-        );
+        glow_sample = textureSample(lightmap, albedo_sampler, glow_uv);
     }
     // What a texel-sourced program mask reads - see `glow.wesl`'s `program_glow`.
     glow_first = first;
@@ -616,7 +632,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // resolved `texel.a`: the microcode's `H0.wwww` is the unit-0 fetch's own
     // fourth channel, before any of the role bits above choose where the
     // output's alpha comes from.
-    let glow_gate = first.a * select(0.0, 1.0, (in.slots & 256u) != 0u);
+    let glow_gate = first.a * select(0.0, 1.0, (in.slots & 256u) != 0u && glow_program < 0.5);
     let glow = glow_sample.rgb * glow_tint_offset.rgb * glow_gate;
     // **The same layer in the linear domain, for the authored path**, which
     // adds it below. The sample is sRGB-decoded and the tint is not, on the
@@ -826,9 +842,29 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // lit HD program carries `/2` in its scale field (renderer.md, "Every lit
         // program ends on a /2 output scale"), so the sum below is what the
         // arithmetic states and the scene holds half of it.
+        //
+        // **The two program modes** (`glow_is_billboard`, `glow_is_bw_glass`): the billboard's
+        // colour is `picture * k * (glow.a + light * glow.rgb)` and has no specular term; the
+        // stand glass multiplies its lit sum and its specular by `bwgradient`. Both samples
+        // are decoded like every other texture on this path. The glass's `bwgradient` gamma
+        // bits were not read off a live draw: decoded like its picture is **chosen, not
+        // measured**.
+        let glow_decoded = pow(glow_sample.rgb, vec3<f32>(2.2));
+        let program_light = select(
+            authored,
+            glow_tint_offset.x * (vec3<f32>(glow_sample.a) + authored * glow_decoded),
+            glow_is_billboard,
+        );
+        let program_sun = select(
+            sun_light,
+            glow_tint_offset.x * sun_light * glow_decoded,
+            glow_is_billboard,
+        );
+        let program_specular = select(specular, vec3<f32>(0.0), glow_is_billboard);
+        let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
         let lit_linear = scene.light.output_scale
-            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow
-                + probe_reflection);
+            * ((surface_linear * program_light + program_specular) * program_multiplier
+                + zone_glow_term + glow_linear + pad_glow + mag_glow + probe_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),
@@ -842,7 +878,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // specular term at all. See
         // `docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md`.
         let sun_linear = scene.light.output_scale
-            * (surface_linear * sun_light + specular);
+            * ((surface_linear * program_sun + program_specular) * program_multiplier);
         let sunless = lit_linear - sun_linear;
         let sunless_encoded = pow(
             clamp(sunless, vec3<f32>(0.0), vec3<f32>(1.0)),

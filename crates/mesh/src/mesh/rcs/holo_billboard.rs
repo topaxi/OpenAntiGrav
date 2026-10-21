@@ -294,6 +294,7 @@ pub(super) fn holo_billboard(
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

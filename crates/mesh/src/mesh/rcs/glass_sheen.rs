@@ -132,6 +132,7 @@ pub(super) fn bias(model: &rcsmodel::Model, packed: &mut [u32], table: &mut Vec<
             offset: c.value[0],
             scale: 1.0,
             rate: 0.0,
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

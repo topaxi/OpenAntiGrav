@@ -138,6 +138,7 @@ pub(super) fn ice(
                         offset: 0.0,
                         scale: 0.0,
                         rate: 0.0,
+                        program: [0.0; 2],
                     })
             })
             .collect();

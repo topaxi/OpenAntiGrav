@@ -41,7 +41,27 @@ pub struct Emissive {
     /// first cut named; all three of its shapes now have their own path with
     /// the rates read, `mesh::rcs::holo_billboard`.)
     pub rate: f32,
+    /// A program-shaped reading of the layer, `[mode, glow u scale]`; `[0, 0]`
+    /// is the additive glow every field above describes. The mode is one of
+    /// [`PROGRAM_BILLBOARD`] and [`PROGRAM_BW_GLASS`], read by `shade.wesl` off
+    /// the entry the vertex's material index names; the second lane is the
+    /// glow tap's `u` scale (zero means 1), which `a`/`b` have no room for.
+    ///
+    /// **A lane of its own rather than a `rate` band**: every band of `rate`
+    /// above 1.5 is read by some test with no role bit in front of it (the
+    /// Zone exemption, the hull probe), and the clock multiplies `rate` too.
+    pub program: [f32; 2],
 }
+
+/// [`Emissive::program`]'s mode for `cf_vex_billboard`: the first texture
+/// multiplied by `k * (glow.a + light * glow.rgb)` instead of the glow being
+/// added. See `super::rcs::billboard_glass`.
+pub const PROGRAM_BILLBOARD: f32 = 1.0;
+
+/// [`Emissive::program`]'s mode for `glasstest`: the second texture
+/// (`bwgradient`, at the second coordinate set) multiplies the lit sum and the
+/// specular instead of being added. See `super::rcs::billboard_glass`.
+pub const PROGRAM_BW_GLASS: f32 = 2.0;
 
 /// The `rate` an entry of [`Model::emissive`](super::Model::emissive) carries
 /// to say "this surface takes no Zone grade": a value no material's own entry

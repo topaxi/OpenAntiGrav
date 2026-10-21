@@ -207,6 +207,7 @@ fn reflective() -> Vec<Emissive> {
         offset: 0.0,
         scale: 1.0,
         rate: REFLECTION_RATE,
+        program: [0.0; 2],
     }]
 }
 

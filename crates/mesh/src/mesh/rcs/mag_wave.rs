@@ -146,6 +146,7 @@ pub(super) fn mag_wave(
             offset: floor.as_ref().map_or(0.0, |f| f.2),
             scale: scale.value[0],
             rate: 1.0,
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < EMISSIVE_LIMIT).then(|| {

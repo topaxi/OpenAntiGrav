@@ -3168,19 +3168,23 @@ number, not a material one, and is named in the thread.
 
 **Not drawn, named:**
 
-- **`glasstest` (Tech de Ra's stand glass, slots 428/437/447)** is traced and not wired. Block `#5`: the lit sum
-  (`f[TC0] + f[TC1] + sunmask * N.L * sun`) times unit 0 (`orangeglass.gtf`, rgb `(137, 51, 27)`, alpha 170) **times
-  `bwgradient.gtf` at the second UV set** (unit 1, 8 to 140 grey, `@0x41`: `H2 = H5 * H2 + spec`), plus a reflection of
-  the probe tinted by `0xd5814b74` (orange, `(1.5, 0.70, 0.16)`), and alpha `unit0.a * glass_fratio(-N.V) * 1.25`
-  (unit 3, a 512x16 ramp 0.77 to 0.97, so about 0.83). Ours binds `orangeglass` as albedo and `bwgradient` as the
-  second texture with no role for it, so the mean over the glass region (1500-1800 x 150-300) reads `(97, 78, 80)` against the original's
-  `(57, 55, 37)` (peach against olive): the missing `bwgradient` multiply is the first suspect, the probe the second. `0x7611a2d8` is a
-  float1 specular power here (63.4 and 30), not a diffuse: keep `glasstest` out of `DIFFUSE_PARAMETER`.
-- **`cf_vex_billboard` (Vineta K's `harimau` billboard, slot 330)**: the program is `tex0 * (glow.a * k + glow.rgb *
-  light)` with `glow` the `tv_glow.gtf` second texture (alpha 255 everywhere) and `k` = `0xb17204e5`/`0x21db4cba`;
-  `tex0` is `(247, 247, 25)`, so the original saturates to `(255, 255, 28)`. Ours adds `glow` to the albedo
-  (`ADD_SECOND`, `albedo + a * glow`) and reads `(164, 183, 118)`. The accumulate predicate (`Program::accumulates`)
-  matches this program by shape, but the structure is a **multiply by the first texture**, not an add of the second.
+- **`glasstest` (Tech de Ra's stand glass, slots 428/437/447)** - **wired 2026-10-21 (`hd-billboard-glass`), probe reflection and alpha ramp not drawn.** Block `#5`
+  (`@0x3150`): `lit = TC0 + TC1 + TC5.z * sat(N.L) * sun` (the paired vertex block `#5` writes `TC1.xyz` and `TC2.xyz` as the literal 0, so the
+  `ADD /2 H0.xyz, R0, H2` that adds `TC2.xyz` after the fog adds nothing), then `rgb = b * (orange.rgb * lit) + b * orange.a * (TC5.z * pow(N.H, e) * sat(8 N.L) * sun) + probe
+  reflection`, with `b` = `bwgradient` (unit 1, `0x7bdf9b36`) read at **`TC5.xy = v[8].zw`, the chunk's `Uv2`** (the high half of attribute `0x1aefe524`, whose low
+  half is the diffuse `Uv1`), and alpha `orange.a * glass_fratio(-N.V) * 1.25` (unit 3, `0xaad2fd79`). **Why it drew peach:** the slots resolved to `ADD_SECOND` (the
+  reflection term's `MAD H2, H3, H4, H2` is an accumulate of a value derived from `b`), so `b` was **added** to the picture at the diffuse UVs. Now: `Emissive::program`
+  mode 2 (`PROGRAM_BW_GLASS`), `shade.wesl` multiplies the lit sum and the specular by `b` decoded like the picture, and `Uv2` is routed into the vertex's `texcoord2`
+  (`billboard_glass::second_uv`, in both emit paths). **Chosen, not measured:** `b`'s gamma nibble was not read off a live draw. **Not drawn, named:** the probe reflection
+  (`0x7480de6d`/`0xd5814b74` tints; needs the dual-paraboloid probe) and the `glass_fratio` alpha ramp (about 0.83 of `orange.a * 1.25`, not bound). Mean over the glass box
+  (300x150 at 1500,150), ours before / after against the original: `(92, 81, 88)` / `(47, 48, 56)` against `(53, 52, 41)`: the remaining blue-against-olive is the orange
+  reflection term. `0x7611a2d8` is a float1 specular power here (63.4 and 30), not a diffuse: `glasstest` stays out of `DIFFUSE_PARAMETER`.
+- **`cf_vex_billboard` (Vineta K's `harimau` billboard, slot 330, and every slot of the family)** - **wired 2026-10-21.** Block `#3` (`@0x1b40`):
+  `g = k * tex1(uv.x * su, uv.y * sv)`, `light = 0x81db67ea + sat(N.L) * 0x2dba643d` (no prelit, no sun mask, no shadow), `out = tex0 * (g.a + light * g.rgb)`, then
+  fog and the `/2`; alpha `g.a`. **The earlier reading of this page was wrong on `k`:** `0xb17204e5` and `0x287b555f` are the glow tap's `u` and `v` scales (harimau 1.5 and
+  1.0095, a Vineta side board 4.0 and 1.1141) and `0x21db4cba` is the multiplier on every glow lane (1 on Vineta K). Wired as `Emissive::program` mode 1
+  (`PROGRAM_BILLBOARD`, the `u` scale in `program[1]`, the `v` scale in `scale`, `k` in `tint`), no specular. The harimau card reads `(255, 255, 28)`-class yellow
+  where it read `(164, 183, 118)`; Vineta K 25.26 to 24.15.
 - **`emissive` (Amphiseum, 3 slots)**: `(f[TC1] + C * fog) / 2`, constant `0x6223f485`; the vertex-colour term makes it
   not a plain constant, left unbound.
 
@@ -3193,6 +3197,10 @@ it drew. The `metallic` family and its siblings: not looked up in 2048's materia
 `psp2.rs` binds its constants as unorm bytes "the way `skin::constant_diffuse` binds HD's"; the reasoning (an
 sRGB-decoding binding against a raw multiply) is the renderer's, not HD's, but no 2048 frame was compared, so it is
 **checked, applies, not wired**.
+
+**2048 and Omega, `glasstest` and `cf_vex_billboard`:** **not checkable here** - neither title's materials were opened for these two names this lane, and their
+programs are declared-interface only (no PSSL/GXP decoder), so "same program" cannot be read; the family names appear in neither `omega-status.md` nor
+`2048-material-params.md`. Open: a name census of both packages' material lists.
 
 ## See also
 

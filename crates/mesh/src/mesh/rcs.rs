@@ -184,6 +184,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
     None
 }
 
+mod billboard_glass;
 mod cutout;
 mod damage_lights;
 mod holo_billboard;
@@ -914,7 +915,14 @@ fn build_with_options(
                     (mesh, model_blob, submesh, stride),
                     (
                         lightmap_texcoords,
-                        ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
+                        billboard_glass::second_uv(
+                            surface.roles,
+                            &out.emissive,
+                            mesh,
+                            model_blob,
+                            submesh,
+                            stride,
+                        ),
                     ),
                 );
                 let tangents = if surface.tangent {

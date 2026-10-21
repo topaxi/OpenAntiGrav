@@ -93,6 +93,7 @@ pub(super) fn probe_lit(
             offset: 0.0,
             scale: 1.0,
             rate: REFLECTION_RATE,
+            program: [0.0; 2],
         };
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
             (table.len() + 1 < super::EMISSIVE_LIMIT).then(|| {

@@ -169,6 +169,7 @@ fn model(lit: f32) -> Model {
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,
+            program: [0.0; 2],
         }],
         vertices: vec![
             vertex(lit, [-0.9, -0.9, 0.5]),

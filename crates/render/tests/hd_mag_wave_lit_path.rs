@@ -115,6 +115,7 @@ fn model(wave: bool) -> Model {
             offset: 0.0,
             scale: 1.0,
             rate: 1.0,
+            program: [0.0; 2],
         }],
         vertices: vec![
             vertex([-0.9, -0.9, 0.5], wave),

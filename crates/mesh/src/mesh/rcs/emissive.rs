@@ -328,6 +328,7 @@ pub(super) fn emissive(
             offset,
             scale,
             rate,
+            program: [0.0; 2],
         };
 
         let index = table.iter().position(|seen| *seen == layer).or_else(|| {
