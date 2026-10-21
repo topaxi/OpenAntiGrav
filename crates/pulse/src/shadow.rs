@@ -61,7 +61,9 @@ pub const AUTHORED_AXIS: [f32; 3] = [0.097_589_54, -0.975_895_4, 0.195_179_08];
 /// (mean over the 24 grid pairs 4.86 to 2.69). `Shadow_RenderOccluderVolume`'s `vtfm4` by the
 /// node's matrix (`self+0xb0`) reads as a local axis, so what that matrix
 /// holds for a craft's shadow node is not the craft's rotation; the
-/// instruction read is left as it was. See `docs/rendering/shadows.md`.
+/// instruction read is left as it was. Measured on level ground; on a bank
+/// `oag_render::shadow::hull_triangles` carries it with the road's tilt.
+/// See `docs/rendering/shadows.md`.
 pub const WORLD_AXIS: [f32; 3] = AUTHORED_AXIS;
 
 /// The whole-number direction [`AUTHORED_AXIS`] is the normalization of.

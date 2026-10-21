@@ -269,8 +269,12 @@ Basilico Black, Moa Therma Black, Outpost 7 Black), and the shadow-box mean
 falls from 4.86 to 2.69 (Moa Therma White 4.80 to 1.66). What the node matrix
 holds for a craft's shadow node is not read; the instruction page stays as
 written and the open question is which matrix `self+0xb0` is for that node.
-Craft pitch and bank were not exercised (all grids are level). The two Zone
-pairs are stale and were not scored as evidence.
+Craft pitch and bank were not exercised (all grids are level), so on a banked
+road the axis is carried with the road's tilt, the identity on level ground and
+**chosen, not measured** elsewhere: a plain world axis thrown at a 52 degree
+wall slid the shadow five units down the slope and left the polygon 0.9 under
+the road (`shadow_stability_ground_truth`, single race at tick 5,400). The two
+Zone pairs are flat (Moa z50 4.327 to 4.332, Talon's z8 8.807 to 8.767).
 
 ### Two populations, and they are not the same feature
 
