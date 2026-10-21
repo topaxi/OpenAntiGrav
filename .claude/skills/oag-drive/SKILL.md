@@ -271,6 +271,18 @@ significant improvement for Sonnet 5.5.
 Members inherit none of your context. `member-rules.md` covers the shared
 rules, so the brief carries only what is specific to the lane:
 
+0. **One claim and its acceptance evidence** (maintainer, 2026-10-21, from an
+   advisor review). The claim is one sentence that is true or false at the end
+   ("Tech de Ra's hexagon panels render within 10 grey of the clean original in
+   the box (x,y,w,h)"). The acceptance evidence is the exact pair id and region
+   whose metric must move, or the exact test that must go from red to green. A
+   whole-frame delta of 0.3-1.0 grey is not acceptance: it is inside the noise of
+   a re-capture. Say whether the lane is a **measure** lane (ends with a number,
+   a confidence, a doc page and a thread marked ready to wire; "one value
+   unread, here is its address and read recipe" is a success) or a **wire**
+   lane (starts from a ready-to-wire thread, ends with a test and a pair). Do
+   not brief one lane to do both. If you cannot write the claim, spawn a scout
+   lane to produce it.
 1. **The lane-specific values `member-rules.md` refers to**: the `<lane>` name
    (worktree, branch and scratch directory), the member's Xvfb display `:9N`,
    and any emulator ports. Say which displays and ports other members hold.

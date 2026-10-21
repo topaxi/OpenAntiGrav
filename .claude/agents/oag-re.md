@@ -30,7 +30,8 @@ lane, binary, function set and display.
 - Every name lands in the binary's `names.tsv` in the same commit as its
   evidence page under `docs/ghidra/functions/<binary>/`. Run
   `just check-names`, then `just gen-status`, after any new evidence page;
-  a new page alone can stale `check-status`.
+  a new page alone can stale `check-status`. Do not commit the regenerated
+  `docs/overview/status.md`; restore it before committing, the lead regenerates it per merge.
 - Your function set is disjoint from other members' sets even on a shared
   binary. Append your own dated section and your own rows. Never edit
   another lane's section.

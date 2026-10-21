@@ -287,6 +287,11 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   Put the evidence itself in the doc (the numbers, the table, the command
   that reproduces it); a tool worth keeping moves to `scripts/`; a reference
   frame worth keeping moves to `data/reference/` and is cited there.
+- **Never commit `docs/overview/status.md`.** Its RE-coverage block is generated, and
+  two lanes regenerating it conflicts at nearly every merge (14 of 88 commits to it were
+  bare regenerations by 2026-10-21). Run `just gen-status` so your gate passes, then
+  `git checkout docs/overview/status.md` before committing; the lead regenerates it once
+  per merge. This overrides any agent file that says to commit `gen-status`.
 - **Never write a compare-page manifest (`data/reference/compare-page/*.toml`) from your
   worktree.** `data/` there is a symlink into the main checkout, and on 2026-10-21 a member's
   `race-shots.toml` pointed into its own worktree and broke the maintainer's page once the
@@ -301,7 +306,8 @@ Write full findings to
 `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`. Include
 commits per step, the gate result you watched finish (counts and exit status),
 any regression gate quoted before and after, screenshot paths, and what is
-still open. Return ONLY that path plus at most 15 lines: long returns can
+still open. Quote your brief's claim and say whether it came out true, false or
+unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines: long returns can
 silently fail to arrive. A negative result reported honestly is a good
 outcome, and "I could not determine X, here is its address" is a result.
 

@@ -34,7 +34,8 @@ the main checkout and follow it. Then read `CLAUDE.md`, `docs/README.md` and
   page, test or address instead.
 - `HANDOVER.md` stays under 256 KiB (`just check-handover`).
   `docs/overview/status.md`'s RE-coverage table is generated
-  (`just gen-status`), so never hand-edit it.
+  (`just gen-status`), so never hand-edit it, and never commit it: the lead
+  regenerates it per merge.
 - A docs-only change runs `just check-docs`, plus `check-names`,
   `check-handover` and `check-status` as they apply. If you find you need to
   touch a `.rs` file beyond a doc comment, stop and tell the lead: that is a
