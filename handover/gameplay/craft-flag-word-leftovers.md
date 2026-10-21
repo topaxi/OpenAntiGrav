@@ -13,10 +13,22 @@ Dead in the original and left out on purpose: `0x10`, `0x20`, `0x40`, `0x80`, `0
 - **`0x2000` live.** The wrong-way kill is a static read (82). Watch `craft+0x1c0` in an
   Elimination race on PPSSPP, turn the craft round, and check the bit, the zero thrust and
   the full airbrakes. Needs an Elimination save state (none under `data/saves/pulse-psp/`).
-- **HD's flag word** (`craft+0x264`) numbers its bits differently: `Craft_UpdateThrottle`
-  (`0x000efb50`) resets `craft+0x320` under `0x20` (Pulse's `0x200`/`0x2cc` shape) and zeroes
-  `craft+0x30c` under `0x200`. Map every writer as on Pulse, then turn
-  `eliminator_wrong_way_kill` from `inherited` to measured for HD (and Omega/2048 through it).
+- ~~**HD's flag word**~~ mapped 2026-10-21 (`hd-throttle-and-flags`):
+  [ps3-hdfury-eu/craft-flags.md](../../docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md).
+  From `0x20` up HD's bits are Pulse's shifted right by four; the sideshift grid gate, the
+  Turbo laws, the doubling and the drag are measured on HD; **HD has no wrong-way kill**
+  (`0x200` has no writer; live, an Eliminator craft flipped backwards keeps its engine), so
+  HD, 2048 and Omega turned it off. Left open from that read:
+  - **HD's Eliminator flip** (L1, "Flip your ship", about `0.15 s` for a half turn) is a
+    player control ours does not have. Its code is unread.
+  - **HD's `T += 100`** in `Craft_UpdateThrottle` while `craft+0x2e0 > 0` and grounded
+    (`0x000efd2c..0x000efd54`), ahead of the doubling; `craft+0x2e0`'s writers are listed on
+    the page, its meaning is not. Ours has no such term.
+  - **`Craft_ApplyQuadraticDrag`'s `r4 != 0` arm** (velocity `x0.99`, or `x0.95` when
+    `body+0x210 == 2`): no caller path read reaches it.
+  - **HD's `0x400`** is read by `Craft_IntegrateHull` and two AI functions and has no
+    setter; **2048's `0x400` and `0x800`** have setters HD lacks (five for `0x400`, one for
+    `0x800`), unread.
 - **The barrel roll and a respawn** were not exercised live: the `0x400` stores are the static
   set, and nothing past `Ship_InitCraft` is known to write the word on a respawn.
 - **`craft+0x2a4 == 1`** gates the turbo add and the lift; ours has no racing-state enum.
@@ -38,5 +50,6 @@ Dead in the original and left out on purpose: `0x10`, `0x20`, `0x40`, `0x80`, `0
 
 1. Take an Elimination grid state on PPSSPP (`psp-drive.py menu`, then `psp-state.py save`),
    run `scripts/psp-craft-flags.py` with a scripted U-turn, and record the `0x2000` frames.
-2. On RPCS3, put a write watch on HD's `craft+0x264` through a race with a Turbo and a
-   sideshift, and name its bits.
+2. HD's flip: find the L1 binding's reader in an Eliminator (`scripts/rpcs3-hd-air-hold.py
+   --script` logs the button words `+0x24`/`+0x28`), read what it writes to the body, then
+   decide whether ours offers it.
