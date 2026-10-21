@@ -154,6 +154,17 @@ impl Renderer {
                 continue;
             };
             let (mut rect, mut uv) = atlas.glyph_quad(&cell, pen, y, scale);
+            if self.hud.whole_advances {
+                // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
+                // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of
+                // the Pulse grid, every glyph of every string), in its pixel-centre convention.
+                for quad in [&mut rect, &mut uv] {
+                    quad[0] -= 0.5;
+                    quad[1] -= 0.5;
+                    quad[2] += 1.0;
+                    quad[3] += 1.0;
+                }
+            }
             if let Some((left, right)) = clip {
                 let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
                 if glyph_right <= left || glyph_left >= right {

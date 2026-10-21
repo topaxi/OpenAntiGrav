@@ -481,10 +481,14 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
             "ab",
             None,
         );
-        renderer.quads.last().expect("a glyph").rect[0]
+        *renderer.quads.last().expect("a glyph")
     };
     let by_advance = last_left(&mut renderer);
     renderer.set_whole_pixel_advances(true);
     let by_ink = last_left(&mut renderer);
-    assert_eq!(by_ink - by_advance, 3.0, "{by_advance} {by_ink}");
+    // The glyph rect is also the box grown half a pixel each side with the uv grown half a texel
+    // (`225.5..249.5` for the box `226..249` in the GE list), so it starts 0.5 left of the ink.
+    assert_eq!(by_ink.rect[0] - by_advance.rect[0], 3.0 - 0.5);
+    assert_eq!((by_advance.rect[2], by_ink.rect[2]), (4.0, 5.0));
+    assert_eq!((by_advance.uv[2], by_ink.uv[2]), (4.0, 5.0));
 }
