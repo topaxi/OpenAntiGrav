@@ -79,8 +79,10 @@ branch, with HD's bit numbers, two differences:
 - **`T += 100` while `craft+0x2e0 > 0` and grounded**, ahead of the doubling. Writers of
   `craft+0x2e0`: `0x000d2058` (`+= dt`, in `FUN_000d1e98`), `0x000e5c08` (`+=` a TOC
   constant), `Ship_ApplyDamage_q` `0x000e88e4` (drained), zeroed at `0x000ef03c` and
-  `0x000f021c`. Not identified; **open**. It never fired on the rows below (no `+100`
-  sized step in any of them).
+  `0x000f021c`. Not identified; **open**. No capture logs `craft+0x2e0`, so whether it ran
+  on the walked rows is not known: the walk leaves 23 of 193, 8 of 154 and 11 of 215
+  grounded rows more than `1.0` u/s per frame slower than the original (Ubermall PHANTOM
+  `centred-1`, `centred-2`, Venom `centred-1`), unattributed.
 - The **Pilot Assist scale** multiplies the throttle the engine reads
   ([pilot-assist.md](pilot-assist.md)).
 
@@ -200,13 +202,18 @@ missed twice on this state.
 - **Omega and 2048 inherit HD's craft laws.** Their doubling and drag were labelled
   inherited from Pulse; they are now inherited from Wipeout HD, which measured the same
   values.
-- **2048 (v1.04, `eboot.elf`), checked statically, applies.** Stores to `craft+0x264`
-  (`str.w ..., [rX,#0x264]` with an `orrs`/`bfi`): `0x1` (`0x811cdf8a`, cleared
+- **2048 (v1.04, `eboot.elf`), checked statically, differs in part; open.** Stores to
+  `craft+0x264` (`str.w ..., [rX,#0x264]` with an `orrs`/`bfi`): `0x1` (`0x811cdf8a`, cleared
   `0x811d015a`), `0x2` (`0x811d128c`, `0x811d12bc`), `0x4` (`0x811b238a`), `0x8`
   (`0x811d1344`), `0x20` (`0x811bf0b4`), `0x40`, `0x80`, `0x100` (`0x811bf7aa`, the
   sideshift's shape), plus `0x400` (five setters, `0x811c7366` among them) and `0x800`
-  (`0x812bdc0e`) that HD does not have. **No store sets `0x200`.** So 2048 inherits HD's
-  "no wrong-way kill" with that census behind it; its new `0x400`/`0x800` are unread.
+  (`0x812bdc0e`, in `FUN_812bda96`, a virtual method with no direct caller; cleared at
+  `0x812bdb00`) that HD does not have. **No store sets `0x200`**, but 2048 keeps Pulse's
+  second reader: at `0x811cfb0c` a set `0x200` writes `100.0` into both airbrake inputs of
+  the control record, and the next test (`0x811cfb2c`) does the same kind of override under
+  **`0x800`**, which is set. So 2048 has no `0x200` kill, as HD, but it has an `0x800` state
+  that overrides the controls, and what sets it (a wrong-way rule or something else) is
+  unread. 2048 inherits HD's "no wrong-way kill" with that gap named.
 - **Omega: not checkable here.** Its craft structure is laid out for 8-byte pointers and
   its `craft+0x264` counterpart has not been located; no PS4 capture path exists. It
   inherits HD's laws.

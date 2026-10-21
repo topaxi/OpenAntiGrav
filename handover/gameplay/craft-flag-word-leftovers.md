@@ -28,7 +28,9 @@ Dead in the original and left out on purpose: `0x10`, `0x20`, `0x40`, `0x80`, `0
     `body+0x210 == 2`): no caller path read reaches it.
   - **HD's `0x400`** is read by `Craft_IntegrateHull` and two AI functions and has no
     setter; **2048's `0x400` and `0x800`** have setters HD lacks (five for `0x400`, one for
-    `0x800`), unread.
+    `0x800`). 2048's `0x800` overrides the control record (`0x811cfb2c`, beside Pulse's
+    forced-airbrake reader of `0x200` at `0x811cfb0c`), set by `FUN_812bda96`: read what
+    sets it before trusting 2048's inherited "no wrong-way kill".
 - **The barrel roll and a respawn** were not exercised live: the `0x400` stores are the static
   set, and nothing past `Ship_InitCraft` is known to write the word on a respawn.
 - **`craft+0x2a4 == 1`** gates the turbo add and the lift; ours has no racing-state enum.
