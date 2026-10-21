@@ -71,6 +71,9 @@ GO_TICK = ce.go_tick()
 #: smallest mean grey difference named row `i - 1` on all seven shots (21.3 against 26.6 and up for every other row).
 #: So the pose, camera, field and HUD are read at stop 0 and the screenshot taken at stop `PRESENTED_LAG`.
 PRESENTED_LAG = 1
+#: `Ship_UpdateCraft`: the load stops at its first hit, the state's own first frame (bit-identical run to run), where the
+#: old load-then-freeze landed 0.6 s of race clock late and differently each time (`psp-state.py do_load_stopped`).
+SHIP_UPDATE_CRAFT = 0x08849618
 
 
 def run(cmd, **kw):
@@ -463,7 +466,8 @@ def main():
     uv = ["uv", "run", "--with", "websocket-client", "python3"]
     set_window(960, 544)
     resume(args.port)
-    run(uv + [HERE / "psp-state.py", "--port", args.port, "--home", args.home, "load", "2", "--file", args.state])
+    run(uv + [HERE / "psp-state.py", "--port", args.port, "--home", args.home, "load", "2", "--file", args.state,
+         "--stop-at", hex(SHIP_UPDATE_CRAFT)])
     freeze(args.port)
     time.sleep(args.toast_wait)
     from ppsspp_debugger import Debugger
