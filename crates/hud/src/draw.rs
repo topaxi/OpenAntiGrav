@@ -222,15 +222,24 @@ pub(super) fn text_for(
         // Running clocks: tenths. See [`Precision`].
         "CurrentTime" => Some(format_lap_time(readout.lap_ticks, Precision::Tenths)),
         // Pulse authors an `idstring` caption here; HD's `HUD_lap_times.xml`
-        // authors `string="1"` in the lap hexagon instead, which the original
-        // draws on lap 1 (compare pairs). The widget is `hud+0x298`: bound once
-        // and rewritten only by `Hud_UpdateTimeCluster`'s lap-change branch,
-        // which never fires on lap 1, so lap 1 is the authored text. What a later
-        // lap writes is unread, so a later lap draws nothing rather than a guess.
+        // authors `string="1"` in the lap hexagon instead. The widget is
+        // `hud+0x298`: bound once, and rewritten only by
+        // `Hud_UpdateTimeCluster`'s lap-change branch, which writes the new lap
+        // number as one digit (`0x30 + lap`) for laps 2 to 5 (the four history
+        // rows plus the first lap) and never fires on lap 1 or past lap 5, so
+        // the last digit stays. Read from the disassembly and watched live
+        // (hud+0x294 = 2, 3 and the hexagon reading 2, 3 at the lines).
+        // The branch runs only where the layout has no `BestTime`; the one
+        // layout that authors a literal here is the one without it.
         // [`docs/formats/hd-hud.md`], "The lap hexagon".
-        "CurrentTimeTxt" => {
-            caption(label, strings).or_else(|| label.string.clone().filter(|_| readout.lap <= 1))
-        }
+        "CurrentTimeTxt" => caption(label, strings).or_else(|| {
+            let literal = label.string.as_deref().filter(|s| !s.is_empty())?;
+            let last = readout.lap_splits.len() as u32 + 1;
+            Some(match readout.lap {
+                0 | 1 => literal.to_string(),
+                lap => lap.min(last).to_string(),
+            })
+        }),
         // The total time and its caption yield the top-right anchor to the
         // place only when the two actually coincide - see
         // [`place_owns_the_anchor`], `false` throughout on 2048.

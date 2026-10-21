@@ -788,3 +788,5 @@
 0x000eadb8	function	Ship_UpdateEntity	72	ship-lean.md
 # 2026-10-21 hud-leftovers: the pickup bar update (hud-readouts.md)
 0x0008df30	function	Hud_UpdatePickupBar	70	hud-readouts.md
+# 2026-10-21 hd-lap-hexagon: the clock formatter (hud-readouts.md)
+0x000835e0	function	Time_FormatCentiseconds	85	hud-readouts.md

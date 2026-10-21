@@ -472,11 +472,12 @@ fn no_two_live_labels_overlap() {
 }
 
 /// HD's `HUD_lap_times.xml` authors `string="1"` on `CurrentTimeTxt` with no
-/// idstring; the original draws it in the lap hexagon on lap 1 (compare pair,
-/// Modesto Heights time trial) and rewrites it at a lap change, which is unread,
-/// so a later lap draws nothing.
+/// idstring; the original draws it in the lap hexagon on lap 1 and
+/// `Hud_UpdateTimeCluster` writes the lap number there at each lap change, laps 2
+/// to 5 (watched live on Talon's Junction: the hexagon read 1, 2, 3), so the
+/// digit holds at the fifth lap.
 #[test]
-fn the_lap_hexagon_draws_its_authored_literal_on_lap_one_only() {
+fn the_lap_hexagon_draws_the_lap_number_from_the_authored_literal() {
     let layout = Layout::from_xml(
         r#"<Screen><Text name="CurrentTimeTxt"><Values string="1" font="HUD" x="0" y="0"/></Text></Screen>"#,
     );
@@ -498,5 +499,8 @@ fn the_lap_hexagon_draws_its_authored_literal_on_lap_one_only() {
         )
     };
     assert_eq!(text(1), Some("1".to_string()));
-    assert_eq!(text(2), None);
+    assert_eq!(text(2), Some("2".to_string()));
+    assert_eq!(text(3), Some("3".to_string()));
+    assert_eq!(text(5), Some("5".to_string()));
+    assert_eq!(text(6), Some("5".to_string()));
 }
