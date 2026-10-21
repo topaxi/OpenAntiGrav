@@ -522,7 +522,8 @@ mesh-shape tag (`Collision_RaycastMesh` writes `1`, `Collision_RaycastBox` `3`;
 and the translate sits inside the probe loop before the type test
 ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
 **Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
-millimetre). A `MagFloor` hit passes the shape tag too, and since 2026-10-21 it escapes
+millimetre); since 2026-10-21, 87 for the wall gate and 92 for the escape off a `Floor`
+([census below](#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census)). A `MagFloor` hit passes the shape tag too, and since 2026-10-21 it escapes
 ([below](#a-magstrip-passes-the-gate-and-the-escape-fires-on-one-2026-10-21-deviations-to-original-pulse-magstrip-hold)); it was held out by choice
 until then. The floor-only gate this replaces (2026-08-12) was a reading of the field as
 the floor class, made the same day the shape tag was not yet recovered; nothing measured it
@@ -674,9 +675,116 @@ reads the same with the escape held out or on:
 | title | escape off any hit | escape without contact | origin |
 | --- | --- | --- | --- |
 | Pulse (PSP, PS2) | yes (`Floor`, `Wall`, `MagFloor`) | yes | measured; `MagFloor` read and seen tagged `1` live, held out until 2026-10-21 |
-| Pure | yes | yes | inherited from Pulse (Pure's `Ship_HoverTwoPoint` lineage; its gate not read) |
+| Pure | yes | yes | inherited from Pulse for the gate (not read); the escapes sum, read statically 2026-10-21 (`0x0892e00c`-`0x0892e358`, [below](#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census)) |
 | Wipeout HD | yes (`Floor`, `Wall`; `MagFloor` below full magnet lock) | yes | without contact: read statically (`Craft_HoverFourPoint` translates at `0x000ee6ac` before its contact test, [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); the gate `hit+0x28 == 1` is the march's mesh-shape tag, read and seen constant live, `Floor` only before 2026-10-21 ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#hit0x28-is-the-marchs-mesh-shape-tag-2026-10-21-deviations-to-original)) |
 | Omega, 2048 | yes | yes | **changed by this port** (they had Pulse's floor-only gate too), inherited from Pulse: both fly Pulse's two-point rig (`hover_rig: None`) until their own loops are read ([hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#the-escapes-sum-2026-10-20-hd-hover-residual)); not checkable here, no executable read of either's hover loop and no Omega capture path |
+
+Whether the escapes add or the deeper one wins is its own question, answered
+[below](#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census):
+they add on every rig read so far (Pulse, Pure, HD).
+
+## The two-point escapes sum, and a census of the one-step height misses (2026-10-21, `pulse-wall-escape-census`)
+
+**The census.** `crates/trace/tests/height_miss_census.rs` steps every row of a capture once
+(physics plus the cage) and splits the miss along the next row's up axis into the original's
+own jump (`pos(t+1) - pos(t) - v(t+1) dt`, a move its velocity does not carry), ours, and the
+velocity term, with what each probe's ray found. The `391` figure above was five captures,
+two of them the original's Autopilot. Split by source:
+
+| rows | misses over `0.05` | what they are |
+| --- | ---: | --- |
+| player input, Talon's (clean lap, time-trial lap, lap replay, standing start) and the four Fort Gale player ramps, 10,121 | 120 | 113 magstrip rows (the hold, below); 1579, two probes escaping at once; 4 rows entering or leaving a strip; Fort Gale `1190` tick 58; Fort Gale `1180nb` tick 130 (air) |
+| the original's Autopilot (Talon's, Fort Gale ramps 1 to 3), 8,016 | 307 | every miss on the Fort Gale captures (173 of 173) sits on a row with `rail_blend > 0`: `Ai_SnapToLane` writing position. Talon's 134 carry no rail column; most are magstrip rows |
+| the pitch-gate drops (`talons-pitch-*`, placed, player input), 523 | 8 | placed runs whose single write kicks the body on the first ticks |
+| placed and weave runs under player input, 2026-10-21 (below), 3,792 | 34 | all on or at the edge of a magstrip, in one weave run |
+
+So nothing in the old count was a missed wall escape. The magstrip class is the one-step walk
+not running the hold, which needs the race spline. `crates/raceplay/tests/magstrip_jump_census.rs`
+runs `oag_physics::maglock` from each recorded pose on the clean lap, with the blend ramped
+along the record. The hold is engaged on all 117 strip miss rows. The ramp rows (blend under
+`1`) fit to `0.012` rms, but at full blend the original sits a median `+0.034` higher than
+ours (282 rows, held height `3.975` mean). The rms over the 117 rows falls only from `0.095`
+to `0.072`. That offset is the held height's reference: the axis and height come off our
+resampled spline, which `maglock_ground_truth.rs` already names as the open question. Not
+ported.
+
+**The escapes add.** `Ship_HoverTwoPoint`'s probe loop (`0x0884a798`-`0x0884ab90`, two
+passes) reads each probe point at `craft+0xe0 + 0x10 i` (`s4`) and its hit at `craft+0x1e0 +
+0x30 i` (`fp`), both written before the loop by `Ship_CastHoverProbes`. It takes the height
+`dot(point - hit, up)`, stores it at `craft+0x308`, and escapes through `Body_Translate`
+(`0x0884d9f8`). Translate adds to `body+0x30` and writes nothing else, and the loop writes
+neither `s4` nor `fp` (the rest of the pass is `Body_AddForceAtPoint`). So the second probe's
+height is the one from before the first move, and both escapes apply. Ours took the larger
+one alone; the code called that a choice, not a finding. Pure's loop (`0x0892e00c`-`0x0892e358`)
+has the same shape: the cached point (`s4`) and hit (`s7`), and its translate is the
+unrelocated `jal 0x0012f8c8`, i.e. `0x089338c8`, which adds to `body+0x30`.
+
+| tick | probes `1 - h` | recorded jump | summed | the larger |
+| --- | --- | ---: | ---: | ---: |
+| clean lap 1579 (landing, player input) | `0.473`, `1.218` | `1.6981` | `1.6945` | `1.2214` |
+| Fort Gale player ramp `1190` tick 77 | `0.211`, `0.072` | `0.2556` | `0.2563` | `0.2472` |
+| Talon's Autopilot 1594 (corroboration) | `0.879`, `1.921` | `2.8043` | `2.8056` | `1.9266` |
+| Fort Gale Autopilot ramp 3, 1143 (corroboration, rail on) | `0.082`, `0.220` | `0.2259` | `0.2103` | `-0.0592` |
+
+1579 is the tick that discriminates (`0.48` apart). Fort Gale `1190` tick 77 separates the two
+laws by only `0.009`. The Autopilot rows are corroboration only, since the rail writes position.
+**Ported**: `oag_physics::hover::Rig::TWO_POINT.sum_escapes` is `true`. **Confidence 92**: a
+direct read of the loop, a runtime tick to `0.004`, and Pure's loop the same shape (a second
+binary, statically).
+
+| | before | after |
+| --- | --- | --- |
+| one step from 1579, height against the record | `-0.477` | `-0.004` |
+| rolled from 1578, up error at 1580 | `-0.473` | `+0.002` |
+| rolled from 1578, nose error at 1594 / 1608 | `+0.9` / `-2.8` mrad | `-6.1` / `-18.3` mrad |
+| rolled from 1594, nose error at 1608 | `1.1` mrad | `1.1` mrad (unchanged) |
+| player-input misses over `0.05` (10,121 rows) | 120 | 119 |
+| `race_ground_truth` lone craft | 12/12 clean | 12/12 clean (`10_Track` 39.2 -> 38.2 s, the rest unchanged) |
+| `pad_crossing_ground_truth` | pass | pass |
+
+The free roll from 1578 now gets worse further on, and that is not the escape. With the
+landing closed, the position-restored roll shows the nose drifting `-6` mrad from 1584 (the
+cage tick) to 1594, and the omega-restored roll does not. That is an angular residual on the
+1584 cage response, which the landing's `-0.47` used to hide. From 1594 the craft therefore
+arrives off the attitude that puts the front ray on the wall, and misses the wall escape. The
+old law was right for the wrong reason. Pinned by
+`hover_contact_ground_truth::the_landing_escapes_off_both_probes_and_the_moves_add` and
+`oag-physics`'s `the_two_point_law_sums_both_probes_escapes` and
+`two_penetrating_probes_move_the_body_by_their_sum`.
+
+**The wall escape, looked for under player input.** Across the 10,121 player rows the only
+probe ray that finds a wall within a unit is the 1594 crest. Two deliberate runs were taken on
+PPSSPP v1.20.4, software renderer, muted, from the Time Trial grid state, VENOM, Assegai:
+
+- **Placed at the crest.** `psp-trace.py --warmup 2 --hold cross --place=<pose> --place-repeat 2
+  --ticks 40`, at the clean lap's 1594 pose stepped back one tick, at `-0.45`, `-0.3`, `-0.15`,
+  `0` and `+0.12` along up (`data/traces/talons-wall-skim-*.csv`). With the rates the
+  placement zeroes, the front ray finds the wall below it out of reach on row 0, and the craft
+  takes off without an escape on either side. All five land 21 ticks later with a single-probe
+  floor escape on five consecutive rows: 20 escape rows (`0.008` to `0.192`), ours against the
+  original within `0.003` on every one. The escape's `1 - h` off a `Floor` is measured live,
+  confidence **92**.
+- **A weave at speed.** `verification/scenarios/talons-wall-weave.inputs`, thrust held,
+  20-tick full-lock pulses with 40 straight ticks between, placed at speed at the clean lap's
+  poses 200, 700 and 1400 (`data/traces/talons-wall-weave-{200,700,1400}.csv`, 3,597 rows,
+  1,950 of them with a wall contact, speed `3` to `149`). No escape on either side. The only
+  miss off a strip is tick 804 of the 700 run, a wall-contact row where the original moves the
+  body `0.053` down along up that ours does not move. One row, not chased: the cage's
+  position push is the first suspect (ours reports two wall contacts and no cage contact there).
+  A run from the grid stalled against the grid wall at walking pace and is not counted.
+
+So a wall escape needs a probe ray that finds a wall face within one unit, in practice the
+derived rear hit behind a front ray that lands on a wall at a crest. Normal wall contact never
+produces one: ours fired none where the original moved nothing, over 1,950 wall-contact rows.
+The wall gate goes from **85 to 87** on that negative. Its positive leg is still the one
+1594 tick.
+
+**Open, not chased:** Fort Gale player ramp `1190` tick 58, right after a wall hit (speed `65 ->
+38`): ours escapes `0.2085` off the rear probe, the original does not move (`-0.032`). The
+cached speed is not it: `craft+0x2ec` is stored at `0x08849938`, before the hover call at
+`0x08849bd4`, and the capture's next-row cache (`12.10`) equals `|v . fwd|` of this row, so
+both rays are cast on both sides. Next: `psp-trace.py --place` at that pose with a breakpoint on
+`0x0884a828` (the escape's load of `craft+0x308`) to read the rear probe's height.
 
 ## Wipeout HD: the class scale is on flight gravity (Ubermall)
 
