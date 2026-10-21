@@ -1838,8 +1838,9 @@ which is the pale concrete at the top of `ds_wall_cs.gtf` rather than the
 near-black, alpha-0 band at its bottom.
 
 **It is per material and not a convention.** 18 of `track_wall`'s 94 vertex
-blocks flip and **none** of `track_surface`'s 64 do; across the whole circuit
-exactly **one of 283 resolved variants** flips. Flipping unconditionally makes
+blocks flip *directly* (see the next section for the ones that flip through a
+temporary) and none of Talon's Junction's `track_surface` do; across the whole
+circuit exactly **one of 283 resolved variants** flips. Flipping unconditionally makes
 the walls right and every surface that was already right wrong, so
 `oag_rcs::rcsmaterial::vertex::Program::flips` reads it out of the resolved
 block and `mesh::rcs::skin::flips` asks per slot.
@@ -1864,6 +1865,68 @@ because each is a check someone will otherwise repeat:
 Note that the first of those is *true* and still not the answer: the texture is
 stored the right way up, and the flip is in the shader. Checking the texture
 was what made the shader the only place left to look.
+
+## The flip also arrives through a temporary: the pit boxes and a wall that drew upside down
+
+**Recovered 2026-10-21 (`hd-track-materials`), confidence 90.** The reading above
+looked for a negated `v[Uv1]` written **straight** into an interpolator and
+recorded "a negation into a temporary is not a flip". Amphiseum's
+`track_surface_no_emissive` (vertex block `0x5720`) writes the same `(u, 1 - v)`
+pair the other way round:
+
+```text
+ 2  MOV o[TC3].w, v[3].xxxx          u
+ 5  ADD R3.w, -v[3].yyyy, c[208].zzzz   1 - v, into a temporary
+11  MOV o[TC4], R3                   copied out to the interpolator
+```
+
+Talon's `track_surface` (block `0x5710`) is the same program with
+`MOV R3.w, v[3].yyyy` in place of the `ADD`, which is why Talon's start grid
+always drew right and Amphiseum's and Tech de Ra's did not. `Program::flips` now
+also counts a negation of the attribute into temporary `T` when a **later**
+`MOV` copies `T` to an interpolator (`Instruction::dest_temp` is `d0` bits
+15-20); a negation that never reaches an output is still not a flip.
+
+**What a player saw.** The five pit boxes under the start line are one chunk of
+1,100-triangle relief with `ds_pit_box_cs.gtf` mapped once over each. Unflipped,
+the box's orange arrows and white clamp bodies sat at the wrong end of the relief,
+so the floor read as a flat mottled texture with orange arms at the sides and no
+floor arrows. Flipped, the clamps sit on their relief and the orange arrow lands
+under the craft, as in the RPCS3 original. Talon's Junction's left wall at the
+start (`track_wall` block `0x19630`, which the direct reading missed) was the same
+cause: its panel rows were shifted and the dark lower band came out light.
+
+**Disc census** (`crates/render/examples/hd_flip_disc_census.rs`, 643 `.rcsmodel`
+files, 1,761 distinct material and vertex-block pairs): flips **21 direct, 41
+with the temporary hop**; none read before is lost. The 20 added are Amphiseum's
+`track_surface` and `track_surface_no_emissive` (and the `_reversed` copies),
+Tech de Ra's `track_surface`, Talon's and Modesto Heights' `track_wall` blocks
+`0x19630` / `0x6e20`, `mageffect08` and `mageffect08_lh` on Amphiseum and Talon's,
+and `reflectplane_dc_seawater` on `03_track`. The last two families are read by
+the same rule and **not compared with an original**: `mageffect08` block `0x1a140`
+writes `R0.y = 1 - v[3].y` and `MOV o[TC6], R0`, the `track_wall` idiom exactly, but
+no pair frame contains the magstrip floor or the sea.
+
+**Measured, same tree, before and after** (grey RMSE 0-255, theirs against ours,
+`hd/*/theirs.png` against a re-render at the pair's own flags): Amphiseum grid
+floor **46.0 -> 30.3**, Tech de Ra **55.1 -> 32.4**, Talon's left wall **39.4 ->
+9.3**, Talon's grid floor 25.9 -> 25.0 (it was already right). Whole-frame mean
+grey difference over the 13 HD time-trial pairs and `hd-race/talons-pack`: five
+fall (Amphiseum 24.5 -> 17.9, Tech de Ra 28.6 -> 18.8, Talon's 22.1 -> 16.0,
+Talon's Assegai 22.6 -> 16.5, Modesto Heights 23.5 -> 19.6) and nine are
+byte-identical in the changed region; none rises.
+
+**Test.** `crates/rcs/tests/hd_uv_flip_ground_truth.rs` pins Amphiseum's
+`track_surface_no_emissive` as flipping, Talon's `track_surface` as not, and
+Talon's `track_wall` block `0x19630` as flipping; the first and last fail on the
+direct-only reading.
+
+**Cross-title.** *Omega, 2048:* **not checkable by this reading.** The reader is
+the RSX microcode of the PS3 `.rcsmaterial`; 2048's materials are Vita `.gxp`
+and Omega's are recompiled for the PS4, and `mesh::rcs::psp2` carries no
+orientation reading at all. Both re-ship HD's circuits with the same pit-box
+chunks, so whether their start grids draw upside down is open (named in the
+`hd-track-materials` thread).
 
 ## The PS4 Omega Collection: a different container, not a byte-swap of this one
 
