@@ -63,6 +63,10 @@
   per-piece costs at 1080p, one cut landed (craft outside the frustum are no longer drawn,
   byte-identical), the velocity attachment's "10 %" measured as noise, and three suspects cleared -
   see [`hd-gpu-cost.md`](hd-gpu-cost.md)
+- **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
+  paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
+  redundant per-frame uploads were removed (byte-identical) - see
+  [`frame-thread-cpu.md`](frame-thread-cpu.md)
 - **4K and 8K cost, per pass and per title** (2026-10-19, RX 7800 XT): everything scales
   linearly with the pixels and defaults stay under 8 ms at 8K; the one outlier, Omega's circuit
   shading 3.7 fragments a pixel with no depth prepass, now has one (pipelined 8K 9.4 to 4.9 ms,
