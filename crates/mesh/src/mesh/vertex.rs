@@ -455,15 +455,31 @@ pub mod slots {
     /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16.
     pub const MATERIAL_SHIFT: u32 = 24;
 
-    /// The mask covering every role bit - the low half of the word, with
-    /// [`MATERIAL_SHIFT`]'s index excluded.
-    pub const ROLE_MASK: u32 = (1 << MATERIAL_SHIFT) - 1;
+    /// The material's program lights the albedo texture's **alpha** and tints
+    /// the specular with its RGB (`oag_rcs::rcsmaterial::fragment::LitAlbedo::Alpha`):
+    /// `light * albedo.a + spec * albedo.rgb`, where every other lit program
+    /// computes `light * albedo.rgb + spec * albedo.a`. Read off the resolved
+    /// fragment program's own multiply (`skin::roles`); Anulpha Pass's
+    /// `reversed_diffuse_specular_normal` and `cf_chevron_pulse` walls and
+    /// floor plates, whose `_sc` textures carry a blue specular tint that
+    /// painted the surface cyan - `docs/rendering/hd-track-tone.md`, "The blue
+    /// cast".
+    ///
+    /// **Bit 31, above the index**, because bits 0 to 23 are all taken and the
+    /// index needs only seven: the glow table holds
+    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) (64) entries, so
+    /// [`material_index`] masks the top bit off.
+    pub const LIT_ALPHA: u32 = 1 << 31;
+
+    /// The mask covering every role bit - the low half of the word plus
+    /// [`LIT_ALPHA`], with [`MATERIAL_SHIFT`]'s index excluded.
+    pub const ROLE_MASK: u32 = ((1 << MATERIAL_SHIFT) - 1) | LIT_ALPHA;
 
     /// This material's [`Model::emissive`](super::Model::emissive) index plus
     /// one, or `0` where it has no entry.
     #[must_use]
     pub const fn material_index(packed: u32) -> u32 {
-        packed >> MATERIAL_SHIFT
+        (packed >> MATERIAL_SHIFT) & 0x7f
     }
 
     /// Which channel of that texture the alpha is, in bits 3 and 4.

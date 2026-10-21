@@ -770,6 +770,24 @@ pub(super) fn roles(
         // samples `mesh_render::build`'s black placeholder - which is a
         // black surface, the loudest possible way to be wrong. Caught by the
         // picture on the first run of this reading.
+        // **Which part of the albedo the light multiplies**, off the same
+        // program: a `reversed_*` or `cf_chevron_pulse` program lights the
+        // texture's alpha and keeps its RGB for the specular tint - see
+        // `slots::LIT_ALPHA`. Only where `picks` bound a picture as the
+        // albedo: `m_diffuse_normal_constantspecular` lights `constant *
+        // normal.a` off a normal map at unit 0, and the renderer binds that
+        // family's constant as its picture (`constant_diffuse`), whose alpha
+        // is one - the normal map's alpha is a separate, unwired factor.
+        let picture_bound = picks.get(slot).is_some_and(|p| p.albedo.is_some());
+        if let Some(program) = program.as_ref()
+            && picture_bound
+            && u8::try_from(first_unit)
+                .ok()
+                .and_then(|unit| program.lit_albedo(unit))
+                == Some(rcsmaterial::fragment::LitAlbedo::Alpha)
+        {
+            packed |= slots::LIT_ALPHA;
+        }
         let bound = seconds.get(slot).is_some_and(Option::is_some);
         // The (unit, channel) the shader's coverage alpha samples: the first
         // texture's alpha unless the reading below re-points it.

@@ -459,6 +459,14 @@ pub const CONSTANT_AMBIENT: u32 = 0x81db_67ea;
 pub const SUN_COLOUR: u32 = 0x2dba_643d;
 /// `~crc32("directionalLight0DirectionWorldSpace")`, the sun's direction.
 pub const SUN_DIRECTION: u32 = 0x02df_31e5;
+/// The `Lighting.Prelit ambient colour scale` of a circuit's `.envsettings`,
+/// the float3 a lit program multiplies `pow(lightmap, power)` by before it
+/// adds the sun term: the one patch that marks the diffuse light register
+/// (`MAD light.xyz, curved, {scale}, light`). No preimage; cited by hash.
+pub const PRELIT_SCALE: u32 = 0x8670_f0be;
+/// The `Lighting.Prelit ambient colour power` beside it, the float3 the
+/// lightmap's per-channel `LG2`/`MUL`/`EX2` curve raises it to.
+pub const PRELIT_POWER: u32 = 0x002c_73e8;
 /// `~crc32("SpecularPower")`, the specular exponent -
 /// `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`'s "Ships have no
 /// Lambert diffuse either" names it as the parameter a resolved `0.0`

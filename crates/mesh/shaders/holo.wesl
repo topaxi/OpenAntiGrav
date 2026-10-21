@@ -43,7 +43,7 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
         let lightmap = textures[material.lightmap];
         let pad_mask = textures[material.pad_mask];
     }
-    let rates = emissives.tint_offset[in.slots >> 24u];
+    let rates = emissives.tint_offset[(in.slots >> 24u) & 127u];
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;
     let scan_uv = in.lightmap_texcoord.zw;

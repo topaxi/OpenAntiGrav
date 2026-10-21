@@ -241,6 +241,206 @@ anisotropy override.
 2. **Decide the adaptation law** against the console, not the emulator: whether
    the hardware's ladder filters linear or encoded. The live number says encoded;
    the static read of `FUN_003b4690` and the gamma nibble say linear.
-3. **The wall's cyan cast** (`cf_chevron_pulse` and the wall slots, pre-resolve)
-   and **the pulse's colour and phase** are open and are not lighting.
+3. ~~**The wall's cyan cast** (`cf_chevron_pulse` and the wall slots, pre-resolve)~~
+   **closed below (2026-10-21, `hd-blue-tone`)**: the wall programs light the
+   albedo's alpha. **The pulse's colour and phase** (the chevron's emissive
+   mask, `emask.a * colour * wave`) and its `+ emask.rgb` diffuse term stay
+   open and are not lighting.
 4. **HD's `-1.5` LOD bias** on material textures.
+
+## The blue cast (2026-10-21, later, `hd-blue-tone`)
+
+**Claim**: our HD frames carry a blue/cyan cast the original does not, caused
+by one input to the lit track material or the frame chain. **True, and
+fixed.** The cast is one material family's, on one circuit: Anulpha Pass's
+`reversed_diffuse_specular_normal` and `cf_chevron_pulse` (walls, floor
+plates, the lead-in chevrons) **light the albedo texture's alpha and tint the
+specular with its RGB**, and ours lit the RGB. Those textures (`ds_wall_sc`,
+`ds_wallchevron_sc`, `ds_floorplain_cs`) carry a blue specular tint in their
+RGB (encoded mean B/G 1.35, 1.26, 1.28) and a dark grey picture in their alpha
+(mean 64, range 7 to 126), so the surface came out cyan. Judged by
+chromaticity (linear-light R/G and B/G of region means), which the original's
+exposure does not change; whole-frame mean grey is quoted only as the brief's
+regression bound. Nothing else in the chain was the cause: the lightmap
+atlases decode to the same format on every slot (`0x88`, DXT5, 1024 square),
+the vertex programs of the cast and non-cast materials write the same
+interpolators (`o[TC4].zw = v[4].xy`, the same T/B/N frame), the live sun
+direction is unit length (`(-0.70069, 0.504497, 0.504497)`), the sun colour's
+`w` (the specular scale) is 1, and the prelit scale and power patch in as 3 and
+1.6.
+
+### The cast is Anulpha's alone
+
+Whole-frame linear chromaticity, ours minus theirs, on the stored pairs before
+this lane (`data/reference/compare-page/hd/*`): Anulpha Pass **B/G +0.089**,
+rows 200 to 900 **+0.136**; every other circuit within -0.057 to +0.027
+(Chenghou +0.027, Moa Therma +0.012, Sol 2 +0.003, Amphiseum -0.001, Talon's
+-0.010, Ubermall -0.010, Sebenco -0.018, Assegai -0.020, Vineta K -0.022,
+Metropia -0.023, Tech de Ra -0.046, Modesto -0.057). Chenghou's R/G -0.08 (ours
+less warm) is not this cause and is unchanged by it.
+
+### Which materials, by the original's scene target
+
+Per material slot (a tinted render's slot masks, `hd_slot_list` ordinals), the
+original's scene target against ours with the glow suppressed, at the restored
+Anulpha state, 1920x1080; `dB/G` is ours minus theirs in linear light:
+
+| Slot | Material, texture | Theirs | Ours | dR/G | dB/G |
+| ---: | --- | --- | --- | ---: | ---: |
+| 476 | `diffuse_normal_specular`, `ds_pit_cs` (the floor) | 99.5, 125.7, 134.7 | 95.5, 121.1, 130.6 | +0.008 | +0.003 |
+| 442 | `cf_chevron_pulse`, `ds_wallchevron_sc` (the left wall) | 31.9, 40.7, 39.0 | 33.1, 43.9, 56.2 | -0.129 | **+0.532** |
+| 486 | `reversed_diffuse_specular_normal`, `ds_floorplain_cs` | 57.4, 81.1, 87.9 | 66.5, 93.5, 123.8 | -0.135 | **+0.572** |
+| 485 | `reversed_diffuse_specular_normal`, `ds_wall_sc` | 43.5, 61.0, 61.9 | 52.5, 79.0, 106.4 | -0.089 | **+0.842** |
+| 483 | `cf_chevron_pulse`, `ds_floorchevron_sc` | 40.9, 66.7, 66.6 | 53.8, 71.5, 89.2 | +0.147 | **+0.640** |
+| 492 | `diffuse_specular`, `m_metalpanelv08_d` | 35.1, 38.1, 31.7 | 35.7, 41.5, 43.5 | -0.246 | +0.392 |
+
+The floor matches (the previous section's finding, now per slot), and the
+cast sits on the two families above. Slot 492's row is a camera artefact: that
+scene dump (`d7`) is not at the pair's camera, which the far, small slots show
+and the floor does not; against the aligned original (below) `diffuse_specular`
+reads +0.033.
+
+### The programs, read
+
+The lit-race block each material resolves to (`HalfBrightIleLightmapSunSpot0SVC0`,
+`scripts/ps3-microcode.py fp-file`; the offsets are pinned by
+`crates/rcs/tests/rcsmaterial_ground_truth.rs`), unit 0 the albedo, unit 1 the
+normal map, unit 2 the lightmap:
+
+- **`reversed_diffuse_specular_normal`** (`0xe9d0`): the same light as the floor's
+  (`@0x31 MAD H1.xyz, pow(lm, power), {scale}, sun * lm.a * N.L`) and the same
+  specular (`N.H^32 * sat(8 N.L) * lm.a * sun.w * sun.rgb`), combined the other
+  way round:
+
+  ```text
+  @0x36  TEX H0, f[TC4] unit0               ; albedo
+  @0x3b  MUL H2.xyz, H1.wwww, {sun}         ; specular colour
+  @0x3d  MUL H0.xyz, H0, H2                 ; albedo.rgb * specular
+  @0x3e  MAD H0.xyz, H1, H0.wwww, H0        ; light * albedo.a + that
+  @0x41  MAD /2 H0.xyz, fog, H0, fogColour  END
+  ```
+
+- **`cf_chevron_pulse`** (`0xf6d0`): the same, plus the chevron's emissive mask
+  (unit 2, `ds_wallchevron_emask`) on both sides of the multiply:
+
+  ```text
+  @0x16  MUL H7.xyz, H6.wwww, {0x02ab9f07}  ; emask.a * pulse colour ((0, 1, 0) live)
+  @0x2f  TEX H0.xyz, R0 unit4               ; the wave, at uv * 0.2 + phase
+  @0x37  MUL H7.xyz, H7, H0                 ; the emissive
+  @0x43  ADD H6.xyz, H4.wwww, H6            ; albedo.a + emask.rgb
+  @0x44  MAD H5.xyz, H2, H6, H7             ; light * that + emissive
+  @0x49  MAD H2.xyz, H2, H4, H5             ; + specular * albedo.rgb
+  ```
+
+- **`diffuse_normal_specular`** (`0x5430`, the floor) and **`diffuse_specular`**
+  (`0xf030`) end on `MUL albedo.rgb, light` and `MAD specular, albedo.wwww, that`:
+  the colour is the surface and the alpha masks the specular.
+
+The albedo unit's address word carries gamma nibble 7 (RGB decoded, alpha raw;
+the sampler section above), so the grey picture is the raw alpha and the
+specular tint the decoded colour. Confidence 90: the microcode's own
+arithmetic, two materials agreeing, the live constants read off the hooked
+draw (`a-c0753100.bin`: direction, sun, scale, power, the pulse colour, the
+wave scroll 0.2 and its phase), and the rendered result below landing on the
+original's chromaticity to 0.01.
+
+### What landed
+
+- `oag_rcs::rcsmaterial::fragment::Program::lit_albedo(unit)`: the register the
+  prelit scale (`0x8670f0be`, now `rcsmaterial::PRELIT_SCALE`) or the constant
+  ambient is patched into is the diffuse light; its lanes are followed forward
+  per lane, and the first `MUL`/`MAD` pairing a light lane with the albedo
+  unit's sample answers by that sample's swizzle (`.wwww` is `Alpha`, `.xyz` is
+  `Colour`). Per lane, because the light register's spare `.w` routinely holds
+  the specular scalar; two channels of the sample meeting in one lane
+  (`lambertemissive`'s `albedo * (1 - albedo.a)`) answer nothing; a unit fetched
+  one lane at a time (`2diffuse_plus_spec_blend_via_alpha_n`'s blend mask) is
+  not an albedo.
+- `oag_mesh::mesh::slots::LIT_ALPHA` (bit 31; the glow index is masked to seven
+  bits, 64 entries), set by `skin::roles` where the program reads `Alpha` **and**
+  `picks` bound a picture: `m_diffuse_normal_constantspecular` lights
+  `constant * normal.a` off a normal map at unit 0, the renderer binds that
+  family's constant as its picture, and flagging it painted Ubermall's and Tech
+  de Ra's pipes white (mean grey +2.8 and +1.5, caught by the pair table and
+  reverted). Its `normal.a` factor is a separate, unwired term.
+- `shade.wesl`: on the flag, `surface = vec3(albedo.a)` (raw) and the specular is
+  tinted by the decoded albedo instead of masked by its alpha.
+- Disc-wide reach (`crates/render/examples/hd_lit_albedo_census.rs`, every chunk
+  of 637 models resolved to its lit-race `Static` block, 54,629 chunks): four
+  families read `Alpha`, all Anulpha Pass's: `reversed_diffuse_specular_normal`
+  378 chunks, `cf_chevron_pulse` 172, `chevron_pulse` 9, and the gated
+  `m_diffuse_normal_constantspecular` 94. 29,049 chunks read `Colour`; 24,927
+  carry no prelit or ambient patch (emissive, glass, hull families) and keep
+  their own paths. Pinned by `rcsmaterial_ground_truth.rs` and
+  `crates/render/tests/hd_lit_alpha_ground_truth.rs` (Anulpha's slots by number).
+
+### Before and after
+
+Against the aligned original (the `hd-track-tone` lane's `pair3`, the final
+frame at its own camera), the same slots:
+
+| Slot | dR/G, dB/G before | dR/G, dB/G after |
+| ---: | --- | --- |
+| 486 `reversed`, floor plate | -0.177, +0.613 | **-0.002, -0.003** |
+| 485 `reversed`, wall | -0.118, +0.520 | **+0.021, -0.010** |
+| 442 `cf_chevron_pulse`, left wall | -0.241, +0.362 | **+0.006, -0.010** |
+| 476 floor | -0.077, +0.036 | -0.076, +0.036 |
+| 492 `diffuse_specular` | +0.027, +0.033 | +0.027, +0.032 |
+
+Regions, same pair: left wall (0,560)-(330,720) R/G -0.317 and B/G +0.332 to
+**-0.003 and +0.005**; rows 200 to 900 B/G +0.158 to +0.028; whole frame
++0.109 to +0.042.
+
+The brief's acceptance, on the compare page's own pair `hd/anulpha-pass` (its
+original at Resolution Scale 150), ours minus theirs in linear light:
+
+| Region | dR/G before | dB/G before | dR/G after | dB/G after |
+| --- | ---: | ---: | ---: | ---: |
+| grey floor centre (500,700)-(1420,1000) | -0.066 | +0.036 | -0.063 | +0.031 |
+| blue floor left (80,760)-(500,1000) | -0.035 | +0.073 | -0.013 | -0.004 |
+| blue floor right (1300,700)-(1800,900) | -0.051 | +0.180 | +0.022 | +0.014 |
+| left wall (0,560)-(330,720) | -0.095 | +0.113 | +0.056 | +0.013 |
+| rows 200 to 900 | -0.062 | +0.136 | -0.015 | +0.019 |
+| whole frame | -0.034 | +0.089 | -0.008 | +0.024 |
+
+Chenghou Project and Sebenco Climb (the two more circuits): every region
+identical before and after, as the census predicts. `just compare-rerender-ours`
+over every HD pair: Anulpha Pass mean grey **19.74 to 17.33**, RMSE 0.124 to
+0.112, edge correlation 0.35 to 0.39; the other twelve time trials and
+`hd-race/talons-pack` unchanged to the decimal (no pair rose).
+
+What remains on Anulpha after this: the floor's -0.06 R/G (ours less red than
+the stored original; pre-resolve the floor matches, so this is the original's
+exposure and bloom at 150), the blue floor right's pulse, the chevron panel's
+emissive (`emask.a * (0, 1, 0) * wave`, a green outline live) and its
+`+ emask.rgb` diffuse term (mean 0.05), neither drawn.
+
+### Tried and not shipped
+
+- **The unclamped diffuse `N.L`** (every program above dots the sun without
+  `_SAT`): on the lightmapped chunks it darkens the floor by 6 (95.5 to 89.8
+  against 99.5) and the left wall by 16, and moves no reversed slot's
+  chromaticity (485 B/G 1.290 either way). The lightmap's alpha already zeroes
+  the sun where a surface faces away; whatever is left is not this cast.
+- **The specular on the reversed slots** carries the remaining blue there
+  (485 B/G 1.290 with it, 1.095 without, the original 0.979 in the misaligned
+  dump); it is the program's own term with the live constants, and the aligned
+  pair shows the slot within 0.01, so it stays.
+
+### Cross-title
+
+Both re-ship Anulpha Pass with the same families and textures, so the finding
+applies to both and neither is wired:
+
+- **Omega (checked, applies, not wired)**: `uroot/data08.psarc` (the patch)
+  carries `environments/15_Anulpha_Pass/Materials/Reversed_Diffuse_Specular_Normal{,_1,_2}.rcsmaterial`,
+  `cf_Chevron_Pulse{,_1,_2,_Displacement2Out*}.rcsmaterial` and
+  `Chevron_Pulse*`; `data01.psarc` carries `TexturesPS4/ds_wall_sc.gnf`,
+  `ds_floorplain_cs.gnf` and `ds_wallchevron_N.gnf`. The reader here is the PS3
+  fragment microcode, so `LIT_ALPHA` is never set on Omega; whether its PSSL
+  pixel shader for the family multiplies the alpha the same way is a GCN read
+  (`ps4-omega-eu/lightmap-prelit.md`'s method), not done.
+- **2048 (checked, applies, not wired)**: the Vita base `data.psarc` ships
+  `textures/ds_wall_sc.gxt`, `ds_wallchevron_sc.gxt` and `ds_wallchevron_n.gxt`
+  under its Anulpha Pass directory; the material's `.gxp` program is not read
+  by this lane.

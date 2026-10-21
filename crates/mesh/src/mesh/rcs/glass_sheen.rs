@@ -121,7 +121,7 @@ pub(super) fn bias(model: &rcsmodel::Model, packed: &mut [u32], table: &mut Vec<
         let Some(word) = packed.get_mut(slot) else {
             continue;
         };
-        if *word & slots::FACING_RAMP_SHEEN == 0 || *word >> slots::MATERIAL_SHIFT != 0 {
+        if *word & slots::FACING_RAMP_SHEEN == 0 || slots::material_index(*word) != 0 {
             continue;
         }
         let Some(c) = material.parameters.iter().find(|p| p.hash == RAMP_BIAS) else {

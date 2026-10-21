@@ -162,6 +162,9 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
         // 23) is the fifteenth: the holographic billboard's combine - see
         // `mesh::rcs::holo_billboard`; Talon's Junction's `wes_` plume carries
         // it since the parameter-driven shape was wired (2026-10-12).
+        // `slots::LIT_ALPHA` (bit 31, above the index) is the sixteenth: the
+        // program lights the albedo's alpha - Anulpha Pass's reversed walls,
+        // 2026-10-21 - see `docs/rendering/hd-track-tone.md`, "The blue cast".
         for packed in &model.material_slots {
             assert_eq!(
                 packed
@@ -172,7 +175,8 @@ fn a_circuit_authors_a_glow_table_and_never_over_its_lightmap() {
                         | slots::MAG_WAVE
                         | slots::MAG_LOOP
                         | slots::LIGHT_CONE
-                        | slots::HOLO_BILLBOARD),
+                        | slots::HOLO_BILLBOARD
+                        | slots::LIT_ALPHA),
                 0,
                 "a role bit outside the ten this reading defines"
             );
