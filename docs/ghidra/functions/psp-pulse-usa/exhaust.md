@@ -2129,8 +2129,9 @@ list-B meshes. Interleaving it is open. (b) HD's tube keeps the old order: its q
 (`Race::hd_trail_active`). (c) Pure shares the `Trail` class and this GE state, so it takes the same order here, **checked,
 applies, not measured** (no Pure queue read); PS2 Pulse draws the ribbon through its own GS packets (`TrailLaw::Baked`) and
 shares this definition by the project's rule, **not checkable** from this PSP read. (d) The circuit's blended list used
-to draw before the pads and hulls and now draws after them, which is the original's order (`0x4a` before `0x4d`); the
-grid pairs show no change from it.
+to draw before the pads and hulls and now draws after the hulls (not after the weapon bodies, wrecks or flares: moving it
+past a laid bomb dropped `bomb_orbit_ground_truth` under its floor), which is the original's order (`0x4a` before `0x4d`) for
+the hulls; the grid pairs show no change from it.
 
 
 ## Open

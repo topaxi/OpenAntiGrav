@@ -1032,6 +1032,12 @@ impl Scene {
                 draws.mesh(drawable);
             }
         }
+        // The ribbons, then the circuit's blended list over them: the original's queue order
+        // (`Recorder::draw_ribbons`). After the hulls, so their depth is in the buffer for the
+        // ribbon to be occluded by; the weapon bodies, wrecks and flares keep their place after
+        // the blended list, as before. HD's tube keeps the old order: its queue key is unread.
+        let ribbon_first = !race.hd_trail_active();
+        draws.ribbons_then_blended(ribbon_first);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
         // Every weapon's own body: opaque painted models, bounded by how many
@@ -1071,12 +1077,6 @@ impl Scene {
         // rather than the asset's. What the original *does* animate on it is
         // unread: `EF_Main` carries one attribute, `AnimEnd = 1.0`, and
         // nothing here plays it. See docs/rendering/trail-ribbon.md.
-        // The ribbons, then the circuit's blended list over them: the original's queue order
-        // (`Recorder::draw_ribbons`). After the hulls, so their depth is in the buffer for the
-        // ribbon to be occluded by; before the flares, which are keyed by their own depth and
-        // sit nearly last. HD's tube keeps the old order: its queue key is unread.
-        let ribbon_first = !race.hd_trail_active();
-        draws.ribbons_then_blended(ribbon_first);
         draws.mark("engine flares");
         for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
             let Some(flare) = flare else {
