@@ -11,9 +11,11 @@ GS screenshot while the VM stands still on the state's frame, and resizes it ONC
 output size; ours is rendered natively at that size. The ship pose, the race clock and the camera node are
 read out of the state file's own EE RAM (`pcsx2_state.py`), so what is compared is the state's frame, not
 the frame some ticks later. Ours is run a second time with `--trace-out` to MEASURE its pose at the rendered
-tick. The PS2 camera is NOT recovered (a node whose position matches the PSP's follow geometry was found, its
-orientation convention and the 4:3 fov were not settled), so a pair is refused unless `--allow-own-camera`
-is given, and then ships with that named as a caveat in its manifest note.
+tick. The camera is the original's own: its eye, orientation and vertical field are read out of the state's EE RAM
+(`pcsx2_state.camera`, the object `Camera_SubmitScene` runs on) and fed to ours (`cam_*` columns of the pose row,
+`--camera-fov`), as the PSP and HD pairs do. The state must have the game's own `Aspect Ratio` option on `16:9`
+(`DAT_00284fe8` = 1, `docs/ghidra/functions/ps2-pulse-eu/camera.md`): a pair whose state is on `4:3` is refused,
+because the profile is the PS2's widescreen and the projection aspect is read back and checked.
 """
 
 import argparse
@@ -73,7 +75,6 @@ def main():
     ap.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
     ap.add_argument("--serial", default="SCES-54748 (F8AE6FF2)",
                     help="the state file name's game part in PCSX2's sstates directory")
-    ap.add_argument("--allow-own-camera", action="store_true")
     ap.add_argument("--meta", default="")
     args = ap.parse_args()
     data = os.environ.get("OAG_PCSX2_DATA")
@@ -124,6 +125,15 @@ def main():
     ram = zipfile.ZipFile(args.state).read("eeMemory.bin")
     vec = lambda a: struct.unpack_from("<3f", ram, a)
     right, up, fwd = vec(body), vec(body + 0x10), vec(body + 0x20)
+    cam = pcsx2_state.camera(args.state, pos)
+    if cam is None:
+        pair.check("camera", False, "no camera object (fov, perspective and world matrix agreeing, within 25 units of the craft) in the state")
+        pair.finish()
+    pair.rec["original"]["camera"] = {k: (list(v) if isinstance(v, tuple) else v) for k, v in cam.items()}
+    pair.rec["original"]["camera"]["source"] = "state EE RAM, camera object at %#x" % cam["address"]
+    wide = 10 / 7 * 4 / 3
+    pair.check("the state's game option is Aspect Ratio 16:9 (projection aspect 10/7 * 4/3)", abs(cam["aspect"] - wide) < 0.01,
+               "projection aspect %.4f, the 4:3 option reads %.4f, 16:9 reads %.4f" % (cam["aspect"], 10 / 7, wide))
     clock = struct.unpack_from("<f", ram, CLOCK_ADDRESS)[0]
     if not 0.0 <= clock <= 3600.0:
         pair.check("race clock", False, "%r at %#x is not a clock" % (clock, CLOCK_ADDRESS))
@@ -132,6 +142,19 @@ def main():
     for name, v in (("right", right), ("up", up), ("fwd", fwd), ("pos", pos)):
         for a, x in zip("xyz", v):
             row["%s_%s" % (name, a)] = x
+    # The trace's camera columns are the VIEW matrix's rows (columns = the camera's axes, `camera_orientation_of`:
+    # right = column 0, up = column 1, backward = column 2); the camera object holds those axes as rows.
+    axes = (cam["right"], cam["up"], cam["back"])
+    for r, name in enumerate(("right", "up", "fwd")):
+        for c, a in enumerate("xyz"):
+            row["cam_%s_%s" % (name, a)] = axes[c][r]
+    for i, a in enumerate("xyz"):
+        row["cam_pos_" + a] = cam["eye"][i]
+    to_craft = [p - e for p, e in zip(pos, cam["eye"])]
+    look = [-x for x in cam["back"]]
+    cosine = sum(a * b for a, b in zip(to_craft, look)) / math.hypot(*to_craft)
+    pair.check("the camera's look direction (minus its backward axis) points at the craft", cosine > 0.97,
+               "cosine %.4f, eye %.2f units from the craft" % (cosine, math.hypot(*to_craft)))
     csv = out / "state-row.csv"
     ce.write_trace_row(csv, row)
     theirs = {"pos": list(pos), "fwd": list(fwd), "vel": [0, 0, 0]}
@@ -153,16 +176,9 @@ def main():
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if args.reversed else "")
     # `--pose-hold`: the original's pose has already turned for the clock it was read at (a resting craft turns, in
     # the original as in ours, docs/physics/grid-state.md), so the frame and the last trace row put ours back on it.
-    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--no-camera",
-            "--pose-hold"] + flags
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--camera-fov", "%.4f" % cam["fov_deg"], "--pose-hold"] + flags
     pair.rec["ours"].update({"mode": "single_race", "class": "venom", "layout": "reversed" if args.reversed else "forward",
-                             "flags": [str(c) for c in base[2:]], "camera": "our own chase camera"})
-    if args.allow_own_camera:
-        pair.check("camera", True, "NOT MATCHED, allowed by --allow-own-camera")
-        pair.caveat("the camera: ours is our own chase camera, the PS2's camera node and its 4:3 fov are not recovered")
-    else:
-        pair.check("camera", False, "ours draws its own chase camera, the PS2 original's camera is not recovered "
-                   "(pass --allow-own-camera to ship the pair with that named)")
+                             "flags": [str(c) for c in base[2:]], "camera": "the original's own eye, orientation and field (state RAM)"})
     probe = {}
     for layout, name in (("forward", "track.vex"), ("reversed", "track_reversed.vex")):
         probe_csv = out / ("layout-%s.csv" % layout)

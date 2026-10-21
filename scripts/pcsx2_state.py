@@ -86,6 +86,42 @@ def player_craft(path):
     return None
 
 
+#: Offsets inside the camera object `Camera_SubmitScene` runs on (measured live, `docs/ghidra/functions/ps2-pulse-eu/camera.md`):
+#: the camera's world matrix (rows right, up, backward, then the eye) at `+0x40`, its twin at `+0x90`, the perspective
+#: matrix at `+0xd0` and the vertical field in degrees at `+0x110`.
+CAMERA_WORLD = 0x40
+CAMERA_PROJECTION = 0xD0
+CAMERA_FOV = 0x110
+
+
+def camera(path, craft_position, max_eye_distance=25.0):
+    """The race camera of a state, found by signature: `{address, eye, right, up, back, fov_deg, aspect}`, or `None`.
+
+    A camera object is the 16-aligned address whose field of view at `+0x110` agrees with the perspective matrix's
+    `m11 = 1 / tan(fov / 2)`, whose world matrix at `+0x40` is orthonormal, whose twin at `+0x90` equals it and whose
+    eye is within `max_eye_distance` of the player's craft. `aspect` is `m11 / m00`, the projection's own: 10/7 with
+    the game's `Aspect Ratio` option on `4:3`, 10/7 * 4/3 on `16:9`."""
+    ram = _ram(path)
+    for a in range(RAM_LO, len(ram) - 0x120, 16):
+        (fov,) = struct.unpack_from("<f", ram, a + CAMERA_FOV)
+        if not (math.isfinite(fov) and 20.0 < fov < 120.0):
+            continue
+        m00, m11 = struct.unpack_from("<f", ram, a + CAMERA_PROJECTION)[0], struct.unpack_from("<f", ram, a + CAMERA_PROJECTION + 0x14)[0]
+        if not (math.isfinite(m11) and m00 > 0 and abs(m11 * math.tan(math.radians(fov) / 2) - 1.0) < 1e-3):
+            continue
+        rows = [_vec(ram, a + CAMERA_WORLD + 16 * i) for i in range(4)]
+        twin = [_vec(ram, a + 0x90 + 16 * i) for i in range(4)]
+        if rows != twin or not all(all(math.isfinite(x) for x in r) for r in rows):
+            continue
+        if not all(abs(sum(x * x for x in r) - 1.0) < 1e-3 for r in rows[:3]):
+            continue
+        if math.dist(rows[3], craft_position) > max_eye_distance:
+            continue
+        return {"address": a, "eye": rows[3], "right": rows[0], "up": rows[1], "back": rows[2], "fov_deg": fov,
+                "aspect": m11 / m00}
+    return None
+
+
 def sidecar(path):
     return Path(str(path) + ".json")
 

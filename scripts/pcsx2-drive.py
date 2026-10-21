@@ -208,7 +208,7 @@ VsyncEnable = false
 ; 1:1, which is what an X grab of a *paused* frame can then capture. Under 4:3
 ; the same window is letterboxed and the grab is 30 % RMSE away from the GS
 ; output. Headless, there is no other reason to care what the window looks like.
-AspectRatio = Stretch
+AspectRatio = {aspect}
 upscale_multiplier = {upscale}
 ScreenshotSize = {screenshot_size}
 ScreenshotFormat = 0
@@ -300,14 +300,16 @@ def write_config(slot, renderer=12, screenshot_size=SCREENSHOT_INTERNAL,
         os.makedirs(path, exist_ok=True)
     pad1 = "\n".join("%s = %s" % row for row in PAD1_BINDINGS)
     upscale = 1
+    aspect = "Stretch"
     if os.environ.get("OAG_COMPARE_PLATFORM"):
         # The comparison profile (scripts/compare-environment.toml) fixes what changes the picture.
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import compare_env
         emu = compare_env.platform(os.environ["OAG_COMPARE_PLATFORM"])["emulator"]
         upscale, screenshot_size = emu["upscale_multiplier"], emu["screenshot_size"]
+        aspect = emu.get("aspect_ratio", aspect)
     ini = INI_TEMPLATE.format(
-        bios=BIOS_DIR, slot=slot, renderer=renderer, upscale=upscale,
+        bios=BIOS_DIR, slot=slot, renderer=renderer, upscale=upscale, aspect=aspect,
         screenshot_size=screenshot_size,
         osd_messages="true" if osd_messages else "false", pad1=pad1)
     target = os.path.join(INI_DIR, "PCSX2.ini")
