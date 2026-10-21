@@ -609,6 +609,25 @@ pub(crate) const LINE: f32 = 10.0;
 const GRAPH_W: f32 = WINDOW as f32;
 const GRAPH_H: f32 = 30.0;
 const PANEL_W: f32 = GRAPH_W + PAD * 2.0;
+/// How large the panels draw against the overlay's grid: [`draw_list`] lays them
+/// out on a grid this much wider ([`panel_width`]) and [`shrink`] draws them back
+/// at this scale about the top-left corner, so text, padding and graph shrink
+/// together and the right-hand panel still sits flush with the window's edge.
+/// Chosen (2026-10-21, the maintainer asked for a smaller font), not measured.
+pub const PANEL_SCALE: f32 = 0.75;
+
+/// The width to lay the panels out in for an overlay grid `width` wide.
+#[must_use]
+pub fn panel_width(width: f32) -> f32 {
+    width / PANEL_SCALE
+}
+
+/// Draws a [`draw_list`] laid out at [`panel_width`] back into the overlay's grid.
+pub fn shrink(draws: &mut [Draw]) {
+    for draw in draws {
+        draw.zoom((0.0, 0.0), PANEL_SCALE, 1.0);
+    }
+}
 
 /// Where the GPU-cost panel sits: top left, mirroring the frame-time panel off
 /// the opposite edge.

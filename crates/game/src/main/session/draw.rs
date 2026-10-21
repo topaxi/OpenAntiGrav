@@ -900,8 +900,9 @@ impl Session {
                 present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
             net_readout.as_ref(),
-            overlay_space.size.0,
+            perf::panel_width(overlay_space.size.0),
         );
+        perf::shrink(&mut list);
         // The on-screen racing controls, under the pointer. Empty unless this
         // is a touch device mid-race with no pad in use - see `crate::touch`.
         list.extend(self.draw_touch(
