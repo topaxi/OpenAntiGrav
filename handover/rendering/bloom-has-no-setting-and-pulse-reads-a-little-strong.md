@@ -179,9 +179,15 @@ own clock; the 0.2991 came from a later freeze), and the original's ribbon fragm
 ours draws while its bloom stamp matches (details and table in `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The
 race pair is not boosting"). So:
 
-1. Find why the original's ribbon colour is so low: read the ribbon prims' vertex stream in a `gpu.record.dump` of the pair
-   frame (`scripts/psp-ribbon-ab.py` reproduces it exactly) against ours' vertices, the `u`/`v` sent per vertex, and the
-   palette index image under `TEXLEVEL` auto. Do not scale the colour by a fitted constant.
+1. **Done 2026-10-21 (`pulse-ribbon-colour`): the colour is not low, it is overpainted.** The original queues every
+   `Trail` at `0x4d000000`, ahead of every list-B circuit mesh, and a translucent floor patch drawn after it paints over the
+   ribbon (the ribbon writes no depth); ours now draws the ribbons after the hulls and before the circuit's blended list
+   (tail box 69.1 to 41.6 against the original's 37.1; `exhaust.md`, "The ribbon is queued first"). Open from it:
+   (a) the flare is keyed by its own depth (`0x4d | depth`) and ours still draws it after the whole blended list, which is
+   right for the player's (112th of 113) and not for an opponent's, so interleave the flares by depth with the blended
+   draws (needs per-craft ranges in the exhaust upload); (b) HD's tube, Omega's and 2048's keep the old order, their queue
+   keys unread (RPCS3: read `display`'s queue the way `scripts/psp-queue-read.py` does); (c) the rest of the tail-box gap
+   (41.6 against 37.1) and the nozzle disc (210.4 against 193.0) is the flare quad, the hull and the bloom of those.
 2. Only then `psp-pulse-pair.py`: read the flare at its own stop (`psp-trace.py --flare`) and pass `--pose-boost
    (0.8 - boost_timer)` when above 0, and make `--pose-boost` keep the warmed trail. `psp-state.py load` + `freeze` lands
    0.6 s after the state's moment on this machine; load with a `Trail_DrawRibbon` breakpoint armed instead.

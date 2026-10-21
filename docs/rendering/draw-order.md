@@ -80,6 +80,7 @@ Ascending order, so **lower layer draws first**:
 | `0x45000000` | batch `pass_mask & 0x1000`, narrowly | [`vex::mesh_layer`] |
 | `0x4a000000` | every other mesh - the default | [`vex::mesh_layer`] |
 | `0x4d000000` \| depth | the exhaust flare, **and every list-B mesh** (2026-10-19) | `ExhaustFlare_Submit`, `Mesh_SubmitNode` |
+| `0x4d000000` | **every `Trail` (the engine ribbon)**, depth zero (2026-10-21) | `Trail_Submit` (`0x0892a408`) |
 
 ### List-A mesh geometry carries no depth at all, list B does (corrected 2026-10-19)
 
@@ -125,6 +126,17 @@ over a circuit's batches would be *less* faithful than one that did not.
 The `0x40000000` set is skipped entirely unless a distance test passes, which is
 a cull rather than an ordering rule and is recorded here so nobody inherits it by
 accident.
+
+### The ribbon is keyed at depth zero, so every list-B mesh draws after it (2026-10-21)
+
+`Trail_Submit` (`0x0892a408`) enqueues the engine ribbon at the constant `0x4d000000`. Read off the live queue on the
+Talon's race pair (166 entries, `scripts/psp-queue-read.py`): all ten `Trail` items carry exactly that key, ahead of the 40-odd list-B
+meshes (`0x4d0d00d5` and up) and of the player's flare (`0x4d0ff75e`). The ribbon writes no depth, so a translucent
+circuit mesh near the craft draws over it: the floor patch under the player removes about six sevenths of the ribbon's
+colour at the tail box (replay bisection, [exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md), "The ribbon is
+queued first"). Implemented as `Recorder::draw_ribbons` and `Draw::TrackBlended`: the hulls, then the ribbons, then the
+circuit's blended list, then the flares. HD's tube keeps the old order, its key unread. The flare, which carries its own
+depth, is still drawn after the whole blended list; interleaving it is open.
 
 ### The exhaust flare is the one thing that computes a depth
 

@@ -28,6 +28,11 @@ pub(super) enum Draw<'a> {
     /// The circuit: its solid lists, the sky, its blended list and its shine pass
     /// ([`Recorder::draw_track`]), under the view's sets and frustum.
     Track,
+    /// The circuit's blended list alone, once the hulls and the ribbons are down
+    /// ([`ViewPass::ribbon_first`]).
+    TrackBlended,
+    /// The craft's ribbons alone ([`Recorder::draw_ribbons`]).
+    Ribbon,
     /// Every list of a drawable, culled by the view's frustum.
     Culled(&'a Drawable),
     /// Every list of a drawable, uncull'd.
@@ -64,6 +69,15 @@ impl<'a> DrawList<'a> {
 
     pub(super) fn overlay(&mut self, drawable: &'a Drawable) {
         self.0.push(Draw::Overlay(drawable));
+    }
+
+    /// The ribbons, then the circuit's blended list over them, when `ribbon_first`
+    /// ([`ViewPass::ribbon_first`]); nothing otherwise, the circuit having drawn it whole.
+    pub(super) fn ribbons_then_blended(&mut self, ribbon_first: bool) {
+        if ribbon_first {
+            self.0.push(Draw::Ribbon);
+            self.0.push(Draw::TrackBlended);
+        }
     }
 
     pub(super) fn push(&mut self, draw: Draw<'a>) {
@@ -111,6 +125,10 @@ pub(super) struct ViewPass<'a> {
     pub(super) timestamps: Option<wgpu::RenderPassTimestampWrites<'a>>,
     pub(super) draws: DrawList<'a>,
     pub(super) effects: EffectsDrawn,
+    /// The original's queue order for a `Trail`: the ribbons draw before the circuit's blended
+    /// list, which then draws over them where it passes its own depth test. Set where the
+    /// title's ribbon is the PSP preset's; see [`Recorder::draw_ribbons`].
+    pub(super) ribbon_first: bool,
     pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
     pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
     /// What the prepare already drew (the behind-the-glass target), counted in.
@@ -299,7 +317,15 @@ impl Recorder<'_> {
         for draw in &pass.draws.0 {
             match draw {
                 Draw::Mark(label) => oag_gpu::perfprobe::marks::mark(&mut render, label),
-                Draw::Track => stats.add(self.draw_track(&mut render, pass)),
+                Draw::Track => stats.add(self.draw_track(
+                    &mut render,
+                    pass,
+                    BlendedList::with_ribbons(pass.ribbon_first),
+                )),
+                Draw::TrackBlended => {
+                    stats.add(self.draw_track(&mut render, pass, BlendedList::Only));
+                }
+                Draw::Ribbon => self.draw_ribbons(&mut render, pass),
                 Draw::Culled(drawable) => stats.add(drawable.draw(
                     &mut render,
                     block,
@@ -343,7 +369,12 @@ impl Recorder<'_> {
     /// added to the stats either: being exempt from both tiers, folding them in
     /// would shift the denominator ADR-0011's and the roadmap's PVS
     /// effectiveness figures are quoted against.
-    fn draw_track(&self, render: &mut wgpu::RenderPass<'_>, pass: &ViewPass<'_>) -> SceneStats {
+    fn draw_track(
+        &self,
+        render: &mut wgpu::RenderPass<'_>,
+        pass: &ViewPass<'_>,
+        blended: BlendedList,
+    ) -> SceneStats {
         let block = pass.block;
         let (set, chunks, frustum) = (
             pass.visible_set.as_ref(),
@@ -352,6 +383,12 @@ impl Recorder<'_> {
         );
         let mut stats = SceneStats::default();
         for stage in TRACK_STAGES {
+            let is_blended = stage == TrackStage::Blended;
+            match blended {
+                BlendedList::Without if is_blended => continue,
+                BlendedList::Only if !is_blended => continue,
+                _ => {}
+            }
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
@@ -411,6 +448,21 @@ impl Recorder<'_> {
         stats
     }
 
+    /// The craft's ribbons, alone: after the hulls, before the circuit's blended list.
+    ///
+    /// **The original queues every `Trail` at the constant key `0x4d000000`** - layer `0x4d`,
+    /// depth zero - so it draws ahead of every list-B mesh (`0x4d` plus a depth that is never
+    /// zero within 3,000 units), and the ribbon writes no depth. A translucent circuit mesh near
+    /// the craft therefore paints over the ribbon where it passes its own depth test: on the race
+    /// pair, one floor patch under the craft leaves the ribbon about a seventh of its colour. The
+    /// flare is not part of this: it is keyed by its own depth and sits last. See
+    /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
+    fn draw_ribbons(&self, render: &mut wgpu::RenderPass<'_>, pass: &ViewPass<'_>) {
+        oag_gpu::perfprobe::marks::mark(render, "ribbons");
+        let (drawer, drawn) = &pass.effects.exhaust;
+        drawer.draw(render, drawn.trail_only());
+    }
+
     /// The race pass's last stretch: the depth-tested, depth-unwritten effects that draw over
     /// everything solid. The order is load-bearing: the flare tests depth but does not write it,
     /// so the hull's depth has to already be in the buffer for the flare to be occluded by it,
@@ -423,7 +475,13 @@ impl Recorder<'_> {
     ) {
         let effects = &pass.effects;
         oag_gpu::perfprobe::marks::mark(render, "exhaust, sparks, clouds, ghost");
-        effects.exhaust.0.draw(render, effects.exhaust.1);
+        // The ribbons already drew, ahead of the blended list ([`Self::draw_ribbons`]).
+        let exhaust = if pass.ribbon_first {
+            effects.exhaust.1.without_trail()
+        } else {
+            effects.exhaust.1
+        };
+        effects.exhaust.0.draw(render, exhaust);
         effects.sparks.0.draw(render, effects.sparks.1);
         for (beam, drawn) in effects.beams.iter().flatten() {
             beam.draw(render, *drawn);
@@ -452,6 +510,27 @@ impl Recorder<'_> {
 /// (`tests/track_stages.rs`): the `0x2000` extra pass is queued at the mesh's list-A key
 /// (`0x45`/`0x4a`) and every list-B mesh is `0x4d`, so the shine is drawn
 /// before the blended list, never after it.
+/// Which of the circuit's stages [`Recorder::draw_track`] draws: the whole circuit, all but the
+/// blended list, or the blended list alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BlendedList {
+    With,
+    Without,
+    Only,
+}
+
+impl BlendedList {
+    /// What the circuit's own draw takes: with the ribbons first the blended list is a draw of its
+    /// own, after them.
+    pub(crate) const fn with_ribbons(ribbon_first: bool) -> Self {
+        if ribbon_first {
+            Self::Without
+        } else {
+            Self::With
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TrackStage {
     Solid,
@@ -512,3 +591,33 @@ const _: () = {
     shared::<Recorder<'_>>();
     sent::<ViewPass<'_>>();
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The original queues every `Trail` at the constant key `0x4d000000`, ahead of every
+    /// list-B mesh, which then paints over it where it passes its own depth test (the ribbon
+    /// writes no depth). The ribbons must be recorded before the circuit's blended list, and the
+    /// circuit's own draw must leave that list out, or it draws twice and over the ribbon.
+    #[test]
+    fn the_ribbons_are_drawn_before_the_blended_list() {
+        let mut list = DrawList(Vec::new());
+        list.ribbons_then_blended(true);
+        assert!(matches!(
+            list.0.as_slice(),
+            [Draw::Ribbon, Draw::TrackBlended]
+        ));
+        assert_eq!(BlendedList::with_ribbons(true), BlendedList::Without);
+    }
+
+    /// HD's tube keeps the old order, its queue key unread: the circuit draws whole and no extra
+    /// draw is pushed.
+    #[test]
+    fn without_ribbons_first_the_circuit_draws_whole() {
+        let mut list = DrawList(Vec::new());
+        list.ribbons_then_blended(false);
+        assert!(list.0.is_empty());
+        assert_eq!(BlendedList::with_ribbons(false), BlendedList::With);
+    }
+}

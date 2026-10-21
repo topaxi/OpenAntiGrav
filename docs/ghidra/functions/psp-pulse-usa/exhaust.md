@@ -799,6 +799,7 @@ gains a `_q` suffix, below 50 is not renamed at all. Mirrored in
 | `0x0892a2b0` | function | `Trail_Init` | 75 |
 | `0x08929958` | function | `Trail_PushPoint` | 85 |
 | `0x0892acc8` | function | `Trail_DrawRibbon` | 90 |
+| `0x0892a408` | function | `Trail_Submit` | 85 |
 | `0x08905210` | function | `Texture_LoadEngineFlare` | 85 |
 | `0x0892a5a4` | function | `Texture_LoadEngineNoise` | 85 |
 | `0x08928460` | function | `Gfx_BindTexture` | 75 |
@@ -2069,6 +2070,68 @@ size and ours is brighter along the tail.
 Cross-title: Pure shares the `Trail` class and this GE state, so the same A/B applies and is **checked, applies, not
 measured** (no Pure pair at speed with a ring this close to the eye); PS2 Pulse draws the ribbon through its own GS
 packets (`TrailLaw::Baked`), **not checkable** from this PSP read.
+### The ribbon is queued first: a translucent circuit mesh paints over it (2026-10-21, `pulse-ribbon-colour`)
+
+**The claim above is false as worded: no colour input differs.** The ribbon's ring, baked colours, ambient, blend and
+texture are as recovered, and the "about 20x" is a draw-order effect: the original queues every `Trail` at the
+constant key `0x4d000000`, ahead of every list-B circuit mesh, and the ribbon writes no depth, so a translucent circuit
+batch drawn after it paints over the ribbon wherever that batch passes its own depth test. Confidence 90.
+
+| | |
+| --- | --- |
+| **Address** | `0x0892a408` `Trail_Submit`: `if (!g_display[+0x5dec]) Gfx_Enqueue(g_display, this, 0x4d000000)`, a constant key (`lui a2,0x4d00` in the call's delay slot at `0x0892a43c`); the vtable slot that holds it was not read, the function is named from its position beside `Trail_Update` and the live queue below |
+| **Confidence** | 85 for the name, 90 for the key |
+
+**Evidence, in the order it was found.**
+
+1. *Where the colour is.* On the pair frame (clock 38.4082, `psp-ribbon-ab.py`), zeroing the ribbon's baked colours
+   (`lz:012`), whitening its palette (`clut:W`), turning blend or lighting off in its state list, all change the picture
+   only in a thin streak at the left of the ribbon and a ring round the nozzle, and not in the 2,852 px wedge the
+   ribbon stamps into the glow mask (1,119 of 1,494 changed pixels are in the stamp). The stamp (alpha) is written there,
+   so the fragments exist and pass their depth test, yet their colour does not reach the frame.
+2. *Replay.* `scripts/psp-ge-replay.py` replays the recorded GE frame in PPSSPP with words edited (see
+   [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md)). Control: with the player's 27 ribbon PRIMs
+   removed the replay's difference reproduces the live A/B (tail box 6.9 against 6.8, disc 47.6 against 47.7). With layers 1 and
+   2 only, and every draw after the ribbons removed, the ribbon's tail-box colour is **12.7** grey; with the full frame it
+   is **0.0**. So a later draw removes it.
+3. *Bisection of the 107 later PRIMs* (keeping a prefix, 8 runs): the first that removes it is PRIM chunk `7678`, 186
+   vertices, vertex type `0x13b`, a 64x64 texture, blend `SRC_ALPHA / 1-SRC_ALPHA`, alpha test on, depth `GREATER` with the
+   write masked, world box x -142..-84, y -53.5..-42.8, z -734..-685: the translucent (list-B) floor patch under the
+   player. Removing that one PRIM lifts the ribbon's contribution in the tail box from 6.8 to **30.8** (disc 47.6 to 61.2),
+   the figures ours showed (43.1, 52.3).
+4. *The queue itself.* `scripts/psp-queue-read.py` reads the 166 entries at `display+0x16a0` before the sort, on the same
+   frame: every `Trail` item (the player's is `0x9b7b6b0`, `+0x60` is the ring) has key **`0x4d000000`**, all ten of
+   them; the 40-odd list-B meshes keyed `0x4d0d00d5`..`0x4d0f1134` sort after them, and the player's flare is
+   `0x4d0ff75e`, 112th of 113 in the layer. So a ribbon is behind every list-B mesh within 3,000 units, and the flare is
+   behind nearly all of them (which is why only the ribbon is veiled).
+
+**The geometry that makes it visible.** The ring runs along the velocity at 2.0 units a sample towards the chase camera,
+so samples 0-2 are 6.3, 4.3 and 2.3 units in front of the eye and 3 onwards are behind it. Segments 0 and 1 are the
+visible wedge (the stamps `114` and `102`); the floor patch is under all of it.
+
+**What it replaces.** The earlier sections' "ribbon colour at most a sixth of `ramp x baked colour x noise`" and "cause
+not found" are this draw order, not a missing factor. `TRAIL_GLOW_GAIN` and `trail_stencil` stay as they were.
+
+**Ported (2026-10-21).** `Recorder::draw_ribbons` draws the ribbon after the hulls and before the circuit's blended list,
+which now draws as its own step after it (`Draw::TrackBlended`); the flare stays in the effects stretch. The race pair,
+`pulse-psp-race/talons-alongside`, tail box (190,236) 90x36 grey: original 37.1, ours before 69.1, after **41.6**; the
+pink streak under the craft is gone and the faint blue one remains. Whole-frame mean grey 54.03 to 52.61 (original 46.68),
+`|ours - original|` 16.38 to 14.82. All 24 PSP grid pairs: whole-frame mean grey 84.193 to 84.194, `|diff|` 6.076
+unchanged, one pair (outpost-7-black) changes 214 px; both Zone pairs unchanged; `talons-boost` 10 px. A grid has no
+full ring, so the tail box there is unchanged by construction.
+
+**Residual, open.** The tail box is 41.6 against 37.1 and the disc 210.4 against 193.0: the rest sits in the flare quad,
+the hull and the bloom of those, as the section above recorded. Not fitted.
+
+**What was not measured.** (a) The flare is keyed by its own depth (`0x4d | depth`, `ExhaustFlare_Submit`) and ours still
+draws it after the whole blended list; for the player it is 112th of 113, for a distant opponent it sits among the
+list-B meshes. Interleaving it is open. (b) HD's tube keeps the old order: its queue key is unread
+(`Race::hd_trail_active`). (c) Pure shares the `Trail` class and this GE state, so it takes the same order here, **checked,
+applies, not measured** (no Pure queue read); PS2 Pulse draws the ribbon through its own GS packets (`TrailLaw::Baked`) and
+shares this definition by the project's rule, **not checkable** from this PSP read. (d) The circuit's blended list used
+to draw before the pads and hulls and now draws after them, which is the original's order (`0x4a` before `0x4d`); the
+grid pairs show no change from it.
+
 
 ## Open
 

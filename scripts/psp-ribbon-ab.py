@@ -8,7 +8,10 @@ frame (RGBA, 480x272) of the frames that follow.
 
 `VARIANT`: `base` (no poke), `off` (ring count 0: the ribbon is not drawn), `lz:012` / `lw:012` (zero / whiten the
 baked vertex colours of the listed layers), `sq:K` and `vb:K` (scale the ring / vertex-buffer positions; neither
-changed a pixel on 2026-10-21, so the geometry is not read from them at the poke). `POKE_HITS` are player draw hits
+changed a pixel on 2026-10-21, so the geometry is not read from them at the poke). `gl:OP=VAL[,OP=VAL]` rewrites the payload of every word with that opcode in the ribbon's own state list
+(0x08B65700), `clut:W` / `clut:K` whitens or scales the ribbon texture's palette, `nz:K` sets the baked normals' z (the bake
+writes them every frame, so it changes nothing). None of these changed the wedge, which is why the cause was a later draw,
+found by replay (`scripts/psp-ge-replay.py`). `POKE_HITS` are player draw hits
 counted from the clock stop; the frame the player's draw at hit 1 builds is the one in `<TAG>_h2_B.npy` (buffer B
 at hit 2 equals the pair's `theirs.png` to 0.43 grey). Emulation from the load is bit-identical run to run
 (`base` twice: 0 differing bytes), so two variants differ only by the poke. Loading with the breakpoint armed puts
@@ -79,6 +82,28 @@ def apply(v):
             d.write(p,bytes(raw))
         return
     if v=='off': d.write_u32(node+0xC,0); return
+    if v.startswith('gl:'):   # gl:OP=VAL[,OP=VAL] rewrites the payload of every word with that opcode in the ribbon's state list (0x08B65700, 0xc0 bytes), e.g. gl:23=000000 turns the depth test off
+        raw=bytearray(d.read(0x08B65700,0xC0))
+        print('state list',' '.join('%08x'%struct.unpack_from('<I',raw,i)[0] for i in range(0,0xC0,4)))
+        for item in v[3:].split(','):
+            op,val=item.split('='); op=int(op,16); val=int(val,16)
+            for i in range(0,0xC0,4):
+                if raw[i+3]==op: raw[i:i+3]=val.to_bytes(3,'little')
+        d.write(0x08B65700,bytes(raw)); return
+    if v.startswith('nz:'):   # nz:K sets the normal's z of every baked vertex of the three layers to K (the bake stores 0.725/1.275 here)
+        k=float(v[3:])
+        for L in range(3):
+            p=struct.unpack_from('<I',d.read(node+0x68+4*L,4))[0]
+            raw=bytearray(d.read(p,90*32))
+            for i in range(90): struct.pack_into('<f',raw,i*32+16,k)
+            d.write(p,bytes(raw))
+        return
+    if v.startswith('clut:'):   # clut:W whitens the ribbon texture's palette; clut:N scales it by N (clamped)
+        addr=0x041F1680; raw=bytearray(d.read(addr,1024))
+        for i in range(256):
+            for c in range(3):
+                raw[i*4+c]=255 if v[5:]=='W' else min(255,int(raw[i*4+c]*float(v[5:])))
+        d.write(addr,bytes(raw)); return
     b=bytearray(d.read(ptr,320)); nw=struct.unpack_from('<3f',b,((w-1)%10)*32+4)
     if v.startswith('sq:'):
         k=float(v[3:])

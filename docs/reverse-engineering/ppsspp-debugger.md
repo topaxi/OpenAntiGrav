@@ -1656,6 +1656,27 @@ CPU store. Before trusting an absence, cross-check the target's own value
 before and after the window, the way this session did by accident rather
 than by original design; a changed value with a silent log is the tell that
 
+## Replaying an edited GE frame (2026-10-21, `pulse-ribbon-colour`)
+
+A `.ppdmp` from `gpu.record.dump` plays back in `PPSSPPSDL file.ppdmp` with no game and **no debugger** (the websocket
+never comes up, so there are no memory reads and `gpu.buffer.screenshot` is not an option either). The pixels are read off the
+Xvfb the instance runs in: `import -window root`, crop the 960x544 area at (160,128), scale to 480x272. It draws the recorded list
+and nothing else, so the picture is the original's own, and it can be edited:
+
+- **Edit words in place and recompress the push buffer.** The command table keeps its sizes. `scripts/psp-ge-replay.py`
+  NOPs a range of PRIMs, every PRIM after an index, or rewrites every word of an opcode in a range, and keeps the picture.
+- **Control first.** With the ribbons' PRIMs removed the replay's difference to the unedited replay reproduced the live A/B of
+  `scripts/psp-ribbon-ab.py` (tail box 6.9 against 6.8, nozzle disc 47.6 against 47.7). The top HUD rows (a clock text)
+  differ between replays; nothing else did.
+- **What it is for.** A bisection the live game cannot give, because the frame is otherwise bit-identical: keeping a prefix of the
+  draws after a suspect and testing a measure is a binary search. It found that one translucent floor PRIM drawn after the ribbon
+  removes the ribbon's colour ([exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md), "The ribbon is queued first") after
+  a lane had ruled out every state, texture and vertex colour; and a state poke in the live game, which the GE reads later, shows
+  nothing about draws that come after it.
+- **A just-stopped instance holds its debugger port for about 20 s**; the next start falls back to a random port and a script
+  that expects the fixed one is refused. `scripts/psp-queue-read.py` reads the render queue (`display+0x16a0`, count `+0x5520`)
+  before the sort, which is how a draw-order claim is checked against the original's own keys.
+
 ## Reading the frame's GE list: `gpu.record.dump`
 
 **Measured 2026-09-30, PPSSPP v1.20.4, `UCUS98712`.** The websocket answers

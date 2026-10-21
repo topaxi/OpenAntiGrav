@@ -654,3 +654,19 @@ fn the_ps2_law_draws_the_baked_ribbon_at_rest_without_the_widest_layer() {
     );
     assert_eq!(LAYER_COLOUR[0], [0.0, 8.0 / 255.0, 128.0 / 255.0]);
 }
+
+/// The original queues a `Trail` at the constant key `0x4d000000` and a flare by its own depth,
+/// so the two draw apart: the ribbon ahead of the circuit's blended list, the flare after it.
+/// The split must keep each half and drop the other, or a ribbon drawn early is drawn twice
+/// (or the flare is drawn early with it).
+#[test]
+fn the_ribbon_and_the_flare_draw_apart() {
+    let all = Drawn {
+        count: 12,
+        trail_count: 648,
+    };
+    let ribbon = all.trail_only();
+    assert_eq!((ribbon.count, ribbon.trail_count), (0, 648));
+    let flare = all.without_trail();
+    assert_eq!((flare.count, flare.trail_count), (12, 0));
+}
