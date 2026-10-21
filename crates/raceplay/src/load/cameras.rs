@@ -15,22 +15,15 @@ pub(super) fn resolve(
     handling: &oag_physics::params::Handling,
     team: &str,
     zone_file_read: bool,
-    view_sheared: Option<bool>,
     report: &mut Vec<String>,
 ) -> (ChaseParams, ChaseParams, InternalParams) {
     let far = stats.external_camera_far;
-    let chase = ChaseParams {
-        view_sheared: view_sheared.unwrap_or(false),
-        ..chase_params(far)
-    };
+    let chase = chase_params(far);
     // The other two views the player can cycle to, read from the same document
     // and through the same conversion - so the sign convention is reconciled in
     // exactly one place for both external blocks, which is what
     // `chase_pos_length` exists for.
-    let chase_close = ChaseParams {
-        view_sheared: view_sheared.unwrap_or(false),
-        ..chase_params(stats.external_camera_close)
-    };
+    let chase_close = chase_params(stats.external_camera_close);
     let internal = InternalParams {
         fov: stats.internal_camera.fov,
         headtilt: stats.internal_camera.headtilt,
