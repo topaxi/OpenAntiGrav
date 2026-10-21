@@ -536,7 +536,7 @@ mod tests {
     #[cfg(target_pointer_width = "64")]
     #[test]
     fn the_world_snapshot_does_not_grow() {
-        const LIMIT: usize = 19_328; // +16 bytes x 8 crafts: Handling::camera_lean
+        const LIMIT: usize = 19_392; // +24 bytes x 8 crafts: Handling::camera_lean
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,
