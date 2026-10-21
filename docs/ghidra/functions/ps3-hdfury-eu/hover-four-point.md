@@ -102,7 +102,9 @@ before the loop and nothing in it rewrites them. Under `1.0` (`0x000ee25c`, `blt
   contact test (`b 0x000ee268`) and the next probe.
 
 So every penetrating probe moves the body by its own `1 - h`, all off heights fixed before the
-loop: the moves **sum**. Ours took the largest alone (a choice, for Pulse's two probes).
+loop: the moves **sum**. Ours took the largest alone (a choice, for Pulse's two probes); since
+2026-10-21 Pulse's two-point loop is read and measured to sum as well
+([airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census)).
 
 **Live.** One `oag_physics::step` per row of an RPCS3 capture of the original's Autopilot on
 Ubermall PHANTOM (Feisar, rows 400-1260, `crates/raceplay/tests/hd_air_pose_walk.rs` with
