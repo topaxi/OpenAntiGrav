@@ -788,6 +788,16 @@ pub(super) fn roles(
             program.as_ref(),
             material,
             routed,
+            // A second binding that is the circuit's lightmap (or is not bound)
+            // is no picture to read a mask from.
+            (
+                first_unit,
+                if bound && packed & slots::SECOND_IS_LIGHTMAP == 0 {
+                    second_unit
+                } else {
+                    u32::MAX
+                },
+            ),
             report,
         ));
         out.push(packed);

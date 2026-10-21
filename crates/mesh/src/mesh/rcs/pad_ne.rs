@@ -52,6 +52,7 @@ pub(super) fn pad_ne(
     textures: Textures<'_>,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    glow: &mut [f32],
     only: Option<&[bool]>,
     report: &mut Report,
 ) -> TextureSlots {
@@ -130,6 +131,29 @@ pub(super) fn pad_ne(
             continue;
         };
         out[slot] = Some(texture);
+        // **The mask the program writes may be this very sample's alpha**: the pad
+        // programs end `MOV H0.w, <_ne>.w`, so the bloom's gate sees the light
+        // bars as the same mask that gates their colour. Read off the program,
+        // and only where it is exactly that.
+        if let Some(value) = glow.get_mut(slot)
+            && let oag_rcs::rcsmaterial::fragment::Lane::Texel {
+                unit: lane_unit,
+                channel,
+                scale,
+                bias: 0.0,
+            } = program.output_alpha(|hash| {
+                material
+                    .parameters
+                    .iter()
+                    .find(|p| p.hash == hash)
+                    .map(|p| p.value)
+            })
+            && lane_unit == unit
+            && scale > 0.0
+            && scale < 8.0
+        {
+            *value = super::glow::texel_glow(super::glow::Source::PadMask, channel, scale);
+        }
         if let Some(word) = packed.get_mut(slot) {
             *word |= slots::PAD_NE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;

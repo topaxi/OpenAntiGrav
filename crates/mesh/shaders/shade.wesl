@@ -5,6 +5,7 @@ import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shado
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
+import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
@@ -607,6 +608,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             vec2<f32>(in.texcoord.x, glow_v),
         );
     }
+    // What a texel-sourced program mask reads - see `glow.wesl`'s `program_glow`.
+    glow_first = first;
+    glow_second = select(second, glow_sample, (in.slots & 256u) != 0u);
+    glow_pad = pad_ne_texel;
     // Gated by the *diffuse* alpha, which is `first.a` rather than the
     // resolved `texel.a`: the microcode's `H0.wwww` is the unit-0 fetch's own
     // fourth channel, before any of the role bits above choose where the
