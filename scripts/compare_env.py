@@ -80,6 +80,21 @@ def ours_flags(plat):
     return flags
 
 
+def tenths_matched_ticks(clock):
+    """Ticks after GO whose clock shows the same tenth as the original's `clock` seconds.
+
+    Pulse's HUD writes `trunc(clock * 100)` centiseconds and then the tenth by truncation (measured live
+    2026-10-21: the string in RAM equalled the truncated tenth of the clock float on 40 of 40 stops). Rounding to the nearest tick
+    can land up to half a tick (8 ms) past the original's clock, and where a tenth boundary falls in that gap ours
+    reads one tenth later than the frame it is paired with (Amphiseum Black: clock 13.2967, 798 ticks, `13.3` against
+    the original's `13.2`). Ours is quantised to ticks, so the nearest tick is kept unless it crosses a tenth.
+    """
+    ticks = round(clock * 60)
+    if ticks * 10 // 60 > int(clock * 10):
+        ticks -= 1
+    return ticks
+
+
 def ours_env(profile_dir):
     return {"XDG_CONFIG_HOME": str(profile_dir / "cfg"), "XDG_DATA_HOME": str(profile_dir / "data"),
             "XDG_STATE_HOME": str(profile_dir / "state")}
