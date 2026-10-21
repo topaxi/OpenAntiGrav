@@ -16,6 +16,7 @@ mod gxp_ground_truth;
 mod hd_gantry_curve_ground_truth;
 mod hd_lineage_blend_ground_truth;
 mod hd_pvs_ground_truth;
+mod hd_uv_flip_ground_truth;
 mod magstrip_arc_fp_ground_truth;
 mod omega_animation_ground_truth;
 mod omega_declaration_ground_truth;

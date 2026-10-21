@@ -67,16 +67,55 @@ fn a_coordinate_passed_through_is_not_a_flip() {
     assert!(!program(vec![pass]).flips(UV1));
 }
 
+/// `encode` for an instruction whose vector half writes temporary `temp`.
+fn encode_to_temp(vec_op: u8, input: u8, sources: [u32; 3], temp: u32) -> [u32; 4] {
+    let mut words = encode(vec_op, input, sources, 0, false);
+    words[0] |= temp << 15;
+    words
+}
+
+/// A source field naming temporary `n`.
+fn temporary_source(n: u32) -> u32 {
+    SOURCE_TEMPORARY | (n << 2)
+}
+
 #[test]
-fn a_negation_into_a_temporary_is_not_a_flip() {
-    let into_temp = encode(
-        ADD,
-        3,
-        [input_source(true), 0, constant_source()],
-        TC6,
-        false,
-    );
+fn a_negation_into_a_temporary_that_never_reaches_an_output_is_not_a_flip() {
+    let into_temp = encode_to_temp(ADD, 3, [input_source(true), 0, constant_source()], 3);
     assert!(!program(vec![into_temp]).flips(UV1));
+}
+
+/// `ADD R3.w, -v[3].yyyy, c[208].zzzz` then `MOV o[TC4], R3`: Amphiseum's
+/// `track_surface_no_emissive`, whose pit-box floor drew with the picture upside
+/// down for as long as only a direct negation counted.
+#[test]
+fn a_negation_copied_to_an_interpolator_through_a_temporary_is_a_flip() {
+    let negate = encode_to_temp(ADD, 3, [input_source(true), 0, constant_source()], 3);
+    let copy = encode(MOV, 0, [temporary_source(3), 0, 0], TC6, true);
+    assert!(program(vec![negate, copy]).flips(UV1));
+}
+
+#[test]
+fn a_copy_that_comes_before_the_negation_does_not_count() {
+    let negate = encode_to_temp(ADD, 3, [input_source(true), 0, constant_source()], 3);
+    let copy = encode(MOV, 0, [temporary_source(3), 0, 0], TC6, true);
+    assert!(!program(vec![copy, negate]).flips(UV1));
+}
+
+#[test]
+fn a_negation_into_one_temporary_is_not_a_copy_of_another() {
+    let negate = encode_to_temp(ADD, 3, [input_source(true), 0, constant_source()], 3);
+    let copy = encode(MOV, 0, [temporary_source(2), 0, 0], TC6, true);
+    assert!(!program(vec![negate, copy]).flips(UV1));
+}
+
+/// Talon's `track_surface` loads the same temporary without the negate
+/// (`MOV R3.w, v[3].yyyy`) and is upright.
+#[test]
+fn an_unnegated_load_copied_through_a_temporary_is_not_a_flip() {
+    let load = encode_to_temp(MOV, 3, [input_source(false), 0, 0], 3);
+    let copy = encode(MOV, 0, [temporary_source(3), 0, 0], TC6, true);
+    assert!(!program(vec![load, copy]).flips(UV1));
 }
 
 #[test]
