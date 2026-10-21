@@ -124,6 +124,16 @@ Pulse PSP Zone pairs exist, HD's do not. `psp-pulse-pair.py --zone` reads `g_gam
    HD's 13 time trials), so the page only ever shows one hull. Cycle team, ship and variant (classic/Fury livery) through
    the roster across pairs, both sides of a pair still on the same craft and circuit, with the choice recorded in `meta`.
    A Time Trial state per team is a new savestate per circuit; making them is the cost.
+8. **Faster clean HD originals than a cold boot** (from an outside web search on 2026-10-21, nothing run here; the rule in
+   `docs/reverse-engineering/rpcs3-capture.md`, "Savestate restore paints garbage on glass", stands until this is measured).
+   RPCS3 reports say the bad data is stored *in* the state (loading the same state reproduces the same corruption, saving and
+   reloading at once clears what was on screen when it was saved; rpcs3 issue 18738, forum thread 178968). So: (a) save a new
+   Time Trial state from a **cold-booted** run at the grid and check whether restoring that state draws clean glass; if it
+   does, the 13 HD states can be re-made once and restores stay at about 40 s a frame. (b) Diff restored frames at +1, +5, +30
+   and +300 frames against a cold frame of the same scene: a decaying error is a load transient, a flat one a stored target
+   (the 2026-10-21 measurements say flat). `Force CPU Blit` was already tried without effect and `Write Color Buffers` off made
+   it worse (same page); record the RPCS3 build, renderer and those two settings with every pair, which `original.emulator`
+   and the provenance settings hash already do.
 
 **Pulse PSP, `pulse-one-pair` (2026-10-21), Moa Therma White grid, mean grey difference 0-255 with today's ticks (GO 272) 4.621 to 4.512 (24 grid pairs: every one but Moa Therma Black down 0.08 to 0.17).** HUD text steps the pen a whole pixel per glyph ([hud.md](../../docs/ui/hud.md)). Next, for whoever owns `psp-pulse-pair.py`: read the gantry node time (Mesh `+0x40`, breakpoint `0x089128fc`, `s0`; a heap address, never a constant) at the capture and pass `--gantry-seconds`; on Moa Therma White ours with the RAM phase reads 1.70 against 2.48 on the stale pair ([start-gantry.md](../../docs/rendering/start-gantry.md)). Left in the Moa frame: the hull's texel-level speckle (about 23 % of the error, PPSSPP's sampling), the plume interior (ours darker or brighter by the pair, up to 25 grey), and the dark pill our shadow draws under the craft.
 
