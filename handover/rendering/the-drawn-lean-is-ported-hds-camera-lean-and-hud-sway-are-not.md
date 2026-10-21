@@ -29,10 +29,15 @@ inherited from HD (both parse `<Tilt>`; consumer not located).
   folded `-l * 0.005 + r * 0.005`). Both inherit HD's law.
 - **`& 2` on Pulse's `entity+0x860`** negates the stick term of both filters; no writer was
   identified and it read clear in the capture. Treated as clear (chosen).
-- **HD's lean sign is inherited, not measured.** HD composes the same angle through its own
-  rotation builder (`bl 0x006776e8` at `0x000ebb68`); ours applies Pulse's measured
-  `ROLL_DIRECTION` to it, as it already did for HD's barrel roll. A read of HD's drawn node
-  matrix against the body under a held stick (RPCS3, `*(ship+0x6adc)`) would settle it.
+- ~~**HD's lean sign is inherited, not measured.**~~ Measured 2026-10-21: HD's node matrix
+  under a held stick matches Pulse's form, pinned by
+  `hds_lean_turns_the_hull_the_way_its_captured_display_matrix_does`
+  ([ship-lean.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md)).
+- **`oag-game --input-script` drops the stick axis on a race.** A script line
+  `200 cross stick_x=0.7` left `steer` at `0` for 120 ticks (`--trace-out`), where `right`
+  steered: the race capture path takes the script's buttons and not its analog axes, so any
+  "same script on both sides" comparison that uses `stick_x` silently runs ours with the stick
+  centred. Look at `oag_game::race_capture::tick` and `HeldButtons::advance`.
 - **The stick shape.** Ours feeds the lean the unshaped stick; the original's record goes
   through a `0.2` deadzone and an S-curve (camera.md), so a partial stick leans less there.
   The maintainer's decision keeps our linear deadzone, so this is a known difference, not a bug.

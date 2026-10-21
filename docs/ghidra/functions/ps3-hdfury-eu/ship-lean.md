@@ -84,6 +84,17 @@ record and lean can sit either side of a frame's update). Pulse's follower `5.0`
 `0.045`, Pulse's smooth `3.0` `0.137`, and `shipAmount` left out `0.217`; pinned by
 `crates/trace/tests/steer_lean_ground_truth.rs`. **Confidence 90** for the drawn lean's law.
 
+**The sign, measured the same day.** `scripts/rpcs3-hd-lean-display.py` holds the stick and
+reads the hull node, `*(ship+0x6adc) + 0x80` (`0x00323780` is the `+0x80` accessor), against the
+body's rows. With the stick right, lean `+1.3981`, roll `0`, angle `+0.6991`: node row 0 in the
+body's basis `(+0.5774, +0.4784, -0.0021)` = `0.75 * (cos, sin, 0)`, row 1 `(-0.4784, +0.5774)`,
+row 2 `0.75` on the nose; with the stick left the mirror, `(+0.5741, -0.4823, 0)`. So HD's
+`0x006776e8` builds the same rotation Pulse's VFPU code does, `row0 = 0.75 * (cos * body_row0 +
+sin * body_row1)`. `crates/raceplay/src/drawable.rs`'s
+`hds_lean_turns_the_hull_the_way_its_captured_display_matrix_does` reproduces the captured row 0's
+world height through our own composition (sign and size, within `0.02`) and fails with
+`ROLL_DIRECTION` flipped. Confidence 92 for the sign on HD.
+
 **Ported**: `oag_physics::SteerLean` per craft, filled from `<Tilt>` by
 `oag_raceplay::load::code_laws` under `CraftLaws::tilt_steer_lean` (`oag_hd::race::CRAFT_LAWS`,
 measured), drawn through `oag_render::roll::display_angle`.

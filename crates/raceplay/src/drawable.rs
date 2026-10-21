@@ -1228,6 +1228,36 @@ mod tests {
              ours={ours_row0} original={original_row0}"
         );
     }
+
+    /// Wipeout HD's twin of the test above, for the steering lean: the same angle
+    /// (`lean * 0.5 + roll * 6.28`, `Ship_UpdateEntity` `0x000ebb3c`) through HD's own rotation
+    /// builder, so the sign is HD's to confirm rather than Pulse's to lend. Captured on RPCS3
+    /// 2026-10-21 with the stick held right (`scripts/rpcs3-hd-lean-display.py`): `ship+0x6a54`
+    /// read `1.3981`, the eased roll `0`, and the hull node `*(ship+0x6adc) + 0x80` carried
+    /// `0.75 * (cos * body_row0 + sin * body_row1)` at angle `0.6991`, the form Pulse's has.
+    #[test]
+    fn hds_lean_turns_the_hull_the_way_its_captured_display_matrix_does() {
+        let right = Vec3::new(0.2473, 0.1258, -0.9607);
+        let up = Vec3::new(-0.0147, 0.9919, 0.1261);
+        let forward = Vec3::new(0.9688, -0.0170, 0.2471);
+        let original_row0 = Vec3::new(0.1337, 0.5472, -0.4949);
+
+        let orientation = Quat::from_mat3(&oag_core::math::Mat3::from_cols(right, up, forward));
+        let roll = oag_render::roll::display_rotation(Vec3::NEG_Z, 0.0, 1.3981);
+        let ours_row0 = orientation * roll * Vec3::X;
+
+        assert_eq!(
+            ours_row0.dot(Vec3::Y).signum(),
+            original_row0.dot(Vec3::Y).signum(),
+            "ours={ours_row0} original={original_row0}"
+        );
+        // And by about as much: the captured row is scaled by 0.75.
+        let height = original_row0.dot(Vec3::Y) / 0.75;
+        assert!(
+            (ours_row0.dot(Vec3::Y) - height).abs() < 0.02,
+            "{ours_row0} {height}"
+        );
+    }
 }
 
 pub(super) mod draw;
