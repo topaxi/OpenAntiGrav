@@ -193,10 +193,10 @@ impl Program {
                         _ => Lane::Other,
                     };
                     *out = out.scaled(scale_factor(insn.scale));
-                    if insn.saturate {
-                        if let Lane::Constant(v) = *out {
-                            *out = Lane::Constant(v.clamp(0.0, 1.0));
-                        }
+                    if insn.saturate
+                        && let Lane::Constant(v) = *out
+                    {
+                        *out = Lane::Constant(v.clamp(0.0, 1.0));
                     }
                 }
             }
