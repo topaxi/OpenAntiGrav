@@ -57,11 +57,21 @@ fn the_hulls_vertex_colour_materials_are_factors_and_the_unlit_ones_are_not() {
             .any(|v| v.specular_exponent == mesh::NO_SPECULAR),
         "diffuse_vcol has no LG2, so its chunks draw no specular"
     );
-    assert!(
-        model
-            .vertices
-            .iter()
-            .any(|v| v.specular_exponent == mesh::DEFAULT_SPECULAR_EXPONENT),
-        "the n_vcol material keeps its stand-in exponent"
-    );
+}
+
+/// The hull's specular exponent is the material instance's own parameter
+/// (`0x4232e459`: 160 on `feisar_c1`'s paint, 80 on its glass, 300 on Harimau's), patched
+/// into the program at draw time. Asking only for the `SPECULAR_POWER` hash left every
+/// hull on the shared 32.
+#[test]
+#[ignore = "needs the HD disc image"]
+fn a_hulls_specular_exponent_is_its_materials_own_parameter() {
+    let Some(model) = hull() else { return };
+    let exponents = &model.material_specular_exponent;
+    for authored in [160.0, 80.0] {
+        assert!(
+            exponents.contains(&authored),
+            "no material of feisar_c1 resolved the instance's {authored}: {exponents:?}"
+        );
+    }
 }

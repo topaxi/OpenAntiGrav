@@ -99,7 +99,15 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
-    let ndl = clamp(dot(n_lit, scene.light.direction), 0.0, 1.0);
+    let ndl_raw = dot(n_lit, scene.light.direction);
+    let ndl = clamp(ndl_raw, 0.0, 1.0);
+    // The specular's facing term in every HD lit program: `MOV_SAT x8` of the unsaturated
+    // `N.L` (`MUL R1.w, pow, sat(8 N.L)`), so the highlight is full strength from about
+    // seven degrees off the horizon, not scaled by `N.L` itself. Read on the hull's own
+    // `diffuse_with_specular_from_alpha_*` and the track's, which share the snippet; the
+    // track keeps `N.L` here until the track is matched on its own (it moved four of
+    // thirteen pairs the wrong way).
+    let ndl_spec = select(clamp(8.0 * ndl_raw, 0.0, 1.0), ndl, receives_shadow == 2.0);
 
     // **Everything from here to `authored` is the authored rig's, and only
     // runs when the rig is on.** Off - `Light::stand_in`, which is every
@@ -721,7 +729,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let no_specular = in.specular_exponent <= 0.0 && colour_factor;
         let specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
         let specular = scene.light.sun
-            * (pow(ndh, specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
+            * (pow(ndh, specular_exponent) * ndl_spec * mask * texel.a * scene.light.specular_scale
                 * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);

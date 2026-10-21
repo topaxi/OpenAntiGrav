@@ -50,6 +50,13 @@ pub(super) fn colour_factor(
     !fed.is_empty() && fed.iter().all(|&n| program.input_is_only_a_factor(n))
 }
 
+/// The parameters read as an exponent where they patch the exponent's own `MUL`.
+const EXPONENT_PARAMETERS: [u32; 3] = [
+    rcsmaterial::SPECULAR_POWER,
+    rcsmaterial::SPEC_EXPONENT,
+    rcsmaterial::CARBON_EXPONENT,
+];
+
 /// The exponent this material's specular term is drawn with: its own chain's
 /// literal, [`crate::mesh::NO_SPECULAR`] for a [`colour_factor`] material
 /// whose program has no chain, else the shared stand-in.
@@ -59,40 +66,30 @@ pub(super) fn specular_exponent(
     factor: bool,
     report: &mut Report,
 ) -> f32 {
-    // **A resolved `0.0` is checked against the model's own patch table
-    // before it is discarded.** `Program::specular_exponent`'s own doc
-    // comment carries the disc-wide evidence that `0.0` is the strongest
-    // candidate for `SpecularPower` patched at draw time rather than a
-    // real value baked in the file - `pow(x, 0) = 1` is not a plausible
-    // authored shininess. That is now checked rather than assumed:
-    // `Program::patches` says whether the exponent's own code slot is one
-    // `SpecularPower` overwrites, and where it is, the material's own
-    // parameter table (the same table `Flame::from_material` reads) has
-    // the value the engine actually puts there. Verified disc-wide before
-    // being wired - `crates/render/examples/hd_specular_patch_census.rs` -
-    // every one of 62 materials across 16 circuits whose `0.0` chain is
-    // patched this way also authors a non-zero `SpecularPower`, at values
-    // (30 to 100, non-round) the shared-literal population never carries.
-    // A `0.0` that is *not* patched, or a material with no authored value
-    // for it, still falls back to `DEFAULT_SPECULAR_EXPONENT` - every
-    // other resolved value is wired exactly as read.
+    // **A resolved `0.0` is the engine's own patch, not a shininess.** `pow(x, 0) = 1` is
+    // not a plausible authored exponent, and the code slot of that chain's `MUL` is one
+    // the engine overwrites at draw time with a parameter of the material instance
+    // (`Program::specular_exponent_parameter` names it): `SpecularPower` on most
+    // materials, `SPEC_EXPONENT` (`0x4232e459`) on a hull's
+    // `diffuse_with_specular_from_alpha_*` (300 on Harimau, 160 on `feisar_c1`'s paint, read
+    // off the live program's patch table on Sebenco Climb and Anulpha Pass), and
+    // `CARBON_EXPONENT` on `carbonfibre`. Asking for `SpecularPower` alone left
+    // every hull on the shared 32 and its highlights a broad white wash. A `0.0` whose
+    // slot nothing patches, or a material with no authored value for it, still falls
+    // back to `DEFAULT_SPECULAR_EXPONENT`; every other resolved value is wired as read.
     let resolved = program.and_then(|program| {
         let value = program.specular_exponent()?;
         if value != 0.0 {
             return Some(value);
         }
-        let slot = program.specular_exponent_slot()?;
-        program
-            .patches(rcsmaterial::SPECULAR_POWER)
-            .any(|patched| patched == slot)
-            .then(|| {
-                material
-                    .parameters
-                    .iter()
-                    .find(|p| p.hash == rcsmaterial::SPECULAR_POWER)
-                    .map(|p| p.value[0])
-            })
-            .flatten()
+        let hash = program
+            .specular_exponent_parameter()
+            .filter(|hash| EXPONENT_PARAMETERS.contains(hash))?;
+        material
+            .parameters
+            .iter()
+            .find(|p| p.hash == hash)
+            .map(|p| p.value[0])
             .filter(|value| *value != 0.0)
     });
     if let Some(value) = resolved {

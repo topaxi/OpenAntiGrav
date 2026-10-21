@@ -70,7 +70,7 @@ def regions(out, stem, rnd):
         ST['stage']=1
         res=[]
         for p in sorted(set(d[0x8e4]&0xfffffff0 for d in draws)):
-            res.append((base(draws[0][0x8e4]&3)+p,0x600))
+            res.append((base(draws[0][0x8e4]&3)+p,int(os.environ.get('HOOK_FP_LEN','0x600'),0)))
         seen=set()
         for d in ([] if LIGHT else [x for x in draws if keep(x)]):
             ixoff=d.get(0x181c)
@@ -133,7 +133,7 @@ def regions(out, stem, rnd):
             fp=d[0x8e4]&0xfffffff0
             try: txt=subprocess.run(['python3',os.path.join(os.path.dirname(os.path.abspath(__file__)),'ps3-fp-live.py'),'%s/%s-%08x.bin'%(out,stem,0xC0000000+fp)],capture_output=True,text=True,timeout=20).stdout
             except Exception: continue
-            if '{2, -1' in txt and txt.count('unit0')>=2:
+            if (os.environ.get('HOOK_TEX_RE') and re.search(os.environ['HOOK_TEX_RE'],txt)) or (not os.environ.get('HOOK_TEX_RE') and '{2, -1' in txt and txt.count('unit0')>=2):
                 for u in range(6):
                     b=0x1a00+0x20*u; c=d.get(b+0xc)
                     if c and c&0x80000000:

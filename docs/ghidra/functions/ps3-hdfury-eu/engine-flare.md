@@ -202,7 +202,7 @@ parameters are identified by the slot they patch rather than by a name.
   specular exponent as "32, the commonest of three round values ... a stand-in,
   now labelled as one", from a sweep of *inline* literals. The exponent is a
   per-instance parameter, and reading it is what would retire that stand-in.
-  Nothing reads it yet.
+  Nothing read it until 2026-10-21: it is the specular exponent where it patches the exponent's `MUL`, and a hull now draws with it ([hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The hull's specular exponent"; the value is 160 on `feisar_c1`'s paint, 300 on Harimau's).
 - **`Bloom` (`0xf8f3ade0`) is 1.0 on `emissive_bloom`**, the material on a
   hull's lit strips.
 - **`0xab31c2b1`** is 0.2 on the paint and 0.3 on the glass, with no preimage.

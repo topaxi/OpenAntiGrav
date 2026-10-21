@@ -37,6 +37,10 @@ const CIRCUITS: &[(&str, &str)] = &[
     ("DATA02", "/data/environments/10_sebenco_climb/track.vex"),
     ("DATA02", "/data/environments/05_ubermall/track.vex"),
     ("DATA02", "/data/environments/12_sol_2/track.vex"),
+    ("DATA03", "/data/ships/harimau/ship.vex"),
+    ("DATA06", "/data/ships/feisar_c1/ship.vex"),
+    ("DATA06", "/data/ships/harimau_c1/ship.vex"),
+    ("DATA06", "/data/ships/assegai_c1/ship.vex"),
 ];
 
 fn main() -> anyhow::Result<()> {
@@ -48,6 +52,10 @@ fn main() -> anyhow::Result<()> {
     let mut other_nonzero = 0usize;
     let mut blocks_checked = 0usize;
     let mut slot_collisions = 0usize;
+    // Zero chains whose slot is patched by a parameter other than `SpecularPower`: what
+    // `light_inputs::specular_exponent` newly resolves (2026-10-21, `hd-hull-colour`).
+    let mut other_hash: std::collections::BTreeMap<(u32, bool), (usize, f32, f32)> =
+        Default::default();
 
     for (archive, name) in CIRCUITS {
         let spec = format!("{image}:PS3_GAME/USRDIR/{archive}.PSARC");
@@ -104,6 +112,30 @@ fn main() -> anyhow::Result<()> {
                 continue;
             }
             zero += 1;
+            if let Some(hash) = program
+                .specular_exponent_parameter()
+                .filter(|&hash| hash != rcsmaterial::SPECULAR_POWER)
+            {
+                {
+                    let value = material
+                        .parameters
+                        .iter()
+                        .find(|p| p.hash == hash)
+                        .map_or(0.0, |p| p.value[0]);
+                    let entry = other_hash
+                        .entry((hash, name.contains("/ships/")))
+                        .or_insert((0, f32::MAX, 0.0));
+                    entry.0 += 1;
+                    entry.1 = entry.1.min(value);
+                    entry.2 = entry.2.max(value);
+                    if value != 0.0 && value < 8.0 {
+                        println!(
+                            "LOW {name} slot {slot} ({}): {hash:#010x} = {value}",
+                            material.name
+                        );
+                    }
+                }
+            }
             let patched = program.specular_exponent_slot().is_some_and(|slot| {
                 program
                     .patches(rcsmaterial::SPECULAR_POWER)
@@ -136,6 +168,12 @@ fn main() -> anyhow::Result<()> {
     println!("  of those, code slot patched by SpecularPower: {zero_patched_by_specular_power}");
     println!("  of those, model authors a non-zero SpecularPower: {zero_authored_nonzero}");
     println!("  of those, model authors zero or nothing: {zero_authored_zero_or_absent}");
+    for ((hash, ship), (n, lo, hi)) in &other_hash {
+        println!(
+            "zero chain patched by {hash:#010x} (not SpecularPower), {}: {n} block(s), authored {lo}..{hi}",
+            if *ship { "ships" } else { "circuits" }
+        );
+    }
     println!("blocks checked for a shared patch slot: {blocks_checked}");
     println!("two parameters patching the same slot: {slot_collisions}");
     Ok(())
