@@ -436,7 +436,10 @@ def manifest(out_path, dirs):
                 print("skipped (refused): %s" % pj, file=sys.stderr)
                 continue
             plat = platform(rec["profile"])
-            base = pj.parent
+            # Resolved like `out`: in a worktree `data/` is a symlink into the main checkout, and
+            # relpath from an unresolved pair to a resolved manifest names the worktree, which is
+            # reaped after its merge.
+            base = pj.parent.resolve()
             if "overlap" not in rec:
                 rec["overlap"] = overlap_score(base / "theirs.png", base / "ours.png")
             # Re-spelled every run, so a pair made before a field joined the line (the build hash) gains it.
