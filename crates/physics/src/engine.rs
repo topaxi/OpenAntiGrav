@@ -504,7 +504,9 @@ pub fn pitch(
 /// `Ship_TestPitchAlignment` (`0x088492bc`): `dot(hull_up, -down) > 0.9`, `down` the located
 /// spline sample's (`*(craft+0x1c4) + 0xb10`, the sample [`crate::forces::Environment::track_sample`]
 /// carries), read raw as the original reads it (`vscl.q` by `-1.0`, `vdot.t`, `c.le.s` against
-/// `0x3f666666`).
+/// `0x3f666666`). Measured live under player input, closed by pitch and by roll, and on a
+/// crossing world down would have placed a tick early (`docs/physics/airborne-ground-truth.md`,
+/// confidence 93).
 ///
 /// With no located sample the gate is open: **chosen, not measured** (the original always
 /// has one while racing), so a caller that supplies none keeps the input it had before the gate

@@ -1757,7 +1757,7 @@ off `*(craft+0x6c)` whenever the bit is clear, **whether or not the gate passed*
 the gate's failure branches straight to `0x08848d7c`, the bias test.
 
 **`Ship_TestPitchAlignment` (`0x088492bc`), decoded 2026-10-19
-(`autopilot-crest-steering`), confidence 80.** It returns
+(`autopilot-crest-steering`), confidence 93 since 2026-10-21 (80 on the read alone).** It returns
 `dot(craft+0x160, -1.0 * (*(craft+0x1c4) + 0xb10)) > 0.9`: the hull up against the
 located spline sample's down, negated (`vscl.q` by `-1.0` at `0x088492f0`,
 `vdot.t` at `0x08849318`, `c.le.s` against `0x3f666666` at `0x08849338`). So
@@ -1768,7 +1768,8 @@ and bias ([ps3-hdfury-eu/physics.md](../ps3-hdfury-eu/physics.md)). The bias is
 `8.0` on Assegai, Qirex and Triakis, `-8.0` on AG Systems, Feisar and Piranha, and
 `0.0` on EGX and Goteki. It was read live as `8.0` on a captured craft
 (PPSSPP, 2026-10-19). **The gate is measured** (`oag_physics::engine::pitch_aligned`, on; live on three
-crossings, confidence 90,
+Autopilot crossings, confidence 90, then under player input on 364 closed airborne rows and a
+crossing that needs the located down rather than world down, confidence 93,
 [airborne-ground-truth.md](../../../physics/airborne-ground-truth.md#the-pitch-input-gate-live));
 the bias is measured (confidence 85) and on
 ([the same page](../../../physics/airborne-ground-truth.md#the-in-air-weight_distribution-torque-live)).

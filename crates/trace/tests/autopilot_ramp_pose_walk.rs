@@ -18,7 +18,10 @@
 //! ```
 //!
 //! `OAG_RAMP_TEAM` (default `Assegai`), `OAG_RAMP_CLASS` (default `PHANTOM`) and
-//! `OAG_RAMP_TRACK` (default Fort Gale, `14_Track`) choose the rest.
+//! `OAG_RAMP_TRACK` (default Fort Gale, `14_Track`) choose the rest. A player-input
+//! capture (`psp-trace.py --place ... --hold`) runs with `OAG_RAMP_PLAYER` (plus
+//! `OAG_RAMP_AIRBRAKE_LEFT` when the left airbrake was held), and `OAG_RAMP_FRAME=body`
+//! steps HD's rotated inertia frame for the comparison.
 
 use oag_core::math::Vec3;
 use oag_gameplay::{collision_world, handling_for};
@@ -93,17 +96,51 @@ fn raw_controls(text: &str) -> Option<Vec<ShipControls>> {
     )
 }
 
+/// A player-input capture's controls (`psp-trace.py --hold`): the control block's
+/// own stick (`stick_steer`, `stick_pitch`) and full thrust, with the left airbrake
+/// held when `OAG_RAMP_AIRBRAKE_LEFT` is set. Our ramps run from the row's recorded
+/// ramped state, as the original's do.
+fn player_controls(text: &str) -> Option<Vec<ShipControls>> {
+    let mut lines = text.lines();
+    let header: Vec<&str> = lines.next()?.split(',').collect();
+    let at = |name: &str| header.iter().position(|h| *h == name);
+    let (steer, pitch) = (at("stick_steer")?, at("stick_pitch")?);
+    let left = if std::env::var_os("OAG_RAMP_AIRBRAKE_LEFT").is_some() {
+        1.0
+    } else {
+        0.0
+    };
+    Some(
+        lines
+            .map(|line| {
+                let f: Vec<f32> = line.split(',').map(|v| v.parse().unwrap()).collect();
+                ShipControls {
+                    steer_x: f[steer] / CONTROL_RANGE,
+                    thrust: 1.0,
+                    airbrake_left: left,
+                    steer_y: f[pitch] / CONTROL_RANGE,
+                    ..ShipControls::default()
+                }
+            })
+            .collect(),
+    )
+}
+
 /// The extra columns `Trace` does not know: rail blend and own lateral, per tick.
+/// A capture without them (a player-input one, no Autopilot and so no rail)
+/// reads as a zero blend on every row.
 fn rail_columns(text: &str) -> Vec<(f32, Vec3)> {
     let mut lines = text.lines();
     let header: Vec<&str> = lines.next().expect("header").split(',').collect();
-    let at = |name: &str| header.iter().position(|h| *h == name).expect(name);
-    let (b, x, y, z) = (
+    let at = |name: &str| header.iter().position(|h| *h == name);
+    let (Some(b), Some(x), Some(y), Some(z)) = (
         at("rail_blend"),
         at("own_lat_x"),
         at("own_lat_y"),
         at("own_lat_z"),
-    );
+    ) else {
+        return lines.map(|_| (0.0, Vec3::ZERO)).collect();
+    };
     lines
         .map(|line| {
             let f: Vec<f32> = line.split(',').map(|v| v.parse().unwrap()).collect();
@@ -155,7 +192,16 @@ fn the_original_s_autopilot_stepped_once_per_row() {
     let text = std::fs::read_to_string(&path).expect("reading the capture");
     let trace = Trace::parse(&text).expect("parsing the capture");
     let rail = rail_columns(&text);
-    let raw = raw_controls(&text);
+    // `OAG_RAMP_PLAYER`: a player-input capture, so no Autopilot engine flags and
+    // the stick for controls. `OAG_RAMP_FRAME=body` steps HD's rotated inertia
+    // frame instead of Pulse's world axes.
+    let player = std::env::var_os("OAG_RAMP_PLAYER").is_some();
+    let body_frame = env_or("OAG_RAMP_FRAME", "world") == "body";
+    let raw = if player {
+        player_controls(&text)
+    } else {
+        raw_controls(&text)
+    };
     let raw = raw.as_deref();
     let ticks = env_or("OAG_RAMP_TICKS", "1170..1230");
     let (lo, hi) = ticks.split_once("..").expect("OAG_RAMP_TICKS is lo..hi");
@@ -176,9 +222,13 @@ fn the_original_s_autopilot_stepped_once_per_row() {
     let handling = handling_for(&stats, &class, pads, global.special).expect("class handling");
     let env = Environment {
         class_gravity_scale: gravity_mul.airborne,
-        engine_flags: EngineFlags {
-            uncapped: true,
-            speedup: Some(ENGINE_AUTOPILOT_SPEEDUP),
+        engine_flags: if player {
+            EngineFlags::default()
+        } else {
+            EngineFlags {
+                uncapped: true,
+                speedup: Some(ENGINE_AUTOPILOT_SPEEDUP),
+            }
         },
         ..Environment::default()
     };
@@ -204,6 +254,9 @@ fn the_original_s_autopilot_stepped_once_per_row() {
         state.stun_timer = frame.stun_timer.unwrap_or(0.0);
         state.slowdown_timer = frame.timer_2e0.unwrap_or(0.0);
         (state.time_since_landing, state.time_airborne) = timers[i];
+        if body_frame {
+            state.inertia_frame = oag_physics::InertiaFrame::Body;
+        }
         let controls = match raw {
             Some(raw) => raw[i],
             None => ShipControls {
@@ -268,6 +321,17 @@ fn the_original_s_autopilot_stepped_once_per_row() {
             engine_y,
             terms.vertical_damping.y / mass,
             rail_dvy,
+        );
+        println!(
+            "ROW,{},{},{},{},{},{},{},{}",
+            frame.tick,
+            frame.grounded,
+            next.grounded,
+            dw.dot(up0),
+            dw.dot(lat0),
+            dw.dot(fwd0),
+            dv.length(),
+            frame.stun_timer.unwrap_or(0.0),
         );
     }
     rollout(&trace, &rail, raw, lo, hi, &handling, &env, &world, &timers);
