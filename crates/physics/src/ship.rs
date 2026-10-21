@@ -263,7 +263,7 @@ pub enum Sideshift {
 /// angular damping reads ([`crate::forces::evaluate`]).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum InertiaFrame {
-    /// Fixed in world axes, as Pulse's `Body_Integrate` applies it (confidence 90,
+    /// Fixed in world axes, as Pulse's `Body_Integrate` applies it (confidence 93,
     /// `docs/physics/airborne-ground-truth.md`).
     #[default]
     World,

@@ -1382,7 +1382,7 @@
 # 2026-10-19 moa-strip-band: the list-B queue key (mesh-draw.md)
 0x08902b24	function	ViewCull_ViewDepth	80	mesh-draw.md
 # 2026-10-19 autopilot-crest-steering: the pitch gate (engine.md)
-0x088492bc	function	Ship_TestPitchAlignment	80	engine.md
+0x088492bc	function	Ship_TestPitchAlignment	93	engine.md
 # 2026-10-20 wall-contact-miss: the collision cage (collision-cage.md)
 0x08831aa4	function	Cage_ResolveCraft	88	collision-cage.md
 0x0883191c	function	Cage_UpdateCraft	85	collision-cage.md

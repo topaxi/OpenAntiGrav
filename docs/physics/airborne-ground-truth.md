@@ -131,10 +131,66 @@ The tensor accounts for most of the gap, not all: about `5` of the `8.5`
 units/s of launch speed.
 
 **Confidence 90** that Pulse applies the diagonal in world axes (kinematic
-identity at `100.00 %` plus this dynamic leg on three captures). Wipeout HD
+identity at `100.00 %` plus this dynamic leg on three captures; 93 since the player-input
+leg [below](#under-player-input-2026-10-21-pulse-gate-tensor)). Wipeout HD
 rotates its tensor (`body+0x50` read live as `R I R^T`,
 [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md)), so the frame is a
 per-title law.
+
+### Under player input (2026-10-21, `pulse-gate-tensor`)
+
+The dynamic leg above flew the original's Autopilot (the rail undone, the driver's raw
+output for controls), which the maintainer's rule of 2026-10-20 does not accept as a physics
+reference. This leg is player input only.
+
+- **The capture.** PPSSPP v1.20.4, software renderer, muted, `pulse-psp-usa`, Time Trial,
+  Fort Gale Black (`14_Track` forward, the grid at `(242.2, 111.8, 540.8)` heading `+x`),
+  PHANTOM (`psp-drive.py menu --unlock --class-right 3 --track-down 15` from a cold boot),
+  the profile's Assegai. Per run `psp-drive.py restart`, then `psp-trace.py --warmup 6 --hold
+  cross --hold left [--hold ltrigger] --place=<pose> --place-repeat 2 --ticks 140`: the body is
+  written to capture 2's pose at ticks 1170, 1180 and 1190 (position, nose, speed, and the
+  recorded bank as `--place`'s roll value), on two consecutive hits, then recorded with
+  thrust, full left and the left airbrake held. No Autopilot, so no rail and no engine flags.
+  `data/traces/fortgale-player-ramp-{1170,1180,1190}.csv`, plus `-1180nb` with the airbrake
+  released.
+- **Why `--place-repeat`.** After one write the first stepped tick kicked the body to tens of
+  rad/s on every placement (the same kick took the first pitch-gate drops below); after two
+  writes on consecutive hits it rides the ramp. Why is not proven; state the craft carried from
+  where it was 6 s down the track is the likely candidate.
+- **The sweep.** `autopilot_ramp_pose_walk.rs` with `OAG_RAMP_PLAYER=1` (the control block's
+  `stick_steer`/`stick_pitch`, full thrust, `OAG_RAMP_AIRBRAKE_LEFT=1` where the shoulder was
+  held, default engine flags, no rail) and `OAG_RAMP_FRAME=world|body`. Rows from tick 5 on,
+  with no stun, a velocity residual under `1` unit/s and the craft over `100` units/s: runs
+  1170 and 1180 meet a wall at the lip and creep along it at `2` to `40` units/s for about a
+  hundred ticks, and a craft held against a wall gives a small one-step `dv`, so speed is the
+  filter that removes it. Aggregated by `scripts/pose-walk-residuals.py frames --from 5
+  --min-speed 100 <capture>=<sweep> ...`.
+
+One-step angular-acceleration residual (rad/s²), world axes against body axes:
+
+| phase (n) | yaw rms | yaw median \|r\| | pitch rms | pitch median \|r\| | roll rms | roll median \|r\| |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| ground (95) | 1.395 → **0.518** | 0.508 → **0.102** | **1.251** → 1.307 | **0.795** → 0.838 | 1.540 → **1.343** | 0.554 → **0.220** |
+| air (98) | 0.393 → **0.073** | 0.384 → **0.032** | 0.771 → **0.527** | 0.359 → **0.208** | 0.593 → 0.629 | 0.404 → **0.198** |
+
+World axes win yaw and roll on the ground and every axis in the air, by median by a factor of
+two to five and by twelve in air yaw; the air-roll rms that does not move is carried by a few
+rows the median ignores. **Ground pitch does not depend on the frame** (`0.795` against
+`0.838`) and is large against the Autopilot capture's `0.235` rms: unexplained here (the
+airbrake is held on these rows and the hover probes carry the pitch on a ramp; neither is
+separated). With the wall-creeping rows left in (404 ground rows) world axes win all three
+ground axes by median (yaw `0.262 → 0.054`, pitch `0.483 → 0.291`, roll `0.432 → 0.251`). The same
+sweep on the Autopilot's capture 2 (`OAG_RAMP_GATE=1`, the bias now in the physics) gives the
+table above to the third decimal (ground yaw `0.389 → 0.215`), so the tool is unchanged and
+the two legs agree. **Confidence 93** that Pulse applies the diagonal in world axes: a
+runtime trace on two kinds of drive (the Autopilot's frames with the rail undone, and player
+input) plus the kinematic identity, and Pure's `Body_Integrate` read as the same instruction
+sequence; a live Pure capture would take it to the top band.
+
+What these runs do not settle: the pitch-gate drops below tumble at `2` to `8` rad/s, and
+there neither frame fits (yaw rms about `2.5` in both, larger on the faster rows).
+Unexplained: candidates are the gyroscopic `omega x (I omega)` term ours omits, a rate clamp,
+and the damping's form at high rates. Not chased here.
 
 **On (2026-10-20), a per-title craft law** (`oag_physics::InertiaFrame`,
 `oag_title::craft_laws::CraftLaws::inertia_rotates`): Pulse and the PS2 world axes, measured;
@@ -277,7 +333,7 @@ input torque (`input * 0.3 / I_xx`, `1.92` rad/s² at full deflection) is:
 So the original drops the whole input exactly where the dot product crosses
 `0.9`, on three crossings and both input signs: capture 2 ticks 1236/1237
 (`0.9022` open, `0.8984` closed) and 1297/1298, capture 3 ticks 1312/1313
-(`0.9009`, `0.8976`). **Confidence 90. On (2026-10-20)**, after the tensor and the bias: on its own it cost
+(`0.9009`, `0.8976`). **Confidence 90, 93 since the player-input leg [below](#under-player-input-2026-10-21-pulse-gate-tensor-1). On (2026-10-20)**, after the tensor and the bias: on its own it cost
 the original's autopilot driver two rescues on Pulse's `05_Track`
 (`autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue`, twelve tests since 2026-10-20,
 tick 7282), which passes with all three on; that test also fails under 2 of the 9
@@ -295,6 +351,57 @@ gate, seen closing live under a held stick (confidence 90,
 either's pitch update and no capture path for Omega. The lone craft's regression gate and
 every committed reference were unchanged by it: no scripted or lone-craft run pitches
 past the cone.
+
+### Under player input (2026-10-21, `pulse-gate-tensor`)
+
+The closings above were all on the original's Autopilot, its input the driver's raw output
+rather than the craft's control block. These are player input.
+
+- **The capture.** PPSSPP v1.20.4, software renderer, muted, `pulse-psp-usa`, Time Trial,
+  Talon's Junction (`16_Track`), VENOM, the profile's Assegai. Per run `psp-drive.py restart`
+  (some runs), then `psp-trace.py --warmup 6 --hold cross --hold up|down --place=<pose> --ticks
+  60|90` on the start straight: nose up 24 to 40 degrees (a tangent with `y` `0.41` to `0.64`),
+  or level and rolled 18 or 30 degrees (`--place`'s eighth value), 8 to 15 units over the
+  track, 40 to 80 units/s along the nose. `psp-trace.py` now records the located sample's down
+  (`spline_down_*`, `*(craft+0x1c4) + 0xb10`), the vector the gate dots the hull up against.
+  `data/traces/talons-pitch-{up-30,down-24,down-24-s1,down-24-s3,down-24-s4,roll30-a,roll18-a,roll30-b}.csv`.
+  These single-write placements kick the body on the first tick (above), so most runs tumble;
+  each row is reseeded from the record, so a tumbling airborne row still tests the gate.
+- **The sweep.** `crest_pitch_pose_walk.rs` on every airborne row (`grounded` `0` on both
+  sides), dropping rows where `|pos(t+1) - pos(t) - v(t+1) dt|` exceeds `0.05` (a cage or
+  escape moved the body, 32 of 396), in three modes: `OAG_CREST_OURS_GATE=1` (the stick goes in
+  ungated and our own `engine::pitch_aligned` gates it, off a `TrackSample` built from the
+  recorded down), `OAG_CREST_UNGATED=1` (the stick on every row), and the first with
+  `OAG_CREST_NO_BIAS=1`. Aggregated by `scripts/pose-walk-residuals.py gate`; the residual is
+  over the full input torque `1.923` rad/s², signed by the stick.
+
+| runs with the recorded down (6), closed rows (364) | median | mean |
+| --- | ---: | ---: |
+| our gate (`pitch_aligned`, the located down) | `-0.010` | `-0.033` |
+| ungated | `-0.999` | `-1.001` |
+| our gate, bias off | `+0.224` | `+0.031` |
+
+On the one run that rotates slowly through the cone (`down-24`, nose up 24 degrees, d-pad
+down), the crossing is between ticks 4 (`0.9028`, open, residual `+0.012` either way) and 5
+(`0.8993`, closed: `+0.009` gated, `-0.991` ungated), and the whole closed stretch reads
+`+0.001` gated against `-0.997` ungated (31 rows). The open side holds on `up-30` (nose up 30,
+d-pad up, it pitches down into the cone and stays there): 38 open airborne rows, median
+`-0.006` with the input applied. **That crossing needs the located down, not world down**: on
+`up.y` alone tick 4 reads `0.8993`, closed, and the gated sweep misses it by the whole input
+(`+1.012`). `down-24` was taken before `spline_down_*` was recorded, so its down is
+`down-24-s1`'s at the same tick (same placement, positions within `1` unit, `down` within
+`0.001` over the run): `talons-pitch-down-24-sd.csv`, grafted, said so. A one-tick lag in the
+hull up would fit the same pair under world down, but the Autopilot captures record both the
+body's up and the gate's own read (`craft+0x160`), and they are equal on every one of capture 2
+and 3's 3,700 rows. The located down was already established by the Autopilot crossings on
+the banked ramp; this run corroborates it under player input. With the bias off its
+closed rows read `+0.266` against the bias' own `0.513 / 1.923 = 0.267`: the in-air
+`weight_distribution` torque acts while the gate is closed, live, as the static read has it.
+
+**Confidence 93** for the gate (`0x088492bc`, `dot(hull_up, -located_down) > 0.9`): runtime
+on two kinds of drive, both stick signs, closed by pitch and by roll, and our own
+implementation reproducing it on 364 rows. Below the top band for want of a second binary
+(Pure has no gate, the PS2 is not read).
 
 ## The in-air `weight_distribution` torque, live
 
