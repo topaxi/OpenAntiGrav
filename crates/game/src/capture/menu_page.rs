@@ -153,6 +153,7 @@ pub(super) fn menu_page(
     // a captured RACE page has the rows a player's has.
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
+    definition.drop_unavailable_trail_order(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
     if definition.page(page).is_none() {
@@ -228,11 +229,6 @@ pub(super) fn menu_page(
     model.supply(
         oag_ui::menu::ValueSource::ScreenFilters,
         &crate::screen::Catalogue::load(crate::screen::Catalogue::directory()).choices(),
-    );
-    // The live menus' own list: both orders on a PSP-preset ribbon, none elsewhere.
-    model.supply(
-        oag_ui::menu::ValueSource::TrailOrders,
-        &crate::settings::trail_order_choices(title),
     );
     // Straight off the boot survey, not off the settings file, and that is
     // the difference from the two rows above: what a player may choose here

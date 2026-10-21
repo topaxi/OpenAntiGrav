@@ -356,6 +356,8 @@ impl Pending {
         definition.drop_unavailable_boost_zoom(title);
         // And the HUD STYLE row, where the disc authors the list: HD and Omega.
         definition.drop_unavailable_hud_style(title);
+        // And the TRAIL ORDER row, where the ribbon is the PSP preset: Pulse and Pure.
+        definition.drop_unavailable_trail_order(title);
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);

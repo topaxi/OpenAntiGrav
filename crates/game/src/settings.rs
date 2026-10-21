@@ -70,7 +70,7 @@ pub mod web;
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
 pub use race::{Race, Remix};
-pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key, trail_order_choices};
+pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
     migrate_render_profiles, seed_render_scale_chosen, seed_shadow_defaults,
@@ -942,8 +942,8 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
-    // Offered only where the ribbon is the PSP preset; elsewhere the row has no
-    // values (`values_from = "trail_orders"`) and nothing to seed.
+    // Offered only where the ribbon is the PSP preset; elsewhere the row is
+    // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.
     if title.exhaust.is_psp_preset() {
         out.push((
             "graphics.trail_order",

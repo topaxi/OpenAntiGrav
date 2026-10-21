@@ -25,6 +25,7 @@ motion_blur = "off"
 shadows = "original"          # settings file only: `--shadows` takes off|blob
 model_detail = "original"
 texture_detail = "original"
+trail_order = "original"        # the measured ribbon order; ignored off the PSP ribbon (HD, Omega, 2048)
 screen_filter = "off"
 anisotropy = "off"
 boost_fov_kick = 0            # our own effect, off for a comparison (settings.rs boost_fov_kick)

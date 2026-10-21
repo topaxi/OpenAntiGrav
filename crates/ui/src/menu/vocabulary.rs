@@ -341,10 +341,6 @@ pub enum ValueSource {
     /// (`oag_game::mods::Listing`). The MODS page is read-only, so the row only moves the
     /// detail lines under it.
     Mods,
-    /// The TRAIL ORDER row's two values (`original`, `over-floors`) on a title
-    /// whose engine ribbon is the PSP preset, and nothing elsewhere, which
-    /// draws the row unusable (`oag_game::settings::trail_order_choices`).
-    TrailOrders,
 }
 
 impl ValueSource {
@@ -378,7 +374,6 @@ impl ValueSource {
             Self::KillTargets => "kill_targets",
             Self::Weapons => "weapons",
             Self::Mods => "mods",
-            Self::TrailOrders => "trail_orders",
         }
     }
 
@@ -412,7 +407,6 @@ impl ValueSource {
             "kill_targets" => Some(Self::KillTargets),
             "weapons" => Some(Self::Weapons),
             "mods" => Some(Self::Mods),
-            "trail_orders" => Some(Self::TrailOrders),
             _ => None,
         }
     }

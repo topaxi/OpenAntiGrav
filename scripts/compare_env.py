@@ -90,6 +90,7 @@ def ours_flags(plat):
              "--render-scale", str(o["render_scale"]), "--reconstruction", o["reconstruction"],
              "--msaa", o["msaa"], "--motion-blur", o["motion_blur"],
              "--lod", o["model_detail"], "--texture-detail", o["texture_detail"],
+             "--trail-order", o["trail_order"],
              "--screen-filter", o["screen_filter"], "--anisotropy", o["anisotropy"]]
     if "pilot_assist" in o:
         flags += ["--pilot-assist", o["pilot_assist"]]
@@ -131,11 +132,12 @@ def write_ours_settings(plat, profile_dir):
             "[graphics]\nanisotropy = \"%s\"\nfov = %d\nboost_fov_kick = %d\n\n"
             "[render_profiles.\"%s\"]\nrender_scale = %d\nreconstruction = \"%s\"\nmsaa = \"%s\"\n"
             "motion_blur = \"%s\"\nshadows = \"%s\"\nmodel_detail = \"%s\"\ntexture_detail = \"%s\"\n"
+            "trail_order = \"%s\"\n"
             "screen_filter = \"%s\"\n"
             % (plat["aspect"], o["brightness"], o["gamma"], "16x" if o["anisotropy"] == "16x" else o["anisotropy"],
                o["fov_percent"], o["boost_fov_kick"], plat["profile_key"], o["render_scale"],
                o["reconstruction"], o["msaa"], o["motion_blur"], o["shadows"], o["model_detail"],
-               o["texture_detail"], o["screen_filter"]))
+               o["texture_detail"], o["trail_order"], o["screen_filter"]))
     if "hud_safe_area" in o:
         text = text.replace("boost_fov_kick = %d\n" % o["boost_fov_kick"],
                             "boost_fov_kick = %d\nhud_safe_area = %d\n" % (o["boost_fov_kick"], o["hud_safe_area"]), 1)
@@ -151,7 +153,7 @@ def read_back(plat, profile_dir):
            "gamma": doc["display"]["gamma"], "anisotropy": doc["graphics"]["anisotropy"],
            "fov_percent": doc["graphics"]["fov"], "boost_fov_kick": doc["graphics"]["boost_fov_kick"]}
     for k in ("render_scale", "reconstruction", "msaa", "motion_blur", "shadows", "model_detail",
-              "texture_detail", "screen_filter"):
+              "texture_detail", "trail_order", "screen_filter"):
         got[k] = rp.get(k)
     want = dict(o, aspect=plat["aspect"])
     bad = ["ours setting %s is %r, the profile says %r" % (k, got[k], want[k])

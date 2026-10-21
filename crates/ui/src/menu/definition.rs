@@ -495,6 +495,19 @@ impl Definition {
         }
     }
 
+    /// Drops the TRAIL ORDER row on a title whose engine ribbon is not the PSP
+    /// preset (`oag_title::exhaust::Exhaust::is_psp_preset`): HD/Fury's tube keeps
+    /// its own order whatever the setting holds, and Omega and 2048 reuse it. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_trail_order(&mut self, title: &oag_title::Title) {
+        if title.exhaust.is_psp_preset() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.trail_order"));
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

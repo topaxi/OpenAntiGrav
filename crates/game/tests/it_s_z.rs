@@ -30,6 +30,7 @@ mod title_behaviour_data;
 mod track_audio_2048_ground_truth;
 mod track_audio_ground_truth;
 mod track_panel_ground_truth;
+mod trail_order_ground_truth;
 mod unlock_ground_truth;
 mod variant_unlock_ground_truth;
 mod vita_2048_boot_ground_truth;
