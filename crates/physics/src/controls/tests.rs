@@ -391,6 +391,7 @@ fn hds_camera_lean_settles_on_its_tilt_gain_and_follows_the_sideshift_timers() {
         follower_rate: 7.0,
         smooth_rate: 6.0,
         sideshift_offset: 0.5,
+        clamp: crate::params::CameraClamp::Hd,
     };
     let settle = |timers: [f32; 2]| {
         let mut state = ShipState {

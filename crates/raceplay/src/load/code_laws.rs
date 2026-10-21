@@ -34,6 +34,7 @@ pub(super) fn apply(
             follower_rate: tilt.internal_speed,
             smooth_rate: camera.value.smooth_rate,
             sideshift_offset: camera.value.sideshift_offset,
+            clamp: oag_physics::CameraClamp::Hd,
         };
     }
     if let Some(block) = stats.class_named(class) {

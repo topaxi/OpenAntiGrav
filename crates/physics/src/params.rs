@@ -279,6 +279,21 @@ pub struct CameraLean {
     /// does: HD `0.5`. Pulse's original folds in `10.0` from two flags nobody identified, so
     /// ours is `0.0` there (chosen, not measured).
     pub sideshift_offset: f32,
+    /// How the follower's step is bounded.
+    pub clamp: CameraClamp,
+}
+
+/// How [`CameraLean`] bounds the follower's step `delta` (target minus follower).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CameraClamp {
+    /// Pulse: `0.6` while the raw stick pushes the way the follower moves, `0.3` otherwise,
+    /// both ways.
+    #[default]
+    Pulse,
+    /// Wipeout HD (`0x000eb574`-`0x000eb594`, `0x000ed290`-`0x000ed2ac`): only a step the raw
+    /// stick pushes is bounded, to `0.6` when beyond `0.6` and otherwise to `0.3`; a step with
+    /// the stick centred or against it is unbounded, so the lean lets go at the follower rate.
+    Hd,
 }
 
 impl CameraLean {
@@ -289,6 +304,7 @@ impl CameraLean {
         follower_rate: 5.4,
         smooth_rate: 4.0,
         sideshift_offset: 0.0,
+        clamp: CameraClamp::Pulse,
     };
 
     /// No lean at all: every rate zero.
@@ -297,6 +313,7 @@ impl CameraLean {
         follower_rate: 0.0,
         smooth_rate: 0.0,
         sideshift_offset: 0.0,
+        clamp: CameraClamp::Pulse,
     };
 }
 

@@ -91,8 +91,9 @@ pub struct CraftLaws {
     pub tilt_camera_lean: Option<Sourced<TiltCameraLean>>,
 }
 
-/// The two literals Wipeout HD's cockpit camera lean adds to `<Tilt>`'s `internalAmount` and
-/// `internalSpeed` (`oag_physics::CameraLean`).
+/// The literals Wipeout HD's cockpit camera lean adds to `<Tilt>`'s `internalAmount` and
+/// `internalSpeed` (`oag_physics::CameraLean`); a title that has them also bounds the follower's
+/// step the way HD does (`oag_physics::CameraClamp::Hd`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TiltCameraLean {
     /// The first-order rate between the follower and the lean: HD `6.0`.

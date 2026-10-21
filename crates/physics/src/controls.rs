@@ -5,7 +5,7 @@
 //! ramps are live; the throttle's is not ([`crate::params::Engine::falloff`]). Evidence:
 //! `docs/ghidra/functions/psp-pulse-usa/engine.md`, "Engine", "Brakes" and "Steering".
 
-use crate::params::Handling;
+use crate::params::{CameraClamp, Handling};
 use crate::ship::{ShipControls, ShipState};
 
 /// The scale the original's control states use.
@@ -195,12 +195,33 @@ pub fn update_camera_lean(
         target += lean.sideshift_offset;
     }
     let delta = target - state.camera_lean_follower;
-    let limit = if (delta > 0.0 && stick_x > 0.0) || (delta <= 0.0 && stick_x < 0.0) {
-        CAMERA_LEAN_OUT_LIMIT
-    } else {
-        CAMERA_LEAN_RETURN_LIMIT
+    let delta = match lean.clamp {
+        CameraClamp::Pulse => {
+            let limit = if (delta > 0.0 && stick_x > 0.0) || (delta <= 0.0 && stick_x < 0.0) {
+                CAMERA_LEAN_OUT_LIMIT
+            } else {
+                CAMERA_LEAN_RETURN_LIMIT
+            };
+            delta.clamp(-limit, limit)
+        }
+        CameraClamp::Hd => {
+            if delta > 0.0 && stick_x > 0.0 {
+                if delta > CAMERA_LEAN_OUT_LIMIT {
+                    CAMERA_LEAN_OUT_LIMIT
+                } else {
+                    delta.min(CAMERA_LEAN_RETURN_LIMIT)
+                }
+            } else if delta <= 0.0 && stick_x < 0.0 {
+                if delta < -CAMERA_LEAN_OUT_LIMIT {
+                    -CAMERA_LEAN_OUT_LIMIT
+                } else {
+                    delta.max(-CAMERA_LEAN_RETURN_LIMIT)
+                }
+            } else {
+                delta
+            }
+        }
     };
-    let delta = delta.clamp(-limit, limit);
     state.camera_lean_follower += delta * lean.follower_rate * dt;
     state.camera_lean += (state.camera_lean_follower - state.camera_lean) * dt * lean.smooth_rate;
 }
