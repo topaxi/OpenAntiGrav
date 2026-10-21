@@ -105,7 +105,7 @@ binary that rendered ours is recorded by hash.
 
 **The race clock** is the state difference that mattered most: the original's HUD clock runs on from the state
 (PPSSPP 40 s after GO on the grid states) and its GO board fades and its record panel counts down with it, so ours
-runs `GO_TICK = 276` ticks (our countdown) plus the original's clock times 60 (`--ours-ticks`). The original's clock
+runs `GO_TICK = 272` ticks (our countdown, `oag_race::COUNTDOWN_TICKS`; Pulse PSP's pair script until 2026-10-21 used 276, which put ours' clock 0.067 s ahead; HD's and PS2's still do, unmeasured) plus the original's clock times 60 (`--ours-ticks`). The original's clock
 is read out of its RAM: PPSSPP f32 seconds at `0x08B344B0` (the CPU is stopped straight after the load so it stands
 still), HD f32 at craft `+0x7014` (read in the same pause as the pose), PS2 f32 at EE `0x70EE9C` of the state file
 (the HUD reads 0.19 s under it). With it the GO board, the record panel and the HUD clock match on the Pulse PSP and HD

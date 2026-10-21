@@ -29,9 +29,11 @@ from pathlib import Path
 #: The race clock in seconds (f32) in PPSSPP's Pulse USA RAM: 40.07 at a state whose HUD read 0:40.0, and it
 #: counts 1:1 with ours (read 2026-10-20 by scanning RAM for a float that advances with the emulation).
 CLOCK_ADDRESS = 0x08B344B0
-#: Our race's tick at which its race clock leaves 0 (the countdown's length): ours reads 0:00.4 at tick 300 and
-#: 0:40.4 at tick 2700, so GO is at 276.
-GO_TICK = 276
+#: Our race's tick at which its race clock leaves 0, `oag_race::COUNTDOWN_TICKS` (the countdown's length, measured
+#: on the original: the lap clock is 0.0 until the tick the thrust gate opens). It was 276 here until 2026-10-21,
+#: fitted to `0:00.4` at tick 300 and `0:40.4` at tick 2700, which truncated tenths cannot tell from 272; that put
+#: ours' HUD clock 4 ticks (0.067 s) ahead of the original's in every pair (ours showed `0.13.3` against `0.13.2`).
+GO_TICK = 272
 
 #: `g_weapons_enabled` (byte, 0 = off), docs/ghidra/functions/psp-pulse-usa/shield.md.
 WEAPONS_ENABLED = 0x08B30FA8
@@ -300,7 +302,7 @@ def main():
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
     if args.ours_ticks is None:
-        args.ours_ticks = GO_TICK + round(clock * 60)
+        args.ours_ticks = GO_TICK + ce.tenths_matched_ticks(clock)
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
     pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,

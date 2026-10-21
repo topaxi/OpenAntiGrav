@@ -47,6 +47,7 @@ use oag_tables::fexml::{self, Node};
 
 mod assets;
 pub mod assist;
+mod bar_tip;
 mod compose;
 mod dialect_2048;
 mod draw;
@@ -526,6 +527,7 @@ fn collect_constants(node: &Node, out: &mut HashMap<String, String>) {
 /// our clock keeping our time, not a reproduction of theirs.
 ///
 /// [ADR-0007]: ../../../docs/architecture/adr/0007-fixed-timestep-vs-original.md
+#[cfg(test)]
 const TICKS_PER_SECOND: f64 = 60.0;
 
 /// What the HUD needs to know about the race this frame.
@@ -874,22 +876,19 @@ pub enum Precision {
 /// `0.29.0`.
 #[must_use]
 pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
-    let total = ticks as f64 / TICKS_PER_SECOND;
-    let minutes = (total / 60.0).floor();
-    let seconds = total - minutes * 60.0;
-    let whole = seconds.floor();
-    let fraction = seconds - whole;
+    // Whole centiseconds by integer arithmetic, truncated as the original's
+    // `(uint)(seconds * 100)` is. A float division put a tick that is an exact
+    // tenth (72 ticks, 1.2 s) one hundredth under it, so 1.2 s read `1.19`
+    // and the clock showed the previous tenth on every sixth tick.
+    let centiseconds = ticks.saturating_mul(100) / 60;
+    let minutes = centiseconds / 6000;
+    let whole = centiseconds / 100 % 60;
+    let hundredths = centiseconds % 100;
     // Truncated rather than rounded: a lap timed at 1.11.089 has not reached
     // 1.11.09, and a clock that rounds up can show a best lap it never ran.
     match precision {
-        Precision::Tenths => {
-            let tenths = (fraction * 10.0).floor();
-            format!("{minutes:.0}.{whole:02.0}.{tenths:.0}")
-        }
-        Precision::Hundredths => {
-            let hundredths = (fraction * 100.0).floor();
-            format!("{minutes:.0}.{whole:02.0}.{hundredths:02.0}")
-        }
+        Precision::Tenths => format!("{minutes}.{whole:02}.{}", hundredths / 10),
+        Precision::Hundredths => format!("{minutes}.{whole:02}.{hundredths:02}"),
     }
 }
 
@@ -975,6 +974,8 @@ pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
         && rect[1] + rect[3] <= screen.1
 }
 
+#[cfg(test)]
+mod bar_tip_tests;
 #[cfg(test)]
 mod curve_bar_tests;
 #[cfg(test)]

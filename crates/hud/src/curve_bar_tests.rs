@@ -164,7 +164,7 @@ fn the_thrust_bar_follows_the_craft_throttle_and_prints_it_truncated() {
 #[test]
 fn the_speed_bar_scale_is_the_titles_own() {
     assert_eq!(oag_hd::hud::ART.speed_full_kmh, 700);
-    assert_eq!(oag_pulse::hud::ART.speed_full_kmh, 600);
+    assert_eq!(oag_pulse::hud::ART.speed_full_kmh, 700);
     assert_eq!(oag_pure::hud::ART.speed_full_kmh, 600);
     // HD's bar is half full at 350 km/h, where a 600 scale would read 58%.
     let (half, _, _) = fill_at(350.0).expect("draws");

@@ -113,6 +113,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
+    bar_tip: None,
     ..*ART
 };
 
@@ -330,6 +331,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     }),
     runtime: Some(RUNTIME),
     lap_one_shift: None,
+    bar_tip: None,
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.

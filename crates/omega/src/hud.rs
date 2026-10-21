@@ -108,6 +108,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
+    bar_tip: None,
     ..*ART
 };
 
@@ -276,6 +277,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     }),
     runtime: Some(RUNTIME),
     lap_one_shift: None,
+    bar_tip: None,
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
     // TimeTrial, SpeedLap and Elimination, with HD's names and nesting, so no

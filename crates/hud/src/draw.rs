@@ -51,6 +51,9 @@ const RETRO_ENERGY_BAR: &str = "nrgBarWo3";
 /// fill and its background are identical in every attribute but colour. See
 /// `each_bar_exactly_overlays_its_own_background` in the ground-truth tests.
 pub(super) fn bar_fraction(name: &str, readout: &Readout, art: &oag_title::HudArt) -> Option<f32> {
+    if let Some(tipped) = super::bar_tip::fill_fraction(art, readout, name) {
+        return Some(tipped);
+    }
     match name {
         "SpeedBar" | RETRO_SPEED_BAR => Some(readout.speed_fraction(art.speed_full_kmh as f32)),
         "ThrustBar" | RETRO_THRUST_BAR => Some(readout.thrust_fraction()),
@@ -779,6 +782,22 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             .or_else(|| super::dialect_2048::energy_bg_tint(sprite, readout));
         let fill = super::runtime::shield_fill(cx, readout, sprite);
         let sprite = tinted.as_ref().unwrap_or(sprite);
+        let tip_dx = super::bar_tip::dx(cx, readout, &sprite.name);
+        let marked;
+        let sprite = if tip_dx == 0.0 {
+            sprite
+        } else {
+            marked = Sprite {
+                rect: [
+                    sprite.rect[0] + tip_dx,
+                    sprite.rect[1],
+                    sprite.rect[2],
+                    sprite.rect[3],
+                ],
+                ..sprite.clone()
+            };
+            &marked
+        };
         // `ShieldBar`'s absorb flash, painted *under* the bar - see
         // `shield_bar::tint`. `None` outside the absorb window.
         let mut flash = None;
@@ -788,7 +807,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             // is worse than not asking.
             Some(fraction) if fraction <= 0.0 => None,
             Some(fraction) => {
-                let mut cropped = crop_horizontally(sprite, fraction);
+                let mut cropped = if cx
+                    .art
+                    .bar_tip
+                    .is_some_and(|law| law.bars.iter().any(|bar| bar.fill == sprite.name))
+                {
+                    super::bar_tip::crop(sprite, fraction)
+                } else {
+                    crop_horizontally(sprite, fraction)
+                };
                 // `ShieldBar` alone: confirmed against the digits this
                 // function formats, `"%"` and not `"kmh"`. See
                 // `shield_bar::tint` for the three rules it applies.
@@ -899,16 +926,19 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         {
             continue;
         }
-        let Some(text) = text_for(
-            label,
-            readout,
-            cx.strings,
-            place_shown,
-            speed_unit,
-            cx.art.zone_speed_classes,
-            cx.art.shield_percent,
-            position_combined,
-        ) else {
+        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit);
+        let Some(text) = tipped.or_else(|| {
+            text_for(
+                label,
+                readout,
+                cx.strings,
+                place_shown,
+                speed_unit,
+                cx.art.zone_speed_classes,
+                cx.art.shield_percent,
+                position_combined,
+            )
+        }) else {
             continue;
         };
         if text.is_empty() {
@@ -939,7 +969,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         let placed = next_row.filter(|_| label.name == NEXT_CLASS_WIDGETS[1]);
         let draw = Draw::Text {
             x: placed.map_or(
-                label.x + lap_one_dx(cx, readout, &label.name),
+                label.x
+                    + lap_one_dx(cx, readout, &label.name)
+                    + super::bar_tip::dx(cx, readout, &label.name),
                 |(_, text)| text[0],
             ),
             // The row's `y` is a **top** edge - every `ZonePlus1`-`ZonePlus10`

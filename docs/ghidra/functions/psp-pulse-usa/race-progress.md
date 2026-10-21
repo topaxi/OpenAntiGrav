@@ -114,6 +114,13 @@ Re-rendered: the glyphs sit on the original's columns. **Not applied/not read:**
 `LapOf` in `FUN_08821838`, update unread, so Pure keeps the authored x; HD's `Hud_UpdateLapCounter` (`0x00096ef0`)
 has no such shift (checked, differs: it scales the digit to 0.5 from lap 10 instead).
 
+**Read in full 2026-10-21 (`pulse-hud-align`): nothing else moves.** The function has two arms and no digit-width
+branch. With no lap target (`+0xc < 1`) it writes the lap digits into `Lap`, an empty string into `Lap Outof` and
+hides `LapOf`, and touches no x. With a target it writes the lap and the total (up to three digits each, no leading
+zeros), shows `LapOf`, and sets the two x values: `-17.0` on lap 1, the authored x on every other lap. The Amphiseum
+and Metropia Black pairs re-rendered from current `main` have the `/` and the `3` on the original's columns on lap 1,
+and `talons-alongside` (lap 2) on the authored ones, so the lap counter has nothing left.
+
 ## The target-time readout: `+0x78`/`+0x7c`/`+0x80`, closed 2026-09-28
 
 **Confidence 92** for `PlayerStatus_Update`'s own write of these three
