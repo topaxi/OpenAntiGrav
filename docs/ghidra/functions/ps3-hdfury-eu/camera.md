@@ -89,3 +89,52 @@ to 12.86) is **not** what the player sees, it is that times `0.75`.
 Not read: what `+0xa8`, `+0xac` and `+0xb0` of the same object scale (`1.0`, and
 `0.9` in Detonator); the byte at `0x009384e1` that gates the Detonator values;
 whether the internal rig reads the scale (Pulse's does not).
+
+## The default view is `OPT_CLOSE`, measured 2026-10-21
+
+A fresh HD profile starts on the **Close** chase view. Confidence **92**: two clean
+cold boots on RPCS3, three independent readings agreeing, no view press.
+
+**Method.** A private RPCS3 tree with `BCES00664-AUTO-` (the maintainer's autosave, which
+`scripts/emu-env.sh` copies) deleted before each boot; the boot reaches `FirstPlay` then
+`Save Warning` then `Main Menu`, the signature of an empty profile. Racebox, Time Trial,
+Venom, Feisar, no button touched but the menu walk and the three `cross` presses of START
+RACE; `rpcs3-drive.py capture --shots 2` reads the eye from the push buffer and the body
+pose from the same pause. Boot 1: Vineta K. Boot 2: Anulpha Pass.
+
+**Written before the capture.** Feisar authors Far `pos (4.0, -15.0)` and Close
+`pos (3.7, -11.0)`; at the 0.75 scale the craft-frame eye is Far `(3.000, -11.250)`,
+Close `(2.775, -8.250)`. An eye at the Close prediction falsifies "Far is the default".
+
+**Read (eye in the craft frame, lateral / up / back):**
+
+| Boot | Circuit | Shot 0 | Shot 1 |
+| --- | --- | --- | --- |
+| 1 | Vineta K | -0.035 / 2.752 / -8.273 | -0.035 / 2.751 / -8.435 |
+| 2 | Anulpha Pass | 0.037 / 2.774 / -8.294 | 0.034 / 2.775 / -8.448 |
+
+The up component is the Close block's 2.775 (Far would be 3.0); the back component is
+8.27-8.45 (the craft is moving between the shots and the spring lags, 0.2 spread), 3 units
+short of Far's 11.25. Close on both boots.
+
+**The setting agrees.** The autosave HD writes on that empty profile holds
+`CameraP1 = OPT_CLOSE` (`strings` on `DATA.BIN`, both boots), where the maintainer's
+long-lived profile holds `OPT_FAR`. HD's own `additional_definition.xml` (DATA06) declares
+`CameraP1 ... default="OPT_CLOSE"`.
+
+**Static side.** The option strings `OPT_INT`, `OPT_CLOSE`, `OPT_FAR` sit in `Player.cpp`'s
+string block (`0x007819f8`, beside `CameraP%i` and the `"local player%d external close
+tripod"` string); `scripts/ps3-toc.py attrib` names `0x000cae68` as a function that uses
+the `0x007819f8` copy and `0x000b0d20` for the `0x00780188` copy. Neither was decompiled or
+renamed; the answer above does not rest on them. The profile value overrides the authored
+default (the maintainer's save flew Far).
+
+**What it explains.** The 13 HD time-trial compare pairs whose eye sat at Far x 0.75
+(0.00, 3.00, -12.38) came from states taken in the maintainer's `OPT_FAR` profile. They
+are not HD's default view. They feed the camera to ours explicitly, so they do not move.
+
+**Cross-checks (CLAUDE.md).** 2048: its own options definition declares `OPT_CLOSE`
+(already recorded); not measured live. Omega: `data09.psarc` and `data00.psarc` carry
+`additional_definition.xml` with `CameraP1 default="OPT_CLOSE"`, identical to HD's
+(checked, applies; Omega not checkable live, no PS4 emulator). Ours defaults to Close on
+every title (`CameraView::default()`), so nothing changed in code.

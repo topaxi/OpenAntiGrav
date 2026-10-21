@@ -1190,6 +1190,8 @@ at the 0.75 scale, see
 [leach-beam-strips.md](../ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md), "hd-leach-2".
 In-race SELECT does not cycle the view.
 
+**Settled 2026-10-21:** HD's default on an empty profile is Close, measured on two clean boots with the autosave deleted first (`ps3-hdfury-eu/camera.md`, "The default view is `OPT_CLOSE`"). Delete `savedata/BCES00664-AUTO-` from your private tree before a boot to get the default view; keep it only when you want the Far pairs.
+
 **Solving a dumped frame's camera.** `c[256..259]` of a draw are its view-projection with
 the clip rows as columns (`M[i][j] = c[256+j][i]`); the eye solves `M[0].p = M[1].p =
 M[3].p = 0`, forward is `M[3].xyz` normalised, up `M[1].xyz` normalised, and the vertical
