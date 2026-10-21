@@ -57,6 +57,7 @@ mod reconcile_cost;
 mod reconcile_predict;
 mod repulser;
 pub(crate) mod respawn;
+mod roll_payout;
 mod run_stats;
 mod scene;
 mod scene_blocks;

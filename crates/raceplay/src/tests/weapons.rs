@@ -200,6 +200,16 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
             .any(|event| event.cue == oag_gameplay::cue::Cue::Turbo),
         "a fired Turbo raised no TURBO cue"
     );
+    // The flare too: `Turbo_Fire` ends in `0x0890514c`, `flare+0xb8 = 0.8`, which is what the
+    // HUD's boost copies, the speed-bar glow and the boost plume read.
+    assert!(
+        fired.exhaust_of(0).boost_timer() > 0.7,
+        "a fired Turbo did not arm the exhaust flare"
+    );
+    assert!(
+        fired.readout().boost_phase > 0.9,
+        "the HUD's boost copies read the flare, and it is armed"
+    );
 
     assert!(
         fired.ship().physics.turbo_timer > 0.0,
