@@ -167,3 +167,14 @@ executable's.
    several speeds, `exhaust.md`), the `+1.4-2.9 %` luma.
 2. PS2 bloom: a second circuit (Talon's Junction) and a racing frame at a pose read out of the emulator, for the racing-straight strength the PSP chain still carries 1.2-1.6x on.
 3. Measure HD's bloom strength at matched poses on RPCS3.
+
+## Pulse PSP boosting plume at speed, `pulse-boost-plume` (2026-10-21)
+
+On `talons-alongside` the original is 0.50 s into a pad boost (`boost_timer` 0.299, `plume_timer` 0.484, `half_size` 4.4-5.1) and ours renders with `boost_timer` 0 because `Race::warm_up_field` never calls `Exhaust::boost`. The "original is bigger" claim is false: ours is already brighter than the original at the nozzle (mean grey 219.6 against 193.0) and in the ribbon tail (69.1 against 37.1), and `--pose-boost 0.501` makes both worse (246.6 and 115.2; whole frame 54.05 to 61.49 against the original's 46.68). Evidence and the table: `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "A boosting plume at speed".
+
+## Next Steps (boost plume)
+
+1. Find why the original shows almost no ribbon under the craft although `Trail_DrawRibbon` runs with width scale 0.550: read its ring (count, spacing, the direction vectors) at the stop and lay it beside ours' `trail_ready` history (`warm_up_field` lays a straight one at the field velocity).
+2. Find why the original's nozzle ball is smaller than `half_size` 4.4 draws in ours (depth against the hull, blend, or the quad's texture size).
+3. Only then make `psp-pulse-pair.py` read the flare node at the pose tick (`psp-trace.py --flare`) and pass `--pose-boost (0.8 - boost_timer)` when it is above 0, and make `--pose-boost` keep the warmed trail instead of laying a straight one at 120 u/s. Wired today it widens the gap.
+4. The `--trace-out` row of a `--field-warmup` run is written without the warm-up (speed 0, intensity 0), so it cannot be used to read ours' exhaust state at the rendered tick.
