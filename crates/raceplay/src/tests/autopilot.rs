@@ -204,3 +204,86 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
     let flags = race.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, None, "no pickup, no multiplier");
 }
+
+/// Two people on one grid, the Autopilot running out under slot 1 alone.
+///
+/// `seat` is the network client's seat (`None` for a machine that flies both).
+fn two_people(seat: Option<usize>, remote: bool) -> Race {
+    let mut setup = setup(Handling::default());
+    setup.mode = Mode::SingleRace;
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    let mut race = Race::start(setup);
+    let controller = if remote {
+        oag_gameplay::Controller::Remote
+    } else {
+        oag_gameplay::Controller::Local
+    };
+    race.sim.world.controllers[1] = controller;
+    if remote {
+        race.sim.world.controllers[0] = controller;
+    }
+    race.set_seat(seat);
+    race
+}
+
+/// Runs `slot`'s Autopilot through its one-second warning and returns the slots
+/// that raised [`Cue::Disengaging`].
+fn disengaging_from(race: &mut Race, slot: usize) -> Vec<usize> {
+    race.sim.world.ships[slot].autopilot_timer = 1.5;
+    let mut raised = Vec::new();
+    for _ in 0..120 {
+        race.tick(&PlayerInputs::none());
+        raised.extend(
+            race.drain_cues()
+                .into_iter()
+                .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
+                .map(|e| usize::from(e.slot)),
+        );
+    }
+    raised
+}
+
+/// A client seated at slot 0 hears its own call and not another person's: both
+/// are person-flown on its copy of the world, and the call is dry, so a cue that
+/// reached the mix would be in this player's ear.
+#[test]
+fn a_clients_seat_hears_only_its_own_disengaging_call() {
+    let mut race = two_people(Some(0), true);
+    assert_eq!(disengaging_from(&mut race, 1), Vec::<usize>::new());
+    let mut race = two_people(Some(0), true);
+    assert_eq!(disengaging_from(&mut race, 0), vec![0]);
+    let mut race = two_people(Some(1), true);
+    assert_eq!(disengaging_from(&mut race, 0), Vec::<usize>::new());
+    let mut race = two_people(Some(1), true);
+    assert_eq!(disengaging_from(&mut race, 1), vec![1]);
+}
+
+/// One machine flying both seats has one speaker: each person's call is heard.
+/// Chosen, not measured - HD's `Autopilot_Update` has no seat test of its own.
+#[test]
+fn a_machine_flying_both_seats_hears_both_calls() {
+    let mut race = two_people(None, false);
+    assert_eq!(disengaging_from(&mut race, 1), vec![1]);
+    let mut race = two_people(None, false);
+    assert_eq!(disengaging_from(&mut race, 0), vec![0]);
+}
+
+/// The held `~AUTOPILOT` voice follows the same seat: another person's
+/// Autopilot does not sound it on a client, and a second local seat's does.
+#[test]
+fn the_held_autopilot_voice_follows_the_seat() {
+    let mut race = two_people(Some(0), true);
+    race.sim.world.ships[1].autopilot_timer = 3.0;
+    assert!(!race.autopilot_is_active(), "another person's Autopilot");
+    race.sim.world.ships[0].autopilot_timer = 3.0;
+    assert!(race.autopilot_is_active(), "this seat's own");
+
+    let mut race = two_people(None, false);
+    race.sim.world.ships[1].autopilot_timer = 3.0;
+    assert!(race.autopilot_is_active(), "a second local seat's");
+}
