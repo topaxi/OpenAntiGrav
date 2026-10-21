@@ -31,6 +31,7 @@ fn params() -> ChaseParams {
         spring_horiz: 4.0,
         spring_vert: 2.0,
         craft_scale: 1.0,
+        view_sheared: false,
     }
 }
 
@@ -287,4 +288,58 @@ fn a_rolled_ship_springs_along_its_own_up_not_the_worlds() {
         (after - before).abs() < 1e-6,
         "rolled: {before} to {after}, expected untouched"
     );
+}
+
+/// Wipeout Pure's view matrix, read off its GE view at the grid (Close, craft scale applied:
+/// eye `3.0` up and `11.25` back, aimed at a point on the craft's own height `18.75` ahead):
+/// the rows are `(0.002, 0.003, 0.995)`, `(0, 1.0, 0.097)`, `(-0.995, 0, 0.002)` - forward
+/// pitched `5.71` degrees down, up left alone, right axis shrunk by the pitch's cosine.
+#[test]
+fn a_sheared_view_keeps_the_up_axis_and_shrinks_the_right_axis() {
+    let eye = Vec3::new(-11.25, 3.0, 0.0);
+    let aim = Vec3::new(18.75, 0.0, 0.0);
+    let view = sheared_look_at(eye, aim, Vec3::Y);
+
+    let pitch = (3.0_f32 / 30.0).atan();
+    // The view's second row is the up axis exactly, so world height is screen height.
+    let row = |i: usize| {
+        let m = view.to_cols_array_2d();
+        Vec3::new(m[0][i], m[1][i], m[2][i])
+    };
+    assert_eq!(row(1), Vec3::Y);
+    assert!(
+        (row(0).length() - pitch.cos()).abs() < 1e-6,
+        "{}",
+        row(0).length()
+    );
+    assert!((row(2).length() - 1.0).abs() < 1e-6);
+    // The forward axis is the pitched look direction.
+    assert!((row(2).dot(Vec3::Y).abs() - pitch.sin()).abs() < 1e-6);
+
+    // A point ahead of the eye at the eye's own height stays on the centre line, which a
+    // rotation pitched down by 5.71 degrees would lift above it.
+    let level = view.transform_point3(Vec3::new(20.0, 3.0, 0.0));
+    assert!(level.y.abs() < 1e-5, "{level:?}");
+    let rotated = camera::look_at(eye, aim, Vec3::Y).transform_point3(Vec3::new(20.0, 3.0, 0.0));
+    assert!(rotated.y > 1.0, "{rotated:?}");
+}
+
+/// The flag selects the matrix and nothing else: the eye and the aim are the same either way.
+#[test]
+fn the_view_flag_changes_only_the_matrix() {
+    let target = target();
+    let camera = Chase::snapped(target, &params());
+    let plain = camera.view(target, &params());
+    let sheared = camera.view(
+        target,
+        &ChaseParams {
+            view_sheared: true,
+            ..params()
+        },
+    );
+    assert_ne!(plain, sheared);
+    // The eye maps to the origin of view space in both.
+    let eye = camera.eye(target, &params());
+    assert!(plain.transform_point3(eye).length() < 1e-5);
+    assert!(sheared.transform_point3(eye).length() < 1e-5);
 }

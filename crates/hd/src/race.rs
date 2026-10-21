@@ -966,6 +966,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // one circuit whose header sets Pulse's flag, the original's craft flies both jumps with no
     // cage push (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`). Confidence 85.
     cage_from_track_header: oag_title::pre_race::Sourced::measured(false),
+    // Not read: the view matrix is Pulse's orthonormal look-at until measured.
+    chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

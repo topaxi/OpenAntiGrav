@@ -264,6 +264,7 @@ fn setup(handling: Handling) -> Setup {
             // above stay the numbers a reader can check the geometry
             // against. A real load passes the scale through.
             craft_scale: 1.0,
+            view_sheared: false,
         },
         // The nearer external view, deliberately a *different* set of round
         // numbers from `chase`: a test that cycles to it and back has to be
@@ -279,6 +280,7 @@ fn setup(handling: Handling) -> Setup {
             spring_horiz: 4.0,
             spring_vert: 2.0,
             craft_scale: 1.0,
+            view_sheared: false,
         },
         // The cockpit view. `length` positive puts the eye ahead of the
         // craft's origin, which is the sign the original's own measured

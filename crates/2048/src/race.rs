@@ -543,6 +543,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // and the gate has no row to regenerate; the inherited air bias is held the same way.
     wall_point_rate_body_local: oag_title::pre_race::Sourced::chosen(false),
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+    // Not read: the view matrix is Pulse's orthonormal look-at until measured.
+    chase_view_sheared: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,

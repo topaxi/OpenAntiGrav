@@ -85,6 +85,7 @@ mod tests {
             wall_steer_away: Sourced::chosen(false),
             wall_point_rate_body_local: Sourced::chosen(false),
             cage_from_track_header: Sourced::chosen(true),
+            chase_view_sheared: Sourced::chosen(false),
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,

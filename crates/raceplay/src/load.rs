@@ -279,6 +279,25 @@ pub fn load(options: &Options) -> Result<Loaded> {
         zone_handling.is_some(),
         &mut report,
     );
+    // The title's view matrix: a shear where the original's camera node is one. The lock-on's
+    // rig below never draws, so it keeps the flag off.
+    #[cfg(feature = "view")]
+    let (chase, chase_close) = {
+        let sheared = craft_title
+            .race
+            .craft_laws
+            .is_some_and(|laws| laws.chase_view_sheared.value);
+        (
+            ChaseParams {
+                view_sheared: sheared,
+                ..chase
+            },
+            ChaseParams {
+                view_sheared: sheared,
+                ..chase_close
+            },
+        )
+    };
     // The lock-on's rig, which is all of the cameras the simulation reads.
     #[cfg(not(feature = "view"))]
     let chase = chase_params(stats.external_camera_far);

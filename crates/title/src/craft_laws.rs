@@ -72,6 +72,12 @@ pub struct CraftLaws {
     /// (`docs/ghidra/functions/ps3-hdfury-eu/collision-cage.md`). A title with no `CraftLaws`
     /// (Pulse) runs it.
     pub cage_from_track_header: Sourced<bool>,
+    /// The chase cameras' view matrix is a shear: the right axis is `forward x up`
+    /// unnormalised and the up axis is the craft's own, so the look-at pitch bends the forward
+    /// axis alone and the horizon stays on the screen's centre line
+    /// (`oag_race::chase_rig::ChaseParams::view_sheared`). Wipeout Pure's, read off its GE view
+    /// matrix and its camera tripod live; Pulse's camera node is orthonormal.
+    pub chase_view_sheared: Sourced<bool>,
     /// The pitch response a title compiles into its engine, used where a `<Class>` authors no
     /// `<pitch>`: Wipeout Pure's. `None`: the file's own block, or the stand-in.
     pub code_pitch: Option<Sourced<CodePitch>>,

@@ -122,6 +122,7 @@ pub fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
         spring_horiz: block.spring_horiz,
         spring_vert: block.spring_vert,
         craft_scale: oag_physics::hover::TARGET_GLOBAL_SCALE,
+        view_sheared: false,
     }
 }
 
