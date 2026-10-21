@@ -112,6 +112,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 /// (`oag_title::HudSkin::art`).
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
+    lap_one_shift: None,
     ..*ART
 };
 
@@ -328,6 +329,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         },
     }),
     runtime: Some(RUNTIME),
+    lap_one_shift: None,
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.
@@ -379,6 +381,14 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         prefix: "PosBar",
         segments: 8,
     },
+    // `Hud_UpdatePickup` (`0x0008df30`) resets `PickupBackground`, `PickupDamageBG` and
+    // `PickupAbsorbBG` to white each tick and writes `0x5affffff` over them with nothing to
+    // show (hud-readouts.md, "The pickup bar's idle dim"). Omega inherits HD's.
+    pickup_idle: Some(oag_title::hud::PickupIdle {
+        backdrop: "PickupBackground",
+        hit_pills: &["PickupDamageBG", "PickupAbsorbBG"],
+        argb: 0x5aff_ffff,
+    }),
 };
 
 /// The sprite widgets HD draws whenever its HUD is up.

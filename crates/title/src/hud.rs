@@ -657,6 +657,8 @@ pub struct HudArt {
     /// `oag_hd::hud::RUNTIME` carries. Pulse's own shield rule is a
     /// different shape and lives on `oag_hud::Readout::shield_forced_red`.
     pub runtime: Option<&'static RuntimeHud>,
+    /// The lap counter's lap-one shift: `None` where unmeasured.
+    pub lap_one_shift: Option<LapOneShift>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -705,6 +707,34 @@ pub struct RuntimeHud {
     /// last place shows one and first place shows all of them. `segments`
     /// is the executable's own literal, not the field size.
     pub place_arc: SegmentArc,
+    /// The pickup bar's idle look, `None` where unmeasured.
+    pub pickup_idle: Option<PickupIdle>,
+}
+
+/// The lap counter closes up on lap one: with a lap target and the lap equal to
+/// one, the executable moves the two glyphs after the digit left by [`Self::dx`]
+/// (a one-digit lap leaves the gap a two-digit one fills). Pulse's
+/// `Hud_UpdateLapCounter` (`0x0881a690`), `-17.0` in the 480-wide layout space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LapOneShift {
+    /// The widgets that move: the separator and the lap total.
+    pub widgets: &'static [&'static str],
+    /// Added to their authored `x` on lap one.
+    pub dx: i32,
+}
+
+/// The dim the pickup bar is drawn in while it has nothing to show: the
+/// executable resets its widgets to white each tick and writes this colour
+/// over the ones with no content (HD's `0x0008df30`, `0x5affffff`, alpha 0.35).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PickupIdle {
+    /// The hexagon behind a held pickup's icon: dim while nothing is held.
+    pub backdrop: &'static str,
+    /// The two pills beside it that carry the recent damage and absorb
+    /// readouts: dim while no hit is showing.
+    pub hit_pills: &'static [&'static str],
+    /// The dim, as `0xAARRGGBB`.
+    pub argb: u32,
 }
 
 /// Pilot Assist's four indicator widgets; an arrow lists its child images too, which

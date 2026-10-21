@@ -470,3 +470,33 @@ fn no_two_live_labels_overlap() {
         anchors.push((*x, *y));
     }
 }
+
+/// HD's `HUD_lap_times.xml` authors `string="1"` on `CurrentTimeTxt` with no
+/// idstring; the original draws it in the lap hexagon on lap 1 (compare pair,
+/// Modesto Heights time trial) and rewrites it at a lap change, which is unread,
+/// so a later lap draws nothing.
+#[test]
+fn the_lap_hexagon_draws_its_authored_literal_on_lap_one_only() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="CurrentTimeTxt"><Values string="1" font="HUD" x="0" y="0"/></Text></Screen>"#,
+    );
+    let strings = strings();
+    let text = |lap| {
+        let readout = Readout {
+            lap,
+            ..Readout::blank()
+        };
+        text_for(
+            &layout.labels[0],
+            &readout,
+            &strings,
+            false,
+            true,
+            None,
+            false,
+            false,
+        )
+    };
+    assert_eq!(text(1), Some("1".to_string()));
+    assert_eq!(text(2), None);
+}

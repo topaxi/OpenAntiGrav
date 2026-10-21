@@ -191,6 +191,7 @@ const TITLE: &Title = &Title {
         message_slots: false,
         lap_hud: None,
         runtime: None,
+        lap_one_shift: None,
         resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,
     },

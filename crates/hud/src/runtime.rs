@@ -103,6 +103,11 @@ pub(super) fn colour(cx: &Context<'_>, readout: &Readout, name: &str) -> Option<
         };
         return Some(argb_to_rgba(argb));
     }
+    let idle = cx.art.runtime?.pickup_idle?;
+    // No recent-hit state exists to light the pills, so they are idle throughout.
+    if idle.hit_pills.contains(&name) || (name == idle.backdrop && readout.pickup.is_none()) {
+        return Some(argb_to_rgba(idle.argb));
+    }
     None
 }
 

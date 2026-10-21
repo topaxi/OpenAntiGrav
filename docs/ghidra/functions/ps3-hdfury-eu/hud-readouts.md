@@ -378,6 +378,27 @@ object at `mode+0x1bc` and no ladder (`mode+0x90 == 0`) races `min(best, stats f
 (`+0xc0` for mode `10`): Pulse's `Hud_UpdateTimeCluster_q` law. Not read: the writer of `+0x3c` itself, and what `+0x38`
 holds. **Omega/2048: checked, applies, not wired by this page** (same `stats.xml` path; hud.md names the wiring).
 
+## The pickup bar's idle dim (`Hud_UpdatePickupBar`, `0x0008df30`)
+
+**2026-10-21, `hud-leftovers`, confidence 70** (static read; the frames agree, no live probe). The per-tick update of the
+top-centre pickup bar. Widgets, from `Hud_BindWidgets`' TOC slots (`scripts/ps3-toc.py resolve 0x0009bb30`): `+0x524`
+`PickupDetails` (the group holding the `DAMAGE`/`Absorb` texts and their two bars, hidden at bind, bits `0x6` cleared),
+`+0x528` `PickupDamageBG`, `+0x52c` `PickupAbsorbBG`, `+0x530` `PickupAbsorb`, `+0x534` `PickupDamage`; the pickup table
+row 0 (`PTR_008a7800 + hud*0x150 + 4`) is `PickupBackground`, the hexagon.
+
+- **Every tick starts white.** `Image_SetVertexColours(+0x528, 0xffffffff)` and the same for `+0x52c`, before anything else.
+- **The idle path writes `0x5affffff`** (alpha `0x5a`, 0.35) over `+0x528`, `+0x52c` and, with no pickup held
+  (`record+0x58 == 0`), over the hexagon. A held pickup's hexagon takes the faded table colour instead.
+- **The details group is shown only with a number to show** (`+0x530`/`+0x534` formatted, bits `0x6` set), the lit `DAMAGE` and
+  `Absorb` state of `hd-race/talons-pack`.
+
+The frames: all 13 HD Time Trial pairs show the dim pills and a dim empty hexagon; the Talon's race frame with
+`DAMAGE 0` and `Absorb 14` shows them bright. Ours drew every one of them at the layout's white. Wired as
+`oag_title::hud::PickupIdle` on HD and Omega (inherits HD's; no Omega executable here to read): the pills dim throughout
+(no recent-hit state exists to light them), the hexagon dim while `Readout::pickup` is `None`. **Not read:** the jump table at
+`0x008a7808` (14 cases, one per pickup row) that holds the held-pickup fade, so a held pickup's hexagon stays as authored.
+2048: `HUD_pickups.xml` is not this layout, not checked.
+
 ## Not read
 
 - **Which craft `beam+0xc94c` is** (above), so `ship+0x6958` is not wired.

@@ -221,6 +221,16 @@ pub(super) fn text_for(
         }
         // Running clocks: tenths. See [`Precision`].
         "CurrentTime" => Some(format_lap_time(readout.lap_ticks, Precision::Tenths)),
+        // Pulse authors an `idstring` caption here; HD's `HUD_lap_times.xml`
+        // authors `string="1"` in the lap hexagon instead, which the original
+        // draws on lap 1 (compare pairs). The widget is `hud+0x298`: bound once
+        // and rewritten only by `Hud_UpdateTimeCluster`'s lap-change branch,
+        // which never fires on lap 1, so lap 1 is the authored text. What a later
+        // lap writes is unread, so a later lap draws nothing rather than a guess.
+        // [`docs/formats/hd-hud.md`], "The lap hexagon".
+        "CurrentTimeTxt" => {
+            caption(label, strings).or_else(|| label.string.clone().filter(|_| readout.lap <= 1))
+        }
         // The total time and its caption yield the top-right anchor to the
         // place only when the two actually coincide - see
         // [`place_owns_the_anchor`], `false` throughout on 2048.
@@ -919,7 +929,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         // placeholder - `zone_next_row` carries the whole reasoning.
         let placed = next_row.filter(|_| label.name == NEXT_CLASS_WIDGETS[1]);
         let draw = Draw::Text {
-            x: placed.map_or(label.x, |(_, text)| text[0]),
+            x: placed.map_or(
+                label.x + lap_one_dx(cx, readout, &label.name),
+                |(_, text)| text[0],
+            ),
             // The row's `y` is a **top** edge - every `ZonePlus1`-`ZonePlus10`
             // is `vertalign="top"` - and this label rides that line directly,
             // so it takes it unconverted rather than through `top_edge`.
@@ -952,6 +965,17 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     }
 
     frame
+}
+
+/// How far the lap counter's separator and total move left on lap one
+/// ([`oag_title::hud::LapOneShift`]); zero for every other widget, lap and title.
+pub(super) fn lap_one_dx(cx: &Context<'_>, readout: &Readout, name: &str) -> f32 {
+    match cx.art.lap_one_shift {
+        Some(shift) if readout.lap == 1 && readout.laps >= 1 && shift.widgets.contains(&name) => {
+            shift.dx as f32
+        }
+        _ => 0.0,
+    }
 }
 
 /// One layout sprite as a draw, or `None` for a sprite whose texture the sheet

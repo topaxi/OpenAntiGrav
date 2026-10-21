@@ -347,3 +347,49 @@ fn draw_list_paints_the_fill_straight_over_its_background() {
     assert_eq!(uvs.get(bg + 1), Some(&[770.0, 186.0, 254.0, 194.0]));
     assert!(uvs.contains(&[376.0, 0.0, 1.0, 1.0]), "PosBar0 at eighth");
 }
+
+/// The pickup bar is dim with nothing to show (`Hud_UpdatePickupBar`, `0x5affffff`): the two
+/// pills always, the hexagon only while no pickup is held. Pulse's art names no idle dim.
+#[test]
+fn the_pickup_bar_is_dim_while_idle() {
+    let idle = argb(0x5aff_ffff);
+    let none = readout(98.0);
+    let held = Readout {
+        pickup: Some(oag_tables::weapons::Weapon::ALL[0]),
+        ..readout(98.0)
+    };
+    with_hd(oag_hd::hud::ART, |cx| {
+        for name in ["PickupDamageBG", "PickupAbsorbBG", "PickupBackground"] {
+            assert_eq!(colour(cx, &none, name), Some(idle), "{name}");
+        }
+        assert_eq!(colour(cx, &held, "PickupBackground"), None);
+        assert_eq!(colour(cx, &held, "PickupDamageBG"), Some(idle));
+        assert_eq!(colour(cx, &none, "PickupFarBackground"), None);
+    });
+}
+
+/// Pulse's lap counter closes up on lap one (`Hud_UpdateLapCounter`, `-17`): the separator and the
+/// total move, the digit does not, later laps and HD (no such rule) draw as authored.
+#[test]
+fn pulses_lap_counter_closes_up_on_lap_one_only() {
+    let at = |lap, laps| Readout {
+        lap,
+        laps,
+        ..readout(100.0)
+    };
+    with_hd(oag_pulse::hud::ART, |cx| {
+        for name in ["LapOf", "Lap Outof"] {
+            assert_eq!(
+                crate::draw::lap_one_dx(cx, &at(1, 3), name),
+                -17.0,
+                "{name}"
+            );
+            assert_eq!(crate::draw::lap_one_dx(cx, &at(2, 3), name), 0.0, "{name}");
+            assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 0), name), 0.0, "{name}");
+        }
+        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"), 0.0);
+    });
+    with_hd(oag_hd::hud::ART, |cx| {
+        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "LapOf"), 0.0);
+    });
+}

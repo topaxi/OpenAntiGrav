@@ -107,6 +107,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 /// (`oag_title::HudSkin::art`).
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
+    lap_one_shift: None,
     ..*ART
 };
 
@@ -274,6 +275,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         },
     }),
     runtime: Some(RUNTIME),
+    lap_one_shift: None,
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
     // TimeTrial, SpeedLap and Elimination, with HD's names and nesting, so no
@@ -308,6 +310,14 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         prefix: "PosBar",
         segments: 8,
     },
+    // `Hud_UpdatePickup` (`0x0008df30`) resets `PickupBackground`, `PickupDamageBG` and
+    // `PickupAbsorbBG` to white each tick and writes `0x5affffff` over them with nothing to
+    // show (hud-readouts.md, "The pickup bar's idle dim"). Omega inherits HD's.
+    pickup_idle: Some(oag_title::hud::PickupIdle {
+        backdrop: "PickupBackground",
+        hit_pills: &["PickupDamageBG", "PickupAbsorbBG"],
+        argb: 0x5aff_ffff,
+    }),
 };
 
 /// Widgets drawn in every frame whatever the race state, HD's list. **Chosen,

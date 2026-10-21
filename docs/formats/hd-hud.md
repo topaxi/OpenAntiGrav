@@ -1143,6 +1143,28 @@ alone.
   warning up. The always-on set outside Zone still rests on that single state,
   which is why it is deliberately short.
 
+## The lap hexagon: `CurrentTimeTxt` is authored, and drawn on lap 1
+
+**2026-10-21, `hud-leftovers`, confidence 80 for lap 1, nothing claimed for later laps.**
+`HUD_lap_times.xml` authors `<Text name="CurrentTimeTxt"><Values string="1" font="HUD" align="centre" x="66" y="195">`
+over `TimeIcon`'s hexagon, beside `CurrentTime`. Every HD Time Trial compare pair shows that `1` in the
+original and an empty hexagon in ours: the reader drew a label only for a widget with an `idstring` or a
+computed arm, and this one has only a literal. It now draws the authored string (`oag_hud::draw::text_for`,
+`CurrentTimeTxt`); Pulse authors an `idstring` caption there and is unchanged.
+
+Read in the executable (`/hdfury/EBOOT-ps3-hdfury-eu.elf`, `scripts/ps3-toc.py attrib 0x0077f880`): only
+`Hud_BindWidgets` (`0x0009bb30`) names the widget, at TOC slot `0x008a7ac4`, which is the `hud+0x298` pointer
+(`-0x1685` in that function). `Hud_UpdateTimeCluster` (`0x00094598`) writes it only in the lap-change branch
+(`record+0xc` changed, lap row `0..3`), the same string it shifts into the new lap row, and that branch cannot fire on
+lap 1. So lap 1 is the authored text, which is what the frame shows. **Not read:** what the lap-change branch writes
+(the string comes from `record+0x34`; the earlier reading of `+0x34` as a held time and of `hud+0x1fc` as a
+target text is wrong: `hud+0x1f8` is `CurrentTime`, `hud+0x1fc` is `BestTime` and `record+0x38` is `craft+0x7028`,
+the best lap in centiseconds), so a later lap draws nothing. An Arcade race frame (`hd-race/talons-pack`, lap 2)
+shows `ClockIcon` in the hexagon and a `BEST` row instead; that layout does not author the digit.
+
+Omega: **not checkable here**, no Omega HUD XML is extracted on this tree; it carries HD's front-end plugin and HUD
+fragments, so the same `string="1"` is expected and the reader is shared.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of
