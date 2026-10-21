@@ -188,8 +188,9 @@ race pair is not boosting"). So:
    draws (needs per-craft ranges in the exhaust upload); (b) HD's tube, Omega's and 2048's keep the old order, their queue
    keys unread (RPCS3: read `display`'s queue the way `scripts/psp-queue-read.py` does); (c) the rest of the tail-box gap
    (41.6 against 37.1) and the nozzle disc (210.4 against 193.0) is the flare quad, the hull and the bloom of those.
-2. Only then `psp-pulse-pair.py`: read the flare at its own stop (`psp-trace.py --flare`) and pass `--pose-boost
-   (0.8 - boost_timer)` when above 0, and make `--pose-boost` keep the warmed trail. `psp-state.py load` + `freeze` lands
-   0.6 s after the state's moment on this machine; load with a `Trail_DrawRibbon` breakpoint armed instead.
-3. The `--trace-out` row of a `--field-warmup` run is written without the warm-up, so it cannot be used to read ours'
-   exhaust state at the rendered tick.
+2. **Done 2026-10-21 (`pose-lean-boost`):** `psp-pulse-pair.py` reads the flare at its own stop and passes `--pose-boost
+   (0.8 - boost_timer)` with the warmed trail kept (`Race::warm_up_field` arms the boost), the load stops at the state's own
+   first frame and `--target-clock` lands re-makes on one instant (docs/tools/compare-page.md, "A deterministic stop").
+   `talons-boost` whole-frame RMSE 0.143 to 0.108, craft crop 0.304 to 0.157 against the same `theirs.png`.
+3. **Done:** the `--trace-out` row of a `--field-warmup` run is written with the warm-up now, so it reads ours' exhaust at
+   the rendered tick.

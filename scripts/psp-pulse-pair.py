@@ -17,6 +17,10 @@ an already-turned pose turned ours twice). A second, `--trace-out` run checks th
 of the basis, convention and fov, not of the simulation (`scripts/compare-resting-yaw.py` measures that). A pair that differs from the profile
 (image size, settings read back, layout file, mode, class, pose, fov) is refused with the mismatch named, and
 `pair.json` records both sides.
+
+The load stops at the state's own first frame (`psp-state.py load --stop-at`, bit-identical run to run) and `--target-clock T`
+runs the original on to a stored pair's moment; a race shot reads the pose row's drawn lean, roll phase and flare boost timer
+(`psp-trace.py --flare`) and passes `--pose-lean` and `--pose-boost` to ours, checking ours' row against them.
 """
 
 import argparse

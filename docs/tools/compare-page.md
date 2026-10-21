@@ -177,6 +177,30 @@ difference over the 24 pairs **9.24 to 6.67** (every pair lower, Fort Gale Black
 original's; table in the handover thread). Pulse PS2: the camera is now the original's own (2026-10-21, `ps2-widescreen-pairs`: eye, axes and fov
 read from the camera object in the state's EE RAM, fed as `cam_*` columns and `--camera-fov`); `pcsx2-pulse-pair.py` still reads no world clock; the one PS2 pair is a chase view.
 
+## A deterministic stop, and the posed craft's lean and boost (Pulse PSP, 2026-10-21, `pose-lean-boost`)
+
+- **The stop.** `psp-state.py load --stop-at 0x08849618` (what `psp-pulse-pair.py` passes) arms a breakpoint on `Ship_UpdateCraft`
+  with the pause menu open, presses Load, runs on and stops at its first hit: the state's own first frame (race clock
+  37.3578 on `race-talons-venom-alongside.ppst`, the same bits in 3 of 3 loads). The old load, `cpu.stepping`, 6 s toast wait landed
+  0.6 s of race clock past it and differently each run. `--target-clock T` then runs the stopped original to the first player
+  tick at or past `T` in **one** resume (a breakpoint conditional on the player's craft and on the clock's float bits;
+  stepping tick by tick with a stop per hit gave clocks 11 ulp apart in 1 of 3 runs, one resume 4 of 4). Two consecutive
+  re-makes of `talons-alongside` at `--target-clock 38.4082` have a bit-identical `theirs.png` (0 grey difference), and
+  re-makes of `talons-black` and `fort-gale-white` at their stored clocks are bit-identical to `data/reference` (0.00
+  grey rise). `paused()` reads the debugger's own `paused` flag first (true with the menu open) and the cycle counter only as the fallback.
+  The `rerender-cold` lane's "could not open the pause menu" did not reproduce on a fresh instance with the OpenGL backend
+  (menu open: `paused` true, ticks still; load 2.4 s); the cause there is not known, only that the flag no longer depends on it.
+- **The lean.** `--pose-lean` (needs `--pose-from`) puts the pose row's `steer_lean` and `roll_phase` on ship 0 after the ticks:
+  the drawn lean (`entity+0x854`, the hull turns by `steer_lean * 0.5` about its nose) is written by the original's per-tick
+  update and a posed capture runs none, so ours was drawn flat. The follower behind it (`entity+0x858`, read by the HUD
+  sway) has no trace column and is not carried. A trace without the columns is refused. Ours' `--trace-out` now writes both columns.
+- **The boost.** `--pose-boost AGE` with `--field-warmup` arms the boost inside the warm-up instead of laying a straight
+  trail (`Race::warm_up_field(.., boost_age)`); the pair reads the flare's `boost_timer` at the pose's stop and checks ours'
+  row at the rendered tick (lean and roll phase equal, boost timer within a tick). `talons-boost`: `steer_lean` 0.3202,
+  `boost_timer` 0.349067; `talons-alongside`: `steer_lean` 1.0161, no boost.
+- **Re-make commands** (own Xvfb and PPSSPP, `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp`): `psp-pulse-pair.py --field --layout forward
+  --team Assegai --track 16_Track --state data/saves/pulse-psp/race-talons-venom-alongside.ppst --target-clock 38.4082` and `... --target-clock 39.3429`.
+
 ## The presented frame lags the stop, per platform (2026-10-21, `rerender-all`)
 
 A screenshot is the last PRESENTED frame, which is a little older than the RAM read next to it. Measured per platform, and what each pair script does about it:
