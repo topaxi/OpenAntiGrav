@@ -242,6 +242,91 @@ frame is `640/448` shown anamorphically at whatever the display is, and ours
 presents the field at the viewport's own shape. See
 [aspect-ratio.md](../../../ps2/aspect-ratio.md).
 
+## The `Aspect Ratio` option on `16:9`, switched on in a state and measured live, 2026-10-21
+
+Lane `ps2-widescreen-pairs`: PCSX2 `v2.7` (own data path, PINE), the Moa Therma White grid state of the
+compare page (`03_Track`, player in slot 8 of 8, close view). The option's global `DAT_00284fe8`
+(`docs/ps2/aspect-ratio.md`) was **written to `1` over PINE** into the loaded state, four frames were advanced and the
+state saved again; the original menu route (OPTIONS, `Additional`, `Aspect Ratio`, which copies the list's value
+into the global when the screen is left) was **not walked**, and `*(g_settings + 0x2d8)` (`0x2db628` through the
+pointer at `0x002db350`) still reads `0` in the new state, so the settings object and the global disagree there.
+That does not matter for a frame: `Camera_SubmitScene` reads the global (`0x0013e6ec`), nothing else.
+
+| Read (the camera object `Camera_SubmitScene` runs on, `0x609bb0` in both states) | option `4:3` (`0`) | option `16:9` (`1`) |
+| --- | --- | --- |
+| `*(a + 0x110)` vertical fov | `60.000004` | `60.000004` |
+| `m00`, `m11` at `a + 0xd0`, `+ 0xe4` | `1.21244`, `1.73205` | `0.90933`, `1.73205` |
+| `m11 / m00` | `1.42857` = `10/7` | `1.90476` = `10/7 * 4/3` = `40/21` |
+| `*(0x0027e7e4)`, the aspect `Camera_SubmitScene` stores | `1.42857` | `1.90476` |
+| eye `(a + 0x70)` against the craft | `(-11.25, +3.0)` in the craft's axes | unchanged |
+| GS framebuffer (`ScreenshotSize 2`, uncorrected, upscale 1) | `512x512` | `512x512` |
+
+So the option changes **the projection's aspect and nothing about the buffer**: the console always rasterises
+the same 512x512 buffer (`pcsx2-drive.py`'s table) and the CRTC stretches it, so `16:9` is a third more world across
+the same pixels, not a different framebuffer. PCSX2 is set to `AspectRatio = 16:9` to show the frame at the
+shape a 16:9 television would (its `Auto 4:3/3:2` default was not tried). Read twice (the state file's EE RAM,
+`pcsx2_state.camera`, and live through PINE after a load, on two loads). Confidence **90** for the table;
+**85** that the menu route sets the same global (`aspect-ratio.md`, 95, from the code, but this lane did not walk it).
+
+### The camera object, recovered: the pair needs no `--allow-own-camera` any more
+
+The object's layout, found by signature (`pcsx2_state.camera`: the 16-aligned address whose `+0x110` fov agrees
+with `m11 = 1 / tan(fov/2)`, whose world matrix at `+0x40` is orthonormal and equal to its twin at `+0x90`, and
+whose eye is within 25 units of the craft), identical at `0x609bb0` in the 4:3 state of 2026-10-01 and in this one:
+
+| Offset | Field |
+| --- | --- |
+| `+0x40`, `+0x50`, `+0x60` | the camera's right, up and **backward** axes in world space, as rows (the camera looks along minus the third row) |
+| `+0x70` | the eye, `(-385.81, 7.00, 138.34)` here, `1.0` in `w` |
+| `+0x90 .. +0xcc` | a twin of the four rows above |
+| `+0xd0 .. +0x10c` | the perspective matrix |
+| `+0x110` | the vertical field in degrees |
+
+The look direction points at the craft with cosine `0.987` and the eye is `11.64` from it (the close rig). **The
+earlier "pitch sign is the PSP's opposite" and "ambiguous 48 degree fit" readings were this layout read the
+wrong way round**: the PSP trace's `cam_*` columns are the rows of the VIEW matrix (columns are the camera's axes,
+`replay::camera_orientation_of`), and the PS2 object holds the camera's axes as rows, so feeding the rows
+unchanged transposes the rotation (the first run of the pair with the rows unchanged scored `edge_ncc` `0.023`, the
+transposed one `0.108`); the 48 degree "best fit" was the `4:3` aspect `10/7` against the `16:9` the sweep assumed.
+Confidence **90**: the object is the one the projection matrix lives on, the look-at check holds, and the pair
+below registers to 1.001 on the hull.
+
+### What is left between the original's frame and ours: exactly the `40/21` against `16/9`
+
+At the original's eye and fov, in 1280x720, three loads of the state (`edge_ncc`, `rmse` as `compare_env.overlap_score`,
+mean grey difference over the frame, 0-255):
+
+| | `edge_ncc` | `rmse` | mean grey difference |
+| --- | ---: | ---: | ---: |
+| before: 960x720, `4:3`, ours' own camera (the shipped pair) | 0.013 | 0.210 | 20.55 |
+| now: 1280x720, `16:9`, the original's camera, three loads | 0.105 - 0.115 | 0.147 - 0.157 | 12.73 - 13.38 |
+| same three, ours squeezed horizontally by `(16/9) / (40/21)` = `0.9333` | 0.591 - 0.599 | 0.093 - 0.098 | 6.48 - 7.04 |
+
+(The PSP and HD reference pairs score `edge_ncc` 0.21 - 0.46, median 0.40.) The original projects at aspect `40/21`
+(`1.905`) and PCSX2 shows the 640x448 frame at `16:9` (`1.778`), so the original's world is **`7.1 %` narrower
+horizontally than a true 16:9 picture** - the original's own anamorphic mismatch, vertical unchanged. Ours renders
+the same vertical field at a true `16:9` and so draws everything `1.0714` wider. Measured on the hull with
+`scripts/frame-register.py` (box `540,380,760,720`, the speed readout excluded, steps 0.01 and 0.005 agreeing
+to 0.03 %): ours is `1.0236` times the original's size uniformly; with ours squeezed horizontally by `1195/1280` the
+ratio is `1.0010`, and at `1120/1280` it is `0.980`. A scenery box (sky and towers) did not register (its peak
+moved 0.058 to 0.069 with the step), so it is not a measurement. **The hull that was about 1.35 times too wide in
+the old pair was the camera and the 4:3 frame, not the craft's scale: with the original's camera the hull is
+the original's size to within the `7.1 %` horizontal term.** Confidence **85** (one circuit and one resting
+craft; the squeezed score is a ceiling for the HUD, which is squeezed with the scene).
+
+This is **not fixed here**, by maintainer decision (this project presents the PS2 widescreen only and keeps the
+PSP-shape fit; never a 640/448 fit or an anamorphic mode): the number is the cost of that decision on a pixel
+comparison, `edge_ncc` `0.11` against `0.59`, and the compare page's PS2 scores carry it.
+
+Other differences seen in the pair, none chased: the original's track surfaces carry more neon edge and shadow
+contrast; its HUD draws `pos 8/8` and a second line (`(UT EDIT)`, a known artifact), ours draws neither; the engine
+flare's spike at rest (the known open lead). The original's grab is of the VM running a moment after the load
+(its race clock reads 0.3 to 1.4 s past the state's, `compare-page.md`), so a run-to-run spread of 2.2 mean grey
+exists in the original's own frame.
+
+Cross-title check: the `Aspect Ratio` option is a PS2 disc setting; Pulse PSP has no counterpart and HD, 2048 and
+Omega were **not checked** for one (not part of this lane).
+
 ## The `Aspect Ratio` option's widen, at one address inside `Camera_SubmitScene`
 
 `docs/ps2/aspect-ratio.md` ("What the option changes: one multiply, in the

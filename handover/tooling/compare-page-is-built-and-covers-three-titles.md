@@ -11,7 +11,7 @@ Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, plat
 **The fresh set of 2026-10-20 (`compare-parity`).** The old pairs, manifests and page are archived under
 `data/archive/compare-2026-10-20/` and are no reference. Every pair now comes out of `scripts/compare-environment.toml`
 and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md), "Environment parity"): 24 of 25 Pulse PSP
-(480x272), 13 of 13 HD (1920x1080) and one Pulse PS2 (960x720, camera not matched), 37 pairs in
+(480x272), 13 of 13 HD (1920x1080) and one Pulse PS2 (960x720, camera not matched; 1280x720 widescreen with the camera matched since 2026-10-21, below), 37 pairs in
 `data/reference/compare-page/{pulse-psp,hd,pulse-ps2}/`, manifest `fresh.toml` from `compare_env.py manifest`.
 `just compare-rerender` re-makes them from the savestates after a renderer change. The overlap score
 (`pair.json` `overlap`, `edge_ncc` 0.07 to 0.44 on PSP, 0.14 to 0.31 on HD) is on the page.
@@ -20,12 +20,20 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   degrees at 216.4 s, where the shipped pair was refused at 0.777 units (the resting turn's double count, below). The pair
   in `data/reference/compare-page/pulse-psp/talons-white` is still the refused one: `just compare-rerender` skips a
   `refused` pair, so re-make it with `psp-pulse-pair.py` and its recorded `argv` (run 2026-10-20 into a scratch copy only).
-- **PS2: the camera is not matched** (pair shipped with `--allow-own-camera`, edge correlation 0.01). A camera node whose
-  position fits the PSP's follow geometry is in the state (a 4x4 at several EE addresses, e.g. `0x609bf0`, 11.64 units behind
-  and 3.0 above the craft); its pitch sign is the PSP's opposite and the 4:3 fov is unmeasured, a fov sweep gives only an
-  ambiguous best fit (48 degrees). Next: read the PS2 `Camera_UpdatePlayerView` counterpart and the projection setup.
-- **PS2 is 960x720 (the maintainer's "720p" at the game's own 4:3)** because the state has the 16:9 option off; a widescreen state
-  and 1280x720 is the alternative. PS2 clock address `0x70EE9C` was read on two states of one run only.
+- **PS2: the camera is matched and the pair is widescreen (2026-10-21, `ps2-widescreen-pairs`).** The original's eye, axes and
+  fov come from the camera object in the state's RAM (`pcsx2_state.camera`, `0x609bb0`; `camera.md`) and are fed to ours, so
+  `--allow-own-camera` is gone. The 2026-10-20 "pitch sign opposite" and "ambiguous 48 degree fit" were the object's rows read
+  as the view matrix's rows (a transposed rotation) and the `4:3` aspect, not a different convention. The game's own `Aspect
+  Ratio` option on `16:9` (`DAT_00284fe8` = 1, written over PINE, state saved as
+  `data/saves/pulse-ps2/single-race-moa-therma-white-slot8-grid-widescreen.p2s`) makes the projection `40/21`; the profile is
+  1280x720 with PCSX2 `AspectRatio 16:9`. Overlap `edge_ncc` 0.013 to 0.105-0.115 (three loads), mean grey difference
+  20.55 to 12.7-13.4. What is left of that gap is the original's own `40/21` shown at `16:9` (ours is 7.1 % wider): squeezing
+  ours by `0.9333` scores 0.59-0.60 and 6.5-7.0 grey; the maintainer's decision (PS2 widescreen only, PSP-shape fit, no
+  anamorphic mode) stands. The original's frame is grabbed with the VM running (clock 0.3-1.4 s past the state's).
+  The old `data/reference/compare-page/pulse-ps2/moa-therma-white` cannot be re-rendered by the new script (its `argv` carries
+  `--allow-own-camera`, its state is `4:3`): replace it with a pair made from the widescreen state.
+- **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
+  across three grabs, monotonic) now.
 - **Pure (PSP), 2048 (Vita3K), Omega (shadPS4): not reachable** (unchanged: no grid state or camera node for Pure, Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
 - **Speed class and mode are declared by the state's file name, not read from RAM** (PSP and HD), PS2's class is assumed Venom.
@@ -84,9 +92,9 @@ PS2: the original's hull fills about 1.35 times the width ours does (the camera 
 
 ## Next Steps
 
-1. Recover the PS2 camera (orientation and fov) so the PS2 pair needs no `--allow-own-camera`.
+1. ~~Recover the PS2 camera~~ **Done 2026-10-21** (see the PS2 bullet above). Open: more PS2 states (a menu route for `pcsx2-drive.py`), a race shot with the field.
 2. Re-make the Pulse PSP Talon's Junction White pair with `psp-pulse-pair.py` (it passes with `--pose-hold`; `compare-rerender` skips refused pairs), and re-make the rest so their `pair.json` records `pose_hold`.
 3. HD's 0.5 to 0.7 degree heading residual on pairs where ours does not turn: read the original's heading at GO after `Restart Race`.
 4. Make a Pure PSP grid state and locate its camera node; 2048 and Omega need a race reached first.
-5. Pulse PS2 in widescreen (maintainer, 2026-10-20, lower priority): the game has its own widescreen option, which may need switching on in the state (and the PCSX2 window or screen resized to match). Take the PS2 pairs with it on, at 1280x720 rather than the 960x720 4:3 profile, together with step 1's camera.
+5. ~~Pulse PS2 in widescreen~~ **Done 2026-10-21**: the option was switched on by writing `DAT_00284fe8`, not walked through the menu (the menu route, and a PCSX2 boot on a fresh profile reading the default, are open). The 7.1 % horizontal difference between the original's `40/21` projection at `16:9` and our true `16:9` is the whole remaining overlap gap on this pair; it is the maintainer's decision, not a defect.
 6. ~~HD default camera view~~ - settled 2026-10-21 (`hd-default-view`): HD's fresh-profile default is Close (measured on two clean RPCS3 boots, `docs/ghidra/functions/ps3-hdfury-eu/camera.md`). The 13 HD pairs' Far eye (`(0.00, 3.00, -12.38)`, Far x 0.75) came from the maintainer's `OPT_FAR` profile, not HD's default; they feed the camera explicitly and are unaffected. Ours already defaults to Close. Left: whether HD's default belongs on `Title` (one value on every title today).

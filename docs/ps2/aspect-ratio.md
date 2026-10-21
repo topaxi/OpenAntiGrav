@@ -93,6 +93,15 @@ display path sees the setting. (The sweep is exhaustive for the *global*; the
 parameter, so Ghidra lists no references to it. The global is the only way the
 field propagates.)
 
+### Confirmed live, 2026-10-21
+
+With `DAT_00284fe8` written to `1` in a running PCSX2 race state, the camera object's projection reads
+`m11 / m00 = 1.90476` (`10/7 * 4/3`) against `1.42857` on `0`, the vertical field `60` and the eye unchanged, and the
+GS framebuffer stays `512x512` (read twice, two loads each): the option is the aspect multiply and nothing else, as
+read above. The global was poked, not set through the menu, and `g_settings + 0x2d8` stayed `0`; see
+[camera.md](../ghidra/functions/ps2-pulse-eu/camera.md), "The `Aspect Ratio` option on `16:9`, switched on in a
+state". Confidence 90.
+
 ## What the option does not change: the 2D layer
 
 ### The same artwork, drawn stretched

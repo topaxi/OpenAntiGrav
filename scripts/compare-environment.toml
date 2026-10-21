@@ -75,8 +75,8 @@ title = "Wipeout Pulse"
 game = "Wipeout Pulse (EU)"
 platform = "PS2"
 image = "data/images/pulse-ps2-eu.chd"
-output = [960, 720]
-output_note = "CHOSEN, not measured: the maintainer's pick of 720 lines for the PS2 (the console outputs 640x448 or 512x448), at the game's own 4:3 because the saved state has no 16:9 option on (1280x720 would stretch or pillarbox); adjustable here"
+output = [1280, 720]
+output_note = "CHOSEN, not measured: the maintainer's pick of 720 lines for the PS2 (the console outputs 640x448 or 512x448), in the game's own widescreen mode (Aspect Ratio 16:9, DAT_00284fe8 = 1) shown at 16:9 so 1280x720 is the whole frame; adjustable here"
 aspect = "ps2"
 profile_key = "Wipeout Pulse (PS2)"
 [platform.pulse-ps2.emulator]
@@ -84,10 +84,11 @@ name = "PCSX2"
 renderer = "OpenGL hardware"  # the software renderer needs a Vulkan present queue Xvfb does not give (pcsx2-drive.py)
 upscale_multiplier = 2        # [EmuCore/GS] upscale_multiplier; 1 is the GS's own 512 lines
 screenshot_size = 1           # [EmuCore/GS] ScreenshotSize: internal resolution, aspect corrected
-widescreen = "off in the saved state (4:3 frame)"
+aspect_ratio = "16:9"         # [EmuCore/GS] AspectRatio; the profile default is Stretch
+widescreen = "the game's own Aspect Ratio option on 16:9 in the state (projection aspect 10/7 * 4/3), PCSX2 AspectRatio 16:9 (1820x1024 GS screenshot)"
 deinterlace = "none"
 capture = "gs-screenshot"
-capture_note = "PCSX2's own GS screenshot (2x internal, aspect corrected, 1365x1024), then ONE Lanczos resize to the output size, recorded in pair.json; ours is rendered at the output size natively"
+capture_note = "PCSX2's own GS screenshot (2x internal, aspect corrected to 16:9, 1820x1024), then ONE Lanczos resize to the output size, recorded in pair.json; ours is rendered at the output size natively"
 
 [platform.hd-fury]
 title = "Wipeout HD"
