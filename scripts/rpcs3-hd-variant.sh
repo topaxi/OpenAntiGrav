@@ -12,6 +12,7 @@ main=/home/topaxi/projects/OpenAntiGrav
 repo=$(cd "$(dirname "$0")/.." && pwd)
 W=$main/data/scratch/$lane
 source "$W/env.sh"
+export OAG_HD_CAPTURE_KIND=savestate_restore  # provenance: this script restores a state
 export OAG_COMPARE_PLATFORM=hd-fury UV_CACHE_DIR=$HOME/.cache/uv UV_OFFLINE=1 OAG_RPCS3_EXTRA_EDITS="$extra"
 cd "$repo"
 state=$main/data/saves/hd-fury/hd-timetrial-$circuit-harimau-classic-start.SAVESTAT.zst

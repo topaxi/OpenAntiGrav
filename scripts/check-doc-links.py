@@ -96,8 +96,12 @@ DISPOSABLE_DATA_DIRS = {
     "shots",
     "wine",
 }
-# This script names a disposable path in its own docstring.
-DATA_CITATION_EXEMPT = {"scripts/check-doc-links.py"}
+# A named lane's git worktree is reaped after its merge, so a tracked file citing one has a dead path in it (a
+# `<lane>` template or the bare directory is not a citation). A compare-page `pair.json` is held to the same by
+# `scripts/compare_provenance.py scan`.
+WORKTREE_CITATION = re.compile(r"OpenAntiGrav-worktrees/[A-Za-z0-9_.-]")
+# This script names a disposable path in its own docstring; the lead's skill names the lead's own gate worktree.
+DATA_CITATION_EXEMPT = {"scripts/check-doc-links.py", ".claude/skills/oag-drive/SKILL.md"}
 # Directories whose Markdown is not this project's to check.
 #
 # **`.claude` is the one that is easy to leave out and bites.** It holds this
@@ -308,6 +312,8 @@ def data_citations(root: Path) -> list[str]:
             continue
 
         for number, line in enumerate(text.splitlines(), start=1):
+            if WORKTREE_CITATION.search(line):
+                problems.append(f"{rel}:{number}: cites another lane's worktree, which is reaped after its merge - {line.strip()}")
             for match in DATA_CITATION.finditer(line):
                 if match.group(1) not in DISPOSABLE_DATA_DIRS:
                     continue

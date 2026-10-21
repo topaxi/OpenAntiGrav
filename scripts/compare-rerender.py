@@ -33,6 +33,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_provenance as cp  # noqa: E402
 
 #: A profile's directory under `data/saves/`.
 SAVES_DIR = {"pulse-psp": "pulse-psp", "pulse-ps2": "pulse-ps2", "hd-fury": "hd-fury", "pure-psp": "pure-psp"}
@@ -114,6 +115,8 @@ def remake(pj, env=None, remap=None, timeout=None, record_dir=None):
             alt = ce.MAIN / "data/saves" / SAVES_DIR.get(rec["profile"], rec["profile"]) / st.name
             if alt.exists():
                 args[args.index("--state") + 1] = str(alt)
+    if any("{scratch}" in a for a in args):
+        return ["argv names {scratch} (a recorded path under a lane's scratch directory): remap that flag, e.g. PP_HOME for --home"], []
     done = run_child(RUNNER + [str(HERE / args[0])] + args[1:], env, timeout)
     new_pj = tmp / "pair.json"
     if not new_pj.exists() or json.loads(new_pj.read_text()).get("refused"):
@@ -129,10 +132,11 @@ def remake(pj, env=None, remap=None, timeout=None, record_dir=None):
                        "ours_binary": rec["ours"].get("binary"), "rerendered_from": rec.get("rerendered_at"),
                        "overlap": before_overlap(rec, pj.parent)}
     new["drift"] = drift
+    cp.note_twin(new, drift)
     new["rerendered_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
     new["argv"] = rec["argv"]
     new["argv"][new["argv"].index("--out") + 1] = str(record_dir or pj.parent)
-    new_pj.write_text(json.dumps(new, indent=2) + "\n")
+    new_pj.write_text(json.dumps(cp.portable(new), indent=2) + "\n")
     # the new run's files replace the old ones, the scratch shots directory included
     for f in tmp.iterdir():
         dst = pj.parent / f.name

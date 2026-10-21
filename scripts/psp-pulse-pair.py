@@ -59,6 +59,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_provenance as cp  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -376,6 +377,7 @@ def main():
                     help="with --zone: the shield pool, read as 135.0 on the Assegai in Zone (a full bar shows 100 %%)")
     ap.add_argument("--toast-wait", type=float, default=6.0)
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
+    cp.add_arguments(ap)
     args = ap.parse_args()
     if "OAG_SHOT_DISPLAY" not in os.environ or "DISPLAY" not in os.environ:
         sys.exit("DISPLAY and OAG_SHOT_DISPLAY must name the instance's own Xvfb")
@@ -421,6 +423,8 @@ def main():
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["original"]["presented_lag_ticks"] = PRESENTED_LAG
+    cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", "savestate_restore", args.state,
+             {"value": PRESENTED_LAG, "unit": "ticks", "basis": "measured", "what": "picture, psp-presented-lag.py"})
     if not args.zone:  # a Zone frame renders at tick 0 on the mode object's counters, not on a run-up clock
         if args.ours_ticks is None:
             args.ours_ticks = GO_TICK + ce.tenths_matched_ticks(clock)

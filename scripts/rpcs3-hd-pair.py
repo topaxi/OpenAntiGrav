@@ -33,6 +33,7 @@ ROOT = HERE.parent
 MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_provenance as cp  # noqa: E402
 
 #: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
 #: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
@@ -134,6 +135,7 @@ def main():
     ap.add_argument("--platform", default="hd-fury")
     ap.add_argument("--state", help="the save state the emulator was restored from (mode/circuit facts)")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
+    cp.add_arguments(ap)
     ap.add_argument("--ours-ticks", type=int, default=None,
                     help="ticks ours runs before the frame; the states are after GO, so ours runs past its "
                          "own countdown to show the same gantry board (0 keeps the craft exactly on the "
@@ -206,6 +208,10 @@ def main():
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
     pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction: the RSX had presented the paused frame "
                                               "(hull check on hd-race/talons-pack), not measured per tick"}
+    capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
+    cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
+             {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
+              "what": "HUD clock text vs RAM; the picture is not corrected (the RSX presented the paused frame), per-tick picture lag not measured"})
     gantry = ship.get("gantry_seconds")
     pair.rec["original"]["gantry_seconds"] = gantry
     pair.rec["ours"]["ticks"] = args.ours_ticks

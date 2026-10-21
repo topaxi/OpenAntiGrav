@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -169,7 +169,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
+gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1276,6 +1276,13 @@ gen-status:
 # docs page nobody wrote, which check-docs never sees. See ADR-0047
 check-captures:
     python3 scripts/check-ghidra-captures.py
+
+# Every comparison pair records how its original was made, breaks no refusal rule and names no worktree or
+# scratch path (scripts/compare_provenance.py, docs/tools/compare-page.md "Provenance"). The pair scan reads
+# $OAG_PAIR_DIR (default data/reference/compare-page) and is skipped, loudly, where that directory is absent.
+check-pair-provenance:
+    python3 scripts/compare_provenance.py selftest
+    python3 scripts/compare_provenance.py scan
 
 # Re-snapshot every program in the open Ghidra project. Two steps because only
 # the first needs Ghidra: run scripts/ghidra/DumpDatabaseState.java from the
