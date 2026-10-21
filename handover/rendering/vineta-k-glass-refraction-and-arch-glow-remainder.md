@@ -44,3 +44,5 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 2. Measure whether the 4/3 holds at speed (`place --speed`, dump `0x00c49240..0x00c492b0` and the vertex constants in
    the hook's last round), and capture a second pose with the glass in view to re-check the coordinate law.
 3. RPCS3-capture a second circuit that `hd_add_second_census` shows moved (`place --hook`, same recipe).
+
+- **Glass sweep, 2026-10-21 (`hd-glass-sweep`): no single input found; the grid term is the lead.** `rpcs3-capture.md`, "What the sweep found". Ours samples the grid (alpha and additive) at a blurred mean on Tech de Ra's road (`in.texcoord` about 27, footprint level 5-7), so the original's outlines are absent; settle that first. `glass_sheen::bias` also skips slots that carry a glow entry, so slot 449 has no `c`: a held merge fixes saturation but raises the pair's mean grey 0.41 (budget 0.1). Next: grid UV and footprint, then a live draw dump of the glass draw at the cold pair's tick, then land the `c` merge with the light fix.
