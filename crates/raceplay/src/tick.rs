@@ -94,6 +94,8 @@ impl Race {
         // across this tick - see `race::perfect_start`.
         #[cfg(feature = "view")]
         let launch_grades = self.launch_grades();
+        #[cfg(feature = "view")]
+        let roll_payouts = self.roll_payout_timers();
         // Every craft is in the original's grid state until the green light:
         // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
         // moves it to state 1. Derived from the one countdown clock rather than
@@ -561,6 +563,7 @@ impl Race {
             // The perfect start arms the flare the way a pad does, so before the
             // exhausts take this tick's step, as the pad's arming is.
             self.fire_perfect_starts(&launch_grades);
+            self.fire_roll_payouts(&roll_payouts);
             self.advance_exhausts();
             // After the trails have taken this tick's sample, so a craft is tested
             // against the ribbon as it stands now rather than one tick stale.

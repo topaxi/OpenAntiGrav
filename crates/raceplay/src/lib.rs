@@ -263,6 +263,8 @@ mod respawn;
 mod results;
 #[cfg(feature = "view")]
 pub mod rocket_smoke;
+#[cfg(feature = "view")]
+mod roll_payout;
 mod routes;
 #[cfg(feature = "view")]
 mod scene;
