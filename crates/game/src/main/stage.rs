@@ -559,7 +559,8 @@ impl Stage {
             &hud,
             settings.graphics.hud_scale,
         )
-        .context("building the HUD overlay")?;
+        .context("building the HUD overlay")?
+        .map(|overlay| overlay.with_safe_area(settings.graphics.hud_safe_area));
         // The results table, built from the same assets and drawn into the same
         // target - see `oag_game::scoreboard`, which is where the "this is ours,
         // the disc's own Race End chain is not built" argument lives. Built with

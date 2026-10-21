@@ -22,6 +22,22 @@ pub fn stretch_for(
     }
 }
 
+/// `frame` drawn at `scale` about the centre of a `size` grid: the whole HUD moves in toward the
+/// middle of the screen, as a title's `Safe Area Setting` does ([`oag_title::hud::SafeArea`]).
+/// A scale of `1.0` returns the frame as it was.
+#[must_use]
+pub fn safe_area_frame(frame: Frame, scale: f32, size: (f32, f32)) -> Frame {
+    if (scale - 1.0).abs() < f32::EPSILON || frame.is_empty() {
+        return frame;
+    }
+    let placement = Placement {
+        scale,
+        offset: [(1.0 - scale) * size.0 * 0.5, (1.0 - scale) * size.1 * 0.5],
+        clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
+    };
+    frame.placed(&placement)
+}
+
 /// One view of a split screen: the layout it draws from, the slot's readout and
 /// where the HUD goes.
 #[derive(Debug)]
@@ -126,6 +142,9 @@ pub struct Overlay {
     split: Option<oag_hud::SplitAssets>,
     split_columns: Option<oag_hud::SplitAssets>,
     split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
+    /// The whole HUD's scale about the screen's centre, [`oag_title::HudArt::safe_area`] at the
+    /// player's value; `1.0` for a title with no such option.
+    safe_area_scale: f32,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -225,7 +244,27 @@ impl Overlay {
             split: assets.split.clone(),
             split_columns: assets.split_columns.clone(),
             split_hud: assets.split_hud.clone(),
+            safe_area_scale: assets
+                .art
+                .safe_area
+                .map_or(1.0, |area| area.value.scale(None)),
         }))
+    }
+
+    /// The player's `[graphics] hud_safe_area` (`None`: the title's own default). A title with
+    /// no `Safe Area Setting` keeps its HUD at full size whatever this says.
+    #[must_use]
+    pub fn with_safe_area(mut self, percent: Option<u8>) -> Self {
+        self.safe_area_scale = self
+            .art
+            .safe_area
+            .map_or(1.0, |area| area.value.scale(percent));
+        self
+    }
+
+    /// `frame` drawn at [`Self::safe_area_scale`] about the centre of the layout's grid.
+    fn safe_area(&self, frame: Frame) -> Frame {
+        safe_area_frame(frame, self.safe_area_scale, self.space.size)
     }
 
     /// The grid this HUD is authored in: the title's own, per `Assets::space`.
@@ -285,7 +324,7 @@ impl Overlay {
         countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) {
-        let mut frame = draw_list(&self.context(), readout);
+        let mut frame = self.safe_area(draw_list(&self.context(), readout));
         if let Some(text) = countdown {
             frame.extend(crate::hud_views::countdown_frame(
                 &self.context(),

@@ -194,6 +194,7 @@ const TITLE: &Title = &Title {
         lap_one_shift: None,
         bar_tip: None,
         sway: None,
+        safe_area: None,
         resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,
     },

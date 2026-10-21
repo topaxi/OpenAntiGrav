@@ -51,6 +51,8 @@ def platform(key):
         out["ours"]["shadows"] = table["shadows"]
     if "pilot_assist" in table:
         out["ours"]["pilot_assist"] = table["pilot_assist"]
+    if "hud_safe_area" in table:
+        out["ours"]["hud_safe_area"] = table["hud_safe_area"]
     out["tolerance"] = dict(doc["tolerance"])
     out["profile_sha"] = hashlib.sha256(PROFILE.read_bytes()).hexdigest()[:12]
     return out
@@ -134,6 +136,9 @@ def write_ours_settings(plat, profile_dir):
                o["fov_percent"], o["boost_fov_kick"], plat["profile_key"], o["render_scale"],
                o["reconstruction"], o["msaa"], o["motion_blur"], o["shadows"], o["model_detail"],
                o["texture_detail"], o["screen_filter"]))
+    if "hud_safe_area" in o:
+        text = text.replace("boost_fov_kick = %d\n" % o["boost_fov_kick"],
+                            "boost_fov_kick = %d\nhud_safe_area = %d\n" % (o["boost_fov_kick"], o["hud_safe_area"]), 1)
     settings_path(profile_dir).write_text(text)
 
 
