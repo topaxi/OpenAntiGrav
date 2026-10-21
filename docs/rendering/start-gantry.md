@@ -959,6 +959,14 @@ that, capture the quad's fragment-program constants on Ubermall (`rpcs3_draw_hoo
 compare with what ours multiplies the card by.
 **Omega/2048: checked, differs.** 2048 and Omega place no gantry (this page, above); nothing to port.
 
+**Closed 2026-10-21 (`hd-emissive-glow`, [hd-glow-mask.md](hd-glow-mask.md)).** Both leads above are answered, and neither was the lighting factor:
+(1) the **phase** is read out of RAM now: the gantry node's `+0xc0` among the circuit's `MeshImporter` nodes (19 sit inside a race-manager window, all at one value),
+`scripts/rpcs3_hd_field.py::gantry_seconds`, and `oag-game --gantry-seconds` pins the race manager's board with it; the pair script passes it, and the capture waits for the RSX to
+present before the grab (the screenshot was 0.1 to 0.3 s older than RAM). (2) the **gap where both are bright** was the glow mask: the card's program ends `MOV H0.w, {1}` (read
+live on Metropia: `tex0 * (glow.a + glow.rgb * light)`, draws 96, 101 and 106), so the original's board blooms from a mask of 1 that ours did not write, and ours' pre-bloom colour was already
+the original's. With the mask wired and the phase pinned Metropia's `GO` reads bright white with the original's halo. **Still open:** the side boards' advert card (ours shows `FX-350`, the
+original's are plain teal in that frame) and `cf_vex_billboard`'s multiply-by-the-card shape (rcsmaterial.md).
+
 ## Wipeout HD: the gantry is a card, and the mode picks the file (2026-10-08, `hd-gantry`)
 
 **The maintainer's two reports from play, both measured on RPCS3** (private instance,

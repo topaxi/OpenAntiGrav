@@ -67,6 +67,10 @@
   and the tunnel's rim light are blended batches with the glow bits, which the original's stencil
   stamps and ours did not, so they had no bloom; now drawn through a second alpha-only pass and
   measured against the original's own EDRAM mask - see [`glow-mask.md`](glow-mask.md)
+- **Wipeout HD's glow mask is each fragment program's own alpha** (2026-10-21): the bloom gate reads the
+  scene target's alpha and the programs write it (1 on the neon signs and the lit billboards, 0 on lit surfaces,
+  a texture's alpha on the pads, the sky's `Sky colour` fourth byte), opaque draws only; ours stamped none, so
+  emissive signs had no halo - see [`hd-glow-mask.md`](hd-glow-mask.md)
 - **Pulse PS2 does bloom** (2026-10-02): five passes per field read off a GS dump, 7-tap blur at
   320x224, half-strength add; the mask is unmeasured - see [`ps2-bloom.md`](ps2-bloom.md)
 - **Pulse's glow mask and hull lights, measured live** (2026-09-23): the
