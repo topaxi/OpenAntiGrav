@@ -236,3 +236,5 @@
 0x089338c8	function	Body_Translate	85	craft-physics.md
 # 2026-10-21 ship-lean: the drawn lean filter, Pulse's verbatim (craft-physics.md)
 0x08925054	function	Ship_UpdateSteerLeans	85	craft-physics.md
+# 2026-10-21 pure-camera-eye: the player view update, live (camera.md)
+0x08849970	function	Camera_CopyTripodToView	85	camera.md
