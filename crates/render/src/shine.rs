@@ -221,6 +221,10 @@ pub struct TrackNormals {
     fixed: bool,
     /// How many times `units` has been recomputed.
     refreshed: u32,
+    /// The vertices that ride a node, so a new clock value turns those and nothing else.
+    animated: Vec<u32>,
+    /// How many nodes `animated` was read against.
+    nodes: usize,
 }
 
 impl TrackNormals {
@@ -231,7 +235,10 @@ impl TrackNormals {
     }
 
     fn refresh(&mut self, model: &Model, seconds: f32) {
-        if self.at.is_some() && (self.fixed || self.at == Some(seconds.to_bits())) {
+        if self.at.is_some()
+            && (self.fixed || self.at == Some(seconds.to_bits()))
+            && self.units.len() == model.vertices.len()
+        {
             return;
         }
         self.refreshed += 1;
@@ -245,6 +252,8 @@ impl TrackNormals {
             texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
                 identity * Vec3::from_array(v.normal)
             });
+            self.animated.clear();
+            self.nodes = 0;
             return;
         }
         // An animated node's vertices are in the node's space; its matrix takes the
@@ -256,7 +265,7 @@ impl TrackNormals {
         // first. The arithmetic is the two-pass form's to the bit: a placed normal
         // is renormalised, then goes through the identity the map's model matrix
         // was, and is renormalised again.
-        texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
+        let unit = |v: &oag_mesh::mesh::GpuVertex| {
             let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
                 Some(m) => Vec3::new(
                     m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
@@ -266,8 +275,29 @@ impl TrackNormals {
                 .normalize_or_zero(),
                 None => Vec3::from_array(v.normal),
             };
-            identity * normal
-        });
+            (identity * normal).normalize_or_zero()
+        };
+        // A vertex that rides no node has the same normal at every clock value, so once
+        // the whole list is placed only the vertices that ride a node are turned again.
+        // `animated` is read off the model once, with the whole list.
+        if self.units.len() == model.vertices.len() && self.nodes == nodes.len() {
+            for &i in &self.animated {
+                self.units[i as usize] = unit(&model.vertices[i as usize]);
+            }
+            return;
+        }
+        self.units.clear();
+        self.units.extend(model.vertices.iter().map(unit));
+        self.nodes = nodes.len();
+        self.animated.clear();
+        self.animated.extend(
+            model
+                .vertices
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| (v.xform as usize).checked_sub(1).is_some_and(|i| i < nodes.len()))
+                .map(|(i, _)| i as u32),
+        );
     }
 
     /// [`write_view`] for `model` at `seconds`, reusing the normals if they are current.
