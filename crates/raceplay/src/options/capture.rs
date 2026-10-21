@@ -49,6 +49,23 @@ pub struct CaptureHud {
     pub shield_percent: Option<f32>,
     /// The best lap so far in ticks, when the capture read it (`None` also when there is none).
     pub best_lap_ticks: Option<u32>,
+    /// Zone mode's counters as the original's frame showed them, when the capture read them.
+    pub zone: Option<CaptureZone>,
+}
+
+/// Zone mode's own counters, read out of the original's RAM at the stop a Zone pair is taken at
+/// (Pulse PSP: the mode object's `+0x1a10` zone number, `+0x1a1c` score and `+0x1a24` dwell timer,
+/// `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`). They are written into the race's own state
+/// before the first frame, so the HUD, the colour grade and the stage sphere all read the zone the
+/// original was on; a posed capture runs no ticks, so nothing else would move them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureZone {
+    /// The zone number.
+    pub zone: u16,
+    /// The score, when the capture read it.
+    pub score: Option<i32>,
+    /// Seconds into the current zone, when the capture read it.
+    pub timer_seconds: Option<f32>,
 }
 
 /// A camera pose imposed from outside, replacing the chase camera.

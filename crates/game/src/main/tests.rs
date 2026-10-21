@@ -114,12 +114,19 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             speed_kmh: None,
             shield_percent: None,
             best_lap_ticks: None,
+            zone: None,
         }
     );
     let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
     assert_eq!((full.speed_kmh, full.shield_percent), (Some(571.5), Some(99.0)));
     let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
     assert_eq!(best.best_lap_ticks, Some(3375));
+    let zone = pose::parse_hud_state("1,1,0,0,500.0,99.0,0,12,151921,2.5").expect("ten values");
+    assert_eq!(
+        zone.zone,
+        Some(race::CaptureZone { zone: 12, score: Some(151_921), timer_seconds: Some(2.5) })
+    );
+    assert_eq!(best.zone, None);
     let none = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,0").expect("seven values");
     assert_eq!(none.best_lap_ticks, None);
     assert!(pose::parse_hud_state("6,1,30.0").is_err());
