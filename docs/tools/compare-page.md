@@ -217,7 +217,10 @@ stored pose is reused, where `compare-rerender` re-reads it because it re-captur
 path under a lane's scratch directory or a reaped worktree resolves to the file of the same name in the pair
 directory (`trace.csv`, `field.csv`, `state-row.csv`), and a pair whose input does not resolve is skipped and named.
 The old scores move to `previous_ours`; `ours.binary`, `ours.rendered_at`, `overlap` and the environment are
-replaced, then the three manifests are rewritten from the pairs they list and the page is rebuilt. It does not re-run
+replaced, then the three manifests are rewritten from the pairs they list and the page is rebuilt. Each pair's line
+prints mean grey, RMSE and edge correlation old -> new, green where the score improved, red where it regressed and dim
+where the printed value did not move, and the run ends with a tally by mean grey; colour is on for a terminal and off
+under `NO_COLOR` or a pipe (`FORCE_COLOR=1` forces it). It does not re-run
 the pair scripts' checks on ours (pose read back from our trace, settings read back): a change that moves our pose
 shows up only in the picture and the scores.
 

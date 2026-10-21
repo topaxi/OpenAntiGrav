@@ -95,10 +95,33 @@ def rerender(pj, binary):
     rec["overlap"] = ce.overlap_score(pair_dir / "theirs.png", pair_dir / "ours.png")
     rec["environment"] = ce.environment_text(plat, rec)
     pj.write_text(json.dumps(rec, indent=2) + "\n")
-    new = rec["overlap"]
-    if "mean_grey" in old and "mean_grey" in new:
-        return "ok: mean grey %.2f -> %.2f, rmse %.3f -> %.3f" % (old["mean_grey"], new["mean_grey"], old["rmse"], new["rmse"])
-    return "ok"
+    return "ok: " + changes(old, rec["overlap"])
+
+
+#: `(key, label, format, lower is better)`, in the order printed.
+SCORES = (("mean_grey", "mean grey", "%.2f", True), ("rmse", "rmse", "%.3f", True), ("edge_ncc", "edge", "%.2f", False))
+COLOUR = (sys.stdout.isatty() and "NO_COLOR" not in os.environ) or bool(os.environ.get("FORCE_COLOR"))
+GREEN, RED, DIM, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
+TALLY = {"better": 0, "worse": 0, "same": 0}
+
+
+def paint(text, code):
+    return code + text + RESET if COLOUR else text
+
+
+def changes(old, new):
+    """Each score old -> new, green where it improved, red where it regressed and dim where the printed value did not
+    move; the pair is tallied by its mean grey difference."""
+    parts = []
+    for key, label, fmt, lower in SCORES:
+        if key not in old or key not in new:
+            continue
+        a, b = fmt % old[key], fmt % new[key]
+        verdict = "same" if a == b else "better" if (float(b) < float(a)) == lower else "worse"
+        if key == "mean_grey":
+            TALLY[verdict] += 1
+        parts.append(paint("%s %s -> %s" % (label, a, b), {"same": DIM, "better": GREEN, "worse": RED}[verdict]))
+    return ", ".join(parts) if parts else "no previous scores"
 
 
 def rewrite_manifests(d):
@@ -125,11 +148,15 @@ def main():
     for pj in pairs:
         result = rerender(pj, BINARY)
         bad += not result.startswith(("ok", "skipped: refused"))
+        if not result.startswith(("ok", "skipped")):
+            result = paint(result, RED)
         print("%-55s %s" % (pj.parent.relative_to(args.dir), result), flush=True)
     if not args.no_page:
         rewrite_manifests(args.dir)
         subprocess.run([sys.executable, str(HERE / "compare-page.py"), str(args.dir), "--out", str(ROOT / "data/compare")], check=True)
-    print("%d pair(s), %d not re-rendered" % (len(pairs), bad))
+    print("%d pair(s), %d not re-rendered; by mean grey: %s, %s, %s" % (
+        len(pairs), bad, paint("%d better" % TALLY["better"], GREEN), paint("%d worse" % TALLY["worse"], RED),
+        paint("%d same" % TALLY["same"], DIM)))
     sys.exit(1 if bad else 0)
 
 
