@@ -7,8 +7,9 @@
 Loads `race-talons-venom-alongside.ppst` with a breakpoint on `Gfx_FlushRenderManager` (0x0891e3c0) armed, runs to the
 state's own race clock, and writes `{flare, node, disp, ents}` where `ents` is `[index, item, key, first word of item]` for
 each of `display+0x5520` entries at `display+0x16a0` (`g_display` is the pointer at 0x08abf5d4). `flare` and `node` are the
-player's `ExhaustFlare` and its `Trail` (`*(flare+0x64)`, the queue item itself, `+0x60` is `node`). A key is `layer << 24 |
-depth`, drawn ascending: on the race pair the player's `Trail` is `0x4d000000` (depth zero, every ship's is) and its flare
+player's `ExhaustFlare` and its `Trail` (`*(flare+0x64)`, the queue item itself, `+0x60` is `node`). A key is the submitter's
+layer in its top bits and a 20-bit depth (`Gfx_Enqueue` keeps `key & 0xfff00000` and ORs in `display+0x1180` when that is
+not -1), drawn ascending: on the race pair the player's `Trail` is `0x4d000000` (depth zero, every ship's is) and its flare
 `0x4d0ff75e`, with 40-odd list-B meshes between them (`docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The ribbon is
 queued first"). Output is derived game data: keep it under data/, never commit it.
 """

@@ -2133,6 +2133,69 @@ to draw before the pads and hulls and now draws after the hulls (not after the w
 past a laid bomb dropped `bomb_orbit_ground_truth` under its floor), which is the original's order (`0x4a` before `0x4d`) for
 the hulls; the grid pairs show no change from it.
 
+#### Re-verified independently, and the order made a setting (2026-10-21, `trail-order-option`)
+
+**Verdict: true.** Re-measured by a second lane on its own PPSSPP (v1.20.4, software renderer) with the tools above;
+nothing below reuses the first lane's captures.
+
+1. *The key, statically.* `Trail_Submit` (`0x0892a408`): `lbu a1,-0xa20(0x08ac0000)` reads the byte global
+   `0x08abf5e0`; when it is **non-zero** the function calls `Gfx_Enqueue` (`0x0891e35c`) with `a0 = *(0x08abf5d4)`
+   (`g_display`), `a1 = this` and `a2 = 0x4d000000` (`lui a2,0x4d00` in the delay slot at `0x0892a43c`), and returns 1;
+   otherwise it returns 0. **Correction to the paraphrase above**: the guard is that global byte and its polarity is
+   "non-zero enqueues", not `!g_display[+0x5dec]`. `Gfx_Enqueue` stores `(item, key)` at `display + 0x16a0 + 8 n` and
+   bumps the count at `+0x5520`; **when `display+0x1180` is not -1 it keeps `key & 0xfff00000` and ORs in
+   `display+0x1180 & 0xfffff`**, so the key is a 12-bit layer and a 20-bit depth, and a trail's zero depth can be
+   overridden. All three live reads below saw it inactive. Confidence on the key stays 90.
+2. *The depth write, live.* The ribbon's state list read back from `0x08b65700` holds `23000001` (depth test on),
+   `de000006`, **`e7000001` (depth writes masked)**, `21000001` and `df0000aa` (the additive blend), as the static decode
+   says.
+3. *The queue, on three states* (`scripts/psp-queue-read.py`, `RIBBON_STATE`, `TARGET_CLOCK`):
+
+   | state | clock | entries | layer `0x4d` | player `Trail` | player flare |
+   | --- | --- | --- | --- | --- | --- |
+   | `race-talons-venom-alongside` (Talon's Junction, single race) | 38.4082 | 166 | 55 | `0x4d000000`, first | `0x4d0ff75e`, last |
+   | `zone-talons-junction-white-assegai-z8` (Zone) | 10.7135 | 56 | 10 | `0x4d000000`, first | `0x4d0ff79b` |
+   | `zone-moa-therma-white-assegai-z50` (Zone, Moa Therma) | 1.2624 | 76 | 14 | `0x4d000000`, first | `0x4d0ff776` |
+
+   On the race pair 16 entries carry exactly `0x4d000000`: the **ten** `Trail` items (first word 0, the player's
+   `0x9b7b6b0` among them) and six items of an unidentified class (first word `0xed56`); each Zone state has the
+   player's `Trail` and one such item (`0xa202`, `0x8a01`). So depth zero is not the ribbon's alone, and nothing here
+   says how ties sort.
+4. *The removal, on a frame of my own* (`psp-ge-dump.py dump` a few frames after the race pair's clock, so a later
+   frame than the lane's: the player's ribbon box differs). The player's ribbon is chunks `5485..5673` (27 PRIMs,
+   vertex type `0x1fe`, blend `0xaa`, depth mask on, depth test 6) and the floor patch is chunk `7672` (186 vertices,
+   world box -142..-84, -53..-43, -734..-685, the same mesh as the lane's `7678`). Ribbon contribution
+   (`|with - without|`, grey):
+
+   | replay | over the ribbon's own 3,999 px | tail box (190,236) 90x36 |
+   | --- | --- | --- |
+   | full frame | 54.3 | 16.5 |
+   | patch `7672` removed | **75.8** | **31.8** |
+   | `7598`, `7608`, `7672`, `7692` removed | 75.8 | 31.8 |
+
+   The mechanism reproduces, and only `7672` veils the ribbon on this frame. The size does not: 16.5 to 31.8 here
+   against 6.8 to 30.8 on the pair frame, because the ribbon sits partly outside the tail box on this one. "About 20x" is
+   that frame's figure, not a property of the order.
+5. *A frame with nothing to veil it.* On the Talon's Junction Zone state (`zone-tj`, 255 PRIMs) the ribbon contributes
+   31.6 grey over 1,810 px and the translucent `0x13b` meshes drawn after it touch 23 px: the Zone floor there is
+   opaque, so the ribbon reads at full strength, as the claim predicts. Three `0x13b` meshes with the floor patch's
+   state (`1408..1428`, alpha blend, alpha test, depth mask) draw **before** that ribbon; which queue entry they are
+   (a lower layer, or the depth-zero partner at index 21) was **not identified**.
+
+**Not measured here: Pure.** The tools carry Pulse USA addresses; a Pure read needs its `Gfx_Enqueue` and `g_display`
+located first. Pure keeps the **checked, applies, not measured** label from item (c) above.
+
+**The setting.** `[render_profiles.<title>] trail_order` (`oag_display::display::TrailOrder`, menu row TRAIL ORDER,
+`--trail-order`): `original` is this order and the default; `over-floors` draws the ribbons after the circuit's blended
+list, which is this project's order before the measurement (**chosen, not measured**, the maintainer's request). Offered
+only where `Title::exhaust` is `Exhaust::Named` (Pulse on PSP and PS2, Pure); `Definition::drop_unavailable_trail_order`
+drops the row on HD/Fury, Omega and 2048, whose tube keeps its own order whatever the profile holds
+(`Race::ribbons_first`). On `pulse-psp-race/talons-alongside`, re-rendered from the same inputs: `original` is
+byte-identical to `main` at `fff40a50c`; tail box grey original 37.4, `original` 41.3, `over-floors` 64.9; whole-frame
+`|ours - original|` 14.85 and 16.28 (4,272 px change). `talons-boost` is identical under both (no translucent patch
+under the craft). Held by `trail_order_ground_truth` (both orders differ at a pose over the patch, the default equals
+`original`) and the `trail_order` unit tests in `oag-raceplay` and `oag-game`; the compare profile pins `original`.
+
 
 ## Open
 
