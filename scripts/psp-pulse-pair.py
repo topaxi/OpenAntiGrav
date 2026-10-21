@@ -35,6 +35,12 @@ GO_TICK = 276
 
 #: `g_weapons_enabled` (byte, 0 = off), docs/ghidra/functions/psp-pulse-usa/shield.md.
 WEAPONS_ENABLED = 0x08B30FA8
+#: `g_camera_fov_degrees` (f32), the fov the frame is drawn with: the view's authored fov (`<ExternalCameraClose>` 60,
+#: `<InternalCamera>` 65 on these ships) plus `0.075 * dot(fwd, vel)`, docs/ghidra/functions/psp-pulse-usa/camera.md.
+CAMERA_FOV_ADDRESS = 0x08B34310
+#: `<InternalCamera fov>` on every Pulse ship read so far (our log: `<InternalCamera>: fov 65`); a check below
+#: compares it with the fov in RAM, so a ship that authors another value is refused rather than mis-posed.
+INTERNAL_FOV = 65.0
 #: `|velocity| * 3.6`, the HUD's speed readout (PlayerStatus_Update, docs/ghidra/functions/psp-pulse-usa/race-progress.md).
 SPEED_TO_KMH = 3.6
 
@@ -101,6 +107,16 @@ def race_field_module():
     return mod
 
 
+def camera_craft_distance(row):
+    return ce.math.dist([row["cam_pos_" + a] for a in "xyz"], [row["pos_" + a] for a in "xyz"])
+
+
+def camera_view_of(row):
+    """`internal` when the original's camera sits inside the craft (3.0 units from it at its own height), else
+    the close chase view, the one every other pair is in (11.64 units back, 3 up)."""
+    return "internal" if camera_craft_distance(row) < 6.0 else "close"
+
+
 def detect_layout(oag, image, track, theirs_row, flags, tol):
     """Which of `track.vex` / `track_reversed.vex` the original loaded: our own start on each layout against
     the original's grid pose (position and heading). Returns (layout, report) or exits naming the circuit."""
@@ -160,7 +176,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 (player["place"], len(rows), lap_number, player["lap_time"]))
     ours_csv = out / "ours-trace.csv"
     run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
-    run(base + ["--ticks", 0, "--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
+    run(base + ["--ticks", 0] + view_flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:
@@ -243,6 +259,7 @@ def main():
     time.sleep(args.toast_wait)
     from ppsspp_debugger import Debugger
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
+    ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
@@ -275,10 +292,21 @@ def main():
     run(["magick", shots / "tick00000.png", "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", out / "theirs.png"])
     theirs_row = ce.csv_row(csv, 0)
     theirs = ce.pose_of(theirs_row)
-    fov = ce.speed_fov(theirs_row)
+    view = camera_view_of(theirs_row)
+    fov = ce.speed_fov(theirs_row, INTERNAL_FOV if view == "internal" else 60.0)
+    pair.rec["original"]["fov_source"] = ("the view's authored fov (%s) plus 0.075 * dot(fwd, vel), checked against "
+                                          "g_camera_fov_degrees (%#x) read at the clock's stop" % (
+                                              INTERNAL_FOV if view == "internal" else 60.0, CAMERA_FOV_ADDRESS))
+    pair.rec["original"]["fov_ram_at_stop"] = ram_fov
+    pair.check("the original's fov in RAM at the stop is the view's authored fov plus the speed term (4 ticks of drift allowed)",
+               abs(ram_fov - fov) < 1.0, "RAM %.3f, law %.3f" % (ram_fov, fov))
     pair.rec["original"]["camera"] = {"pos": [theirs_row["cam_pos_" + a] for a in "xyz"],
                                       "fwd": [theirs_row["cam_fwd_" + a] for a in "xyz"], "source": "psp-trace.py --camera"}
     pair.rec["original"]["shield"] = theirs_row.get("shield")
+    pair.rec["original"]["camera_view"] = {"view": view, "source": "camera-to-craft distance (%.2f units; the chase "
+                                           "views sit 11.64 away, the cockpit view 3.0)" % camera_craft_distance(theirs_row)}
+    pair.rec["ours"]["camera_view"] = view
+    view_flags = ["--camera-view", view]
     pair.check_size("original", out / "theirs.png")
 
     if args.field:
@@ -319,7 +347,7 @@ def main():
     cmd = base + ["--pose-hold"]
     pair.rec["ours"]["pose_hold"] = True
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
-    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--screenshot", out / "ours.png"],
+    run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks] + view_flags + ["--screenshot", out / "ours.png"],
         stdout=subprocess.DEVNULL)
     run(cmd + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks, "--trace-out", ours_csv],
         stdout=subprocess.DEVNULL)

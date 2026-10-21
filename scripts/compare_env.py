@@ -150,11 +150,11 @@ def pose_of(row):
             "speed": row.get("speed")}
 
 
-def speed_fov(row):
-    """The original's vertical fov at this row: `60 + 0.075 * dot(fwd, vel)`
-    (docs/rendering/projection-vs-the-original.md, confidence 94)."""
+def speed_fov(row, base=60.0):
+    """The original's vertical fov at this row: `base + 0.075 * dot(fwd, vel)`, `base` the view's authored fov (60 for
+    the chase views, 65 for Pulse's `<InternalCamera>`; docs/rendering/projection-vs-the-original.md, confidence 94)."""
     dot = sum(row[f"fwd_{a}"] * row[f"vel_{a}"] for a in "xyz")
-    return 60.0 + 0.075 * dot
+    return base + 0.075 * dot
 
 
 def state_facts(state_path):
