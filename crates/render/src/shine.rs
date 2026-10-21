@@ -295,7 +295,11 @@ impl TrackNormals {
                 .vertices
                 .iter()
                 .enumerate()
-                .filter(|(_, v)| (v.xform as usize).checked_sub(1).is_some_and(|i| i < nodes.len()))
+                .filter(|(_, v)| {
+                    (v.xform as usize)
+                        .checked_sub(1)
+                        .is_some_and(|i| i < nodes.len())
+                })
                 .map(|(i, _)| i as u32),
         );
     }
