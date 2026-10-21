@@ -1115,7 +1115,8 @@ pub(crate) struct Uniforms {
 
 /// A craft's model matrix, which is the only correct way to place its mesh.
 ///
-/// The barrel roll turns this about the craft's own nose: `FUN_08841f88`
+/// The barrel roll and the steering lean turn this about the craft's own nose,
+/// one angle between them (`oag_render::roll::display_angle`): `FUN_08841f88`
 /// composes its rotation with the rigid body's own matrix, about the
 /// forward axis that matrix's own third row carries, so it is folded into
 /// `body.orientation` here rather than applied as a separate factor -
@@ -1125,7 +1126,11 @@ pub(crate) struct Uniforms {
 /// would otherwise carry through a following scale. See `oag_render::roll`.
 pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
     let body = &ship.physics.body;
-    let roll = oag_render::roll::rotation(Vec3::NEG_Z, ship.physics.roll_phase);
+    let roll = oag_render::roll::display_rotation(
+        Vec3::NEG_Z,
+        ship.physics.roll_phase,
+        ship.physics.steer_lean,
+    );
     Mat4::from_rotation_translation(body.orientation * roll, body.position)
         * Mat4::from_rotation_y(MODEL_YAW)
         * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))

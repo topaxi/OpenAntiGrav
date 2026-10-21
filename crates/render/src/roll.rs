@@ -44,7 +44,8 @@ pub const FULL_TURN: f32 = 6.28;
 /// The capture: `entity+0x880` (the eased phase `FUN_088418e0`'s display
 /// matrix reads directly, `angle = entity[0x880] * 6.28`) was pinned at a
 /// breakpoint to a small sweep of values (`0.0`, `+/-0.2`, `+/-0.35`) with
-/// the steering lean `entity+0x854` pinned at `0.0`, and the resulting
+/// the steering lean `entity+0x854` pinned at `0.0` (it shares the angle, so
+/// [`display_angle`] carries this sign for it too), and the resulting
 /// display matrix - `*(*(entity+0x8b0)+0x3c)+0x40`, self-validated because
 /// its own row 3 reproduces the rigid body's position exactly - was read
 /// back alongside the body basis at `entity+0x794`. Every nonzero sample
@@ -103,30 +104,56 @@ pub fn ease(p: f32) -> f32 {
 /// The angle to roll by, in radians: the eased phase times [`FULL_TURN`]
 /// times [`ROLL_DIRECTION`].
 ///
-/// This is the roll term alone. The original's angle is
-/// `craft[0x854] * 0.5 + craft[0x880] * 6.28`, and the first term -
-/// `FUN_0883fab4`'s steering lean, confidence **0** for what it physically
-/// means - is deliberately **not** transcribed here. So the reimplementation's
-/// total roll angle differs from the original's by whatever that term
-/// contributes - an honest, documented gap rather than a guessed constant.
+/// The roll term alone, which is what the internal camera's up vector turns by
+/// (`FUN_088455ec` reads `craft[0x880]` and not the steering lean). The hull's
+/// display matrix adds the lean: [`display_angle`].
 #[must_use]
 pub fn angle(roll_phase: f32) -> f32 {
     ease(roll_phase) * FULL_TURN * ROLL_DIRECTION
 }
 
+/// What the steering lean is scaled by before it joins the roll's angle: the
+/// `0.5` at `0x08842148` in `FUN_088418e0`.
+pub const LEAN_SCALE: f32 = 0.5;
+
+/// The angle the hull is drawn turned by about its nose, in radians.
+///
+/// `FUN_088418e0` builds one angle, `entity[0x854] * 0.5 + entity[0x880] * 6.28`
+/// (`0x08842140`), and rotates the display matrix by it: the steering lean
+/// (`oag_physics::controls::update_steer_lean`, confidence 95) and the eased
+/// barrel roll share the rotation, so they share [`ROLL_DIRECTION`] too.
+#[must_use]
+pub fn display_angle(roll_phase: f32, steer_lean: f32) -> f32 {
+    (steer_lean * LEAN_SCALE + ease(roll_phase) * FULL_TURN) * ROLL_DIRECTION
+}
+
 /// The rotation [`angle`] describes, about `axis`.
 ///
-/// `axis` is the caller's own forward: the ship's local nose for the model
-/// matrix, the internal camera's view direction for the up vector. Neither
-/// call site lives here - see them for the axis each one passes.
+/// `axis` is the caller's own forward: the internal camera's view direction
+/// for the up vector. The hull's own rotation is [`display_rotation`].
 #[must_use]
 pub fn rotation(axis: Vec3, roll_phase: f32) -> Quat {
     Quat::from_axis_angle(axis, angle(roll_phase))
 }
 
+/// The rotation [`display_angle`] describes, about `axis`, the ship's local
+/// nose for the model matrix and everything placed on the drawn hull.
+#[must_use]
+pub fn display_rotation(axis: Vec3, roll_phase: f32, steer_lean: f32) -> Quat {
+    Quat::from_axis_angle(axis, display_angle(roll_phase, steer_lean))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lean_turns_the_hull_the_way_a_positive_roll_does_at_half_scale() {
+        assert_eq!(display_angle(0.0, 0.0), 0.0);
+        assert_eq!(display_angle(0.0, 1.0), LEAN_SCALE * ROLL_DIRECTION);
+        assert_eq!(display_angle(0.3, 0.0), angle(0.3));
+        assert!((display_angle(0.3, 0.8) - (angle(0.3) + 0.4 * ROLL_DIRECTION)).abs() < 1e-6);
+    }
 
     #[test]
     fn ease_of_zero_is_zero() {

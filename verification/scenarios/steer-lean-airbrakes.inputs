@@ -1,0 +1,24 @@
+# The drawn steering lean (entity+0x854, FUN_0883fab4's second filter) against
+# each of its inputs: the stick, each airbrake alone, the stick with either
+# airbrake, and both airbrakes. Each airbrake is pressed once and held, never
+# tapped twice inside the sideshift window, so the sideshift terms stay clear.
+#
+#     just trace --port <port> --script verification/scenarios/steer-lean-airbrakes.inputs \
+#         --script-lead 2 --warmup-hold cross --warmup 6 \
+#         --out data/traces/talons-junction-steer-lean-airbrakes.csv
+#
+# Reference scenario: Time Trial, Venom, Talon's Junction White, Assegai.
+
+60 cross
+120 cross stick_x=1.0
+60 cross
+120 cross l
+60 cross
+120 cross r
+60 cross
+120 cross stick_x=1.0 r
+60 cross
+120 cross stick_x=1.0 l
+60 cross
+120 cross l r
+60 cross

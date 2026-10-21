@@ -24,6 +24,7 @@ mod pads_ground_truth;
 mod ride_height_ground_truth;
 mod shove_wall_pose_walk_ground_truth;
 mod steady_state_vertical_ground_truth;
+mod steer_lean_ground_truth;
 mod wall_angular_pose_walk_ground_truth;
 mod wall_contact_ground_truth;
 mod yaw_authority_ground_truth;

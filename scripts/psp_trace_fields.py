@@ -57,6 +57,8 @@ CRAFT_FIELDS = [
 CONTROLS_POINTER = 0x78
 CONTROL_FIELDS = [
     ("stick_steer", 0x00),
+    ("stick_lab", 0x08),
+    ("stick_rab", 0x0C),
     ("stick_pitch", 0x10),
 ]
 
