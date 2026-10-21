@@ -15,7 +15,8 @@
 [ours_defaults]
 # Every render setting that has an "original" value is set to it; the upscaler, FSR,
 # SMAA and the screen filter are off, motion blur is off (neither original has it), and
-# anisotropic filtering is off (no original forces it). These are written into the
+# anisotropic filtering is off (no original forces it; measured for HD: max anisotropy 0 on every bind
+# of two circuits, docs/rendering/hd-track-tone.md). These are written into the
 # pair's private settings.toml AND passed on the command line where a flag exists, and
 # the settings file the run rewrites is read back and compared (compare_env.read_back).
 render_scale = 100
@@ -118,7 +119,7 @@ hud_safe_area = 96
 name = "RPCS3"
 renderer = "Vulkan"
 resolution = "1280x720"
-resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080
+resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080. At 150 the exposure readback read half the frame on Anulpha (the other dark circuits are predicted, not read) and the original came out brighter than the game makes it (docs/rendering/hd-track-tone.md); judge brightness against 100
 write_color_buffers = true    # BOTH config.yml and custom_configs/config_BCES00664.yml
 output_scaling = "Nearest"
 msaa = "Disabled"
