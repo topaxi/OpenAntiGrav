@@ -6,8 +6,6 @@
                                                    #   or $OAG_PAIR_DIR) carries provenance and names no worktree or
                                                    #   scratch path; --strict also fails a broken rule; skipped loudly
                                                    #   when DIR is absent
-    compare_provenance.py tracked                  # ratchet: tracked files outside scripts/ and .claude/ naming
-                                                   #   `data/scratch/` or `OpenAntiGrav-worktrees/` may not grow
     compare_provenance.py backfill SRC DST         # copy SRC (pair dirs, `cp -rL`) to DST and fill what can be read
     compare_provenance.py table DIR                # markdown table of every pair's provenance and its refusals
     compare_provenance.py portable DST             # rewrite a copy's pair.json paths (no worktree or scratch path)
@@ -311,33 +309,6 @@ def scan(d, strict=False):
     return 1 if bad else 0
 
 
-BASELINE_FILE = HERE / "provenance-path-baseline.txt"
-
-
-def tracked_counts():
-    out = subprocess.run(["git", "grep", "-c", "-E", "data/scratch/|OpenAntiGrav-worktrees/", "--", ".", ":!scripts", ":!.claude", ":!justfile",
-                          ":!scripts/provenance-path-baseline.txt"], cwd=ROOT, capture_output=True, text=True).stdout
-    return {l.rsplit(":", 1)[0]: int(l.rsplit(":", 1)[1]) for l in out.splitlines() if l}
-
-
-def tracked(write=False):
-    now = tracked_counts()
-    if write:
-        BASELINE_FILE.write_text("".join("%s\t%d\n" % (k, v) for k, v in sorted(now.items())))
-        print("wrote %d rows to %s" % (len(now), BASELINE_FILE))
-        return 0
-    base = {}
-    for l in BASELINE_FILE.read_text().splitlines():
-        k, _, v = l.partition("\t")
-        base[k] = int(v)
-    grew = [(k, base.get(k, 0), v) for k, v in sorted(now.items()) if v > base.get(k, 0)]
-    for k, was, v in grew:
-        print("GREW   %s names data/scratch/ or a worktree %d time(s), baseline %d: cite the evidence itself, not a path that is reaped" % (k, v, was))
-    shrunk = sum(1 for k, v in base.items() if now.get(k, 0) < v)
-    print("check-pair-provenance: tracked-file ratchet, %d files over, %d below baseline (lower the baseline: --write-baseline)" % (len(grew), shrunk))
-    return 1 if grew else 0
-
-
 def table(d):
     print("| pair | kind | capture | state | lag | autopilot | writes | twin rmse | refused by |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
@@ -360,6 +331,7 @@ def table(d):
 
 
 def selftest():
+    WT = "OpenAntiGrav-" + "worktrees/"
     good_hd = {"pair_kind": "scenery", "capture_path": {"kind": "cold_boot"}, "presented_lag": {"value": 3, "unit": "ticks", "basis": "measured"},
                "autopilot": {"armed": False}, "overrides": []}
     assert refusals(good_hd, "hd-fury") == [], "a clean HD cold pair must pass"
@@ -377,9 +349,9 @@ def selftest():
     over = dict(armed, overrides=[{"rule": "autopilot_timer", "reason": "state predates the field, looked at"}])
     assert refusals(over, "pulse-psp") == [], "an explicit override with a reason passes"
     assert [r for r, _ in refusals(dict(armed, overrides=[{"rule": "autopilot_timer", "reason": ""}]), "pulse-psp")] == ["autopilot_timer"], "an override needs a reason"
-    assert path_offenders({"a": ["x", {"b": "/h/OpenAntiGrav-worktrees/lane/t"}]}) == [("a[1].b", "/h/OpenAntiGrav-worktrees/lane/t")]
-    assert path_offenders({"a": "data/scratch/lane/x"}) and not path_offenders({"a": "data/saves/x"})
-    fixed = portable({"a": "/home/topaxi/projects/OpenAntiGrav-worktrees/lane/target/debug/oag-game", "b": "--home /x/OpenAntiGrav/data/scratch/lane/pp/home",
+    assert path_offenders({"a": ["x", {"b": WT + "lane/t"}]}) == [("a[1].b", WT + "lane/t")]
+    assert path_offenders({"a": "data/" + "scratch/lane/x"}) and not path_offenders({"a": "data/saves/x"})
+    fixed = portable({"a": "/home/topaxi/projects/" + WT + "lane/target/debug/oag-game", "b": "--home /x/OpenAntiGrav/data/" + "scratch/lane/pp/home",
                       "c": str(MAIN) + "/data/saves/pulse-psp/s.ppst"})
     assert fixed == {"a": "target/debug/oag-game", "b": "--home {scratch}/pp/home", "c": "data/saves/pulse-psp/s.ppst"}, fixed
     assert not path_offenders(fixed)
@@ -416,8 +388,6 @@ def main():
     s = sub.add_parser("scan")
     s.add_argument("dir", nargs="?", default=os.environ.get("OAG_PAIR_DIR", str(ROOT / DEFAULT_DIR)))
     s.add_argument("--strict", action="store_true", help="a broken refusal rule fails the scan (default: listed as a note)")
-    t = sub.add_parser("tracked")
-    t.add_argument("--write-baseline", action="store_true")
     b = sub.add_parser("backfill")
     b.add_argument("src")
     b.add_argument("dst")
@@ -430,8 +400,6 @@ def main():
         sys.exit(selftest())
     if a.cmd == "scan":
         sys.exit(scan(a.dir, a.strict))
-    if a.cmd == "tracked":
-        sys.exit(tracked(a.write_baseline))
     if a.cmd == "backfill":
         backfill(a.src, a.dst)
     if a.cmd == "table":

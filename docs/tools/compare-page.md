@@ -393,8 +393,8 @@ directory. A worktree is reaped after its merge and a manifest that named it bro
 check-pair-provenance` (in the gate) runs the refusal rules against constructed bad records (`selftest`), scans
 `$OAG_PAIR_DIR` (default `data/reference/compare-page`; skipped, loudly, when absent, as in CI) for missing
 provenance or a reaped path (a broken rule is listed as a note there, `scan --strict` fails on it: a pair on file may
-be an accepted exception, a pair script never makes one silently), and holds a ratchet over tracked files outside `scripts/` and `.claude/`:
-`scripts/provenance-path-baseline.txt` is the frozen count per file and a file may shrink but not grow. A re-made
+be an accepted exception, a pair script never makes one silently). `check-docs` already refuses a tracked file that
+cites a disposable `data/` directory; it also refuses one that names another lane's worktree. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
 
 ## Publishing is locked
