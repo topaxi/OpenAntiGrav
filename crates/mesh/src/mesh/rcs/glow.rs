@@ -70,7 +70,7 @@ pub(super) fn glow_of(
         // register held, which is the cleared `0` of a fresh one.
         Lane::Unwritten => 0.0,
         Lane::Constant(v) => v.clamp(0.0, 1.0),
-        Lane::Texel { scale, .. } if scale == 0.0 => 0.0,
+        Lane::Texel { scale: 0.0, .. } => 0.0,
         Lane::Texel {
             unit,
             channel,

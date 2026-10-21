@@ -46,6 +46,10 @@ pub(super) const NE_SAMPLER: u32 = 0xa2d5_55b9;
 /// program reads `_ne` the same way (`pads::is_light_bar_material`); every
 /// other material that samples the same hash is refused by the program match
 /// below.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the model's whole per-material tables, as the other setup passes take them"
+)]
 pub(super) fn pad_ne(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
