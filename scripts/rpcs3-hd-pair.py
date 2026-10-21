@@ -203,6 +203,7 @@ def main():
             sys.exit("the capture has no race clock (ship.race_clock_s): pass --ours-ticks")
         args.ours_ticks = GO_TICK + round(clock * 60) - HUD_LAG_TICKS
     pair.rec["original"]["race_clock_s"] = clock
+    pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
     pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction: the RSX had presented the paused frame "
                                               "(hull check on hd-race/talons-pack), not measured per tick"}
     gantry = ship.get("gantry_seconds")

@@ -138,15 +138,35 @@ class Rpcs3(Emulator):
         self.env = env
         self.remap = {}
 
+    #: Track Select presses from the first circuit, by pair directory (docs/reverse-engineering/rpcs3-capture.md), and Ship Select's
+    #: `right` presses per `--team` (Assegai 7, Harimau 9; `_c1` is the Fury hull, the classic hull is one `down` more).
+    CIRCUITS = {"vineta-k": 0, "anulpha-pass": 1, "moa-therma": 2, "chenghou-project": 3, "metropia": 4, "sebenco-climb": 5,
+                "ubermall": 6, "sol-2": 7, "talons": 8, "talons-assegai-c1": 8, "the-amphiseum": 9, "modesto-heights": 10,
+                "tech-de-ra": 11}
+    TEAMS = {"harimau": (9, 1), "Assegai_c1": (7, 0)}
+
     def prepare(self, rec):
         argv = rec["argv"]
         state = argv[argv.index("--state") + 1]
-        flag = "--pause" if "--field" in argv else "--restart"
         env = dict(self.env)
         env.pop("OAG_RPCS3_ATTACH", None)
-        sh([HERE / "emu-restore-state.sh", self.args.lane, state, flag], env=env, timeout=300)
-        run_env = dict(self.env, OAG_RPCS3_ATTACH="1")
-        return run_env, self.remap
+        pair_dir = Path(argv[argv.index("--out") + 1]).name
+        team = argv[argv.index("--team") + 1] if "--team" in argv else ""
+        if "--field" not in argv and self.args.hd_cold and pair_dir in self.CIRCUITS and team in self.TEAMS:
+            # A restored savestate paints garbage on HD's glass; a cold boot to the same race draws it clean
+            # (docs/reverse-engineering/rpcs3-capture.md, 2026-10-21): boot, walk Time Trial, Restart Race.
+            rights, classic = self.TEAMS[team]
+            sh([HERE / "emu-hd-glass-boot.sh", self.args.lane, self.CIRCUITS[pair_dir], rights, classic, "cold-" + pair_dir],
+               env=env, timeout=600)
+            attach = dict(env, OAG_RPCS3_ATTACH="1")
+            sh(["uv", "run", "--with", "evdev", "python3", HERE / "emu-run.py", "--", "python3", "-u", HERE / "rpcs3-drive.py",
+                "--log-dir", self.scratch / "restart", "restart"], env=attach, timeout=300)
+            path = "cold boot (no savestate): the glass stays clean"
+        else:
+            flag = "--pause" if "--field" in argv else "--restart"
+            sh([HERE / "emu-restore-state.sh", self.args.lane, state, flag], env=env, timeout=300)
+            path = "restored savestate (RPCS3 paints garbage on the glass of a restored state; the original is no reference there)"
+        return dict(self.env, OAG_RPCS3_ATTACH="1", OAG_HD_CAPTURE_PATH=path), self.remap
 
     def stop(self):
         sh(["python3", HERE / "rpcs3-drive.py", "stop"], env=self.env, check=False)
@@ -258,6 +278,8 @@ def main():
     ap.add_argument("--pcsx2-display", default="92")
     ap.add_argument("--pcsx2-slot", default="28015")
     ap.add_argument("--timeout", type=int, default=PAIR_TIMEOUT, help="seconds per pair")
+    ap.add_argument("--no-hd-cold", dest="hd_cold", action="store_false",
+                    help="restore HD's savestates instead of cold-booting each Time Trial (about 40 s a pair against 4 minutes, glass garbage)")
     ap.add_argument("--attempts", type=int, default=2, help="tries per pair: an emulator stalls, a capture is ambiguous, a toast covers the frame; a refusal that repeats is reported")
     args = ap.parse_args()
 
