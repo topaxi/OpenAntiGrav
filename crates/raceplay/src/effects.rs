@@ -930,7 +930,8 @@ impl Race {
         self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 
-    /// Whether the player's Autopilot pickup is currently active.
+    /// Whether an Autopilot pickup is currently active under a person this
+    /// machine's speakers are for ([`Self::heard_here`]).
     ///
     /// A *level*, the same shape [`Self::shield_is_up`] already is:
     /// `Ship_FireHeldWeapon`'s case 6 opens `~AUTOPILOT` with a handle at
@@ -940,7 +941,11 @@ impl Race {
     /// "`Ship_FireHeldWeapon` opens both cues" section.
     #[must_use]
     pub fn autopilot_is_active(&self) -> bool {
-        self.ship().autopilot_timer > 0.0
+        (0..oag_gameplay::MAX_PLAYERS).any(|slot| {
+            self.sim.world.person_flown(slot)
+                && self.heard_here(slot)
+                && self.sim.world.ships[slot].autopilot_timer > 0.0
+        })
     }
 
     /// Where the Quake wave is on the road, while one travels: the point

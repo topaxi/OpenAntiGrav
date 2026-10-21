@@ -175,3 +175,34 @@ So every title runs the same law, and the axis `oag_title::autopilot_engine` car
 `Origin::Measured` on all five: live on Pulse and HD, off the code on Pure, Omega and
 2048. Confidence on the three static reads: 85 (decompile-level, one site each, the
 engine reader of the multiplier not traced on those three).
+
+## Who hears the "disengaging" call (2026-10-21, static)
+
+`Autopilot_Update` (`0x00129988`, read in full at instruction level, the decompiler
+does not finish on it) raises the one-second warning with no test of which craft or
+seat it concerns:
+
+```text
+00129a80  lfs f0,0x154(r4)          ; previous remainder
+00129a84  fcmpu f0, f12 ; ble ...   ; previous > 1.0
+00129a8c  lwz r9,-0x30f4(r2)        ; global (sound manager)
+00129a94  lwz r3,0xf0(r4)           ; the craft's owner object
+00129a98  lwz r5,-0x30f0(r2)        ; the cue name "disengaging"
+00129aa0  bl  0x000cfeb8            ; r3 owner, r4 bank, r5 name, r6 = 0
+```
+
+The helper `0x000cfeb8` (unnamed, 90 bytes read in full) returns at once when
+`owner+0x628c != 0`, then reads a mode word (`[0x00054628()]+0x1970 == 2`) and a
+table word (`+0xe0 == 2`, taken only while a byte global is clear) before it hands
+`(bank, name, volume)` to `0x00310bd8`, the **dry** play with no emitter. `owner+0x628c`
+is also what `Autopilot_Update`'s held-voice release tests (`0x001299f8`). None of the
+three flags is read to a meaning, so nothing is renamed and no confidence is claimed:
+what the code does show is that **there is no viewport or local-seat comparison on the
+path** - the call is not routed to the window of the seat it concerns.
+
+Our rule is therefore **chosen, not measured**: `Race::heard_here` (a network client
+hears its own seat's dry voice lines alone; one machine flying several seats has one
+output and plays each local person's), applied to `Cue::Disengaging` at its raise site
+and to the held `~AUTOPILOT` level (`Race::autopilot_is_active`). Pulse and Pure have
+no split screen. Omega and 2048: not checked, the announcer path is
+unread there, so the same chosen rule applies to both.
