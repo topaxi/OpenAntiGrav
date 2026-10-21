@@ -51,4 +51,29 @@ higher: decompilation only, no run of Pure.
 
 - The internal and backward rigs (`FUN_0892a7d0`'s other branches) and whether
   Pure's internal rig leaves the scale alone as Pulse's does.
-- Pure's default view (an unmeasured `OPT_*` default), unchanged by this page.
+- Pure's default view as a number: see "Pure's default view" below (a frame comparison, not an eye read).
+
+## Pure's default view is not Far (qualitative, 2026-10-21)
+
+A fresh Pure profile does not start on the Far chase view. Confidence **70**: one boot,
+a frame comparison and no eye reading.
+
+**Method.** PPSSPP v1.20.4, software renderer, a fresh `HOME` (no save of any title),
+walked by hand from the first-boot screens (language, memory-stick notice, new profile with
+the default name and tag, save profile Yes) to Single Player, Time Trial, Vector, Vineta K,
+Feisar, and no button pressed after the race loaded. The craft sat at rest on the grid
+(race clock 15 s, 0 km/h). Our frame: `oag-game --race --track 01_Vineta_K --team feisar
+--camera-view close|far --ticks 1100 --size 480x272` on the same pressing.
+
+**Falsifier written first.** Far puts the eye 1.4 times further back than Close (Pulse's
+measured 14.56 against 11.64), so the craft would draw about 0.8 of Close's width. The
+original's craft is **wider than ours at Close** (about 95 px against 75 of 480, nose lower
+on screen), 2.3 times Far's (about 40 px). So the default is not Far and is at least as near
+as Close; Internal hides the hull, which is drawn, so it is not Internal. By elimination it
+is Close.
+
+**Residual.** The original's craft is about 1.2 times larger than ours at Close. Not
+explained: the grid pose of the two frames differs (original read mid-session, ours at a
+fixed tick), and no eye was read. Pure's authored Close block equals Pulse's. An eye read
+needs Pure's camera node, which this lane did not locate (`compare-page` thread, Next Step 4).
+The profile (`PROFILE.BIN`) is binary with no readable option string, unlike HD's.

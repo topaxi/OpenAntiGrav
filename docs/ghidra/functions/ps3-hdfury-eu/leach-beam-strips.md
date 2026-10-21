@@ -427,7 +427,7 @@ pinned the Far rig against an original frame, so earlier pairs from the same pro
 rig is not wrong: ours rendered with `--camera-view far` at the same pose frames the hull at the same
 size (`rest_pair.png`: original, ours Far, ours Close). Frames taken in motion read the eye
 11.2-18.1 back; those mix a frame-time eye with a CPU-time body and are not a measurement.
-**Not measured: HD's Close view on the original** (SELECT did not cycle it in race; the
+**HD's Close view on the original was measured 2026-10-21** (`camera.md`, "The default view is `OPT_CLOSE`"; eye 8.27-8.45 back on a fresh profile). Earlier: not measured (SELECT did not cycle it in race; the
 Options page was not walked). The speed widen agrees too: 68.6 degrees at 114.8 u/s read off
 the matrix, `60 + 0.075 * 114.8` = 68.6.
 
