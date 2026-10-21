@@ -64,8 +64,16 @@ def probes(dbg, craft):
             "tag": struct.unpack_from("<I", raw, rec + 0x28)[0],
             "surface": surface,
             "point": struct.unpack_from("<3f", raw, rec),
+            "normal": struct.unpack_from("<3f", raw, rec + 0x10),
         })
-    return out, struct.unpack_from("<f", raw, 0x280)[0], struct.unpack_from("<3f", raw, 0x160)
+    hover = {
+        "target": struct.unpack_from("<f", raw, 0x2F0)[0],
+        "speed_prev": struct.unpack_from("<f", raw, 0x2EC)[0],
+        "forward": struct.unpack_from("<3f", raw, 0x180),
+        "mag_point": struct.unpack_from("<3f", raw, 0x250),
+        "mag_normal": struct.unpack_from("<3f", raw, 0x260),
+    }
+    return out, struct.unpack_from("<f", raw, 0x280)[0], struct.unpack_from("<3f", raw, 0x160), hover
 
 
 def run(args):
@@ -108,14 +116,14 @@ def run(args):
             held, _, _ = autopilot.steer_for(state, line, index, args)
             held = [b for b in held if b != "cross"] + (["cross"] if speed < args.cap else [])
             dbg.hold(**buttons(held))
-            probe, blend, hover_up = probes(dbg, craft)
+            probe, blend, hover_up, hover = probes(dbg, craft)
             if any(p["surface"] == 3 for p in probe):
                 mag_ticks += 1
             row = {
                 "tick": ticks, "row": index, "dt": dt,
                 "pos": state["position"], "vel": state["velocity"], "up": state["up"],
                 "hover_up": hover_up, "speed": speed, "held": held,
-                "mag_blend": blend, "probes": probe,
+                "mag_blend": blend, "probes": probe, "hover": hover,
             }
             out.write(json.dumps(row, separators=(",", ":")) + "\n")
             ticks += 1
