@@ -580,5 +580,9 @@ fn a_plan_followed_at_a_lower_share_multiplies_the_yaw_ratio() {
     let lowered = plan.at_share(0.5);
     assert_eq!(lowered.share_for(Some(learned * 0.5)), 0.25);
     assert_eq!(lowered.share_for(Some(learned * 2.0)), 0.5);
-    assert_eq!(plan.share_for(Some(learned * 0.5)), 0.5, "the original is untouched");
+    assert_eq!(
+        plan.share_for(Some(learned * 0.5)),
+        0.5,
+        "the original is untouched"
+    );
 }
