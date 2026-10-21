@@ -64,6 +64,10 @@ def rerender(pj, binary):
     if not flags:
         return "skipped: no recorded ours.flags"
     flags, problems = resolve_flags(flags, pair_dir)
+    # The HD and PS2 pair scripts record the run length beside the flags (`ours.ticks`), not in them; without it the
+    # frame is tick 0 (a clock of 0.00.0, no GO board).
+    if "--ticks" not in flags and rec["ours"].get("ticks") is not None:
+        flags += ["--ticks", str(rec["ours"]["ticks"])]
     if problems:
         return "skipped: " + "; ".join(problems)
     plat = ce.platform(rec["profile"])
