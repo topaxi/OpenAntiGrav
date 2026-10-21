@@ -1161,6 +1161,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             world_clock_offset: options.world_clock_offset,
             #[cfg(feature = "view")]
+            gantry_seconds: options.gantry_seconds,
+            #[cfg(feature = "view")]
             camera_override: options.camera,
         },
         #[cfg(feature = "view")]

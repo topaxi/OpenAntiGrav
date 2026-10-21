@@ -879,6 +879,13 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "SECONDS", allow_negative_numbers = true)]
     pub(crate) world_clock_offset: Option<f32>,
 
+    /// Show the start gantry's board at this animation time instead of the one the race clock gives.
+    /// **A capture aid**: the original's GO board loops over a window of its own node's time, and a
+    /// pair is only comparable when ours is put at the phase that node held (`+0xc0`, read off RAM).
+    /// Unlike `--anim-seconds` it leaves every other clock alone.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) gantry_seconds: Option<f32>,
+
     /// Which tick of `--pose-from` to take the pose off.
     #[arg(long, default_value_t = 0, requires = "pose_from")]
     pub(crate) pose_tick: u64,

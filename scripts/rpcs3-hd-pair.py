@@ -33,6 +33,10 @@ ROOT = HERE.parent
 MAIN = Path("/home/topaxi/projects/OpenAntiGrav")
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+
+# The RSX presents the frames it was handed after the game is paused, so a grab taken at once is older than the
+# memory read (the HUD's lap clock lagged RAM's by 0.1 to 0.3 s); 3 s lets it catch up (`rpcs3-drive.py capture`).
+os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
 import rpcs3_place  # noqa: E402
 
 
@@ -170,6 +174,8 @@ def main():
             sys.exit("the capture has no race clock (ship.race_clock_s): pass --ours-ticks")
         args.ours_ticks = GO_TICK + round(clock * 60)
     pair.rec["original"]["race_clock_s"] = clock
+    gantry = ship.get("gantry_seconds")
+    pair.rec["original"]["gantry_seconds"] = gantry
     pair.rec["ours"]["ticks"] = args.ours_ticks
     pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
     if clock is not None and not args.field:
@@ -198,6 +204,10 @@ def main():
     flags[flags.index("--size") + 1] = size
     mode = pair.rec["original"].get("state", {}).get("mode", "single_race" if args.field else "time_trial")
     flags += ["--mode", mode]
+    # The GO board's phase, off the gantry node's own time in the same pause: the race clock alone
+    # does not give it. A board past its windows (the node reads outside every one) keeps ours' own.
+    if gantry is not None:
+        flags += ["--gantry-seconds", "%.6f" % gantry]
     field_flags = []
     if args.field:
         rows = [{"slot": r["slot"], "player": r["player"], "team": r["team"], "left": r["rows"][0],

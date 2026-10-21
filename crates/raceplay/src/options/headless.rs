@@ -202,6 +202,7 @@ impl Setup {
             capture_hud: None,
             #[cfg(feature = "view")]
             world_clock_offset: 0.0,
+            gantry_seconds: None,
             #[cfg(feature = "view")]
             camera_override: None,
         }
