@@ -904,11 +904,24 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // held stick: the input drops at `0.8988` and below and returns at `0.9016` and above, and
     // the bias stays on (`docs/physics/airborne-ground-truth.md`). Confidence 90.
     pitch_gate: oag_title::pre_race::Sourced::measured(true),
-    // Not read on HD: its flag word (`craft+0x264`) numbers its bits differently and the
-    // mapping is open (`docs/ghidra/functions/psp-pulse-usa/craft-flags.md`), so HD inherits Pulse's.
-    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // HD's flag word `craft+0x264` numbers Pulse's bits from `0x20` up shifted right by four
+    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Pulse's wrong-way kill `0x2000` is
+    // HD's `0x200`: the engine still reads it, nothing in the image writes it, and nothing forces
+    // the airbrakes. Live in an Eliminator (mode 8), a craft flipped with L1 and driven back down
+    // the track under held throttle kept its engine and never set the bit. Confidence 90.
+    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::measured(false),
+    // `Ship_UpdateSideshiftInput` (`0x000d9e18`) skips the gesture block while `craft+0x264 & 2`
+    // (`0x000da04c`). Live on RPCS3: double taps of L1, R1, L2 and R2 through the countdown arm
+    // no tap window and no shift; after GO, L2 and R2 set `0x80` and `0x100`
+    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
+    sideshift_grid_gate: oag_title::pre_race::Sourced::measured(true),
+    // HD's running Turbo is `craft+0x264 & 0x20` (`Ship_UpdateTurboFlag`, `0x000cf7a8`), read by
+    // Pulse's three laws: the stun return's escape (`0x000efbc0`), the pad fade clock
+    // `craft+0x320` held at `0` (`0x000efb84`, read by the pad force at `0x000eec48`), and the
+    // turbo add with its d-pad Up lift. Live: the bit one frame behind the slot's, the clock at
+    // `0` while it runs and `+dt` after (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`).
+    // Confidence 92; the escape and the lift were read, not exercised.
+    turbo_running_laws: oag_title::pre_race::Sourced::measured(true),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table. Under player
     // input the airborne vy residual is `-0.02` to `+0.02` per frame on PHANTOM (scale `1.2`) and
     // `0.000` on Venom (`0.85`), against `+0.41` to `+0.51` and `-0.27` on the grounded term
@@ -917,8 +930,16 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `body+0x50` holds the tensor rotated into world axes, read live
     // (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
     inertia_rotates: oag_title::pre_race::Sourced::measured(true),
-    engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
+    // `Craft_UpdateThrottle` doubles its output, `fadds f0,f12,f12` at `0x000efd5c` on the only
+    // path to the force store. Under player input, the pose walk's median forward residual per
+    // frame on Ubermall PHANTOM is `+0.03` airborne and grounded with it and `-0.37` and `-1.76`
+    // without (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
+    engine_output_double: oag_title::pre_race::Sourced::measured(true),
+    // `Craft_ApplyQuadraticDrag` (`0x000ed700`) loads Pulse's four coefficients in Pulse's order
+    // (`0x008a9118..0x008a9124`), `-0.005` on contact. Under player input the pose walk's grounded
+    // median forward residual is `+0.03` with it, `+1.54` with Pure's `-0.0025` and `-1.46` with
+    // `-0.0075` (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 92.
+    drag_ground: oag_title::pre_race::Sourced::measured(-0.005),
     // HD's own: `Craft_HoverFourPoint`'s epilogue reads `30` (`0x008a9198`, at `0x000ee6cc`) for
     // racing and Zone alike (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`); the same
     // number as Pulse's racing law, read off HD's executable rather than inherited.
@@ -988,6 +1009,55 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's engine doubles its output, read off `Craft_UpdateThrottle` and measured under
+    /// player input, not inherited from Pulse.
+    #[test]
+    fn the_engine_doubling_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.engine_output_double,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD's grounded drag coefficient is `-0.005`, read off `Craft_ApplyQuadraticDrag` and
+    /// measured under player input.
+    #[test]
+    fn the_grounded_drag_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.drag_ground,
+            oag_title::pre_race::Sourced::measured(-0.005)
+        );
+    }
+
+    /// HD withholds the sideshift gestures on the grid, read and watched live.
+    #[test]
+    fn the_sideshift_grid_gate_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.sideshift_grid_gate,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD's running Turbo escapes the stun return, holds the pad fade and adds the lift, read and
+    /// watched live on HD's own flag bit.
+    #[test]
+    fn the_turbo_running_laws_are_hds_own_measured_laws() {
+        assert_eq!(
+            CRAFT_LAWS.turbo_running_laws,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD has no Eliminator wrong-way kill: the bit has no writer, and a flipped craft keeps its
+    /// engine live.
+    #[test]
+    fn hd_has_no_eliminator_wrong_way_kill() {
+        assert_eq!(
+            CRAFT_LAWS.eliminator_wrong_way_kill,
+            oag_title::pre_race::Sourced::measured(false)
+        );
+    }
 
     /// HD's Zone banks into a turn at its racing hover's `30`, read off the executable, not at
     /// Pulse's four-corner `50`.

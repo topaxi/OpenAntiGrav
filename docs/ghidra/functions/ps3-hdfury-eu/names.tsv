@@ -774,3 +774,12 @@
 0x000c6550	function	Handling_ReadAntigrav	85	hover-four-point.md
 0x0007c588	function	CageEffect_Spawn	62	collision-cage.md
 0x00094598	function	Hud_UpdateTimeCluster	70	hud-readouts.md
+# 2026-10-21, hd-throttle-and-flags: craft+0x264 by bit, the engine, drag, the sideshift grid gate, the Turbo flag (craft-flags.md).
+0x000cf7a8	function	Ship_UpdateTurboFlag	92	craft-flags.md
+0x000d9e18	function	Ship_UpdateSideshiftInput	90	craft-flags.md
+0x000ed700	function	Craft_ApplyQuadraticDrag	90	craft-flags.md
+0x000ed5a8	function	Craft_EnterGridState	75	craft-flags.md
+0x000ed5b8	function	Craft_ReleaseFromGrid	75	craft-flags.md
+0x000e1e20	function	Ship_SetState	65	craft-flags.md
+0x000eeb70	function	Craft_ApplySpeedPad	65	craft-flags.md
+0x000f5860	function	Body_AddForce	80	craft-flags.md

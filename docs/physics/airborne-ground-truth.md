@@ -970,12 +970,25 @@ time over the original's own rows, ours matches it in the air on Chenghou too (`
 `0.000`, pitch `-0.002`); at the lip, the two frames with only the rear probes in contact
 leave ours `+0.66` and `+0.87` u/s higher, small and the other way.
 
-**Open: a forward residual, not an air law.** Ours ends each step faster along the craft's
-forward than the original: in the air by `+0.12` to `+0.16` u/s per frame on PHANTOM (about
-`8` u/s²) and `+0.04` on Venom, on the ground by `+0.15` to `+0.44`. Unattributed. The first
-suspect is the walk's own seeding: it copies the row's throttle `craft+0x30c` into
-`ShipState::thrust`, which may not be the same quantity. After that, HD's engine doubling
-and ground drag, which are inherited from Pulse and unread on HD.
+**Closed 2026-10-21: the forward residual was the walk's seeding.** Ours ended each step faster
+along the craft's forward than the original, `+0.12` to `+0.16` u/s per frame in the air on
+PHANTOM, `+0.04` on Venom, `+0.15` to `+0.44` on the ground. The captures ran with Pilot Assist
+on, and `Craft_UpdateThrottle` multiplies the throttle by its scale before the engine reads it
+(`craft+0x30c` reads `88` against a held `100`); the walk has no Pilot Assist and stepped with
+`100`. Stepping with the row's own throttle (the walk's default since; `OAG_HD_THROTTLE=input`
+restores the old seeding), the median forward residual per frame is:
+
+| Capture | Airborne before | Airborne after | Grounded before | Grounded after |
+| --- | ---: | ---: | ---: | ---: |
+| `ubermall-phantom-feisar-centred-1` | `+0.14` | `+0.03` | `+0.45` | `+0.03` |
+| `ubermall-phantom-feisar-centred-2` | `+0.13` | `+0.02` | `+0.30` | `+0.02` |
+| `ubermall-venom-harimau-centred-1` | `+0.04` | `+0.02` | `+0.15` | `+0.04` |
+
+The airborne `dvy` and pitch residuals above do not move with it. With the seeding right the
+walk discriminates HD's engine doubling and grounded drag, both now measured on HD
+([craft-flags.md](../ghidra/functions/ps3-hdfury-eu/craft-flags.md)): on `centred-1`, no
+doubling (`OAG_HD_DOUBLE=0`) gives `-0.37` airborne and `-1.76` grounded, and a grounded drag of
+`-0.0025` or `-0.0075` (`OAG_HD_DRAG`) gives `+1.54` and `-1.46` grounded.
 
 **Cross-title.** Omega already flies HD's bias, gate and gravity term, inherited (**checked,
 applies, wired**: the same `CraftLaws` values; not re-measured, no Omega capture path). The

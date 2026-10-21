@@ -113,9 +113,19 @@ fn the_original_hd_capture_stepped_once_per_row() {
         Ok("ground") => oag_physics::passive::ClassGravityTerm::Grounded,
         _ => oag_physics::passive::ClassGravityTerm::Airborne,
     };
+    // `OAG_HD_DOUBLE=0` steps without the engine's doubling, `OAG_HD_DRAG=<k>` with another
+    // grounded drag coefficient: the alternatives the capture has to refute.
+    let mut laws = oag_physics::laws::Laws::PULSE;
+    if std::env::var("OAG_HD_DOUBLE").as_deref() == Ok("0") {
+        laws.engine_output_double = false;
+    }
+    if let Ok(k) = std::env::var("OAG_HD_DRAG") {
+        laws.drag_ground = k.parse().expect("OAG_HD_DRAG");
+    }
     let base_env = Environment {
         class_gravity_scale: gravity,
         class_gravity_term: term,
+        laws,
         ..Environment::default()
     };
     // A row from the original's Autopilot (slot bit `0x800`) carries its rail, which writes the
@@ -205,9 +215,18 @@ fn the_original_hd_capture_stepped_once_per_row() {
         let gate_closed = state.pitch_gate
             && std::env::var("OAG_HD_GATE").as_deref() != Ok("0")
             && up.dot(-located_down) <= oag_physics::engine::PITCH_ALIGNMENT;
+        // The engine reads `craft+0x30c`, which `Craft_UpdateThrottle` has already multiplied by
+        // `PilotAssist_ThrustScale` (`0x000efc58`): the captures ran with Pilot Assist on, so
+        // it reads `88` against a held `100`. The walk has no Pilot Assist, so the row's own
+        // throttle is the thrust input. `OAG_HD_THROTTLE=input` steps with the stick's `c1`.
+        let thrust_in = if std::env::var("OAG_HD_THROTTLE").as_deref() == Ok("input") {
+            r[at("c1")]
+        } else {
+            r[at("throttle")]
+        };
         let controls = ShipControls {
             steer_x: r[at("c0")] / 100.0,
-            thrust: r[at("c1")] / 100.0,
+            thrust: thrust_in / 100.0,
             airbrake_left: r[at("c2")] / 100.0,
             airbrake_right: r[at("c3")] / 100.0,
             steer_y: if gate_closed {

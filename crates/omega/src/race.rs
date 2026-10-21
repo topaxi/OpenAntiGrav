@@ -376,13 +376,15 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     steer_ramp_clamped: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     air_pitch_bias: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     pitch_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    // HD has none (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`); Omega's flag word is
+    // not located.
+    eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
     sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     inertia_rotates: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
+    engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Wipeout HD"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     // Zone's hover is not read on this title: Wipeout HD's `30`.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::inherited(30.0, "Wipeout HD"),
