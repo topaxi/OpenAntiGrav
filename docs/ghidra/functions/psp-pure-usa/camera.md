@@ -55,8 +55,8 @@ higher: decompilation only, no run of Pure.
 
 ## Pure's default view is Close, read live (2026-10-21)
 
-**The eye, in the craft's frame, on a fresh profile.** Confidence **85**: three samples on one cold boot
-(a second boot is listed under "Open"), the eye read directly.
+**The eye, in the craft's frame, on a fresh profile.** Confidence **90**: three samples on each of two cold boots
+(profile wiped between them), the eye read directly, identical to the printed digit.
 
 **Method.** PPSSPP v1.20.4, software renderer, a fresh `HOME` (no save of any title), walked by hand
 from the first-boot screens to Single Player, Time Trial, Vector, Alpha, Vineta K, Feisar, and no
@@ -130,6 +130,7 @@ exactly (`38.865, 37.473, -96.697`), identical on three reads three seconds apar
 
 ## Open
 
-- A second cold boot of the default view and the matrix (this page is one boot, three samples).
 - The Far view's matrix (same code path, not read) and the cockpit view's.
 - HD, Omega and 2048: whether their view matrices are sheared. Pulse's is not.
+
+Second cold boot (2026-10-21, `HOME` wiped, the same walk): eye `(0.000, +3.000, -11.250)`, `11.643`, fov `59.99997`, the hull node's axes `0.75` and its translation the body's, the tripod's third column `(0, 0.0995, -0.995)` in the body frame again.
