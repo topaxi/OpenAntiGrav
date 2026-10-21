@@ -952,6 +952,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     #[cfg(feature = "view")]
     let hull_lights = vex_geometry && title.looks.hull_lights.applies(archives.layout.platform);
+    let pulse_ps2_data =
+        vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
     let track_stats = track_stats::read(
         &options.source,
         &mut archives,
@@ -969,7 +971,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mode: options.mode,
             weapons_on: options.weapons_on(),
             full_grid: options.opponents || options.mode.has_opponents(),
-            track_stats: track_stats.as_ref(),
+            // The AI's ambient skill reads the file on Pulse only: HD's and Omega's own AI
+            // skill is measured without it, and the HUD's `RECORD` is the one other reader.
+            track_stats: track_stats.as_ref().filter(|_| pulse_psp || pulse_ps2_data),
         },
         &mut report,
     );
