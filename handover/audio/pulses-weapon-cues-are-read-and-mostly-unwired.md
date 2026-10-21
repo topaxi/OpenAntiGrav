@@ -59,6 +59,8 @@ the addresses.
 
 ## Open
 
+- **Closed 2026-10-21 (`pulse-roll-turbo-boost`):** a landed barrel roll plays `TURBO` and arms the exhaust flare (0.8 s), like a fired Turbo; `ExhaustFlare_OnTurbo` (`0x0890514c`) has exactly those two callers, watched live ([roll-boost.md](../../docs/ghidra/functions/psp-pulse-usa/roll-boost.md)). Open: Pure, HD, Omega and 2048's own roll call was not read, ours applies the same cue and flare where a roll pays.
+
 - **2026-09-30 (pulse-weapon-audio lane): the four triggers were all recovered
   and wired, and the Cannon round now lives 1.0 s.** `Cue::ALL` is 38.
   `MISSILEEXPSHIP` (`MissilePool_Update`, craft-hit bit `0x20`) and the Missile's

@@ -30,13 +30,14 @@ fn rolled_and_falling(turbotime: f32) -> Race {
     race
 }
 
-/// Ticks until the payout arms, returning the cues of that tick and the flare.
+/// Ticks until the payout arms, returning the cues of that tick and the HUD's
+/// boost phase, which the boost copies and the speed bar's glow draw from.
 fn until_paid(race: &mut Race) -> Option<(Vec<Cue>, f32)> {
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
         let cues: Vec<Cue> = race.drain_cues().into_iter().map(|e| e.cue).collect();
         if race.sim.world.ships[0].physics.roll_payout_timer > 0.0 {
-            return Some((cues, race.exhaust_of(0).boost_timer()));
+            return Some((cues, race.readout().boost_phase));
         }
     }
     None

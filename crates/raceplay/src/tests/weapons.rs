@@ -206,6 +206,10 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         fired.exhaust_of(0).boost_timer() > 0.7,
         "a fired Turbo did not arm the exhaust flare"
     );
+    assert!(
+        fired.readout().boost_phase > 0.9,
+        "the HUD's boost copies read the flare, and it is armed"
+    );
 
     assert!(
         fired.ship().physics.turbo_timer > 0.0,
