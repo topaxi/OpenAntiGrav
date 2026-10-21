@@ -162,6 +162,19 @@ internal one (`<InternalCamera fov>` in the Assegai file our default team reads;
 cockpit view: the old pair drew ours in the chase view at 60 degrees against an original with no hull, mean grey difference
 **50.7**, and **9.3** with the view and fov matched (an A/B on the same state, `--camera-fov 65` alone gives 10.4).
 
+**Moa Therma Black was re-made (2026-10-21, `psp-moa-black-recapture`): a state's camera view and clock are part of the state, and the
+grid states do not agree on either.** `time-trial-moa-therma-black-venom-grid.ppst` was saved with the camera in the **cockpit view**
+(3.0 units from the craft, the HUD clock at 11.5 s) while the other 23 grid states sit in the chase view (11.64 units). The craft was
+not wedged: its pose `(-385.54, 4.015, 126.07)` and speed 0.018 are the grid's, and a fresh `psp-drive.py menu --unlock --track-down 3
+--any-track` from an empty profile reproduces that pose to 0.01 units. The cockpit view hides the hull, so the original shows only the
+bright streak and ours (which copies the pose) drew wings around the camera. *Why* that walk ended in the cockpit view is not
+established (a view-toggle press during the walk is the candidate); the fresh walk came up in the chase view at HUD 35.0 s. A re-make
+is `time-trial-moa-therma-black-venom-grid-r2.ppst` (same recipe, `psp-state.py save 1 --keep`). Check a new state before pairing it:
+`original.camera_view.view` must read `close` (the pair script records it), and look at `theirs.png`. The state's clock is whatever
+the walk ended at (11.5, 18.6, 27.2, 35.0, 41.2 s across the grid states): compare ours at the original's own clock, which the pair
+script already does. The re-made pair: mean grey difference 0.042 RMSE (the old pair 0.179), `theirs.png` bit-identical across two
+captures of the state (`--target-clock 35.0346` on the second).
+
 **The world meshes' animation clock (Pulse PSP, same day).** Scrolling surfaces, flip-book signs and the neon strips run on a
 clock the original feeds every world mesh (`Mesh_UpdateTextureTransforms`, `0x0890e160`, `mesh+0x40`) that is **not the HUD
 clock**: it stands at the HUD clock plus a constant per state. Read live by `scripts/psp-world-anim-clock.py` and by the pair
