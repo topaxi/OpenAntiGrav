@@ -496,7 +496,9 @@ impl Scene {
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
-            let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
+            let clock = anim_seconds
+                .or(race.gantry_seconds())
+                .unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
         if first_view {

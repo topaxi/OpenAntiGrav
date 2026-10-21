@@ -809,8 +809,16 @@ impl CardTimeline {
 
     /// This timeline's clock now: [`race_clock`], or `anim_seconds` where a
     /// capture pins one.
+    ///
+    /// **A capture's [`crate::Options::gantry_seconds`] pins the race manager's board** - the
+    /// timelines that carry a release window, which is the gantry's `GO` board - and no other
+    /// timeline, so an advert beside it keeps its own clock.
     pub(super) fn seconds(&self, race: &Race, anim_seconds: Option<f32>) -> f32 {
-        anim_seconds.unwrap_or_else(|| race_clock(&self.clock, &self.tracker, race))
+        anim_seconds
+            .or(race
+                .gantry_seconds()
+                .filter(|_| self.clock.window.is_some()))
+            .unwrap_or_else(|| race_clock(&self.clock, &self.tracker, race))
     }
 
     /// Sets `drawable`'s hidden draws for `clock` and returns the time its

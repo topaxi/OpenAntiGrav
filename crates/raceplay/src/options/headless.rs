@@ -203,6 +203,8 @@ impl Setup {
             #[cfg(feature = "view")]
             world_clock_offset: 0.0,
             #[cfg(feature = "view")]
+            gantry_seconds: None,
+            #[cfg(feature = "view")]
             camera_override: None,
         }
     }

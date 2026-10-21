@@ -270,6 +270,12 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
    decodes both and refuses (`place` is None, the pair stops) when both or neither is a valid reading. Not understood: it is a read
    of one structure at one address in two boots. The restored-and-paused state reads `(2, 3, 6)`, which matches the frame.
 
+**HD pairs pin the GO board's phase and wait for the RSX (2026-10-21, `hd-emissive-glow`).** `rpcs3-drive.py capture` reads the gantry node's time out of RAM in the pause
+(`ship.gantry_seconds`, `rpcs3_hd_field.gantry_seconds`; `None` when no node is inside a race-manager window) and `rpcs3-hd-pair.py` passes it as `oag-game --gantry-seconds`, so the
+board shows the original's phase and not the one the race clock gives. The same script sets `OAG_CAPTURE_FLUSH=3`: with the game paused the RSX keeps presenting the frames it was
+handed, and a grab taken at once was 0.1 to 0.3 s older than the RAM it is paired with (HUD lap clock `0.21.0` against RAM `21.2`; about one tick with the wait). Any other capture of a
+paused RPCS3 frame next to a RAM read has the same lag. [hd-glow-mask.md](../rendering/hd-glow-mask.md).
+
 `just compare-rerender` re-makes a race pair only if the emulator is in the state it was made from: restore the state with
 `--pause` first (the capture lets the game run for 0.12 s, so a second rerender needs another restore). Measured drifts between two
 captures of one state: PSP 15 to 90 units (the CPU stops a few ticks after the load; two direct runs agreed exactly, a rerender did not),

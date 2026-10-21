@@ -46,12 +46,17 @@ pub(super) const NE_SAMPLER: u32 = 0xa2d5_55b9;
 /// program reads `_ne` the same way (`pads::is_light_bar_material`); every
 /// other material that samples the same hash is refused by the program match
 /// below.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the model's whole per-material tables, as the other setup passes take them"
+)]
 pub(super) fn pad_ne(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     textures: Textures<'_>,
     packed: &mut [u32],
     table: &mut Vec<Emissive>,
+    glow: &mut [f32],
     only: Option<&[bool]>,
     report: &mut Report,
 ) -> TextureSlots {
@@ -130,6 +135,29 @@ pub(super) fn pad_ne(
             continue;
         };
         out[slot] = Some(texture);
+        // **The mask the program writes may be this very sample's alpha**: the pad
+        // programs end `MOV H0.w, <_ne>.w`, so the bloom's gate sees the light
+        // bars as the same mask that gates their colour. Read off the program,
+        // and only where it is exactly that.
+        if let Some(value) = glow.get_mut(slot)
+            && let oag_rcs::rcsmaterial::fragment::Lane::Texel {
+                unit: lane_unit,
+                channel,
+                scale,
+                bias: 0.0,
+            } = program.output_alpha(|hash| {
+                material
+                    .parameters
+                    .iter()
+                    .find(|p| p.hash == hash)
+                    .map(|p| p.value)
+            })
+            && lane_unit == unit
+            && scale > 0.0
+            && scale < 8.0
+        {
+            *value = super::glow::texel_glow(super::glow::Source::PadMask, channel, scale);
+        }
         if let Some(word) = packed.get_mut(slot) {
             *word |= slots::PAD_NE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;

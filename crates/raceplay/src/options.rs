@@ -343,6 +343,12 @@ pub struct Options {
     /// inferred to be the time since the circuit loaded), and a frame of it is only comparable when ours
     /// is put at the same phase. Read off the original's RAM, never derived; `0.0` is every race.
     pub world_clock_offset: f32,
+    /// The start gantry's animation time in seconds, imposed on the board for the frame. **A capture
+    /// aid**: the original's GO board loops over a window of its own node's time (`[3.83, 5.25)`
+    /// s before the first line crossing, 86 ticks a loop) whose phase the race clock alone does not
+    /// give, so a pair is only comparable when ours shows the phase the original's RAM held. Read
+    /// off the gantry node's `+0xc0`, never derived; `None` is every race.
+    pub gantry_seconds: Option<f32>,
     /// Render from this camera instead of the chase camera.
     ///
     /// The other half of the same capture aid: a ship pose replicates *what*
@@ -810,6 +816,9 @@ pub struct Setup {
     /// [`Options::world_clock_offset`], carried to the scene's animation clock.
     #[cfg(feature = "view")]
     pub world_clock_offset: f32,
+    /// [`Options::gantry_seconds`], carried to the gantry's clock.
+    #[cfg(feature = "view")]
+    pub gantry_seconds: Option<f32>,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     #[cfg(feature = "view")]

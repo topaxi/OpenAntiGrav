@@ -96,6 +96,11 @@ pub struct Model {
     /// table to read this from. See `mesh::rcs::skin::roles` and
     /// `oag_rcs::rcsmaterial::fragment::Program::specular_exponent`.
     pub material_specular_exponent: Vec<f32>,
+    /// Per material slot: the glow mask its fragment program writes - `>= 0`
+    /// a constant, `< 0` the picture's alpha times `-value` - see
+    /// `mesh::rcs::skin::glow_of` and `mesh_render::GlowMask::StampedByProgram`.
+    /// Empty for every title but Wipeout HD.
+    pub material_glow: Vec<f32>,
     /// Per material slot: whether its program takes `VertexColour1` as a factor
     /// on the light rather than a baked light to add - see
     /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
@@ -172,6 +177,11 @@ pub struct Model {
     /// `mesh_render::GlowMask::StampedByTexel`. **Without** `stamps_glow` it
     /// means a PS2 model that writes no mask at all, whatever its call site asks.
     pub glow_by_texel: bool,
+    /// Wipeout HD's rule: the mask is what each material's own fragment
+    /// program writes into the output alpha, carried per vertex in
+    /// [`GpuVertex::glow`]. Takes the place of the two rules above where set.
+    /// See `mesh_render::GlowMask::StampedByProgram`.
+    pub glow_from_program: bool,
     /// Wipeout HD's engine-flare shading, for the one model that is one, and
     /// `None` for every other model of every title. See [`Flame`].
     pub flame: Option<Flame>,
@@ -265,6 +275,7 @@ impl Model {
             wave_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
+            material_glow: Vec::new(),
             material_colour_factor: Vec::new(),
             material_quake: Vec::new(),
             material_tangent: Vec::new(),
@@ -275,6 +286,7 @@ impl Model {
             vertex_colour_is_light: false,
             stamps_glow: false,
             glow_by_texel: false,
+            glow_from_program: false,
 
             flame: None,
             absorb_shell: false,
@@ -888,6 +900,7 @@ fn build_class(
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
+        material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
@@ -897,6 +910,7 @@ fn build_class(
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,
+        glow_from_program: false,
 
         flame: None,
         absorb_shell: false,

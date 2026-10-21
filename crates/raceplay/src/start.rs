@@ -113,6 +113,8 @@ impl Race {
             #[cfg(feature = "view")]
             world_clock_offset,
             #[cfg(feature = "view")]
+            gantry_seconds,
+            #[cfg(feature = "view")]
             camera_override,
             #[cfg(feature = "view")]
             hd_trail,
@@ -773,6 +775,7 @@ impl Race {
                 camera_override,
                 capture_hud,
                 world_clock_offset,
+                gantry_seconds,
                 wreck_ended_tick: None,
                 finish_camera: (!destroy_stations.is_empty()).then(|| {
                     super::finish_camera::FinishCamera::new(

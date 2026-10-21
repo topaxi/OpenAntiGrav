@@ -567,6 +567,12 @@ impl Race {
         self.clock_seconds() + self.view.world_clock_offset
     }
 
+    /// The gantry time a capture imposes, [`crate::Options::gantry_seconds`] (`None` in every race).
+    #[must_use]
+    pub fn gantry_seconds(&self) -> Option<f32> {
+        self.view.gantry_seconds
+    }
+
     /// The capture's [`crate::Options::world_clock_offset`], which only the world meshes' clock carries.
     #[must_use]
     pub fn world_clock_offset(&self) -> f32 {

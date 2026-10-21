@@ -3164,6 +3164,7 @@ law: `cf_constantcolourglow` now draws its authored colour (the "Be" neon sign g
 its lime) where it drew grey, but the original draws it **blown white with a large halo** (255 against ours 153-174)
 and our bloom does not reach it, so a grey that happened to sit nearer white scored better. That is the bloom lane's
 number, not a material one, and is named in the thread.
+**Closed 2026-10-21 (`hd-emissive-glow`):** the "0.7x" is the program's own `/2` (ours' pre-bloom value matches the original's `(155, 166, 175)` against `(153, 164, 174)`); the halo is the glow mask the program writes (`MOV H0.w, 1`), which ours did not stamp: [hd-glow-mask.md](../rendering/hd-glow-mask.md).
 
 **Not drawn, named:**
 

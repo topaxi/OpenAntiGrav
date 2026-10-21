@@ -111,3 +111,38 @@ def field_rows(m):
                     "rows": rows, "pos": list(struct.unpack(">3f", m.rd(body + 0x200, 12))),
                     "vel": list(struct.unpack(">3f", m.rd(body + 0x190, 12))), "clock": m.f32(ship + 0x7014)})
     return out
+
+
+#: `MeshImporter`'s vtable (`0x00869fd0`, `docs/ghidra/functions/ps3-hdfury-eu/gantry-clock.md`): every scenery
+#: node of a circuit is one, its animation time at `+0xc0`.
+MESH_IMPORTER_VTABLE = 0x00869FD0
+TIME_OFFSET = 0xC0
+#: The race manager's windows for the gantry node's time (gantry-clock.md): before the first crossing
+#: `[3.83, 5.25)`, then `[6.017, 9.3)`, `[9.5, 9.9)` and `[12.35, 13.3)`.
+GANTRY_WINDOWS = ((3.83, 5.25), (6.017, 9.3), (9.5, 9.9), (12.35, 13.3))
+
+
+def gantry_seconds(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
+    """The start gantry's animation time, read out of RAM in the same pause as the frame.
+
+    The race manager keeps the gantry node's time inside one of `GANTRY_WINDOWS` and resets it to the
+    window's start when it leaves, so the original's `GO` board plays a phase the race clock alone does
+    not give. A circuit has about 1,300 `MeshImporter` nodes: most sit at 0.0 (static) and the rest on
+    the global clock; the gantry's own 19 (Metropia, 2026-10-21) read a value inside a window. Returns
+    the most common such value, or `None` when no node is inside one (the board is gone).
+    """
+    needle = struct.pack(">I", MESH_IMPORTER_VTABLE)
+    seen = {}
+    for base in range(lo, hi, chunk):
+        try:
+            block = m.rd(base, chunk)
+        except OSError:
+            continue
+        at = block.find(needle)
+        while at >= 0:
+            if at % 4 == 0 and at + TIME_OFFSET + 4 <= len(block):
+                (t,) = struct.unpack(">f", block[at + TIME_OFFSET:at + TIME_OFFSET + 4])
+                if any(a <= t < b for a, b in GANTRY_WINDOWS):
+                    seen[t] = seen.get(t, 0) + 1
+            at = block.find(needle, at + 4)
+    return max(seen, key=seen.get) if seen else None

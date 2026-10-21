@@ -44,6 +44,8 @@ pub fn plain(model: &mut Model) {
     model.lightmaps.clear();
     model.material_slots.clear();
     model.material_specular_exponent.clear();
+    model.material_glow.clear();
+    model.glow_from_program = false;
     model.material_colour_factor.clear();
     model.material_quake.clear();
     model.material_variants.clear();

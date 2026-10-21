@@ -47,6 +47,8 @@ mod hd_mag_wave_lit_path;
 mod hd_original_speed_pad_ground_truth;
 mod hd_pad_ne_ground_truth;
 mod hd_pad_ne_lit_path;
+mod hd_program_glow_ground_truth;
+mod hd_program_glow_mask;
 mod hd_quake_lift;
 mod hd_scenery_animation_ground_truth;
 mod hd_shadowed_track_redraw;

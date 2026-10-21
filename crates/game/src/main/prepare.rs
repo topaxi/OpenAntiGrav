@@ -259,6 +259,7 @@ impl Pending {
             field: self.field.iter().map(|craft| craft.pose).collect(),
             hud: self.hud_state,
             world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
+            gantry_seconds: self.cli.gantry_seconds,
             camera: self.camera,
         }
     }

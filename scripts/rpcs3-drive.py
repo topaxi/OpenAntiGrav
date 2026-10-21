@@ -1692,6 +1692,11 @@ def cmd_capture(args):
                     session.pad.set(args.press, False)
 
                 stem = "%02d" % n
+                # The RSX runs behind the PPU: with the game paused it is still presenting the frames it was
+                # handed, so a grab taken at once shows an older moment than the memory read below (the HUD's
+                # lap clock lagged RAM's by 0.1 to 0.3 s on the 2026-10-21 HD pairs). `OAG_CAPTURE_FLUSH`
+                # seconds let it catch up first.
+                time.sleep(float(os.environ.get("OAG_CAPTURE_FLUSH", "0")))
                 shot = screenshot(out / ("%s.png" % stem), trim=True)
                 # The player's body at the same instant as the frame and the camera.
                 try:
@@ -1701,6 +1706,13 @@ def cmd_capture(args):
                     # equals the HUD's `current` time and counts 1:1 with emulated time), so a pair can
                     # run ours the same number of seconds after GO.
                     ship_pose["race_clock_s"] = struct.unpack(">f", gdb.read(player_ship + 0x7014, 4))[0]
+                    try:
+                        # The gantry node's animation time, so ours can show the board's phase (`--gantry-seconds`).
+                        import rpcs3_hd_field
+                        ship_pose["gantry_seconds"] = rpcs3_hd_field.gantry_seconds(
+                            rpcs3_hd_field.Mem(session.open_mem()))
+                    except Exception as error:  # noqa: BLE001 - the phase is a bonus
+                        print("  %s: no gantry time (%s)" % (stem, error), flush=True)
                     if args.field:
                         # every craft of the field and the HUD's record, in the same pause (`rpcs3_hd_field`)
                         import rpcs3_hd_field

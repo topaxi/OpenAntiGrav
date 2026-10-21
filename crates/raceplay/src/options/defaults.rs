@@ -56,6 +56,7 @@ impl Default for Options {
             field: Vec::new(),
             hud: None,
             world_clock_offset: 0.0,
+            gantry_seconds: None,
             camera: None,
         }
     }

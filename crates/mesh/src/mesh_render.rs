@@ -357,6 +357,9 @@ pub fn build_with(
     // see [`Model::stamps_glow`]. That is also what stops the PSP plume and
     // shield writing it: their batches are transparent without the glow bits.
     let glow = match (model.stamps_glow, model.glow_by_texel) {
+        // Wipeout HD: the program writes the mask. Decided by the model, like the rules
+        // above, because the loader read it off the material's own microcode.
+        _ if model.glow_from_program => GlowMask::StampedByProgram,
         (true, true) => GlowMask::StampedByTexel,
         (true, false) => GlowMask::Stamped,
         // A PS2 model that opts out of the mask: it writes colour only.
@@ -368,6 +371,9 @@ pub fn build_with(
     }
     if glow == GlowMask::StampedByTexel {
         constants.push(("glow_texel", 1.0));
+    }
+    if glow == GlowMask::StampedByProgram {
+        constants.push(("glow_program", 1.0));
     }
     if receives_shadow != ShadowReceiver::Never {
         constants.push(("receives_shadow", receives_shadow.constant()));
@@ -631,6 +637,22 @@ pub fn build_with(
     // depth like the opaque pipeline, so it writes real velocity too - same
     // `targets` as the opaque pipeline above, reused rather than rebuilt.
     let cutout_fragment_entry = velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
+    // **HD's alpha-tested draws leave the mask alone**: every one of a live
+    // Metropia frame's 32 draws with the alpha test on has the colour mask's
+    // alpha bit clear (`docs/rendering/hd-glow-mask.md`), whatever its program
+    // computes. Every other rule keeps the opaque pipeline's targets.
+    let cutout_targets = if glow == GlowMask::StampedByProgram {
+        velocity_targets(
+            wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: glow.blend_writes(),
+            },
+            velocity.target(false),
+        )
+    } else {
+        targets.clone()
+    };
     let make_cutout = |label: &str, reference: Option<f32>| {
         // A per-batch reference overrides the model-level one already in
         // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
@@ -652,7 +674,7 @@ pub fn build_with(
             "vs_main",
             &vertex_buffers,
             cutout_fragment_entry,
-            &targets,
+            &cutout_targets,
             primitive,
             Some(depth_stencil.clone()),
             multisample,
@@ -670,7 +692,7 @@ pub fn build_with(
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
                         entry_point: Some(cutout_fragment_entry),
-                        targets: &targets,
+                        targets: &cutout_targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
                             constants: &constants,
                             ..Default::default()
@@ -823,7 +845,7 @@ pub fn build_with(
         ));
     }
 
-    let stamp_pipeline = glow.stamps().then(|| {
+    let stamp_pipeline = glow.stamps_blended().then(|| {
         stamp::pipelines(&stamp::Shared {
             device,
             shader,

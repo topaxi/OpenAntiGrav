@@ -188,6 +188,7 @@ pub(super) fn bind_scene_pad_masks(
             textures,
             &mut out.material_slots,
             &mut out.emissive,
+            &mut out.material_glow,
             Some(&pad_slots),
             report,
         ),
@@ -319,6 +320,7 @@ pub(super) fn build_pad_class(
         lightmaps: seconds,
         material_slots,
         material_specular_exponent,
+        material_glow,
         material_variants,
         emissive,
         alpha_test_ref,
@@ -330,6 +332,7 @@ pub(super) fn build_pad_class(
     out.lightmaps = seconds;
     out.material_slots = material_slots;
     out.emissive = emissive;
+    out.material_glow = material_glow;
     // The `_ne` mask, third beside the lightmap - see `pad_ne`.
     out.pad_masks = pad_ne::pad_ne(
         &model,
@@ -337,10 +340,12 @@ pub(super) fn build_pad_class(
         textures,
         &mut out.material_slots,
         &mut out.emissive,
+        &mut out.material_glow,
         None,
         &mut report,
     );
     out.material_specular_exponent = material_specular_exponent;
+    out.glow_from_program = true;
     out.material_variants = material_variants;
     out.alpha_test_ref = alpha_test_ref;
     out.material_anim = material_anim;

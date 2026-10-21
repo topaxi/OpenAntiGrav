@@ -105,6 +105,11 @@ pub struct Report {
     /// specular map is read by no pass here, so the surface is drawn without
     /// its bump and its specular, stated rather than painted as colour.
     pub picture_unsampled: usize,
+    /// Materials whose fragment program writes an output alpha (the bloom's glow
+    /// mask) that this reading could not follow or this renderer cannot
+    /// reproduce: a texel with a bias or an inversion, a dot product, a product
+    /// of two samples. They write no mask rather than a guess.
+    pub glow_unread: usize,
     /// Of [`Self::picture_unsampled`], the materials whose authored constant
     /// diffuse colour is bound as a one-texel picture.
     pub constant_diffuse: usize,
@@ -351,6 +356,11 @@ impl Report {
             n => format!(
                 ", {n} material(s) whose program samples no colour texture (normal map and lightmap only), drawn without a picture ({} of them with their authored constant diffuse)",
                 self.constant_diffuse
+            ),
+        } + &match self.glow_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) whose alpha (the bloom's glow mask) is unread, writing none"
             ),
         } + &match self.lightmapped {
             0 => String::new(),

@@ -290,6 +290,7 @@ pub fn build_model(
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
+        material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
@@ -300,6 +301,7 @@ pub fn build_model(
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,
+        glow_from_program: false,
 
         flame: None,
         absorb_shell: false,

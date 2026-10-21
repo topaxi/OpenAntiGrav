@@ -17,6 +17,44 @@ override glow_stamp: f32 = 0.0;
 // `GlowMask::StampedByTexel` and docs/rendering/ps2-bloom.md.
 override glow_texel: f32 = 0.0;
 
+// **Whether the mask is what the material's own program writes** - 1.0 only for
+// a drawable built with `mesh_render::GlowMask::StampedByProgram`, Wipeout HD's
+// rule. The per-vertex `glow` carries the program's alpha lane: `>= 0` is a
+// constant the program writes, `< 0` is the picture's alpha times `-glow` (the
+// program multiplies a texture's alpha channel by a constant). See
+// `oag_rcs::rcsmaterial::fragment::Program::output_alpha` and
+// docs/rendering/hd-glow-mask.md.
+override glow_program: f32 = 0.0;
+
+// The samples a texel-sourced program mask reads, written by `lit_texel` as it
+// fetches them: the first texture, the second (scrolled where the material adds
+// it) and the pad's third binding. Zero wherever the draw does not fetch one.
+var<private> glow_first: vec4<f32>;
+var<private> glow_second: vec4<f32>;
+var<private> glow_pad: vec4<f32>;
+
+// The mask `GpuVertex::glow` names under `glow_program`: `>= 0` is a constant
+// the program writes; `< 0` is a texel's channel times a constant, packed
+// `-(scale + 8 * (4 * source + channel))` by `mesh::rcs::glow::texel_glow`,
+// `source` 0 the coverage alpha, 1 the second texture, 2 the first, 3 the pad's.
+fn program_glow(g: f32, coverage: f32) -> f32 {
+    if g >= 0.0 {
+        return g;
+    }
+    let m = -g;
+    let k = u32(floor(m / 8.0));
+    let scale = m - f32(k) * 8.0;
+    let channel = k & 3u;
+    var value = coverage;
+    switch k >> 2u {
+        case 1u: { value = glow_second[channel]; }
+        case 2u: { value = glow_first[channel]; }
+        case 3u: { value = glow_pad[channel]; }
+        default: {}
+    }
+    return clamp(scale * value, 0.0, 1.0);
+}
+
 // `slots::GLOW_BATCH`: the batch carries the glow bits.
 const SLOT_GLOW_BATCH: u32 = 8192u;
 
@@ -24,7 +62,7 @@ const SLOT_GLOW_BATCH: u32 = 8192u;
 // PSP's rule, the fragment's own alpha on a glow batch on the PS2's.
 fn stamp_value(in: VertexOutput, shaded_alpha: f32) -> f32 {
     let ps2 = select(0.0, shaded_alpha, (in.slots & SLOT_GLOW_BATCH) != 0u);
-    return mix(in.glow, ps2, glow_texel);
+    return mix(mix(in.glow, ps2, glow_texel), program_glow(in.glow, shaded_alpha), glow_program);
 }
 
 // The opaque and cutout pipelines' alpha: `1.0` as it always was, or the

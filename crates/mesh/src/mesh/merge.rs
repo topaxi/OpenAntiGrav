@@ -40,6 +40,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
+        material_glow: Vec::new(),
         material_colour_factor: Vec::new(),
         material_quake: Vec::new(),
         material_tangent: Vec::new(),
@@ -50,6 +51,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,
+        glow_from_program: false,
 
         flame: None,
         absorb_shell: false,
@@ -244,6 +246,7 @@ mod merge_tests {
             wave_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
+            material_glow: Vec::new(),
             material_colour_factor: Vec::new(),
             material_quake: Vec::new(),
             material_tangent: Vec::new(),
@@ -254,6 +257,7 @@ mod merge_tests {
             vertex_colour_is_light: false,
             stamps_glow: false,
             glow_by_texel: false,
+            glow_from_program: false,
 
             flame: None,
             absorb_shell: false,
