@@ -433,3 +433,77 @@ fn a_remembered_point_keeps_the_road_it_was_given_and_a_missing_road_too() {
 fn the_hull_darkness_is_the_originals_wipe_blend() {
     assert_eq!(HULL_DARKNESS, 1.0 - 159.0 / 255.0);
 }
+
+#[test]
+fn the_cast_axis_is_a_world_vector_the_crafts_rotation_does_not_turn() {
+    // Pulse's shadow falls the same way whichever way the craft points
+    // (measured on the original, `oag_pulse::shadow::WORLD_AXIS`), so a craft
+    // turned a quarter round must land its hull's corners where the world axis
+    // puts them, not where an axis turned by the craft would.
+    let hull = hull();
+    let axis = Vec3::new(0.3, -1.0, 0.6).normalize();
+    for turn in [0.0_f32, std::f32::consts::FRAC_PI_2, 2.5] {
+        let model = Mat4::from_translation(Vec3::new(0.0, 4.0, 0.0)) * Mat4::from_rotation_y(turn);
+        let mut out = Vec::new();
+        let rings = hull_triangles(
+            &Cast {
+                axis,
+                model,
+                ..cast_from(&hull, 4.0, 1.0)
+            },
+            &mut out,
+        );
+        assert!(rings > 0, "turn {turn}: something is drawn");
+        let corners: Vec<Vec3> = hull
+            .vertices
+            .iter()
+            .map(|v| {
+                let world = model.transform_point3(Vec3::from_array(*v));
+                world + axis * (-world.y / axis.y)
+            })
+            .collect();
+        for vertex in &out {
+            let p = Vec3::from_array(vertex.position) - Vec3::Y * LIFT;
+            assert!(
+                corners.iter().any(|c| (*c - p).length() < 1e-3),
+                "turn {turn}: {p:?} is not a corner cast along the world axis"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_banked_road_carries_the_axis_with_it() {
+    // On a 50 degree bank the same shadow falls the same way relative to the
+    // road as on level ground, instead of sliding down the slope.
+    let hull = hull();
+    let axis = Vec3::new(0.0976, -0.9759, 0.1952);
+    let normal = Vec3::new(
+        -50.0_f32.to_radians().sin(),
+        50.0_f32.to_radians().cos(),
+        0.0,
+    );
+    let model = Mat4::from_translation(normal * 3.0);
+    let mut out = Vec::new();
+    hull_triangles(
+        &Cast {
+            axis,
+            model,
+            normal,
+            ..cast_from(&hull, 3.0, 1.0)
+        },
+        &mut out,
+    );
+    assert!(!out.is_empty());
+    let direction = Quat::from_rotation_arc(Vec3::Y, normal) * axis;
+    for vertex in &out {
+        let p = Vec3::from_array(vertex.position) - normal * LIFT;
+        assert!(p.dot(normal).abs() < 1e-3, "{p:?} is on the road plane");
+        let on_ray = hull.vertices.iter().any(|v| {
+            let w = model.transform_point3(Vec3::from_array(*v));
+            let q = w + direction * (-w.dot(normal) / direction.dot(normal));
+            (q - p).length() < 1e-3
+        });
+        assert!(on_ray, "{p:?} is not a corner cast along the tilted axis");
+    }
+}

@@ -251,6 +251,31 @@ including the relocation entries, is on
 
 Confidence 88 on the value, 82 on the override.
 
+**Measured 2026-10-21 (`pulse-hull-plume`): the axis is a world vector, not
+turned with the craft.** The `vtfm4` reads as a local axis through the node's
+matrix, but the original's pictures say otherwise. Sweeping the casting axis's
+`x` and `z` over multiples of the authored values on 8 PSP grid pairs (headings
+-z, +z, -x, +x and 76 degrees between) scored the shadow-box grey difference
+(rows 236-272, columns 170-310 of the 480x272 frame, against the fixed
+`theirs.png`). The best axis in the craft's own frame turned with the heading
+as a world-fixed vector does: Talon's Black (heading -x) wanted local
+`(+0.195, -0.098)`, which is world `(-0.098, -0.195)` in the craft frame's
+convention, Moa Therma White (heading -z) the reverse, and no craft-local
+constant reproduces both. Casting along `AUTHORED_AXIS` as a **world** vector
+(`oag_pulse::shadow::WORLD_AXIS`) leaves no one of the 24 grid pairs worse
+(whole-frame mean grey difference 0.02 to 0.23 lower on 20, unchanged on the 4
+whose craft already pointed where the world axis does: Amphiseum White,
+Basilico Black, Moa Therma Black, Outpost 7 Black), and the shadow-box mean
+falls from 4.86 to 2.69 (Moa Therma White 4.80 to 1.66). What the node matrix
+holds for a craft's shadow node is not read; the instruction page stays as
+written and the open question is which matrix `self+0xb0` is for that node.
+Craft pitch and bank were not exercised (all grids are level), so on a banked
+road the axis is carried with the road's tilt, the identity on level ground and
+**chosen, not measured** elsewhere: a plain world axis thrown at a 52 degree
+wall slid the shadow five units down the slope and left the polygon 0.9 under
+the road (`shadow_stability_ground_truth`, single race at tick 5,400). The two
+Zone pairs are flat (Moa z50 4.327 to 4.332, Talon's z8 8.807 to 8.767).
+
 ### Two populations, and they are not the same feature
 
 | | Count | Box centre | Node names |

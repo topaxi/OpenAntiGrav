@@ -34,7 +34,7 @@
 
 use std::collections::HashMap;
 
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::{Mat4, Quat, Vec3};
 use oag_vex::shadow_occluder::Occluder;
 
 use oag_mesh::mesh::GpuVertex;
@@ -220,11 +220,17 @@ pub struct Cast<'a> {
     pub hull: &'a Occluder,
     /// Model to world for the craft the hull belongs to.
     pub model: Mat4,
-    /// The **local** axis to project along, before [`Self::model`] rotates it:
-    /// `oag_pulse::shadow::AUTHORED_AXIS` on Pulse.
+    /// The axis to project along on level ground: `oag_pulse::shadow::WORLD_AXIS`
+    /// on Pulse. Not turned by [`Self::model`], so a craft's heading does not
+    /// change where its shadow falls; the hull's silhouette is found against
+    /// the same direction in the hull's own space.
     ///
-    /// A local axis and not a light, which is what the original does - see
-    /// that constant, and `shadow-occluder.md` for the read.
+    /// **Measured on level ground only.** [`hull_triangles`] carries it with
+    /// the road's tilt (the rotation taking up to [`Self::normal`]), which is
+    /// the identity on a level road and **chosen, not measured** on a bank: a
+    /// world-down axis thrown at a 52 degree wall slides the shadow five units
+    /// down the slope, over road the polygon is not conformed to. See that
+    /// constant for what was measured.
     pub axis: Vec3,
     /// Where the craft's own downward cast hit the surface.
     pub contact: Vec3,
@@ -253,9 +259,20 @@ pub struct Cast<'a> {
 /// plane - which is skipped rather than drawn folded over.
 pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
     let normal = cast.normal.normalize_or_zero();
-    // The direction in world space: the authored local axis through the
-    // craft's own rotation, as `Shadow_RenderOccluderVolume` does it.
-    let direction = cast.model.transform_vector3(cast.axis).normalize_or_zero();
+    // The direction in world space is the axis, carried with the road's tilt
+    // (see [`Cast::axis`]); the hull's own space sees it through the craft's
+    // inverse rotation.
+    let tilt = if normal == Vec3::ZERO {
+        Quat::IDENTITY
+    } else {
+        Quat::from_rotation_arc(Vec3::Y, normal)
+    };
+    let direction = (tilt * cast.axis).normalize_or_zero();
+    let local_axis = cast
+        .model
+        .inverse()
+        .transform_vector3(direction)
+        .normalize_or_zero();
     let facing = direction.dot(normal);
     // Parallel to the surface, or pointing away from it: there is no
     // intersection to draw, and forcing one puts a shadow behind the craft.
@@ -263,7 +280,7 @@ pub fn hull_triangles(cast: &Cast, out: &mut Vec<GpuVertex>) -> usize {
         return 0;
     }
     let mut rings = 0;
-    for ring in cast.hull.outline(cast.axis.to_array()) {
+    for ring in cast.hull.outline(local_axis.to_array()) {
         let projected: Vec<Vec3> = ring
             .iter()
             .map(|slot| {

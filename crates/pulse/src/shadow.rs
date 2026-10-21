@@ -19,10 +19,10 @@
 /// relocation that hid the address, is on
 /// [`shadow-occluder.md`](../../../docs/ghidra/functions/psp-pulse-usa/shadow-occluder.md#the-projection-direction-is-normalize05--5-1).
 ///
-/// **A local axis, not a light.** `Shadow_RenderOccluderVolume` transforms it
-/// by the occluder's own world matrix and normalizes, so a craft's shadow
-/// direction tilts with the craft. Pulse has no light rig to take a direction
-/// from, which this is the other half of.
+/// **Not a light.** `Shadow_RenderOccluderVolume` transforms it by the
+/// occluder's node matrix and normalizes; the pictures show the result is
+/// fixed in the world, see [`WORLD_AXIS`]. Pulse has no light rig to take a
+/// direction from, which this is the other half of.
 ///
 /// **Two builds carry it and Pure carries none.** The three immediates
 /// (`0x3dc7dd06`, `0xbf79d448`, `0x3e47dd06`) appear exactly once each, paired
@@ -46,6 +46,25 @@
 ///
 /// Confidence 88.
 pub const AUTHORED_AXIS: [f32; 3] = [0.097_589_54, -0.975_895_4, 0.195_179_08];
+
+/// The direction a craft's shadow is cast along **in world space**: the same
+/// numbers as [`AUTHORED_AXIS`], applied as a world vector that does **not**
+/// turn with the craft.
+///
+/// Measured off the original's pictures, not read from the instructions. On 8
+/// of the 24 PSP grid pairs (headings along -z, +z, -x, +x and 76 degrees
+/// between) the casting axis was swept over `x`/`z` multiples and the
+/// shadow-box grey difference scored; the best axis in the craft's own frame
+/// turned with the craft's heading exactly as a world-fixed one does, and a
+/// craft-local axis cannot produce that. Applied as a world vector it lowers
+/// the shadow-box difference of every grid pair that was not already aligned
+/// (mean over the 24 grid pairs 4.86 to 2.69). `Shadow_RenderOccluderVolume`'s `vtfm4` by the
+/// node's matrix (`self+0xb0`) reads as a local axis, so what that matrix
+/// holds for a craft's shadow node is not the craft's rotation; the
+/// instruction read is left as it was. Measured on level ground; on a bank
+/// `oag_render::shadow::hull_triangles` carries it with the road's tilt.
+/// See `docs/rendering/shadows.md`.
+pub const WORLD_AXIS: [f32; 3] = AUTHORED_AXIS;
 
 /// The whole-number direction [`AUTHORED_AXIS`] is the normalization of.
 ///

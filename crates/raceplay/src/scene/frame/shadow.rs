@@ -170,11 +170,11 @@ impl super::super::Scene {
         // falling back to a blob: a tier that silently becomes another tier is
         // how a missing feature stops being noticed. See
         // `oag_render::shadow::hull_triangles`, and
-        // `oag_pulse::shadow::AUTHORED_AXIS` for the direction.
+        // `oag_pulse::shadow::WORLD_AXIS` for the direction.
         if shadows == oag_display::display::Shadows::Original {
             // The quads are not drawn at all: the two tiers are alternatives,
             // not layers.
-            let axis = Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS);
+            let axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
             return (Vec::new(), self.original_hulls(race, axis));
         }
         if shadows == oag_display::display::Shadows::Blob {
@@ -683,7 +683,7 @@ fn mapped_fit(player: oag_core::math::Mat4, towards_light: Vec3) -> oag_render::
 ///
 /// **The circuit's own sun where there is one**, which on Wipeout HD there is;
 /// **the direction that title's own shadows are cast along** where there is
-/// not, which on Pulse is `oag_pulse::shadow::AUTHORED_AXIS` - so switching
+/// not, which on Pulse is `oag_pulse::shadow::WORLD_AXIS` - so switching
 /// between `original` and `mapped` changes what is shadowed and not where the
 /// light is.
 ///
@@ -698,7 +698,7 @@ fn mapped_light(light: &oag_mesh::mesh_render::Light) -> Vec3 {
     }
     // The axis points *along* the shadow; the fit wants the direction towards
     // the light.
-    -Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS)
+    -Vec3::from_array(oag_pulse::shadow::WORLD_AXIS)
 }
 
 /// The fit an empty pass uses: anywhere, one unit across, straight down.
