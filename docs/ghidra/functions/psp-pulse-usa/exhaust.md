@@ -2056,8 +2056,7 @@ ours' vertices for the same frame: rgba bytes and the `u`/`v` actually sent per 
 
 **Not ported.** Scaling ours' ribbon colour down to match would be a fitted constant with no law behind it; the colour
 stays as the page recovered it until the cause is read. Judged as a player sees it, ours' ribbon tail is a bright pink
-streak under the craft where the original shows a faint blue one (the contribution images in
-`data/scratch/pulse-plume-ribbon/contrib.png`, not committed).
+streak under the craft where the original shows a faint blue one.
 
 **The nozzle is not smaller, the glow is the same.** On the exact frame the nozzle disc is 193.0 grey / 582 px over 230 in
 the original and 219.6 / 1,029 in ours, and the ribbon's share of that gap is nil (47.7 against 52.3). With the ribbon
