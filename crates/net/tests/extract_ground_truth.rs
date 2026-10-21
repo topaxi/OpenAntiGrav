@@ -119,9 +119,11 @@ fn races(offer: &Offer) -> Vec<(Planned, usize, bool)> {
     ]
 }
 
-/// Extracts `source` for [`races`], requires them to load identically from the result, then
-/// flies each from both and compares every tick.
-fn check(source: &Path, name: &str) {
+/// Extracts `source` for the one race of [`races`] at `which`, requires it to load identically
+/// from the result, then flies it from both and compares every tick. Each race is its own test
+/// (and its own extraction, so the extraction is proven to serve that race alone), because one
+/// test carrying all three ran past the per-test ceiling on one core.
+fn check(source: &Path, name: &str, which: usize) {
     let out = work_dir(name);
     let source = source.display().to_string();
     let report = oag_net::extract::extract(
@@ -129,74 +131,91 @@ fn check(source: &Path, name: &str) {
         &out,
         "ground truth",
         &|offer| {
-            races(offer)
-                .into_iter()
-                .map(|(planned, _, _)| planned)
-                .collect()
+            let (planned, _, _) = races(offer).swap_remove(which);
+            vec![planned]
         },
         |_| {},
     )
     .expect("extracts");
     assert!(report.gaps.is_empty(), "{name}: {:#?}", report.gaps);
-    assert_eq!(report.loaded, 3, "{name}: {:#?}", report.refused);
+    assert_eq!(report.loaded, 1, "{name}: {:#?}", report.refused);
     let offer = oag_net::extract::offer(&source).expect("offers");
     let extraction = out.display().to_string();
-    for (planned, ticks, to_the_finish) in races(&offer) {
-        let params = planned.params;
-        // One after the other, each on a thread with room for the race: a title's loaded race
-        // is gigabytes resident, and six titles run at once.
-        let fly = |at: &str| {
-            let (at, params) = (at.to_string(), params.clone());
-            std::thread::Builder::new()
-                .stack_size(64 << 20)
-                .spawn(move || hashes(&at, &params, ticks, to_the_finish))
-                .expect("spawns")
-                .join()
-                .expect("the race flies")
-        };
-        let (from_source, from_extraction) = (fly(&source), fly(&extraction));
-        let missed = oag_assets::record::take_misses();
-        assert!(
-            missed.is_empty(),
-            "{name}: {}: reads the extraction could not answer: {missed:#?}",
-            planned.label
-        );
-        assert!(
-            !to_the_finish || from_source.len() < ticks,
-            "{name}: {}: no finish line in {ticks} ticks",
-            planned.label
-        );
-        let first_difference = from_source
-            .iter()
-            .zip(&from_extraction)
-            .position(|(a, b)| a != b);
-        assert_eq!(first_difference, None, "{name}: {}", planned.label);
-        assert!(
-            from_source.windows(2).any(|pair| pair[0] != pair[1]),
-            "{name}: {}: the race never moved, so the comparison proves nothing",
-            planned.label
-        );
-    }
+    let (planned, ticks, to_the_finish) = races(&offer).swap_remove(which);
+    let params = planned.params;
+    // One after the other, each on a thread with room for the race: a title's loaded race
+    // is gigabytes resident, and six titles run at once.
+    let fly = |at: &str| {
+        let (at, params) = (at.to_string(), params.clone());
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(move || hashes(&at, &params, ticks, to_the_finish))
+            .expect("spawns")
+            .join()
+            .expect("the race flies")
+    };
+    let (from_source, from_extraction) = (fly(&source), fly(&extraction));
+    let missed = oag_assets::record::take_misses();
+    assert!(
+        missed.is_empty(),
+        "{name}: {}: reads the extraction could not answer: {missed:#?}",
+        planned.label
+    );
+    assert!(
+        !to_the_finish || from_source.len() < ticks,
+        "{name}: {}: no finish line in {ticks} ticks",
+        planned.label
+    );
+    let first_difference = from_source
+        .iter()
+        .zip(&from_extraction)
+        .position(|(a, b)| a != b);
+    assert_eq!(first_difference, None, "{name}: {}", planned.label);
+    assert!(
+        from_source.windows(2).any(|pair| pair[0] != pair[1]),
+        "{name}: {}: the race never moved, so the comparison proves nothing",
+        planned.label
+    );
     let _ = std::fs::remove_dir_all(&out);
 }
 
 macro_rules! per_title {
-    ($($test:ident: $image:expr;)*) => {$(
-        #[test]
-        #[ignore = "needs the title's disc image or extracted folder"]
-        fn $test() {
-            if let Some(source) = oag_testdata::exact($image) {
-                check(&source, stringify!($test));
+    ($($title:ident: $image:expr;)*) => {$(
+        mod $title {
+            use super::*;
+
+            fn run(which: usize) {
+                if let Some(source) = oag_testdata::exact($image) {
+                    check(&source, &format!("{}_{which}", stringify!($title)), which);
+                }
+            }
+
+            #[test]
+            #[ignore = "needs the title's disc image or extracted folder"]
+            fn first_circuit_reproduces() {
+                run(0);
+            }
+
+            #[test]
+            #[ignore = "needs the title's disc image or extracted folder"]
+            fn one_lap_to_the_finish_reproduces() {
+                run(1);
+            }
+
+            #[test]
+            #[ignore = "needs the title's disc image or extracted folder"]
+            fn full_grid_reproduces() {
+                run(2);
             }
         }
     )*};
 }
 
 per_title! {
-    pulse_psp_extraction_reproduces_its_races: "pulse-psp-eu.chd";
-    pulse_ps2_extraction_reproduces_its_races: "pulse-ps2-eu.chd";
-    pure_extraction_reproduces_its_races: "pure-psp-eu.chd";
-    hd_extraction_reproduces_its_races: "hdfury-ps3-eu.iso";
-    wipeout_2048_extraction_reproduces_its_races: "data/extracted/vita";
-    omega_extraction_reproduces_its_races: "data/extracted/ps4";
+    pulse_psp: "pulse-psp-eu.chd";
+    pulse_ps2: "pulse-ps2-eu.chd";
+    pure: "pure-psp-eu.chd";
+    hd: "hdfury-ps3-eu.iso";
+    wipeout_2048: "data/extracted/vita";
+    omega: "data/extracted/ps4";
 }
