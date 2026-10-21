@@ -152,6 +152,16 @@ by the arcade, elimination, time trial and speed lap layouts and by none of Zone
 Duel's (`hd_hud_runtime_ground_truth::the_assist_indicator_is_authored_where_a_race_can_use_it`).
 Wired: `oag_hud::assist`, `oag_hd::hud::RUNTIME.assist`.
 
+**The bracket under the craft in the compare pairs is this indicator (2026-10-21, `hd-go-board-hud`).** All thirteen HD
+Time Trial frames of the original draw a translucent white bracket with a chevron pair under the craft, at the same
+screen place, over the wing tips; it was first read as a scene decal and then as an unidentified HUD-pass overlay. It is
+`AssistIndicatorBG` (`HUD_Components.gtf` 227x102 at 195,191) with `AssistIndicatorMain` and the chevrons, at the layout's
+`OffsetX=960, OffsetY=885` (bottom centre of 1920x1080), drawn while the option byte `+0x473` is on. The states the pairs
+were made from have Pilot Assist on. Ours already draws it (`oag_hud::assist`) and renders the same bracket with
+`--pilot-assist on` (side by side on Ubermall, same place, size and chevrons), so the pair profile now sets
+`pilot_assist = "on"` for HD (`scripts/compare-environment.toml`). Not read: the level the states have (Normal and
+Extreme draw the same indicator), and the chevrons' flashing against an acting assist (the pairs sit at rest).
+
 ## Read live (2026-10-10)
 
 `scripts/rpcs3-trace.py` dumps `craft+0x000..0x600` every frame, which covers the state.

@@ -48,6 +48,8 @@ def platform(key):
     out["ours"] = dict(doc["ours_defaults"])
     if "shadows" in table:
         out["ours"]["shadows"] = table["shadows"]
+    if "pilot_assist" in table:
+        out["ours"]["pilot_assist"] = table["pilot_assist"]
     out["tolerance"] = dict(doc["tolerance"])
     out["profile_sha"] = hashlib.sha256(PROFILE.read_bytes()).hexdigest()[:12]
     return out
@@ -68,11 +70,14 @@ def ppsspp_ini(plat):
 def ours_flags(plat):
     """`oag-game` flags that carry the profile's render settings (every one that has a flag)."""
     o = plat["ours"]
-    return ["--no-audio", "--size", size_text(plat),
-            "--render-scale", str(o["render_scale"]), "--reconstruction", o["reconstruction"],
-            "--msaa", o["msaa"], "--motion-blur", o["motion_blur"],
-            "--lod", o["model_detail"], "--texture-detail", o["texture_detail"],
-            "--screen-filter", o["screen_filter"], "--anisotropy", o["anisotropy"]]
+    flags = ["--no-audio", "--size", size_text(plat),
+             "--render-scale", str(o["render_scale"]), "--reconstruction", o["reconstruction"],
+             "--msaa", o["msaa"], "--motion-blur", o["motion_blur"],
+             "--lod", o["model_detail"], "--texture-detail", o["texture_detail"],
+             "--screen-filter", o["screen_filter"], "--anisotropy", o["anisotropy"]]
+    if "pilot_assist" in o:
+        flags += ["--pilot-assist", o["pilot_assist"]]
+    return flags
 
 
 def ours_env(profile_dir):
@@ -402,6 +407,8 @@ def environment_text(plat, rec):
             "ours: %s, render scale %d, %s, shadows %s, motion blur %s, aspect %s, HUD %s, camera %s"
             % (size_text(plat), o["render_scale"], "no upscaler" if o["reconstruction"] == "off" else o["reconstruction"],
                o["shadows"], o["motion_blur"], plat["aspect"], o["hud"], o["camera"])]
+    if "pilot_assist" in o:
+        bits.append("Pilot Assist %s on both sides (the original's frame draws its indicator)" % o["pilot_assist"])
     ov = rec.get("overlap") or {}
     if "edge_ncc" in ov:
         bits.append("overlap: edge correlation %.2f, RMSE %.3f" % (ov["edge_ncc"], ov["rmse"]))

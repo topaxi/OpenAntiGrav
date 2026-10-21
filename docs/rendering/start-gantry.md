@@ -933,6 +933,32 @@ own HD section places the gantry either - it is the **track**'s own
 already recovered for Pulse below rather than by anything new on this
 model's own side. See ["Implemented on HD"](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat).
 
+## HD's GO board in the compare pairs is a pulse phase, and a lighting gap at its peak (2026-10-21, `hd-go-board-hud`)
+
+**The thread said the original's GO board is lit and ours dark with faint text. Read on the 13 HD Time Trial pairs, that
+is two things, and the first is not a rendering gap.** Every pair is taken 12.0 to 12.9 s into the race, on the first
+lap, when the board plays the lap-0 window `[3.83, 5.25)` s in a loop of 86 ticks ([gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md)).
+The original's board in the thirteen frames is bright with a halo (Tech de Ra, Sol 2, Ubermall, Vineta K), dim grey
+(Modesto Heights, Anulpha Pass, Sebenco Climb, Moa Therma) or the glyph absent altogether (Chenghou Project): the loop's
+phases. Ours, run to the same race clock, plays the phase the race clock gives (the jump to the window happens at the release,
+then 86 ticks a loop); the original's phase is the gantry node's own animation time, and on several of the thirteen the two
+disagree (Modesto Heights: the original dim, ours bright purple; Chenghou Project: the original's glyph absent, ours
+bright), so a pair compares different frames of the loop whenever they do. Rendering ours on Ubermall at eight offsets
+across one loop (86 ticks, 11 apart) gives the sequence GO bright, mid-grey, **absent**, bright, bright, absent, dim,
+bright, so every state the original shows is one ours plays too.
+
+**What remains where both are bright (Ubermall's own pair is one: both bright; measured 310x70 px over the glyph, grey levels):** the
+original's 90th percentile is 255 (clipped, with a bloom halo wider than the strokes) and ours peaks at 186, a flat light
+grey with no halo; the teal panel around it is also lighter in the original. Tech de Ra's pair reads alike by eye at its
+bright phase, so the gap looks per circuit: the original's program for the track's `billboard8` quad is
+`(f[TC0..] + ambient + sun * sat(N.L)) * card` (above), a factor that exceeds 1 in an indoor circuit like Ubermall, and ours
+reaches 186 of 255 on a white glyph there (a factor of about 0.73, taking the card's glyph as 1). The constants of that draw on Ubermall were not captured. **Not wired.** Next: (1) read the
+gantry node's time (`+0xc0` of the `MeshImporter` node, `AnimNode_GetTime`) out of RAM at the capture and hand it to ours,
+so a pair compares like with like (a pair-script change, plus a way to hand ours a gantry time); (2) with
+that, capture the quad's fragment-program constants on Ubermall (`rpcs3_draw_hook.py`, `HOOK_TGT` for the main target) and
+compare with what ours multiplies the card by.
+**Omega/2048: checked, differs.** 2048 and Omega place no gantry (this page, above); nothing to port.
+
 ## Wipeout HD: the gantry is a card, and the mode picks the file (2026-10-08, `hd-gantry`)
 
 **The maintainer's two reports from play, both measured on RPCS3** (private instance,

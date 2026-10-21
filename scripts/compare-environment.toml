@@ -98,6 +98,13 @@ output = [1920, 1080]
 output_note = "full HD"
 aspect = "wide"
 profile_key = "Wipeout HD (PS3)"
+# Pilot Assist is ON in the original's HD states: every one of the thirteen frames draws the
+# assist indicator (`AssistIndicatorBG` and its chevrons, `hud_assist_indicator.xml`, bottom
+# centre at 960,885), the bracket under the craft that was once read as a ground ring, and ours
+# draws the same ring with `--pilot-assist on` (2026-10-21, `hd-go-board-hud`). The level is not
+# read (Normal and Extreme draw the same indicator); `on` is Extreme. Pairs pose-hold, so the
+# assist forces do not move the craft.
+pilot_assist = "on"
 [platform.hd-fury.emulator]
 name = "RPCS3"
 renderer = "Vulkan"

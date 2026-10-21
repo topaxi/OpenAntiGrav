@@ -356,6 +356,28 @@ not by a store). With Pilot Assist off the scale is the literal `1.0`, so the ba
 the button is held (not measured on the running original). Not measured: the ramp between 0 and
 the plateau (samples were 0.8 s apart), and the zero stretches mid-run.
 
+## The time cluster (`Hud_UpdateTimeCluster`, `0x00094598`)
+
+**2026-10-21, `hd-go-board-hud`, confidence 70.** The per-frame update of the top-right `TotalTime` cluster
+(`param_1 + 0x1f8` the time text, `+0x1fc` the target text, `+0x200`/`+0x204` the caption and its colour). It reads the
+HUD's status record at `hud+0x40`:
+
+| Field | Meaning (read) |
+| --- | --- |
+| `+0x30` / `+0x6c` | the race clock in seconds (`f32`); `+0x6c` is used when it differs from the sentinel `DAT_008a75b8` |
+| `+0x34` | a held time shown while the clock is under 4 s (`(int)(clock * 100) < 400` and non-zero) |
+| `+0x3c` | the target's **remaining** time in centiseconds, `0xffffffff` = hidden |
+| `+0x38` | a second time (the redden threshold) |
+
+**Measured live (RPCS3, Modesto Heights Time Trial, one boot):** at `+0x30` = `68.606` s, `+0x3c` = `53040`; the sum
+`53040 + 6860.6` is `59900.6`, so the target is 599.0 s, HD's `<RaceTimes Venom="599">` (hud.md, "HD's RECORD"). The
+record sits where `scripts/rpcs3-hud-probe.py`'s record scan finds a `lap = 1`, `laps = 3`, place word triple at `+0xc`.
+`PlayerStatus_Update` (`0x000cb928`) fills the status: for modes `5`, `0x13` and `10` it sums the lap splits
+(`craft+0x7030`, 99 words) and the clock times 100, takes the stored best (`FUN_00020118`), and with a track stats
+object at `mode+0x1bc` and no ladder (`mode+0x90 == 0`) races `min(best, stats float * 100)` at `+0xb0 + class * 4`
+(`+0xc0` for mode `10`): Pulse's `Hud_UpdateTimeCluster_q` law. Not read: the writer of `+0x3c` itself, and what `+0x38`
+holds. **Omega/2048: checked, applies, not wired by this page** (same `stats.xml` path; hud.md names the wiring).
+
 ## Not read
 
 - **Which craft `beam+0xc94c` is** (above), so `ship+0x6958` is not wired.

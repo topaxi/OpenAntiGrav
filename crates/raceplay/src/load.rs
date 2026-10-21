@@ -958,7 +958,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.source,
         &mut archives,
         &track,
-        (pulse_psp, pulse_ps2_data),
+        pulse_psp,
         &mut report,
     );
     let original_laws =
@@ -971,7 +971,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             mode: options.mode,
             weapons_on: options.weapons_on(),
             full_grid: options.opponents || options.mode.has_opponents(),
-            track_stats: track_stats.as_ref(),
+            // The AI's ambient skill reads the file on Pulse only: HD's and Omega's own AI
+            // skill is measured without it, and the HUD's `RECORD` is the one other reader.
+            track_stats: track_stats.as_ref().filter(|_| pulse_psp || pulse_ps2_data),
         },
         &mut report,
     );
