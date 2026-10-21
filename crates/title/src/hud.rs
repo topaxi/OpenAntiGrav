@@ -523,7 +523,10 @@ pub struct HudArt {
     /// km/h the fill ends at 82% of the bar's width where 700 predicts 76% and
     /// 600 predicts 88%; at 74 km/h it ends at 6% against 11% and 12%.
     ///
-    /// **Pulse, Pure and 2048: 600, ours, not recovered.** Nothing has
+    /// **Pulse: 700, read off the executable** (`Hud_UpdateSpeedBar`, `0x0881a3e0`,
+    /// `speed / 700.0`; live reads of the fill's width matched it on 59 of 60 ticks).
+    ///
+    /// **Pure and 2048: 600, ours, not recovered.** Nothing has
     /// established what sets those bars' maximum. 600 is an inference: the
     /// exhaust's own ramp saturates at 600 km/h (`oag_fx::exhaust::RAMP_FLOOR_KMH`
     /// plus `RAMP_SPAN_KMH`, both recovered), a ramp for a visual effect and not a
@@ -659,6 +662,9 @@ pub struct HudArt {
     pub runtime: Option<&'static RuntimeHud>,
     /// The lap counter's lap-one shift: `None` where unmeasured.
     pub lap_one_shift: Option<LapOneShift>,
+    /// How the speed and shield bars' fill, marker and label follow the bar's
+    /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
+    pub bar_tip: Option<BarTip>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -721,6 +727,53 @@ pub struct LapOneShift {
     pub widgets: &'static [&'static str],
     /// Added to their authored `x` on lap one.
     pub dx: i32,
+}
+
+/// The speed and shield bars' fill law: the tip of the fill is where the marker
+/// and the value label sit.
+///
+/// Pulse's `FUN_0881a3e0` (the speed bar) and `Hud_UpdateEnergyBar`
+/// (`0x0881c638`) run one law: the value as a fraction `f` of full, then
+/// `f' = floor + span * f`, the fill's pixel width `floor(f' * background width)`,
+/// its texture window the **right** `f'` of the art (so the art's pointed end is
+/// always the tip), and the marker and the label moved to `authored x + width +
+/// tip_dx`. The speed bar alone reads a speed under `idle_kmh` as zero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BarTip {
+    /// The fraction a bar shows at zero, in thousandths: `40` is `0.04`.
+    pub floor_permille: u16,
+    /// The rest of the range, in thousandths: `960` is `0.96`.
+    pub span_permille: u16,
+    /// Added to the tip's pixel width for the marker and label: `-6`.
+    pub tip_dx: i16,
+    /// A speed under this reads as zero, in km/h: `5`.
+    pub idle_kmh: u16,
+    /// The bars this law drives.
+    pub bars: &'static [TipBar],
+}
+
+/// One bar of a [`BarTip`] law.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TipBar {
+    /// The fill widget.
+    pub fill: &'static str,
+    /// The marker that rides the tip, if the layout authors one.
+    pub mark: &'static str,
+    /// The value label that rides the tip.
+    pub text: &'static str,
+    /// What the bar shows.
+    pub source: TipSource,
+}
+
+/// The value a [`TipBar`] shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TipSource {
+    /// The speed over [`HudArt::speed_full_kmh`]; the label is the speed in
+    /// whole km/h, truncated, with its unit.
+    Speed,
+    /// The shield as a percentage of the pool; the label is the percentage
+    /// truncated, then `%`.
+    Shield,
 }
 
 /// The dim the pickup bar is drawn in while it has nothing to show: the

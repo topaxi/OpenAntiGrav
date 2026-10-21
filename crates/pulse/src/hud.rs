@@ -90,7 +90,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     zone_speed_classes: None,
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
-    speed_full_kmh: 600,
+    // Read off `FUN_0881a3e0`: the speed over `700.0`, then the bar's `0.04` floor.
+    speed_full_kmh: 700,
     // Measured: every one of Pulse's own language plugins names
     // `<Font><Values name="HUD" ...Src="...\PulseHud.fnt">` and `HUDSmall`
     // -> `small.fnt` - see `oag_ui::language::roles`' own doc table (role
@@ -136,6 +137,28 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     lap_one_shift: Some(oag_title::hud::LapOneShift {
         widgets: &["LapOf", "Lap Outof"],
         dx: -17,
+    }),
+    // Measured: `FUN_0881a3e0` (speed) and `Hud_UpdateEnergyBar` (shield), see
+    // `docs/ghidra/functions/psp-pulse-usa/hud-bar-tip.md`.
+    bar_tip: Some(oag_title::hud::BarTip {
+        floor_permille: 40,
+        span_permille: 960,
+        tip_dx: -6,
+        idle_kmh: 5,
+        bars: &[
+            oag_title::hud::TipBar {
+                fill: "SpeedBar",
+                mark: "SpeedBarMark",
+                text: "SpeedBarText",
+                source: oag_title::hud::TipSource::Speed,
+            },
+            oag_title::hud::TipBar {
+                fill: "ShieldBar",
+                mark: "ShieldBarMark",
+                text: "ShieldBarText",
+                source: oag_title::hud::TipSource::Shield,
+            },
+        ],
     }),
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout

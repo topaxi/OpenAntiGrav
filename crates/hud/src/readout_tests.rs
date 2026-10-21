@@ -42,6 +42,21 @@ fn a_lap_time_truncates_rather_than_rounding_up() {
     assert_eq!(format_lap_time(59, Precision::Tenths), "0.00.9");
 }
 
+/// 72 ticks is exactly 1.2 s. A float division read it as 1.1999..., so it showed `1.19` and the
+/// clock's tenth one short on every sixth tick (512 of the first 7,800 ticks).
+#[test]
+fn a_tick_that_is_an_exact_tenth_shows_that_tenth() {
+    assert_eq!(format_lap_time(72, Precision::Hundredths), "0.01.20");
+    assert_eq!(format_lap_time(72, Precision::Tenths), "0.01.2");
+    for ticks in 0..60 * 130u64 {
+        assert_eq!(
+            format_lap_time(ticks, Precision::Tenths),
+            format!("{}.{:02}.{}", ticks / 3600, ticks / 60 % 60, ticks % 60 / 6),
+            "{ticks} ticks"
+        );
+    }
+}
+
 /// A clock that rolls a minute over correctly is worth one assertion.
 #[test]
 fn the_minute_field_is_not_capped() {

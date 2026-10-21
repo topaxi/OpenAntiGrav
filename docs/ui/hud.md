@@ -554,13 +554,13 @@ Three traps, all of which cost time here:
 
 | Question | Answer |
 | --- | --- |
-| Does the bar fill grow from the left? | **Yes**, and the art is a wedge, so at low speed it reads as a small triangle. The horizontal-crop model is right. |
+| Does the bar fill grow from the left? | **The quad does, the art does not** (2026-10-21, [hud-bar-tip.md](../ghidra/functions/psp-pulse-usa/hud-bar-tip.md)): the fill is `floor((0.04 + 0.96 * speed / 700) * 168)` px wide at the bar's left edge showing the **right** part of the art, so the art's pointed end is the tip at every speed. Pulse only (`oag_title::hud::BarTip`); other titles keep the left crop. |
 | Is there an outline on widgets with no `BorderColor`? | **Yes.** Every HUD-font widget on the frame is outlined, `CurrentTime` and `BestTime` included. The earlier "draw it transparent" reading was wrong. |
 | What does `best` show with no best lap? | **`0.00.00`** - zeros, not a dash placeholder. |
 | What precision do times use? | **Both.** `best` is `m.ss.hh` (`0.00.00`) and `current` is `m.ss.h` (`1.27.9`), a few pixels apart. Running clocks carry tenths, a set time carries hundredths. `record` top-right is also tenths (`0.29.0`). |
 | What does `ShieldBarText` show? | **`100%`** - a percentage, not the raw `<Misc shield/>` pool. Confirmed from the writer as of 2026-08-10: `Ship_SetShield` (`0x0883e6f4`) calls `Hud_SetEnergyBar((shield / max) * 100, ...)` itself, so the percentage is the original's own arithmetic rather than a reading of a frame. |
 | Does the shield bar move? | **Yes, now.** It read a constant full for as long as nothing depleted the pool; wall contact does as of the shield work, so `ShieldBar` and `ShieldBarText` are live. **In a time trial and a speed lap it will still sit near full**, and that is faithful rather than broken - both modes race with the original's `Damage` option off, which floors the pool at 20 and regenerates it at 4 a second. Zone is the mode where it visibly drains. See [shield](../ghidra/functions/psp-pulse-usa/shield.md). |
-| Where is `SpeedBarMark`? | At its authored position at zero speed, just left of the bar. Whether it *slides* with speed is still open - one frame at speed settles it. **Pulse's widget only**: HD authors no `SpeedBarMark`, and HD's speed fill is a `<CurveBar>` - see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). |
+| Where is `SpeedBarMark`? | It **slides**: authored x plus the fill's width minus 6, and so do `SpeedBarText` and the shield's `ShieldBarMark`/`ShieldBarText` (zero offset at standstill, where the fill is 6 px). Read live, 59 of 60 ticks. **Pulse's widget only**: HD authors no `SpeedBarMark`, and HD's speed fill is a `<CurveBar>` - see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). |
 | What is HD's `ThrustBar`? | The craft's throttle after Pilot Assist's scale, `craft+0x30c * 100`, cropped to its width with a truncated `NN%` label and no chase of the HUD's own (99 or 92 with the assist on, 0 with no throttle). `Readout::thrust_percent`, on `oag_hd`'s and `oag_omega`'s `ALWAYS_ON`; see [hd-hud](../formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Not 2048's `thrust_chase_percent`. |
 
 ### And one structural finding
@@ -655,7 +655,6 @@ pair of the 26 code-only keys; the other 25 are not read.
   past the 480-wide screen. Tenths rather than hundredths narrows it but not
   enough. Either that anchor means something other than a left edge, or the
   overflow is real and the original clips too.
-- **Whether `SpeedBarMark` slides.** Needs a frame at speed.
 - **`PulseHud.fnt`'s stylised lowercase.** The disc's captions render in
   lowercase-looking forms in both the original and here, so this is the typeface
   rather than a case fold going wrong - but it was not measured.
