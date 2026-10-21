@@ -153,24 +153,33 @@ reference. This leg is player input only.
   thrust, full left and the left airbrake held. No Autopilot, so no rail and no engine flags.
   `data/traces/fortgale-player-ramp-{1170,1180,1190}.csv`, plus `-1180nb` with the airbrake
   released.
-- **Why `--place-repeat`.** One write left the craft with whatever it carried from 6 s down
-  the track, and the first stepped tick kicked it to tens of rad/s on every placement (the
-  same kick took the first pitch-gate drops below). Two writes, and it rides the ramp.
+- **Why `--place-repeat`.** After one write the first stepped tick kicked the body to tens of
+  rad/s on every placement (the same kick took the first pitch-gate drops below); after two
+  writes on consecutive hits it rides the ramp. Why is not proven; state the craft carried from
+  where it was 6 s down the track is the likely candidate.
 - **The sweep.** `autopilot_ramp_pose_walk.rs` with `OAG_RAMP_PLAYER=1` (the control block's
   `stick_steer`/`stick_pitch`, full thrust, `OAG_RAMP_AIRBRAKE_LEFT=1` where the shoulder was
   held, default engine flags, no rail) and `OAG_RAMP_FRAME=world|body`. Rows from tick 5 on,
-  with no stun and a velocity residual under `1` unit/s (20 rows on the two runs that met a
-  wall), aggregated by `scripts/pose-walk-residuals.py frames --from 5`.
+  with no stun, a velocity residual under `1` unit/s and the craft over `100` units/s: runs
+  1170 and 1180 meet a wall at the lip and creep along it at `2` to `40` units/s for about a
+  hundred ticks, and a craft held against a wall gives a small one-step `dv`, so speed is the
+  filter that removes it. Aggregated by `scripts/pose-walk-residuals.py frames --from 5
+  --min-speed 100 <capture>=<sweep> ...`.
 
 One-step angular-acceleration residual (rad/s²), world axes against body axes:
 
 | phase (n) | yaw rms | yaw median \|r\| | pitch rms | pitch median \|r\| | roll rms | roll median \|r\| |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| ground (404) | 0.825 → **0.317** | 0.262 → **0.054** | 1.046 → **0.964** | 0.483 → **0.291** | 0.978 → **0.867** | 0.432 → **0.251** |
+| ground (95) | 1.395 → **0.518** | 0.508 → **0.102** | **1.251** → 1.307 | **0.795** → 0.838 | 1.540 → **1.343** | 0.554 → **0.220** |
 | air (98) | 0.393 → **0.073** | 0.384 → **0.032** | 0.771 → **0.527** | 0.359 → **0.208** | 0.593 → 0.629 | 0.404 → **0.198** |
 
-World axes win every cell by median, by about a factor of two and by twelve in air yaw; the
-one rms that does not move (air roll) is carried by a few rows the median ignores. The same
+World axes win yaw and roll on the ground and every axis in the air, by median by a factor of
+two to five and by twelve in air yaw; the air-roll rms that does not move is carried by a few
+rows the median ignores. **Ground pitch does not depend on the frame** (`0.795` against
+`0.838`) and is large against the Autopilot capture's `0.235` rms: unexplained here (the
+airbrake is held on these rows and the hover probes carry the pitch on a ramp; neither is
+separated). With the wall-creeping rows left in (404 ground rows) world axes win all three
+ground axes by median (yaw `0.262 → 0.054`, pitch `0.483 → 0.291`, roll `0.432 → 0.251`). The same
 sweep on the Autopilot's capture 2 (`OAG_RAMP_GATE=1`, the bias now in the physics) gives the
 table above to the third decimal (ground yaw `0.389 → 0.215`), so the tool is unchanged and
 the two legs agree. **Confidence 93** that Pulse applies the diagonal in world axes: a
@@ -179,8 +188,9 @@ input) plus the kinematic identity, and Pure's `Body_Integrate` read as the same
 sequence; a live Pure capture would take it to the top band.
 
 What these runs do not settle: the pitch-gate drops below tumble at `2` to `8` rad/s, and
-there neither frame fits (yaw rms about `2.5` in both, the residual growing with the rate),
-so some term that scales with the rate is missing from ours. Not chased here.
+there neither frame fits (yaw rms about `2.5` in both, larger on the faster rows).
+Unexplained: candidates are the gyroscopic `omega x (I omega)` term ours omits, a rate clamp,
+and the damping's form at high rates. Not chased here.
 
 **On (2026-10-20), a per-title craft law** (`oag_physics::InertiaFrame`,
 `oag_title::craft_laws::CraftLaws::inertia_rotates`): Pulse and the PS2 world axes, measured;
@@ -380,7 +390,11 @@ d-pad up, it pitches down into the cone and stays there): 38 open airborne rows,
 `up.y` alone tick 4 reads `0.8993`, closed, and the gated sweep misses it by the whole input
 (`+1.012`). `down-24` was taken before `spline_down_*` was recorded, so its down is
 `down-24-s1`'s at the same tick (same placement, positions within `1` unit, `down` within
-`0.001` over the run): `talons-pitch-down-24-sd.csv`, grafted, said so. With the bias off its
+`0.001` over the run): `talons-pitch-down-24-sd.csv`, grafted, said so. A one-tick lag in the
+hull up would fit the same pair under world down, but the Autopilot captures record both the
+body's up and the gate's own read (`craft+0x160`), and they are equal on every one of capture 2
+and 3's 3,700 rows. The located down was already established by the Autopilot crossings on
+the banked ramp; this run corroborates it under player input. With the bias off its
 closed rows read `+0.266` against the bias' own `0.513 / 1.923 = 0.267`: the in-air
 `weight_distribution` torque acts while the gate is closed, live, as the static read has it.
 

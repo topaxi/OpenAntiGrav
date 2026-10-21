@@ -6,13 +6,15 @@
                                        torque (`1.923` rad/s^2), signed by the stick, on
                                        the airborne rows, split by the recorded
                                        `dot(up, -spline_down)` against `0.9`.
-    frames SWEEP.txt ...               `autopilot_ramp_pose_walk`'s output: rms and median
+    frames [CAPTURE.csv=]SWEEP.txt ... `autopilot_ramp_pose_walk`'s output: rms and median
                                        |residual| per phase (both rows grounded / both
                                        airborne) and axis (yaw, pitch, roll).
 
 Rows are dropped where the next position is off the one-step prediction by more than
 `--rise` (a cage or escape moved the body; gate) or the velocity residual exceeds `--dv`
-(a wall hit; frames), and before `--from` (the placement transient). Prints only.
+(a wall hit; frames), below `--min-speed` units/s where the capture is given (a craft
+held against a wall gives a small one-step `dv`; frames), and before `--from` (the placement
+transient). Prints only.
 """
 
 import argparse
@@ -53,14 +55,22 @@ def gate(pairs, rise, first):
                                                    statistics.mean(v)))
 
 
-def frames(sweeps, dv_max, first):
+def frames(sweeps, dv_max, first, min_speed):
     cells = {}
-    for sweep in sweeps:
+    for item in sweeps:
+        capture, _, sweep = item.rpartition("=")
+        speed = {}
+        if capture:
+            for r in csv.DictReader(open(capture)):
+                speed[int(float(r["tick"]))] = math.sqrt(
+                    sum(float(r["vel_" + c]) ** 2 for c in "xyz"))
         for line in open(sweep):
             if not line.startswith("ROW,"):
                 continue
             t, g, gn, yaw, pitch, roll, dv, stun = (float(x) for x in line.strip().split(",")[1:])
             if t < first or stun > 0 or dv > dv_max:
+                continue
+            if speed and speed[int(t)] < min_speed:
                 continue
             phase = "ground" if g == 1 and gn == 1 else "air" if g == 0 and gn == 0 else None
             if phase is None:
@@ -81,11 +91,12 @@ def main():
     parser.add_argument("--rise", type=float, default=0.05)
     parser.add_argument("--dv", type=float, default=1.0)
     parser.add_argument("--from", dest="first", type=int, default=0)
+    parser.add_argument("--min-speed", type=float, default=0.0)
     args = parser.parse_args()
     if args.mode == "gate":
         gate(args.inputs, args.rise, args.first)
     else:
-        frames(args.inputs, args.dv, args.first)
+        frames(args.inputs, args.dv, args.first, args.min_speed)
 
 
 if __name__ == "__main__":

@@ -113,8 +113,8 @@ pub fn clamp_dt(measured_dt: f32) -> f32 {
 ///   one-step yaw and roll residual of the original's own frames and takes an open-loop
 ///   rollout's vertical velocity error 30 ticks after lift-off from `12.4` to `1.5`
 ///   (`docs/physics/airborne-ground-truth.md`). Under player input on the same ramp it
-///   halves the median one-step residual on every axis, air yaw `0.384` to `0.032`.
-///   Confidence 93.
+///   cuts the median one-step residual on every axis but the grounded pitch, which does not
+///   depend on the frame (air yaw `0.384` to `0.032`). Confidence 93.
 /// - [`InertiaFrame::Body`], Wipeout HD's: it rotates the body tensor, `body+0x50` read live as
 ///   `R I R^T` (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`). The torque is rotated
 ///   into the body, divided component-wise and rotated back once, using the frame's starting

@@ -41,15 +41,17 @@ for our AI or an unread field now runs the original's:
   measured under player input. The gate: 364 closed airborne rows read `-0.010` of the input
   torque through our own `pitch_aligned` against `-0.999` ungated, closed by pitch and by roll,
   and its one slow crossing needs the located down, not world down (93). The frame: on four
-  placed Fort Gale Black ramp runs with thrust, left and the left airbrake held, world axes halve
-  the median one-step residual on every axis against HD's rotated frame (air yaw `0.384` to
-  `0.032`), 93 ([airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md#under-player-input-2026-10-21-pulse-gate-tensor)).
+  placed Fort Gale Black ramp runs with thrust, left and the left airbrake held, world axes cut
+  the median one-step residual on every axis but the grounded pitch against HD's rotated frame
+  (air yaw `0.384` to `0.032`); the grounded pitch residual (`0.8`) is frame-independent and
+  unexplained. 93 ([airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md#under-player-input-2026-10-21-pulse-gate-tensor)).
   No sim code changed. The PS2 shares both through Pulse's definition, unread; Pure has no gate
   and its frame is read only.
 - **A tumbling Pulse craft (`2` to `8` rad/s) fits neither inertia frame**: on the placed drops
   (`data/traces/talons-pitch-*.csv`) the yaw residual is about `2.5` rad/s² rms in both frames
-  and grows with the rate, so a rate-dependent angular term is missing from ours. Only reachable
-  off a placement kick or a hard crash; not chased.
+  and is larger on the faster rows; unexplained (candidates: the gyroscopic term ours omits, a
+  rate clamp, the damping's form). Only reachable off a placement kick or a hard crash; not
+  chased.
 - **HD's escape off a wall was not seen live**: 247 probe hits, all floors. The class numbering
   (`0` wall, `2` reset) is read off two uses, not HD's loader.
 
