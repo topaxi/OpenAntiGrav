@@ -470,3 +470,27 @@ fn no_two_live_labels_overlap() {
         anchors.push((*x, *y));
     }
 }
+
+/// HD's `HUD_lap_times.xml` authors `string="1"` on `CurrentTimeTxt` with no
+/// idstring; the original draws it in the lap hexagon (compare pair, Modesto
+/// Heights time trial). Pulse's carries an idstring caption instead.
+#[test]
+fn the_lap_hexagon_draws_its_authored_literal() {
+    let layout = Layout::from_xml(
+        r#"<Screen><Text name="CurrentTimeTxt"><Values string="1" font="HUD" x="0" y="0"/></Text></Screen>"#,
+    );
+    let strings = strings();
+    assert_eq!(
+        text_for(
+            &layout.labels[0],
+            &Readout::blank(),
+            &strings,
+            false,
+            true,
+            None,
+            false,
+            false
+        ),
+        Some("1".to_string())
+    );
+}
