@@ -624,6 +624,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `0.5`/`0.3`, `5.0`, `3.0`), composed at `0x0892718c` as `lean * 0.5 + roll * 6.28`
     // (`docs/ghidra/functions/psp-pure-usa/`); no `<Tilt>`, so Pulse's gains.
     tilt_steer_lean: None,
+    tilt_camera_lean: None,
 };
 
 #[cfg(test)]

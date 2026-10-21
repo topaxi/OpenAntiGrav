@@ -192,6 +192,7 @@ pub fn handling() -> Handling {
         roll_speed: 1.5,
         roll_turbotime: 0.5,
         steer_lean: crate::params::SteerLean::PULSE,
+        camera_lean: crate::params::CameraLean::PULSE,
     }
 }
 

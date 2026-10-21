@@ -976,6 +976,12 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // `stick * 0.014 -/+ airbrake * 0.005`, frame fit RMS `0.002`
     // (`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`). Confidence 90.
     tilt_steer_lean: Some(oag_title::pre_race::Sourced::measured(10.0)),
+    tilt_camera_lean: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::craft_laws::TiltCameraLean {
+            smooth_rate: 6.0,
+            sideshift_offset: 0.5,
+        },
+    )),
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

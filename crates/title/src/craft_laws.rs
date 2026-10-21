@@ -85,6 +85,20 @@ pub struct CraftLaws {
     /// at this rate, Wipeout HD's `10.0` (`oag_physics::SteerLean`). `None`: Pulse's compiled-in
     /// gains (`oag_physics::SteerLean::PULSE`), which Pure's executable carries too.
     pub tilt_steer_lean: Option<Sourced<f32>>,
+    /// The cockpit camera's lean reads the team's `<Tilt internalAmount internalSpeed>` with
+    /// these two code literals, Wipeout HD's (`oag_physics::CameraLean`). `None`: Pulse's
+    /// compiled-in gains (`oag_physics::CameraLean::PULSE`).
+    pub tilt_camera_lean: Option<Sourced<TiltCameraLean>>,
+}
+
+/// The two literals Wipeout HD's cockpit camera lean adds to `<Tilt>`'s `internalAmount` and
+/// `internalSpeed` (`oag_physics::CameraLean`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TiltCameraLean {
+    /// The first-order rate between the follower and the lean: HD `6.0`.
+    pub smooth_rate: f32,
+    /// What a running sideshift timer adds to or takes off the target: HD `0.5`.
+    pub sideshift_offset: f32,
 }
 
 /// A launch boost compiled into the engine: the seven figures Pulse's `<StartBoost>` authors,

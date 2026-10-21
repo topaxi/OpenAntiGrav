@@ -13,7 +13,7 @@
 //! `k + 1`). Dropping either limit, or the gain, moves it by two orders of
 //! magnitude; see the tolerance.
 
-use oag_physics::{ShipState, controls::update_camera_lean};
+use oag_physics::{CameraLean, ShipState, controls::update_camera_lean};
 
 const CAPTURE: &str = include_str!("../../../data/traces/talons-junction-steer-lean.csv");
 
@@ -54,7 +54,7 @@ fn the_camera_lean_reproduces_the_original_through_a_turn_and_its_release() {
         } else {
             0.0
         };
-        update_camera_lean(&mut state, stick, *dt);
+        update_camera_lean(&mut state, stick, &CameraLean::PULSE, *dt);
         worst = worst
             .max((state.camera_lean - lean).abs())
             .max((state.camera_lean_follower - follower).abs());

@@ -8,7 +8,8 @@
 //!
 //! The other way round too: Wipeout HD reads its drawn lean's stick gain and follower rate from
 //! the team's `<Tilt>` where Pulse compiles them in, so a title whose engine does fills
-//! `Handling::steer_lean` from the file here.
+//! `Handling::steer_lean` from the file here, and the cockpit camera's lean the same way
+//! (`Handling::camera_lean`, `<Tilt internalAmount internalSpeed>`).
 
 use oag_tables::handling;
 use oag_title::craft_laws::CraftLaws;
@@ -25,6 +26,14 @@ pub(super) fn apply(
             stick_amount: tilt.ship_amount,
             follower_rate: tilt.ship_speed,
             smooth_rate: smooth.value,
+        };
+    }
+    if let (Some(camera), Some(tilt)) = (laws.and_then(|laws| laws.tilt_camera_lean), stats.tilt) {
+        handling.camera_lean = oag_physics::CameraLean {
+            stick_scale: 0.015 * tilt.internal_amount,
+            follower_rate: tilt.internal_speed,
+            smooth_rate: camera.value.smooth_rate,
+            sideshift_offset: camera.value.sideshift_offset,
         };
     }
     if let Some(block) = stats.class_named(class) {
@@ -79,6 +88,7 @@ mod tests {
             code_sideshift: None,
             code_start_boost: None,
             tilt_steer_lean: None,
+            tilt_camera_lean: None,
             pitch_gate: Sourced::chosen(true),
             eliminator_wrong_way_kill: Sourced::chosen(true),
             sideshift_grid_gate: Sourced::chosen(true),
