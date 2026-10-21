@@ -1340,3 +1340,35 @@ Detonator. **The first `right` was swallowed on this machine**, so Zone took fiv
 off `TTY.log`'s `BackendRoot has g_GameState.GetMode()==N` (Zone 6, Zone Battle 13, Detonator 14, Eliminator 8) rather than
 counting. Naming a bound texture needs more than the first 64 bytes: a flat first DXT block matches several
 files, so compare the head and the samples at `+0x400`, `+0x1000`, `+0x4000`, `+0x10000`. The main surface word `0x3148` is A8R8G8B8 with 2x MSAA, not fp16.
+
+## The HD capture profile: 1920x1080 at scale 100, and no native overlays (2026-10-21, `hd-capture-profile`)
+
+**Resolution.** `scripts/compare-environment.toml`'s `hd-fury` is now `Resolution 1920x1080`, `Resolution Scale 100` (it was 1280x720 at 150). The
+game's 1080p path draws its scene at a reduced, variable width (1300, 1320 and 1660 of 1920 measured, full 1080 lines) and the exposure readback
+(`FunkLayer + 0x25c`) agrees with 1280x720/100 on three circuits within 3.5 percent and exposure 1.0; at 150 it read 9 to 35 percent low and put Anulpha at
+exposure 1.22. Numbers and method: `docs/rendering/hd-track-tone.md`, "The capture profile moves to 1920x1080". Reading a scene surface's
+size off a frame: the clip registers `0x200` (horizontal, `x | width << 16`) and `0x204` (vertical) in the draw state `scripts/hd-draw-dump.py`
+dumps; `scripts/rsx-draw-list.py`'s `SURF` line does not print them.
+
+**Overlays.** RPCS3's `Press and hold the START button to resume` toast fades in a moment after the GDB stub pauses the game and stays until it
+resumes (screenshots 0.3, 1.5, 4, 8 and 15 s after the pause: it is there from 1.5 s on); the grey box with a spinner at the bottom left is the PPU/shader
+compilation hint. Findings, each on a cold-booted Anulpha Pass in a private config:
+
+| Setting change | Toast while paused |
+| --- | --- |
+| none | shown |
+| `Show PPU compilation hint: false`, `Show shader compilation hint: false` (native interface on) | **still shown** |
+| the same two hints plus `Use native user interface: false` | **gone** |
+
+So the toast has no setting of its own: it is a native overlay and goes with `Use native user interface`. The profile carries `native_ui = false` and
+`show_hints = false`; `scratch_config` writes them into the private config and the game's custom config. **A run that takes a save state keeps the native
+interface on** (the home menu's `SaveState` is a native overlay): `OAG_RPCS3_SUSPEND_STATE=1` exported by the caller, as
+`emu-save-state.sh`, `emu-hd-timetrial-state.sh`, `emu-rebuild-states.sh` and `emu-hd-race-walk.sh` do, leaves it on; a restore alone
+(`prepare_state_boot` with the variable unset) turns it off. Cold boots (`emu-hd-glass-boot.sh`, `rpcs3-hd-cold-pair.sh`) take it from the profile
+through `OAG_COMPARE_PLATFORM`. Corner crops of Anulpha Pass, Moa Therma (cold) and the Talon's race pair (restored state) before and after show no toast and no spinner.
+
+**Private autosave.** A fresh private copy of the maintainer's `~/.config/rpcs3` can have Harimau locked in the autosave, and the cold walk then stops on Ship
+Select (`never reached ... Team Selection`); copy a save with Harimau unlocked into the private `dev_hdd0/home/00000001/savedata/BCES00664-AUTO-/` (never write the maintainer's).
+
+**Flakes seen.** `capture has no camera (2 frame-unique dual-register candidates)` on one Moa Therma attempt and one race attempt, both gone on a rerun with nothing
+changed but the emulator's moment; a second attempt after such a failure then stopped at `Connection refused` (the emulator of the first attempt was gone), so rerun by hand.

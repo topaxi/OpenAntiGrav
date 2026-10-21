@@ -227,16 +227,43 @@ anisotropy override.
   microcode, so it is **not checkable by this reading** for 2048 and Omega, as
   `docs/formats/rcsmodel.md`'s flip section already says.
 
+## The capture profile moves to 1920x1080 at Resolution Scale 100 (2026-10-21, `hd-capture-profile`)
+
+The maintainer chose scale 100. The candidate that keeps 1080p pairs was RPCS3 `Resolution 1920x1080` at `Resolution Scale 100`
+(the game believes it is on a 1080p TV). Method: a **cold boot** to the Time Trial grid (Harimau, classic hull, the
+cold-pair walk), then six reads of the PPU's adapted luma at `FunkLayer + 0x25c` (`0xc50ee0`'s object) two to three
+seconds apart starting five seconds after the walk returned, then one frame of RSX draw state
+(`scripts/hd-draw-dump.py`, `HOOK_RING_ONLY=1`) for the surface clip registers `0x200` and `0x204` of the scene's draws. Exposure is
+`4 - min(adapted * 20, 3)`. Mean of the six reads (min to max in the run):
+
+| Circuit | 1280x720, scale 150 (the old profile) | 1280x720, scale 100 | 1920x1080, scale 100 |
+| --- | --- | --- | --- |
+| Anulpha Pass | 0.139 (0.137 to 0.142), **exposure 1.22** | 0.2127, 0.2109, 0.2114 (three boots), exposure 1.0 | 0.2038, 0.2052 (two boots), exposure 1.0 |
+| Moa Therma | 0.326, exposure 1.0 | 0.427, exposure 1.0 | 0.441, 0.440 (two boots), exposure 1.0 |
+| Talon's Junction | 0.332, exposure 1.0 | 0.363, exposure 1.0 | 0.358, exposure 1.0 |
+
+- **Claim A: true for the exposure, 3.5 percent off for the number.** At 1920x1080/100 the adapted luma is -3.5 percent (Anulpha),
+  +3.2 percent (Moa Therma) and -1.4 percent (Talon's) against 1280x720/100, a sign that changes with the circuit, and the run to run
+  spread at 720/100 is 1 percent (three Anulpha boots), so the difference is not zero noise but it is small, not a bias in one direction,
+  and the exposure is 1.0 on all three, which is the quantity the profile needs. Anulpha stays above the 0.15 threshold by 36 percent.
+  At 150 the same readback is 35, 24 and 9 percent low (Anulpha, Moa Therma, Talon's); only Anulpha is low enough to move the exposure.
+  So **the profile becomes 1920x1080 at scale 100** and the pairs stay 1920x1080.
+- **The 1080p path renders a reduced, dynamic width.** Scene surface (`0x148`, FP16, pitch `0x2000`) clip at 1920x1080/100: **1300x1080** (Anulpha, three
+  frames of one boot; Talon's; Moa Therma's second boot), **1320x1080** (Anulpha, second boot), **1660x1080** (Moa Therma, first boot). The final stage
+  (27 draws) is 1920x1080. So the width of the original's scene is not fixed: it changed between boots of one circuit (Moa Therma 1660 and 1300) and
+  stayed put inside a boot (three dumps of Anulpha, all 1300). Reading the cause (a load-driven dynamic resolution, the game's own) would
+  need the drawing code; not read. At 1280x720 the scene surface is 1280x720 at both scales: at 150 the game still draws 1280x720 and RPCS3
+  scales the surface, which is where the exposure's readback goes wrong.
+- **What it costs.** The pair's original is 1300 to 1660 px of real horizontal resolution upscaled to 1920 (full 1080 lines), a little
+  soft and different from boot to boot in the horizontal axis; 1280x720/100 would be a fixed 1280x720. The maintainer's rule was to keep 1080p if the
+  exposure agreed, which it does.
+- Cold boot Anulpha Pass pair re-made on the final profile: grey difference over the frame 17.33 before, 14.43 after (the
+  pair's ship and camera drifted 0.01 and 0.02 units from the stored pair).
+
 ## Open
 
-1. **Retire `resolution_scale = 150` as a brightness reference.** The profile
-   needs the original at 100 for any frame whose `adapted` falls under 0.15, or at
-   least a note on the pair page. Every dark circuit's `theirs.png` (Anulpha;
-   probably Metropia, Moa Therma, Sebenco Climb) carries an exposure the game does
-   not apply. To re-make Anulpha at 100: `OAG_RPCS3_EXTRA_EDITS="Video:Resolution
-   Scale=100"` before the restore (these edits are applied last, so they win over
-   the profile), and judge
-   `FunkLayer + 0x25c` (`0xc50ee0`'s object) against the gate fade as above.
+1. ~~Retire `resolution_scale = 150` as a brightness reference.~~ Done 2026-10-21 (`hd-capture-profile`): the profile is 1920x1080 at
+   scale 100 (section above). The thirteen stored `hd/*` originals were taken at 150 and carry the artefact until the batch is re-made.
 2. **Decide the adaptation law** against the console, not the emulator: whether
    the hardware's ladder filters linear or encoded. The live number says encoded;
    the static read of `FUN_003b4690` and the gamma nibble say linear.

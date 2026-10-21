@@ -119,8 +119,10 @@ hud_safe_area = 96
 [platform.hd-fury.emulator]
 name = "RPCS3"
 renderer = "Vulkan"
-resolution = "1280x720"
-resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080. At 150 the exposure readback read half the frame on Anulpha (the other dark circuits are predicted, not read) and the original came out brighter than the game makes it (docs/rendering/hd-track-tone.md); judge brightness against 100
+resolution = "1920x1080"
+resolution_scale = 100        # the game takes its own 1080p path (dynamic width, 1300 to 1660 px of 1920 measured); at 100 the exposure readback matches 1280x720/100 on three circuits, at the old 150 it read 9 to 35 percent low (docs/rendering/hd-track-tone.md, 2026-10-21 `hd-capture-profile`)
+native_ui = false             # `Use native user interface`: off, RPCS3 draws no "Press and hold the START button to resume" toast while the GDB stub holds the game, and no compile-hint spinner (a run that takes a save state needs it on: rpcs3-drive.py keeps it on when OAG_RPCS3_SUSPEND_STATE=1)
+show_hints = false            # `Show PPU compilation hint` and `Show shader compilation hint`
 write_color_buffers = true    # BOTH config.yml and custom_configs/config_BCES00664.yml
 output_scaling = "Nearest"
 msaa = "Disabled"
