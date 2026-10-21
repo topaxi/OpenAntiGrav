@@ -993,6 +993,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) pose_hold: bool,
 
+    /// With `--pose-from`: also draw the craft with the lean and barrel-roll phase the pose's own trace row recorded
+    /// (`steer_lean`, `roll_phase`), put on after the ticks.
+    ///
+    /// A posed capture runs no tick, so the hull is drawn flat whatever the original's stick was doing at the
+    /// instant; the lean is display state the original's per-tick update writes (`entity+0x854`), not part of the pose.
+    /// The row is the one `--pose-tick` poses from, and a trace without the columns is refused.
+    #[arg(long, requires = "pose_from")]
+    pub(crate) pose_lean: bool,
+
     /// With `--race --screenshot` or `--race --trace-out`: drive the run from
     /// a committed `.inputs` script (see `scripts/input_script.py` for the
     /// format) instead of `--hold`/`--press` - the same file

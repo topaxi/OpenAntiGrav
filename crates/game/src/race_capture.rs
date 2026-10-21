@@ -14,6 +14,7 @@ mod bench;
 mod describe;
 pub mod gpu;
 pub mod pose_hold;
+pub mod pose_lean;
 mod race_bench;
 mod spectrum;
 pub mod tick;
@@ -244,6 +245,9 @@ pub struct CaptureOptions {
     /// `--pose-hold`: put ship 0 back on its start pose before the frame is drawn. See
     /// [`pose_hold`].
     pub pose_hold: bool,
+    /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
+    /// after the ticks. See [`pose_lean`].
+    pub pose_lean: Option<pose_lean::PoseLean>,
     /// `--field-warmup`: each craft's captured velocity, slot order, the player first. The
     /// exhaust of every craft is replayed on a straight path to its pose before the frame
     /// ([`Race::warm_up_field`]).
@@ -444,8 +448,15 @@ pub fn capture(
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
     let start_pose = options.pose_hold.then(|| pose_hold::StartPose::of(&race));
+    // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
+    // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).
+    let warmed_boost = options
+        .field_warmup
+        .as_ref()
+        .and(options.pose_boost)
+        .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
-        race.warm_up_field(velocities, race.field_warm_up_ticks());
+        race.warm_up_field(velocities, race.field_warm_up_ticks(), warmed_boost);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).
@@ -847,11 +858,14 @@ pub fn capture(
         }
     }
     options.ghost.finish(&mut race)?;
-    if let Some(age) = options.pose_boost {
+    if let (Some(age), None) = (options.pose_boost, warmed_boost) {
         race.force_boost_state(age, options.pose_intensity, options.pose_speed);
     }
     if let Some(pose) = start_pose {
         pose.restore(&mut race);
+    }
+    if let Some(lean) = options.pose_lean {
+        lean.apply(&mut race);
     }
     println!(
         "after {} tick(s): {}",

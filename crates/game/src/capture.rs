@@ -504,6 +504,7 @@ pub fn run(
                 pose_intensity: None,
                 pose_speed: None,
                 pose_hold: false,
+                pose_lean: None,
                 field_warmup: None,
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,

@@ -17,6 +17,10 @@ an already-turned pose turned ours twice). A second, `--trace-out` run checks th
 of the basis, convention and fov, not of the simulation (`scripts/compare-resting-yaw.py` measures that). A pair that differs from the profile
 (image size, settings read back, layout file, mode, class, pose, fov) is refused with the mismatch named, and
 `pair.json` records both sides.
+
+The load stops at the state's own first frame (`psp-state.py load --stop-at`, bit-identical run to run) and `--target-clock T`
+runs the original on to a stored pair's moment; a race shot reads the pose row's drawn lean, roll phase and flare boost timer
+(`psp-trace.py --flare`) and passes `--pose-lean` and `--pose-boost` to ours, checking ours' row against them.
 """
 
 import argparse
@@ -71,6 +75,12 @@ GO_TICK = ce.go_tick()
 #: smallest mean grey difference named row `i - 1` on all seven shots (21.3 against 26.6 and up for every other row).
 #: So the pose, camera, field and HUD are read at stop 0 and the screenshot taken at stop `PRESENTED_LAG`.
 PRESENTED_LAG = 1
+#: `Ship_UpdateCraft`: the load stops at its first hit, the state's own first frame (bit-identical run to run), where the
+#: old load-then-freeze landed 0.6 s of race clock late and differently each time (`psp-state.py do_load_stopped`).
+SHIP_UPDATE_CRAFT = 0x08849618
+#: The flare node's boost length (`+0xb4`, 0.8 s, `exhaust.md`): its `+0xb8` timer counts down from it, `--pose-boost` is the
+#: elapsed time, so the age of a boost with `t` seconds left is `BOOST_SECONDS - t`.
+BOOST_SECONDS = 0.8
 
 
 def run(cmd, **kw):
@@ -130,6 +140,21 @@ AUTOPILOT_TIMER_SANE_S = 600.0
 AUTOPILOT_AUTHORED_S = 5.0
 
 
+def lean_and_boost_flags(pair, theirs_row):
+    """`--pose-lean` and `--pose-boost` for the frame, from the pose row's own columns (`psp-trace.py --flare`): the drawn
+    lean (`steer_lean`) and barrel-roll phase the original's per-tick update had written, and the exhaust flare's boost
+    timer. The boost age is `BOOST_SECONDS - timer`; a timer of 0 carries no boost."""
+    lean, roll, timer = theirs_row.get("steer_lean"), theirs_row.get("roll_phase"), theirs_row.get("boost_timer")
+    pair.check("the trace row carries the drawn lean, the roll phase and the flare's boost timer",
+               None not in (lean, roll, timer), "steer_lean %s, roll_phase %s, boost_timer %s" % (lean, roll, timer))
+    pair.rec["original"]["pose_row_display"] = {"steer_lean": lean, "roll_phase": roll, "boost_timer": timer,
+                                                "intensity": theirs_row.get("intensity")}
+    flags = ["--pose-lean"]
+    if timer is not None and timer > 0.0:
+        flags += ["--pose-boost", "%.6f" % (BOOST_SECONDS - timer)]
+    return flags
+
+
 def boost_phase(dbg):
     """The player's exhaust flare's boost timer over its length (`*(craft+0x78)+0xb8 / +0xb4`), what `Hud_Update`
     (0x0881bf50) turns into the HUD's copy count and the speed bar's glow stamp: 0 with no boost running."""
@@ -165,6 +190,34 @@ def restore_autopilot_timer(port, pair):
     pair.rec["original"]["autopilot_timer_at_stop_s"] = after
     pair.check("no armed-forever Autopilot timer at the stop (the HUD prints it)", after <= AUTOPILOT_TIMER_SANE_S,
                "record+0x148 reads %.3g s" % after)
+
+
+def run_to_clock(port, target):
+    """Run the stopped original on to the first player tick whose race clock reaches `target` (a stored pair's own
+    moment), in ONE resume: a breakpoint on `Ship_UpdateCraft` conditional on the player's craft and on the clock's float
+    bits (`[CLOCK_ADDRESS] >= bits(target)`, valid for a positive float). Stepping tick by tick instead (`each_hit`, a stop
+    and a resume per hit) landed the same state on clocks 11 ulp apart in 1 of 3 runs; one resume gave the same bits in 4
+    of 4. Returns the clock it stopped at."""
+    import struct
+    from ppsspp_debugger import Debugger
+    dbg = Debugger(port)
+    craft = race_field_module().Field(dbg).player["craft"]
+    clock = dbg.read_f32(CLOCK_ADDRESS)
+    if clock >= target - 0.0005:
+        return clock
+    bits = struct.unpack("<I", struct.pack("<f", target - 0.0005))[0]
+    dbg.brk()
+    dbg.add_breakpoint(SHIP_UPDATE_CRAFT, "a0 == 0x%08x && [0x%08x] >= 0x%08x" % (craft, CLOCK_ADDRESS, bits))
+    dbg.call("cpu.status")
+    dbg.pending = []
+    dbg.call("cpu.resume")
+    try:
+        dbg.wait_for_break(SHIP_UPDATE_CRAFT, timeout=120)
+    finally:
+        if not dbg.is_stepping():
+            dbg.brk()
+        dbg.remove_breakpoint(SHIP_UPDATE_CRAFT)
+    return dbg.read_f32(CLOCK_ADDRESS)
 
 
 def race_field_module():
@@ -257,7 +310,7 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
         zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"])
     if shield_percent is None:
         pair.caveat("the original's shield read %.1f against the assumed pool of %.1f: ours shows a full bar" % (shield, args.shield_max))
-    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0, "--pose-lean",
             "--field-from", out / "field.csv", "--field-warmup", "--hud-state", hud] + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
@@ -283,6 +336,16 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
         pair.rec["meta"] = json.loads(args.meta)
     pair.finish()
     print("wrote", out / "side.png")
+
+
+def display_checks(pair, theirs_row, ours_row):
+    """Ours' own `--trace-out` row against the original's at the pose's tick: the drawn lean and roll phase equal, and the
+    exhaust's boost timer within one tick of the original's (the arm and its `aged` advances are whole ticks)."""
+    for col, tol in (("steer_lean", 1e-5), ("roll_phase", 1e-5), ("boost_timer", 1.0 / 60.0)):
+        t, o = theirs_row.get(col), ours_row.get(col)
+        pair.rec["ours"].setdefault("display_row", {})[col] = o
+        pair.check("ours' %s equals the original's (tolerance %g)" % (col, tol),
+                   t is not None and o is not None and abs(t - o) <= tol, "original %s, ours %s" % (t, o))
 
 
 def camera_craft_distance(row):
@@ -363,8 +426,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 player["place"], lap_number, player["lap_time"], clock,
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
                 player["best_lap_cs"] / 100),
-            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + flags + [
-        "--camera-fov", "%.4f" % fov]
+            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + lean_and_boost_flags(
+                pair, theirs_row) + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
     pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft "
@@ -375,7 +438,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 "is not drawn" %
                 (player["place"], len(rows), lap_number, player["lap_time"]))
     ours_csv = out / "ours-trace.csv"
-    run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    # `--ticks 0` writes the one row the frame is drawn from (after the warm-up, the boost and the lean), so the display columns checked below are the picture's
+    run(base + ["--ticks", 0, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
     run(base + ["--ticks", 0] + view_flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got
@@ -384,6 +448,7 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
     pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
     ours_row = ce.csv_row(ours_csv, 0)
     pair.check_pose(theirs, ce.pose_of(ours_row), fov, fov)
+    display_checks(pair, theirs_row, ours_row)
     pair.rec["ours"]["shield"] = ours_row.get("shield")
     pair.check_size("ours", out / "ours.png")
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
@@ -426,6 +491,10 @@ def main():
     ap.add_argument("--run-ticks", type=int, default=0,
                     help="after the load and the Autopilot timer restore, run this many of the player's ticks first (a trace "
                          "with no shots) so the frame is taken that far into the state, e.g. onto a speed pad")
+    ap.add_argument("--target-clock", type=float, default=None,
+                    help="after the load stop and the Autopilot timer restore, run the player's ticks on to the first one whose "
+                         "race clock reaches this many seconds (a stored pair's own moment, e.g. 38.4082), instead of "
+                         "--run-ticks")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -463,14 +532,22 @@ def main():
     uv = ["uv", "run", "--with", "websocket-client", "python3"]
     set_window(960, 544)
     resume(args.port)
-    run(uv + [HERE / "psp-state.py", "--port", args.port, "--home", args.home, "load", "2", "--file", args.state])
+    run(uv + [HERE / "psp-state.py", "--port", args.port, "--home", args.home, "load", "2", "--file", args.state,
+         "--stop-at", hex(SHIP_UPDATE_CRAFT)])
     freeze(args.port)
     time.sleep(args.toast_wait)
     from ppsspp_debugger import Debugger
-    if args.field or args.zone:
-        restore_autopilot_timer(args.port, pair)
-    if args.run_ticks > 0:
+    if args.target_clock is not None:
+        reached = run_to_clock(args.port, args.target_clock)
+        pair.rec["original"]["target_clock_s"] = args.target_clock
+        pair.check("the original reached the target race clock", abs(reached - args.target_clock) < 0.02,
+                   "stopped at %.4f for a target of %.4f" % (reached, args.target_clock))
+    elif args.run_ticks > 0:
         run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
+    if args.field or args.zone:
+        # After the run to the frame's moment: the timer is written at the stop the frame is taken at (CPU not run
+        # after it), so the HUD prints the pickup's own `5.00`, not a countdown the run itself already spent.
+        restore_autopilot_timer(args.port, pair)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:
@@ -510,7 +587,7 @@ def main():
     shots = out / "shots"
     csv = out / "trace.csv"
     with open(csv, "w") as f:
-        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--shot-every", 1,
+        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", 4, "--camera", "--flare", "--shot-every", 1,
                   "--shot-dir", shots] + trace_extra, stdout=f)
     set_window(960, 544)
     run(["magick", shots / ("tick%05d.png" % PRESENTED_LAG), "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", out / "theirs.png"])

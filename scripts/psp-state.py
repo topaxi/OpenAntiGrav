@@ -46,9 +46,14 @@ def xdo(*args):
 
 
 def paused(dbg):
-    first = dbg.call("cpu.status")["ticks"]
+    """Whether emulation stands still: the debugger's own `paused` flag (true with the pause menu open, 2026-10-21, v1.20.4),
+    or the CPU cycle counter not moving over 0.4 s. The `rerender-cold` lane saw the counter keep advancing with the menu
+    open and could not load a state at all; the flag does not depend on it."""
+    first = dbg.call("cpu.status")
+    if first.get("paused"):
+        return True
     time.sleep(0.4)
-    return dbg.call("cpu.status")["ticks"] == first
+    return dbg.call("cpu.status")["ticks"] == first["ticks"]
 
 
 def set_menu(dbg, want_open):
@@ -128,6 +133,31 @@ def do_save(dbg, home, slot):
     raise SystemExit("slot %d was not written within 20 s" % slot)
 
 
+def do_load_stopped(dbg, slot, stop_at):
+    """Press Load on `slot` with an execution breakpoint armed at `stop_at`, run on and stop at its first hit.
+
+    The stop is then the state's own first frame: emulation from a loaded state is bit-identical run to run, so the
+    first hit of any per-frame address is the same instant every time (`scripts/psp-ribbon-ab.py` measured it with
+    `Trail_DrawRibbon`: two loads, 0 differing bytes). `do_load` followed by `cpu.stepping` stops wherever the
+    emulation has got to after the load, the toast wait and the poll, which differed by 0.6 s of race clock between two
+    runs of one state. The breakpoint is removed again and the CPU is left stopped there.
+    """
+    set_menu(dbg, True)
+    dbg.brk()
+    dbg.add_breakpoint(stop_at)
+    click(LOAD_X, SLOT_Y0 + SLOT_DY * (slot - 1))
+    time.sleep(2.5)
+    dbg.call("cpu.status")
+    dbg.pending = []
+    dbg.call("cpu.resume")
+    try:
+        dbg.wait_for_break(stop_at, timeout=60)
+    finally:
+        if not dbg.is_stepping():
+            dbg.brk()
+        dbg.remove_breakpoint(stop_at)
+
+
 def do_load(dbg, slot):
     """Press Load on `slot`, then leave the menu only if it is still open.
 
@@ -182,6 +212,9 @@ def main():
     ap.add_argument("--keep", help="copy the saved state to this path (under data/saves/)")
     ap.add_argument("--serial", default="UCUS98712_1.00",
                     help="disc serial and version in the state file name (Pulse USA by default)")
+    ap.add_argument("--stop-at", type=lambda v: int(v, 0), default=None, metavar="ADDR",
+                    help="for load: stop at the first hit of this address (the state's own first frame, "
+                    "deterministic run to run) and leave the CPU stopped; 0x08849618 is Ship_UpdateCraft")
     ap.add_argument("--file", help="for load: first copy this .ppst into the slot's file name")
     args = ap.parse_args()
     if "DISPLAY" not in os.environ:
@@ -209,8 +242,15 @@ def main():
                 shutil.copy(args.file, target)
                 print("placed %s -> %s" % (args.file, target))
                 # The menu lists the slot only after a reopen; do_load reopens it.
-            took = do_load(dbg, args.slot)
-            print("loaded slot %d in %.1f s" % (args.slot, took))
+            if args.stop_at is not None:
+                began = time.time()
+                do_load_stopped(dbg, args.slot, args.stop_at)
+                took = time.time() - began
+                print("loaded slot %d and stopped at %#x (race clock %.4f) in %.1f s" % (
+                    args.slot, args.stop_at, dbg.read_f32(0x08B344B0), took))
+            else:
+                took = do_load(dbg, args.slot)
+                print("loaded slot %d in %.1f s" % (args.slot, took))
     if args.command in ("check", "pose"):
         time.sleep(1.0)
         now = pose(args.port)

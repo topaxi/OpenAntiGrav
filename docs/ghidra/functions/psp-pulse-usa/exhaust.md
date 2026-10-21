@@ -2070,6 +2070,24 @@ size and ours is brighter along the tail.
 Cross-title: Pure shares the `Trail` class and this GE state, so the same A/B applies and is **checked, applies, not
 measured** (no Pure pair at speed with a ring this close to the eye); PS2 Pulse draws the ribbon through its own GS
 packets (`TrailLaw::Baked`), **not checkable** from this PSP read.
+### The pair now carries the boost and the lean (2026-10-21, `pose-lean-boost`)
+
+`talons-boost` is the alongside state run on to race clock 39.3429 (`--target-clock`), where the original's flare reads
+`boost_timer` 0.349067 of 0.8 s (the HUD's boost phase 0.457 is one tick older: 0.3656 s) and `intensity` 1.0, so the
+warm-up's saturated ramp is the original's own value there. The pair script reads the flare at the pose's own stop
+(`psp-trace.py --flare`) and passes `--pose-boost (0.8 - boost_timer)` (an elapsed age, 0.451 s) with `--field-warmup`:
+`Race::warm_up_field` arms `Exhaust::boost` on the player's exhaust that many ticks before the replay ends, so the plume's
+reveal timer, the flare and the ribbon's layers run on the warmed trail (`force_boost_state` cleared it and laid a straight
+one; with a field warm-up and no ticks it is not called). Ours' own row at the rendered tick reads `boost_timer` 0.350000
+against the original's 0.349067 (one tick allowed). The `talons-alongside` pair (`boost_timer` 0, `intensity` 1.0) carries
+no boost, as measured above.
+
+The old "boosting widens the gap" objection does not hold on the re-made pair: against the same new `theirs.png`, ours
+without the flags, with the lean only and with both read whole-frame RMSE 0.140, 0.136 and 0.113 (the page's mean grey
+difference 11.11 against the stored pair's 12.63), and the craft crop (130x110 at 150,140) RMSE 0.292, 0.276 and 0.179 (mean
+absolute grey difference 42.6, 37.5, 29.9); the boosted plume's magenta spread and the ribbon's tail now match by eye. Ribbon draw order (the section below) was
+already in. Confidence 90: the frame and the flare are the same stop, the crop numbers are one pair.
+
 ### The ribbon is queued first: a translucent circuit mesh paints over it (2026-10-21, `pulse-ribbon-colour`)
 
 **The claim above is false as worded: no colour input differs.** The ribbon's ring, baked colours, ambient, blend and

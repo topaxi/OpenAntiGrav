@@ -73,8 +73,7 @@ ADR-0074 requires both on every published page, so every page carries them:
 The rail and the hunts arm the player's Autopilot pickup with a huge timer (PSP `record+0x148 = 1.0e9`, HD slot `+0x158 = 10000`)
 so a state keeps flying, and the HUD **prints that timer**: the PSP race and both Zone pairs showed `1000000000.00`, the HD race pair
 `9945.79`. The pair scripts now put the pickup's authored timer back after the load (`<Weapon type="Autopilot"><Stats time>`,
-5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, the moment
-is exactly the state's), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
+5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, at the frame's own moment, after any `--target-clock`/`--run-ticks`), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
 0.3 s so the HUD redraws, the frame, pose, field and HUD record are from that moment). The HUD shows a pickup's own countdown
 (`5.00`, `4.95`), the manifest carries a caveat, `pair.json` records the timer before and after, and a pair whose timer at the stop
 is still above 600 s is refused. A run to let the pickup expire instead was tried on PSP and rejected: after 0.8 s the craft had
@@ -176,6 +175,34 @@ The flag shifts the world meshes' clock only; unlike `--anim-seconds` the GO boa
 difference over the 24 pairs **9.24 to 6.67** (every pair lower, Fort Gale Black 23.8 to 21.7 and the sign text now reads the
 original's; table in the handover thread). Pulse PS2: the camera is now the original's own (2026-10-21, `ps2-widescreen-pairs`: eye, axes and fov
 read from the camera object in the state's EE RAM, fed as `cam_*` columns and `--camera-fov`); `pcsx2-pulse-pair.py` still reads no world clock; the one PS2 pair is a chase view.
+
+## A deterministic stop, and the posed craft's lean and boost (Pulse PSP, 2026-10-21, `pose-lean-boost`)
+
+- **The stop.** `psp-state.py load --stop-at 0x08849618` (what `psp-pulse-pair.py` passes) arms a breakpoint on `Ship_UpdateCraft`
+  with the pause menu open, presses Load, runs on and stops at its first hit: the state's own first frame (race clock
+  37.3578 on `race-talons-venom-alongside.ppst`, the same bits in 3 of 3 loads). The old load, `cpu.stepping`, 6 s toast wait landed
+  0.6 s of race clock past it and differently each run. `--target-clock T` then runs the stopped original to the first player
+  tick at or past `T` in **one** resume (a breakpoint conditional on the player's craft and on the clock's float bits;
+  stepping tick by tick with a stop per hit gave clocks 11 ulp apart in 1 of 3 runs, one resume 4 of 4). Two consecutive
+  re-makes of `talons-alongside` at `--target-clock 38.4082` have a bit-identical `theirs.png` (0 grey difference), and
+  re-makes of `talons-black` and `fort-gale-white` at their stored clocks are bit-identical to `data/reference` (0.00
+  grey rise). `paused()` reads the debugger's own `paused` flag first (true with the menu open) and the cycle counter only as the fallback.
+  The `rerender-cold` lane's "could not open the pause menu" did not reproduce on a fresh instance with the OpenGL backend
+  (menu open: `paused` true, ticks still; load 2.4 s); the cause there is not known, only that the flag no longer depends on it.
+- **A re-make without `--target-clock` lands on the state's own first frame** (not the old late freeze), `--run-ticks` counts
+  from that frame, and `compare-pulse-psp-batch.py` passes each stored pair's `race_clock_s` (`--match`, default `data/reference/compare-page/pulse-psp`; `--match none` for the
+  first frame). To reproduce a stored pair pass `--target-clock <its race_clock_s>`. The Autopilot timer is written **after** the run to that moment, so the
+  HUD prints the pickup's own `5.00` at the frame's stop. `talons-black` through the batch: theirs.png and overlap bit-identical to the stored pair.
+- **The lean.** `--pose-lean` (needs `--pose-from`) puts the pose row's `steer_lean` and `roll_phase` on ship 0 after the ticks:
+  the drawn lean (`entity+0x854`, the hull turns by `steer_lean * 0.5` about its nose) is written by the original's per-tick
+  update and a posed capture runs none, so ours was drawn flat. The follower behind it (`entity+0x858`, read by the HUD
+  sway) has no trace column and is not carried. A trace without the columns is refused. Ours' `--trace-out` now writes both columns.
+- **The boost.** `--pose-boost AGE` with `--field-warmup` arms the boost inside the warm-up instead of laying a straight
+  trail (`Race::warm_up_field(.., boost_age)`); the pair reads the flare's `boost_timer` at the pose's stop and checks ours'
+  row at the rendered tick (lean and roll phase equal, boost timer within a tick). `talons-boost`: `steer_lean` 0.3202,
+  `boost_timer` 0.349067; `talons-alongside`: `steer_lean` 1.0161, no boost.
+- **Re-make commands** (own Xvfb and PPSSPP, `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp`): `psp-pulse-pair.py --field --layout forward
+  --team Assegai --track 16_Track --state data/saves/pulse-psp/race-talons-venom-alongside.ppst --target-clock 38.4082` and `... --target-clock 39.3429`.
 
 ## The presented frame lags the stop, per platform (2026-10-21, `rerender-all`)
 

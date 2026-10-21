@@ -378,6 +378,13 @@ pub(crate) fn write_trace(
     let start_pose = cli
         .pose_hold
         .then(|| oag_game::race_capture::pose_hold::StartPose::of(&race));
+    // The same warm-up `race_capture::capture` runs, so this row's flare columns are the frame's.
+    let warmed_boost = field_warmup_velocities(cli)?
+        .and(cli.pose_boost)
+        .filter(|_| cli.ticks == 0);
+    if let Some(velocities) = field_warmup_velocities(cli)? {
+        race.warm_up_field(&velocities, race.field_warm_up_ticks(), warmed_boost);
+    }
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
@@ -417,6 +424,10 @@ pub(crate) fn write_trace(
             // replay` writes it too; the capture side is
             // `scripts/psp_trace_fields.py`'s `shield` at `entity+0x88`.
             shield: Some(ship.shield),
+            // The drawn lean and the barrel roll's phase, so `--pose-lean` can be checked on ours' own row
+            // against the original's.
+            steer_lean: Some(ship.steer_lean),
+            roll_phase: Some(ship.roll_phase),
             flare: Some(Flare {
                 boost_timer: exhaust.boost_timer(),
                 plume_timer: exhaust.plume_timer(),
@@ -451,11 +462,14 @@ pub(crate) fn write_trace(
         inputs.set(race.sim.world.primary_slot(), held.snapshot());
         race.tick(&inputs);
     }
-    if let Some(age) = cli.pose_boost {
+    if let (Some(age), None) = (cli.pose_boost, warmed_boost) {
         race.force_boost_state(age, cli.pose_intensity, cli.pose_speed);
     }
     if let Some(pose) = start_pose {
         pose.restore(&mut race);
+    }
+    if let Some(lean) = pose_lean(cli)? {
+        lean.apply(&mut race);
     }
     trace.frames.push(frame_of(&race, dt));
 
@@ -469,6 +483,25 @@ pub(crate) fn write_trace(
         path.display()
     );
     Ok(())
+}
+
+/// `--field-warmup`: each craft's captured velocity out of `--field-from`, when both are given.
+fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>>> {
+    match (cli.field_warmup, cli.field_from.as_deref()) {
+        (true, Some(path)) => Ok(Some(super::pose::field_from_csv(path)?.velocities()?)),
+        _ => Ok(None),
+    }
+}
+
+/// `--pose-lean`: the lean and roll phase of the row `--pose-from` poses from.
+fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::PoseLean>> {
+    match (cli.pose_lean, &cli.pose_from) {
+        (true, Some(path)) => Ok(Some(oag_game::race_capture::pose_lean::PoseLean::from_trace(
+            path,
+            cli.pose_tick,
+        )?)),
+        _ => Ok(None),
+    }
 }
 
 /// Loads a track and a ship and either captures one frame or opens a window.
@@ -677,10 +710,8 @@ pub(crate) fn run_race(
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,
                 pose_hold: cli.pose_hold,
-                field_warmup: match (cli.field_warmup, cli.field_from.as_deref()) {
-                    (true, Some(path)) => Some(super::pose::field_from_csv(path)?.velocities()?),
-                    _ => None,
-                },
+                pose_lean: pose_lean(cli)?,
+                field_warmup: field_warmup_velocities(cli)?,
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {

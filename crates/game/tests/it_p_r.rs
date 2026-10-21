@@ -18,6 +18,7 @@ mod picker_glyphs_ground_truth;
 mod picker_pitch_ground_truth;
 mod plasma_cues_audio_ground_truth;
 mod pose_hold_ground_truth;
+mod pose_lean_ground_truth;
 mod ps2_glow_mask_ground_truth;
 mod ps2_ship_skin_ground_truth;
 mod ps2_source_ground_truth;
