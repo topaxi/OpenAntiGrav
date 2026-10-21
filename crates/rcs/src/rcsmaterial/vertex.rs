@@ -60,6 +60,10 @@ const MAX_VEC_OP: u8 = 0x19;
 const MAX_SCA_OP: u8 = 0x14;
 /// Source register file: a vertex input register, `v[n]`.
 const SOURCE_INPUT: u32 = 2;
+/// Source register file: a temporary, `R[n]`.
+const SOURCE_TEMPORARY: u32 = 1;
+/// The vector opcode `MOV`.
+const VEC_MOV: u8 = 0x01;
 /// The negate bit of a 17-bit source field.
 const SOURCE_NEGATE: u32 = 1 << 16;
 /// `o[TC0]`, the first destination this reading cares about; `o[POS]` is 0 and
@@ -82,6 +86,10 @@ pub struct Instruction {
     /// Whether the vector half writes an output register rather than a
     /// temporary.
     pub dest_is_output: bool,
+    /// The temporary the vector half writes, meaningful only when it is not
+    /// [`Self::dest_is_output`] (`d0` bits 15-20, as `scripts/ps3-microcode.py`
+    /// reads it).
+    pub dest_temp: u32,
 }
 
 impl Instruction {
@@ -97,7 +105,28 @@ impl Instruction {
             ],
             dest: (d3 >> 2) & 0x1f,
             dest_is_output: d0 & (1 << 30) != 0,
+            dest_temp: (d0 >> 15) & 0x3f,
         }
+    }
+
+    /// Whether any source this opcode reads is vertex input `slot`, negated.
+    fn negates_input(&self, slot: u32) -> bool {
+        self.vec_op != 0
+            && u32::from(self.input) == slot
+            && source_slots(self.vec_op).iter().any(|&n| {
+                let source = self.sources[n];
+                source & 3 == SOURCE_INPUT && source & SOURCE_NEGATE != 0
+            })
+    }
+
+    /// The temporary a `MOV` into an output texture coordinate copies from.
+    fn texcoord_copy_of_temporary(&self) -> Option<u32> {
+        let source = self.sources[0];
+        (self.vec_op == VEC_MOV
+            && self.dest_is_output
+            && self.dest >= FIRST_TEXCOORD_DEST
+            && source & 3 == SOURCE_TEMPORARY)
+            .then_some((source >> 2) & 0x1f)
     }
 
     /// Whether this instruction negates vertex input `slot` into an output
@@ -242,9 +271,25 @@ impl Program {
         let Some(slot) = self.attribute_slot(hash) else {
             return false;
         };
-        self.instructions
+        if self
+            .instructions
             .iter()
             .any(|i| i.negates_into_a_texcoord(slot))
+        {
+            return true;
+        }
+        // The other shape: the negation lands in a temporary and a later `MOV`
+        // copies that temporary to an interpolator (`ADD R3.w, -v[3].yyyy,
+        // c[208].zzzz` ... `MOV o[TC4], R3`, Amphiseum's
+        // `track_surface_no_emissive`). A negation that never reaches an
+        // output is not a flip, whatever it computes.
+        self.instructions.iter().enumerate().any(|(n, i)| {
+            !i.dest_is_output
+                && i.negates_input(slot)
+                && self.instructions[n + 1..]
+                    .iter()
+                    .any(|c| c.texcoord_copy_of_temporary() == Some(i.dest_temp))
+        })
     }
 }
 
