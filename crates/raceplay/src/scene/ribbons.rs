@@ -112,7 +112,8 @@ impl super::Scene {
                 queue,
                 vp,
                 eye.to_array(),
-                self.anim_clock.get(),
+                // The offset is the world meshes' epoch; the strip is a weapon's, not a world mesh's.
+                self.anim_clock.get() - race.world_clock_offset(),
                 &race.leach_strip_vertices(),
             );
         }

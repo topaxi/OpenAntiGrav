@@ -55,6 +55,7 @@ impl Default for Options {
             pose: None,
             field: Vec::new(),
             hud: None,
+            world_clock_offset: 0.0,
             camera: None,
         }
     }

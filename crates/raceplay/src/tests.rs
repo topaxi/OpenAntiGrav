@@ -349,6 +349,7 @@ fn setup(handling: Handling) -> Setup {
         pose_override: None,
         field_poses: Vec::new(),
         capture_hud: None,
+        world_clock_offset: 0.0,
         camera_override: None,
         // The identity, so every assertion below is about the force law and
         // not about a scale. This is also what a race gets when the

@@ -492,9 +492,19 @@ has seen half the mechanism.
 - **What sets `DAT_08ab0628`.**
 - **The per-model animation clock, for models other than the plume.** The
   plume's is settled: `flare+0x88`, reset at reveal (see "The values gap is
-  closed"). World meshes receive the race clock, and at least one object a
-  different local time (`4.80` observed); the general rule for which clock a
-  model gets was not traced.
+  closed"). World meshes receive one clock that is **not the HUD clock**
+  (corrected 2026-10-21, `pulse-outliers`, confidence **90**): read live on
+  Fort Gale Black's grid state, most of the first 40 `Mesh_UpdateTextureTransforms`
+  hits carry `mesh+0x40 = 30.5694` against the HUD clock (`0x08B344B0`) `14.3644`,
+  a constant difference of `16.2050` s; on the 24 Pulse PSP grid states the
+  difference is `13.64` to `24.35` s, constant within a state and identical across
+  two loads of one. Other meshes read `0` (static) or a clock of their own
+  (`3.6671`, minus 10.7 against the HUD clock). The census above that called it
+  "the race clock" was read in a session whose HUD clock ran from an earlier
+  start. **Inferred, not measured:** the world clock is the time since the circuit
+  loaded (flyby plus countdown), which is why it varies per state. The general
+  rule for which clock a model gets (the `4.80` object, the `3.667` meshes) was
+  not traced. `scripts/psp-world-anim-clock.py` reproduces the read.
 - ~~**Whether the blink lights are a colour or a keyframe animation after
   all.**~~ **Settled same day, from the files: they are keyframe tracks.**
   Every one of the eight teams' `colours_flashing_GLOW` meshes
