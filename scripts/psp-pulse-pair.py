@@ -413,6 +413,9 @@ def main():
     ap.add_argument("--shield-max", type=float, default=135.0,
                     help="with --zone: the shield pool, read as 135.0 on the Assegai in Zone (a full bar shows 100 %%)")
     ap.add_argument("--toast-wait", type=float, default=6.0)
+    ap.add_argument("--run-ticks", type=int, default=0,
+                    help="after the load and the Autopilot timer restore, run this many of the player's ticks first (a trace "
+                         "with no shots) so the frame is taken that far into the state, e.g. onto a speed pad")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -456,6 +459,8 @@ def main():
     from ppsspp_debugger import Debugger
     if args.field or args.zone:
         restore_autopilot_timer(args.port, pair)
+    if args.run_ticks > 0:
+        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:
