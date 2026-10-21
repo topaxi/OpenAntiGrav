@@ -120,6 +120,11 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // `uniforms.env_layer` names, and only there - see `lit_texel`.
 @group(2) @binding(16) var env_probe_tex: texture_2d_array<f32>;
 
+// The circuit's sky as a dual hemisphere map: Wipeout HD's `paraboloidReflectionTex`, the one
+// engine-wide 512x256 target its glass and water programs read at `env_probe_uv(reflect(-V, N))`
+// - see `mesh::sky_paraboloid` and `sky_probe`. A black placeholder where there is none.
+@group(2) @binding(17) var sky_probe_tex: texture_2d<f32>;
+
 @group(3) @binding(0) var<uniform> anims: TexAnims;
 
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;

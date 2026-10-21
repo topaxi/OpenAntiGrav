@@ -83,3 +83,8 @@ pub const ZONE_EXEMPT_RATE: f32 = 4.0;
 /// **A value above [`ZONE_EXEMPT_RATE`]**, so the Zone-exemption test is a band
 /// (`3.5 < rate < 7.5`) and a reflective hull still takes the Zone grade.
 pub const REFLECTION_RATE: f32 = 8.0;
+
+/// The `rate` of an entry that marks scenery glass reading the circuit's sky reflection map
+/// (`dc_windows_a`'s block #3), the material's own weight (`0x5e5b1937`) in `tint.x`: read by
+/// `shade.wesl` off the entry the vertex's material index names. See `super::rcs::window_glass`.
+pub const WINDOW_REFLECTION_RATE: f32 = 9.0;

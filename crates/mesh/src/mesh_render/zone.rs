@@ -436,6 +436,10 @@ fn bind_group(
                 binding: 16,
                 resource: wgpu::BindingResource::TextureView(&kept.shadow.env_probe_view),
             },
+            wgpu::BindGroupEntry {
+                binding: 17,
+                resource: wgpu::BindingResource::TextureView(&kept.shadow.sky_probe_view),
+            },
         ],
     })
 }
@@ -533,6 +537,9 @@ pub(super) fn scene_bind_group(
             // `.probes` blended at each craft, read by a hull whose uniform
             // names a layer.
             shadow_entries[7],
+            // The circuit's sky reflection map, binding 17: the engine's
+            // `paraboloidReflectionTex`, read by scenery glass.
+            shadow_entries[8],
         ],
     });
 

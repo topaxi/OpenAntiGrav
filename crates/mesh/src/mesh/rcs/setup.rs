@@ -237,6 +237,15 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // Scenery glass that reads the sky reflection claims its slot after the same families.
+    super::window_glass::window_glass(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.

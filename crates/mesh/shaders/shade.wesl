@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sun_delta, sun_known, uniforms};
+import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -817,6 +817,20 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
                 * (texel.a * emissives.tint_offset[probe_entry].x);
         }
 
+        // **Scenery glass's reflection of the sky** (`slots` entry of rate 9, `mesh::rcs::window_glass`):
+        // `probe_tint(sky(reflect(-V, N))) * reflectivity`, added before the fog like the hull's. The
+        // map is the circuit's `sky.gtf` as the engine's `paraboloidReflectionTex`
+        // (`mesh::sky_paraboloid`), read at the same dual-paraboloid address the hull's is. `N` is the
+        // vertex normal: the program perturbs it with a tangent-space normal map, which a track
+        // vertex carries no frame for here.
+        var sky_reflection = vec3<f32>(0.0);
+        let sky_entry = (in.slots >> 24u) & 127u;
+        if sky_entry != 0u && emissives.scale[sky_entry].y > 8.5 && emissives.scale[sky_entry].y < 9.5 {
+            let r = reflect(-to_eye, n);
+            let sky = textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb;
+            sky_reflection = probe_tint(sky) * emissives.tint_offset[sky_entry].x;
+        }
+
         // The authored path shades in linear light, as the RSX does: the samples
         // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
         // the result is saturated (the stand-in for HD's exposure stage) and
@@ -880,7 +894,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light + program_specular) * program_multiplier
-                + zone_glow_term + glow_linear + pad_glow + mag_glow + probe_reflection);
+                + zone_glow_term + glow_linear + pad_glow + mag_glow + probe_reflection + sky_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),
