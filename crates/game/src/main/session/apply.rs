@@ -474,6 +474,19 @@ impl Session {
                     }
                 }
             }
+            // Applied by the next frame the race draws: the session hands the
+            // order to `Race::set_trail_order` every frame.
+            "graphics.trail_order" => match text.parse::<oag_display::display::TrailOrder>() {
+                Ok(order) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.trail_order = order;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Applied by the next frame the race draws, which reads the
             // tier fresh - the pass is built with every race whatever this
             // says, the same shape `graphics.motion_blur` above has. See

@@ -5,7 +5,7 @@ use super::Cli;
 
 impl Cli {
     /// Applies `--render-scale`, `--upscaler`, `--anti-aliasing`,
-    /// `--motion-blur`, `--shadows`, `--screen-filter`, `--lod` and `--texture-detail`'s preset
+    /// `--motion-blur`, `--shadows`, `--screen-filter`, `--lod`, `--texture-detail` and `--trail-order`'s preset
     /// to one render profile.
     ///
     /// **One function because there are two callers and they disagreed.**
@@ -51,6 +51,9 @@ impl Cli {
         }
         if let Some(detail) = self.texture_detail {
             profile.texture_detail = detail;
+        }
+        if let Some(order) = self.trail_order {
+            profile.trail_order = order;
         }
     }
 }

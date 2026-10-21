@@ -267,6 +267,32 @@ fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
     }
 }
 
+/// The TRAIL ORDER row is offered where the ribbon is the PSP preset (Pulse, Pure)
+/// and dropped where it is not (HD, Omega, 2048), and it offers every order.
+#[test]
+fn the_trail_order_row_is_offered_only_on_the_psp_ribbon() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.trail_order"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 1),
+        (oag_hd::TITLE, 0),
+        (oag_omega::TITLE, 0),
+        (oag_2048::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_trail_order(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// The HUD STYLE row is offered where the disc authors a `HUD Style` list (HD and Omega)
 /// and dropped on the titles that author none, and what it offers is that list.
 #[test]
@@ -661,6 +687,16 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
         texture_detail,
         oag_mesh::mesh_render::TextureDetail::ALL,
         "the TEXTURE DETAIL rows and `TextureDetail::ALL` must be one list"
+    );
+
+    let trail_order: Vec<oag_display::display::TrailOrder> = values("graphics.trail_order")
+        .iter()
+        .map(|name| name.parse().unwrap_or_else(|e| panic!("{e}")))
+        .collect();
+    assert_eq!(
+        trail_order,
+        oag_display::display::TrailOrder::ALL,
+        "the TRAIL ORDER rows and `TrailOrder::ALL` must be one list"
     );
 
     let sizes: Vec<Size> = values("display.window_size")

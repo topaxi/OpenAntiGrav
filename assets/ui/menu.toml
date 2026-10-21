@@ -1186,6 +1186,23 @@ string_id = "OAG_GRAPHICS_TEXTURE_DETAIL"
 setting = "graphics.texture_detail"
 values = ["original", "high", "maximum"]
 
+# Where a craft's engine ribbon draws against the circuit's translucent floors.
+# `original` is the measured order and the default: the original queues every
+# `Trail` at the constant key 0x4d000000, ahead of the circuit's blended list,
+# so a translucent floor patch paints over the ribbon (it writes no depth).
+# `over-floors` draws the ribbons after that list, the order this project drew
+# before the original's was measured: a brighter trail, chosen, not measured.
+# Only a title whose ribbon is the PSP preset (Pulse, Pure) has a choice; the
+# row is dropped elsewhere (`Definition::drop_unavailable_trail_order`).
+# See `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The ribbon is queued
+# first". Applies live: the session hands the order to the race every frame.
+[[page.entry]]
+kind = "choice"
+label = "TRAIL ORDER"
+string_id = "OAG_GRAPHICS_TRAIL_ORDER"
+setting = "graphics.trail_order"
+values = ["original", "over-floors"]
+
 # A simulation of the display the title ran on, drawn over the finished frame
 # - menus, HUD and all - just before brightness and gamma. The list is
 # supplied at runtime: `off`, the presets built into the binary (the PSP's

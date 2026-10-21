@@ -1023,3 +1023,35 @@ reconstruction = "smaa"
     assert_eq!(ps2.minimum_resolution.percent(), 25);
     assert_eq!(ps2.target_fps.hz(), Some(90));
 }
+
+/// TRAIL ORDER is seeded only where the ribbon is the PSP preset; elsewhere its row
+/// is dropped (`Definition::drop_unavailable_trail_order`) and a seed would be
+/// reported as a setting nothing edits.
+#[test]
+fn trail_order_is_seeded_only_where_the_ribbon_is_the_psp_preset() {
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "graphics.trail_order")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+}
+
+/// `original` is the measured order and what a profile without the key reads.
+#[test]
+fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
+    assert_eq!(
+        RenderProfile::default().trail_order,
+        oag_display::display::TrailOrder::Original
+    );
+    let profile: RenderProfile = toml::from_str("trail_order = \"over-floors\"").expect("parse");
+    assert_eq!(
+        profile.trail_order,
+        oag_display::display::TrailOrder::OverFloors
+    );
+    for order in oag_display::display::TrailOrder::ALL {
+        assert_eq!(order.name().parse(), Ok(order));
+    }
+}

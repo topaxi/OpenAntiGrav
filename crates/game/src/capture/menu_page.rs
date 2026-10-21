@@ -153,6 +153,7 @@ pub(super) fn menu_page(
     // a captured RACE page has the rows a player's has.
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
+    definition.drop_unavailable_trail_order(title);
     definition.rename_campaign_row(title, strings);
     definition.rename_multiplayer_row(title, strings);
     if definition.page(page).is_none() {

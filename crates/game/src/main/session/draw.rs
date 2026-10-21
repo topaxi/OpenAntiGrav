@@ -347,6 +347,7 @@ impl Session {
                     parked
                         .race
                         .set_texture_detail(render_profile.texture_detail);
+                    parked.race.set_trail_order(render_profile.trail_order);
                     parked
                         .scene
                         .set_blur_resolution(render_profile.motion_blur_resolution);
@@ -413,10 +414,11 @@ impl Session {
                 }
                 let spectrum = self.audio.output().spectrum().levels();
                 let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
-                // Every frame, so the MODEL DETAIL, TEXTURE DETAIL and BLUR
-                // RESOLUTION rows apply live.
+                // Every frame, so the MODEL DETAIL, TEXTURE DETAIL, TRAIL ORDER
+                // and BLUR RESOLUTION rows apply live.
                 stage.race.set_model_detail(render_profile.model_detail);
                 stage.race.set_texture_detail(render_profile.texture_detail);
+                stage.race.set_trail_order(render_profile.trail_order);
                 stage
                     .scene
                     .set_blur_resolution(render_profile.motion_blur_resolution);

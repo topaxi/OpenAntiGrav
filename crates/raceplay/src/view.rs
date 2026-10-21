@@ -435,6 +435,9 @@ pub struct RaceView {
     /// How far out a PSP model keeps its finer texture levels.
     /// `[render_profiles.<title>] texture_detail`; see [`Race::texture_detail`].
     pub(super) texture_detail: oag_mesh::mesh_render::TextureDetail,
+    /// Where the PSP ribbons draw against the circuit's blended list.
+    /// `[render_profiles.<title>] trail_order`; see [`Race::ribbons_first`].
+    pub(super) trail_order: oag_display::display::TrailOrder,
     /// The results table, taken on the tick the race reached its finish
     /// condition, and `None` before that.
     ///

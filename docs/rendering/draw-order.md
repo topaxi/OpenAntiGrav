@@ -138,6 +138,12 @@ queued first"). Implemented as `Recorder::draw_ribbons` and `Draw::TrackBlended`
 circuit's blended list, then the flares. HD's tube keeps the old order, its key unread. The flare, which carries its own
 depth, is still drawn after the whole blended list; interleaving it is open.
 
+Re-verified independently on 2026-10-21 (`trail-order-option`) on three states, two circuits and one fresh GE-replay
+removal; the key's 20-bit depth can be overridden by `display+0x1180` (inactive in every read), and six non-`Trail`
+items share the depth-zero key. The order is now the TRAIL ORDER setting on the PSP ribbon (`trail_order`, `original`
+by default, `over-floors` chosen, not measured). Details in [exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md),
+"Re-verified independently, and the order made a setting".
+
 ### The exhaust flare is the one thing that computes a depth
 
 `ExhaustFlare_Submit` (`0x0890490c`, confidence 85):

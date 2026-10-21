@@ -48,3 +48,15 @@ pub enum Exhaust {
     /// rather than swapped for a stand-in.
     Unread,
 }
+
+impl Exhaust {
+    /// Whether this title's ribbon is the PSP `Trail` preset: a named noise
+    /// texture and every other number a preset table in the executable (Pulse
+    /// on both platforms, Pure). That ribbon is the one the original queues at
+    /// the constant key `0x4d000000`, ahead of the circuit's blended list, so
+    /// it is the one whose draw order a player can choose (`trail_order`).
+    #[must_use]
+    pub fn is_psp_preset(&self) -> bool {
+        matches!(self, Self::Named(_))
+    }
+}

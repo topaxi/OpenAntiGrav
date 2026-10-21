@@ -118,7 +118,7 @@ the page never shows a directory name. `manifest` no longer rewrites `pair.json`
 | 2048 | 960x544, the Vita's own | Vita3K 1x, no race reached, no pair script | not run |
 
 **Ours is the same on every platform** (`[ours_defaults]`): every render setting with an `original` value is set
-to it (shadows `original`, model and texture detail `original`), upscaler, FSR, SMAA, MSAA, motion blur and screen
+to it (shadows `original`, model and texture detail `original`, trail order `original`), upscaler, FSR, SMAA, MSAA, motion blur and screen
 filter off, render scale 100, anisotropic filtering off (no original forces it), the boost fov kick off (our own
 effect), fov 100 %, an ungraded capture at exactly `--size` (no `--presented`), the HUD on (the original cannot
 switch it off), and the camera is the original's own pose and fov. The profile is written into the pair's private

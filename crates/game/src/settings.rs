@@ -942,6 +942,14 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
+    // Offered only where the ribbon is the PSP preset; elsewhere the row is
+    // dropped (`Definition::drop_unavailable_trail_order`) and nothing seeds it.
+    if title.exhaust.is_psp_preset() {
+        out.push((
+            "graphics.trail_order",
+            text(&profile.trail_order.to_string()),
+        ));
+    }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
     if cfg!(target_arch = "wasm32") {
         out.push(("display.canvas_size", text(&settings.display.canvas_size)));

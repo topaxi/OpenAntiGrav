@@ -102,6 +102,26 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
+    /// Where the PSP ribbons draw against the circuit's blended list -
+    /// `[render_profiles.<title>] trail_order`. Render-only and idempotent like
+    /// [`Self::set_texture_detail`], so the frame loop sets it every frame and
+    /// the menu row applies live.
+    pub fn set_trail_order(&mut self, order: oag_display::display::TrailOrder) {
+        self.view.trail_order = order;
+    }
+
+    #[cfg(feature = "view")]
+    /// Whether this frame records the ribbons ahead of the circuit's blended
+    /// list (`Recorder::draw_ribbons`): the original's order for the PSP
+    /// preset unless the player chose [`oag_display::display::TrailOrder::OverFloors`].
+    /// HD's tube keeps the old order whatever the setting says: its queue key
+    /// is unread, and the menu offers no choice there.
+    #[must_use]
+    pub fn ribbons_first(&self) -> bool {
+        !self.hd_trail_active() && self.view.trail_order.ribbons_first()
+    }
+
+    #[cfg(feature = "view")]
     /// The lock-on reticle, for whoever draws it.
     ///
     /// Render-only state - see [`RaceView::sight`] - so this returning a borrow

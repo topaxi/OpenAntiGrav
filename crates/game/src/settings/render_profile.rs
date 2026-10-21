@@ -279,6 +279,20 @@ pub struct RenderProfile {
     /// Read fresh every frame, so the row applies live.
     #[serde(default)]
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
+    /// Where a craft's engine ribbon draws against the circuit's translucent
+    /// surfaces: `original` or `over-floors`.
+    ///
+    /// **`original` is the measured order and the default** - every `Trail`
+    /// queued at the constant key `0x4d000000`, ahead of the circuit's blended
+    /// list, so a translucent floor patch paints over the ribbon.
+    /// `over-floors` draws the ribbons after that list, the order this project
+    /// drew before the original's was measured; chosen, not measured. Only the
+    /// titles whose ribbon is the PSP preset offer it (`Definition::drop_unavailable_trail_order` drops the row
+    /// elsewhere), and elsewhere the value is ignored. See
+    /// [`oag_display::display::TrailOrder`]. Read fresh every frame, so the row
+    /// applies live.
+    #[serde(default)]
+    pub trail_order: oag_display::display::TrailOrder,
 }
 
 impl RenderProfile {
@@ -427,6 +441,7 @@ impl Default for RenderProfile {
             screen_filter_strength: oag_display::display::FilterStrength::default(),
             model_detail: oag_mesh::mesh::ModelDetail::default(),
             texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
+            trail_order: oag_display::display::TrailOrder::default(),
         }
     }
 }
@@ -458,7 +473,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 14] = [
+pub(super) const PROFILE_KEYS: [&str; 15] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -473,6 +488,7 @@ pub(super) const PROFILE_KEYS: [&str; 14] = [
     "screen_filter_strength",
     "model_detail",
     "texture_detail",
+    "trail_order",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

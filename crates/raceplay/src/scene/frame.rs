@@ -1036,7 +1036,8 @@ impl Scene {
         // (`Recorder::draw_ribbons`). After the hulls, so their depth is in the buffer for the
         // ribbon to be occluded by; the weapon bodies, wrecks and flares keep their place after
         // the blended list, as before. HD's tube keeps the old order: its queue key is unread.
-        let ribbon_first = !race.hd_trail_active();
+        // `trail_order = "over-floors"` puts the PSP ribbons back there too (chosen, not measured).
+        let ribbon_first = race.ribbons_first();
         draws.ribbons_then_blended(ribbon_first);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
