@@ -571,3 +571,14 @@ fn a_slower_turning_hull_follows_a_plan_at_the_ratio_of_the_yaw_ceilings() {
     assert_eq!(plan.share_for(None), 1.0);
     assert_eq!(SpeedPlan::unlimited(&line).share_for(Some(0.1)), 1.0);
 }
+
+#[test]
+fn a_plan_followed_at_a_lower_share_multiplies_the_yaw_ratio() {
+    let line = tight();
+    let (plan, _) = build_on(&line);
+    let learned = plan.learned_yaw().expect("a built plan knows its hull");
+    let lowered = plan.at_share(0.5);
+    assert_eq!(lowered.share_for(Some(learned * 0.5)), 0.25);
+    assert_eq!(lowered.share_for(Some(learned * 2.0)), 0.5);
+    assert_eq!(plan.share_for(Some(learned * 0.5)), 0.5, "the original is untouched");
+}

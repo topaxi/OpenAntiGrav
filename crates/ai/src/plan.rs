@@ -140,6 +140,10 @@ pub struct SpeedPlan {
     /// follows the plan anyway follows it at the ratio of the two: see
     /// [`Self::share_for`].
     yaw: Option<f32>,
+    /// A further share of its speeds this plan is followed at, below the yaw
+    /// ratio: one, except on a copy a race made for a hull the plan was only
+    /// verified on at less ([`Self::at_share`]).
+    share: f32,
 }
 
 /// What a build did, for a loader report and for the tests.
@@ -245,6 +249,7 @@ impl SpeedPlan {
             tight: vec![false; n],
             decel: Decel::FALLBACK,
             yaw: None,
+            share: 1.0,
         }
     }
 
@@ -356,11 +361,25 @@ impl SpeedPlan {
     /// the ratio of the two ceilings for one that turns slower. Applies only
     /// where a craft follows a plan learned on another hull, which
     /// [`Self::adapt`] did not make its own. **Chosen, not measured.**
+    ///
+    /// Times [`Self::at_share`]'s share, one on every plan a search built.
     #[must_use]
     pub fn share_for(&self, yaw: Option<f32>) -> f32 {
-        match (self.yaw, yaw) {
+        let ratio = match (self.yaw, yaw) {
             (Some(learned), Some(own)) if learned > 0.0 && own < learned => own / learned,
             _ => 1.0,
+        };
+        ratio * self.share
+    }
+
+    /// This plan, followed at a further `share` of what [`Self::share_for`]
+    /// gives: for a hull whose verification at the yaw ratio alone failed
+    /// ([`Self::verify_at`]). **Chosen, not measured.**
+    #[must_use]
+    pub fn at_share(&self, share: f32) -> Self {
+        Self {
+            share: self.share * share,
+            ..self.clone()
         }
     }
 

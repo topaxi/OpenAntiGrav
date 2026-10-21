@@ -65,4 +65,40 @@ impl SpeedPlan {
         }
         (plan, report)
     }
+
+    /// Two laps from `craft`'s grid pose following this plan **as it stands**,
+    /// at [`Self::share_for`] its hull's yaw ceiling times `share`, nothing
+    /// learned: what a hull that follows this plan unadapted will meet. The
+    /// verification [`Self::adapt`] runs on its own copy, here on the plan a
+    /// race falls back to when that copy does not verify.
+    ///
+    /// The share is left off a takeoff's run-up, as `Driver::drive` leaves it
+    /// off, so the verification flies what the race will. **Chosen, not
+    /// measured.**
+    #[must_use]
+    pub fn verify_at<R: Raycaster + ?Sized>(
+        &self,
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        share: f32,
+    ) -> Report {
+        let mut plan = self.clone();
+        let mut report = Report::default();
+        if plan.len() != course.line.len() || plan.len() < 3 {
+            return report;
+        }
+        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
+        let margin = plan.share_for(Some(yaw)) * share;
+        for (index, target) in plan.target.iter_mut().enumerate() {
+            if !course
+                .line
+                .takeoff_within(index, crate::driver::planned::RUN_UP_REACH)
+            {
+                *target *= margin;
+            }
+        }
+        plan.verify_stuck(course, craft, tuning, yaw, &mut report, 1.0, STUCK_TICKS);
+        report
+    }
 }

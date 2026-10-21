@@ -83,7 +83,7 @@ fn traffic(ctx: &Context<'_>) -> f32 {
 /// How far ahead of a takeoff run-up a lower level stops holding its share of
 /// the plan's pace: room for a craft held to 0.88 of it to reach full speed,
 /// two to three seconds near the top end. **Chosen, not measured.**
-pub(super) const RUN_UP_REACH: f32 = 450.0;
+pub(crate) const RUN_UP_REACH: f32 = 450.0;
 
 /// The least share of the plan's pace a level holds on the way into a jump. The
 /// field's takeoffs at `05_Track` forward's first jump (VENOM, three seeds)

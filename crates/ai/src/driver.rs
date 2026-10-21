@@ -843,7 +843,7 @@ mod pace;
 mod pads;
 pub use pace::hull_yaw_ceiling;
 mod personality;
-mod planned;
+pub(crate) mod planned;
 mod ram;
 mod reflex;
 mod roll;
