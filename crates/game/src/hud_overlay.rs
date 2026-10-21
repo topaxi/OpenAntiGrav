@@ -205,6 +205,7 @@ impl Overlay {
         let stretch = stretch_for(assets.art, hud_scale);
         for renderer in [&mut values, &mut captions, &mut rows, &mut skin] {
             renderer.set_hud_scale(device, stretch);
+            renderer.set_whole_pixel_advances(assets.art.raster);
         }
 
         Ok(Some(Self {

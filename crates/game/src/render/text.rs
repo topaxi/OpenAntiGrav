@@ -107,7 +107,14 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let width = font::measure(atlas, text) * scale;
+        let width = if self.hud.whole_advances {
+            text.chars()
+                .filter_map(|c| atlas.cell(c))
+                .map(|cell| self.hud.advance(cell.advance * scale * atlas.texel_scale))
+                .sum()
+        } else {
+            font::measure(atlas, text) * scale
+        };
         let texel = atlas.texel_scale;
         let mut pen = self.hud.snap(match align {
             Align::Left => x,
@@ -156,7 +163,7 @@ impl Renderer {
                 chamfer: [0.0, 0.0],
                 tile: [0.0, 0.0],
             });
-            pen += cell.advance * scale * texel;
+            pen += self.hud.advance(cell.advance * scale * texel);
         }
     }
 
