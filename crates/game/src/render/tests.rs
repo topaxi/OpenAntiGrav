@@ -418,3 +418,73 @@ fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
         "an edge texel of grey 100 should read about 100 over black, got {red}: the two passes are not live"
     );
 }
+
+/// A right-aligned HUD string ends on its last glyph's ink, not on its advance.
+///
+/// The Pulse grid's GE lists put `0 kmh`, `100%` and `Record` 2, 1 and 1 px right of the
+/// advance-aligned pens: each last glyph's trailing bearing (advance less cell width), where the
+/// record time's `8` has none. The fixture's last glyph is 4 wide with an advance of 7, so a
+/// string right-aligned at 100 starts its last glyph 3 px further right than the advance would.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
+    use oag_texture::fnt::{Font, Glyph};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let glyph = |ch: u8, advance: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 4,
+        height: 4,
+        u0: 0,
+        u1: 4,
+        v0: 0,
+        v1: 4,
+        advance,
+    };
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 64],
+        glyphs: vec![glyph(b'a', 4), glyph(b'b', 7)],
+    };
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        None,
+        Atlas::from_font(&font),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    let last_left = |renderer: &mut Renderer| {
+        renderer.quads.clear();
+        renderer.push_text(
+            GlyphSlot::Primary,
+            100.0,
+            0.0,
+            1.0,
+            [1.0; 4],
+            [0.0; 4],
+            Align::Right,
+            "ab",
+            None,
+        );
+        renderer.quads.last().expect("a glyph").rect[0]
+    };
+    let by_advance = last_left(&mut renderer);
+    renderer.set_whole_pixel_advances(true);
+    let by_ink = last_left(&mut renderer);
+    assert_eq!(by_ink - by_advance, 3.0, "{by_advance} {by_ink}");
+}
