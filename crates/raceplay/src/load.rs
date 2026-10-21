@@ -408,6 +408,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &track_blob,
         &ps3_geometry,
         geometry_name.as_deref(),
+        title.looks.material_lod_levels(),
         &mut report,
     );
     #[cfg(feature = "view")]

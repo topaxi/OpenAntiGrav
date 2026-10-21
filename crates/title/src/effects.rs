@@ -744,9 +744,31 @@ pub struct Looks {
     /// bright against the unscaled sky. Wipeout HD's (read off its microcode's
     /// scale field, and confirmed against the live scene target).
     pub lit_output_halved: Rule,
+    /// The circuit's material textures (albedo, normal, lightmap) are sampled
+    /// trilinear with a LOD bias of [`MATERIAL_LOD_BIAS`] levels, so a distant
+    /// floor reads sharper than the sampler's own selection gives. Wipeout HD's
+    /// (the RSX filter word `0x02063e80` on every material unit).
+    pub material_lod_bias: Rule,
 }
 
+/// The LOD bias [`Looks::material_lod_bias`] applies, in levels: the filter
+/// word's bias field `0x1e80` as a signed 5.8 fixed-point number, `-384 / 256`.
+/// One value because the one measurement it comes from is the only one there is.
+pub const MATERIAL_LOD_BIAS: f32 = -1.5;
+
 impl Looks {
+    /// The LOD bias this title's circuit materials are sampled with, in levels:
+    /// [`MATERIAL_LOD_BIAS`] where [`Self::material_lod_bias`] applies, else `0.0`
+    /// (the sampler's own selection).
+    #[must_use]
+    pub fn material_lod_levels(&self) -> f32 {
+        if self.material_lod_bias.applies_everywhere() {
+            MATERIAL_LOD_BIAS
+        } else {
+            0.0
+        }
+    }
+
     /// A title none of whose race looks are read, but which still needs a shield
     /// tint: every rule [`Rule::UNREAD`], so it draws none of them, with
     /// `shield_palette` as given. Build a title's own table from this with
@@ -771,6 +793,7 @@ impl Looks {
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
+            material_lod_bias: Rule::UNREAD,
         }
     }
 }

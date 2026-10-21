@@ -9,7 +9,7 @@ changed.** What landed is two reproducible probes
 | Claim | Verdict |
 | --- | --- |
 | **A**: one missing or misapplied input of the lit track material makes HD's track too dark and too blue, and one cause explains the floor, the blue areas and the hexagon panel | **Three parts.** *Too dark*: **false**; the floor is not short of a material input (before the resolve it matches the original within 3 %), the gap is the original's exposure resolve, which at the profile's `Resolution Scale 150` is an emulator artefact. *Too blue*: **true in ours, cause open**, and it is not the exposure: the left wall is cyan before any resolve, and the blue floor on the right is an animated plasma pulse. *One cause*: **false**; the hexagon panel is a third thing |
-| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **The profile's `off` matches what HD requests**: max anisotropy field 0 on every bind of two circuits. The filter is trilinear with a `-1.5` LOD bias on material textures (checked, applies, not wired) |
+| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **The profile's `off` matches what HD requests**: max anisotropy field 0 on every bind of two circuits. The filter is trilinear with a `-1.5` LOD bias on material textures: **true as the request** (2026-10-21, `hd-lod-bias`), **wired but held off**, because ours already matches the stored frames' sharpness without it and the bias makes every pair worse (see "The LOD bias, wired and held") |
 
 ## Claim A
 
@@ -211,9 +211,8 @@ anisotropy override.
 
 - **Ours** samples HD materials with a LOD bias of 0 (the texture-detail slope
   law is the PSP's). The original's -1.5 reads sharper on a distant floor and
-  shimmers more. **Checked, applies, not wired**: a shader-side `textureSampleBias`
-  on the three units, with the cost of an extra bias constant, is a separate
-  change.
+  shimmers more. **Wired and held off (2026-10-21, `hd-lod-bias`)**, see "The LOD
+  bias, wired and held" below.
 - Also read: the albedo unit's address word carries gamma nibble 7 and the
   normal and lightmap units 0 (so the lightmap is raw, as `shade.wesl` reads it);
   `ds_booth_glass`'s albedo carries 0.
@@ -246,7 +245,7 @@ anisotropy override.
    albedo's alpha. **The pulse's colour and phase** (the chevron's emissive
    mask, `emask.a * colour * wave`) and its `+ emask.rgb` diffuse term stay
    open and are not lighting.
-4. **HD's `-1.5` LOD bias** on material textures.
+4. ~~**HD's `-1.5` LOD bias** on material textures~~ **wired, held off, below**.
 
 ## The blue cast (2026-10-21, later, `hd-blue-tone`)
 
@@ -444,3 +443,65 @@ applies to both and neither is wired:
   `textures/ds_wall_sc.gxt`, `ds_wallchevron_sc.gxt` and `ds_wallchevron_n.gxt`
   under its Anulpha Pass directory; the material's `.gxp` program is not read
   by this lane.
+
+## The LOD bias, wired and held (2026-10-21, `hd-lod-bias`)
+
+**Claim**: ours samples HD's material textures at bias 0 where the original
+asks for `-1.5`, so our distant floor and wall textures are blurrier.
+**True for the request, false for the picture.**
+
+**Wiring** (one mechanism, off for every title today): `Title::looks.material_lod_bias`
+(`Rule`, with `oag_title::MATERIAL_LOD_BIAS = -1.5`) -> `Looks::material_lod_levels`
+-> `Model::material_lod_bias` on the track model and the models behind its glass
+(`oag_raceplay::load::geometry::track_model`) -> the `material_lod_bias`
+pipeline constant (`mesh_render::texlod::constants`) -> `material_sample` in
+`crates/mesh/shaders/texture_lod.wesl`, a `textureSampleBias` that the circuit
+material path in `shade.wesl` (albedo, lightmap, the emissive and mask units,
+the second-UV reads) uses in place of `textureSample`; the two `textureSampleGrad`
+reads scale their gradients by `exp2(bias)`, as `Grad` ignores a bias. Left
+at bias 0, as unmeasured: the environment probes and every `textureSampleLevel`
+read (the census shows the probes at filter word `0x02062000`, bias 0), the
+flame, absorb and fire programs, the Zone stage, the shadow maps, and every
+hull (the census named track draws only; a hull's units are unread). Test:
+`oag-render::it psp_slope_lod::a_material_lod_bias_reads_a_finer_level_than_the_samplers_own`
+(a minified stripe texture, contrast 0 at bias 0, 117 at `-1.5`) and
+`oag-hd effects::tests::the_material_lod_bias_follows_its_rule`.
+
+**Measured**: ours re-drawn with the bias on (`compare-rerender-ours`, all 13 HD
+time trials) against the stored RPCS3 frames, 1920x1080:
+
+| | bias 0 | bias -1.5 |
+| --- | --- | --- |
+| Whole-frame mean grey difference, 13 pairs | Anulpha 17.33, Chenghou 8.54, Metropia 11.24, Moa 20.96, Modesto 16.70, Sebenco 18.57, Sol 14.68, Talons 12.57, Talons Assegai 11.62, Tech 15.87, Amphiseum 13.47, Ubermall 12.08, Vineta 18.09 | 17.53, 8.60, 11.54, 21.25, 16.96, 19.18, 15.09, 12.69, 11.74, 16.26, 13.80, 12.70, 18.16 (**all 13 up, 0.06 to 0.62; 11 of 13 over the 0.1 allowance**) |
+| Edge correlation | unchanged to 0.01 on every pair, except Sebenco 0.31 -> 0.30 | |
+
+Per region (grey RMSE against the original, high-pass energy = the standard
+deviation of the Laplacian of the 0.7-blurred grey, structure correlation of
+that high-pass), Anulpha Pass, The Amphiseum and Ubermall, five regions each
+(distant floor, mid floor, left wall, right floor, far right wall): RMSE rose in
+14 of 15 regions, by up to 2 grey levels, and the high-pass structure
+correlation rose by at most 0.05 (one region) and fell in 5. The
+high-pass energy of **ours at bias 0 already sat at 0.9x to 1.4x the
+original's** (Anulpha far floor 9.25 against 10.53, Amphiseum far floor
+15.9 against 11.25, Ubermall far floor 19.4 against 16.7), and the bias took it
+to 1.2x to 1.5x: sharper than the original in most regions, with no
+better alignment, which is the shimmer rather than detail.
+
+**The capture's `Resolution Scale 150` is not the explanation**: the same
+three pairs re-drawn with `--presented --render-scale 150` (supersampled the way
+the original's frame is) before and after the bias read the same way (mean grey
+17.40 -> 17.53, 13.34 -> 13.53, 12.00 -> 12.31; RMSE up in 14 of 15 regions;
+the bias-0 high-pass energy 0.9x to 1.2x the original's). **What stays open**:
+whether RPCS3 applies the filter word's bias at all (the pushbuffer is the
+game's request; the emulator's sampler is not read here), and whether the
+console's own mip chains (authored in the texture, ours generated for a
+texture with none) are sharper. Either would explain why a requested `-1.5`
+leaves the stored frames no sharper than ours.
+
+**Held off**: HD's rule is `Rule::UNREAD` with the measured request written in
+the comment; turning it on is one line in `crates/hd/src/effects.rs`
+(`Platforms::Any`, `Origin::Measured`) and re-judging against a capture taken
+at `Resolution Scale 100` once `hd-capture-profile` lands. Pulse and Pure carry
+no such rule (the GE's slope law selects the level). **Omega and 2048: not
+checkable** (a Vita or PS4 sampler state, no capture path), so neither carries
+the rule: an inherited bias would change two tracks nobody has measured.

@@ -10,6 +10,24 @@ override texlod_slope: f32 = 0.0;
 
 override texlod_bias: f32 = 0.0;
 
+// Wipeout HD's LOD bias on its material textures, in levels (negative reads a
+// finer level): `0` is the sampler's own selection, and what a model that is not
+// a HD circuit's gets, so those pipelines compile to a plain `textureSample`.
+// `Model::material_lod_bias` is the value and `docs/rendering/hd-track-tone.md`
+// the measurement.
+override material_lod_bias: f32 = 0.0;
+
+// `textureSample` with [`material_lod_bias`] added to the level. A pipeline
+// constant, so the branch is resolved at pipeline creation and the call stays in
+// uniform control flow.
+@diagnostic(off, derivative_uniformity)
+fn material_sample(t: texture_2d<f32>, s: sampler, uv: vec2<f32>) -> vec4<f32> {
+    if material_lod_bias != 0.0 {
+        return textureSampleBias(t, s, uv, material_lod_bias);
+    }
+    return textureSample(t, s, uv);
+}
+
 // The sampler's `anisotropy_clamp`, for `sample_at_slope_level`. 1 is off.
 override aniso_max: f32 = 1.0;
 

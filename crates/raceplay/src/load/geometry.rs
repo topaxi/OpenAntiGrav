@@ -83,9 +83,17 @@ pub(super) fn track_model(
     track_blob: &[u8],
     geometry: &Option<Vec<u8>>,
     model_name: Option<&str>,
+    material_lod_bias: f32,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
+    // The title's LOD bias on its material textures
+    // (`oag_title::Looks::material_lod_bias`), on every model this circuit's
+    // geometry builds: the track and what it draws behind its glass.
+    let biased = |mut model: Model| {
+        model.material_lod_bias = material_lod_bias;
+        model
+    };
     match geometry {
         None => (None, none()),
         // **Two containers wear this extension.** Wipeout HD's needs the `.vex`
@@ -100,7 +108,7 @@ pub(super) fn track_model(
             }) {
                 Ok((model, built)) => {
                     report.push(format!("{track}: {}", built.describe()));
-                    (Some(model), none())
+                    (Some(biased(model)), none())
                 }
                 Err(error) => {
                     report.push(format!(
@@ -115,7 +123,9 @@ pub(super) fn track_model(
             match mesh::rcs::build_scene_views(track, track_blob, geometry, &mut |path| {
                 archives.read_name(path).ok()
             }) {
-                Ok((model, groups, built)) => {
+                Ok((model, mut groups, built)) => {
+                    groups.alternate_fog = groups.alternate_fog.map(biased);
+                    groups.primary_fog = groups.primary_fog.map(biased);
                     report.push(format!("{track}: {}", built.describe()));
                     // The pair the target's alternate group is fogged with, read
                     // only for a circuit that has one, so no other report moves.
@@ -125,7 +135,7 @@ pub(super) fn track_model(
                         })
                         .flatten();
                     (
-                        Some(model),
+                        Some(biased(model)),
                         crate::BehindGlassModels {
                             groups,
                             alternate_fog,

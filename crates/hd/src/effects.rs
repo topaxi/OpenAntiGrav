@@ -131,6 +131,14 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // **Held off, though the request is measured**: the RSX texture filter word
+    // `0x02063e80` on 2,619 + 3,935 binds of Anulpha Pass and The Amphiseum is
+    // trilinear with a `-1.5` bias, but drawing ours with it moved the grey
+    // difference to the stored RPCS3 frames up on all 13 pairs and the
+    // per-region RMSE up on most regions, ours already as sharp as theirs without
+    // it. `docs/rendering/hd-track-tone.md`, "Claim B: the sampler". Turning it on
+    // is `Platforms::Any` with `Origin::Measured` here.
+    material_lod_bias: Rule::UNREAD,
     ..Looks::unread(SHIELD)
 };
 
@@ -145,6 +153,23 @@ mod tests {
         assert!(LOOKS.lit_output_halved.applies_everywhere());
         assert_eq!(LOOKS.lit_output_halved.origin, Origin::Measured);
         assert!(!Looks::unread(SHIELD).lit_output_halved.applies_everywhere());
+    }
+
+    /// The material LOD bias is held off on HD (the stored RPCS3 frames do not
+    /// ask for it) and a title whose rule applies gets exactly the measured
+    /// `-1.5` into the track model - the one number `oag_raceplay::load` reads.
+    #[test]
+    fn the_material_lod_bias_follows_its_rule() {
+        assert_eq!(LOOKS.material_lod_levels(), 0.0);
+        let applied = Looks {
+            material_lod_bias: Rule {
+                on: Platforms::Any,
+                origin: Origin::Measured,
+            },
+            ..Looks::unread(SHIELD)
+        };
+        assert_eq!(applied.material_lod_levels(), oag_title::MATERIAL_LOD_BIAS);
+        assert_eq!(oag_title::MATERIAL_LOD_BIAS, -384.0 / 256.0);
     }
 
     /// The five names no archive of HD's disc carries
