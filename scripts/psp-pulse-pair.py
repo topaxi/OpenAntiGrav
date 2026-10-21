@@ -389,6 +389,8 @@ def main():
     pair.rec["ours"]["camera_view"] = view
     view_flags = ["--camera-view", view]
     pair.check_size("original", out / "theirs.png")
+    pair.check("no emulator notification over the original's frame", not ce.toast_over_frame(out / "theirs.png"),
+               "PPSSPP's green 'Game controller connected' banner (any pad appearing on the machine raises it) covers the top-left")
 
     if args.field:
         if args.layout == "auto":

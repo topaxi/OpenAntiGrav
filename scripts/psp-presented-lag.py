@@ -37,6 +37,43 @@ def pair_module():
     return mod
 
 
+def skew_table(args, pp, plat, flags, entry, csv, shots, out, window):
+    """The craft's row `k` posed with the camera of row `k + c`: which pair of rows the presented frame is drawn from.
+    The two are read at one stop but the game updates the craft, then the camera, then draws, so a frame may pair a craft
+    with a camera a tick apart (the race pair's player hull is larger than ours, which a camera a tick ahead would do)."""
+    import csv as csvmod
+    ww, wh, wx, wy = window
+    rows = list(csvmod.DictReader(open(csv)))
+    camcols = [c for c in rows[0] if c.startswith("cam_")]
+    skews = [int(v) for v in args.camera_skews.split(",")]
+    table = []
+    for i in range(args.first, args.ticks):
+        theirs = out / ("theirs%02d.png" % i)
+        pp.run(["magick", shots / ("tick%05d.png" % i), "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", theirs])
+        for k in range(max(0, i - 2), i + 1):
+            for c in skews:
+                src = min(max(k + c, 0), len(rows) - 1)
+                variant = out / ("variant_%02d_%d_%d.csv" % (i, k, c))
+                mod = [dict(r) for r in rows]
+                for col in camcols:
+                    mod[k][col] = rows[src][col]
+                with open(variant, "w", newline="") as f:
+                    w = csvmod.DictWriter(f, fieldnames=list(rows[0]))
+                    w.writeheader()
+                    w.writerows(mod)
+                png = out / ("v%02d_%d_%d.png" % (i, k, c))
+                fov = ce.speed_fov(ce.csv_row(csv, k), 60.0)
+                pp.run([args.oag_game, ce.MAIN / plat["image"], "--race", "--track", entry, "--pose-from", variant,
+                        "--pose-tick", k, "--camera-fov", "%.4f" % fov, "--ticks", 0, "--screenshot", png] + flags,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                table.append({"shot": i, "craft_row": k, "camera_skew": c, "mean_grey": ce.overlap_score(theirs, png).get("mean_grey")})
+        best = min((t for t in table if t["shot"] == i), key=lambda t: t["mean_grey"])
+        print("shot %d: best craft row %d (lag %d) with camera of row %+d from it, mean grey %.2f" % (
+            i, best["craft_row"], i - best["craft_row"], best["camera_skew"], best["mean_grey"]))
+        print("   " + "  ".join("k=%d c=%+d:%.1f" % (t["craft_row"], t["camera_skew"], t["mean_grey"]) for t in table if t["shot"] == i))
+    (out / "skew.json").write_text(json.dumps(table, indent=2))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
@@ -46,7 +83,10 @@ def main():
     ap.add_argument("--team")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--ticks", type=int, default=14)
-    ap.add_argument("--window", type=int, default=6, help="candidate rows k in [i - window, i]")
+    ap.add_argument("--window", type=int, default=6, help="candidate rows k in [max(0, i - window), i]")
+    ap.add_argument("--first", type=int, default=6, help="first shot to score; 1 scores the stops right after the CPU resumes "
+                    "(a best row of 0 there means the frame is older than the record, so the lag is at least the stop's index)")
+    ap.add_argument("--camera-skews", help="comma list of camera row offsets to try against each craft row (e.g. -1,0,1,2)")
     ap.add_argument("--oag-game", default=str(HERE.parent / "target/debug/oag-game"))
     args = ap.parse_args()
     pp = pair_module()
@@ -79,11 +119,14 @@ def main():
     pp.set_window(960, 544)
     entry = "Data\\Environments\\%s\\track.vex" % args.track
     results = []
-    for i in range(args.window, args.ticks):
+    if args.camera_skews:
+        skew_table(args, pp, plat, flags, entry, csv, shots, out, (ww, wh, wx, wy))
+        return
+    for i in range(args.first, args.ticks):
         theirs = out / ("theirs%02d.png" % i)
         pp.run(["magick", shots / ("tick%05d.png" % i), "-crop", "%dx%d+%d+%d" % (ww, wh, wx, wy), "+repage", theirs])
         scores = {}
-        for k in range(i - args.window, i + 1):
+        for k in range(max(0, i - args.window), i + 1):
             png = out / ("ours%02d_%02d.png" % (i, k))
             row = ce.csv_row(csv, k)
             fov = ce.speed_fov(row, 60.0)

@@ -258,7 +258,7 @@ def main():
     ap.add_argument("--pcsx2-display", default="92")
     ap.add_argument("--pcsx2-slot", default="28015")
     ap.add_argument("--timeout", type=int, default=PAIR_TIMEOUT, help="seconds per pair")
-    ap.add_argument("--attempts", type=int, default=2, help="tries per pair when the emulator stalls (a parity refusal is final)")
+    ap.add_argument("--attempts", type=int, default=2, help="tries per pair: an emulator stalls, a capture is ambiguous, a toast covers the frame; a refusal that repeats is reported")
     args = ap.parse_args()
 
     scratch = ce.MAIN / "data/scratch" / args.lane
@@ -313,8 +313,7 @@ def main():
                         problems, warn = rerender.remake(pj, env=env, remap=remap, timeout=args.timeout)
                     except (subprocess.SubprocessError, OSError) as exc:
                         problems, warn = ["emulator step failed: %s" % exc], []
-                    # a parity REFUSAL is an answer; an emulator that stalled or a step that timed out is retried
-                    if not problems or any(p.startswith("the fresh run was refused") and "REFUSED" in p for p in problems):
+                    if not problems:
                         break
                     log("attempt %d of %d failed (%s)" % (attempt, args.attempts, "; ".join(problems)[:200]))
                 if problems:

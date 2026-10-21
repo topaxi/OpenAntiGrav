@@ -339,6 +339,18 @@ def image_size(path):
     return [int(out[0]), int(out[1])]
 
 
+def toast_over_frame(png, crop="120x10+8+4"):
+    """True when PPSSPP's green on-screen notification ("Game controller connected: ...", raised when ANY pad appears on the
+    machine, such as another lane's virtual pad) covers the top-left of a 480x272 frame. The toast is a solid, saturated
+    green banner (about 0, 110, 35); the scenes' own greens are lit and never reach red 0. `crop` is inside the banner
+    and clear of the lap counter. One Outpost 7 White grab in 50 carried it (mean grey difference 6.2 to 13.7)."""
+    out = subprocess.run(["magick", str(png), "-crop", crop, "+repage", "-format",
+                          "%[fx:mean.r] %[fx:mean.g] %[fx:mean.b] %[fx:standard_deviation]", "info:"],
+                         capture_output=True, text=True, check=True).stdout.split()
+    r, g, b, sd = (float(v) for v in out)
+    return r < 0.08 and g > 0.30 and b < 0.25 and sd < 0.12
+
+
 def overlap_score(theirs, ours):
     """A cheap overlap score of two same-size frames: normalised RMSE of the pictures, and the normalised
     cross-correlation of their blurred edge maps (1.0 = the edges lie on each other; a pair that lines up badly
