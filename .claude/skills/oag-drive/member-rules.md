@@ -287,6 +287,11 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   Put the evidence itself in the doc (the numbers, the table, the command
   that reproduces it); a tool worth keeping moves to `scripts/`; a reference
   frame worth keeping moves to `data/reference/` and is cited there.
+- **Never write a compare-page manifest (`data/reference/compare-page/*.toml`) from your
+  worktree.** `data/` there is a symlink into the main checkout, and on 2026-10-21 a member's
+  `race-shots.toml` pointed into its own worktree and broke the maintainer's page once the
+  worktree was reaped. Keep re-made pairs and manifests in your scratch directory and give the
+  lead the commands to adopt them.
 - Avoid em and en dashes in anything you write, and write no decorative
   separator comments.
 
