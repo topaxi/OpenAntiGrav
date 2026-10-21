@@ -416,7 +416,7 @@ and the translate sits inside the probe loop before the type test
 ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
 **Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
 millimetre). A `MagFloor` hit passes the shape tag too, and since 2026-10-21 it escapes
-([below](#a-magstrip-passes-the-gate-and-the-hold-keeps-the-craft-clear-of-it-2026-10-21-deviations-to-original)); it was held out by choice
+([below](#a-magstrip-passes-the-gate-and-the-escape-fires-on-one-2026-10-21-deviations-to-original-pulse-magstrip-hold)); it was held out by choice
 until then. The floor-only gate this replaces (2026-08-12) was a reading of the field as
 the floor class, made the same day the shape tag was not yet recovered; nothing measured it
 against the original. **On** since
@@ -449,7 +449,7 @@ landing, `+1.33` more on the 1584 cage tick), so its own 1594 step does not reac
 escape and its 1595 contact disagrees. That residual belongs to the landing escape at 1579 and
 the cage response's vertical component, not to the air.
 
-### A magstrip passes the gate, and the hold keeps the craft clear of it (2026-10-21, `deviations-to-original`)
+### A magstrip passes the gate, and the escape fires on one (2026-10-21, `deviations-to-original`, `pulse-magstrip-hold`)
 
 **Static.** `Ship_HoverTwoPoint`'s escape (`0x0884a800`-`0x0884a86c`) is `swc1 f12,0x308(s2)`,
 `c.lt.s f12,f20` against `1.0`, `lw a0,0x208(s1)` against `1`, then `Body_Translate`
@@ -470,15 +470,84 @@ One lap, 4,000 updates, the magstrip section spline rows `1150`-`1320`:
 | `MagFloor` | 578 | `1` on all | `1.864` (blend `0.2`, entering) |
 | `MagFloor`, blend `1.0` | 564 | `1` on all | `2.194` (median `3.011`, max `4.093`) |
 
-So the original's gate admits a magstrip, and its hold never lets a probe near one: no
-magstrip tick of the lap had a height under `1.0`, and the escape never fired there. The
-position residuals over the strip (`-0.07` to `+0.19` along up a tick) are the hold's own
-`Body_Translate`, not an escape.
+So the original's gate admits a magstrip, and on **Talon's Junction's** strip its hold never
+lets a probe near one: no magstrip tick of that lap had a height under `1.0`, and the escape
+never fired there. The position residuals over the strip (`-0.07` to `+0.19` along up a tick)
+are the hold's own `Body_Translate`, not an escape. That is a property of that strip, not of the
+hold: on Vertica's crest the escape fires (below).
 
 **Ported** as `oag_physics::hover::MagFloorEscape::Always` on Pulse's two-point rig (the escape
-off a magstrip, whatever the lock), which Pure, Omega and 2048 fly too. Confidence **85**: the
-static read plus a live lap that shows the tag `1` on 578 magstrip hits, but never shows the
-escape itself firing on one, because the original never reaches it.
+off a magstrip, whatever the lock), which Pure, Omega and 2048 fly too. Confidence **92**: the
+static read, the tag `1` on 578 magstrip hits on Talon's Junction, and the escape seen firing
+on a magstrip at full lock on Vertica, in the position residual it predicts.
+
+#### On Vertica's crest the original escapes too (2026-10-21, `pulse-magstrip-hold`)
+
+`06_Track` (Vertica White, forward) climbs a vertical magstrip wall (up `+x`, travel `+y`) and
+crests over its lip onto a floor (up `+y`): the surface normal turns about `90` degrees over
+spline rows `2745`-`2790` (`oag-trace track --track 'Data\Environments\06_Track\track.vex'`),
+about `30` units of radius, centre near `(721, 340)`. Ours escaped there off a magstrip on every
+pass of `ai_clean_lap_gate::track_06_rapier` (489 escape ticks over about 280 passes across the
+perturbed runs, 1-2 a pass, heights `-0.39` to `0.95`, median `0.42`; VENOM 2-3 a pass, median
+`0.28`). The escaping probe is almost always the **derived** rear one: above `50` units/s the
+original casts probe 0 (local `+4.5`, the nose) and builds probe 1's hit from it,
+`hit + (p1 - p0) + up * dot(normal, forward) * 6.0` (`0x0884a168`-`0x0884a2cc`: the record at
+`craft+0x1e0` copied to `+0x210`, `craft+0xf0 - craft+0xe0` added, then `craft+0x160` scaled by
+`dot(craft+0x1f0, craft+0x180)` and by `0x40c00000`). On a crest whose normal runs ahead of the
+craft's up the slope term is positive and the rear height is the nose's minus `6 * slope`:
+`1.52 - 6 * 0.295 = -0.25` on ours' first escape tick. `oag_physics::hover::derived_hit` is that
+expression term for term.
+
+**Live**, PPSSPP 1.20.4 software renderer, USA, Time Trial, Vertica White, Assegai, player input
+only (held throttle, the pure-pursuit stick on the authored line through the virtual pad,
+`scripts/psp-magstrip-escape.py`). VENOM from `data/saves/pulse-psp/time-trial-vertica-white-venom-grid.ppst`;
+RAPIER walked from that race by `psp-drive.py menu --unlock --any-track --class-right 2` (QUIT
+RACE, then the walk), identified by the craft at `(141.3, 2.47, 311.3)` on the Vertica grid and
+the hover target `craft+0x2f0 = 4.5` (RAPIER's `5.4` at full lock). Heights are the probe's along
+up as `Ship_HoverTwoPoint` stores them (`craft+0x308`), at blend `1.0`, every hit tagged `1` and
+of class `3`:
+
+| Class, one pass | Speed at the crest | Escape ticks (height under `1.0`) | Heights |
+| --- | ---: | ---: | --- |
+| VENOM | `98`-`104` | 4 | `0.86` (nose), `-0.21`, `0.80`, `-0.04` (rear) |
+| RAPIER | `88`-`131` | 2 | `-0.05`, `0.46` |
+
+The two deep VENOM escapes show in the next update's position residual along up,
+`dot(pos(t+1) - pos(t) - v(t+1) * dt, up)`: `+1.357` and `+1.299` against `1 - h` of `1.213`
+and `1.042` plus the hold's own `+0.2` to `+0.25` a tick there, then `-0.91` and `-0.78` the
+update after, as the hold pulls back. Ours shows the same bounce (`+0.62` hold translation on
+the escape tick, `-0.35` on the next, RAPIER).
+
+Row-aligned against our AI (not the same input: ours flew VENOM at about `124` units/s and
+RAPIER at `179` on a line near `z = -1`, the original `100` and `88`-`131` near `z = +10`), the
+probe heights agree within about `0.2` over the whole crest at VENOM: the nose falls from `2.73`
+to `1.21` (original) and `2.58` to `1.06` (ours) over rows `2740`-`2758`, the rear dips under
+zero at row `2758`-`2759` in both (`-0.21`, ours `-0.33`), and both recover above `2.2` by row
+`2776`. So **the 06_Track escapes are the original's law**, and the `ai_clean_lap_gate` contact
+rise on that row (`154` to `419`) is our driver meeting an escape the original makes too.
+
+Two negatives:
+
+- **The hold reads the position from before the escape.** `Ship_UpdateMagLock` (`0x0884ba0c`)
+  takes its heights from `craft+0x1a0` (`0x0884bb6c`, again for the from-ray height at
+  `0x0884c090`), the copy of `body+0x30` made at the top of `Ship_CastHoverProbes`
+  (`0x08849f8c`-`0x08849fa4`), not the body the escape's `Body_Translate` (`0x0884d9f8`) has just
+  moved. So within one update the escape and the hold add, as ours does (the hold reads the
+  untranslated body, the escape lands after `drain`). One live `body+0x30` load at
+  `0x0884bc14` feeds a point (`pos - n1 * d1`) whose use was not traced. Confidence **85** on the
+  order, static.
+- **A mid-wall teleport does not reproduce the crest.** Writing the body at our pose on the
+  wall (`y = 250`, up `+x`, `124` units/s) at a `Ship_UpdateCraft` breakpoint left the hold not
+  taking over: up took about 70 updates to converge on the wall and the craft stalled to rest
+  within a second. The cause was not read (the located sections `+0xaf0`/`+0xb60` after the
+  write are the first thing to look at); a lap from the grid is what measured the crest.
+
+Cross-title, for the crest escape: **Pure, Omega and 2048: checked, applies, not measured
+live.** All three fly the two-point default rig (`hover_rig: None`, `MagFloorEscape::Always`),
+so the same derived-hit dip escapes on any crest like this one; no capture of theirs was taken.
+**HD: checked, differs.** Its gate is `BelowFullLock` (`crates/hd/src/race.rs`, the mesh-tag
+read on [hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md#hit0x28-is-the-marchs-mesh-shape-tag-2026-10-21-deviations-to-original)),
+so at full lock a magstrip probe never escapes there.
 
 **The drift it was held for was the harness.** `pad_crossing_ground_truth` replayed with no track
 locator (`replay(..., None)`), so our magstrip hold never engaged: over the 1284 crossing our

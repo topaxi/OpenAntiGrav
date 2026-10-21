@@ -171,8 +171,12 @@ def pose(port):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
-    ap.add_argument("--home", default=os.environ.get("HOME"),
-                    help="the instance's HOME (its memstick is under .config/ppsspp)")
+    # `ppsspp-start.sh`'s `env.sh` exports the private instance's HOME as `PP_HOME`; falling
+    # back to the shell's own HOME put a `load --file` copy into the maintainer's memstick
+    # (2026-10-21).
+    ap.add_argument("--home", default=os.environ.get("PP_HOME") or os.environ.get("HOME"),
+                    help="the instance's HOME (its memstick is under .config/ppsspp); "
+                    "defaults to $PP_HOME, then $HOME")
     ap.add_argument("command", choices=["save", "load", "check", "pose"])
     ap.add_argument("slot", type=int, nargs="?", default=1)
     ap.add_argument("--keep", help="copy the saved state to this path (under data/saves/)")

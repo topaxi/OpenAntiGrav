@@ -283,11 +283,12 @@
 //! `perturb::BOUND_OFFSETS`, failures of the 100 Pulse AI-gate tests per offset: law off
 //! `0 1 0 1 1 2 1 1 1` (median 1, max 2), law on `1 1 1 2 1 2 1 2 1` (median 1, max 2), inside
 //! the bar (median and max each at most two above law off). One row carries it: `06_Track`
-//! RAPIER, worst median contact `154` to `419`, still `CleanLap`. That is our magnet hold, not
-//! our driver: one run of that row escaped off a magstrip 489 times at full blend, with probe
-//! heights down to `-0.25` and the craft pinned near `(745, 365, -1)`, where the original's hold
-//! kept every probe at least `2.19` above the strip on Talon's Junction
-//! (`docs/physics/airborne-ground-truth.md`). Every other row moved inside the tolerances.
+//! RAPIER, worst median contact `154` to `419`, still `CleanLap`. That is our driver meeting an
+//! escape the original makes too: the row escapes off a magstrip 1-2 ticks a pass over the lip
+//! of Vertica's climbing wall (spline rows `2750`-`2768`), mostly on the derived rear probe, and
+//! the original under player input escapes there too, at VENOM and RAPIER, with probe heights
+//! down to `-0.21` (`docs/physics/airborne-ground-truth.md`, "On Vertica's crest the original
+//! escapes too"). Every other row moved inside the tolerances.
 //!
 //! Before that, [`BASELINE`] was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
