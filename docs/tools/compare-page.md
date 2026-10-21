@@ -383,8 +383,10 @@ required. The state-making flags are `--autopilot off|authored|timer`, `--autopi
 
 A record made before the field is backfilled from its `pair.json`, its `argv`, its state sidecar and this page, and
 what none of them says is `unknown` (`compare_provenance.py backfill SRC DST`, on a copy; `table DIR` prints the
-census). The HD grid pairs are backfilled as `savestate_restore` by inference (their state is a `SAVESTAT` and the
-re-make restored it; the cold flag came afterwards), and each is refused until it is recaptured cold.
+census; a pair that already has a block keeps it). The HD grid pairs are backfilled as `savestate_restore` by inference
+(their state is a `SAVESTAT`, `compare-rerender-all` restored it, and the compare-page thread's own open item is to
+recapture the 13 cold), and each is refused until it is recaptured cold (`scripts/rpcs3-hd-cold-pair.sh` sets
+`OAG_HD_CAPTURE_KIND=cold_boot`; the restoring scripts set `savestate_restore`).
 
 **Paths.** No `pair.json` or manifest names another lane's worktree or a lane's scratch directory: a worktree and the main
 checkout are written as the repository-relative path, scratch as `{scratch}/` (`Pair.finish` and `compare-rerender`

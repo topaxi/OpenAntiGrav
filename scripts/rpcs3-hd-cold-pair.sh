@@ -10,6 +10,7 @@ main=/home/topaxi/projects/OpenAntiGrav
 repo=$(cd "$(dirname "$0")/.." && pwd)
 W=$main/data/scratch/$lane
 source "$W/env.sh"
+export OAG_HD_CAPTURE_KIND=cold_boot  # recorded in pair.json provenance; no savestate was restored
 export OAG_COMPARE_PLATFORM=hd-fury UV_CACHE_DIR=$HOME/.cache/uv UV_OFFLINE=1
 cd "$repo"
 rm -f "$W/xdg/cache/rpcs3/TTY.log"

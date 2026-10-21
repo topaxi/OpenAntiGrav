@@ -256,6 +256,10 @@ def backfill(src, dst):
     n = 0
     for pj in pairs_under(dst):
         rec = json.loads(pj.read_text())
+        if "provenance" in rec["original"]:  # a script-recorded block is never replaced by inference
+            pj.write_text(json.dumps(portable(rec), indent=2) + "\n")
+            n += 1
+            continue
         prov = rec["original"]["provenance"] = backfill_pair(rec, pj.parent.relative_to(dst))
         argv = rec.get("argv", [])
         if "--out" in argv:

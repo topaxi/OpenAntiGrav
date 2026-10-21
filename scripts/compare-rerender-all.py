@@ -148,6 +148,8 @@ class Rpcs3(Emulator):
     def prepare(self, rec):
         argv = rec["argv"]
         state = argv[argv.index("--state") + 1]
+        if not Path(state).is_absolute():  # a recorded repo-relative path (provenance: portable argv)
+            state = str(ce.MAIN / state)
         env = dict(self.env)
         env.pop("OAG_RPCS3_ATTACH", None)
         pair_dir = Path(argv[argv.index("--out") + 1]).name
