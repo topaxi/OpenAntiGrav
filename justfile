@@ -71,6 +71,7 @@ check: fmt-check lint test check-docs check-deps check-unused-deps check-determi
 check-docs:
     python3 scripts/check-doc-links.py
     python3 scripts/compare-page.py --check-statement
+    python3 scripts/check-compare-environment.py
 
 # Every assets/ui/menu.toml row/title needs a string_id and real English text
 # in assets/ui/strings/english.toml, unless it predates the rule (a ratchet,

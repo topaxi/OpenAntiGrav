@@ -34,7 +34,7 @@ files a player or modder edits); a wrong shape is refused by name instead
 | `id`, `game`, `title` | required; `game` is the title and region (`Wipeout HD (EU)`) and groups the list |
 | `platform` | the console the original ran on (`PS3`, `PSP`, `PS4`, `Vita`); required to publish, a warning otherwise (see Credits) |
 | `original`, `before`, `ours` | image paths; at least two |
-| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the environment line `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture, and the build that drew ours: the commit `oag-game --version` reports, else the tree's `HEAD` at render time marked `(tree at render)` and `+dirty` when tracked files had changes; the line is re-spelled on every `manifest` run) |
+| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the `[entry.environment]` table `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture, and the build that drew ours: the commit `oag-game --version` reports, else the tree's `HEAD` at render time marked `(tree at render)` and `+dirty` when tracked files had changes) |
 | `note` | free text, shown under the caption (what is not matched) |
 | `not_captured` | why there is no original; shown as a warning |
 
@@ -76,8 +76,19 @@ differed by construction. None of them is a reference now.
 `scripts/compare-environment.toml` is the one **per-title environment profile**; `scripts/compare_env.py` reads
 it. A pair script builds a `compare_env.Pair`, records what each side actually ran with, and `Pair.finish` writes
 `pair.json` and **refuses** (exit 3, every mismatch named) when a check fails. `python3 scripts/compare_env.py
-manifest OUT.toml DIR...` turns the non-refused `pair.json` files into a page manifest whose `environment` line
-the page shows under each pair.
+manifest OUT.toml DIR...` turns the non-refused `pair.json` files into a page manifest whose `[entry.environment]`
+table the page shows under each pair as a definition list (2026-10-21).
+
+The fields come from what the pair **recorded**, never from the live profile: profile and its hash, output, the original's
+emulator and renderer, ours' settings as read back, the three overlap metrics, build and binary, and two times. Each
+metric label carries an `<abbr title>` (`compare_env.METRICS`): **RMSE** is the average per-pixel colour error, 0 is
+identical, lower is better; **edge correlation** compares where edges are, 1 is identical, higher is better, and shows
+whether shapes line up independent of colour; **mean grey difference** is the average brightness difference on a 0-255
+scale, lower is better. `original.captured_at` and `ours.rendered_at` (ISO 8601, local offset) are stamped by `Pair.finish`
+from the clock when the pair is made; **there is no fallback to file times**, so a pair made before they existed shows
+none until it is re-made. A pair needs `meta` (`id`, `title`) in its `pair.json`: `manifest` refuses one without, so
+the page never shows a directory name. `manifest` no longer rewrites `pair.json`. `scripts/check-compare-environment.py`
+(in `just check-docs`) proves the fields round-trip.
 
 | Platform | Output | Original's emulator settings (in the profile) | Ours |
 | --- | --- | --- | --- |

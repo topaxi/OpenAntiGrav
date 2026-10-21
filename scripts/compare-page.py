@@ -32,6 +32,9 @@ import sys
 import tomllib
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import compare_env  # noqa: E402  (the metric explanations live beside the metrics)
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = ROOT / "data" / "compare"
 
@@ -175,6 +178,8 @@ def load_manifest(path: Path, strict: bool = False) -> dict:
             p = path.parent / e[s]
             if not p.is_file():
                 refuse(f"{where}: `{s}` image {p} does not exist")
+        if "environment" in e and not isinstance(e["environment"], dict):
+            refuse(f"{where}: `environment` is a table of fields ([entry.environment]), not a string")
         unknown = set(e) - {"_base", "id", "game", "platform", "note", "not_captured", *SLOTS, *CAPTION_KEYS}
         if unknown:
             refuse(f"{where}: unknown key(s) {sorted(unknown)}")
@@ -277,7 +282,8 @@ def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
     for f in img.glob("*.png"):
         if f.name not in used:
             f.unlink()
-    page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records}
+    page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records,
+            "metric_hints": {key: hint for key, _, _, hint in compare_env.METRICS}}
     (out / "index.html").write_text(TEMPLATE.replace("<!--STATEMENT-->", footer).replace("/*DATA*/", json.dumps(page).replace("</", "<\\/")))
     return out / "index.html"
 
