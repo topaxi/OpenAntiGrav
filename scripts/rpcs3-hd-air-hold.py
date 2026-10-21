@@ -30,11 +30,14 @@ Writes `<out>/<name>.csv`.
 script while logging, so a countdown, a release and re-press of the throttle, sideshift
 taps on the grid and after GO, and a fired Turbo land in one file. TIMELINE is
 `;`-separated `seconds:action[:button]` steps, `action` one of `down`, `up`, `tap` (0.06 s),
-`dtap` (two taps 0.1 s apart, a sideshift gesture) and `give:<state>` (write the held
+`dtap` (two taps 0.1 s apart, a sideshift gesture), `stickx:<x>` (the left stick's x, -1..1) and
+`give:<state>` (write the held
 weapon pair `slot+0x204`/`+0x208`, `4` the Turbo, `rpcs3-capture.md`). Script rows add the
 pad clock `craft+0x320`, the sideshift cells `ship+0x6ac0..+0x6ad0` (two tap windows, the
 left and right shift timers behind `craft+0x264` bits `0x80`/`0x100`, the lockout), the held
-pair, and the control record's button words `+0x24` and `+0x28`.
+pair, the control record's button words `+0x24` and `+0x28`, and the two lean filters,
+`ship+0x6a44`/`+0x6a48` (the cockpit camera's) and `ship+0x6a54`/`+0x6a58` (the drawn hull's,
+`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`).
 """
 import threading
 import argparse
@@ -60,7 +63,8 @@ CRAFT = 0x5FAC
 HEADER = ("t,clock,flags,mult,blend,speed,throttle,grounded,px,py,pz,vx,vy,vz,shield,slot_flags,"
           "slot_timer,c0,c1,c2,c3,c4,ctlptr_minus_craft,wx,wy,wz,r0x,r0y,r0z,upx,upy,upz,"
           "fwx,fwy,fwz,hupx,hupy,hupz,sdx,sdy,sdz,team_wd,target,timer,height,state,"
-          "pad_clock,tap_a,tap_b,shift_l,shift_r,shift_lock,held,held2,buttons24,buttons28\n")
+          "pad_clock,tap_a,tap_b,shift_l,shift_r,shift_lock,held,held2,buttons24,buttons28,"
+          "cam_lean,cam_lean_follower,steer_lean,steer_lean_follower\n")
 
 
 def parse_script(text):
@@ -133,7 +137,7 @@ def main():
             return struct.unpack(">I", read(addr, 4))[0]
 
         team = u32(craft + 0x78)
-        print("team block %#x +0x9c %.3f" % (team, f32(team + 0x9c)), flush=True)
+        print("team block %#x +0x9c %.3f tilt +0x10..+0x1c %s" % (team, f32(team + 0x9c), [round(f32(team + o), 3) for o in (0x10, 0x14, 0x18, 0x1c)]), flush=True)
         def log_rows(name, seconds, script=None):
             """One row per new frame for `seconds`. A plain run keys a frame on the body's
             position; a script run also on the flag block and the sideshift cells, so a
@@ -172,7 +176,9 @@ def main():
                         + struct.unpack(">3f", read(ship + 0x7850, 12)) + (f32(team + 0x9c),)
                         + (g(0x344), g(0x348), f32(craft + 0x260), u32(craft + 0x2f8)))
                 extra = ((g(0x320),) + struct.unpack(">5f", ss)
-                         + struct.unpack(">ii", read(slot + 0x204, 8)) + buttons)
+                         + struct.unpack(">ii", read(slot + 0x204, 8)) + buttons
+                         + struct.unpack(">2f", read(ship + 0x6A44, 8))
+                         + struct.unpack(">2f", read(ship + 0x6A54, 8)))
                 row = (time.time() - t0, g(0x308), flags, g(0x2f0), g(0x278), g(0x340), g(0x30c),
                        g(0x304), *p, *vel, f32(ship + SHIELD), sflags, f32(slot + 0x158), *ctl,
                        ctlptr - craft, *pose, *extra)
@@ -194,6 +200,8 @@ def main():
                     session.pad.press(arg, 0.06)
                     time.sleep(0.1)
                     session.pad.press(arg, 0.06)
+                elif action == "stickx":
+                    session.pad.stick(float(arg), 0.0)
                 elif action == "give":
                     state = struct.pack(">ii", int(arg), int(arg))
                     gdb.pause()

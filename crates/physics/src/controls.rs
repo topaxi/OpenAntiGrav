@@ -157,7 +157,7 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         dt,
     );
     update_camera_lean(state, controls.steer_x, dt);
-    update_steer_lean(state, controls, dt);
+    update_steer_lean(state, controls, &handling.steer_lean, dt);
 }
 
 /// The follower's per-second gain, the `5.4` literal at `0x0883fac0`.
@@ -194,15 +194,11 @@ pub fn update_camera_lean(state: &mut ShipState, stick_x: f32, dt: f32) {
         (state.camera_lean_follower - state.camera_lean) * dt * CAMERA_LEAN_SMOOTH_RATE;
 }
 
-/// The steer lean follower's per-second gain, the `5.0` literal at `0x0883fda8`.
-pub const STEER_LEAN_FOLLOW_GAIN: f32 = 5.0;
 /// The most the steer lean follower may trail its target while the stick pushes the same way
 /// (`0.5`, `0x0883fd08`).
 pub const STEER_LEAN_OUT_LIMIT: f32 = 0.5;
 /// The same bound otherwise, airbrakes alone included (`0x3e99999a`, `0x0883fd28`).
 pub const STEER_LEAN_RETURN_LIMIT: f32 = 0.3;
-/// The first-order rate between the steer lean's follower and the lean, per second (`3.0`).
-pub const STEER_LEAN_SMOOTH_RATE: f32 = 3.0;
 /// What one percent of airbrake adds to the steer lean's target (`0x3ba3d70a`): a full right
 /// airbrake leans like half a right stick, a full left one like half a left stick.
 pub const STEER_LEAN_AIRBRAKE: f32 = 0.005;
@@ -224,12 +220,23 @@ pub const STEER_LEAN_AIRBRAKE: f32 = 0.005;
 ///
 /// **Chosen, not measured: omitted.** The stick term is negated on `entity+0x860 & 2`, a bit
 /// with no identified writer; it is treated as clear, as it read throughout the capture.
-pub fn update_steer_lean(state: &mut ShipState, controls: &ShipControls, dt: f32) {
+///
+/// `lean` carries the three gains a title may change ([`crate::params::SteerLean`]): Wipeout
+/// HD's `FUN_000eadb8` (`0x000eb5d4`-`0x000eb650`) runs this same filter with the stick term
+/// scaled by `<Tilt shipAmount>`, the follower at `<Tilt shipSpeed>` and the smooth at `10.0`,
+/// measured on RPCS3 (`crates/trace/tests/steer_lean_ground_truth.rs`).
+pub fn update_steer_lean(
+    state: &mut ShipState,
+    controls: &ShipControls,
+    lean: &crate::params::SteerLean,
+    dt: f32,
+) {
     let stick = controls.steer_x * CONTROL_RANGE;
     let target = if state.craft_state == crate::damage::CraftState::Eliminated {
         0.0
     } else {
-        stick * 0.01 - controls.airbrake_left * CONTROL_RANGE * STEER_LEAN_AIRBRAKE
+        stick * 0.01 * lean.stick_amount
+            - controls.airbrake_left * CONTROL_RANGE * STEER_LEAN_AIRBRAKE
             + controls.airbrake_right * CONTROL_RANGE * STEER_LEAN_AIRBRAKE
     };
     let delta = target - state.steer_lean_follower;
@@ -239,8 +246,8 @@ pub fn update_steer_lean(state: &mut ShipState, controls: &ShipControls, dt: f32
         STEER_LEAN_RETURN_LIMIT
     };
     let delta = delta.clamp(-limit, limit);
-    state.steer_lean_follower += delta * dt * STEER_LEAN_FOLLOW_GAIN;
-    state.steer_lean += (state.steer_lean_follower - state.steer_lean) * STEER_LEAN_SMOOTH_RATE * dt;
+    state.steer_lean_follower += delta * dt * lean.follower_rate;
+    state.steer_lean += (state.steer_lean_follower - state.steer_lean) * lean.smooth_rate * dt;
 }
 
 #[cfg(test)]

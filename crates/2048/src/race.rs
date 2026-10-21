@@ -546,6 +546,9 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
+    // 2048's teams author `<Tilt>` and its parser reads `shipAmount`/`shipSpeed`; the consumer
+    // was not located, so HD's law is inherited (through Omega).
+    tilt_steer_lean: Some(oag_title::pre_race::Sourced::inherited(10.0, "Wipeout HD")),
 };
 
 #[cfg(test)]

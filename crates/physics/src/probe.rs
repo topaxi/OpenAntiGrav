@@ -191,6 +191,7 @@ pub fn handling() -> Handling {
         roll_cost: 8.0,
         roll_speed: 1.5,
         roll_turbotime: 0.5,
+        steer_lean: crate::params::SteerLean::PULSE,
     }
 }
 

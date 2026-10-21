@@ -5,6 +5,10 @@
 //! `docs/physics/pure-physics.md`. A title whose table carries its own fills them here, in place
 //! of `oag_gameplay::handling::PITCH_STAND_IN`, for the player and every opponent alike. Its
 //! `<Airbrake>` authors no `sideshift` either, and its airbrake function pushes at `200.0`.
+//!
+//! The other way round too: Wipeout HD reads its drawn lean's stick gain and follower rate from
+//! the team's `<Tilt>` where Pulse compiles them in, so a title whose engine does fills
+//! `Handling::steer_lean` from the file here.
 
 use oag_tables::handling;
 use oag_title::craft_laws::CraftLaws;
@@ -16,6 +20,13 @@ pub(super) fn apply(
     class: &str,
     laws: Option<&CraftLaws>,
 ) {
+    if let (Some(smooth), Some(tilt)) = (laws.and_then(|laws| laws.tilt_steer_lean), stats.tilt) {
+        handling.steer_lean = oag_physics::SteerLean {
+            stick_amount: tilt.ship_amount,
+            follower_rate: tilt.ship_speed,
+            smooth_rate: smooth.value,
+        };
+    }
     if let Some(block) = stats.class_named(class) {
         fill(
             handling,
@@ -67,6 +78,7 @@ mod tests {
             code_pitch,
             code_sideshift: None,
             code_start_boost: None,
+            tilt_steer_lean: None,
             pitch_gate: Sourced::chosen(true),
             eliminator_wrong_way_kill: Sourced::chosen(true),
             sideshift_grid_gate: Sourced::chosen(true),

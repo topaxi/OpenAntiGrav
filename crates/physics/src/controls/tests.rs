@@ -313,10 +313,12 @@ fn a_held_stick_parks_the_clamped_ramp_and_cycles_the_unclamped_one() {
     );
 }
 
+use crate::params::SteerLean;
+
 /// Holds `controls` for `seconds` at 60 Hz.
 fn steer_lean_after(state: &mut ShipState, controls: &ShipControls, seconds: f32) {
     for _ in 0..(seconds * 60.0) as usize {
-        update_steer_lean(state, controls, 1.0 / 60.0);
+        update_steer_lean(state, controls, &SteerLean::PULSE, 1.0 / 60.0);
     }
 }
 
@@ -329,7 +331,11 @@ fn the_drawn_lean_settles_at_stick_plus_half_the_airbrake_difference() {
         ..ShipControls::default()
     };
     steer_lean_after(&mut state, &right_with_right_brake, 6.0);
-    assert!((state.steer_lean - 1.5).abs() < 1e-3, "{}", state.steer_lean);
+    assert!(
+        (state.steer_lean - 1.5).abs() < 1e-3,
+        "{}",
+        state.steer_lean
+    );
 
     let mut state = ShipState::default();
     let left_brake = ShipControls {
@@ -337,7 +343,11 @@ fn the_drawn_lean_settles_at_stick_plus_half_the_airbrake_difference() {
         ..ShipControls::default()
     };
     steer_lean_after(&mut state, &left_brake, 6.0);
-    assert!((state.steer_lean + 0.5).abs() < 1e-3, "{}", state.steer_lean);
+    assert!(
+        (state.steer_lean + 0.5).abs() < 1e-3,
+        "{}",
+        state.steer_lean
+    );
 }
 
 #[test]
@@ -347,10 +357,10 @@ fn an_airbrake_alone_moves_the_follower_at_the_slower_limit() {
         airbrake_right: 1.0,
         ..ShipControls::default()
     };
-    update_steer_lean(&mut state, &right_brake, 0.1);
+    update_steer_lean(&mut state, &right_brake, &SteerLean::PULSE, 0.1);
     assert_eq!(
         state.steer_lean_follower,
-        STEER_LEAN_RETURN_LIMIT * 0.1 * STEER_LEAN_FOLLOW_GAIN
+        STEER_LEAN_RETURN_LIMIT * 0.1 * SteerLean::PULSE.follower_rate
     );
 }
 
@@ -364,7 +374,7 @@ fn a_craft_out_of_the_race_eases_its_lean_back_level() {
     steer_lean_after(&mut state, &hard_right, 3.0);
     assert!(state.steer_lean > 0.9);
     state.craft_state = crate::damage::CraftState::Eliminated;
-    update_steer_lean(&mut state, &hard_right, 1.0 / 60.0);
+    update_steer_lean(&mut state, &hard_right, &SteerLean::PULSE, 1.0 / 60.0);
     assert!(state.steer_lean > 0.9, "eases, does not snap");
     steer_lean_after(&mut state, &hard_right, 6.0);
     assert!(state.steer_lean.abs() < 1e-2, "{}", state.steer_lean);

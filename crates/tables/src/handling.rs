@@ -416,6 +416,39 @@ impl Fe {
     }
 }
 
+/// How far and how fast the cockpit view and the drawn hull lean into a steer.
+/// `<Tilt internalSpeed internalAmount shipSpeed shipAmount/>`.
+///
+/// Wipeout HD's `<Stats>` authors it (and 2048's and Omega's); Pulse and Pure do not, their
+/// gains being code literals. HD's parser (`0x000c596c`-`0x000c5ab0`) stores the four at the
+/// team block's `+0x10` (`internalAmount`), `+0x14` (`internalSpeed`), `+0x18` (`shipAmount`)
+/// and `+0x1c` (`shipSpeed`); read live as `[1.4, 7.0, 1.4, 6.0]` on Feisar.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Tilt {
+    /// The cockpit view's follower rate, per second.
+    pub internal_speed: f32,
+    /// The cockpit view's gain on the stick.
+    pub internal_amount: f32,
+    /// The drawn hull's follower rate, per second.
+    pub ship_speed: f32,
+    /// The drawn hull's gain on the stick.
+    pub ship_amount: f32,
+}
+
+impl Tilt {
+    const ELEMENT: &'static str = "Tilt";
+
+    fn from_node(node: &Node) -> Result<Self> {
+        let e = Self::ELEMENT;
+        Ok(Self {
+            internal_speed: number(node, e, "internalSpeed")?,
+            internal_amount: number(node, e, "internalAmount")?,
+            ship_speed: number(node, e, "shipSpeed")?,
+            ship_amount: number(node, e, "shipAmount")?,
+        })
+    }
+}
+
 /// Engine response. `<Engine accelcap amount falloff gain turbo/>`.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Engine {
@@ -772,6 +805,8 @@ pub struct Stats {
     /// `docs/formats/pure-status.md` and
     /// `crates/pure/tests/handling_schema_ground_truth.rs`.
     pub fe: Option<Fe>,
+    /// `<Tilt/>`: the steering lean's gains, when the file authors them (HD, 2048, Omega).
+    pub tilt: Option<Tilt>,
     /// The `<Class>` blocks, in ladder order, slowest first.
     ///
     /// Look one up with [`Self::class`], which matches on name; indexing by
@@ -891,6 +926,10 @@ fn parse_with(expanded: &str, classless: Option<(&str, Unauthored)>) -> Result<S
         misc: Misc::from_node(child(stats, Misc::ELEMENT)?)?,
         fe: match stats.children_named(Fe::ELEMENT).next() {
             Some(node) => Some(Fe::from_node(node)?),
+            None => None,
+        },
+        tilt: match stats.children_named(Tilt::ELEMENT).next() {
+            Some(node) => Some(Tilt::from_node(node)?),
             None => None,
         },
         classes: match classless {

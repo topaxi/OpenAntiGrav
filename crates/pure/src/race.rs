@@ -620,6 +620,10 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // Measured (`START_BOOST`, the player's engine alone). Its multipliers apply to an engine
     // with no doubling, so it rides on `engine_output_double` (`docs/physics/pure-physics.md`).
     code_start_boost: Some(oag_title::pre_race::Sourced::measured(START_BOOST)),
+    // Pure's `FUN_08925054` is Pulse's drawn-lean filter literal for literal (`0.01`, `0.005`,
+    // `0.5`/`0.3`, `5.0`, `3.0`), composed at `0x0892718c` as `lean * 0.5 + roll * 6.28`
+    // (`docs/ghidra/functions/psp-pure-usa/`); no `<Tilt>`, so Pulse's gains.
+    tilt_steer_lean: None,
 };
 
 #[cfg(test)]

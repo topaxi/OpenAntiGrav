@@ -969,6 +969,13 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     code_pitch: None,
     code_sideshift: None,
     code_start_boost: None,
+    // `FUN_000eadb8` (`0x000eb5d4`-`0x000eb650`) runs Pulse's drawn-lean filter with the stick
+    // term times the team block's `+0x18` (`<Tilt shipAmount>`), the follower at `+0x1c`
+    // (`shipSpeed`) and the smooth at the literal `10.0`, composed into the hull's angle as
+    // `lean * 0.5 + roll * 6.28` (`0x000ebb3c`). Live on RPCS3 under player input: settles at
+    // `stick * 0.014 -/+ airbrake * 0.005`, frame fit RMS `0.002`
+    // (`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`). Confidence 90.
+    tilt_steer_lean: Some(oag_title::pre_race::Sourced::measured(10.0)),
 };
 
 /// HD/Fury's twelve teams ([`TEAMS`]) and the identity loyalty keeps each under: their own

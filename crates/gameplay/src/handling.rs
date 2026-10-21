@@ -264,6 +264,9 @@ pub fn handling_for(
         roll_cost: special.roll_cost,
         roll_speed: special.roll_speed,
         roll_turbotime: special.roll_turbotime,
+        // Pulse's compiled-in lean; a title whose engine reads `<Tilt>` replaces it at load
+        // (`oag_raceplay::load::code_laws`), so a title with no lean of its own inherits Pulse's.
+        steer_lean: oag_physics::SteerLean::PULSE,
         engine: Engine {
             accelcap: block.engine.accelcap,
             amount: block.engine.amount * ENGINE_AMOUNT_SCALE,
