@@ -2161,6 +2161,9 @@ nothing below reuses the first lane's captures.
    `0x9b7b6b0` among them) and six items of an unidentified class (first word `0xed56`); each Zone state has the
    player's `Trail` and one such item (`0xa202`, `0x8a01`). So depth zero is not the ribbon's alone, and nothing here
    says how ties sort.
+   The earlier "112th of 113 in the layer" for the flare reads as a zero-based index over every entry keyed `0x4d` or
+   lower: the flare is 113th of 166 in the sorted queue, the last of those 113, and the last of the 55 in layer `0x4d`
+   itself.
 4. *The removal, on a frame of my own* (`psp-ge-dump.py dump` a few frames after the race pair's clock, so a later
    frame than the lane's: the player's ribbon box differs). The player's ribbon is chunks `5485..5673` (27 PRIMs,
    vertex type `0x1fe`, blend `0xaa`, depth mask on, depth test 6) and the floor patch is chunk `7672` (186 vertices,
