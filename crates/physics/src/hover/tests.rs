@@ -576,11 +576,14 @@ fn the_rebound_coefficient_leaves_the_landing_window_at_the_plain_rebound() {
     assert_eq!(rebound_coefficient(&handling, 0.0), 3.5);
 }
 
-/// Two penetrating probes each ask for a teleport, and applying both would
-/// move the body by their sum, which is further than either wanted. The larger
-/// wins. That is a choice made here and not a finding, so it is pinned.
+/// Two penetrating probes each ask for a teleport, and the body takes both: their sum, further
+/// than either asked. `Ship_HoverTwoPoint` measures each height off the probe point and hit
+/// cached before its loop (`0x0884a798`-`0x0884ab90`), so the first `Body_Translate` never
+/// shortens the second; live on Talon's Junction's 1579 landing, `1.698` recorded against
+/// `1.691` summed and `1.221` the deeper alone (`airborne-ground-truth.md`). Until 2026-10-21 the
+/// deeper one won here, a choice and not a finding.
 #[test]
-fn two_penetrating_probes_move_the_body_by_the_deeper_one_and_not_by_their_sum() {
+fn two_penetrating_probes_move_the_body_by_their_sum() {
     // A floor at y = 0 under the front probe and a floor at y = -0.5 under the
     // rear one, both wound to face up.
     let mut world = CollisionWorld::new();
@@ -618,7 +621,7 @@ fn two_penetrating_probes_move_the_body_by_the_deeper_one_and_not_by_their_sum()
     // a subtraction, so the heights land a single ulp off the round numbers.
     assert!((hover.probes[0].escape - Vec3::new(0.0, 0.8, 0.0)).length() < 1e-6);
     assert!((hover.probes[1].escape - Vec3::new(0.0, 0.3, 0.0)).length() < 1e-6);
-    assert!((hover.escape - Vec3::new(0.0, 0.8, 0.0)).length() < 1e-6);
+    assert!((hover.escape - Vec3::new(0.0, 1.1, 0.0)).length() < 1e-6);
 }
 
 /// The roll oscillator is stable, and the margin is pinned so it cannot drift back.

@@ -82,8 +82,13 @@ pub struct Rig {
     pub along_normal: bool,
     /// See [`NormalMean`].
     pub normal_mean: NormalMean,
-    /// Apply every penetrating probe's escape, summed (HD), rather than the largest alone (ours
-    /// for Pulse, see [`super::Hover::escape`]).
+    /// Apply every penetrating probe's escape, summed, rather than the largest alone. Every
+    /// rig the originals were read for sums: HD's `Craft_HoverFourPoint` and Pulse's and Pure's
+    /// `Ship_HoverTwoPoint`, whose probe loops take each height off probe and hit points fixed
+    /// before the loop, so one probe's `Body_Translate` never shortens the next probe's escape
+    /// (Pulse `0x0884a798`-`0x0884ab90`, seen live on a landing: `1.698` recorded, `1.691`
+    /// summed, `1.221` the larger alone; `airborne-ground-truth.md`). `false` exists for the
+    /// comparison only.
     pub sum_escapes: bool,
     /// A probe under `1.0` unit moves the body out (`Ship_HoverTwoPoint`, HD's
     /// `Craft_HoverFourPoint`). Pulse's Zone hover, `Ship_HoverFourCorner` (`0x0884ae90`), has
@@ -143,7 +148,7 @@ impl Rig {
         derive_rear: true,
         along_normal: false,
         normal_mean: NormalMean::Normalised,
-        sum_escapes: false,
+        sum_escapes: true,
         probe_escape: true,
         mag_floor_escape: MagFloorEscape::Always,
         spring: SpringLaw::Racing,
