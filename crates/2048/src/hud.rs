@@ -150,7 +150,6 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the
     // per-zone ladder this row carries. See `oag_title::ZoneSpeedClasses`.
     zone_speed_classes: None,
-    zone_stale_text: None,
     // **Measured `true`, 2026-09-16.** Every Vita3K race frame reads the
     // shield with a `%` - `100%` on the grid, `99%`/`95%`/`93%` after wall
     // hits, `27%` in Zone - under the silhouette at `EnergyText`'s authored

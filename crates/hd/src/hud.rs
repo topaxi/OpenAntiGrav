@@ -278,7 +278,6 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // The fifteen rungs' names. Which rung a zone is on is a different
     // question and an open one - see [`ZONE_SPEED_CLASSES`].
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
-    zone_stale_text: None,
     // **Measured `false`, not left at Pulse's `true`.** All three of
     // `talons-matched/{00,01,03}.png` read a bare number - `100`, `100`, `98` -
     // with no `%` anywhere. See `oag_title::HudArt::shield_percent`.

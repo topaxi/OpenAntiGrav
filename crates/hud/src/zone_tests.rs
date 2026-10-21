@@ -102,7 +102,6 @@ fn the_zone_ladder_counts_up_from_the_current_zone() {
                     false,
                     true,
                     None,
-                    None,
                     true,
                     false,
                 )
@@ -163,7 +162,6 @@ fn pulse_names_the_speed_class_off_the_zone_and_blanks_the_caption_from_zen() {
             false,
             true,
             art.zone_speed_classes,
-            art.zone_stale_text,
             true,
             false,
         )
@@ -182,37 +180,4 @@ fn pulse_names_the_speed_class_off_the_zone_and_blanks_the_caption_from_zen() {
     assert_eq!(class(50).as_deref(), Some("MSC_ZEN"), "the Moa pair");
     assert!(text(34, 0).is_some(), "the caption is up below zone 35");
     assert_eq!(text(35, 0), None, "and gone from it");
-}
-
-/// The widget the original binds and never writes draws its leftover text from
-/// the first zone, and only that widget does.
-#[test]
-fn pulse_draws_the_unwritten_sub_weapon_widget_with_its_leftover_text() {
-    let layout = Layout::from_xml(
-        r#"<Screen>
-             <Text name="SubWeapon"><Values font="HUD" align="centre" x="240" y="45"/></Text>
-             <Text name="Info"><Values font="HUD" x="240" y="70"/></Text>
-           </Screen>"#,
-    );
-    let strings = oag_ui::language::StringTable::default();
-    let art = oag_pulse::hud::ART;
-    let text = |zone: u32, widget: usize| {
-        text_for(
-            &layout.labels[widget],
-            &Readout {
-                zone,
-                ..Readout::blank()
-            },
-            &strings,
-            false,
-            true,
-            art.zone_speed_classes,
-            art.zone_stale_text,
-            true,
-            false,
-        )
-    };
-    assert_eq!(text(8, 0).as_deref(), Some("1000000000.00"));
-    assert_eq!(text(0, 0), None, "outside Zone it stays undrawn");
-    assert_eq!(text(8, 1), None, "no other widget borrows it");
 }

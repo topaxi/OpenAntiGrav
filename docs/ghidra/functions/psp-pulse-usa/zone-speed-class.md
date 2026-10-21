@@ -39,21 +39,33 @@ from the disassembly (`slti` against `0x23`, `0x16`, `0x14`, `0xe`, `0xc`, `0x7`
 widgets from the bind code and the live reads; the picture agrees on both pairs (zone 8 draws `sub-rapier` at
 the authored `SpeedClass` slot, zone 50 draws no `speed class` caption).
 
+**Visibility at zone 0 is unread:** the disassembly writes `Zone`, `Score` and `SpeedClass` unconditionally, so at
+zone 0 the original's strings read `0` and `MSC_SVENOM`; ours draws neither (like `Zone`, a choice from before this
+page) while still drawing the `speed class` caption. Left as it was.
+
 Wired as `oag_pulse::hud::ZONE_SPEED_CLASSES` (`rung_zones`, `caption_hidden_from_zone`), read by
 `oag_hud::draw::text_for`. Pulse has no `ZONE_STAGES`, so no grade follows from it.
 
-## `SubWeapon` is bound, never written, and drawn
+## The `1000000000.00` line: a leftover in `SubWeapon`'s text buffer, not a Zone law
 
-`hud+0x248` is `SubWeapon` (`Zone_HUD.xml` authors it at `(240, 45)`, `HUD` font, scale 1). The only code that
-touches it is the bind at the end of `Hud_BindWidgets`; no update function writes its text, and its visibility
+`hud+0x248` is `SubWeapon` (`Zone_HUD.xml` authors it at `(240, 45)`, `HUD` font, scale 1; `TimeTrial_HUD.xml` the
+same, `Arcade_HUD.xml` at scale 0.6). The only code that touches it is the bind at the end of `Hud_BindWidgets`
+(it is the only by-name load of the `"SubWeapon"` string); no update function writes its text, and its visibility
 flag (`+0x2c` bit `0x4`) stays set (`0xf086`, like `Zone` and `Score`; the lap-gap widgets read `0xb082`, hidden).
-Its text buffer (`0x08b561b0` on both states) holds `1000000000.00`, a copy of the float formatter's scratch
-(`FUN_08974b24`'s buffer `0x08b208f8` holds the same bytes). So **the original draws `1000000000.00` in the
-HUD font under the class name for the whole Zone run**, on both pairs. Wired as
-`HudArt::zone_stale_text` (`oag_pulse::hud::ART`), drawn from zone 1 like the counters. **Not measured:**
-`TimeTrial_HUD.xml` authors the same widget (and `Arcade_HUD.xml` at scale 0.6 with a border); no mid-race Time
-Trial or Arcade original was read for it, so nothing is drawn there. Pulse PS2 shares the data and is not
-measured.
+Both Zone states read its buffer (`0x08b561b0`, in the executable's static text pool, `+0x98` of the widget) as
+`1000000000.00`, the float formatter's output for `1e9`, and the original draws it under the class name on both
+pairs. **It is not a Zone rule and it is not drawn by ours.** Three observations say the bytes are whatever last used
+that pool slot:
+- a Time Trial grid state (`time-trial-talons-venom-grid`) holds the widget's buffer at another slot
+  (`0x08b56130`), **empty**, with the same visible flag;
+- the single-race pair `pulse-psp-race/talons-alongside` shows the same `1000000000.00` at the top centre in the
+  original (at the Arcade scale), so it is not Zone's;
+- `1e9` reads as a "no record" sentinel, so a player with a stored record could see a number there.
+
+The writer was not found (a memory write watch on a restarted race was not run). Wiring it would copy one
+profile's menu history into the picture, so nothing is drawn and the residual stays: a line of white digits in
+the original on these three frames. If a later lane finds a per-race writer on a fixed input, the line becomes a
+law and `HudArt` is the place for it.
 
 ## The top-left counter is the lap, not a zone count
 
@@ -76,7 +88,8 @@ A GE dump of the original on the zone-50 state (`psp-ge-dump.py`) holds the shad
 draws (`0x400`/`0x500`, 456 vertices) and the wipe quad blending `dst * 0x9f/255`; a breakpoint on
 `Shadow_RenderOccluderVolume` hits every frame with the craft's own attached occluder (`parent+0x94->+0x2f8` =
 1.6 to 2.1). So Zone does **not** turn the shadow off. The dark polygon the original does not show under the
-craft is washed out by the plume and the bloom around it. Ours' darkness is now the measured `1 - 159/255`
+craft is most likely washed out by the plume and the bloom around it (the dump proves the wipe quad ran, not that
+those pixels were stencil-marked, and the cause was not isolated: ours with shadows off matches the frame better). Ours' darkness is now the measured `1 - 159/255`
 (`oag_render::shadow::HULL_DARKNESS`, was `0.35`). Residual: ours' plume bloom is narrower than the original's
 at tick 0 (the original's white-out reaches about twice as wide), so a strip of the polygon still shows on either
 side.
@@ -85,15 +98,21 @@ side.
 
 Ours renders at tick 0 with no exhaust history, so the plume is cold. `--field-warmup` replays the exhaust at the
 captured velocity, but it wanted a field file with opponents, and it left each craft at the replay's velocity and
-thrust, which moved the frame (the camera reads them). Both fixed: a player-only `--field-from` is accepted (a Zone
+thrust, which moved the frame (what in the draw reads them was not identified). Both fixed: a player-only `--field-from` is accepted (a Zone
 run has no opponents) and `warm_up_field` hands the velocity and thrust back
 (`field_capture_ground_truth.rs`). Zone pairs re-rendered with a one-row `field.csv` (slot 0 and its `vel_*` from
 the pair's `trace.csv`) and the original's lap: mean grey difference Moa z50 10.58 to 7.98, Talon's z8 17.68 to
-15.18 (their own metric reads about 0.5 lower). `psp-pulse-pair.py --zone` owns the pair flow; it should write that
+15.18 (their own metric reads about 0.5 lower). **It reaches every warm-up pair:** `pulse-psp-race/talons-alongside`
+re-rendered from its recorded flags and files, mean grey difference 39.7 before, 22.4 after; `hd-race/talons-pack`
+(1920x1080 taken to 480x270) 54.1 before, 37.7 after - the existing pairs were rendered with the craft left at the
+replay's velocity, which is why they sit so far from the originals. `psp-pulse-pair.py --zone` owns the pair flow; it should write that
 `field.csv` and the lap into `--hud-state` (handover thread).
 
 ## Cross-title (static)
 
 - **Pure PSP:** no `MSC_SRAPIER` string in `BOOT.BIN`, so no class ladder of this shape (checked, differs); it has
-  a `SubWeapon` widget too (`0x08a7a244`), its Zone text unmeasured.
+  a `SubWeapon` widget too (`0x08a7a244`), its text unmeasured. The lap counter and the speed readout are
+  title-independent reads of `PLAYER_HUD` (not checked in Pure's own binary). Pure authors no shadow pass
+  (`docs/rendering/shadows.md`), so the darkness measurement is Pulse's alone. The warm-up fix is engine-side and
+  applies to every title's pairs.
 - **HD:** its ladder is stage-keyed (`oag_hd::hud::ZONE_SPEED_CLASSES`, checked, differs in the key, the same names).

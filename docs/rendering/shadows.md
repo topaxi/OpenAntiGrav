@@ -930,9 +930,11 @@ Each step is a landing that can be reviewed on its own.
    marked pixels keep `159/255`, so the constant is `1 - 159/255` = `0.3765`.
    Same frame, same finding: **the original runs the whole shadow pass in
    Zone** (the attached occluder is called every frame, `parent+0x94->+0x2f8`
-   reading 1.6 to 2.1 live). Its picture shows no dark polygon under the craft
-   because the plume and bloom there are white, on this circuit's pale track and
-   on the mid-race Talon's frame alike - not because Zone turns the shadow off.
+   reading 1.6 to 2.1 live). Its picture shows no dark polygon under the craft,
+   most likely because the plume and bloom there are white (a mid-race Talon's
+   frame shows none either); the dump proves the wipe ran, not which pixels it
+   marked, and ours with shadows off matches the frame better. Zone does not turn
+   the shadow off.
 
    **HD landed 2026-09-04 too, and its mechanism is a different one.** 2048:
    the `track_proximity_shadow` pair plus the precomputed environment shadows,

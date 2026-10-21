@@ -88,10 +88,6 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_uv: None,
     // Zone's speed-class line, read off `FUN_0881ad10` (`Hud_UpdateZoneSpeedClass`).
     zone_speed_classes: Some(ZONE_SPEED_CLASSES),
-    // Measured on PPSSPP (USA PSP, two Zone states): `SubWeapon` (hud+0x248) is
-    // bound in `Hud_BindWidgets` and written by nothing; its buffer holds the
-    // formatter's scratch. Time Trial authors the same widget, unmeasured.
-    zone_stale_text: Some(("SubWeapon", "1000000000.00")),
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
     // Read off `FUN_0881a3e0`: the speed over `700.0`, then the bar's `0.04` floor.

@@ -180,7 +180,6 @@ const TITLE: &Title = &Title {
         pickup_icon_backdrop_model: None,
         pickup_icon_uv: None,
         zone_speed_classes: None,
-        zone_stale_text: None,
         shield_percent: true,
         speed_full_kmh: 600,
         // Unread here too - this fixture is about archive discovery, not

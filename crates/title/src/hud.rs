@@ -494,15 +494,6 @@ pub struct HudArt {
     /// because the one title that has both recovered them from different
     /// places.
     pub zone_speed_classes: Option<&'static ZoneSpeedClasses>,
-    /// A text widget of the Zone layout that nothing on the disc ever writes, and
-    /// the text its buffer was left holding: `(widget name, text)`.
-    ///
-    /// Pulse's `SubWeapon` is bound and never updated in Zone, and its buffer
-    /// reads `1000000000.00` (the float formatter's scratch, found live on the
-    /// original, byte for byte on both Zone captures), so the original draws that
-    /// line under the class name for the whole run. `None` where no such widget
-    /// has been measured.
-    pub zone_stale_text: Option<(&'static str, &'static str)>,
     /// Whether `ShieldBarText` carries a `%` after its digits.
     ///
     /// Pulse's own reference frame reads `100%`, which is what

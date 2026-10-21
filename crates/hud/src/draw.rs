@@ -138,7 +138,6 @@ pub(super) fn text_for(
     place_shown: bool,
     speed_unit: bool,
     classes: Option<&oag_title::ZoneSpeedClasses>,
-    stale_text: Option<(&str, &str)>,
     shield_percent: bool,
     position_combined: bool,
 ) -> Option<String> {
@@ -350,13 +349,6 @@ pub(super) fn text_for(
             .time_gap
             .as_ref()
             .and_then(|line| line.text(strings)),
-
-        // Zone only (`zone > 0` like the counters): the widget the original binds and
-        // never writes, drawn with the text its buffer holds. See
-        // [`oag_title::HudArt::zone_stale_text`].
-        name if readout.zone > 0 && stale_text.is_some_and(|(widget, _)| widget == name) => {
-            stale_text.map(|(_, text)| literal(text))
-        }
 
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {
@@ -962,7 +954,6 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 place_shown,
                 speed_unit,
                 cx.art.zone_speed_classes,
-                cx.art.zone_stale_text,
                 cx.art.shield_percent,
                 position_combined,
             )
