@@ -19,6 +19,9 @@ use oag_input::Keyboard;
 #[derive(Debug, Default)]
 pub struct HeldButtons {
     keyboard: Keyboard,
+    /// The script's analog axes for this tick (`stick_x`, `stick_y`, `airbrake_left`,
+    /// `airbrake_right`), which a keyboard cannot express; `None` without a script.
+    axes: Option<[f32; 4]>,
 }
 
 impl HeldButtons {
@@ -37,12 +40,23 @@ impl HeldButtons {
                 keyboard.set_key(&key, true);
             }
         }
-        Self { keyboard }
+        Self {
+            keyboard,
+            axes: None,
+        }
     }
 
     /// One tick's snapshot.
     pub fn snapshot(&mut self) -> InputSnapshot {
-        self.keyboard.snapshot()
+        let mut snapshot = self.keyboard.snapshot();
+        if let Some([stick_x, stick_y, airbrake_left, airbrake_right]) = self.axes {
+            snapshot.stick_x = stick_x;
+            snapshot.stick_y = stick_y;
+            snapshot.airbrake_left = airbrake_left;
+            snapshot.airbrake_right = airbrake_right;
+            snapshot = snapshot.sanitised();
+        }
+        snapshot
     }
 
     /// Makes exactly `mask`'s buttons held, releasing everything else.
@@ -88,14 +102,11 @@ impl HeldButtons {
     /// existed - a scripted `--trace-out` run used to write a plausible CSV
     /// of a craft that never moved, with no error.
     ///
-    /// **Only the script's `buttons` reach the keyboard path** - `stick_x`,
-    /// `stick_y` and the two `airbrake_*` fields a script can author are not
-    /// read here, the same gap `advance_one_tick` already had. A script
-    /// naming `stick_x=0.5` drives exactly as `left` does through this path,
-    /// where `oag-trace run`/`replay` (`crates/trace/src/replay.rs`) applies
-    /// the analog value directly. Not fixed here - the axes come out of
-    /// [`Self::snapshot`]'s keyboard mapping, which has no room for an
-    /// authored analog value at all.
+    /// A script's analog axes (`stick_x=0.5`) ride on top of its buttons: the keyboard path
+    /// derives the digital axes, and the script's own values replace them in
+    /// [`Self::snapshot`], so a half-deflected stick reaches the race as `oag-trace run` applies
+    /// it. Before 2026-10-21 only the buttons reached the keyboard and `stick_x=0.7` steered
+    /// nothing.
     pub fn advance(
         &mut self,
         script: Option<&oag_trace::script::Script>,
@@ -104,8 +115,16 @@ impl HeldButtons {
         tick: u32,
     ) {
         if let Some(script) = script {
-            self.set_held(script.at(tick as usize).buttons);
+            let state = script.at(tick as usize);
+            self.set_held(state.buttons);
+            self.axes = Some([
+                state.stick_x,
+                state.stick_y,
+                state.airbrake_left,
+                state.airbrake_right,
+            ]);
         } else {
+            self.axes = None;
             self.pulse(pressed, held, tick.is_multiple_of(2));
         }
     }

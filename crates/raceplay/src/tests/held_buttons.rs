@@ -139,6 +139,20 @@ fn advance_with_a_script_drives_set_held() {
     assert!(snap.stick_x < 0.0, "left must steer negative x");
 }
 
+/// A script's analog axes reach the snapshot: `stick_x=0.7` steers 0.7, not 0 (it once steered
+/// nothing, as only the buttons were read), and the axes fall back to the keyboard's without one.
+#[test]
+fn advance_with_a_script_applies_its_analog_axes() {
+    let script = Script::parse("2 cross stick_x=0.7 airbrake_left=0.4\n").expect("parses");
+    let mut held = HeldButtons::new(0);
+    held.advance(Some(&script), 0, 0, 0);
+    let snap = held.snapshot();
+    assert_eq!(snap.stick_x, 0.7);
+    assert_eq!(snap.airbrake_left, 0.4);
+    held.advance(None, 0, 0, 0);
+    assert_eq!(held.snapshot().stick_x, 0.0);
+}
+
 /// With no script, `advance` must pulse **`pressed`**, not `held` - the
 /// two-argument order `capture::advance_one_tick` and `write_trace` both
 /// call it with. A swap would silently turn every `--press` into a no-op and
