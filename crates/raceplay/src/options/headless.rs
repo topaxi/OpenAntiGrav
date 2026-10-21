@@ -201,6 +201,8 @@ impl Setup {
             #[cfg(feature = "view")]
             capture_hud: None,
             #[cfg(feature = "view")]
+            world_clock_offset: 0.0,
+            #[cfg(feature = "view")]
             camera_override: None,
         }
     }

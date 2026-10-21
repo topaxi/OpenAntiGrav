@@ -107,6 +107,35 @@ def race_field_module():
     return mod
 
 
+#: `Mesh_UpdateTextureTransforms` (a0 = mesh): the world meshes' texture animation updater, texture-animation.md.
+UPDATE_TEXTURE_TRANSFORMS = 0x0890E160
+
+
+def world_clock_offset(port, hits=40):
+    """The world meshes' animation clock minus the HUD's race clock, in seconds, read live.
+
+    Every world mesh is fed one clock that began when the circuit loaded, so it stands at the HUD clock plus the
+    flyby and countdown before GO (16.2 s on Fort Gale's state: `scripts/psp-world-anim-clock.py`), not at the HUD
+    clock. The most common non-zero `mesh+0x40` over `hits` updater calls is that clock (other meshes hold 0 or a
+    clock of their own), read with the HUD clock at the same stop. Runs the CPU for the hits, so call it after
+    everything else has been captured from the state.
+    """
+    from collections import Counter
+    from ppsspp_debugger import Debugger
+    dbg = Debugger(port)
+    seen = Counter()
+    for _ in dbg.each_hit(UPDATE_TEXTURE_TRANSFORMS, hits, timeout=20.0):
+        regs = dbg.call("cpu.getAllRegs")
+        a0 = dict(zip(*[next(c for c in regs["categories"] if c["name"] == "GPR")[k] for k in ("registerNames", "uintValues")]))["a0"]
+        t = dbg.read_f32(a0 + 0x40)
+        if t > 0.0:
+            seen[round(t - dbg.read_f32(CLOCK_ADDRESS), 3)] += 1
+    if not seen:
+        return None
+    (offset, n), = seen.most_common(1)
+    return offset, n, sum(seen.values())
+
+
 def camera_craft_distance(row):
     return ce.math.dist([row["cam_pos_" + a] for a in "xyz"], [row["pos_" + a] for a in "xyz"])
 
@@ -300,6 +329,17 @@ def main():
     pair.rec["original"]["fov_ram_at_stop"] = ram_fov
     pair.check("the original's fov in RAM at the stop is the view's authored fov plus the speed term (4 ticks of drift allowed)",
                abs(ram_fov - fov) < 1.0, "RAM %.3f, law %.3f" % (ram_fov, fov))
+    world = world_clock_offset(args.port)
+    pair.check("the world meshes' animation clock was read", world is not None and world[1] * 2 >= world[2],
+               "%s" % (world,))
+    if world is not None:
+        offset, n, total = world
+        pair.rec["original"]["world_clock_offset_s"] = offset
+        pair.rec["original"]["world_clock_note"] = ("world meshes' animation clock minus the HUD race clock, the most common "
+                                                    "non-zero value (%d of %d updater hits), live" % (n, total))
+        ours_offset = offset - GO_TICK / 60
+        flags += ["--world-clock-offset", "%.3f" % ours_offset]
+        pair.rec["ours"]["world_clock_offset_s"] = ours_offset
     pair.rec["original"]["camera"] = {"pos": [theirs_row["cam_pos_" + a] for a in "xyz"],
                                       "fwd": [theirs_row["cam_fwd_" + a] for a in "xyz"], "source": "psp-trace.py --camera"}
     pair.rec["original"]["shield"] = theirs_row.get("shield")

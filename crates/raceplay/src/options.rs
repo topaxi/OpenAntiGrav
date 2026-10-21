@@ -337,6 +337,12 @@ pub struct Options {
     pub field: Vec<Pose>,
     /// The HUD's place, lap and clocks, imposed. See [`CaptureHud`]; `None` for every race.
     pub hud: Option<CaptureHud>,
+    /// Seconds added to the world meshes' texture-animation clock, which is the race's own tick
+    /// count over 60 otherwise. **A capture aid**: the original feeds every world mesh a clock that
+    /// started when the circuit loaded, so it reads the HUD clock plus whatever came before GO (the
+    /// flyby and the countdown), and a frame of it is only comparable when ours is put at the same
+    /// phase. Read off the original's RAM, never derived; `0.0` is every race.
+    pub world_clock_offset: f32,
     /// Render from this camera instead of the chase camera.
     ///
     /// The other half of the same capture aid: a ship pose replicates *what*
@@ -801,6 +807,9 @@ pub struct Setup {
     /// [`Options::hud`], carried through to the readout.
     #[cfg(feature = "view")]
     pub capture_hud: Option<CaptureHud>,
+    /// [`Options::world_clock_offset`], carried to the scene's animation clock.
+    #[cfg(feature = "view")]
+    pub world_clock_offset: f32,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
     #[cfg(feature = "view")]

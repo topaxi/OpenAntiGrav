@@ -870,6 +870,14 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S]]]")]
     pub(crate) hud_state: Option<String>,
 
+    /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon
+    /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that began
+    /// when the circuit loaded, so a frame of it reads the HUD clock plus the flyby and the countdown before GO;
+    /// `scripts/psp-world-anim-clock.py` reads that offset off a state. Unlike `--anim-seconds` it leaves the GO
+    /// board and the HUD on their own clocks.
+    #[arg(long, value_name = "SECONDS", allow_negative_numbers = true)]
+    pub(crate) world_clock_offset: Option<f32>,
+
     /// Which tick of `--pose-from` to take the pose off.
     #[arg(long, default_value_t = 0, requires = "pose_from")]
     pub(crate) pose_tick: u64,

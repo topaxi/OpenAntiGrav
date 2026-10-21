@@ -69,6 +69,8 @@ pub struct RaceView {
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].
     pub(super) capture_hud: Option<crate::CaptureHud>,
+    /// Seconds added to the world meshes' animation clock. See [`crate::Options::world_clock_offset`].
+    pub(super) world_clock_offset: f32,
     /// The circuit's pre-race flyby, `None` where it has none or a pose was imposed. See
     /// [`super::intro_camera`].
     pub(super) intro: Option<super::intro_camera::IntroCamera>,

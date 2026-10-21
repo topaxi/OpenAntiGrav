@@ -560,6 +560,13 @@ impl Race {
         }
     }
 
+    /// The clock the world meshes' texture animation runs on: [`Self::clock_seconds`] plus the capture's
+    /// [`crate::Options::world_clock_offset`] (zero in every race).
+    #[must_use]
+    pub fn world_clock_seconds(&self) -> f32 {
+        self.clock_seconds() + self.view.world_clock_offset
+    }
+
     /// The player's speed along their own nose this tick, the term
     /// [`Self::vertical_fov`] widens the field by.
     pub(super) fn tick_forward_speed(&self) -> f32 {
