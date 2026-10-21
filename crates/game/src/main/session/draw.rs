@@ -311,6 +311,7 @@ impl Session {
         let timing_first_race_frame =
             self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
         let resume_art = oag_game::pause::art_seconds(self.pause, self.go_at, self.wall);
+        self.phases.mark(super::phases::Phase::Setup);
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, ui_target, rect);
@@ -674,6 +675,7 @@ impl Session {
         // Only the race has one; every other stage that draws straight into
         // this target already did, above - **except the menus**, which draw
         // here instead. See the block below.
+        self.phases.mark(super::phases::Phase::Scene);
         if let Stage::Race(stage) = &mut self.stage {
             // `Framebuffer::output_size`, not `self.gpu.output.size()`: the two
             // usually agree, since `resize_output` above just asked for
@@ -856,6 +858,7 @@ impl Session {
         // own corners, so the overlay gets a full-surface viewport and a grid
         // as wide as the window's aspect (`perf::grid`), with no letterbox.
         let surface = self.gpu.output.size();
+        self.phases.mark(super::phases::Phase::Compose);
         let overlay_space = perf::grid(surface);
         let overlay_rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         self.overlay.set_space(overlay_space);
@@ -969,8 +972,10 @@ impl Session {
             timer.resolve(&mut encoder);
         }
 
+        self.phases.mark(super::phases::Phase::Overlay);
         let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
+        self.phases.mark(super::phases::Phase::Submit);
         // **After the submit**, which is what makes it safe to start a map on
         // the buffer this frame just copied into. What comes back is a frame or
         // more old and says which frame it was - so a reading from a frame that
@@ -982,8 +987,10 @@ impl Session {
         // Unconditional, unlike the `submit_start` above it: this one is both
         // the first race frame's diagnostic *and* the second half of the
         // `PRESENT` row, which every frame contributes to.
+        self.phases.mark(super::phases::Phase::Readback);
         let present_start = web_time::Instant::now();
         self.gpu.queue.present(frame);
+        self.phases.mark(super::phases::Phase::Present);
         present_seconds += present_start.elapsed().as_secs_f32();
         if timing_first_race_frame {
             debug!(

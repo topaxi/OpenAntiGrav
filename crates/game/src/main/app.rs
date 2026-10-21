@@ -483,6 +483,7 @@ impl App {
             cpu_cost: perf::Meter::new(),
             present_cost: perf::Meter::new(),
             frame_timing: Default::default(),
+            phases: crate::session::phases::PhaseClock::new(self.dev.frame_log),
             drs_unreachable_said: false,
             window_ahead: Default::default(),
             frame_index: 0,
