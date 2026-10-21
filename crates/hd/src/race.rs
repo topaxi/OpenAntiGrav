@@ -907,7 +907,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // Not read on HD: its flag word (`craft+0x264`) numbers its bits differently and the
     // mapping is open (`docs/ghidra/functions/psp-pulse-usa/craft-flags.md`), so HD inherits Pulse's.
     eliminator_wrong_way_kill: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
-    sideshift_grid_gate: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // `Ship_UpdateSideshiftInput` (`0x000d9e18`) skips the gesture block while `craft+0x264 & 2`
+    // (`0x000da04c`). Live on RPCS3: double taps of L1, R1, L2 and R2 through the countdown arm
+    // no tap window and no shift; after GO, L2 and R2 set `0x80` and `0x100`
+    // (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
+    sideshift_grid_gate: oag_title::pre_race::Sourced::measured(true),
     turbo_running_laws: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
     // `Craft_Update` (`0x000f1958`) scales `flight_gravity` by the class table. Under player
     // input the airborne vy residual is `-0.02` to `+0.02` per frame on PHANTOM (scale `1.2`) and
@@ -1014,6 +1018,15 @@ mod tests {
         assert_eq!(
             CRAFT_LAWS.drag_ground,
             oag_title::pre_race::Sourced::measured(-0.005)
+        );
+    }
+
+    /// HD withholds the sideshift gestures on the grid, read and watched live.
+    #[test]
+    fn the_sideshift_grid_gate_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.sideshift_grid_gate,
+            oag_title::pre_race::Sourced::measured(true)
         );
     }
 
