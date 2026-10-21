@@ -341,6 +341,18 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     sway: Some(oag_title::pre_race::Sourced::measured(
         oag_title::hud::HudSway { x_per_lean: -15 },
     )),
+    // `additional_definition.xml`'s `Slider name="Safe Area Setting" default="90%"` (`minSlide="80"
+    // maxSlide="100" incSlide="2"`), read off the disc. That the HUD is drawn at the value / 100
+    // is measured on one frame (the savestates the comparison pairs come from hold 96), not proven:
+    // see `oag_title::hud::SafeArea`.
+    safe_area: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::SafeArea {
+            default_percent: 90,
+            min_percent: 80,
+            max_percent: 100,
+            step_percent: 2,
+        },
+    )),
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.

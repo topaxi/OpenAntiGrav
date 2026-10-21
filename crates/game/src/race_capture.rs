@@ -280,6 +280,8 @@ pub struct CaptureOptions {
     pub touch_demo: Option<crate::touch_controls::Demo>,
     /// `[graphics] hud_scale`, which only a raster HUD obeys.
     pub hud_scale: oag_display::display::HudScale,
+    /// `[graphics] hud_safe_area`, which only a title with a `Safe Area Setting` obeys.
+    pub hud_safe_area: Option<u8>,
     /// What casts a shadow in the captured frame: `--shadows`.
     ///
     /// Honoured the same way [`Self::motion_blur`] is, and here for the same
@@ -1260,7 +1262,9 @@ pub fn capture(
                 Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
             },
             None if !race.hud_shown() => {}
-            None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale) {
+            None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale)
+                .map(|built| built.map(|o| o.with_safe_area(options.hud_safe_area)))
+            {
                 Ok(Some(mut overlay)) => {
                     // No campaign cell on this path (`campaign_medal: None` above):
                     // no ladder, so `RECORD`.

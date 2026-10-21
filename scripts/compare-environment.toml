@@ -109,6 +109,11 @@ profile_key = "Wipeout HD (PS3)"
 # read (Normal and Extreme draw the same indicator); `on` is Extreme. Pairs pose-hold, so the
 # assist forces do not move the craft.
 pilot_assist = "on"
+# The original's `Safe Area Setting` in the save the thirteen HD states were taken from: `96.0` read
+# live from the option's global (`+0x104` of the object behind the TOC slot `0x8a5bb4`), 2026-10-21,
+# `hd-hud-leftovers`. The disc's own default is 90 (`default="90%"`), which ours uses when nothing
+# is set: the pairs pin the save's value so ours is drawn at what the original ran with.
+hud_safe_area = 96
 [platform.hd-fury.emulator]
 name = "RPCS3"
 renderer = "Vulkan"

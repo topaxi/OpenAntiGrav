@@ -30,8 +30,14 @@ on the recorded rows and `Basis::LeftUpForward`, not on a new capture).
   up axis) and the y term is **drawn as zero**: [ship-lean.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md).
   Still open: **`body+0x1b0`** (its writer and meaning; it feeds the anchor and is what makes the
   y bumps, up to +/-20 px) and `ship+0x6b00`, then the `"InGame"` screens (pause menu), which are
-  not drawn through `oag-hud`; and **the instance's whole-HUD scale** (`0.966` about the centre,
-  HD's `Safe Area Setting`?) against ours at `1.0`.
+  not drawn through `oag-hud`. ~~**The whole-HUD scale** (`0.966`)~~ Ported 2026-10-21
+  (`hd-hud-leftovers`): it is HD's `Safe Area Setting` (the saves hold 96), `HudArt::safe_area`,
+  `[graphics] hud_safe_area`, default 90 (the disc's), pairs pin 96
+  ([hd-hud.md](../../docs/formats/hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21)).
+  Still open there: the setting's consumer is unread (poking 90 into the global did not move the HUD).
+  The y term was looked at again and does not fit a wiring lane: it needs the `body+0x1b0` writer
+  and a port of the second rig's spring; the original's lap hexagon sits about 15 px (display) higher
+  than ours on `hd-race/talons-pack`, which is that term.
 - **Pulse's first-filter `+/-10.0` terms** (`entity+0x8a4`/`+0x8a8`) are the offsets
   `psp_trace_fields.py` records as `ss_shift_l`/`ss_shift_r`, so likely the sideshift kicking
   the cockpit lean; HD's twin reads its sideshift timers at the same place. Not captured.

@@ -1200,10 +1200,66 @@ moved a 1280x720 frame by 13.3 px (the follower is the one the hull is drawn wit
 "20 px lower" of the frame above) is read but drawn as zero: two of its inputs are unread. The
 evidence, the writer and the measurements are in
 [ps3-hdfury-eu/ship-lean.md](../ghidra/functions/ps3-hdfury-eu/ship-lean.md#the-hud-sway-read-and-measured-2026-10-21-hd-cockpit-lean-hd-hud-sway).
-One more finding on the way: that RPCS3 instance draws the whole HUD at about `0.966` of the frame about
-its centre (the widgets sit `18` px nearer the middle than ours), which is probably HD's `Safe Area Setting`
-option (a user setting, [hd-frontend.md](hd-frontend.md) open item 12) rather than the layout; ours is at
-`1.0`, open.
+The same instance drew the whole HUD at about `0.966` of the frame about its centre (the widgets sat `18` px
+nearer the middle than ours): that is HD's `Safe Area Setting`, see the next section.
+
+## The whole HUD is drawn at the Safe Area Setting (`hd-hud-leftovers`, 2026-10-21)
+
+**The option.** `additional_definition.xml` (DATA06's copy, the one the live Game Options screen is) authors
+`<Slider name="Safe Area Setting" global="Safe Area Setting" save="true" default="90%">` with `minSlide="80"
+maxSlide="100" incSlide="2"`, labelled `Screen Size` (`OPT_SCREEN_SIZE`). The disc's default is **90**.
+**The save is at 96.** Restoring `hd-timetrial-talons-harimau-classic-start` and `hd-race-talons-venom-pack`
+on a private RPCS3 and reading the option's global (the string `Safe Area Setting` is at `0x0077a680`; the
+TOC is `0x008ad4d8`, read off the `.opd` entry of `0x00029f08`; the slot `-0x7924(r2)` is `0x008a5bb4`, a
+pointer to a pointer to an object whose `+0x104` and `+0x108` hold `96.0` as big-endian floats, in both
+saves) gives `96`. The maintainer's profile therefore ran at 96, and the correlation of the earlier
+lane (`0.964`-`0.968`) is `96 / 100` to within its noise. Confidence of "the HUD is drawn at value / 100":
+**70**, one value of one setting; the consumer is **unread** (poking `90.0` into both floats and running
+Restart Race did not move the HUD, so either the HUD scale is fixed at race load from a copy elsewhere or the
+global is not what it reads; a float-pair scan for `0.96`, `0.966` and `0.954` found nothing, `0.9` pairs are
+too common to tell).
+
+**Ours.** `oag_title::hud::SafeArea` on `HudArt::safe_area` (HD **measured** off the disc XML; Pulse, Pure,
+2048 and Omega `None`), `[graphics] hud_safe_area` in the settings file (percent, `None` = the title's
+default 90, held to the slider's range and step; no menu row, taken at race load), and one scale about the
+centre of the layout's grid at the end of `oag_game::hud_overlay::Overlay::draw` (`safe_area_frame`).
+**Default 90, the disc's**: an HD player's HUD is now 10% smaller than before, as the original's is on a fresh
+profile. The comparison profile (`scripts/compare-environment.toml`, `hd-fury`) pins `hud_safe_area = 96`, the
+save's value, so a pair draws ours at what the original ran with. Not applied to a split screen
+(`draw_views`: the original's split layouts are not measured at a safe area).
+
+**Result on the thirteen HD time-trial pairs plus `hd-race/talons-pack`** (1920x1080, the RPCS3 resume toast
+masked, grey RMSE of the region against the original, before to after; whole-frame figure is the pair tool's
+mean grey):
+
+| pair | lap | record | clock | speed | frame (pair tool) |
+| --- | --- | --- | --- | --- | --- |
+| anulpha-pass | 72.9 to 30.9 | 72.1 to 48.2 | 63.2 to 30.1 | 63.6 to 27.2 | 23.49 to 19.54 |
+| chenghou-project | 70.3 to 21.5 | 56.4 to 24.9 | 61.9 to 16.9 | 66.2 to 14.7 | 13.57 to 9.00 |
+| talons | 62.9 to 18.4 | 70.1 to 29.6 | 57.6 to 19.6 | 52.3 to 11.3 | 15.97 to 12.19 |
+| vineta-k | 68.0 to 43.2 | 83.7 to 66.7 | 64.4 to 17.4 | 59.3 to 14.7 | 23.17 to 19.65 |
+| hd-race/talons-pack | 87.6 to 87.9 | 101.9 to 96.4 | 73.5 to 75.9 | 101.2 to 91.7 | 53.04 to 53.02 |
+
+(Every pair's mean grey fell, 14 of 14; the full table is in the lane's report.) The pack race's HUD regions
+barely move: the frames differ in scene and in what the HUD shows (the original is mid-race with a weapon and damage readout, ours at the grid), and its save holds 96 as well. One
+caveat on the signed frame mean (ours minus the original's): it moved by more than `0.1` on three pairs
+(`anulpha-pass` `-9.11` to `-9.31`, `sol-2` `-2.06` to `-2.28`, `vineta-k` `-2.06` to `-2.19`) because a
+smaller HUD covers less of a bright scene; that is the scene, and the absolute grey difference fell on all of
+them.
+
+**Not the top plate.** The earlier claim that the top plate and the pickup hexagon's outline draw "opaque and
+near-black" in ours, where the original's are light translucent grey, **is false on the current build**: a
+crop of the `talons` pair at 2x shows both translucent grey with the scene through them on both sides, and
+the visible gap was the scale and the position. The `ring.png` comparison it came from was a different
+scene on an older build.
+
+**Cross-title.** Omega: **checked, differs** - its patch front end (`data09.psarc`
+`additional_definition.xml`) authors no `Safe Area Setting` slider, so `safe_area` is `None` and its HUD is
+unscaled. 2048: **checked, differs** - its Vita packages carry no `additional_definition.xml` (a different
+front end), `None`. Pulse and Pure: no option. The front end's own `0.904` scale
+([campaign-screens](../ui/campaign-screens.md)) is **not** explained by this: a front end at the value / 100
+rule would read 0.96 on the same save, so either the setting differed on that earlier day's profile (90
+reads `0.904`) or the front end scales differently; open.
 
 ## See also
 

@@ -2442,7 +2442,10 @@ none has been taken yet:**
     Measured 2026-10-08 on the maintainer's RPCS3 save: **not 1:1** - scale
     0.904, offset about (+150, -8), see `docs/ui/campaign-screens.md`'s "The
     layout scale". Open: whether that is `Safe Area Setting` at a non-default
-    value (it is a user option) or the default.
+    value (it is a user option) or the default. 2026-10-21: the option is authored `default="90%"`,
+    range 80-100 step 2, and the save the HUD pairs came from holds 96, which draws the HUD at
+    about 0.96 ([hd-hud.md](hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21));
+    the front end's 0.904 is what 90 would give but is still not read off a fresh profile.
 
 **Not attempted here:**
 

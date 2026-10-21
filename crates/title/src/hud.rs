@@ -671,6 +671,9 @@ pub struct HudArt {
     /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
     /// HUD fixed on the screen. See [`HudSway`].
     pub sway: Option<crate::pre_race::Sourced<HudSway>>,
+    /// The player's `Safe Area Setting`, which draws the whole HUD smaller about the screen's
+    /// centre: `None` where the title has no such option. See [`SafeArea`].
+    pub safe_area: Option<crate::pre_race::Sourced<SafeArea>>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -750,6 +753,42 @@ pub struct HudSway {
     /// (`oag_physics::ShipState::steer_lean_follower`): HD's `-15.0` literal, so a stick to the right
     /// slides the HUD to the left.
     pub x_per_lean: i16,
+}
+
+/// A title's `Safe Area Setting`: a slider in percent whose value is how much of the screen the
+/// HUD uses, the whole HUD drawn at `percent / 100` about the screen's centre.
+///
+/// HD authors the slider in its Game Options (`additional_definition.xml`, `Slider
+/// name="Safe Area Setting" default="90%"`, `minSlide="80" maxSlide="100" incSlide="2"`). The
+/// scale reading is inferred from one live read: the save the HD comparison pairs were restored
+/// from holds `96.0` in the option's global (`+0x104` of the object behind the TOC slot at
+/// `0x8a5bb4`), and a correlation of that frame's HUD against ours puts the HUD at
+/// `0.964`-`0.968` of the screen. Poking `90.0` into the global and restarting the race did
+/// not move the HUD, so the consumer is unread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SafeArea {
+    /// The value a fresh profile starts at.
+    pub default_percent: u8,
+    /// The slider's lowest value.
+    pub min_percent: u8,
+    /// The slider's highest value.
+    pub max_percent: u8,
+    /// The slider's step.
+    pub step_percent: u8,
+}
+
+impl SafeArea {
+    /// The HUD's scale for a player's `percent` (`None` for the title's default): clamped to the
+    /// slider's range and snapped to its step, as a slider would hold it.
+    #[must_use]
+    pub fn scale(self, percent: Option<u8>) -> f32 {
+        let value = percent
+            .unwrap_or(self.default_percent)
+            .clamp(self.min_percent, self.max_percent);
+        let step = self.step_percent.max(1);
+        let snapped = self.min_percent + (value - self.min_percent) / step * step;
+        f32::from(snapped) / 100.0
+    }
 }
 
 /// The speed and shield bars' fill law: the tip of the fill is where the marker
