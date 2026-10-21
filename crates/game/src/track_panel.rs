@@ -14,11 +14,13 @@
 use oag_raceplay::track_panel::Assets;
 use oag_ui_screens::track_panel::Progress;
 
-/// Draws the panel: two renderers, because a renderer binds one face and the name is `Menu`,
-/// the paragraph `Default`.
+/// Draws the panel: three renderers. A renderer binds one face (the name is `Menu`, the paragraph
+/// `Default`), and its quad buffer is written once per frame before any pass runs, so each draw
+/// call of the frame needs a renderer of its own: the top half, the bottom bar and the paragraph.
 pub struct Overlay {
     assets: Assets,
     frame: crate::render::Renderer,
+    bottom: crate::render::Renderer,
     body: crate::render::Renderer,
 }
 
@@ -50,6 +52,14 @@ impl Overlay {
             assets.menu_font.clone(),
             &assets.sheet,
         )?;
+        let bottom = crate::render::Renderer::new(
+            device,
+            queue,
+            format,
+            None,
+            assets.menu_font.clone(),
+            &assets.sheet,
+        )?;
         let body = crate::render::Renderer::new(
             device,
             queue,
@@ -61,6 +71,7 @@ impl Overlay {
         Ok(Self {
             assets,
             frame,
+            bottom,
             body,
         })
     }
@@ -78,19 +89,53 @@ impl Overlay {
         if !progress.visible() {
             return;
         }
-        let lists = self.assets.draw_lists(progress);
-        let load = wgpu::LoadOp::Load;
-        // The name is the frame list's last draw; both texts are clipped to the wipe.
-        let name = lists.frame.len().saturating_sub(1);
+        let mut lists = self.assets.draw_lists(progress);
+        // **Chosen, not measured** (the original ran at one aspect): on a window taller than the
+        // authored 480:272 the top bar is flush to the top edge and the bottom bar to the bottom
+        // edge, each drawn against a viewport of the authored shape at that edge. Wider, or equal,
+        // both share the one centred viewport as before.
+        let (x, y, w, h) = viewport;
+        let fit = w * oag_ui_screens::track_panel::SCREEN_HEIGHT / 480.0;
+        let (top_vp, bottom_vp) = if h > fit {
+            ((x, y, w, fit), (x, y + h - fit, w, fit))
+        } else {
+            (viewport, viewport)
+        };
+        // Wider than authored: the bars repeat outward to the window's edges instead.
+        let visible_width = oag_ui_screens::track_panel::SCREEN_HEIGHT * w / h.max(1.0);
+        lists.extend_width((visible_width - 480.0) * 0.5);
+        let split = |keep: bool| -> Vec<oag_ui::frontend::Draw> {
+            lists
+                .frame
+                .iter()
+                .zip(&lists.frame_bottom)
+                .filter(|(_, bottom)| **bottom == keep)
+                .map(|(d, _)| d.clone())
+                .collect()
+        };
+        // The name is the top list's last draw; both texts are clipped to the wipe.
+        let top = split(false);
+        let lower = split(true);
+        let name = top.len().saturating_sub(1);
         self.frame.render_with(
-            load,
+            wgpu::LoadOp::Load,
             device,
             queue,
             encoder,
             view,
-            &lists.frame,
-            viewport,
+            &top,
+            top_vp,
             Some((name, 0.0, lists.right)),
+        );
+        self.bottom.render_with(
+            wgpu::LoadOp::Load,
+            device,
+            queue,
+            encoder,
+            view,
+            &lower,
+            bottom_vp,
+            None,
         );
         self.body.render_with(
             wgpu::LoadOp::Load,
@@ -99,7 +144,7 @@ impl Overlay {
             encoder,
             view,
             &lists.body,
-            viewport,
+            bottom_vp,
             Some((0, 0.0, lists.right)),
         );
     }
