@@ -567,6 +567,12 @@ impl Race {
         self.clock_seconds() + self.view.world_clock_offset
     }
 
+    /// The capture's [`crate::Options::world_clock_offset`], which only the world meshes' clock carries.
+    #[must_use]
+    pub fn world_clock_offset(&self) -> f32 {
+        self.view.world_clock_offset
+    }
+
     /// The player's speed along their own nose this tick, the term
     /// [`Self::vertical_fov`] widens the field by.
     pub(super) fn tick_forward_speed(&self) -> f32 {

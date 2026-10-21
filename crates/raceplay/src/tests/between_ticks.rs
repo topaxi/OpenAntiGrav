@@ -319,6 +319,19 @@ fn the_clock_runs_between_ticks_only_while_the_world_steps() {
 }
 
 #[test]
+fn the_world_meshes_clock_is_the_race_clock_plus_the_captures_offset_and_nothing_else() {
+    let mut race = gliding_race();
+    race.tick(&PlayerInputs::none());
+    // A race has no offset: the two clocks are one.
+    assert_eq!(race.world_clock_offset(), 0.0);
+    assert_eq!(race.world_clock_seconds(), race.clock_seconds());
+    race.view.world_clock_offset = 11.605;
+    assert!((race.world_clock_seconds() - race.clock_seconds() - 11.605).abs() < 1e-5);
+    // The race's own clock, which the HUD and the gantry read, does not move.
+    assert_eq!(race.clock_seconds(), race.sim.world.tick as f32 / 60.0);
+}
+
+#[test]
 fn the_ghost_is_drawn_between_its_two_poses() {
     let mut race = gliding_race();
     race.tick(&PlayerInputs::none());

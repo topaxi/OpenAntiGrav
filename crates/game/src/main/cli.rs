@@ -871,8 +871,9 @@ pub(crate) struct Cli {
     pub(crate) hud_state: Option<String>,
 
     /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon
-    /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that began
-    /// when the circuit loaded, so a frame of it reads the HUD clock plus the flyby and the countdown before GO;
+    /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that is the
+    /// HUD clock plus a per-state constant (13.6 to 24.3 s on the 24 Pulse PSP grid states; inferred to be the time
+    /// since the circuit loaded, flyby and countdown);
     /// `scripts/psp-world-anim-clock.py` reads that offset off a state. Unlike `--anim-seconds` it leaves the GO
     /// board and the HUD on their own clocks.
     #[arg(long, value_name = "SECONDS", allow_negative_numbers = true)]

@@ -69,6 +69,11 @@ def remake(pj):
     tmp = Path(tempfile.mkdtemp(prefix="rerender-", dir=pj.parent.parent))
     args = list(argv)
     args[args.index("--out") + 1] = str(tmp)
+    # A pair made on another lane's emulator recorded that lane's port and home; the emulator that is up now is
+    # the one `scripts/ppsspp-start.sh` wrote into the environment (`OAG_PPSSPP_PORT`, `PP_HOME`).
+    for flag, var in (("--port", "OAG_PPSSPP_PORT"), ("--home", "PP_HOME")):
+        if rec["profile"] == "pulse-psp" and flag in args and os.environ.get(var):
+            args[args.index(flag) + 1] = os.environ[var]
     done = subprocess.run(RUNNER + [str(HERE / args[0])] + args[1:], capture_output=True, text=True)
     new_pj = tmp / "pair.json"
     if not new_pj.exists() or json.loads(new_pj.read_text()).get("refused"):

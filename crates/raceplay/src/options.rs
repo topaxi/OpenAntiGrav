@@ -339,9 +339,9 @@ pub struct Options {
     pub hud: Option<CaptureHud>,
     /// Seconds added to the world meshes' texture-animation clock, which is the race's own tick
     /// count over 60 otherwise. **A capture aid**: the original feeds every world mesh a clock that
-    /// started when the circuit loaded, so it reads the HUD clock plus whatever came before GO (the
-    /// flyby and the countdown), and a frame of it is only comparable when ours is put at the same
-    /// phase. Read off the original's RAM, never derived; `0.0` is every race.
+    /// is the HUD clock plus a per-state constant (13.6 to 24.3 s on the 24 Pulse PSP grid states;
+    /// inferred to be the time since the circuit loaded), and a frame of it is only comparable when ours
+    /// is put at the same phase. Read off the original's RAM, never derived; `0.0` is every race.
     pub world_clock_offset: f32,
     /// Render from this camera instead of the chase camera.
     ///

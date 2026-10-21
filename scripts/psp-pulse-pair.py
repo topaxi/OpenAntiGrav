@@ -114,9 +114,9 @@ UPDATE_TEXTURE_TRANSFORMS = 0x0890E160
 def world_clock_offset(port, hits=40):
     """The world meshes' animation clock minus the HUD's race clock, in seconds, read live.
 
-    Every world mesh is fed one clock that began when the circuit loaded, so it stands at the HUD clock plus the
-    flyby and countdown before GO (16.2 s on Fort Gale's state: `scripts/psp-world-anim-clock.py`), not at the HUD
-    clock. The most common non-zero `mesh+0x40` over `hits` updater calls is that clock (other meshes hold 0 or a
+    Every world mesh is fed one clock that stands at the HUD clock plus a constant per state (16.2 s on Fort Gale's
+    state, 13.6 to 24.3 s over the 24: `scripts/psp-world-anim-clock.py`; inferred to be the time since the circuit
+    loaded), not at the HUD clock. The most common non-zero `mesh+0x40` over `hits` updater calls is that clock (other meshes hold 0 or a
     clock of their own), read with the HUD clock at the same stop. Runs the CPU for the hits, so call it after
     everything else has been captured from the state.
     """
@@ -141,9 +141,16 @@ def camera_craft_distance(row):
 
 
 def camera_view_of(row):
-    """`internal` when the original's camera sits inside the craft (3.0 units from it at its own height), else
-    the close chase view, the one every other pair is in (11.64 units back, 3 up)."""
-    return "internal" if camera_craft_distance(row) < 6.0 else "close"
+    """`internal` when the original's camera sits inside the craft (3.0 units from it at its own height), `close`
+    at the close chase view's 11.64 units (3 up, 11.25 back at the 0.75 scale), and `None` for any other distance
+    (the far chase view, a photo or destroy camera, a state mid-transition): the pair is refused rather than drawn
+    in a view it was not taken in."""
+    d = camera_craft_distance(row)
+    if abs(d - 3.0) < 0.5:
+        return "internal"
+    if abs(d - 11.64) < 0.5:
+        return "close"
+    return None
 
 
 def detect_layout(oag, image, track, theirs_row, flags, tol):
@@ -322,6 +329,10 @@ def main():
     theirs_row = ce.csv_row(csv, 0)
     theirs = ce.pose_of(theirs_row)
     view = camera_view_of(theirs_row)
+    pair.check("the original's camera is the internal (3.0 units) or the close chase (11.64) view",
+               view is not None, "camera %.2f units from the craft" % camera_craft_distance(theirs_row))
+    if view is None:
+        pair.finish()
     fov = ce.speed_fov(theirs_row, INTERNAL_FOV if view == "internal" else 60.0)
     pair.rec["original"]["fov_source"] = ("the view's authored fov (%s) plus 0.075 * dot(fwd, vel), checked against "
                                           "g_camera_fov_degrees (%#x) read at the clock's stop" % (

@@ -327,10 +327,12 @@ impl Scene {
             });
         // The animation clock, in seconds, from the tick and never the wall
         // clock - so a replay of the same tick draws the same frame. The
-        // original passes the race clock to every world mesh's updater
-        // (`docs/ghidra/functions/psp-pulse-usa/texture-animation.md`, "The
-        // values gap is closed"), and each authored track wraps on its own
-        // period, so there is no global phase to keep in step.
+        // original passes every world mesh one clock that began when the
+        // circuit loaded (`docs/ghidra/functions/psp-pulse-usa/texture-animation.md`,
+        // the per-model clock), not the HUD clock, and each authored track wraps
+        // on its own period, so a race has no global phase to keep in step.
+        // [`Race::world_clock_seconds`] adds a comparison capture's measured
+        // offset (zero in a race).
         //
         // `anim_seconds` overrides it, and is `None` in a race. It exists for a
         // comparison harness that needs to pin the animation phase

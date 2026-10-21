@@ -122,6 +122,30 @@ degrees (edge correlation 0.34 before, 0.36 after); HD Talon's after `Restart Ra
 `--ticks 0` with an imposed `--hud-state`, the race shots' route, was tried for the grid pairs and dropped: the
 trackside GO board renders dark and the exhaust glow is missing at tick 0.
 
+**The camera view and its fov (Pulse PSP, 2026-10-21, `pulse-outliers`).** The pair script no longer assumes the close chase
+view at 60 degrees. It classifies the view by the camera's distance from the craft in the same trace row: **11.64 units** is
+`<ExternalCameraClose>` (`--camera-view close`), **3.0 units at the craft's own height** is `<InternalCamera>` (`--camera-view
+internal`, the only view that hides the hull), and any other distance **refuses the pair** (`pair.json` `original.camera_view`,
+`ours.camera_view`). The fov is the view's authored fov plus `0.075 * dot(fwd, vel)`: **60** for the close view, **65** for the
+internal one (`<InternalCamera fov>` in the Assegai file our default team reads; the load report prints it, and the RAM check above refuses a ship that authors another), checked against `g_camera_fov_degrees`
+(`0x08B34310`) read at the clock's stop (`original.fov_ram_at_stop`, within 1 degree). Moa Therma Black's state was saved in the
+cockpit view: the old pair drew ours in the chase view at 60 degrees against an original with no hull, mean grey difference
+**50.7**, and **9.3** with the view and fov matched (an A/B on the same state, `--camera-fov 65` alone gives 10.4).
+
+**The world meshes' animation clock (Pulse PSP, same day).** Scrolling surfaces, flip-book signs and the neon strips run on a
+clock the original feeds every world mesh (`Mesh_UpdateTextureTransforms`, `0x0890e160`, `mesh+0x40`) that is **not the HUD
+clock**: it stands at the HUD clock plus a constant per state. Read live by `scripts/psp-world-anim-clock.py` and by the pair
+script (the most common non-zero `mesh+0x40` less the clock at the same stop; `pair.json` `original.world_clock_offset_s`,
+with the hit counts), over the 24 Pulse PSP states the offset is **13.6 to 24.3 s** (Metropia Black 13.64 to Moa Therma White
+24.35; `scripts/psp-world-anim-clock.py` on one state: 16.205 s on Fort Gale Black, identical across two loads). It differs per
+state, so it is not a fixed epoch; **inferred, not measured**: it is the time since the circuit loaded (the intro flyby, which a
+press skips, plus the 276-tick countdown), which is what makes it vary. Ours ran the animation on `tick / 60`, which already
+contains the 4.6 s countdown, so the pair passes `--world-clock-offset` = offset minus `GO_TICK / 60` (`ours.world_clock_offset_s`).
+The flag shifts the world meshes' clock only; unlike `--anim-seconds` the GO board and the HUD keep their own. Mean grey
+difference over the 24 pairs **9.24 to 6.67** (every pair lower, Fort Gale Black 23.8 to 21.7 and the sign text now reads the
+original's; table in the handover thread). Pulse PS2: **checked, applies, not wired** - `pcsx2-pulse-pair.py` renders with
+`--no-camera` (our own chase camera, the camera node is unrecovered) and reads no world clock; the one PS2 pair is a chase view.
+
 ## Capturing a pair per title
 
 Every recipe runs in its own display and data directory, muted, and is stopped by PID. A pair is only a pair when
