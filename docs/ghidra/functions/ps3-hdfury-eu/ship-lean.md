@@ -198,8 +198,9 @@ literal; the `9.54` px per unit it comes to on screen is `15 * 1280/1920 * 0.954
 `0.954` is this RPCS3 instance's whole-HUD scale about the frame centre: correlating our HUD,
 scaled about the centre, against the original's frame at stick 0 puts it at `0.964`-`0.968`
 (`Safe Area Setting` is a user option, [hd-frontend.md](../../../formats/hd-frontend.md) open
-item 12, so the scale is the profile's and not the law's). The `1.2%` between the two estimates
-is inside the correlation's own noise. Ours at its default scale: `13.95` px for the same follower
+item 12, so the scale is the profile's and not the law's: the save held `96`, see
+[hd-hud.md](../../../formats/hd-hud.md#the-whole-hud-is-drawn-at-the-safe-area-setting-hd-hud-leftovers-2026-10-21)).
+The `1.2%` between the two estimates is inside the correlation's own noise. Ours at its default scale: `13.95` px for the same follower
 (`-15 * 1.396 * 1280/1920`), `-13.95` right and `+13.96` left. Confidence **85** for the sign, the
 gain and the whole-HUD reach; the `0.954` against `0.966` is unexplained to 1%.
 
