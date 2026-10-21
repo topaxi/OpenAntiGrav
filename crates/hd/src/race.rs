@@ -922,7 +922,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     // frame on Ubermall PHANTOM is `+0.03` airborne and grounded with it and `-0.37` and `-1.76`
     // without (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 95.
     engine_output_double: oag_title::pre_race::Sourced::measured(true),
-    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
+    // `Craft_ApplyQuadraticDrag` (`0x000ed700`) loads Pulse's four coefficients in Pulse's order
+    // (`0x008a9118..0x008a9124`), `-0.005` on contact. Under player input the pose walk's grounded
+    // median forward residual is `+0.03` with it, `+1.54` with Pure's `-0.0025` and `-1.46` with
+    // `-0.0075` (`docs/ghidra/functions/ps3-hdfury-eu/craft-flags.md`). Confidence 92.
+    drag_ground: oag_title::pre_race::Sourced::measured(-0.005),
     // HD's own: `Craft_HoverFourPoint`'s epilogue reads `30` (`0x008a9198`, at `0x000ee6cc`) for
     // racing and Zone alike (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`); the same
     // number as Pulse's racing law, read off HD's executable rather than inherited.
@@ -1000,6 +1004,16 @@ mod tests {
         assert_eq!(
             CRAFT_LAWS.engine_output_double,
             oag_title::pre_race::Sourced::measured(true)
+        );
+    }
+
+    /// HD's grounded drag coefficient is `-0.005`, read off `Craft_ApplyQuadraticDrag` and
+    /// measured under player input.
+    #[test]
+    fn the_grounded_drag_is_hds_own_measured_law() {
+        assert_eq!(
+            CRAFT_LAWS.drag_ground,
+            oag_title::pre_race::Sourced::measured(-0.005)
         );
     }
 

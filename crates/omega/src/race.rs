@@ -382,7 +382,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     class_gravity_on_flight: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     inertia_rotates: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     engine_output_double: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
-    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Pulse"),
+    drag_ground: oag_title::pre_race::Sourced::inherited(-0.005, "Wipeout HD"),
     bank_to_yaw: oag_title::pre_race::Sourced::inherited(30.0, "Pulse"),
     // Zone's hover is not read on this title: Wipeout HD's `30`.
     bank_to_yaw_zone: oag_title::pre_race::Sourced::inherited(30.0, "Wipeout HD"),
