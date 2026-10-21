@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import pcsx2_pine  # noqa: E402
 import pcsx2_state  # noqa: E402
 
 #: EE address of the race clock (f32 seconds): 23.39 at a state whose HUD read 0:23.2 and 26.97 after about
@@ -92,7 +93,8 @@ def main():
     emu = plat["emulator"]
     ini = Path(data) / "PCSX2" / "inis" / "PCSX2.ini"
     text = ini.read_text()
-    for key, want in (("upscale_multiplier", emu["upscale_multiplier"]), ("ScreenshotSize", emu["screenshot_size"])):
+    for key, want in (("upscale_multiplier", emu["upscale_multiplier"]), ("ScreenshotSize", emu["screenshot_size"]),
+                      ("AspectRatio", emu.get("aspect_ratio", "Stretch"))):
         line = next((ln for ln in text.splitlines() if ln.startswith(key)), "")
         got = line.split("=")[-1].strip()
         pair.check("PCSX2 %s" % key, got == str(want), "ini says %r, profile %r" % (got, want))
@@ -109,9 +111,14 @@ def main():
     drive = uv + [HERE / "pcsx2-drive.py", "--slot", args.slot]
     resume(args.slot)
     run(drive + ["state", "load", "1"])
-    time.sleep(4)
+    time.sleep(1.5)
+    # The VM runs after the load (about a third of real time under Xvfb), so the grab is a few tenths of a second
+    # past the state's frame: read the clock before and after it, and let ours run to what the picture shows.
+    pine = pcsx2_pine.Pine(slot=args.slot)
+    live_before = struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
     raw = out / "theirs-gs.png"
     run(drive + ["shot", raw])
+    live_after = struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
     pair.rec["original"]["gs_screenshot_size"] = ce.image_size(raw)
     w, h = plat["output"]
     run(["magick", raw, "-filter", "Lanczos", "-resize", "%dx%d!" % (w, h), out / "theirs.png"])
@@ -162,7 +169,14 @@ def main():
     pair.rec["original"]["race_clock_s"] = clock
     pair.rec["original"]["craft"] = hex(craft)
 
-    shown = clock - CLOCK_HUD_OFFSET_S
+    grab_clock = (live_before + live_after) / 2
+    pair.rec["original"]["race_clock_live_s"] = {"before_grab": live_before, "after_grab": live_after, "state_file": clock}
+    pair.check("the grab is of a running VM near the state's frame", 0.0 <= grab_clock - clock <= 3.0,
+               "RAM clock %.2f s before and %.2f s after the grab, %.2f s in the state file" % (live_before, live_after, clock))
+    pair.caveat("the original's frame is the GS screenshot of the VM running a moment after the load (race clock %.2f to %.2f s, "
+                "the state file's is %.2f s), so its HUD clock and any animated surface are a few tenths of a second "
+                "past the state; ours is rendered at the grab's clock" % (live_before, live_after, clock))
+    shown = grab_clock - CLOCK_HUD_OFFSET_S
     ticks = GO_TICK + round(shown * 60)
     pair.rec["ours"].update({"ticks": ticks, "race_clock_s": (ticks - GO_TICK) / 60})
     pair.check("race clock phase", abs((ticks - GO_TICK) / 60 - shown) <= CLOCK_TOLERANCE_S,
