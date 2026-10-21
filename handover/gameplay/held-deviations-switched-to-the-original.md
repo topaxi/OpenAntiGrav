@@ -36,6 +36,20 @@ for our AI or an unread field now runs the original's:
   ([pure-physics.md](../../docs/physics/pure-physics.md#the-noise-bar-on-the-combined-state-2026-10-21-ai-rejudge-after-switches)).
   Left: an Ace grinding tail (two seeds at one torque, `2175` and `1617` wall ticks; the base has one
   at `1099`).
+- ~~**Pulse's pitch gate and world-axis inertia rest on Autopilot captures**~~ (the 2026-10-20
+  physics audit, rows 4 and 5). Closed 2026-10-21 (`pulse-gate-tensor`): both kept, both
+  measured under player input. The gate: 364 closed airborne rows read `-0.010` of the input
+  torque through our own `pitch_aligned` against `-0.999` ungated, closed by pitch and by roll,
+  and its one slow crossing needs the located down, not world down (93). The frame: on four
+  placed Fort Gale Black ramp runs with thrust, left and the left airbrake held, world axes halve
+  the median one-step residual on every axis against HD's rotated frame (air yaw `0.384` to
+  `0.032`), 93 ([airborne-ground-truth.md](../../docs/physics/airborne-ground-truth.md#under-player-input-2026-10-21-pulse-gate-tensor)).
+  No sim code changed. The PS2 shares both through Pulse's definition, unread; Pure has no gate
+  and its frame is read only.
+- **A tumbling Pulse craft (`2` to `8` rad/s) fits neither inertia frame**: on the placed drops
+  (`data/traces/talons-pitch-*.csv`) the yaw residual is about `2.5` rad/s² rms in both frames
+  and grows with the rate, so a rate-dependent angular term is missing from ours. Only reachable
+  off a placement kick or a hard crash; not chased.
 - **HD's escape off a wall was not seen live**: 247 probe hits, all floors. The class numbering
   (`0` wall, `2` reset) is read off two uses, not HD's loader.
 
@@ -46,6 +60,9 @@ for our AI or an unread field now runs the original's:
    writes it per tick). About 2 hours.
 2. Pure `craft+0x288`: find its writers in Pure's image (`psp-relocate.py`) and watch it across
    a Turbo in PPSSPP Pure. About an hour once a Pure state exists.
-3. The verified fallback for route plans (`hull_plans_for`'s routes still follow the reference's
+3. The tumble term: step `crest_pitch_pose_walk.rs` on `talons-pitch-down-24-s1.csv`'s first
+   twenty rows with each angular term zeroed in turn (damping, the gyroscopic `omega x I omega`
+   ours omits) and see which one closes the yaw residual. About 2 hours.
+4. The verified fallback for route plans (`hull_plans_for`'s routes still follow the reference's
    route unchecked), and a share that clears `06_Track`'s short gap. Start from
    `crates/raceplay/tests/ai_contact_where.rs`. About half a day.
