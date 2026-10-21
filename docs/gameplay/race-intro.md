@@ -118,6 +118,21 @@ and 132): the bars thin out together, the title and paragraph are cut from the r
 viewport closes, and the HUD arrives over a panel still a third visible. Scratch:
 `{montage-enter,montage-exit,cmp-moa,cmp-exit,cmp-bottom}.png`.
 
+### The panel on a window that is not 480:272 (2026-10-21)
+
+**Chosen, not measured** (the original ran at one aspect, so no confidence score). On a window
+taller than the authored shape the top bar (name) is flush to the top edge and the bottom bar
+(paragraph) to the bottom edge, each drawn against a 480:272 viewport at that edge. On a wider
+window the bars extend to the window's edges: `hex_bg.mip` is a 32x16 tile already drawn as a
+repeating `TiledSprite` (16 units wide here), so the black fill and the tile repeat outward in
+whole tiles (the hexagon phase holds), each half of the white rule stretches to the new edge, and
+the name and paragraph stay where the disc put them. At 480:272 the result is byte-identical to
+before. Code: `DrawLists::extend_width`, `frame_bottom` and `Overlay::draw`. Checked with
+`--race --intro-ticks 90` under `aspect = "free"` at 1080x1440 and 1024x768 (flush), 2560x1080
+(repeating) and 480x272 (unchanged); with the default `psp` aspect the viewport is already the
+authored shape and nothing changes. Pulse PSP and PS2 share this one definition; the panel is read
+off a PSP disc only, and HD, Omega and 2048 do not use this path.
+
 ## Other titles (census 2026-10-07)
 
 Every title but Pure ships a `start_grid.vex` per circuit with a `grid_camera1` animation and a

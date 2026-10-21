@@ -31,6 +31,12 @@ pub const FADE_SECONDS: f32 = 0.7;
 /// Seconds the viewport takes to wipe open: the `enabletransition="2"` the XML authors on it.
 pub const WIPE_SECONDS: f32 = 2.0;
 
+/// The authored screen's width, the PSP's 480x272.
+pub const SCREEN_WIDTH: f32 = 480.0;
+
+/// The authored screen's height, the PSP's 480x272.
+pub const SCREEN_HEIGHT: f32 = 272.0;
+
 /// The viewport's `deltaWidth`, the width its wipe opens to.
 pub const WIPE_WIDTH: f32 = 470.0;
 
@@ -85,6 +91,10 @@ pub struct DrawLists {
     pub frame: Vec<Draw>,
     /// The paragraph, in the `Default` face.
     pub body: Vec<Draw>,
+    /// Parallel to `frame`: whether that draw sits in the lower half of the authored screen (the
+    /// paragraph's bar) rather than the upper (the name's). What lets a taller window anchor each
+    /// half to its own edge. **Chosen, not measured**: the original only ran at one aspect.
+    pub frame_bottom: Vec<bool>,
     /// The right edge of the texts' viewport, in screen units: what both texts are clipped to.
     pub right: f32,
 }
@@ -103,10 +113,13 @@ pub fn draw_lists(
 ) -> DrawLists {
     let alpha = progress.alpha();
     let mut frame = Vec::new();
+    let mut frame_bottom = Vec::new();
+    let in_bottom = |y: f32| y >= SCREEN_HEIGHT * 0.5;
     for fill in &layout.screen.fills {
         let mut draw = crate::picker::fill_draw(fill);
         draw.fade(alpha);
         frame.push(draw);
+        frame_bottom.push(in_bottom(fill.y));
     }
     for image in &layout.screen.images {
         let Some(placed) = sprites(&image.src) else {
@@ -116,6 +129,7 @@ pub fn draw_lists(
             crate::campaign::draw::sprite_draw(image, placed, image.x, image.y, image.color);
         draw.fade(alpha);
         frame.push(draw);
+        frame_bottom.push(in_bottom(image.y));
     }
     let mut body = Vec::new();
     for text in &layout.screen.texts {
@@ -142,6 +156,7 @@ pub fn draw_lists(
         draw.fade(alpha);
         if text.name.as_deref() == Some(oag_pulse::race::TRACK_NAME_WIDGET) {
             frame.push(draw);
+            frame_bottom.push(in_bottom(text.y));
         } else {
             body.push(draw);
         }
@@ -149,7 +164,64 @@ pub fn draw_lists(
     DrawLists {
         frame,
         body,
+        frame_bottom,
         right: WIPE_WIDTH * progress.wipe(),
+    }
+}
+
+impl DrawLists {
+    /// Widens the bars to cover a window wider than the authored 480, by `extra` screen units on
+    /// each side (rounded up to whole tiles so the hexagon pattern keeps its phase): the black
+    /// fill and the tile repeat outward, each half of a rule stretches to the new edge, and the
+    /// texts stay where the disc put them. **Chosen, not measured**: the original ran at one
+    /// aspect, and `hex_bg.mip` is a 32x16 tile, so it repeats cleanly.
+    pub fn extend_width(&mut self, extra: f32) {
+        if extra <= 0.0 {
+            return;
+        }
+        let tile = self
+            .frame
+            .iter()
+            .find_map(|d| match d {
+                Draw::TiledSprite { rect, repeat, .. } if repeat[0] > 0.0 => {
+                    Some(rect[2] / repeat[0])
+                }
+                _ => None,
+            })
+            .filter(|t| *t > 0.0)
+            .unwrap_or(1.0);
+        let pad = (extra / tile).ceil() * tile;
+        let (left, right) = (0.0, SCREEN_WIDTH * 0.5);
+        for draw in &mut self.frame {
+            match draw {
+                Draw::GradientFill { rect, .. } | Draw::Fill { rect, .. } => {
+                    widen(rect, pad, left, right);
+                }
+                Draw::TiledSprite { rect, repeat, .. } => {
+                    let before = rect[2];
+                    widen(rect, pad, left, right);
+                    repeat[0] *= rect[2] / before;
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+/// A full-width bar grows to both sides; the left half of a split rule grows leftward and the
+/// right half rightward; anything else stays.
+fn widen(rect: &mut [f32; 4], pad: f32, left: f32, right: f32) {
+    let full = rect[0] == left && rect[2] == SCREEN_WIDTH;
+    let left_half = rect[0] == left && rect[2] == SCREEN_WIDTH * 0.5;
+    let right_half = rect[0] == right && rect[2] == SCREEN_WIDTH * 0.5;
+    if full {
+        rect[0] -= pad;
+        rect[2] += 2.0 * pad;
+    } else if left_half {
+        rect[0] -= pad;
+        rect[2] += pad;
+    } else if right_half {
+        rect[2] += pad;
     }
 }
 

@@ -15,6 +15,9 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 
 ## Open
 
+- ~~The panel floated mid-screen on a taller window~~ **landed 2026-10-21 (`pulse-flyby-panel-anchor`)**:
+  top bar flush to the top, bottom bar flush to the bottom, and bars repeat outward on a wider
+  window; chosen, not measured. See [race-intro.md](../../docs/gameplay/race-intro.md#the-panel-on-a-window-that-is-not-480272-2026-10-21).
 - ~~The track-description panel~~ **landed 2026-10-02**: `InGameTrackDescriptionScreen` read off
   `InGame_Definition.xml`, name = the `PI_Track` id as a table key and paragraph =
   `MSC_TRACK_<nn>` (`RaceManager_Construct`), fade measured per frame (0.7 s linear, a 2 s width
