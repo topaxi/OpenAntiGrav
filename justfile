@@ -1069,6 +1069,12 @@ compare-page *ARGS:
 compare-rerender *ARGS:
     python3 scripts/compare-rerender.py {{ARGS}}
 
+# Re-render only ours for every pair from its recorded flags, originals untouched, no emulator; then the manifests and page (docs/tools/compare-page.md).
+#   just compare-rerender-ours [--only moa] [--no-build] [--no-page] [data/reference/compare-page]
+[doc("Re-render only our side of every comparison pair (no emulator), then rebuild the page")]
+compare-rerender-ours *ARGS:
+    python3 scripts/compare-rerender-ours.py {{ARGS}}
+
 # Boot each platform's emulator, restore every pair's state, re-make the pair, print one before/after table (docs/tools/compare-page.md).
 #   just compare-rerender-all --out data/scratch/<lane>/compare-page [--platform psp] [--resume] [--dry-run]
 [doc("Re-make every comparison pair on its own emulator and print the before/after table")]

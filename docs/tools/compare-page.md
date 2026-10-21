@@ -206,6 +206,21 @@ A screenshot is the last PRESENTED frame, which is a little older than the RAM r
   recorded in `pair.json` `original.presented_lag`. The set in `data/reference` made before this carries the uncorrected clock. Per-tick picture lag on RPCS3 is not measured (no per-tick stepping).
   HD's window opens at x = 240 on the 2000-pixel Xvfb, so a 1920-wide frame was clipped to 1760 and every pair refused ("original image size 1760x1080"); `rpcs3-hd-pair.py` waits for the resize to land and moves the window to the origin.
 
+## Re-rendering ours only (2026-10-21)
+
+`just compare-rerender-ours [--only <substring>]` re-draws `ours.png` of every pair with the current `oag-game` and
+leaves every original alone; no emulator runs, so the maintainer can run it at any time. It replays the flags each pair
+recorded in `ours.flags` against the pair's disc image (`--image` in `argv`, else the profile's), with a private
+settings directory written from the profile. Those flags carry the pose, camera, field and clock read from the
+original's RAM when `theirs.png` was captured, so with `theirs.png` kept they still match it: this is the one place a
+stored pose is reused, where `compare-rerender` re-reads it because it re-captures the original as well. A recorded
+path under a lane's scratch directory or a reaped worktree resolves to the file of the same name in the pair
+directory (`trace.csv`, `field.csv`, `state-row.csv`), and a pair whose input does not resolve is skipped and named.
+The old scores move to `previous_ours`; `ours.binary`, `ours.rendered_at`, `overlap` and the environment are
+replaced, then the three manifests are rewritten from the pairs they list and the page is rebuilt. It does not re-run
+the pair scripts' checks on ours (pose read back from our trace, settings read back): a change that moves our pose
+shows up only in the picture and the scores.
+
 ## Capturing a pair per title
 
 Every recipe runs in its own display and data directory, muted, and is stopped by PID. A pair is only a pair when
