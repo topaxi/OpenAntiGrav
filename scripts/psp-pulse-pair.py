@@ -130,6 +130,15 @@ AUTOPILOT_TIMER_SANE_S = 600.0
 AUTOPILOT_AUTHORED_S = 5.0
 
 
+def boost_phase(dbg):
+    """The player's exhaust flare's boost timer over its length (`*(craft+0x78)+0xb8 / +0xb4`), what `Hud_Update`
+    (0x0881bf50) turns into the HUD's copy count and the speed bar's glow stamp: 0 with no boost running."""
+    craft = dbg.read_u32(dbg.read_u32(RACE_MANAGER) + 0x2C0)  # `g_race_manager + 0x2c0`, the player's craft
+    flare = dbg.read_u32(craft + 0x78)
+    length, timer = dbg.read_f32(flare + 0xB4), dbg.read_f32(flare + 0xB8)
+    return timer / length if length > 0.0 and timer > 0.0 else 0.0
+
+
 def restore_autopilot_timer(port, pair):
     """Put the authored timer back over one armed forever, so the HUD prints what a player's own pickup prints
     (`5.00` counting down) rather than `1000000000.00`. The CPU does not run, so the moment (clock, pose, field,
@@ -353,7 +362,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
                 player["place"], lap_number, player["lap_time"], clock,
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
-                player["best_lap_cs"] / 100)] + flags + [
+                player["best_lap_cs"] / 100),
+            "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + flags + [
         "--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
@@ -413,6 +423,9 @@ def main():
     ap.add_argument("--shield-max", type=float, default=135.0,
                     help="with --zone: the shield pool, read as 135.0 on the Assegai in Zone (a full bar shows 100 %%)")
     ap.add_argument("--toast-wait", type=float, default=6.0)
+    ap.add_argument("--run-ticks", type=int, default=0,
+                    help="after the load and the Autopilot timer restore, run this many of the player's ticks first (a trace "
+                         "with no shots) so the frame is taken that far into the state, e.g. onto a speed pad")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -456,6 +469,8 @@ def main():
     from ppsspp_debugger import Debugger
     if args.field or args.zone:
         restore_autopilot_timer(args.port, pair)
+    if args.run_ticks > 0:
+        run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:
@@ -488,7 +503,8 @@ def main():
                    "g_weapons_enabled byte at %#x reads %d (0 = off)" % (WEAPONS_ENABLED, wp))
         trace_extra = ["--craft", hex(player_craft), "--field-out", out / "field.json"]
         fr = [r for r in rf.Field(probe).rows() if r["player"]][0]
-        pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6}
+        pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6,
+                                                 "boost_phase": boost_phase(probe)}
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shots = out / "shots"

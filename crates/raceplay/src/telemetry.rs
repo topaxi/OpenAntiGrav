@@ -241,6 +241,11 @@ impl Race {
             // The drawn lean's follower, which a title with a measured sway slides its whole HUD
             // by (`oag_hud::Readout::steer_lean_follower`). Display state, never hashed.
             steer_lean_follower: ship.physics.steer_lean_follower,
+            // The flare's boost timer over its length: what the HUD's multi-copy draw and the speed
+            // bar's glow stamp run on (`oag_hud::boost_smear`). Display state, never hashed.
+            best_lap_centiseconds: None,
+            boost_phase: (self.exhaust_of(slot).boost_timer() / oag_fx::exhaust::BOOST_SECONDS)
+                .clamp(0.0, 1.0),
         };
         if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
             readout.place = hud.place;
@@ -252,6 +257,10 @@ impl Race {
                 readout.shield = readout.shield_max * percent * 0.01;
             }
             readout.best_lap_ticks = hud.best_lap_ticks.or(readout.best_lap_ticks);
+            readout.best_lap_centiseconds = hud.best_lap_centiseconds;
+            if let Some(phase) = hud.boost_phase {
+                readout.boost_phase = phase.clamp(0.0, 1.0);
+            }
         }
         if finished.is_some() {
             readout.messages[oag_hud::messages::SLOTS - 1] = Some(oag_hud::messages::MessageLine {

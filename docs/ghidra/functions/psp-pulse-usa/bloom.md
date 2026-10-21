@@ -531,6 +531,11 @@ fullscreen-pass plumbing (FXAA, SMAA, FSR 1), so steps 2-4 fit its existing
 shape. **Step 1 is the real work**, and it reaches every surface that should
 glow - see the correction above, which is the first known consumer.
 
+> **2026-10-21 (`pulse-hud-boost-glow`):** the original's bright pass does read the HUD, and the one place it
+> shows is the speed bar: its fill stamps the mask (`n / 10 * 255`) for the 0.8 s of a speed pad's boost, so the bar
+> blooms white. Ours runs a rectangle-only chain for it
+> ([hud-boost-smear.md](hud-boost-smear.md)); the HUD text over a glowing surface is still the open half.
+
 ## The bloom draws over the HUD (2026-10-04, `pulse-bloom-roll`)
 
 **Confidence 92.** `Bloom_Draw` is the last thing in the race's render queue,

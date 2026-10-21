@@ -37,6 +37,11 @@ struct Constants {
     // extent; see `post::sub_rectangle`.
     uv_scale: vec2<f32>,
     uv_max: vec2<f32>,
+    // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the colour, and
+    // `(count, value, opacity, pad)`. Zero for every other pass.
+    stamps: array<vec4<f32>, 10>,
+    stamp_colour: vec4<f32>,
+    stamp_meta: vec4<f32>,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -94,6 +99,26 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel = textureSample(source_tex, source_sampler, at);
     let alpha = u32(floor(texel.a * 255.0 + 0.5));
     return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
+}
+
+// Pass 0 of `Bloom::stamp_glow`: the bright pass over rectangles alone, `colour * coverage * value`
+// where `coverage` is what `k` overlapping copies of alpha `opacity` leave of a pixel.
+@fragment
+fn fs_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
+    let count = u32(constants.stamp_meta.x);
+    var k = 0.0;
+    for (var i = 0u; i < count; i = i + 1u) {
+        let r = constants.stamps[i];
+        if in.uv.x >= r.x && in.uv.x < r.x + r.z && in.uv.y >= r.y && in.uv.y < r.y + r.w {
+            k = k + 1.0;
+        }
+    }
+    if k == 0.0 {
+        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
+    let coverage = 1.0 - pow(1.0 - constants.stamp_meta.z, k);
+    let value = u32(constants.stamp_meta.y);
+    return vec4<f32>(vec3<f32>(bytes(constants.stamp_colour.rgb * coverage) * value / 255u) / 255.0, 1.0);
 }
 
 // Passes 1 and 2: eleven taps at -5..+5 texels along `direction`.

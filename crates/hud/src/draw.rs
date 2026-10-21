@@ -274,10 +274,15 @@ pub(super) fn text_for(
         // A time that has been set: hundredths. With none set the original shows
         // zeros rather than a dash placeholder - `best 0.00.00` on the reference
         // frame - so an absent best formats as zero rather than as its own string.
-        "BestTime" => Some(format_lap_time(
-            u64::from(readout.best_lap_ticks.unwrap_or(0)),
-            Precision::Hundredths,
-        )),
+        "BestTime" => Some(match readout.best_lap_centiseconds {
+            Some(centiseconds) => {
+                super::format_centiseconds(u64::from(centiseconds), Precision::Hundredths)
+            }
+            None => format_lap_time(
+                u64::from(readout.best_lap_ticks.unwrap_or(0)),
+                Precision::Hundredths,
+            ),
+        }),
 
         // Zone mode. The number and the score are the two widgets with a real
         // source; `Zone_Bar_*` is the mode's own graphic and nothing was found
@@ -664,6 +669,9 @@ pub struct Frame {
     /// pass can scissor them to the view. Empty for a whole-screen frame, which is
     /// painted unclipped.
     pub spans: Vec<Span>,
+    /// The rectangles whose pixels the bloom's bright pass reads at a mask of their own, in
+    /// the HUD's grid: the speed bar's fill while a boost runs. See [`super::boost_smear`].
+    pub glow: Vec<super::boost_smear::GlowStamp>,
 }
 
 /// One view's share of a [`Frame`]: its draws run from these indices of the five
@@ -780,6 +788,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         &ungated
     };
     let mut frame = Frame::default();
+    let mut stamped: Vec<([f32; 4], [f32; 4])> = Vec::new();
 
     // An always-on name draws **once**, even where the layout authors it twice.
     // See `ONE_WIDGET_PER_NAME`.
@@ -856,6 +865,14 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             },
         };
         frame.sprites.extend(flash);
+        if cx
+            .art
+            .boost_smear
+            .is_some_and(|law| law.stamp == sprite.name)
+            && let Some(Draw::Sprite { rect, color, .. }) = &drawn
+        {
+            stamped.push((*rect, *color));
+        }
         frame.sprites.extend(drawn);
         frame.sprites.extend(fill);
     }
@@ -1027,6 +1044,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
     // measured it - see `sway`.
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
+    super::boost_smear::smear(&mut frame, cx.art, readout, &stamped);
     frame
 }
 

@@ -870,6 +870,12 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S[,ZONE[,SCORE[,ZONE_S]]]]]]")]
     pub(crate) hud_state: Option<String>,
 
+    /// With `--hud-state`: the original's exhaust boost timer over its length (`0` to `1`; Pulse PSP
+    /// `*(craft+0x78)+0xb8 / +0xb4`), which the HUD's multi-copy boost draw and the speed bar's glow stamp
+    /// run on. A posed capture runs no ticks, so its flare has no timer of its own.
+    #[arg(long, value_name = "PHASE", requires = "hud_state")]
+    pub(crate) hud_boost_phase: Option<f32>,
+
     /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon
     /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that is the
     /// HUD clock plus a per-state constant (13.6 to 24.3 s on the 24 Pulse PSP grid states; inferred to be the time

@@ -209,6 +209,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
     bar_tip: None,
+    boost_smear: None,
     // Inherited from HD through Omega, which ships this title's own HUD set under the same
     // `<Screen name="HUD">` root. The Vita executable's `Hud_Update` was not read. The **literal**
     // is inherited, and it acts in this title's own 960x544 grid (`Space::VITA`), so on screen it

@@ -193,6 +193,7 @@ const TITLE: &Title = &Title {
         runtime: None,
         lap_one_shift: None,
         bar_tip: None,
+        boost_smear: None,
         sway: None,
         resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,

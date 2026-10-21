@@ -519,3 +519,17 @@ fn the_lap_hexagon_draws_the_lap_number_from_the_authored_literal() {
     assert_eq!(text(5), Some("5".to_string()));
     assert_eq!(text(6), Some("5".to_string()));
 }
+
+/// The original stores a best lap in centiseconds and prints it truncated from nothing: `56.34` s
+/// is `3380.4` ticks, which the tick count prints as `56.33`. A capture carries the centiseconds.
+#[test]
+fn a_best_lap_in_centiseconds_prints_as_stored() {
+    assert_eq!(
+        crate::format_centiseconds(5634, crate::Precision::Hundredths),
+        "0.56.34"
+    );
+    assert_eq!(
+        crate::format_lap_time(3380, crate::Precision::Hundredths),
+        "0.56.33"
+    );
+}

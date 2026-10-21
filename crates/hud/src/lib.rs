@@ -48,6 +48,7 @@ use oag_tables::fexml::{self, Node};
 mod assets;
 pub mod assist;
 mod bar_tip;
+pub mod boost_smear;
 mod compose;
 mod dialect_2048;
 mod draw;
@@ -756,6 +757,14 @@ pub struct Readout {
     /// (`sway`). Display only: zero for a view with no craft of its own, and for
     /// every title with no sway the HUD ignores it.
     pub steer_lean_follower: f32,
+    /// The player's exhaust boost timer over its length, `(0, 1]` while a speed pad's boost
+    /// runs and `0` otherwise: what a title with a [`oag_title::HudArt::boost_smear`] smears
+    /// its widgets by. Display only.
+    pub boost_phase: f32,
+    /// The best lap in whole centiseconds, when it is not a whole number of ticks: only a frame
+    /// captured from the original carries it (`CaptureHud::best_lap_centiseconds`), and it is
+    /// what `BestTime` prints when set. Display only.
+    pub best_lap_centiseconds: Option<u32>,
 }
 
 impl Readout {
@@ -887,7 +896,14 @@ pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
     // `(uint)(seconds * 100)` is. A float division put a tick that is an exact
     // tenth (72 ticks, 1.2 s) one hundredth under it, so 1.2 s read `1.19`
     // and the clock showed the previous tenth on every sixth tick.
-    let centiseconds = ticks.saturating_mul(100) / 60;
+    format_centiseconds(ticks.saturating_mul(100) / 60, precision)
+}
+
+/// [`format_lap_time`] from whole centiseconds, which is what the original stores a best lap in
+/// (`entity+0x930`, a `u32` of hundredths): a best of `56.34` s is not a whole number of 60 Hz
+/// ticks (3380.4), so a frame captured from the original carries it in this unit.
+#[must_use]
+pub fn format_centiseconds(centiseconds: u64, precision: Precision) -> String {
     let minutes = centiseconds / 6000;
     let whole = centiseconds / 100 % 60;
     let hundredths = centiseconds % 100;

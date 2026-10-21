@@ -71,6 +71,30 @@ pub(super) fn mean_reach(area: (f32, f32, f32, f32), rects: &[(f32, f32, f32, f3
 }
 
 impl Scene {
+    /// Adds the glow of the HUD's stamped rectangles onto `target` over `rect`: Pulse PSP's bloom
+    /// only (the PS2's chain has no stamp pass). See `oag_post::bloom::Bloom::stamp_glow`.
+    pub fn stamp_glow(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        rect: (f32, f32, f32, f32),
+        stamps: &oag_post::bloom::Stamps<'_>,
+    ) {
+        if let Some(bloom) = &self.bloom {
+            bloom.stamp_glow(
+                device,
+                queue,
+                encoder,
+                target,
+                (rect.0, rect.1),
+                (rect.2 as u32, rect.3 as u32),
+                stamps,
+            );
+        }
+    }
+
     /// Adds the glow [`Scene::render`] prepared onto `target`, over the rectangle
     /// `rect` (`x, y, width, height`) the frame was drawn into - or, for a split screen,
     /// each view's glow over its own share of `rect` (the area the views were cut from

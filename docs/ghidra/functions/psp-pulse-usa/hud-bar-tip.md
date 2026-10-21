@@ -68,6 +68,7 @@ the race pair's 29.6 to 24.6 (the rest of that gap is the original flying at 572
 
 ## Not wired
 
-The speed bar's alpha pulse (`+0xf4` from `PlayerStatus+0x274+0xa8`, a 0 to 255 flash scaled by `/10`) and the
-per-frame HUD shake (`Hud_Update`'s `+0x3c/+0x40` offsets on two widget groups) are read and left: the shake is
+~~The speed bar's alpha pulse (`+0xf4` from `PlayerStatus+0x274+0xa8`, a 0 to 255 flash scaled by `/10`)~~ - read
+again 2026-10-21 and wired: `+0xf4` is not an alpha, it is the glow-mask stamp the bar writes while a boost runs, and
+`+0xa8` the boost's copy count ([hud-boost-smear.md](hud-boost-smear.md)). The per-frame HUD shake (`Hud_Update`'s `+0x3c/+0x40` offsets on two widget groups) are read and left: the shake is
 `hd-cockpit-lean`'s territory on HD and unmeasured on Pulse.

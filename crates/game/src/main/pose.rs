@@ -278,6 +278,18 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
             .filter(|&ticks| ticks > 0)
             .map(|ticks| u32::try_from(ticks).context("--hud-state BEST_LAP_SECONDS is too long"))
             .transpose()?,
+        best_lap_centiseconds: parts
+            .get(6)
+            .map(|text| -> Result<u32> {
+                let value: f64 = text
+                    .parse()
+                    .with_context(|| format!("--hud-state BEST_LAP_SECONDS {text:?} is not a number"))?;
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                Ok((value * 100.0).round().max(0.0) as u32)
+            })
+            .transpose()?
+            .filter(|&centiseconds| centiseconds > 0),
+        boost_phase: None,
         zone: parts
             .get(7)
             .map(|text| -> Result<race::CaptureZone> {

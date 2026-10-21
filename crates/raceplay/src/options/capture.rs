@@ -49,6 +49,14 @@ pub struct CaptureHud {
     pub shield_percent: Option<f32>,
     /// The best lap so far in ticks, when the capture read it (`None` also when there is none).
     pub best_lap_ticks: Option<u32>,
+    /// The same best lap in whole centiseconds, which is what the original stores (`entity+0x930`) and
+    /// prints: `56.34` s is `3380.4` ticks, which no tick count reproduces, so `BestTime` reads this when
+    /// set (`oag_hud::Readout::best_lap_centiseconds`).
+    pub best_lap_centiseconds: Option<u32>,
+    /// The player's exhaust boost timer over its length, `0..=1`, when the capture read it
+    /// (`*(craft+0x78)+0xb8 / +0xb4` on Pulse PSP): a posed capture runs no ticks, so its flare has no
+    /// timer, and the HUD's multi-copy boost draw runs on this (`oag_hud::boost_smear`).
+    pub boost_phase: Option<f32>,
     /// Zone mode's counters as the original's frame showed them, when the capture read them.
     pub zone: Option<CaptureZone>,
 }
