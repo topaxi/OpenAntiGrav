@@ -121,6 +121,43 @@ def resume(port):
         time.sleep(1.0)
 
 
+#: The Autopilot pickup's countdown (`record+0x148`) is armed at `1.0e9` by the rail and the hunt so a state keeps
+#: flying; the HUD prints that timer, so a frame taken in such a state shows `1000000000.00`. Anything above this is an
+#: armed-forever pickup, not a player's state.
+AUTOPILOT_TIMER_SANE_S = 600.0
+#: `<Weapon type="Autopilot"><Stats time>`: the timer the pickup arms with (4.9666 read two dispatches after arming,
+#: `scripts/psp-autopilot-rail.py` logs it as `authored_timer`), which is what a player who just took the pickup sees.
+AUTOPILOT_AUTHORED_S = 5.0
+
+
+def restore_autopilot_timer(port, pair):
+    """Put the authored timer back over one armed forever, so the HUD prints what a player's own pickup prints
+    (`5.00` counting down) rather than `1000000000.00`. The CPU does not run, so the moment (clock, pose, field,
+    camera) is exactly the state's; a run to let the pickup expire was tried and left the moment (the craft slid
+    off the line and the pack was gone after 0.8 s, and the clock differed run to run). The pair is refused when a
+    timer above the sane bound is still there."""
+    import struct
+    from ppsspp_debugger import Debugger
+    rail = race_field_module().rail
+    dbg = Debugger(port)
+    p = rail.player(dbg)
+    if p is None:
+        pair.check("the player's record was found to read the Autopilot timer", False, "rail.player() found no player")
+        return
+    addr = p["record"] + rail.AUTO_TIMER
+    timer = rail.f32s(dbg, addr, 1)[0]
+    pair.rec["original"]["autopilot_timer_in_state_s"] = timer
+    if timer > AUTOPILOT_TIMER_SANE_S:
+        dbg.write(addr, struct.pack("<f", AUTOPILOT_AUTHORED_S))
+        pair.caveat("the state was saved with the player's Autopilot armed for good (timer %.3g s, which the HUD would "
+                    "print); the timer was put back to the pickup's authored %.1f s after the load, the CPU not run, so "
+                    "the HUD shows a pickup's own countdown and every other value is the state's" % (timer, AUTOPILOT_AUTHORED_S))
+    after = rail.f32s(dbg, addr, 1)[0]
+    pair.rec["original"]["autopilot_timer_at_stop_s"] = after
+    pair.check("no armed-forever Autopilot timer at the stop (the HUD prints it)", after <= AUTOPILOT_TIMER_SANE_S,
+               "record+0x148 reads %.3g s" % after)
+
+
 def race_field_module():
     """`psp-race-field.py` (a hyphenated name cannot be imported): the original's whole field out of RAM."""
     import importlib.util
@@ -417,6 +454,8 @@ def main():
     freeze(args.port)
     time.sleep(args.toast_wait)
     from ppsspp_debugger import Debugger
+    if args.field or args.zone:
+        restore_autopilot_timer(args.port, pair)
     clock = Debugger(args.port).read_f32(CLOCK_ADDRESS)
     ram_fov = Debugger(args.port).read_f32(CAMERA_FOV_ADDRESS)
     if not 0.0 <= clock <= 3600.0:

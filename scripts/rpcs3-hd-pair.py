@@ -52,6 +52,12 @@ os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
 import rpcs3_place  # noqa: E402
 
 
+#: `<Weapon type="Autopilot"><Stats time>` in HD's `weaponstats_race.xml`: the timer a player's own pickup arms with.
+#: The hunt arms it at 10000 so the Autopilot keeps flying, and the HUD prints that.
+AUTOPILOT_AUTHORED_S = 5.0
+AUTOPILOT_TIMER_SANE_S = 600.0
+
+
 def run(cmd, **kw):
     print("+", " ".join(str(c) for c in cmd), file=sys.stderr)
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
@@ -184,7 +190,8 @@ def main():
                "--shots", 2, "--interval", 0.12, "--load", args.load, "--team", args.team,
                "--press", args.press]
         if args.field:
-            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause"]
+            cap += ["--field", "--in-race", "--settle", "0", "--first-at-pause",
+                    "--autopilot-timer", AUTOPILOT_AUTHORED_S]
         run(cap)
         record_path = out / "capture" / "00.json"
     record = json.loads(record_path.read_text())
@@ -208,6 +215,17 @@ def main():
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
     pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction: the RSX had presented the paused frame "
                                               "(hull check on hd-race/talons-pack), not measured per tick"}
+    note = ship.get("autopilot_timer")
+    if args.field:
+        pair.rec["original"]["autopilot_timer"] = note
+        pair.check("no armed-forever Autopilot timer at the stop (the HUD prints it)",
+                   note is not None and note["after_s"] <= AUTOPILOT_TIMER_SANE_S,
+                   "slot+0x158 read %s before and %s after" % ((note or {}).get("before_s"), (note or {}).get("after_s")))
+        if note and note["written"]:
+            pair.caveat("the state was saved with the player's Autopilot timer at %.0f s, which the HUD prints; the "
+                        "pickup's authored %.1f s was written back after the load and the game ran %.1f s so the HUD "
+                        "redraws it: the frame, pose, field and HUD record are from that moment" %
+                        (note["before_s"], note["authored_s"], note["run_s"]))
     capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
     cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",

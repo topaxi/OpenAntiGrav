@@ -34,7 +34,7 @@ files a player or modder edits); a wrong shape is refused by name instead
 | `id`, `game`, `title` | required; `game` is the title and region (`Wipeout HD (EU)`) and groups the list |
 | `platform` | the console the original ran on (`PS3`, `PSP`, `PS4`, `Vita`); required to publish, a warning otherwise (see Credits) |
 | `original`, `before`, `ours` | image paths; at least two |
-| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the environment line `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture, and the build that drew ours: the commit `oag-game --version` reports, else the tree's `HEAD` at render time marked `(tree at render)` and `+dirty` when tracked files had changes; the line is re-spelled on every `manifest` run) |
+| `track`, `craft`, `state`, `setting`, `environment` | the caption: circuit, ship, what moment and how the pose was matched, emulator and size, and the `[entry.environment]` table `scripts/compare_env.py manifest` writes from `pair.json` (profile, output size, every setting that changes the picture, and the build that drew ours: the commit `oag-game --version` reports, else the tree's `HEAD` at render time marked `(tree at render)` and `+dirty` when tracked files had changes) |
 | `note` | free text, shown under the caption (what is not matched) |
 | `not_captured` | why there is no original; shown as a warning |
 
@@ -65,6 +65,20 @@ ADR-0074 requires both on every published page, so every page carries them:
   --check-statement` runs only that check; `just check-docs` runs it, so the gate fails on
   drift. The ADR is immutable, so a mismatch is fixed in `legal.md`.
 
+## Autopilot timer in a race state (2026-10-21)
+
+The rail and the hunts arm the player's Autopilot pickup with a huge timer (PSP `record+0x148 = 1.0e9`, HD slot `+0x158 = 10000`)
+so a state keeps flying, and the HUD **prints that timer**: the PSP race and both Zone pairs showed `1000000000.00`, the HD race pair
+`9945.79`. The pair scripts now put the pickup's authored timer back after the load (`<Weapon type="Autopilot"><Stats time>`,
+5 s on Pulse and HD): `psp-pulse-pair.py --field|--zone` writes it with the CPU stopped (`restore_autopilot_timer`, the moment
+is exactly the state's), `rpcs3-hd-pair.py --field` through `rpcs3-drive.py capture --autopilot-timer 5` (the game then runs
+0.3 s so the HUD redraws, the frame, pose, field and HUD record are from that moment). The HUD shows a pickup's own countdown
+(`5.00`, `4.95`), the manifest carries a caveat, `pair.json` records the timer before and after, and a pair whose timer at the stop
+is still above 600 s is refused. A run to let the pickup expire instead was tried on PSP and rejected: after 0.8 s the craft had
+left its line and the pack was gone. Known and not fixed here: the HD frames carry RPCS3's "Press and hold the START button to
+resume" toast (the pause the restore holds), and a PSP state loads a different number of emulated frames before the stop on
+a slower instance (a Zone 8 frame moved from zone second 1.5 to 2.1, where its HUD is mid-fade).
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and
@@ -76,8 +90,19 @@ differed by construction. None of them is a reference now.
 `scripts/compare-environment.toml` is the one **per-title environment profile**; `scripts/compare_env.py` reads
 it. A pair script builds a `compare_env.Pair`, records what each side actually ran with, and `Pair.finish` writes
 `pair.json` and **refuses** (exit 3, every mismatch named) when a check fails. `python3 scripts/compare_env.py
-manifest OUT.toml DIR...` turns the non-refused `pair.json` files into a page manifest whose `environment` line
-the page shows under each pair.
+manifest OUT.toml DIR...` turns the non-refused `pair.json` files into a page manifest whose `[entry.environment]`
+table the page shows under each pair as a definition list (2026-10-21).
+
+The fields come from what the pair **recorded**, never from the live profile: profile and its hash, output, the original's
+emulator and renderer, ours' settings as read back, the three overlap metrics, build and binary, and two times. Each
+metric label carries an `<abbr title>` (`compare_env.METRICS`): **RMSE** is the average per-pixel colour error, 0 is
+identical, lower is better; **edge correlation** compares where edges are, 1 is identical, higher is better, and shows
+whether shapes line up independent of colour; **mean grey difference** is the average brightness difference on a 0-255
+scale, lower is better. `original.captured_at` and `ours.rendered_at` (ISO 8601, local offset) are stamped by `Pair.finish`
+from the clock when the pair is made; **there is no fallback to file times**, so a pair made before they existed shows
+none until it is re-made. A pair needs `meta` (`id`, `title`) in its `pair.json`: `manifest` refuses one without, so
+the page never shows a directory name. `manifest` no longer rewrites `pair.json`. `scripts/check-compare-environment.py`
+(in `just check-docs`) proves the fields round-trip.
 
 | Platform | Output | Original's emulator settings (in the profile) | Ours |
 | --- | --- | --- | --- |

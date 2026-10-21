@@ -13,6 +13,7 @@ sides differ beyond the profile's tolerance. `manifest` carries the environment 
 compare page's manifest, so the page shows it.
 """
 
+import datetime
 import hashlib
 import json
 import math
@@ -398,6 +399,13 @@ class Pair:
         self.rec["caveats"].append(text)
         print("CAVEAT %s" % text, file=sys.stderr)
 
+    def stamp(self, side):
+        """Record the wall-clock time `side`'s picture was made: `original.captured_at` or `ours.rendered_at`, ISO 8601
+        with the local offset. Taken from the clock at the moment it is called and never from a file time, so a pair
+        made before this existed shows no time at all."""
+        key = {"original": "captured_at", "ours": "rendered_at"}[side]
+        self.rec[side][key] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+
     def check(self, name, ok, detail):
         self.checks.append({"name": name, "ok": bool(ok), "detail": detail})
         print("%s %s: %s" % ("ok     " if ok else "MISMATCH", name, detail), file=sys.stderr)
@@ -436,6 +444,11 @@ class Pair:
         if (self.out / "theirs.png").exists() and (self.out / "ours.png").exists():
             self.rec["overlap"] = overlap_score(self.out / "theirs.png", self.out / "ours.png")
         self.rec["refused"] = bool(bad)
+        # The pair scripts capture the original and render ours inside one run, so both are stamped here unless a
+        # script stamped its side earlier, at the moment the picture was written.
+        for side, key in (("original", "captured_at"), ("ours", "rendered_at")):
+            if key not in self.rec[side]:
+                self.stamp(side)
         self.rec["environment"] = environment_text(self.plat, self.rec)
         (self.out / "pair.json").write_text(json.dumps(self.rec, indent=2) + "\n")
         if bad:
@@ -467,8 +480,57 @@ def environment_text(plat, rec):
     return "; ".join(bits)
 
 
+METRICS = (
+    ("rmse", "RMSE", "%.3f", "Average per-pixel colour error between the two pictures. 0 is identical; lower is better."),
+    ("edge_ncc", "Edge correlation", "%.2f",
+     "Compares where edges are in the two pictures: 1 is identical, higher is better. It shows whether shapes line up, "
+     "independent of colour."),
+    ("mean_grey", "Mean grey difference", "%.2f",
+     "Average brightness difference between the two pictures on a 0-255 scale; lower is better."),
+)
+
+
+def environment_fields(rec):
+    """The environment as structured fields, built from what the pair RECORDED (`pair.json`), never from the live
+    profile: a pair made under an older profile keeps showing the one it was made under. A field the pair does not
+    carry is absent, so the page shows nothing for it rather than a guess."""
+    f = {}
+    if rec.get("profile"):
+        f["profile"] = "%s@%s" % (rec["profile"], rec.get("profile_sha", "?"))
+    if rec.get("output"):
+        f["output"] = "%dx%d" % tuple(rec["output"])
+    emu = rec.get("original", {}).get("emulator") or {}
+    if emu.get("name"):
+        f["original_emulator"] = " ".join(x for x in (emu["name"], emu.get("version", "")) if x)
+    if emu.get("renderer"):
+        f["original_renderer"] = emu["renderer"]
+    ours = rec.get("ours", {})
+    rb = ours.get("settings_readback") or {}
+    if rb:
+        f["ours_settings"] = ", ".join("%s %s" % (k.replace("_", " "), v) for k, v in rb.items())
+    ov = rec.get("overlap") or {}
+    for key, _, fmt, _ in METRICS:
+        if key in ov:
+            f[key] = fmt % ov[key]
+    binary = ours.get("binary")
+    if binary:
+        build = build_text(binary)
+        if build:
+            f["build"] = build.replace("build ", "", 1)
+        f["binary"] = binary["sha256_12"]
+    if rec.get("original", {}).get("captured_at"):
+        f["captured_at"] = rec["original"]["captured_at"]
+    if ours.get("rendered_at"):
+        f["rendered_at"] = ours["rendered_at"]
+    return f
+
+
 def toml_str(s):
     return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def refuse_pair(pj, why):
+    sys.exit("compare_env: %s: %s" % (pj, why))
 
 
 def manifest(out_path, dirs):
@@ -486,21 +548,18 @@ def manifest(out_path, dirs):
             # relpath from an unresolved pair to a resolved manifest names the worktree, which is
             # reaped after its merge.
             base = pj.parent.resolve()
-            if "overlap" not in rec:
+            if "mean_grey" not in (rec.get("overlap") or {}):
                 rec["overlap"] = overlap_score(base / "theirs.png", base / "ours.png")
-            # Re-spelled every run, so a pair made before a field joined the line (the build hash) gains it.
-            environment = environment_text(plat, rec)
-            if rec.get("environment") != environment:
-                rec["environment"] = environment
-                pj.write_text(json.dumps(rec, indent=2) + "\n")
+            m = rec.get("meta") or {}
+            if not m.get("title") or not m.get("id"):
+                refuse_pair(pj, "no `meta` with an id and a title: the page shows a pair's own words, never its directory name")
             rel = lambda name: Path(__import__("os").path.relpath(base / name, out.parent))
-            m = rec.get("meta", {})
             entries.append("\n".join([
                 "[[entry]]",
-                "id = %s" % toml_str(m.get("id", base.name)),
+                "id = %s" % toml_str(m["id"]),
                 "game = %s" % toml_str(plat["game"]),
                 "platform = %s" % toml_str(plat["platform"]),
-                "title = %s" % toml_str(m.get("title", base.name)),
+                "title = %s" % toml_str(m["title"]),
                 "original = %s" % toml_str(rel("theirs.png")),
                 "ours = %s" % toml_str(rel("ours.png")),
                 "track = %s" % toml_str(m.get("track", "")),
@@ -508,8 +567,10 @@ def manifest(out_path, dirs):
                 "state = %s" % toml_str(m.get("state", "")),
                 "setting = %s" % toml_str("%s %s, %s; ours %s" % (plat["emulator"]["name"], plat["emulator"].get("version", ""),
                                                                  size_text(plat), size_text(plat))),
-                "environment = %s" % toml_str(rec["environment"]),
-                "note = %s" % toml_str(" ".join([m.get("note", "")] + [("Not matched: " + c) for c in rec.get("caveats", [])]).strip()),
+                "note = %s" % toml_str(" ".join([m.get("note", "")] + [("Not matched: " + c.rstrip(".") + ".") for c in rec.get("caveats", [])]).strip()),
+                "",
+                "[entry.environment]",
+                *("%s = %s" % (k, toml_str(v)) for k, v in environment_fields(rec).items()),
             ]))
     out.write_text('[page]\ntitle = "Original vs ours"\nintro = "Fresh set of 2026-10-20: environment parity checked per pair (see Environment)."\n\n'
                    + "\n\n".join(entries) + "\n")
