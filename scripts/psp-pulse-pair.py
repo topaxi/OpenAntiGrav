@@ -46,6 +46,15 @@ INTERNAL_FOV = 65.0
 #: `|velocity| * 3.6`, the HUD's speed readout (PlayerStatus_Update, docs/ghidra/functions/psp-pulse-usa/race-progress.md).
 SPEED_TO_KMH = 3.6
 
+#: `g_game_mode` (u32): 6 is Zone (`docs/ghidra/functions/psp-pulse-usa/zone-start.md`).
+GAME_MODE = 0x08B31048
+ZONE_MODE = 6
+#: `g_race_manager` (`race-progress.md`): its word is the race's mode object, whose Zone fields are `+0x1a10` the zone number
+#: (u16), `+0x1a12` the clean-zone count (u16), `+0x1a1c` the score (s32) and `+0x1a24` the seconds into the zone (f32)
+#: (`zone-mode.md`, "The mode object"; the pointer hop and the three reads were checked live on 2026-10-21 against `craft+0x28c`).
+RACE_MANAGER = 0x08B317B4
+ZONE_COUNTER_OFFSET = 0x28C
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
@@ -136,6 +145,77 @@ def world_clock_offset(port, hits=40):
         return None
     (offset, n), = seen.most_common(1)
     return offset, n, sum(seen.values())
+
+
+def read_zone_ram(port):
+    """Zone's own state out of the stopped original: the mode, the zone number, the clean-zone count, the score and the
+    seconds into the zone, from the race's mode object."""
+    import struct
+    from ppsspp_debugger import Debugger
+    dbg = Debugger(port)
+    obj = dbg.read_u32(RACE_MANAGER)
+    blob = dbg.read(obj + 0x1A10, 0x1C)
+    zone, clean = struct.unpack_from("<2H", blob, 0)
+    return {"game_mode": dbg.read_u32(GAME_MODE), "mode_object": obj, "zone": zone, "clean_zones": clean,
+            "score": struct.unpack_from("<i", blob, 12)[0], "zone_seconds": struct.unpack_from("<f", blob, 20)[0]}
+
+
+def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, view_flags, profile_dir,
+              clock, zone_ram, world):
+    """Ours for a Zone frame: the player alone (Zone has no opponents), posed on the original's body and camera, rendered at
+    tick 0 with the original's zone number, score and zone clock written into the race's own state (`--hud-state`'s zone
+    fields) so the readout, the colour grade and the stage sphere read the zone the original was on."""
+    import json
+    from ppsspp_debugger import Debugger
+    after = read_zone_ram(args.port)
+    pair.rec["original"]["zone"] = {"at_load_stop": zone_ram, "after_the_trace_ticks": after,
+                                    "source": "race-manager mode object +0x1a10/+0x1a12/+0x1a1c/+0x1a24, g_game_mode"}
+    pair.check("the original is in Zone (g_game_mode == 6)", zone_ram["game_mode"] == ZONE_MODE,
+               "g_game_mode reads %d" % zone_ram["game_mode"])
+    pair.check("the state's zone number is unchanged across the capture's four ticks",
+               after["zone"] == zone_ram["zone"], "%d at the load stop, %d after" % (zone_ram["zone"], after["zone"]))
+    layout = args.layout if args.layout != "auto" else "forward"
+    declared = facts.get("layout")
+    pair.check("layout asserted matches the state's declared layout", declared in (None, layout),
+               "asserted %s, sidecar declares %s" % (layout, declared))
+    shield = theirs_row.get("shield")
+    shield_percent = 100.0 if shield is not None and shield >= args.shield_max - 0.5 else None
+    pair.rec["original"]["hud"] = {"zone": zone_ram["zone"], "score": zone_ram["score"], "zone_seconds": zone_ram["zone_seconds"],
+                                   "shield": shield, "shield_max_assumed": args.shield_max, "race_clock_f32_s": clock}
+    pair.rec["ours"].update({"mode": facts.get("mode", "zone"), "class": facts.get("class", "zone"),
+                             "team": args.team or "default", "layout": layout})
+    pair.rec["original"]["layout"] = layout
+    entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
+    hud = "1,1,%.4f,%.4f,%.4f,%s,0,%d,%d,%.4f" % (
+        clock, clock, theirs_row["speed"] * SPEED_TO_KMH, "%.2f" % shield_percent if shield_percent is not None else "100",
+        zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"])
+    if shield_percent is None:
+        pair.caveat("the original's shield read %.1f against the assumed pool of %.1f: ours shows a full bar" % (shield, args.shield_max))
+    base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
+            "--hud-state", hud] + flags + ["--camera-fov", "%.4f" % fov]
+    pair.rec["ours"]["ticks"] = 0
+    pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
+    pair.caveat("Zone state read from the original's RAM and imposed on ours: zone %d, score %d, %.2f s into the zone; ours runs no "
+                "ticks, so its exhaust, trail and every effect that needs history start cold (no field warm-up in Zone); the HUD's "
+                "place, lap and clocks are imposed from the original's RAM but Zone_HUD authors none of them; the world meshes' clock is "
+                "the original's own mesh clock, imposed" % (zone_ram["zone"], zone_ram["score"], zone_ram["zone_seconds"]))
+    ours_csv = out / "ours-trace.csv"
+    run(base + ["--ticks", 1, "--trace-out", ours_csv], stdout=subprocess.DEVNULL)
+    run(base + ["--ticks", 0] + view_flags + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL)
+    got, bad = ce.read_back(plat, profile_dir)
+    pair.rec["ours"]["settings_readback"] = got
+    for b in bad:
+        pair.check("ours settings", False, b)
+    pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
+    ours_row = ce.csv_row(ours_csv, 0)
+    pair.check_pose(theirs, ce.pose_of(ours_row), fov, fov)
+    pair.rec["ours"]["shield"] = ours_row.get("shield")
+    pair.check_size("ours", out / "ours.png")
+    run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
+    if args.meta:
+        pair.rec["meta"] = json.loads(args.meta)
+    pair.finish()
+    print("wrote", out / "side.png")
 
 
 def camera_craft_distance(row):
@@ -255,6 +335,11 @@ def main():
     ap.add_argument("--pack-near", type=float, default=45.0,
                     help="with --field: how close to the player a craft in view must be (units); the pair is "
                          "refused when the frame is not a pack")
+    ap.add_argument("--zone", action="store_true",
+                    help="a Zone frame: the state is a Zone race (g_game_mode 6, checked). Ours is the player alone at tick 0 on the "
+                         "original's pose and camera, with the zone number, score and zone clock read from the mode object")
+    ap.add_argument("--shield-max", type=float, default=135.0,
+                    help="with --zone: the shield pool, read as 135.0 on the Assegai in Zone (a full bar shows 100 %%)")
     ap.add_argument("--toast-wait", type=float, default=6.0)
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     args = ap.parse_args()
@@ -301,14 +386,16 @@ def main():
     if not 0.0 <= clock <= 3600.0:
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
-    if args.ours_ticks is None:
-        args.ours_ticks = GO_TICK + ce.tenths_matched_ticks(clock)
-    pair.rec["ours"]["ticks"] = args.ours_ticks
-    pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
-    pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,
-               "original %.2f s after GO, ours %.2f s (ticks %d, GO at tick %d)"
-               % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
+    if not args.zone:  # a Zone frame renders at tick 0 on the mode object's counters, not on a run-up clock
+        if args.ours_ticks is None:
+            args.ours_ticks = GO_TICK + ce.tenths_matched_ticks(clock)
+        pair.rec["ours"]["ticks"] = args.ours_ticks
+        pair.rec["ours"]["race_clock_s"] = (args.ours_ticks - GO_TICK) / 60
+        pair.check("race clock phase", abs((args.ours_ticks - GO_TICK) / 60 - clock) <= 0.05,
+                   "original %.2f s after GO, ours %.2f s (ticks %d, GO at tick %d)"
+                   % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     trace_extra = []
+    zone_ram = read_zone_ram(args.port) if args.zone else None
     if args.field:
         rf = race_field_module()
         from ppsspp_debugger import Debugger as _D
@@ -350,7 +437,8 @@ def main():
         pair.rec["original"]["world_clock_offset_s"] = offset
         pair.rec["original"]["world_clock_note"] = ("world meshes' animation clock minus the HUD race clock, the most common "
                                                     "non-zero value (%d of %d updater hits), live" % (n, total))
-        ours_offset = offset - GO_TICK / 60
+        # a Zone frame renders at tick 0, so ours' animation clock is the offset alone: the original's mesh clock
+        ours_offset = offset + clock if args.zone else offset - GO_TICK / 60
         flags += ["--world-clock-offset", "%.3f" % ours_offset]
         pair.rec["ours"]["world_clock_offset_s"] = ours_offset
     pair.rec["original"]["camera"] = {"pos": [theirs_row["cam_pos_" + a] for a in "xyz"],
@@ -362,6 +450,9 @@ def main():
     view_flags = ["--camera-view", view]
     pair.check_size("original", out / "theirs.png")
 
+    if args.zone:
+        return zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, view_flags, profile_dir,
+                         clock, zone_ram, world)
     if args.field:
         if args.layout == "auto":
             sys.exit("--field needs --layout forward|reversed: the grid probe is a start-line test")

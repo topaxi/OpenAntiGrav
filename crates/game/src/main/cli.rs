@@ -864,10 +864,10 @@ pub(crate) struct Cli {
     pub(crate) field_warmup: bool,
 
     /// With a posed craft (`--pose-from` or `--pose`): the HUD's race state as the original's frame showed it,
-    /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]` (lap 1-based, the clocks in seconds), read out of the
+    /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]` (lap 1-based, the clocks in seconds; the last three are Zone mode's counters, written into the race's own state so the grade follows), read out of the
     /// emulator's RAM at the same stop as the pose. A posed capture runs no ticks, so without this
     /// the HUD reads the grid's place and zero clocks.
-    #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S]]]")]
+    #[arg(long, value_name = "PLACE,LAP,LAP_S,RACE_S[,KMH[,SHIELD_PCT[,BEST_S[,ZONE[,SCORE[,ZONE_S]]]]]]")]
     pub(crate) hud_state: Option<String>,
 
     /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon

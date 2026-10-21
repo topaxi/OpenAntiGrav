@@ -591,6 +591,16 @@ impl Race {
         }
 
         #[cfg(feature = "view")]
+        if let Some(zone) = capture_hud.and_then(|hud| hud.zone) {
+            // A Zone capture's counters, so the readout, the grade and the sphere read the
+            // original's zone (`CaptureZone`).
+            let race = &mut world.race[0];
+            race.zone = zone.zone;
+            race.score = zone.score.unwrap_or(race.score);
+            race.zone_timer = zone.timer_seconds.unwrap_or(race.zone_timer);
+        }
+
+        #[cfg(feature = "view")]
         let camera_view = oag_display::display::CameraView::default();
         #[cfg(feature = "view")]
         let chase_params = super::access::chase_block_for(camera_view, chase, chase_close);
