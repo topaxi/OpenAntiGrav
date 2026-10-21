@@ -279,6 +279,20 @@ pub struct RenderProfile {
     /// Read fresh every frame, so the row applies live.
     #[serde(default)]
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
+    /// Where a craft's engine ribbon draws against the circuit's translucent
+    /// surfaces: `original` or `over-floors`.
+    ///
+    /// **`original` is the measured order and the default** - every `Trail`
+    /// queued at the constant key `0x4d000000`, ahead of the circuit's blended
+    /// list, so a translucent floor patch paints over the ribbon.
+    /// `over-floors` draws the ribbons after that list, the order this project
+    /// drew before the original's was measured; chosen, not measured. Only the
+    /// titles whose ribbon is the PSP preset offer it (the menu row reads
+    /// `values_from = "trail_orders"`); elsewhere the value is ignored. See
+    /// [`oag_display::display::TrailOrder`]. Read fresh every frame, so the row
+    /// applies live.
+    #[serde(default)]
+    pub trail_order: oag_display::display::TrailOrder,
 }
 
 impl RenderProfile {
@@ -294,6 +308,22 @@ impl RenderProfile {
             ..Self::default()
         }
     }
+}
+
+/// The TRAIL ORDER row's values for `title`: every [`oag_display::display::TrailOrder`]
+/// where its ribbon is the PSP preset (Pulse on both platforms, Pure), and none
+/// elsewhere, which draws the row unusable. HD/Fury's tube keeps its own order
+/// whatever the setting holds (`oag_raceplay::Race::ribbons_first`), and so do
+/// Omega's and 2048's, which reuse HD's.
+#[must_use]
+pub fn trail_order_choices(title: &oag_title::Title) -> Vec<oag_ui::menu::Choice> {
+    if !title.exhaust.is_psp_preset() {
+        return Vec::new();
+    }
+    oag_display::display::TrailOrder::ALL
+        .iter()
+        .map(|order| oag_ui::menu::Choice::plain(order.name()))
+        .collect()
 }
 
 /// See [`RenderProfile::shadows`]: the tier a title starts on.
@@ -427,6 +457,7 @@ impl Default for RenderProfile {
             screen_filter_strength: oag_display::display::FilterStrength::default(),
             model_detail: oag_mesh::mesh::ModelDetail::default(),
             texture_detail: oag_mesh::mesh_render::TextureDetail::default(),
+            trail_order: oag_display::display::TrailOrder::default(),
         }
     }
 }
@@ -458,7 +489,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 14] = [
+pub(super) const PROFILE_KEYS: [&str; 15] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -473,6 +504,7 @@ pub(super) const PROFILE_KEYS: [&str; 14] = [
     "screen_filter_strength",
     "model_detail",
     "texture_detail",
+    "trail_order",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

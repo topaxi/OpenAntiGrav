@@ -70,7 +70,7 @@ pub mod web;
 pub use controls::{Controls, TriggerSensitivity};
 pub use online::Online;
 pub use race::{Race, Remix};
-pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
+pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key, trail_order_choices};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
     migrate_render_profiles, seed_render_scale_chosen, seed_shadow_defaults,
@@ -942,6 +942,14 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
+    // Offered only where the ribbon is the PSP preset; elsewhere the row has no
+    // values (`values_from = "trail_orders"`) and nothing to seed.
+    if title.exhaust.is_psp_preset() {
+        out.push((
+            "graphics.trail_order",
+            text(&profile.trail_order.to_string()),
+        ));
+    }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
     if cfg!(target_arch = "wasm32") {
         out.push(("display.canvas_size", text(&settings.display.canvas_size)));

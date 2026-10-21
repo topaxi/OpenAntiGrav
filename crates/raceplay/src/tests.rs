@@ -78,6 +78,7 @@ mod thrust_chase;
 mod title_effects;
 mod track_stages;
 mod trail_hits;
+mod trail_order;
 mod viewpoint;
 mod weapons;
 mod windowed;

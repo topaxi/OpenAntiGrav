@@ -1023,3 +1023,54 @@ reconstruction = "smaa"
     assert_eq!(ps2.minimum_resolution.percent(), 25);
     assert_eq!(ps2.target_fps.hz(), Some(90));
 }
+
+/// TRAIL ORDER is a choice only where the ribbon is the PSP preset: Pulse (both
+/// platforms share its title) and Pure. HD/Fury's tube keeps its own order, and so
+/// do Omega's and 2048's; their row has no values and greys out, and nothing seeds it.
+#[test]
+fn trail_order_is_offered_only_where_the_ribbon_is_the_psp_preset() {
+    let both: Vec<String> = oag_display::display::TrailOrder::ALL
+        .iter()
+        .map(|order| order.name().to_string())
+        .collect();
+    let values = |title: &oag_title::Title| -> Vec<String> {
+        trail_order_choices(title)
+            .into_iter()
+            .map(|choice| choice.value)
+            .collect()
+    };
+    assert_eq!(values(oag_pulse::TITLE), both);
+    assert_eq!(values(oag_pure::TITLE), both);
+    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
+        assert!(
+            values(title).is_empty(),
+            "{} offers a trail order",
+            title.name
+        );
+    }
+
+    let seeded = |title, platform| {
+        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+            .into_iter()
+            .any(|(key, _)| key == "graphics.trail_order")
+    };
+    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+}
+
+/// `original` is the measured order and what a profile without the key reads.
+#[test]
+fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
+    assert_eq!(
+        RenderProfile::default().trail_order,
+        oag_display::display::TrailOrder::Original
+    );
+    let profile: RenderProfile = toml::from_str("trail_order = \"over-floors\"").expect("parse");
+    assert_eq!(
+        profile.trail_order,
+        oag_display::display::TrailOrder::OverFloors
+    );
+    for order in oag_display::display::TrailOrder::ALL {
+        assert_eq!(order.name().parse(), Ok(order));
+    }
+}

@@ -707,6 +707,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) texture_detail: Option<oag_mesh::mesh_render::TextureDetail>,
 
+    /// Where the PSP engine ribbons draw against the circuit's translucent
+    /// surfaces: `original` or `over-floors`, overriding
+    /// `[render_profiles.<title>] trail_order` for this run only. See
+    /// `oag_display::display::TrailOrder`.
+    #[arg(long)]
+    pub(crate) trail_order: Option<oag_display::display::TrailOrder>,
+
     /// Whether the track's authored visibility set culls this run: `true` or
     /// `false`.
     ///

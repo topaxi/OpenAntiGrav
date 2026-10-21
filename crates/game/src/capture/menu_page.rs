@@ -229,6 +229,11 @@ pub(super) fn menu_page(
         oag_ui::menu::ValueSource::ScreenFilters,
         &crate::screen::Catalogue::load(crate::screen::Catalogue::directory()).choices(),
     );
+    // The live menus' own list: both orders on a PSP-preset ribbon, none elsewhere.
+    model.supply(
+        oag_ui::menu::ValueSource::TrailOrders,
+        &crate::settings::trail_order_choices(title),
+    );
     // Straight off the boot survey, not off the settings file, and that is
     // the difference from the two rows above: what a player may choose here
     // depends on which discs they own rather than on what they last picked, so

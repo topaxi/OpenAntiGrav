@@ -294,6 +294,13 @@ impl Session {
             menu::ValueSource::ScreenFilters,
             &self.screen_filters.choices(),
         );
+        // Empty off the PSP ribbon, which greys the row: HD's tube has no choice here.
+        if let Some(shell) = &self.shell {
+            model.supply(
+                menu::ValueSource::TrailOrders,
+                &settings::trail_order_choices(shell.title),
+            );
+        }
         // Race Remix's own axis - every title this machine can currently open
         // a source for, surveyed once at `Session` construction. See the
         // field's own doc comment. TRACK TITLE's own row: 2048's circuits are
