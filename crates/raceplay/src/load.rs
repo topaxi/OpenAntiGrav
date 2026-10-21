@@ -952,13 +952,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     #[cfg(feature = "view")]
     let hull_lights = vex_geometry && title.looks.hull_lights.applies(archives.layout.platform);
-    let pulse_ps2_data =
-        vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
     let track_stats = track_stats::read(
         &options.source,
         &mut archives,
         &track,
-        (pulse_psp, pulse_ps2_data),
+        pulse_psp,
         &mut report,
     );
     let original_laws =

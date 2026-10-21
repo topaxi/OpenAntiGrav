@@ -29,10 +29,11 @@ use oag_raceplay::{Race, Scene};
 /// `campaign` and `record_target` are the stage's: a campaign cell races its
 /// own ladder and any other Time Trial or Speed Lap races the record. See
 /// `oag_hud::Readout::time_trial_pace`. `campaign_cell` is title-blind (HD
-/// reuses the same `oag_tables::race_campaign::Cell`), so nothing here stops it
-/// computing on HD - what keeps this Pulse-only is `record_target` (`stats.xml`
-/// is read off Pulse's PSP disc alone) and `draw.rs`'s widget-name match: no
-/// shipped HD layout authors a widget named `TotalTime`/`TotalTimeTxt`. The
+/// reuses the same `oag_tables::race_campaign::Cell`). `record_target` is
+/// whatever the circuit's own `stats.xml` gave: Pulse's, and since 2026-10-21
+/// HD's too (`<RaceTimes Venom="599">`, the `RECORD` the original counts down
+/// from), so a Time Trial on either draws `RECORD`; a title whose file does not
+/// read keeps the plain `TOTAL` clock. The
 /// capture path has no cell and passes `None`.
 #[must_use]
 pub fn readout(

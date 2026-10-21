@@ -30,6 +30,7 @@ mod hd_opponent_variant_ground_truth;
 mod hd_original_ai_ground_truth;
 mod hd_pad_illumination_ground_truth;
 mod hd_pickup_icon_ground_truth;
+mod hd_record_target_ground_truth;
 mod hd_rim_glow_ground_truth;
 mod hd_rocket_smoke_ground_truth;
 mod hd_sky_tint_ground_truth;

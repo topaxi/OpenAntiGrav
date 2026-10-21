@@ -1,46 +1,43 @@
 //! The circuit's own `stats.xml`: the authored `<RaceTimes>` and `<LapTimes>`
 //! the HUD's `RECORD` readout counts down to.
 //!
-//! Pulse keeps it in `FEData.wad`, beside the per-track front-end screens,
-//! **not** in the `Data.wad` the race reads its geometry from -
+//! Pulse's PSP disc keeps it in `FEData.wad`, beside the per-track front-end
+//! screens, **not** in the `Data.wad` the race reads its geometry from -
 //! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s `TrackStats_Load`
 //! opens `"<track directory>\stats.xml"` (`stats_reversed.xml` for a reversed
-//! circuit). The campaign's AI-skill lookup reads the same file the same way
-//! (`Session::resolve_campaign_ai_skill_scale`).
+//! circuit). Every other pressing keeps it among the race's own archives under
+//! the same entry name: Pulse PS2, and HD, whose circuits author
+//! `/data/environments/<dir>/stats.xml` (`<RaceTimes Venom="599" .../>` on the
+//! thirteen Time Trial circuits, measured as the `RECORD` the original counts
+//! down from; `docs/ui/hud.md`, "HD's RECORD"). The campaign's AI-skill lookup
+//! reads the same file the same way (`Session::resolve_campaign_ai_skill_scale`).
 
 use oag_tables::track_stats::{self, TrackStats};
 
-/// The stats for `track` (a `.vex` entry name), or `None` off Pulse's PSP disc
-/// or when the file is absent or unreadable. Says which in `report`.
+/// The stats for `track` (a `.vex` entry name), or `None` where the file is
+/// absent or unreadable. Says which in `report`. `in_fedata` is Pulse's PSP
+/// disc, whose file sits in `FEData.wad`; every other title reads it out of the
+/// race's own `archives`.
 pub(super) fn read(
     source: &str,
     archives: &mut oag_assets::Archives,
     track: &str,
-    (pulse_psp, pulse_ps2): (bool, bool),
+    in_fedata: bool,
     report: &mut Vec<String>,
 ) -> Option<TrackStats> {
-    if !pulse_psp && !pulse_ps2 {
-        report.push(
-            "track stats: not read (only Pulse on a PSP or PS2 disc keeps them); the \
-             HUD's RECORD readout has no authored time"
-                .into(),
-        );
-        return None;
-    }
-    let (directory, file) = track.rsplit_once('\\')?;
+    let track = track.replace('/', "\\");
+    let (directory, file) = track.trim_start_matches('\\').rsplit_once('\\')?;
     let name = if file.to_ascii_lowercase().contains("reversed") {
         "stats_reversed.xml"
     } else {
         "stats.xml"
     };
     let entry = format!(r"{directory}\{name}");
-    let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
-    // The PS2 pressing keeps the same file in the archive the race reads its
-    // geometry from, under the same entry name.
-    let blob = if pulse_ps2 {
-        archives.read_name(&entry)
-    } else {
+    let blob = if in_fedata {
+        let spec = oag_assets::source::archive_spec(source, oag_pulse::archives::FEDATA);
         oag_assets::Archive::open(&spec).and_then(|mut archive| archive.read_name(&entry))
+    } else {
+        archives.read_name(&entry)
     }
     .map_err(|e| report.push(format!("track stats: {entry} did not read ({e})")))
     .ok()?;
