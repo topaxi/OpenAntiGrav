@@ -550,9 +550,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // and so does the output alpha (`MOV H0.w, H6.x`).
     let ramp_linear = pow(first.rgb, vec3<f32>(2.2));
     let grid_linear = pow(second.r, 2.2);
-    let sheen_linear = vertex_light_sheen * (ramp_linear + vec3<f32>(glow_tint_offset.w))
-        + ramp_linear
-        + vec3<f32>(grid_linear);
+    // **Times the program's output scale**, as the authored path above is: block #7 ends on
+    // `ADD /2 H0.xyz, R0, H2` (read live on Tech de Ra, fragment `0x76fac0`), so the scene holds
+    // half of the sum. The output alpha, `MOV H0.w, H6.x`, is not scaled.
+    let sheen_linear = scene.light.output_scale
+        * (vertex_light_sheen * (ramp_linear + vec3<f32>(glow_tint_offset.w))
+            + ramp_linear
+            + vec3<f32>(grid_linear));
     // Unclamped on the linear target, whose bloom gate reads values above 1;
     // clamped and encoded on a gamma one, as the authored path does.
     let sheen_rgb = mix(
