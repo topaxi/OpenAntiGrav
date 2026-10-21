@@ -1294,3 +1294,22 @@ The layouts sharpen the search, because the widget names are in the binary:
 Nothing is renamed on the strength of the above - see
 [ADR-0005](../architecture/adr/0005-ghidra-conventions.md) and the
 [confidence rubric](../reverse-engineering/confidence-rubric.md).
+
+## Pulse's HUD text steps the pen a whole pixel per glyph (2026-10-21, `pulse-one-pair`)
+
+Read off a GE list of the Moa Therma White grid (`scripts/psp-ge-dump.py`, 680 prims): the HUD text is
+one `RECTANGLES` prim per string, a rect pair per glyph, vertex type `0x183` (float uv and position), linear
+filter. The best-lap row `0.00.00` at scale 0.6 has its glyphs at x = 34.5, 44.5, 48.5, 58.5, 68.5, 72.5,
+82.5: steps of 10 and 4, where `PulseHud.fnt`'s advances at 0.6 are 9.6 and 3.6. `0 kmh` and the lap
+counter step the same way (7 and 13 for 7.2 and 13.2), so each advance is `round(advance * scale)`
+(confidence 80: three strings, rounding and not flooring or ceiling separated only by 9.6 and 3.6). Ours
+stepped fractionally, so the 7-glyph row ended 2.4 px short and its strokes sat on half pixels.
+`Renderer::set_whole_pixel_advances` (set for a title whose HUD is raster art, `HudArt::raster`: Pulse, and
+Pure unmeasured) rounds the pen's step and the width an aligned string is placed by. The 24 Pulse PSP grid
+pairs' mean grey difference (0-255, `compare_env.overlap_score` edge correlation beside it) fell 0.08 to
+0.17 on each but Moa Therma Black (0.00, no text in its error), the Zone pairs moved +0.01 and +0.02.
+
+Checked and not taken: the glyph rect is the box grown 0.5 px each side and the uv 0.5 texel (`225.5..249.5`
+for the box `226..249`), in the PSP's pixel-centre convention (a rect edge at `x.5` covers from pixel
+`ceil(x)`). Drawing ours that way, in every offset combination, did not lower the grid pairs' difference
+(7.555 against 7.561 on the 15 white pairs at best), so it is not wired. Not checked against Pure or the PS2.

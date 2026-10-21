@@ -2730,3 +2730,14 @@ the original. Both are right: the pair script rendered ours at `--ticks 0`, wher
 reads 0 (`3 2 1` unlit, dark red texels), while the original's state is after the release. Ours at
 `--ticks 300` with the same pose shows the green `GO` board on all 12 circuits; no gantry change was
 needed. `scripts/psp-pulse-pair.py` and `scripts/pcsx2-pulse-pair.py` now render at 300 ticks.
+
+## Pulse's gantry phase in a compare pair is the pair's tick, not the clock (2026-10-21, `pulse-one-pair`)
+
+`GO` strobes in `[3.2, 5.5)` and the pair frame lands anywhere in the loop, so a pair compares the board's phase
+before anything else. Read live on the 24 Time Trial grid states (breakpoint `0x089128fc`, `s0` is the `Mesh` node,
+`+0x40` its time, read with the race clock at the same stop): `Clock::PULSE`'s prediction at that race clock is
+within 0 ticks up to clock 16 s, 1 tick from 17 to 27 s, 2 ticks at 40 s and 12 ticks at 216 s (the original steps
+at 59.87 Hz, so its loop is 0.2 % longer in clock seconds), with no scatter. The stored pairs were 4 ticks off
+because they predate `GO_TICK` 272; with it (`psp-pulse-pair.py`) ours is within about 2 ticks and Moa Therma
+White's board matches. What is left needs the node time read at the capture and handed to `--gantry-seconds`
+(the HD pair script does this): a one-tick phase error is 0.3 of this pair's mean grey difference.

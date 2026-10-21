@@ -19,6 +19,9 @@ pub(super) struct HudStretch {
     /// Output pixels per grid unit of the fitted viewport, measured by
     /// [`Self::measure`] at the top of every frame. Zero until the first.
     pub(super) pixels_per_grid: f32,
+    /// Whether each glyph's advance is rounded to a whole pixel, see
+    /// [`Renderer::set_whole_pixel_advances`].
+    pub(super) whole_advances: bool,
 }
 
 impl Default for HudStretch {
@@ -26,11 +29,21 @@ impl Default for HudStretch {
         Self {
             mode: HudScale::Linear,
             pixels_per_grid: 0.0,
+            whole_advances: false,
         }
     }
 }
 
 impl HudStretch {
+    /// The pen's step past a glyph of `advance` grid units.
+    pub(super) fn advance(&self, advance: f32) -> f32 {
+        if self.whole_advances {
+            advance.round()
+        } else {
+            advance
+        }
+    }
+
     /// Pixels per grid unit once `space` is letterboxed into `viewport`.
     pub(super) fn measure(space: Space, viewport: (f32, f32, f32, f32)) -> f32 {
         let [scale_x, _] =
@@ -99,6 +112,18 @@ pub(super) fn snap_sprites(quads: &mut [Quad], pixels_per_grid: f32) {
 }
 
 impl Renderer {
+    /// Steps the pen a whole pixel per glyph, as the PSP's HUD text does.
+    ///
+    /// **Measured on Pulse (PSP)**: a GE list of a Time Trial grid has the
+    /// `0.00.00` of the best-lap row at pens 34.5, 44.5, 48.5, 58.5, 68.5, 72.5
+    /// and 82.5 - steps of 10 and 4 where the face's advances at scale 0.6 are
+    /// 9.6 and 3.6 - and `0 kmh` and the lap counter step the same way, so each
+    /// advance is `round(advance * scale)`. Called for a title whose HUD is
+    /// raster art (`HudArt::raster`: Pulse, Pure); Pure inherits it unmeasured.
+    pub fn set_whole_pixel_advances(&mut self, on: bool) {
+        self.hud.whole_advances = on;
+    }
+
     /// Draws this renderer's atlases and sprites the way `mode` asks. Only
     /// the HUD's own renderers call it, and only for a title whose HUD is
     /// raster art.
@@ -150,6 +175,7 @@ mod tests {
         HudStretch {
             mode: HudScale::Integer,
             pixels_per_grid,
+            ..HudStretch::default()
         }
     }
 
@@ -201,6 +227,7 @@ mod tests {
             let stretch = HudStretch {
                 mode,
                 pixels_per_grid: 3.97,
+                ..HudStretch::default()
             };
             assert_eq!(stretch.text_scale(1.0, 0.8), 0.8);
             assert_eq!(stretch.snap(12.34), 12.34);
@@ -238,5 +265,20 @@ mod tests {
         snap_sprites(&mut quads, 3.97);
         let after: Vec<[f32; 4]> = quads.iter().map(|q| q.rect).collect();
         assert_eq!(before, after);
+    }
+
+    #[test]
+    fn whole_pixel_advances_are_the_psp_steps_of_the_best_lap_row() {
+        let on = HudStretch {
+            whole_advances: true,
+            ..HudStretch::default()
+        };
+        // `0.00.00` at scale 0.6, read off the original's GE list: 10, 4, 10, 10, 4, 10.
+        let steps: Vec<f32> = [16.0, 6.0, 16.0, 16.0, 6.0, 16.0]
+            .iter()
+            .map(|advance| on.advance(advance * 0.6))
+            .collect();
+        assert_eq!(steps, [10.0, 4.0, 10.0, 10.0, 4.0, 10.0]);
+        assert!((HudStretch::default().advance(9.6) - 9.6).abs() < 1e-6);
     }
 }
