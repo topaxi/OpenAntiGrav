@@ -134,6 +134,7 @@ fn model(slots: usize, decoded: usize) -> Model {
 
         flame: None,
         absorb_shell: false,
+        material_lod_bias: 0.0,
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,

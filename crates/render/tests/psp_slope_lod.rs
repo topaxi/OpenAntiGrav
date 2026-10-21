@@ -159,6 +159,7 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         glow_from_program: false,
         flame: None,
         absorb_shell: false,
+        material_lod_bias: 0.0,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0 * depth,
@@ -567,4 +568,73 @@ fn anisotropy_leaves_a_footprint_narrower_than_a_texel_alone() {
         return;
     };
     assert_eq!(moved, 0);
+}
+
+/// A 16x16 base of one-texel red and blue stripes across `u`, with no chain of
+/// the disc's: the renderer generates the levels, and level 1 onwards is the
+/// purple average of the pair, so the stripes' contrast is how fine a level
+/// arrived.
+fn stripes() -> Arc<ModelTexture> {
+    let texels = (0..16 * 16)
+        .flat_map(|i| {
+            if i % 2 == 0 {
+                [255, 0, 0, 255]
+            } else {
+                [0, 0, 255, 255]
+            }
+        })
+        .collect();
+    Arc::new(ModelTexture {
+        label: "red and blue stripes".into(),
+        width: 16,
+        height: 16,
+        texels: Texels::Rgba8(texels),
+        mip_count: None,
+    })
+}
+
+/// The strongest red-against-blue contrast along the centre row of a draw of
+/// [`stripes`] minified to about two texels a pixel (level 1 of the sampler's
+/// own derivative selection), at `bias` levels of `Model::material_lod_bias`.
+fn stripe_contrast(bias: f32) -> i32 {
+    let Some((device, queue)) = gpu() else {
+        return -1;
+    };
+    let depth = 64.0;
+    let mut quad = model(stripes(), depth, Texcoords::Constant);
+    for (vertex, uv) in quad
+        .vertices
+        .iter_mut()
+        .zip([[0.0, 0.0], [8.0, 0.0], [4.0, 8.0]])
+    {
+        vertex.texcoord = uv;
+    }
+    quad.material_lod_bias = bias;
+    let setup = Setup::all(TextureDetail::Original)[0];
+    let image = draw(&device, &queue, &quad, depth, setup);
+    let row = (SIZE / 2) * SIZE;
+    ((SIZE / 2 - 8)..(SIZE / 2 + 8))
+        .map(|x| {
+            let texel = &image[((row + x) * 4) as usize..][..4];
+            (i32::from(texel[0]) - i32::from(texel[2])).abs()
+        })
+        .max()
+        .unwrap()
+}
+
+#[test]
+fn a_material_lod_bias_reads_a_finer_level_than_the_samplers_own() {
+    let plain = stripe_contrast(0.0);
+    if plain < 0 {
+        return;
+    }
+    let biased = stripe_contrast(-1.5);
+    assert!(
+        plain < 20,
+        "with no bias the minified stripes average to purple, contrast {plain}"
+    );
+    assert!(
+        biased > 80,
+        "a bias of -1.5 reaches the stripes themselves, contrast {biased} against {plain}"
+    );
 }

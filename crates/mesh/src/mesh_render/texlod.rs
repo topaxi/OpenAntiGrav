@@ -122,13 +122,19 @@ pub(super) fn constants(model: &Model, anisotropy: Anisotropy) -> Vec<(&'static 
         .iter()
         .flatten()
         .any(|texture| matches!(texture.texels, Texels::Chain(_)));
+    let mut out = Vec::new();
     if chained {
-        vec![
+        out.extend([
             ("texlod_slope", f64::from(PSP_TEXLOD_SLOPE)),
             ("texlod_bias", f64::from(PSP_TEXLOD_BIAS)),
             ("aniso_max", f64::from(anisotropy.clamp())),
-        ]
-    } else {
-        Vec::new()
+        ]);
     }
+    // A title's own bias on its material textures, a separate knob from the
+    // slope law above: it adds to the sampler's derivative-driven level
+    // (`textureSampleBias`), where the slope law replaces it.
+    if model.material_lod_bias != 0.0 {
+        out.push(("material_lod_bias", f64::from(model.material_lod_bias)));
+    }
+    out
 }

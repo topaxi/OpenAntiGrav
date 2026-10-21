@@ -164,6 +164,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
 
         flame: None,
         absorb_shell: false,
+        material_lod_bias: 0.0,
         alpha_test_ref: None,
         centre,
         radius,

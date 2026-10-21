@@ -161,4 +161,6 @@ pub const LOOKS: &Looks = &Looks {
     skips_language_picker: Rule::UNREAD,
     // Pulse lights on the GE; no fragment-program output scale exists there.
     lit_output_halved: Rule::UNREAD,
+    // The GE selects the level by its slope law (`oag_mesh::mesh_render::PSP_TEXLOD_SLOPE`), not a bias.
+    material_lod_bias: Rule::UNREAD,
 };

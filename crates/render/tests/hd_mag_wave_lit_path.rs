@@ -104,6 +104,7 @@ fn model(wave: bool) -> Model {
         glow_from_program: false,
         flame: None,
         absorb_shell: false,
+        material_lod_bias: 0.0,
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,
