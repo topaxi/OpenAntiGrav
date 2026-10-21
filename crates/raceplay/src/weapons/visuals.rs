@@ -279,12 +279,7 @@ impl Race {
         // The shooter's node basis: the drawn hull's own rotation, the body's
         // orientation with its visual roll - `drawable::model_matrix_of`
         // without the model-space yaw and scale.
-        let rotation = shooter.physics.body.orientation
-            * oag_render::roll::display_rotation(
-                oag_core::math::Vec3::NEG_Z,
-                shooter.physics.roll_phase,
-                shooter.physics.steer_lean,
-            );
+        let rotation = crate::drawable::display_orientation(shooter);
         let frame = oag_fx::beam::Frame {
             owner: shooter.physics.body.position,
             target: self.sim.world.ships[beam.target as usize]

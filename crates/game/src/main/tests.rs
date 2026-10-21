@@ -94,6 +94,20 @@ fn a_slot_zero_row_is_the_players_exact_pose() {
 }
 
 #[test]
+fn a_field_of_the_player_alone_is_a_field() {
+    // A Zone run has no opponents; `--field-warmup` still warms the player's exhaust.
+    let text = "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z\n\
+                0,Assegai,0,0,-1,0,1,0,1,0,0,7,8,9,10,0,0\n";
+    let path = fixture_file("field-player-alone", text);
+    let field = pose::field_from_csv(&path).expect("a player-only field");
+    assert!(field.opponents.is_empty());
+    assert_eq!(
+        field.velocities().expect("the player's velocity"),
+        vec![oag_core::math::Vec3::new(10.0, 0.0, 0.0)]
+    );
+}
+
+#[test]
 fn a_field_with_a_gap_in_its_slots_is_refused() {
     let text = FIELD.replace("\n2,Qirex", "\n3,Qirex");
     let path = fixture_file("field-gap", &text);
@@ -114,12 +128,19 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             speed_kmh: None,
             shield_percent: None,
             best_lap_ticks: None,
+            zone: None,
         }
     );
     let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
     assert_eq!((full.speed_kmh, full.shield_percent), (Some(571.5), Some(99.0)));
     let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
     assert_eq!(best.best_lap_ticks, Some(3375));
+    let zone = pose::parse_hud_state("1,1,0,0,500.0,99.0,0,12,151921,2.5").expect("ten values");
+    assert_eq!(
+        zone.zone,
+        Some(race::CaptureZone { zone: 12, score: Some(151_921), timer_seconds: Some(2.5) })
+    );
+    assert_eq!(best.zone, None);
     let none = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,0").expect("seven values");
     assert_eq!(none.best_lap_ticks, None);
     assert!(pose::parse_hud_state("6,1,30.0").is_err());

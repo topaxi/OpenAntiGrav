@@ -12,7 +12,7 @@ use std::sync::Arc;
 use oag_rcs::{rcsmaterial, rcsmodel};
 
 use super::super::{ModelTexture, TextureSlots};
-use super::{Report, Textures, glass_sheen};
+use super::{Report, Textures, glass_sheen, picture_tint};
 
 /// Decodes one material's texture, or says which way it could not be.
 ///
@@ -74,6 +74,10 @@ pub(super) fn skin(
         (String, [u32; 4]),
         Option<Arc<ModelTexture>>,
     > = Default::default();
+    let mut tinted_pictures: std::collections::HashMap<
+        (String, [u32; 3]),
+        Option<Arc<ModelTexture>>,
+    > = Default::default();
     let mut skins = Vec::with_capacity(model.materials.len());
     let mut seconds = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
@@ -133,7 +137,24 @@ pub(super) fn skin(
                 }
             },
             Some(path) => {
-                let decoded = load(path, textures);
+                let mut decoded = load(path, textures);
+                if decoded.is_some()
+                    && let Some(tint) = picture_tint::tint_of(material)
+                {
+                    let key = (path.to_string(), tint.map(f32::to_bits));
+                    let baked = tinted_pictures
+                        .entry(key)
+                        .or_insert_with(|| {
+                            let map = textures(path)
+                                .and_then(|blob| ModelTexture::from_gtf(path, &blob))?;
+                            picture_tint::tinted(&map, tint).map(Arc::new)
+                        })
+                        .clone();
+                    if baked.is_some() {
+                        decoded = baked;
+                        report.picture_tinted += 1;
+                    }
+                }
                 if decoded.is_none() {
                     report.untextured += 1;
                 }

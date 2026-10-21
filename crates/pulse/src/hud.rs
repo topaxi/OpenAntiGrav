@@ -86,8 +86,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Pulse names a widget per weapon (`pickup_icon_name`) - this field is
     // 2048's own dialect, one widget with a rewritten UV.
     pickup_icon_uv: None,
-    // `None`: no Zone speed-class ladder has been read on this title.
-    zone_speed_classes: None,
+    // Zone's speed-class line, read off `FUN_0881ad10` (`Hud_UpdateZoneSpeedClass`).
+    zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     // Pulse's own reference frame reads `100%`. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
     // Read off `FUN_0881a3e0`: the speed over `700.0`, then the bar's `0.04` floor.
@@ -160,6 +160,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             },
         ],
     }),
+    // Nobody has read a sway in this title's `Hud_Update`: the HUD stays fixed.
+    sway: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.
@@ -382,6 +384,37 @@ pub const ALWAYS_ON: &[&str] = &[
     "ShieldBarMark",
     "TimeIcon",
 ];
+
+/// Zone's speed-class line, `SpeedClass` and the `SpeedClassTxt` caption over it.
+///
+/// **Keyed on the zone, not on a stage:** `FUN_0881ad10` (`Hud_UpdateZoneSpeedClass`,
+/// `Hud_Update` flag `0x20`) walks the zone counter (`PLAYER_HUD+0x1c`) down ten
+/// thresholds and writes the matching string into `SpeedClass` every frame. The
+/// ids are the string table's, which is why `Venom`, `Flash`, `Rapier` and
+/// `Phantom` are literals: the disc's code passes those four names straight, so
+/// they print as written whatever the language. The same ten names HD's ladder
+/// carries (`oag_hd::hud::ZONE_SPEED_CLASSES`), here on different zones.
+///
+/// From zone 35 the line reads `MSC_ZEN` and the code overwrites `SpeedClassTxt`
+/// with an empty string. Confidence 90: the thresholds are the disassembly's,
+/// zone 8 reads `sub-rapier` and zone 50 shows no caption on the Zone pairs.
+/// See `docs/ghidra/functions/psp-pulse-usa/zone-speed-class.md`.
+pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpeedClasses {
+    ids: &[
+        Some("MSC_SVENOM"),
+        Some("Venom"),
+        Some("MSC_SFLASH"),
+        Some("Flash"),
+        Some("MSC_SRAPIER"),
+        Some("Rapier"),
+        Some("MSC_SPHANTOM"),
+        Some("Phantom"),
+        Some("MSC_SPPHANTOM"),
+        Some("MSC_ZEN"),
+    ],
+    rung_zones: Some(&[0, 2, 3, 5, 7, 12, 14, 20, 22, 35]),
+    caption_hidden_from_zone: Some(35),
+};
 
 /// The five shipped layouts, by race mode.
 ///

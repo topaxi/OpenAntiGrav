@@ -32,43 +32,22 @@ pub const FULL_TURN: f32 = 6.28;
 
 /// The roll's direction about the forward axis, for a positive `roll_phase`.
 ///
-/// **Measured, confidence 92** (rubric: a runtime trace, one binary - see
-/// `docs/reverse-engineering/confidence-rubric.md`). A memory-read capture
-/// against a real, booted `pulse-psp-usa.chd` settled what the VFPU
-/// register-name row/column ambiguity could not: the ambiguity reaches
-/// exactly the `sin`/`-sin` placement in the rotation the original composes
-/// with the rigid body (the *axis* survives it, since both literal `1.0`s
-/// sit on the diagonal), so only a live read of the result - not another
-/// reading of the disassembly - could close it.
+/// `+1.0`: a positive phase (and a positive steering lean) rotates the hull about its
+/// nose so the **left** wingtip rises and the right one drops - a right bank for a
+/// right stick, a left roll (left wing down) for a left-first gesture, whose phase
+/// ramps negative.
 ///
-/// The capture: `entity+0x880` (the eased phase `FUN_088418e0`'s display
-/// matrix reads directly, `angle = entity[0x880] * 6.28`) was pinned at a
-/// breakpoint to a small sweep of values (`0.0`, `+/-0.2`, `+/-0.35`) with
-/// the steering lean `entity+0x854` pinned at `0.0` (it shares the angle, so
-/// [`display_angle`] carries this sign for it too), and the resulting
-/// display matrix - `*(*(entity+0x8b0)+0x3c)+0x40`, self-validated because
-/// its own row 3 reproduces the rigid body's position exactly - was read
-/// back alongside the body basis at `entity+0x794`. Every nonzero sample
-/// agreed with `row0 = scale*cos(angle)*right + scale*sin(angle)*up` (the
-/// literal, un-transposed reading of the matrix as disassembled) to 3-4
-/// significant figures, `scale` reading exactly `0.75` at the `angle = 0`
-/// baseline. For a positive phase the original's right axis gains a
-/// positive `up` component - the right wingtip rises. See
-/// `docs/ghidra/functions/psp-pulse-usa/input-bindings.md`'s roll section
-/// for the full numbers and
-/// `crates/raceplay/src/drawable.rs`'s
-/// `roll_direction_matches_the_original_captured_display_matrix` test, which
-/// reproduces that same body and phase through this crate's own
-/// `orientation * roll` composition rather than trusting hand algebra to
-/// carry the sign across the two engines' different axis conventions
-/// (`oag_physics::ship::Body::forward` is local `-Z`; the original's own
-/// third row is `+`).
-///
-/// `-1.0`, not the `+1.0` a player's own gesture would have suggested and
-/// this constant shipped as before the capture: a `[1, 2, 1]` gesture (tap
-/// LEFT first, which ramps `roll_phase` toward `-1.0`) turns out to drop the
-/// **right** wing, not the left.
-pub const ROLL_DIRECTION: f32 = -1.0;
+/// **Measured, confidence 92, and read the other way round until 2026-10-21.** The
+/// 2026-09-08 capture pinned `entity+0x880` at `0.0`, `+/-0.2`, `+/-0.35` and read the
+/// drawn matrix back: `row0 = scale*cos(angle)*body_row0 + scale*sin(angle)*body_row1`,
+/// scale `0.75`. Row 0 of the original's basis is the hull's **left**, not its right
+/// (`oag_trace::replay::Basis::LeftUpForward`, measured; `right x up = forward` in the
+/// capture), so a positive angle lifts the left wingtip. The test that carried the sign
+/// across mapped that row onto our `+X`, the right, and shipped `-1.0`: both the lean and
+/// the roll drew mirrored. `crates/raceplay/src/drawable.rs`'s
+/// `roll_direction_matches_the_original_captured_display_matrix` now builds our body from
+/// the captured rows the way `Basis::LeftUpForward` does and compares the left wingtip.
+pub const ROLL_DIRECTION: f32 = 1.0;
 
 /// The symmetric quadratic ease-in-out `FUN_08841f88` applies to
 /// `roll_phase` before turning it into an angle.
@@ -206,6 +185,23 @@ mod tests {
         for p in [0.1, 0.5, 0.75, 1.0] {
             assert_eq!(angle(-p), -angle(p), "p = {p}");
         }
+    }
+
+    /// The sense, on a hull and on the cockpit camera's up vector alike: a roll started
+    /// leftwards (`roll_phase < 0`) tips the up vector towards the craft's left, and
+    /// a steer held right leans the hull's up towards its right. Derived from the
+    /// handedness (`right = forward x up`), so it fails if the constant flips.
+    #[test]
+    fn a_left_roll_and_a_right_steer_tip_up_the_way_they_name() {
+        let forward = Vec3::X;
+        let up = Vec3::Y;
+        let right = forward.cross(up);
+        let left_roll = rotation(forward, -0.25) * up;
+        assert!(left_roll.dot(right) < -0.1, "{left_roll}");
+        let right_roll = rotation(forward, 0.25) * up;
+        assert!(right_roll.dot(right) > 0.1, "{right_roll}");
+        let right_steer = display_rotation(forward, 0.0, 1.0) * up;
+        assert!(right_steer.dot(right) > 0.1, "{right_steer}");
     }
 
     #[test]

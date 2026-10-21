@@ -199,7 +199,13 @@ pub(crate) fn field_from_csv(path: &std::path::Path) -> Result<Field> {
             });
         }
     }
-    ensure!(!field.is_empty(), "{} has no opponent rows", path.display());
+    // A player row alone is a field of one: a Zone run has no opponents, and `--field-warmup`
+    // still has the player's own exhaust to warm.
+    ensure!(
+        !field.is_empty() || player.is_some(),
+        "{} has no opponent rows",
+        path.display()
+    );
     Ok(Field {
         player,
         player_velocity,
@@ -221,13 +227,13 @@ impl Field {
     }
 }
 
-/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]]`,
+/// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]`,
 /// the clocks rounded to the tick; a best lap of zero is none.
 pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
     let parts: Vec<&str> = text.split(',').map(str::trim).collect();
     ensure!(
-        (4..=7).contains(&parts.len()),
-        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS]]], not {} value(s)",
+        (4..=10).contains(&parts.len()),
+        "--hud-state takes PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]], not {} value(s)",
         parts.len()
     );
     let whole = |name: &str, text: &str| -> Result<u32> {
@@ -271,6 +277,32 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
             .transpose()?
             .filter(|&ticks| ticks > 0)
             .map(|ticks| u32::try_from(ticks).context("--hud-state BEST_LAP_SECONDS is too long"))
+            .transpose()?,
+        zone: parts
+            .get(7)
+            .map(|text| -> Result<race::CaptureZone> {
+                Ok(race::CaptureZone {
+                    zone: text
+                        .parse()
+                        .with_context(|| format!("--hud-state ZONE {text:?} is not a whole number"))?,
+                    score: parts
+                        .get(8)
+                        .map(|text| {
+                            text.parse::<i32>().with_context(|| {
+                                format!("--hud-state ZONE_SCORE {text:?} is not a whole number")
+                            })
+                        })
+                        .transpose()?,
+                    timer_seconds: parts
+                        .get(9)
+                        .map(|text| {
+                            text.parse::<f32>().with_context(|| {
+                                format!("--hud-state ZONE_SECONDS {text:?} is not a number")
+                            })
+                        })
+                        .transpose()?,
+                })
+            })
             .transpose()?,
     };
     ensure!(

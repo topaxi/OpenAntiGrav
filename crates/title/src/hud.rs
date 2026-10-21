@@ -665,6 +665,9 @@ pub struct HudArt {
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
+    /// The whole HUD sliding with the drawn lean: `None` where unmeasured, which leaves the
+    /// HUD fixed on the screen. See [`HudSway`].
+    pub sway: Option<crate::pre_race::Sourced<HudSway>>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -727,6 +730,23 @@ pub struct LapOneShift {
     pub widgets: &'static [&'static str],
     /// Added to their authored `x` on lap one.
     pub dx: i32,
+}
+
+/// The race HUD slides across the screen with the ship's drawn lean, as a whole.
+///
+/// Wipeout HD's `Hud_Update` (`0x0009e704`-`0x0009e754`) writes one translation into the
+/// top-level `"HUD"` and `"InGame"` screens it looked up by name at load, and every layout's
+/// root element is `<Screen name="HUD">`, so every widget the race draws moves with it: the
+/// bars, the clocks, the message lines, the pickup slot and the fixed reticle. On a
+/// running original a held full stick moved the whole HUD by 13.3 px at 1280x720, all five
+/// regions measured alike, and each plateau of the drawn lean's follower (`ship+0x6a58`) did
+/// the same at its own size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HudSway {
+    /// Layout units the HUD moves along **x** per unit of the drawn lean's follower
+    /// (`oag_physics::ShipState::steer_lean_follower`): HD's `-15.0` literal, so a stick to the right
+    /// slides the HUD to the left.
+    pub x_per_lean: i16,
 }
 
 /// The speed and shield bars' fill law: the tip of the fill is where the marker
@@ -873,6 +893,18 @@ pub struct SegmentArc {
 pub struct ZoneSpeedClasses {
     /// One entry per rung, in stage order from zero. See the type's docs.
     pub ids: &'static [Option<&'static str>],
+    /// Where each rung begins, as a zone number, for a title whose HUD names
+    /// the class **off the zone** instead of off the grade's stage.
+    ///
+    /// Pulse is that title: `FUN_0881ad10` walks the zone counter down a
+    /// ladder of thresholds with no stage in between (Pulse has no grade, so no
+    /// stage). Rung `n` begins at `rung_zones[n]`, ascending, the same length as
+    /// [`Self::ids`]. `None` keeps the stage-keyed reading HD uses.
+    pub rung_zones: Option<&'static [u32]>,
+    /// From this zone on the `SpeedClassTxt` caption (`speed class`) is blanked.
+    ///
+    /// Pulse's top rung writes an empty string over it. `None` never blanks.
+    pub caption_hidden_from_zone: Option<u32>,
 }
 
 impl ZoneSpeedClasses {
@@ -884,6 +916,20 @@ impl ZoneSpeedClasses {
         let rung = usize::try_from(stage).unwrap_or(last);
         self.ids.get(rung.min(last)).copied().flatten()
     }
+
+    /// The rung the HUD names at `stage` and `zone`: the zone's own rung where
+    /// the title keys the class on the zone ([`Self::rung_zones`]), the grade's
+    /// `stage` otherwise.
+    #[must_use]
+    pub fn rung(&self, stage: u32, zone: u32) -> u32 {
+        match self.rung_zones {
+            Some(starts) => {
+                let began = starts.iter().take_while(|&&start| start <= zone).count();
+                u32::try_from(began.saturating_sub(1)).unwrap_or(0)
+            }
+            None => stage,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -892,6 +938,8 @@ mod tests {
 
     const LADDER: ZoneSpeedClasses = ZoneSpeedClasses {
         ids: &[None, Some("A"), Some("B")],
+        rung_zones: None,
+        caption_hidden_from_zone: None,
     };
 
     /// The bottom rung has no name, and saying so is the point of the `Option`:
@@ -914,7 +962,11 @@ mod tests {
     /// bounds.
     #[test]
     fn an_empty_ladder_names_nothing() {
-        let empty = ZoneSpeedClasses { ids: &[] };
+        let empty = ZoneSpeedClasses {
+            ids: &[],
+            rung_zones: None,
+            caption_hidden_from_zone: None,
+        };
         assert_eq!(empty.id_for(0), None);
         assert_eq!(empty.id_for(7), None);
     }

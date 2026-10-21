@@ -278,6 +278,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     runtime: Some(RUNTIME),
     lap_one_shift: None,
     bar_tip: None,
+    // Inherited from HD: Omega's race HUD is HD's own files, whose roots are `<Screen name="HUD">`
+    // (read off `data00.psarc`, both the default and the `2048_hud` sets). The consumer in the
+    // PS4 executable is not located, and no PS4 emulator can check it.
+    sway: Some(oag_title::pre_race::Sourced::inherited(
+        oag_title::hud::HudSway { x_per_lean: -15 },
+        "hd",
+    )),
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
     // TimeTrial, SpeedLap and Elimination, with HD's names and nesting, so no

@@ -10,6 +10,12 @@ into the barrel roll's own angle, `lean * 0.5 + roll * 6.28`. Evidence:
 Per title: Pulse measured, Pure checked (same literals, static), HD measured, Omega and 2048
 inherited from HD (both parse `<Tilt>`; consumer not located).
 
+**Direction corrected 2026-10-21 (`lean-sign-fix`):** the lean and the barrel roll drew
+mirrored (right stick raised the right wingtip) because the captured row 0 is the hull's
+left and the sign test mapped it onto our right. `ROLL_DIRECTION` is `+1.0`; a right stick banks
+right on every title. Open: a PPSSPP/RPCS3 photograph of the hull under a held stick (the fix rests
+on the recorded rows and `Basis::LeftUpForward`, not on a new capture).
+
 ## Open
 
 - ~~**HD's cockpit lean is its own and ours runs Pulse's on it.**~~ Ported 2026-10-21
@@ -17,10 +23,15 @@ inherited from HD (both parse `<Tilt>`; consumer not located).
   one-sided (a centred stick lets go unbounded). The `+/-0.5` sideshift terms are read, not
   measured (the capture's taps never raised the timers):
   [ship-lean.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md).
-- **HD's HUD sways with the steer, law not closed.** `Hud_Update` slides the "HUD" and "InGame"
-  containers by `(-15 * ship+0x6a58, 15 * ship+0x6a5c)`. `ship+0x6a5c` has no `stfs` writer and is
-  live-dynamic; the two nodes were not found in RAM. Need the `+0x6a5c` writer (vector store,
-  `stfsx` or a block copy) and the node's on-screen shift.
+- ~~**HD's HUD sways with the steer.**~~ x ported 2026-10-21 (`hd-hud-sway`): `Hud_Update` slides
+  the `"HUD"` screen, which every race layout is, by `-15 * ship+0x6a58` (RPCS3: 13.3 px at a full
+  stick, 1280x720, every region alike), `HudArt::sway` (HD measured, Omega and 2048 inherited). The
+  `+0x6a5c` writer is found (`Ship_UpdateCameraRigs`, the second rig's spring lag along the craft's
+  up axis) and the y term is **drawn as zero**: [ship-lean.md](../../docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md).
+  Still open: **`body+0x1b0`** (its writer and meaning; it feeds the anchor and is what makes the
+  y bumps, up to +/-20 px) and `ship+0x6b00`, then the `"InGame"` screens (pause menu), which are
+  not drawn through `oag-hud`; and **the instance's whole-HUD scale** (`0.966` about the centre,
+  HD's `Safe Area Setting`?) against ours at `1.0`.
 - **Pulse's first-filter `+/-10.0` terms** (`entity+0x8a4`/`+0x8a8`) are the offsets
   `psp_trace_fields.py` records as `ss_shift_l`/`ss_shift_r`, so likely the sideshift kicking
   the cockpit lean; HD's twin reads its sideshift timers at the same place. Not captured.
@@ -41,8 +52,8 @@ inherited from HD (both parse `<Tilt>`; consumer not located).
 
 ## Next Steps
 
-1. Find the writer of HD's `ship+0x6a5c` (not an `stfs`) and the "HUD"/"InGame" node in RAM; then
-   port the sway into `oag-hud` as per-title data, constant `15.0`.
+1. Read the writer of `body+0x1b0` and the `ship+0x6b00` vector, then port the y term of the sway
+   (`15 * ship+0x6a5c`, the far rig's up-axis lag) beside the x term in `oag_hud::sway`.
 2. Take a sideshift capture on HD that raises `ship+0x6ac8`/`+0x6acc` (a single tap of the
    sideshift button on the scheme the pad script drives) and fit the `0.5` term.
 3. Check whether Pulse's `FUN_0883fab4` has the same one-sided bound (its capture says the `0.3`

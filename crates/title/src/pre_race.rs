@@ -8,7 +8,7 @@
 use crate::effects::{Origin, Platforms};
 
 /// A value and where it came from, so a number nobody measured says so.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sourced<T> {
     /// The value.
     pub value: T,

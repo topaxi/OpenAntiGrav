@@ -332,6 +332,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     runtime: Some(RUNTIME),
     lap_one_shift: None,
     bar_tip: None,
+    // Measured on RPCS3 under player input, `docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`,
+    // "The HUD sway": `Hud_Update` slides the `"HUD"` and `"InGame"` screens by
+    // `-15 * ship+0x6a58`, and a held stick moved every widget of the frame alike. The y term
+    // (`15 * ship+0x6a5c`) is the far camera rig's spring lag, not ported.
+    sway: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::HudSway { x_per_lean: -15 },
+    )),
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.
@@ -579,6 +586,8 @@ pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpe
         Some("IG_HUD_MACH1"),  // 13 Mach 1
         Some("IG_HUD_SUPSON"), // 14 Supersonic
     ],
+    rung_zones: None,
+    caption_hidden_from_zone: None,
 };
 
 /// The eighteen root layouts, by mode and skin.

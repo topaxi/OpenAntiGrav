@@ -1408,3 +1408,4 @@
 0x0883fab4	function	Ship_UpdateSteerLeans	90	camera.md
 0x0881a3e0	function	Hud_UpdateSpeedBar	88	hud-bar-tip.md
 0x0897e158	function	Math_Floorf	85	hud-bar-tip.md
+0x0881ad10	function	Hud_UpdateZoneSpeedClass	85	zone-speed-class.md

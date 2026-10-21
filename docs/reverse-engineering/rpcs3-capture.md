@@ -1165,6 +1165,10 @@ keyed on it misses every airborne frame. Results:
 
 ## Green noise on Moa Therma's stand glass: no RPCS3 setting removes it (2026-10-21, `hd-reference-artifacts`)
 
+> **Settled the same day (`hd-savestate-glass`, next section): the noise is a savestate-restore artifact, not authored and not an
+> RPCS3 setting. A cold boot to the same race draws clean glass. The "runtime paraboloid probe" reading below rests on garbage pixels
+> and is withdrawn.**
+
 The maintainer read the HD reference frames as carrying texture artifacts ("greenish noisy windows" on Moa Therma). Measured on
 `hd-timetrial-moa-therma-harimau-classic-start`, restored and `Restart Race`d under the compare profile, one setting changed per
 boot with `scripts/rpcs3-hd-variant.sh <lane> moa-therma <out> 'Video:Key=value;...'` (overrides through `OAG_RPCS3_EXTRA_EDITS`,
@@ -1199,6 +1203,54 @@ changes ours' band by under 1 grey. What would settle it: pause on the frame, re
 bound-texture recipe in "Racing a chosen race type" below) and dump its VRAM. A clean probe with a green screen means a sampling or
 format problem in RPCS3; a green probe means the original wrote it (or RPCS3 never filled it). Confidence that no profile setting
 tried removes it: 75. The profile in `scripts/compare-environment.toml` is unchanged.
+
+## Savestate restore paints garbage on glass; a cold boot does not (2026-10-21, `hd-savestate-glass`)
+
+**Rule (confidence 90): an HD original that will be compared on glass or any reflective surface is captured from a cold boot, never
+from a restored savestate.** `scripts/rpcs3-hd-cold-pair.sh <lane> <circuit-index> <out> [oag-game]` boots, walks Time Trial to the circuit
+(`scripts/emu-hd-glass-boot.sh`, GDB stub on, savestate modes off), moves and sizes the window, runs `Restart Race` and then
+`rpcs3-hd-pair.py`. It costs about 4 minutes a frame instead of about 40 seconds, and the car is at the grid, not 9 s past `GO`.
+
+**What was measured** (Moa Therma, Time Trial, classic Harimau, the maintainer's autosave copied from the compare-page tree so the camera is the Far view the
+13 shipped pairs use; same Xvfb, same RPCS3 build, same private config, frames cropped from the root window after one `windowsize 1920 1080 windowmove 0 0`):
+
+| Path | Stand and tower glass |
+| --- | --- |
+| cold boot, no savestate (4 boots: 3 on Moa Therma, one with the stub off, one with `Suspend`/`Compatible Savestate Mode` on) | clean: opaque teal tower, pale translucent grandstand glass |
+| savestate restore (`hd-timetrial-moa-therma-...`), then `Restart Race` (this session, twice) | green and lilac blocks over the glass, as on the compare page |
+| savestate restore, no `Restart Race` | the same blocks |
+
+Green-excess standard deviation (G minus the mean of R and B) over the upper-left stand band `(0,60)-(700,300)` of the same frame at the same race tick: **22.4 restored, 12.9 cold**;
+over the grandstand's ground-floor glass `(0,270)-(640,360)`: **28.2 restored, 12.7 cold**. Tech de Ra's stand glass (stored restore frame against a cold one, both Far view): the stored one is olive
+blocks, the cold one a dark amber crowd seen through glass. Anulpha Pass shows no visible difference (its glass is small; one cold boot).
+The crops were read by eye next to the numbers; recapture with the script above.
+
+**The two variables.**
+1. **Savestate restore against a normal start: it is the restore** (confidence 90 for the cause, seen on 4 cold boots and 3 restores of Moa Therma, once each on Tech de Ra and Anulpha Pass).
+   Restart Race does not clear it, so the bad data lives in something a restart does not rebuild. The mechanism, "a GPU-side render target (the glass's reflection source) that the savestate
+   does not carry", is a **hypothesis (confidence 55)**: no VRAM was read.
+2. **Xvfb against the real GPU: not a factor** (confidence 90). RPCS3's log under our Xvfb reads `Setting the default renderer to Vulkan. Default GPU: 'AMD Radeon RX 7800 XT (RADV NAVI32)'`, the card the
+   maintainer's session uses; `vulkaninfo` lists llvmpipe as a third device, and RPCS3 did not pick it. The cold boot on that Xvfb is clean, so the headless display does not corrupt it.
+   The software-device arm of the brief therefore did not apply.
+
+**The settings confound is ruled out.** The `Used configuration:` dumps of a cold run and a restore run (330 lines each, Video section included) differ only in
+`Suspend Emulation Savestate Mode` and `Compatible Savestate Mode`, and a cold boot with both on is clean too.
+
+**What the clean frame says about ours.** Moa Therma's grandstand glass in the original is pale and translucent (sky and surroundings reflected, the crowd and the floor behind it visible); ours draws it
+nearly black, so the band is still the largest difference on that pair (grey difference over the ground-floor glass 67.9 cold against 73.1 restored: the garbage was not most of it). The tower glass is
+opaque teal in both. The pale tone is `dc_windows_a`'s `paraboloidReflectionTex` term (`rcsmaterial.md`, `hd-stand-glass`; weight 0.8, program read); which map that unit holds for a scenery draw is still **open**. Tech de Ra's stand glass, read on the clean frame,
+is **warm and dark** where ours carries a **blue sheen** that the original does not; ours is the one with an extra term there (found 2026-10-21, `hd-stand-glass`: the opaque `lambert_spec_mult` panels behind the glass drawn without their `0x6d0178af` tint, `rcsmaterial.md`). Tech de Ra's floor wedge (`rcsmaterial.md`, "Open", (a)) reads the same on restored and cold frames (grey with lilac), so that finding stands.
+
+**Same pair, whole frame, ours rendered at each frame's own camera** (grey difference over the frame, restored against cold): Moa Therma 25.7 against 24.5; Tech de Ra 30.3 cold (33.7 for the stored restored pair, a different ours build); Anulpha Pass 24.6 cold (25.0 stored).
+The whole-frame score barely moves: the garbage covers a few percent of the frame. It matters for judging the glass, not for the score.
+
+**Open.** (1) Every current `theirs.png` shows RPCS3's `Press and hold the START button to resume` banner in the top-left corner (restore path and cold path alike, this session): it appears while the GDB stub holds the game for a capture
+and is gone once resumed. It sits over the lap-counter HUD, not over glass. The compare-page frames stored before 2026-10-21 do not carry it; what changed was not found (`rerender-all` owns the capture scripts). (2) A one-frame mask or a crop before the compare is the cheap
+remedy. (3) The patch for `rpcs3-hd-pair.py`: its `set_window` resizes RPCS3's window to 1920x1080 without moving it, and RPCS3 opens it off-origin, so on a 2000 px Xvfb the window runs off the right edge and the frame trims to 1760x1080
+(`size` check refuses). Add `xdotool windowmove <id> 0 0` after `windowsize`, or give the Xvfb 2200 px (`OAG_RPCS3_GEOMETRY=2200x1300x24`) and move the window; `rpcs3-hd-cold-pair.sh` does the move itself.
+(4) `compare-hd-batch.sh` and `rpcs3-hd-variant.sh` restore a savestate per circuit; a cold-boot batch is `rpcs3-hd-cold-pair.sh` per circuit (indices on Track Select: Vineta K 0, Anulpha Pass 1, Moa Therma 2, Chenghou 3, Ubermall 6, Talon's 8, Tech de Ra 11; read `Loading World` off `TTY.log`, a dropped press picks the neighbour).
+
+**Omega: not checkable** (no PS4 capture path); the original-frame artifact is RPCS3's, specific to HD's capture here. 2048 on Vita3K was not tried.
 
 ## See also
 

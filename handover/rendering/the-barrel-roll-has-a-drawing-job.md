@@ -120,7 +120,10 @@ last item above remain open, and neither blocks anything.
    `oag_render::camera::internal::view` in `crates/render/src/camera/
    internal.rs` takes `roll_phase` and rotates the up vector about the view's
    forward axis before the look-at is built.
-5. ~~The sign is chosen, not measured~~ **Now measured**: `ROLL_DIRECTION` in
+5. **Corrected 2026-10-21 (`lean-sign-fix`): `ROLL_DIRECTION` is `+1.0`.** The capture's
+   row 0 is the hull's LEFT, so a positive phase lifts the left wingtip; a tap-left-first
+   gesture (phase toward `-1.0`) drops the left wing. The text below the struck line is
+   the earlier, mirrored reading. ~~The sign is chosen, not measured~~ **Now measured** (old): `ROLL_DIRECTION` in
    `crates/render/src/roll.rs` is `-1.0`, flipped from the `+1.0` it shipped
    as - a `[1, 2, 1]` gesture (tap LEFT first, which ramps `roll_phase`
    toward `-1.0`) turns out to drop the **right** wing, not the left the
