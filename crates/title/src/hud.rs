@@ -657,6 +657,8 @@ pub struct HudArt {
     /// `oag_hd::hud::RUNTIME` carries. Pulse's own shield rule is a
     /// different shape and lives on `oag_hud::Readout::shield_forced_red`.
     pub runtime: Option<&'static RuntimeHud>,
+    /// The lap counter's lap-one shift: `None` where unmeasured.
+    pub lap_one_shift: Option<LapOneShift>,
     /// Pilot Assist's HUD indicator: the widget names, and where a layout that
     /// does not author them gets them from. `None` on a title with no
     /// indicator.
@@ -707,6 +709,18 @@ pub struct RuntimeHud {
     pub place_arc: SegmentArc,
     /// The pickup bar's idle look, `None` where unmeasured.
     pub pickup_idle: Option<PickupIdle>,
+}
+
+/// The lap counter closes up on lap one: with a lap target and the lap equal to
+/// one, the executable moves the two glyphs after the digit left by [`Self::dx`]
+/// (a one-digit lap leaves the gap a two-digit one fills). Pulse's
+/// `Hud_UpdateLapCounter` (`0x0881a690`), `-17.0` in the 480-wide layout space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LapOneShift {
+    /// The widgets that move: the separator and the lap total.
+    pub widgets: &'static [&'static str],
+    /// Added to their authored `x` on lap one.
+    pub dx: i32,
 }
 
 /// The dim the pickup bar is drawn in while it has nothing to show: the

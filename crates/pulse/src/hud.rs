@@ -133,6 +133,10 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
         },
     }),
     runtime: None,
+    lap_one_shift: Some(oag_title::hud::LapOneShift {
+        widgets: &["LapOf", "Lap Outof"],
+        dx: -17,
+    }),
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.

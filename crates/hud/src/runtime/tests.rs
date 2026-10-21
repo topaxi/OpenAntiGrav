@@ -367,3 +367,29 @@ fn the_pickup_bar_is_dim_while_idle() {
         assert_eq!(colour(cx, &none, "PickupFarBackground"), None);
     });
 }
+
+/// Pulse's lap counter closes up on lap one (`Hud_UpdateLapCounter`, `-17`): the separator and the
+/// total move, the digit does not, later laps and HD (no such rule) draw as authored.
+#[test]
+fn pulses_lap_counter_closes_up_on_lap_one_only() {
+    let at = |lap, laps| Readout {
+        lap,
+        laps,
+        ..readout(100.0)
+    };
+    with_hd(oag_pulse::hud::ART, |cx| {
+        for name in ["LapOf", "Lap Outof"] {
+            assert_eq!(
+                crate::draw::lap_one_dx(cx, &at(1, 3), name),
+                -17.0,
+                "{name}"
+            );
+            assert_eq!(crate::draw::lap_one_dx(cx, &at(2, 3), name), 0.0, "{name}");
+            assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 0), name), 0.0, "{name}");
+        }
+        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "Lap"), 0.0);
+    });
+    with_hd(oag_hd::hud::ART, |cx| {
+        assert_eq!(crate::draw::lap_one_dx(cx, &at(1, 3), "LapOf"), 0.0);
+    });
+}

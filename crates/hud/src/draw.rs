@@ -929,7 +929,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         // placeholder - `zone_next_row` carries the whole reasoning.
         let placed = next_row.filter(|_| label.name == NEXT_CLASS_WIDGETS[1]);
         let draw = Draw::Text {
-            x: placed.map_or(label.x, |(_, text)| text[0]),
+            x: placed.map_or(
+                label.x + lap_one_dx(cx, readout, &label.name),
+                |(_, text)| text[0],
+            ),
             // The row's `y` is a **top** edge - every `ZonePlus1`-`ZonePlus10`
             // is `vertalign="top"` - and this label rides that line directly,
             // so it takes it unconverted rather than through `top_edge`.
@@ -962,6 +965,17 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     }
 
     frame
+}
+
+/// How far the lap counter's separator and total move left on lap one
+/// ([`oag_title::hud::LapOneShift`]); zero for every other widget, lap and title.
+pub(super) fn lap_one_dx(cx: &Context<'_>, readout: &Readout, name: &str) -> f32 {
+    match cx.art.lap_one_shift {
+        Some(shift) if readout.lap == 1 && readout.laps >= 1 && shift.widgets.contains(&name) => {
+            shift.dx as f32
+        }
+        _ => 0.0,
+    }
 }
 
 /// One layout sprite as a draw, or `None` for a sprite whose texture the sheet

@@ -102,6 +102,18 @@ the player), the `FE_ModelSkin` livery, `PlayerInput_Construct`, then
 `autopilot_input` - a hardware DIP that makes the player's craft drive
 itself.
 
+**On lap 1 the total and the separator close up (2026-10-21, `hud-leftovers`, confidence 90).** With a lap
+target (`+0xc >= 1`), `Hud_UpdateLapCounter` writes `hud+0x238 - 17.0` and `hud+0x23c - 17.0` into the x of the
+total (`hud+0x220`, `Lap Outof`) and the separator (`hud+0x224`, `LapOf`) when the lap (`+0x8`) is `1`, and the
+saved authored x otherwise: a one-digit lap leaves the gap a two-digit one fills. The Metropia Black compare pair
+showed it as ours drawing `1 / 3` 17 px too far right (the `/` at x 33-38 and the `3` at 45-52 against the
+original's 16-22 and 28-35, in 480 px); authored `x` is 5+27 and 5+40 in `TimeTrial_HUD.xml`, which ours already
+reproduced. Wired as `oag_title::hud::LapOneShift` (`oag_pulse::hud::ART`, `dx = -17`, `oag_hud::draw::lap_one_dx`).
+Re-rendered: the glyphs sit on the original's columns. **Not applied/not read:** Pulse PS2 shares the data (one
+`ART` across pressings) and its `FUN_00139ea8` binds `Lap Outof`, but its update function was not read; Pure binds
+`LapOf` in `FUN_08821838`, update unread, so Pure keeps the authored x; HD's `Hud_UpdateLapCounter` (`0x00096ef0`)
+has no such shift (checked, differs: it scales the digit to 0.5 from lap 10 instead).
+
 ## The target-time readout: `+0x78`/`+0x7c`/`+0x80`, closed 2026-09-28
 
 **Confidence 92** for `PlayerStatus_Update`'s own write of these three
