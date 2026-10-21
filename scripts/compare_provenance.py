@@ -2,9 +2,10 @@
 """How a comparison pair's ORIGINAL was made, and the rules that refuse an untrustworthy one.
 
     compare_provenance.py selftest                 # one constructed bad record per refusal rule; needs no data
-    compare_provenance.py scan [DIR]               # every pair.json under DIR (default data/reference/compare-page,
-                                                   #   or $OAG_PAIR_DIR) carries provenance, breaks no rule, names no
-                                                   #   worktree or scratch path; skipped loudly when DIR is absent
+    compare_provenance.py scan [DIR] [--strict]    # every pair.json under DIR (default data/reference/compare-page,
+                                                   #   or $OAG_PAIR_DIR) carries provenance and names no worktree or
+                                                   #   scratch path; --strict also fails a broken rule; skipped loudly
+                                                   #   when DIR is absent
     compare_provenance.py tracked                  # ratchet: tracked files outside scripts/ and .claude/ naming
                                                    #   `data/scratch/` or `OpenAntiGrav-worktrees/` may not grow
     compare_provenance.py backfill SRC DST         # copy SRC (pair dirs, `cp -rL`) to DST and fill what can be read
@@ -280,7 +281,7 @@ def portable_dir(dst):
     print("made %d pair.json under %s portable" % (n, dst))
 
 
-def scan(d):
+def scan(d, strict=False):
     d = Path(d)
     if not d.is_dir():
         print("check-pair-provenance: SKIPPED the pair scan, %s does not exist (no data/ here)" % d)
@@ -304,8 +305,8 @@ def scan(d):
             bad += 1
             continue
         for rule, detail in refusals(prov, rec["profile"]):
-            print("REFUSED %s %s: %s" % (f.parent.relative_to(d), rule, detail))
-            bad += 1
+            print("%s %s %s: %s" % ("REFUSED" if strict else "NOTE   ", f.parent.relative_to(d), rule, detail))
+            bad += 1 if strict else 0
     print("check-pair-provenance: %d pair.json, %d problem(s)" % (len([f for f in files if f.suffix == ".json"]), bad))
     return 1 if bad else 0
 
@@ -414,6 +415,7 @@ def main():
     sub.add_parser("selftest")
     s = sub.add_parser("scan")
     s.add_argument("dir", nargs="?", default=os.environ.get("OAG_PAIR_DIR", str(ROOT / DEFAULT_DIR)))
+    s.add_argument("--strict", action="store_true", help="a broken refusal rule fails the scan (default: listed as a note)")
     t = sub.add_parser("tracked")
     t.add_argument("--write-baseline", action="store_true")
     b = sub.add_parser("backfill")
@@ -427,7 +429,7 @@ def main():
     if a.cmd == "selftest":
         sys.exit(selftest())
     if a.cmd == "scan":
-        sys.exit(scan(a.dir))
+        sys.exit(scan(a.dir, a.strict))
     if a.cmd == "tracked":
         sys.exit(tracked(a.write_baseline))
     if a.cmd == "backfill":

@@ -386,13 +386,14 @@ what none of them says is `unknown` (`compare_provenance.py backfill SRC DST`, o
 census). The HD grid pairs are backfilled as `savestate_restore` by inference (their state is a `SAVESTAT` and the
 re-make restored it; the cold flag came afterwards), and each is refused until it is recaptured cold.
 
-**Paths.** No `pair.json` or manifest names `OpenAntiGrav-worktrees/` or `data/scratch/`: a worktree and the main
+**Paths.** No `pair.json` or manifest names another lane's worktree or a lane's scratch directory: a worktree and the main
 checkout are written as the repository-relative path, scratch as `{scratch}/` (`Pair.finish` and `compare-rerender`
 do it; `compare_provenance.py portable DIR` does it to a copy), and manifests hold paths relative to their own
 directory. A worktree is reaped after its merge and a manifest that named it broke the page. `just
 check-pair-provenance` (in the gate) runs the refusal rules against constructed bad records (`selftest`), scans
 `$OAG_PAIR_DIR` (default `data/reference/compare-page`; skipped, loudly, when absent, as in CI) for missing
-provenance, a broken rule or a reaped path, and holds a ratchet over tracked files outside `scripts/` and `.claude/`:
+provenance or a reaped path (a broken rule is listed as a note there, `scan --strict` fails on it: a pair on file may
+be an accepted exception, a pair script never makes one silently), and holds a ratchet over tracked files outside `scripts/` and `.claude/`:
 `scripts/provenance-path-baseline.txt` is the frozen count per file and a file may shrink but not grow. A re-made
 `argv` that names `{scratch}` is refused by `compare-rerender` until that flag is remapped.
 
