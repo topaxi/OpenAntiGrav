@@ -48,6 +48,9 @@ of ours is never put in the original slot.
 (`scripts/compare-seed.py` splits the 3x3 composites into one entry per column).
 `live.toml` is hand-written from the captures below.
 
+The page lists titles in release order (Pure, Pulse, HD/Fury, 2048, Omega; `compare-page.py`'s `GENERATIONS`), a
+title's handheld original before its port (PSP, PS2, PS3, Vita, PS4), and keeps the manifest order inside one title.
+
 ## Credits and the rights-holder statement
 
 ADR-0074 requires both on every published page, so every page carries them:

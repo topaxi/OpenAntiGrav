@@ -271,12 +271,26 @@ def normalise(entry: dict, base: Path, img: Path) -> dict:
     }
 
 
+#: The engine's generations in release order (Pure 2005, Pulse 2007, HD 2008 with Fury 2009, 2048 2012, Omega 2017),
+#: matched as a word in an entry's `game`; a title not listed sorts last.
+GENERATIONS = ("Pure", "Pulse", "HD", "2048", "Omega")
+#: Within one title, the platform it shipped on first.
+PLATFORM_ORDER = {"PSP": 0, "PS2": 1, "PS3": 2, "Vita": 3, "PS Vita": 3, "PS4": 4}
+
+
+def generation(game: str) -> int:
+    words = game.replace("/", " ").split()
+    return next((i for i, g in enumerate(GENERATIONS) if g in words), len(GENERATIONS))
+
+
 def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
     footer = statement_html()
     doc = load_all(manifests, strict)
     img = out / "img"
     img.mkdir(parents=True, exist_ok=True)
     records = [normalise(e, e["_base"], img) for e in doc["entry"]]
+    # Titles in the order they were released, the original handheld before its port; ties keep the manifest order.
+    records.sort(key=lambda r: (generation(r["game"]), PLATFORM_ORDER.get(r["platform"], len(PLATFORM_ORDER))))
     # Drop images no entry references any more, so a rebuilt page carries nothing stale.
     used = {Path(p).name for r in records for p in [*r["images"].values(), *r["diffs"].values()]}
     for f in img.glob("*.png"):
