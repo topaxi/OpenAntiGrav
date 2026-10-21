@@ -34,6 +34,7 @@ impl Bloom {
     /// Blurs the glow of `stamps` and adds it onto `target` over the rectangle at `origin` of
     /// size `viewport`: the bright pass, two blurs and the composite, for rectangles alone.
     /// Nothing is drawn for no rectangle or a mask of zero.
+    #[allow(clippy::too_many_arguments)]
     pub fn stamp_glow(
         &self,
         device: &wgpu::Device,
