@@ -26,8 +26,11 @@ end-of-frame bookkeeping are outside the phases):
 | `readback` | mapping last frame's timestamps, feeding the resolution controller |
 | `present` | `Queue::present` |
 
-The stage name reads `race-paused` while the pause rule freezes the race (`--race` starts
-frozen, a `start` tap in `--script` releases it).
+The stage name reads `race-paused` while the pause rule freezes the race: `Session::paused`
+(`pause.rs`) is true for a Start pause and for the race's own start countdown, and false
+otherwise. The 2026-10-21 Deck lane measured that on the current build a `3:start` script tap
+*pauses* a running race (see its section below); an earlier version of this page said `--race`
+starts frozen and a tap releases it, which holds only through the countdown.
 
 ## What was measured
 
@@ -104,3 +107,152 @@ not explain a Deck `CPU` of 8 to 10 ms by itself.
 The changes are in `oag-render` and `oag-raceplay`'s drawables, which every title shares. Pulse
 and Pure share the Pulse path; HD, Omega and 2048 use the same drawables. Measured on Pulse and
 HD only; the screenshots were also compared on Pure.
+
+## On the Steam Deck (2026-10-21, `deck-read`)
+
+Measured on the Deck itself: release AppImage (`just appimage-deck`, znver2, `perf-probe`), run
+extracted, native under the Deck's gamescope on `DISPLAY=:1` with the environment copied from
+Steam's process, `--no-audio --frame-log --race --autopilot`, a private `XDG_*` tree holding a
+copy of the maintainer's `settings.toml` (read, never modified; only `pause_on_focus_loss =
+false`). Pulse is the EU PSP image, HD the EU PS3 image. Each run is 12 s; the first 4 `frame-
+phases` and frame-log lines (load, resolution settling) are dropped and the rest averaged.
+Deck: load 0.4 to 1.2, on AC (`ACAD/online` 1, battery full), `powersave` governor.
+The commands are below.
+
+The frame-log stage name is `race-paused` after a `3:start` tap and `race` without it, so on
+this build the tap *pauses* (ticks 0.06 ms against 0.07 to 0.25 ms racing). Rows below use the
+stage name the log printed.
+
+### The split (ms per frame, the maintainer's settings, DRS on)
+
+| Run | scene | compose | submit | present | total | CPU row | PRESENT row |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Pulse racing (`race`) | 1.17 | 0.28 | 3.39 | 1.00 | 6.12 | 5.1 | 9.7 |
+| Pulse paused | 0.90 | 0.28 | 3.03 | 1.01 | 5.51 | 4.6 | 9.7 |
+| HD racing | 1.80 | 0.18 | 3.59 | 0.92 | 6.97 | 6.0 | 7.1 |
+| HD paused | 1.08 | 0.16 | 3.01 | 0.75 | 5.26 | 4.5 | 6.7 |
+
+`CPU row` is `cpu_ms - present_ms` from the frame-log line, which is what the meter draws
+(`CpuCost::rows`). It equals `total - present` of the phases line within 0.1 ms, so the two
+instruments agree. The window is 3840x2160 under this gamescope and DRS settled between 1728x972
+and 2880x1620.
+
+- **`submit` (`encoder.finish()` plus `Queue::submit`) is 55 to 60 % of the thread**, about 3 ms
+  on both titles; `scene` is 1 to 1.8 ms, `present` about 1 ms (the `PRESENT` row's 7 to 10 ms is
+  mostly the swapchain acquire wait, which is the GPU and the limiter, not CPU).
+- **A paused frame costs 5.3 to 5.5 ms of thread time, about 4.5 ms of it in the `CPU` row**, 4 to
+  5 times the host's 1.2 to 1.9 ms. The maintainer's 8 to 10 ms `CPU` row was **not reproduced**:
+  this lane reads 4.5 to 6.0 on both titles. See "What could still differ" below.
+
+### Render scale: not the GPU
+
+`target_fps = "off"` in a copy of the settings (no DRS), `--render-scale N`, same title and
+tap. Render sizes are N % of the 3840x2160 window.
+
+| Run | render | scene | submit | total | CPU row | gpu_ms | frame_ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Pulse paused, 50 | 1920x1080 | 0.87 | 3.16 | 5.60 | 4.63 | 3.7 | 11.1 |
+| Pulse paused, 100 | 3840x2160 | 0.85 | 2.82 | 5.15 | 4.08 | 13.0 | 27.5 |
+| Pulse paused, 150 | 5760x3240 | 0.81 | 2.47 | 4.60 | 4.13 | 29.1 | 55.0 |
+| HD paused, 50 | 1920x1080 | 1.09 | 3.02 | 5.27 | 4.58 | 5.6 | 12.6 |
+| HD paused, 100 | 3840x2160 | 1.02 | 2.86 | 4.98 | 4.40 | 17.0 | 31.4 |
+| HD paused, 150 | 5760x3240 | 1.06 | 2.85 | 5.12 | 4.87 | 34.8 | 61.7 |
+
+The GPU time rises 8 to 10 times across the range, and `scene`, `submit` and the `CPU` row do not
+move (they fall slightly, the frame thread idling in the acquire instead). **So the Deck's CPU
+row is not waiting on the GPU. It is per-frame CPU work that does not depend on pixels**, the
+cost of wgpu-core and RADV recording and submitting the passes. (The racing runs of the same
+sweep show the same flatness: CPU row 4.1 to 4.9 for Pulse, 4.4 to 6.2 for HD.)
+
+### Why it is 4 to 5 times the host
+
+`perf stat` on the process (Pulse, paused, 15 s, whole run including the load): 11.64 G user
+cycles over 7.67 s of task-clock (user plus sys) is 1.52 GHz, over 6.17 s of user time alone
+1.89 GHz, so **1.5 to 1.9 GHz effective** (a range because the process has loader and music
+threads, and the load is in it), against the part's 3.5 GHz boost. The host (Ryzen 9 7900,
+`lscpu` max 5.49 GHz, not measured under load) is 2.9 to 3.6 times that on clock alone, and its
+core is newer than Zen 2. That, not a blocked call, is most of the 4 to 5 times. A second `perf
+stat -D 9000` of the steady state gave 1.12 (Pulse) and 1.00 (HD) instructions per cycle. The
+cost is per-frame and per-pass work in wgpu-core and RADV, independent of pixels; it is not
+simply per draw (`submit` is 3.0 ms on Pulse's 321 draws and on HD's 617, where the host's
+scaled 2.8 times), and the ablation below points at the post passes. `perf record -F 1999` (user cycles only: `perf_event_paranoid` is 2, no
+kernel samples) of the steady-state paused thread: 54 % in `oag-game` (of which wgpu-core usage
+tracking, `new_usage_scope`, `track::texture::update`, `new_pooled`, is the largest named
+block, with the `Vec` and `ArrayVec` code under it; our own `oag_*` code is about 4 %), 27 % in
+`libvulkan_radeon.so` (RADV command recording), 16 % in libc (`malloc`, `free`, `memcpy`). The
+AppImage binary is stripped; symbols were resolved with `addr2line` against the unstripped
+`dist/oag-game` of the same BuildID, so the names are good to the function, not to the line.
+
+### Ablation: the post chain costs 1.3 to 1.9 ms of the 5.5
+
+Paused, 50 % render scale, no DRS, 90 fps limit, one flag at a time (`submit` / `total`):
+
+| Run | Pulse | HD |
+| --- | --- | --- |
+| maintainer's settings | 3.10 / 5.50 (3.17 / 5.60 repeat) | 2.96 / 5.16 (2.99 / 5.22) |
+| `--shadows off` | 3.21 / 5.72 | 2.84 / 5.02 |
+| `--reconstruction off` (SMAA) | 2.13 / 4.14 | 2.85 / 4.92 |
+| `--motion-blur off` | 1.80 / 3.90 | 2.83 / 5.09 |
+| `--screen-filter off` | 2.25 / 4.18 | 2.99 / 5.21 |
+| all four off | 1.80 / 3.57 | 2.15 / 3.91 |
+
+The repeat of the baseline differs by 0.07 ms in `submit`. On Pulse (SMAA, medium blur and the
+`psp-3000` filter) turning off *any one* of the three drops `submit` by 0.9 to 1.3 ms and all
+together no more, so the cost is not a sum of three passes: it looks like a step that three
+chained post passes trip together (not investigated further). On HD only turning all off helps
+(0.8 ms). Shadows (`blob`) cost nothing measurable.
+
+### What could still differ on the maintainer's Deck
+
+The meter reading 8 to 10 ms is about twice this lane's. Not measured, in the order of how well
+the evidence supports it:
+
+1. **A lower CPU clock than this run's.** This run was at 1.5 to 1.9 GHz effective, on AC, with
+   the `powersave` governor and nothing else running. Steam's own client, a TDP cap or a
+   background download in the maintainer's session could push it lower, and the frame thread
+   scales with the clock. A 2x clock difference would be the whole gap. Not measured.
+2. **A different profile or window.** The maintainer's figure is on a title and profile this lane
+   did not ask for (the `Pulse (PS2)` profile has 4x MSAA and a `crt-aperture` filter).
+3. **The build: ruled out.** The maintainer's install is
+   `~/Desktop/OpenAntiGrav-x86_64-portable.AppImage` (`--version` bb68bbb, 27 commits before the
+   merge this lane ran on, no `frame-phases` line). Copied into the lane directory (never run in
+   place) and run interleaved with this lane's znver2 build, two runs each, 50 % render scale, no
+   DRS, 12 s, CPU row from the frame-log (`cpu_ms - present_ms`), ms:
+
+   | | portable, old | znver2, new |
+   | --- | --- | --- |
+   | Pulse racing | 5.64, 5.53 | 5.15, 5.26 |
+   | HD racing | 5.16, 5.17 | 5.30, 5.20 |
+   | Pulse, `3:start` tap | 4.97, 5.12 | 4.58, 4.67 (paused) |
+   | HD, `3:start` tap | 4.77, 4.82 | 4.42, 4.50 (paused) |
+
+   The old build reads 4.8 to 5.6 as well, so the build does not explain 8 to 10 ms. (On the old
+   build the `3:start` tap left the stage name at `race`, so those two rows are racing frames:
+   the pause rule differs, not investigated.)
+
+To settle it, read `frame-phases` from the maintainer's own launch (`--frame-log` in the Steam
+launch options) next to the meter, and `cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq`
+while it runs.
+
+### Ranked options (nothing changed in the code)
+
+No blocking readback, per-frame buffer re-creation or validation layer turned up: `readback` is
+0.03 to 0.05 ms and `submit` does not move with the GPU. The lever is the amount of recorded work:
+
+1. **Fewer, cheaper post passes on the Deck.** The ablation above is 1.3 to 1.9 ms of a 5.5 ms
+   frame, the cheapest lever and a settings decision (what the Deck's default profile enables),
+   not a code change.
+2. **Render bundles or a held scene for a paused frame.** Not attempted; see the host sections.
+3. **Why does one post pass off remove the whole step on Pulse?** Worth a look in `oag-post`'s
+   pass chain (intermediate targets, init actions); open.
+
+### Commands run on the Deck (about 30 `ssh` calls; every run under `flock -o ~/.cache/oag/deck.lock`)
+
+`~/oag-perf/deck-read/run.sh LABEL pulse|hd 12 "SCRIPT" [flags]` launched
+`squashfs-root/AppRun <image> --no-audio --frame-log --race --autopilot --script SCRIPT [flags]`
+with `XDG_CONFIG_HOME` etc. under the lane directory; `SCRIPT` was `12:quit` (racing) or
+`3:start,12:quit` (paused). Render-scale sweep: `--render-scale 50|100|150` with `target_fps = "off"`.
+Ablation: `--render-scale 50 --shadows off|--reconstruction off|--motion-blur off|--screen-filter
+off`. Profile: `PREFIX="perf record -D 9000 -F 1999 -o F" ./run.sh ... 20 "3:start,20:quit"` and
+`PREFIX="perf stat -e task-clock,cycles:u,instructions:u -o F" ./run.sh ... 15`. The lane
+directory was removed afterwards; the maintainer's install and settings were not touched.
