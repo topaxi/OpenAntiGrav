@@ -378,6 +378,36 @@ object at `mode+0x1bc` and no ladder (`mode+0x90 == 0`) races `min(best, stats f
 (`+0xc0` for mode `10`): Pulse's `Hud_UpdateTimeCluster_q` law. Not read: the writer of `+0x3c` itself, and what `+0x38`
 holds. **Omega/2048: checked, applies, not wired by this page** (same `stats.xml` path; hud.md names the wiring).
 
+### The lap-change branch: the lap hexagon takes the lap number
+
+**2026-10-21, `hd-lap-hexagon`, confidence 85** (disassembly of `0x00095130`-`0x000952d4`, and watched live). The tail
+of `Hud_UpdateTimeCluster` after the best-time text (`hud+0x1fc`) is skipped when that text is bound; with it unbound
+(`HUD_lap_times.xml`'s layout, Time Trial) and `hud+0xac == 0` (not the Arcade clock layout) it runs the lap row update:
+
+1. `lap = record+0xc`. Nothing happens while `hud+0x294 == lap` (initial value `0xffffffff`, so lap 1 never writes), nor
+   unless `lap - 2` is `0..3`, i.e. **laps 2 to 5**, nor unless the three row widgets `hud+0x540+4i`, `+0x550+4i`, `+0x560+4i`
+   (`Lap{n}Image`, `Lap{n}Text`, `Lap{n}Time`, row `i = lap - 2`) are all bound. Then `hud+0x294 = lap`.
+2. `Time_FormatCentiseconds(record+0x34, buf, 0, 1)` writes the finished lap's time, `"%d.%02d.%02d"`, into the stack buffer.
+   The row's image and both texts go opaque (`rgb | 0xff000000`), older rows' texts shift down one row, and the new row-0
+   time text (`hud+0x560`) takes the time.
+3. The **same stack buffer is then reused as a two-byte string**: `buf[0] = lap + 0x2f` for row 0's label (`hud+0x550`),
+   the finished lap's number, and `buf[0] = lap + 0x30` for **`hud+0x298`, `CurrentTimeTxt`, the current lap number** as
+   one ASCII digit. The decompiler hides this: it shows `local_118` (the time) passed to all three writes; the
+   disassembly (`stb r9,0x78(r1)` at `0x00095298` and `0x000952bc`, each followed by a `0x00202d28` string set) does not.
+
+Live on RPCS3 (Talon's Junction Time Trial, Venom, Feisar, player throttle held, the Autopilot only to reach the line,
+`record = 0x306aa57c`, `hud = 0x329021b0`): `hud+0x294` read `0xffffffff` on lap 1, `2` at the lap 1 to 2 line and `3` at
+the next; the hexagon read `1`, `2`, `3`. After the race (lap 4 of 3) it stayed `3`. Past lap 5 the guard is false, so the
+digit holds at `5`. `Time_FormatCentiseconds` (`0x000835e0`): `r5 == 0` selects `"%d.%02d.%02d"`, otherwise
+`"%d.%02d.%01d"`; `r6 != 0` clamps minutes of 10 and over to `9.59.99`; `0xffff` reads as zero. It is the formatter every
+HUD clock here uses.
+
+Wired as `oag_hud::draw::text_for`'s `CurrentTimeTxt` arm: the authored literal on lap 1, then the lap number capped at
+`lap_splits.len() + 1` (the layout's four rows plus the first lap). The one layout that authors a literal there is the
+one with no `BestTime`, so the branch's gate holds without a per-title field. **Omega: not checkable live** (no PS4
+emulator); HD's HUD fragments ship in its data and the reader is shared, so the same layout and branch are expected.
+2048: `HUD_lap_times.xml` is byte-identical but no played 2048 mode loads it (hd-hud.md, "The per-lap history draws").
+
 ## The pickup bar's idle dim (`Hud_UpdatePickupBar`, `0x0008df30`)
 
 **2026-10-21, `hud-leftovers`, confidence 70** (static read; the frames agree, no live probe). The per-tick update of the
@@ -395,8 +425,19 @@ row 0 (`PTR_008a7800 + hud*0x150 + 4`) is `PickupBackground`, the hexagon.
 The frames: all 13 HD Time Trial pairs show the dim pills and a dim empty hexagon; the Talon's race frame with
 `DAMAGE 0` and `Absorb 14` shows them bright. Ours drew every one of them at the layout's white. Wired as
 `oag_title::hud::PickupIdle` on HD and Omega (inherits HD's; no Omega executable here to read): the pills dim throughout
-(no recent-hit state exists to light them), the hexagon dim while `Readout::pickup` is `None`. **Not read:** the jump table at
-`0x008a7808` (14 cases, one per pickup row) that holds the held-pickup fade, so a held pickup's hexagon stays as authored.
+(no recent-hit state exists to light them), the hexagon dim while `Readout::pickup` is `None`. **Not wired:** the held pickup's hexagon fade. What is read of the jump table
+(`hd-lap-hexagon`, 2026-10-21, confidence 70, static): the slot `0x008a7808` holds `0x0008e188`, the base of 14 signed
+offsets indexed by the pickup state `record+0x58` (`0..13`; case 0 is the idle path above, `0x0008e464`). Cases 1 to 13 are
+five-instruction stubs (`0x0008f124`-`0x0008f210`, case 10 at `0x0008f040` not read) that each load an integer `r22` and a float `f27` out of the record at
+a case-specific pair of offsets (case 1 `+0x8/+0x2c`, 2 `+0x34/+0x5c`, 3 `+0x64/+0x70`, 7 `+0xc0/+0xe0`, 8 `+0x118/+0x128`, 9 `+0xe8/+0xf8`,
+11 `+0x140/+0x144`, 12 `+0x164/+0x174`, 13 `+0x180/+0x1a8`; cases 4 to 6 load `0` and only a float at `+0xa8`/`+0xb0`/`+0xb8`), set
+`r25 = 1` and branch to the common tail at `0x0008e4c8`. So the held pickup's own count and timer feed one shared fade;
+the tail walks the pickup table rows (`PTR_008a7800 + hud*0x150 + row*0x18`, an ARGB pair at `+8`/`+0xc`), advances a
+per-row timer at `hud+0x50+4*row` by `dt`, shapes it with the easing helpers `0x00676fe8` and `0x00677528`, scales the
+row colour's channels by it (clamped to `0..1`) and writes it to the hexagon and the pickup text `hud+0x2a4`. The row
+colours, the easing constants and what each record field is (ammo, cooldown, heat) are **not read**, and ours has no
+per-pickup count or timer in `Readout`, so a held pickup's hexagon stays as authored.
+
 2048: `HUD_pickups.xml` is not this layout, not checked.
 
 ## Not read

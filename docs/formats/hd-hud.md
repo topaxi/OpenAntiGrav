@@ -1143,27 +1143,50 @@ alone.
   warning up. The always-on set outside Zone still rests on that single state,
   which is why it is deliberately short.
 
-## The lap hexagon: `CurrentTimeTxt` is authored, and drawn on lap 1
+## The lap hexagon: `CurrentTimeTxt` is the lap number
 
-**2026-10-21, `hud-leftovers`, confidence 80 for lap 1, nothing claimed for later laps.**
+**2026-10-21, `hud-leftovers` (lap 1) and `hd-lap-hexagon` (later laps), confidence 85, watched live.**
 `HUD_lap_times.xml` authors `<Text name="CurrentTimeTxt"><Values string="1" font="HUD" align="centre" x="66" y="195">`
 over `TimeIcon`'s hexagon, beside `CurrentTime`. Every HD Time Trial compare pair shows that `1` in the
 original and an empty hexagon in ours: the reader drew a label only for a widget with an `idstring` or a
-computed arm, and this one has only a literal. It now draws the authored string (`oag_hud::draw::text_for`,
-`CurrentTimeTxt`); Pulse authors an `idstring` caption there and is unchanged.
+computed arm, and this one has only a literal. Pulse authors an `idstring` caption there and is unchanged.
 
 Read in the executable (`/hdfury/EBOOT-ps3-hdfury-eu.elf`, `scripts/ps3-toc.py attrib 0x0077f880`): only
 `Hud_BindWidgets` (`0x0009bb30`) names the widget, at TOC slot `0x008a7ac4`, which is the `hud+0x298` pointer
-(`-0x1685` in that function). `Hud_UpdateTimeCluster` (`0x00094598`) writes it only in the lap-change branch
-(`record+0xc` changed, lap row `0..3`), the same string it shifts into the new lap row, and that branch cannot fire on
-lap 1. So lap 1 is the authored text, which is what the frame shows. **Not read:** what the lap-change branch writes
-(the string comes from `record+0x34`; the earlier reading of `+0x34` as a held time and of `hud+0x1fc` as a
-target text is wrong: `hud+0x1f8` is `CurrentTime`, `hud+0x1fc` is `BestTime` and `record+0x38` is `craft+0x7028`,
-the best lap in centiseconds), so a later lap draws nothing. An Arcade race frame (`hd-race/talons-pack`, lap 2)
-shows `ClockIcon` in the hexagon and a `BEST` row instead; that layout does not author the digit.
+(`-0x1685` in that function). `Hud_UpdateTimeCluster` (`0x00094598`) writes it only in the lap-change branch, **as the
+current lap number, one ASCII digit (`0x30 + lap`), for laps 2 to 5**; lap 1 is the authored `1` and a lap past 5 holds
+the `5`. The branch runs only where the layout binds the lap rows and has no `BestTime` text, and not in the Arcade
+clock layout (`hud+0xac`), which authors `string=""` here and shows `ClockIcon` and a `BEST` row instead. Full read and
+the live values (`hud+0x294` = 2, 3 at the lines; the hexagon reading `1`, `2`, `3`):
+[hud-readouts](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md), "The lap-change branch". An earlier version of this
+section read the branch's string as unread, and before that `record+0x34` as a held time; `record+0x34` is the finished
+lap's time and goes to the lap row's time text, while the digit comes from `record+0xc`.
 
-Omega: **not checkable here**, no Omega HUD XML is extracted on this tree; it carries HD's front-end plugin and HUD
-fragments, so the same `string="1"` is expected and the reader is shared.
+`oag_hud::draw::text_for` draws the authored literal on lap 1 and the lap number after, capped at the history's
+four rows plus one. A layout whose literal is empty draws nothing, as before. The compare pairs are all lap 1 (and the
+Arcade one lap 2 on a layout that authors no digit), so no pair's pixels moved; the check is the live frames, hexagon crops
+of the original at laps 1, 2 and 3 against ours rendered from a pair's flags with `--hud-state 1,<lap>,...`, which agree to
+the digit, its yellow and its size.
+
+Omega: **not checkable here**, no Omega HUD XML is extracted on this tree and there is no PS4 emulator; it carries HD's
+front-end plugin and HUD fragments, so the same `string="1"` and branch are expected, and the reader is shared. 2048's
+`HUD_lap_times.xml` is byte-identical but no played 2048 mode loads it ("The per-lap history draws").
+
+## The `100` box is `PickupFarBackground`'s texels, and the original draws it translucent
+
+**2026-10-21, `hd-lap-hexagon`, open (confidence 70 on the identification, nothing wired).** The grey rounded box behind
+the shield `100` on every HD pair is not part of `DamageBarBg` (that sprite, `HUD_Components.gtf` `U=770 V=186`, is the
+two striped hexagon halves and nothing else). It is the slot at the top middle of **`PickupFarBackground`**
+(`HUD_pickup_background.xml`, `U=146 V=380`, 878x116): an opaque grey texel (178, alpha 255) in a bar whose body is
+alpha about 0.3. Modesto Heights pair, 1920x1080, after the pickup dim landed (the hexagon and pills now agree): the box
+reads a flat 178 in ours and about 150 in the original, with the sky and the dark ring behind it showing through, so the
+original draws it at roughly 0.8 over the background (a one-pair estimate with a guessed background, **chosen
+reading, not a measured constant**). `Hud_BindWidgets` binds `PickupFarBackground` at `hud+0x5c0`; the only function that
+reads that slot is `FUN_0008fbf0`, which shows or hides it with the five widgets around it (bit `0x4` of `+0x34`), and no
+`Image_SetVertexColours` is called on it, so the translucency is not a per-tick colour write. The layout authors
+`Vertices="10"` on it, an attribute ours does not read (`rg Vertices crates/hud` finds nothing); that a 10-vertex strip
+carries per-vertex alpha is the open lead. The original's whole HUD also sits 20 px lower than ours in this frame, which is
+the cockpit sway (`hd-cockpit-lean`'s), not this. Not wired: ours keeps the authored opaque texel.
 
 ## See also
 
