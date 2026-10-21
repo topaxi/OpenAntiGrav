@@ -44,3 +44,5 @@ a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 2. Measure whether the 4/3 holds at speed (`place --speed`, dump `0x00c49240..0x00c492b0` and the vertex constants in
    the hook's last round), and capture a second pose with the glass in view to re-check the coordinate law.
 3. RPCS3-capture a second circuit that `hd_add_second_census` shows moved (`place --hook`, same recipe).
+
+- **Glass sweep, 2026-10-21 (`hd-glass-sweep`): one input does not explain it; one fix is found and held.** `rpcs3-capture.md`, "What the sweep found". `glass_sheen::bias` skips slots that already carry a glow entry, so Tech de Ra's road (slot 449) has no `c`; adding it fixes saturation but raises the pair's mean grey by 0.41 (budget 0.1) because the light is also too high and not by one scalar. Next: a live draw dump of the glass draw (per-vertex `TC0..2.w`, normals, constants) at the cold pair's tick, to settle the ramp coordinate at grazing angles before touching the light; then land the `c` merge together with it.
