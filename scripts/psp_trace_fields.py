@@ -135,11 +135,10 @@ ENTITY_OWNER = 0x94
 # `roll_phase` (`+0x87c`) is the linear phase `Ship_UpdateSideshiftInput_q`
 # ramps; `roll_eased` (`+0x880`) is `FUN_088418e0`'s one-writer eased copy that
 # the display matrix and the internal camera's up vector both read; `steer_lean`
-# (`+0x854`) is `FUN_0883fab4`'s steering lean, the angle's *other* term
-# (`angle = entity[0x854] * 0.5 + entity[0x880] * 6.28`) - recorded so a capture
-# taken while steering (a d-pad roll gesture *is* steering input) can still
-# predict the exact angle the original drew, even though this term is
-# deliberately not ported (confidence 0 for what it means physically).
+# (`+0x854`) is `FUN_0883fab4`'s drawn steering lean, the angle's *other* term
+# (`angle = entity[0x854] * 0.5 + entity[0x880] * 6.28`), measured and ported
+# 2026-10-21 (camera.md, "The drawn lean"). `stick_lab`/`stick_rab` above are the
+# control record's two airbrakes, which that lean reads.
 ENTITY_FIELDS = [
     ("shield", 0x88),
     ("fov_intercept", 0x7C),

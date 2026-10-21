@@ -993,10 +993,13 @@ nose - a full revolution to within `0.16` degrees, `2*pi` being `6.28319`. The
 `6.28` is a code literal, not authored data.
 
 **`craft+0x854 * 0.5` is a second, independent contribution to the same angle**
-and is *not* part of the barrel roll. It is the steering lean computed by
-`FUN_0883fab4`, which [camera.md](camera.md) scores at confidence 0 for what it
-physically means. Nothing in a reimplementation should transcribe it; the roll
-term stands alone.
+and is *not* part of the barrel roll. It is the drawn steering lean computed by
+`Ship_UpdateSteerLeans` (`0x0883fab4`): `stick * 0.01 - left airbrake * 0.005 +
+right airbrake * 0.005` through a rate-limited follower and a `3/s` smooth,
+measured to `8e-7` on 2026-10-21 and confirmed on this matrix live (residual
+`0.00000` at `angle = +/-0.49`, the same sign as the roll), confidence 95. See
+[camera.md](camera.md#the-drawn-lean-entity0x854-read-and-measured-2026-10-21).
+Ours composes it into the same angle (`oag_render::roll::display_angle`).
 
 #### Stage 2b: the internal camera's up vector
 

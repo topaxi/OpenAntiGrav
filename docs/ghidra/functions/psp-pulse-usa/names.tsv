@@ -1404,3 +1404,5 @@
 0x0892d688	function	WoSpot_GetDistanceBeyondRadius	80	scene-light.md
 0x088418e0	function	Ship_UpdateEntity	75	craft-flags.md
 0x088272f4	function	Entity_SetGridState	80	craft-flags.md
+# 2026-10-21 ship-lean: both lean filters measured (camera.md, "The drawn lean")
+0x0883fab4	function	Ship_UpdateSteerLeans	90	camera.md

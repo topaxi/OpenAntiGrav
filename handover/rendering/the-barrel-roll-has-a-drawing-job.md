@@ -77,12 +77,14 @@ value the simulation already publishes.
   own breakpoint. A capture identical in shape to the one below, breaking
   inside `FUN_088455ec` instead of `FUN_088418e0`, would turn that inference
   into a second measurement.
-- **`craft+0x854 * 0.5`, the angle's other term, must not be transcribed.** It
-  is `FUN_0883fab4`'s steering lean, which camera.md scores at confidence **0**
-  for what it physically means. The roll term stands alone and is complete
-  without it. This *does* mean the reimplementation's total roll angle will
-  differ from the original's by whatever the lean contributes - an honest,
-  documented gap rather than a guessed constant.
+- ~~**`craft+0x854 * 0.5`, the angle's other term, must not be transcribed.**~~
+  **Superseded 2026-10-21 (`ship-lean`)**: `entity+0x854` is the drawn steering
+  lean, read at instruction level and measured to `8e-7` under player input
+  (stick and both airbrakes), and live-confirmed on this display matrix at the
+  roll's own sign, confidence 95
+  ([camera.md](../../docs/ghidra/functions/psp-pulse-usa/camera.md#the-drawn-lean-entity0x854-read-and-measured-2026-10-21)).
+  Ported: `oag_physics::controls::update_steer_lean`, drawn through
+  `oag_render::roll::display_angle`. The internal camera keeps the roll term alone.
 - Whether the roll should also reach anything else - a trail, an exhaust, a
   sound - is untouched. Nothing was found, but only `+0x87c` and `+0x880` were
   swept.
@@ -90,9 +92,9 @@ value the simulation already publishes.
 ## Next Steps
 
 **Steps 2-5 are done.** The drawing half of this thread is fully landed,
-including the sign; only the internal camera's own corroboration (an
-optional second measurement) and the two items above remain open, and
-neither blocks anything.
+including the sign and, since 2026-10-21, the steering lean term; only the
+internal camera's own corroboration (an optional second measurement) and the
+last item above remain open, and neither blocks anything.
 
 1. ~~Settle the sign with a memory-read capture~~ **Done, 2026-09-08.** A
    ground d-pad `[2,1,2]`/`[1,2,1]` gesture produced no roll at all
@@ -131,4 +133,4 @@ neither blocks anything.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-drawn and on screen since 2026-09-06: a symmetric quadratic ease on `ShipState::roll_phase`, then `eased * 6.28` radians about the craft's **nose** on its display matrix, and the same angle on the internal camera's up vector, all at confidence 88. **The sign is now measured too (2026-09-08, confidence 92)**: a memory-read capture against a real, booted `pulse-psp-usa.chd` settled the VFPU `sin`/`-sin` ambiguity the axis survived but the sign didn't, and closed `vmmul.q`'s operand order and `[0x002ace1c] = 0.75 = g_craft_scale` in the same pass - `oag_render::roll::ROLL_DIRECTION` is `-1.0`, flipped from the `+1.0` a player's own gesture would have suggested. Only the internal camera's own site (`FUN_088455ec`) was not independently captured; it inherits the ship's measured sign as a labelled inference. `craft+0x854`'s lean term shares the angle and must not be transcribed - confidence 0 upstream. **Also found this pass**: every offset in this section is on the **entity**, not the craft `Ship_UpdateCraft` itself takes - the third time this exact trap has bitten the project
+drawn and on screen since 2026-09-06: a symmetric quadratic ease on `ShipState::roll_phase`, then `eased * 6.28` radians about the craft's **nose** on its display matrix, and the same angle on the internal camera's up vector, all at confidence 88. **The sign is now measured too (2026-09-08, confidence 92)**: a memory-read capture against a real, booted `pulse-psp-usa.chd` settled the VFPU `sin`/`-sin` ambiguity the axis survived but the sign didn't, and closed `vmmul.q`'s operand order and `[0x002ace1c] = 0.75 = g_craft_scale` in the same pass - `oag_render::roll::ROLL_DIRECTION` is `-1.0`, flipped from the `+1.0` a player's own gesture would have suggested. Only the internal camera's own site (`FUN_088455ec`) was not independently captured; it inherits the ship's measured sign as a labelled inference. `craft+0x854`'s lean term shares the angle; measured and drawn since 2026-10-21 (confidence 95, camera.md "The drawn lean"). **Also found this pass**: every offset in this section is on the **entity**, not the craft `Ship_UpdateCraft` itself takes - the third time this exact trap has bitten the project
