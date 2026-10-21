@@ -3177,8 +3177,9 @@ number, not a material one, and is named in the thread.
   mode 2 (`PROGRAM_BW_GLASS`), `shade.wesl` multiplies the lit sum and the specular by `b` decoded like the picture, and `Uv2` is routed into the vertex's `texcoord2`
   (`billboard_glass::second_uv`, in both emit paths). **Chosen, not measured:** `b`'s gamma nibble was not read off a live draw. **Not drawn, named:** the probe reflection
   (`0x7480de6d`/`0xd5814b74` tints; needs the dual-paraboloid probe) and the `glass_fratio` alpha ramp (about 0.83 of `orange.a * 1.25`, not bound). Mean over the glass box
-  (300x150 at 1500,150), ours before / after against the original: `(92, 81, 88)` / `(47, 48, 56)` against `(53, 52, 41)`: the remaining blue-against-olive is the orange
-  reflection term. `0x7611a2d8` is a float1 specular power here (63.4 and 30), not a diffuse: `glasstest` stays out of `DIFFUSE_PARAMETER`.
+  (300x150 at 1500,150), ours before / after against the original: `(92, 81, 88)` / `(47, 48, 56)` against `(53, 52, 41)`: the "olive" `(53, 52, 41)` was **savestate garbage in the stored original** (2026-10-21,
+  `hd-savestate-glass`, [rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md)): a cold-boot frame of the same glass is a dark amber crowd behind glass with no blue sheen, so the
+  blue in ours is an **extra term**, not a missing reflection, and "the orange reflection term" explanation is withdrawn. Re-measure this box against a cold-boot original before wiring the probe for it. `0x7611a2d8` is a float1 specular power here (63.4 and 30), not a diffuse: `glasstest` stays out of `DIFFUSE_PARAMETER`.
 - **`cf_vex_billboard` (Vineta K's `harimau` billboard, slot 330, and every slot of the family)** - **wired 2026-10-21.** Block `#3` (`@0x1b40`):
   `g = k * tex1(uv.x * su, uv.y * sv)`, `light = 0x81db67ea + sat(N.L) * 0x2dba643d` (no prelit, no sun mask, no shadow), `out = tex0 * (g.a + light * g.rgb)`, then
   fog and the `/2`; alpha `g.a`. **The earlier reading of this page was wrong on `k`:** `0xb17204e5` and `0x287b555f` are the glow tap's `u` and `v` scales (harimau 1.5 and
