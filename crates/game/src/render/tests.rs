@@ -286,3 +286,135 @@ fn to_grid_maps_a_bar_to_a_point_off_the_grid() {
     let (x, _) = to_grid(Space::PSP, viewport, (1920.0 - 10.0, 272.0));
     assert!(x > Space::PSP.size.0, "{x}");
 }
+
+/// An outlined font is drawn as the PSP draws it, in two passes: the silhouette's alpha in the
+/// border colour, then the body's grey level as alpha in the text colour.
+///
+/// The texel here is an antialiased edge: palette alpha 200 and grey 100. One pass that mixes the
+/// two colours by the grey first (what the menu fonts need) gives it `100/255` white at about
+/// `0.54` alpha, a pixel of about 42 over black; the two passes give `100/255` white over a
+/// quarter-alpha black, a pixel of about 100. The original's HUD strokes read the second, which
+/// is the stroke brightness this pins (`PulseHud.fnt`'s two CLUTs in a GE list of a Pulse grid).
+///
+/// **Skips with no adapter.**
+#[test]
+fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
+    use oag_texture::fnt::{Font, Glyph};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let mut palette = vec![[0, 0, 0, 0]; 16];
+    palette[1] = [100, 100, 100, 200];
+    palette[2] = [255, 255, 255, 255];
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette,
+        indices: (0..64)
+            .map(|at| u8::from(at % 8 < 4 && at / 8 < 4))
+            .collect(),
+        glyphs: vec![Glyph {
+            codepoint: u16::from(b'8'),
+            width: 4,
+            height: 4,
+            u0: 0,
+            u1: 4,
+            v0: 0,
+            v1: 4,
+            advance: 4,
+        }],
+    };
+    assert!(font.is_outlined(), "the fixture must be an outlined font");
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        Atlas::from_font(&font),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    renderer.set_space(Space {
+        size: (4.0, 4.0),
+        display_aspect: 1.0,
+    });
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("outlined font test"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = target.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("outlined font readback"),
+        size: (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 4) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    renderer.render_with(
+        wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+        &device,
+        &queue,
+        &mut encoder,
+        &view,
+        &[Draw::Text {
+            x: 0.0,
+            y: 0.0,
+            scale: 1.0,
+            color: [1.0, 1.0, 1.0, 1.0],
+            border: Some([0.0, 0.0, 0.0, 0.25]),
+            align: oag_ui::frontend::Align::Left,
+            text: "8".to_owned(),
+            wrap_width: None,
+        }],
+        (0.0, 0.0, 4.0, 4.0),
+        None,
+    );
+    encoder.copy_texture_to_buffer(
+        target.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                rows_per_image: Some(4),
+            },
+        },
+        wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let at = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize + 4;
+    let red = i32::from(slice.get_mapped_range().expect("the readback")[at]);
+    assert!(
+        (red - 100).abs() <= 6,
+        "an edge texel of grey 100 should read about 100 over black, got {red}: the two passes are not live"
+    );
+}

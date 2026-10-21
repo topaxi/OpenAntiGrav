@@ -884,7 +884,11 @@ impl Renderer {
                 video_rect,
                 face_atlas: face_atlas_size(self.face_atlas.as_ref()),
                 buttons_atlas: face_atlas_size(self.buttons_atlas.as_ref()),
-                hud: self.hud.uniform(),
+                hud: {
+                    let mut hud = self.hud.uniform();
+                    hud[2] = f32::from(u8::from(self.atlas.is_outlined()));
+                    hud
+                },
             }),
         );
 
