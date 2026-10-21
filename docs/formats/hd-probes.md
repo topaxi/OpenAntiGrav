@@ -67,6 +67,11 @@ addresses, one per craft, 0x8000 apart, and every draw of a craft binds its own.
 
 ## Not what the earlier lane thought
 
+**Corrected 2026-10-21 (`hd-one-pair-moa`)**: the producer names below do exist on the running game, for the *scenery's* map: the
+512x256 `paraboloidReflectionTex` at `0xc4065380` is the circuit's sky resampled
+([hd-track-tone.md](../rendering/hd-track-tone.md), "The reflection map is the sky"). It is a different map from the hull's 128x64 pair this file
+holds, and it is written once at load, which is why no frame shows a draw into it.
+
 `liveRsxPanXForm_CubemapToDualParaboloide_fp` and `liveRsxPanXForm_CubemapConvolve_fp`
 (names in the executable) are not on any frame of the running game: eight captures and a
 draw-state poll at 100 Hz found no draw into either map. They read as the offline bake

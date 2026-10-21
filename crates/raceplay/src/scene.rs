@@ -604,6 +604,11 @@ impl Scene {
         // The circuit's baked environment probes, blended per craft each frame: only a
         // circuit that ships them (Wipeout HD's) has an array to bind.
         let env_probes = probes.map(|probes| crate::env_probes::EnvProbes::new(device, probes));
+        // The circuit's sky as the engine's `paraboloidReflectionTex`, for the materials that read it.
+        let sky_probe = sky_model
+            .as_ref()
+            .and_then(mesh::sky_paraboloid::from_sky)
+            .map(|map| mesh_render::upload_sky_probe(device, queue, &map));
         let shadow_maps = mesh_render::ShadowMaps {
             coverage: Some(shadow_map.view()),
             depth: Some(shadow_map.depth_view()),
@@ -611,6 +616,7 @@ impl Scene {
             self_shadow: Some(sun_occlusion.self_shadow().view()),
             behind_glass: None,
             env_probes: env_probes.as_ref().map(crate::env_probes::EnvProbes::view),
+            sky_probe: sky_probe.as_ref(),
         };
         let behind_glass = behind_glass::Target::build(
             device,

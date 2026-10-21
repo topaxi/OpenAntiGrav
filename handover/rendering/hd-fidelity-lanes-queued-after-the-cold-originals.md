@@ -8,9 +8,16 @@ another HD pair's mean grey difference by more than about 0.1-0.2.
 
 ## Open
 
-- **Moa Therma pair** (`hd/moa-therma`, the largest HD difference, 20.96 mean grey on the old originals):
-  close the gap as far as possible without regressing the others. The one lane still queued at
-  wind-down; spawn it once the cold originals are adopted.
+- **Moa Therma pair** (`hd/moa-therma`): 15.05 to 10.32 mean grey (2026-10-21, `hd-one-pair-moa`; the other twelve HD pairs 0.00).
+  The glass cause is closed: `paraboloidReflectionTex` is the circuit's `sky.gtf` as a 512x256 dual hemisphere map and
+  `dc_windows_a` reads it (`docs/rendering/hd-track-tone.md`, "The reflection map is the sky"). Left on this pair: the cast
+  shadow under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell,
+  slot not found by bisection), texture sharpness, and the glass program's normal map.
+- **The other families that declare the sky map** (`glass_reflect`, `ds_booth_glass`, `glasstest`, `mt_windows_a` on Anulpha Pass,
+  the water sheets of Vineta K, the mag floors, the pipe family, the ice): the map and its binding exist
+  (`mesh::sky_paraboloid`, group 2 binding 17); each family needs its program block read and a `rcs::window_glass`-style tag, one
+  per commit with all 13 pairs re-judged. The tint is `ProbeTint::SCENERY` (`{1, 1, 1, 0}`, read on Moa's glass only); a second circuit's
+  read would settle whether it is per circuit. The producer program itself is still undecoded.
 - **HD's exposure adaptation law** (`docs/rendering/hd-track-tone.md`, "Decide the adaptation law"): the
   live readback matches the mean of the *encoded* per-pixel luma within 1.3 % on three circuits, ours
   encodes the linear mean (15-43 % high). The patch is six lines in `crates/post/shaders/hd_bloom.wesl`

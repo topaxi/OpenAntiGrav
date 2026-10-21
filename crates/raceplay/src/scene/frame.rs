@@ -595,8 +595,18 @@ impl Scene {
                 prev_vp * prev.camera_translation,
             );
         }
-        self.track
-            .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
+        // The circuit's own materials that read the engine's reflection map (scenery glass) take their
+        // own tint, see `ProbeTint::SCENERY`.
+        self.track.write_hull(
+            queue,
+            view_projection,
+            Mat4::IDENTITY,
+            prev_vp,
+            crate::drawable::HullLayers {
+                env_tint: crate::env_probes::ProbeTint::SCENERY,
+                ..Default::default()
+            },
+        );
         // How many slots this race fills, which bounds every per-craft loop from
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.

@@ -910,7 +910,8 @@ frame took about one minute; the full one with textures about seven (`hd-draw-du
 `--dump-attempts`, so one boot can hook a frame in the gantry's FINAL LAP window (`--window 9.5,9.9`) and its chequered
 window (`--window 12.35,13.3`): `HOOK_LIGHT=1 HOOK_NEED_SCREEN=1 ... lapboard --window 9.5,9.9 --window 12.35,13.3 --hook
 scripts/rpcs3_draw_hook.py --hook-shots 1 --dump 0x40000000:0x20000 --laps ""` (464 s on 2026-10-18). **A render
-target's pixels are not readable this way**: `--dump 0xC2AE0000:0x40000` (a 512 x 256 card) returns all zeros, the RSX keeps
+target's pixels are not readable this way (a GDB read of its VRAM range is, with `Write Color Buffers` on: `hd-one-pair-moa` read the 512x256 sky reflection map at
+`0xc4065380` that way on four cold boots, 524,288 bytes `A R G B`; but not after a hook dump, whose pause came back with a gamma-decoded copy)**: `--dump 0xC2AE0000:0x40000` (a 512 x 256 card) returns all zeros, the RSX keeps
 the target on the host side.
 
 **What measured here (confidence 90 unless stated):**

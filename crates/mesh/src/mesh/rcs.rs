@@ -207,6 +207,7 @@ mod rim_glow;
 mod skin;
 mod vertex_scroll;
 mod water;
+mod window_glass;
 use bounds::bounding_sphere;
 
 mod emissive;

@@ -11,6 +11,7 @@
 
 mod archive_cache;
 mod hd_picture_tint_ground_truth;
+mod hd_sky_reflection_ground_truth;
 mod track_albedo;
 
 mod airbrake_flaps_ground_truth;

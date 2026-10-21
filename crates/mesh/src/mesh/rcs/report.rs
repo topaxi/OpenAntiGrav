@@ -272,6 +272,12 @@ pub struct Report {
     pub probe_lit_blocked: usize,
     /// Reflective materials whose reflectivity parameter was missing.
     pub probe_lit_unread: usize,
+    /// Scenery glass materials tagged to read the sky reflection map - see `super::window_glass`.
+    pub window_glass_bound: usize,
+    /// Scenery glass left untagged: its glow index was taken or the table was full.
+    pub window_glass_blocked: usize,
+    /// Scenery glass whose reflection weight parameter was missing.
+    pub window_glass_unread: usize,
     /// HD holographic billboards whose three textures were bound, and the
     /// materials of the family left on the generic emissive reading: one whose
     /// program is another one (`scanlinebillboard*`), or whose texture did not
@@ -463,6 +469,17 @@ impl Report {
         } + &match self.probe_lit_bound {
             0 => String::new(),
             n => format!(", {n} hull material(s) reading the reflection probe"),
+        } + &match self.window_glass_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} scenery glass material(s) reflecting the circuit's sky (the program's normal map \
+                 is not applied)"
+            ),
+        } + &match self.window_glass_blocked + self.window_glass_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} scenery glass material(s) NOT tagged (glow index taken, table full or no weight)"
+            ),
         } + &match self.hull_normal_bound {
             0 => String::new(),
             n => format!(", {n} hull material(s) sampling their normal map"),

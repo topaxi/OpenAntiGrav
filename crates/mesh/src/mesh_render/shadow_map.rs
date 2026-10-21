@@ -50,6 +50,11 @@ pub const OCCLUSION_LAYERS: u32 = 8;
 /// with it on, the raw read is the pale, washed hull and this one the original's saturation.
 pub const ENV_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
+/// The circuit's sky reflection map's texel format (`mesh::sky_paraboloid`): sRGB for the same
+/// reason [`ENV_PROBE_FORMAT`] is, the original's units 1 to 3 carrying the same
+/// gamma-nibble-7 address word on the glass draws that read it.
+pub const SKY_PROBE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
 /// Two layers per craft: its irradiance map (resized to the reflection map's size) and
 /// its reflection map.
 pub const ENV_PROBE_LAYERS: u32 = OCCLUSION_LAYERS * 2;
@@ -79,7 +84,7 @@ pub const SELF_SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32
 /// (`super::ShadowMaps::behind_glass`), read through the coverage map's
 /// clamped filtering sampler, which is the original's own sampler state for it
 /// (clamp to edge, linear, `0x60030303`/`0x02022000` on Vineta K's capture).
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 9] {
     [
         wgpu::BindGroupLayoutEntry {
             binding: 6,
@@ -153,7 +158,54 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
             },
             count: None,
         },
+        wgpu::BindGroupLayoutEntry {
+            binding: 17,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        },
     ]
+}
+
+/// Uploads the circuit's sky reflection map ([`crate::mesh::sky_paraboloid::build`]'s bytes) and returns
+/// the view to hand [`super::ShadowMaps::sky_probe`]. The view keeps the texture alive.
+#[must_use]
+pub fn upload_sky_probe(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    rgba: &[u8],
+) -> wgpu::TextureView {
+    let (width, height) = crate::mesh::sky_paraboloid::SIZE;
+    let extent = wgpu::Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("sky probe"),
+        size: extent,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: SKY_PROBE_FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    queue.write_texture(
+        texture.as_image_copy(),
+        rgba,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(width * 4),
+            rows_per_image: Some(height),
+        },
+        extent,
+    );
+    texture.create_view(&wgpu::TextureViewDescriptor::default())
 }
 
 /// What [`resources`] builds.
@@ -171,6 +223,8 @@ pub(super) struct Resources {
     pub behind_glass_view: wgpu::TextureView,
     /// The per-craft environment-probe array, or a one-layer black placeholder.
     pub env_probe_view: wgpu::TextureView,
+    /// The circuit's sky reflection map, or a black placeholder.
+    pub sky_probe_view: wgpu::TextureView,
 }
 
 /// The view and sampler to bind, given the caller's map or none.
@@ -197,6 +251,7 @@ pub(super) fn resources(
         self_shadow,
         behind_glass,
         env_probes,
+        sky_probe,
     } = maps;
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("shadow map"),
@@ -419,6 +474,41 @@ pub(super) fn resources(
             })
         }
     };
+    // Black, one texel, never sampled: no material names the map without one bound.
+    let sky_probe_view = match sky_probe {
+        Some(view) => view.clone(),
+        None => {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("sky probe placeholder"),
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: SKY_PROBE_FORMAT,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            queue.write_texture(
+                texture.as_image_copy(),
+                &[0u8, 0, 0, 255],
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4),
+                    rows_per_image: Some(1),
+                },
+                wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
+            );
+            texture.create_view(&wgpu::TextureViewDescriptor::default())
+        }
+    };
     Resources {
         view,
         sampler,
@@ -428,5 +518,6 @@ pub(super) fn resources(
         self_shadow_view,
         behind_glass_view,
         env_probe_view,
+        sky_probe_view,
     }
 }

@@ -325,7 +325,8 @@ pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
 pub use emissive::{
-    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, REFLECTION_RATE, WINDOW_REFLECTION_RATE,
+    ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -338,6 +339,7 @@ pub mod rcs;
 pub mod shine_pass;
 pub mod ship_skin;
 pub mod sky_cube;
+pub mod sky_paraboloid;
 
 /// Reads one named blob out of an archive inside a disc image.
 ///

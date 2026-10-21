@@ -41,6 +41,15 @@ impl ProbeTint {
         gain: 4.0,
         desaturate: 0.0,
     };
+    /// What scenery glass multiplies the sky reflection map by: `(1, 1, 1, 0)`, read live on RPCS3
+    /// off Moa Therma's `dc_windows_a` (the lightmapped variant, `MUL H1.xyz, H1, {1, 1, 1, 0}` after
+    /// the luma `DP3`), where the hulls beside it in the same frame read the engine's `(4, 4, 4, 0)`.
+    /// One circuit and one family measured; whether the value follows the draw's class or the
+    /// circuit is not read, and a Zone race's is not read at all, so every race takes this one.
+    pub(crate) const SCENERY: Self = Self {
+        gain: 1.0,
+        desaturate: 0.0,
+    };
     /// A Zone race: `0.69804` is `178 / 255`.
     pub(crate) const ZONE: Self = Self {
         gain: 178.0 / 255.0,
