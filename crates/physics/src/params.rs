@@ -260,6 +260,63 @@ impl SteerLean {
     };
 }
 
+/// The cockpit camera's steering lean, `oag_physics::controls::update_camera_lean`'s gains.
+///
+/// Display state only, like [`SteerLean`]. Pulse compiles the numbers in ([`Self::PULSE`]);
+/// Wipeout HD reads the stick gain and the follower rate from the team's
+/// `<Tilt internalAmount internalSpeed>` and smooths at its own literal `6.0`, with `+/-0.5`
+/// sideshift terms (`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CameraLean {
+    /// What the raw stick on the `+/-100` record is multiplied by to give the follower's target:
+    /// Pulse `0.01`, HD `0.015 * <Tilt internalAmount>`.
+    pub stick_scale: f32,
+    /// The follower's per-second rate: Pulse `5.4`, HD `<Tilt internalSpeed>`.
+    pub follower_rate: f32,
+    /// The first-order rate between the follower and the lean: Pulse `4.0`, HD `6.0`.
+    pub smooth_rate: f32,
+    /// Added to the target while the right sideshift timer runs and taken off while the left
+    /// does: HD `0.5`. Pulse's original folds in `10.0` from two flags nobody identified, so
+    /// ours is `0.0` there (chosen, not measured).
+    pub sideshift_offset: f32,
+    /// How the follower's step is bounded.
+    pub clamp: CameraClamp,
+}
+
+/// How [`CameraLean`] bounds the follower's step `delta` (target minus follower).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CameraClamp {
+    /// Pulse: `0.6` while the raw stick pushes the way the follower moves, `0.3` otherwise,
+    /// both ways.
+    #[default]
+    Pulse,
+    /// Wipeout HD (`0x000eb574`-`0x000eb594`, `0x000ed290`-`0x000ed2ac`): only a step the raw
+    /// stick pushes is bounded, to `0.6` when beyond `0.6` and otherwise to `0.3`; a step with
+    /// the stick centred or against it is unbounded, so the lean lets go at the follower rate.
+    Hd,
+}
+
+impl CameraLean {
+    /// Pulse PSP's literals, `FUN_0883fab4` (`0x0883fac0` and the `4.0` smooth), measured to RMS
+    /// `0.0003` (`crates/trace/tests/camera_lean_ground_truth.rs`). Pure's twin is not measured.
+    pub const PULSE: Self = Self {
+        stick_scale: 0.01,
+        follower_rate: 5.4,
+        smooth_rate: 4.0,
+        sideshift_offset: 0.0,
+        clamp: CameraClamp::Pulse,
+    };
+
+    /// No lean at all: every rate zero.
+    pub const NONE: Self = Self {
+        stick_scale: 0.0,
+        follower_rate: 0.0,
+        smooth_rate: 0.0,
+        sideshift_offset: 0.0,
+        clamp: CameraClamp::Pulse,
+    };
+}
+
 /// Everything the force law reads for one ship in one speed class.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Handling {
@@ -301,6 +358,8 @@ pub struct Handling {
     pub roll_turbotime: f32,
     /// The drawn hull's steering lean (display only, [`SteerLean`]).
     pub steer_lean: SteerLean,
+    /// The cockpit camera's steering lean (display only, [`CameraLean`]).
+    pub camera_lean: CameraLean,
 }
 
 impl Handling {
@@ -370,6 +429,7 @@ impl Handling {
         roll_speed: 0.0,
         roll_turbotime: 0.0,
         steer_lean: SteerLean::NONE,
+        camera_lean: CameraLean::NONE,
     };
 }
 

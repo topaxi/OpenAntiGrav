@@ -5,7 +5,7 @@
 //! ramps are live; the throttle's is not ([`crate::params::Engine::falloff`]). Evidence:
 //! `docs/ghidra/functions/psp-pulse-usa/engine.md`, "Engine", "Brakes" and "Steering".
 
-use crate::params::Handling;
+use crate::params::{CameraClamp, Handling};
 use crate::ship::{ShipControls, ShipState};
 
 /// The scale the original's control states use.
@@ -156,19 +156,15 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         handling.turning.falloff,
         dt,
     );
-    update_camera_lean(state, controls.steer_x, dt);
+    update_camera_lean(state, controls.steer_x, &handling.camera_lean, dt);
     update_steer_lean(state, controls, &handling.steer_lean, dt);
 }
 
-/// The follower's per-second gain, the `5.4` literal at `0x0883fac0`.
-pub const CAMERA_LEAN_FOLLOW_GAIN: f32 = 5.4;
 /// The most the follower may be behind its target, in lean units, while the stick
 /// pushes it further out (`0x3f19999a`).
 pub const CAMERA_LEAN_OUT_LIMIT: f32 = 0.6;
 /// The same bound while the stick is centred or opposes the move (`0x3e99999a`).
 pub const CAMERA_LEAN_RETURN_LIMIT: f32 = 0.3;
-/// The first-order filter's rate between follower and lean, per second (`4.0`).
-pub const CAMERA_LEAN_SMOOTH_RATE: f32 = 4.0;
 
 /// Advances the steering lean the cockpit camera rolls by, one frame.
 ///
@@ -177,21 +173,57 @@ pub const CAMERA_LEAN_SMOOTH_RATE: f32 = 4.0;
 /// writes, not the ramped [`ShipState::steer`]; `stick_x` is that stick on `-1..=1`. The
 /// follower's `delta` is clamped, not the lean, which saturates at `+/-1` where the stick does.
 ///
-/// **Chosen, not measured: omitted.** The original also folds in `+/-10.0` from two flags
-/// (`craft+0x8a4`, `craft+0x8a8`) and negates on `craft+0x860 & 2`; none is identified, so they
-/// are treated as clear.
-pub fn update_camera_lean(state: &mut ShipState, stick_x: f32, dt: f32) {
-    let target = stick_x * CONTROL_RANGE * 0.01;
+/// `lean` carries the gains a title may change ([`crate::params::CameraLean`]): Wipeout HD's
+/// `FUN_000eadb8` (`0x000eb528`-`0x000eb5d0`) runs this filter with the stick term `0.015 *
+/// <Tilt internalAmount>`, the follower at `<Tilt internalSpeed>`, the smooth at `6.0`, and
+/// `+/-0.5` from the two sideshift timers ([`ShipState::sideshift_timers`]).
+///
+/// **Chosen, not measured: omitted on Pulse.** The original also folds in `+/-10.0` from two
+/// flags (`craft+0x8a4`, `craft+0x8a8`) and negates on `craft+0x860 & 2`; none is identified,
+/// so they are treated as clear.
+pub fn update_camera_lean(
+    state: &mut ShipState,
+    stick_x: f32,
+    lean: &crate::params::CameraLean,
+    dt: f32,
+) {
+    let mut target = stick_x * CONTROL_RANGE * lean.stick_scale;
+    if state.sideshift_timers[0] > 0.0 {
+        target -= lean.sideshift_offset;
+    }
+    if state.sideshift_timers[1] > 0.0 {
+        target += lean.sideshift_offset;
+    }
     let delta = target - state.camera_lean_follower;
-    let limit = if (delta > 0.0 && stick_x > 0.0) || (delta <= 0.0 && stick_x < 0.0) {
-        CAMERA_LEAN_OUT_LIMIT
-    } else {
-        CAMERA_LEAN_RETURN_LIMIT
+    let delta = match lean.clamp {
+        CameraClamp::Pulse => {
+            let limit = if (delta > 0.0 && stick_x > 0.0) || (delta <= 0.0 && stick_x < 0.0) {
+                CAMERA_LEAN_OUT_LIMIT
+            } else {
+                CAMERA_LEAN_RETURN_LIMIT
+            };
+            delta.clamp(-limit, limit)
+        }
+        CameraClamp::Hd => {
+            if delta > 0.0 && stick_x > 0.0 {
+                if delta > CAMERA_LEAN_OUT_LIMIT {
+                    CAMERA_LEAN_OUT_LIMIT
+                } else {
+                    delta.min(CAMERA_LEAN_RETURN_LIMIT)
+                }
+            } else if delta <= 0.0 && stick_x < 0.0 {
+                if delta < -CAMERA_LEAN_OUT_LIMIT {
+                    -CAMERA_LEAN_OUT_LIMIT
+                } else {
+                    delta.max(-CAMERA_LEAN_RETURN_LIMIT)
+                }
+            } else {
+                delta
+            }
+        }
     };
-    let delta = delta.clamp(-limit, limit);
-    state.camera_lean_follower += delta * CAMERA_LEAN_FOLLOW_GAIN * dt;
-    state.camera_lean +=
-        (state.camera_lean_follower - state.camera_lean) * dt * CAMERA_LEAN_SMOOTH_RATE;
+    state.camera_lean_follower += delta * lean.follower_rate * dt;
+    state.camera_lean += (state.camera_lean_follower - state.camera_lean) * dt * lean.smooth_rate;
 }
 
 /// The most the steer lean follower may trail its target while the stick pushes the same way

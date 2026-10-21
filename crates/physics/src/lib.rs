@@ -85,7 +85,7 @@ pub use damage::{CraftState, DamageRules, Shield};
 pub use forces::{Accumulators, Environment, Evaluated};
 pub use integrate::{clamp_dt, integrate, step};
 pub use maglock::{Hold, MagContact, TrackSample};
-pub use params::{Handling, SteerLean};
+pub use params::{CameraClamp, CameraLean, Handling, SteerLean};
 pub use reset::ResetContact;
 pub use ship::{Body, InertiaFrame, MAX_DT, SUBSTEPS, ShipControls, ShipState, Sideshift};
 pub use wall::{WallContact, WallResponse};

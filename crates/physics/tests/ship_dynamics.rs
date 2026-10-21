@@ -116,6 +116,7 @@ fn fixture() -> Handling {
         roll_speed: 0.0,
         roll_turbotime: 0.0,
         steer_lean: oag_physics::SteerLean::NONE,
+        camera_lean: oag_physics::CameraLean::NONE,
     }
 }
 

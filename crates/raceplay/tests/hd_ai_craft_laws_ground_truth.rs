@@ -77,6 +77,14 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
             lean.stick_amount > 0.0 && lean.follower_rate > 0.0,
             "slot {slot} lean {lean:?}"
         );
+        // The cockpit lean reads `<Tilt internalAmount internalSpeed>`, smooths at `6.0`.
+        let camera = race.sim.world.ships[slot].handling.camera_lean;
+        assert_eq!(camera.smooth_rate, 6.0, "slot {slot} cockpit smooth");
+        assert_eq!(camera.clamp, oag_physics::CameraClamp::Hd, "slot {slot}");
+        assert!(
+            camera.stick_scale > 0.0 && camera.follower_rate > 0.0,
+            "slot {slot} cockpit lean {camera:?}"
+        );
     }
     let ship = &race.sim.world.ships[1];
     let ceiling = oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body);

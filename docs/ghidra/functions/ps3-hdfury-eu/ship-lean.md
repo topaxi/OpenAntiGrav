@@ -23,7 +23,7 @@ right `+0x0c`, each `+/-100` or `0/100`); `team` is `*(craft+0x78)`; `dt` is `f2
 target = rec[0] * 0.015 * team[+0x10];             /* <Tilt internalAmount> */
 if (ship[0x6ac8] > 0) target -= 0.5;               /* the two sideshift timers */
 if (ship[0x6acc] > 0) target += 0.5;
-/* clamp d to 0.6 / 0.3 by the raw stick's side, as Pulse */
+/* d bounded only while the raw stick pushes it (see "The cockpit lean, measured") */
 ship[0x6a48] += d * (dt * team[+0x14]);            /* <Tilt internalSpeed> */
 ship[0x6a44] += (ship[0x6a48] - ship[0x6a44]) * (dt * 6.0);
 
@@ -41,8 +41,8 @@ Against Pulse's `Ship_UpdateSteerLeans`: the drawn lean is the same filter (same
 `0.005`, `0.5`/`0.3` limits, raw-stick side test, `0x1000` gate) with the stick term scaled by
 `shipAmount`, the follower at `shipSpeed` (Pulse `5.0`) and the smooth at `10.0` (Pulse `3.0`).
 HD has no `& 2` negate on either filter. The camera lean differs more (`0.015 * internalAmount`,
-`+/-0.5` sideshift terms where Pulse has `+/-10`, smooth `6.0`, follower `internalSpeed`); ours
-still runs Pulse's camera lean on HD, which this lane did not change.
+`+/-0.5` sideshift terms where Pulse has `+/-10`, smooth `6.0`, follower `internalSpeed`, and a
+different step bound, below); ported 2026-10-21 as `oag_physics::CameraLean`.
 
 ## The display matrix, `0x000ebb3c`-`0x000ebc6c`
 
@@ -57,8 +57,8 @@ Pulse's `0x08842140` angle exactly. A raw scan of the ELF for every load at disp
 `0x6a54` (Ghidra's own instruction search missed this one) finds it the lean's only reader
 besides its two writers (`FUN_000eadb8` and `FUN_000cf0c8`, a second copy of both filters) and
 the constructors. The follower `0x6a58` has two more: `PlayerInput_Update` (`0x000cec84`) and
-`Hud_Update` (`0x0009e710`-`0x0009e754`), which offsets two HUD widgets by the follower, so
-HD's HUD sways with the steer (not ported, open).
+`Hud_Update` (`0x0009e710`-`0x0009e754`), which offsets two HUD containers by it
+(see "The HUD sway").
 
 ## Measured on RPCS3, 2026-10-21
 
@@ -103,8 +103,75 @@ measured), drawn through `oag_render::roll::display_angle`.
 [rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md) was a teleport with no input,
 and is the craft's yaw in the frame, not a roll: this filter reads input alone and is `0` there.
 
+## The cockpit lean, measured 2026-10-21 (`hd-cockpit-lean`)
+
+`0x000eb528`-`0x000eb5d0` and the two clamp tails `0x000ecd04`, `0x000ed290`-`0x000ed2ac`, read
+at instruction level. The step bound is **not** Pulse's `0.6` out / `0.3` back:
+
+```c
+d = target - follower;
+if (d > 0 && stick > 0)       d = (d > 0.6) ? 0.6 : min(d, 0.3);   /* 0x000eb574-0x000eb594 */
+else if (d <= 0 && stick < 0) d = (d < -0.6) ? -0.6 : max(d, -0.3); /* 0x000ed290-0x000ed2ac */
+/* else: d is unbounded - a centred or opposing stick lets go at the follower rate */
+```
+
+Live (Talon's Junction, Feisar, `scripts/rpcs3-hd-air-hold.py --script`, a stick-only timeline
+of full right, half left, full left, with the centre between, 2,681 rows,
+`data/traces/hd-talons-cockpit-lean.csv`): the lean settles at `+/-2.0972`
+(`0.99868 * 0.015 * 1.4`, twice Pulse's `1.0`) and, released from there, the follower falls as
+`exp(-7 t)` (`2.1 -> 1.28 -> 0.61 -> 0.26` in 0.1 s steps), where Pulse's `0.3 * 5.4` limit would
+fall linearly. Replayed through `oag_physics::controls::update_camera_lean` with the HD
+`CameraLean`: RMS `0.009`, worst `0.18` at the polled edges; Pulse's gains `0.35`, Pulse's step
+bound `0.24`, `internalAmount` left out `0.6`
+(`crates/trace/tests/camera_lean_ground_truth.rs`,
+`hds_cockpit_lean_runs_its_tilt_gains_and_lets_go_unbounded`). Confidence 88 for the stick, return
+and settle; the polled rows cannot resolve the `(0.3, 0.6]` knee on the way out.
+
+**The sideshift terms are read, not measured**: `ship+0x6ac8` > 0 takes `0.5` off the target,
+`ship+0x6acc` > 0 adds it (`0x000eb530`-`0x000eb564`), ported as `CameraLean::sideshift_offset`.
+The capture's double-taps of L1/R1 never raised either timer (`shift_l`/`shift_r` read 0
+throughout), so the term has no live number yet. Confidence 75.
+
+Whether Pulse's `FUN_0883fab4` has the same one-sided bound was not checked; its capture (a full
+right held, then released) reproduces with the `0.3` return limit to RMS `0.0003`, which an
+unbounded return would break, so it differs.
+
+**Ported**: `oag_physics::CameraLean` per craft (`Handling::camera_lean`), filled by
+`oag_raceplay::load::code_laws` under `CraftLaws::tilt_camera_lean` (HD measured; Omega and 2048
+inherited from HD). Display state: unhashed, read by no force, golden hashes unchanged. The camera
+reads it through `oag_render::camera::internal`'s `headtilt`; the lean now reaches `+/-2.1` on HD
+where the Pulse law capped at `+/-1`.
+
+## The HUD sway, read 2026-10-21 (`hd-cockpit-lean`), not ported
+
+`Hud_Update` (`0x0009e3d0`, `r28` the HUD, `r31` the ship) at `0x0009e704`-`0x0009e754`, when
+`*(*0x009389a0) + 0x488` (a byte, live `1`) and `hud+0x63c` are non-zero:
+
+```c
+dx = -15.0 * ship[0x6a58];   /* TOC -0x5d20 = 0x008a77b8 = 0x41700000; f13 */
+dy =  15.0 * ship[0x6a5c];   /* r7 */
+for node in (*(hud+0x4e4), *(hud+0x4e8)) { node[0x40] = dx; node[0x44] = dy; node[0x48] = 0; }
+```
+
+(both zero when the gate is clear). The two nodes are looked up by name in `Hud_LoadDefinition`
+(`0x00097ef0`, `0x00097f14`): `*(0x8a7950)` = `"HUD"` and `*(0x8a7968)` = `"InGame"` (strings at
+`0x0077f138`, `0x0077f170`) - the two top-level containers, so the whole in-game HUD slides, not
+two widgets. `+0x40`/`+0x44` are the node's translation in the HUD layout's own space.
+
+Open: `ship+0x6a5c` has **no `stfs` writer** and is live-dynamic (`-0.001` at rest, `-0.297`
+under a held right stick, `-0.0003`..), so it is a second follower the instruction search does
+not find (a vector or `stfsx` store); the old "written only by the constructors" is wrong. A scan
+of guest memory under a held stick (`scripts/rpcs3-hd-hud-sway.py`, `0x10000000`-`0x80000000`)
+found 57 floats equal to `-15 * follower` but none with a matching `+0x44`, so the two nodes were
+not located in RAM and the screen offset is unmeasured. Without the `+0x44` writer and a measured
+pixel shift the law is not closed; the port waits for both.
+
 ## 2048 and Omega
 
+- **Cockpit lean (`<Tilt internalAmount internalSpeed>`)**: both ship the attributes (Omega's
+  teams author `<Tilt>`, 2048's at `1.3`/`5`); the consumer is the same unlocated code as above,
+  so both inherit HD's gains, smooth `6.0`, sideshift `0.5` and step bound, labelled inherited
+  (`oag_omega::race::CRAFT_LAWS`, `oag_2048::race::CRAFT_LAWS`). Not checkable live.
 - **Omega: checked, applies, inherited.** Its teams author `<Tilt>` and its parser reads the
   four names (`shipAmount` at `0x018145aa`, referenced from `FUN_012d8e30`, which stores the
   previous one at `+0x1c`). The consumer was not located: the two `-0.005` constants' readers

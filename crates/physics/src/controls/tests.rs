@@ -2,11 +2,12 @@
 //! `controls.rs` under the 200-line cap on inline `#[cfg(test)]` modules (`scripts/check-file-size.py`).
 
 use super::*;
-use crate::params::{Airbrake, Brakes, Turning};
+use crate::params::{Airbrake, Brakes, CameraLean, Turning};
 
 /// Arbitrary round numbers. **Not recovered values.**
 fn test_handling() -> Handling {
     Handling {
+        camera_lean: CameraLean::PULSE,
         airbrake: Airbrake {
             gain: 800.0,
             falloff: 400.0,
@@ -208,7 +209,7 @@ const DT: f32 = 1.0 / 60.0;
 fn lean_after(ticks: usize, stick: f32) -> ShipState {
     let mut state = ShipState::default();
     for _ in 0..ticks {
-        update_camera_lean(&mut state, stick, DT);
+        update_camera_lean(&mut state, stick, &CameraLean::PULSE, DT);
     }
     state
 }
@@ -248,7 +249,7 @@ fn the_camera_lean_returns_slower_than_it_leans_out() {
         camera_lean_follower: 1.0,
         ..ShipState::default()
     };
-    update_camera_lean(&mut state, 0.0, DT);
+    update_camera_lean(&mut state, 0.0, &CameraLean::PULSE, DT);
     let back = 1.0 - state.camera_lean_follower;
     assert!((back * 2.0 - out).abs() < 1.0e-6, "{back} vs {out}");
 }
@@ -378,4 +379,36 @@ fn a_craft_out_of_the_race_eases_its_lean_back_level() {
     assert!(state.steer_lean > 0.9, "eases, does not snap");
     steer_lean_after(&mut state, &hard_right, 6.0);
     assert!(state.steer_lean.abs() < 1e-2, "{}", state.steer_lean);
+}
+
+/// Wipeout HD's cockpit lean (Feisar `<Tilt internalAmount="1.4" internalSpeed="7">`, smooth
+/// `6.0`) settles at `stick * 1.5 * 1.4`, past Pulse's `1.0`, and a running sideshift timer
+/// moves the target by `0.5` to its side.
+#[test]
+fn hds_camera_lean_settles_on_its_tilt_gain_and_follows_the_sideshift_timers() {
+    let hd = CameraLean {
+        stick_scale: 0.015 * 1.4,
+        follower_rate: 7.0,
+        smooth_rate: 6.0,
+        sideshift_offset: 0.5,
+        clamp: crate::params::CameraClamp::Hd,
+    };
+    let settle = |timers: [f32; 2]| {
+        let mut state = ShipState {
+            sideshift_timers: timers,
+            ..ShipState::default()
+        };
+        for _ in 0..600 {
+            update_camera_lean(&mut state, 1.0, &hd, DT);
+        }
+        state.camera_lean
+    };
+    assert!((settle([0.0, 0.0]) - 2.1).abs() < 1.0e-3);
+    assert!((settle([0.0, 1.0]) - 2.6).abs() < 1.0e-3);
+    assert!((settle([1.0, 0.0]) - 1.6).abs() < 1.0e-3);
+    let mut pulse = ShipState::default();
+    for _ in 0..600 {
+        update_camera_lean(&mut pulse, 1.0, &CameraLean::PULSE, DT);
+    }
+    assert!((pulse.camera_lean - 1.0).abs() < 1.0e-3);
 }
