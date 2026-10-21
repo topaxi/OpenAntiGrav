@@ -34,8 +34,9 @@ What is measured (RPCS3, interpreter):
 2. Sample live: restore a Time Trial state with `scripts/emu-restore-state.sh <lane> <state> --interpreter`,
    read `ship+0x6b00..` and the `0x005d8488` matrix against `body+0x1d0` over a few seconds at rest and at
    speed. Restore fresh for each attach: the GDB stub wedged on a second attach three times this session.
-   The probe scripts were scratch (`data/scratch/hd-hull/bin/`, `tilt-series.py`, `stages.py`); rewrite
-   them under `scripts/` if they are kept.
+   A probe is a few lines over `scripts/rpcs3-hd-hull-light.py`'s helpers (`stop_at`, `place.find_player`,
+   `place.read_pose`): break at `0x005d8488`, keep the matrix with scale 0.75 within 0.1 of the body, or stop
+   at `0x000ebc78`/`0x000ebc88` with `r31` the ship and read the matrix at `r28`. Land it under `scripts/`.
 3. Port the law to the drawn model matrix in `oag_raceplay` (view only, unhashed, its own seeded `Rng` if
    it is random), then `just compare-rerender-ours --only compare-page/hd` and measure each pair's craft
    offset with a craft mask (render once with the craft lifted out of view, `--pose` y + 300).
