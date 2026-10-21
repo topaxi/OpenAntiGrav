@@ -174,7 +174,16 @@ On `talons-alongside` the original is 0.50 s into a pad boost (`boost_timer` 0.2
 
 ## Next Steps (boost plume)
 
-1. Find why the original shows almost no ribbon under the craft although `Trail_DrawRibbon` runs with width scale 0.550: read its ring (count, spacing, the direction vectors) at the stop and lay it beside ours' `trail_ready` history (`warm_up_field` lays a straight one at the field velocity).
-2. Find why the original's nozzle ball is smaller than `half_size` 4.4 draws in ours (depth against the hull, blend, or the quad's texture size).
-3. Only then make `psp-pulse-pair.py` read the flare node at the pose tick (`psp-trace.py --flare`) and pass `--pose-boost (0.8 - boost_timer)` when it is above 0, and make `--pose-boost` keep the warmed trail instead of laying a straight one at 120 u/s. Wired today it widens the gap.
-4. The `--trace-out` row of a `--field-warmup` run is written without the warm-up (speed 0, intensity 0), so it cannot be used to read ours' exhaust state at the rendered tick.
+`pulse-plume-ribbon` (2026-10-21) corrected this thread: the race pair is not boosting (flare `boost_timer` 0 at the pair's
+own clock; the 0.2991 came from a later freeze), and the original's ribbon fragment colour is about a twentieth of what
+ours draws while its bloom stamp matches (details and table in `docs/ghidra/functions/psp-pulse-usa/exhaust.md`, "The
+race pair is not boosting"). So:
+
+1. Find why the original's ribbon colour is so low: read the ribbon prims' vertex stream in a `gpu.record.dump` of the pair
+   frame (`scripts/psp-ribbon-ab.py` reproduces it exactly) against ours' vertices, the `u`/`v` sent per vertex, and the
+   palette index image under `TEXLEVEL` auto. Do not scale the colour by a fitted constant.
+2. Only then `psp-pulse-pair.py`: read the flare at its own stop (`psp-trace.py --flare`) and pass `--pose-boost
+   (0.8 - boost_timer)` when above 0, and make `--pose-boost` keep the warmed trail. `psp-state.py load` + `freeze` lands
+   0.6 s after the state's moment on this machine; load with a `Trail_DrawRibbon` breakpoint armed instead.
+3. The `--trace-out` row of a `--field-warmup` run is written without the warm-up, so it cannot be used to read ours'
+   exhaust state at the rendered tick.

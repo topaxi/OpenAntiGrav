@@ -2000,6 +2000,76 @@ Cross-title: HD's flame (`exhaust::hd`) and Pure's flare share the law's shape b
 neither has a warm-up pair at speed, so **checked, applies, not wired**
 (`--field-warmup` drops the boost on any title). Not ported.
 
+### The race pair is not boosting, and the original's ribbon has almost no colour (2026-10-21, `pulse-plume-ribbon`)
+
+Both halves of the claim were tested on the original at the pair's own frame, bit-exactly. `scripts/psp-ribbon-ab.py`
+loads `race-talons-venom-alongside.ppst` with a breakpoint on `Trail_DrawRibbon` armed, so the first stop is the state's
+first frame (clock 37.358), and runs on to clock 38.40821838, the pair's `race_clock_s`. The EDRAM frame there is
+`theirs.png` to 0.43 grey, and two loads of the same variant differ by 0 bytes, so a poke is the only difference
+between two runs.
+
+**Correction to the section above: the original is not boosting at the pair frame.** Flare `+0xb8` `boost_timer` reads
+**0.0**, `half_size` 2.32 (the idle law, `2.5 x` flicker). The 0.2991 / `half_size` 4.4-5.1 table was read from a load
+that was frozen later: `psp-state.py load` then `cpu.stepping` lands 0.6 s past the state's moment (clock 39.03-39.06 here
+against 38.408), and the player crosses a speed pad between the two (`boost_timer` 0.77 at 39.03, 0.30 at about 39.4).
+So the picture and ours are both unboosted, the "boost wiring must stay off" caution and the "original is 0.50 s into a
+boost" reading both fall, and the pair compares like with like. Confidence 95 (flare read and frame match at the same
+stop). This does not reopen wiring the boost: `psp-pulse-pair.py --flare` should read the flare at its own stop before
+any `--pose-boost` is passed.
+
+**The ring is the same.** At that stop the original's ring (10 samples, 1.0 / `width scale 0.55`, stencil base 0.45, layer
+ambients 0.7) runs along the velocity at 2.0 units a sample, and the eye is 6.86 units from the nozzle: samples 0-3 are
+5.0, 3.2, 1.4 units in front of it along the view axis (sample 0 at 6.86) and 4-9 are behind it. Ours' ring is at the same
+place to one tick (head z -707.0 against -709.0), the baked vertex colours of the three layers read live match the
+law (layer 2: 210, 147, 99, 63, 38, ...), and the GE state matches the page (lighting on with lights 0-3 off, material
+update 7, texture function modulate/RGBA with colour doubling off, blend `FIX`/`FIX` white, depth test `GEQUAL` with the
+write masked, stencil `REPLACE` of the ramp, a 64x64 `CLUT8` texture with 4 mips, `texlevel` 0). No ring, depth,
+blend or near-plane rule differs.
+
+**What differs is the ribbon's own colour, by a factor of about 20.** Setting the ring's count to 0 at the draw
+hit removes the ribbon from that one frame (the alpha stamp `102`/`114` goes back to `4`). Ours with the ribbon off
+(a temporary `OAG_DBG_TRAIL=off`, not kept) gives the same difference on the same pose:
+
+| contribution of the ribbon, mean grey | original | ours |
+| --- | ---: | ---: |
+| nozzle disc (185,190) 40x44, whole ribbon | 47.7 | 52.3 |
+| ribbon tail box (190,236) 90x36, whole ribbon | 6.8 | 43.1 |
+| the 2,852 px the ribbon stamps into alpha, whole ribbon | 56.9 | 113.6 |
+| the same pixels, glow stamp and its bloom only | 53.9 | 54.3 |
+| the same pixels, the ribbon's colour only | 2.9 | 59.3 |
+| the nozzle disc, colour only | 2.3 | 19.5 |
+
+The "colour only" row is the original with every baked vertex colour of the three layers zeroed (the stamp stays) and ours
+with the glow alpha forced to 0. Whitening the original's baked colours (255 on all layers) adds only 15.9 grey, against
+the 59 ours reaches with the authored blue, magenta and grey, so the ribbon's fragment colour in the original is at
+most about a sixth of the `ramp x baked colour x noise` product this page recovered, and about a twentieth of it with the
+authored colours. The bloom half matches to 0.4 grey, so `TRAIL_GLOW_GAIN` and `trail_stencil` are right and the ribbon
+is, in the original, almost entirely the bloom mask it stamps. The cause of the missing colour is **not found**. Ruled out:
+ring positions and the near plane (dropping every triangle that crosses it changes none of ours' boxes), the colours baked
+in the buffers, the layer ambients, the blend and depth state, the texture's mean (82 of 255 over its mips) and its
+palette alpha (255), and the ribbon being drawn before the floor (the stamp survives, so it is drawn after). Two pokes on
+the original did nothing at all: rewriting the ring's positions, or the layer vertex buffers' positions, at the draw hit
+leaves every pixel unchanged, so the draw does not read them at that point and the geometry cannot be probed this way.
+The next read is the GE vertex stream of the ribbon prims in the `gpu.record.dump` (`scripts/psp-ge-dump.py`) against
+ours' vertices for the same frame: rgba bytes and the `u`/`v` actually sent per vertex, and the palette index image under
+`TEXLEVEL` auto against the level 0 ours samples.
+
+**Not ported.** Scaling ours' ribbon colour down to match would be a fitted constant with no law behind it; the colour
+stays as the page recovered it until the cause is read. Judged as a player sees it, ours' ribbon tail is a bright pink
+streak under the craft where the original shows a faint blue one.
+
+**The nozzle is not smaller, the glow is the same.** On the exact frame the nozzle disc is 193.0 grey / 582 px over 230 in
+the original and 219.6 / 1,029 in ours, and the ribbon's share of that gap is nil (47.7 against 52.3). With the ribbon
+removed from both the gap is 145.2 against 167.4: it sits in the flare quad, the hull and the bloom of those, which is
+the flare's `half_size` flicker (2.3 here against ours' draw at the same law) and the hull, not the ribbon. Spatial
+extent: the original's alpha stamp is a 2,852 px wedge from the nozzle to the bottom of the frame, and ours' ribbon
+covers the same footprint (49-55 px wide at the bottom rows), so the plume is not larger-but-dimmer: it is the same
+size and ours is brighter along the tail.
+
+Cross-title: Pure shares the `Trail` class and this GE state, so the same A/B applies and is **checked, applies, not
+measured** (no Pure pair at speed with a ring this close to the eye); PS2 Pulse draws the ribbon through its own GS
+packets (`TrailLaw::Baked`), **not checkable** from this PSP read.
+
 ## Open
 
 - **`engine_fire` (`0x3e5`) and `exitglow` (`0x3e4`) have no registration call
