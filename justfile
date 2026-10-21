@@ -1068,6 +1068,12 @@ compare-page *ARGS:
 compare-rerender *ARGS:
     python3 scripts/compare-rerender.py {{ARGS}}
 
+# Boot each platform's emulator, restore every pair's state, re-make the pair, print one before/after table (docs/tools/compare-page.md).
+#   just compare-rerender-all --out data/scratch/<lane>/compare-page [--platform psp] [--resume] [--dry-run]
+[doc("Re-make every comparison pair on its own emulator and print the before/after table")]
+compare-rerender-all *ARGS:
+    python3 scripts/compare-rerender-all.py {{ARGS}}
+
 # Rebuild the seed manifest from the reference sheets under data/reference/.
 [doc("Split the HD lanes' reference sheets into the compare-page seed manifest")]
 compare-seed:

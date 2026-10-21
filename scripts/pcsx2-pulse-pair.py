@@ -34,6 +34,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+
+#: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
+#: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
+GO_TICK = ce.go_tick()
 import pcsx2_pine  # noqa: E402
 import pcsx2_state  # noqa: E402
 
@@ -41,10 +45,13 @@ import pcsx2_state  # noqa: E402
 #: 3.6 s more of emulation (two states, 2026-10-20). The HUD runs about 0.2 s behind it, so the check is loose.
 CLOCK_ADDRESS = 0x70EE9C
 CLOCK_TOLERANCE_S = 0.1
-#: The HUD's clock reads 0.19 s under the RAM float (0:23.2 against 23.39, one state), so ours runs to the HUD's.
-CLOCK_HUD_OFFSET_S = 0.19
-#: Our race's tick at which the clock leaves 0 (Pulse's own countdown, measured on PSP and HD alike).
-GO_TICK = 276
+#: The HUD's lap clock reads the RAM float (EE `0x70EE9C`) LESS a constant: that float runs from the start of the countdown,
+#: the HUD clock from GO. Measured 2026-10-21 on three grabs of one state, each bracketed by clock reads (the HUD digit read off
+#: the frame, the bracket the RAM clock at the key press and at the file's appearance): HUD 0:20.9 in 25.10..25.77, 0:22.2 in
+#: 26.24..27.89 and 0:21.6 in 25.73..25.89, so the offset lies in 4.2..4.87, 4.04..5.69 and 4.13..4.29 s: **4.2 to 4.29, taken
+#: as 4.25 s (255 ticks)**. That is not our countdown (272 ticks, 4.53 s, measured on Pulse PSP); the PS2's own is unmeasured
+#: beyond this. The 0.19 s this replaces was read off a state where the two clocks were not compared at one instant.
+CLOCK_HUD_OFFSET_S = 4.25
 
 
 def run(cmd, **kw):
@@ -52,16 +59,58 @@ def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
 
-def resume(slot):
-    """Run the VM: a previous trace or state save leaves it paused, and the GS screenshot hotkey does nothing
-    on a paused one (`screenshot FAILED`). The load that follows leaves the VM standing on the state's frame."""
+def load_drive():
     import importlib.util
     spec = importlib.util.spec_from_file_location("pcsx2_drive", HERE / "pcsx2-drive.py")
     drive = importlib.util.module_from_spec(spec)
     sys.path.insert(0, str(HERE))
     spec.loader.exec_module(drive)
+    return drive
+
+
+def resume(slot):
+    """Run the VM: a previous trace or state save leaves it paused, and the GS screenshot hotkey does nothing
+    on a paused one (`screenshot FAILED`). The load that follows leaves the VM standing on the state's frame."""
+    drive = load_drive()
     pine = drive.Pine(slot=slot)
     drive.set_paused(pine, drive.Keyboard(), False)
+
+
+def grab_with_clock(slot, dest, timeout=30.0):
+    """PCSX2's own GS screenshot (the F8 hotkey, as `pcsx2-drive.py shot`) taken in this process, with the race clock
+    read over PINE every few milliseconds from the key press until the file appears. Returns `(first, last)`, the clock
+    at the key press and at the first look that saw the file: the screenshot is of a frame presented between the two,
+    a bracket of a few tenths of a second of emulated time where a clock read before and after a separate `shot`
+    process (a `uv run` start-up of seconds, the VM running at a third of real time throughout) spanned one to three."""
+    drive = load_drive()
+    kb, pine = drive.Keyboard(), drive.Pine(slot=slot)
+
+    def clock():
+        return struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
+
+    before = drive.newest_snapshot()
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        kb.focus()
+        first = clock()
+        kb.down("F8")
+        last = first
+        t_down = time.monotonic()
+        released = False
+        while time.monotonic() - t_down < 4.0:
+            if not released and time.monotonic() - t_down > 0.12:
+                kb.up("F8")
+                released = True
+            last = clock()
+            latest = drive.newest_snapshot()
+            if latest and latest != before and os.path.getsize(latest) > 0:
+                drive._wait_until_written(latest)
+                shutil.move(latest, dest)
+                return first, last
+            time.sleep(0.01)
+        if not released:
+            kb.up("F8")
+    sys.exit("no GS screenshot within %.0f s" % timeout)
 
 
 def main():
@@ -115,10 +164,8 @@ def main():
     # The VM runs after the load (about a third of real time under Xvfb), so the grab is a few tenths of a second
     # past the state's frame: read the clock before and after it, and let ours run to what the picture shows.
     pine = pcsx2_pine.Pine(slot=args.slot)
-    live_before = struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
     raw = out / "theirs-gs.png"
-    run(drive + ["shot", raw])
-    live_after = struct.unpack("<f", struct.pack("<I", pine.read32(CLOCK_ADDRESS)))[0]
+    live_before, live_after = grab_with_clock(args.slot, raw)
     pair.rec["original"]["gs_screenshot_size"] = ce.image_size(raw)
     w, h = plat["output"]
     run(["magick", raw, "-filter", "Lanczos", "-resize", "%dx%d!" % (w, h), out / "theirs.png"])
@@ -170,6 +217,8 @@ def main():
     pair.rec["original"]["craft"] = hex(craft)
 
     grab_clock = (live_before + live_after) / 2
+    pair.rec["original"]["presented_lag"] = {"hud_clock_offset_s": CLOCK_HUD_OFFSET_S, "grab_bracket_s": [live_before, live_after],
+                                              "note": "ours runs to the bracket's mean less the HUD offset; the craft rests, so its pose needs no lag"}
     pair.rec["original"]["race_clock_live_s"] = {"before_grab": live_before, "after_grab": live_after, "state_file": clock}
     pair.check("the grab is of a running VM near the state's frame", 0.0 <= grab_clock - clock <= 3.0,
                "RAM clock %.2f s before and %.2f s after the grab, %.2f s in the state file" % (live_before, live_after, clock))

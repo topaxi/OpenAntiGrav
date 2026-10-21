@@ -8,6 +8,15 @@ Landed 2026-10-20 (`compare-page` lane). Each image carries a credit (game, plat
 
 ## Open
 
+**One command re-makes every pair (2026-10-21, `rerender-all`; [compare-page.md](../../docs/tools/compare-page.md), "Re-making every pair with one command" and "The presented frame lags the stop, per platform").** `just compare-rerender-all --out <dir>` boots each emulator
+(PPSSPP, RPCS3, PCSX2) on its own display, port and config, restores each state, re-makes each pair from its recorded `argv`, stops the emulator by PID, rebuilds the manifests and prints the before/after table (`edge_ncc`, `rmse`, mean grey
+difference). Measured on the way: the PSP presented frame lags the stop by **one tick** (seven shots, sharp minimum) and `psp-pulse-pair.py` now shoots at stop 1; the PSP race pair's 572 against 587 km/h was the pair script passing body `|v| * 3.6`
+where the frame shows the `PLAYER_HUD` block one tick older (now read from the block); PS2's HUD clock is the RAM clock **less 4.25 s** (it was 0.19, 4.4 s off) and its profile aspect was `ps2` (4:3, pillarboxed) now `wide`; HD pairs were refused
+at 1760x1080 on a window opened at x = 240 (now moved to the origin); every pair script reads our countdown with `compare_env.go_tick()` instead of a hard-coded 276. **Open, found here:** (1) PPSSPP's state load is not tick-exact (a rerender's clock moves
+0.2 to 1.2 s and a race pair's pose 100+ units: pause before the load, or load through the debugger); (2) HD's `--pause` restore does not hold either (a race pair drifted 110 units); (3) PS2's countdown is not the 272 ticks of Pulse PSP (the HUD clock
+starts 255 ticks after the RAM clock) and a moving PS2 craft would need its pose read live at the grab; (4) the PSP race pair's place, lap, lap time and shield are read at the pose's stop and may be one tick ahead of the frame's HUD text, as the speed was;
+(5) a PS2 deterministic capture (load paused, advance frames) does not work yet: F8 writes nothing while paused and the paused window grab is black.
+
 **The fresh set of 2026-10-20 (`compare-parity`).** The old pairs, manifests and page are archived under
 `data/archive/compare-2026-10-20/` and are no reference. Every pair now comes out of `scripts/compare-environment.toml`
 and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md), "Environment parity"): 24 of 25 Pulse PSP
@@ -103,7 +112,7 @@ Pulse PSP Zone pairs exist, HD's do not. `psp-pulse-pair.py --zone` reads `g_gam
 ## Next Steps
 
 1. ~~Recover the PS2 camera~~ **Done 2026-10-21** (see the PS2 bullet above). Open: more PS2 states (a menu route for `pcsx2-drive.py`), a race shot with the field.
-2. Re-make the Pulse PSP Talon's Junction White pair with `psp-pulse-pair.py` (it passes with `--pose-hold`; `compare-rerender` skips refused pairs), and re-make the rest so their `pair.json` records `pose_hold`.
+2. ~~Re-make the pairs~~ **Done 2026-10-21 by `just compare-rerender-all`** (`rerender-all`): every pair re-made on the current binary into a copy, adopt commands in that lane's report; the lead adopts into `data/reference/compare-page`.
 3. HD's 0.5 to 0.7 degree heading residual on pairs where ours does not turn: read the original's heading at GO after `Restart Race`.
 4. Make a Pure PSP grid state and locate its camera node; 2048 and Omega need a race reached first.
 5. ~~Pulse PS2 in widescreen~~ **Done 2026-10-21**: the option was switched on by writing `DAT_00284fe8`, not walked through the menu (the menu route, and a PCSX2 boot on a fresh profile reading the default, are open). The 7.1 % horizontal difference between the original's `40/21` projection at `16:9` and our true `16:9` is the whole remaining overlap gap on this pair; it is the maintainer's decision, not a defect.

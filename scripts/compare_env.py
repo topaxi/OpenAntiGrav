@@ -55,6 +55,19 @@ def platform(key):
     return out
 
 
+def go_tick(plat=None):
+    """Our race's tick at which the race clock leaves zero: the countdown's length, read from the source of truth
+    (`oag_race::COUNTDOWN_TICKS`, `crates/race/src/state.rs`) rather than copied into each pair script. A platform
+    table may carry its own `go_tick` once a title's countdown is measured to differ; today ours has one length
+    for every title, so every platform reads the same number."""
+    if plat and "go_tick" in plat:
+        return int(plat["go_tick"])
+    m = re.search(r"pub const COUNTDOWN_TICKS: u64 = (\d+);", (ROOT / "crates/race/src/state.rs").read_text())
+    if not m:
+        sys.exit("compare_env: COUNTDOWN_TICKS not found in crates/race/src/state.rs")
+    return int(m.group(1))
+
+
 def size_text(plat):
     return "%dx%d" % tuple(plat["output"])
 
@@ -326,6 +339,18 @@ def image_size(path):
     return [int(out[0]), int(out[1])]
 
 
+def toast_over_frame(png, crop="120x10+8+4"):
+    """True when PPSSPP's green on-screen notification ("Game controller connected: ...", raised when ANY pad appears on the
+    machine, such as another lane's virtual pad) covers the top-left of a 480x272 frame. The toast is a solid, saturated
+    green banner (about 0, 110, 35); the scenes' own greens are lit and never reach red 0. `crop` is inside the banner
+    and clear of the lap counter. One Outpost 7 White grab in 50 carried it (mean grey difference 6.2 to 13.7)."""
+    out = subprocess.run(["magick", str(png), "-crop", crop, "+repage", "-format",
+                          "%[fx:mean.r] %[fx:mean.g] %[fx:mean.b] %[fx:standard_deviation]", "info:"],
+                         capture_output=True, text=True, check=True).stdout.split()
+    r, g, b, sd = (float(v) for v in out)
+    return r < 0.08 and g > 0.30 and b < 0.25 and sd < 0.12
+
+
 def overlap_score(theirs, ours):
     """A cheap overlap score of two same-size frames: normalised RMSE of the pictures, and the normalised
     cross-correlation of their blurred edge maps (1.0 = the edges lie on each other; a pair that lines up badly
@@ -346,6 +371,10 @@ def overlap_score(theirs, ours):
         saa = sum((x - ma) ** 2 for x in a)
         sbb = sum((y - mb) ** 2 for y in b)
         out["edge_ncc"] = sab / ((saa * sbb) ** 0.5) if saa and sbb else 0.0
+        # mean absolute grey difference over the frame, 0-255 (the number the handover threads quote)
+        g = subprocess.run(["magick", str(theirs), str(ours), "-colorspace", "Gray", "-compose", "difference", "-composite",
+                            "-format", "%[fx:mean*255]", "info:"], capture_output=True, text=True, check=True)
+        out["mean_grey"] = float(g.stdout)
     except Exception as exc:  # noqa: BLE001 - a score is a convenience, never a reason to lose a pair
         out["error"] = str(exc)
     return out

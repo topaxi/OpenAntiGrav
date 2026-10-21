@@ -23,11 +23,17 @@ import math
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-GO_TICK = 276
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import compare_env as ce  # noqa: E402
+
+#: Our race's tick at which the race clock leaves 0: `oag_race::COUNTDOWN_TICKS`, read from ours by `compare_env.go_tick` (one
+#: length for every title today; it was a hard-coded 276 here until 2026-10-21, 4 ticks late).
+GO_TICK = ce.go_tick()
 
 
 def yaw(fwd):

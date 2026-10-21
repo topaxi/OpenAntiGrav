@@ -55,6 +55,13 @@ SKILL_LEVEL = 0x08B31044
 SHIELD = 0x88
 
 
+#: `g_named_registry` (race-progress.md): 256 pointers from +0, the entry count at +0xc00. `PLAYER_HUD` is one of them, the
+#: block `PlayerStatus_Update` refreshes: the speed readout in km/h at +0x00, the lap time (`craft+0x920`) at +0x24.
+NAMED_REGISTRY = 0x08B317B8
+HUD_SPEED = 0x00
+HUD_LAP_TIME = 0x24
+
+
 def ram(pointer):
     return 0x08800000 <= pointer < 0x0A000000
 
@@ -89,6 +96,21 @@ class Field:
                 s["team"] = "?%s" % error
         return s["team"]
 
+    def hud_kmh(self, lap_time):
+        """The speed the HUD reads, `PLAYER_HUD+0x00`: the registry's block whose lap time (+0x24) is the player's own
+        `entity+0x920` (a bit-exact float match; no name hash is needed). `None` when no block matches. Read at the same
+        stop as the pose, so a pair imposes the value the original's own readout holds rather than `|velocity| * 3.6`
+        of a body read a tick or two off the frame's (2026-10-21, `rerender-all`)."""
+        if "hud_block" not in self.player:
+            self.player["hud_block"] = None
+            pointers = struct.unpack("<256I", self.dbg.read(NAMED_REGISTRY, 0x400))
+            for ptr in pointers:
+                if lap_time > 0.0 and ram(ptr) and struct.unpack("<f", self.dbg.read(ptr + HUD_LAP_TIME, 4))[0] == lap_time:
+                    self.player["hud_block"] = ptr
+                    break
+        block = self.player["hud_block"]
+        return None if block is None else struct.unpack("<f", self.dbg.read(block + HUD_SPEED, 4))[0]
+
     def shield_max(self, s):
         """The pool's maximum for this craft and the race's skill level, the same formula the game clamps with."""
         if "shield_max" not in s:
@@ -115,6 +137,8 @@ class Field:
                 "shield_max": self.shield_max(s),
                 "lap_time": rail.f32s(self.dbg, s["entity"] + RACE_TIME, 1)[0],
             })
+            if s["player"]:
+                out[-1]["hud_kmh"] = self.hud_kmh(out[-1]["lap_time"])
         return out
 
 
