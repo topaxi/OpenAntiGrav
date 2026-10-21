@@ -522,7 +522,7 @@ mesh-shape tag (`Collision_RaycastMesh` writes `1`, `Collision_RaycastBox` `3`;
 and the translate sits inside the probe loop before the type test
 ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md#the-probes-depenetrate-as-well-as-push)).
 **Confidence 85** for both on `Wall` and `Floor` hits (the static reads and one live tick to a
-millimetre); since 2026-10-21, 87 for the wall gate and 92 for the escape off a `Floor`
+millimetre); since 2026-10-21, 92 for the escape off a `Floor`, the wall gate unchanged at 85
 ([census below](#the-two-point-escapes-sum-and-a-census-of-the-one-step-height-misses-2026-10-21-pulse-wall-escape-census)). A `MagFloor` hit passes the shape tag too, and since 2026-10-21 it escapes
 ([below](#a-magstrip-passes-the-gate-and-the-escape-fires-on-one-2026-10-21-deviations-to-original-pulse-magstrip-hold)); it was held out by choice
 until then. The floor-only gate this replaces (2026-08-12) was a reading of the field as
@@ -689,7 +689,13 @@ they add on every rig read so far (Pulse, Pure, HD).
 (physics plus the cage) and splits the miss along the next row's up axis into the original's
 own jump (`pos(t+1) - pos(t) - v(t+1) dt`, a move its velocity does not carry), ours, and the
 velocity term, with what each probe's ray found. The `391` figure above was five captures,
-two of them the original's Autopilot. Split by source:
+three of them the original's Autopilot: the clean lap (2,976 rows), the time-trial lap (3,145),
+Talon's Autopilot (3,019) and Fort Gale Autopilot ramps 1 and 3 (1,299 and 2,399), 12,838 rows.
+This census counts `393` on that set before this change (clean lap 118, time-trial lap 0,
+Talon's Autopilot 135, Fort Gale 34 and 106; it steps with the full controls, the replayed
+ground timers and the class gravity scale, so it is one or two off the older tool) and `390`
+after it: exactly the three ticks where two probes escape at once close (clean lap 1579,
+Talon's Autopilot 1594, Fort Gale ramp 3 1143), and none opens. Split by source:
 
 | rows | misses over `0.05` | what they are |
 | --- | ---: | --- |
@@ -775,9 +781,9 @@ PPSSPP v1.20.4, software renderer, muted, from the Time Trial grid state, VENOM,
 
 So a wall escape needs a probe ray that finds a wall face within one unit, in practice the
 derived rear hit behind a front ray that lands on a wall at a crest. Normal wall contact never
-produces one: ours fired none where the original moved nothing, over 1,950 wall-contact rows.
-The wall gate goes from **85 to 87** on that negative. Its positive leg is still the one
-1594 tick.
+produces one: in the 1,950 wall-contact rows no probe ray finds a wall within a unit, and
+neither side escapes. Those rows do not exercise the gate, so its confidence stays **85**, on
+the static read and the one 1594 tick.
 
 **Open, not chased:** Fort Gale player ramp `1190` tick 58, right after a wall hit (speed `65 ->
 38`): ours escapes `0.2085` off the rear probe, the original does not move (`-0.032`). The
