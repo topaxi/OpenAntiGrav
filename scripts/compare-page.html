@@ -39,7 +39,7 @@ main { flex:1; min-width:0; padding:12px 16px 40px; }
 .cap { margin-top:14px; max-width:900px; }
 .cap h3 { margin:0 0 6px; font-size:16px; }
 .cap dl { display:grid; grid-template-columns:max-content 1fr; gap:2px 14px; margin:0; }
-.cap h4 { margin:10px 0 2px; font-size:13px; } .cap dl.env { display:grid; grid-template-columns:max-content 1fr; gap:1px 12px; } .cap dt { color:var(--dim); } .cap abbr { text-decoration:underline dotted; cursor:help; } .cap dd { margin:0; }
+.cap h4 { margin:10px 0 2px; font-size:13px; } .cap dl.env { display:grid; grid-template-columns:max-content 1fr; gap:1px 12px; } .cap dt { color:var(--dim); } .cap abbr { text-decoration:underline dotted; cursor:help; } .cap dd { margin:0; } .cap dd.band-green { color:#4caf50; } .cap dd.band-amber { color:#e0a020; } .cap dd.band-red { color:#e5534b; } .cap dd[class^="band-"] { font-weight:600; }
 .cap .note { margin-top:8px; color:var(--dim); }
 .credits { display:flex; flex-wrap:wrap; gap:4px 18px; margin-top:6px; max-width:1600px; font-size:12px; color:var(--dim); }
 .credits span b { color:var(--fg); font-weight:600; }
@@ -183,12 +183,23 @@ function render() {
       const dt = document.createElement("dt"), dd = document.createElement("dd");
       if (hint) { const ab = document.createElement("abbr"); ab.title = hint; ab.textContent = label; dt.append(ab); } else dt.textContent = label;
       dd.textContent = env[key]; el.append(dt, dd);
+      const band = metricBand(key, env[key]); if (band) { dd.className = "band-" + band[0]; dd.title = band[1]; }
     }
     cap.append(el);
   }
   if (e.note) { const n = document.createElement("div"); n.className = "note"; n.textContent = e.note; cap.append(n); }
   if (e.not_captured) { const n = document.createElement("div"); n.className = "warn"; n.textContent = "Original not captured: " + e.not_captured; cap.append(n); }
   if (e.size) { const n = document.createElement("div"); n.className = "note"; n.textContent = "compared at " + w + "x" + h; cap.append(n); }
+}
+
+// Green is close to the original, amber partly, red off; the bands are compare_env.METRIC_BANDS.
+function metricBand(key, text) {
+  const b = DATA.metric_bands && DATA.metric_bands[key], v = parseFloat(text);
+  if (!b || isNaN(v)) return null;
+  const lower = b.better === "lower";
+  const name = lower ? (v <= b.green ? "green" : v <= b.amber ? "amber" : "red") : (v >= b.green ? "green" : v >= b.amber ? "amber" : "red");
+  const op = lower ? "<=" : ">=";
+  return [name, "green " + op + " " + b.green + ", amber " + op + " " + b.amber + ", red beyond (chosen bands)"];
 }
 
 const ENV_FIELDS = [

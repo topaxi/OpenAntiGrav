@@ -98,7 +98,10 @@ emulator and renderer, ours' settings as read back, the three overlap metrics, b
 metric label carries an `<abbr title>` (`compare_env.METRICS`): **RMSE** is the average per-pixel colour error, 0 is
 identical, lower is better; **edge correlation** compares where edges are, 1 is identical, higher is better, and shows
 whether shapes line up independent of colour; **mean grey difference** is the average brightness difference on a 0-255
-scale, lower is better. `original.captured_at` and `ours.rendered_at` (ISO 8601, local offset) are stamped by `Pair.finish`
+scale, lower is better. Each metric's value is coloured green (close), amber (partly) or red (off) by
+`compare_env.METRIC_BANDS`, **chosen, not measured** (2026-10-21, against the spread of the 42 pairs then): RMSE green
+at or under 0.06 and amber at or under 0.12; edge correlation green at or over 0.40 and amber at or over 0.25; mean grey
+difference green at or under 5 and amber at or under 12; the value's tooltip names its band. `original.captured_at` and `ours.rendered_at` (ISO 8601, local offset) are stamped by `Pair.finish`
 from the clock when the pair is made; **there is no fallback to file times**, so a pair made before they existed shows
 none until it is re-made. A pair needs `meta` (`id`, `title`) in its `pair.json`: `manifest` refuses one without, so
 the page never shows a directory name. `manifest` no longer rewrites `pair.json`. `scripts/check-compare-environment.py`

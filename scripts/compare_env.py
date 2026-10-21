@@ -490,6 +490,15 @@ METRICS = (
 )
 
 
+#: Colour bands for the page: (green up to, amber up to) for a lower-is-better metric, (green from, amber from) for
+#: edge correlation. Chosen, not measured: set on 2026-10-21 against the spread of the 42 pairs then (Pulse PSP grid
+#: pairs mostly green, the HD pairs amber to red), so a band reads as "close", "partly", "off".
+METRIC_BANDS = {
+    "rmse": {"better": "lower", "green": 0.06, "amber": 0.12},
+    "edge_ncc": {"better": "higher", "green": 0.40, "amber": 0.25},
+    "mean_grey": {"better": "lower", "green": 5.0, "amber": 12.0},
+}
+
 def environment_fields(rec):
     """The environment as structured fields, built from what the pair RECORDED (`pair.json`), never from the live
     profile: a pair made under an older profile keeps showing the one it was made under. A field the pair does not

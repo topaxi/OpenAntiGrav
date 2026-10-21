@@ -283,7 +283,8 @@ def build(manifests: list[Path], out: Path, strict: bool = False) -> Path:
         if f.name not in used:
             f.unlink()
     page = {"title": doc["page"]["title"], "intro": doc["page"].get("intro", ""), "entries": records,
-            "metric_hints": {key: hint for key, _, _, hint in compare_env.METRICS}}
+            "metric_hints": {key: hint for key, _, _, hint in compare_env.METRICS},
+            "metric_bands": compare_env.METRIC_BANDS}
     (out / "index.html").write_text(TEMPLATE.replace("<!--STATEMENT-->", footer).replace("/*DATA*/", json.dumps(page).replace("</", "<\\/")))
     return out / "index.html"
 
