@@ -96,7 +96,8 @@ pub(super) fn available(
 /// The runtime sets it by the model-variant name
 /// (`concept1`/`nitro`/`detonator`/`chrome_c1`), and on the disc those
 /// variants live in `*_c1`, `*_n1` and `detonator` directories. See
-/// `Loaded::hd_trail_red`.
+/// `Loaded::hd_trail_red`. Case-blind: `--team ASSEGAI_C1` names the same
+/// directory as `assegai_c1`, and read as classic it lit the Fury hull blue.
 ///
 /// Here rather than in `load.rs` under the 1,000-line rule in
 /// `scripts/check-file-size.py`; a move, with no behaviour change, and this is
@@ -104,6 +105,7 @@ pub(super) fn available(
 pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let fury = slot_teams.get(slot).is_some_and(|team| {
+            let team = team.to_ascii_lowercase();
             team.ends_with("_c1") || team.ends_with("_n1") || team == "detonator"
         });
         if fury { 1.0 } else { 0.0 }
@@ -362,6 +364,15 @@ mod tests {
             hull_variant: None,
             skin: None,
         }
+    }
+
+    /// A Fury directory is Fury in any case: the CLI's `ASSEGAI_C1` once lit
+    /// the Fury hull with the classic engine light.
+    #[cfg(feature = "view")]
+    #[test]
+    fn the_fury_flag_ignores_case() {
+        let red = super::hd_trail_red(&slots(&["ASSEGAI_C1", "harimau", "Qirex_N1", "DETONATOR"]));
+        assert_eq!(red[..4], [1.0, 0.0, 1.0, 1.0]);
     }
 
     /// The draw gave slot 3 the team a person then took: slot 3 takes the team

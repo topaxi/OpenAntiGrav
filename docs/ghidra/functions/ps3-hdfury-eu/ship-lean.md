@@ -60,6 +60,12 @@ the constructors. The follower `0x6a58` has two more: `PlayerInput_Update` (`0x0
 `Hud_Update` (`0x0009e710`-`0x0009e754`), which offsets two HUD containers by it
 (see "The HUD sway").
 
+**Not the last step (2026-10-22).** Right after this store, `FUN_000d0c70(ship+0x6b00, ...)` and
+`FUN_000d39d0(ship+0x6b00, node, 0)` (`0x000ebc74`, `0x000ebc84`) turn the node by 1.1 to 1.3 degrees and move it by up to 0.09 units,
+differently each frame, at rest with lean and phase 0; the result is the matrix the hull is drawn with (`ship+0x40`). Live reads and
+what it does to the pairs: [hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The drawn hull is not the body". The law
+is unread.
+
 ## Measured on RPCS3, 2026-10-21
 
 Time Trial, Talon's Junction, Feisar, from `hd-timetrial-talons-venom-start`, under player input

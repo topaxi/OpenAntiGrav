@@ -1005,3 +1005,57 @@ bloom around the very bright highlights (sun 4 and a specular scale of 2 to 3 on
 `light_inputs::specular_exponent` gets no program for them and they keep the stand-in; nothing was ported by accident. 2048: checked, differs -
 its materials name their uniforms by their own GXP programs ([2048-material-params.md](../formats/2048-material-params.md)), not by HD's
 hash table, so `0x4232e459` has no counterpart to look up. Whether their hull highlights are the stand-in 32 is open for both.
+
+## The engine bay: Assegai_c1's Fury light, and the two circuits that switch the SPU lights off (2026-10-21, `hd-hull-bay`)
+
+**What a player sees.** Behind the cockpit the engine bay (the housing around the nozzle) is lit in the engine light's colour in
+the original. Ours lit Assegai_c1's bay blue where the original's is orange, and on Metropia and Sol 2 ours draws Harimau's bay black
+where the original's is blue.
+
+**Assegai_c1, fixed (confidence 85).** The engine light's Fury colour `(40, 10, 4)` is selected by the same `_c1`/`_n1`/`detonator`
+directory test as the red trail, and the test was case-sensitive: the pair scripts pass `--team ASSEGAI_C1`, so the Fury hull flew
+the classic blue light (and the classic trail colour). The test is case-blind now (`load::roster::hd_trail_red`). The front end
+passes the directory's own lower-case id, so only the command line and the pair path were affected. On the compare pair the
+housing and its rim line turn orange like the original's (bay crop mean absolute difference 24.56 to 24.18 levels; the poses
+differ by a few pixels, see "The drawn hull is not the body", so the number moves little).
+
+**Metropia and Sol 2, open (confidence 75 on the reading, no score on the cause).** Both circuits' `.envsettings` author
+`Lighting.Enable spu vertex lights = 0` and ours takes the engine light off every receiver there, the hull included. The original's
+bay is blue on both pairs. Ours with the light forced onto the hull reproduces that picture (walls and yellow rim line), **but the
+original does not get it that way**: on RPCS3 (interpreter, the Sol 2 and Talon's Junction Time Trial states) the light is still
+submitted on Sol 2 (`EngineFlare_SubmitSpuLight`'s `0x0029ff8c`, 2 stops in 25 s on both circuits), yet the hull's `SVC1` branch
+(`0x003eb368`, `r19` the hull record) was taken **0 times in 25 s on Sol 2 against 2 on Talon's Junction** (list count 1). So the
+hull draws without the SPU light there, as ours does, and the blue comes from a term not read yet. Ours is left as it was, an honest
+black, rather than lit by a light the original does not apply. The sample is small (rate about one stop in 12 s on the interpreter);
+a longer Sol 2 run, and what the non-`SVC1` variant reads in the bay, are the next steps.
+
+**Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
+them; whether their originals light the bay is not checkable (no PS4 capture) and not compared on the Vita. The case-blind Fury test
+applies to every title that reads it.
+
+## The drawn hull is not the body: a per-frame shake from `ship+0x6b00` (2026-10-22, `hd-hull-bay`)
+
+**What a player sees.** On every one of the 13 HD pairs our craft sits 3 to 13 pixels away from the original's (Talon's Junction
+`(0, -9)`, Sol 2 `(+13, -6)`, Modesto Heights `(-12, +1)`), while the floor right beside it lines up within one pixel. Shifting our craft
+onto the original's halves the craft difference (Tech de Ra 49 to 16, Sebenco 53 to 24, Vineta K 33 to 12 levels, a mask of the
+craft's own pixels from a render with the craft lifted out of view).
+
+**Not ours, not lag (measured).** Ours draws exactly the RAM pose (no between-ticks blend, lean or roll at the screenshot frame), and
+the pair poses equal the RAM body. The original's craft does not move between its two captured frames (0.12 s apart), and the near
+floor aligns, so neither presented-frame lag nor the camera's eye explains it.
+
+**The original draws the hull away from its body (confidence 80).** On RPCS3 the main hull's `EdgeGeom` matrix (`0x005d8488`, `r11`,
+scale 0.75) equals the matrix the craft struct holds at `ship+0x40` (a copy at `+0x80`), and it is **1.1 to 1.8 degrees** off the body
+rows at `body+0x1d0` and 0.05 to 0.09 units off its position, about an axis that differs between reads (Talon's Junction 1.13 to 1.33
+degrees, Sol 2 1.76). Posing ours with the Talon's read moves that pair's craft from `(0, -9)` to `(-2, -1)` pixels and its craft
+difference at zero shift from 32.37 to 16.04. In `Ship_UpdateEntity` (`0x000eadb8`) the display block builds the node matrix from the
+body rows and the drawn lean (`ship-lean.md`, "The display matrix"; lean and roll phase are 0 at rest): stopped at `0x000ebc78` the
+node matrix equals the body to 0.016 degrees, at `0x000ebc88` it is 1.12 to 1.13 degrees and `(-0.013, +0.087, -0.086)` /
+`(-0.008, +0.054, -0.052)` off on two consecutive frames. Between the two sit `FUN_000d0c70(ship+0x6b00, f2 = *(r9+0x4c4))` and
+`FUN_000d39d0(ship+0x6b00, node, 0)`: an object at `ship+0x6b00` that adds a changing rotation and offset every frame. Neither
+function decompiles (VMX code, 0x258 and 0x4a4 bytes); their law is not read. A still pair cannot match a shake frame for frame; what
+can be ported is the law (amplitude, rate, source), and until then the pair pixels carry it.
+
+**Next.** Read `FUN_000d0c70`/`FUN_000d39d0` from the disassembly, sample `ship+0x6b00` live over a few seconds at rest and at speed,
+and port the shake to `oag_raceplay`'s drawn model matrix (view only, unhashed). Cross-title: Omega carries HD's engine, so the same
+object is expected, not checkable here; 2048 not compared.

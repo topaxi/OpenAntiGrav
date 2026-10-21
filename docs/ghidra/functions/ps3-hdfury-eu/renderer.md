@@ -4376,6 +4376,15 @@ if (((1 << (chunk_id & 7) & (uint)(byte)table[(chunk_id >> 3) + CONST]) == 0) ||
 
 **Confidence 82** for the structural claims in this section (a real per-chunk consumer exists and embeds `(address, value)` via a project-internal opcode; a distinct, differently-gated producer exists, reached from many call sites) - two independently-found consumer sites agreeing on the identical bit-test-then-opcode-emit shape, and the producer's own gate and offset arithmetic read directly, is why this sits above the 70-79 "single-site inference" band the standing `75` above reflected. **Confidence stays at 75 or below for what the records represent** (a dynamic light, specifically) - this section adds a shader consumer and a producer, both consistent with "dynamic light," but does not itself trace what shader variant `0x800` does differently, nor confirm the 128-slot and 8-slot arrays are the same data at two lifecycle stages. No code changed.
 
+**2026-10-22: on Sol 2 the hull does not take `SVC1` (confidence 75).** `FUN_003ea368` above, filed as a hazard/prop compiler, is
+`Ship_DrawModels` ([ship-sun-occlusion.md](ship-sun-occlusion.md)), so the ship draw does read `+0x5a3`. Live on RPCS3 (interpreter,
+Time Trial states): `EngineFlare_SubmitSpuLight` (`0x0029ff8c`) fires on Sol 2 (`12_sol_2`, key 0) and on Talon's Junction alike
+(2 stops in 25 s each), but the hull's `SVC1` branch (`0x003eb368`, `r19` the hull record) fired 0 times in 25 s on Sol 2 against 2 on
+Talon's Junction. So the key does keep the engine light off the hull, as ours does; the original's blue engine bay on Sol 2 and
+Metropia is another term
+([hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The engine bay: Assegai_c1's Fury light, and the two circuits that
+switch the SPU lights off"). The sample is small; a longer run is open.
+
 ### `Enable_spu_vertex_light`, slot 1: the "exact ratio on every record" claim from the previous entry does not hold generally - it is refuted on two records this session read (2026-09-18, later still)
 
 Per this section's own "Next Steps," slot 1 (index alternates 0/1 across boots; only slot 0 had been read) is now captured - `scripts/rpcs3-spu-light-dump.py /tmp/hd-spu-light-dump-slot1`, five snapshots, landed on `index_raw: 1` on this boot. **The `A`/`A*0.25`/`A*0.1` ratio the previous entry called "exact on every record checked" holds on most of slot 1's records too** (e.g. snapshot `s0`, record 0: `A=40.0000`, fields read `10.0000`/`4.0000`, exact) **but is demonstrably not exact on at least two records, read directly off the slot's own raw bytes** (`s3_slot.bin`, not just the derived JSON):
