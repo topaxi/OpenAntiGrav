@@ -1,6 +1,6 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
-import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
+import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
 // whose material declares the whole parameter set it reads - see
@@ -271,6 +271,9 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // this that only reached `fs_main` shadowed the scenery a blended material drew
 // and left the road untouched. That is exactly what the first cut did.
 fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
+    if shadow_exempt > 0.5 {
+        return colour;
+    }
     let coverage = shadow_coverage(world);
     if scene.shadow.mode < 1.5 && sun_known > 0.5 {
         return max(colour - coverage * sun_delta, vec3<f32>(0.0));

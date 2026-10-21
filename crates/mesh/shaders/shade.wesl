@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{emissives, env_probe_tex, scene, shadow_sampler, sun_delta, sun_known, uniforms};
+import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -977,9 +977,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if (in.slots & 262144u) != 0u && scene.zone.enabled == 0.0 {
         let grid = textureSample(albedo, albedo_sampler, in.texcoord).r;
         let ramp = textureSample(lightmap, albedo_sampler, ramp_uv).rgb;
-        let loop_light = in.colour.rgb + in.texcoord.x * ramp_sun;
-        let loop_rgb = loop_light * grid * (ramp + vec3<f32>(glow_tint_offset.w))
-            + (vec3<f32>(grid) + ramp) * mag_glow;
+        let loop_light = in.colour.rgb;
+        // Times the program's output scale: the live floor program (Talon's `0x78d0c0`, the shadowed
+        // pass of `mag_effect_loop_opaque`) ends `MAD /2 H0.xyz, fog, H1, fogColour`.
+        let loop_rgb = scene.light.output_scale
+            * (loop_light * grid * (ramp + vec3<f32>(glow_tint_offset.w))
+                + (vec3<f32>(grid) + ramp) * mag_glow);
         mag_floor = vec4<f32>(loop_rgb, grid * in.colour.a);
     }
 
@@ -1231,6 +1234,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     }
     let rim_glow_on = (in.slots & 2048u) != 0u;
     let rim_edge_on = (in.slots & 4096u) != 0u;
+    // The magstrip floor's `ShadowToAlpha` redraw (`0x78d0c0`) draws the very colour the lit pass
+    // does - its light is `TC1 + TC2`, no sun in it - so the original's craft shadow is invisible
+    // on it; the stand-in multiply would show one.
+    shadow_exempt = select(
+        0.0,
+        1.0,
+        ramp_sheen || ((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0),
+    );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
