@@ -891,5 +891,117 @@ reach them (their lightmap alpha is 255). Overlap scores (whole frame, hull is a
 0.18252 to 0.18289 (same `theirs.png`), a live rerender 0.1854 to 0.1810 RMSE and edge NCC 0.2524 to 0.2362 (two different
 captures).
 
+**Superseded in part (2026-10-21):** the overshoot and the open-air pearl were mostly the specular exponent, see
+["The hull's specular exponent"](#the-hulls-specular-exponent-2026-10-21-hd-hull-colour-every-hull-drew-its-highlight-with-the-shared-32).
+
 **Cross-title.** Omega: checked, not checkable (its original shadow tier is `Unbuilt`, hulls build through the PS4 path). 2048: checked,
 differs. The ground ring and the pearl on open-air circuits stay open.
+
+## The hull's specular exponent (2026-10-21, `hd-hull-colour`): every hull drew its highlight with the shared 32
+
+**What a player sees.** The hull's sun-facing panels read white and chalky where the original's are saturated orange, yellow
+and blue. The brief's "pearl gap" on open-air circuits was mostly this, and the part of the whole-hull overshoot that
+`hd-hull-pearl` could not place.
+
+**The cause (confidence 90, two circuits read live).** A hull's fragment program is `diffuse_with_specular_from_alpha_n[_vcol]`'s
+`IBL`/`SunShadowMap` block (block 17, `0x740` bytes of code). Its live copy on **Sebenco Climb** and **Anulpha Pass**
+(`HOOK_FP_LEN=0x800`, [rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md); the default dump cut the block at instruction
+`0x60`) carries these constants, every one equal to the circuit's own `track.envsettings`:
+
+| slot | constant | Sebenco Climb | Anulpha Pass |
+| --- | --- | --- | --- |
+| `0x18`/`0x36` | sun direction | `(-0.842, 0.337, 0.421)` | `(-0.701, 0.504, 0.504)` |
+| `0x1f`/`0x68`/`0x6c` | sun colour, `.w` the specular scale | `(4, 4, 4)`, 3 | `(1.087, 1.694, 1.790)`, 1 |
+| `0x2c`/`0x5e` | probe tint | `(4, 4, 4, 0)` | `(4, 4, 4, 0)` |
+| `0x48` | fog | `(0.646, 1.184, 1.852)`, density `0.0004` | density `0.0004` |
+| **`0x58`** | **the exponent `MUL` after `LG2`** | **300** | **300** |
+| `0x6f` | reflectivity | 0.5 | 0.5 |
+
+The exponent's `MUL` constant is patched at draw time by parameter **`0x4232e459`**, and `0x4232e459` is the exponent: Harimau's
+`.rcsmodel` material carries `0x4232e459 = 300`, `feisar_c1`'s `160`, `assegai_c1`'s `160`. The reader asked the patch table for
+`SpecularPower` (`0x81e0e773`) only, found nothing, and fell back to the shared stand-in **32**: visualised in ours (the exponent
+as a grey level), 46,325 of Sebenco's hull pixels drew at 32, 5,379 at 400 (a second material) and 14,092 at 0 (`diffuse_vcol`,
+no highlight). A highlight `pow(N.H, 32)` against `pow(N.H, 300)` is a wash over a third of a panel instead of a point.
+
+**Fixed.** `fragment::Program::specular_exponent_parameter` names whichever parameter patches the exponent's own slot, and
+`skin::light_inputs::specular_exponent` reads it for `SpecularPower`, `0x4232e459` (`SPEC_EXPONENT`) and `carbonfibre`'s
+`0xebecee0f` (`CARBON_EXPONENT`, 80 on `feisar_c1`, 70 on `assegai_c1`). Harimau's paint is now 300, `feisar_c1`'s 160, their
+carbon 80 and 70 (pinned by `hd_hull_colour_factor_ground_truth::a_hulls_specular_exponent_is_its_materials_own_parameter`, which
+reads 160 and 80 off `feisar_c1`).
+
+**Why only three hashes (a census, `hd_specular_patch_census`).** Over the 16 circuits and four hulls, 732 blocks whose literal is `0.0`
+have the exponent slot patched by a parameter other than `SpecularPower`: `0x2924e4ad` 476 blocks (authored 0.01 to 100), `0x7611a2d8` 99 (1
+to 200), `0x4232e459` 46, `0x2fae3d80` 41 (all 1.0, Anulpha's `mt_diffuse_specular`), `0xebecee0f` 30, `0x2a2dc10b` 16, `0x71db09a8` 4,
+`0xef18f362` 4, `0x05fec07d` 5, `0x46ce6dda` 2, `0x438ddeff` 2, `0xbd4582d3` 2, `0x6be7990e` 1, `0x3dc31258` 1. No two parameters ever
+patch one slot (7,183 blocks). Reading all of them was tried first and moved the **scenery** (Amphiseum 150,462 pixels, Anulpha 181,392,
+Modesto 20,070, Tech de Ra 47,681 differ from the three-hash reading) with a mixed whole-frame score, and a value of 1.0 as an
+exponent is not credible next to a material whose own name says `specscalar`, so only the three whose slot, value and name agree
+are read; the rest stay on the stand-in and are listed as open. The three hashes do reach the scenery (carbon and the `0x4232e459` materials on circuits, and the `sat(8 N.L)` factor below), which
+`hd-scenery-materials` owns: outside the hull box (x 680-1240, y 540-960 of the 1920x1080 frame) the pictures changed on Anulpha Pass
+(284,859 pixels, at most 62 levels), Modesto Heights (58,088), Vineta K (299,260), Tech de Ra (27,712, at most 1) and Talon's (13,704,
+at most 6), and the grey difference to the original there did not get worse on any of the thirteen pairs (Anulpha -0.045, Modesto -0.162,
+Vineta K -0.020, Tech de Ra +0.002, the rest 0.000; mean 24.752 to 24.735).
+
+**The facing term is `sat(8 N.L)`, not `N.L` (confidence 85).** In every HD lit program the specular multiplies `MOV_SAT x8` of the
+**unsaturated** `DP3` of the normal and the sun (`@0x26` here, `@0x36` of the track's `track_surface` block 5), so a highlight is full
+strength from about seven degrees above the horizon instead of scaled by `N.L` itself. Wired for the hull and scenery
+(`receives_shadow` not the track's); the track keeps `N.L` because applying it there moved four of the thirteen pairs the wrong way and
+the track is the scenery lane's. Hull box difference, Vineta K 11.25 to 10.90.
+
+**Read, measured, not wired: the diffuse `N.L` is unsaturated too.** The same `DP3` feeds `H3 = N.L * sunColour` unsaturated
+(`diffuse_vcol` alone has `DP3_SAT`), so a facet turned from the sun would be darker than its ambient. Wired, Vineta K's hull
+difference went 10.90 to 13.16 (worse) and Anulpha's 33.95 to 34.51, so the diffuse stays saturated. The original's self-shadow pass
+(front faces culled) zeroes most of the back-facing sun, which is the likely reason the negative term is rarely seen; not checked.
+
+**Measured (the 13 HD compare pairs, Harimau classic on 12 circuits and Assegai_c1 on Talon's Junction).** The pixel metric on a hull is
+dominated by the silhouette: two captures of one state differ in camera (0.078 units on Anulpha Pass, about ten pixels at the hull), and the hull-box grey
+difference of the re-made set swung from -9.2 (Talon's) to +6.4 (Vineta K) against the pairs it replaced with no change to the hull in
+between. So each number below is taken on **one** original frame and **one** pose, ours rendered before and after, aligned to the
+original by a scale and shift search (`0.97-1.02`, at most 14 px) over the hull, the hull pixels picked by a flat-colour render of ours
+(`uniforms.env_layer`) eroded by 14 px, 25,000 to 32,000 pixels a pair:
+
+| pair | luma orig | luma before / after | sat orig | sat before / after | hull mean abs diff before / after | 6 flat facets before / after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| anulpha-pass | 100.6 | 93.1 / 84.9 | 0.342 | 0.281 / 0.336 | 21.0 / 19.5 | 15.0 / 9.7 |
+| chenghou-project | 85.2 | 81.5 / 81.5 | 0.517 | 0.467 / 0.467 | 15.4 / 15.4 | 7.3 / 7.3 |
+| metropia | 65.9 | 63.0 / 63.0 | 0.426 | 0.338 / 0.338 | 9.1 / 9.1 | 3.0 / 3.0 |
+| moa-therma | 179.3 | 166.2 / 160.9 | 0.391 | 0.355 / 0.400 | 26.6 / 24.7 | 15.0 / 15.3 |
+| modesto-heights | 119.5 | 124.1 / 118.1 | 0.276 | 0.234 / 0.245 | 15.9 / 11.4 | 11.0 / 3.9 |
+| sebenco-climb | 168.2 | 159.4 / 155.8 | 0.304 | 0.291 / 0.324 | 22.0 / 20.2 | 14.1 / 12.5 |
+| sol-2 | 111.2 | 105.0 / 105.0 | 0.305 | 0.293 / 0.293 | 16.2 / 16.2 | 6.1 / 6.1 |
+| talons (Harimau) | 106.3 | 111.9 / 107.8 | 0.284 | 0.249 / 0.258 | 15.5 / 13.2 | 4.3 / 4.1 |
+| talons-assegai-c1 | 52.9 | 46.6 / 46.3 | 0.446 | 0.401 / 0.407 | 19.6 / 19.7 | 4.2 / 4.2 |
+| tech-de-ra | 136.3 | 150.4 / 140.4 | 0.357 | 0.347 / 0.377 | 28.0 / 22.2 | 26.4 / 26.3 |
+| the-amphiseum | 70.7 | 71.7 / 70.2 | 0.362 | 0.292 / 0.316 | 8.3 / 7.5 | 6.5 / 3.4 |
+| ubermall | 138.9 | 142.1 / 137.2 | 0.393 | 0.355 / 0.393 | 24.9 / 20.6 | 11.6 / 11.6 |
+| vineta-k | 104.2 | 114.3 / 103.4 | 0.386 | 0.334 / 0.352 | 16.6 / 8.1 | 8.1 / 3.2 |
+| **mean abs gap, mean** | | **6.70 / 5.84** | | **0.042 / 0.029** | **18.4 / 16.0** | **10.2 / 8.5** |
+
+The facets are six 10x10-pixel cells, one per colour cluster, flat in the original (std below 9) and wholly inside the eroded hull, at
+the same aligned coordinates in all three images. Examples (original / before / after, RGB): Modesto Heights' orange wing panel
+`(149,110,98) / (182,149,123) / (148,108,92)`, its blue wing tip `(117,143,192) / (149,167,204) / (130,153,197)`; Anulpha Pass' orange
+panel `(139,110,81) / (153,150,139) / (123,97,71)` and olive panel `(138,170,81) / (148,183,134) / (118,147,69)`; Talon's Harimau's
+six sit at 4.3 and 4.1 mean levels (the tunnel's gate keeps the highlight small there). **The re-made pairs, the same code, the same capture**
+(ours rendered with the old reading at each re-made pair's own pose and camera): box grey difference **26.53 to 25.95**, whole-frame RGB
+difference 24.944 to 24.890; no pair worse but Anulpha Pass (+0.22 box, -0.06 whole frame, the luma shortfall below), Vineta K -3.61,
+Tech de Ra -1.06, Ubermall -0.98, Modesto -0.73, Moa Therma -0.52, Sebenco -0.50, Talon's -0.36, the rest within 0.04.
+
+**Not closed, by circuit.** Three circuits turn darker than the original once the highlight is narrow: **Anulpha Pass** (hull luma
+-7.5 to -15.7), **Moa Therma** (-13.1 to -18.4) and **Sebenco Climb** (-8.8 to -12.4), saturation now level with it (Anulpha -0.061 to
+-0.006, Moa -0.036 to +0.009, Sebenco -0.013 to +0.020). What is read is not the gap: the live constants (above), the program (every
+instruction of block 17 matched against `shade.wesl`: the normal-map frame, the `(u, v)` law of both probe maps, `reflect(-V, N)` with
+`V` the vertex program's `eye - position`, the `x4` probe tint, reflectivity `0.5` times the livery's alpha, the `/2` and the fog), the probe
+content (our blend at the original's position against the live 128x64 and 64x32 maps on Sebenco: mean 82.5 / 92.9 / 102.1 against
+80.2 / 91.2 / 100.8, 11.6 mean absolute per texel: the blend's weights, not isolated) and the livery (its first 576 rows
+are the disc's `harimau_livery.gtf` byte for byte, and its DXT5 alpha is 255 everywhere, so the reflection reaches every hull texel in both).
+The residual on Anulpha's and Chenghou's orange facets is a factor of 1.13-1.14 in display value on all three channels (`(214,133,91)` against
+`(188,114,81)` on Chenghou, which the exponent never touched), about 1.3 in light, not an additive grey. Candidates, unmeasured: the post
+bloom around the very bright highlights (sun 4 and a specular scale of 2 to 3 on Sebenco and Moa), and the craft's SPU vertex light
+(`f[TC1]`), which the hull programs add before the albedo multiply and which ours feeds from the weapon point lights
+(`weapon_light.rs`); whether the original's list also carries the circuit's own lights is unread. The glass chunk
+(`glass_texture`, exponent parameter `0x4232e459` = 115) still draws with 32: its chain is not the hull program's.
+
+**Cross-title.** Omega: checked, not checkable here - its hull shaders are PS4 programs this reader does not decode, so
+`light_inputs::specular_exponent` gets no program for them and they keep the stand-in; nothing was ported by accident. 2048: checked, differs -
+its materials name their uniforms by their own GXP programs ([2048-material-params.md](../formats/2048-material-params.md)), not by HD's
+hash table, so `0x4232e459` has no counterpart to look up. Whether their hull highlights are the stand-in 32 is open for both.
