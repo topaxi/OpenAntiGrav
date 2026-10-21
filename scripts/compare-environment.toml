@@ -119,7 +119,7 @@ hud_safe_area = 96
 name = "RPCS3"
 renderer = "Vulkan"
 resolution = "1280x720"
-resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080. At 150 the exposure readback reads half the frame on a dark circuit and the original is brighter than the game makes it (docs/rendering/hd-track-tone.md); judge brightness against 100
+resolution_scale = 150        # 1280x720 x 1.5 = 1920x1080. At 150 the exposure readback read half the frame on Anulpha (the other dark circuits are predicted, not read) and the original came out brighter than the game makes it (docs/rendering/hd-track-tone.md); judge brightness against 100
 write_color_buffers = true    # BOTH config.yml and custom_configs/config_BCES00664.yml
 output_scaling = "Nearest"
 msaa = "Disabled"

@@ -8,8 +8,8 @@ changed.** What landed is two reproducible probes
 
 | Claim | Verdict |
 | --- | --- |
-| **A**: one missing or misapplied input of the lit track material makes HD's track too dark and too blue, and one cause explains the floor, the blue areas and the hexagon panel | **False.** The floor is not short of a material input: before the resolve it matches the original within 3 %. The gap sits between the scene and the final frame, in the original's exposure resolve, and at the profile's `Resolution Scale 150` that exposure is an emulator artefact. The wall's blue cast and the hexagon panel are two separate causes |
-| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **False for anisotropy** (max anisotropy field 0 on every bind of two circuits), **trilinear with a `-1.5` LOD bias** on material textures |
+| **A**: one missing or misapplied input of the lit track material makes HD's track too dark and too blue, and one cause explains the floor, the blue areas and the hexagon panel | **Three parts.** *Too dark*: **false**; the floor is not short of a material input (before the resolve it matches the original within 3 %), the gap is the original's exposure resolve, which at the profile's `Resolution Scale 150` is an emulator artefact. *Too blue*: **true in ours, cause open**, and it is not the exposure: the left wall is cyan before any resolve, and the blue floor on the right is an animated plasma pulse. *One cause*: **false**; the hexagon panel is a third thing |
+| **B**: HD's floor, wall and glass-road draws request anisotropic filtering, and with which filter and LOD bias | **The profile's `off` matches what HD requests**: max anisotropy field 0 on every bind of two circuits. The filter is trilinear with a `-1.5` LOD bias on material textures (checked, applies, not wired) |
 
 ## Claim A
 
@@ -105,13 +105,29 @@ through `*0x8b73bc`) holds the same number beside its mean colour:
   follows (1.6 against 1.0). A cold boot (`rerender-cold`'s Anulpha original,
   13.9 s after GO) shows the same floor as the restored state
   (117.1, 143.4, 151.7 against 113.3, 139.2, 147.5), so this is not a savestate
-  transient. The pair frames `hd/*` were taken at 150
+  transient (that lane's RPCS3 log, its latest boot, reads `Resolution Scale: 150`
+  and `Anisotropic Filter Override: 0`; the Anulpha capture is earlier, so the log
+  shows the profile, not that boot). The pair frames `hd/*` were taken at 150
   (`scripts/compare-environment.toml`, `resolution_scale = 150`), which brightens
-  every dark circuit's original by an exposure the game would not apply.
-- **Anulpha's matched frame at 100.** Original final (98.4, 120.7, 127.4) against
-  ours (90.3, 113.4, 121.5) in the floor box: the 30-per-channel gap is 8, and
-  the whole-frame boxes agree to a few units (original 49.4, 61.5, 63.6; ours
-  47.1, 62.1, 69.9).
+  the dark circuits' originals by an exposure the game would not apply (measured on
+  Anulpha; Metropia, Moa Therma and Sebenco Climb are predicted, not read).
+- **Anulpha's matched frame at 100**, original final against ours:
+
+  | Region | Original at 100 (scene, final) | Ours (final) | Ours minus original |
+  | --- | --- | --- | --- |
+  | floor box | 82.8, 104.3, 111.3; 98.4, 120.7, 127.4 | 90.3, 113.4, 121.5 | -8.1, -7.3, -5.9 |
+  | the lane under the craft | 124.2, 153.0, 159.4; 143.3, 175.3, 181.7 | 116.2, 143.4, 149.3 | -27.1, -31.9, -32.4 |
+  | blue floor right | 39.1, 56.2, 67.7; 47.7, 64.9, 75.9 | 42.3, 79.4, 95.4 | -5.4, +14.5, +19.5 |
+  | whole, rows 200-900 | 43.7, 55.3, 57.1; 49.4, 61.5, 63.6 | 47.1, 62.1, 69.9 | -2.3, +0.6, +6.3 |
+  | left wall | 51.7, 54.4, 53.9; 54.6, 57.1, 56.5 | 47.3, 60.6, 72.4 | -7.3, +3.5, +15.9 |
+
+  So the box's 30 per channel becomes 8, but **the lane keeps a 27 to 32 gap**:
+  the original's step from scene to final adds +19 there and ours +3. That is
+  the bloom, and it is the part the adaptation law below moves (the lane goes to
+  127). The blue floor right is the original's own unstable region: its G reads
+  71.8 in a frame at 150 and 56.2 in one at 100 (a plasma pulse), and ours is
+  bluer than either. The remaining blue is in ours (wall: G +3.5, B +15.9; whole
+  frame B +6.3), so **"too blue" survives the correction.**
 - **The adaptation law in `oag_post::hd_bloom` disagrees with the live
   readback.** At 100 the PPU's luma equals the mean of the **encoded** per-pixel
   luma (0.224, 0.266, 0.382 against 0.227, 0.271, 0.379: within 1.3 %), not the
@@ -129,6 +145,18 @@ through `*0x8b73bc`) holds the same number beside its mean colour:
   12.62 to 12.72 and `hd-race/talons-pack` 53.02 to 53.12 (each at or over the
   0.1 rise this lane was bound by, against references taken at 150). **Not
   shipped.**
+
+### Amphiseum's grid floor is not explained by this
+
+The brief's grid-floor box is not recorded anywhere (the UV-flip thread quotes RMSE 46.0 to
+30.3 without coordinates). Measured instead on the pair `hd/the-amphiseum` with a tinted
+render's slot masks (the HUD excluded): the `track_surface*` floor slots (345,008 px) read
+theirs 71.7, 79.9, 80.7 against ours 70.3, 78.1, 78.9, a **mean gap of -1.7 and a grey RMSE
+of 12.2, 12.1 of it structure** (the same RMSE with each side's mean removed). The 30 comes
+from what shares the box: the billboard (slot 504, RMSE 34.5, ours 12 darker), concrete
+panelling (slot 377, 30.6) and the unmatched pixels (32.2). Amphiseum's readback at 150
+(0.213) stayed above 0.15, so its exposure was 1.0 either way: **the 150 artefact does not
+explain Amphiseum's floor**, and its residual is the thread's lightmap noise, unchanged.
 
 ### The wall and the hexagon panel are their own causes
 
@@ -158,9 +186,10 @@ anisotropy override.
 | Anulpha Pass | 530, 2,619 | `0x80078000` on every bind | `0x02063e80` 1,597; `0x02062000` 824; `0x02022000` 198 |
 | The Amphiseum | 867, 3,935 | `0x80078000` on every bind | `0x02063e80` 3,269; `0x02062000` 467; `0x02022000` 199 |
 
-- **Maximum anisotropy is 0 (one sample) on every bind.** `scripts/compare-environment.toml`'s
-  "no original forces it" holds for HD and now has a measurement behind it. HD has
-  no anisotropy to be an `original` setting value for; the profile's `off` stands.
+- **The profile's `off` matches what HD requests.** Maximum anisotropy is 0 (one
+  sample) on every bind. `scripts/compare-environment.toml`'s "no original forces
+  it" holds for HD and now has a measurement behind it. HD has no anisotropy to
+  be an `original` setting value for.
 - **The filter is trilinear with a LOD bias of -1.5 on material textures**:
   `0x02063e80` is magnification LINEAR, minification LINEAR_MIPMAP_LINEAR, bias
   `0x1e80` = -384/256 = -1.5. It sits on the albedo, normal and lightmap units
