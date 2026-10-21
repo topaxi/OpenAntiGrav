@@ -99,6 +99,7 @@ impl Session {
             Stage::Launcher(_) => "launcher".into(),
             Stage::Loading(_) => "loading".into(),
             Stage::Frontend(_) => "frontend".into(),
+            Stage::Race(_) if self.paused() => "race-paused".into(),
             Stage::Race(_) => "race".into(),
             Stage::Menu(stage) => {
                 let screen = if let Some(open) = &stage.layout {
@@ -152,9 +153,13 @@ impl Session {
             return;
         }
         self.dev_clock.last_log = Some(now);
+        let phases = self.phases.take_line();
         let Some(stats) = self.meter.stats() else {
             return;
         };
+        if let Some(phases) = phases {
+            info!("{phases}");
+        }
         let ms = |s: Option<oag_present::perf::Stats>| s.map(|s| s.mean_ms);
         let stage = self.dev_stage_name();
         info!(

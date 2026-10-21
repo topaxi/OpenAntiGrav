@@ -199,6 +199,7 @@ impl Session {
         let acquire_start = web_time::Instant::now();
         let acquired = self.gpu.output.acquire(&self.gpu.device);
         let acquire_wait = acquire_start.elapsed();
+        self.phases.begin();
         if acquired {
             self.frame_timing
                 .acquired(acquire_start, acquire_start + acquire_wait);
@@ -1000,13 +1001,16 @@ impl Session {
         // once it has either built the flow or given up. The second guard
         // is not decoration: without it a source whose screens do not read
         // reopened its disc image once a frame and warned once a frame.
+        self.phases.mark(super::phases::Phase::Ticks);
         self.build_endrace();
 
         self.begin_scene_frame();
+        self.phases.mark(super::phases::Phase::Prep);
         let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
         // The further windows of a `--windows` run, once window 1's frame is submitted: each
         // seat is its own submission. A no-op with one window.
         self.draw_screens();
+        self.phases.end_frame();
         if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
             log::debug!(
                 "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \

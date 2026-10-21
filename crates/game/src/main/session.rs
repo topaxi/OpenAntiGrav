@@ -38,6 +38,8 @@ mod frame;
 pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
+#[path = "session/phases.rs"]
+pub(crate) mod phases;
 #[path = "session/language.rs"]
 mod language;
 #[path = "session/launch2048.rs"]
@@ -293,6 +295,8 @@ pub(crate) struct Session {
     /// acquire, summed a second at a time and logged at `debug`. See
     /// [`frame_timing`].
     pub(crate) frame_timing: frame_timing::FrameTiming,
+    /// Which stretch of the frame the thread's CPU goes into, for `--frame-log`. See [`phases`].
+    pub(crate) phases: phases::PhaseClock,
     /// Whether the "this target is out of reach" line has already been said
     /// for the spell the controller is currently in.
     ///
