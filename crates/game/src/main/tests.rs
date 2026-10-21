@@ -94,6 +94,20 @@ fn a_slot_zero_row_is_the_players_exact_pose() {
 }
 
 #[test]
+fn a_field_of_the_player_alone_is_a_field() {
+    // A Zone run has no opponents; `--field-warmup` still warms the player's exhaust.
+    let text = "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z\n\
+                0,Assegai,0,0,-1,0,1,0,1,0,0,7,8,9,10,0,0\n";
+    let path = fixture_file("field-player-alone", text);
+    let field = pose::field_from_csv(&path).expect("a player-only field");
+    assert!(field.opponents.is_empty());
+    assert_eq!(
+        field.velocities().expect("the player's velocity"),
+        vec![oag_core::math::Vec3::new(10.0, 0.0, 0.0)]
+    );
+}
+
+#[test]
 fn a_field_with_a_gap_in_its_slots_is_refused() {
     let text = FIELD.replace("\n2,Qirex", "\n3,Qirex");
     let path = fixture_file("field-gap", &text);

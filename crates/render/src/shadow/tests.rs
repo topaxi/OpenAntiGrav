@@ -426,3 +426,10 @@ fn a_remembered_point_keeps_the_road_it_was_given_and_a_missing_road_too() {
     let bits = |v: &[GpuVertex]| -> Vec<u8> { bytemuck::cast_slice(v).to_vec() };
     assert_eq!(bits(&remembered), bits(&every));
 }
+
+/// The darkness is the original's own wipe quad: `dst * 0x9f/255` on a black source, read off a GE dump of
+/// the Moa Therma Zone frame. A different constant is a different picture of the same shadow.
+#[test]
+fn the_hull_darkness_is_the_originals_wipe_blend() {
+    assert_eq!(HULL_DARKNESS, 1.0 - 159.0 / 255.0);
+}

@@ -120,10 +120,24 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
             (body.position, body.orientation)
         })
         .collect();
+    let motion: Vec<(Vec3, f32)> = (0..8)
+        .map(|slot| {
+            let ship = &warm.sim.world.ships[slot].physics;
+            (ship.body.linear_velocity, ship.thrust)
+        })
+        .collect();
     let ticks = warm.field_warm_up_ticks();
     warm.warm_up_field(&velocities, ticks);
     for (slot, (position, orientation)) in poses.into_iter().enumerate() {
         let body = &warm.sim.world.ships[slot].physics.body;
+        assert_eq!(
+            (
+                body.linear_velocity,
+                warm.sim.world.ships[slot].physics.thrust
+            ),
+            motion[slot],
+            "slot {slot} is handed back at the speed and thrust it had: only its exhaust was replayed"
+        );
         assert_eq!(
             body.position, position,
             "slot {slot} ends on its captured pose"

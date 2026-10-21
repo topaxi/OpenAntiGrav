@@ -301,8 +301,27 @@ pub(super) fn text_for(
         // circuit's grade wrong together or right together. Nothing on a title
         // with no ladder, and nothing on rung zero, which has no name.
         "SpeedClass" => classes
-            .and_then(|classes| classes.id_for(readout.zone_stage))
+            .and_then(|classes| {
+                // Pulse names the class off the zone and, like `Zone`, not before
+                // the first one; HD's rung is the grade's own stage.
+                if classes.rung_zones.is_some() && readout.zone == 0 {
+                    return None;
+                }
+                classes.id_for(classes.rung(readout.zone_stage, readout.zone))
+            })
             .map(|id| strings.get_or_id(id).to_string()),
+        // The caption over the class name. Pulse's top rung writes an empty
+        // string over it (`FUN_0881ad10`, zone 35 on), so it goes with the
+        // Zen rung; below that it is the authored `RC_SC` like any caption.
+        "SpeedClassTxt"
+            if classes.is_some_and(|classes| {
+                classes
+                    .caption_hidden_from_zone
+                    .is_some_and(|from| readout.zone >= from)
+            }) =>
+        {
+            None
+        }
         // The rung above it, on the row [`zone_next_row`] puts the bar. Both
         // gates matter: with no next rung there is no name, and with no row
         // there is nowhere honest to put it.

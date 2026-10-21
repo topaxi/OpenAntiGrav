@@ -586,6 +586,8 @@ pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpe
         Some("IG_HUD_MACH1"),  // 13 Mach 1
         Some("IG_HUD_SUPSON"), // 14 Supersonic
     ],
+    rung_zones: None,
+    caption_hidden_from_zone: None,
 };
 
 /// The eighteen root layouts, by mode and skin.
