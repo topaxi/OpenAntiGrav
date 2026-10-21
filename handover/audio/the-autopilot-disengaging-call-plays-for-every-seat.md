@@ -1,27 +1,14 @@
 # The Autopilot's "disengaging" call plays for every seat
 
-Reported by the maintainer on 2026-10-21, not investigated in a lane yet.
+Reported by the maintainer on 2026-10-21. Landed on the `autopilot-seat-cue` branch for a network client; local seats left on purpose.
 
 ## Open
 
-- **In a multiplayer race, player 1 hears the Autopilot's `disengaging` announcer when player 2's
-  Autopilot runs out.** The call is raised per slot: `Field::tick_autopilot`
-  (`crates/raceplay/src/field.rs`) pushes `Cue::Disengaging` for any person-flown slot when its
-  remainder crosses one second (`Autopilot_Update`, `docs/ghidra/functions/psp-pulse-usa/autopilot.md`).
-  Nothing on the playback side appears to check which seat a voice line belongs to before playing it,
-  so a cue for slot 1 reaches the mix player 1 listens to. Which multiplayer path the maintainer heard
-  it on (split screen in one window, one window per seat, or network play) is not recorded; check all
-  three.
-- **The held `~AUTOPILOT` voice is the other half and may be wrong the other way.**
-  `oag_sound::sfx` opens it off `Race::autopilot_is_active` (`crates/raceplay/src/effects.rs`), which
-  reads `self.ship()`, one craft, so a second seat's Autopilot may never sound its held voice.
-- The original's rule is not read: Pulse and Pure have no split screen, and HD's split-screen announcer
-  routing is unread. Until it is, the call should be heard by the seat it concerns (its window or
-  client); for one shared output it is a choice, labelled chosen, not measured.
+- **Which path leaked.** Reproduced in `crates/raceplay/src/tests/autopilot.rs`: a network client (every person `Controller::Remote`, `set_seat`) raised `Cue::Disengaging` for another person's slot and sounded the held `~AUTOPILOT` for it. Split screen in one window and one window per seat share one `Audio` and one `Race`, so they play every local person's call by design now (`Race::heard_here`); if the maintainer heard it on one machine with two local seats, that is the chosen rule and needs a decision: one output cannot tell the seats apart (an option is panning each seat to its side).
+- **Other dry lines raised per slot are not routed yet.** `Cue::Message` is raised as slot 0 for any person's board; `CueEvent::is_player` is `slot == 0`, so a client seated at 1 plays its own `CraftUnlessPlayer` cues positionally. The engine loop's `slot != 0` is the same shape. Not speech; untouched.
+- The original's rule: HD's `Autopilot_Update` has no seat test (`docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`, "Who hears the disengaging call"); the flags in its play helper are unread.
 
 ## Next Steps
 
-1. Reproduce: a two-seat race with an Autopilot pickup on seat 2; record which output plays the call.
-2. Route speech cues (`Cue::Disengaging`, the shield callout) by the cue's slot to the seat that owns it,
-   and drive the held `~AUTOPILOT` voice per seat; a test asserts seat 1 hears no call for seat 2.
-3. Read HD's split-screen announcer path (EBOOT, the `disengaging` cue's caller) for the original's rule.
+1. Ask the maintainer which path he heard it on; if one machine, choose a rule for one speaker set with two people.
+2. Route `Cue::Message` and `is_player` by the listening seat.

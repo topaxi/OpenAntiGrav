@@ -399,6 +399,29 @@ impl Race {
             .unwrap_or_else(|| self.sim.world.primary_slot())
     }
 
+    /// Whether `slot`'s person is one this machine's speakers are for.
+    ///
+    /// A network client names its seat ([`Self::set_seat`]) and hears that seat
+    /// alone: every person is person-flown on its copy of the world, and a dry
+    /// line (`Cue::Disengaging`, the held `~AUTOPILOT`) from another seat would
+    /// play in its ear. Without a seat, every person flown at this machine is
+    /// heard, because one output serves all of them (a split screen, or one
+    /// window per seat). **Chosen, not measured**: HD's `Autopilot_Update`
+    /// (`0x00129988`) has no seat test of its own, and the play helper it calls
+    /// (`0x000cfeb8`) gates on flags whose meaning is unread, see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
+    #[must_use]
+    pub fn heard_here(&self, slot: usize) -> bool {
+        match self.view.seat {
+            Some(seat) => slot == seat,
+            None => {
+                slot == self.sim.world.primary_slot()
+                    || self.sim.world.controllers.get(slot)
+                        == Some(&oag_gameplay::Controller::Local)
+            }
+        }
+    }
+
     /// Names the slot this machine's person flies in a network race, for every
     /// presentation-side reader ([`Self::player_slot`]) and for the correction
     /// glide, which carries the camera and its craft together. View-only: nothing
