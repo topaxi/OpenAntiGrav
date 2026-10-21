@@ -8,12 +8,13 @@ categories: [rendering, tooling]
 `docs/rendering/frame-thread-cpu.md` ("On the Steam Deck"). On the Deck, paused, the frame
 thread costs 5.3 to 5.5 ms (Pulse and HD), about 4.5 ms of it the meter's `CPU` row; 55 to 60 %
 of it is `Queue::submit`, flat from 50 to 150 % render scale, so it is not waiting on the GPU.
-Effective user clock was 1.5 GHz on battery.
+Effective user clock was 1.5 to 1.9 GHz on AC. The maintainer's installed build (bb68bbb) reads the same
+4.8 to 5.6 ms, so the build is ruled out.
 
 ## Open
 
 - The maintainer's own 8 to 10 ms `CPU` row. This lane read 4.5 to 6.0 on both titles with a copy
-  of the maintainer's settings, so the gap is in their session (clock, TDP, a different profile).
+  of the maintainer's settings, so the gap is in their session (clock, TDP, a different profile), not the build.
 - Why turning off any one of SMAA, medium blur or the `psp-3000` filter on Pulse removes the same
   1 ms from `submit` (all three off is no better). A step three chained post passes trip
   together; look in `oag-post` (intermediate targets, wgpu-core init actions).
