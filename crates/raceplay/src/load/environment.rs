@@ -73,7 +73,14 @@ pub(super) fn hd_sky_model(
             }),
         _ => [1.0; 3],
     };
-    match mesh::sky_cube::build(&name, &blob, rotation, tint) {
+    // The fourth byte is the glow mask the sky writes, `byte / 255` (Metropia: 122 authored, 122 read).
+    let mask = match (zone_sky, env.as_ref()) {
+        (None, Some(env)) => env
+            .rgba8(oag_tables::envsettings::SKY_COLOUR)
+            .map_or(0.0, |c| f32::from(c[3]) / mesh::sky_cube::SKY_COLOUR_FULL),
+        _ => 0.0,
+    };
+    match mesh::sky_cube::build(&name, &blob, rotation, tint, mask) {
         Ok(sky) => {
             let (width, height) = sky
                 .textures

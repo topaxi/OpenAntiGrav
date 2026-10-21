@@ -140,12 +140,26 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 /// **Do not "fix" the sign to make a screenshot match** without that: under an
 /// exposure mismatch a hue can be moved either way by eye.
 ///
+/// # The glow mask
+///
+/// `mask` is what the sky writes into the scene target's alpha: **Metropia's
+/// `Sky colour` is `255 255 255 122` and the original's sky pixels read alpha
+/// 122** (live, RPCS3, the half-resolution scene target), so the fourth byte
+/// reaches the mask unchanged, `byte / 255`. `0` for a circuit that authors none
+/// and for the Zone sky, whose branch masks alpha off (`docs/rendering/hd-glow-mask.md`).
+///
 /// # Errors
 ///
 /// A `.gtf` that does not parse, is not a cubemap, or whose faces do not
 /// decode. The caller reports and draws no sky, per the usual rule: an honest
 /// absence rather than an invention.
-pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) -> Result<Model> {
+pub fn build(
+    label: &str,
+    blob: &[u8],
+    rotation_degrees: f32,
+    tint: [f32; 3],
+    mask: f32,
+) -> Result<Model> {
     let parsed = gtf::Gtf::parse(blob).with_context(|| format!("{label}: parsing"))?;
     let Some(texture) = parsed.only() else {
         bail!(
@@ -200,7 +214,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
                 sun_mask: 1.0,
                 slots: crate::mesh::slots::DEFAULT,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
-                glow: 0.0,
+                glow: mask,
                 texcoord2: [0.0, 0.0],
                 tangent: 0,
             });
@@ -256,7 +270,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
         vertex_colour_is_light: false,
         stamps_glow: false,
         glow_by_texel: false,
-        glow_from_program: false,
+        glow_from_program: true,
 
         flame: None,
         absorb_shell: false,
