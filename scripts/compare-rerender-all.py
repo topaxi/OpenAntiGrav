@@ -158,9 +158,9 @@ class Pcsx2(Emulator):
         data = self.scratch / "ps2"
         data.mkdir(parents=True, exist_ok=True)
         env = self.base_env()
-        env.update(OAG_PCSX2_DISPLAY=str(a.pcsx2_display), OAG_PCSX2_DATA=str(data), OAG_COMPARE_PLATFORM="pulse-ps2",
-                   HOME=str(data / "home"))
-        (data / "home").mkdir(exist_ok=True)
+        env.update(OAG_PCSX2_DISPLAY=str(a.pcsx2_display), OAG_PCSX2_DATA=str(data), OAG_COMPARE_PLATFORM="pulse-ps2")
+        # HOME stays the real one: the BIOS is read from ~/.config/PCSX2/bios, and everything PCSX2 writes goes to the
+        # private OAG_PCSX2_DATA directory
         self.env = env
         self.remap = {"--slot": a.pcsx2_slot}
         image = ce.MAIN / ce.platform("pulse-ps2")["image"]
@@ -172,6 +172,35 @@ class Pcsx2(Emulator):
 
 
 EMULATORS = {"psp": Psp, "rpcs3": Rpcs3, "pcsx2": Pcsx2}
+
+
+def backfill_meta(root):
+    """A pair made before `--meta` existed has no `meta` in its `pair.json`, so a regenerated manifest would name it by
+    its directory. Take the hand-written fields (id, title, track, craft, state, note) from the manifest entry that lists
+    the pair's `theirs.png`, and keep them in `pair.json` (`meta`) and in its recorded `argv` (`--meta`), so every
+    later re-make and every regenerated manifest carries them. Returns the pairs it filled."""
+    import tomllib
+    entries = {}
+    for toml in root.glob("*.toml"):
+        for e in tomllib.loads(toml.read_text()).get("entry", []):
+            if e.get("original"):
+                entries[(toml.parent / e["original"]).resolve().parent] = e
+    filled = []
+    for pj in root.rglob("pair.json"):
+        rec = json.loads(pj.read_text())
+        e = entries.get(pj.parent.resolve())
+        if rec.get("meta") or e is None:
+            continue
+        meta = {k: e[k] for k in ("id", "title", "track", "craft", "state") if e.get(k)}
+        note = e.get("note", "").split(" Not matched: ")[0].strip()
+        if note:
+            meta["note"] = note
+        rec["meta"] = meta
+        if rec.get("argv") and "--meta" not in rec["argv"]:
+            rec["argv"] += ["--meta", json.dumps(meta)]
+        pj.write_text(json.dumps(rec, indent=2) + "\n")
+        filled.append(str(pj.parent.relative_to(root)))
+    return filled
 
 
 def row_of(pj, platform, rec_before):
@@ -229,6 +258,7 @@ def main():
     ap.add_argument("--pcsx2-display", default="92")
     ap.add_argument("--pcsx2-slot", default="28015")
     ap.add_argument("--timeout", type=int, default=PAIR_TIMEOUT, help="seconds per pair")
+    ap.add_argument("--attempts", type=int, default=2, help="tries per pair when the emulator stalls (a parity refusal is final)")
     args = ap.parse_args()
 
     scratch = ce.MAIN / "data/scratch" / args.lane
@@ -238,6 +268,8 @@ def main():
         root = args.out.resolve()
         if not root.exists():
             shutil.copytree(args.src, root, symlinks=True)
+    for name in backfill_meta(root):
+        log("meta backfilled from the manifest entry: " + name)
     state_file = root / "rerender-all.json"
     results = json.loads(state_file.read_text()) if args.resume and state_file.exists() else {}
 
@@ -275,11 +307,16 @@ def main():
                 name = str(pj.parent.relative_to(root))
                 rec = json.loads(pj.read_text())
                 t0 = time.time()
-                try:
-                    env, remap = emu.prepare(rec)
-                    problems, warn = rerender.remake(pj, env=env, remap=remap, timeout=args.timeout)
-                except (subprocess.SubprocessError, OSError) as exc:
-                    problems, warn = ["emulator step failed: %s" % exc], []
+                for attempt in range(1, args.attempts + 1):
+                    try:
+                        env, remap = emu.prepare(rec)
+                        problems, warn = rerender.remake(pj, env=env, remap=remap, timeout=args.timeout)
+                    except (subprocess.SubprocessError, OSError) as exc:
+                        problems, warn = ["emulator step failed: %s" % exc], []
+                    # a parity REFUSAL is an answer; an emulator that stalled or a step that timed out is retried
+                    if not problems or any(p.startswith("the fresh run was refused") and "REFUSED" in p for p in problems):
+                        break
+                    log("attempt %d of %d failed (%s)" % (attempt, args.attempts, "; ".join(problems)[:200]))
                 if problems:
                     failed += 1
                     results[name] = {"platform": plat, "status": "FAILED: " + "; ".join(problems)}

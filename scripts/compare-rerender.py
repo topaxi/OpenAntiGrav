@@ -43,7 +43,9 @@ RUNNER = ["uv", "run", "--with", "websocket-client", "--with", "evdev", "--with"
 def camera_of(c):
     if not c:
         return None
-    return (c.get("pos") or c.get("eye"), c.get("fwd") or c.get("forward"))
+    fwd = c.get("fwd") or c.get("forward") or ([-x for x in c["back"]] if c.get("back") else None)
+    eye = c.get("pos") or c.get("eye")
+    return (eye, fwd) if eye and fwd else None
 
 
 def drift_of(old, new, tol):

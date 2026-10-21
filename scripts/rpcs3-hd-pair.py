@@ -66,18 +66,33 @@ def set_window(w, h):
     wins = subprocess.run(["xdotool", "search", "--onlyvisible", "--name", ""], capture_output=True,
                           text=True, env=env).stdout.split()
     # the largest is the root; the emulator is the largest one that is not the whole screen
-    cands = []
-    for wid in wins:
+    def geometry(wid):
         geo = subprocess.run(["xdotool", "getwindowgeometry", "--shell", wid], capture_output=True,
                              text=True, env=env).stdout
         v = dict(line.split("=") for line in geo.split() if "=" in line)
-        cands.append((int(v["WIDTH"]) * int(v["HEIGHT"]), wid, int(v["WIDTH"]), int(v["HEIGHT"])))
+        return int(v["WIDTH"]), int(v["HEIGHT"])
+
+    cands = []
+    for wid in wins:
+        gw, gh = geometry(wid)
+        cands.append((gw * gh, wid, gw, gh))
     cands.sort()
     emu = cands[-2] if len(cands) > 1 else cands[-1]
     if (emu[2], emu[3]) != (w, h):
-        subprocess.run(["xdotool", "windowsize", emu[1], str(w), str(h)], env=env, check=True)
         import time
+        subprocess.run(["xdotool", "windowsize", emu[1], str(w), str(h)], env=env, check=True)
+        # On a loaded machine Qt applies the resize a few seconds late (one run captured a 1760x1080 window): wait
+        # for the size to land, not for a fixed time.
+        for _ in range(60):
+            if geometry(emu[1]) == (w, h):
+                break
+            time.sleep(1.0)
         time.sleep(3.0)
+    # The window opens at x=240 on the 2000-pixel screen: a 1920 pixel frame then runs off the screen edge and the
+    # capture is clipped to 1760 wide (a refused pair, 2026-10-21). Put it at the origin.
+    subprocess.run(["xdotool", "windowmove", emu[1], "0", "0"], env=env, check=True)
+    import time
+    time.sleep(1.0)
 
 
 def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
