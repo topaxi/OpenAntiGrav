@@ -213,6 +213,7 @@ impl Setup {
 /// A chase camera with every term at zero. See [`Setup::headless`].
 const ZERO_CHASE: ChaseParams = ChaseParams {
     craft_scale: 0.0,
+    view_sheared: false,
     fov: 0.0,
     lookat_height: 0.0,
     lookat_length: 0.0,

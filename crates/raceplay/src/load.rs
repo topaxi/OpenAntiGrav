@@ -277,6 +277,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &handling,
         &team,
         zone_handling.is_some(),
+        craft_title
+            .race
+            .craft_laws
+            .map(|laws| laws.chase_view_sheared.value),
         &mut report,
     );
     // The lock-on's rig, which is all of the cameras the simulation reads.

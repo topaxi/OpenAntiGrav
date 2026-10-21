@@ -106,7 +106,7 @@
 //! which is why the agreement above is not evidence *for* it - the capture never
 //! reaches the branch.
 
-use oag_core::math::{Mat4, Vec3, camera};
+use oag_core::math::{Mat4, Vec3, Vec4, camera};
 use oag_race::chase_rig::{
     ChaseParams, Target, aim_point, look_at_point, scaled_about, spring_anchor,
 };
@@ -220,12 +220,36 @@ impl Chase {
     /// what the original's external view does through a barrel roll.
     #[must_use]
     pub fn view(&self, target: Target, params: &ChaseParams) -> Mat4 {
-        camera::look_at(
-            self.eye(target, params),
-            look_at_point(target, params),
-            target.up,
-        )
+        let eye = self.eye(target, params);
+        let aim = look_at_point(target, params);
+        if params.view_sheared {
+            sheared_look_at(eye, aim, target.up)
+        } else {
+            camera::look_at(eye, aim, target.up)
+        }
     }
+}
+
+/// Wipeout Pure's view matrix: the three rows are `forward x up` (**not** renormalised, so its
+/// length is the cosine of the angle the forward axis is pitched off the horizontal), `up`
+/// as given, and `-forward`, with the eye taken off by dot products.
+///
+/// Not a rotation: `up` is not perpendicular to `forward`, so a level line stays level and a
+/// point ahead of the craft at the eye's height stays on the screen's centre line however far
+/// the look-at point is below it. Read live off Pure's GE view matrix, whose rows at the grid
+/// are `(0.002, 0.003, 0.995)`, `(0, 1.0, 0.097)`, `(-0.995, 0, 0.002)` - exactly this with
+/// `forward` pitched `5.71` degrees down - and off the camera tripod it was copied from.
+#[must_use]
+pub fn sheared_look_at(eye: Vec3, aim: Vec3, up: Vec3) -> Mat4 {
+    let forward = (aim - eye).normalize_or_zero();
+    let up = up.normalize_or_zero();
+    let side = forward.cross(up);
+    Mat4::from_cols(
+        Vec4::new(side.x, up.x, -forward.x, 0.0),
+        Vec4::new(side.y, up.y, -forward.y, 0.0),
+        Vec4::new(side.z, up.z, -forward.z, 0.0),
+        Vec4::new(-side.dot(eye), -up.dot(eye), forward.dot(eye), 1.0),
+    )
 }
 
 /// The fraction of its error a first-order lag closes in `dt` seconds at `rate`.

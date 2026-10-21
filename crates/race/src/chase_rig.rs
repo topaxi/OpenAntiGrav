@@ -44,6 +44,13 @@ pub struct ChaseParams {
     /// the free spring's `4.938`, which is why the error was invisible until the
     /// rigid radius made the rest of the model right.
     pub craft_scale: f32,
+    /// The view matrix is built the way Wipeout Pure's is: the right axis is `forward x up`
+    /// **without** being renormalised and the up axis stays the craft's own, so the look-down
+    /// pitch bends the forward axis and nothing else. The matrix is a shear, not a rotation,
+    /// and the horizon stays on the screen's centre line instead of rising with the look-at
+    /// pitch. `false` is the orthonormal look-at of Pulse's camera node (`data/traces/pad0-boost.csv`,
+    /// orthonormal to rounding). From `oag_title::craft_laws::CraftLaws::chase_view_sheared`.
+    pub view_sheared: bool,
     /// Field of view, **as authored**, in **vertical degrees** at the authored
     /// 480x272 aspect - settled 2026-08-09 at confidence 94 by reading
     /// `g_camera_fov_degrees` (`0x08b34310`) off the running game. Nothing here

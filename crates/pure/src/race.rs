@@ -611,6 +611,11 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     wall_point_rate_body_local: oag_title::pre_race::Sourced::inherited(false, "Pulse"),
     // Pure's binary is not read for the cage; its own headers clear the flag on all 16 tracks.
     cage_from_track_header: oag_title::pre_race::Sourced::inherited(true, "Pulse"),
+    // The player camera update (`0x08849970`) copies the tripod matrix into the camera node and
+    // the GE view matrix keeps it: right = forward x up with length `cos(5.71 deg) = 0.995`, up
+    // = the craft's own (`docs/ghidra/functions/psp-pure-usa/camera.md`, "The view matrix is a
+    // shear"). Read live on PPSSPP at the grid.
+    chase_view_sheared: oag_title::pre_race::Sourced::measured(true),
     // Measured (`CODE_PITCH`), in place of Pulse's `<pitch>` stand-in, with its grid damping
     // (`docs/physics/pure-physics.md`).
     code_pitch: Some(oag_title::pre_race::Sourced::measured(CODE_PITCH)),
@@ -630,6 +635,16 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
 #[cfg(test)]
 mod tests {
     use super::{COUNTDOWN_VOICE, DEFAULT_TEAM, DEFAULT_TRACK};
+
+    /// Pure's chase view matrix is the sheared one, measured on its GE view and camera tripod;
+    /// a title whose camera is not read keeps Pulse's orthonormal look-at.
+    #[test]
+    fn the_chase_view_is_sheared_and_measured() {
+        assert_eq!(
+            super::CRAFT_LAWS.chase_view_sheared,
+            oag_title::pre_race::Sourced::measured(true)
+        );
+    }
 
     /// Pure's engine does not double its output and its grounded drag is `-0.0025`, both
     /// measured live (`docs/physics/pure-physics.md`), and Pure flies them.
