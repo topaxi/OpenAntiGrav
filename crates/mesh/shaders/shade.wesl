@@ -104,9 +104,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The specular's facing term in every HD lit program: `MOV_SAT x8` of the unsaturated
     // `N.L` (`MUL R1.w, pow, sat(8 N.L)`), so the highlight is full strength from about
     // seven degrees off the horizon, not scaled by `N.L` itself. Read on the hull's own
-    // `diffuse_with_specular_from_alpha_*` and the track's, which share the snippet; the
-    // track keeps `N.L` here until the track is matched on its own (it moved four of
-    // thirteen pairs the wrong way).
+    // `diffuse_with_specular_from_alpha_*` and the track's (`@0x3d` of `track_surface`'s lit block, live
+    // on Modesto Heights' disc copy), which share the snippet. The track kept `N.L` here until its
+    // normal map was read (2026-10-21, `hd-track-surface`): with the road's bump in `N` the original's
+    // term moved Vineta K's bottom band 17.59 to 14.16 and no pair the wrong way by more than 0.03.
     let ndl_spec = clamp(8.0 * ndl_raw, 0.0, 1.0);
 
     // **Everything from here to `authored` is the authored rig's, and only

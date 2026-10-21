@@ -10,8 +10,9 @@
 //!
 //! 1. Its declared sampler set is *exactly* three hashes: [`TEXTURE1`], one of
 //!    the three facing-ramp hashes ([`RAMP_HASHES`]), and
-//!    [`PARABOLOID_REFLECTION`] - no lightmap, no normal map, no specular map
-//!    mixed in.
+//!    [`PARABOLOID_REFLECTION`] - or those three plus `lightmap` (the
+//!    lightmapped variant, fragment `0x7704c0` on Tech de Ra, 2026-10-21) - no
+//!    normal map, no specular map mixed in.
 //! 2. `Program::output_texels`'s colour lane is [`Texel::Mixed`] - more than
 //!    one unit reaches it, which a flat single-texture picture never is.
 //! 3. The alpha lane traces to the unit the ramp hash's own entry sits at -
@@ -148,7 +149,14 @@ fn main() -> anyhow::Result<()> {
                 let Some(ramp_hash) = ramp_hash else {
                     continue;
                 };
-                if !(has_texture1 && has_paraboloid && declared.samplers.len() == 3) {
+                let has_lightmap = declared
+                    .samplers
+                    .iter()
+                    .any(|&(h, _)| h == rcsmaterial::LIGHTMAP_SAMPLER);
+                if !(has_texture1
+                    && has_paraboloid
+                    && declared.samplers.len() == 3 + usize::from(has_lightmap))
+                {
                     continue;
                 }
                 let Some(program) =
@@ -187,8 +195,10 @@ fn main() -> anyhow::Result<()> {
                 total_materials += 1;
                 total_chunks += n;
                 println!(
-                    "{path} slot {slot} {:4} chunk(s) {} (ramp hash {ramp_hash:#010x})",
-                    n, material.name
+                    "{path} slot {slot} {:4} chunk(s) {} (ramp hash {ramp_hash:#010x}){}",
+                    n,
+                    material.name,
+                    if has_lightmap { " lightmapped" } else { "" }
                 );
             }
         }

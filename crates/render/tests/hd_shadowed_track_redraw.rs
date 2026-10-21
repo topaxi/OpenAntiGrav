@@ -495,15 +495,15 @@ fn draw(
     [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
 }
 
-/// A track chunk whose colour is a special combine - here the glass floor's
-/// facing-ramp sheen - is not the generic path's, so the generic sun term must
-/// not be subtracted from it: it falls back to the chosen multiply. At a
-/// strength of 0.25 the multiply leaves 0.75 of the colour (191 of 255) where
-/// subtracting the generic sun term (about 130 on this rig) would leave about
-/// half. A `MAG_LOOP` or `LIGHT_CONE` chunk draws nothing in this harness, so the
-/// sheen stands for the family.
+/// The glass floor's facing-ramp sheen has no shadow lookup in either of its live programs
+/// (`0x76fac0` and `0x7704c0`, read on Tech de Ra), and the magstrip floor's shadowed redraw draws
+/// the colour its lit pass does, so the craft's shadow is not drawn on either (`hd-track-surface`:
+/// the original's frame shows none where ours darkened the floor to 0.75 with the chosen
+/// multiply). A shadow coverage of 0.25 must leave the sheen chunk's colour exactly as drawn. A
+/// `MAG_LOOP` or `LIGHT_CONE` chunk draws nothing in this harness, so the sheen stands for the
+/// family; the flag is the same private `shadow_exempt` that `shade.wesl` sets for both.
 #[test]
-fn a_special_combine_keeps_the_multiply_and_is_not_charged_a_sun_it_never_had() {
+fn a_glass_sheen_chunk_is_not_shadowed() {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -523,10 +523,50 @@ fn a_special_combine_keeps_the_multiply_and_is_not_charged_a_sun_it_never_had() 
         "the floor must draw something to be shadowed: {plain:?}"
     );
     for channel in 0..3 {
-        let expected = (f32::from(plain[channel]) * 0.75).round() as u8;
         assert!(
-            covered[channel].abs_diff(expected) <= 3,
-            "channel {channel}: a sheen chunk keeps the multiply, 0.75 of {plain:?}, got {covered:?}"
+            covered[channel].abs_diff(plain[channel]) <= 1,
+            "channel {channel}: a sheen chunk is not shadowed, {plain:?} against {covered:?}"
         );
     }
+}
+
+/// The facing-ramp sheen's last instruction is `ADD /2 H0.xyz, R0, H2` (the live Tech de Ra
+/// program, `0x76fac0`), the same half every authored HD program ends on, so the scene holds half of
+/// its linear sum: the sheen must follow `Light::output_scale` as the authored path does. It drew at
+/// full scale (twice the original's light) until `hd-track-surface`.
+#[test]
+fn the_glass_sheen_carries_the_programs_output_scale() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let model = model(slots::DEFAULT | slots::FACING_RAMP_SHEEN);
+
+    // The harness's textures are white, so the sum is well over 1 at the engine's 0.5: compare two
+    // scales a factor of two apart, both low enough not to saturate.
+    let mut quarter = rig(SUN);
+    quarter.light = quarter.light.with_output_scale(0.25);
+    let full = draw(&device, &queue, &model, quarter, None);
+    let mut eighth = rig(SUN);
+    eighth.light = eighth.light.with_output_scale(0.125);
+    let half = draw(&device, &queue, &model, eighth, None);
+    let decode = |v: u8| (f32::from(v) / 255.0).powf(2.2);
+    let encode = |v: f32| (v.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round();
+    let mut checked = 0;
+    for channel in 0..3 {
+        if full[channel] >= 250 {
+            continue;
+        }
+        let expected = encode(decode(full[channel]) * 0.5);
+        assert!(
+            (f32::from(half[channel]) - expected).abs() <= 3.0,
+            "channel {channel}: {full:?} at scale 0.25 and {half:?} at 0.125, expected {expected}"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "every channel saturated: {full:?}");
 }

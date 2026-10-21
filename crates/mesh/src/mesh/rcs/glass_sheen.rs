@@ -246,9 +246,12 @@ pub(super) fn classify(
         .iter()
         .position(|&(h, ref p)| h == TEXTURE1_SAMPLER && p.is_some())?;
     let lightmap_entry = if has_lightmap {
-        Some(material.samplers.iter().position(|&(h, ref p)| {
-            h == rcsmaterial::LIGHTMAP_SAMPLER && p.is_some()
-        })?)
+        Some(
+            material
+                .samplers
+                .iter()
+                .position(|&(h, ref p)| h == rcsmaterial::LIGHTMAP_SAMPLER && p.is_some())?,
+        )
     } else {
         None
     };
