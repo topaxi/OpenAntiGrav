@@ -275,6 +275,9 @@ pub struct Report {
     /// ones whose textures or colours could not be read (drawn as before).
     pub ice_bound: usize,
     pub ice_unread: usize,
+    /// Lightmapped glass-sheen materials whose grid texture could not be read
+    /// (drawn with no coverage).
+    pub glass_grid_unread: usize,
     /// Refraction materials bound to the behind-the-glass target, and ones whose weight or table
     /// entry could not be read (drawn as an ordinary lit surface).
     pub refraction_bound: usize,
@@ -464,6 +467,9 @@ impl Report {
         } + &match self.ice_unread {
             0 => String::new(),
             n => format!(", {n} ice material(s) whose mask or colours could not be read"),
+        } + &match self.glass_grid_unread {
+            0 => String::new(),
+            n => format!(", {n} lightmapped glass material(s) whose grid could not be read"),
         } + &match self.refraction_bound {
             0 => String::new(),
             n => format!(", {n} refraction material(s) reading the behind-the-glass target"),

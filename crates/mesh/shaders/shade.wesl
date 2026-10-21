@@ -542,14 +542,35 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let glow_scale = emissives.scale[glow_slot];
     let ramp_sun = scene.light.sun * ndl;
     let sheen_prelit = scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power);
-    let vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
+    // **The lightmapped variant** (`SECOND_IS_LIGHTMAP` beside the sheen bit, fragment `0x7704c0`
+    // on Tech de Ra, read live): the atlas takes `lightmap`, the grid moves to the third binding,
+    // and the light is `TC0 + scale * atlas^power + atlas.a * N.L * sun` - the atlas alpha is the
+    // sun mask, where the unlit-by-atlas variant weights the sun by the colour set's fourth byte.
+    // The atlas is raw (its address word's gamma field is 0). Fetched under explicit gradients so
+    // the branch stays out of the derivative-uniform flow.
+    let sheen_lightmapped = ramp_sheen && (in.slots & 1u) != 0u;
+    let sheen_dx = dpdx(in.texcoord);
+    let sheen_dy = dpdy(in.texcoord);
+    var vertex_light_sheen = sheen_prelit + in.sun_mask * ramp_sun;
+    var sheen_grid = second.r;
+    if sheen_lightmapped {
+        let atlas_dx = dpdx(in.lightmap_texcoord.xy);
+        let atlas_dy = dpdy(in.lightmap_texcoord.xy);
+        let glass_atlas = textureSampleGrad(
+            lightmap, albedo_sampler, in.lightmap_texcoord.xy, atlas_dx, atlas_dy,
+        );
+        vertex_light_sheen = sheen_prelit
+            + scene.light.prelit_scale * pow(glass_atlas.rgb, scene.light.prelit_power)
+            + glass_atlas.a * ramp_sun;
+        sheen_grid = textureSampleGrad(pad_mask, albedo_sampler, in.texcoord, sheen_dx, sheen_dy).r;
+    }
     // **Both taps are sRGB-decoded**, as the RSX does: the capture of this
     // material's draw on RPCS3 has `SET_TEXTURE_ADDRESS` bits 20-23 (the
     // gamma field) at `0x7` on the ramp (unit 2) and the grid (unit 0) and
     // `0x0` on the normal maps, so the arithmetic below runs on linear values
     // and so does the output alpha (`MOV H0.w, H6.x`).
     let ramp_linear = pow(first.rgb, vec3<f32>(2.2));
-    let grid_linear = pow(second.r, 2.2);
+    let grid_linear = pow(sheen_grid, 2.2);
     // **Times the program's output scale**, as the authored path above is: block #7 ends on
     // `ADD /2 H0.xyz, R0, H2` (read live on Tech de Ra, fragment `0x76fac0`), so the scene holds
     // half of the sum. The output alpha, `MOV H0.w, H6.x`, is not scaled.

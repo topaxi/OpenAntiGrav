@@ -450,6 +450,29 @@ pub(super) fn picks(
                         *hash == rcsmaterial::LIGHTMAP_SAMPLER && path.is_some()
                     })
                     .unwrap_or(1);
+                // **The glass family's lightmapped variant keeps the ramp as its
+                // picture**, not the entry `lightmapped::albedo` would pick (the
+                // ramp is a lookup, not a picture); its grid rides third, see
+                // `glass_sheen::lightmapped_grids`.
+                let sheen = variants
+                    .get(slot)
+                    .copied()
+                    .flatten()
+                    .and_then(|variant| {
+                        let blob = cache
+                            .entry(material.name.clone())
+                            .or_insert_with(|| textures(&format!("/{}", material.name)))
+                            .clone()?;
+                        let declared = rcsmaterial::Declared::parse(&blob, variant.fragment.offset)?;
+                        let program = Program::parse(&blob, variant.fragment.offset)?;
+                        glass_sheen::classify(material, &declared, &program)
+                    });
+                if let Some(sheen) = sheen {
+                    return Pick {
+                        albedo: Some(sheen.ramp_entry),
+                        aux: Some(at),
+                    };
+                }
                 let albedo = match lightmapped::albedo(
                     material,
                     variants.get(slot).copied().flatten(),

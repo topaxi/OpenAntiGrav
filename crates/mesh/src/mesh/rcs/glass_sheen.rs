@@ -100,9 +100,11 @@
 use oag_rcs::rcsmodel;
 use oag_rcs::{rcsmaterial, rcsmaterial::fragment};
 
-use crate::mesh::{Emissive, slots};
+use crate::mesh::{Emissive, TextureSlots, slots};
 
 use super::emissive::EMISSIVE_LIMIT;
+use super::skin::decode_texture;
+use super::{Report, Textures};
 
 /// The block's per-material constant `c` (`ADD H4.xyz, H2, {c}`), measured
 /// `[0.26562, 0.26562, 0.26562, 0]` on `etched_glass_tech`. No preimage.
@@ -166,20 +168,27 @@ pub(super) struct GlassSheen {
     pub(super) ramp_entry: usize,
     /// Index into [`rcsmodel::Material::samplers`] of the grid entry.
     pub(super) grid_entry: usize,
+    /// Index of the circuit's baked atlas, on the **lightmapped** variant of
+    /// the same combine (fragment `0x7704c0` on Tech de Ra, read live): the
+    /// light is `TC0 + prelit * lightmap^power + lightmap.a * N.L * sun`, not
+    /// the vertex-colour-only light of the unlit-by-atlas one. `None` on the
+    /// variant with no lightmap.
+    pub(super) lightmap_entry: Option<usize>,
 }
 
-/// Whether `material`'s resolved variant is exactly the traced glass-sheen
-/// combine, and if so, which of its own sampler entries are the ramp and the
-/// grid.
+/// Whether `material`'s resolved variant is the traced glass-sheen combine,
+/// and if so, which of its own sampler entries are the ramp, the grid and (on
+/// the lightmapped variant) the atlas.
 ///
 /// **Fact-based, not name-based** - every check is a property of the
 /// resolved program the disc itself ships, so a material sharing this exact
 /// shape is caught without naming it, and one that merely shares a ramp
 /// hash with a different combine (the `blue_metal` family, unread) is not:
 ///
-/// 1. the resolved variant declares *exactly* three samplers - [`TEXTURE1_SAMPLER`],
-///    one of [`RAMP_HASHES`], [`PARABOLOID_REFLECTION_SAMPLER`] - no
-///    lightmap, no normal or specular map alongside them;
+/// 1. the resolved variant declares *exactly* [`TEXTURE1_SAMPLER`], one of
+///    [`RAMP_HASHES`] and [`PARABOLOID_REFLECTION_SAMPLER`] - plus, on the
+///    lightmapped variant, `lightmap` with a path of its own - and no normal
+///    or specular map alongside them;
 /// 2. the program's colour lane is [`fragment::Texel::Mixed`] - more than one
 ///    unit reaches it, which a flat picture never is;
 /// 3. the alpha lane traces to `Texture1`'s own declared unit, matching the
@@ -203,7 +212,12 @@ pub(super) fn classify(
         .samplers
         .iter()
         .any(|&(h, _)| h == PARABOLOID_REFLECTION_SAMPLER);
-    if !(has_texture1 && has_paraboloid && declared.samplers.len() == 3) {
+    let has_lightmap = declared
+        .samplers
+        .iter()
+        .any(|&(h, _)| h == rcsmaterial::LIGHTMAP_SAMPLER);
+    let expected = 3 + usize::from(has_lightmap);
+    if !(has_texture1 && has_paraboloid && declared.samplers.len() == expected) {
         return None;
     }
     let texture1_unit = declared
@@ -231,8 +245,62 @@ pub(super) fn classify(
         .samplers
         .iter()
         .position(|&(h, ref p)| h == TEXTURE1_SAMPLER && p.is_some())?;
+    let lightmap_entry = if has_lightmap {
+        Some(material.samplers.iter().position(|&(h, ref p)| {
+            h == rcsmaterial::LIGHTMAP_SAMPLER && p.is_some()
+        })?)
+    } else {
+        None
+    };
     Some(GlassSheen {
         ramp_entry,
         grid_entry,
+        lightmap_entry,
     })
+}
+
+/// The grid of every **lightmapped** glass-sheen material, bound third
+/// (beside what the magstrips, pads and ice bind there): the atlas takes the
+/// `lightmap` binding on this variant, as on every lightmapped surface, so
+/// the grid cannot.
+pub(super) fn lightmapped_grids(
+    model: &rcsmodel::Model,
+    variants: &[Option<rcsmaterial::Variant>],
+    textures: Textures<'_>,
+    report: &mut Report,
+) -> TextureSlots {
+    let mut grids: TextureSlots = vec![None; model.materials.len()];
+    for (slot, material) in model.materials.iter().enumerate() {
+        let Some(variant) = variants.get(slot).copied().flatten() else {
+            continue;
+        };
+        let Some(blob) = textures(&format!("/{}", material.name)) else {
+            continue;
+        };
+        let (Some(declared), Some(program)) = (
+            rcsmaterial::Declared::parse(&blob, variant.fragment.offset),
+            fragment::Program::parse(&blob, variant.fragment.offset),
+        ) else {
+            continue;
+        };
+        let Some(sheen) = classify(material, &declared, &program) else {
+            continue;
+        };
+        if sheen.lightmap_entry.is_none() {
+            continue;
+        }
+        let grid = material.samplers[sheen.grid_entry]
+            .1
+            .as_deref()
+            .and_then(|path| {
+                textures(&format!("/{path}"))
+                    .and_then(|bytes| decode_texture(path, &bytes))
+                    .map(std::sync::Arc::new)
+            });
+        if grid.is_none() {
+            report.glass_grid_unread += 1;
+        }
+        grids[slot] = grid;
+    }
+    grids
 }
