@@ -21,6 +21,8 @@
 /data/traces/*
 !/data/traces/pad0-boost.csv
 !/data/traces/talons-junction-steer-lean.csv
+!/data/traces/talons-junction-steer-lean-airbrakes.csv
+!/data/traces/hd-talons-steer-lean-airbrakes.csv
 !/data/traces/talons-junction-pitch-both-ways.csv
 !/data/traces/talons-junction-standing-start.csv
 !/data/traces/talons-junction-time-trial-lap.csv

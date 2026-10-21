@@ -115,6 +115,7 @@ fn fixture() -> Handling {
         roll_cost: 0.0,
         roll_speed: 0.0,
         roll_turbotime: 0.0,
+        steer_lean: oag_physics::SteerLean::NONE,
     }
 }
 

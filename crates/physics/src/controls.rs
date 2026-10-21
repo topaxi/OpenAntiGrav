@@ -157,6 +157,7 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         dt,
     );
     update_camera_lean(state, controls.steer_x, dt);
+    update_steer_lean(state, controls, &handling.steer_lean, dt);
 }
 
 /// The follower's per-second gain, the `5.4` literal at `0x0883fac0`.
@@ -191,6 +192,62 @@ pub fn update_camera_lean(state: &mut ShipState, stick_x: f32, dt: f32) {
     state.camera_lean_follower += delta * CAMERA_LEAN_FOLLOW_GAIN * dt;
     state.camera_lean +=
         (state.camera_lean_follower - state.camera_lean) * dt * CAMERA_LEAN_SMOOTH_RATE;
+}
+
+/// The most the steer lean follower may trail its target while the stick pushes the same way
+/// (`0.5`, `0x0883fd08`).
+pub const STEER_LEAN_OUT_LIMIT: f32 = 0.5;
+/// The same bound otherwise, airbrakes alone included (`0x3e99999a`, `0x0883fd28`).
+pub const STEER_LEAN_RETURN_LIMIT: f32 = 0.3;
+/// What one percent of airbrake adds to the steer lean's target (`0x3ba3d70a`): a full right
+/// airbrake leans like half a right stick, a full left one like half a left stick.
+pub const STEER_LEAN_AIRBRAKE: f32 = 0.005;
+
+/// Advances the lean the ship's model is drawn with, one frame.
+///
+/// `FUN_0883fab4`'s second filter (`entity+0x858` follower, `entity+0x854` lean), read at
+/// instruction level and measured: replaying it over a PPSSPP capture of the stick, each
+/// airbrake alone, the stick with either airbrake and both airbrakes
+/// (`data/traces/talons-junction-steer-lean-airbrakes.csv`) reproduces `+0x854` to `8e-7`.
+/// Confidence 95. The target is `stick * 0.01 - left * 0.005 + right * 0.005` on the `+/-100`
+/// control record; the follower's step is clamped to `0.5` when the **raw stick** points the
+/// way it moves and to `0.3` otherwise, so an airbrake alone always takes the slower limit.
+/// The display matrix turns the hull by `lean * 0.5` radians about its nose (`FUN_088418e0`,
+/// `0x08842140`); the cockpit camera does not read it.
+///
+/// While the craft is out of the race (state 5, `entity+0x860 & 0x1000`) the target is zero,
+/// so the lean eases back level through both rates rather than snapping.
+///
+/// **Chosen, not measured: omitted.** The stick term is negated on `entity+0x860 & 2`, a bit
+/// with no identified writer; it is treated as clear, as it read throughout the capture.
+///
+/// `lean` carries the three gains a title may change ([`crate::params::SteerLean`]): Wipeout
+/// HD's `FUN_000eadb8` (`0x000eb5d4`-`0x000eb650`) runs this same filter with the stick term
+/// scaled by `<Tilt shipAmount>`, the follower at `<Tilt shipSpeed>` and the smooth at `10.0`,
+/// measured on RPCS3 (`crates/trace/tests/steer_lean_ground_truth.rs`).
+pub fn update_steer_lean(
+    state: &mut ShipState,
+    controls: &ShipControls,
+    lean: &crate::params::SteerLean,
+    dt: f32,
+) {
+    let stick = controls.steer_x * CONTROL_RANGE;
+    let target = if state.craft_state == crate::damage::CraftState::Eliminated {
+        0.0
+    } else {
+        stick * 0.01 * lean.stick_amount
+            - controls.airbrake_left * CONTROL_RANGE * STEER_LEAN_AIRBRAKE
+            + controls.airbrake_right * CONTROL_RANGE * STEER_LEAN_AIRBRAKE
+    };
+    let delta = target - state.steer_lean_follower;
+    let limit = if (delta > 0.0 && stick > 0.0) || (delta <= 0.0 && stick < 0.0) {
+        STEER_LEAN_OUT_LIMIT
+    } else {
+        STEER_LEAN_RETURN_LIMIT
+    };
+    let delta = delta.clamp(-limit, limit);
+    state.steer_lean_follower += delta * dt * lean.follower_rate;
+    state.steer_lean += (state.steer_lean_follower - state.steer_lean) * lean.smooth_rate * dt;
 }
 
 #[cfg(test)]

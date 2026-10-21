@@ -70,6 +70,13 @@ fn hd_opponents_are_seated_on_hds_craft_laws() {
         assert_eq!(rig.count, 4, "slot {slot} hover probes");
         assert_eq!(rig.spring_share, 0.15, "slot {slot} spring share");
         assert!(rig.along_normal, "slot {slot} spring direction");
+        // The drawn lean reads the team's `<Tilt shipAmount shipSpeed>` and smooths at `10.0`.
+        let lean = race.sim.world.ships[slot].handling.steer_lean;
+        assert_eq!(lean.smooth_rate, 10.0, "slot {slot} lean smooth");
+        assert!(
+            lean.stick_amount > 0.0 && lean.follower_rate > 0.0,
+            "slot {slot} lean {lean:?}"
+        );
     }
     let ship = &race.sim.world.ships[1];
     let ceiling = oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body);

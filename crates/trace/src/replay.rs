@@ -863,12 +863,11 @@ fn frame_of(state: &ShipState, tick: u64, dt: f32, speed_cached: f32, options: &
         // `ShipState::roll_phase` is simulated and compared directly.
         // `roll_eased` is `oag_render::roll::ease` of it, and this crate must
         // not depend on `oag-render` (`just check-deps`), so it is reported
-        // absent rather than reimplemented a second place; `steer_lean` is
-        // `FUN_0883fab4`'s output, confidence 0 and deliberately not ported,
-        // so there is nothing to compare it against either.
+        // absent rather than reimplemented a second place. `steer_lean` is
+        // `FUN_0883fab4`'s second filter, simulated in `oag_physics::controls`.
         roll_phase: Some(state.roll_phase),
         roll_eased: None,
-        steer_lean: None,
+        steer_lean: Some(state.steer_lean),
         cam_lean: Some(state.camera_lean),
         cam_lean_follower: Some(state.camera_lean_follower),
         // The replay simulates the ship, not the original's camera rig, so the

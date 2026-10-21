@@ -280,7 +280,11 @@ impl Race {
         // orientation with its visual roll - `drawable::model_matrix_of`
         // without the model-space yaw and scale.
         let rotation = shooter.physics.body.orientation
-            * oag_render::roll::rotation(oag_core::math::Vec3::NEG_Z, shooter.physics.roll_phase);
+            * oag_render::roll::display_rotation(
+                oag_core::math::Vec3::NEG_Z,
+                shooter.physics.roll_phase,
+                shooter.physics.steer_lean,
+            );
         let frame = oag_fx::beam::Frame {
             owner: shooter.physics.body.position,
             target: self.sim.world.ships[beam.target as usize]

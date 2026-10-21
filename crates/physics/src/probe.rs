@@ -191,6 +191,7 @@ pub fn handling() -> Handling {
         roll_cost: 8.0,
         roll_speed: 1.5,
         roll_turbotime: 0.5,
+        steer_lean: crate::params::SteerLean::PULSE,
     }
 }
 
@@ -329,6 +330,9 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         // the cockpit camera.
         camera_lean_follower: _,
         camera_lean: _,
+        // Not hashed (`ShipState::steer_lean`): the drawn lean, read by no force.
+        steer_lean_follower: _,
+        steer_lean: _,
         reverse_controls,
         stun_timer,
         wall_contact_prev,

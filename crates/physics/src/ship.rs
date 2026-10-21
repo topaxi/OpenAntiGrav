@@ -308,6 +308,13 @@ pub struct ShipState {
     /// [`Self::camera_lean_follower`] through a `4/s` first-order filter, `-1..=1`. Not
     /// hashed, for the reason above.
     pub camera_lean: f32,
+    /// The drawn lean's rate-limited follower, the original's `entity+0x858`
+    /// ([`crate::controls::update_steer_lean`]). **Not hashed**: display state, read by no force.
+    pub steer_lean_follower: f32,
+    /// The lean the hull is drawn with, `entity+0x854`: [`Self::steer_lean_follower`] through a
+    /// `3/s` first-order filter. The display matrix turns the model by `steer_lean * 0.5`
+    /// radians about its nose. Not hashed, for the reason above.
+    pub steer_lean: f32,
     /// How far steering is inverted: a **blend**, not a flag (0 normal, 0.5 dead, past 1
     /// fully inverted). Nothing in this crate drives it; a reverse-controls pickup would.
     pub reverse_controls: f32,
@@ -692,6 +699,8 @@ impl Default for ShipState {
             steer: 0.0,
             camera_lean_follower: 0.0,
             camera_lean: 0.0,
+            steer_lean_follower: 0.0,
+            steer_lean: 0.0,
             reverse_controls: 0.0,
             stun_timer: 0.0,
             wall_contact_prev: false,

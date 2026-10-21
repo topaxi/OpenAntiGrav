@@ -815,3 +815,25 @@ fn a_classless_file_reads_as_the_one_class_with_the_callers_unauthored_antigrav(
     // `<Class>`.
     assert!(parse(doc).expect("the plain reader").classes.is_empty());
 }
+
+/// HD's `<Tilt>` lands field by field; a file without one (Pulse, Pure) reads `None`.
+#[test]
+fn a_tilt_is_read_by_name_and_its_absence_is_none() {
+    let doc = all_four();
+    assert_eq!(parse(&doc).expect("fixture").tilt, None);
+    let with = doc.replacen(
+        "<Misc ",
+        r#"<Tilt internalSpeed="7" internalAmount="1.4" shipSpeed="6" shipAmount="1.3"/><Misc "#,
+        1,
+    );
+    assert_ne!(with, doc, "the fixture has a <Misc> to put it beside");
+    assert_eq!(
+        parse(&with).expect("a file with a Tilt").tilt,
+        Some(Tilt {
+            internal_speed: 7.0,
+            internal_amount: 1.4,
+            ship_speed: 6.0,
+            ship_amount: 1.3,
+        })
+    );
+}

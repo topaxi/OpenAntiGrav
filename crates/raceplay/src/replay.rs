@@ -179,10 +179,15 @@ impl Race {
     }
 
     /// The player's craft as a pose: its position, and its orientation with
-    /// the barrel roll folded in exactly as [`model_matrix_of`] folds it.
+    /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
+    /// folds them.
     fn player_pose(&self) -> Pose {
         let ship = self.ship();
-        let roll = oag_render::roll::rotation(Vec3::NEG_Z, ship.physics.roll_phase);
+        let roll = oag_render::roll::display_rotation(
+            Vec3::NEG_Z,
+            ship.physics.roll_phase,
+            ship.physics.steer_lean,
+        );
         Pose {
             position: ship.physics.body.position,
             rotation: ship.physics.body.orientation * roll,

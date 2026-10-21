@@ -1209,30 +1209,93 @@ The tripod rows at `entity+0xa0` are stored mirrored in `z` against the body's r
 (the tripod's yaw is minus the body's, to 0.1 degree at rest), which is why a naive
 dot product against the body looks like a camera lagging by 180 degrees.
 
-The same function computes a **second** pair the same way - `craft+0x858` as the
-follower at rate `5.0` and `craft+0x854` smoothed at `3.0` - from a richer input
-(`steer * 0.01` minus and plus two `0.005` terms, gated off by
-`craft[0x860] & 0x1000`). **`craft+0x854` is not a camera value**: its only
-consumer outside this function is `FUN_088418e0`, the contact-reaction function.
-That is why nothing here is renamed - see below.
+The same function computes a **second** pair, `entity+0x858` (follower) and
+`entity+0x854` (lean): **the lean the ship's model is drawn with**. Its only
+consumer outside this function is `FUN_088418e0`, which reads it at `0x08842148`
+as `entity[0x854] * 0.5`, one of the two terms of the angle it rotates the
+*ship's own* display matrix by (the other being the barrel roll's eased phase;
+[input-bindings.md](input-bindings.md#stage-2a-the-ships-own-display-matrix-0x08842140---0x08842264)).
+The camera does not read it.
 
-**Qualified 2026-09-06.** "Not a camera value" holds, but `craft+0x854` is not
-off the display path either: `FUN_088418e0` reads it at `0x08842148` as
-`craft[0x854] * 0.5`, one of the two terms of the roll angle it applies to the
-*ship's own* transform (the other being the barrel roll's eased phase). So it is
-a **lean the model is drawn with**, on a matrix the camera then follows. That
-does not raise its confidence 0 - what the quantity means physically is still
-unidentified, and it must not be transcribed - but a reimplementation that treats
-it as inert is dropping a visible term. See
-[input-bindings.md](input-bindings.md#stage-2a-the-ships-own-display-matrix-0x08842140---0x08842264).
+### The drawn lean, `entity+0x854`: read and measured 2026-10-21
 
-**Confidence 80** for the arithmetic, read end to end at instruction level, with
-the reader and writer sets established by an operand scan over all 635,908
-instructions rather than by an xref search; raised to **90** for the `0x844` filter
-on 2026-10-02 by the capture above. What `+0x844` *means* is no longer open: it is
-the raw stick, smoothed. The **second** pair (`0x854`, the ship's display lean) is
-still not ported and its input still carries the two `0.005` terms and the
-`0x1000` gate described above; the camera does not read it.
+Read at instruction level, `0x0883fc5c`-`0x0883fddc` (`rec = *(*(entity+0x94)+0x78)`,
+the craft's live control record, `cannon-quake-leachbeam.md`'s table):
+
+```c
+target = rec[+0x00] * 0.01;                     /* stick, +/-100 (0x3c23d70a) */
+if (entity[0x860] & 2) target = -target;        /* stick term only */
+target -= rec[+0x08] * 0.005;                   /* left airbrake, 0/100 (0x3ba3d70a) */
+target += rec[+0x0c] * 0.005;                   /* right airbrake */
+if (entity[0x860] & 0x1000) target = 0.0;       /* out of the race, Ship_SetState case 5 */
+
+d = target - entity[0x858];
+/* d > 0:  limit 0.5 if rec[0] > 0, else 0.3    (0x0883fd08 / 0x0883fd28)
+   d <= 0: limit 0.5 if rec[0] < 0, else 0.3    (0x0883fd64 / 0x0883fd84) */
+d = clamp(d, -limit, limit);
+entity[0x858] += d * dt * 5.0;                                /* 0x40a00000 */
+entity[0x854] += (entity[0x858] - entity[0x854]) * 3.0 * dt;  /* 0x40400000 */
+```
+
+So the two `0.005` terms are **the two airbrakes**: a full right airbrake leans
+like half a right stick, a full left one like half a left stick, and both cancel.
+The clamp's side test reads the **raw stick** (`rec[0]` reloaded), not the target,
+so an airbrake alone always moves at the slower `0.3` limit. The limits differ
+from the first filter's (`0.5` against `0.6`), as do both rates (`5.0`/`3.0`
+against `5.4`/`4.0`). `0x1000` is the destroyed bit
+([zone-mode.md](zone-mode.md), `Ship_SetState` case 5): it zeroes the target, so
+the lean eases back level rather than snapping. `& 2` has no identified writer.
+
+**Measured.** A PPSSPP capture under player input (Talon's Junction, Assegai/Venom,
+`verification/scenarios/steer-lean-airbrakes.inputs`, recorded as
+`data/traces/talons-junction-steer-lean-airbrakes.csv` with the record's stick and
+both airbrakes, `scripts/psp_trace_fields.py` `stick_lab`/`stick_rab`) runs a full
+right stick, each airbrake alone, the stick with the right and then the left
+airbrake, and both airbrakes, 120 ticks each with 60-tick releases. Replaying the
+law above over the recorded record reproduces `+0x854` to a worst error of
+**8e-7** over 1,140 ticks at one tick of record latency (row `k` from row `k - 1`'s
+record, the same latency the first filter's capture found). The settled values
+read `-0.497` for the left airbrake alone, `+0.497` for the right, `+1.470` for
+the stick with the right airbrake, `+0.481` with the left, and `0` for both.
+Mutations: dropping the airbrake terms leaves a worst error of `0.52`, a `0.6`
+outward limit `0.12`, and testing the target's sign instead of the stick's `0.04`.
+`entity+0x860 & 2` and `& 0x1000` were clear throughout (the fit would show
+either). `cam_lean` stayed flat through the airbrake-only segments, as the first
+filter, which has no airbrake term, requires.
+
+**And it is drawn as read.** `scripts/psp-lean-display.py` holds the stick on a
+free-running PPSSPP, stops at `0x08842140` for the player's entity on consecutive
+ticks and predicts the drawn node's row 0 from the previous tick's
+`angle = lean * 0.5 + eased * 6.28` as `0.75 * (cos * body_row0 + sin * body_row1)`,
+the rollsign capture's law: residual **0.00000** on four ticks at
+`angle = +0.488` (stick right) and four at `-0.492` (stick left), against `0.70`
+for the opposite sign. So the lean shares the roll's composition and its sign.
+
+Confidence **95** for the law (instruction-level read, an exact fit over every
+input it has, and a second live leg on its consumer). Ported as
+`oag_physics::controls::update_steer_lean` (unhashed `ShipState::steer_lean`),
+drawn through `oag_render::roll::display_angle` and pinned by
+`crates/trace/tests/steer_lean_ground_truth.rs`.
+
+**Other titles.** Pure's `0x08925054` is this function literal for literal
+([psp-pure-usa/craft-physics.md](../psp-pure-usa/craft-physics.md)). Wipeout HD runs the same
+drawn-lean filter with the stick gain and follower rate read from the team's `<Tilt>` and a
+`10.0` smooth, measured on RPCS3
+([ps3-hdfury-eu/ship-lean.md](../ps3-hdfury-eu/ship-lean.md)); Omega and 2048 inherit HD's.
+Ours carries the gains per craft as `oag_physics::SteerLean`.
+
+**`FUN_0883fab4` is named `Ship_UpdateSteerLeans`** at confidence 90: both its
+outputs are now identified and measured, the cockpit camera's lean (`+0x844`,
+confidence 90) and the drawn lean (`+0x854`, confidence 95). The first filter's
+`+/-10.0` terms from `entity+0x8a4`/`+0x8a8` remain unread; those two offsets are
+the ones `psp_trace_fields.py` records as `ss_shift_l`/`ss_shift_r`, so a
+sideshift is the likely trigger, not measured here.
+
+**Confidence 80** for the first filter's arithmetic, read end to end at instruction
+level, with the reader and writer sets established by an operand scan over all
+635,908 instructions rather than by an xref search; raised to **90** for the `0x844`
+filter on 2026-10-02 by the capture above. What `+0x844` *means* is no longer open:
+it is the raw stick, smoothed.
 
 ### A wrong name was live in the Ghidra database, on this very function
 
@@ -1250,10 +1313,10 @@ answers to the name, so a search for the start boost lands on a steering filter.
 copy of the name, most likely from one of the fuzzy cross-application sweeps.
 
 **Reverted to `FUN_0883fab4` rather than renamed to something better**, which the
-[rubric](../../../reverse-engineering/confidence-rubric.md) requires: what the
-function computes is read, what its two outputs *are* is not, and its consumers
-span two subsystems, so any name would be a guess dressed up. A wrong name stops
-people looking, and this one already had.
+[rubric](../../../reverse-engineering/confidence-rubric.md) required at the time:
+what the function computes was read, what its two outputs *were* was not. A wrong
+name stops people looking, and this one already had. **Named
+`Ship_UpdateSteerLeans` on 2026-10-21**, once both outputs were measured (above).
 
 Confidence **80** for the store and its constant read directly, **88** with the
 pixel confirmation; **75** for the decomposition, up from 0, on one capture of

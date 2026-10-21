@@ -81,6 +81,10 @@ pub struct CraftLaws {
     /// A launch boost a title compiles into its engine rather than authoring as
     /// `<Handling><Global><StartBoost>`: Wipeout Pure's. `None`: the file's, or none.
     pub code_start_boost: Option<Sourced<CodeStartBoost>>,
+    /// The drawn hull's steering lean reads the team's `<Tilt shipAmount shipSpeed>` and smooths
+    /// at this rate, Wipeout HD's `10.0` (`oag_physics::SteerLean`). `None`: Pulse's compiled-in
+    /// gains (`oag_physics::SteerLean::PULSE`), which Pure's executable carries too.
+    pub tilt_steer_lean: Option<Sourced<f32>>,
 }
 
 /// A launch boost compiled into the engine: the seven figures Pulse's `<StartBoost>` authors,

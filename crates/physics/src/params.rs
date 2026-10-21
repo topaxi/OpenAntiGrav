@@ -226,6 +226,40 @@ pub struct SpeedupPads {
     pub time: f32,
 }
 
+/// The drawn hull's steering lean, `oag_physics::controls::update_steer_lean`'s gains.
+///
+/// Display state only: nothing here reaches a force. Pulse and Pure compile the numbers in
+/// ([`Self::PULSE`]); Wipeout HD reads the stick gain and the follower rate from the team's
+/// `<Tilt shipAmount shipSpeed>` and smooths at its own code literal `10.0`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-lean.md`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SteerLean {
+    /// What the stick term `stick * 0.01` is multiplied by: Pulse `1.0`, HD `<Tilt shipAmount>`.
+    pub stick_amount: f32,
+    /// The follower's per-second rate: Pulse `5.0`, HD `<Tilt shipSpeed>`.
+    pub follower_rate: f32,
+    /// The first-order rate between the follower and the lean: Pulse `3.0`, HD `10.0`.
+    pub smooth_rate: f32,
+}
+
+impl SteerLean {
+    /// Pulse PSP's literals, `Ship_UpdateSteerLeans` (`0x0883fda8`, `0x0883fdb4`), measured to
+    /// `8e-7` (`crates/trace/tests/steer_lean_ground_truth.rs`). Pure's `0x08925054` carries the
+    /// same three.
+    pub const PULSE: Self = Self {
+        stick_amount: 1.0,
+        follower_rate: 5.0,
+        smooth_rate: 3.0,
+    };
+
+    /// No lean at all: every rate zero.
+    pub const NONE: Self = Self {
+        stick_amount: 0.0,
+        follower_rate: 0.0,
+        smooth_rate: 0.0,
+    };
+}
+
 /// Everything the force law reads for one ship in one speed class.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Handling {
@@ -265,6 +299,8 @@ pub struct Handling {
     /// `<Global><Special roll_turbotime>`: how long the landing payout holds, in seconds
     /// ([`crate::ship::ShipState::roll_payout_timer`]).
     pub roll_turbotime: f32,
+    /// The drawn hull's steering lean (display only, [`SteerLean`]).
+    pub steer_lean: SteerLean,
 }
 
 impl Handling {
@@ -333,6 +369,7 @@ impl Handling {
         roll_cost: 0.0,
         roll_speed: 0.0,
         roll_turbotime: 0.0,
+        steer_lean: SteerLean::NONE,
     };
 }
 

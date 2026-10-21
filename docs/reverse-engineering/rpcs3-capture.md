@@ -812,8 +812,10 @@ matches in geometry, pad and lane at all three points. At Vineta K the
 tunnel's curve and the wall are the same, and the **original shows a lit
 floor and a teal hexagonal glass ceiling where ours shows a black water floor and a dark ceiling** - the maintainer's
 report reproduces from the original side. The craft's own yaw in the RPCS3
-frame (about 15 degrees) is the game's visual banking: the body's rows read
-back identical to what was written.
+frame (about 15 degrees) is not explained: the body's rows read back identical
+to what was written, and it is **not** the drawn steering lean, which reads input
+alone and is `0` with nothing held ([ship-lean.md](../ghidra/functions/ps3-hdfury-eu/ship-lean.md),
+2026-10-21; the earlier "visual banking" reading is withdrawn).
 
 **Attitude.** `place` takes the basis from `oag-game --pose ... --trace-out`
 row 0 (the same nearest-spline-sample rule our side uses), so both sides
