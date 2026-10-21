@@ -27,6 +27,11 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Open
 
+- **2026-10-21 (`hd-hull-bay`): Assegai_c1's engine light is Fury orange now (case-blind `_c1` test). Metropia's and Sol 2's blue bay
+  is open**: on Sol 2 the original does not take the hull's `SVC1` branch, so it is not the engine light; ours stays black there
+  ([hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "The engine bay: Assegai_c1's Fury light, and the two circuits
+  that switch the SPU lights off").
+- The drawn-hull shake (the craft offset on every HD pair) has its own thread: [hds-drawn-hull-shakes-off-its-body.md](hds-drawn-hull-shakes-off-its-body.md).
 - **Landed 2026-10-20 (`hd-craft-ibl-probe`): the pale, metallic hull.** The original's IBL variant and the environment maps it
   reads are wired: the maps are not a runtime render but a blend of the circuit's baked `track.probes`, decoded and read at
   each craft (`oag_vex::probes`, `oag_raceplay::env_probes`, `shade.wesl`), the hull's ambient is `4 * irradiance[n]` and
@@ -56,3 +61,4 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 3. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
    emulator-recipes.md, and read whether the wing rims are white at rest in
    the original.
+4. Metropia/Sol 2 bay: run the `0x003eb368` count longer on Sol 2, then read what the non-`SVC1` hull variant adds in the bay.
