@@ -1344,6 +1344,48 @@ a nudge. It is probably the same thing as "the original draws the `100` box at r
   exists to measure either.
 - **2048**: not checked, unmeasured (a different HUD dialect; no HD-style capture of its digits).
 
+## Where the 0.8 is not (hd-hud-alpha, 2026-10-22)
+
+The original draws HD's lit HUD at about 0.8 alpha (section above). This lane looked for the source and **did not find
+it**; nothing is wired, and a 0.8 constant would be invented. What is excluded, each with its evidence:
+
+- **Not in the layout XML.** All 314 `/data/xml/**` files of `DATA00`-`DATA06` (HUD, split-screen, `2097_hud`, `wo3_hud`)
+  were searched for any attribute naming alpha, opacity, fade or transparency. The only hits are `UseParentAlpha="false"`
+  (84 times, six per file, all in the `*assist_indicator.xml` family) and `EnableAlphaToOne="false"` (15). No lap, speed,
+  label or position widget carries one. The widget attribute set is `name transition x y width height U V TxtrWidth TxtrHeight
+  src ScaleForSD BackgroundLayer font align vertalign scale color BorderColor Centred ...`; none is an opacity.
+- **Not in the colour globals.** `HUD_colours.xml` declares `HudColour1 0xFFFFFFFF`, `HudColour2 0xB4FFFFFF` (alpha 0.706,
+  the dim labels), `HudColour3 0xFF0DDFDD`, `HudColour3A 0xFF646464`, `HudBGColour 0x40000000` (25 % black). The lap `1` is
+  `Color="0xFFFFFF00"` (alpha 0xFF). No 0xCC alpha anywhere in the HUD data.
+- **Not in the lap counter's code.** `Hud_UpdateLapCounter` (`0x96ef0`, disassembled) sets the digit strings
+  (through `0x202d28`) and the text scale at `+0xb8`/`+0xbc` (0.5, 1.0 or 1.5); it never calls `Text_SetColour` and
+  writes no alpha. The lap text's colour is the XML's, stored at widget `+0xc4` (`Text_SetColour`, `0x200468`, four
+  instructions) with the colour-override flag at `+0x80` bit 0.
+- **Not `UseParentAlpha`.** The string sits at `0x78b838` and is read only through a name table (`0x8ad6e0`, `DATA`) and a
+  static-initialiser table; it appears in the assist indicator files only, so it cannot be the HUD-wide factor.
+- **Not the 0.8 literals the executable already reads.** All 66 `0x3F4CCCCD` words in the image were walked with their
+  referrers; the ones inside HUD code (`0x8a777c`, read by `Hud_UpdateMissileSight` and `Hud_UpdateMessages`) are the
+  sight hold time and a message timer, and `0x8af728` is the default of a pair of static widget-like globals
+  (`0x204d58` and `0x204e08`, listed in the static-initialiser table at `0x87dbe0`; `+0xc0 = 0.8`, `+0xc4 = +0xc8 =
+  100.0`, `+0xcc = -1`). That pair is unidentified and not shown to be drawn on the HUD; it is a lead, not a finding.
+- **Not `globalAlphaScaler`.** Engine parameter 76 is the identity (`alpha = a * n.y + n.x`, [hd-unlit-programs](../rendering/hd-unlit-programs.md)).
+
+So the factor lives downstream of the widget data: in the Text and Image widgets' draw (the colour at `+0xc4`/`+0xc0`..`+0xc8`
+reaches the vertices there), in the HUD pass's blend state, or in a fragment-program constant of the HUD text and sprite
+programs (`HUD*`, `PrimList*` in the shader name list, [renderer](../ghidra/functions/ps3-hdfury-eu/renderer.md)).
+Confidence that it is **not** in the layout XML or the lap counter's update: 85. Confidence in any positive source: none.
+
+**Next addresses to read**: (1) the vtable of the `Text` widget class (created by `Widget_CreateChildByType`, `0x16aaa8`) and
+its draw slot - find what multiplies the `+0xc4` colour's alpha before the glyph quads are written; the `Image` class
+draw (`0x1b5708` area, `+0xbc..+0xc8` are its four vertex colours) is the second reader. (2) Cheaper and decisive: one
+RPCS3 frame capture of the HUD draw with the fragment program and blend state of the lap `1` (the draw's `SRC_ALPHA`
+factors and any constant register that reads 0.8 or 0.2), which says in one step whether it is blend state, a program
+constant or a vertex alpha. Not run here (static reading only, no unattended emulator).
+
+- **Omega**: checked, differs not found. Its `hud_colours.xml` is byte-identical in size to HD's (433 bytes) and carries the same five
+  globals, so the layout side holds the same absence; the draw code is not checkable (PS4 build, no capture path).
+- **2048**: not checked, a different HUD dialect.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of
