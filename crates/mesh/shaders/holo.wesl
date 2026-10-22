@@ -18,7 +18,10 @@
 //
 // `S` is `texcoord`, `Q` the vertex's `lightmap_texcoord.xy` and `P` its
 // `lightmap_texcoord.zw`; `albedo` is the advert, `lightmap` the scanlines and
-// `pad_mask` the second layer. Samples are raw, as every HD program's are.
+// `pad_mask` the second layer. On the race's linear target every tap is
+// sRGB-decoded first: the console's three units read with gamma nibble 7 on
+// `scanlinebillboard`'s live draws (`docs/rendering/hd-track-tone.md`, "The
+// holographic taps are decoded on fetch"), so the overlay runs on light.
 //
 // `scanlinebillboard` runs the same combine with `Q` and `P` laid from the
 // advert's own pair by `holo_billboard::route`, and three terms the entry after
@@ -30,7 +33,7 @@
 import package::bindings::{emissives, scene};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask};
 @if(bindless) import package::bindings::{material, samplers, textures};
-import oag_shaders::target::linear_out;
+import oag_shaders::target::{gamma_to_target, linear_out};
 import package::types::{VertexOutput};
 
 // `SLT` against 0.5 per channel, then `MUL x2` where it holds and
@@ -57,21 +60,28 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;
     let scan_uv = in.lightmap_texcoord.zw;
-    let tap = textureSample(lightmap, albedo_sampler, scan_uv);
-    let layer = textureSample(
-        pad_mask,
-        albedo_sampler,
-        rates.z * vec2<f32>(layer_uv.x, layer_uv.y + rates.y * t),
-    ).rgb;
-    let sampled = textureSample(albedo, albedo_sampler, in.texcoord).rgb;
+    let raw_tap = textureSample(lightmap, albedo_sampler, scan_uv);
+    let tap = vec4<f32>(gamma_to_target(raw_tap.rgb, linear_out), raw_tap.a);
+    let layer = gamma_to_target(
+        textureSample(
+            pad_mask,
+            albedo_sampler,
+            rates.z * vec2<f32>(layer_uv.x, layer_uv.y + rates.y * t),
+        ).rgb,
+        linear_out,
+    );
+    let sampled = gamma_to_target(textureSample(albedo, albedo_sampler, in.texcoord).rgb, linear_out);
     let advert = mix(vec3<f32>(sampled.r), sampled, finish.w);
     let base = advert * layer;
     let drift = rates.x * t;
-    let scan = textureSample(
-        lightmap,
-        albedo_sampler,
-        vec2<f32>(scan_uv.x + drift, scan_uv.y + drift + tap.y),
-    ).rgb;
+    let scan = gamma_to_target(
+        textureSample(
+            lightmap,
+            albedo_sampler,
+            vec2<f32>(scan_uv.x + drift, scan_uv.y + drift + tap.y),
+        ).rgb,
+        linear_out,
+    );
     // The program's closing `/2`, then the encode a gamma target needs; the
     // race's linear target is encoded by the ROP, as `lit_texel` does.
     let lit = overlay(base, scan) * tint * scene.light.output_scale;
