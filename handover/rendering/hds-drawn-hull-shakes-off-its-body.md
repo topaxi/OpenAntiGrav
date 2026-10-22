@@ -42,6 +42,8 @@ decoders. All three HD capture scripts run the patch first. See `hull-shake.md`,
   size. Nothing has been calibrated against them.
 - **Lane masks.** The masks at `0x00c47730` are BSS, so the x/y/z order of the three angle writes is assumed.
 - **Not read:** the constructor's seeding of `P0..P3`, and whether opponents run the block (ours shakes every craft).
+- **Talon's (`hd/talons`) is recaptured patched:** craft offset `(0, -9)` -> `(0, 0)` px, craft difference
+  32.95 -> 10.84.
 - **The other 12 HD originals:** still captured with the shake on. Their pairs stay comparable to what they were (ours
   draws none), but the craft offset on them includes the original's shake until they are recaptured.
 - **Cross-title:** Omega and 2048 inherit HD's law unread, and a constant search found neither. Pulse and Pure are

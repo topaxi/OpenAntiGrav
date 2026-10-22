@@ -1064,5 +1064,6 @@ carry it.
 
 **Ported, and off for comparisons (2026-10-22).** Ours runs the shake (`oag_raceplay`'s `hull_shake`, faded by `1.5 * speed`).
 Still pairs draw it on neither side: ours uses `--no-hull-shake`, and the original is patched (`scripts/rpcs3-hd-no-hull-shake.py`).
-On a re-captured pair the craft offset that remains is the true residual. Open: a live sample of `ship+0x6b00` for the lane masks and to
+On Talon's Junction, re-captured that way, the craft
+offset is `(0, -9)` -> `(0, 0)` px and the craft difference 32.95 -> 10.84 ([hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)). Open: a live sample of `ship+0x6b00` for the lane masks and to
 confirm the fade input is speed. Cross-title: Omega and 2048 inherit HD's law; neither was read.

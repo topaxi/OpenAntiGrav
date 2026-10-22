@@ -176,6 +176,12 @@ def main():
     size = args.size or ce.size_text(plat)
     scratch = out / "ours-profile"
     ce.write_ours_settings(plat, scratch / "profile")
+    # Whether this lane's RPCS3 draws the hull shake: `scripts/rpcs3-hd-no-hull-shake.py` patches it out, read
+    # back from the lane's own patch file rather than trusted from a variable, before ours' profile replaces
+    # `XDG_CONFIG_HOME` below.
+    patch = Path(os.environ.get("XDG_CONFIG_HOME", "/nonexistent")) / "rpcs3" / "patches" / "patch.yml"
+    pair.rec["original"]["hull_shake"] = ("patched out (rpcs3-hd-no-hull-shake.py)"
+                                          if patch.exists() and "HullShake_Apply" in patch.read_text() else "on")
     os.environ.update(ce.ours_env(scratch / "profile"))
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
@@ -226,11 +232,6 @@ def main():
                         "pickup's authored %.1f s was written back after the load and the game ran %.1f s so the HUD "
                         "redraws it: the frame, pose, field and HUD record are from that moment" %
                         (note["before_s"], note["authored_s"], note["run_s"]))
-    # Whether this lane's RPCS3 draws the hull shake: `scripts/rpcs3-hd-no-hull-shake.py` patches it out, read
-    # back from the lane's own patch file rather than trusted from a variable.
-    patch = Path(os.environ.get("XDG_CONFIG_HOME", "/nonexistent")) / "rpcs3" / "patches" / "patch.yml"
-    pair.rec["original"]["hull_shake"] = ("patched out (rpcs3-hd-no-hull-shake.py)"
-                                          if patch.exists() and "HullShake_Apply" in patch.read_text() else "on")
     capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
     cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",

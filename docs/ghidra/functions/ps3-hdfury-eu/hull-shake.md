@@ -148,6 +148,13 @@ RPCS3 applies it at load, before either decoder runs, and logs `Applied patch ..
 `HullShake_Update` still runs, so `rand` is drawn as before. A pair records which way it was captured
 in `original.hull_shake`.
 
+**Measured on Talon's Junction (2026-10-22).** A cold-boot original was captured with the patch applied
+(`Applied patch` in the lane's `RPCS3.log`) and ours drawn with `--no-hull-shake`. On a craft mask (ours
+against a render with the craft lifted 300 units, within the craft's box), the best-aligning shift of
+the original's craft went from `(0, -9)` px on the old unpatched pair to `(0, 0)`. The craft difference at
+zero shift fell from 32.95 to 10.84, and the whole frame's mean grey difference from 10.15 to 9.51. The
+residual is material, not placement.
+
 ## Cross-title
 
 - **Omega:** not checked. A search for `2^-30` (`0x30800000`) in Omega's `eboot.bin` returns 30-odd
