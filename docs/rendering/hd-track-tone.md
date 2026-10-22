@@ -627,7 +627,8 @@ bisection this lane), the normal map on the glass, and the other reflection-read
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws
-black in ours because `cf_chevron_pulse`'s emask and wave terms are not drawn. **True; cause measured, not wired.**
+black in ours because `cf_chevron_pulse`'s emask and wave terms are not drawn. **True; cause measured; wired 2026-10-22 by
+route 2 (`hd-texture-slots`, "Six material textures" below).**
 
 **Where.** Box `180,600 200x80` (the panel, away from the craft): mean absolute grey difference **27.90**, unchanged at the
 end of this lane. A slot-skip sweep over that box in a tint render (`OAG_TINT_MATERIALS=1`, `OAG_SKIP_SLOT`) names one slot:
@@ -685,6 +686,68 @@ the animation table is a vertex-stage binding and the coordinate is linear in `u
 **Other titles.** Omega ships `cf_Chevron_Pulse{,_1,_2,_Displacement2Out*}` and `Chevron_Pulse*` (section above); its
 programs are GCN and unread: **checked, applies, not wired**. 2048 ships the `ds_wallchevron` textures as `.gxt` (above) and no
 RSX program: **not checkable**.
+
+## Six material textures, and the chevron wired (2026-10-22, `hd-texture-slots`)
+
+**Route 2 above, taken.** Group 1 carries six textures: albedo (binding 0), lightmap (2), the third (3, `Model::pad_masks`), the
+fourth (4, `Model::wave_maps`), and two new ones, the fifth (5, `Model::fifth_maps`) and the sixth (6, `Model::sixth_maps`), all
+through the one sampler (1). A slot that names none binds the white 1x1 `build` already shares, so the bindless arrays gain no
+element. The bindless row (`mesh_render::bindless::Row`, `MaterialSlot` in `bindings.wesl`) is seven indices: the four textures,
+the sampler, then the fifth and sixth.
+
+**The limit it meets.** The mesh pipeline's fragment stage now binds 18 sampled textures: group 1's six and group 2's twelve
+(`zone`'s five, `shadow_map`'s seven). It bound 16 before, which is exactly wgpu's default and WebGPU's guaranteed minimum.
+`mesh_render::required_limits` asks the adapter for `min(adapter, 18)`
+(`material_layout::FRAGMENT_SAMPLED_TEXTURES`). The bindless arrays count against the binding-array limits, not this one
+(`wgpu-core` 30, `binding_model.rs`). What each target allows, read off `wgpu-hal` 30.0.1 and a WebGPU survey:
+
+| Target | Sampled textures per stage | 18 fits |
+| --- | --- | --- |
+| Vulkan (desktop, Android) | the device's `maxPerStageDescriptorSampledImages`, capped by the set limit over two stages (`vulkan/adapter.rs`) | on every desktop driver here; on Android, per device |
+| DX12 | the resource-binding tier's SRV count (`dx12/adapter.rs`) | yes |
+| Metal | 96 on macOS and Apple6+, 72 on Apple4/5, 23 on older iOS (`metal/adapter.rs`) | yes |
+| WebGPU (browser) | 16 or 48, a tier the browser picks: AMD and Qualcomm report 48, Intel 16, ARM both (web3dsurvey) | only on a 48-tier adapter |
+| GL, WebGL2 | `MAX_TEXTURE_SLOTS` = 16, a `wgpu-hal` constant (`gles/mod.rs`) | no |
+
+**Not resolved in this lane, and the branch cannot merge without it**: on a 16-limit adapter the layout fails validation and
+every mesh draw fails, not only these two materials. The default-limit test devices in `oag-mesh` reproduce it (five
+`pipeline_cache`/`deferred` tests). The two ways out are a layout per device, with the chevron and snow claims gated on it,
+and freeing two group-2 bindings so 18 fits in 16.
+
+**No pixel moved from the bindings alone.** All 13 HD pairs, Pulse PSP `amphiseum-black` and an Omega race frame
+(`--race`, 300 ticks, 1280x720) are byte-identical before and after, bindless and `OAG_BINDLESS=0` alike.
+
+**The chevron** (`mesh::rcs::chevron_pulse`): the emask rides the fifth binding and the wave the sixth, so the normal map
+keeps the third. `shade.wesl` adds `emask.rgb` to the albedo's alpha inside the light multiply, and `emask.a * Colour *
+wave` after it, block #7's `@0x43`/`@0x44`. The wave's coordinate `uv * k + offset` is laid in the vertex stage into the
+chunk's unused second pair. `offset` is the material's own curve, played as an `AnimTrack::Param` row named by the glow
+entry's `offset`. Eight slots bind (441, 442, 474, 475, 480, 481, 483, 484: the wall's `ds_wallchevron_*` and the floor's
+`ds_floorchevron_*`), each with its normal map still third. Pinned by `hd_chevron_pulse_ground_truth` and
+`hd_chevron_pulse_lit_path`.
+
+Chosen, not measured:
+- **The clock.** It is the scenery's animation clock, the race clock unless `--world-clock-offset` moves it, the clock
+  every other HD material curve here runs on. Which clock the original's scenery curves run on is unread.
+- **The emask's and the wave's decode.** Both are decoded like every colour unit read live so far (gamma nibble 7 on the
+  albedo, the probes and the leach noise). These two units' address words were not read.
+
+**Acceptance on `hd/anulpha-pass`**, mean absolute grey difference (PIL `L`) against the 2026-10-22 re-capture:
+
+| Box | main | wired, at the pair's clock | wired, outline off the panel |
+| --- | ---: | ---: | ---: |
+| panel `180,600 200x80` | 8.84 | 16.75 | 5.25 |
+| inside the panel `220,620 120x40` | 8.32 | 18.95 | 5.62 |
+| left wall `50,800 300x150` | 9.12 | 9.12 | 9.12 |
+
+The re-capture shows the panel's blue hexagon fill with **no outline**. Ours at the pair's clock draws the outline at full
+strength, so the panel box got worse there. A sweep of `--world-clock-offset` over the curve's 3 s period puts the band off
+the panel from 1.0 to 2.25 s (42 % of the cycle), where the box is 5.25. So what is left is the phase, which follows from
+the clock: the fill and the outline are both drawn. The wall is unchanged because the normal map stayed bound. Whole frame:
+9.935 to 9.945.
+
+**Other titles.** Unchanged from the chevron section above: Omega's `cf_Chevron_Pulse*` programs are GCN and unread, so
+**checked, applies, not wired**. The fifth and sixth bindings are on every title's pipeline, so wiring it needs only the
+GCN program's units. 2048 ships no RSX program for it: **not checkable**.
 
 ## Moa Therma's trees are cut off by the glass: the trees write depth while blending (2026-10-22, `hd-scenery-materials`)
 

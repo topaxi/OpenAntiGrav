@@ -3340,7 +3340,9 @@ not wired** - both titles ship a `track_surface*` family (Omega's `track_surface
 ## Sebenco's snow-capped rocks draw bare rock: `sebenco_snow`'s snow layer is unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: the rock faces right of the start in `hd/sebenco-climb` (cold RPCS3 original, 1920x1080 scale 100) are snow in
-the original and grey rock in ours because one material's snow layer is not drawn. **True; cause measured, not wired.**
+the original and grey rock in ours because one material's snow layer is not drawn. **True; cause measured; wired
+2026-10-22 (`hd-texture-slots`, below). The blend's reading below is superseded: the rock is mixed in by the mask, not by a
+slope.**
 
 **Where.** Box `1300,240 160x160`: mean grey difference **112.7**; mean RGB original `(166, 175, 189)`, ours `(72, 76, 79)`.
 The slot-skip sweep names slot **289**, `10_sebenco_climb/materials/sebenco_snow.rcsmaterial` (box change 79.8; the next,
@@ -3361,10 +3363,68 @@ a painted mask alone. Instance values on Sebenco's two records: `0xe7b6ae63` 1, 
 paired vertex program's output and a direction) was not traced, so "slope" is a hypothesis; the unbound snow layer is
 certain (the frame's picture is the rock texture, and the program draws the snow texel where the factor is 0).
 
-**Not wired.** It is a material path of its own (six textures, two coordinate pairs, a normal-mixed blend), beyond the four
-bindings a draw has (see `docs/rendering/hd-track-tone.md`, "The chevron panel draws black", for the same limit). Next:
-read the paired vertex block's `TC1` and identify `0x02df31e5`, then decide the binding route with the chevron's.
-`sebenco_snow_just_snow` (slots 271, 283) is a sibling; not read.
+**Superseded 2026-10-22 (`hd-texture-slots`): the rock is mixed in by the painted mask, confidence 85.** Re-read register by
+register, block #21's factor at `@0x3f` (`MAD H2.xyz, H3.xxxx, H5, H2`) is **`H3.x`, the mask texel** `@0x0b` writes
+(`TEX H3.x, f[TC4].zwzz unit1`), and not `R3.x`, the `DP3_SAT` of the bumped normal with the half vector at `@0x24`. `H3`
+and `R3` are different registers. On the RSX a half register is half of a full one (`H3` is the upper half of `R1`), and no
+instruction between `@0x0b` and `@0x3f` writes `R1.z`. The program's own later uses agree: `H3.y` (`N.V`, `@0x1f`), `H3.z`
+(`@0x26`) and `H3.w` (`@0x18`, `@0x1b`) all keep clear of `H3.x`. `TC1` is `eye - position` (vertex block #15, instruction 9,
+`c[209]` being `eyePositionWorldSpace`), so `@0x1a`..`@0x24` is the specular half vector, `normalize(V + L)`. The full law:
+
+```text
+m   = tex(unit 1, TC4.zw).x                          the mask, second pair       @0x0b
+n   = lerp(2 snowN - 1, 2 rockN - 1, m)              unit 2 at uv, unit 5 at uv k @0x01..@0x0c
+N   = normalize(n.x T + n.y B + n.z N0)              B = (N0 x T) w, block #15    @0x0d..@0x1e
+s   = lerp(pale 0x9dbd80db, snow.rgb, N.V)           unit 0                      @0x28..@0x2c
+d   = lerp(s, rock.rgb, m)                           unit 4 at uv k, k 0xe7b6ae63 @0x36..@0x3f
+e   = lerp(0xbd4582d3, 0x1017e83c, m)                exponent                    @0x3d
+c   = lerp(snow.a 0x06f7d6c7, rock.a 0x74a4fe88, m)  specular colour             @0x41..@0x43
+out = fog((atlas^p 0x8670f0be + atlas.a N.L sun) d + (N.H)^e sat(8 N.L) atlas.a sun.w sun c) / 2
+```
+
+Why 85, not higher: every instruction of the lit block is read, and a second variant computes the same mix, the vertex-lit
+block #5 `@0x38f0` (its mask `H6.x` at `@0x0b`, `@0x45`). Wiring it brings the cap back as the original draws it (below).
+No live draw of the program was traced. The specular colours are what the instructions say: a snow-cap specular `(0.152,
+0.171, 0.171) * snow.a` at exponent 59.63, and a nearly flat rock specular `(0.127, 0.127, 0.109) * rock.a` at 0.0186 or
+0.02.
+
+**Wired** (`mesh::rcs::snow_rock`, `shade.wesl`, `Emissive::program` mode 4 `PROGRAM_SNOW`). The bindings are:
+- the snow (unit 0, `and_snow3alpha`) as the albedo, replacing the rock the generic reading bound;
+- the atlas where it was;
+- the mask third, at the second pair (`texcoord2`, `TC4.zw`);
+- the snow's normal fourth;
+- the rock (unit 4) fifth;
+- the rock's normal (unit 5) sixth.
+
+The material's constants ride the glow entry and the two after it, and its chunks carry their tangent. Twelve slots bind:
+ten use the lightmapped block #21, and two (157 and 290) use the vertex-lit block #5. The generic reading had given block #5's
+mask an additive glow (`ADD_SECOND`), which this replaces. Block #5's vertex block feeds the same `v[8].xy`/`v[8].zw` pairs.
+Pinned by `hd_snow_rock_ground_truth` (twelve slots, the entries' authored values, tangents and the second pair on every
+drawn vertex) and `hd_snow_rock_lit_path` (the mask draws the rock; without the mode the rock is never drawn).
+
+Chosen, not measured:
+- **The decode of the snow and the rock.** Both are decoded like every colour unit read live so far (nibble 7). Their
+  address words were not read. The normal units are read raw, as the hulls' are.
+- **`pale` is used raw**, beside the decoded snow, as the arithmetic has it. `mesh::rcs::ice` decodes the same constant
+  `(0.663, 0.763, 1.0)` to linear. The two families now differ on that choice, and neither is measured.
+- **Block #5's light.** It is the generic vertex-lit reading's, not checked against block #5's own `TC0 + N.L sun TC5.z`.
+
+**Acceptance on `hd/sebenco-climb`**, mean absolute grey difference (PIL `L`) against the 2026-10-22 re-capture:
+
+| | main | wired |
+| --- | ---: | ---: |
+| box `1300,240 160x160` | 112.65 | 9.72 |
+| its mean RGB, ours (original `(165, 174, 187)`) | `(71, 74, 78)` | `(172, 180, 192)` |
+| whole frame | 13.11 | 8.65 |
+
+The other twelve HD pairs are byte-identical, apart from Anulpha's chevron (`docs/rendering/hd-track-tone.md`, "Six
+material textures").
+
+**`sebenco_snow_just_snow`** (slots 271, 283): **read, a different program**. Its fragment blocks declare their own
+samplers (`0x00e5b679`, `0x1f6f85a3`, `0x9becc725`, `0xa51b8b14`, `0xd5e000d1`, `0x52834137`, `0xcc090349` beside the snow
+`0xc97c5a4c` and its normal `0x67a30ab1`), up to seven units, and none of this material's rock or mask. Not wired; its
+block is unread.
 
 **Other titles.** Omega ships `Sebenco_snow_new` and `Sebenco_snow_just_snow` under `10_sebenco_climb` (`data02`, `data05`, `data08`; name census); its programs are GCN and unread: **checked,
-applies, not wired**. 2048: no Sebenco circuit, **not checkable**.
+applies, not wired**. 2048: no Sebenco circuit, **not checkable**. Re-checked 2026-10-22 (`hd-texture-slots`): the six bindings now exist on every title's mesh pipeline, so wiring Omega's
+`Sebenco_snow_new` is a matter of reading its GCN program's units and constants; still **checked, applies, not wired**.

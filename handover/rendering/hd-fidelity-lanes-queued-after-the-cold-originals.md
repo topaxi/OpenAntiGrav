@@ -14,9 +14,11 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
 1. ~~Talon's white grills~~ **wired**: `scanlinebillboard` (renderer.md, "`scanlinebillboard` is the fourth shape"). Box
    51.08 to 43.57. Left: the original adds in gamma space, ours in linear (the panel reads greyer); the add is also about 3x
    the program's `overlay * tint / 2`, source unread.
-2. Anulpha's black chevron panel: **cause measured, not wired** (hd-track-tone.md, "The chevron panel draws black").
-   `cf_chevron_pulse` needs five textures against four bindings; three routes written there; the wave's phase is the
-   material's own `offset` curve. Box 27.90 unchanged.
+2. ~~Anulpha's black chevron panel~~ **wired** (2026-10-22, `hd-texture-slots`; hd-track-tone.md, "Six material textures"):
+   route 2, group 1 carries six textures; the emask rides the fifth binding and the wave the sixth, the normal map stays
+   third, the offset is the material's curve. Left: the phase (at the pair's clock ours shows the outline the re-capture
+   does not, box 8.84 to 16.75; off-panel phases 5.25; the scenery clock is chosen, not measured) and the two units'
+   decode (chosen). **Blocker for merge, see below.**
 3. ~~Moa Therma's cut-off trees~~ **wired** (2026-10-22, `hd-tree-depth`; material-state.md, "The race pass sets pass bits
    3, 5 and 6"; hd-track-tone.md, "Moa Therma's trees"). A live frame shows the trees unblended with alpha-to-coverage and
    depth write; `Looks::material_render_state` (HD measured) moves state-bit-7 draws to the cutout list at a chosen 0.5 and
@@ -24,10 +26,17 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
    crowns' edges are hard where the console's two-sample coverage softens them (with `--msaa` on, real
    `alpha_to_coverage_enabled` could replace the threshold; unbuilt); Omega and 2048 author the same `0xbd` trees and
    bit-2 blends but their `psp2::transparency::route` ignores both bits (checked, applies, not wired).
-4. Sebenco's bare rocks: **cause measured, not wired** (rcsmaterial.md, "Sebenco's snow-capped rocks"). `sebenco_snow`'s
-   snow layer and its normal-driven blend; six textures. Decide the binding route together with item 2's.
+4. ~~Sebenco's bare rocks~~ **wired** (2026-10-22, `hd-texture-slots`; rcsmaterial.md, "Sebenco's snow-capped rocks"):
+   the rock is mixed in by the painted mask, not a slope (confidence 85); twelve slots, both lit variants. Box 112.65 to
+   9.72, frame 13.11 to 8.65. Left: `pale` raw here and decoded in `ice` (both chosen), block #5's light, and
+   `sebenco_snow_just_snow` (a different program, unread).
 5. Modesto glass / banners / building texture; 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
    details: **not started** (Tech de Ra carries 9 `scanlinebillboard` slots, now bound, none in the pair's view).
+
+**The six-texture layout on a 16-texture adapter** (2026-10-22, `hd-texture-slots`): the mesh fragment stage now binds 18
+sampled textures; an adapter limited to 16 (Intel WebGPU, GL/WebGL2, wgpu's default limits) fails the layout outright.
+Either a layout per device with the chevron and snow claims gated on it, or two group-2 bindings freed (the Zone outer
+pair folded into a 2-layer array with the inner). Table of limits: hd-track-tone.md, "Six material textures".
 
 Tooling found on the way: `OAG_ONLY_SLOT`, or an `OAG_SKIP_SLOT` list covering a whole draw list, panics with
 "buffer slice can not be empty" (an empty list reaches `wgpu`); skip in chunks of about 40 slots.
