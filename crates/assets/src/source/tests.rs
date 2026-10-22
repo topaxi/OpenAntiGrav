@@ -177,6 +177,7 @@ const TITLE: &Title = &Title {
         ink_aligned_text: false,
         half_unit_glyph_quads: false,
         lit_alpha: None,
+        text_shadow: None,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,

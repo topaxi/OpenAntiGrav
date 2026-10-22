@@ -109,6 +109,9 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
     lit_alpha: None,
+    // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
+    text_shadow: None,
+    half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
     ..*ART
@@ -227,6 +230,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // not checkable (PS4 build, no capture path).
     lit_alpha: Some(oag_title::pre_race::Sourced::inherited(
         oag_title::hud::LitAlpha { byte: 0xCC },
+        "hd",
+    )),
+    // Inherited from HD, with the lit alpha above.
+    text_shadow: Some(oag_title::pre_race::Sourced::inherited(
+        oag_title::hud::TextShadow { dx: -1, dy: -1 },
         "hd",
     )),
     sights: &oag_title::hud::Sights::Concentric {

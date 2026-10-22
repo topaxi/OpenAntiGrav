@@ -1351,3 +1351,100 @@ fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not()
     assert!(flat_plain.iter().zip(&flat_scaled).any(|(p, s)| s < p));
     assert!(flat_plain.iter().zip(&flat_scaled).all(|(p, s)| s <= p));
 }
+
+/// Every lit text string has a black twin drawn first, one layout unit up and left, at the outline's
+/// own `0x40` alpha, unscaled (`hd-hud-leftovers`: the capture's `00 00 00 40` quad at `(131.5, 80.5)`
+/// under the lap `1` at `(132.5, 81.5)`, and the `3`'s at `(200.6, 63.3)` under `(201.6, 64.3)`).
+#[test]
+fn every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, "/data/xml/timetrial_hud.xml").layout;
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings =
+        oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
+    let blobs: Vec<(String, Vec<u8>)> = layout
+        .textures()
+        .iter()
+        .map(|reference| {
+            let entry = oag_hd::hud::texture_entry(reference);
+            (
+                (*reference).to_string(),
+                archives.read_name(&entry).expect("a HUD texture"),
+            )
+        })
+        .collect();
+    let mut notes = Vec::new();
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut notes);
+    let readout = oag_hud::Readout {
+        speed_kmh: 420.0,
+        shield: 50.0,
+        shield_max: 100.0,
+        lap: 1,
+        laps: 3,
+        ..Default::default()
+    };
+    let draw = |art: &oag_title::HudArt| {
+        let cx = hud::Context {
+            layout: &layout,
+            strings: &strings,
+            sheet: &sheet,
+            art,
+            hud_line_height: 92.0,
+            small_line_height: 34.0,
+            default_line_height: 34.0,
+            skin_line_height: 34.0,
+            default_border: layout.default_border(),
+        };
+        hud::draw_list(&cx, &readout)
+    };
+    let with = draw(oag_hd::hud::ART);
+    let without = draw(&oag_title::HudArt {
+        text_shadow: None,
+        ..*oag_hd::hud::ART
+    });
+
+    use oag_ui::frontend::Draw;
+    let strings_of = |frame: &hud::Frame| -> Vec<Draw> { frame.hud_text.clone() };
+    let (with_text, without_text) = (strings_of(&with), strings_of(&without));
+    assert!(!without_text.is_empty(), "the HUD face draws text");
+    assert_eq!(
+        with_text.len(),
+        2 * without_text.len(),
+        "one twin per string"
+    );
+    for (pair, plain) in with_text.chunks(2).zip(&without_text) {
+        assert_eq!(&pair[1], plain, "the string itself is as it was");
+        let (
+            Draw::Text {
+                x,
+                y,
+                text,
+                color,
+                border,
+                ..
+            },
+            Draw::Text {
+                x: px,
+                y: py,
+                text: ptext,
+                border: pborder,
+                ..
+            },
+        ) = (&pair[0], plain)
+        else {
+            panic!("text twins");
+        };
+        assert_eq!((*x, *y), (px - 1.0, py - 1.0));
+        assert_eq!(text, ptext);
+        assert_eq!(*border, *pborder, "the twin keeps the string's border");
+        let outline = pborder.expect("every HUD string carries an outline colour");
+        assert_eq!(
+            *color, outline,
+            "the twin is drawn in the outline colour, alpha unscaled"
+        );
+    }
+}

@@ -116,6 +116,9 @@ const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     // The capture was the default skin only; the retro skins' lit quads are unmeasured, so they
     // keep the authored alpha rather than borrow the default skin's.
     lit_alpha: None,
+    // Unmeasured on the retro skins (`hd-hud-leftovers` item 3 asks it): no shadow, authored quads.
+    text_shadow: None,
+    half_unit_glyph_quads: false,
     bar_tip: None,
     boost_smear: None,
     ..*ART
@@ -228,6 +231,11 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // stay at their own alpha. `docs/formats/hd-hud.md`.
     lit_alpha: Some(oag_title::pre_race::Sourced::measured(
         oag_title::hud::LitAlpha { byte: 0xCC },
+    )),
+    // **Measured** (`hd-hud-leftovers`, 2026-10-22): the same capture draws every text glyph twice,
+    // a `HudBGColour` (`0x40`, unscaled) twin one unit up and left first. `docs/formats/hd-hud.md`.
+    text_shadow: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::TextShadow { dx: -1, dy: -1 },
     )),
     // **Concentric sprites, not brackets.** HD's arcade HUD composes to zero
     // `<Mode3D>` models; its reticle is six `<Image>` widgets off

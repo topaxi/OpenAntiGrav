@@ -687,6 +687,9 @@ pub struct HudArt {
     /// The alpha the original multiplies into its lit HUD text and sprite quads: `None` draws
     /// them at the authored alpha. See [`LitAlpha`].
     pub lit_alpha: Option<crate::pre_race::Sourced<LitAlpha>>,
+    /// The drop shadow the original draws under every text string: `None` draws none. See
+    /// [`TextShadow`].
+    pub text_shadow: Option<crate::pre_race::Sourced<TextShadow>>,
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
@@ -773,6 +776,22 @@ impl LitAlpha {
         let authored = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
         (authored * u32::from(self.byte) / 255) as f32 / 255.0
     }
+}
+
+/// The black copy of a text string the original draws under it, offset up and left.
+///
+/// HD **measured** (`hd-hud-leftovers`, 2026-10-22, the RPCS3 draw capture of
+/// `docs/formats/hd-hud.md`): every glyph quad of the lit HUD text has a twin drawn before it with
+/// the same size and uv, `-1` HUD unit on both axes (the lap `1` at `(132.5, 81.5)` has its twin at
+/// `(131.5, 80.5)`, the lap count `3` at `(201.6, 64.3)` has `(200.6, 63.3)`, at scale 1.0 and
+/// 0.6 alike) and vertex colour `00 00 00 40`: `HudBGColour`, **not** scaled by [`LitAlpha`]. The
+/// HD font atlas is plain coverage, so the twin is the glyph's own shape, not a halo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextShadow {
+    /// Added to the string's `x`, in layout units.
+    pub dx: i32,
+    /// Added to the string's `y`, in layout units.
+    pub dy: i32,
 }
 
 /// The lap counter closes up on lap one: with a lap target and the lap equal to
