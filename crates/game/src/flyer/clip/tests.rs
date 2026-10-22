@@ -129,6 +129,7 @@ fn tri(points: [[f32; 2]; 3]) -> Model {
         depth_point: None,
         layer: 0,
         alpha_test_ref: None,
+        writes_depth: false,
         node: None,
         chunk: None,
     }];

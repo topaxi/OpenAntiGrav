@@ -73,6 +73,7 @@ fn model() -> Model {
         label: "hd spu vertex light quad".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

@@ -812,6 +812,7 @@ fn build_class(
                     // setter was not read.
                     .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
                     let draw = DrawCall {
+                        writes_depth: false,
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },

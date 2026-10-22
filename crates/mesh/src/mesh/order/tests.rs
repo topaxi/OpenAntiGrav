@@ -16,6 +16,7 @@ fn draw(layer: u32, depth_point: Option<[f32; 3]>) -> DrawCall {
         depth_point,
         layer,
         alpha_test_ref: None,
+        writes_depth: false,
         node: None,
         chunk: None,
     }

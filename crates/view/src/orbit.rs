@@ -195,7 +195,7 @@ struct Session {
     unblended_pipeline: [wgpu::RenderPipeline; 2],
     /// One pair per equation this model's own file authors - see
     /// `mesh_render::Built::authored_pipelines`.
-    authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
+    authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,

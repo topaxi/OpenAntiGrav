@@ -110,6 +110,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
     // `radius` above, which is only half the longest single axis and would
     // under-cover the corners of a non-cubic box.
     let draws = vec![DrawCall {
+        writes_depth: false,
         moving: false,
         // Synthetic: no batch, so no recovered blend class.
         blend: None,

@@ -38,6 +38,7 @@ fn strips(half: usize) -> Model {
         let start = indices.len() as u32;
         indices.extend([0, 1, 2, 0, 2, 3].map(|i| base + i));
         draws.push(DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

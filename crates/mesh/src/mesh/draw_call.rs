@@ -125,6 +125,11 @@ pub struct DrawCall {
     /// either overriding the other: HD authors per material and lands on the
     /// pipeline, PSP/PS2 author per batch and land here.
     pub alpha_test_ref: Option<f32>,
+    /// Whether this draw writes depth although it blends: a Wipeout HD
+    /// material whose render-state word carries bit 2 beside its blend bit,
+    /// once the title's rule honours it (`Model::honour_render_state`).
+    /// `false` everywhere else, where a blended draw writes no depth.
+    pub writes_depth: bool,
     /// Index of the scene-tree node this draw call came from, into the
     /// `vex::nodes` of the file the model was built from, or `None` for
     /// synthetic geometry (ribbons, collision overlays, fixtures).

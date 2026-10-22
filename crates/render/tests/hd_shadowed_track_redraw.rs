@@ -74,6 +74,7 @@ fn model(slot_bits: u32) -> Model {
         label: "hd shadowed track redraw".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

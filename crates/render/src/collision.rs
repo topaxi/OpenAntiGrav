@@ -255,6 +255,7 @@ pub fn build_model(
         .fold(0.0f32, f32::max)
         .sqrt();
     let draws = vec![DrawCall {
+        writes_depth: false,
         moving: false,
         // Synthetic: no batch, so no recovered blend class.
         blend: None,

@@ -24,6 +24,7 @@ fn two_tiers(distance: f32) -> LodGroups {
 
 fn draw(node: Option<u32>) -> DrawCall {
     DrawCall {
+        writes_depth: false,
         range: 0..3,
         texture: None,
         bounds: Bounds {

@@ -59,6 +59,7 @@ fn model(slots: u32, emissive: Vec<Emissive>, normal: [f32; 3]) -> Model {
         label: "hd hull environment probe triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

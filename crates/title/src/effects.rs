@@ -751,8 +751,9 @@ pub struct Looks {
     pub material_lod_bias: Rule,
     /// A circuit material's render-state word is honoured beyond its blend and
     /// alpha-test bits: a state with bit 7 draws unblended, among the cutouts,
-    /// writing depth (the original's alpha-to-coverage path). Wipeout HD's,
-    /// read off `Material_ApplyRenderState` and a live race frame.
+    /// writing depth (the original's alpha-to-coverage path), and a blended
+    /// state with bit 2 writes depth. Wipeout HD's, read off
+    /// `Material_ApplyRenderState` and a live race frame.
     pub material_render_state: Rule,
 }
 

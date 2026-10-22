@@ -76,6 +76,7 @@ fn model(pad: &Pad) -> Model {
     let mut model = Model::none("hd pad _ne lit-path triangle");
     model.indices = vec![0, 1, 2];
     model.draws = vec![DrawCall {
+        writes_depth: false,
         moving: false,
         blend: None,
         blend_state: None,

@@ -80,7 +80,7 @@ pub struct TransparentPipelines<'a> {
     /// [`super::Built::unblended_pipeline`].
     pub unblended: &'a [wgpu::RenderPipeline; 2],
     /// [`super::Built::authored_pipelines`].
-    pub authored: &'a [(wgpu::BlendState, [wgpu::RenderPipeline; 2])],
+    pub authored: &'a [((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])],
 }
 
 impl<'a> TransparentPipelines<'a> {
@@ -103,7 +103,7 @@ impl<'a> TransparentPipelines<'a> {
             Some(state) => self
                 .authored
                 .iter()
-                .find(|(seen, _)| *seen == state)
+                .find(|(seen, _)| *seen == (state, draw.writes_depth))
                 .map_or(self.alpha_over, |(_, pipelines)| pipelines),
             None => match draw.blend {
                 Some(oag_vex::vex::BlendClass::Additive) => self.additive,

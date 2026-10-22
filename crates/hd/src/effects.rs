@@ -143,7 +143,8 @@ pub const LOOKS: &Looks = &Looks {
     material_lod_bias: Rule::UNREAD,
     // State bit 7 is the alpha-to-coverage path (blend and alpha test off,
     // depth written): all 31 `cf_tree` draws (`0xbd`) of a live Moa Therma race
-    // frame are issued that way. `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`,
+    // frame are issued that way. Bit 2 on a blended state writes depth: the
+    // same frame's `0x2d` and `0x3d` draws blend with the depth mask on. `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`,
     // "The race pass sets pass bits 3, 5 and 6". How this renderer stands in for
     // coverage on one sample is chosen (`oag_mesh::mesh::render_state`).
     material_render_state: Rule {

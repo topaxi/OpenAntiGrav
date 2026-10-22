@@ -85,6 +85,7 @@ fn model_with(
         indices: vec![0, 1, 2],
         draws: Vec::new(),
         transparent_draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

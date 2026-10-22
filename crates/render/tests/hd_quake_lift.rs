@@ -69,6 +69,7 @@ fn model() -> Model {
         label: "hd quake lift pair".into(),
         indices: vec![0, 1, 2, 3, 4, 5],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

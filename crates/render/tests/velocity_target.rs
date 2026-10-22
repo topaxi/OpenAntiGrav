@@ -40,6 +40,7 @@ fn vertex(position: [f32; 3], alpha: f32) -> GpuVertex {
 /// directly.
 fn triangle_model(blended: bool, alpha: f32) -> Model {
     let call = DrawCall {
+        writes_depth: false,
         moving: false,
         blend: None,
         blend_state: None,

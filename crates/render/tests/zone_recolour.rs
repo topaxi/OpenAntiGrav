@@ -69,6 +69,7 @@ fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
         label: "zone recolour test quad".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

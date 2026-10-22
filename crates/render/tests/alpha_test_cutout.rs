@@ -71,6 +71,7 @@ fn model(albedo: Arc<ModelTexture>, reference: Option<f32>) -> Model {
         indices: vec![0, 1, 2],
         draws: Vec::new(),
         alpha_tested_draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,

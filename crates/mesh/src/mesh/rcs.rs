@@ -624,6 +624,7 @@ fn emit(
         (None, false) => &mut out.draws,
     };
     list.push(DrawCall {
+        writes_depth: false,
         moving: place.xform != 0,
         range: first_index..u32::try_from(out.indices.len()).unwrap_or(u32::MAX),
         texture: surface.texture,

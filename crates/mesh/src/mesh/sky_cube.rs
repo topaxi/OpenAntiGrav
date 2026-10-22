@@ -224,6 +224,7 @@ pub fn build(
             indices.push(base + i);
         }
         draws.push(DrawCall {
+            writes_depth: false,
             range: start..start + 6,
             texture: Some(face),
             bounds: Bounds {

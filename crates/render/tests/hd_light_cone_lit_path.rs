@@ -60,6 +60,7 @@ fn model(noise: u8, ramp: u8, entry: Emissive) -> Model {
         indices: vec![0, 1, 2],
         draws: Vec::new(),
         transparent_draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,
