@@ -19,6 +19,13 @@
 // `S` is `texcoord`, `Q` the vertex's `lightmap_texcoord.xy` and `P` its
 // `lightmap_texcoord.zw`; `albedo` is the advert, `lightmap` the scanlines and
 // `pad_mask` the second layer. Samples are raw, as every HD program's are.
+//
+// `scanlinebillboard` runs the same combine with `Q` and `P` laid from the
+// advert's own pair by `holo_billboard::route`, and three terms the entry after
+// the rates carries (the holographic shapes write values that change nothing):
+// the output tint (rgb) the overlay is multiplied by, an alpha addend
+// (`_alphaboost`, `scale.z`) and the advert's weight against its own red
+// channel (`_desaturate`, `scale.w`: `mix(adv.r, adv, w)`).
 
 import package::bindings::{emissives, scene};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask};
@@ -43,7 +50,10 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
         let lightmap = textures[material.lightmap];
         let pad_mask = textures[material.pad_mask];
     }
-    let rates = emissives.tint_offset[(in.slots >> 24u) & 127u];
+    let entry = (in.slots >> 24u) & 127u;
+    let rates = emissives.tint_offset[entry];
+    let tint = emissives.tint_offset[entry + 1u].rgb;
+    let finish = emissives.scale[entry + 1u];
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;
     let scan_uv = in.lightmap_texcoord.zw;
@@ -53,7 +63,8 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
         albedo_sampler,
         rates.z * vec2<f32>(layer_uv.x, layer_uv.y + rates.y * t),
     ).rgb;
-    let advert = textureSample(albedo, albedo_sampler, in.texcoord).rgb;
+    let sampled = textureSample(albedo, albedo_sampler, in.texcoord).rgb;
+    let advert = mix(vec3<f32>(sampled.r), sampled, finish.w);
     let base = advert * layer;
     let drift = rates.x * t;
     let scan = textureSample(
@@ -63,7 +74,7 @@ fn holo_billboard(in: VertexOutput) -> vec4<f32> {
     ).rgb;
     // The program's closing `/2`, then the encode a gamma target needs; the
     // race's linear target is encoded by the ROP, as `lit_texel` does.
-    let lit = overlay(base, scan) * scene.light.output_scale;
+    let lit = overlay(base, scan) * tint * scene.light.output_scale;
     let encoded = pow(clamp(lit, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
-    return vec4<f32>(mix(encoded, lit, linear_out), tap.z);
+    return vec4<f32>(mix(encoded, lit, linear_out), tap.z + finish.z);
 }

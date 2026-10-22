@@ -973,6 +973,8 @@ It is capped at 84 rather than reaching that reading's 88 because the split is
 not perfect (113/145 and 113/115, not all of either) and the `lambert`
 exceptions are unexplained rather than merely unmeasured.
 
+**Superseded 2026-10-22**: `Material_ApplyRenderState`'s disassembly ties bit 7 to `NV4097_SET_ANTI_ALIASING_CONTROL`'s alpha-to-coverage with blending off (confidence 80), and bit 2 to the depth mask; see [material-state.md](../ghidra/functions/ps3-hdfury-eu/material-state.md), "State bit 2 is depth write, bit 7 is alpha-to-coverage". The inference below is kept as it was written.
+
 **What the bit actually selects is a separate, weaker claim - confidence 55.**
 Every `_atoc`-suffixed texture on the disc is foliage, a distant-crowd
 silhouette, a traffic sprite or on-screen text/signage

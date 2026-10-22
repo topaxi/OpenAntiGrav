@@ -474,6 +474,7 @@ pub(super) fn emit_chunk(
             let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
             let (lightmap_texcoords, texcoords2) = super::holo_billboard::route(
                 surface.roles,
+                &out.emissive,
                 (mesh, model_blob, submesh, stride),
                 (
                     lightmap_texcoords,
