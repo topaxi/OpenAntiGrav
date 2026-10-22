@@ -11,7 +11,7 @@ use super::texture;
 ///
 /// Everything besides the albedo is what a slot with no lightmap, no pad mask
 /// and no wave map binds in [`super::build`]: black with alpha 1, a flat tangent
-/// normal with zero alpha, and white. The sampler repeats where `wrap` says the
+/// normal with zero alpha, and white for the wave and the fifth and sixth pictures. The sampler repeats where `wrap` says the
 /// title's own does (HD, measured), else clamps, and filters linearly with no mip
 /// chain to choose from.
 ///
@@ -35,6 +35,7 @@ pub fn card_material(
             .expect("a 1x1 texture fits every device")
             .view
     };
+    let white = flat([255, 255, 255, 255], "card: white");
     Material {
         albedo: albedo.clone(),
         sampler: device.create_sampler(&wgpu::SamplerDescriptor {
@@ -47,6 +48,8 @@ pub fn card_material(
         }),
         lightmap: flat([0, 0, 0, 255], "card: no lightmap"),
         pad_mask: flat([128, 128, 255, 0], "card: no pad mask"),
-        wave: flat([255, 255, 255, 255], "card: no wave map"),
+        wave: white.clone(),
+        fifth: white.clone(),
+        sixth: white,
     }
 }

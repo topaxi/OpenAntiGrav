@@ -506,6 +506,8 @@ impl super::Model {
         release(&mut self.lightmaps);
         release(&mut self.pad_masks);
         release(&mut self.wave_maps);
+        release(&mut self.fifth_maps);
+        release(&mut self.sixth_maps);
     }
 }
 

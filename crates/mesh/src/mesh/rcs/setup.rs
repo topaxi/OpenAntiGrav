@@ -39,6 +39,10 @@ pub(super) struct MaterialSetup {
     /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
     pub(super) mag_emissive: TextureSlots,
     pub(super) wave_maps: TextureSlots,
+    /// The fifth and sixth pictures of a program that samples more than four
+    /// units - see [`crate::mesh::Model::fifth_maps`].
+    pub(super) fifth_maps: TextureSlots,
+    pub(super) sixth_maps: TextureSlots,
     /// Which of [`crate::mesh::Model::anim_tracks`] each material slot
     /// drives - see [`curve_track::material_anim_tracks`].
     pub(super) material_anim: Vec<u32>,
@@ -67,6 +71,8 @@ impl MaterialSetup {
             alpha_test_ref: model.alpha_test_ref,
             mag_emissive: model.pad_masks.clone(),
             wave_maps: model.wave_maps.clone(),
+            fifth_maps: model.fifth_maps.clone(),
+            sixth_maps: model.sixth_maps.clone(),
             material_anim: model.material_anim.clone(),
             anim_tracks: model.anim_tracks.clone(),
         }
@@ -278,6 +284,8 @@ pub(super) fn material_setup(
         alpha_test_ref,
         mag_emissive,
         wave_maps,
+        fifth_maps: Vec::new(),
+        sixth_maps: Vec::new(),
         material_anim,
         anim_tracks,
     }

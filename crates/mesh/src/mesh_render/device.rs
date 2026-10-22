@@ -88,8 +88,10 @@ pub fn device_descriptor<'a>(
 }
 
 /// wgpu's default limits with the **texture-dimension limits raised to the
-/// adapter's own**, and the binding-array limits to what the `bindless` mesh
-/// variant needs where the adapter has them (`super::bindless::with_limits`).
+/// adapter's own**, the sampled textures per stage to the mesh pipeline's
+/// [`super::material_layout::FRAGMENT_SAMPLED_TEXTURES`] where the adapter has
+/// them, and the binding-array limits to what the `bindless` mesh variant
+/// needs where the adapter has them (`super::bindless::with_limits`).
 ///
 /// The default `max_texture_dimension_2d` is 8,192, and Wipeout Omega's Talon's
 /// Junction ships `ds_floor_cs.gnf` 16,384 texels wide: `create_texture` on it
@@ -107,8 +109,15 @@ pub fn device_descriptor<'a>(
 /// adapter allows.
 #[must_use]
 pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
+    let limits = wgpu::Limits::default().using_resolution(adapter.limits());
+    let sampled = super::material_layout::FRAGMENT_SAMPLED_TEXTURES
+        .min(adapter.limits().max_sampled_textures_per_shader_stage)
+        .max(limits.max_sampled_textures_per_shader_stage);
     super::bindless::with_limits(
-        wgpu::Limits::default().using_resolution(adapter.limits()),
+        wgpu::Limits {
+            max_sampled_textures_per_shader_stage: sampled,
+            ..limits
+        },
         adapter,
     )
 }

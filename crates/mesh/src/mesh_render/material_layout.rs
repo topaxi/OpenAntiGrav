@@ -57,16 +57,32 @@ pub fn material_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayou
                 count: None,
             },
             // HD's magstrip wave, sampled only where `slots::MAG_WAVE` is set.
-            wgpu::BindGroupLayoutEntry {
-                binding: 4,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
+            texture(4),
+            // A material's fifth and sixth pictures, for the HD programs that
+            // sample more than four units (`Model::fifth_maps`,
+            // `Model::sixth_maps`); a 1x1 everywhere else.
+            texture(5),
+            texture(6),
         ],
     })
 }
+
+/// A fragment-stage 2D float texture at `binding`.
+fn texture(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    }
+}
+
+/// The sampled textures the mesh pipeline's fragment stage binds: group 1's
+/// six (albedo, lightmap, pad mask, wave, fifth, sixth) and group 2's twelve
+/// (`zone`'s five, `shadow_map`'s seven). One over WebGPU's guaranteed 16 by
+/// two: [`super::required_limits`] asks the adapter for this many.
+pub const FRAGMENT_SAMPLED_TEXTURES: u32 = 18;

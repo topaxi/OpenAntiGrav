@@ -764,6 +764,8 @@ fn build_with_options(
         alpha_test_ref,
         mag_emissive,
         wave_maps,
+        fifth_maps,
+        sixth_maps,
         material_anim,
         anim_tracks,
     } = match setup {
@@ -772,6 +774,8 @@ fn build_with_options(
     };
     out.pad_masks = mag_emissive;
     out.wave_maps = wave_maps;
+    out.fifth_maps = fifth_maps;
+    out.sixth_maps = sixth_maps;
     out.emissive = emissive;
     out.textures = skins;
     out.lightmaps = seconds;

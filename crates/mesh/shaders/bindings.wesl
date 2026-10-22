@@ -21,10 +21,17 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // HD's magstrip wave, read only where `slots::MAG_WAVE` is set. `mesh::rcs::mag_wave`.
 @if(!bindless) @group(1) @binding(4) var wave_map: texture_2d<f32>;
 
+// A material's fifth and sixth pictures, for an HD program that samples more than
+// four units (`Model::fifth_maps`, `Model::sixth_maps`). A white 1x1 elsewhere, and
+// read only where the slot's own flag asks for them.
+@if(!bindless) @group(1) @binding(5) var fifth_map: texture_2d<f32>;
+
+@if(!bindless) @group(1) @binding(6) var sixth_map: texture_2d<f32>;
+
 // The `bindless` variant (`mesh_render::bindless`): group 1 is a drawable's distinct
 // textures and samplers in two arrays, bound once per drawable, and the drawn slot's row
-// naming which of them its five bindings were (`material`). Every function that reads
-// the five names below declares them from that row first, so the rest of the shader is
+// naming which of them its seven bindings were (`material`). Every function that reads
+// the names below declares them from that row first, so the rest of the shader is
 // one source.
 // Native only; WebGPU has no binding arrays. The `enable` directive is `mesh.wesl`'s,
 // the root module's.
@@ -43,6 +50,8 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
     pad_mask: u32,
     wave_map: u32,
     albedo_sampler: u32,
+    fifth_map: u32,
+    sixth_map: u32,
 }
 
 @if(bindless) var<immediate> material: MaterialSlot;

@@ -107,6 +107,8 @@ fn model_with(
         lightmaps: vec![Some(texture("scanlines", scanlines))],
         pad_masks: vec![Some(layer)],
         wave_maps: Vec::new(),
+        fifth_maps: Vec::new(),
+        sixth_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),
