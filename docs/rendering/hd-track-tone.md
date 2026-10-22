@@ -695,27 +695,33 @@ through the one sampler (1). A slot that names none binds the white 1x1 `build` 
 element. The bindless row (`mesh_render::bindless::Row`, `MaterialSlot` in `bindings.wesl`) is seven indices: the four textures,
 the sampler, then the fifth and sixth.
 
-**The limit it meets.** The mesh pipeline's fragment stage now binds 18 sampled textures: group 1's six and group 2's twelve
-(`zone`'s five, `shadow_map`'s seven). It bound 16 before, which is exactly wgpu's default and WebGPU's guaranteed minimum.
-`mesh_render::required_limits` asks the adapter for `min(adapter, 18)`
-(`material_layout::FRAGMENT_SAMPLED_TEXTURES`). The bindless arrays count against the binding-array limits, not this one
-(`wgpu-core` 30, `binding_model.rs`). What each target allows, read off `wgpu-hal` 30.0.1 and a WebGPU survey:
+**The limit it meets, and the fold that keeps it at 16.** Group 1's six plus group 2's twelve would have been 18 sampled
+textures in the per-slot fragment stage, over wgpu's default and WebGPU's guaranteed 16. What each target allows, read off
+`wgpu-hal` 30.0.1 and a WebGPU survey:
 
-| Target | Sampled textures per stage | 18 fits |
-| --- | --- | --- |
-| Vulkan (desktop, Android) | the device's `maxPerStageDescriptorSampledImages`, capped by the set limit over two stages (`vulkan/adapter.rs`) | on every desktop driver here; on Android, per device |
-| DX12 | the resource-binding tier's SRV count (`dx12/adapter.rs`) | yes |
-| Metal | 96 on macOS and Apple6+, 72 on Apple4/5, 23 on older iOS (`metal/adapter.rs`) | yes |
-| WebGPU (browser) | 16 or 48, a tier the browser picks: AMD and Qualcomm report 48, Intel 16, ARM both (web3dsurvey) | only on a 48-tier adapter |
-| GL, WebGL2 | `MAX_TEXTURE_SLOTS` = 16, a `wgpu-hal` constant (`gles/mod.rs`) | no |
+| Target | Sampled textures per stage |
+| --- | --- |
+| Vulkan (desktop, Android) | the device's `maxPerStageDescriptorSampledImages`, capped by the set limit over two stages (`vulkan/adapter.rs`) |
+| DX12 | the resource-binding tier's SRV count (`dx12/adapter.rs`) |
+| Metal | 96 on macOS and Apple6+, 72 on Apple4/5, 23 on older iOS (`metal/adapter.rs`) |
+| WebGPU (browser) | 16 or 48, a tier the browser picks: AMD and Qualcomm report 48, Intel 16, ARM both (web3dsurvey) |
+| GL, WebGL2 | `MAX_TEXTURE_SLOTS` = 16, a `wgpu-hal` constant (`gles/mod.rs`) |
 
-**Not resolved in this lane, and the branch cannot merge without it**: on a 16-limit adapter the layout fails validation and
-every mesh draw fails, not only these two materials. The default-limit test devices in `oag-mesh` reproduce it (five
-`pipeline_cache`/`deferred` tests). The two ways out are a layout per device, with the chevron and snow claims gated on it,
-and freeing two group-2 bindings so 18 fits in 16.
+An 18-texture layout fails validation on any 16 adapter, and then no mesh draws at all. So the Zone stage's Inner and Outer
+sets are now **one 2-layer array each** (`mesh_render::zone::layered`): binding 1 holds `zoneModeTrack<n>` at layer 0 and the
+swept-out stage's at layer 1, binding 10 the same for `zoneMode<n>`, and bindings 11 and 12 are gone. The arrays are copied
+GPU-side from the two uploads (material textures gain `COPY_SRC` for it). An outer of another size or format cannot share
+the array; it repeats the inner, which makes the sphere a no-op, and is logged. HD/Fury's 30 stage files are all 87,552
+bytes. The per-slot fragment stage binds 16 again (group 1's six, group 2's ten), so `required_limits` keeps wgpu's
+default. `material_layout`'s
+`the_fragment_stage_binds_no_more_sampled_textures_than_the_default_limit` pins the count. The bindless arrays count against
+the binding-array limits, not this one (`wgpu-core` 30, `binding_model.rs`).
 
-**No pixel moved from the bindings alone.** All 13 HD pairs, Pulse PSP `amphiseum-black` and an Omega race frame
-(`--race`, 300 ticks, 1280x720) are byte-identical before and after, bindless and `OAG_BINDLESS=0` alike.
+**No pixel moved from the bindings or the fold.** All 13 HD pairs, Pulse PSP `amphiseum-black` and an Omega race frame
+(`--race`, 300 ticks, 1280x720) are byte-identical before and after the bindings, bindless and `OAG_BINDLESS=0` alike. After
+the fold they are byte-identical to the unfolded result with the chevron and the snow wired. Both Pulse PSP Zone pairs
+(`pulse-psp-zone-moa-white-z50`, `pulse-psp-zone-talons-white-z8`) are byte-identical to their a1e81dec0 renders. HD's own
+Inner/Outer selection is pinned by `zone_recolour`.
 
 **The chevron** (`mesh::rcs::chevron_pulse`): the emask rides the fifth binding and the wave the sixth, so the normal map
 keeps the third. `shade.wesl` adds `emask.rgb` to the albedo's alpha inside the light multiply, and `emask.a * Colour *
@@ -742,7 +748,10 @@ Chosen, not measured:
 The re-capture shows the panel's blue hexagon fill with **no outline**. Ours at the pair's clock draws the outline at full
 strength, so the panel box got worse there. A sweep of `--world-clock-offset` over the curve's 3 s period puts the band off
 the panel from 1.0 to 2.25 s (42 % of the cycle), where the box is 5.25. So what is left is the phase, which follows from
-the clock: the fill and the outline are both drawn. The wall is unchanged because the normal map stayed bound. Whole frame:
+the clock: the fill and the outline are both drawn. The wall is unchanged because the normal map stayed bound.
+**Where the outline is off, the fill matches the original's**: the same blue hexagons on a near-black ground, ours about 5
+grey levels brighter (mean RGB `(8, 15, 21)` against `(3, 9, 16)` inside the panel), with a faint rim on the hexagon edges.
+Before this, ours drew the panel black. Whole frame:
 9.935 to 9.945.
 
 **Other titles.** Unchanged from the chevron section above: Omega's `cf_Chevron_Pulse*` programs are GCN and unread, so

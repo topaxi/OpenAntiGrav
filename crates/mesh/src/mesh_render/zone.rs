@@ -106,7 +106,7 @@ impl StageArt {
 ///
 /// **Each set is one 2-layer array, Inner at layer 0 and Outer at layer 1**, rather than two
 /// textures: the fold frees two of the fragment stage's sampled-texture bindings so the material
-/// group's six fit in WebGPU's guaranteed 16 (`super::material_layout::FRAGMENT_SAMPLED_TEXTURES`).
+/// group's six fit in WebGPU's guaranteed 16 (`material_layout`'s count test).
 pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
     let texture_entry = |binding, view_dimension| wgpu::BindGroupLayoutEntry {
         binding,
