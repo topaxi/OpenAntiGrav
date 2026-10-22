@@ -112,11 +112,12 @@ fn count(frame: &[[u8; 3]], keep: impl Fn([u8; 3]) -> bool) -> usize {
     frame.iter().filter(|&&p| keep(p)).count()
 }
 
-/// The fireball's yellow-orange and the rings' glow: red and green high, blue
-/// low. The scene without a blast has a few hundred (a lit rail, a craft's
-/// glow); the blast's psys puffs are brown and add none.
-fn yellow([r, g, b]: [u8; 3]) -> bool {
-    r > 230 && g > 190 && b < 170
+/// The fireball's yellow-orange and the rings' glow, up to white where they
+/// stack: red and green high, any blue. The scene without a blast has a few
+/// thousand (a lit rail, a craft's glow, the brightest sky); the blast's psys
+/// puffs are brown and add few.
+fn warm([r, g, _]: [u8; 3]) -> bool {
+    r > 230 && g > 190
 }
 
 /// Near-white: the white-hot fireball and the sky behind it.
@@ -127,22 +128,24 @@ fn white([r, g, b]: [u8; 3]) -> bool {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn a_detonating_bomb_draws_its_fireball_and_then_its_ripple_rings() {
-    // Yellow pixels of 522,240. Before the blast: 366. The fireball at 0.67 s:
-    // 13,025 drawn, 578 with the model draw dropped (the smoke ring and rays
-    // the psys stage draws remain). The ripple rings at 1.8 s: 2,957 drawn, 348
-    // dropped.
-    let at = |ticks| count(&frame_of(ticks).expect("image"), yellow);
+    // Warm pixels (yellow to white) of 522,240, measured 2026-10-22 on HD's
+    // encoded scene store (`oag_gpu::formats::SceneStore::Encoded`), where the
+    // stacked additive rings add encoded values and burn through to white, so
+    // a yellow-only count no longer sees them. Before the blast: 4,920. The
+    // fireball at 0.67 s: 26,688 drawn, 4,145 with the bomb's models dropped
+    // (`OAG_SKIP_MATERIAL=bomb`; the smoke ring and rays the psys stage draws
+    // remain). The ripple rings at 1.8 s: 25,549 drawn, 1,656 dropped.
+    let at = |ticks| count(&frame_of(ticks).expect("image"), warm);
     let (before, ball, rings) = (at(420), at(460), at(528));
-    println!("yellow pixels: before {before}, fireball {ball}, ripple rings {rings}");
+    println!("warm pixels: before {before}, fireball {ball}, ripple rings {rings}");
     // Age 1.32 s: the fireball is white-hot and burning away. Its alpha test is
     // `GL_LESS` 0.5, so as `AlphaAnim` falls the texels with the most alpha go;
-    // near-white pixels of the frame: 55,217 with the test, 67,264 with the
-    // discard dropped (a solid ball), 52,661 and 65,326 either side of it at
-    // ticks 440 and 480, where nothing has gone yet.
+    // near-white pixels of the frame: 28,957 with the test, 45,339 with the
+    // discard dropped (a solid ball), 23,707 and 39,136 at ticks 440 and 480.
     let burnt = count(&frame_of(500).expect("image"), white);
     println!("near-white pixels at 1.32 s: {burnt}");
-    assert!(burnt < 62_000, "the fireball is not burning away: {burnt}");
-    assert!(before < 1_000, "the control already glows: {before}");
-    assert!(ball > 5_000, "the fireball is missing: {ball}");
-    assert!(rings > 1_500, "the ripple rings are missing: {rings}");
+    assert!(burnt < 37_000, "the fireball is not burning away: {burnt}");
+    assert!(before < 10_000, "the control already glows: {before}");
+    assert!(ball > 15_000, "the fireball is missing: {ball}");
+    assert!(rings > 12_000, "the ripple rings are missing: {rings}");
 }

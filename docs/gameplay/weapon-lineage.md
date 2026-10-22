@@ -260,6 +260,16 @@ it fires, not that the rate matches any original's.
 | Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: unread |
 | Disruptor | A | ?: effect blocks authored, four have no parser branch | A | A | A |
 
+**HD's blends are encoded (2026-10-22, `hd-blend-space`).** Every HD weapon visual drawn into
+the race scene (models, psys, beams, flashes, the weapon quads) now combines with the scene in
+display values, as the console's shader packer makes it: the blend law is **M**
+([hd-track-tone.md](../rendering/hd-track-tone.md), "HD's blends combine encoded values"),
+the sources are not re-measured. The Bomb's stacked rings now burn through to white at 1.8 s
+where they drew yellow (the frame test was re-derived on the new build). No original frame of
+the blast exists: an RPCS3 capture of the rings at about 1.8 s is the falsifier. The fireball
+program reads its texels raw as light, as `holo.wesl` did before its units were read live,
+so its source may be too strong.
+
 ### Sound
 
 Cue names are Pulse's, looked up in whichever bank the title ships
