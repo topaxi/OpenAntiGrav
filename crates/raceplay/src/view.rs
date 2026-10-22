@@ -54,6 +54,12 @@ pub struct RaceView {
     pub(super) correction: [Vec3; MAX_SHIPS],
     /// Whether a correction glides or is drawn where it lands.
     pub(super) correction_smoothing: bool,
+    /// Each craft's drawn-hull shake, made on its first drawn tick; see [`super::hull_shake`].
+    pub(super) hull_shake: [Option<super::hull_shake::Shake>; MAX_SHIPS],
+    /// The title's shake law, `None` for a title without one.
+    pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
+    /// Whether the shake runs ([`super::Race::set_hull_shake`]).
+    pub(super) hull_shake_on: bool,
     /// The grid slot this machine's person flies in a network race, set by
     /// [`super::Race::set_seat`]. View-only: in a network race every person's slot
     /// is [`oag_gameplay::Controller::Remote`] on every peer, because the

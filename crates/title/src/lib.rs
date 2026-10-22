@@ -47,6 +47,7 @@ pub mod exhaust;
 pub mod flare;
 pub mod hover_rig;
 pub mod hud;
+pub mod hull_shake;
 pub mod language;
 pub mod lap_hud;
 pub mod launch_hover;

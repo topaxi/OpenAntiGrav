@@ -1062,6 +1062,7 @@ full at rest and nearly gone under full throttle. `HullShake_Apply` composes the
 bits, so the points are centred on zero. A still pair cannot match a shake frame for frame; what can be ported is the law, and until then the pair pixels
 carry it.
 
-**Next.** Sample `ship+0x6b00` live for the lane masks, the frame time and what body `+0x4c4` is (thrust or speed), then port the shake to `oag_raceplay`'s drawn model
-matrix (view only, unhashed). Cross-title: Omega carries HD's engine, so the same
-object is expected, not checkable here; 2048 not compared.
+**Ported, and off for comparisons (2026-10-22).** Ours runs the shake (`oag_raceplay`'s `hull_shake`, faded by `1.5 * speed`).
+Still pairs draw it on neither side: ours uses `--no-hull-shake`, and the original is patched (`scripts/rpcs3-hd-no-hull-shake.py`).
+On a re-captured pair the craft offset that remains is the true residual. Open: a live sample of `ship+0x6b00` for the lane masks and to
+confirm the fade input is speed. Cross-title: Omega and 2048 inherit HD's law; neither was read.

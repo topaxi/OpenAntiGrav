@@ -1140,6 +1140,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
                 .is_some_and(|voice| voice.beat.is_some()),
             // A title whose grid hover skips Zone (HD's `Craft_Update`, modes 6, 13 and 14) races
             // Zone at the race target from the grid.
+            hull_shake: title.race.hull_shake.map(|shake| shake.value),
             launch_hover: title
                 .race
                 .launch_hover

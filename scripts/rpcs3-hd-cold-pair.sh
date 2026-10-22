@@ -13,6 +13,9 @@ source "$W/env.sh"
 export OAG_HD_CAPTURE_KIND=cold_boot  # recorded in pair.json provenance; no savestate was restored
 export OAG_COMPARE_PLATFORM=hd-fury UV_CACHE_DIR=$HOME/.cache/uv UV_OFFLINE=1
 cd "$repo"
+# The original's drawn-hull shake is random; patch it out so the still pair matches ours' `--no-hull-shake`
+# (`OAG_HD_KEEP_HULL_SHAKE=1` keeps it). Applied when RPCS3 loads the game, so before the boot below.
+python3 scripts/rpcs3-hd-no-hull-shake.py ${OAG_HD_KEEP_HULL_SHAKE:+--remove} || exit 3
 rm -f "$W/xdg/cache/rpcs3/TTY.log"
 bash scripts/emu-hd-glass-boot.sh "$lane" "$circuit" 9 1 cold-$circuit || exit 3
 export OAG_RPCS3_ATTACH=1

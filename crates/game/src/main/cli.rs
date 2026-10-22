@@ -780,6 +780,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) camera_jitter: bool,
 
+    /// Draw every hull at its body's pose, without the title's drawn-hull shake
+    /// (`oag_raceplay`'s `hull_shake`, Wipeout HD's `HullShake_Update`). For a still
+    /// comparison against an original with its shake patched out
+    /// (`scripts/rpcs3-hd-no-hull-shake.py`): a random shake cannot match frame for frame.
+    #[arg(long)]
+    pub(crate) no_hull_shake: bool,
+
     /// With `--race --screenshot`, draw the captured frame this far between
     /// the last two ticks, `0.0..=1.0`, as a window does between frames.
     /// `1.0`, the default, is the tick itself. A verification aid: a few

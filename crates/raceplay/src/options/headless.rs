@@ -180,6 +180,7 @@ impl Setup {
             countdown_voice: false,
             countdown_beat: false,
             launch_hover: None,
+            hull_shake: None,
             hover_rig: None,
             craft_laws: None,
             autopilot_engine: oag_title::autopilot_engine::MEASURED,

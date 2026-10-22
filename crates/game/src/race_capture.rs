@@ -300,6 +300,8 @@ pub struct CaptureOptions {
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
     /// `[render_profiles.<title>] trail_order`, or `--trail-order`.
     pub trail_order: oag_display::display::TrailOrder,
+    /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
+    pub hull_shake: bool,
     /// Replaces the live audio spectrum with a fixed synthetic ramp before
     /// the frame is drawn. `--zone-spectrum-test`.
     ///
@@ -482,6 +484,7 @@ pub fn capture(
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
     race.set_trail_order(options.trail_order);
+    race.set_hull_shake(options.hull_shake);
     race.watch_laps(
         &hud,
         options

@@ -705,6 +705,7 @@ pub(crate) fn run_race(
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 trail_order: render_profile.trail_order,
+                hull_shake: !cli.no_hull_shake,
                 camera_jitter: cli.camera_jitter,
                 draw_alpha: cli.draw_alpha,
                 pose_boost: cli.pose_boost,

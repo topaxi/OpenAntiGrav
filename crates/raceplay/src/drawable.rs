@@ -1142,7 +1142,15 @@ pub(crate) struct Uniforms {
 /// keeps it independent of whatever `vmmul.q`'s unresolved operand order
 /// would otherwise carry through a following scale. See `oag_render::roll`.
 pub(super) fn model_matrix_of(ship: &Ship) -> Mat4 {
+    shaken_model_matrix_of(ship, Mat4::IDENTITY)
+}
+
+/// [`model_matrix_of`] with the drawn hull's shake (`crate::hull_shake`) composed in the hull's
+/// own frame, after the lean and before the model's yaw and scale, where Wipeout HD's
+/// `HullShake_Apply` multiplies it into the display node.
+pub(super) fn shaken_model_matrix_of(ship: &Ship, shake: Mat4) -> Mat4 {
     Mat4::from_rotation_translation(display_orientation(ship), ship.physics.body.position)
+        * shake
         * Mat4::from_rotation_y(MODEL_YAW)
         * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
 }

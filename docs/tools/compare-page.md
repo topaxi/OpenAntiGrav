@@ -281,6 +281,17 @@ its `pair.json` has no failed check.
 | 2048 (Vita) | **partial** | nothing | `vita3k-drive.py race --screenshot` boots Vita3K on a private config, on its own weston and Xwayland display, and writes a frame; its fixed-timing tap walk never changed screen in the 2026-10-20 run and the frame was an intro cinematic, not a race. Profile row `2048`: 960x544 at 1x |
 | Omega (PS4) | **partial** | layout only | shadPS4 0.20, the extracted base plus patch hard-linked into a game folder, a headless `sway` on the render node and its own `HOME` (recipe: [online lobby, part 3](../networking/online-lobby.md)). It reaches `MAIN MENU` unattended in about 45 s; `grim` takes the frame. No race was reached. Profile row `omega`: 1920x1080 |
 
+**No hull shake on either side (2026-10-22, `hd-hull-shake`).** HD turns and moves every drawn hull a little each frame
+by a random curve ([hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)). A still pair cannot match that frame
+for frame, so it is drawn on neither side:
+- **Ours:** `compare_env.ours_flags` passes `--no-hull-shake`, and `compare-rerender-ours.py` adds it to an older pair's
+  recorded flags.
+- **The original:** `scripts/rpcs3-hd-no-hull-shake.py` patches the call out in the lane's private RPCS3 config.
+  `rpcs3-hd-cold-pair.sh`, `compare-hd-batch.sh` and `compare-rerender-all.py` run it before booting;
+  `OAG_HD_KEEP_HULL_SHAKE=1` keeps the shake.
+- `pair.json` records the original's state as `original.hull_shake`. A pair captured before 2026-10-22 has no such field,
+  and its original still shakes.
+
 **HD pairs run with Pilot Assist on** (`pilot_assist = "on"` in the `hd-fury` profile): the original's states have it on, and its indicator (the bracket under the craft) is part of the frame; ours takes `--pilot-assist on` and the environment line says so (2026-10-21, [pilot-assist.md](../ghidra/functions/ps3-hdfury-eu/pilot-assist.md)).
 
 **Re-making every pair with one command (2026-10-21, `rerender-all`).** `just compare-rerender-all [--out DIR] [--platform psp|rpcs3|pcsx2] [--only SUBSTRING] [--resume] [--dry-run]`

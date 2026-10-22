@@ -87,6 +87,10 @@ impl Race {
             launch_hover,
             hover_rig,
             craft_laws,
+            #[cfg(feature = "view")]
+            hull_shake,
+            #[cfg(not(feature = "view"))]
+                hull_shake: _,
             autopilot_engine,
             opponent_autopilot,
             #[cfg(feature = "view")]
@@ -776,6 +780,9 @@ impl Race {
                 poses: Default::default(),
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,
+                hull_shake: std::array::from_fn(|_| None),
+                hull_shake_law: hull_shake,
+                hull_shake_on: true,
                 seat: None,
                 person_names: Vec::new(),
                 contact: super::contact_fx::ContactFx::new(),

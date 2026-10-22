@@ -199,6 +199,9 @@ pub struct RaceDefaults {
     pub zone_handling: Option<&'static crate::zone_handling::ZoneHandling>,
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
+    /// The drawn hull's random shake, faded out with speed, `None` for a title not read to have
+    /// one: [`crate::hull_shake::HullShake`].
+    pub hull_shake: Option<crate::pre_race::Sourced<crate::hull_shake::HullShake>>,
     /// What the Autopilot pickup does to the player's engine while it runs:
     /// [`crate::autopilot_engine::AutopilotEngine`].
     pub autopilot_engine: crate::autopilot_engine::AutopilotEngine,

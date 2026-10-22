@@ -229,6 +229,8 @@ mod hud;
 #[cfg(feature = "view")]
 pub mod hull_gather;
 #[cfg(feature = "view")]
+mod hull_shake;
+#[cfg(feature = "view")]
 pub mod intro_camera;
 pub mod lap_messages;
 pub mod launch_hover;
@@ -378,6 +380,7 @@ use drawable::draw::Lists;
 #[cfg(feature = "view")]
 use drawable::{
     Drawable, SceneBlocks, SceneKind, Staging, UniformBlocks, Uploads, ViewBlock, model_matrix_of,
+    shaken_model_matrix_of,
 };
 #[cfg(feature = "view")]
 use effects::exhaust_seed;

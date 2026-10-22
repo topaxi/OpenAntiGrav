@@ -101,6 +101,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Unread: whether this title's Zone reads a Zone file, and which (`hover-four-point.md`).
     zone_handling: None,
     craft_laws: Some(&CRAFT_LAWS),
+    // Omega carries HD's engine; its ship update was not located, so HD's shake is inherited.
+    hull_shake: Some(oag_title::pre_race::Sourced::inherited(
+        oag_title::hull_shake::HullShake::HD,
+        "Wipeout HD",
+    )),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     opponent_autopilot: oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY,
     original_opponent: true,
