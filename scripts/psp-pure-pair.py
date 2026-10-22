@@ -53,6 +53,49 @@ CLOSE_DISTANCE = 11.643
 PRESENTED_LAG = 1
 
 
+#: The chase-camera hull's region of the 480x272 frame: x, y, w, h (the craft sits bottom-centre, about 120 px wide).
+CRAFT_REGION = (180, 176, 120, 96)
+#: How far, in px, the best shift is searched.
+CRAFT_SEARCH = 12
+
+
+def edge_frame(path):
+    """A 480x272 frame's blurred edge map, 8-bit grey bytes: the recipe `compare_env.overlap_score` scores frames with."""
+    return subprocess.run(["magick", str(path), "-colorspace", "Gray", "-blur", "0x1.2", "-edge", "1", "-depth", "8", "gray:-"],
+                          capture_output=True, check=True).stdout
+
+
+def craft_offset(theirs, ours):
+    """Where the original's hull sits against ours', in px, as the best normalised cross-correlation of the two frames' edge
+    maps over `CRAFT_REGION` (edges, so the hull's shading, darker in ours, does not count). `dx`, `dy`: how far the
+    original's picture is shifted right and down of ours' where the hull edges line up; (0, 0) is the same place. A posed
+    craft drawn through a camera with the wrong pitch is about 24 px off in `dy` (camera.md, "The view matrix is a shear")."""
+    from operator import mul
+    a, b = edge_frame(ours), edge_frame(theirs)
+    x, y, w, h = CRAFT_REGION
+
+    def patch(buf, dx, dy):
+        return [v for j in range(h) for v in buf[(y + dy + j) * 480 + x + dx:(y + dy + j) * 480 + x + dx + w]]
+
+    def centred(v):
+        m = sum(v) / len(v)
+        return [c - m for c in v]
+
+    pa = centred(patch(a, 0, 0))
+    na = sum(map(mul, pa, pa)) ** 0.5
+    scores = {}
+    for dy in range(-CRAFT_SEARCH, CRAFT_SEARCH + 1):
+        for dx in range(-CRAFT_SEARCH, CRAFT_SEARCH + 1):
+            if x + dx < 0 or y + dy < 0 or x + dx + w > 480 or y + dy + h > 272:
+                continue
+            pb = centred(patch(b, dx, dy))
+            nb = sum(map(mul, pb, pb)) ** 0.5
+            scores[(dx, dy)] = sum(map(mul, pa, pb)) / (na * nb) if na and nb else 0.0
+    (bx, by), best = max(scores.items(), key=lambda kv: kv[1])
+    return {"dx": bx, "dy": by, "ncc_at_best": best, "ncc_at_zero": scores[(0, 0)],
+            "region": list(CRAFT_REGION), "search_px": CRAFT_SEARCH}
+
+
 def run(cmd, **kw):
     print("+", " ".join(str(c) for c in cmd), file=sys.stderr)
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
@@ -282,12 +325,13 @@ def main():
     pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
     ours_row = ce.csv_row(ours_csv, ticks)
     pair.check_pose(ce.pose_of(ce.csv_row(csv, 0)), ce.pose_of(ours_row), fov, fov)
-    if "cam_pos_x" in ours_row:
-        oeye = [ours_row["cam_pos_" + a] for a in "xyz"]
-        pair.check("ours' chase eye is the original's", math.dist(oeye, eye) < 0.2,
-                   "%.3f units apart (original %s, ours %s)" % (math.dist(oeye, eye), [round(v, 2) for v in eye],
-                                                              [round(v, 2) for v in oeye]))
     pair.check_size("ours", out / "ours.png")
+    off = craft_offset(out / "theirs.png", out / "ours.png")
+    pair.rec["craft_offset_px"] = off
+    pair.check("ours' hull is on the original's (ours' own chase camera is checked here: its trace has no camera columns)",
+               abs(off["dx"]) <= 3 and abs(off["dy"]) <= 3,
+               "best edge correlation %.3f at (%+d, %+d) px, %.3f at (0, 0); a lost shear reads about 24 px in dy"
+               % (off["ncc_at_best"], off["dx"], off["dy"], off["ncc_at_zero"]))
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         import json

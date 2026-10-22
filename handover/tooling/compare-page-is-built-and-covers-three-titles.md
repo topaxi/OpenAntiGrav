@@ -45,7 +45,7 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   `--allow-own-camera`, its state is `4:3`): replace it with a pair made from the widescreen state.
 - **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
   across three grabs, monotonic) now.
-- **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: see the lane report). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
+- **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: copy the four pair directories to `data/reference/compare-page/pure-psp/` and build `pure.toml` beside them with `compare_env.py manifest`). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
 - **Speed class and mode are declared by the state's file name, not read from RAM** (PSP and HD), PS2's class is assumed Venom.
 - **`just compare-rerender` was run once each on PSP, HD and PS2.** HD drifts 10 degrees in the ship's heading and 1.8 units in the
