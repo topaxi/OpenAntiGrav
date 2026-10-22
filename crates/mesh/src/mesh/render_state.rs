@@ -128,7 +128,7 @@ mod tests {
         }
     }
 
-    /// A model with no recorded states (every title but the PS3/PS4 ones) is
+    /// A model with no recorded states (every builder but HD's PS3 one) is
     /// left exactly as it was.
     #[test]
     fn a_model_without_states_is_untouched() {

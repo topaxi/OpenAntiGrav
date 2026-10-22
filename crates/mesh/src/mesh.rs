@@ -195,8 +195,9 @@ pub struct Model {
     /// the title, and pushed as the `material_lod_bias` pipeline constant.
     pub material_lod_bias: f32,
     /// Per material slot: the `.rcsmodel` material record's render-state word
-    /// (`oag_rcs::rcsmodel::Material::state`), as the file authors it. Empty for
-    /// every model that is not a PS3/PS4 `.rcsmodel`.
+    /// (`oag_rcs::rcsmodel::Material::state`), as the file authors it. Filled by
+    /// Wipeout HD's PS3 builder only; empty for every other model, including the
+    /// Vita/PS4 container (`rcs::psp2`), whose materials carry the same word.
     ///
     /// **Recorded, not acted on by the decode.** Which of its bits the renderer
     /// honours is a title's rule (`oag_title::Looks::material_render_state`),

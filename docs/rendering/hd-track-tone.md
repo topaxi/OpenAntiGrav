@@ -750,6 +750,13 @@ list to the cutout list, unblended, at a 0.5 reference that stands in for two-sa
 whole in front of the grandstand glass, in the pair and in moving frames just after GO; their edges are harder than the
 original's, which the console's two-sample coverage softens. Tech de Ra's glass road gains the dark seam the original shows.
 
+**Where else it reaches.** Material records per circuit file (blended with bit 2 / bit 7): Moa Therma 11 / 43,
+Chenghou 19 / 21, Modesto 35 / 29, Ubermall 49 / 6, Sebenco 27 / 6, Amphiseum 21 / 10, Talon's 14 / 7, Anulpha 13 / 4,
+Tech de Ra 11 / 1, Metropia 10 / 8, Vineta K 2 / 5, Sol 2 1 / 5; each reversed variant about the same; the four Zone
+circuits 1 to 3 / 0. The reversed variants and the Zone circuits have no pair; the one HD race pair outside `hd/`
+(`hd-race/talons-pack`) moved 46.50 to 46.14. **The Zone pass's own pass bits are unread**: the frame above is a race
+frame, and the rule applies to a Zone race's model as well (bit 2 only, no Zone circuit authors bit 7).
+
 **Other titles, re-checked.** Omega and 2048 author HD's state word on their own materials (`psp2::material::Material::state`),
 and a census of all 16 Omega and 14 2048 circuit models finds `cf_tree` at `0xbd` (Omega also `0xbe`, `0x2bd`; 2048 20
 records) and blended states with bit 2 (`0x3d`, `0x7d`, `0x2d`) on both. Their builder

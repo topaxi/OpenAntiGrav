@@ -756,7 +756,10 @@ pub fn build_with(
         // The second target rides along **write-masked empty** when
         // [`Velocity::Write`] adds one: a blended draw writes no depth, so
         // the velocity at its pixels stays the surface's behind it - see
-        // [`Velocity`]. Alpha is the bloom's glow mask - see [`GlowMask`] for
+        // [`Velocity`]. A depth-writing blend (`DrawCall::writes_depth`) keeps
+        // that empty mask too, so its pixels carry its own depth but the
+        // velocity behind it: chosen, not measured, and unexamined under
+        // motion blur. Alpha is the bloom's glow mask - see [`GlowMask`] for
         // which draw paths are allowed to write it and why.
         let targets = velocity_targets(
             wgpu::ColorTargetState {
