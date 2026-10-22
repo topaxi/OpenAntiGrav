@@ -42,23 +42,26 @@ decoders. All three HD capture scripts run the patch first. See `hull-shake.md`,
   size. Nothing has been calibrated against them.
 - **Lane masks.** The masks at `0x00c47730` are BSS, so the x/y/z order of the three angle writes is assumed.
 - **Not read:** the constructor's seeding of `P0..P3`, and whether opponents run the block (ours shakes every craft).
-- **Talon's (`hd/talons`) is recaptured patched:** craft offset `(0, -9)` -> `(0, 0)` px, craft difference
-  32.95 -> 10.84.
-- **The other 12 HD originals:** still captured with the shake on. Their pairs stay comparable to what they were (ours
-  draws none), but the craft offset on them includes the original's shake until they are recaptured.
+- **All 13 HD originals are recaptured patched (2026-10-22, cold boots):** the craft's best-aligning shift went
+  from up to `(12, -8)` px to `(-1, 0)` or `(0, 0)` on every pair, and the craft difference from 13.7-55.8 to
+  8.4-15.1. The mean grey difference over 14 pairs fell from 15.15 to 13.55. A constant one-pixel `(-1, 0)` remains on
+  9 of 13.
+- **Per-boot patch evidence:** `RPCS3.log` is truncated every boot, so the 13 boots' `Applied patch` lines are gone.
+  The evidence is the shift collapsing on all 13, and Talon's lane log. `emu-hd-glass-boot.sh` should keep the log
+  per pair.
+- **`hd-race/talons-pack`** is a savestate race pair and was not re-captured patched.
 - **Cross-title:** Omega and 2048 inherit HD's law unread, and a constant search found neither. Pulse and Pure are
   not read.
 
 ## Next Steps
 
-1. **Recapture the other 12 HD originals cold with the patch**, about 5 minutes each:
-   `scripts/rpcs3-hd-cold-pair.sh <lane> <circuit-index> <out> ""` per circuit (indices are in
-   `compare-rerender-all.py`'s `CIRCUITS`), or `just compare-rerender-all --platform rpcs3`. Then run
-   `just compare-rerender-ours --only compare-page/hd` and measure each pair's craft offset with a craft mask.
-2. **Sample live,** about 30 minutes. Restore a Time Trial state with
+1. **Find the constant `(-1, 0)` px craft shift** on 9 of 13 pairs, about an hour. It could be a half-pixel
+   projection or viewport convention. Check it against a static scenery edge in the same frames first.
+2. **Keep the boot log per pair:** have `emu-hd-glass-boot.sh` copy `RPCS3.log` per pair, so `Applied patch` is
+   checkable per capture, about 15 minutes.
+3. **Sample live,** about 30 minutes. Restore a Time Trial state with
    `scripts/emu-restore-state.sh <lane> <state> --interpreter` and stop at `0x000ebc74` with `r3 = ship+0x6b00`.
    - Read `f1`, `f2` and `P0..P3` (`+0x40..+0x70`), then `+0x80`, `+0x10`, `+0x00` and `+0x20`.
    - Take one read just after a throttle release at speed: thrust drops at once, speed does not.
    - Stop again at `0x000ebc88` and check that the node equals `HullShake_Apply` of those values.
-   - Restore fresh for each attach. Build the probe from `scripts/rpcs3-hd-hull-light.py`'s helpers.
    - Compare amplitude and rate per unit of `f1` against ours (`hull_shake`'s tests).
