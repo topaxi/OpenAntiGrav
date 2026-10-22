@@ -113,6 +113,7 @@ fn model(vertices: Vec<GpuVertex>, moving: bool) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 2.0,

@@ -141,6 +141,15 @@ pub const LOOKS: &Looks = &Looks {
     // scale-100 originals (2026-10-22): 12 of 13 pairs' mean grey up, 8 by over 0.2,
     // so still held (same section, "Re-judged on the cold originals").
     material_lod_bias: Rule::UNREAD,
+    // State bit 7 is the alpha-to-coverage path (blend and alpha test off,
+    // depth written): all 31 `cf_tree` draws (`0xbd`) of a live Moa Therma race
+    // frame are issued that way. `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`,
+    // "The race pass sets pass bits 3, 5 and 6". How this renderer stands in for
+    // coverage on one sample is chosen (`oag_mesh::mesh::render_state`).
+    material_render_state: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     ..Looks::unread(SHIELD)
 };
 
@@ -155,6 +164,20 @@ mod tests {
         assert!(LOOKS.lit_output_halved.applies_everywhere());
         assert_eq!(LOOKS.lit_output_halved.origin, Origin::Measured);
         assert!(!Looks::unread(SHIELD).lit_output_halved.applies_everywhere());
+    }
+
+    /// HD honours its circuit materials' render-state word (bit 7 draws
+    /// among the cutouts, measured off a live race frame); a title with no
+    /// reading of its own does not.
+    #[test]
+    fn hd_honours_the_material_render_state_and_an_unread_title_does_not() {
+        assert!(LOOKS.material_render_state.applies_everywhere());
+        assert_eq!(LOOKS.material_render_state.origin, Origin::Measured);
+        assert!(
+            !Looks::unread(SHIELD)
+                .material_render_state
+                .applies_everywhere()
+        );
     }
 
     /// The material LOD bias is held off on HD (the stored RPCS3 frames do not

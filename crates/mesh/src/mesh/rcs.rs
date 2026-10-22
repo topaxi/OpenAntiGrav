@@ -792,6 +792,7 @@ fn build_with_options(
     out.glow_from_program = true;
     out.material_colour_factor = material_colour_factor;
     out.material_quake = material_quake;
+    out.material_state = model.materials.iter().map(|m| m.state).collect();
     out.material_tangent = material_tangent;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;

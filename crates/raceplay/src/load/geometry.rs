@@ -83,15 +83,21 @@ pub(super) fn track_model(
     track_blob: &[u8],
     geometry: &Option<Vec<u8>>,
     model_name: Option<&str>,
-    material_lod_bias: f32,
+    looks: &oag_title::Looks,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
     // The title's LOD bias on its material textures
-    // (`oag_title::Looks::material_lod_bias`), on every model this circuit's
-    // geometry builds: the track and what it draws behind its glass.
+    // (`oag_title::Looks::material_lod_bias`) and its render-state rule
+    // (`oag_title::Looks::material_render_state`), on every model this
+    // circuit's geometry builds: the track and what it draws behind its glass.
+    let material_lod_bias = looks.material_lod_levels();
+    let render_state = looks.material_render_state.applies_everywhere();
     let biased = |mut model: Model| {
         model.material_lod_bias = material_lod_bias;
+        if render_state {
+            model.honour_render_state();
+        }
         model
     };
     match geometry {

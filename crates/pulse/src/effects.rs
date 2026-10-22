@@ -163,4 +163,5 @@ pub const LOOKS: &Looks = &Looks {
     lit_output_halved: Rule::UNREAD,
     // The GE selects the level by its slope law (`oag_mesh::mesh_render::PSP_TEXLOD_SLOPE`), not a bias.
     material_lod_bias: Rule::UNREAD,
+    material_render_state: Rule::UNREAD,
 };

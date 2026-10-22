@@ -122,6 +122,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
