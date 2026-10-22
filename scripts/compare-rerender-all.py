@@ -49,9 +49,10 @@ rerender = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rerender)
 
 #: The emulator that makes each profile's pairs.
-PLATFORM_OF = {"pulse-psp": "psp", "pure-psp": "psp", "hd-fury": "rpcs3", "pulse-ps2": "pcsx2"}
+PLATFORM_OF = {"pulse-psp": "psp", "pure-psp": "psp-pure", "hd-fury": "rpcs3", "pulse-ps2": "pcsx2"}
 #: The manifests the page is built from: which pair directories each lists.
-MANIFESTS = {"fresh.toml": ("pulse-psp", "hd", "pulse-ps2"), "race-shots.toml": ("pulse-psp-race", "hd-race")}
+MANIFESTS = {"fresh.toml": ("pulse-psp", "hd", "pulse-ps2"), "race-shots.toml": ("pulse-psp-race", "hd-race"),
+             "pure.toml": ("pure-psp",)}
 PAIR_TIMEOUT = 540
 
 
@@ -104,14 +105,17 @@ class Emulator:
 
 
 class Psp(Emulator):
+    #: The profile whose image the instance boots and whose picture settings its ini carries.
+    PROFILE = "pulse-psp"
+
     def start(self):
         a = self.args
         w = self.scratch / "pp"
         ini = self.scratch / "pp.ini"
-        ini.write_text(ce.ppsspp_ini(ce.platform("pulse-psp")))
+        ini.write_text(ce.ppsspp_ini(ce.platform(self.PROFILE)))
         env = self.base_env()
         env["PPSSPP_EXTRA_INI"] = str(ini)
-        sh([HERE / "ppsspp-start.sh", a.lane, a.psp_display, a.psp_port, ce.MAIN / ce.platform("pulse-psp")["image"]], env=env)
+        sh([HERE / "ppsspp-start.sh", a.lane, a.psp_display, a.psp_port, ce.MAIN / ce.platform(self.PROFILE)["image"]], env=env)
         env = {**self.base_env(), **source_env(w / "env.sh")}
         env["OAG_SHOT_DISPLAY"] = env["DISPLAY"]
         self.env = env
@@ -127,6 +131,11 @@ class Psp(Emulator):
 
     def stop(self):
         sh([HERE / "ppsspp-start.sh", self.args.lane, "stop"], check=False)
+
+
+class PspPure(Psp):
+    """Wipeout Pure runs on its own PPSSPP boot: the image is the profile's USA disc, not Pulse's."""
+    PROFILE = "pure-psp"
 
 
 class Rpcs3(Emulator):
@@ -197,7 +206,7 @@ class Pcsx2(Emulator):
         sh(["python3", HERE / "pcsx2-drive.py", "--slot", self.args.pcsx2_slot, "stop"], env=self.env, check=False)
 
 
-EMULATORS = {"psp": Psp, "rpcs3": Rpcs3, "pcsx2": Pcsx2}
+EMULATORS = {"psp": Psp, "psp-pure": PspPure, "rpcs3": Rpcs3, "pcsx2": Pcsx2}
 
 
 def backfill_meta(root):

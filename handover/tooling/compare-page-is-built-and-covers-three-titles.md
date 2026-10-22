@@ -45,7 +45,7 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   `--allow-own-camera`, its state is `4:3`): replace it with a pair made from the widescreen state.
 - **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
   across three grabs, monotonic) now.
-- **Pure (PSP), 2048 (Vita3K), Omega (shadPS4): not reachable** (unchanged: no grid state or camera node for Pure, Vita3K stops at
+- **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: copy the four pair directories to `data/reference/compare-page/pure-psp/` and build `pure.toml` beside them with `compare_env.py manifest`). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
 - **Speed class and mode are declared by the state's file name, not read from RAM** (PSP and HD), PS2's class is assumed Venom.
 - **`just compare-rerender` was run once each on PSP, HD and PS2.** HD drifts 10 degrees in the ship's heading and 1.8 units in the
@@ -117,7 +117,7 @@ Pulse PSP Zone pairs exist, HD's do not. `psp-pulse-pair.py --zone` reads `g_gam
 1. ~~Recover the PS2 camera~~ **Done 2026-10-21** (see the PS2 bullet above). Open: more PS2 states (a menu route for `pcsx2-drive.py`), a race shot with the field.
 2. ~~Re-make the pairs~~ **Done 2026-10-21 by `just compare-rerender-all`** (`rerender-all`): every pair re-made on the current binary into a copy, adopt commands in that lane's report; the lead adopts into `data/reference/compare-page`.
 3. HD's 0.5 to 0.7 degree heading residual on pairs where ours does not turn: read the original's heading at GO after `Restart Race`.
-4. Make a Pure PSP grid state and locate its camera node; 2048 and Omega need a race reached first.
+4. ~~Make a Pure PSP grid state~~ **Done 2026-10-22** (4 pairs, Alpha league). Open on Pure: the hull is darker in ours, our HUD lacks the speed gauge and prints `TOTAL` for `BRONZE TIME`, a race shot (the field) and the other leagues (no dev unlock found). 2048 and Omega need a race reached first.
 5. ~~Pulse PS2 in widescreen~~ **Done 2026-10-21**: the option was switched on by writing `DAT_00284fe8`, not walked through the menu (the menu route, and a PCSX2 boot on a fresh profile reading the default, are open). The 7.1 % horizontal difference between the original's `40/21` projection at `16:9` and our true `16:9` is the whole remaining overlap gap on this pair; it is the maintainer's decision, not a defect.
 6. ~~HD default camera view~~ - settled 2026-10-21 (`hd-default-view`): HD's fresh-profile default is Close (measured on two clean RPCS3 boots, `docs/ghidra/functions/ps3-hdfury-eu/camera.md`). The 13 HD pairs' Far eye (`(0.00, 3.00, -12.38)`, Far x 0.75) came from the maintainer's `OPT_FAR` profile, not HD's default; they feed the camera explicitly and are unaffected. Ours already defaults to Close. Left: whether HD's default belongs on `Title` (one value on every title today).
 7. **Rotate the craft across pairs** (maintainer, 2026-10-21; do it the next time the pair scripts or `compare-rerender-all`
