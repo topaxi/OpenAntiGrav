@@ -3336,3 +3336,35 @@ above.
 **2048 and Omega.** The glass family: **checked, differs** (no `etched_glass*` entry in either, `omega-status.md`). The road's normal map and the world-pass tangent: **checked, applies,
 not wired** - both titles ship a `track_surface*` family (Omega's `track_surface_displacement2out`, `omega-status.md`) read by the PSARC/`psp2` readers, whose chunks set
 `tangent: 0`, with no frame compared. The `/2` is an RSX program fact and says nothing about their recompiled shaders.
+
+## Sebenco's snow-capped rocks draw bare rock: `sebenco_snow`'s snow layer is unbound (2026-10-22, `hd-scenery-materials`)
+
+**Claim**: the rock faces right of the start in `hd/sebenco-climb` (cold RPCS3 original, 1920x1080 scale 100) are snow in
+the original and grey rock in ours because one material's snow layer is not drawn. **True; cause measured, not wired.**
+
+**Where.** Box `1300,240 160x160`: mean grey difference **112.7**; mean RGB original `(166, 175, 189)`, ours `(72, 76, 79)`.
+The slot-skip sweep names slot **289**, `10_sebenco_climb/materials/sebenco_snow.rcsmaterial` (box change 79.8; the next,
+a post at 28.3). `OAG_ALBEDO_ONLY=1` shows the picture ours binds there is a grey rock texture; the load probe lists the slot
+as `lightmap|no_ambient`, the generic lightmapped reading.
+
+**The program** (resolved fragment block #21 `@0xe0d0`, vertex `@0xdef0`; `scripts/ps3-microcode.py fp-file`) samples six
+units: `and_snow3alpha` (unit 0, sampler `0xc97c5a4c`, at `TC4.xy`), a near-blend mask (unit 1, `0x40db67c1`, at the second
+pair `TC4.zw`), the snow normal (unit 2, `0x67a30ab1`), the lightmap atlas (unit 3, `0x37b5db58`), the rock (unit 4,
+`0xc8b6445d`, at `TC4.xy * [0xe7b6ae63]`) and the rock normal (unit 5, `0x85ba9c63`). The two normals are mixed by the mask
+into one bumped normal (`@0x05`..`@0x17`), the snow texel is shaded toward `[0x9dbd80db]` by a dot product of that normal
+(`@0x29`..`@0x2c`), and **the rock is mixed in by a saturated dot product of the bumped normal with a normalised
+`TC1 + [0x02df31e5]`** (`@0x1a`..`@0x24`, `@0x3c`..`@0x3f`: `H2 = H3.x * (rock - snow) + snow`), before the lightmap, the
+sun (`[0x2dba643d]`, `[0x8670f0be]`) and fog. So which faces read as snow is a function of the surface's own normal, not of
+a painted mask alone. Instance values on Sebenco's two records: `0xe7b6ae63` 1, `0xbd4582d3` 59.63, `0x1017e83c` 0.01864 and
+0.02, `0x74a4fe88` `(0.127, 0.127, 0.109)`, `0x9dbd80db` `(0.663, 0.763, 1)`, `0x06f7d6c7` `(0.152, 0.171, 0.171)`.
+**Confidence 60 on the reading of the blend**: every instruction was listed, but what `TC1` and `[0x02df31e5]` are (the
+paired vertex program's output and a direction) was not traced, so "slope" is a hypothesis; the unbound snow layer is
+certain (the frame's picture is the rock texture, and the program draws the snow texel where the factor is 0).
+
+**Not wired.** It is a material path of its own (six textures, two coordinate pairs, a normal-mixed blend), beyond the four
+bindings a draw has (see `docs/rendering/hd-track-tone.md`, "The chevron panel draws black", for the same limit). Next:
+read the paired vertex block's `TC1` and identify `0x02df31e5`, then decide the binding route with the chevron's.
+`sebenco_snow_just_snow` (slots 271, 283) is a sibling; not read.
+
+**Other titles.** Omega ships `Sebenco_snow_new` and `Sebenco_snow_just_snow` under `10_sebenco_climb` (`data02`, `data05`, `data08`; name census); its programs are GCN and unread: **checked,
+applies, not wired**. 2048: no Sebenco circuit, **not checkable**.
