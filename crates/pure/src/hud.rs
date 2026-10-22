@@ -158,6 +158,14 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // the icons themselves sit at `z="-10"`, in front of it) and with no
     // `colour` of its own.
     pickup_icon_backdrop_model: Some("weapon_icon_grid"),
+    // **Measured**: the Time Trial clock's four captions, `0x08a46428`-`0x08a46458`, picked by
+    // `PlayerStatus_Update` (`0x0892195c`). See `docs/ghidra/functions/psp-pure-usa/hud-time-ladder.md`.
+    time_ladder_captions: Some([
+        "HUD_Bronze time",
+        "HUD_Silver time",
+        "HUD_Gold time",
+        "HUD_Record time",
+    ]),
     // **Measured**: `TimeTrial_HUD.xml` and `Arcade_HUD.xml` author the gauge as these three
     // models, not `<Image>` bars. See [`oag_title::BarModels`].
     bar_models: Some(oag_title::BarModels {

@@ -509,6 +509,13 @@ pub struct HudArt {
     /// The speed and shield gauge when a title draws it as three `<Mode3D><Model>`
     /// widgets instead of `<Image>` bars, or `None`. See [`BarModels`].
     pub bar_models: Option<BarModels>,
+    /// The four captions the Time Trial clock takes when the title races a medal ladder, as
+    /// `[bronze, silver, gold, record]` string keys, or `None` for a title that counts to
+    /// `RECORD` or a campaign cell's own target (Pulse, HD). Pure's, read off
+    /// `0x08a46428`-`0x08a46458`: `HUD_Bronze time` and its three siblings. Its presence is the
+    /// law's: the stored best's standing on the circuit's own gold/silver/bronze figures picks
+    /// the caption and the target - `docs/ghidra/functions/psp-pure-usa/hud-time-ladder.md`.
+    pub time_ladder_captions: Option<[&'static str; 4]>,
     /// A per-weapon source-rectangle rewrite for a title whose pickup slot is
     /// *one* icon widget rather than Pulse/HD's thirteen named ones, or `None`
     /// for a title that names a widget per weapon (or has not measured this).

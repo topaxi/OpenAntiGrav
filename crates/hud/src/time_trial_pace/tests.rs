@@ -40,6 +40,7 @@ fn grid0_3_2() -> Cell {
 /// `Talon's Junction`'s Venom figure, `stats.xml`'s `<RaceTimes Venom="117">`
 /// (11700 cs), with no stored best - the fresh-profile case.
 const VENOM_RACE: RecordTarget = RecordTarget {
+    medal_ladder: None,
     personal_best_centis: None,
     authored_centis: Some(11_700),
 };
@@ -201,12 +202,13 @@ fn a_stored_best_faster_than_gold_shows_record_on_a_campaign_cell() {
 fn the_target_reads_the_figure_and_the_best_that_belong_to_the_mode() {
     let stats = oag_tables::track_stats::TrackStats {
         race_times: [117.0, 138.0, 119.0, 128.0],
-        lap_times: [38.0, 33.0, 29.0, 25.0],
+        lap_times: Some([38.0, 33.0, 29.0, 25.0]),
         elimination_target: None,
         zone_target: None,
         length: None,
         skill_scale: [[1.0, 2.0, 3.0]; 4],
         mode_modifiers: Default::default(),
+        pure_medals: None,
     };
     let (best_total, best_lap) = (Some(6_000), Some(1_800));
     let tt = RecordTarget::new(
@@ -274,4 +276,20 @@ fn without_stats_a_plain_race_has_no_pace_and_a_campaign_cell_still_does() {
         super::pace_for(oag_race::Mode::SingleRace, 0, 0, Some(&cell), None),
         None
     );
+}
+
+/// Pure's `PlayerStatus_Update` (`0x0892195c`): the stored best picks the next medal to chase.
+#[test]
+fn pure_ladder_names_the_next_medal_from_the_stored_best() {
+    let limits = [12_400, 12_700, 13_000];
+    let tier = |best| TimeTrialPace::evaluate_ladder(1000, limits, best).tier;
+    assert_eq!(tier(None), PaceTier::Bronze);
+    assert_eq!(tier(Some(0xffff)), PaceTier::Bronze);
+    assert_eq!(tier(Some(13_500)), PaceTier::Bronze);
+    assert_eq!(tier(Some(13_000)), PaceTier::Silver);
+    assert_eq!(tier(Some(12_700)), PaceTier::Gold);
+    assert_eq!(tier(Some(12_400)), PaceTier::Record);
+    let fresh = TimeTrialPace::evaluate_ladder(1000, limits, None);
+    assert!((i64::from(fresh.remaining_ticks) * 100 / 60 - (13_000 - 1666)).abs() <= 2);
+    assert!(TimeTrialPace::evaluate_ladder(9000, limits, None).missed);
 }

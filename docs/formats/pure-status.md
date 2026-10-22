@@ -1590,3 +1590,11 @@ a partial speed fill, so the crop's slope is read off the model, not off a frame
 Speed's scale on Pure is now 700 (it was 600, "ours, not recovered"). 2048 and Omega:
 **checked, differs / not checkable** - they do not share this HUD engine
 ([the page](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md#other-titles)).
+
+## Time Trial's medal ladder (2026-10-22)
+
+Pure's Time Trial clock counts down to the next medal, captioned `BRONZE TIME` on a fresh profile, and
+`stats.xml` has no `<LapTimes>` (which had made the whole file unreadable). Law, table and the four pairs'
+label/time match (label 4 of 4, time exactly on 2, a tenth under on 2 from pair alignment):
+[hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md). Silver, gold and `RECORD`
+captions follow the stored best and are unexercised on a frame (no pair holds a best).

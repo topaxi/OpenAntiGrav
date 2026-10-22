@@ -983,7 +983,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         {
             continue;
         }
-        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit);
+        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit).or_else(|| {
+            super::time_trial_pace::ladder_caption(cx.art, readout, &label.name, cx.strings)
+        });
         let Some(text) = tipped.or_else(|| {
             text_for(
                 label,

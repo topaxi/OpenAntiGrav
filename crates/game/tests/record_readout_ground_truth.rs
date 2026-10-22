@@ -59,7 +59,11 @@ fn the_load_carries_venoms_authored_time_off_the_disc() {
     let loaded = load(&image, oag_race::Mode::TimeTrial);
     let stats = loaded.track_stats.expect("16_Track's stats.xml reads");
     assert_eq!(stats.race_times[0], 117.0, "Venom's <RaceTimes>");
-    assert_eq!(stats.lap_times[0], 38.0, "Venom's <LapTimes>");
+    assert_eq!(
+        stats.lap_times.map(|row| row[0]),
+        Some(38.0),
+        "Venom's <LapTimes>"
+    );
     let target = RecordTarget::new(oag_race::Mode::TimeTrial, "VENOM", Some(&stats), None, None)
         .expect("a Time Trial has a record target");
     assert_eq!(target.authored_centis, Some(11_700));

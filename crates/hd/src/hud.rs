@@ -295,6 +295,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
     bar_models: None,
+    time_ladder_captions: None,
     // Same reasoning again: HD names a widget per weapon, same as Pulse -
     // 2048's own dialect is the one with a single rewritten-UV widget.
     pickup_icon_uv: None,
