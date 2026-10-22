@@ -84,6 +84,13 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
 - **Processes.** Record the PID of everything you start, and kill only by
   that PID. Never `pkill -f <pattern>`: one pattern kill took down every
   member's `oag-game --race` run.
+- **Memory.** Run render loops, bisects and batch scripts sequentially, never
+  as a parallel fan-out, and cap any batch you start with `systemd-run --user
+  --scope -q -p MemoryMax=8G -p MemorySwapMax=0 <cmd>`. On 2026-10-22 the
+  machine ran out of memory twice with 986 and 1,588 `python3` processes alive.
+  The OOM killer took the lead's tmux session and `systemd --user` with them,
+  and every member died. If you see a `python3` count climbing, tell the lead
+  what spawned it.
 - **Profilers open windows too.** `heaptrack` launches `heaptrack_gui` on
   the maintainer's display when `DISPLAY` is set (2026-10-19). Run every
   profiler with `DISPLAY` and `WAYLAND_DISPLAY` unset (`env -u DISPLAY -u
