@@ -139,12 +139,17 @@ output = [1920, 1080]
 output_note = "full HD"
 aspect = "wide"
 profile_key = "Wipeout: Omega Collection (PS4)"
-status = "no pair script: shadPS4 reaches MAIN MENU only, no race reached (2026-10-20)"
+status = "pair script scripts/shadps4-omega-pair.py: Race Box single race to the grid before GO, cold boot (2026-10-22)"
 [platform.omega.emulator]
 name = "shadPS4"
 version = "0.20"
 resolution = "1920x1080"
 capture = "grim on a headless sway"
+full_screen = true            # no window chrome in the frame
+internal_resolution = "1920x1080"
+rcas_enabled = false          # no sharpening of the upscale
+readbacks_mode = 1            # with the next key, makes the 3D scene draw (black without them)
+readback_linear_images_enabled = true
 
 [platform.2048]
 title = "Wipeout 2048"
