@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
-MANIFESTS = ("fresh.toml", "race-shots.toml", "zone.toml", "pure.toml", "2048.toml")
+MANIFESTS = ("fresh.toml", "race-shots.toml", "zone.toml", "pure.toml", "2048.toml", "omega.toml")
 #: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
 STALE = re.compile(r"\{scratch\}/|OpenAntiGrav-worktrees/|/data/scratch/")
 
