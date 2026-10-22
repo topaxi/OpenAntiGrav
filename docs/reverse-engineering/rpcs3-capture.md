@@ -947,6 +947,8 @@ the target on the host side.
   exit or kill the PID. A private instance needs its own `XDG_*` copy of `~/.config/rpcs3`, `OAG_RPCS3_DISPLAY`,
   `OAG_RPCS3_GDB`, `OAG_RPCS3_PAD_NAME`, `OAG_RPCS3_SCRATCH_CONFIG`, and `~/.cache/rpcs3` created (`TTY.log`'s directory).
 
+**32-bit index arrays (2026-10-22, `hd-hud-alpha-capture`).** The HUD's draws use 32-bit indices (`0x1820 = 1`, `0xFFFFFFFF` restart between strips, vertex data stride 24 with the colour as four normalised bytes at offset 12). `rpcs3_draw_hook.py` stage 1 and 2 read `first*2` and `cnt*2+2` bytes as `>H`, so for these draws each draw's second half and the next draw's first are mixed: read `first*4`, `cnt*4+4` and `>I` and drop `0xFFFFFFFF` before taking the vertex span. A copy of the hook with those three lines changed, run through `scripts/hd-draw-dump.py` with `HOOKPY=<copy> HOOK_TGT=394000 HOOK_NEED_SCREEN=1`, dumped the 27 HUD draws in about 3 minutes on a warm shader cache; a fresh private `XDG_CACHE_HOME` boots 2.5 minutes cold, so copy `cache/` from another private tree first, and start `serve` with `setsid` outside `emu-run.py` (a `serve` started inside an `emu-run.py` that then stalled was gone afterwards). Vertex data, the vertex program (`rsx-vp-names.py`'s replay) and the draw state are all in the dump; see `docs/formats/hd-hud.md`, "The 0.8 is the vertex colour's alpha byte".
+
 ## Giving the player a weapon and filming its effect (2026-10-07, `hd-weapon-ref`)
 
 Nobody had a held weapon on RPCS3 before this. It needs no pad pickup and no

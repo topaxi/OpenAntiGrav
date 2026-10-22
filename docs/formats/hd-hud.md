@@ -1373,7 +1373,7 @@ it**; nothing is wired, and a 0.8 constant would be invented. What is excluded, 
 So the factor lives downstream of the widget data: in the Text and Image widgets' draw (the colour at `+0xc4`/`+0xc0`..`+0xc8`
 reaches the vertices there), in the HUD pass's blend state, or in a fragment-program constant of the HUD text and sprite
 programs (`HUD*`, `PrimList*` in the shader name list, [renderer](../ghidra/functions/ps3-hdfury-eu/renderer.md)).
-Confidence that it is **not** in the layout XML or the lap counter's update: 85. Confidence in any positive source: none.
+Confidence that it is **not** in the layout XML or the lap counter's update: 85. Confidence in any positive source: none. **Superseded: the next section found it in one capture.**
 
 **Next addresses to read**: (1) the vtable of the `Text` widget class (created by `Widget_CreateChildByType`, `0x16aaa8`) and
 its draw slot - find what multiplies the `+0xc4` colour's alpha before the glyph quads are written; the `Image` class
@@ -1384,6 +1384,80 @@ constant or a vertex alpha. Not run here (static reading only, no unattended emu
 
 - **Omega**: checked, differs not found. Its `hud_colours.xml` is byte-identical in size to HD's (433 bytes) and carries the same five
   globals, so the layout side holds the same absence; the draw code is not checkable (PS4 build, no capture path).
+- **2048**: not checked, a different HUD dialect.
+
+## The 0.8 is the vertex colour's alpha byte, `0xCC` (`hd-hud-alpha-capture`, 2026-10-22)
+
+One RPCS3 draw capture answers the question the section above left open: the 0.8 is **in the vertex colour the CPU writes**, as an
+alpha byte of `0xCC` (204 / 255 = 0.8000). It is not in a fragment constant, the blend state or a later pass.
+
+**Method.** Two cold boots of HD Fury EU on RPCS3 (muted, private config, `Write Color Buffers: true`, 1920x1080 at scale 100): a
+Harimau classic Time Trial on Vineta K (the first frame, paused after GO) and one on Anulpha Pass. Each paused the target and dumped the
+frame's command stream with `scripts/rpcs3_draw_hook.py` (`HOOK_NEED_SCREEN=1 HOOK_TGT=394000 HOOK_FP_LEN=0x800`, run through
+`scripts/hd-draw-dump.py`). The HUD is the last pass: 27 draws, all on the screen buffer `0x00394000`, nothing drawn after them (the
+`SURF 0x00010000` that follows has no draws). **Trap, fixed for this capture only:** the stock hook reads index arrays as 16-bit
+(`first*2`, `cnt*2+2` bytes). These draws use 32-bit indices (`0x1820 = 1`, `0xFFFFFFFF` restarts, `[0, v]` pairs when read as 16-bit),
+so every draw after the first took another draw's vertices; the capture used a copy of the hook that dumps `first*4`, `cnt*4+4` and
+unpacks `>I`. The hook in `scripts/` is unchanged and still has the 16-bit assumption.
+
+**The draw.** The lap `1` is the 11th of the 27 HUD draws (draw 817 of the first frame, 474 of the second): a two-triangle quad,
+`(132.5, 81.5)` to `(147.5, 162.5)` in HUD units (15 x 81), texture unit 0 at VRAM `0x02cc0000`, `0x0800 x 0x0400`, format `0x87`
+(DXT3), UV `0.378..0.385 x 0.900..0.979` (a 15 x 81 texel cell, 1:1). HUD units map to the 1920x1080 target as `x * 0.96 + 38.4`,
+`y * 0.96 + 21.6` (vertex constants `c[256..259]` = `0.001`, `-0.00178`, offset `(-0.96, 0.96)`), which puts the quad over the digit in
+the screenshot (the red box checked by eye on the frame; the digit fills it). The sheet is `Data\FE\Fonts\pulsehud.gtf` (128 + 2048 x 1024
+DXT3 = 2,097,280 bytes, the only 2 MiB candidate; its three 64-byte head samples are all blank, so the size and format name it, not
+the bytes): confidence 75. The `3` is the 12th draw's quad at `(201.6, 64.3)`, UV `0.427..0.449`. Each is preceded by a black copy 1 HUD
+unit up and left (draw 816, `(131.5, 80.5)`), the drop shadow.
+
+**What the draw carries** (identical on both boots):
+
+| Stage | Value | Reads as |
+| --- | --- | --- |
+| vertex program | `MOV o[COL0], v[3]`, position = `v[0]` through `c[0..3]`, `MOV o[TC0].xy, v[8].xyxx` | the colour passes through unchanged |
+| vertex attribute 3 | `u8` normalised x 4, stride 24, offset 12, bytes in R, G, B, A order | the lap `1` reads `ff ff 00 cc` |
+| fragment program (`0x00744181`) | `TEX R0, f[TC0] unit0` then `MUL H0, R0, f[COL0]` | no constant slot at all, so no fragment-side factor |
+| blend | enabled; `0x314 = 0x00010302`, `0x318 = 0x00000303`, `0x320 = 0x80068006` | colour `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`, alpha `ONE, ZERO`, `FUNC_ADD` |
+| blend colour `0x31c`, alpha test | `0`; enabled, `GREATER` (`0x204`), reference 0 | nothing reads a constant colour |
+| depth, cull | depth test off and mask off, cull off | |
+
+The byte order is self-checking: the shadow reads `00 00 00 40`, which is `HudBGColour 0x40000000` (ARGB) as RGBA; the lap `1` reads
+`ff ff 00 cc`, which is the XML's `Color="0xFFFFFF00"` (alpha `ff`) at 0.8; the lap count reads `64 64 64 cc`, `HudColour3A 0xFF646464`
+at 0.8. So the authored colour is untouched in RGB and its alpha is multiplied by 0.8 before the quad is written.
+
+**Which draws carry it** (the census of every distinct vertex colour over the 27 HUD draws, the same on both boots):
+
+| Alpha byte | Where | Note |
+| --- | --- | --- |
+| `0xCC` (0.8) | every white label, panel, hexagon and the lap `1` and `3` (`ffffffcc`, `ffff00cc`, `646464cc`, `1664ffcc`) | authored alpha `ff` |
+| `0x90` (0.565) | the Record time's six glyph quads, HUD x 1694..1823, y 49..79 | `0xB4 * 0.8 = 144`: a **multiply**, not a replace (one data point; the Record's authored colour was not read) |
+| `0x48`, `0x32` | `ffffff48` on the top-centre strips (HUD x 543..845, 1075..1377, y 46..106) and the box at x 876..1044; `ffffff32` on two strips at bottom left (x 70..291, y 878..962) | not explained: `0x5A * 0.8` and `0x3E * 0.8` would fit, the authored values were not read |
+| `0x40` | every black shadow quad | `HudBGColour` is `0x40000000`, so **unscaled** (scaled it would be `0x33`), unless the shadow is authored at `0x50` |
+| `0xFF` | the speed bar's gold gradient (`ffdb0c`, `ffed0c`, `ffff0c`), the blue shield colours (`b7d1ff`, `85a0d8`, `9eb9ec`, `1664ff`) and a font-sheet quad at bottom centre (HUD x 847..1074, y 834..936, `ffffffff`) | **not scaled**: the 0.8 is per widget, not HUD-wide |
+
+The gradient and the blue bars share draw 808 (texture `hud_components.gtf`, `0x03de5380`) with `ffffffcc` quads, so the split is per
+vertex, not per texture or per draw. A HUD-wide 0.8 in ours would dim the gradient and the shield bar, which the original draws at
+full alpha.
+
+**Where it enters, and the answer to the claim.** The value is read off the draw: the vertex colour alpha byte `0xCC` on the lap `1`
+(`ffff00cc`), carried through a pass-through vertex program and a fragment program that only multiplies it by the texel. Blend
+state, blend colour, fragment constants and a later pass are excluded by the dump itself. Confidence 90 that the lap `1` is drawn with
+vertex alpha 0xCC and that nothing downstream rescales it (two boots, two circuits, identical census); 85 that it is
+authored colour alpha times 0.8 for the Text and lit-sprite widgets (the `0xB4` to `0x90` point and the three byte-order checks);
+60 for the exact list of widget classes that are scaled and which are not (the `0x48`, `0x32` and `0x40` rows are open); 75 for the
+sheet's name.
+
+**Ready to wire, narrowly.** In `HudArt`'s draw list, multiply the alpha of the colour of the lap, speed, label and panel quads by 0.8
+(`round(a * 0.8)` as a byte, `0xFF -> 0xCC`, `0xB4 -> 0x90`), leave the black shadow quads and the speed bar gradient and shield bar
+colours alone, and re-run the 13 cold pairs; the lap `1`'s solved 0.800 is the check. **Not measured, so do not generalise:** whether
+the factor belongs to the widget's own colour (set once at layout load) or to a per-frame group alpha, and the Omega HUD (its layout
+data is the same; the draw code is not checkable). **Where the factor is applied is still unread:** the colour is stored per widget as
+four packed `u32`s (`Image_SetVertexColours`, `0x1b5708`, writes `+0xbc/+0xc0/+0xc4/+0xc8`), and the multiply happens when the quads
+are written. The next read is the Image and Text widgets' draw slots (the vtable via `Widget_CreateChildByType`, `0x16aaa8`), looking
+for the alpha byte scaled before it is stored at vertex offset 12; a PPU write-watch on the HUD vertex buffer
+(`scripts/build-rpcs3-watchpoints.sh`) would name the writer in one run. A live scan for `0xFFFFFF00` at widget `+0xc4` over guest RAM
+`0x00800000..0x50000000` found 261 words and none with 0.8 at `+0xc0`, so the `0x204d58`/`0x204e08` pair stays unrelated.
+
+- **Omega**: checked, not checkable by capture (PS4); same HUD layout data, so the finding is a lead for Omega's HUD, not a measurement.
 - **2048**: not checked, a different HUD dialect.
 
 ## See also
