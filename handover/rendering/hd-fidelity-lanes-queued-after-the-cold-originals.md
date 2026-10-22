@@ -67,8 +67,8 @@ Tooling found on the way: `OAG_ONLY_SLOT`, or an `OAG_SKIP_SLOT` list covering a
   ramp read at `u` about 0.36-0.5 where ours reads 0.10-0.20. Next: dump draw 354's vertex constant
   `c[209]` (`eyePositionWorldSpace`, `0x3466fc0e`) at the cold pair's tick against our view eye, then
   the chunk's packed normal (same page, same section).
-- **The chevron's emissive pulse** (`cf_chevron_pulse`, `docs/rendering/hd-track-tone.md` item 3): the
-  pulse's colour and phase (`emask.a * colour * wave`) and its `+ emask.rgb` diffuse term are unwired.
+- ~~**The chevron's emissive pulse**~~ **wired** (2026-10-22, `hd-texture-slots`, item 2 above); what is left is the
+  clock its curve runs on.
 - **`m_diffuse_normal_constantspecular`'s normal alpha**: the RGB is a normal map
   (`docs/formats/rcsmaterial.md`); what its alpha carries is unread.
 
@@ -83,4 +83,4 @@ Tooling found on the way: `OAG_ONLY_SLOT`, or an `OAG_SKIP_SLOT` list covering a
 
 1. Adopt the cold HD originals, run the provenance scan, `just compare-rerender-ours --only /hd/`.
 2. Spawn the Moa Therma lane against them.
-3. Then, in order: the exposure law, the glass eye dump, the chevron pulse.
+3. Then, in order: the exposure law, the glass eye dump, the chevron curve's clock.

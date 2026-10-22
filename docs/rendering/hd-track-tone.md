@@ -745,6 +745,12 @@ Chosen, not measured:
 | inside the panel `220,620 120x40` | 8.32 | 18.95 | 5.62 |
 | left wall `50,800 300x150` | 9.12 | 9.12 | 9.12 |
 
+Sweep of `--world-clock-offset` (panel box, every 0.25 s of the 3 s period):
+
+| offset s | 0 | 0.25 | 0.5 | 0.75 | 1.0-2.25 | 2.5 | 2.75 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| box | 16.75 | 10.07 | 9.16 | 6.93 | 5.25 | 33.76 | 44.27 |
+
 The re-capture shows the panel's blue hexagon fill with **no outline**. Ours at the pair's clock draws the outline at full
 strength, so the panel box got worse there. A sweep of `--world-clock-offset` over the curve's 3 s period puts the band off
 the panel from 1.0 to 2.25 s (42 % of the cycle), where the box is 5.25. So what is left is the phase, which follows from
@@ -753,6 +759,11 @@ the clock: the fill and the outline are both drawn. The wall is unchanged becaus
 grey levels brighter (mean RGB `(8, 15, 21)` against `(3, 9, 16)` inside the panel), with a faint rim on the hexagon edges.
 Before this, ours drew the panel black. Whole frame:
 9.935 to 9.945.
+
+**Not in a Zone race.** Every Zone variant of `cf_chevron_pulse` (fragment blocks #15-#34, #45-#64, #75-#93, those declaring
+`zoneColourTint`) declares neither the emask nor the wave, as the magstrips' do not, so both terms are off when
+`scene.zone.enabled` is set. Without that gate Anulpha's Zone panel drew the outline (panel green 16 to 37 against main);
+with it the Zone frame is main's. `sebenco_snow`'s Zone variants declare all six of its samplers, so the snow keeps its mix.
 
 **Other titles.** Unchanged from the chevron section above: Omega's `cf_Chevron_Pulse*` programs are GCN and unread, so
 **checked, applies, not wired**. The fifth and sixth bindings are on every title's pipeline, so wiring it needs only the
