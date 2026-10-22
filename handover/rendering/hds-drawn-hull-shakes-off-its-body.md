@@ -28,30 +28,37 @@ It is moved by `4 * (p - q)` along the node's rows. Both terms are scaled by `cl
 `thrust_s` is the body's `+0x4c4` (engine thrust) smoothed 0.99 per frame. The shake is full at rest or coasting and
 nearly gone under full throttle.
 
+**Ported 2026-10-22** (`oag_raceplay`'s `hull_shake`, law in `oag_title::hull_shake::HullShake::HD`, fade input taken as
+`1.5 * speed` per `engine-trail.md`'s direct read). **Off for still pairs on both sides:** ours `--no-hull-shake`
+(`compare_env.ours_flags`), and the original patched by `scripts/rpcs3-hd-no-hull-shake.py`, which RPCS3 applies on both
+decoders. All three HD capture scripts run the patch first. See `hull-shake.md`, "Ported".
+
 ## Open
 
-- What body `+0x4c4` is. `physics.md` measured it as thrust; `xfade.md` scales it by 3.6 like a speed. That decides
-  whether a craft coasting fast shakes, so it blocks the port.
-- The frame time. The 0.05-0.09 offsets were read under the interpreter, whose frame time varied (two consecutive
-  offsets differ by 0.61 in every component), so they are not a 60 Hz size. Do not calibrate the port against them.
-- The `vsel` lane masks at `0x00c47730` are BSS, so the x/y/z order of the three angle writes is assumed.
-- How the constructor seeds `P0..P3` and `obj+0x80`. Whether opponents run the block: it is inside the per-ship update,
-  but no player test above `0x000ebb28` was read.
-- What our sim carries for HD's body `+0x4c4` thrust (the fade input), at our fixed 60 Hz. HD's `0.99` filter and its
-  one-frame difference are per frame, so 60 Hz is their own rate.
-- Cross-title: Omega and 2048 not found by a constant search (needs their ship update's call site). Pulse and Pure
+- **Speed or thrust?** The fade input is taken as speed (`engine-trail.md`, eight craft, four sessions), but `physics.md`
+  calls the same field thrust. Both say the shake is gone at racing pace. They disagree on a craft coasting fast after a
+  throttle release.
+- **Frame time.** The 0.05-0.09 offsets were read under the interpreter, whose frame time varied, so they are not a 60 Hz
+  size. Nothing has been calibrated against them.
+- **Lane masks.** The masks at `0x00c47730` are BSS, so the x/y/z order of the three angle writes is assumed.
+- **Not read:** the constructor's seeding of `P0..P3`, and whether opponents run the block (ours shakes every craft).
+- **Talon's (`hd/talons`) is recaptured patched:** craft offset `(0, -9)` -> `(0, 0)` px, craft difference
+  32.95 -> 10.84.
+- **The other 12 HD originals:** still captured with the shake on. Their pairs stay comparable to what they were (ours
+  draws none), but the craft offset on them includes the original's shake until they are recaptured.
+- **Cross-title:** Omega and 2048 inherit HD's law unread, and a constant search found neither. Pulse and Pure are
   not read.
 
 ## Next Steps
 
-1. Sample live, about 30 minutes. Restore a Time Trial state with `scripts/emu-restore-state.sh <lane> <state> --interpreter`
-   and stop at `0x000ebc74` with `r3 = ship+0x6b00`. Read `f1` (the frame time) and `f2` (body `+0x4c4`), and also
-   `P0..P3` (`+0x40..+0x70`), `+0x80`, `+0x10`, `+0x00` and `+0x20`. Read once while coasting just after a throttle
-   release at speed: thrust drops at once, speed does not. Judge rate and offset per unit of `f1`. Stop again at `0x000ebc88` and check that the node
-   equals `HullShake_Apply` of those values. Restore fresh for each attach: the GDB stub wedges on a second attach.
-   Build the probe from `scripts/rpcs3-hd-hull-light.py`'s helpers (`stop_at`, `place.find_player`, `place.read_pose`)
-   and land it under `scripts/`.
-2. Port it to the drawn model matrix in `oag_raceplay`: view only, unhashed, its own seeded `Rng`, stepped on the fixed
-   60 Hz tick (not per rendered frame), fed by whatever step 1 shows `+0x4c4` to be. Then run `just compare-rerender-ours --only compare-page/hd`. The pairs cannot match a random shake frame
-   for frame, so judge the port by amplitude and rate against step 1's samples, and use the craft-mask offset only as
-   a sanity check.
+1. **Recapture the other 12 HD originals cold with the patch**, about 5 minutes each:
+   `scripts/rpcs3-hd-cold-pair.sh <lane> <circuit-index> <out> ""` per circuit (indices are in
+   `compare-rerender-all.py`'s `CIRCUITS`), or `just compare-rerender-all --platform rpcs3`. Then run
+   `just compare-rerender-ours --only compare-page/hd` and measure each pair's craft offset with a craft mask.
+2. **Sample live,** about 30 minutes. Restore a Time Trial state with
+   `scripts/emu-restore-state.sh <lane> <state> --interpreter` and stop at `0x000ebc74` with `r3 = ship+0x6b00`.
+   - Read `f1`, `f2` and `P0..P3` (`+0x40..+0x70`), then `+0x80`, `+0x10`, `+0x00` and `+0x20`.
+   - Take one read just after a throttle release at speed: thrust drops at once, speed does not.
+   - Stop again at `0x000ebc88` and check that the node equals `HullShake_Apply` of those values.
+   - Restore fresh for each attach. Build the probe from `scripts/rpcs3-hd-hull-light.py`'s helpers.
+   - Compare amplitude and rate per unit of `f1` against ours (`hull_shake`'s tests).

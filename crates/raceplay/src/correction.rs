@@ -149,7 +149,7 @@ impl Race {
     /// `slot`'s craft model matrix as drawn at this tick: the simulation's, moved by
     /// the correction glide.
     pub(super) fn drawn_model(&self, slot: usize) -> Mat4 {
-        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let model = shaken_model_matrix_of(&self.sim.world.ships[slot], self.hull_shake_of(slot));
         match self.view.correction[slot] {
             offset if offset == Vec3::ZERO => model,
             offset => Mat4::from_translation(offset) * model,

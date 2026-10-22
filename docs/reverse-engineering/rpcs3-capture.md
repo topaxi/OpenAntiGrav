@@ -1348,6 +1348,25 @@ cause is found and its fix is the held LOD-bias rule; the far band's hue is not 
 **Cross-title**: the `etched_glass` family is in neither 2048 nor Omega (checked, differs, `omega-status.md`); Modesto Heights and The Amphiseum are
 covered by the test above.
 
+## Patching a call out with RPCS3's `patch.yml` (2026-10-22, `hd-hull-shake`)
+
+RPCS3 applies a `patch.yml` entry when it loads the executable, before the PPU interpreter or the
+LLVM recompiler sees the code, so one patch holds for both decoders.
+
+The worked example is `scripts/rpcs3-hd-no-hull-shake.py`, which turns HD's `bl HullShake_Apply`
+(`0x000ebc84`) into a `nop` for still comparisons:
+- **Hash:** the entry is keyed by HD's PPU executable hash, `PPU-b1c6a86617b246b2df74dbe90f8400cd3809d4dc`.
+  RPCS3 logs it as `PPU executable hash:` at every boot of BCES00664.
+- **Enabling:** the entry is switched on in `patch_config.yml`, which sits at the config root on
+  Linux.
+- **Check:** `RPCS3.log` shows `PAT: Applied patch (hash=..., description=...) (<- 1)`, where `1` is
+  the number of sites written.
+- **Lane only:** the lane's `patches` directory is a symlink to the maintainer's (`emu-env.sh`). The
+  script replaces it with a private copy first and refuses `~/.config/rpcs3` itself.
+
+A GDB write is not the route. The stub serves one session per launch and the pair script needs
+it, and code pages may answer `E03`.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

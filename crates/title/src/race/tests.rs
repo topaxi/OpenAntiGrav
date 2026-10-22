@@ -359,6 +359,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_hover_rig: None,
     zone_handling: None,
     craft_laws: None,
+    hull_shake: None,
     autopilot_engine: crate::autopilot_engine::MEASURED,
     opponent_autopilot: crate::opponent_autopilot::ABSORBED,
     original_opponent: false,

@@ -59,6 +59,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_hover_rig: Some(&ZONE_HOVER_RIG),
     zone_handling: Some(&ZONE_HANDLING),
     craft_laws: Some(&CRAFT_LAWS),
+    hull_shake: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hull_shake::HullShake::HD,
+    )),
     autopilot_engine: oag_title::autopilot_engine::MEASURED,
     opponent_autopilot: oag_title::opponent_autopilot::BY_CLASS_AND_DIFFICULTY,
     // HD's own driver, Pulse's with five gated branches, flown in the

@@ -135,6 +135,8 @@ class Rpcs3(Emulator):
         sh([HERE / "emu-env.sh", a.lane, a.rpcs3_display, a.rpcs3_gdb])
         env = {**self.base_env(), **source_env(self.scratch / "env.sh")}
         env.update(OAG_COMPARE_PLATFORM="hd-fury", UV_CACHE_DIR=str(Path.home() / ".cache/uv"), UV_OFFLINE="1")
+        # The original's random hull shake patched out, as ours draws `--no-hull-shake`; before any boot.
+        sh([sys.executable, HERE / "rpcs3-hd-no-hull-shake.py"], env=env)
         self.env = env
         self.remap = {}
 

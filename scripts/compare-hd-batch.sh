@@ -18,6 +18,9 @@ source "$W/env.sh"
 export OAG_HD_CAPTURE_KIND=savestate_restore  # provenance: this script restores a state per circuit
 export OAG_COMPARE_PLATFORM=hd-fury UV_CACHE_DIR=$HOME/.cache/uv UV_OFFLINE=1
 cd "$repo"
+# The original's drawn-hull shake is random; patch it out so the still pair matches ours' `--no-hull-shake`
+# (`OAG_HD_KEEP_HULL_SHAKE=1` keeps it). Applied when RPCS3 loads the game, so before the boot below.
+python3 scripts/rpcs3-hd-no-hull-shake.py ${OAG_HD_KEEP_HULL_SHAKE:+--remove} || exit 3
 declare -A TITLE=(
   [vineta-k]="Vineta K" [anulpha-pass]="Anulpha Pass" [moa-therma]="Moa Therma" [chenghou-project]="Chenghou Project"
   [metropia]="Metropia" [sebenco-climb]="Sebenco Climb" [ubermall]="Ubermall" [sol-2]="Sol 2" [talons]="Talon's Junction"

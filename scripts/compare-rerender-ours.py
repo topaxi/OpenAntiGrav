@@ -68,6 +68,9 @@ def rerender(pj, binary):
     # frame is tick 0 (a clock of 0.00.0, no GO board).
     if "--ticks" not in flags and rec["ours"].get("ticks") is not None:
         flags += ["--ticks", str(rec["ours"]["ticks"])]
+    # Pairs recorded before `--no-hull-shake` existed drew no shake; keep it that way (`compare_env.ours_flags`).
+    if "--no-hull-shake" not in flags:
+        flags += ["--no-hull-shake"]
     if problems:
         return "skipped: " + "; ".join(problems)
     plat = ce.platform(rec["profile"])

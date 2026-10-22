@@ -94,6 +94,10 @@ def ours_flags(plat):
              "--screen-filter", o["screen_filter"], "--anisotropy", o["anisotropy"]]
     if "pilot_assist" in o:
         flags += ["--pilot-assist", o["pilot_assist"]]
+    # A still pair cannot match a random shake frame for frame, so ours draws every hull at its body's pose; HD
+    # originals are captured with theirs patched out (`scripts/rpcs3-hd-no-hull-shake.py`). A no-op on a title without
+    # one (Pulse, Pure).
+    flags += ["--no-hull-shake"]
     return flags
 
 

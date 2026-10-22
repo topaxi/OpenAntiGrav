@@ -60,10 +60,15 @@ The three lane writes into `obj+0x10` go through `vsel` with masks loaded from `
 `+0x10`, `+0x20`). That address is in BSS and filled at run time, so the x, y, z order of the three
 masks is assumed, not read. The constant `1.0` is TOC `-0x49c4`, `0.0` is `-0x49d8`.
 
-`f2` is `(*(ship+0x6944))->f[0x4c4]`, the player's physics body's `+0x4c4`.
-[`physics.md`](physics.md) measured that field following the throttle (r = 0.94; about 77 held, about 1
-released). So the shake is at full size below a smoothed 30 and gone at 80: full while coasting or
-at rest, nearly gone under full throttle. The `0.99` filter runs once per call and ignores `dt`,
+`f2` is `(*(ship+0x6944))->f[0x4c4]`, the craft's physics body's `+0x4c4`. Two pages read that field
+differently. [`physics.md`](physics.md) scored it against a throttle square wave and called it thrust
+(r = 0.94, about 77 held, about 1 released). [`engine-trail.md`](engine-trail.md) measured it directly
+on all eight craft over four sessions: `3.6` times it is world speed times 5.4, so the field is
+**`1.5 * speed`** (`oag_core::math::SPEED_FIELD_GAIN`). The engine-note crossfade
+([`xfade.md`](xfade.md)) reads it the same way, and its ground truth holds. The direct read is the one
+taken here (confidence 70). A speed that builds under throttle and bleeds off without it also fits the
+square wave. So the shake is at full size below a smoothed field of 30 (a speed of 20) and gone at
+80 (a speed of about 53): full at rest and on the grid, gone at racing pace. The `0.99` filter runs once per call and ignores `dt`,
 so its time constant depends on the frame rate. The offset `4s(p - q)` is the spline's change over one
 frame, so it is proportional to `dt`. A port runs both on a fixed 60 Hz tick, HD's own rate, not per
 rendered frame.
@@ -116,12 +121,39 @@ every other `rand` caller, so a sequence match is not on offer.
 - The mask order at `0x00c47730`.
 - How the constructor seeds `P0..P3` and `obj+0x80`.
 - Whether any other code reads the 60-slot history.
-- What body `+0x4c4` is. [`physics.md`](physics.md) scored it against a throttle square wave as thrust.
-  [`xfade.md`](xfade.md) multiplies it by 3.6 (a m/s to km/h shape) and `magstrip-wake.md` calls it
-  speed. That decides whether a craft coasting fast shakes. A live read after a throttle release at
-  speed settles it: thrust drops at once, speed does not.
+- Whether body `+0x4c4` is speed (taken, above) or thrust: a live read just after a throttle release
+  at speed settles it. Thrust drops at once, speed does not.
 - Whether opponents run the same block. It is inside the per-ship update, but no branch above
   `0x000ebb28` was read for a player test.
+
+## Ported, 2026-10-22
+
+`oag_title::hull_shake::HullShake::HD` carries every constant above. `RaceDefaults::hull_shake` is
+`Measured` on HD, inherited from HD on Omega and 2048, and `None` on Pulse and Pure. `oag_raceplay`'s
+`hull_shake` runs it per craft on the fixed tick from its own seeded stream (view-only, unhashed). The
+fade input is `1.5 * |velocity|`, and the matrix is composed between the drawn lean and the model's yaw
+and scale (`drawable::shaken_model_matrix_of`). The original's axes are the hull's left, up and nose;
+ours are right, up and the tail, a half turn about up. So pitch and roll change sign, and so do the
+offset's `x` and `z`. Every craft shakes. The matrix moves the drawn hull only: the body, the camera
+and the effects placed off `model_matrix_of` do not move.
+
+Chosen, not read: the first four points are fresh draws with the parameter at 0, and the first tick's
+previous value is the current one, so there is no first-frame jump.
+
+**Off for still comparisons.** A random shake cannot match frame for frame, so comparison frames draw
+it on neither side. Ours uses `oag-game --no-hull-shake`, which `scripts/compare_env.py` passes for every
+pair. The original uses `scripts/rpcs3-hd-no-hull-shake.py`, an RPCS3 `patch.yml` entry for HD's PPU
+hash (`PPU-b1c6a86617b246b2df74dbe90f8400cd3809d4dc`). It turns the `bl` at `0x000ebc84` into a `nop`.
+RPCS3 applies it at load, before either decoder runs, and logs `Applied patch ... (<- 1)`.
+`HullShake_Update` still runs, so `rand` is drawn as before. A pair records which way it was captured
+in `original.hull_shake`.
+
+**Measured on Talon's Junction (2026-10-22).** A cold-boot original was captured with the patch applied
+(`Applied patch` in the lane's `RPCS3.log`) and ours drawn with `--no-hull-shake`. On a craft mask (ours
+against a render with the craft lifted 300 units, within the craft's box), the best-aligning shift of
+the original's craft went from `(0, -9)` px on the old unpatched pair to `(0, 0)`. The craft difference at
+zero shift fell from 32.95 to 10.84, and the whole frame's mean grey difference from 10.15 to 9.51. The
+residual is material, not placement.
 
 ## Cross-title
 

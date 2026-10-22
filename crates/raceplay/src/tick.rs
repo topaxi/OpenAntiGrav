@@ -564,6 +564,7 @@ impl Race {
             // exhausts take this tick's step, as the pad's arming is.
             self.fire_perfect_starts(&launch_grades);
             self.fire_roll_payouts(&roll_payouts);
+            self.advance_hull_shakes();
             self.advance_exhausts();
             // After the trails have taken this tick's sample, so a craft is tested
             // against the ribbon as it stands now rather than one tick stale.
