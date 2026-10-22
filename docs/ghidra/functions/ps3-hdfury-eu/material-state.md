@@ -182,3 +182,34 @@ winding in clip space, was not read. The two setters are named
   was chased; bit 7's own question (alpha-to-coverage, confidence 55 in
   rcsmodel.md) is untouched by this pass and still needs its own RSX-write
   reading.
+
+## State bit 2 is depth write, bit 7 is alpha-to-coverage (2026-10-22, `hd-scenery-materials`)
+
+**Read off the disassembly of `Material_ApplyRenderState` (`0x005d8f68`)**, not the decompiler (which did not complete
+on it). The function keeps the material's state word in `r28` (`lwz r28,0x10(r4)`, the record) and a second word in
+`r30` (`lwz r30,0x4(r3)`, the object being drawn: called "pass flags" below, its meaning unread). Besides the calls
+the sections above name:
+
+| Instruction | Reads | Call | Method |
+| --- | --- | --- | --- |
+| `0x005d90b4` `rlwinm r0,r28,0,0x1d,0x1d` | **state bit 2** | `if (state & 4) arg = (pass >> 6) & 1 else 0`, then `Rsx_SetDepthMask(arg)` (`0x005c2524`) | `0x0a70` `SET_DEPTH_MASK` |
+| `0x005d9004` / `0x005d9010` | pass bit 3 and **state bit 7** | both set: branch to `0x005d9148` | |
+| `0x005d9148`.. | | `Rsx_SetMethod(0x310, 0)`, `Rsx_SetMethod(0x304, 0)`: blend and alpha test **off**; `Rsx_SetAntiAliasingControl(1, 1, (pass >> 9) & 1, 0xffff)`; `Rsx_SetDepthMask((pass >> 5) & 1)` | `0x1d7c` |
+| otherwise, `0x005d901c`.. | | `Rsx_SetAntiAliasingControl(+0xb0 != 0, (pass >> 9) & 1, (pass >> 10) & 1, 0xffff)` | `0x1d7c` |
+| `0x005d90d4`.. | state bits 5, 6 | `Rsx_SetColorMask(rgb, rgb, rgb, a)` with `rgb = state & 0x20 ? (pass >> 4) & 1 : 0`, `a = state & 0x40 ? (pass >> 5) & 1 : 0` | |
+
+`0x005c393c` builds one word `enable | a << 4 | b << 8 | mask << 16` and writes it under header `0x00041d7c`, which is
+`NV4097_SET_ANTI_ALIASING_CONTROL` (`rpcs3/Emu/RSX/gcm_enums.h`): enable, alpha-to-coverage, alpha-to-one, sample mask.
+Named `Rsx_SetAntiAliasingControl`, **confidence 85** (the header literal and the field packing; RPCS3's enum read as
+recalled, not re-opened). So:
+
+- **State bit 2 is depth write (confidence 85).** The instruction, plus a census that agrees with it in every class
+  (`hd_state_census`, 7,241 records): the opaque word `0x7c` (6,363 records) and the alpha-tested `0x3e` carry it; the
+  blended records split, 335 with it (`0x3d`, `0x7d`, `0xbd`, `0x2d`) and 440 without (`0x39`, `0x79`, `0x29`, `0x69`).
+  A blended draw that writes depth is what Moa Therma shows: the `cf_tree` crowns (`0xbd`) stand in front of the
+  grandstand glass `dc_windows_a` (`0x39`) although ours draws the glass after them
+  ([`hd-track-tone.md`](../../../rendering/hd-track-tone.md), "Moa Therma's trees").
+- **State bit 7 selects alpha-to-coverage with blending off (confidence 80)**, on the draws whose pass word has bit 3
+  set; the depth mask then follows pass bit 5. This replaces [rcsmodel.md](../../../formats/rcsmodel.md)'s confidence-55
+  inference from the `_atoc` texture names with the instruction. **Open: when pass bit 3, 5, 6, 9 and 10 are set** (which
+  draws, which pass, whether the console's MSAA mode or RPCS3's disabled MSAA decides), read at `r3 + 0x4`'s writers.

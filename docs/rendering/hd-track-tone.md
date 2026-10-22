@@ -655,3 +655,37 @@ the animation table is a vertex-stage binding and the coordinate is linear in `u
 **Other titles.** Omega ships `cf_Chevron_Pulse{,_1,_2,_Displacement2Out*}` and `Chevron_Pulse*` (section above); its
 programs are GCN and unread: **checked, applies, not wired**. 2048 ships the `ds_wallchevron` textures as `.gxt` (above) and no
 RSX program: **not checkable**.
+
+## Moa Therma's trees are cut off by the glass: the trees write depth while blending (2026-10-22, `hd-scenery-materials`)
+
+**Claim**: the tree crowns left of centre in `hd/moa-therma` are cut off because a blended surface draws over them. **True;
+cause measured, mechanism read, not wired.**
+
+**Where.** Box `880,360 120x60` (the crowns against the grandstand): mean grey difference **27.05**. The slot-skip sweep
+(tint render) names `dc_windows_a` slot 560 (box change 72.4) and three `cf_tree` slots, 557, 550, 548 (17.1, 14.3, 6.4);
+skipping 560 alone brings the crowns back in our frame. Our transparent list is drawn in a fixed build-time order (layer,
+then file chunk order; `docs/rendering/draw-order.md`), and the tree chunks (299 to 383) come before the glass chunks (458,
+703), so the glass paints over the crowns. A camera-distance sort would not fix it: the glass chunk 703 (radius 127) is
+317.7 from the pair's eye, between tree chunks at 247.8, 310.5 and 358.0.
+
+**Why the original shows them: the trees write depth.** Their state word is `0xbd`, the glass's `0x39`; `0xbd` adds bit 2
+and bit 7. `Material_ApplyRenderState` feeds state bit 2 to `Rsx_SetDepthMask` and, on draws whose pass word has bit 3,
+state bit 7 to an alpha-to-coverage path with blending off
+([material-state.md](../ghidra/functions/ps3-hdfury-eu/material-state.md), "State bit 2 is depth write, bit 7 is
+alpha-to-coverage"). Either way the trees write depth, and the glass behind them fails the depth test.
+
+**The experiment** (a temporary build, not committed): drawing every `_atoc`-textured chunk through our cutout pipeline
+(depth write on, alpha tested) brings the crowns back as in the original. Box **27.05 to 17.85**; whole frame 10.32 to
+10.30; the other twelve HD pairs move by -0.026 to +0.004. The crowns' edges are harder than the original's.
+
+**Not wired, and why.** The faithful change is renderer-wide: a blended HD draw whose state carries bit 2 writes depth
+(335 blended records disc-wide, `hd_state_census`), and a bit-7 draw takes alpha-to-coverage instead of the blend when the
+pass asks for it. Two things are unread and decide the picture: which pass word bits are set in the race's scene pass (bit 6
+gates the depth mask, bit 3 the coverage path), and how a blend-plus-depth-write tree with no alpha test (`0xbd` has bit 1
+clear) looks without MSAA (its clear texels would write depth too, which the original frame does not obviously show).
+Next: dump the tree draw's `SET_DEPTH_MASK`, `SET_BLEND_ENABLE` and `SET_ANTI_ALIASING_CONTROL` on a cold Moa Therma frame
+(`scripts/hd-draw-dump.py`), then key a depth-writing blend pipeline on state bit 2 (`mesh_render`'s blend pipelines are
+built with `depth_write_enabled: false` for every blended draw today).
+
+**Other titles.** The state word is the `.rcsmodel` material record's, and Omega and 2048 read their models through the
+same reader; their render-state code is not on an RSX (GCN, GXM) and is unread: **not checkable** for the bit meanings.
