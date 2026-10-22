@@ -81,4 +81,64 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
         !weights.is_empty() && weights.iter().all(|&w| (w - 0.8).abs() < 1e-6),
         "the glass weight (parameter 0x5e5b1937) is 0.8 on every instance: {weights:?}"
     );
+    trees_draw_among_the_cutouts_and_bit_2_blends_write_depth(model);
+}
+
+/// The same build, honouring HD's render-state rule
+/// (`oag_title::Looks::material_render_state`): every `cf_tree` draw (`0xbd`,
+/// state bit 7) leaves the blended list for the cutout list, unblended, as all
+/// 31 tree draws of a live Moa Therma frame are issued; the `0x3d`/`0x2d`
+/// blends that frame draws with the depth mask on write depth, and the `0x39`
+/// glass in front of which the crowns were cut off does not.
+/// `docs/ghidra/functions/ps3-hdfury-eu/material-state.md`, "The race pass sets
+/// pass bits 3, 5 and 6".
+fn trees_draw_among_the_cutouts_and_bit_2_blends_write_depth(mut model: mesh::Model) {
+    let state = |model: &mesh::Model, draw: &mesh::DrawCall| model.state_of(draw.texture);
+    let trees_before = model
+        .transparent_draws
+        .iter()
+        .filter(|d| state(&model, d) == 0xbd)
+        .count();
+    assert!(
+        trees_before > 0,
+        "Moa Therma's cf_tree chunks are blended in the file"
+    );
+    let cutouts_before = model.alpha_tested_draws.len();
+
+    let moved = model.honour_render_state();
+
+    assert_eq!(moved, trees_before, "every 0xbd draw moves");
+    assert_eq!(model.alpha_tested_draws.len(), cutouts_before + moved);
+    assert!(
+        model
+            .transparent_draws
+            .iter()
+            .all(|d| state(&model, d) & mesh::render_state::STATE_COVERAGE == 0),
+        "no coverage draw stays blended"
+    );
+    for tree in &model.alpha_tested_draws[cutouts_before..] {
+        assert_eq!(state(&model, tree), 0xbd);
+        assert_eq!(tree.blend_state, None);
+        assert_eq!(
+            tree.alpha_test_ref,
+            Some(mesh::render_state::COVERAGE_REFERENCE)
+        );
+    }
+    let writes = |word: u32| {
+        model
+            .transparent_draws
+            .iter()
+            .filter(|d| state(&model, d) == word)
+            .map(|d| d.writes_depth)
+            .collect::<Vec<_>>()
+    };
+    for word in [0x3d, 0x2d] {
+        let w = writes(word);
+        assert!(!w.is_empty() && w.iter().all(|&w| w), "{word:#x}: {w:?}");
+    }
+    let glass = writes(0x39);
+    assert!(
+        !glass.is_empty() && glass.iter().all(|&w| !w),
+        "0x39: {glass:?}"
+    );
 }

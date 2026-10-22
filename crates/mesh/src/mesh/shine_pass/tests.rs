@@ -23,6 +23,7 @@ fn vertex(normal: [f32; 3]) -> GpuVertex {
 
 fn draw(range: std::ops::Range<u32>, texture: usize) -> DrawCall {
     DrawCall {
+        writes_depth: false,
         range,
         texture: Some(texture),
         bounds: Bounds {

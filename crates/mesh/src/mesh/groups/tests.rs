@@ -73,6 +73,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
         }));
         model.indices.extend(start..start + 3);
         model.draws.push(DrawCall {
+            writes_depth: false,
             moving: false,
             chunk: None,
             alpha_test_ref: None,

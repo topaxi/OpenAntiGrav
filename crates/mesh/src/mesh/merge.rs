@@ -56,6 +56,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,
@@ -123,6 +124,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         out.indices
             .extend(model.indices.iter().map(|i| i + vertex_base));
         let rebase = |d: DrawCall| DrawCall {
+            writes_depth: false,
             range: (d.range.start + index_base)..(d.range.end + index_base),
             texture: d.texture.map(|t| t + texture_base),
             bounds: d.bounds,
@@ -223,6 +225,7 @@ mod merge_tests {
                 .collect(),
             indices: (0..vertices as u32).collect(),
             draws: vec![DrawCall {
+                writes_depth: false,
                 moving: false,
                 chunk: None,
                 blend: None,
@@ -263,6 +266,7 @@ mod merge_tests {
             flame: None,
             absorb_shell: false,
             material_lod_bias: 0.0,
+            material_state: Vec::new(),
             alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 1.0,

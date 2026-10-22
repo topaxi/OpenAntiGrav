@@ -61,6 +61,7 @@ fn one_triangle_model(label: &str) -> Model {
     ];
     model.indices = vec![0, 1, 2];
     model.draws = vec![DrawCall {
+        writes_depth: false,
         range: 0..3,
         // Untextured: `Built::texture_binds` always carries the white
         // placeholder at slot 0, which is what `None` binds to - see

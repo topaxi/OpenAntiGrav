@@ -85,6 +85,7 @@ fn model_with(
         indices: vec![0, 1, 2],
         draws: Vec::new(),
         transparent_draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,
@@ -122,6 +123,7 @@ fn model_with(
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

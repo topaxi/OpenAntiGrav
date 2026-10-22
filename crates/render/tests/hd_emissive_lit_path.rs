@@ -108,6 +108,7 @@ fn model(lit: f32) -> Model {
         label: "hd emissive lit-path quad".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,
@@ -154,6 +155,7 @@ fn model(lit: f32) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

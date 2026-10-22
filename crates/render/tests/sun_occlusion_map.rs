@@ -65,6 +65,7 @@ fn draw(range: std::ops::Range<u32>, centre: [f32; 3], radius: f32, moving: bool
         depth_point: None,
         layer: 0,
         alpha_test_ref: None,
+        writes_depth: false,
         node: None,
         chunk: None,
     }

@@ -624,6 +624,7 @@ fn emit(
         (None, false) => &mut out.draws,
     };
     list.push(DrawCall {
+        writes_depth: false,
         moving: place.xform != 0,
         range: first_index..u32::try_from(out.indices.len()).unwrap_or(u32::MAX),
         texture: surface.texture,
@@ -792,6 +793,7 @@ fn build_with_options(
     out.glow_from_program = true;
     out.material_colour_factor = material_colour_factor;
     out.material_quake = material_quake;
+    out.material_state = model.materials.iter().map(|m| m.state).collect();
     out.material_tangent = material_tangent;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;

@@ -59,6 +59,7 @@ fn moving_quad(xform: u32) -> Model {
         // of the check, not the check itself.
         indices: vec![0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0],
         draws: vec![DrawCall {
+            writes_depth: false,
             range: 0..12,
             texture: None,
             bounds: Bounds {
@@ -107,6 +108,7 @@ fn moving_quad(xform: u32) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         node_vertex_ranges: Vec::new(),
         lod_groups: Default::default(),

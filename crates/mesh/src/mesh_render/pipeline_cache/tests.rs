@@ -50,6 +50,7 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
         label: "pipeline_cache test triangle".into(),
         indices: vec![0, 1, 2],
         draws: vec![DrawCall {
+            writes_depth: false,
             moving: false,
             blend: None,
             blend_state: None,
@@ -88,6 +89,7 @@ pub(in crate::mesh_render) fn triangle_model() -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0, 0.0, 0.5],
         radius: 2.0,

@@ -213,3 +213,40 @@ recalled, not re-opened). So:
   set; the depth mask then follows pass bit 5. This replaces [rcsmodel.md](../../../formats/rcsmodel.md)'s confidence-55
   inference from the `_atoc` texture names with the instruction. **Open: when pass bit 3, 5, 6, 9 and 10 are set** (which
   draws, which pass, whether the console's MSAA mode or RPCS3's disabled MSAA decides), read at `r3 + 0x4`'s writers.
+
+## The race pass sets pass bits 3, 5 and 6: measured on a live Moa Therma frame (2026-10-22, `hd-tree-depth`)
+
+**One cold-booted frame** (RPCS3, private config with `Write Color Buffers` on, Time Trial on Moa Therma, FEISAR at the grid
+because the private autosave has Harimau locked), paused and dumped with `scripts/hd-draw-dump.py` (`HOOK_LIGHT=1
+HOOK_NO_HEADS=1`; 650 draws, read with `scripts/rsx-draw-list.py`). The bound texture of each draw named below was identified
+by reading three 64-byte samples (at `+0x400`, `+0x1000`, `+0x4000`) of its unit-0 texture out of VRAM through the GDB stub
+and finding the one Moa Therma `.gtf` that holds all three; every tree draw matched exactly one file. Registers:
+`0x0310` blend enable, `0x0304` alpha-test enable, `0x0a70` depth mask, `0x1d7c` anti-aliasing control.
+
+| Draws (main scene target `0x00f50000`) | Texture | State word | Blend | Alpha test | Depth mask | `0x1d7c` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 273 to 356, 31 draws, inside the opaque span | `ol_*_atoc.gtf` (`cf_tree`) | `0xbd` | 0 | 0 | 1 | `0xffff0011` |
+| 528, 529 | `dc_cornerarrows.gtf` (`dc_hologramsigns`) | `0x2d` | 1 | 0 | **1** | `0xffff0001` |
+| 551 | `cf_startline.gtf` (`cf_startbeam_glow`) | `0x3d` | 1 | 0 | **1** | `0xffff0001` |
+| 530 to 558 (but 551) | `dc_window_a_normalmap.gtf` and the other glass | `0x39` and others without bit 2 | 1 | 0 | 0 | `0xffff0001` |
+
+`0xffff0011` is enable 1, **alpha-to-coverage 1**, alpha-to-one 0, sample mask `0xffff`; `0xffff0001` is enable only. So:
+
+- **The trees take the bit-7 branch on the race pass, which therefore has pass bit 3 set.** Their state has bit 0 (blend)
+  set, yet the draw has blending and the alpha test off and coverage on, which only the branch at `0x005d9148` does. Their
+  depth mask is 1, and in that branch it follows pass bit 5, so pass bit 5 is set too. **The trees are not blended at all:
+  they are coverage-tested and write depth, and they are issued among the opaque draws, before the first blended draw (522).**
+  Confidence 90 (one frame, one circuit, every one of the 31 draws the same).
+- **State bit 2 is depth write on a blended draw, and pass bit 6 is set.** The `0x2d` and `0x3d` draws blend with the depth
+  mask on; the `0x39` glass blends with it off. Confidence 90.
+- **The scene target is multisampled**: its surface format word is `0x00003148`, anti-alias field `3`, which is two samples
+  (`CELL_GCM_SURFACE_DIAGONAL_CENTERED_2`, as RPCS3's `surface_antialiasing` enum lists it; recalled, not re-opened,
+  confidence 70). So on the console a tree texel's alpha selects 0, 1 or 2 of a pixel's two samples.
+- **Caveat: the coverage bit alone does not mark a tree.** Draws 522 to 526 (`ds_moa_wall_cs`, `ds_pit_cs` and others) have
+  blend **and** alpha test on, depth mask 1 and `0x1d7c` = `0xffff0011` as well: the other branch writes coverage from pass
+  bit 9. Identify a coverage draw by its state word's bit 7, not by the register.
+
+**Wired** the same day: `oag_title::Looks::material_render_state` and `oag_mesh::mesh::Model::honour_render_state` draw a
+bit-7 state among the cutouts (a 0.5 threshold standing in for coverage, chosen) and a blended bit-2 state with depth write
+([hd-track-tone.md](../../../rendering/hd-track-tone.md), "Moa Therma's trees", for the 13 pairs). Omega and 2048 author
+the same words and are **checked, applies, not wired** (same section).

@@ -537,6 +537,7 @@ mod tests {
             depth_point: None,
             layer: 0,
             alpha_test_ref: None,
+            writes_depth: false,
             node: None,
             chunk: None,
         }

@@ -23,6 +23,7 @@ use oag_mesh::mesh::Bounds;
 
 fn draw_at(centre: [f32; 3], radius: f32) -> DrawCall {
     DrawCall {
+        writes_depth: false,
         moving: false,
         blend: None,
         blend_state: None,
@@ -71,6 +72,7 @@ pub(super) fn pvs(boxes: &[(u8, [f32; 3], [f32; 3])]) -> TrackPvs {
 
 fn draw_of_node(node: Option<u32>) -> DrawCall {
     DrawCall {
+        writes_depth: false,
         moving: false,
         chunk: None,
         blend: None,
@@ -122,6 +124,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre: [0.0; 3],
         radius: 1.0,

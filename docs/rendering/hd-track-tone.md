@@ -689,7 +689,7 @@ RSX program: **not checkable**.
 ## Moa Therma's trees are cut off by the glass: the trees write depth while blending (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: the tree crowns left of centre in `hd/moa-therma` are cut off because a blended surface draws over them. **True;
-cause measured, mechanism read, not wired.**
+cause measured, mechanism read, wired 2026-10-22 (`hd-tree-depth`, below).**
 
 **Where.** Box `880,360 120x60` (the crowns against the grandstand): mean grey difference **27.05**. The slot-skip sweep
 (tint render) names `dc_windows_a` slot 560 (box change 72.4) and three `cf_tree` slots, 557, 550, 548 (17.1, 14.3, 6.4);
@@ -719,3 +719,46 @@ built with `depth_write_enabled: false` for every blended draw today).
 
 **Other titles.** The state word is the `.rcsmodel` material record's, and Omega and 2048 read their models through the
 same reader; their render-state code is not on an RSX (GCN, GXM) and is unread: **not checkable** for the bit meanings.
+
+**Wired (2026-10-22, `hd-tree-depth`).** A live cold Moa Therma frame
+([material-state.md](../ghidra/functions/ps3-hdfury-eu/material-state.md), "The race pass sets pass bits 3, 5 and 6")
+answered both open questions: the race pass sets pass bits 3, 5 and 6, so the 31 tree draws are issued **unblended**, alpha
+test off, alpha-to-coverage on, depth written, among the opaque draws; and the blended `0x2d`/`0x3d` draws write depth while
+the `0x39` glass does not. The scene target has two samples. `oag_title::Looks::material_render_state` (HD `Measured`,
+every other title unread) has the track loader call `Model::honour_render_state`: a state-bit-7 draw moves from the blended
+list to the cutout list, unblended, at a 0.5 reference that stands in for two-sample coverage on our single-sample scene
+(**chosen, not measured**), and a blended draw with bit 2 takes a depth-writing variant of its blend pipeline.
+
+| Pair (re-captured 2026-10-22, whole-frame mean grey) | before | bit 7 | bit 7 + bit 2 |
+| --- | --- | --- | --- |
+| anulpha-pass | 10.877 | 10.877 | 10.637 |
+| chenghou-project | 7.486 | 7.486 | 7.489 |
+| metropia | 9.140 | 9.115 | 9.113 |
+| moa-therma | 9.853 | 9.825 | 9.826 |
+| moa-therma box `880,360 120x60` | 25.62 | 16.70 | 16.70 |
+| modesto-heights | 14.242 | 14.244 | 14.232 |
+| sebenco-climb | 13.722 | 13.722 | 13.708 |
+| sol-2 | 8.534 | 8.534 | 8.534 |
+| talons-assegai-c1 | 8.826 | 8.824 | 8.825 |
+| talons | 8.461 | 8.458 | 8.459 |
+| tech-de-ra | 12.886 | 12.886 | 12.804 |
+| the-amphiseum | 10.663 | 10.663 | 10.667 |
+| ubermall | 9.823 | 9.823 | 9.818 |
+| vineta-k | 17.031 | 17.031 | 17.031 |
+
+(The box read 27.05 against the pair captured before the hull shake was patched out.) Seen as a player: the crowns stand
+whole in front of the grandstand glass, in the pair and in moving frames just after GO; their edges are harder than the
+original's, which the console's two-sample coverage softens. Tech de Ra's glass road gains the dark seam the original shows.
+
+**Where else it reaches.** Material records per circuit file (blended with bit 2 / bit 7): Moa Therma 11 / 43,
+Chenghou 19 / 21, Modesto 35 / 29, Ubermall 49 / 6, Sebenco 27 / 6, Amphiseum 21 / 10, Talon's 14 / 7, Anulpha 13 / 4,
+Tech de Ra 11 / 1, Metropia 10 / 8, Vineta K 2 / 5, Sol 2 1 / 5; each reversed variant about the same; the four Zone
+circuits 1 to 3 / 0. The reversed variants and the Zone circuits have no pair; the one HD race pair outside `hd/`
+(`hd-race/talons-pack`) moved 46.50 to 46.14. **The Zone pass's own pass bits are unread**: the frame above is a race
+frame, and the rule applies to a Zone race's model as well (bit 2 only, no Zone circuit authors bit 7).
+
+**Other titles, re-checked.** Omega and 2048 author HD's state word on their own materials (`psp2::material::Material::state`),
+and a census of all 16 Omega and 14 2048 circuit models finds `cf_tree` at `0xbd` (Omega also `0xbe`, `0x2bd`; 2048 20
+records) and blended states with bit 2 (`0x3d`, `0x7d`, `0x2d`) on both. Their builder
+(`mesh::rcs::psp2::transparency::route`) reads bits 0 and 1 only, and their executables' handling of bits 2 and 7 is unread:
+**checked, applies, not wired** for both.

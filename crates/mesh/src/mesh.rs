@@ -194,6 +194,15 @@ pub struct Model {
     /// (`oag_title::effects::MATERIAL_LOD_BIAS`) - set by the loader that knows
     /// the title, and pushed as the `material_lod_bias` pipeline constant.
     pub material_lod_bias: f32,
+    /// Per material slot: the `.rcsmodel` material record's render-state word
+    /// (`oag_rcs::rcsmodel::Material::state`), as the file authors it. Filled by
+    /// Wipeout HD's PS3 builder only; empty for every other model, including the
+    /// Vita/PS4 container (`rcs::psp2`), whose materials carry the same word.
+    ///
+    /// **Recorded, not acted on by the decode.** Which of its bits the renderer
+    /// honours is a title's rule (`oag_title::Looks::material_render_state`),
+    /// applied by [`Self::honour_render_state`].
+    pub material_state: Vec<u32>,
     /// The alpha-test reference [`Self::alpha_tested_draws`] is compared
     /// against, when the model's own materials author one.
     ///
@@ -297,6 +306,7 @@ impl Model {
             flame: None,
             absorb_shell: false,
             material_lod_bias: 0.0,
+            material_state: Vec::new(),
             alpha_test_ref: None,
             centre: [0.0; 3],
             radius: 0.0,
@@ -803,6 +813,7 @@ fn build_class(
                     // setter was not read.
                     .map(|c| bounds_matrix.map_or(c, |m| vex::transform_point(&m, c)));
                     let draw = DrawCall {
+                        writes_depth: false,
                         range: first_index..last_index,
                         texture,
                         bounds: Bounds { centre, radius },
@@ -926,6 +937,7 @@ fn build_class(
         flame: None,
         absorb_shell: false,
         material_lod_bias: 0.0,
+        material_state: Vec::new(),
         alpha_test_ref: None,
         centre,
         radius,
@@ -957,4 +969,5 @@ pub use flame::Flame;
 pub mod glow;
 mod merge;
 mod order;
+pub mod render_state;
 pub use merge::merge;

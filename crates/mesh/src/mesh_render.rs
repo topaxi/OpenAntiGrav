@@ -127,7 +127,7 @@ pub struct Built {
     /// destination factor each drawn from four values, and Talon's Junction
     /// alone uses five of the pairs that makes. A Pulse model authors none and
     /// this is empty, so nothing is created for a title that does not use it.
-    pub authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])>,
+    pub authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
     /// Alpha-only pass that stamps a blended batch's glow byte into the mask,
     /// drawn over [`Model::transparent_draws`] after their colour - see
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
@@ -738,9 +738,9 @@ pub fn build_with(
     // culling, while culling front faces changes 2,666 - and the pixels that
     // do change are back-facing slivers that were wrongly visible. That is
     // the check the old blanket `cull_mode: None` asked for and never got.
-    // Depth state never varies across this pipeline's callers - blended
-    // geometry never writes depth, whichever `Depth` this model asked for -
-    // so it is computed once outside the closure rather than per call.
+    // Blended geometry writes no depth, whichever `Depth` this model asked
+    // for, except a Wipeout HD draw whose material state asks for it
+    // (`DrawCall::writes_depth`), which takes `depth_writing_blend` below.
     let blend_depth_stencil = wgpu::DepthStencilState {
         format: DEPTH_FORMAT,
         depth_write_enabled: Some(false),
@@ -749,11 +749,17 @@ pub fn build_with(
         bias: Default::default(),
     };
     let (blend_entry, velocity_target) = velocity.mesh_blend();
-    let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
+    let make_pipeline_with = |label: &str,
+                              blend: Option<wgpu::BlendState>,
+                              cull: bool,
+                              depth: &wgpu::DepthStencilState| {
         // The second target rides along **write-masked empty** when
         // [`Velocity::Write`] adds one: a blended draw writes no depth, so
         // the velocity at its pixels stays the surface's behind it - see
-        // [`Velocity`]. Alpha is the bloom's glow mask - see [`GlowMask`] for
+        // [`Velocity`]. A depth-writing blend (`DrawCall::writes_depth`) keeps
+        // that empty mask too, so its pixels carry its own depth but the
+        // velocity behind it: chosen, not measured, and unexamined under
+        // motion blur. Alpha is the bloom's glow mask - see [`GlowMask`] for
         // which draw paths are allowed to write it and why.
         let targets = velocity_targets(
             wgpu::ColorTargetState {
@@ -774,7 +780,7 @@ pub fn build_with(
             blend_entry,
             &targets,
             primitive,
-            Some(blend_depth_stencil.clone()),
+            Some(depth.clone()),
             multisample,
             constants,
             || {
@@ -797,13 +803,16 @@ pub fn build_with(
                         },
                     }),
                     primitive,
-                    depth_stencil: Some(blend_depth_stencil.clone()),
+                    depth_stencil: Some(depth.clone()),
                     multisample,
                     multiview_mask: None,
                     cache: None,
                 })
             },
         )
+    };
+    let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
+        make_pipeline_with(label, blend, cull, &blend_depth_stencil)
     };
     let blend_pipeline = [
         make_pipeline("mesh blend (alpha over, two-sided)", Some(blend), false),
@@ -826,21 +835,34 @@ pub fn build_with(
     // map: `wgpu::BlendState` is not `Hash`, the count is five on the widest
     // circuit measured, and first-seen order keeps a rebuild of the same file
     // byte-identical - the same reason `Model::anim_tracks` is ordered that way.
-    let mut authored_pipelines: Vec<(wgpu::BlendState, [wgpu::RenderPipeline; 2])> = Vec::new();
-    for state in model
+    let mut authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])> =
+        Vec::new();
+    // **Keyed on the depth write too**: a Wipeout HD blended draw whose
+    // material state carries bit 2 writes depth (`DrawCall::writes_depth`).
+    let depth_writing_blend = wgpu::DepthStencilState {
+        depth_write_enabled: Some(true),
+        ..blend_depth_stencil.clone()
+    };
+    for key in model
         .transparent_draws
         .iter()
-        .filter_map(|draw| draw.blend_state)
+        .filter_map(|draw| draw.blend_state.map(|state| (state, draw.writes_depth)))
     {
-        if authored_pipelines.iter().any(|(seen, _)| *seen == state) {
+        if authored_pipelines.iter().any(|(seen, _)| *seen == key) {
             continue;
         }
-        let label = format!("mesh blend (authored {state:?})");
+        let (state, writes_depth) = key;
+        let label = format!("mesh blend (authored {state:?}, depth write {writes_depth})");
+        let depth = if writes_depth {
+            &depth_writing_blend
+        } else {
+            &blend_depth_stencil
+        };
         authored_pipelines.push((
-            state,
+            key,
             [
-                make_pipeline(&label, Some(state), false),
-                make_pipeline(&label, Some(state), true),
+                make_pipeline_with(&label, Some(state), false, depth),
+                make_pipeline_with(&label, Some(state), true, depth),
             ],
         ));
     }

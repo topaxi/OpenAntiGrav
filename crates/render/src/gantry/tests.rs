@@ -129,6 +129,7 @@ fn two_draws(a: f32, b: f32) -> Model {
     ];
     model.indices = vec![0, 1, 2, 3, 4, 5];
     let draw = |range: std::ops::Range<u32>| DrawCall {
+        writes_depth: false,
         range,
         texture: None,
         bounds: Bounds {
@@ -242,6 +243,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
         texture("factory_floor_01_rp.tga"),
     ];
     let draw = |range: std::ops::Range<u32>, texture: usize| DrawCall {
+        writes_depth: false,
         range,
         texture: Some(texture),
         bounds: Bounds {

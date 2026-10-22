@@ -62,6 +62,7 @@ fn model(map: [u8; 4], tangent: u32) -> Model {
     let mut model = Model::none("hd hull normal lit-path triangle");
     model.indices = vec![0, 1, 2];
     model.draws = vec![DrawCall {
+        writes_depth: false,
         moving: false,
         blend: None,
         blend_state: None,

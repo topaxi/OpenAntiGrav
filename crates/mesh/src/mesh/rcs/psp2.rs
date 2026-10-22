@@ -667,6 +667,7 @@ fn build_planned(
                 .sqrt()
         };
         model.draws.push(DrawCall {
+            writes_depth: false,
             range: first..u32::try_from(model.indices.len()).unwrap_or(u32::MAX),
             texture: None,
             bounds: Bounds { centre, radius },
