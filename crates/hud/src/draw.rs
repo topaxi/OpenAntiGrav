@@ -149,6 +149,16 @@ pub(super) fn text_for(
 
     match label.name.as_str() {
         // Values.
+        // Pure's speed digits, in two widgets: `Hud_UpdateSpeedBar` (`0x0881eabc`) prints the
+        // speed `%.0f` (below 5 as `0`), puts everything but the last two characters in
+        // `SpeedL` and the last two in `SpeedR`, or all of a short string in `SpeedR`.
+        "SpeedL" | "SpeedR" => {
+            let shown = readout.speed_kmh.max(0.0);
+            let digits = format!("{:.0}", if shown < 5.0 { 0.0 } else { shown });
+            let split = digits.len().saturating_sub(2);
+            let (head, tail) = digits.split_at(if digits.len() < 3 { 0 } else { split });
+            Some(if label.name == "SpeedL" { head } else { tail }.to_string())
+        }
         "SpeedBarText" => Some(match speed_unit {
             true => format!("{:.0} kmh", readout.speed_kmh.max(0.0)),
             false => format!("{:.0}", readout.speed_kmh.max(0.0)),
@@ -887,6 +897,11 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     );
     frame.sprites.extend(super::assist::sprites(cx, readout));
 
+    // A title that draws its gauge as models (Pure) puts it where the always-on bars would be.
+    frame
+        .sprites
+        .extend(super::bar_models::bar_model_draws(cx, readout));
+
     // The lock-on reticle, over the bars and under the text - it is the only
     // HUD sprite anchored on the *world* rather than on the screen, so it moves
     // across everything else and must not be under it.
@@ -968,7 +983,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         {
             continue;
         }
-        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit);
+        let tipped = super::bar_tip::text(cx.art, readout, &label.name, speed_unit).or_else(|| {
+            super::time_trial_pace::ladder_caption(cx.art, readout, &label.name, cx.strings)
+        });
         let Some(text) = tipped.or_else(|| {
             text_for(
                 label,

@@ -44,8 +44,8 @@ pub(super) fn read(
     match track_stats::from_blob(&blob) {
         Ok(stats) => {
             report.push(format!(
-                "track stats: {entry}, race times {:?} s, lap times {:?} s",
-                stats.race_times, stats.lap_times
+                "track stats: {entry}, race times {:?} s, lap times {:?} s, Pure medals {:?}",
+                stats.race_times, stats.lap_times, stats.pure_medals
             ));
             Some(stats)
         }

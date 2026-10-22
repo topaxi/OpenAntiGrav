@@ -43,7 +43,7 @@ const FIXTURE: &str = r#"
 fn parses_the_flat_class_rows() {
     let stats = parse(FIXTURE).expect("parses");
     assert_eq!(stats.race_times, [200.0, 180.0, 160.0, 140.0]);
-    assert_eq!(stats.lap_times, [50.0, 45.0, 40.0, 35.0]);
+    assert_eq!(stats.lap_times, Some([50.0, 45.0, 40.0, 35.0]));
     assert_eq!(stats.elimination_target, Some(12));
     assert_eq!(stats.zone_target, Some(30));
     assert_eq!(stats.length, Some(4321.0));
@@ -184,4 +184,24 @@ fn ambient_skill_scale_without_a_table_is_two() {
         ),
         2.0
     );
+}
+
+#[test]
+fn a_file_with_no_lap_times_reads_with_none() {
+    let pure = FIXTURE
+        .replace(
+            r#"<LapTimes Venom="50" Flash="45" Rapier="40" Phantom="35"/>"#,
+            "",
+        )
+        .replace(
+            r#"<RaceTimes Venom="200""#,
+            r#"<RaceTimes Vector="154" Silver="3" Bronze="6" Venom="200""#,
+        )
+        .replace(
+            "</Stats>",
+            r#"<ZoneMedals Gold="25" Silver="20" Bronze="15"/></Stats>"#,
+        );
+    let stats = parse(&pure).expect("a file without <LapTimes> parses");
+    assert_eq!(stats.lap_times, None);
+    assert_eq!(stats.race_times, [200.0, 180.0, 160.0, 140.0]);
 }

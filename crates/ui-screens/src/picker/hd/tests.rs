@@ -268,6 +268,7 @@ fn sheet(name: &str) -> Option<Placed> {
         width: 128,
         height: 64,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }
@@ -428,6 +429,7 @@ fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 
         width,
         height,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     };
     let frame = Frame {

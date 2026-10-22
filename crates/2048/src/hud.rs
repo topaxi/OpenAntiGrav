@@ -149,6 +149,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // names - not `<Mode3D><Model>`s, so this field is moot here too.
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    bar_models: None,
+    time_ladder_captions: None,
     pickup_icon_uv: Some(PICKUP_ICON_UV),
     // `None`: 2048's Zone HUD shows a class per *band* of zones off
     // `oag_2048::race::ZONE_STAGES`, which is a different shape from the

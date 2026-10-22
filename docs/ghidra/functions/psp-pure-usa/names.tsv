@@ -238,3 +238,6 @@
 0x08925054	function	Ship_UpdateSteerLeans	85	craft-physics.md
 # 2026-10-21 pure-camera-eye: the player view update, live (camera.md)
 0x08849970	function	Camera_CopyTripodToView	85	camera.md
+# 2026-10-22 pure-fidelity: the speed and shield gauge (hud-speed-gauge.md)
+0x0881eabc	function	Hud_UpdateSpeedBar	85	hud-speed-gauge.md
+0x0881f13c	function	Hud_UpdateEnergyBar	80	hud-speed-gauge.md

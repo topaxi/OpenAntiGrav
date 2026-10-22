@@ -1554,3 +1554,68 @@ are rewards, untraced), how the profile counts medals for
 ([`ai-controls.md`](../ghidra/functions/psp-pure-usa/ai-controls.md): planned, not flown
 there yet).
 
+
+## The speed gauge is three models (2026-10-22)
+
+Pure's HUD draws its speed and shield gauge from three `<Mode3D><Model>` widgets, not from
+`<Image>` bars: `Speed3D` (`Data\HUD\Bar_1.vex`), `Shield3D` (`Bar_3.vex`) and `Overlay3D`
+(`Bar_outline_1.vex`), all at `x="394" y="20"` in `Arcade_HUD.xml` and `TimeTrial_HUD.xml`, and
+`Zone_Bar_1`/`Zone_Bar_3`/`Zone_outline_1` under the same names in `Zone_HUD.xml`. Ours drew no
+gauge on Pure until this date; `oag_title::HudArt::bar_models` carries the three names and
+`oag_raceplay::hud` rasterises each model flat into the HUD sheet (the HUD's own orthographic pass
+at one unit per pixel, `y` up from the screen's bottom). Evidence: the executable's
+`Hud_UpdateSpeedBar` and `Hud_UpdateEnergyBar`
+([`hud-speed-gauge.md`](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md)) and the four pairs
+in `data/reference/compare-page/pure-psp/`.
+
+| Claim | Measured | Confidence |
+| --- | --- | ---: |
+| the gauge is these three models, the outline carries both boxes and the `km/h` caption | layouts, model census | 95 |
+| the speed fill is `speed / 700` of the mesh's width, from the left | `0x0881eabc` reads `lui 0x442f`; the crop is read off the model's texture track | 85 |
+| the shield fill is the eased shield percent over 100 | `0x0881f13c` | 80 |
+| `SpeedR` carries the last two digits of `%.0f` of the speed, `SpeedL` the rest | `0x0881eabc` | 85 |
+
+**Box, per pair** (yellow outline's bounding box, theirs and ours identical on all four, 345 pixels each):
+`(309, 239)-(477, 252)`; the shield fill `(309, 255)-(474, 263)`; the readout `0` at `SpeedR`'s
+`x = 436`. Whole-frame mean grey, theirs / ours before / ours after: Vineta K 143.63 / 117.40 /
+118.39, Modesto Heights 72.30 / 66.49 / 68.92, Chenghou Project 97.41 / 76.15 / 77.59, Blue
+Ridge 102.90 / 96.89 / 98.67.
+
+**Chosen, not measured:** nearest texel sampling, the 169 px bar's crop edge being a hard edge
+(the original's would be one texel of bilinear), and no easing of the shield (the original chases
+the true value at 140 percent a second). Open: the animation's first key sits one frame in, so the
+original's fill likely stays empty up to 1.7 percent of the way; no pair moves fast enough to show
+a partial speed fill, so the crop's slope is read off the model, not off a frame.
+
+Speed's scale on Pure is now 700 (it was 600, "ours, not recovered"). 2048 and Omega:
+**checked, differs / not checkable** - they do not share this HUD engine
+([the page](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md#other-titles)).
+
+## Time Trial's medal ladder (2026-10-22)
+
+Pure's Time Trial clock counts down to the next medal, captioned `BRONZE TIME` on a fresh profile, and
+`stats.xml` has no `<LapTimes>` (which had made the whole file unreadable). Law, table and the four pairs'
+label/time match (label 4 of 4, time exactly on 2, a tenth under on 2 from pair alignment):
+[hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md). Silver, gold and `RECORD`
+captions follow the stored best and are unexercised on a frame (no pair holds a best).
+
+## Pure's hull is darker than the original's and does not move with the circuit (2026-10-22, measured)
+
+Four Time Trial pairs (Vector, Feisar, same pose, hull offset 0 to 1 px), mean RGB over a patch of the teal body at the
+hull's centre, original then ours (ours/original on green in the last column; whole-frame mean grey of the original
+beside it):
+
+| circuit | original | ours | ratio | frame mean grey |
+| --- | --- | --- | ---: | ---: |
+| Vineta K | 159 176 155 | 56 68 53 | 0.39 | 143.6 |
+| Chenghou Project | 156 168 138 | 61 74 58 | 0.44 | 97.4 |
+| Blue Ridge | 132 149 124 | 57 69 55 | 0.46 | 102.9 |
+| Modesto Heights | 110 94 74 | 61 73 58 | 0.78 | 72.3 |
+
+Ours is flat (56 to 61 red) on all four because the stand-in rig is fixed; the original follows the scene's own
+brightness, so the gap is a per-circuit lighting input and not the texture or the tone curve. Pure's `track.vex`
+authors no `AmbientLight`/`DirectionalLight` node (loader report: `hull lights: the circuit authors none`), and
+switching Pulse's rule (`Looks::hull_lights`) on for Pure's PSP changed no pixel on any pair (tried, reverted). A
+second patch placed by hand on the re-rendered pairs reads the same direction (ours 35 to 42 red on all four, the
+original 70 to 124, darkest on Modesto). Nothing implemented; the cause class is an inference from the flat-versus-moving pattern. Open: the executable's per-craft
+hull lighting source, not yet located. Other titles: not checkable from this lane (2048 and Omega ship no Pure hull).

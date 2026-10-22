@@ -326,6 +326,7 @@ fn a_centred_image_draws_from_its_middle() {
             width: 1024,
             height: 128,
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         },
     )];

@@ -60,8 +60,8 @@ pub struct TrackStats {
     /// `<RaceTimes>`, one figure per class, indexed by [`SpeedClass`]'s
     /// discriminant. Seconds.
     pub race_times: [f32; 4],
-    /// `<LapTimes>`, the same shape.
-    pub lap_times: [f32; 4],
+    /// `<LapTimes>`, the same shape; `None` on Pure, whose file authors no lap figures.
+    pub lap_times: Option<[f32; 4]>,
     /// `<Targets Elimination="..."/>`: the kill count. `None` when absent (never
     /// missing across `pulse-psp-usa.chd`'s 24 files).
     pub elimination_target: Option<u32>,
@@ -77,6 +77,10 @@ pub struct TrackStats {
     /// `<SkillLevels><ModeModifiers>`, one row a class; read by
     /// [`ambient_skill_scale`], not [`resolve_skill_scale`].
     pub mode_modifiers: [ModeModifiers; 4],
+    /// Pure's medal figures from the same `<RaceTimes>` - the gold time of all five of its classes
+    /// (Vector included, which [`Self::race_times`] has no slot for) and the `Silver`/`Bronze`
+    /// offsets - or `None` for a file without them, which is every Pulse and HD one.
+    pub pure_medals: Option<crate::pure_campaign::Stats>,
 }
 
 /// One `<ModeModifiers>` row: `AI_ResolveSkillScale`'s non-campaign terms, added
@@ -180,7 +184,10 @@ pub fn parse(expanded: &str) -> Result<TrackStats> {
         .ok_or(Error::MissingElement { element: "Stats" })?;
 
     let race_times = class_row(stats, "RaceTimes")?;
-    let lap_times = class_row(stats, "LapTimes")?;
+    let lap_times = match class_row(stats, "LapTimes") {
+        Err(Error::MissingElement { .. }) => None,
+        row => Some(row?),
+    };
 
     let targets = stats.children_named("Targets").next();
     let elimination_target = targets
@@ -256,6 +263,7 @@ pub fn parse(expanded: &str) -> Result<TrackStats> {
         length,
         skill_scale,
         mode_modifiers,
+        pure_medals: crate::pure_campaign::parse_stats(expanded).ok(),
     })
 }
 

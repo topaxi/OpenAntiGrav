@@ -87,6 +87,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // not `<Mode3D><Model>`s - this field is Pure's own dialect.
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    bar_models: None,
+    time_ladder_captions: None,
     // Pulse names a widget per weapon (`pickup_icon_name`) - this field is
     // 2048's own dialect, one widget with a rewritten UV.
     pickup_icon_uv: None,

@@ -151,6 +151,7 @@ fn medal_atlas_placed() -> Placed {
         width: 1024,
         height: 256,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     }
 }

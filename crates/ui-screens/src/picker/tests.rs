@@ -443,6 +443,7 @@ fn the_hex_grid_tiles_rather_than_reading_past_its_sprite() {
         width: 32,
         height: 16,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     };
     let layers = draw_list(
@@ -758,6 +759,7 @@ fn an_unsized_arrow_off_the_sheet_is_no_target() {
         width: 17,
         height: 14,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     };
     let targets = pointer::targets(&picker, &layout, &pulse_skin(), &|_| Some(placed));

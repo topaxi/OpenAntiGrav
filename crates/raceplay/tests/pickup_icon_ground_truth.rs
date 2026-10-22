@@ -173,3 +173,68 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
     );
     println!("{icon_draw:?}");
 }
+
+/// Pure's speed and shield gauge is three `<Mode3D>` models, `oag_title::BarModels`, and a race
+/// draws them where the original's frames put them: the yellow outline's box at
+/// `(309, 239)`-`(477, 252)` and the shield's at `(309, 255)`-`(474, 263)` on all four pairs in
+/// `data/reference/compare-page/pure-psp/`, which this reproduces from the disc's own models.
+///
+/// Dropping `HudArt::bar_models` leaves no gauge at all, and this fails.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_speed_gauge_is_three_models_drawn_flat_where_the_original_draws_them() {
+    use oag_ui::frontend::Draw;
+    let Some(loaded) = single_race() else { return };
+    let context = loaded.hud.context().expect("a context is buildable");
+    let mut readout = race::Race::start(loaded.setup).readout();
+    readout.shield_max = 100.0;
+    readout.shield = 100.0;
+    let rects = |speed: f32, shield: f32| -> Vec<[f32; 4]> {
+        let mut readout = readout.clone();
+        readout.speed_kmh = speed;
+        readout.shield = shield;
+        oag_hud::draw_list(&context, &readout)
+            .sprites
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[1] >= 236.0 && rect[0] >= 266.0 => Some(rect),
+                _ => None,
+            })
+            .collect()
+    };
+
+    // At a standstill with a full shield: the shield fill and the outline, no speed fill.
+    let at_rest = rects(0.0, 100.0);
+    assert_eq!(
+        at_rest,
+        vec![[309.0, 255.0, 166.0, 9.0], [266.0, 236.0, 256.0, 32.0]],
+        "the gauge at a standstill: the shield's full fill under the outline, nothing for the speed"
+    );
+    // 350 km/h is half of the 700 the executable divides by; a half shield is half the fill.
+    let half = rects(350.0, 50.0);
+    assert_eq!(
+        half,
+        vec![
+            [309.0, 239.0, 84.5, 14.0],
+            [309.0, 255.0, 83.0, 9.0],
+            [266.0, 236.0, 256.0, 32.0]
+        ]
+    );
+
+    // The digits: `0` in `SpeedR` alone at rest, `1` over `23` split across the two at 123.
+    let digits = |speed: f32| -> Vec<(String, f32)> {
+        let mut readout = readout.clone();
+        readout.speed_kmh = speed;
+        oag_hud::draw_list(&context, &readout)
+            .hud_text
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, x, .. } if (430.0..=440.0).contains(&x) => Some((text, x)),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(digits(0.0), vec![("0".to_string(), 436.0)]);
+    let texts: Vec<String> = digits(123.4).into_iter().map(|(text, _)| text).collect();
+    assert_eq!(texts, vec!["1".to_string(), "23".to_string()]);
+}

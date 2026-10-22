@@ -237,6 +237,7 @@ struct Staged {
     src: String,
     image: Image,
     quad_extent: Option<[f32; 2]>,
+    quad_centre: Option<[f32; 2]>,
     blend: Option<vex::BlendClass>,
 }
 
@@ -317,6 +318,8 @@ pub struct DecodedImage {
     pub rgba: Vec<u8>,
     /// Becomes [`Placed::quad_extent`].
     pub quad_extent: Option<[f32; 2]>,
+    /// Becomes [`Placed::quad_centre`].
+    pub quad_centre: Option<[f32; 2]>,
     /// Becomes [`Placed::blend`].
     pub blend: Option<oag_vex::vex::BlendClass>,
 }
@@ -362,6 +365,7 @@ impl Sheet {
                     src: src.clone(),
                     image,
                     quad_extent: None,
+                    quad_centre: None,
                     blend: None,
                 }),
                 Err(e) => report.push(format!("image {src}: {e}")),
@@ -375,6 +379,7 @@ impl Sheet {
                 height,
                 rgba,
                 quad_extent,
+                quad_centre,
                 blend,
             } = image;
             match Image::from_rgba(width, height, rgba) {
@@ -382,6 +387,7 @@ impl Sheet {
                     src,
                     image,
                     quad_extent,
+                    quad_centre,
                     blend,
                 }),
                 None => report.push(format!(
@@ -429,6 +435,7 @@ impl Sheet {
                 src,
                 image: texture,
                 quad_extent,
+                quad_centre,
                 blend,
             },
             (x, y),
@@ -456,6 +463,7 @@ impl Sheet {
                     width: w,
                     height: h,
                     quad_extent,
+                    quad_centre,
                     blend,
                 },
             ));
@@ -780,6 +788,7 @@ mod tests {
             height: 5000,
             rgba: vec![255; 4 * 5000 * 4],
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         };
         let mut report = Vec::new();

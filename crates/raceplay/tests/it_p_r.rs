@@ -29,6 +29,7 @@ mod psys_inventory_ground_truth;
 mod pulse_gantry_circuits_ground_truth;
 mod pulse_variant_titles_ground_truth;
 mod pure_race_ground_truth;
+mod pure_time_ladder_ground_truth;
 mod quake_orientation_ground_truth;
 mod quake_ripple_ground_truth;
 mod quiet_replay_ground_truth;

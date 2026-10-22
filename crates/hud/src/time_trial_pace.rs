@@ -49,6 +49,10 @@ pub enum PaceTier {
 /// module doc for what is measured and what is chosen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RecordTarget {
+    /// Pure's `[gold, silver, bronze]` limits for this circuit and class, centiseconds - the figures
+    /// `Medal_Evaluate` and `PlayerStatus_Update` (`0x0892195c`) both read, `None` for every other
+    /// title's file. Its presence selects [`TimeTrialPace::evaluate_ladder`]'s law.
+    pub medal_ladder: Option<[i64; 3]>,
     /// The stored best for this circuit, mode and class - `FUN_088091a0`'s
     /// answer. `None` until a race here has set one.
     pub personal_best_centis: Option<i64>,
@@ -74,14 +78,27 @@ impl RecordTarget {
         best_total_ticks: Option<u64>,
         best_lap_ticks: Option<u32>,
     ) -> Option<Self> {
+        let medal_ladder = (mode == oag_race::Mode::TimeTrial)
+            .then(|| stats?.pure_medals.as_ref().zip(pure_class(class)))
+            .flatten()
+            .map(|(figures, class)| {
+                let gold = (figures.gold_seconds[class] * 100.0) as i64;
+                [
+                    gold,
+                    gold + (figures.silver_seconds * 100.0) as i64,
+                    gold + (figures.bronze_seconds * 100.0) as i64,
+                ]
+            });
         let class = oag_tables::handling::SpeedClass::census(class);
-        let authored = |figures: fn(&TrackStats) -> [f32; 4]| {
+        let authored = |figures: fn(&TrackStats) -> Option<[f32; 4]>| {
             let (stats, class) = (stats?, class?);
             #[allow(clippy::cast_possible_truncation)]
-            Some((figures(stats)[class.index()] * 100.0) as i64)
+            Some((figures(stats)?[class.index()] * 100.0) as i64)
         };
         let (authored, best_ticks) = match mode {
-            oag_race::Mode::TimeTrial => (authored(|stats| stats.race_times), best_total_ticks),
+            oag_race::Mode::TimeTrial => {
+                (authored(|stats| Some(stats.race_times)), best_total_ticks)
+            }
             oag_race::Mode::SpeedLap => (
                 authored(|stats| stats.lap_times),
                 best_lap_ticks.map(u64::from),
@@ -89,10 +106,18 @@ impl RecordTarget {
             _ => return None,
         };
         Some(Self {
+            medal_ladder,
             personal_best_centis: best_ticks.map(ticks_to_centis),
             authored_centis: authored,
         })
     }
+}
+
+/// Pure's class by its name, as an index into [`oag_tables::pure_campaign::Stats::gold_seconds`].
+fn pure_class(name: &str) -> Option<usize> {
+    oag_tables::pure_ai_stats::PureClass::ALL
+        .iter()
+        .position(|class| class.title().eq_ignore_ascii_case(name))
 }
 
 fn ticks_to_centis(ticks: u64) -> i64 {
@@ -215,6 +240,43 @@ impl TimeTrialPace {
     }
 }
 
+impl TimeTrialPace {
+    /// Pure's law, `PlayerStatus_Update` (`0x0892195c`, `0x08921f60`-`0x08921fe0`): the stored best's
+    /// standing on the circuit's `[gold, silver, bronze]` limits names the **next** medal to chase
+    /// and its time is the target, never the elapsed clock's own standing. No best (the original's
+    /// `0` and `0xffff` both), or one slower than bronze: bronze. Slower than silver: silver.
+    /// Slower than gold: gold. At or under gold: `RECORD` against the best itself. A clock past the
+    /// target reads `0` and reddens, as Pulse's does. Confidence 90: the branch table read in full,
+    /// and the fresh-profile `BRONZE TIME` at `13000 - 1668 = 11332` read live on four circuits.
+    #[must_use]
+    pub fn evaluate_ladder(
+        elapsed_ticks: u64,
+        [gold, silver, bronze]: [i64; 3],
+        personal_best_centis: Option<i64>,
+    ) -> Self {
+        let elapsed = ticks_to_centis(elapsed_ticks);
+        let best = personal_best_centis.filter(|&best| best > 0 && best != 0xffff);
+        let (tier, target) = match best {
+            None => (PaceTier::Bronze, bronze),
+            Some(best) if best <= gold => (PaceTier::Record, best),
+            Some(best) if best <= silver => (PaceTier::Gold, gold),
+            Some(best) if best <= bronze => (PaceTier::Silver, silver),
+            Some(_) => (PaceTier::Bronze, bronze),
+        };
+        let missed = elapsed > target;
+        let remaining_ticks = if missed {
+            0
+        } else {
+            u32::try_from((target - elapsed).max(0) * 60 / 100).unwrap_or(u32::MAX)
+        };
+        Self {
+            tier,
+            remaining_ticks,
+            missed,
+        }
+    }
+}
+
 /// [`super::Readout::time_trial_pace`] for a race in `mode`, or `None` when
 /// the clock keeps showing the plain elapsed time.
 ///
@@ -239,6 +301,11 @@ pub fn pace_for(
     };
     let default = RecordTarget::default();
     let target = target.unwrap_or(&default);
+    if let Some(ladder) = target.medal_ladder {
+        // Pure races its ladder in Time Trial alone and never by a campaign cell's own.
+        return (mode == oag_race::Mode::TimeTrial)
+            .then(|| TimeTrialPace::evaluate_ladder(elapsed, ladder, target.personal_best_centis));
+    }
     if ladder.is_none() && target.authored_centis.is_none() {
         return None;
     }
@@ -258,6 +325,28 @@ pub(super) fn tier_caption(tier: PaceTier, strings: &oag_ui::language::StringTab
         PaceTier::Record => "IG_HUD_RECORD",
     };
     strings.get_or_id(id).to_string()
+}
+
+/// `TotalTimeTxt` on a title that races a medal ladder: the caption its own table names for the
+/// tier ([`oag_title::HudArt::time_ladder_captions`]), in place of Pulse's `IG_HUD_*` keys.
+/// `None` for every other widget and every other title.
+pub(super) fn ladder_caption(
+    art: &oag_title::HudArt,
+    readout: &super::Readout,
+    name: &str,
+    strings: &oag_ui::language::StringTable,
+) -> Option<String> {
+    let ids = art.time_ladder_captions?;
+    let pace = readout.time_trial_pace?;
+    (name == "TotalTimeTxt").then(|| {
+        let id = ids[match pace.tier {
+            PaceTier::Bronze => 0,
+            PaceTier::Silver => 1,
+            PaceTier::Gold => 2,
+            PaceTier::Record => 3,
+        }];
+        strings.get_or_id(id).to_string()
+    })
 }
 
 /// `TotalTime`'s own colour override - `Hud_UpdateTimeCluster`'s literal

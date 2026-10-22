@@ -313,6 +313,29 @@ impl Sights {
     }
 }
 
+/// A title's speed and shield gauge when it authors them as `<Mode3D><Model>`
+/// widgets: one `.vex` per bar fill and one for the outline drawn over both.
+///
+/// **Pure's dialect** (`TimeTrial_HUD.xml`, `Arcade_HUD.xml`): `Speed3D`
+/// (`Data\HUD\Bar_1.vex`), `Shield3D` (`Bar_3.vex`) and `Overlay3D`
+/// (`Bar_outline_1.vex`), all at `x="394" y="20"` in an orthographic block whose
+/// `y` counts from the **bottom** of the screen. A fill is a flat polygon strip
+/// with a texture that is opaque on its left half and clear on its right, and
+/// the game scrubs that model's animation by the bar's fraction
+/// (`Hud_UpdateSpeedBar`, `0x0881eabc`: speed over 700; `0x0881f13c`: the
+/// eased shield percent over 100), so the texture slides under a clamped edge and
+/// the fill grows left to right. The outline model carries both boxes and the
+/// `km/h` caption in one texture. See `docs/formats/pure-status.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BarModels {
+    /// The widget whose fill follows the speed.
+    pub speed: &'static str,
+    /// The widget whose fill follows the shield.
+    pub shield: &'static str,
+    /// The widget drawn over both fills: the two outlines and the unit caption.
+    pub outline: &'static str,
+}
+
 /// How a title's HUD sprites reach the screen: where their pixels come from,
 /// which of them are up whenever the HUD is, and the one colour this build
 /// substitutes.
@@ -331,6 +354,7 @@ impl Sights {
 /// | [`Self::pickup_icon_models`] | `None` - icons are `<Image>` sprites | `None` - unmeasured |
 /// | [`Self::pickup_icon_backdrop_model`] | `None` - moot with the row above | `None` - moot with the row above |
 /// | [`Self::pickup_icon_uv`] | `None` - one widget per weapon | `None` - one widget per weapon |
+/// | [`Self::bar_models`] | `None` - the bars are `<Image>` sprites | Pure: three `<Mode3D>` models; HD `None` |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HudArt {
     /// The extension a layout's `src=` reference takes to become an archive
@@ -482,6 +506,16 @@ pub struct HudArt {
     /// it needs no substitution the icon models beside it do not either. Moot
     /// whenever [`Self::pickup_icon_models`] is `None`.
     pub pickup_icon_backdrop_model: Option<&'static str>,
+    /// The speed and shield gauge when a title draws it as three `<Mode3D><Model>`
+    /// widgets instead of `<Image>` bars, or `None`. See [`BarModels`].
+    pub bar_models: Option<BarModels>,
+    /// The four captions the Time Trial clock takes when the title races a medal ladder, as
+    /// `[bronze, silver, gold, record]` string keys, or `None` for a title that counts to
+    /// `RECORD` or a campaign cell's own target (Pulse, HD). Pure's, read off
+    /// `0x08a46428`-`0x08a46458`: `HUD_Bronze time` and its three siblings. Its presence is the
+    /// law's: the stored best's standing on the circuit's own gold/silver/bronze figures picks
+    /// the caption and the target - `docs/ghidra/functions/psp-pure-usa/hud-time-ladder.md`.
+    pub time_ladder_captions: Option<[&'static str; 4]>,
     /// A per-weapon source-rectangle rewrite for a title whose pickup slot is
     /// *one* icon widget rather than Pulse/HD's thirteen named ones, or `None`
     /// for a title that names a widget per weapon (or has not measured this).
@@ -548,8 +582,11 @@ pub struct HudArt {
     /// **Pulse: 700, read off the executable** (`Hud_UpdateSpeedBar`, `0x0881a3e0`,
     /// `speed / 700.0`; live reads of the fill's width matched it on 59 of 60 ticks).
     ///
-    /// **Pure and 2048: 600, ours, not recovered.** Nothing has
-    /// established what sets those bars' maximum. 600 is an inference: the
+    /// **Pure: 700, read off the executable** (`0x0881eabc`, the same `div.s` by
+    /// `0x442f0000` into its `Speed3D` model; `docs/ghidra/functions/psp-pure-usa/hud-speed-gauge.md`).
+    ///
+    /// **2048: 600, ours, not recovered.** Nothing has
+    /// established what sets that bar's maximum. 600 is an inference: the
     /// exhaust's own ramp saturates at 600 km/h (`oag_fx::exhaust::RAMP_FLOOR_KMH`
     /// plus `RAMP_SPAN_KMH`, both recovered), a ramp for a visual effect and not a
     /// bar maximum. A reference frame at a known speed would settle it.

@@ -256,6 +256,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     pickup_colours: None,
     pickup_icon_models: None,
     pickup_icon_backdrop_model: None,
+    bar_models: None,
+    time_ladder_captions: None,
     pickup_icon_uv: None,
     zone_speed_classes: None,
     shield_percent: false,

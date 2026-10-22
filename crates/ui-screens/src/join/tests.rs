@@ -186,6 +186,7 @@ fn block_frame() -> Frame {
         width,
         height,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     };
     Frame {

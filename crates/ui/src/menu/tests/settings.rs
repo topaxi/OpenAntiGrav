@@ -41,6 +41,7 @@ fn layout() -> Layout {
             width: 512,
             height: 128,
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         },
     );
