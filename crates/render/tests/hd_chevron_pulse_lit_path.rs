@@ -133,14 +133,18 @@ fn the_emask_and_the_swept_outline_reach_the_pixel() {
         adapter.request_device(&mesh_render::device_descriptor("chevron", &adapter)),
     )
     .expect("requesting the device");
-    let at = |model: &Model| {
+    let at_zone = |model: &Model, zone: bool| {
         let mut scene = Scene::off();
+        if zone {
+            scene.zone.enabled = 1.0;
+        }
         scene.light.enabled = 1.0;
         scene.light.direction = [0.0, 0.0, 1.0];
         scene.light.sun = [0.6, 0.6, 0.6];
         scene.fog.camera = [0.0, 0.0, 100.5];
         draw(&device, &queue, model, scene)
     };
+    let at = |model: &Model| at_zone(model, false);
     let outline = [0, 0, 0, 255];
     let dark = at(&model(outline, 0));
     let bright = at(&model(outline, 255));
@@ -153,6 +157,12 @@ fn the_emask_and_the_swept_outline_reach_the_pixel() {
     assert!(
         fill[0] > none[0],
         "the emask's colour must light where the albedo's alpha is 0: {none:?} then {fill:?}"
+    );
+    // No Zone variant of `cf_chevron_pulse` declares the emask or the wave.
+    assert_eq!(
+        at_zone(&model(outline, 255), true),
+        at_zone(&model(outline, 0), true),
+        "in a Zone race the outline must not reach the pixel"
     );
 }
 

@@ -738,7 +738,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `MAD H5, light, H6, H7`. Both decoded like every colour unit read live so far (gamma
     // nibble 7 on the albedo, the probes and the leach noise): **chosen, not measured** for
     // these two units, whose address words were not read; the alpha they join is raw.
-    let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5;
+    // **Not in a Zone race**: every Zone variant of `cf_chevron_pulse` (blocks #15-#34, #45-#64,
+    // #75-#93) declares neither the emask nor the wave, as the magstrips' do not (`mag_glow`).
+    let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5
+        && scene.zone.enabled == 0.0;
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
