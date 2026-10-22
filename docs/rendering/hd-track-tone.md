@@ -533,6 +533,36 @@ no such rule (the GE's slope law selects the level). **Omega and 2048: not
 checkable** (a Vita or PS4 sampler state, no capture path), so neither carries
 the rule: an inherited bias would change two tracks nobody has measured.
 
+### Re-judged on the cold originals: still held off (2026-10-22, `hd-sharp-hud`)
+
+**Claim: turning the `-1.5` bias on moves ours' high-frequency energy toward the original's in the Tech de Ra glass grid box and a Modesto
+Heights background-building box. Result: false on the picture's total, true for the grid's structure.** Ours re-drawn with the rule on
+(`Rule { on: Any, origin: Measured }`, nothing else) against the 13 cold pairs (1920x1080, Resolution Scale 100, `pair.json` clean), boxes chosen
+before the change (x, y, w, h):
+
+| box | metric | original | ours, bias 0 | ours, bias -1.5 |
+| --- | --- | --- | --- | --- |
+| Tech de Ra, road grid `(630, 570, 250, 75)` | Laplacian variance, grey | 288.1 | 322.6 | 655.5 |
+| Tech de Ra, mid band `(650, 540)-(1400, 600)` (the section above's metric) | RMS of the Laplacian of the 0.7-blurred grey | 0.0379 | 0.0304 | 0.0410 |
+| Modesto Heights, background towers `(440, 280, 100, 130)` | Laplacian variance, grey | 232.3 | 733.1 | 977.2 |
+
+The grid box is already above the original's in raw Laplacian variance at bias 0 (its edges are the panels'), and the bias doubles it; the section's
+own blurred metric reads the other way (0.0304 to 0.0410 against 0.0379, the gap closed from 0.0075 to 0.0031), and a 3x crop shows the
+bias is what brings the grid lines and the panel outlines back into the glass. The Modesto box is ours' over-sharp already (3.2x), so the
+bias moves it away. **Whole-frame mean grey difference** (HUD-alignment commit as the baseline), bias 0 to bias -1.5:
+Anulpha Pass 12.51 to 12.87, Chenghou 7.73 to 7.77, Metropia 10.04 to 10.26, Moa Therma 10.22 to 10.54, Modesto 15.84 to 16.08, Sebenco 15.44 to
+15.76, Sol-2 10.48 to 10.60, Talon's Assegai 10.40 to 10.50, Talon's 9.39 to 9.43, Tech de Ra 15.79 to 16.25, Amphiseum 11.60 to 11.87, Ubermall 9.26
+to 9.71, Vineta K 18.46 to 18.44: **12 of 13 up, 8 by more than 0.2** (the limit the lane was held to). Left off. The rule that would fix the
+grid is the bias on the glass sheen's grid tap alone, which is a chosen scope, not measured; not wired.
+
+**Mips.** The compressed (HD `.gtf`) path uploads the authored chain and drops a level only when it is wider than the device's
+`max_texture_dimension_2d` or not block-aligned (`first_fitting_level`, `mesh_render/texture.rs`); HD's textures top out at 2048, so nothing is dropped
+on a desktop adapter (read from the code; the per-model census line was not captured on this run). **Anisotropy.** The RSX texture control word
+`0x80078000` is anisotropy 0 on every bind and RPCS3 ran with `Anisotropic Filter Override: 0`, so the original samples without it; the pair
+profile already draws ours with `--anisotropy off`, which is the same. The shipped default is `16x`, a player setting that sharpens grazing floors beyond
+the original. Reported, not wired.
+
+
 ## The reflection map is the sky, and Moa Therma's glass reads it (2026-10-21, `hd-one-pair-moa`)
 
 **Target**: the HD pair with the largest difference, `hd/moa-therma` (cold original, 1920x1080, Resolution Scale 100; mean grey 15.05

@@ -137,7 +137,9 @@ pub const LOOKS: &Looks = &Looks {
     // difference to the stored RPCS3 frames up on all 13 pairs and the
     // per-region RMSE up on most regions, ours already as sharp as theirs without
     // it. `docs/rendering/hd-track-tone.md`, "Claim B: the sampler". Turning it on
-    // is `Platforms::Any` with `Origin::Measured` here.
+    // is `Platforms::Any` with `Origin::Measured` here. Re-judged on the cold
+    // scale-100 originals (2026-10-22): 12 of 13 pairs' mean grey up, 8 by over 0.2,
+    // so still held (same section, "Re-judged on the cold originals").
     material_lod_bias: Rule::UNREAD,
     ..Looks::unread(SHIELD)
 };
