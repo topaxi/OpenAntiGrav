@@ -21,10 +21,17 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // HD's magstrip wave, read only where `slots::MAG_WAVE` is set. `mesh::rcs::mag_wave`.
 @if(!bindless) @group(1) @binding(4) var wave_map: texture_2d<f32>;
 
+// A material's fifth and sixth pictures, for an HD program that samples more than
+// four units (`Model::fifth_maps`, `Model::sixth_maps`). A white 1x1 elsewhere, and
+// read only where the slot's own flag asks for them.
+@if(!bindless) @group(1) @binding(5) var fifth_map: texture_2d<f32>;
+
+@if(!bindless) @group(1) @binding(6) var sixth_map: texture_2d<f32>;
+
 // The `bindless` variant (`mesh_render::bindless`): group 1 is a drawable's distinct
 // textures and samplers in two arrays, bound once per drawable, and the drawn slot's row
-// naming which of them its five bindings were (`material`). Every function that reads
-// the five names below declares them from that row first, so the rest of the shader is
+// naming which of them its seven bindings were (`material`). Every function that reads
+// the names below declares them from that row first, so the rest of the shader is
 // one source.
 // Native only; WebGPU has no binding arrays. The `enable` directive is `mesh.wesl`'s,
 // the root module's.
@@ -43,6 +50,8 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
     pad_mask: u32,
     wave_map: u32,
     albedo_sampler: u32,
+    fifth_map: u32,
+    sixth_map: u32,
 }
 
 @if(bindless) var<immediate> material: MaterialSlot;
@@ -55,7 +64,8 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // wherever the scale does, and the albedo sampler's `Repeat` is what the
 // original's own sampler state says there too. Every draw outside a Zone race
 // binds a 1x1 black, which is the identity once `scene.zone.enabled` is 0.
-@group(2) @binding(1) var zone_tex: texture_2d<f32>;
+// Layer 0 the showing stage, layer 1 the stage the transition sphere sweeps out.
+@group(2) @binding(1) var zone_tex: texture_2d_array<f32>;
 
 @group(2) @binding(2) var zone_sampler: sampler;
 
@@ -87,17 +97,11 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // The Zone stage's `zoneMode<n>.gtf`, sampled through `zone_sampler` on the
 // same coordinate as `zone_tex`, for a chunk without `ZONE_TRACK` - see
 // `zone_set`. Numbered past the shadow map because it was bound later.
-@group(2) @binding(10) var zone_scene_tex: texture_2d<f32>;
+@group(2) @binding(10) var zone_scene_tex: texture_2d_array<f32>;
 
-// The stage-transition sphere's Outer half of the two textures above - the
-// stage being swept out's own `zoneModeTrack<n>.gtf`/`zoneMode<n>.gtf`,
-// through the same two samplers and the same coordinate. `zone_inside`
-// selects the pair the way it already selects `ZoneSet`'s Inner/Outer
-// colours; see `zone_sample` and `zone_glow`. Numbered past 10 for the same
-// reason that binding is past the shadow map.
-@group(2) @binding(11) var zone_tex_outer: texture_2d<f32>;
-
-@group(2) @binding(12) var zone_scene_tex_outer: texture_2d<f32>;
+// Bindings 11 and 12 held the stage-transition sphere's Outer half of the two textures above;
+// it is now layer 1 of `zone_tex` and `zone_scene_tex` (`mesh_render::zone::layered`), which frees
+// two of the fragment stage's sampled textures for the material group's six.
 
 // The per-craft sun-occlusion maps, one layer per craft, read through the
 // coverage map's own clamped filtering sampler - see `sun_occlusion` and

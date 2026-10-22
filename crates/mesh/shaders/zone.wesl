@@ -1,6 +1,6 @@
 // Zone-race track grading: the Zone sets, their sampling and the window glow.
 
-import package::bindings::{scene, zone_nearest_sampler, zone_sampler, zone_scene_tex, zone_scene_tex_outer, zone_tex, zone_tex_outer, zone_vis_sampler, zone_vis_tex};
+import package::bindings::{scene, zone_nearest_sampler, zone_sampler, zone_scene_tex, zone_tex, zone_vis_sampler, zone_vis_tex};
 import package::types::{ZoneSet};
 
 // **The Zone recolour**, read out of the Zone variant compiled into the disc's
@@ -69,7 +69,7 @@ import package::types::{ZoneSet};
 // ships. The sky cube, the pads and the collision wireframe do still reach
 // this path, which is the same shape of blanket approximation as the shared
 // specular exponent and the blanket sun term above. **The stage texture now
-// follows the sphere too**: `zone_tex_outer`/`zone_scene_tex_outer` are the
+// follows the sphere too**: layer 1 of `zone_tex`/`zone_scene_tex` is the
 // stage being swept out's own `zoneTexInner`/`zoneTexOuter` publication,
 // rebuilt on the same stage-change edge `oag_raceplay::Scene::rebind_zone_art`
 // rebinds bind group 2 on rather than every frame - see
@@ -109,10 +109,10 @@ fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
 @diagnostic(off, derivative_uniformity)
 fn zone_sample(uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
-    let track = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
-    let track_outer = textureSample(zone_tex_outer, zone_sampler, zone_uv).rgb;
-    let general = textureSample(zone_scene_tex, zone_sampler, zone_uv).rgb;
-    let general_outer = textureSample(zone_scene_tex_outer, zone_sampler, zone_uv).rgb;
+    let track = textureSample(zone_tex, zone_sampler, zone_uv, 0).rgb;
+    let track_outer = textureSample(zone_tex, zone_sampler, zone_uv, 1).rgb;
+    let general = textureSample(zone_scene_tex, zone_sampler, zone_uv, 0).rgb;
+    let general_outer = textureSample(zone_scene_tex, zone_sampler, zone_uv, 1).rgb;
     let inside = zone_inside(world);
     return select(
         select(general_outer, track_outer, zone_is_track(slots)),
@@ -212,10 +212,10 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     // above already names both sides. Four samples, `select`ed rather than
     // branched into, for the same uniform-control-flow reason `zone_sample`
     // is.
-    let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
-    let track_outer_band = textureSample(zone_tex_outer, zone_nearest_sampler, zone_uv).a;
-    let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv).a;
-    let scene_outer_band = textureSample(zone_scene_tex_outer, zone_nearest_sampler, zone_uv).a;
+    let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv, 0).a;
+    let track_outer_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv, 1).a;
+    let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, 0).a;
+    let scene_outer_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, 1).a;
     let inside = zone_inside(world);
     let band = select(
         select(scene_outer_band, track_outer_band, zone_is_track(slots)),

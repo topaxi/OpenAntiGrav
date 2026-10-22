@@ -209,6 +209,8 @@ fn keep_drawn_textures(model: &mut Model) {
         &mut model.lightmaps,
         &mut model.pad_masks,
         &mut model.wave_maps,
+        &mut model.fifth_maps,
+        &mut model.sixth_maps,
     ] {
         for (slot, texture) in slots.iter_mut().enumerate() {
             if !drawn.get(slot).copied().unwrap_or(false) {

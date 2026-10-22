@@ -233,7 +233,11 @@ fn upload_levels<'a>(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: FORMAT,
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        // `COPY_SRC` so the Zone stage's two sets can be copied into their arrays
+        // (`zone::layered`); no other path reads one back.
+        usage: wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     for (level, (mip_width, mip_height, mip_rgba)) in levels.enumerate() {
@@ -412,7 +416,11 @@ fn upload_with(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: format.wgpu(),
-        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        // `COPY_SRC` so the Zone stage's two sets can be copied into their arrays
+        // (`zone::layered`); no other path reads one back.
+        usage: wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_DST
+            | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
     for (index, texels) in levels[skip..].iter().enumerate() {

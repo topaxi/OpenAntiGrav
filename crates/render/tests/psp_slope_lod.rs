@@ -145,6 +145,8 @@ fn model(albedo: Arc<ModelTexture>, depth: f32, texcoords: Texcoords) -> Model {
         lightmaps: vec![None],
         pad_masks: Vec::new(),
         wave_maps: Vec::new(),
+        fifth_maps: Vec::new(),
+        sixth_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),

@@ -39,6 +39,10 @@ pub(super) struct MaterialSetup {
     /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
     pub(super) mag_emissive: TextureSlots,
     pub(super) wave_maps: TextureSlots,
+    /// The fifth and sixth pictures of a program that samples more than four
+    /// units - see [`crate::mesh::Model::fifth_maps`].
+    pub(super) fifth_maps: TextureSlots,
+    pub(super) sixth_maps: TextureSlots,
     /// Which of [`crate::mesh::Model::anim_tracks`] each material slot
     /// drives - see [`curve_track::material_anim_tracks`].
     pub(super) material_anim: Vec<u32>,
@@ -67,6 +71,8 @@ impl MaterialSetup {
             alpha_test_ref: model.alpha_test_ref,
             mag_emissive: model.pad_masks.clone(),
             wave_maps: model.wave_maps.clone(),
+            fifth_maps: model.fifth_maps.clone(),
+            sixth_maps: model.sixth_maps.clone(),
             material_anim: model.material_anim.clone(),
             anim_tracks: model.anim_tracks.clone(),
         }
@@ -211,10 +217,26 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, ice_masks);
+    // Sebenco's snow-capped rock binds six pictures: its mask third, the snow's normal
+    // fourth, the rock and its normal fifth and sixth, and three entries.
+    let snow = super::snow_rock::snow_rock(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut skins,
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, snow.mask);
+    super::mag_wave::merge(&mut wave_maps, snow.snow_normal);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
-    let (hull_maps, material_tangent) =
+    let (hull_maps, mut material_tangent) =
         super::hull_normal::hull_normal(model, &material_variants, textures, &mag_emissive, report);
+    for (tangent, snow) in material_tangent.iter_mut().zip(&snow.tangent) {
+        *tangent |= snow;
+    }
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(
@@ -264,6 +286,22 @@ pub(super) fn material_setup(
         &mut anim_tracks,
         report,
     );
+    // After the curves, because it appends a track of its own (the outline's offset is its
+    // material's curve driving a parameter), and after every glow-index family, because it
+    // only takes a slot none of them did.
+    let (chevron_emasks, chevron_waves) = super::chevron_pulse::chevron_pulse(
+        model,
+        model_blob,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        &mut anim_tracks,
+        report,
+    );
+    let (mut fifth_maps, mut sixth_maps) = (snow.rock, snow.rock_normal);
+    super::mag_wave::merge(&mut fifth_maps, chevron_emasks);
+    super::mag_wave::merge(&mut sixth_maps, chevron_waves);
     MaterialSetup {
         textures: skins,
         lightmaps: seconds,
@@ -278,6 +316,8 @@ pub(super) fn material_setup(
         alpha_test_ref,
         mag_emissive,
         wave_maps,
+        fifth_maps,
+        sixth_maps,
         material_anim,
         anim_tracks,
     }

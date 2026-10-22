@@ -185,6 +185,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod billboard_glass;
+mod chevron_pulse;
 mod cutout;
 mod damage_lights;
 mod holo_billboard;
@@ -196,6 +197,7 @@ mod pad_ne;
 mod pads;
 mod picture_tint;
 mod refraction;
+mod snow_rock;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
@@ -764,6 +766,8 @@ fn build_with_options(
         alpha_test_ref,
         mag_emissive,
         wave_maps,
+        fifth_maps,
+        sixth_maps,
         material_anim,
         anim_tracks,
     } = match setup {
@@ -772,6 +776,8 @@ fn build_with_options(
     };
     out.pad_masks = mag_emissive;
     out.wave_maps = wave_maps;
+    out.fifth_maps = fifth_maps;
+    out.sixth_maps = sixth_maps;
     out.emissive = emissive;
     out.textures = skins;
     out.lightmaps = seconds;

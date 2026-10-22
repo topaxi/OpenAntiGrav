@@ -920,16 +920,21 @@ pub fn build_with(
     };
 
     // One material per slot: its albedo and its lightmap, which the shader
-    // multiplies, the pad mask and the wave map, all through the one sampler.
+    // multiplies, the pad mask, the wave map and the fifth and sixth pictures,
+    // all through the one sampler.
     let material = |albedo: wgpu::TextureView,
                     lightmap: wgpu::TextureView,
                     pad_mask: wgpu::TextureView,
-                    wave: wgpu::TextureView| bindless::Material {
+                    wave: wgpu::TextureView,
+                    fifth: wgpu::TextureView,
+                    sixth: wgpu::TextureView| bindless::Material {
         albedo,
         sampler: sampler.clone(),
         lightmap,
         pad_mask,
         wave,
+        fifth,
+        sixth,
     };
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
@@ -987,6 +992,8 @@ pub fn build_with(
         no_lightmap.clone(),
         no_pad_mask.clone(),
         white.clone(),
+        white.clone(),
+        white.clone(),
     )];
     let mut labels = vec!["white"];
     for (index, slot) in model.textures.iter().enumerate() {
@@ -1012,8 +1019,20 @@ pub fn build_with(
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
             .unwrap_or_else(|| white.clone());
+        let fifth = model
+            .fifth_maps
+            .get(index)
+            .and_then(Option::as_ref)
+            .and_then(&mut view_of)
+            .unwrap_or_else(|| white.clone());
+        let sixth = model
+            .sixth_maps
+            .get(index)
+            .and_then(Option::as_ref)
+            .and_then(&mut view_of)
+            .unwrap_or_else(|| white.clone());
         labels.push(slot.as_ref().map_or("undecoded", |t| t.label.as_str()));
-        materials.push(material(albedo, lightmap, pad_mask, wave));
+        materials.push(material(albedo, lightmap, pad_mask, wave, fifth, sixth));
     }
     let texture_binds = materials
         .iter()

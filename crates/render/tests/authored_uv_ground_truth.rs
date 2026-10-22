@@ -45,7 +45,7 @@ fn image() -> Option<PathBuf> {
 fn psp(track: &AnimTrack) -> Option<&vex::TexTransform> {
     match track {
         AnimTrack::Psp(t) => Some(t),
-        AnimTrack::Rcs(_) | AnimTrack::Scroll(_) => None,
+        AnimTrack::Rcs(_) | AnimTrack::Scroll(_) | AnimTrack::Param(_) => None,
     }
 }
 

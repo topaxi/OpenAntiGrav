@@ -79,6 +79,11 @@ pub struct Model {
     pub pad_masks: TextureSlots,
     /// Each magstrip material's scrolling wave texture, bound fourth; empty elsewhere.
     pub wave_maps: TextureSlots,
+    /// Each material's fifth picture, bound fifth, for an HD program that samples
+    /// more than four units. Empty elsewhere.
+    pub fifth_maps: TextureSlots,
+    /// Each material's sixth picture, bound sixth. Empty elsewhere.
+    pub sixth_maps: TextureSlots,
     /// What each material slot's own microcode says its two texture units are
     /// for, packed as [`slots`], in the same order as [`Self::textures`].
     ///
@@ -288,6 +293,8 @@ impl Model {
             lightmaps: Vec::new(),
             pad_masks: Vec::new(),
             wave_maps: Vec::new(),
+            fifth_maps: Vec::new(),
+            sixth_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_glow: Vec::new(),
@@ -335,8 +342,8 @@ pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
 pub use emissive::{
-    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, REFLECTION_RATE, WINDOW_REFLECTION_RATE,
-    ZONE_EXEMPT_RATE,
+    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON, PROGRAM_SNOW, REFLECTION_RATE,
+    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -920,6 +927,8 @@ fn build_class(
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
         wave_maps: Vec::new(),
+        fifth_maps: Vec::new(),
+        sixth_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),

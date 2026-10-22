@@ -5,7 +5,7 @@
 //! validates and tracks each switch when the encoder finishes: 55 to 65% of a
 //! view's `encoder.finish`. Here a drawable binds one group: every **distinct**
 //! texture its slots name in one array and its distinct samplers in another. Each slot
-//! has a row of the five indices its group named ([`Bindless::row`]), which a draw
+//! has a row of the seven indices its group named ([`Bindless::row`]), which a draw
 //! pushes as immediates when its slot changes, and the shader (`shaders/bindings.wesl`,
 //! the `bindless` feature) samples the same texture with the same sampler the slot's
 //! group bound, so the pictures are the same by construction.
@@ -55,8 +55,9 @@ pub const CAPACITY: u32 = 1024;
 pub const SAMPLERS: u32 = 16;
 
 /// One slot's row, `MaterialSlot` in `shaders/bindings.wesl`: indices into the texture
-/// array of its albedo, lightmap, pad mask and wave map, then into the sampler array.
-pub type Row = [u32; 5];
+/// array of its albedo, lightmap, pad mask and wave map, then into the sampler array,
+/// then into the texture array of its fifth and sixth pictures.
+pub type Row = [u32; 7];
 
 /// The bytes of immediates the variant's pipelines declare: one [`Row`].
 pub const IMMEDIATE_SIZE: u32 = std::mem::size_of::<Row>() as u32;
@@ -82,6 +83,8 @@ pub fn fits(model: &crate::mesh::Model) -> bool {
         &model.lightmaps,
         &model.pad_masks,
         &model.wave_maps,
+        &model.fifth_maps,
+        &model.sixth_maps,
     ]
     .into_iter()
     .flatten()
@@ -126,7 +129,7 @@ pub fn with_limits(limits: wgpu::Limits, adapter: &wgpu::Adapter) -> wgpu::Limit
     }
 }
 
-/// What one material slot binds: group 1's five resources.
+/// What one material slot binds: group 1's seven resources.
 #[derive(Clone, Debug)]
 pub struct Material {
     pub albedo: wgpu::TextureView,
@@ -134,6 +137,8 @@ pub struct Material {
     pub lightmap: wgpu::TextureView,
     pub pad_mask: wgpu::TextureView,
     pub wave: wgpu::TextureView,
+    pub fifth: wgpu::TextureView,
+    pub sixth: wgpu::TextureView,
 }
 
 impl Material {
@@ -169,6 +174,14 @@ impl Material {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: wgpu::BindingResource::TextureView(&self.wave),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(&self.fifth),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&self.sixth),
                 },
             ],
         })
@@ -281,11 +294,16 @@ fn distinct<T: Clone + Eq + std::hash::Hash>(all: impl Iterator<Item = T>) -> (V
 /// The group over `materials`, their distinct textures and samplers, and each slot's
 /// [`Row`] of indices into them.
 fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGroup, Vec<Row>)> {
-    let (views, view_index) = distinct(
-        materials
-            .iter()
-            .flat_map(|m| [&m.albedo, &m.lightmap, &m.pad_mask, &m.wave]),
-    );
+    let (views, view_index) = distinct(materials.iter().flat_map(|m| {
+        [
+            &m.albedo,
+            &m.lightmap,
+            &m.pad_mask,
+            &m.wave,
+            &m.fifth,
+            &m.sixth,
+        ]
+    }));
     let (samplers, sampler_index) = distinct(materials.iter().map(|m| &m.sampler));
     log::debug!(
         "bindless: {} slots, {} textures, {} samplers",
@@ -297,13 +315,15 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
         return None;
     }
     let rows = view_index
-        .as_chunks::<4>()
+        .as_chunks::<6>()
         .0
         .iter()
         .zip(&sampler_index)
-        .map(|(&[albedo, lightmap, pad_mask, wave], &sampler)| {
-            [albedo, lightmap, pad_mask, wave, sampler]
-        })
+        .map(
+            |(&[albedo, lightmap, pad_mask, wave, fifth, sixth], &sampler)| {
+                [albedo, lightmap, pad_mask, wave, sampler, fifth, sixth]
+            },
+        )
         .collect();
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("material arrays"),

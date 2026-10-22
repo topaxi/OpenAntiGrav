@@ -90,6 +90,8 @@ fn model(wave: bool) -> Model {
             4,
             vec![0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255],
         ))],
+        fifth_maps: Vec::new(),
+        sixth_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_glow: Vec::new(),

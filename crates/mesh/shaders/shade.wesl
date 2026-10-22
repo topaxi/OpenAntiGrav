@@ -2,7 +2,7 @@
 
 import package::absorb::{absorb_shading};
 import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
-@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::glow::{glow_first, glow_pad, glow_second};
@@ -67,6 +67,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let lightmap = textures[material.lightmap];
         let pad_mask = textures[material.pad_mask];
         let wave_map = textures[material.wave_map];
+        let fifth_map = textures[material.fifth_map];
+        let sixth_map = textures[material.sixth_map];
     }
     if (in.slots & 8388608u) != 0u {
         return holo_billboard(in);
@@ -89,7 +91,28 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The mapped normal feeds the sun's `N.L`, the specular's `N.H` and the probe
     // lookups; a pad takes its own frame above and has no tangent.
     var n_hull = n;
-    if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
+    // **Sebenco's snow-capped rock** (`Emissive::program` mode 4, `oag_mesh::mesh::rcs::snow_rock`):
+    // the mask (third binding, second pair) mixes the snow's normal (fourth) with the rock's
+    // (sixth) before the frame, and the rock (fifth) into the snow below. Both normals and the
+    // rock are read at the diffuse coordinate times the entry's scale (the rock's; the snow's
+    // normal at the coordinate itself).
+    let snow_entry = (in.slots >> 24u) & 127u;
+    let snow = snow_entry != 0u && emissives.scale[snow_entry].z > 3.5
+        && emissives.scale[snow_entry].z < 4.5;
+    var snow_mask = 0.0;
+    var rock = vec4<f32>(0.0);
+    if snow {
+        let rock_uv = in.texcoord * emissives.scale[snow_entry].x;
+        snow_mask = material_sample(pad_mask, albedo_sampler, in.lightmap_texcoord.zw).x;
+        rock = material_sample(fifth_map, albedo_sampler, rock_uv);
+        let bump = mix(
+            material_sample(wave_map, albedo_sampler, in.texcoord),
+            material_sample(sixth_map, albedo_sampler, rock_uv),
+            snow_mask,
+        );
+        n_hull = hull_normal(bump, n, in.tangent);
+        n_lit = n_hull;
+    } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         n_hull = hull_normal(material_sample(pad_mask, albedo_sampler, in.texcoord), n, in.tangent);
         n_lit = n_hull;
     }
@@ -708,6 +731,26 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     }
     let mag_glow_gamma = pow(mag_glow, vec3<f32>(1.0 / 2.2));
 
+    // **HD's chevron pulse** (`Emissive::program` mode 3 on a `slots::LIT_ALPHA` slot,
+    // `oag_mesh::mesh::rcs::chevron_pulse`): the emask `e` (fifth binding) adds to the
+    // albedo's alpha inside the light multiply, and `e.a * Colour * wave` (sixth binding, at
+    // the coordinate the vertex stage laid) adds after it: `ADD H6, H4.wwww, H6` then
+    // `MAD H5, light, H6, H7`. Both decoded like every colour unit read live so far (gamma
+    // nibble 7 on the albedo, the probes and the leach noise): **chosen, not measured** for
+    // these two units, whose address words were not read; the alpha they join is raw.
+    // **Not in a Zone race**: every Zone variant of `cf_chevron_pulse` (blocks #15-#34, #45-#64,
+    // #75-#93) declares neither the emask nor the wave, as the magstrips' do not (`mag_glow`).
+    let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5
+        && scene.zone.enabled == 0.0;
+    var chevron_surface = vec3<f32>(0.0);
+    var chevron_glow = vec3<f32>(0.0);
+    if chevron {
+        let e = material_sample(fifth_map, albedo_sampler, in.texcoord);
+        let w = material_sample(sixth_map, albedo_sampler, in.lightmap_texcoord.zw);
+        chevron_surface = pow(e.rgb, vec3<f32>(2.2));
+        chevron_glow = e.a * glow_tint_offset.rgb * pow(w.rgb, vec3<f32>(2.2));
+    }
+
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
     // `rim` is the microcode's own `1 - dot(N, -V)`, where its `-V` points
@@ -778,7 +821,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // `NO_SPECULAR` (`oag_mesh::mesh::NO_SPECULAR`) is a hull program's with no
         // `pow(N.H, e)` in it; any other draw keeps the shared stand-in there.
         let no_specular = in.specular_exponent <= 0.0 && colour_factor;
-        let specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
+        var specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
         // **`slots::LIT_ALPHA`**: the program lights the albedo's alpha and tints the
         // specular with its RGB (`light * albedo.a + spec * albedo.rgb`, read off
         // `reversed_diffuse_specular_normal` and `cf_chevron_pulse` on Anulpha Pass);
@@ -787,9 +830,25 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // not its alpha, so the tint is the decoded colour and the grey albedo the
         // raw alpha. `docs/rendering/hd-track-tone.md`, "The blue cast".
         let lit_alpha = (in.slots & 2147483648u) != 0u;
-        let albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
-        let specular_mask = select(texel.a, 1.0, lit_alpha);
-        let specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
+        var albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
+        var specular_mask = select(texel.a, 1.0, lit_alpha);
+        var specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
+        // **Sebenco's snow-capped rock**: the snow shaded toward `pale` by `N.V` (the bumped
+        // normal), the rock mixed in by the mask, and the exponent and the alpha-weighted
+        // specular colour each mixed the same way - the program's `@0x29`..`@0x43`. `pale` is
+        // the program's constant beside the decoded texels, as its arithmetic has it.
+        if snow {
+            let snow_c = emissives.tint_offset[snow_entry];
+            let shaded = mix(snow_c.rgb, albedo_linear, dot(n_lit, to_eye));
+            albedo_linear = mix(shaded, pow(rock.rgb, vec3<f32>(2.2)), snow_mask);
+            specular_exponent = mix(snow_c.w, emissives.scale[snow_entry].w, snow_mask);
+            specular_mask = 1.0;
+            specular_tint = mix(
+                texel.a * emissives.tint_offset[snow_entry + 1u].rgb,
+                rock.a * emissives.tint_offset[snow_entry + 2u].rgb,
+                snow_mask,
+            );
+        }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
@@ -842,7 +901,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // light terms and multiplies the albedo once. It stays a factor on the
         // stand-in path below, where it is a tint and every other title authors
         // it as one.
-        let texel_linear = select(albedo_linear, vec3<f32>(texel.a), lit_alpha);
+        let texel_linear = select(albedo_linear, vec3<f32>(texel.a) + chevron_surface, lit_alpha);
         // `surface = zoneCol`, then `colour = light * surface` - the microcode's
         // own order, and on this path both terms are linear. The Zone surface
         // **replaces** the albedo rather than adding to it, so `enabled` is the
@@ -894,7 +953,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light + program_specular) * program_multiplier
-                + zone_glow_term + glow_linear + pad_glow + mag_glow + probe_reflection + sky_reflection);
+                + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection
+                + sky_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

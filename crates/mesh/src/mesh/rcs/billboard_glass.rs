@@ -55,7 +55,9 @@
 
 use oag_rcs::{rcsmaterial, rcsmodel};
 
-use crate::mesh::{Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, TextureSlots, slots};
+use crate::mesh::{
+    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_SNOW, TextureSlots, slots,
+};
 
 use super::emissive::EMISSIVE_LIMIT;
 use super::{Report, Textures};
@@ -188,12 +190,13 @@ pub(super) fn second_uv(
     stride: usize,
 ) -> Option<Vec<[f32; 2]>> {
     super::ice::second_uv(roles, mesh, model_blob, submesh, stride).or_else(|| {
-        let glass = roles & slots::ADD_SECOND != 0
-            && slots::material_index(roles)
-                .checked_sub(1)
-                .and_then(|i| table.get(i as usize))
-                .is_some_and(|layer| layer.program[0] == PROGRAM_BW_GLASS);
-        glass
+        let program = slots::material_index(roles)
+            .checked_sub(1)
+            .and_then(|i| table.get(i as usize))
+            .map_or(0.0, |layer| layer.program[0]);
+        // The stand glass's `bwgradient` and `sebenco_snow`'s mask (`super::snow_rock`).
+        let glass = roles & slots::ADD_SECOND != 0 && program == PROGRAM_BW_GLASS;
+        (glass || program == PROGRAM_SNOW)
             .then(|| mesh.second_texcoords(model_blob, submesh, stride).ok())
             .flatten()
     })
