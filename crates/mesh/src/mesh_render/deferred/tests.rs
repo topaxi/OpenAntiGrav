@@ -22,6 +22,7 @@ fn build_deferring(
         queue,
         model,
         wgpu::TextureFormat::Rgba8Unorm,
+        oag_gpu::formats::SceneStore::Computed,
         Anisotropy::Off,
         1,
         mesh_render::Depth::Scene,

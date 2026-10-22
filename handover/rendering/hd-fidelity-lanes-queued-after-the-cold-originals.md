@@ -12,8 +12,10 @@ another HD pair's mean grey difference by more than about 0.1-0.2.
 from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages are named per item.
 
 1. ~~Talon's white grills~~ **wired**: `scanlinebillboard` (renderer.md, "`scanlinebillboard` is the fourth shape"). Box
-   51.08 to 43.57. Left: the original adds in gamma space, ours in linear (the panel reads greyer); the add is also about 3x
-   the program's `overlay * tint / 2`, source unread.
+   51.08 to 43.57. ~~Left: the original adds in gamma space, ours in linear~~ **wired 2026-10-22 (`hd-blend-space`)**:
+   HD's scene stores encoded values (`Looks::blends_encoded`, confidence 85) and the holo taps are decoded on fetch
+   (confidence 80); docs/rendering/hd-track-tone.md, "HD's blends combine encoded values". Left: the grill's source is
+   still about 1.5x the original's (scanline phase and layer scroll are the candidates).
 2. ~~Anulpha's black chevron panel~~ **wired** (2026-10-22, `hd-texture-slots`; hd-track-tone.md, "Six material textures"):
    route 2, group 1 carries six textures; the emask rides the fifth binding and the wave the sixth, the normal map stays
    third, the offset is the material's curve. Left: the phase (at the pair's clock ours shows the outline the re-capture
@@ -32,8 +34,23 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
    the rock is mixed in by the painted mask, not a slope (confidence 85); twelve slots, both lit variants. Box 112.65 to
    9.72, frame 13.11 to 8.65. Left: `pale` raw here and decoded in `ice` (both chosen), block #5's light, and
    `sebenco_snow_just_snow` (a different program, unread).
-5. Modesto glass / banners / building texture; 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
+5. Modesto glass / banners / building texture (**banners at the turn located 2026-10-22, `hd-blend-space`**: slot 773,
+   `uvanim_diffuse_emissivealpha` with `egx_lcd.gtf`, an LCD the original draws as a pale scanline grid; its program is
+   unread, next is its fragment block and a live Modesto frame's unit gamma nibbles; the encoded store moved the right
+   banner box 35.1 to 24.7 only); 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
    details: **not started** (Tech de Ra carries 9 `scanlinebillboard` slots, now bound, none in the pair's view).
+
+**Amphiseum's `hologram.rcsmaterial` board** (2026-10-22, `hd-blend-space`): drawn through the generic emissive
+stand-in and +70 grey too bright over the start gantry (box `840,0 240x120`); the encoded store lifts it further, which is
+the whole of `hd/the-amphiseum`'s +0.42 (10.09 to 10.51). With the material skipped the box is within 9 grey of the
+original. Next: read its fragment program.
+
+**HD's unlit programs read their taps raw** (2026-10-22, `hd-blend-space`): with the scene now stored encoded, an
+additive source that was too strong shows more. `holo.wesl` was fixed from a live read (units 0-2 at gamma nibble 7);
+the Bomb's fireball (`slots::BOMB_FIRE`) and the other unlit programs in `shade.wesl` still use raw texels as light.
+The Bomb's rings now burn white at 1.8 s, with no original frame to judge them. Next: one RPCS3 frame of a Bomb blast
+at about 1.8 s with `scripts/hd-draw-dump.py`, reading the fireball and ring draws' unit nibbles, then the decode where
+the console does it (docs/rendering/hd-track-tone.md, "What is left").
 
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
 textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which is WebGPU's and GL's ceiling. A seventh material

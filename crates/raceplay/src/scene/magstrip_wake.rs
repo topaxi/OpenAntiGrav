@@ -34,6 +34,7 @@ pub(super) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
+    store: oag_gpu::formats::SceneStore,
     textures: Option<&[FlareTexture; 2]>,
     sample_count: u32,
 ) -> Option<Magstrip> {
@@ -43,6 +44,7 @@ pub(super) fn build(
             device,
             queue,
             format,
+            store,
             texture,
             sample_count,
             super::mesh_render::Velocity::Write,

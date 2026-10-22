@@ -674,6 +674,11 @@ pub(super) fn staging(
         .flatten()
         .map(|params| oag_post::hd_bloom::Params {
             zoom: title.race.zoom_ring.map(crate::zoom::tuning),
+            store: if title.looks.blends_encoded.applies_everywhere() {
+                oag_gpu::formats::SceneStore::Encoded
+            } else {
+                oag_gpu::formats::SceneStore::Computed
+            },
             ..params
         });
     let omega_tonemap = (geometry == GeometryKind::Ps4)

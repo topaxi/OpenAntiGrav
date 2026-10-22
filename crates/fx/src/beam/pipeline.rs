@@ -233,6 +233,7 @@ impl Pipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        store: oag_gpu::formats::SceneStore,
         texture: &FlareTexture,
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
@@ -241,6 +242,7 @@ impl Pipeline {
             device,
             queue,
             format,
+            store,
             texture,
             sample_count,
             velocity,
@@ -249,10 +251,12 @@ impl Pipeline {
     }
 
     /// [`Self::new`] for another thing drawn the same way - see [`Style`].
+    #[allow(clippy::too_many_arguments)]
     pub fn with_style(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        store: oag_gpu::formats::SceneStore,
         texture: &FlareTexture,
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
@@ -262,6 +266,7 @@ impl Pipeline {
             device,
             queue,
             format,
+            store,
             texture,
             None,
             sample_count,
@@ -278,6 +283,8 @@ impl Pipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         texture: &FlareTexture,
         noise: Option<&FlareTexture>,
         sample_count: u32,
@@ -343,7 +350,7 @@ impl Pipeline {
             immediate_size: 0,
         });
 
-        let constants: Vec<(&str, f64)> = oag_mesh::mesh_render::linear_constants(format)
+        let constants: Vec<(&str, f64)> = oag_mesh::mesh_render::linear_constants(format, store)
             .iter()
             .copied()
             .chain([

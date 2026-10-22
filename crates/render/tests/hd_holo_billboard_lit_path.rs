@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 
+use oag_gpu::formats::{SCENE_FORMAT, SceneStore};
 use oag_mesh::mesh::{Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, Texels, slots};
 use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
 
@@ -203,6 +204,38 @@ fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines()
     assert_ne!(low, generic, "the role bit is what selects the combine");
 }
 
+/// On HD's race target every tap is sRGB-decoded before the overlay, as the
+/// console's units are (gamma nibble 7 on `scanlinebillboard`'s live draws,
+/// `docs/rendering/hd-track-tone.md`, "The holographic taps are decoded on
+/// fetch"), and the scene stores the encoded result. Advert and layer `128`
+/// decode to `0.2195` each and the scanline red to the same, so the overlay is
+/// `2 * 0.0482 * 0.2195 = 0.0212`, stored as `0.0212^(1/2.2) = 0.173`. Raw taps
+/// would store `0.252^(1/2.2) = 0.534`.
+#[test]
+fn on_the_race_target_the_taps_are_decoded_before_the_overlay() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let mut scene = Scene::off();
+    scene.light.enabled = 1.0;
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    let model = model(128, [128, 128, 255], 128, slots::HOLO_BILLBOARD);
+    let stored = draw_into(
+        &device,
+        &queue,
+        &model,
+        scene,
+        SCENE_FORMAT,
+        SceneStore::Encoded,
+    );
+    assert!((stored[0] - 0.173).abs() < 0.01, "{stored:?}");
+}
+
 /// The second entry of a holographic slot: tint 1, scales 1, no boost, no
 /// desaturation (`mesh::rcs::holo_billboard`'s module doc).
 fn holo_finish() -> Emissive {
@@ -350,13 +383,38 @@ fn uniforms() -> Vec<u8> {
     bytes
 }
 
-/// Draws the model once into a `SIZE`x`SIZE` target and reads the centre back.
+/// Draws the model once into a `SIZE`x`SIZE` gamma target and reads the centre back.
 fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene) -> [u8; 4] {
-    let built = mesh_render::build(
+    draw_into(device, queue, model, scene, FORMAT, SceneStore::Computed)
+        .map(|c| (c * 255.0).round() as u8)
+}
+
+fn half_to_f32(bits: u16) -> f32 {
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let mantissa = f32::from(bits & 0x3ff);
+    match exponent {
+        0 => mantissa * 2f32.powi(-24),
+        _ => (1.0 + mantissa / 1024.0) * 2f32.powi(exponent - 15),
+    }
+}
+
+/// Draws the model once into a `SIZE`x`SIZE` target of `format`, built for
+/// `store`, and reads the centre back as `0..1` values.
+fn draw_into(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+    scene: Scene,
+    format: wgpu::TextureFormat,
+    store: SceneStore,
+) -> [f32; 4] {
+    let texel_bytes = format.block_copy_size(None).expect("a colour format");
+    let built = mesh_render::build_with(
         device,
         queue,
         model,
-        FORMAT,
+        format,
+        store,
         Anisotropy::Off,
         1,
         mesh_render::Depth::Scene,
@@ -366,6 +424,11 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         &mesh_render::zone::StageArt::NONE,
         mesh_render::ShadowMaps::NONE,
         mesh_render::ShadowReceiver::Never,
+        mesh_render::Texcoords::Interleaved,
+        false,
+        false,
+        false,
+        false,
     )
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
@@ -405,7 +468,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
     };
     let colour = make(
         "colour",
-        FORMAT,
+        format,
         wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
     );
     let depth = make(
@@ -454,7 +517,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
 
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("glow readback"),
-        size: u64::from(SIZE * SIZE * 4),
+        size: u64::from(SIZE * SIZE * texel_bytes),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -464,7 +527,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
             buffer: &readback,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(SIZE * 4),
+                bytes_per_row: Some(SIZE * texel_bytes),
                 rows_per_image: None,
             },
         },
@@ -477,6 +540,15 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         .expect("draining the queue");
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
     // Dead centre of the triangle.
-    let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
-    [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+    let at = (((SIZE / 2) * SIZE + SIZE / 2) * texel_bytes) as usize;
+    std::array::from_fn(|c| {
+        if texel_bytes == 8 {
+            half_to_f32(u16::from_le_bytes([
+                mapped[at + 2 * c],
+                mapped[at + 2 * c + 1],
+            ]))
+        } else {
+            f32::from(mapped[at + c]) / 255.0
+        }
+    })
 }

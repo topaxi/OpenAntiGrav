@@ -55,6 +55,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
         &device,
         &queue,
         FORMAT,
+        oag_gpu::formats::SceneStore::Computed,
         &flare,
         &noise,
         None,

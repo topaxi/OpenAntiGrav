@@ -1160,6 +1160,8 @@ impl Pipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         flare: &FlareTexture,
         noise: &FlareTexture,
         trail_shape: Option<&FlareTexture>,
@@ -1232,7 +1234,7 @@ impl Pipeline {
         // shader reads slot 2 is a property of that title's asset rather than
         // of the frame - the same shape as `linear_out` beside it. A pipeline
         // built without one never samples the view bound there.
-        let mut trail_constants = oag_mesh::mesh_render::linear_constants(format).to_vec();
+        let mut trail_constants = oag_mesh::mesh_render::linear_constants(format, store).to_vec();
         if trail_shape.is_some() {
             trail_constants.push(("trail_shape", 1.0));
         }
@@ -1319,7 +1321,7 @@ impl Pipeline {
             "exhaust",
             BLEND,
             wgpu::ColorWrites::COLOR,
-            oag_mesh::mesh_render::linear_constants(format),
+            oag_mesh::mesh_render::linear_constants(format, store),
         );
         // The caller's, not [`TRAIL_BLEND`]: a title that authors its ribbon
         // passes its material's own pair - `race::Loaded::trail_blend`.

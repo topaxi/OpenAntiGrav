@@ -80,7 +80,7 @@
 //! measurement.
 
 use anyhow::Result;
-use oag_gpu::formats::SCENE_FORMAT;
+use oag_gpu::formats::{SCENE_FORMAT, SceneStore};
 
 use super::{sampler_entry, texture_entry, uniform_entry};
 
@@ -165,6 +165,10 @@ pub struct Params {
     /// HD's boost and damage zoom-streak ring, when the title has one. See
     /// [`super::hd_zoom`].
     pub zoom: Option<super::hd_zoom::Tuning>,
+    /// What the scene target this chain reads holds: with
+    /// [`SceneStore::Encoded`] the two taps of the scene itself (the first
+    /// downsample and the resolve) decode it back to linear light.
+    pub store: SceneStore,
 }
 
 /// Whether this chain's glow reaches the resolve.
@@ -361,6 +365,8 @@ pub struct Chain {
     params: Params,
     glow: Glow,
     copy: wgpu::RenderPipeline,
+    /// `copy` for the first downsample, the one that reads the scene target.
+    copy_scene: wgpu::RenderPipeline,
     /// The first luminance-reduction step: an exact 2x2 mean of the quarter-res
     /// scene, every texel weighing 1.
     reduce_first: wgpu::RenderPipeline,
@@ -475,7 +481,19 @@ impl Chain {
                 cache: None,
             })
         };
+        let encoded: &[(&str, f64)] = if params.store == SceneStore::Encoded {
+            &[("scene_encoded", 1.0)]
+        } else {
+            &[]
+        };
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
+        let copy_scene = pipeline(
+            "hd bloom copy scene",
+            "fs_copy",
+            SCENE_FORMAT,
+            None,
+            encoded,
+        );
         let reduce_first = pipeline(
             "hd bloom reduce first",
             "fs_reduce_first",
@@ -502,7 +520,7 @@ impl Chain {
             "fs_encode",
             surface_format.remove_srgb_suffix(),
             None,
-            &[],
+            encoded,
         );
         let sized = Self::sized(device, &layout, &sampler, size, params);
         let zoom = Self::zoom_for(device, &params, &sized)?;
@@ -510,6 +528,7 @@ impl Chain {
             params,
             glow,
             copy,
+            copy_scene,
             reduce_first,
             reduce,
             adapt,
@@ -525,6 +544,13 @@ impl Chain {
             zoom,
             zoom_frame: std::cell::Cell::new(None),
         })
+    }
+
+    /// What the scene target holds, which every pipeline drawing into it is
+    /// built for ([`Params::store`]).
+    #[must_use]
+    pub fn store(&self) -> SceneStore {
+        self.params.store
     }
 
     /// The float scene target the race pass draws into.
@@ -851,7 +877,8 @@ impl Chain {
             // The two halvings are the gate's and the blur's quarter-res
             // scene; what follows is the luminance reduction.
             let pipeline = match index {
-                0 | 1 => &self.copy,
+                0 => &self.copy_scene,
+                1 => &self.copy,
                 2 => &self.reduce_first,
                 _ => &self.reduce,
             };

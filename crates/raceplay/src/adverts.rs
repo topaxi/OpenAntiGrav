@@ -320,6 +320,7 @@ impl Cards {
                 queue,
                 card.model,
                 FORMAT,
+                oag_gpu::formats::SceneStore::Computed,
                 anisotropy,
                 1,
                 mesh_render::Depth::Scene,

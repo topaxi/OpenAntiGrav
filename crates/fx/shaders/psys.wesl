@@ -29,7 +29,7 @@
 //   radial falloff a round billboard wants.
 
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
-import oag_shaders::target::{linear_out, gamma_to_target};
+import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(0) @binding(1) var sheet: texture_2d<f32>;
@@ -119,5 +119,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // decoded so the blend and the encode after it round-trip; on a gamma
     // target this is the identity. See `mesh_render::is_linear_target`.
     let out_rgb = gamma_to_target(rgb, linear_out);
-    return vec4<f32>(out_rgb, picked.a);
+    return vec4<f32>(target_out(out_rgb), picked.a);
 }

@@ -6,7 +6,7 @@
 // vertex colour, so a layer contributes the texel times its alpha, which the
 // pipeline's `(SRC_ALPHA, ONE)` blend then adds.
 
-import oag_shaders::target::{linear_out, gamma_to_target};
+import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var mist_texture: texture_2d<f32>;
 @group(0) @binding(1) var mist_sampler: sampler;
@@ -36,5 +36,5 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let texel = textureSample(mist_texture, mist_sampler, in.texcoord);
     let decoded = gamma_to_target(texel.rgb, linear_out);
-    return vec4<f32>(decoded, texel.a * in.alpha);
+    return vec4<f32>(target_out(decoded), texel.a * in.alpha);
 }

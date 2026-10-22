@@ -3,7 +3,7 @@
 // entry point below stands for. Unlit throughout: `MeshNode_Ghost_Draw`
 // disables lighting at entry for every pass.
 
-import oag_shaders::target::{gamma_to_target, linear_out};
+import oag_shaders::target::{gamma_to_target, linear_out, target_out};
 
 struct Uniforms {
     view_projection: mat4x4<f32>,
@@ -79,7 +79,7 @@ fn fs_hull(in: VertexOutput) -> MrtOutput {
     }
     let rgb = gamma_to_target(texel.rgb, linear_out);
     var out: MrtOutput;
-    out.colour = vec4<f32>(rgb, 1.0);
+    out.colour = vec4<f32>(target_out(rgb), 1.0);
     out.velocity = vec2<f32>(0.0);
     return out;
 }

@@ -19,6 +19,7 @@ impl Scene {
                 device,
                 queue,
                 format,
+                self.store(),
                 texture,
                 self.sample_count(),
                 mesh_render::Velocity::Write,

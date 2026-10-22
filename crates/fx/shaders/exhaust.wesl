@@ -11,7 +11,7 @@
 // assertion the mesh path already has.
 
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
-import oag_shaders::target::{linear_out, gamma_to_target};
+import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var flare: texture_2d<f32>;
@@ -145,7 +145,7 @@ fn shade(in: VertexOutput) -> vec4<f32> {
     // lands. See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let decoded = gamma_to_target(rgb, linear_out);
     let out_rgb = mix(decoded, rgb, trail_shape);
-    return vec4<f32>(out_rgb, shape * in.colour.a * hd_fade);
+    return vec4<f32>(target_out(out_rgb), shape * in.colour.a * hd_fade);
 }
 
 @fragment

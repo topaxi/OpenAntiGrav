@@ -126,7 +126,7 @@ fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
     // The offset is zero on every pass but the first downsample's, the only one that
     // reads the scene target.
-    return surface(textureSample(source_tex, source_sampler, drawn_scene(in.uv)));
+    return scene_tap(textureSample(source_tex, source_sampler, drawn_scene(in.uv)));
 }
 
 // **What an 8-bit render target does to a value, done where this chain reads
@@ -153,6 +153,16 @@ fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
 // falls from ~1.6e5 to 2.43.
 fn surface(texel: vec4<f32>) -> vec4<f32> {
     return clamp(texel, vec4<f32>(0.0), vec4<f32>(1.0));
+}
+
+// 1.0 on the two pipelines that read the scene target itself (the first
+// downsample and the resolve) when the scene stores encoded values.
+override scene_encoded: f32 = 0.0;
+
+// A tap of the scene target, in linear light.
+fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
+    let c = surface(texel);
+    return vec4<f32>(mix(c.rgb, pow(c.rgb, vec3<f32>(2.2)), scene_encoded), c.a);
 }
 
 // The luminance reduction's halving step, in two forms.
@@ -288,7 +298,7 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
-    let scene = surface(textureSample(source_tex, source_sampler, drawn_scene(in.uv))).rgb;
+    let scene = scene_tap(textureSample(source_tex, source_sampler, drawn_scene(in.uv))).rgb;
     let bloom = textureSample(bloom_tex, source_sampler, drawn(in.uv)).rgb;
     let adapted = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let scale = constants.tone_maximum_brightness

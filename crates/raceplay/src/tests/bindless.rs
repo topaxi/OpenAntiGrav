@@ -91,6 +91,7 @@ fn drawable(device: &wgpu::Device, queue: &wgpu::Queue, half: usize, bindless: b
         queue,
         strips(half),
         FORMAT,
+        oag_gpu::formats::SceneStore::Computed,
         Anisotropy::Off,
         1,
         mesh_render::Depth::Scene,

@@ -755,6 +755,13 @@ pub struct Looks {
     /// state with bit 2 writes depth. Wipeout HD's, read off
     /// `Material_ApplyRenderState` and a live race frame.
     pub material_render_state: Rule,
+    /// The race scene stores display-encoded values, so a blended draw adds or
+    /// mixes encoded values rather than linear light. Wipeout HD's: every scene
+    /// draw of three live race frames has `SET_SHADER_PACKER` 1 into an
+    /// `A8R8G8B8` target, and an additive grill's lift is grey and independent
+    /// of what is behind it (`docs/rendering/hd-track-tone.md`, "HD's blends
+    /// combine encoded values").
+    pub blends_encoded: Rule,
 }
 
 /// The LOD bias [`Looks::material_lod_bias`] applies, in levels: the filter
@@ -801,6 +808,7 @@ impl Looks {
             lit_output_halved: Rule::UNREAD,
             material_lod_bias: Rule::UNREAD,
             material_render_state: Rule::UNREAD,
+            blends_encoded: Rule::UNREAD,
         }
     }
 }

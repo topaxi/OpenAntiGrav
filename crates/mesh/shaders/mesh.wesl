@@ -16,6 +16,7 @@ import package::shadow::{shadowed};
 import package::spu_light::{spu_light_sum};
 import package::types::{BlendMrtOutput, MrtOutput, VertexInput, VertexOutput};
 import package::velocity::{velocity_of};
+import oag_shaders::target::{target_out};
 
 // Binding arrays, for the `bindless` variant's group 1 - see `bindings.wesl`.
 @if(bindless) enable wgpu_binding_array;
@@ -146,7 +147,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(opaque_colour(in, shaded), stamped_alpha(in, shaded.a));
+    return vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a));
 }
 
 // Used only by the blended pipeline - see
@@ -158,7 +159,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let shaded = lit_texel(in);
     return vec4<f32>(
-        fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+        target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
         shaded.a
     );
 }
@@ -172,7 +173,7 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
     let shaded = lit_texel(in);
     return BlendMrtOutput(
         vec4<f32>(
-            fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+            target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
             shaded.a
         ),
         vec4<f32>(velocity_of(in), 0.0, shaded.a),
@@ -200,7 +201,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     return vec4<f32>(
-        fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+        target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
         stamped_alpha(in, shaded.a)
     );
 }
@@ -236,7 +237,7 @@ fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
 fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     let shaded = lit_texel(in);
     return MrtOutput(
-        vec4<f32>(opaque_colour(in, shaded), stamped_alpha(in, shaded.a)),
+        vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a)),
         velocity_of(in),
     );
 }
@@ -249,7 +250,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     }
     return MrtOutput(
         vec4<f32>(
-            fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+            target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
             stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),

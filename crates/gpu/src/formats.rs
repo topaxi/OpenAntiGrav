@@ -26,3 +26,21 @@ pub const DISTORTION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Floa
 /// see luminance above 1.0. Drawing into it is what tells every mesh pipeline
 /// to output linear light - see `oag_mesh::mesh_render::is_linear_target`.
 pub const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+/// What a [`SCENE_FORMAT`] target stores of a draw's linear-light output.
+///
+/// The format says the draws compute in linear light; this says whether the
+/// target then keeps that value or its display encoding. It matters only to a
+/// blended draw, which combines with what is stored: Wipeout HD's console packs
+/// every scene draw to sRGB before the blend unit sees it (`SET_SHADER_PACKER`
+/// 1 into an `A8R8G8B8` target, `docs/rendering/hd-track-tone.md`, "HD's blends
+/// combine encoded values"), so an add or a mix there runs on encoded values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SceneStore {
+    /// The value as computed: Omega's float scene, and any gamma target.
+    #[default]
+    Computed,
+    /// Clamped to `[0, 1]` and encoded with the `2.2` power the HD chain
+    /// decodes with where it reads the scene.
+    Encoded,
+}

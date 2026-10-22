@@ -113,6 +113,8 @@ impl Pipeline {
     pub fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
     ) -> Self {
@@ -199,7 +201,7 @@ impl Pipeline {
                         targets.extend(velocity.target(true));
                         targets
                     },
-                    compilation_options: oag_mesh::mesh_render::fragment_options(format),
+                    compilation_options: oag_mesh::mesh_render::fragment_options(format, store),
                 }),
                 primitive: wgpu::PrimitiveState {
                     // A camera-facing quad has no meaningful winding: the
@@ -291,7 +293,7 @@ impl Pipeline {
         let additive_vertices = buffer("psys additive vertices");
         let alpha_vertices = buffer("psys alpha-over vertices");
 
-        let flash = crate::flash::Pipeline::new(device, format, sample_count, velocity);
+        let flash = crate::flash::Pipeline::new(device, format, store, sample_count, velocity);
         Self {
             drawer: Drawer {
                 additive,

@@ -976,3 +976,172 @@ dome (`SkyCube/*.rcsmaterial`, `SkyCube_Vineta_K_*.gnf`), which this engine read
 colour` at all: it has `Sky brightness` 3, `Sky scale` 3.5 and `Sky height offset` 0, whose
 consumer is unlocated. So the tint law does not carry over, and Omega's sky brightness is a
 separate open question.
+
+## HD's blends combine encoded values: the packer runs before the blend (2026-10-22, `hd-blend-space`)
+
+**Claim**: a blended HD draw is combined with what the scene target already holds in
+display (gamma-encoded) values, not in linear light. **True for the reference frames,
+confidence 85.**
+
+**The register read.** Every draw into the race's scene target (`SET_SURFACE_COLOR_AOFFSET`
+`0xf50000`, format word `0x3148`: colour format 8, `A8R8G8B8`, two-sample) on three
+existing RPCS3 frame dumps of race frames (one carries the six `scanlinebillboard`-shaped
+draws below, which places it on Talon's Junction; the other two are a hull-brightness and a
+start-gantry capture; `scripts/rpcs3_draw_hook.py`'s `draws_of`) carries
+`SET_SHADER_PACKER` (`0x1fec`) = 1 and `SET_SHADER_CONTROL` (`0x1d60`) with no 32-bit
+exports (low byte 0, or `0x0e` on one draw). The blended ones among them use
+`SET_BLEND_EQUATION` `0x80068006` (`FUNC_ADD` on colour and alpha) with, per frame:
+
+| `SET_BLEND_FUNC_SFACTOR` / `DFACTOR` | meaning (colour) | draws (three frames) |
+| --- | --- | --- |
+| `0x3020302` / `0x3030303` | `SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA` | 52, 42, 48 |
+| `0x3020302` / `0x10001` | `SRC_ALPHA`, `ONE` | 44, 9, 19 |
+| `0x10001` / `0x10001` | `ONE`, `ONE` | 12, 16, 16 |
+| `0x302` / `0x3030303` | `SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA` (alpha `ZERO`) | 19, 0, 12 |
+| `0x10001` / `0x3030303` | `ONE`, `ONE_MINUS_SRC_ALPHA` | 6, 1, 1 |
+
+No blended scene draw uses a destination-alpha factor.
+
+**Where the encode sits.** `SET_SHADER_PACKER` is the fragment output packer: the sRGB
+encode is applied to the program's colour output **before** the blend unit sees it, and the
+blend then adds or mixes the encoded source with the encoded bytes already in the
+`A8R8G8B8` target. RPCS3, which made every reference frame, implements exactly that: its
+fragment epilogue (`RSXROPEpilogue.glsl`, `_ENABLE_FRAMEBUFFER_SRGB`) applies
+`linear_to_srgb` to `col0..col3` in the shader when the packer is non-zero and the program
+does not export 32-bit registers (`RSXThread.cpp`), and the attachment is
+`VK_FORMAT_B8G8R8A8_UNORM` (`VKGSRender.cpp`), so the fixed-function blend runs on encoded
+values. Alpha is not encoded. (The earlier wording "the ROP encodes sRGB on write" in
+renderer.md, "`SET_SHADER_PACKER`", is the same register; the encode is per fragment, ahead
+of the blend, not after it.) The console's own G70-class RSX is a pre-Direct3D-10 part, and
+the inference that it, too, encodes before blending rather than linearising the destination
+is not measured here; the confidence is for the reference frames.
+
+So for the race's scene target:
+
+```text
+stored' = enc(src.rgb) * sfactor(src.a) + stored * dfactor(src.a)      (encoded, clamped to [0,1] per draw)
+```
+
+where ours computed `enc(dec(stored) * dfactor + src.rgb * sfactor)`.
+
+**The discriminating fit, Talon's grill.** `scanlinebillboard` slot 435 is a `ONE`/`ONE`
+add whose program output is grey (`overlay * 0.2893 / 2`, renderer.md, "`scanlinebillboard`
+is the fourth shape"). An encoded add lifts every channel by the same `enc(src)`, whatever
+lies behind; a linear add lifts a dark channel more than a bright one. Ours with the
+material skipped (`OAG_SKIP_MATERIAL=scanlinebillboard`) stands in for the destination:
+
+| box | behind (ours, grill skipped) | theirs | theirs minus behind | ours minus behind | corr(lift, behind) R,G,B: theirs / ours |
+| --- | --- | --- | --- | --- | --- |
+| 790,10 60x200 | 49.9, 101.4, 122.4 | 104.9, 157.7, 180.1 | **+55.0, +56.3, +57.7** | +53.5, +29.6, +24.6 | -0.05, 0.07, 0.04 / -0.48, -0.18, -0.09 |
+| 800,130 50x80 | 40.7, 102.4, 124.1 | 101.2, 162.7, 185.2 | **+60.4, +60.3, +61.1** | +56.8, +27.6, +22.9 | 0.07, 0.21, 0.09 / -0.66, -0.30, -0.27 |
+
+The original's lift is grey and uncorrelated with what is behind it; ours, with a grey
+linear source of about 0.092 on every channel, is not. For a linear add to give theirs, the
+source would have to be 2.6 times bluer than red (0.112 against 0.289 linear in the
+smaller box), against a grey program. The size is close but not exact: ours' source
+encoded is `+84` on every channel against theirs `+60`, so about half of ours' linear
+source would fit. The advert's phase (the scanlines move with the clock) and the program's
+`/2` are the candidates for that remainder; the old "the original's add is about 3x the
+program's" note in renderer.md was this encode (0.1 linear is 0.35 encoded).
+
+**Other titles.** Pulse renders into an 8-bit gamma target already (no change). Omega's
+pixel shaders export fp16 (`v_cvt_pkrtz_f16_f32`) into a float target that its own tone map
+reads (`oag_post::omega_tonemap`), so its blends are linear: **checked, differs**. 2048 has
+no RSX; its target format is unread: **not checkable** here.
+
+### The holographic taps are decoded on fetch
+
+The same Talon's frame carries six `ONE`/`ONE` scene draws of `scanlinebillboard`'s shape
+(draws 434-439 of the dump, fragment programs `0x78f441` to `0x791d81`): unit 0 the advert
+(`512x256`, and `128x256` on two, the `banner_02` variant the parameter census names), unit 1
+the `128x128` scanline texture, unit 2 the `32x256` second layer, unit 3 the circuit's
+`1024x1024` lightmap. **Units 0, 1 and 2 read with gamma nibble 7** (sRGB-decoded on fetch,
+`SET_TEXTURE_ADDRESS` bits 20-23), unit 3 with 0 (raw), the same split renderer.md records for
+albedo and lightmap units. `holo.wesl` used all three taps raw as if they were light. It now
+decodes each tap on the race's linear target before the overlay; the gamma-target path is
+unchanged. Confidence 80 for `scanlinebillboard` (one frame, six draws); the three
+holographic shapes run the same combine and are decoded the same way by inference, not by a
+live read.
+
+### Wired, and measured
+
+`Looks::blends_encoded` (HD `Measured`, every other title `UNREAD`) sets
+`oag_post::hd_bloom::Params::store` to `SceneStore::Encoded`. Every pipeline that draws into
+the HD scene is built for it and encodes its output (`target_out` in
+`crates/shader-check/shaders/target.wesl`: the mesh entry points, the ghost, the seven `fx`
+shaders), the glass grab decodes what it reads (`target_in`), and the chain decodes the scene
+at its two taps (the first downsample and the resolve), so opaque surfaces round-trip
+unchanged (a 400x300 opaque box of `hd/talons` is identical to the decimal). Tests:
+`oag-fx::it encoded_blend` (a grey flash lifts `0.2, 0.5, 0.8` by `0.3` each, encoded, and by
+`0.3^2.2` stored as computed), `oag-post hd_bloom::tests::an_encoded_scene_resolves_as_the_light_it_encodes`,
+`oag-render::it hd_holo_billboard_lit_path::on_the_race_target_the_taps_are_decoded_before_the_overlay`,
+`oag-hd effects::tests::hd_blends_encoded_and_an_unread_title_does_not`.
+
+Whole-frame mean grey difference against the cold originals (the compare page's metric,
+`magick ... -colorspace Gray -compose difference`), before (main `0fad6e937`), with the encoded
+store alone, and with the holo decode as well:
+
+| pair | before | encoded store | + holo decode |
+| --- | ---: | ---: | ---: |
+| `hd/anulpha-pass` | 10.06 | 10.05 | 10.05 |
+| `hd/chenghou-project` | 6.76 | 6.76 | 6.76 |
+| `hd/metropia` | 8.48 | 8.43 | 8.43 |
+| `hd/moa-therma` | 9.27 | 9.09 | 9.09 |
+| `hd/modesto-heights` | 10.15 | 10.16 | 10.16 |
+| `hd/sebenco-climb` | 8.59 | 8.21 | 8.21 |
+| `hd/sol-2` | 7.82 | 7.72 | 7.72 |
+| `hd/talons` | 5.72 | 6.06 | 5.90 |
+| `hd/talons-assegai-c1` | 6.15 | 6.41 | 6.26 |
+| `hd/tech-de-ra` | 12.27 | 8.77 | 8.77 |
+| `hd/the-amphiseum` | 10.09 | 10.51 | 10.51 |
+| `hd/ubermall` | 9.35 | 9.34 | 9.34 |
+| `hd/vineta-k` | 10.93 | 10.88 | 10.88 |
+
+Tech de Ra's pale haze over the road is gone (the grid reads as the original's); the
+blown-white glass and stands on Sebenco, Ubermall and Sol 2 move toward the original. A
+Pulse PSP pair (`pulse-psp/amphiseum-white`) and an Omega pair (`omega/anulpha-pass`) render
+byte-identical to main.
+
+**Boxes** (mean RGB, 0-255):
+
+| box | theirs | ours before | ours after |
+| --- | --- | --- | --- |
+| Talon's grill `790,10 60x200` | 104.9, 157.7, 180.1 | 103.4, 131.0, 147.0 | 148.6, 192.2, 206.6 |
+| Talon's grill, inner `800,130 50x80` | 101.2, 162.7, 185.2 | 97.6, 130.0, 146.9 | 126.5, 186.8, 208.0 |
+| Modesto right banner `1130,412 170x28` | 98.6, 102.0, 98.6 | 156.0, 141.8, 92.8 | 137.4, 130.2, 84.2 |
+| Modesto left banner `850,385 80x35` | 102.4, 105.4, 99.0 | 122.3, 116.8, 97.0 | 113.4, 107.8, 82.7 |
+| Amphiseum hologram `840,0 240x120` | 54.1, 77.1, 89.8 | 120.9, 151.3, 165.3 | 140.9, 171.7, 183.5 |
+
+The grill's lift is now grey on every channel, as the original's is, and over-sized: the
+large box's mean grey difference rises 23.8 to 36.1 while the inner one falls 27.7 to 24.6.
+The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not the original's.
+
+### What is left, and why the two worse pairs do not argue against the law
+
+- **Amphiseum (+0.42)** is one surface: `hologram.rcsmaterial`, the board over the start
+  gantry. With it skipped (`OAG_SKIP_MATERIAL=hologram`) the box reads `63.5, 82.2, 90.8`
+  against the original's `54.1, 77.1, 89.8`. Ours draws it through the generic emissive
+  stand-in (its program is unread, rcsmaterial.md, "Pixels are small") and it was already
+  +70 grey too bright before this change; an encoded add of a too-strong source lifts more.
+  Next: read `hologram`'s fragment program.
+- **Talon's (+0.18) and its Assegai pair (+0.11)**: the grill's source is still about 1.5x
+  the original's after the decode. The phase of the scanlines (they move with the clock) and
+  the second layer's scroll are the candidates.
+- **The Modesto banners at the turn are not a blend-space defect.** A slot bisect on the
+  banner's yellow (`R - B` of the right box) finds slot **773**,
+  `uvanim_diffuse_emissivealpha.rcsmaterial` with `egx_lcd.gtf`: an LCD material, blended.
+  The original draws it as a pale, see-through scanline grid with no logo; ours draws the
+  texture's logo, saturated. Its program is unread. Next: read that program's fragment
+  block and its units' gamma nibbles on a live Modesto frame.
+- **Weapon effects are stronger.** Every additive weapon draw now adds its authored display
+  value rather than its linear value. The Bomb's rings at 1.8 s burn through to white where
+  they drew yellow (`hd_bomb_blast_ground_truth` re-derived on the new build), and a rocket's
+  detonation glare is whiter. There is no original frame of either. The falsifier is an
+  RPCS3 capture of the Bomb's rings at about 1.8 s. The fireball's program
+  (`slots::BOMB_FIRE` in `shade.wesl`) reads its three taps raw as light, as `holo.wesl`
+  did before its units' gamma nibbles were read; the nibbles of its units on a live blast
+  are the next read. Three additive sources measured too strong under this law (the grill,
+  the hologram, possibly the Bomb) point at the same pattern: HD's unlit programs reading
+  taps raw where the console decodes them.
+- `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
+  change; it is not exercised by any of the 13 pairs.

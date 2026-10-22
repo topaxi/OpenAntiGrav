@@ -570,6 +570,12 @@ impl Scene {
         // See `hd_chain::build`'s own doc comment for what this chain is and
         // why `format` comes back shadowed.
         let (hd, format, caller_format) = hd_chain::build(device, format, size, hd_bloom);
+        // What the scene target stores, which every pipeline drawing into it is
+        // built for: HD's chain says (`oag_gpu::formats::SceneStore`).
+        let store = hd.as_ref().map_or(
+            oag_gpu::formats::SceneStore::Computed,
+            oag_post::hd_bloom::Chain::store,
+        );
         let (omega, format) =
             hd_chain::build_omega(device, format, caller_format, size, omega_tonemap);
         // **The Zone stage's own texture, bound once per model.** The showing
@@ -624,6 +630,7 @@ impl Scene {
             behind_glass,
             sky_model.as_ref(),
             format,
+            store,
             anisotropy,
             zone_art,
             shadow_maps,
@@ -636,6 +643,7 @@ impl Scene {
                     queue,
                     model,
                     format,
+                    store,
                     anisotropy,
                     sample_count,
                     mesh_render::Depth::Sky,
@@ -658,6 +666,7 @@ impl Scene {
             queue,
             &track_model,
             format,
+            store,
             anisotropy,
             sample_count,
             zone_art,
@@ -669,6 +678,7 @@ impl Scene {
             queue,
             track_model,
             format,
+            store,
             anisotropy,
             sample_count,
             scene_depth,
@@ -715,6 +725,7 @@ impl Scene {
                 queue,
                 livery.hull.clone(),
                 format,
+                store,
                 anisotropy,
                 sample_count,
                 scene_depth,
@@ -733,6 +744,7 @@ impl Scene {
                     queue,
                     model,
                     format,
+                    store,
                     anisotropy,
                     sample_count,
                     scene_depth,
@@ -754,6 +766,7 @@ impl Scene {
                         queue,
                         model,
                         format,
+                        store,
                         anisotropy,
                         sample_count,
                         scene_depth,
@@ -795,6 +808,7 @@ impl Scene {
                     queue,
                     placed,
                     format,
+                    store,
                     anisotropy,
                     sample_count,
                     shadow_maps,
@@ -809,6 +823,7 @@ impl Scene {
             queue,
             liveries,
             format,
+            store,
             anisotropy,
             sample_count,
             scene_depth,
@@ -845,6 +860,7 @@ impl Scene {
             queue,
             liveries,
             format,
+            store,
             anisotropy,
             sample_count,
             zone_art,
@@ -865,6 +881,7 @@ impl Scene {
                 queue,
                 model,
                 format,
+                store,
                 anisotropy,
                 sample_count,
                 scene_depth,
@@ -899,6 +916,7 @@ impl Scene {
                 plasma_blast_models,
                 bomb_blast_models,
                 format,
+                store,
                 anisotropy,
                 sample_count,
                 scene_depth,
@@ -920,6 +938,7 @@ impl Scene {
                 queue,
                 model,
                 format,
+                store,
                 anisotropy,
                 sample_count,
                 scene_depth,
@@ -943,6 +962,7 @@ impl Scene {
             device,
             queue,
             format,
+            store,
             &flare,
             &noise,
             trail_shape.as_ref(),
@@ -957,19 +977,21 @@ impl Scene {
         let sparks = std::cell::RefCell::new(sparks::Pipeline::new(
             device,
             format,
+            store,
             sample_count,
             mesh_render::Velocity::Write,
         ));
         let weapon_quads =
-            weapon_quads::build(device, queue, format, cannon, liveries, sample_count);
+            weapon_quads::build(device, queue, format, store, cannon, liveries, sample_count);
         let beam = beam::build(
             device,
             queue,
             format,
+            store,
             leach_beam_texture.as_ref(),
             sample_count,
         );
-        let ribbons = ribbons::build(device, queue, format, &ribbon_textures, sample_count);
+        let ribbons = ribbons::build(device, queue, format, store, &ribbon_textures, sample_count);
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
@@ -1099,7 +1121,7 @@ impl Scene {
             zone_grade,
             exhaust,
             weapon_quads,
-            clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
+            clouds: clouds::Clouds::build(device, queue, format, store, sample_count, cloud_layer),
             mist: std::cell::RefCell::new(None),
             beam,
             ribbons,

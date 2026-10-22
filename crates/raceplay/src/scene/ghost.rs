@@ -66,6 +66,7 @@ impl Scene {
             device,
             queue,
             format,
+            self.store(),
             self.sample_count(),
             self.bloom.is_some(),
             static_glow,

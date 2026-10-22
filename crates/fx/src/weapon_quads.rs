@@ -157,10 +157,13 @@ impl Pipeline {
     /// by `oag_texture`. `format` must match the caller's render pass and
     /// `sample_count` its multisample state - see `mesh_render::build`.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         bolt: &FlareTexture,
         flash: &FlareTexture,
         sample_count: u32,
@@ -250,7 +253,7 @@ impl Pipeline {
                     targets.extend(velocity.target(true));
                     targets
                 },
-                compilation_options: oag_mesh::mesh_render::fragment_options(format),
+                compilation_options: oag_mesh::mesh_render::fragment_options(format, store),
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: None,

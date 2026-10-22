@@ -3,6 +3,7 @@
 // behind-the-glass target read at the point one unit along the surface normal,
 // projected through `scene.refraction`.
 
+import oag_shaders::target::{target_in};
 import package::bindings::{behind_glass_tex, emissives, scene, shadow_sampler};
 import package::fog::{fogged};
 import package::shadow::{shadowed};
@@ -36,6 +37,6 @@ fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
     let clip = scene.refraction * vec4<f32>(in.world + n, 1.0);
     let ndc = clip.xy / max(clip.w, 1e-6);
     let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
-    let grab = textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb;
+    let grab = target_in(textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb);
     return fogged(lit * tint.w + grab * w, in.world, in.view_depth);
 }
