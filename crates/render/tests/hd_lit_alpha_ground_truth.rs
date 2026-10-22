@@ -84,9 +84,14 @@ fn anulphas_reversed_walls_light_their_alpha_and_its_floor_lights_its_colour() {
             "slot {slot} ({material}) should {}light the albedo's alpha",
             if alpha { "" } else { "not " }
         );
+        // The chevron's own entry is its emask-and-outline program (`mesh::rcs::chevron_pulse`,
+        // mode `PROGRAM_CHEVRON`); no other slot here carries one.
+        let program = slots::material_index(word)
+            .checked_sub(1)
+            .map(|entry| model.emissive[entry as usize].program[0]);
+        let expected = (material == "cf_chevron_pulse").then_some(mesh::PROGRAM_CHEVRON);
         assert_eq!(
-            slots::material_index(word),
-            0,
+            program, expected,
             "slot {slot} ({material}) carries a glow entry the flag must not be confused with"
         );
     }
