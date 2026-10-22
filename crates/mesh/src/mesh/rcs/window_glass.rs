@@ -8,6 +8,11 @@
 //! The map is the circuit's sky (`mesh::sky_paraboloid`); this module tags the slots whose
 //! program is that block, the way `probe_lit` tags a hull's, and `shade.wesl` adds the term.
 //!
+//! **`mt_windows_a` is the same window** (Anulpha Pass, lightmapped block #15 `@0xc6e0`, traced
+//! `hd-glass-families`): its picture at unit 1, the normal map at unit 0, the sky at unit 3 times
+//! the same weight parameter (`0.336` there), added to the lit picture and the specular, alpha the
+//! picture's.
+//!
 //! **`glass_texture_customr` is a pane, not a window** (block #5 `@0x2db0`, the variant
 //! Modesto Heights' and Talon's Junction's slots resolve to, traced `hd-glass-families`):
 //! `rgb = fog(a * light * T1.rgb + (1 - a) * (specular + k * reflection)) / 2`, alpha `a`, with
@@ -90,6 +95,13 @@ struct Row {
 const FAMILIES: &[Row] = &[
     Row {
         family: "dc_windows_a",
+        weight: Some(0x5e5b_1937),
+        picture: None,
+        mode: Mode::Window,
+        glow: None,
+    },
+    Row {
+        family: "mt_windows_a",
         weight: Some(0x5e5b_1937),
         picture: None,
         mode: Mode::Window,

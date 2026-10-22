@@ -222,6 +222,45 @@ fn chenghous_reflective_windows_bind_their_picture_and_reflect_through_its_alpha
     assert!(checked >= 6, "only {checked} drawn window slots");
 }
 
+/// Anulpha Pass's `mt_windows_a` (`docs/rendering/hd-track-tone.md`, "The sky-reflecting families"):
+/// `dc_windows_a`'s window law, weighted by its own `0x5e5b1937` (`0.336` on slot 579).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn anulphas_windows_reflect_the_sky_by_their_own_weight() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/15_anulpha_pass/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Anulpha Pass builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/mt_windows_a.rcsmaterial") {
+            continue;
+        }
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        let weight = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x5e5b_1937)
+            .map(|p| p.value[0])
+            .expect("a weight");
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [weight, 0.0, 0.0], "slot {slot}");
+        checked += 1;
+    }
+    assert_eq!(checked, 3, "Anulpha names mt_windows_a in three slots");
+}
+
 /// The same build, honouring HD's render-state rule
 /// (`oag_title::Looks::material_render_state`): every `cf_tree` draw (`0xbd`,
 /// state bit 7) leaves the blended list for the cutout list, unblended, as all

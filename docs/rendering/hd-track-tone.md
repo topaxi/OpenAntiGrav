@@ -704,8 +704,29 @@ ours before**: the sky term through `1 - T.a` lifts the unlit panes. Metropia 8.
 Omega byte-identical. **Left open**: the reflection's brightness on these panes (the `N` of a far facade and the sky unit's live gamma
 were not dumped), and Metropia's `@0x18350` block, assumed the same law.
 
-**Omega: checked, applies, not wired.** Omega ships `Glass_2nduv_reflect_glow_1` on Chenghou Project (`data01.psarc`, `data05.psarc`,
-`data08.psarc`); its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
+**Omega: checked, applies, not wired.** Omega ships `Glass_2nduv_reflect_glow` (and `_1`, `_2`) on Vineta K, Metropia and Chenghou
+Project, under `Materials/` and `Materials_DLC/`; its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
+
+### Anulpha's `mt_windows_a` is `dc_windows_a`'s window (confidence 85)
+
+Slot 579 is the one that draws (4 chunks, lightmapped block #15 `@0xc6e0`; 563 and 571 name the family and draw nothing in this
+frame), blended `SrcAlpha`/`OneMinusSrcAlpha`. The block is Moa Therma's glass law with its own units: the normal map (`0xfc52b822`)
+at unit 0, the picture `dc_window_a_diffuse` (`0x11cb4f74`) at unit 1, the atlas at unit 2, the sky at unit 3;
+`rgb = fog(w * probeTint(sky(reflect(-E, N))) + light * T.rgb + specular) / 2` with `w` the same parameter `0x5e5b1937` (`0.336` here)
+and the specular colour `0x370a63cb`, alpha `T.a`. The picture and the alpha were already right; **wired**: the row tags it like
+`dc_windows_a`. **Left out, named**: the normal map, as on Moa's glass.
+
+| `hd/anulpha-pass` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| window strip box `80,200 180x80` (behind the lap counter), mean RGB | 34.4, 36.9, 37.1 | 38.4, 40.2, 39.6 | 40.0, 42.1, 42.2 |
+| whole-frame mean grey difference | | 10.049 | 10.079 |
+
+**Worse in its box by 2 grey and in the frame by 0.03**, with the program's term as read: the strip is mostly hidden behind the HUD,
+and the pane's normal map, which tilts each reflection, is the named omission. The other HD pairs unchanged, Pulse PSP and Omega
+byte-identical.
+
+**Omega: checked, applies, not wired.** Omega's Anulpha ships `MT_Windows_A` (and `_1`, `_2`, under `Materials/` and
+`materials_DLC/`); its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
 
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
