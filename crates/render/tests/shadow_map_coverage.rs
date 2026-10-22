@@ -554,3 +554,49 @@ fn the_receivers_lookup_reads_the_row_the_caster_landed_in() {
         at(column, row)
     );
 }
+
+#[test]
+fn a_caster_with_nothing_to_draw_is_skipped_rather_than_panicking() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let mut map = Map::new(&device);
+    // What a drawable whose every chunk was filtered out (`OAG_ONLY_SLOT` with
+    // no slot that matches) holds: zero-size buffers and no draw ranges. A
+    // zero-size buffer has no slice, and `slice(..)` of one panics in wgpu.
+    let empty = |usage| {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("empty caster"),
+            size: 0,
+            usage,
+            mapped_at_creation: false,
+        })
+    };
+    let vertices = empty(wgpu::BufferUsages::VERTEX);
+    let indices = empty(wgpu::BufferUsages::INDEX);
+    let caster = Caster {
+        vertices: &vertices,
+        indices: &indices,
+        ranges: &[],
+        model: Mat4::IDENTITY,
+    };
+    let fit = Fit {
+        centre: Vec3::ZERO,
+        radius: 2.0,
+        towards_light: Vec3::Y,
+    };
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    map.render(
+        &queue,
+        &mut encoder,
+        &[CraftCaster {
+            slot: 0,
+            rank: 0,
+            fit,
+            caster,
+        }],
+    );
+    map.render_depth(&queue, &mut encoder, &fit, &[caster]);
+    queue.submit([encoder.finish()]);
+    assert_eq!(map.casters(), 1);
+}
