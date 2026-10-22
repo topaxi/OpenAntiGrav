@@ -225,6 +225,7 @@ impl Overlay {
         for renderer in [&mut values, &mut captions, &mut rows, &mut skin] {
             renderer.set_hud_scale(device, stretch);
             renderer.set_whole_pixel_advances(assets.art.raster);
+            renderer.set_ink_aligned_text(assets.art.ink_aligned_text);
         }
 
         Ok(Some(Self {

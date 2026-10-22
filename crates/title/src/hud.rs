@@ -377,6 +377,18 @@ pub struct HudArt {
     /// 1080p grid - there is no stretch to sharpen. Measured as a census of
     /// each title's sheet and grid, `docs/ui/hud-skins.md`.
     pub raster: bool,
+    /// Whether a **right- or centre-aligned string ends on its last glyph's ink**, not on its advance:
+    /// the width the alignment uses is the advances less that glyph's trailing bearing (its advance
+    /// less its cell width).
+    ///
+    /// HD **measured** (2026-10-22, `hd-sharp-hud`): `LAP`, `Record` and `0 kmh` (right-aligned) sat
+    /// 2.8, 3.9 and about 4 px left of the original's at 1920x1080, `100` and the lap digit (centred)
+    /// 1.7 px, on all 13 cold pairs alike, and the whole-HUD, bars and left-aligned `KM/H` sat within
+    /// 0.1 px; with the rule on, the text crops' phase-correlation peak is within 0.3 px on the pairs
+    /// measured. Omega inherits HD's HUD engine and font, unmeasured. Pulse and Pure keep their
+    /// narrower, measured rule (right-aligned only, on `Self::raster`); 2048 is unmeasured and
+    /// `false`.
+    pub ink_aligned_text: bool,
     /// How this title authors its lock-on reticle. See [`Sights`].
     ///
     /// Not part of [`Self::always_on`] and deliberately so: the sights are up

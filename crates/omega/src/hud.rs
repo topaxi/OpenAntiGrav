@@ -220,6 +220,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     texture_extension: Some(".gnf"),
     always_on: ALWAYS_ON,
     raster: false,
+    ink_aligned_text: true,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",

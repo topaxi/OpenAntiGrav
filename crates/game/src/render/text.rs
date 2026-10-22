@@ -116,12 +116,18 @@ impl Renderer {
             font::measure(atlas, text) * scale
         };
         let texel = atlas.texel_scale;
-        // **A right-aligned HUD string ends on its last glyph's ink, not on its advance.** Read off
+        // **A right-aligned HUD string (and, for `HudArt::ink_aligned_text`, a centred one) ends on
+        // its last glyph's ink, not on its advance.** Read off
         // the GE lists of the Pulse grid: `0 kmh`, `100%` and `Record` sit 2, 1 and 1 px further
         // right than the advance-aligned pens, the last glyph's trailing bearing (its advance less
         // its cell width) in each, where the record time's last glyph has none and sits where it
         // always did. `docs/ui/hud.md`, "Right-aligned HUD text ends on the ink".
-        let trailing = if self.hud.whole_advances && align == Align::Right {
+        let ink_end = match align {
+            Align::Right => self.hud.whole_advances || self.hud.ink_aligned,
+            Align::Centre => self.hud.ink_aligned,
+            Align::Left => false,
+        };
+        let trailing = if ink_end {
             text.chars()
                 .next_back()
                 .and_then(|c| atlas.cell(c))
@@ -134,7 +140,7 @@ impl Renderer {
         };
         let mut pen = self.hud.snap(match align {
             Align::Left => x,
-            Align::Centre => x - width / 2.0,
+            Align::Centre => x - (width - trailing) / 2.0,
             Align::Right => x - width + trailing,
         });
         let y = self.hud.snap(y);

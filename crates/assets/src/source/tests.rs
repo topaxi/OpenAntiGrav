@@ -174,6 +174,7 @@ const TITLE: &Title = &Title {
         texture_extension: None,
         always_on: &[],
         raster: false,
+        ink_aligned_text: false,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,
         pickup_colours: None,
