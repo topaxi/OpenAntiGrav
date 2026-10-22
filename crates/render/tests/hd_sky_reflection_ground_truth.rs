@@ -84,6 +84,64 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
     trees_draw_among_the_cutouts_and_bit_2_blends_write_depth(model);
 }
 
+/// Modesto Heights' `glass_texture_customr` panes (`docs/rendering/hd-track-tone.md`, "The
+/// sky-reflecting families"): the picture and coverage are `Texture1`'s (`glass_dark_r`,
+/// `j_tower_glass_r`), never the `j_sky.gtf` at entry 0 that no block of the family samples, and
+/// each slot carries a pane entry (`tint.y` 1) weighted by its own `Refbrightness` (`0xab31c2b1`).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn modestos_glass_panes_bind_texture1_and_split_by_coverage() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let path = "/data/environments/modesto_heights/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Modesto Heights builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/glass_texture_customr.rcsmaterial")
+        {
+            continue;
+        }
+        let Some(Some(texture)) = model.textures.get(slot) else {
+            continue;
+        };
+        let texture1 = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x3bdc_0403)
+            .and_then(|(_, path)| path.as_deref())
+            .expect("a pane names Texture1");
+        assert!(
+            texture.label.ends_with(texture1),
+            "slot {slot} binds {} where its program samples {texture1}",
+            texture.label
+        );
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        let refbrightness = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0xab31_c2b1)
+            .map(|p| p.value[0])
+            .expect("Refbrightness");
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [refbrightness, 1.0, 0.0], "slot {slot}");
+        checked += 1;
+    }
+    assert!(checked >= 5, "only {checked} drawn pane slots");
+}
+
 /// The same build, honouring HD's render-state rule
 /// (`oag_title::Looks::material_render_state`): every `cf_tree` draw (`0xbd`,
 /// state bit 7) leaves the blended list for the cutout list, unblended, as all

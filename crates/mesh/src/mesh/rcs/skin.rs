@@ -540,6 +540,16 @@ pub(super) fn picks(
                     aux: Some(sheen.grid_entry),
                 };
             }
+            // **A sky-reflecting pane's picture and coverage are `Texture1`'s**, ahead of the
+            // generic reading: its colour lane is `Mixed` (the sky map reaches it), so that
+            // reading falls to entry 0, a texture no block of the family declares. See
+            // `window_glass::pane_picture`.
+            if let Some(entry) = super::window_glass::pane_picture(material, &declared) {
+                return Pick {
+                    albedo: Some(entry),
+                    aux: Some(entry),
+                };
+            }
             // An entry only counts when it supplies a `.gtf`: an entry the
             // material declares and leaves empty is the engine's to bind, and
             // pointing a lane at it would sample `mesh_render::build`'s

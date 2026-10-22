@@ -624,6 +624,53 @@ Omega: **not checkable** (no capture path; its HD-lineage circuits ship the cube
 **Open**: the shadows under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell, a material not found by slot
 bisection this lane), the normal map on the glass, and the other reflection-reading families above.
 
+## The sky-reflecting families, one at a time (2026-10-22, `hd-glass-families`)
+
+The families besides `dc_windows_a` that declare `paraboloidReflectionTex` (`0x9edd3243`), each read off its own resolved
+fragment block (`scripts/ps3-microcode.py fp-file`) and tagged in `mesh::rcs::window_glass`'s family table (a row: the family,
+its weight parameter, and how its program combines the reflection). Census of the 13 cold pairs' circuits (`hd_slot_list`,
+material names containing `glass`, `window` or `reflect`): `glass_reflect` on 11 circuits, `ds_booth_glass` on 11,
+`glass_reflect_opacity` on Vineta K, `03_track` and Chenghou (14 slots there), `glass_texture_customr` on Modesto Heights (7 slots)
+and Talon's Junction (2), `mt_windows_a` on Anulpha Pass (3).
+
+### Modesto's right-hand glass: `glass_texture_customr` is a pane (confidence 85)
+
+**Found** by slot skip on `hd/modesto-heights` (`OAG_SKIP_SLOT=760,762,789,793,808,809,824` empties the stand's glass band and shows
+the interior the original shows through it). Slot 762 (40 chunks) names `j_sky.gtf` at entry 0 (`0x8365b1f3`) and `glass_dark_r.gtf`
+at entry 1 (`0x3bdc0403`, `Texture1`); 760 names `j_tower_glass_r.gtf` there. Drawn `One`/`OneMinusSrcAlpha`, state `0x39`.
+
+**The program** (resolved variant: fragment block #5 `@0x2db0`, vertex `@0x2b60`):
+
+- `T1 = tex(unit 0 = Texture1, TC5.zw)`, `a = T1.a`;
+- `light = TC0 + TC5.x * N.L * sun` (`TC0` the vertex block's prelit colour, `TC5.x` the vertex sun mask);
+- `R = probeTint(tex(unit 1 = paraboloidReflectionTex, env_probe_uv(reflect(-E, N))))` (`iblScalePower` `0x7480de6d`, the hull's law);
+- `rgb = fog(a * light * T1.rgb + (1 - a) * (specular + k * R)) / 2`, `alpha = a`, with `k` the material's `Refbrightness`
+  (`0xab31c2b1`, `0.205` on slot 760, read per slot) and the specular `pow(N.H, 200) * sun`;
+- `TC1.xyz` and `TC2.xyz` are written `0` by the vertex block, so the closing `ADD /2 R1, H0` adds nothing.
+
+**`j_sky.gtf` is never sampled**: none of the material's twelve fragment blocks declares `0x8365b1f3`. Ours bound it as the picture
+because the program's colour lane is `Mixed` (the sky map reaches it) and `skin::picks` then fell to entry 0; with `One` as the source
+factor the pane added a whole opaque picture of a city skyline over the stand. And the generic emissive reading
+(`rcs::emissive`) saw the program accumulate unit 1 and added `Texture1` again as a still glow layer, taking the slot's glow
+index; unit 1 is the sky map, so the window-glass families are now refused there as `glass_sheen` is. **Wired**: `window_glass::pane_picture` binds `Texture1`'s
+entry as picture and coverage for a pane family, and `shade.wesl` splits the sum by the coverage (`tint.y` 1 on the glow-table entry):
+the lit picture times `a`, the specular and `k * R` times `1 - a`. Nothing of the block is left out: it samples no normal map.
+
+| `hd/modesto-heights` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| glass box `1550,170 350x120`, mean RGB | 112.8, 118.4, 128.8 | 139.6, 144.9, 155.0 | 117.9, 123.7, 128.7 |
+| whole-frame mean grey difference | | 10.162 | 9.691 |
+
+The other twelve HD pairs: unchanged (Talon's two slots are not in either Talon's pair's view; five pairs differ by one level on 1-7
+pixels, shader-recompile rounding). Pulse PSP `amphiseum-black` and Omega `anulpha-pass` byte-identical. At player size the
+pane now shows the stand's interior through a faint sky reflection, as the original's does. **Left open**: the original's interior
+reads a little sharper behind the glass (its lit strip along the pane's foot is brighter); `N` and `E` of the sky lookup were not
+dumped live.
+
+**Omega: checked, applies, not wired.** Omega ships `Glass_Texture_CustomR` (and `_1`, `_2`) on Modesto Heights and Talon's Junction with
+the same `j_sky` and `glass_dark_r` textures (`data02.psarc`, `.gnf`); its PS4 programs are not decoded, so whether its pane skips
+`j_sky` too is unread, and Omega's `psp2` material route does not run `window_glass`.
+
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws
