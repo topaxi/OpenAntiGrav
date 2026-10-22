@@ -1598,3 +1598,24 @@ Pure's Time Trial clock counts down to the next medal, captioned `BRONZE TIME` o
 label/time match (label 4 of 4, time exactly on 2, a tenth under on 2 from pair alignment):
 [hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md). Silver, gold and `RECORD`
 captions follow the stored best and are unexercised on a frame (no pair holds a best).
+
+## Pure's hull is darker than the original's and does not move with the circuit (2026-10-22, measured)
+
+Four Time Trial pairs (Vector, Feisar, same pose, hull offset 0 to 1 px), mean RGB over a patch of the teal body at the
+hull's centre, original then ours (ours/original on green in the last column; whole-frame mean grey of the original
+beside it):
+
+| circuit | original | ours | ratio | frame mean grey |
+| --- | --- | --- | ---: | ---: |
+| Vineta K | 159 176 155 | 56 68 53 | 0.39 | 143.6 |
+| Chenghou Project | 156 168 138 | 61 74 58 | 0.44 | 97.4 |
+| Blue Ridge | 132 149 124 | 57 69 55 | 0.46 | 102.9 |
+| Modesto Heights | 110 94 74 | 61 73 58 | 0.78 | 72.3 |
+
+Ours is flat (56 to 61 red) on all four because the stand-in rig is fixed; the original follows the scene's own
+brightness, so the gap is a per-circuit lighting input and not the texture or the tone curve. Pure's `track.vex`
+authors no `AmbientLight`/`DirectionalLight` node (loader report: `hull lights: the circuit authors none`), and
+switching Pulse's rule (`Looks::hull_lights`) on for Pure's PSP changed no pixel on any pair (tried, reverted). A
+second patch placed by hand on the re-rendered pairs reads the same direction (ours 35 to 42 red on all four, the
+original 70 to 124, darkest on Modesto). Nothing implemented; the cause class is an inference from the flat-versus-moving pattern. Open: the executable's per-craft
+hull lighting source, not yet located. Other titles: not checkable from this lane (2048 and Omega ship no Pure hull).
