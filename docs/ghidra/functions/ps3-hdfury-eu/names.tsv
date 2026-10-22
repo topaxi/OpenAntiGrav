@@ -790,3 +790,11 @@
 0x0008df30	function	Hud_UpdatePickupBar	70	hud-readouts.md
 # 2026-10-21 hd-lap-hexagon: the clock formatter (hud-readouts.md)
 0x000835e0	function	Time_FormatCentiseconds	85	hud-readouts.md
+# 2026-10-22 hd-hull-shake: the drawn hull's random-spline shake and the rotation builders it uses (hull-shake.md)
+0x000d0c70	function	HullShake_Update	75	hull-shake.md
+0x000d39d0	function	HullShake_Apply	72	hull-shake.md
+0x006ca948	function	Matrix_RotationX	85	hull-shake.md
+0x006ca868	function	Matrix_RotationY	85	hull-shake.md
+0x006ca788	function	Matrix_RotationZ	85	hull-shake.md
+0x00390c68	function	Math_CosPoly	80	hull-shake.md
+0x00390ca0	function	Math_SinPoly	80	hull-shake.md

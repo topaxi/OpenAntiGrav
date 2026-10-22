@@ -1053,9 +1053,15 @@ body rows and the drawn lean (`ship-lean.md`, "The display matrix"; lean and rol
 node matrix equals the body to 0.016 degrees, at `0x000ebc88` it is 1.12 to 1.13 degrees and `(-0.013, +0.087, -0.086)` /
 `(-0.008, +0.054, -0.052)` off on two consecutive frames. Between the two sit `FUN_000d0c70(ship+0x6b00, f2 = *(r9+0x4c4))` and
 `FUN_000d39d0(ship+0x6b00, node, 0)`: an object at `ship+0x6b00` that adds a changing rotation and offset every frame. Neither
-function decompiles (VMX code, 0x258 and 0x4a4 bytes); their law is not read. A still pair cannot match a shake frame for frame; what
-can be ported is the law (amplitude, rate, source), and until then the pair pixels carry it.
+function decompiles (VMX code, 0x258 and 0x4a4 bytes). **Read from the disassembly (2026-10-22,
+[hull-shake.md](../ghidra/functions/ps3-hdfury-eu/hull-shake.md)):** `HullShake_Update` runs a uniform cubic B-spline over random
+points, one new point a second (x in `4 * (r - 0.5)`, y and z in `1.8 * (r - 0.5)`). The hull turns by roll `0.025 * x`, yaw
+`-0.01 * x` and pitch `0.025 * (y - z)` of the previous frame's value, and moves by `4 * (p - q)` (the spline's change over one frame).
+Both are scaled by `clamp((80 - thrust) * 0.02, 0, 1)` on a 0.99-per-frame smoothed engine thrust (body `+0x4c4`), so the shake is
+full at rest and nearly gone under full throttle. `HullShake_Apply` composes the rotations in the hull's own frame. `rand`'s range is
+not in the binary. A still pair cannot match a shake frame for frame; what can be ported is the law, and until then the pair pixels
+carry it.
 
-**Next.** Read `FUN_000d0c70`/`FUN_000d39d0` from the disassembly, sample `ship+0x6b00` live over a few seconds at rest and at speed,
-and port the shake to `oag_raceplay`'s drawn model matrix (view only, unhashed). Cross-title: Omega carries HD's engine, so the same
+**Next.** Sample `ship+0x6b00` live to pin `rand`'s range and the lane masks, then port the shake to `oag_raceplay`'s drawn model
+matrix (view only, unhashed). Cross-title: Omega carries HD's engine, so the same
 object is expected, not checkable here; 2048 not compared.

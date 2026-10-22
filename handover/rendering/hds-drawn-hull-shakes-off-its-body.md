@@ -19,24 +19,37 @@ What is measured (RPCS3, interpreter):
 - Posing ours with one read halves Talon's craft difference (32.37 -> 16.04 at zero shift). That was a
   temporary override to prove the cause, not a fix; do not land a per-pair pose as accuracy.
 
+**Read from the disassembly 2026-10-22** ([hull-shake.md](../../docs/ghidra/functions/ps3-hdfury-eu/hull-shake.md),
+`HullShake_Update` 75, `HullShake_Apply` 72). It is a uniform cubic B-spline over random points at `obj+0x40..+0x70`, with
+the parameter at `obj+0x80` advanced by `dt`, so one new point a second. The points are x `4 * (r - 0.5)`, y and z
+`1.8 * (r - 0.5)`, with `r = rand() * 2^-30`. From the previous frame's value `q` the hull is turned by roll
+`0.025 * q.x`, yaw `-0.01 * q.x` and pitch `0.025 * (q.y - q.z)`, composed `Ry * Rz * Rx * node` in the hull's own frame.
+It is moved by `4 * (p - q)` along the node's rows. Both terms are scaled by `clamp((80 - thrust_s) * 0.02, 0, 1)`, where
+`thrust_s` is the body's `+0x4c4` (engine thrust) smoothed 0.99 per frame. The shake is full at rest or coasting and
+nearly gone under full throttle.
+
 ## Open
 
-- The law of the `ship+0x6b00` object: what drives it (time, speed, hover, engine), its amplitude and
-  rate, and whether it runs for opponents too. Both functions defeat Ghidra's decompiler (VMX,
-  0x258 and 0x4a4 bytes).
-- Cross-title: Omega carries HD's engine (expected, not checkable, no PS4 capture); 2048 not compared;
-  whether Pulse/Pure shake their hull is unread.
+- `rand`'s range: `Libc_Rand` is a PRX stub. With `RAND_MAX = 2^31 - 1` the points are biased (`[-0.5, 1.5)` before
+  scaling), which gives a standing roll of about 2.9 degrees. The live reads (1.1-1.8 degrees, axis changing) fit a
+  centred range better, but that is inference, not a read.
+- The `vsel` lane masks at `0x00c47730` are BSS, so the x/y/z order of the three angle writes is assumed.
+- How the constructor seeds `P0..P3` and `obj+0x80`. Whether opponents run the block: it is inside the per-ship update,
+  but no player test above `0x000ebb28` was read.
+- What our sim carries for HD's body `+0x4c4` thrust (the fade input), at our fixed 60 Hz. HD's `0.99` filter and its
+  one-frame difference are per frame, so 60 Hz is their own rate.
+- Cross-title: Omega and 2048 not found by a constant search (needs their ship update's call site). Pulse and Pure
+  not read.
 
 ## Next Steps
 
-1. Read `FUN_000d0c70` and `FUN_000d39d0` from the disassembly (`mcp__ghidra-mcp__disassemble_bytes`
-   on `/hdfury/EBOOT-ps3-hdfury-eu.elf`); name them only once the reading reaches 50.
-2. Sample live: restore a Time Trial state with `scripts/emu-restore-state.sh <lane> <state> --interpreter`,
-   read `ship+0x6b00..` and the `0x005d8488` matrix against `body+0x1d0` over a few seconds at rest and at
-   speed. Restore fresh for each attach: the GDB stub wedged on a second attach three times this session.
-   A probe is a few lines over `scripts/rpcs3-hd-hull-light.py`'s helpers (`stop_at`, `place.find_player`,
-   `place.read_pose`): break at `0x005d8488`, keep the matrix with scale 0.75 within 0.1 of the body, or stop
-   at `0x000ebc78`/`0x000ebc88` with `r31` the ship and read the matrix at `r28`. Land it under `scripts/`.
-3. Port the law to the drawn model matrix in `oag_raceplay` (view only, unhashed, its own seeded `Rng` if
-   it is random), then `just compare-rerender-ours --only compare-page/hd` and measure each pair's craft
-   offset with a craft mask (render once with the craft lifted out of view, `--pose` y + 300).
+1. Sample live, about 30 minutes. Restore a Time Trial state with `scripts/emu-restore-state.sh <lane> <state> --interpreter`
+   and stop at `0x000ebc74` with `r3 = ship+0x6b00`. Read `P0..P3` (`+0x40..+0x70`, any x outside `[-2, 2]` means
+   `RAND_MAX = 2^31 - 1`), `+0x80`, `+0x10`, `+0x00` and `+0x20`. Stop again at `0x000ebc88` and check that the node
+   equals `HullShake_Apply` of those values. Restore fresh for each attach: the GDB stub wedges on a second attach.
+   Build the probe from `scripts/rpcs3-hd-hull-light.py`'s helpers (`stop_at`, `place.find_player`, `place.read_pose`)
+   and land it under `scripts/`.
+2. Port it to the drawn model matrix in `oag_raceplay`: view only, unhashed, its own seeded `Rng`, fed by the craft's
+   thrust. Then run `just compare-rerender-ours --only compare-page/hd`. The pairs cannot match a random shake frame
+   for frame, so judge the port by amplitude and rate against step 1's samples, and use the craft-mask offset only as
+   a sanity check.

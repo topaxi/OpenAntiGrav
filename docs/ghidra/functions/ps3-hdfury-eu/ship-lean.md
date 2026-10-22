@@ -63,8 +63,8 @@ the constructors. The follower `0x6a58` has two more: `PlayerInput_Update` (`0x0
 **Not the last step (2026-10-22).** Right after this store, `FUN_000d0c70(ship+0x6b00, ...)` and
 `FUN_000d39d0(ship+0x6b00, node, 0)` (`0x000ebc74`, `0x000ebc84`) turn the node by 1.1 to 1.3 degrees and move it by up to 0.09 units,
 differently each frame, at rest with lean and phase 0; the result is the matrix the hull is drawn with (`ship+0x40`). Live reads and
-what it does to the pairs: [hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The drawn hull is not the body". The law
-is unread.
+what it does to the pairs: [hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The drawn hull is not the body". The law,
+read from the disassembly the same day, is a random cubic B-spline faded by engine thrust: [hull-shake.md](hull-shake.md).
 
 ## Measured on RPCS3, 2026-10-21
 
