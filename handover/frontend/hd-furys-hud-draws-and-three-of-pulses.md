@@ -134,6 +134,7 @@ not measured as a scale, only seen in a 2x crop. 2048 and Omega not captured.
   section.
 
 - **HD/Omega `ThrustBar` (2026-10-16): done.** Drawn off the craft's throttle after Pilot Assist's scale (`Readout::thrust_percent`) with its truncated `NN%` label, no chase; see [hd-hud.md](../../docs/formats/hd-hud.md#hds-speed-bar-fill-is-a-curvebar-and-it-draws). Still open from the speed bar: its full scale (`Hud_UpdateSpeedReadout` multiplies by a reciprocal of 700, now HD's and Omega's `HudArt::speed_full_kmh`) and crop-versus-path-length past `CurveStartPos`.
+- **HD HUD digits (`hd-hud-digits`, 2026-10-22): sizes match, opacity does not.** The lap `1` and speed `0` match the original within 0.4 px and the same edge width on all 13 cold pairs; the lap-count `3` sits 0.5 px up and left and is 1.1 to 1.35 px narrower in the edge-to-edge span, cause unfound. The visible "smaller and softer" is the original drawing the lit HUD at **0.8 alpha** (lap `1` solves to 0.800 on all 13 pairs; authored colour alpha is 1.0). Source unread; likely the `100` box's "roughly 0.8" lead above. Numbers and method in [hd-hud.md](../../docs/formats/hd-hud.md#the-hud-digits-size-and-softness-hd-hud-digits-2026-10-22). Find where the original gets the 0.8 (a vertex alpha on the HUD sprites, or the HUD pass's blend constant) before drawing anything at it.
 
 ## Next Steps
 

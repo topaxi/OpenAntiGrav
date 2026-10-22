@@ -1293,6 +1293,57 @@ font, unmeasured; Pulse and Pure keep the narrower rule on `raster`; 2048 `false
 (the HUD text only). Cross-title: Pulse **ported earlier** for right-aligned text, centred text there still
 unmeasured; 2048 **checked, applies, not wired**: same engine, no capture of its text edge.
 
+## The HUD digits' size and softness (`hd-hud-digits`, 2026-10-22)
+
+**Measured, no code changed.** The 13 cold `hd/*` pairs (1920x1080, Resolution Scale 100, hull shake patched out), the
+lap `1` (`Lap`, scale 1.0 x 0.96 safe area), the lap-count `3` (`Lap Outof`, authored scale 0.6, `Centre`/`Bottom`, colour
+`0.39` grey) and the speed `0` (`SpeedBarText`, scale 1.0). The HUD is screen-fixed, so none of this depends on the
+craft pose. Three measures, each on a fixed window around the glyph, ours against theirs:
+
+- **Ink box**: the 50 % crossings of the glyph's own coverage (sub-pixel), needs a clean background.
+- **Scale and shift fit**: ours resampled about the glyph centre over a grid of scale and shift, maximising the
+  normalised correlation of the two gradient-magnitude images. Works on all 13 where the ink box saturates (a bright
+  sky behind the white `0`).
+- **Edge width**: the median over the middle rows of `1 / max slope` of the coverage normalised to 0..1. It hides
+  contrast by construction, so it says nothing about how bright the glyph is (see the opacity below).
+
+| digit | ink box w x h, theirs / ours (mean of 13) | fit scale, ours to theirs | shift of theirs vs ours | edge width, theirs / ours |
+| --- | --- | --- | --- | --- |
+| lap `1` | 12.44 x 56.16 / 12.41 x 56.26 | 1.000 | +0.02, +0.04 | 1.13 / 1.21 px |
+| speed `0` | 16.6 x 20.5 / 16.5 x 20.4 (10 pairs with a clean background) | 0.999 (13 of 13) | +0.00, +0.08 | 1.33 / 1.30 px (10 pairs) |
+| lap-count `3` | spans below | 1.018 (1.01 to 1.03) | -0.52, -0.42 (up and left) | 1.35 / 1.28 px |
+
+The lap `1` and the speed `0` **match the original within 0.4 px on every pair**: the stem is 12.4 px wide in both,
+the strokes' edges rise over the same 1.1 to 1.3 px, and no pair is off by more than 0.25 px in position. The
+glyph size, the atlas filtering and the layout scale are right for both.
+
+The lap-count `3` is **not** within 1 px on the width. Edge-to-edge spans of the 3 (50 % crossings along the top
+bar, the bottom bar and the left stem, mean of 13, theirs / ours): top bar 23.1 / 21.7 px, bottom bar 22.2 / 21.1 px,
+height 34.3 / 33.5 px, so ours is narrower by 1.1 to 1.35 px and shorter by 0.7 px on every pair (range -0.5 to
+-1.8). The pixel rows show where: the bars' left ends begin about one pixel further left in the original (column 231
+against 232 on the `talons` pair), with the bottom-right corner within 0.3 px, so it reads as a 0.5 px shift of the
+whole glyph plus about 1.2 % size. The cause is **unfound**. Read and ruled out: the layout scale (0.6 x 0.96 =
+0.576, cell 43x80, the same font and engine as the `1`, which matches exactly); a pen rounding (the `0` and `1` would
+move too, and they do not); a missing outline (both sides draw the `HudBGColour` 25 % black halo, `125` against `128`
+at the bar's end). Nothing wired: a nudge for one label is what the lane's rules forbid.
+
+**What the player sees as "smaller and softer" is opacity, not size or filtering.** The original draws the lit digits
+and labels at about **0.8 alpha**: the lap `1` solves to alpha 0.800 (0.791 to 0.803 on every pair), with
+`theirs = 0.8 * ours + 0.2 * background` on each channel. Its core reads `(218, 218, 15)` against ours
+`(254, 254, 0)`, and the 15 in blue is the blend, not a tint (the authored colour has no blue). The white speed `0`,
+the `LAP`, `KM/H` and `RECORD` labels, the lap ring and the timer read 0.85 to 0.90 of ours at their brightest pixels
+(0.95 on the thin `KM/H` frame line, where bilinear sampling lowers the peak anyway), consistent with the same 0.8 over
+a mid-grey scene. The dark `3` (`100` against `103.7` over a translucent box) is the same law within its noise. The
+authored colour of every one of these labels is alpha 1.0, so the factor is not in the layout. It is **not** the Safe
+Area Setting (that scales position, above) and **not** wired: no source for it is found, and a 0.8 constant would be
+a nudge. It is probably the same thing as "the original draws the `100` box at roughly 0.8" in the section above
+(`hd-lap-hexagon`): per-vertex alpha on a 10-vertex strip, or a HUD-wide fade the RSX state carries. Open.
+
+- **Omega**: checked, applies, not checkable. It runs HD's HUD engine and font (`ink_aligned_text` is inherited the
+  same way), so the digit sizes are expected to hold and its opacity is expected to be the same; no PS4 capture path
+  exists to measure either.
+- **2048**: not checked, unmeasured (a different HUD dialect; no HD-style capture of its digits).
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of
