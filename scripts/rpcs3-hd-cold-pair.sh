@@ -11,6 +11,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 W=$main/data/scratch/$lane
 source "$W/env.sh"
 export OAG_HD_CAPTURE_KIND=cold_boot  # recorded in pair.json provenance; no savestate was restored
+export OAG_HD_CAPTURE_PATH="cold boot (no savestate): the glass stays clean"  # the text compare-rerender-all records
 export OAG_COMPARE_PLATFORM=hd-fury UV_CACHE_DIR=$HOME/.cache/uv UV_OFFLINE=1
 cd "$repo"
 # The original's drawn-hull shake is random; patch it out so the still pair matches ours' `--no-hull-shake`
