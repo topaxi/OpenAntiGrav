@@ -435,6 +435,16 @@ impl FullscreenResolution {
     /// The spelling for the monitor's own size.
     pub const NATIVE: &'static str = "native";
 
+    /// The shape the game is drawn at: `aspect`, except that a fixed size under `free` keeps
+    /// its own shape, so a monitor of another shape gets bars rather than a stretched picture.
+    #[must_use]
+    pub fn letterboxed(self, aspect: Aspect) -> Aspect {
+        match (self, aspect) {
+            (Self::Fixed(size), Aspect::Free) => Aspect::Ratio(size.width, size.height),
+            _ => aspect,
+        }
+    }
+
     /// The size to draw the scene at for a surface of `surface` pixels.
     #[must_use]
     pub fn target(self, surface: (u32, u32)) -> (u32, u32) {
@@ -490,6 +500,19 @@ mod fullscreen_resolution_tests {
         let fixed: FullscreenResolution = "1280x720".parse().expect("size");
         assert_eq!(fixed.to_string(), "1280x720");
         assert!("nonsense".parse::<FullscreenResolution>().is_err());
+    }
+
+    #[test]
+    fn a_fixed_size_under_free_keeps_its_own_shape() {
+        let fixed = FullscreenResolution::Fixed(Size::new(1280, 720));
+        assert_eq!(fixed.letterboxed(Aspect::Free), Aspect::Ratio(1280, 720));
+        assert_eq!(fixed.letterboxed(Aspect::Psp), Aspect::Psp);
+        assert_eq!(
+            FullscreenResolution::Native.letterboxed(Aspect::Free),
+            Aspect::Free
+        );
+        let rect = viewport((3440, 1440), fixed.letterboxed(Aspect::Free));
+        assert!((rect.2 / rect.3 - 16.0 / 9.0).abs() < 0.01, "{rect:?}");
     }
 
     #[test]

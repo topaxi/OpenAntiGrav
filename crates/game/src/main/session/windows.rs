@@ -369,6 +369,17 @@ impl Session {
             .collect()
     }
 
+    /// The shape the game is drawn at: the setting, or in borderless a fixed fullscreen
+    /// resolution's own shape under `free` ([`display::FullscreenResolution::letterboxed`]).
+    pub(super) fn aspect(&self) -> display::Aspect {
+        let settings = &self.settings.display;
+        if settings.window_mode == display::WindowMode::Borderless {
+            settings.fullscreen_resolution.letterboxed(settings.aspect)
+        } else {
+            settings.aspect
+        }
+    }
+
     /// The aspect rectangle the scene's resolution is measured against: the surface's, or in
     /// borderless the fixed `display.fullscreen_resolution` when the player picked one. Only
     /// the size is used, the scene is stretched into the surface's own rectangle afterwards.
@@ -378,7 +389,7 @@ impl Session {
         } else {
             surface
         };
-        display::viewport(basis, self.settings.display.aspect)
+        display::viewport(basis, self.aspect())
     }
 
     /// The render target a window of `surface` pixels wants at the profile's render scale.
@@ -560,7 +571,7 @@ impl Session {
     /// rather than waiting for the end screens. What the end screens read
     /// ([`Self::end_screen_pointer`]).
     pub(crate) fn seat_pointers(&mut self) -> Vec<SeatPointer> {
-        let aspect = self.settings.display.aspect;
+        let aspect = self.aspect();
         self.screens
             .iter_mut()
             .map(|screen| {
@@ -714,7 +725,7 @@ impl Session {
     ) {
         let profile = self.render_profile();
         let surface = screen.output.size();
-        let rect = display::viewport(surface, self.settings.display.aspect);
+        let rect = display::viewport(surface, self.aspect());
         let wanted = self.target_for(surface);
         let device = &self.gpu.device;
         screen.framebuffer.resize_output(device, surface);

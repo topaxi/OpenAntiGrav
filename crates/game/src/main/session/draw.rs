@@ -145,7 +145,7 @@ impl Session {
         // Where the game goes on the surface, and how many pixels it is drawn
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
-        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
+        let rect = display::viewport(self.gpu.output.size(), self.aspect());
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window

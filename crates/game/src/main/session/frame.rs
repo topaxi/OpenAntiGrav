@@ -299,7 +299,7 @@ impl Session {
         // the same rectangle `Session::draw` fits every stage into, so a
         // click maps back through exactly the transform the rows went out
         // through. See `session::pointer::in_grid`.
-        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
+        let rect = display::viewport(self.gpu.output.size(), self.aspect());
 
         for _ in 0..steps {
             // Ends the devices' tick for both stages. A race reads the snapshot's
