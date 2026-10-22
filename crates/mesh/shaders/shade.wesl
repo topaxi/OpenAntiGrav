@@ -12,7 +12,7 @@ import package::pad::{pad_normal};
 import oag_shaders::target::linear_out;
 import package::shading_modes::{colour_is_light, nova_prelit};
 import package::shadow::{receives_shadow, sun_occlusion};
-import package::texture_lod::{material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
 import package::types::{VertexOutput};
 import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
 
@@ -82,7 +82,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     var pad_ne_texel = vec4<f32>(0.0);
     var n_lit = n;
     if pad_ne {
-        pad_ne_texel = material_sample(pad_mask, albedo_sampler, in.texcoord);
+        pad_ne_texel = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         n_lit = pad_normal(pad_ne_texel, n, in.world, in.texcoord);
     }
 
@@ -103,17 +103,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     var rock = vec4<f32>(0.0);
     if snow {
         let rock_uv = in.texcoord * emissives.scale[snow_entry].x;
-        snow_mask = material_sample(pad_mask, albedo_sampler, in.lightmap_texcoord.zw).x;
-        rock = material_sample(fifth_map, albedo_sampler, rock_uv);
+        snow_mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).x;
+        rock = material_sample(MATERIAL_FIFTH_MAP, rock_uv);
         let bump = mix(
-            material_sample(wave_map, albedo_sampler, in.texcoord),
-            material_sample(sixth_map, albedo_sampler, rock_uv),
+            material_sample(MATERIAL_WAVE_MAP, in.texcoord),
+            material_sample(MATERIAL_SIXTH_MAP, rock_uv),
             snow_mask,
         );
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
     } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
-        n_hull = hull_normal(material_sample(pad_mask, albedo_sampler, in.texcoord), n, in.tangent);
+        n_hull = hull_normal(material_sample(MATERIAL_PAD_MASK, in.texcoord), n, in.tangent);
         n_lit = n_hull;
     }
 
@@ -171,7 +171,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     var mask = 0.0;
     var emissive = false;
     if scene.light.enabled != 0.0 {
-        let atlas = material_sample(lightmap, albedo_sampler, in.lightmap_texcoord.xy);
+        let atlas = material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy);
         let baked = select(
             vec4<f32>(0.0, 0.0, 0.0, 1.0),
             atlas,
@@ -448,17 +448,11 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let missile_shock = (in.slots & 36864u) == 36864u;
     let missile_any = missile_core || missile_rays || missile_shock;
     if (in.slots & 32768u) != 0u && !bomb_shock && !missile_any {
-        let n = material_sample(
-            albedo,
-            albedo_sampler,
-            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
+        let n = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y + 0.01 * clock),
         ).a;
         first_uv = in.texcoord + vec2<f32>(0.15 * n + 0.1 * clock);
     } else if (in.slots & 65536u) != 0u && !bomb_shock && !missile_any {
-        let n = material_sample(
-            albedo,
-            albedo_sampler,
-            vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
+        let n = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y + 0.4 * clock),
         ).a;
         first_uv = vec2<f32>(
             2.0 * in.texcoord.x + 0.1 * clock,
@@ -478,9 +472,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         );
         first = sample_at_slope_level(first_uv, lod);
     } else {
-        first = material_sample(albedo, albedo_sampler, first_uv);
+        first = material_sample(MATERIAL_ALBEDO, first_uv);
     }
-    let second = material_sample(lightmap, albedo_sampler, in.texcoord);
+    let second = material_sample(MATERIAL_LIGHTMAP, in.texcoord);
     var picture = select(first, second, (in.slots & 2u) != 0u);
     // **HD's Sebenco ice pool** (`slots::ICE`, `oag_mesh::mesh::rcs::ice`): the
     // picture is replaced by the program's own lerp,
@@ -504,7 +498,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
         let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));
         let pale = pow(emissives.tint_offset[ice_slot + 2u].rgb, vec3<f32>(2.2));
-        let pond = material_sample(pad_mask, albedo_sampler, in.lightmap_texcoord.zw).x;
+        let pond = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).x;
         let facing = clamp(ramp_facing, 0.0, 1.0);
         let water = deep + facing * (cyan - deep);
         let ice = pale + facing * (first.rgb - pale);
@@ -526,11 +520,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let shift = emissives.scale[cell_entry].x;
         let flash_c = emissives.tint_offset[cell_entry].rgb;
         let uv2 = in.lightmap_texcoord.zw;
-        let mask = material_sample(
-            wave_map, albedo_sampler,
-            vec2<f32>(uv2.x + emissives.tint_offset[cell_entry].w * scene.time.x, uv2.y - shift),
+        let mask = material_sample(MATERIAL_WAVE_MAP, vec2<f32>(uv2.x + emissives.tint_offset[cell_entry].w * scene.time.x, uv2.y - shift),
         ).x;
-        let blue = material_sample(pad_mask, albedo_sampler, vec2<f32>(uv2.x + shift, uv2.y)).rgb;
+        let blue = material_sample(MATERIAL_PAD_MASK, vec2<f32>(uv2.x + shift, uv2.y)).rgb;
         picture = vec4<f32>(picture.rgb + mask * (blue - flash_c) + flash_c, picture.a);
         cell_picture = picture.rgb;
     }
@@ -649,7 +641,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     );
     var glow_sample = vec4<f32>(0.0);
     if (in.slots & 256u) != 0u {
-        glow_sample = material_sample(lightmap, albedo_sampler, glow_uv);
+        glow_sample = material_sample(MATERIAL_LIGHTMAP, glow_uv);
     }
     // What a texel-sourced program mask reads - see `glow.wesl`'s `program_glow`.
     glow_first = first;
@@ -717,11 +709,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // Time Trial picture is untouched to the byte.
     var mag_glow = pow(cell_picture, vec3<f32>(2.2));
     if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
-        let e = material_sample(pad_mask, albedo_sampler, in.texcoord);
-        let w = material_sample(
-            wave_map,
-            albedo_sampler,
-            in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
+        let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
         );
         let m = mix(e.rgb, w.rgb, e.a);
         mag_glow = min(
@@ -745,8 +734,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     var chevron_surface = vec3<f32>(0.0);
     var chevron_glow = vec3<f32>(0.0);
     if chevron {
-        let e = material_sample(fifth_map, albedo_sampler, in.texcoord);
-        let w = material_sample(sixth_map, albedo_sampler, in.lightmap_texcoord.zw);
+        let e = material_sample(MATERIAL_FIFTH_MAP, in.texcoord);
+        let w = material_sample(MATERIAL_SIXTH_MAP, in.lightmap_texcoord.zw);
         chevron_surface = pow(e.rgb, vec3<f32>(2.2));
         chevron_glow = e.a * glow_tint_offset.rgb * pow(w.rgb, vec3<f32>(2.2));
     }

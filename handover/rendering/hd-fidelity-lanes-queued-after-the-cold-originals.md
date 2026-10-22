@@ -40,9 +40,6 @@ textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which i
 texture or another group-2 texture needs another fold first: candidates are the shadow coverage and depth pair (a tier reads
 one), or the sky map as a layer beside the probes (different sizes today, 512x256 against 128x64).
 
-Tooling found on the way: `OAG_ONLY_SLOT`, or an `OAG_SKIP_SLOT` list covering a whole draw list, panics with
-"buffer slice can not be empty" (an empty list reaches `wgpu`); skip in chunks of about 40 slots.
-
 - **Moa Therma pair** (`hd/moa-therma`): 15.05 to 10.32 mean grey (2026-10-21, `hd-one-pair-moa`; the other twelve HD pairs 0.00).
   The glass cause is closed: `paraboloidReflectionTex` is the circuit's `sky.gtf` as a 512x256 dual hemisphere map and
   `dc_windows_a` reads it (`docs/rendering/hd-track-tone.md`, "The reflection map is the sky"). Left on this pair: the cast

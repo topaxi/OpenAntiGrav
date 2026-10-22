@@ -1,6 +1,6 @@
 // Slope-based texture level of detail and anisotropic sampling.
 
-@if(!bindless) import package::bindings::{albedo, albedo_sampler};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 
 // The GE's texture level slope and bias for a PSP `.vex` model, off by default
@@ -17,15 +17,54 @@ override texlod_bias: f32 = 0.0;
 // the measurement.
 override material_lod_bias: f32 = 0.0;
 
-// `textureSample` with [`material_lod_bias`] added to the level. A pipeline
-// constant, so the branch is resolved at pipeline creation and the call stays in
-// uniform control flow.
+// The material pictures `material_sample` can read, by the name `bindings.wesl` gives them.
+const MATERIAL_ALBEDO: u32 = 0u;
+const MATERIAL_LIGHTMAP: u32 = 1u;
+const MATERIAL_PAD_MASK: u32 = 2u;
+const MATERIAL_WAVE_MAP: u32 = 3u;
+const MATERIAL_FIFTH_MAP: u32 = 4u;
+const MATERIAL_SIXTH_MAP: u32 = 5u;
+
+// `textureSample` of one of the material pictures (a `MATERIAL_*` constant) through the
+// albedo sampler, with [`material_lod_bias`] added to the level. A pipeline constant, so
+// the branch is resolved at pipeline creation and the call stays in uniform control flow.
+//
+// It takes the picture by name rather than as a `texture_2d` parameter: on the `bindless`
+// variant a picture is an element of a binding array, and naga's SPIR-V writer passes a
+// texture parameter as a pointer to a global but a binding-array element as the loaded
+// value, which `spirv-val` rejects (`OpFunctionCall Argument ... type does not match`).
+// `oag_shader_check::validate` refuses that shape. Every constant is a literal at its call
+// site, so the switches fold away.
 @diagnostic(off, derivative_uniformity)
-fn material_sample(t: texture_2d<f32>, s: sampler, uv: vec2<f32>) -> vec4<f32> {
-    if material_lod_bias != 0.0 {
-        return textureSampleBias(t, s, uv, material_lod_bias);
+fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
+    // The `bindless` variant's slots - see `bindings.wesl`.
+    @if(bindless) {
+        let albedo = textures[material.albedo];
+        let albedo_sampler = samplers[material.albedo_sampler];
+        let lightmap = textures[material.lightmap];
+        let pad_mask = textures[material.pad_mask];
+        let wave_map = textures[material.wave_map];
+        let fifth_map = textures[material.fifth_map];
+        let sixth_map = textures[material.sixth_map];
     }
-    return textureSample(t, s, uv);
+    if material_lod_bias != 0.0 {
+        switch picture {
+            case 1u: { return textureSampleBias(lightmap, albedo_sampler, uv, material_lod_bias); }
+            case 2u: { return textureSampleBias(pad_mask, albedo_sampler, uv, material_lod_bias); }
+            case 3u: { return textureSampleBias(wave_map, albedo_sampler, uv, material_lod_bias); }
+            case 4u: { return textureSampleBias(fifth_map, albedo_sampler, uv, material_lod_bias); }
+            case 5u: { return textureSampleBias(sixth_map, albedo_sampler, uv, material_lod_bias); }
+            default: { return textureSampleBias(albedo, albedo_sampler, uv, material_lod_bias); }
+        }
+    }
+    switch picture {
+        case 1u: { return textureSample(lightmap, albedo_sampler, uv); }
+        case 2u: { return textureSample(pad_mask, albedo_sampler, uv); }
+        case 3u: { return textureSample(wave_map, albedo_sampler, uv); }
+        case 4u: { return textureSample(fifth_map, albedo_sampler, uv); }
+        case 5u: { return textureSample(sixth_map, albedo_sampler, uv); }
+        default: { return textureSample(albedo, albedo_sampler, uv); }
+    }
 }
 
 // The sampler's `anisotropy_clamp`, for `sample_at_slope_level`. 1 is off.

@@ -670,6 +670,9 @@ impl Map {
         });
         pass.set_pipeline(&self.depth_pipeline);
         for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
+            if caster.ranges.is_empty() {
+                continue;
+            }
             pass.set_bind_group(0, &self.binds[slot], &[]);
             pass.set_vertex_buffer(0, caster.vertices.slice(..));
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -766,6 +769,11 @@ impl Map {
         });
         pass.set_pipeline(&self.pipeline);
         for (index, craft) in crafts.iter().enumerate() {
+            // Nothing to draw (a drawable with every chunk filtered out holds
+            // zero-size buffers, which have no slice to bind).
+            if craft.caster.ranges.is_empty() {
+                continue;
+            }
             let (x, y, side) = RANK_SQUARES[craft.rank.min(MAX_CASTERS - 1)];
             // The viewport maps the craft's clip box onto its own square and
             // the scissor keeps what the box does not clip (the guard band)
