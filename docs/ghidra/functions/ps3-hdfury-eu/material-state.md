@@ -245,3 +245,8 @@ and finding the one Moa Therma `.gtf` that holds all three; every tree draw matc
 - **Caveat: the coverage bit alone does not mark a tree.** Draws 522 to 526 (`ds_moa_wall_cs`, `ds_pit_cs` and others) have
   blend **and** alpha test on, depth mask 1 and `0x1d7c` = `0xffff0011` as well: the other branch writes coverage from pass
   bit 9. Identify a coverage draw by its state word's bit 7, not by the register.
+
+**Wired** the same day: `oag_title::Looks::material_render_state` and `oag_mesh::mesh::Model::honour_render_state` draw a
+bit-7 state among the cutouts (a 0.5 threshold standing in for coverage, chosen) and a blended bit-2 state with depth write
+([hd-track-tone.md](../../../rendering/hd-track-tone.md), "Moa Therma's trees", for the 13 pairs). Omega and 2048 author
+the same words and are **checked, applies, not wired** (same section).

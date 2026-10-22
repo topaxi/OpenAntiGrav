@@ -17,10 +17,13 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
 2. Anulpha's black chevron panel: **cause measured, not wired** (hd-track-tone.md, "The chevron panel draws black").
    `cf_chevron_pulse` needs five textures against four bindings; three routes written there; the wave's phase is the
    material's own `offset` curve. Box 27.90 unchanged.
-3. Moa Therma's cut-off trees: **cause and mechanism read, not wired** (hd-track-tone.md, "Moa Therma's trees";
-   material-state.md, "State bit 2 is depth write, bit 7 is alpha-to-coverage"). Next: dump the tree draw's depth mask and
-   AA control on a cold Moa frame, then a depth-writing blend pipeline keyed on state bit 2. A temporary build drawing the
-   `_atoc` chunks as depth-writing cutouts took the box 27.05 to 17.85, no pair worse than +0.004.
+3. ~~Moa Therma's cut-off trees~~ **wired** (2026-10-22, `hd-tree-depth`; material-state.md, "The race pass sets pass bits
+   3, 5 and 6"; hd-track-tone.md, "Moa Therma's trees"). A live frame shows the trees unblended with alpha-to-coverage and
+   depth write; `Looks::material_render_state` (HD measured) moves state-bit-7 draws to the cutout list at a chosen 0.5 and
+   makes bit-2 blends write depth. Box 25.62 to 16.70 on the re-captured pair; no pair worse than +0.004. Left open: the
+   crowns' edges are hard where the console's two-sample coverage softens them (with `--msaa` on, real
+   `alpha_to_coverage_enabled` could replace the threshold; unbuilt); Omega and 2048 author the same `0xbd` trees and
+   bit-2 blends but their `psp2::transparency::route` ignores both bits (checked, applies, not wired).
 4. Sebenco's bare rocks: **cause measured, not wired** (rcsmaterial.md, "Sebenco's snow-capped rocks"). `sebenco_snow`'s
    snow layer and its normal-driven blend; six textures. Decide the binding route together with item 2's.
 5. Modesto glass / banners / building texture; 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
