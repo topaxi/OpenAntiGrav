@@ -829,6 +829,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         // `ShieldBar`'s absorb flash, painted *under* the bar - see
         // `shield_bar::tint`. `None` outside the absorb window.
         let mut flash = None;
+        let is_bar = bar_fraction(&sprite.name, readout, cx.art).is_some();
         let drawn = match bar_fraction(&sprite.name, readout, cx.art) {
             // A bar at zero is not drawn at all: a zero-width quad is a
             // degenerate triangle pair, and asking the rasteriser to do nothing
@@ -873,12 +874,17 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         {
             stamped.push((*rect, *color));
         }
-        frame.sprites.extend(drawn);
+        // A bar's fill keeps its own alpha, as does the shield fill; every other lit panel scales.
+        frame
+            .sprites
+            .extend(drawn.map(|draw| if is_bar { draw } else { lit_draw(cx, draw) }));
         frame.sprites.extend(fill);
     }
-    frame
-        .sprites
-        .extend(super::runtime::arc_sprites(cx, readout));
+    frame.sprites.extend(
+        super::runtime::arc_sprites(cx, readout)
+            .into_iter()
+            .map(|draw| lit_draw(cx, draw)),
+    );
     frame.sprites.extend(super::assist::sprites(cx, readout));
 
     // The lock-on reticle, over the bars and under the text - it is the only
@@ -1019,7 +1025,10 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
                 .or_else(|| super::time_gap::colour(readout, &label.name))
                 .or_else(|| super::time_trial_pace::time_trial_colour(readout, &label.name))
                 .or_else(|| super::runtime::colour(cx, readout, &label.name))
-                .unwrap_or(label.color),
+                .map_or_else(
+                    || lit_colour(cx, label.color),
+                    |colour| lit_colour(cx, colour),
+                ),
             // The layout's own `BorderColor`, which is what makes the HUD fonts'
             // baked outline visible as an outline rather than as more glyph. The
             // 57 widgets that name none still get one - the original draws it -
@@ -1046,6 +1055,40 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     super::sway::slide(&mut frame, super::sway::offset(cx.art, readout));
     super::boost_smear::smear(&mut frame, cx.art, readout, &stamped);
     frame
+}
+
+/// `color` with its alpha taken through [`oag_title::HudArt::lit_alpha`]: the original's lit HUD
+/// text and sprites carry the authored (or runtime-written) alpha times 0.8 in their vertex colour.
+/// Never called for a text outline, a gradient bar or a shield fill, which the capture shows at
+/// their own alpha.
+pub(super) fn lit_colour(cx: &Context<'_>, mut color: [f32; 4]) -> [f32; 4] {
+    if let Some(lit) = cx.art.lit_alpha {
+        color[3] = lit.value.apply(color[3]);
+    }
+    color
+}
+
+/// `draw` with a flat sprite's colour scaled by [`lit_colour`]; a gradient sprite is returned as it is.
+pub(super) fn lit_draw(cx: &Context<'_>, draw: Draw) -> Draw {
+    match draw {
+        Draw::Sprite { rect, uv, color } => Draw::Sprite {
+            rect,
+            uv,
+            color: lit_colour(cx, color),
+        },
+        Draw::RotatedSprite {
+            rect,
+            uv,
+            color,
+            rotation,
+        } => Draw::RotatedSprite {
+            rect,
+            uv,
+            color: lit_colour(cx, color),
+            rotation,
+        },
+        other => other,
+    }
 }
 
 /// How far the lap counter's separator and total move left on lap one

@@ -108,6 +108,7 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
+    lit_alpha: None,
     bar_tip: None,
     boost_smear: None,
     ..*ART
@@ -221,6 +222,12 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
+    // Inherited from HD: Omega draws HD's own HUD files through HD's engine, and the draw code is
+    // not checkable (PS4 build, no capture path).
+    lit_alpha: Some(oag_title::pre_race::Sourced::inherited(
+        oag_title::hud::LitAlpha { byte: 0xCC },
+        "hd",
+    )),
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
             "MissileSightBG",

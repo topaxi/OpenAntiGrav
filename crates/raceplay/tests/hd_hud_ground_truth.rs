@@ -1230,3 +1230,124 @@ fn a_held_stick_reaches_the_hud_as_the_drawn_leans_follower() {
         "a held stick leans the hull, not {follower}"
     );
 }
+
+/// The original's HUD vertex colours carry alpha x `0xCC / 255` on lit text and panels and leave the
+/// outline, the speed bar's gradient and the shield fill alone (`hd-hud-alpha-capture`).
+#[test]
+fn lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, "/data/xml/timetrial_hud.xml").layout;
+    let blob = archives
+        .read_name(r"Data\Plugins\Languages\English\entries.xml")
+        .expect("English entries.xml");
+    let strings =
+        oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("entries.xml is text"));
+    let blobs: Vec<(String, Vec<u8>)> = layout
+        .textures()
+        .iter()
+        .map(|reference| {
+            let entry = oag_hd::hud::texture_entry(reference);
+            (
+                (*reference).to_string(),
+                archives.read_name(&entry).expect("a HUD texture"),
+            )
+        })
+        .collect();
+    let mut notes = Vec::new();
+    let sheet = oag_hud::sprite::Sheet::build(&blobs, &mut notes);
+    let readout = oag_hud::Readout {
+        speed_kmh: 420.0,
+        shield: 50.0,
+        shield_max: 100.0,
+        lap: 1,
+        laps: 3,
+        ..Default::default()
+    };
+    let draw = |art: &oag_title::HudArt| {
+        let cx = hud::Context {
+            layout: &layout,
+            strings: &strings,
+            sheet: &sheet,
+            art,
+            hud_line_height: 92.0,
+            small_line_height: 34.0,
+            default_line_height: 34.0,
+            skin_line_height: 34.0,
+            default_border: layout.default_border(),
+        };
+        hud::draw_list(&cx, &readout)
+    };
+    let scaled = draw(oag_hd::hud::ART);
+    let plain = draw(&oag_title::HudArt {
+        lit_alpha: None,
+        ..*oag_hd::hud::ART
+    });
+
+    use oag_ui::frontend::Draw;
+    let texts = |frame: &hud::Frame| -> Vec<Draw> {
+        frame
+            .hud_text
+            .iter()
+            .chain(&frame.default_text)
+            .chain(&frame.small_text)
+            .cloned()
+            .collect()
+    };
+    // Authored alpha 0xFF becomes 0xCC: the lap digit's `ff ff 00 cc`.
+    let lap_alpha = |frame: &hud::Frame| {
+        texts(frame)
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Text { text, color, .. } if text == "1" && color[..3] == [1.0, 1.0, 0.0] => {
+                    Some(color[3])
+                }
+                _ => None,
+            })
+            .expect("the lap digit draws")
+    };
+    assert_eq!(lap_alpha(&plain), 1.0);
+    assert_eq!(lap_alpha(&scaled), 204.0 / 255.0);
+
+    // The outline is the text's own `border` and keeps its alpha.
+    let borders = |frame: &hud::Frame| -> Vec<f32> {
+        texts(frame)
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { border, .. } => Some(border.map_or(0.0, |b| b[3])),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(borders(&scaled), borders(&plain));
+
+    // The speed bar's gradient is not scaled; flat panels are.
+    let gradients = |frame: &hud::Frame| -> Vec<Draw> {
+        frame
+            .sprites
+            .iter()
+            .filter(|draw| matches!(draw, Draw::GradientSprite { .. }))
+            .cloned()
+            .collect()
+    };
+    assert!(
+        !gradients(&plain).is_empty(),
+        "the speed bar draws a gradient"
+    );
+    assert_eq!(gradients(&scaled), gradients(&plain));
+    let flat = |frame: &hud::Frame| -> Vec<f32> {
+        frame
+            .sprites
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { color, .. } => Some(color[3]),
+                _ => None,
+            })
+            .collect()
+    };
+    let (flat_plain, flat_scaled) = (flat(&plain), flat(&scaled));
+    assert_eq!(flat_plain.len(), flat_scaled.len());
+    assert!(flat_plain.iter().zip(&flat_scaled).any(|(p, s)| s < p));
+    assert!(flat_plain.iter().zip(&flat_scaled).all(|(p, s)| s <= p));
+}
