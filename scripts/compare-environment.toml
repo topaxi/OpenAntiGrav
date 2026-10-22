@@ -70,7 +70,7 @@ title = "Wipeout Pure"
 game = "Wipeout Pure (USA)"
 image = "data/images/pure-psp-usa.chd"
 profile_key = "Wipeout Pure (PSP)"
-status = "not reachable yet: no Pure grid state, camera node not located (docs/tools/compare-page.md)"
+status = "works: Time Trial grid pairs on the USA disc, scripts/psp-pure-pair.py (docs/tools/compare-page.md, Pure (PSP) pairs)"
 
 [platform.pulse-ps2]
 title = "Wipeout Pulse"
