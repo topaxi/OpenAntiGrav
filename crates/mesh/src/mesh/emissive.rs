@@ -63,6 +63,13 @@ pub const PROGRAM_BILLBOARD: f32 = 1.0;
 /// specular instead of being added. See `super::rcs::billboard_glass`.
 pub const PROGRAM_BW_GLASS: f32 = 2.0;
 
+/// [`Emissive::program`]'s mode for `cf_chevron_pulse`: the emask (fifth
+/// binding) adds to an albedo-alpha-lit surface, and its alpha times the tint
+/// and the wave (sixth binding, at the coordinate the vertex stage lays from
+/// `scale` and the animation-table row in `offset`) adds after the light. See
+/// `super::rcs::chevron_pulse`.
+pub const PROGRAM_CHEVRON: f32 = 3.0;
+
 /// The `rate` an entry of [`Model::emissive`](super::Model::emissive) carries
 /// to say "this surface takes no Zone grade": a value no material's own entry
 /// reaches (rates are `0`, `1` and the water family's `2`), read by

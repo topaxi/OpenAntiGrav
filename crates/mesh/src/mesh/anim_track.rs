@@ -29,6 +29,10 @@ pub enum AnimTrack {
     /// per second, wrapping at one - see [`rcs::psp2`]'s `glow` module for
     /// which materials get one and what is chosen about it.
     Scroll([f32; 2]),
+    /// A Wipeout HD material's curve driving one scalar parameter rather than
+    /// its UV, carried as `offset = (v, v)` with scale 1. No vertex's `anim`
+    /// names it; a material's glow-table entry does (`rcs::chevron_pulse`).
+    Param(rcs::curve_track::ParamCurveTrack),
 }
 
 impl AnimTrack {
@@ -40,6 +44,10 @@ impl AnimTrack {
         match self {
             Self::Psp(track) => track.sample(seconds),
             Self::Rcs(track) => track.sample(seconds),
+            Self::Param(track) => {
+                let v = track.sample(seconds);
+                ([1.0, 1.0], [v, v])
+            }
             Self::Scroll(rate) => (
                 [1.0, 1.0],
                 [

@@ -239,6 +239,13 @@ pub struct Report {
     /// Magstrip materials that declare the wave and could not be bound: a
     /// texture did not decode or an authored value is missing. Drawn without.
     pub mag_wave_unread: usize,
+    /// Chevron-pulse materials whose emask, wave and offset curve were bound - see
+    /// `super::chevron_pulse`.
+    pub chevron_pulse_bound: usize,
+    /// Chevron-pulse materials left without the term: a texture did not decode, a value is
+    /// missing, the slot is not lit by its albedo's alpha or already names a glow entry, or a
+    /// table is full. Drawn without.
+    pub chevron_pulse_unread: usize,
     /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
     /// `super::damage_lights`.
     pub damage_lights_bound: usize,
@@ -446,6 +453,16 @@ impl Report {
         } + &match self.mag_wave_unread {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) whose wave could not be read (drawn without)"),
+        } + &match self.chevron_pulse_bound {
+            0 => String::new(),
+            n => {
+                format!(", {n} chevron-pulse material(s) with their emask and swept outline bound")
+            }
+        } + &match self.chevron_pulse_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} chevron-pulse material(s) whose emask or wave could not be read (drawn without)"
+            ),
         } + &match self.damage_lights_bound {
             0 => String::new(),
             n => format!(", {n} Zone light-cell material(s) with their scrolling flash bound"),

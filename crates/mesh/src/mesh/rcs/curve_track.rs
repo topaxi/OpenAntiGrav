@@ -89,6 +89,58 @@ impl UvCurveTrack {
     }
 }
 
+/// One material's curve, sampled for the single scalar parameter `hash` it
+/// drives, over the material's own static value of it. See [`AnimTrack::Param`].
+#[derive(Clone)]
+pub struct ParamCurveTrack {
+    blob: Arc<[u8]>,
+    curve: Option<Curve>,
+    hash: u32,
+    /// The material's own static value, kept where the curve does not drive it.
+    value: f32,
+}
+
+impl std::fmt::Debug for ParamCurveTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParamCurveTrack")
+            .field("blob_len", &self.blob.len())
+            .field("curve", &self.curve)
+            .field("hash", &format_args!("{:#010x}", self.hash))
+            .field("value", &self.value)
+            .finish()
+    }
+}
+
+impl ParamCurveTrack {
+    /// The parameter's `x` for `material`: its curve's component-0 channel for
+    /// `hash` where it carries one (the store is by `(target, component)`, the
+    /// module doc's "How a channel's value reaches"), else the record's value.
+    #[must_use]
+    pub(super) fn of(material: &rcsmodel::Material, model_blob: Arc<[u8]>, hash: u32) -> Self {
+        Self {
+            blob: model_blob,
+            curve: material.curve.clone(),
+            hash,
+            value: parameter(&material.parameters, hash, [0.0; 4])[0],
+        }
+    }
+
+    /// The value at `seconds` on the model's animation clock.
+    #[must_use]
+    pub fn sample(&self, seconds: f32) -> f32 {
+        let Some(curve) = &self.curve else {
+            return self.value;
+        };
+        curve
+            .sample(&self.blob, seconds)
+            .into_iter()
+            .filter(|(channel, _)| channel.name_hash == self.hash && channel.component == 0)
+            .map(|(_, v)| v)
+            .next_back()
+            .unwrap_or(self.value)
+    }
+}
+
 /// The static value of a material's own named parameter, or `default` when it
 /// authors none.
 fn parameter(

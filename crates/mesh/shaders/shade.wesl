@@ -2,7 +2,7 @@
 
 import package::absorb::{absorb_shading};
 import package::bindings::{emissives, env_probe_tex, scene, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
-@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::glow::{glow_first, glow_pad, glow_second};
@@ -67,6 +67,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let lightmap = textures[material.lightmap];
         let pad_mask = textures[material.pad_mask];
         let wave_map = textures[material.wave_map];
+        let fifth_map = textures[material.fifth_map];
+        let sixth_map = textures[material.sixth_map];
     }
     if (in.slots & 8388608u) != 0u {
         return holo_billboard(in);
@@ -708,6 +710,23 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     }
     let mag_glow_gamma = pow(mag_glow, vec3<f32>(1.0 / 2.2));
 
+    // **HD's chevron pulse** (`Emissive::program` mode 3 on a `slots::LIT_ALPHA` slot,
+    // `oag_mesh::mesh::rcs::chevron_pulse`): the emask `e` (fifth binding) adds to the
+    // albedo's alpha inside the light multiply, and `e.a * Colour * wave` (sixth binding, at
+    // the coordinate the vertex stage laid) adds after it: `ADD H6, H4.wwww, H6` then
+    // `MAD H5, light, H6, H7`. Both decoded like every colour unit read live so far (gamma
+    // nibble 7 on the albedo, the probes and the leach noise): **chosen, not measured** for
+    // these two units, whose address words were not read; the alpha they join is raw.
+    let chevron = (in.slots & 2147483648u) != 0u && glow_program > 2.5 && glow_program < 3.5;
+    var chevron_surface = vec3<f32>(0.0);
+    var chevron_glow = vec3<f32>(0.0);
+    if chevron {
+        let e = material_sample(fifth_map, albedo_sampler, in.texcoord);
+        let w = material_sample(sixth_map, albedo_sampler, in.lightmap_texcoord.zw);
+        chevron_surface = pow(e.rgb, vec3<f32>(2.2));
+        chevron_glow = e.a * glow_tint_offset.rgb * pow(w.rgb, vec3<f32>(2.2));
+    }
+
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
     //
     // `rim` is the microcode's own `1 - dot(N, -V)`, where its `-V` points
@@ -842,7 +861,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // light terms and multiplies the albedo once. It stays a factor on the
         // stand-in path below, where it is a tint and every other title authors
         // it as one.
-        let texel_linear = select(albedo_linear, vec3<f32>(texel.a), lit_alpha);
+        let texel_linear = select(albedo_linear, vec3<f32>(texel.a) + chevron_surface, lit_alpha);
         // `surface = zoneCol`, then `colour = light * surface` - the microcode's
         // own order, and on this path both terms are linear. The Zone surface
         // **replaces** the albedo rather than adding to it, so `enabled` is the
@@ -894,7 +913,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light + program_specular) * program_multiplier
-                + zone_glow_term + glow_linear + pad_glow + mag_glow + probe_reflection + sky_reflection);
+                + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection
+                + sky_reflection);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

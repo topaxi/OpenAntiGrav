@@ -103,6 +103,21 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // surface scrolls its diffuse across itself, while its patch in the
     // circuit's lightmap atlas stays where the bake put it.
     out.lightmap_texcoord = vec4<f32>(in.lightmap_texcoord, in.texcoord2);
+    // **HD's chevron pulse** (`slots::LIT_ALPHA` with a `PROGRAM_CHEVRON` entry,
+    // `oag_mesh::mesh::rcs::chevron_pulse`): the wave's coordinate `uv * k + offset`, `k`
+    // the entry's scale and `offset` the animation-table row its offset names, which plays
+    // the material's own curve. Laid here into the chunk's unused second pair because the
+    // table is a vertex-stage binding and the coordinate is linear in `uv`.
+    let chevron_entry = (in.slots >> 24u) & 127u;
+    if (in.slots & 2147483648u) != 0u && chevron_entry != 0u
+        && emissives.scale[chevron_entry].z > 2.5 && emissives.scale[chevron_entry].z < 3.5 {
+        let row = u32(emissives.tint_offset[chevron_entry].w + 0.5);
+        let offset = anims.transform[min(row, 63u)].z;
+        out.lightmap_texcoord = vec4<f32>(
+            in.lightmap_texcoord,
+            in.texcoord * emissives.scale[chevron_entry].x + vec2<f32>(offset),
+        );
+    }
     // `uv * scale + offset`, the GE's own `TEXSCALE`/`TEXOFFSET` arithmetic -
     // the four words `TexAnim_CompileTransformList` (`0x08927358`) writes into
     // each animated material's display list. The direction is the authored

@@ -185,6 +185,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod billboard_glass;
+mod chevron_pulse;
 mod cutout;
 mod damage_lights;
 mod holo_billboard;

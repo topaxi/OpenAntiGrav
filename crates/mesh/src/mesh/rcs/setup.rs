@@ -270,6 +270,19 @@ pub(super) fn material_setup(
         &mut anim_tracks,
         report,
     );
+    // After the curves, because it appends a track of its own (the outline's offset is its
+    // material's curve driving a parameter), and after every glow-index family, because it
+    // only takes a slot none of them did.
+    let (fifth_maps, sixth_maps) = super::chevron_pulse::chevron_pulse(
+        model,
+        model_blob,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        &mut anim_tracks,
+        report,
+    );
     MaterialSetup {
         textures: skins,
         lightmaps: seconds,
@@ -284,8 +297,8 @@ pub(super) fn material_setup(
         alpha_test_ref,
         mag_emissive,
         wave_maps,
-        fifth_maps: Vec::new(),
-        sixth_maps: Vec::new(),
+        fifth_maps,
+        sixth_maps,
         material_anim,
         anim_tracks,
     }
