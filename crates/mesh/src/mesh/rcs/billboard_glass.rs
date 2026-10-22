@@ -190,13 +190,17 @@ pub(super) fn second_uv(
     stride: usize,
 ) -> Option<Vec<[f32; 2]>> {
     super::ice::second_uv(roles, mesh, model_blob, submesh, stride).or_else(|| {
-        let program = slots::material_index(roles)
+        let layer = slots::material_index(roles)
             .checked_sub(1)
-            .and_then(|i| table.get(i as usize))
-            .map_or(0.0, |layer| layer.program[0]);
+            .and_then(|i| table.get(i as usize));
+        let program = layer.map_or(0.0, |layer| layer.program[0]);
         // The stand glass's `bwgradient` and `sebenco_snow`'s mask (`super::snow_rock`).
         let glass = roles & slots::ADD_SECOND != 0 && program == PROGRAM_BW_GLASS;
-        (glass || program == PROGRAM_SNOW)
+        // A reflective window's glow mask (`super::window_glass`, `offset` 1).
+        let window = layer.is_some_and(|layer| {
+            layer.rate == crate::mesh::WINDOW_REFLECTION_RATE && layer.offset > 0.5
+        });
+        (glass || window || program == PROGRAM_SNOW)
             .then(|| mesh.second_texcoords(model_blob, submesh, stride).ok())
             .flatten()
     })

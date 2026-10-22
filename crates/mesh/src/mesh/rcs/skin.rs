@@ -540,11 +540,12 @@ pub(super) fn picks(
                     aux: Some(sheen.grid_entry),
                 };
             }
-            // **A sky-reflecting pane's picture and coverage are `Texture1`'s**, ahead of the
+            // **A sky-reflecting family's picture is the sampler its row names**, ahead of the
             // generic reading: its colour lane is `Mixed` (the sky map reaches it), so that
-            // reading falls to entry 0, a texture no block of the family declares. See
-            // `window_glass::pane_picture`.
-            if let Some(entry) = super::window_glass::pane_picture(material, &declared) {
+            // reading falls to entry 0, which is a texture the family never samples
+            // (`glass_texture_customr`) or its glow mask (`glass_2nduv_reflect_glow`). See
+            // `window_glass::picture`.
+            if let Some(entry) = super::window_glass::picture(material, &declared) {
                 return Pick {
                     albedo: Some(entry),
                     aux: Some(entry),

@@ -875,6 +875,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // **A pane** (`tint.y` 1, `glass_texture_customr`) splits its sum by the coverage `a`:
         // `a * light * picture + (1 - a) * (specular + reflection)`, alpha `a`, drawn
         // `One`/`OneMinusSrcAlpha`, so the clear part of the pane shows what is behind it.
+        // `tint.z` 1 weights the reflection by `1 - a` (the pane, and
+        // `glass_2nduv_reflect_glow`'s opaque windows).
         var sky_reflection = vec3<f32>(0.0);
         var pane_cover = 1.0;
         var pane_clear = 1.0;
@@ -886,7 +888,15 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
                 pane_cover = texel.a;
                 pane_clear = 1.0 - texel.a;
             }
-            sky_reflection = probe_tint(sky) * (emissives.tint_offset[sky_entry].x * pane_clear);
+            let reflect_clear = select(1.0, 1.0 - texel.a, emissives.tint_offset[sky_entry].z > 0.5);
+            sky_reflection = probe_tint(sky) * (emissives.tint_offset[sky_entry].x * reflect_clear);
+            // `offset` 1: the program also adds `colour * (1 - mask.a)`, the colour in the next
+            // entry's tint and the mask bound third at the second coordinate set
+            // (`glass_2nduv_reflect_glow`). The colour is added raw, as the program adds it.
+            if emissives.tint_offset[sky_entry].w > 0.5 {
+                let mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).a;
+                sky_reflection += emissives.tint_offset[sky_entry + 1u].xyz * (1.0 - mask);
+            }
         }
 
         // The authored path shades in linear light, as the RSX does: the samples

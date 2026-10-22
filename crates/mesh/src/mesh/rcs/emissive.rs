@@ -255,10 +255,10 @@ pub(super) fn emissive(
         if *packed & slots::FACING_RAMP_SHEEN != 0 {
             continue;
         }
-        // Nor is a sky-reflecting glass family's: its unit 1 is `paraboloidReflectionTex`, which
-        // `window_glass` tags. Claiming the slot here added `glass_texture_customr`'s own picture
-        // as a still glow and left the pane no index for its reflection (2026-10-22,
-        // `hd-glass-families`).
+        // Nor is a sky-reflecting glass family's: what its program adds is
+        // `paraboloidReflectionTex`, which `window_glass` tags. Claiming the slot here added
+        // `glass_texture_customr`'s own picture as a still glow and left the pane no index for its
+        // reflection (2026-10-22, `hd-glass-families`).
         if super::window_glass::reads_sky(material) {
             continue;
         }

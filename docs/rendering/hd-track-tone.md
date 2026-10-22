@@ -671,6 +671,42 @@ dumped live.
 the same `j_sky` and `glass_dark_r` textures (`data02.psarc`, `.gnf`); its PS4 programs are not decoded, so whether its pane skips
 `j_sky` too is unread, and Omega's `psp2` material route does not run `window_glass`.
 
+### Chenghou's background windows: `glass_2nduv_reflect_glow` is an opaque reflective window with a glow (confidence 80)
+
+**Found** by family skip on `hd/chenghou-project` (skipping slots 69, 71, 75, 89, 90, 256, 348, 370 bares the stepped tower behind the
+gantry, whose green-lit window strips are what differ). The family is on Chenghou (8 slots), Metropia (`02_track`, 32), Vineta K (2),
+Sebenco (1), Sol 2 (7) and Talon's (2).
+
+**The program**, both race variants read (`04_chenghou_project`: lightmapped block #5 `@0x4380`, vertex-lit block #21 `@0xc900`;
+Metropia's copy of the file resolves its vertex-lit slots to `@0x18350`, not read separately):
+
+- `T = tex(unit 1 = 0xc29b64e4, first coordinate set)`, the window picture;
+- `G = tex(unit 0 = 0x290a5adb, TC3.zw).a`, the `*_alpha.gtf` mask at the **second** coordinate set (`Uv2`);
+- `light` = the atlas (`@0x00`-`@0x10`, lightmapped) or `TC0` (vertex-lit), plus `TC4.x * N.L * sun`;
+- `rgb = fog(light * T.rgb + glow * (1 - G) + (1 - T.a) * probeTint(sky(reflect(-E, N)))) / 2`, alpha 1, opaque, no specular term;
+- `glow` is parameter `0xfc21467a`, per slot (`0.016, 0.145, 0.018` on Chenghou's slot 348, `1.0, 0.97, 0.7` on Metropia's slot 7); the
+  reflection carries no weight parameter.
+
+**What ours drew**: the generic picture reading fell to entry 0, which is the glow **mask**, so the window drew its mask's colour,
+with no reflection and no glow. **Wired**: the row binds `0xc29b64e4` as the picture, the window entry (`tint` `[1, 0, 1]`) weights the
+reflection by `1 - T.a`, and `offset` 1 adds `glow * (1 - G)` with the colour in the next glow-table entry and the mask bound third
+(the binding `snow_rock`'s mask uses) at `texcoord2`. The pair is deduplicated across slots: Metropia's 32 slots at two entries each
+filled the 64-entry table and blacked out its floor panels (+6.6 mean grey) until they shared. The glow is added raw, as the program
+adds it; the units' gamma nibbles were not read live (**chosen, not measured**: the picture decoded like every other colour unit).
+
+| `hd/chenghou-project` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| tower box `1380,20 180x200`, mean RGB | 62.8, 56.5, 44.9 | 62.8, 55.6, 47.1 | 66.7, 60.6, 49.4 |
+| whole-frame mean grey difference | | 6.760 | 6.697 |
+
+The tower's faces now carry the green strips the original shows, but **the box reads 4 grey brighter than either the original or
+ours before**: the sky term through `1 - T.a` lifts the unlit panes. Metropia 8.432 to 8.427; the other HD pairs unchanged, Pulse PSP and
+Omega byte-identical. **Left open**: the reflection's brightness on these panes (the `N` of a far facade and the sky unit's live gamma
+were not dumped), and Metropia's `@0x18350` block, assumed the same law.
+
+**Omega: checked, applies, not wired.** Omega ships `Glass_2nduv_reflect_glow_1` on Chenghou Project (`data01.psarc`, `data05.psarc`,
+`data08.psarc`); its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
+
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws
