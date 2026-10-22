@@ -624,6 +624,112 @@ Omega: **not checkable** (no capture path; its HD-lineage circuits ship the cube
 **Open**: the shadows under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell, a material not found by slot
 bisection this lane), the normal map on the glass, and the other reflection-reading families above.
 
+## The sky-reflecting families, one at a time (2026-10-22, `hd-glass-families`)
+
+The families besides `dc_windows_a` that declare `paraboloidReflectionTex` (`0x9edd3243`), each read off its own resolved
+fragment block (`scripts/ps3-microcode.py fp-file`) and tagged in `mesh::rcs::window_glass`'s family table (a row: the family,
+its weight parameter, and how its program combines the reflection). Census of the 13 cold pairs' circuits (`hd_slot_list`,
+material names containing `glass`, `window` or `reflect`): `glass_reflect` on 11 circuits, `ds_booth_glass` on 11,
+`glass_reflect_opacity` on Vineta K, `03_track` and Chenghou (14 slots there), `glass_texture_customr` on Modesto Heights (7 slots)
+and Talon's Junction (2), `mt_windows_a` on Anulpha Pass (3).
+
+### Modesto's right-hand glass: `glass_texture_customr` is a pane (confidence 85)
+
+**Found** by slot skip on `hd/modesto-heights` (`OAG_SKIP_SLOT=760,762,789,793,808,809,824` empties the stand's glass band and shows
+the interior the original shows through it). Slot 762 (40 chunks) names `j_sky.gtf` at entry 0 (`0x8365b1f3`) and `glass_dark_r.gtf`
+at entry 1 (`0x3bdc0403`, `Texture1`); 760 names `j_tower_glass_r.gtf` there. Drawn `One`/`OneMinusSrcAlpha`, state `0x39`.
+
+**The program** (resolved variant: fragment block #5 `@0x2db0`, vertex `@0x2b60`):
+
+- `T1 = tex(unit 0 = Texture1, TC5.zw)`, `a = T1.a`;
+- `light = TC0 + TC5.x * N.L * sun` (`TC0` the vertex block's prelit colour, `TC5.x` the vertex sun mask);
+- `R = probeTint(tex(unit 1 = paraboloidReflectionTex, env_probe_uv(reflect(-E, N))))` (`iblScalePower` `0x7480de6d`, the hull's law);
+- `rgb = fog(a * light * T1.rgb + (1 - a) * (specular + k * R)) / 2`, `alpha = a`, with `k` the material's `Refbrightness`
+  (`0xab31c2b1`, `0.205` on slot 760, read per slot) and the specular `pow(N.H, 200) * sun`;
+- `TC1.xyz` and `TC2.xyz` are written `0` by the vertex block, so the closing `ADD /2 R1, H0` adds nothing.
+
+**`j_sky.gtf` is never sampled**: none of the material's twelve fragment blocks declares `0x8365b1f3`. Ours bound it as the picture
+because the program's colour lane is `Mixed` (the sky map reaches it) and `skin::picks` then fell to entry 0; with `One` as the source
+factor the pane added a whole opaque picture of a city skyline over the stand. And the generic emissive reading
+(`rcs::emissive`) saw the program accumulate unit 1 and added `Texture1` again as a still glow layer, taking the slot's glow
+index; unit 1 is the sky map, so the window-glass families are now refused there as `glass_sheen` is. **Wired**: `window_glass::pane_picture` binds `Texture1`'s
+entry as picture and coverage for a pane family, and `shade.wesl` splits the sum by the coverage (`tint.y` 1 on the glow-table entry):
+the lit picture times `a`, the specular and `k * R` times `1 - a`. Nothing of the block is left out: it samples no normal map.
+
+| `hd/modesto-heights` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| glass box `1550,170 350x120`, mean RGB | 112.8, 118.4, 128.8 | 139.6, 144.9, 155.0 | 117.9, 123.7, 128.7 |
+| whole-frame mean grey difference | | 10.162 | 9.691 |
+
+The other twelve HD pairs: unchanged (Talon's two slots are not in either Talon's pair's view; five pairs differ by one level on 1-7
+pixels, shader-recompile rounding). Pulse PSP `amphiseum-black` and Omega `anulpha-pass` byte-identical. At player size the
+pane now shows the stand's interior through a faint sky reflection, as the original's does. **Left open**: the original's interior
+reads a little sharper behind the glass (its lit strip along the pane's foot is brighter); `N` and `E` of the sky lookup were not
+dumped live.
+
+**Omega: checked, applies, not wired.** Omega ships `Glass_Texture_CustomR` (and `_1`, `_2`) on Modesto Heights and Talon's Junction with
+the same `j_sky` and `glass_dark_r` textures (`data02.psarc`, `.gnf`); its PS4 programs are not decoded, so whether its pane skips
+`j_sky` too is unread, and Omega's `psp2` material route does not run `window_glass`.
+
+### Chenghou's background windows: `glass_2nduv_reflect_glow` is an opaque reflective window with a glow (confidence 80)
+
+**Found** by family skip on `hd/chenghou-project` (skipping slots 69, 71, 75, 89, 90, 256, 348, 370 bares the stepped tower behind the
+gantry, whose green-lit window strips are what differ). The family is on Chenghou (8 slots), Metropia (`02_track`, 32), Vineta K (2),
+Sebenco (1), Sol 2 (7) and Talon's (2).
+
+**The program**, both race variants read (`04_chenghou_project`: lightmapped block #5 `@0x4380`, vertex-lit block #21 `@0xc900`;
+Metropia's copy of the file resolves its vertex-lit slots to `@0x18350`, not read separately):
+
+- `T = tex(unit 1 = 0xc29b64e4, first coordinate set)`, the window picture;
+- `G = tex(unit 0 = 0x290a5adb, TC3.zw).a`, the `*_alpha.gtf` mask at the **second** coordinate set (`Uv2`);
+- `light` = the atlas (`@0x00`-`@0x10`, lightmapped) or `TC0` (vertex-lit), plus `TC4.x * N.L * sun`;
+- `rgb = fog(light * T.rgb + glow * (1 - G) + (1 - T.a) * probeTint(sky(reflect(-E, N)))) / 2`, alpha 1, opaque, no specular term;
+- `glow` is parameter `0xfc21467a`, per slot (`0.016, 0.145, 0.018` on Chenghou's slot 348, `1.0, 0.97, 0.7` on Metropia's slot 7); the
+  reflection carries no weight parameter.
+
+**What ours drew**: the generic picture reading fell to entry 0, which is the glow **mask**, so the window drew its mask's colour,
+with no reflection and no glow. **Wired**: the row binds `0xc29b64e4` as the picture, the window entry (`tint` `[1, 0, 1]`) weights the
+reflection by `1 - T.a`, and `offset` 1 adds `glow * (1 - G)` with the colour in the next glow-table entry and the mask bound third
+(the binding `snow_rock`'s mask uses) at `texcoord2`. The pair is deduplicated across slots: Metropia's 32 slots at two entries each
+filled the 64-entry table and blacked out its floor panels (+6.6 mean grey) until they shared. The glow is added raw, as the program
+adds it; the units' gamma nibbles were not read live (**chosen, not measured**: the picture decoded like every other colour unit).
+
+| `hd/chenghou-project` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| tower box `1380,20 180x200`, mean RGB | 62.8, 56.5, 44.9 | 62.8, 55.6, 47.1 | 66.7, 60.6, 49.4 |
+| whole-frame mean grey difference | | 6.760 | 6.697 |
+
+The tower's faces now carry the green strips the original shows, but **the box reads 4 grey brighter than either the original or
+ours before**. Measured in steps: the picture and the reflection alone gave 57.6, the glow adds 1.3 more; zeroing the renderer's own
+specular (which this program does not have) left the box at 58.9, so it is not the cause. The excess is the picture-plus-reflection
+term and the glow, whose split between the reflection's brightness and the units' gamma is unread. Metropia 8.432 to 8.427; the other HD pairs unchanged, Pulse PSP and
+Omega byte-identical. **Left open**: the reflection's brightness on these panes (the `N` of a far facade and the sky unit's live gamma
+were not dumped), and Metropia's `@0x18350` block, assumed the same law.
+
+**Omega: checked, applies, not wired.** Omega ships `Glass_2nduv_reflect_glow` (and `_1`, `_2`) on Vineta K, Metropia and Chenghou
+Project, under `Materials/` and `Materials_DLC/`; its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
+
+### Anulpha's `mt_windows_a` is `dc_windows_a`'s window (confidence 85)
+
+Slot 579 is the one that draws (4 chunks, lightmapped block #15 `@0xc6e0`; 563 and 571 name the family and draw nothing in this
+frame), blended `SrcAlpha`/`OneMinusSrcAlpha`. The block is Moa Therma's glass law with its own units: the normal map (`0xfc52b822`)
+at unit 0, the picture `dc_window_a_diffuse` (`0x11cb4f74`) at unit 1, the atlas at unit 2, the sky at unit 3;
+`rgb = fog(w * probeTint(sky(reflect(-E, N))) + light * T.rgb + specular) / 2` with `w` the same parameter `0x5e5b1937` (`0.336` here)
+and the specular colour `0x370a63cb`, alpha `T.a`. The picture and the alpha were already right; **wired**: the row tags it like
+`dc_windows_a`. **Left out, named**: the normal map, as on Moa's glass.
+
+| `hd/anulpha-pass` | theirs | ours before | ours after |
+| --- | ---: | ---: | ---: |
+| window strip box `80,200 180x80` (behind the lap counter), mean RGB | 34.4, 36.9, 37.1 | 38.4, 40.2, 39.6 | 40.0, 42.1, 42.2 |
+| whole-frame mean grey difference | | 10.049 | 10.079 |
+
+**Worse in its box by 2 grey and in the frame by 0.03**, with the program's term as read: the strip is mostly hidden behind the HUD,
+and the pane's normal map, which tilts each reflection, is the named omission. The other HD pairs unchanged, Pulse PSP and Omega
+byte-identical.
+
+**Omega: checked, applies, not wired.** Omega's Anulpha ships `MT_Windows_A` (and `_1`, `_2`, under `Materials/` and
+`materials_DLC/`); its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
+
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws

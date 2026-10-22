@@ -84,6 +84,183 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
     trees_draw_among_the_cutouts_and_bit_2_blends_write_depth(model);
 }
 
+/// Modesto Heights' `glass_texture_customr` panes (`docs/rendering/hd-track-tone.md`, "The
+/// sky-reflecting families"): the picture and coverage are `Texture1`'s (`glass_dark_r`,
+/// `j_tower_glass_r`), never the `j_sky.gtf` at entry 0 that no block of the family samples, and
+/// each slot carries a pane entry (`tint.y` and `tint.z` 1) weighted by its own `Refbrightness` (`0xab31c2b1`).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn modestos_glass_panes_bind_texture1_and_split_by_coverage() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let path = "/data/environments/modesto_heights/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Modesto Heights builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/glass_texture_customr.rcsmaterial")
+        {
+            continue;
+        }
+        let Some(Some(texture)) = model.textures.get(slot) else {
+            continue;
+        };
+        let texture1 = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x3bdc_0403)
+            .and_then(|(_, path)| path.as_deref())
+            .expect("a pane names Texture1");
+        assert!(
+            texture.label.ends_with(texture1),
+            "slot {slot} binds {} where its program samples {texture1}",
+            texture.label
+        );
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        let refbrightness = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0xab31_c2b1)
+            .map(|p| p.value[0])
+            .expect("Refbrightness");
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [refbrightness, 1.0, 1.0], "slot {slot}");
+        checked += 1;
+    }
+    assert!(checked >= 5, "only {checked} drawn pane slots");
+}
+
+/// Chenghou Project's `glass_2nduv_reflect_glow` windows (`docs/rendering/hd-track-tone.md`, "The
+/// sky-reflecting families"): the picture is the window texture at `0xc29b64e4` (unit 1 of both
+/// race blocks), never the glow mask at entry 0, and each slot reflects the sky unweighted
+/// through `1 - a` (`tint` `[1, 0, 1]`) and adds its glow colour through `1 - mask.a`, the mask
+/// bound third.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn chenghous_reflective_windows_bind_their_picture_and_reflect_through_its_alpha() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/04_chenghou_project/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Chenghou Project builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material
+            .name
+            .ends_with("/glass_2nduv_reflect_glow.rcsmaterial")
+        {
+            continue;
+        }
+        let Some(Some(texture)) = model.textures.get(slot) else {
+            continue;
+        };
+        let picture = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0xc29b_64e4)
+            .and_then(|(_, path)| path.as_deref())
+            .expect("a window names its picture");
+        assert!(
+            texture.label.ends_with(picture),
+            "slot {slot} binds {} where its program's picture is {picture}",
+            texture.label
+        );
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [1.0, 0.0, 1.0], "slot {slot}");
+        // The glow: `offset` 1, its colour in the next entry, its mask bound third.
+        assert_eq!(entry.offset, 1.0, "slot {slot}");
+        let colour = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0xfc21_467a)
+            .map(|p| p.value)
+            .expect("a glow colour");
+        assert_eq!(
+            model.emissive[index as usize].tint,
+            [colour[0], colour[1], colour[2]],
+            "slot {slot}"
+        );
+        let mask = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x290a_5adb)
+            .and_then(|(_, path)| path.as_deref())
+            .expect("a window names its glow mask");
+        let bound = model.pad_masks[slot]
+            .as_ref()
+            .expect("the mask is bound third");
+        assert!(
+            bound.label.ends_with(mask),
+            "slot {slot} binds {}",
+            bound.label
+        );
+        checked += 1;
+    }
+    assert!(checked >= 6, "only {checked} drawn window slots");
+}
+
+/// Anulpha Pass's `mt_windows_a` (`docs/rendering/hd-track-tone.md`, "The sky-reflecting families"):
+/// `dc_windows_a`'s window law, weighted by its own `0x5e5b1937` (`0.336` on slot 579).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn anulphas_windows_reflect_the_sky_by_their_own_weight() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/15_anulpha_pass/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Anulpha Pass builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/mt_windows_a.rcsmaterial") {
+            continue;
+        }
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        let weight = material
+            .parameters
+            .iter()
+            .find(|p| p.hash == 0x5e5b_1937)
+            .map(|p| p.value[0])
+            .expect("a weight");
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [weight, 0.0, 0.0], "slot {slot}");
+        checked += 1;
+    }
+    assert_eq!(checked, 3, "Anulpha names mt_windows_a in three slots");
+}
+
 /// The same build, honouring HD's render-state rule
 /// (`oag_title::Looks::material_render_state`): every `cf_tree` draw (`0xbd`,
 /// state bit 7) leaves the blended list for the cutout list, unblended, as all

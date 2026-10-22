@@ -260,7 +260,8 @@ pub(super) fn material_setup(
         report,
     );
     // Scenery glass that reads the sky reflection claims its slot after the same families.
-    super::window_glass::window_glass(
+    // Its glow masks ride the third binding, read at the second coordinate set.
+    let window_masks = super::window_glass::window_glass(
         model,
         &material_variants,
         textures,
@@ -268,6 +269,7 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    super::mag_wave::merge(&mut mag_emissive, window_masks);
     // The disc's own alpha-test reference, for a caller's cutout draws - see
     // `cutout`, which reports a comparison this shader cannot reproduce
     // rather than drawing one wrongly.

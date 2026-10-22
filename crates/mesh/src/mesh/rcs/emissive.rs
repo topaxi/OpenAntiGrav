@@ -255,6 +255,13 @@ pub(super) fn emissive(
         if *packed & slots::FACING_RAMP_SHEEN != 0 {
             continue;
         }
+        // Nor is a sky-reflecting glass family's: what its program adds is
+        // `paraboloidReflectionTex`, which `window_glass` tags. Claiming the slot here added
+        // `glass_texture_customr`'s own picture as a still glow and left the pane no index for its
+        // reflection (2026-10-22, `hd-glass-families`).
+        if super::window_glass::reads_sky(material) {
+            continue;
+        }
         let Some(variant) = variants.get(slot).copied().flatten() else {
             continue;
         };
@@ -319,8 +326,8 @@ pub(super) fn emissive(
         //   coordinate constants are the shader's own **inline literals**,
         //   which live in the code rather than in the material record and
         //   which this reading has not recovered;
-        // - it does not declare `time` at all (`glass_texture_customr`,
-        //   `and_diffuse_emissive`, `bluemetal`) - a still additive layer.
+        // - it does not declare `time` at all (`and_diffuse_emissive`,
+        //   `bluemetal`) - a still additive layer.
         //
         // Only the first scrolls here. **A `scale` of 0 is the most
         // destructive value in the range, not a neutral one**: it annihilates

@@ -34,10 +34,14 @@ from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages
    the rock is mixed in by the painted mask, not a slope (confidence 85); twelve slots, both lit variants. Box 112.65 to
    9.72, frame 13.11 to 8.65. Left: `pale` raw here and decoded in `ice` (both chosen), block #5's light, and
    `sebenco_snow_just_snow` (a different program, unread).
-5. Modesto glass / banners / building texture (**banners at the turn located 2026-10-22, `hd-blend-space`**: slot 773,
+5. Modesto ~~glass~~ (**wired 2026-10-22, `hd-glass-families`**: `glass_texture_customr` is a pane, `Texture1` its picture
+   and coverage and the sky through `1 - a`; glass box 146.5 to 123.5 grey against 120.0; hd-track-tone.md, "The sky-reflecting
+   families") / banners / building texture (**banners at the turn located 2026-10-22, `hd-blend-space`**: slot 773,
    `uvanim_diffuse_emissivealpha` with `egx_lcd.gtf`, an LCD the original draws as a pale scanline grid; its program is
    unread, next is its fragment block and a live Modesto frame's unit gamma nibbles; the encoded store moved the right
-   banner box 35.1 to 24.7 only); 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
+   banner box 35.1 to 24.7 only); 6. Vineta's light and sky; 7. ~~Chenghou's windows~~ **wired 2026-10-22, `hd-glass-families`**
+   (`glass_2nduv_reflect_glow`: the window picture, the sky through `1 - a` and the glow through the second-UV mask; the green
+   strips are back, but the tower box reads 58.9 grey against 54.7, the panes' reflection too bright: open); 8. Tech de Ra's missing
    details: **not started** (Tech de Ra carries 9 `scanlinebillboard` slots, now bound, none in the pair's view).
 
 **Amphiseum's `hologram.rcsmaterial` board** (2026-10-22, `hd-blend-space`): drawn through the generic emissive
@@ -62,10 +66,13 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
   `dc_windows_a` reads it (`docs/rendering/hd-track-tone.md`, "The reflection map is the sky"). Left on this pair: the cast
   shadow under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell,
   slot not found by bisection), texture sharpness, and the glass program's normal map.
-- **The other families that declare the sky map** (`glass_reflect`, `ds_booth_glass`, `glasstest`, `mt_windows_a` on Anulpha Pass,
-  the water sheets of Vineta K, the mag floors, the pipe family, the ice): the map and its binding exist
-  (`mesh::sky_paraboloid`, group 2 binding 17); each family needs its program block read and a `rcs::window_glass`-style tag, one
-  per commit with all 13 pairs re-judged. The tint is `ProbeTint::SCENERY` (`{1, 1, 1, 0}`, read on Moa's glass only); a second circuit's
+- **The other families that declare the sky map**: ~~`mt_windows_a`~~, ~~`glass_texture_customr`~~ and
+  ~~`glass_2nduv_reflect_glow`~~ **wired 2026-10-22, `hd-glass-families`** (rows of `rcs::window_glass`'s family table;
+  hd-track-tone.md, "The sky-reflecting families"; Anulpha's strip box 2 grey brighter with the normal map still left out). Still
+  open: `glass_reflect` (11 circuits), `ds_booth_glass` (11), `glass_reflect_opacity` (Chenghou 14 slots, Vineta K, `03_track`),
+  `glasstest`, the water sheets of Vineta K (`rcs::water`, not started), the mag floors, the pipe family, the ice: each a row once its
+  block is read, one per commit with all 13 pairs re-judged. Metropia's `glass_2nduv_reflect_glow` resolves to block `@0x18350`,
+  assumed Chenghou's law, unread. The glass normal maps are the shared omission. The tint is `ProbeTint::SCENERY` (`{1, 1, 1, 0}`, read on Moa's glass only); a second circuit's
   read would settle whether it is per circuit. The producer program itself is still undecoded.
 - **HD's exposure adaptation law** (`docs/rendering/hd-track-tone.md`, "Decide the adaptation law"): the
   live readback matches the mean of the *encoded* per-pixel luma within 1.3 % on three circuits, ours

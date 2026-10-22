@@ -871,12 +871,32 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // (`mesh::sky_paraboloid`), read at the same dual-paraboloid address the hull's is. `N` is the
         // vertex normal: the program perturbs it with a tangent-space normal map, which a track
         // vertex carries no frame for here.
+        //
+        // **A pane** (`tint.y` 1, `glass_texture_customr`) splits its sum by the coverage `a`:
+        // `a * light * picture + (1 - a) * (specular + reflection)`, alpha `a`, drawn
+        // `One`/`OneMinusSrcAlpha`, so the clear part of the pane shows what is behind it.
+        // `tint.z` 1 weights the reflection by `1 - a` (the pane, and
+        // `glass_2nduv_reflect_glow`'s opaque windows).
         var sky_reflection = vec3<f32>(0.0);
+        var pane_cover = 1.0;
+        var pane_clear = 1.0;
         let sky_entry = (in.slots >> 24u) & 127u;
         if sky_entry != 0u && emissives.scale[sky_entry].y > 8.5 && emissives.scale[sky_entry].y < 9.5 {
             let r = reflect(-to_eye, n);
             let sky = textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb;
-            sky_reflection = probe_tint(sky) * emissives.tint_offset[sky_entry].x;
+            if emissives.tint_offset[sky_entry].y > 0.5 {
+                pane_cover = texel.a;
+                pane_clear = 1.0 - texel.a;
+            }
+            let reflect_clear = select(1.0, 1.0 - texel.a, emissives.tint_offset[sky_entry].z > 0.5);
+            sky_reflection = probe_tint(sky) * (emissives.tint_offset[sky_entry].x * reflect_clear);
+            // `offset` 1: the program also adds `colour * (1 - mask.a)`, the colour in the next
+            // entry's tint and the mask bound third at the second coordinate set
+            // (`glass_2nduv_reflect_glow`). The colour is added raw, as the program adds it.
+            if emissives.tint_offset[sky_entry].w > 0.5 {
+                let mask = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).a;
+                sky_reflection += emissives.tint_offset[sky_entry + 1u].xyz * (1.0 - mask);
+            }
         }
 
         // The authored path shades in linear light, as the RSX does: the samples
@@ -938,10 +958,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             glow_tint_offset.x * sun_light * glow_decoded,
             glow_is_billboard,
         );
-        let program_specular = select(specular, vec3<f32>(0.0), glow_is_billboard);
+        let program_specular = select(specular, vec3<f32>(0.0), glow_is_billboard) * pane_clear;
         let program_multiplier = select(vec3<f32>(1.0), glow_decoded, glow_is_bw_glass);
         let lit_linear = scene.light.output_scale
-            * ((surface_linear * program_light + program_specular) * program_multiplier
+            * ((surface_linear * program_light * pane_cover + program_specular) * program_multiplier
                 + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection
                 + sky_reflection);
         let encoded = pow(
@@ -957,7 +977,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // specular term at all. See
         // `docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md`.
         let sun_linear = scene.light.output_scale
-            * ((surface_linear * program_sun + program_specular) * program_multiplier);
+            * ((surface_linear * program_sun * pane_cover + program_specular) * program_multiplier);
         let sunless = lit_linear - sun_linear;
         let sunless_encoded = pow(
             clamp(sunless, vec3<f32>(0.0), vec3<f32>(1.0)),

@@ -540,6 +540,17 @@ pub(super) fn picks(
                     aux: Some(sheen.grid_entry),
                 };
             }
+            // **A sky-reflecting family's picture is the sampler its row names**, ahead of the
+            // generic reading: its colour lane is `Mixed` (the sky map reaches it), so that
+            // reading falls to entry 0, which is a texture the family never samples
+            // (`glass_texture_customr`) or its glow mask (`glass_2nduv_reflect_glow`). See
+            // `window_glass::picture`.
+            if let Some(entry) = super::window_glass::picture(material, &declared) {
+                return Pick {
+                    albedo: Some(entry),
+                    aux: Some(entry),
+                };
+            }
             // An entry only counts when it supplies a `.gtf`: an entry the
             // material declares and leaves empty is the engine's to bind, and
             // pointing a lane at it would sample `mesh_render::build`'s
