@@ -63,7 +63,13 @@ fn gpu() -> Option<Gpu> {
 fn draw(gpu: &Gpu, quads: &[Quad], occluder: f32) -> Vec<[f32; 2]> {
     let Gpu { device, queue } = gpu;
     device.on_uncaptured_error(std::sync::Arc::new(|e| panic!("wgpu validation: {e}")));
-    let mut pipeline = Pipeline::new(device, wgpu::TextureFormat::Rgba8Unorm, 1, Velocity::None);
+    let mut pipeline = Pipeline::new(
+        device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        oag_gpu::formats::SceneStore::Computed,
+        1,
+        Velocity::None,
+    );
     let mut sheet = Sheet::default();
     let vertices: Vec<GpuVertex> = quads
         .iter()

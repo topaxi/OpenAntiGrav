@@ -80,6 +80,7 @@ impl Wrecks {
                     slots.queue,
                     model,
                     slots.format,
+                    slots.store,
                     slots.anisotropy,
                     slots.sample_count,
                     depth,

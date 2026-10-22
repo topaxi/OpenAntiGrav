@@ -106,5 +106,6 @@ pub(in crate::load) fn envsettings_bloom(
         tone_darkening_clamp,
         tone_maximum_brightness,
         zoom: None,
+        store: oag_gpu::formats::SceneStore::Computed,
     })
 }

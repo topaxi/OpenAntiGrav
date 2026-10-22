@@ -31,6 +31,7 @@ impl Clouds {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        store: oag_gpu::formats::SceneStore,
         sample_count: u32,
         source: Option<(oag_fx::cloud::Layer, FlareTexture)>,
     ) -> std::cell::RefCell<Self> {
@@ -39,6 +40,7 @@ impl Clouds {
                 device,
                 queue,
                 format,
+                store,
                 &texture,
                 sample_count,
                 mesh_render::Velocity::Write,

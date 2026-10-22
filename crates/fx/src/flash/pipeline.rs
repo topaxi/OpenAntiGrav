@@ -32,6 +32,8 @@ impl Pipeline {
     pub fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         sample_count: u32,
         velocity: Velocity,
     ) -> Self {
@@ -81,7 +83,7 @@ impl Pipeline {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &targets,
-                compilation_options: fragment_options(format),
+                compilation_options: fragment_options(format, store),
             }),
             primitive: wgpu::PrimitiveState::default(),
             // Depth test off, as `ScreenFlash_Draw` sets it; the attachment

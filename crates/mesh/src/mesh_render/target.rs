@@ -3,6 +3,8 @@
 //! Split out of `mesh_render.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+use oag_gpu::formats::SceneStore;
+
 /// Whether a render-target format holds linear light rather than
 /// gamma-encoded colour.
 ///
@@ -17,23 +19,31 @@ pub fn is_linear_target(format: wgpu::TextureFormat) -> bool {
 }
 
 /// The pipeline-constant list that switches a shader's `linear_out` override
-/// for `format` - `&[]` on a gamma target, so a pipeline built against one
-/// is bit-identical to what it was before linear targets existed.
+/// for `format`, and its `encoded_out` for a scene target that stores encoded
+/// values ([`SceneStore::Encoded`], ignored on a gamma target) - `&[]` on a gamma
+/// target, so a pipeline built against one is bit-identical to what it was
+/// before linear targets existed.
 #[must_use]
-pub fn linear_constants(format: wgpu::TextureFormat) -> &'static [(&'static str, f64)] {
-    if is_linear_target(format) {
-        &[("linear_out", 1.0)]
-    } else {
-        &[]
+pub fn linear_constants(
+    format: wgpu::TextureFormat,
+    store: SceneStore,
+) -> &'static [(&'static str, f64)] {
+    match (is_linear_target(format), store) {
+        (true, SceneStore::Encoded) => &[("linear_out", 1.0), ("encoded_out", 1.0)],
+        (true, SceneStore::Computed) => &[("linear_out", 1.0)],
+        (false, _) => &[],
     }
 }
 
 /// [`linear_constants`] as a whole fragment-stage options block, for the
 /// pipelines whose only compilation option it is.
 #[must_use]
-pub fn fragment_options(format: wgpu::TextureFormat) -> wgpu::PipelineCompilationOptions<'static> {
+pub fn fragment_options(
+    format: wgpu::TextureFormat,
+    store: SceneStore,
+) -> wgpu::PipelineCompilationOptions<'static> {
     wgpu::PipelineCompilationOptions {
-        constants: linear_constants(format),
+        constants: linear_constants(format, store),
         ..Default::default()
     }
 }

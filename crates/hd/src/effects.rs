@@ -151,6 +151,16 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // `SET_SHADER_PACKER` is 1 on every scene draw of three live race frames
+    // (Talon's Junction, a hull frame, a gantry frame), so the packer encodes a
+    // draw before the blend and blends combine encoded values; an additive
+    // grill's lift on the cold `hd/talons` pair is grey and uncorrelated with
+    // what is behind it. `docs/rendering/hd-track-tone.md`, "HD's blends combine
+    // encoded values", confidence 85.
+    blends_encoded: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     ..Looks::unread(SHIELD)
 };
 
@@ -179,6 +189,15 @@ mod tests {
                 .material_render_state
                 .applies_everywhere()
         );
+    }
+
+    /// HD's scene stores encoded values, measured live; an unread title's
+    /// keeps the value as computed.
+    #[test]
+    fn hd_blends_encoded_and_an_unread_title_does_not() {
+        assert!(LOOKS.blends_encoded.applies_everywhere());
+        assert_eq!(LOOKS.blends_encoded.origin, Origin::Measured);
+        assert!(!Looks::unread(SHIELD).blends_encoded.applies_everywhere());
     }
 
     /// The material LOD bias is held off on HD (the stored RPCS3 frames do not

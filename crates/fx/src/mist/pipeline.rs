@@ -67,6 +67,8 @@ impl Pipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         texture: &FlareTexture,
         sample_count: u32,
         velocity: Velocity,
@@ -130,7 +132,7 @@ impl Pipeline {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &targets,
-                compilation_options: fragment_options(format),
+                compilation_options: fragment_options(format, store),
             }),
             // Culling off (`Gu_Disable(GU_CULL_FACE)`).
             primitive: wgpu::PrimitiveState::default(),

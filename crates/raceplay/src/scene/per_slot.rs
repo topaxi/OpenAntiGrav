@@ -12,6 +12,8 @@ pub(super) struct Build<'a> {
     pub(super) queue: &'a wgpu::Queue,
     pub(super) liveries: &'a [oag_livery::Livery],
     pub(super) format: wgpu::TextureFormat,
+    /// What the scene target stores - see `oag_gpu::formats::SceneStore`.
+    pub(super) store: oag_gpu::formats::SceneStore,
     pub(super) anisotropy: Anisotropy,
     pub(super) sample_count: u32,
     pub(super) zone_art: &'a mesh_render::zone::StageArt,
@@ -77,6 +79,7 @@ impl Build<'_> {
                     self.queue,
                     model,
                     self.format,
+                    self.store,
                     self.anisotropy,
                     self.sample_count,
                     depth,

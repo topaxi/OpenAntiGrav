@@ -5,7 +5,7 @@
 // computed (white, faded by the disconnect linger, zeroed at both ends).
 
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
-import oag_shaders::target::{linear_out, gamma_to_target};
+import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 // What the ribbon stamps into the glow mask - `beam::GLOW_MASK`, the stencil
 // reference `LeachBeam_SubmitStrip` writes with `REPLACE`.
@@ -110,7 +110,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let glow = textureSample(beam_texture, beam_sampler, vec2<f32>(u + in.clock + n, v));
         let facing = abs(dot(normalize(in.normal), normalize(in.view)));
         let alpha = glow.a * facing * in.colour.a * saturate(in.clip.z * 0.75);
-        return vec4<f32>(gamma_to_target(glow.rgb * in.colour.rgb, linear_out * decode_source), alpha);
+        return vec4<f32>(target_out(gamma_to_target(glow.rgb * in.colour.rgb, linear_out * decode_source)), alpha);
     }
     let texel = textureSample(beam_texture, beam_sampler, in.texcoord);
     let rgb = texel.rgb * in.colour.rgb;
@@ -130,7 +130,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let facing = saturate(max(min(abs(facing_dot), 0.32), 0.0) * 3.12433);
         let depth_fade = saturate(in.clip.z * 0.75);
         let coverage = saturate(14.0 * texel.a * facing * in.colour.a) * depth_fade;
-        return vec4<f32>(decoded, coverage);
+        return vec4<f32>(target_out(decoded), coverage);
     }
-    return vec4<f32>(decoded * weight, alpha);
+    return vec4<f32>(target_out(decoded * weight), alpha);
 }

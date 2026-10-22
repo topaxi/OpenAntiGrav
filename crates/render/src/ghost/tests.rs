@@ -75,7 +75,15 @@ fn the_three_passes_build_against_a_race_target() {
         (wgpu::TextureFormat::Rgba16Float, false),
     ] {
         let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
-        let pipeline = Pipeline::new(&device, &queue, format, 4, stamps, Some(&static_glow));
+        let pipeline = Pipeline::new(
+            &device,
+            &queue,
+            format,
+            oag_gpu::formats::SceneStore::Computed,
+            4,
+            stamps,
+            Some(&static_glow),
+        );
         let error = pollster::block_on(scope.pop());
         assert!(error.is_none(), "{format:?}: {error:?}");
         assert_eq!(pipeline.stamps_glow(), stamps);

@@ -850,11 +850,13 @@ impl Gantry {
     ///
     /// Propagates a pipeline or geometry upload failure, the same as every
     /// other [`Drawable`].
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         placed: Placed,
         format: wgpu::TextureFormat,
+        store: oag_gpu::formats::SceneStore,
         anisotropy: Anisotropy,
         sample_count: u32,
         shadow_maps: mesh_render::ShadowMaps<'_>,
@@ -864,6 +866,7 @@ impl Gantry {
             queue,
             placed.model,
             format,
+            store,
             anisotropy,
             sample_count,
             mesh_render::Depth::Scene,

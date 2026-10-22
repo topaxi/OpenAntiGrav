@@ -21,6 +21,7 @@ fn params() -> oag_post::hd_bloom::Params {
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
         zoom: None,
+        store: oag_gpu::formats::SceneStore::Computed,
     }
 }
 

@@ -26,6 +26,7 @@ pub(super) fn params() -> Params {
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
         zoom: None,
+        store: oag_gpu::formats::SceneStore::Computed,
     }
 }
 
@@ -661,4 +662,117 @@ fn a_shorter_reach_spills_less_glow_over_an_edge() {
         short < whole,
         "a reach of a quarter spilled {short} against the authored reach's {whole}"
     );
+}
+
+/// Resolves a flat scene holding `stored` on every channel, built for `store`,
+/// and returns the centre texel's red byte; `None` with no adapter.
+fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
+    let instance = wgpu::Instance::default();
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    let adapter = adapters.first()?;
+    let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let canvas = (64u32, 64u32);
+    let chain = Chain::new(
+        &device,
+        format,
+        canvas,
+        Params { store, ..params() },
+        Glow::Drawn,
+    )
+    .expect("the pipelines build");
+    let output = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hd bloom store test output"),
+        size: wgpu::Extent3d {
+            width: canvas.0,
+            height: canvas.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = output.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hd bloom store test readback"),
+        size: u64::from(canvas.0) * u64::from(canvas.1) * 4,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("hd bloom store test scene"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: chain.scene_view(),
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: stored,
+                    g: stored,
+                    b: stored,
+                    a: 0.0,
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
+    chain.run(&queue, &mut encoder, &view, (0.0, 0.0), canvas, None);
+    encoder.copy_texture_to_buffer(
+        output.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(canvas.0 * 4),
+                rows_per_image: Some(canvas.1),
+            },
+        },
+        wgpu::Extent3d {
+            width: canvas.0,
+            height: canvas.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |r| {
+        r.expect("the readback maps");
+    });
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let data = readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("the buffer is mapped");
+    Some(data[((32 * canvas.0 + 32) * 4) as usize])
+}
+
+/// A scene stored encoded is decoded where the chain reads it: a flat linear
+/// grey `0.2` resolves to the same byte whether the target holds `0.2` as
+/// computed or its encoding `0.2^(1/2.2)` (HD's `SET_SHADER_PACKER` store,
+/// `docs/rendering/hd-track-tone.md`, "HD's blends combine encoded values").
+/// Read without the decode, the encoded scene would resolve far brighter.
+#[test]
+fn an_encoded_scene_resolves_as_the_light_it_encodes() {
+    let linear = 0.2f64;
+    let (Some(computed), Some(encoded)) = (
+        resolve_flat(SceneStore::Computed, linear),
+        resolve_flat(SceneStore::Encoded, linear.powf(1.0 / 2.2)),
+    ) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert!(
+        computed.abs_diff(encoded) <= 2,
+        "computed {computed}, encoded {encoded}"
+    );
+    assert!(computed > 40, "the grey resolves lit ({computed})");
 }

@@ -10,6 +10,7 @@ pub(super) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
+    store: oag_gpu::formats::SceneStore,
     texture: Option<&FlareTexture>,
     sample_count: u32,
 ) -> Option<std::cell::RefCell<oag_fx::beam::Pipeline>> {
@@ -18,6 +19,7 @@ pub(super) fn build(
             device,
             queue,
             format,
+            store,
             texture,
             sample_count,
             super::mesh_render::Velocity::Write,

@@ -11,6 +11,7 @@
 
 mod cloud_field_ground_truth;
 mod distort_pass;
+mod encoded_blend;
 mod exhaust_pipeline;
 mod psys_2048_ground_truth;
 mod psys_emitter_roll_ground_truth;

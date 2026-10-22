@@ -356,6 +356,8 @@ impl Pipeline {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         format: wgpu::TextureFormat,
+        // What the scene target stores - see `oag_gpu::formats::SceneStore`.
+        store: oag_gpu::formats::SceneStore,
         texture: &FlareTexture,
         sample_count: u32,
         velocity: oag_mesh::mesh_render::Velocity,
@@ -440,7 +442,7 @@ impl Pipeline {
                     targets
                 },
                 compilation_options: wgpu::PipelineCompilationOptions {
-                    constants: oag_mesh::mesh_render::linear_constants(format),
+                    constants: oag_mesh::mesh_render::linear_constants(format, store),
                     ..Default::default()
                 },
             }),

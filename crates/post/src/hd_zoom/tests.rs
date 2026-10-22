@@ -190,6 +190,7 @@ fn params() -> Params {
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
         zoom: Some(tuning()),
+        store: oag_gpu::formats::SceneStore::Computed,
     }
 }
 

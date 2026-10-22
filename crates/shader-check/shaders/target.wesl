@@ -15,3 +15,23 @@ public override linear_out: f32 = 0.0;
 public fn gamma_to_target(rgb: vec3<f32>, amount: f32) -> vec3<f32> {
     return mix(rgb, pow(rgb, vec3<f32>(2.2)), amount);
 }
+
+// 1.0 when the render target holds display (gamma-encoded) values while the
+// draw computes in linear light: Wipeout HD's race scene, whose draws the
+// console packs to sRGB before the blend (`SET_SHADER_PACKER` 1,
+// docs/rendering/hd-track-tone.md, "HD's blends combine encoded values"), so a
+// blended draw adds or mixes encoded values. Only meaningful with
+// `linear_out`; 0.0 everywhere else, which leaves every output as it was.
+public override encoded_out: f32 = 0.0;
+
+// A linear-light colour as the target stores it: clamped and encoded with the
+// 2.2 power the HD chain decodes with when `encoded_out` is set, as it is.
+public fn target_out(rgb: vec3<f32>) -> vec3<f32> {
+    return mix(rgb, pow(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2)), encoded_out);
+}
+
+// What a draw reads back from a scene-format target (the behind-glass grab),
+// in linear light: the inverse of `target_out`.
+public fn target_in(rgb: vec3<f32>) -> vec3<f32> {
+    return mix(rgb, pow(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(2.2)), encoded_out);
+}

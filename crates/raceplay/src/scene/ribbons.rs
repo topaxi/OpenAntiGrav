@@ -30,6 +30,7 @@ pub(super) fn build(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     format: wgpu::TextureFormat,
+    store: oag_gpu::formats::SceneStore,
     textures: &RibbonTextures,
     sample_count: u32,
 ) -> Ribbons {
@@ -37,6 +38,7 @@ pub(super) fn build(
         device,
         queue,
         format,
+        store,
         textures.magstrip.as_ref(),
         sample_count,
     );
@@ -45,6 +47,7 @@ pub(super) fn build(
             device,
             queue,
             format,
+            store,
             &assets.texture,
             sample_count,
             super::mesh_render::Velocity::Write,
@@ -57,6 +60,7 @@ pub(super) fn build(
             device,
             queue,
             format,
+            store,
             &assets.glow,
             Some(&assets.noise),
             sample_count,

@@ -100,6 +100,14 @@ impl Scene {
 
     /// Whether the scene's pipelines were built against the linear float
     /// target - see [`build`] and [`build_omega`].
+    /// What the scene target stores - see `oag_gpu::formats::SceneStore`.
+    pub(super) fn store(&self) -> oag_gpu::formats::SceneStore {
+        self.hd.as_ref().map_or(
+            oag_gpu::formats::SceneStore::Computed,
+            oag_post::hd_bloom::Chain::store,
+        )
+    }
+
     pub(super) fn draws_linear(&self) -> bool {
         self.hd.is_some() || self.omega.is_some()
     }

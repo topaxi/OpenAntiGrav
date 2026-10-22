@@ -7,7 +7,7 @@
 // `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`.
 
 import oag_shaders::scene_vertex::{Uniforms, VertexInput, VertexOutput};
-import oag_shaders::target::{linear_out, gamma_to_target};
+import oag_shaders::target::{linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var quad_texture: texture_2d<f32>;
@@ -39,5 +39,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // gamma-authored input decoded first so the add and the later encode
     // round-trip.
     let decoded = gamma_to_target(rgb, linear_out);
-    return vec4<f32>(decoded, texel.a * in.colour.a);
+    return vec4<f32>(target_out(decoded), texel.a * in.colour.a);
 }

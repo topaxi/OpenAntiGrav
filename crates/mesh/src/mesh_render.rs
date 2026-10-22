@@ -249,6 +249,7 @@ pub fn build(
         queue,
         model,
         format,
+        oag_gpu::formats::SceneStore::Computed,
         anisotropy,
         sample_count,
         depth,
@@ -273,6 +274,8 @@ pub fn build_with(
     queue: &wgpu::Queue,
     model: &Model,
     format: wgpu::TextureFormat,
+    // What a scene-format target stores - see `oag_gpu::formats::SceneStore`.
+    store: oag_gpu::formats::SceneStore,
     anisotropy: Anisotropy,
     sample_count: u32,
     depth: Depth,
@@ -342,6 +345,9 @@ pub fn build_with(
     let mut constants: Vec<(&str, f64)> = Vec::new();
     if is_linear_target(format) {
         constants.push(("linear_out", 1.0));
+        if store == oag_gpu::formats::SceneStore::Encoded {
+            constants.push(("encoded_out", 1.0));
+        }
     }
     if model.vertex_colour_is_light {
         constants.push(("colour_is_light", 1.0));
