@@ -845,3 +845,134 @@ and a census of all 16 Omega and 14 2048 circuit models finds `cf_tree` at `0xbd
 records) and blended states with bit 2 (`0x3d`, `0x7d`, `0x2d`) on both. Their builder
 (`mesh::rcs::psp2::transparency::route`) reads bits 0 and 1 only, and their executables' handling of bits 2 and 7 is unread:
 **checked, applies, not wired** for both.
+
+## Vineta K's sky was dark because ours tinted the encoded texel (2026-10-22, `hd-tone-vineta`)
+
+**Claim** (the maintainer, from the compare page: "`hd/vineta-k`: the light looks
+different, our sky is too dark"): on `hd/vineta-k`, our sky and overall light are within
+10 grey of the original's in a sky box and a lit-scenery box, and the cause is fixed from
+measured law. **True.** The stage that carried it is the **sky tint**, not the exposure, the
+tone map or the sky texel; one lit surface family on the right-hand building is a separate
+cause and not tone (below).
+
+### The boxes
+
+The pair `hd/vineta-k` (the originals re-made at 1920x1080, Resolution Scale 100, race
+clock 13.8 s), mean RGB, theirs, ours before (`0e678255a`) and ours after:
+
+| Box (x, y, w, h) | Theirs | Ours before | Ours after | Grey, before -> after |
+| --- | --- | --- | --- | ---: |
+| sky (360, 5, 160, 45) | 206.0, 192.5, 186.9 | 139.3, 130.4, 126.8 | 196.5, 184.0, 178.7 | -63.0 -> **-8.8** |
+| sky (1160, 5, 160, 40) | 201.5, 186.2, 172.4 | 136.2, 126.2, 116.8 | 192.0, 177.9, 164.5 | -60.3 -> -8.5 |
+| sky (600, 5, 200, 40) | 215.2, 198.8, 193.3 | 145.4, 134.5, 130.5 | 205.3, 189.7, 184.1 | -65.7 -> -9.4 |
+| lit scenery, the sunlit rail right of the craft (1150, 470, 250, 50) | 155.5, 130.1, 95.5 | 152.4, 126.9, 93.8 | 150.6, 125.1, 92.4 | -2.6 -> **-4.4** |
+
+The sky was the whole of "too dark": ours over theirs was 0.676, 0.677, 0.678 per channel,
+one factor. The lit scenery was already inside 3 grey and moves 1.8 darker after the fix,
+because a brighter sky lifts the frame's adapted luminance and with it the bloom gate's fade.
+
+### The decomposition
+
+Our own frames at the pair's pose, the sky box (360, 5, 160, 45), with two temporary
+switches (not committed): the HD glow suppressed (`Glow::Suppressed`, the scene times the
+exposure, encoded) and the sky's tint forced to 1.
+
+| Ours | Sky box |
+| --- | --- |
+| as shipped (tint 134/255, glow on) | 139.3, 130.4, 126.8 |
+| glow off, tinted | 126.7, 118.5, 115.2 |
+| glow off, untinted (the texel times the exposure) | 241.1, 225.6, 219.3 |
+| glow on, untinted | 253.5, 242.3, 235.5 |
+
+**Tinted over untinted, glow off, is 0.5255 (R) and 0.525 (G): `134 / 255 = 0.5255`**, in
+the encoded output. The live law (renderer.md, "The sky law, read off live draws",
+measured on four circuits in 2026-10-08) is `texel * (byte / 255) ^ (1 / 2.2)` in display
+terms, 0.746 at 134. So ours applied the authored byte in the display domain. The reason
+is in the shader, not the loader: the sky's faces upload raw (`Rgba8Unorm`), its corners
+carry `lit` 0.0, and `shade.wesl`'s stand-in path multiplies `texel * colour` on the encoded
+texel and decodes to light afterwards. The loader handed it `byte / 255`, the linear-light
+value. `0.525 / 0.746 = 0.704` is the predicted shortfall; the box read 0.677 with the bloom
+in. The exposure is not the stage: it is 1.0 on both renders (the ratio is exact, which a
+moving exposure would break), and the texel itself is not short (untinted, glow off, it
+reads 241 against theirs' 206).
+
+**Confidence 95** that ours mis-applied the tint's domain (the ratio, and the code path read).
+The law itself keeps its 2026-10-08 evidence.
+
+**The 2026-10-08 port table** in renderer.md ("Port: before and after") read Talon's
+Junction at x0.93 of the law after the port, where this measurement says ours sat at
+`(128/255)^(1 - 1/2.2) = 0.69` of it. No commit after the port changed the sky's shading
+domain (`git log -p fe5313ff3..0e678255a` on `shade.wesl` and `sky_cube.rs`), and the
+stand-in path's gamma multiply dates from `acccdfabb` (2026-08-20), so the table did not
+measure what it says; how its renders were made is not recorded well enough to say why.
+
+### The fix
+
+`oag_mesh::mesh::sky_cube::build` keeps taking the measured linear-light tint, `byte / 255`,
+and writes the cube's corners as `tint ^ (1 / 2.2)`, the factor the encoded texel is
+multiplied by. Scoped to the sky's own builder: every other model on the stand-in path
+(Pulse's prelit colours, authored in the gamma domain) is unchanged, and the Zone sky and
+untinted callers pass `[1.0; 3]`, which the conversion leaves at 1. Tests that fail without
+it: `sky_cube`'s `the_vertex_colour_is_the_displayed_factor_the_live_draw_shows` (0.736 at
+128, 0.765 at 140, the live draw's numbers, within 0.01) and `hd_sky_tint_ground_truth`
+(the loaded cube's corners are `(byte / 255) ^ (1 / 2.2)` on four circuits).
+
+### Second circuit, Talon's Junction (byte 128)
+
+`hd/talons`, a cloud box (1090, 130, 190, 80): theirs 132.3, 159.6, 172.0; ours before
+91.1, 108.6, 117.0 (grey -49.1); after 129.4, 155.0, 166.9 (**-4.2**). A higher box
+(1100, 20, 180, 40): -47.8 to -1.3. Independent of Vineta: a different byte, a different
+archive (`DATA00` against `DATA02`) and a different sky texture.
+
+### The 13 pairs
+
+`scripts/compare-rerender-ours.py --no-page` over a copy of `data/reference/compare-page/hd/*`,
+the script's mean grey difference over the whole frame, before (`0e678255a`) and after:
+
+| Pair | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| `hd/anulpha-pass` | 10.06 | 10.06 | +0.00 |
+| `hd/chenghou-project` | 6.76 | 6.76 | +0.00 |
+| `hd/metropia` | 8.48 | 8.48 | +0.00 |
+| `hd/moa-therma` | 9.27 | 9.27 | +0.00 |
+| `hd/modesto-heights` | 13.81 | 10.15 | -3.66 |
+| `hd/sebenco-climb` | 8.59 | 8.59 | +0.00 |
+| `hd/sol-2` | 7.82 | 7.82 | +0.00 |
+| `hd/talons` | 7.93 | 5.72 | -2.21 |
+| `hd/talons-assegai-c1` | 8.32 | 6.15 | -2.17 |
+| `hd/tech-de-ra` | 12.27 | 12.27 | +0.00 |
+| `hd/the-amphiseum` | 10.10 | 10.09 | -0.01 |
+| `hd/ubermall` | 9.35 | 9.35 | +0.00 |
+| `hd/vineta-k` | 16.46 | 10.93 | -5.53 |
+
+None worse. The pairs that move are the circuits that author `Sky colour` under 255 and show
+sky; the 255 circuits are bit-identical (`x ^ (1/2.2)` is 1 at 1). `hd-race/talons-pack`, the
+one moving pair, shows no sky and stays at 46.60. A moving frame of ours on Vineta K
+(autopilot, 522 km/h, race clock 0.04.2, 1920x1080, read at full size) shows the pale warm
+sky the original's grid frame has, where the old build drew it a flat grey; the track box
+(800, 500, 300, 200) moved 0.9 grey darker, the whole frame 4.0 brighter.
+
+### What is left, and not tone
+
+- **The sky's residual, -8.5 to -9.4 grey.** The texel and the tint now match the law, so
+  this sits in the bloom's share of the sky (the sky's glow mask is its fourth byte, 16 on
+  Vineta K) or in the adaptation. The held adaptation patch (encoded against linear, "Decide
+  the adaptation law" above) was not tried here: the claim's bound holds without it and the
+  question it needs is the console's, not this pair's.
+- **The right-hand building's horizontal bands** (box (1500, 280, 350, 40): theirs 67.5,
+  59.3, 47.4; ours 98.5, 89.9, 78.6 before and 97.2, 88.7, 77.3 after, +30 grey) are cream
+  white and sunlit in ours and dark in the original. Glow off they are still +23, and
+  skipping every material matching `lightstrip` removes only the blue strip, not the bands,
+  so this is a lit surface family's shading (sun, specular or shadow), not the exposure and
+  not an emissive. It is most of what still reads as "the light looks different" on this
+  pair. Not investigated further; the next step is a slot mask (`OAG_TINT_MATERIALS=1`,
+  `hd_slot_list`) to name the material.
+
+### Omega
+
+**Checked, differs.** Omega's Vineta K (`data01.psarc`) draws its sky as 2048's `SkyCube`
+dome (`SkyCube/*.rcsmaterial`, `SkyCube_Vineta_K_*.gnf`), which this engine reads through
+`psp2_sky_model`, not the cube this fix touches, and its `track.EnvSettings` authors no `Sky
+colour` at all: it has `Sky brightness` 3, `Sky scale` 3.5 and `Sky height offset` 0, whose
+consumer is unlocated. So the tint law does not carry over, and Omega's sky brightness is a
+separate open question.

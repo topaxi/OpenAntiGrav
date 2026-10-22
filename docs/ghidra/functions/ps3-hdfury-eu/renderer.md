@@ -7682,6 +7682,15 @@ So the displayed sky is `texel * (byte / 255) ^ (1 / 2.2)`: the colour is a **li
 | Talon's Junction | 128 | x1.38, error 0.178 | **x0.93, error 0.034** |
 | The Amphiseum | 140 | x2.59, error 0.171 | x1.33, error 0.037 (night: ours 0.077 against 0.057 at the dark end) |
 
+**Correction (2026-10-22, `hd-tone-vineta`): the port did not implement the law.** The
+cube's vertex colour multiplies the *encoded* texel on `shade.wesl`'s stand-in path (raw
+`Rgba8Unorm` faces, `lit` 0.0), so `byte / 255` displayed as `texel * byte / 255`, not
+`texel * (byte / 255) ^ (1 / 2.2)`: measured on Vineta K (134) with the glow off, tinted
+over untinted sky reads 0.5255 against `134 / 255`. The "After" column above does not
+reproduce (Talon's sat at about 0.69 of the law, not 0.93). The corners now carry
+`(byte / 255) ^ (1 / 2.2)`; see
+[hd-track-tone.md](../../../rendering/hd-track-tone.md#vineta-ks-sky-was-dark-because-ours-tinted-the-encoded-texel-2026-10-22-hd-tone-vineta).
+
 **Gamma is in the ADDRESS word, and the older "settled negative" looked in `FILTER`.** The live `0x1a08` word of the sky faces is `0x60730303` and of a mesh's diffuse unit `0x60710101` (bits 20-22 = 7: R, G, B gamma), while that mesh's units 1 and 2 read `0x60010101` (nibble 0): the decode is a per-unit choice. `Texture_BuildGcmRegisters` (`0x005a9998`, decompiled again here) writes `+0x28` as `0x60030303` (or `0x60031303`) - nibble 0 - so the `0x700000` is ORed on after the builder, by code not located (the sky binder `0x005e5858` is the first place to look). This is the *input* end the 2026-09-06 entry ("Per-texture sRGB/`GAMMA` decode: settled negative", which searched `FILTER`'s top nibble only) could not see; it is consistent with ADR-0026's linear scene. Confidence 90 that the live word carries the bits on these draws, 0 on who sets them.
 
 **Open, in order.** (1) The race-start exposure transient: a scene-target dump at `0.00.3` on Sol 2 would turn the inference above into a measurement and give the adaptation's start value for `oag-post`. (2) Amphiseum's dark end is 0.02 high in ours (sRGB near black, or the ambient on the unlit cube); Talon's is 7 % low, Sebenco and Sol 2 2 % high: all inside this project's exposure model, not the sky. (3) The six 7-index draws are issued twice a frame, the first into the 640x360 `R5G6B5` target; nothing reads it on Sebenco, and `hd-behind-glass` found the glass circuits read it: untouched here.
