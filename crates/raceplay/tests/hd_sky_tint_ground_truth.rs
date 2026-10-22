@@ -89,6 +89,7 @@ fn the_sky_writes_its_fourth_byte_as_the_glow_mask() {
             ..race::Options::default()
         })
         .expect("loading the race");
+        coverage_draws_are_cutouts(&loaded.track_model);
         let sky = loaded.sky_model.as_ref().expect("the circuit's sky loads");
         assert!(sky.glow_from_program, "the sky's mask is its own program's");
         sky.vertices[0].glow
@@ -116,5 +117,20 @@ fn the_sky_writes_its_fourth_byte_as_the_glow_mask() {
         ),
         0.0,
         "the Zone sky's branch masks alpha off"
+    );
+}
+
+/// The race loader honours HD's render-state rule
+/// (`oag_title::Looks::material_render_state`) on the circuit it loads: no
+/// draw whose material state carries bit 7 is left blended, and those it moved
+/// are cutouts. Dropping the loader's call leaves them in the blended list.
+fn coverage_draws_are_cutouts(model: &oag_mesh::mesh::Model) {
+    let coverage = |d: &&oag_mesh::mesh::DrawCall| {
+        model.state_of(d.texture) & oag_mesh::mesh::render_state::STATE_COVERAGE != 0
+    };
+    assert_eq!(model.transparent_draws.iter().filter(coverage).count(), 0);
+    assert!(
+        model.alpha_tested_draws.iter().filter(coverage).count() > 0,
+        "the circuit's coverage materials draw among the cutouts"
     );
 }
