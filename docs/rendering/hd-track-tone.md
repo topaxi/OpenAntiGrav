@@ -700,7 +700,9 @@ adds it; the units' gamma nibbles were not read live (**chosen, not measured**: 
 | whole-frame mean grey difference | | 6.760 | 6.697 |
 
 The tower's faces now carry the green strips the original shows, but **the box reads 4 grey brighter than either the original or
-ours before**: the sky term through `1 - T.a` lifts the unlit panes. Metropia 8.432 to 8.427; the other HD pairs unchanged, Pulse PSP and
+ours before**. Measured in steps: the picture and the reflection alone gave 57.6, the glow adds 1.3 more; zeroing the renderer's own
+specular (which this program does not have) left the box at 58.9, so it is not the cause. The excess is the picture-plus-reflection
+term and the glow, whose split between the reflection's brightness and the units' gamma is unread. Metropia 8.432 to 8.427; the other HD pairs unchanged, Pulse PSP and
 Omega byte-identical. **Left open**: the reflection's brightness on these panes (the `N` of a far facade and the sky unit's live gamma
 were not dumped), and Metropia's `@0x18350` block, assumed the same law.
 
