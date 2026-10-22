@@ -976,3 +976,74 @@ dome (`SkyCube/*.rcsmaterial`, `SkyCube_Vineta_K_*.gnf`), which this engine read
 colour` at all: it has `Sky brightness` 3, `Sky scale` 3.5 and `Sky height offset` 0, whose
 consumer is unlocated. So the tint law does not carry over, and Omega's sky brightness is a
 separate open question.
+
+## HD's blends combine encoded values: the packer runs before the blend (2026-10-22, `hd-blend-space`)
+
+**Claim**: a blended HD draw is combined with what the scene target already holds in
+display (gamma-encoded) values, not in linear light. **True for the reference frames,
+confidence 85.**
+
+**The register read.** Every draw into the race's scene target (`SET_SURFACE_COLOR_AOFFSET`
+`0xf50000`, format word `0x3148`: colour format 8, `A8R8G8B8`, two-sample) on three
+existing RPCS3 frame dumps (a Talon's Junction pack frame, a hull-brightness frame and a
+start-gantry frame; `scripts/rpcs3_draw_hook.py`'s `draws_of`) carries
+`SET_SHADER_PACKER` (`0x1fec`) = 1 and `SET_SHADER_CONTROL` (`0x1d60`) with no 32-bit
+exports (low byte 0, or `0x0e` on one draw). The blended ones among them use
+`SET_BLEND_EQUATION` `0x80068006` (`FUNC_ADD` on colour and alpha) with, per frame:
+
+| `SET_BLEND_FUNC_SFACTOR` / `DFACTOR` | meaning (colour) | draws (three frames) |
+| --- | --- | --- |
+| `0x3020302` / `0x3030303` | `SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA` | 52, 42, 48 |
+| `0x3020302` / `0x10001` | `SRC_ALPHA`, `ONE` | 44, 9, 19 |
+| `0x10001` / `0x10001` | `ONE`, `ONE` | 12, 16, 16 |
+| `0x302` / `0x3030303` | `SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA` (alpha `ZERO`) | 19, 0, 12 |
+| `0x10001` / `0x3030303` | `ONE`, `ONE_MINUS_SRC_ALPHA` | 6, 1, 1 |
+
+No blended scene draw uses a destination-alpha factor.
+
+**Where the encode sits.** `SET_SHADER_PACKER` is the fragment output packer: the sRGB
+encode is applied to the program's colour output **before** the blend unit sees it, and the
+blend then adds or mixes the encoded source with the encoded bytes already in the
+`A8R8G8B8` target. RPCS3, which made every reference frame, implements exactly that: its
+fragment epilogue (`RSXROPEpilogue.glsl`, `_ENABLE_FRAMEBUFFER_SRGB`) applies
+`linear_to_srgb` to `col0..col3` in the shader when the packer is non-zero and the program
+does not export 32-bit registers (`RSXThread.cpp`), and the attachment is
+`VK_FORMAT_B8G8R8A8_UNORM` (`VKGSRender.cpp`), so the fixed-function blend runs on encoded
+values. Alpha is not encoded. (The earlier wording "the ROP encodes sRGB on write" in
+renderer.md, "`SET_SHADER_PACKER`", is the same register; the encode is per fragment, ahead
+of the blend, not after it.) The console's own G70-class RSX is a pre-Direct3D-10 part, and
+the inference that it, too, encodes before blending rather than linearising the destination
+is not measured here; the confidence is for the reference frames.
+
+So for the race's scene target:
+
+```text
+stored' = enc(src.rgb) * sfactor(src.a) + stored * dfactor(src.a)      (encoded, clamped to [0,1] per draw)
+```
+
+where ours computed `enc(dec(stored) * dfactor + src.rgb * sfactor)`.
+
+**The discriminating fit, Talon's grill.** `scanlinebillboard` slot 435 is a `ONE`/`ONE`
+add whose program output is grey (`overlay * 0.2893 / 2`, renderer.md, "`scanlinebillboard`
+is the fourth shape"). An encoded add lifts every channel by the same `enc(src)`, whatever
+lies behind; a linear add lifts a dark channel more than a bright one. Ours with the
+material skipped (`OAG_SKIP_MATERIAL=scanlinebillboard`) stands in for the destination:
+
+| box | behind (ours, grill skipped) | theirs | theirs minus behind | ours minus behind | corr(lift, behind) R,G,B: theirs / ours |
+| --- | --- | --- | --- | --- | --- |
+| 790,10 60x200 | 49.9, 101.4, 122.4 | 104.9, 157.7, 180.1 | **+55.0, +56.3, +57.7** | +53.5, +29.6, +24.6 | -0.05, 0.07, 0.04 / -0.48, -0.18, -0.09 |
+| 800,130 50x80 | 40.7, 102.4, 124.1 | 101.2, 162.7, 185.2 | **+60.4, +60.3, +61.1** | +56.8, +27.6, +22.9 | 0.07, 0.21, 0.09 / -0.66, -0.30, -0.27 |
+
+The original's lift is grey and uncorrelated with what is behind it; ours, with a grey
+linear source of about 0.092 on every channel, is not. For a linear add to give theirs, the
+source would have to be 2.6 times bluer than red (0.112 against 0.289 linear in the
+smaller box), against a grey program. The size is close but not exact: ours' source
+encoded is `+84` on every channel against theirs `+60`, so about half of ours' linear
+source would fit. The advert's phase (the scanlines move with the clock) and the program's
+`/2` are the candidates for that remainder; the old "the original's add is about 3x the
+program's" note in renderer.md was this encode (0.1 linear is 0.35 encoded).
+
+**Other titles.** Pulse renders into an 8-bit gamma target already (no change). Omega's
+pixel shaders export fp16 (`v_cvt_pkrtz_f16_f32`) into a float target that its own tone map
+reads (`oag_post::omega_tonemap`), so its blends are linear: **checked, differs**. 2048 has
+no RSX; its target format is unread: **not checkable** here.
