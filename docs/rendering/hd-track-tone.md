@@ -271,7 +271,8 @@ seconds apart starting five seconds after the walk returned, then one frame of R
    **closed below (2026-10-21, `hd-blue-tone`)**: the wall programs light the
    albedo's alpha. **The pulse's colour and phase** (the chevron's emissive
    mask, `emask.a * colour * wave`) and its `+ emask.rgb` diffuse term stay
-   open and are not lighting.
+   open and are not lighting; the phase, the blocker and the routes are in
+   "The chevron panel draws black" below (2026-10-22).
 4. ~~**HD's `-1.5` LOD bias** on material textures~~ **wired, held off, below**.
 
 ## The blue cast (2026-10-21, later, `hd-blue-tone`)
@@ -592,3 +593,65 @@ Omega: **not checkable** (no capture path; its HD-lineage circuits ship the cube
 
 **Open**: the shadows under the craft (the original's is harder), the teal advert wall at the top right (ours 28 grey brighter in its cell, a material not found by slot
 bisection this lane), the normal map on the glass, and the other reflection-reading families above.
+
+## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
+
+**Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws
+black in ours because `cf_chevron_pulse`'s emask and wave terms are not drawn. **True; cause measured, not wired.**
+
+**Where.** Box `180,600 200x80` (the panel, away from the craft): mean absolute grey difference **27.90**, unchanged at the
+end of this lane. A slot-skip sweep over that box in a tint render (`OAG_TINT_MATERIALS=1`, `OAG_SKIP_SLOT`) names one slot:
+**442**, `cf_chevron_pulse` / `ds_wallchevron_sc` (box change 76.5; nothing else above 0.5). Mean RGB in a 120x40 box inside
+the panel (`220,620`): the original `(3, 38, 16)` (a green outline over a near-black fill), ours `(0, 0, 0)`.
+
+**Why it is black.** The program lights the albedo's **alpha** (`slots::LIT_ALPHA`, "The blue cast" above) and
+`ds_wallchevron_sc`'s alpha is 0 inside both chevrons; the picture there is the emask's, unit 2 (`ds_wallchevron_emask`, 1024x512
+DXT5: RGB a blue hexagon fill, alpha the hexagon outline, both 0 outside the chevrons). Block #7 `@0xf6d0` of
+`15_anulpha_pass/materials/cf_chevron_pulse.rcsmaterial` (`scripts/ps3-microcode.py fp-file`):
+
+```text
+@0x15  TEX H6, f[TC4] unit2                     e = emask
+@0x16  MUL H7.xyz, H6.wwww, [0x02ab9f07]        e.a * Colour          (record: (0, 1, 0))
+@0x27  MAD R0.xy, uv, [0x220cf0e6], [0xa6f5352f].yy   uv * k + offset (record: k 0.2, offset 0)
+@0x2f  TEX H0.xyz, R0 unit4                     w = ds_wave_c (512x512 DXT1, one bright horizontal band)
+@0x37  MUL H7.xyz, H7, H0                       the outline
+@0x43  ADD H6.xyz, H4.wwww, H6                  albedo.a + e.rgb
+@0x44  MAD H5.xyz, H2, H6, H7                   light * that + outline
+@0x49  MAD H2.xyz, H2, H4, H5                   + specular * albedo.rgb
+@0x4a  MAD /2 H0.xyz, fog, H2, fogColour
+```
+
+**The sweep is authored (confidence 85).** `0xa6f5352f` is `~crc32("offset")` (`scripts/ps3-sho.py hash offset`), a material
+parameter the record authors as 0, and **the material's own Edge Animation curve drives it**: one channel, hash `0xa6f5352f`
+component 0, sampled through `rcsmodel::material::Curve::sample` at 0, 0.5, 1, 2, 2.9, 3.0, 3.1, 4.5 s as 0, 0.1667, 0.3333,
+0.6667, 0.9667, 0, 0.0333, 0.5: `offset = fract(t / 3)`, the same on all eight `cf_chevron_pulse` slots of Anulpha's
+`track.vex` (441, 442, 474, 475, 480, 481, 483 and the reversed copies); `chevron_pulse` (445, 477, 482) carries no curve.
+`curve_track::UvCurveTrack` reads only `uvOffset`/`uvScale` channels, so this one is dropped today. **Which clock a scenery
+curve runs on is not measured** (the gantry board's is, `crates/raceplay/src/gantry/clock.rs`; this is a different material),
+so the outline's strength at the pair's instant cannot be predicted yet: the original's outline is at full strength there.
+
+**The blocker: five textures, four bindings.** The program samples albedo (unit 0), normal map (unit 1, `ds_wallchevron_n`),
+emask (2), lightmap atlas (3) and wave (4). Ours binds albedo, atlas, the **normal map in the third binding**
+(`hull_normal`, which reads only its `xyz`) and has the fourth free. A prototype that put the emask in the third binding drew
+the panel (box 27.90 to about 19) but took the normal map from every `cf_chevron_pulse` wall: the left wall's box
+`50,800 300x150` went from `(28, 34, 38)` to `(48, 60, 64)` against the original's `(22, 30, 36)`, and the whole frame from
+12.62 to 16.15. It was reverted. The prototype's renders all ran with that wrong normal, so they say nothing about the emask
+and wave's gamma (their address words were not read; the albedo unit's is 7).
+
+**Routes, for whoever wires it** (one is a renderer decision, so none was taken here):
+
+1. **Pack `emask.a` into the normal map's alpha.** Both are 1024x512 at the same coordinate (`f[TC4]`); the normal is DXT1 with
+   no alpha and the shader reads `xyz` only. Decode both to RGBA8 at load, put the result in the third binding, the wave in the
+   fourth. `emask.rgb` (the `+ e.rgb` fill) then has no home: draw without it and say so in the load report. It is the dimmer
+   term: the original's fill is near black.
+2. **A fifth texture binding** in the material group, which every pipeline variant and the bindless arrays carry.
+3. **Let the chevron claim the third binding before `hull_normal`**, as the magstrips' emissive picture does; this drops the
+   normal map, which the wall measurement above shows is visible.
+
+The outline's phase would ride as an `AnimTrack` that plays the `offset` channel (a vertex `anim` of 0, its row named by the
+slot's glow-table entry), with the vertex stage writing `uv * k + offset(t)` into the chunk's unused `lightmap_texcoord.zw`:
+the animation table is a vertex-stage binding and the coordinate is linear in `uv`.
+
+**Other titles.** Omega ships `cf_Chevron_Pulse{,_1,_2,_Displacement2Out*}` and `Chevron_Pulse*` (section above); its
+programs are GCN and unread: **checked, applies, not wired**. 2048 ships the `ds_wallchevron` textures as `.gxt` (above) and no
+RSX program: **not checkable**.
