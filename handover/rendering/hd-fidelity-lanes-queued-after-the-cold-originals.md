@@ -45,6 +45,13 @@ stand-in and +70 grey too bright over the start gantry (box `840,0 240x120`); th
 the whole of `hd/the-amphiseum`'s +0.42 (10.09 to 10.51). With the material skipped the box is within 9 grey of the
 original. Next: read its fragment program.
 
+**HD's unlit programs read their taps raw** (2026-10-22, `hd-blend-space`): with the scene now stored encoded, an
+additive source that was too strong shows more. `holo.wesl` was fixed from a live read (units 0-2 at gamma nibble 7);
+the Bomb's fireball (`slots::BOMB_FIRE`) and the other unlit programs in `shade.wesl` still use raw texels as light.
+The Bomb's rings now burn white at 1.8 s, with no original frame to judge them. Next: one RPCS3 frame of a Bomb blast
+at about 1.8 s with `scripts/hd-draw-dump.py`, reading the fireball and ring draws' unit nibbles, then the decode where
+the console does it (docs/rendering/hd-track-tone.md, "What is left").
+
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
 textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which is WebGPU's and GL's ceiling. A seventh material
 texture or another group-2 texture needs another fold first: candidates are the shadow coverage and depth pair (a tier reads

@@ -1133,5 +1133,15 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
   The original draws it as a pale, see-through scanline grid with no logo; ours draws the
   texture's logo, saturated. Its program is unread. Next: read that program's fragment
   block and its units' gamma nibbles on a live Modesto frame.
+- **Weapon effects are stronger.** Every additive weapon draw now adds its authored display
+  value rather than its linear value. The Bomb's rings at 1.8 s burn through to white where
+  they drew yellow (`hd_bomb_blast_ground_truth` re-derived on the new build), and a rocket's
+  detonation glare is whiter. There is no original frame of either. The falsifier is an
+  RPCS3 capture of the Bomb's rings at about 1.8 s. The fireball's program
+  (`slots::BOMB_FIRE` in `shade.wesl`) reads its three taps raw as light, as `holo.wesl`
+  did before its units' gamma nibbles were read; the nibbles of its units on a live blast
+  are the next read. Three additive sources measured too strong under this law (the grill,
+  the hologram, possibly the Bomb) point at the same pattern: HD's unlit programs reading
+  taps raw where the console decodes them.
 - `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
   change; it is not exercised by any of the 13 pairs.
