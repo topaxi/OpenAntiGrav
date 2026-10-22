@@ -14,9 +14,10 @@
 //! `(255, 255, 255, 0)` on Sol 2 and Sebenco Climb, `(128, 128, 128, 0)` on
 //! Talon's Junction and `(140, 140, 140, 0)` on The Amphiseum, with a fragment
 //! program that is `tex * COL0` and nothing else (`renderer.md`, "The sky law,
-//! read off live draws"). So the tint is `byte / 255`
+//! read off live draws"). So the tint is `byte / 255` in linear light
 //! ([`oag_mesh::mesh::sky_cube::SKY_COLOUR_FULL`]): 255 leaves the texture
-//! alone and 128 halves it in linear light. The `byte / 128` fit this replaced
+//! alone and 128 halves it. The corners carry it as the displayed factor
+//! `(byte / 255) ^ (1 / 2.2)`, since the sky multiplies the encoded texel. The `byte / 128` fit this replaced
 //! doubled Sol 2's sky and Sebenco's; dropping the tint from the loader leaves
 //! every circuit at 1.0 and fails the Talon's and Amphiseum assertions.
 
@@ -53,7 +54,17 @@ fn the_sky_tint_is_the_authored_byte_over_255() {
         let Some(tint) = sky_tint(track, oag_race::Mode::SingleRace) else {
             return;
         };
-        assert_eq!(tint, [byte / 255.0; 3], "{track} authors Sky colour {byte}");
+        // The corners carry the displayed factor, `(byte / 255) ^ (1 / 2.2)`,
+        // because the sky multiplies the encoded texel (`sky_cube`'s
+        // `tint_in_texel_domain`); the live draw shows 0.736 at 128 and 0.765
+        // at 140.
+        let displayed = (byte / 255.0f32).powf(1.0 / 2.2);
+        for c in tint {
+            assert!(
+                (c - displayed).abs() < 1e-6,
+                "{track} authors Sky colour {byte}: corner {c}, displayed {displayed}"
+            );
+        }
     }
 }
 

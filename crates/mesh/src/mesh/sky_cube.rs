@@ -45,9 +45,11 @@ const HALF_EXTENT: f32 = 32.0;
 /// the displayed sky is `texel * (byte / 255) ^ (1 / 2.2)` in display terms:
 /// `1.00` at 255 (Sebenco, Sol 2: 0.996 to 1.001 of the texel over 62,000 and
 /// 64,000 sky pixels), `0.736` against `0.730` predicted at 128 and `0.765`
-/// against `0.761` at 140. This engine's HD scene is linear and its sky
-/// textures decode as sRGB, so the same `byte / 255` multiplied in linear
-/// light is the same law.
+/// against `0.761` at 140. This engine's sky textures upload raw and its
+/// sky multiplies the encoded texel, so [`build`] hands the shader the
+/// displayed factor `(byte / 255) ^ (1 / 2.2)`, not `byte / 255` itself
+/// (corrected 2026-10-22, `hd-tone-vineta`: the earlier note here said the
+/// multiply was in linear light, and it never was).
 ///
 /// What this retires: the earlier `byte / 128` fit, which read 255 as a
 /// doubling. That doubling was real in the matched frames and is not the sky's:
@@ -81,11 +83,12 @@ const CORNERS: [(f32, f32); 4] = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 
 
 /// Builds a camera-centred cube from a `.gtf` cubemap.
 ///
-/// `tint` is the vertex colour of all 24 corners, multiplied into the texel
-/// (HD's own sky draw passes the circuit's `Lighting.Sky colour` as the cube's
-/// vertex colour, `FUN_005ecc28`). [`SKY_COLOUR_FULL`] says what that colour
-/// is in these units; `[1.0; 3]` is no tint, which is what Zone's file swap and
-/// every caller without an authored colour pass.
+/// `tint` is the circuit's `Lighting.Sky colour` in linear light, `byte /
+/// 255` (HD's own sky draw passes it as the cube's vertex colour,
+/// `FUN_005ecc28`). The corners carry it as [`tint_in_texel_domain`]
+/// converts it, because this engine multiplies the encoded texel; `[1.0; 3]`
+/// is no tint, which is what Zone's file swap and every caller without an
+/// authored colour pass.
 ///
 /// `rotation_degrees` is the circuit's `Lighting.Sky rotation`, applied about
 /// the world's vertical. **Degrees is read off the corpus rather than assumed**:
@@ -172,6 +175,7 @@ pub fn build(
     }
     let (width, height) = texture.level_size(0);
 
+    let colour = tint_in_texel_domain(tint);
     let (sin, cos) = rotation_degrees.to_radians().sin_cos();
     let turn = |p: [f32; 3]| [p[0] * cos + p[2] * sin, p[1], p[2] * cos - p[0] * sin];
 
@@ -205,7 +209,7 @@ pub fn build(
                 // sky, the same way Pulse's own sky meshes are authored
                 // `_nolight`. A sky is a picture of light, not a surface.
                 normal: [-major[0], -major[1], -major[2]],
-                colour: [tint[0], tint[1], tint[2], 1.0],
+                colour: [colour[0], colour[1], colour[2], 1.0],
                 texcoord: [(sc + 1.0) / 2.0, (tc + 1.0) / 2.0],
                 lit: 0.0,
                 anim: 0,
@@ -292,6 +296,21 @@ pub fn build(
     })
 }
 
+/// The sky's linear-light `tint` as the vertex colour its shading path reads.
+///
+/// **The colour multiplies the encoded texel, so it is the displayed factor,
+/// `tint ^ (1 / 2.2)`** (2026-10-22, `hd-tone-vineta`). The sky's textures
+/// upload raw (`Rgba8Unorm`) and `lit` 0.0 sends it down `shade.wesl`'s
+/// stand-in path, `texel * colour` in the gamma domain, decoded to light only
+/// afterwards. Handed `byte / 255` itself, that path displayed
+/// `texel * byte / 255`: Vineta K's 134 at 0.525 of the texel where the live
+/// draw shows 0.746, and its sky 63 grey under the original's. Measured on
+/// this tree with the glow off, tinted over untinted sky: 0.5255 on R, 0.525
+/// on G, against `134 / 255 = 0.5255`.
+fn tint_in_texel_domain(tint: [f32; 3]) -> [f32; 3] {
+    tint.map(|t| t.max(0.0).powf(1.0 / 2.2))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,6 +352,24 @@ mod tests {
         for &face in &[0usize, 1, 4, 5] {
             let (_, _, t_axis) = FACES[face];
             assert_eq!(t_axis, [0.0, -1.0, 0.0], "face {face}");
+        }
+    }
+
+    /// The live draw's displayed factors (renderer.md, "The sky law, read off
+    /// live draws"): 0.736 at 128 (Talon's Junction) and 0.765 at 140 (The
+    /// Amphiseum), 1.00 at 255. The vertex colour multiplies the encoded
+    /// texel, so it must be that factor, not `byte / 255`; dropping the
+    /// conversion puts 128 at 0.502 and fails here.
+    #[test]
+    fn the_vertex_colour_is_the_displayed_factor_the_live_draw_shows() {
+        for (byte, displayed) in [(128.0f32, 0.736f32), (140.0, 0.765), (255.0, 1.0)] {
+            let colour = tint_in_texel_domain([byte / SKY_COLOUR_FULL; 3]);
+            for c in colour {
+                assert!(
+                    (c - displayed).abs() < 0.01,
+                    "byte {byte}: {c} against {displayed}"
+                );
+            }
         }
     }
 }
