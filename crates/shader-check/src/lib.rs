@@ -198,11 +198,103 @@ pub fn validate(source: &str, path: &str) -> Result<(), Problem> {
     })?;
     Validator::new(ValidationFlags::all(), capabilities(source))
         .validate(&module)
-        .map(|_| ())
         .map_err(|e| Problem {
             message: e.emit_to_string_with_path(source, path),
             range: e.spans().next().and_then(|(span, _)| span.to_range()),
-        })
+        })?;
+    if let Some(message) = binding_array_element_argument(&module) {
+        return Err(Problem {
+            message: format!("{path}: {message}"),
+            range: None,
+        });
+    }
+    Ok(())
+}
+
+/// A call that passes an element of a binding array as an argument, if there is one.
+///
+/// `naga` accepts it and `wgpu` hands the SPIR-V to the driver, whose
+/// `spirv-val` then rejects it: the writer declares a texture or sampler
+/// *parameter* as a pointer, passes a global as that pointer, but passes
+/// `textures[i]` as the value it loaded, so the call's argument type does not
+/// match its function's (`OpFunctionCall Argument ... type does not match`).
+/// Naga's validator does not see the difference, so this does: a function that
+/// needs a binding-array element names which one instead of taking it.
+fn binding_array_element_argument(module: &naga::Module) -> Option<String> {
+    let entries = module.entry_points.iter().map(|entry| &entry.function);
+    for function in module.functions.iter().map(|(_, f)| f).chain(entries) {
+        let mut found = None;
+        scan_calls(&function.body, &mut |callee, arguments| {
+            for &argument in arguments {
+                if found.is_none() && is_binding_array_element(module, function, argument) {
+                    let callee = module.functions[callee].name.as_deref().unwrap_or("?");
+                    let caller = function.name.as_deref().unwrap_or("?");
+                    found = Some(format!(
+                        "`{caller}` passes an element of a binding array to `{callee}`; naga's SPIR-V writer \
+                         loads it to a value but declares the parameter as a pointer, which spirv-val rejects \
+                         - pass an index and let `{callee}` read the array"
+                    ));
+                }
+            }
+        });
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
+}
+
+/// What [`scan_calls`] reports: the callee and the argument expressions of one call.
+type OnCall<'a> = dyn FnMut(naga::Handle<naga::Function>, &[naga::Handle<naga::Expression>]) + 'a;
+
+fn scan_calls(block: &naga::Block, on_call: &mut OnCall) {
+    use naga::Statement;
+    for statement in block.iter() {
+        match statement {
+            Statement::Call {
+                function,
+                arguments,
+                ..
+            } => on_call(*function, arguments),
+            Statement::Block(inner) => scan_calls(inner, on_call),
+            Statement::If { accept, reject, .. } => {
+                scan_calls(accept, on_call);
+                scan_calls(reject, on_call);
+            }
+            Statement::Switch { cases, .. } => {
+                for case in cases {
+                    scan_calls(&case.body, on_call);
+                }
+            }
+            Statement::Loop {
+                body, continuing, ..
+            } => {
+                scan_calls(body, on_call);
+                scan_calls(continuing, on_call);
+            }
+            _ => {}
+        }
+    }
+}
+
+fn is_binding_array_element(
+    module: &naga::Module,
+    function: &naga::Function,
+    expression: naga::Handle<naga::Expression>,
+) -> bool {
+    use naga::Expression;
+    let (Expression::Access { base, .. } | Expression::AccessIndex { base, .. }) =
+        function.expressions[expression]
+    else {
+        return false;
+    };
+    let Expression::GlobalVariable(global) = function.expressions[base] else {
+        return false;
+    };
+    matches!(
+        module.types[module.global_variables[global].ty].inner,
+        naga::TypeInner::BindingArray { .. }
+    )
 }
 
 /// The shader capabilities `source` is validated under: none, unless it opts

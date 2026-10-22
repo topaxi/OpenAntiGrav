@@ -77,3 +77,29 @@ fn a_failure_in_a_linked_module_names_the_module_and_its_declaration() {
         "{text}"
     );
 }
+
+const BINDING_ARRAY: &str = "enable wgpu_binding_array;\n\
+@group(0) @binding(0) var textures: binding_array<texture_2d<f32>>;\n\
+@group(0) @binding(1) var one: sampler;\n\
+fn tap(t: texture_2d<f32>, s: sampler) -> vec4<f32> { return textureSampleLevel(t, s, vec2<f32>(0.5), 0.0); }\n\
+@fragment\n\
+fn fs() -> @location(0) vec4<f32> { let t = textures[1]; return CALL; }\n";
+
+#[test]
+fn a_binding_array_element_passed_to_a_function_is_a_problem() {
+    let source = BINDING_ARRAY.replace("CALL", "tap(t, one)");
+    let problem = validate(&source, "b.wgsl").unwrap_err();
+    assert!(
+        problem
+            .message
+            .contains("`fs` passes an element of a binding array to `tap`"),
+        "{}",
+        problem.message
+    );
+}
+
+#[test]
+fn a_binding_array_element_sampled_where_it_is_read_is_fine() {
+    let source = BINDING_ARRAY.replace("CALL", "textureSampleLevel(t, one, vec2<f32>(0.5), 0.0)");
+    assert!(validate(&source, "b.wgsl").is_ok());
+}
