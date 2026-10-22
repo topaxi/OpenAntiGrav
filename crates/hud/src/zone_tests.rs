@@ -51,6 +51,7 @@ fn a_rotation_is_read_in_either_spelling_and_reaches_the_draw() {
             width: 128,
             height: 128,
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         },
     )]);

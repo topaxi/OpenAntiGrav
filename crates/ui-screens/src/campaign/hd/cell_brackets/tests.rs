@@ -7,6 +7,7 @@ fn mask(src: &str) -> Option<Placed> {
         width: 16,
         height: 16,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }

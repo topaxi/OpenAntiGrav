@@ -36,6 +36,7 @@ fn with_art<R>(art: &oag_title::HudArt, f: impl FnOnce(&Context<'_>) -> R) -> R 
             width: 1024,
             height: 1024,
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         },
     )]);

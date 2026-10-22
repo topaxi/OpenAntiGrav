@@ -99,6 +99,7 @@ pub fn sheet(svg: &str) -> Sheet {
         height: RASTER_HEIGHT,
         rgba,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     }];
     images.extend(crate::touch_controls::art::images());

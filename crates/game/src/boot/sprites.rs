@@ -299,6 +299,7 @@ fn bottom_up_rows(src: &str, blob: &[u8]) -> Option<oag_hud::sprite::DecodedImag
         height: texture.height,
         rgba,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }

@@ -143,7 +143,8 @@ there, from the cited evidence.
 | --- | --- | --- |
 | `Arcade`, `Elimination` (Pulse), `TimeTrial`, `Zone` roots, `PulseHUD.mip`, `PulseHud.fnt`, `small.fnt` | wired | default, every mode (Time Trial's file also serves Speed Lap: this disc ships no `SpeedLap_HUD.xml`, [hud.md](hud.md)) |
 | `MPTag_HUD.xml` | named in `oag_pulse::hud::layouts::MP_TAG`, not drawn | multiplayer tag; this engine has no tag mode |
-| 26 `Data\HUD\*.vex` polygonal models (`Bar_1`, `Speed`, `Shield`, `Lap`, ... `Zone_Bar_*`) | unwired, no layout names them ([hud.md](hud.md)) | not determined; no `BOOT.BIN` string (confidence 70 that nothing reads them by name) |
+| `Data\HUD\Bar_1`/`Bar_3`/`Bar_outline_1` and `Zone_Bar_1`/`Zone_Bar_3`/`Zone_outline_1` (Pure's speed and shield gauge) | wired on Pure (2026-10-22): the layouts name them as `Speed3D`/`Shield3D`/`Overlay3D`, [pure-status.md](../formats/pure-status.md#the-speed-gauge-is-three-models-2026-10-22); Pulse's layouts do not | every Pure race |
+| the other 20 `Data\HUD\*.vex` polygonal models (`Speed`, `Shield`, `Lap`, ...) | unwired, no layout names them ([hud.md](hud.md)) | not determined; no `BOOT.BIN` string (confidence 70 that nothing reads them by name) |
 | PS2-only HUD `.pct` textures (19) | unwired | not determined |
 | Pilot Assist indicator | own layer: `assets/fallback/Data/XML/HUD_assist_indicator.xml` + `AssistIndicator.pix` (our art, chosen, not measured) | with the Pilot Assist option on |
 | Split-screen layout | own layer: `SplitHud_Pulse.toml` / `SplitHud_Pure.toml` (these discs author none) | two-view race |

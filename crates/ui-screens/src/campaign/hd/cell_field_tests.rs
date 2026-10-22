@@ -85,6 +85,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
             width: 8,
             height: 8,
             quad_extent: None,
+            quad_centre: None,
             blend: None,
         })
     };

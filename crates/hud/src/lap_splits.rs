@@ -181,6 +181,7 @@ mod tests {
                 width: 256,
                 height: 256,
                 quad_extent: None,
+                quad_centre: None,
                 blend: None,
             },
         )]);

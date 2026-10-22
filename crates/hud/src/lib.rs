@@ -47,6 +47,7 @@ use oag_tables::fexml::{self, Node};
 
 mod assets;
 pub mod assist;
+mod bar_models;
 mod bar_tip;
 pub mod boost_smear;
 mod compose;
@@ -997,6 +998,8 @@ pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
         && rect[1] + rect[3] <= screen.1
 }
 
+#[cfg(test)]
+mod bar_model_tests;
 #[cfg(test)]
 mod bar_tip_tests;
 #[cfg(test)]

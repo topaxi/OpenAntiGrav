@@ -158,6 +158,13 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // the icons themselves sit at `z="-10"`, in front of it) and with no
     // `colour` of its own.
     pickup_icon_backdrop_model: Some("weapon_icon_grid"),
+    // **Measured**: `TimeTrial_HUD.xml` and `Arcade_HUD.xml` author the gauge as these three
+    // models, not `<Image>` bars. See [`oag_title::BarModels`].
+    bar_models: Some(oag_title::BarModels {
+        speed: "Speed3D",
+        shield: "Shield3D",
+        outline: "Overlay3D",
+    }),
     // Pure's icons are `<Mode3D><Model>`s (the row above), not a single
     // rewritten-UV `<Image>` widget - 2048's own dialect.
     pickup_icon_uv: None,
@@ -166,7 +173,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // Unmeasured on Pure; Pulse's own reading (`true`) carries over rather
     // than guessing a change. See `oag_title::HudArt::shield_percent`.
     shield_percent: true,
-    speed_full_kmh: 600,
+    // **Measured, 700**: `Hud_UpdateSpeedBar` (`0x0881eabc`, `docs/ghidra/functions/psp-pure-usa/hud-speed-gauge.md`)
+    // divides the speed by `0x442f0000` = 700.0 and hands the quotient to the bar model.
+    speed_full_kmh: 700,
     // Measured: Pure's own plugins fill the same `HUD`/`HUDSmall` roles
     // Pulse's do, resolving to `HUDFont.fnt`/`small.fnt` rather than
     // Pulse's files - see `oag_ui::language::roles`' own doc table. See

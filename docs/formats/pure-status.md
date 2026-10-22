@@ -1554,3 +1554,39 @@ are rewards, untraced), how the profile counts medals for
 ([`ai-controls.md`](../ghidra/functions/psp-pure-usa/ai-controls.md): planned, not flown
 there yet).
 
+
+## The speed gauge is three models (2026-10-22)
+
+Pure's HUD draws its speed and shield gauge from three `<Mode3D><Model>` widgets, not from
+`<Image>` bars: `Speed3D` (`Data\HUD\Bar_1.vex`), `Shield3D` (`Bar_3.vex`) and `Overlay3D`
+(`Bar_outline_1.vex`), all at `x="394" y="20"` in `Arcade_HUD.xml` and `TimeTrial_HUD.xml`, and
+`Zone_Bar_1`/`Zone_Bar_3`/`Zone_outline_1` under the same names in `Zone_HUD.xml`. Ours drew no
+gauge on Pure until this date; `oag_title::HudArt::bar_models` carries the three names and
+`oag_raceplay::hud` rasterises each model flat into the HUD sheet (the HUD's own orthographic pass
+at one unit per pixel, `y` up from the screen's bottom). Evidence: the executable's
+`Hud_UpdateSpeedBar` and `Hud_UpdateEnergyBar`
+([`hud-speed-gauge.md`](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md)) and the four pairs
+in `data/reference/compare-page/pure-psp/`.
+
+| Claim | Measured | Confidence |
+| --- | --- | ---: |
+| the gauge is these three models, the outline carries both boxes and the `km/h` caption | layouts, model census | 95 |
+| the speed fill is `speed / 700` of the mesh's width, from the left | `0x0881eabc` reads `lui 0x442f`; the crop is read off the model's texture track | 85 |
+| the shield fill is the eased shield percent over 100 | `0x0881f13c` | 80 |
+| `SpeedR` carries the last two digits of `%.0f` of the speed, `SpeedL` the rest | `0x0881eabc` | 85 |
+
+**Box, per pair** (yellow outline's bounding box, theirs and ours identical on all four, 345 pixels each):
+`(309, 239)-(477, 252)`; the shield fill `(309, 255)-(474, 263)`; the readout `0` at `SpeedR`'s
+`x = 436`. Whole-frame mean grey, theirs / ours before / ours after: Vineta K 143.63 / 117.40 /
+118.39, Modesto Heights 72.30 / 66.49 / 68.92, Chenghou Project 97.41 / 76.15 / 77.59, Blue
+Ridge 102.90 / 96.89 / 98.67.
+
+**Chosen, not measured:** nearest texel sampling, the 169 px bar's crop edge being a hard edge
+(the original's would be one texel of bilinear), and no easing of the shield (the original chases
+the true value at 140 percent a second). Open: the animation's first key sits one frame in, so the
+original's fill likely stays empty up to 1.7 percent of the way; no pair moves fast enough to show
+a partial speed fill, so the crop's slope is read off the model, not off a frame.
+
+Speed's scale on Pure is now 700 (it was 600, "ours, not recovered"). 2048 and Omega:
+**checked, differs / not checkable** - they do not share this HUD engine
+([the page](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md#other-titles)).

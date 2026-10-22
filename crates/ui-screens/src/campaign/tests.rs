@@ -516,6 +516,7 @@ fn placed32() -> Option<oag_ui::frontend::Placed> {
         width: 32,
         height: 32,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }
@@ -861,6 +862,7 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
                 width: 1024,
                 height: 256,
                 quad_extent: None,
+                quad_centre: None,
                 blend: None,
             })
         } else {

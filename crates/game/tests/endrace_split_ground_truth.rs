@@ -61,6 +61,7 @@ fn placed(_: &str) -> Option<Placed> {
         width: 32,
         height: 32,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }

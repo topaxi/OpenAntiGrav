@@ -29,6 +29,12 @@ pub struct Placed {
     /// constant's own doc for why unifying the two was left alone rather
     /// than guessed at.
     pub quad_extent: Option<[f32; 2]>,
+    /// Where the middle of [`Self::quad_extent`] sits from the model's own origin, in the same
+    /// units and in screen orientation (`y` down) - `None` when the quad is centred on the
+    /// origin, which every single-quad model measured is. A model drawn as a polygon strip
+    /// (Pure's speed and shield fills) is not symmetric about its origin, and a draw that
+    /// crops it needs the bounds the crop is a fraction of.
+    pub quad_centre: Option<[f32; 2]>,
     /// How a `.vex` model's own batch asked to be composited, straight off its
     /// `pass_mask` - `None` for anything that is not a model, and `None` for a
     /// model whose batch is not in the transparent class at all.

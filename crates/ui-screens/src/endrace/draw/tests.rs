@@ -469,6 +469,7 @@ fn placed() -> Option<oag_ui::frontend::Placed> {
         width: 32,
         height: 32,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     })
 }

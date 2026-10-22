@@ -86,6 +86,7 @@ fn texture(name: &str, inside: impl Fn(f32, f32) -> bool) -> DecodedImage {
         height: SIDE,
         rgba,
         quad_extent: None,
+        quad_centre: None,
         blend: None,
     }
 }

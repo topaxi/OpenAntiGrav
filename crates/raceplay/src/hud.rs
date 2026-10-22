@@ -6,6 +6,8 @@
 
 use super::*;
 
+mod model_raster;
+
 /// The roots a race of `style` reads on `title`: the named skin's, or the title's own
 /// (the default skin) for no name, an unknown one, or a title with no `HUD Style` list.
 ///
@@ -708,9 +710,17 @@ fn vex_model_art(
         .chain(title.hud_art.pickup_icon_backdrop_model)
         .collect();
 
+    let bars = title.hud_art.bar_models;
+    let bar_names = bars.map_or(Vec::new(), |b| vec![b.speed, b.shield, b.outline]);
+    let mut bar_srcs: Vec<&str> = Vec::new();
     let mut wanted: Vec<&str> = Vec::new();
     for model in &layout.models {
-        let is_wanted = oag_race::sight::is_sight_widget(&model.name)
+        let is_bar = bar_names.contains(&model.name.as_str());
+        if is_bar && !model.src.is_empty() {
+            bar_srcs.push(model.src.as_str());
+        }
+        let is_wanted = is_bar
+            || oag_race::sight::is_sight_widget(&model.name)
             || icon_names.contains(&model.name.as_str());
         if !is_wanted || model.src.is_empty() {
             continue;
@@ -738,6 +748,31 @@ fn vex_model_art(
                 continue;
             }
         };
+        // A gauge model is a polygon strip, not a quad: rasterised flat, in the state of a full
+        // bar (the model's own texture track at its end) so the draw can crop it.
+        if bar_srcs.contains(&src) {
+            match model_raster::raster(&model, model_raster::end_of_tracks(&model)) {
+                Some(flat) => {
+                    report.push(format!(
+                        "HUD model {src}: drawn flat, {}x{} at {:?} from its origin",
+                        flat.width, flat.height, flat.centre
+                    ));
+                    out.push(oag_hud::sprite::DecodedImage {
+                        src: src.to_string(),
+                        width: flat.width,
+                        height: flat.height,
+                        rgba: flat.rgba,
+                        quad_extent: Some([flat.width as f32, flat.height as f32]),
+                        quad_centre: Some(flat.centre),
+                        blend: None,
+                    });
+                }
+                None => report.push(format!(
+                    "HUD model {src} could not be drawn flat (no triangles or no texture)"
+                )),
+            }
+            continue;
+        }
         // One texture apiece, and the widget is what it draws. A model that
         // embeds none is reported rather than drawn untextured, which for a
         // white-on-nothing bracket would be an invisible quad.
@@ -770,6 +805,7 @@ fn vex_model_art(
             height: texture.height,
             rgba: rgba.to_vec(),
             quad_extent: quad_extent(&model),
+            quad_centre: None,
             blend,
         });
     }

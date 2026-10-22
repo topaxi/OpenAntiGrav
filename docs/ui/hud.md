@@ -911,8 +911,14 @@ and their embedded Maya source paths and node names are unmistakably meshes:
 several carrying `AnimEnd` markers. The `_nolight` suffix is what you would name
 flat-shaded overlay geometry.
 
-Nothing references them: no layout's `Src=`, and `BOOT.BIN` holds no
-`Data\HUD\...vex` string at all. They are also `.vex` **version 4** with root class
+**Corrected 2026-10-22: Pure's layouts do name them.** `Arcade_HUD.xml` and
+`TimeTrial_HUD.xml` author `Bar_1`, `Bar_3` and `Bar_outline_1` as the `Speed3D`,
+`Shield3D` and `Overlay3D` `<Mode3D><Model>` widgets, and `Zone_HUD.xml` the `Zone_Bar_*`
+and `Zone_outline_1` set under the same names: Pure's speed and shield gauge is these
+models, not `<Image>` bars. They are drawn as of that date
+([`pure-status.md`](../formats/pure-status.md#the-speed-gauge-is-three-models-2026-10-22)). What
+follows is what the Pulse layouts and `BOOT.BIN` say, which is still that no Pulse layout
+names one. They are also `.vex` **version 4** with root class
 `0x0ee`, which [vex.md](../formats/vex.md) says does not occur in Pulse.
 
 What that means is **not** established. The defensible reading is only that a
@@ -1064,7 +1070,7 @@ Recorded so none of this reads as undiscovered work.
   2026-09-28" below.
 - **`IG_PAUSE_QUIT`.** There is no pause: leaving a race drops the `World` rather
   than suspending it.
-- **26 unreferenced `Data\HUD\*.vex` models.** `Bar_1`, `Speed`, `Shield`, `Lap`,
+- **Unreferenced `Data\HUD\*.vex` models** (Pure's gauge set, `Bar_1`/`Bar_3`/`Bar_outline_1` and `Zone_*`, is referenced and drawn as of 2026-10-22; the rest of the 26 below is not). `Bar_1`, `Speed`, `Shield`, `Lap`,
   `Position`, `Thrust`, 11 `Weapon_*`, `Zone_Bar_*`, `ghostship`, `grid`,
   `memory_stick_anim`. Referenced by **no** layout's `Src=` and by no string in
   `BOOT.BIN`. They are also `.vex` **version 4** with root class `0x0ee`, which
