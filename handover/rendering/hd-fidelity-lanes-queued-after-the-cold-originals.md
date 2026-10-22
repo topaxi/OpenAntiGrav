@@ -102,6 +102,27 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 
 ## Next Steps
 
-1. Adopt the cold HD originals, run the provenance scan, `just compare-rerender-ours --only /hd/`.
-2. Spawn the Moa Therma lane against them.
-3. Then, in order: the exposure law, the glass eye dump, the chevron curve's clock.
+The queue for the next drive, in order (written at the 2026-10-22 wind-down; each item's evidence is in the
+section above or the doc page it names). At most one lane in `crates/mesh` at a time.
+
+1. **The Bomb's ripple rings** (capture, about 10 minutes): one cold RPCS3 frame of an HD Bomb blast at about
+   1.8 s, read with `scripts/hd-draw-dump.py`. Since the encoded blend landed the rings burn white where they drew
+   yellow; the blend law is measured, the weapons' additive sources are not (docs/gameplay/weapon-lineage.md).
+2. **`hd-tech-de-ra`** (opus, mesh): Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
+   brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
+   (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).
+3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
+   stand-in about 70 grey over; then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and
+   Modesto's `uvanim_diffuse_emissivealpha` LCD banners (program unread).
+4. **Vineta K's water sheets** through `rcs::water` and the sky map (family 4 of the glass lane, not started).
+5. **`hd-render-state-ports`**: Omega and 2048 state bits 7 and 2, real alpha-to-coverage under `--msaa`, Zone's
+   pass bits; the Anulpha chevron curve's clock (a live read beside the HUD clock).
+6. **`hd-hud-leftovers-2`** (HUD crates): the retro skins (one RPCS3 draw capture with HUD Style 2097), the empty
+   Lap1/Lap2 rows' rule, the `0xCC` writer by a PPU write-watch, and a test that fails if `hud_overlay` drops
+   `half_unit_glyph_quads`.
+7. **Pure** (`docs/formats/pure-status.md`): the hull, flat in ours where the original's follows the scene; an
+   unlock for circuits past the Alpha league so more pairs can be made.
+8. **2048 and Omega** (`docs/tools/compare-page.md`): 2048's Empire Climb draws in flat colours and is far brighter
+   than the original, Queens Mall's grid spot differs, Metro Park's Time Trial hangs Vita3K; Omega's gantry board
+   shows a static 8 where the original counts down, its lighting differs, Anulpha's road reads white, and the idle
+   exhaust flame is missing.
