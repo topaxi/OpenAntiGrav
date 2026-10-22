@@ -91,6 +91,15 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
   The OOM killer took the lead's tmux session and `systemd --user` with them,
   and every member died. If you see a `python3` count climbing, tell the lead
   what spawned it.
+- **Never name a scratch script after a stdlib module** (`bisect.py`,
+  `random.py`, `test.py`, `json.py`, `math.py`, ...). Python puts the script's
+  own directory first on `sys.path`, so every other script run from that
+  directory imports yours instead of the stdlib. That was the cause of both
+  crashes above: a scratch `bisect.py` launched `python3 render.py`, whose
+  `import tempfile` pulls in `random` and then `bisect`, which imported the
+  scratch file, which launched `render.py` again. Use descriptive names
+  (`slot_bisect.py`), and run batches with `-p TasksMax=64` in the
+  `systemd-run` scope so a runaway dies alone.
 - **Profilers open windows too.** `heaptrack` launches `heaptrack_gui` on
   the maintainer's display when `DISPLAY` is set (2026-10-19). Run every
   profiler with `DISPLAY` and `WAYLAND_DISPLAY` unset (`env -u DISPLAY -u
