@@ -123,7 +123,7 @@ fn fill_draw(
     canvas: &mut [u8],
 ) {
     let indices = &model.indices[draw.range.start as usize..draw.range.end as usize];
-    for triangle in indices.chunks_exact(3) {
+    for triangle in indices.as_chunks::<3>().0 {
         let v = [
             &model.vertices[triangle[0] as usize],
             &model.vertices[triangle[1] as usize],
