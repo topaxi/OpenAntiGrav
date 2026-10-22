@@ -192,6 +192,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     always_on: &[],
     raster: false,
     ink_aligned_text: false,
+    half_unit_glyph_quads: false,
     lit_alpha: None,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &[
@@ -273,6 +274,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     always_on: &[],
     raster: false,
     ink_aligned_text: false,
+    half_unit_glyph_quads: false,
     lit_alpha: None,
     sights: &oag_title::hud::Sights::Concentric {
         seeking: &["MissileSightBG", "MissileSightOuter"],
@@ -974,6 +976,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         always_on: &[],
         raster: false,
         ink_aligned_text: false,
+        half_unit_glyph_quads: false,
         lit_alpha: None,
         sights: &oag_title::hud::Sights::Unread,
         pickup_backdrop_colour: None,

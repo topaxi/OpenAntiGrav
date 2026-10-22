@@ -220,6 +220,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
+    half_unit_glyph_quads: true,
     // **Measured** (`hd-hud-alpha-capture`, 2026-10-22; wired `hd-hud-alpha-wire`): an RPCS3 draw
     // capture on two cold boots reads the lap `1`'s vertex colour as `ff ff 00 cc` and the Record
     // time's as `0x90` against authored `0xFF` and `0xB4`, so the lit text and panel quads carry

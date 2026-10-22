@@ -501,3 +501,77 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
     let centred_by_ink = last_left_at(&mut renderer, Align::Centre);
     assert_eq!(centred_by_ink.rect[0] - centred_by_advance.rect[0], 1.5);
 }
+
+/// `HudArt::half_unit_glyph_quads`: a glyph is its cell grown half a grid unit on every side with the
+/// uv grown half a texel, whatever the text scale - the lap count `3` of the RPCS3 draw capture is
+/// 43 texels at 0.6 drawn 26.8 wide over a uv 44 wide (`43 * 0.6 + 1`). The authored
+/// `borderExtendPixels` it replaces grows both by the same texels at the text's scale instead.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_half_unit_glyph_quad_grows_by_half_a_unit_at_any_scale() {
+    use oag_texture::fnt::{Font, Glyph};
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let font = Font {
+        line_height: 40,
+        unknown: 0,
+        width: 80,
+        height: 80,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 6400],
+        glyphs: vec![Glyph {
+            codepoint: u16::from(b'3'),
+            width: 20,
+            height: 20,
+            u0: 30,
+            u1: 50,
+            v0: 30,
+            v1: 50,
+            advance: 24,
+        }],
+    };
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        None,
+        Atlas::from_font(&font).with_border_extend(5),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    let glyph = |renderer: &mut Renderer| {
+        renderer.quads.clear();
+        renderer.push_text(
+            GlyphSlot::Primary,
+            100.0,
+            100.0,
+            0.6,
+            [1.0; 4],
+            [0.0; 4],
+            Align::Left,
+            "3",
+            None,
+        );
+        *renderer.quads.last().expect("a glyph")
+    };
+    let extended = glyph(&mut renderer);
+    assert_eq!((extended.rect[2], extended.uv[2]), (30.0 * 0.6, 30.0));
+    renderer.set_half_unit_glyph_quads(true);
+    let half_unit = glyph(&mut renderer);
+    assert_eq!(
+        (half_unit.rect[2], half_unit.rect[3]),
+        (20.0 * 0.6 + 1.0, 20.0 * 0.6 + 1.0)
+    );
+    assert_eq!((half_unit.uv[2], half_unit.uv[3]), (21.0, 21.0));
+    assert_eq!(half_unit.rect[0], 100.0 - 0.5);
+    assert_eq!(half_unit.uv[0], 29.5);
+}

@@ -389,6 +389,16 @@ pub struct HudArt {
     /// narrower, measured rule (right-aligned only, on `Self::raster`); 2048 is unmeasured and
     /// `false`.
     pub ink_aligned_text: bool,
+    /// Whether a glyph's quad is **its cell grown by half a grid unit on each side, with the uv grown
+    /// by half a texel**, whatever the text scale, instead of by the face's authored
+    /// `borderExtendPixels` at that scale.
+    ///
+    /// HD **measured** (2026-10-22, `hd-hud-leftovers`): the RPCS3 draw capture's lap `1` (scale 1.0)
+    /// is a 15x81 quad over the 14x80 cell and the lap count `3` (scale 0.6) a 26.8x49.0 quad over
+    /// the 43x80 cell, both with the uv grown 0.5 texel (44x81): `43 * 0.6 + 1.0` and `80 * 0.6 + 1.0`,
+    /// so the glyph is magnified 1.5 % past its scale. Omega inherits HD's HUD engine, unmeasured.
+    /// Pulse's PSP path does the same on its own flag (`Self::raster`); 2048 is unmeasured.
+    pub half_unit_glyph_quads: bool,
     /// How this title authors its lock-on reticle. See [`Sights`].
     ///
     /// Not part of [`Self::always_on`] and deliberately so: the sights are up

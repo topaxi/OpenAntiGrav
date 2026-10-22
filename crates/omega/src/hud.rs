@@ -222,6 +222,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
+    half_unit_glyph_quads: true,
     // Inherited from HD: Omega draws HD's own HUD files through HD's engine, and the draw code is
     // not checkable (PS4 build, no capture path).
     lit_alpha: Some(oag_title::pre_race::Sourced::inherited(
