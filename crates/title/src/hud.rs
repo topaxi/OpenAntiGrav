@@ -389,6 +389,16 @@ pub struct HudArt {
     /// narrower, measured rule (right-aligned only, on `Self::raster`); 2048 is unmeasured and
     /// `false`.
     pub ink_aligned_text: bool,
+    /// Whether a glyph's quad is **its cell grown by half a grid unit on each side, with the uv grown
+    /// by half a texel**, whatever the text scale, instead of by the face's authored
+    /// `borderExtendPixels` at that scale.
+    ///
+    /// HD **measured** (2026-10-22, `hd-hud-leftovers`): the RPCS3 draw capture's lap `1` (scale 1.0)
+    /// is a 15x81 quad over the 14x80 cell and the lap count `3` (scale 0.6) a 26.8x49.0 quad over
+    /// the 43x80 cell, both with the uv grown 0.5 texel (44x81): `43 * 0.6 + 1.0` and `80 * 0.6 + 1.0`,
+    /// so the glyph is magnified 1.5 % past its scale. Omega inherits HD's HUD engine, unmeasured.
+    /// Pulse's PSP path does the same on its own flag (`Self::raster`); 2048 is unmeasured.
+    pub half_unit_glyph_quads: bool,
     /// How this title authors its lock-on reticle. See [`Sights`].
     ///
     /// Not part of [`Self::always_on`] and deliberately so: the sights are up
@@ -677,6 +687,9 @@ pub struct HudArt {
     /// The alpha the original multiplies into its lit HUD text and sprite quads: `None` draws
     /// them at the authored alpha. See [`LitAlpha`].
     pub lit_alpha: Option<crate::pre_race::Sourced<LitAlpha>>,
+    /// The drop shadow the original draws under every text string: `None` draws none. See
+    /// [`TextShadow`].
+    pub text_shadow: Option<crate::pre_race::Sourced<TextShadow>>,
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
@@ -763,6 +776,22 @@ impl LitAlpha {
         let authored = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
         (authored * u32::from(self.byte) / 255) as f32 / 255.0
     }
+}
+
+/// The black copy of a text string the original draws under it, offset up and left.
+///
+/// HD **measured** (`hd-hud-leftovers`, 2026-10-22, the RPCS3 draw capture of
+/// `docs/formats/hd-hud.md`): every glyph quad of the lit HUD text has a twin drawn before it with
+/// the same size and uv, `-1` HUD unit on both axes (the lap `1` at `(132.5, 81.5)` has its twin at
+/// `(131.5, 80.5)`, the lap count `3` at `(201.6, 64.3)` has `(200.6, 63.3)`, at scale 1.0 and
+/// 0.6 alike) and vertex colour `00 00 00 40`: `HudBGColour`, **not** scaled by [`LitAlpha`]. The
+/// HD font atlas is plain coverage, so the twin is the glyph's own shape, not a halo.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextShadow {
+    /// Added to the string's `x`, in layout units.
+    pub dx: i32,
+    /// Added to the string's `y`, in layout units.
+    pub dy: i32,
 }
 
 /// The lap counter closes up on lap one: with a lap target and the lap equal to

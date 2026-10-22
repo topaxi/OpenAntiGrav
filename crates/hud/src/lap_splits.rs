@@ -184,11 +184,16 @@ mod tests {
                 blend: None,
             },
         )]);
+        // The row is under test, not HD's drop shadow, which doubles every string.
+        let art = oag_title::HudArt {
+            text_shadow: None,
+            ..*oag_hd::hud::ART
+        };
         let cx = Context {
             layout: &layout,
             strings: &strings,
             sheet: &sheet,
-            art: oag_hd::hud::ART,
+            art: &art,
             hud_line_height: 25.0,
             small_line_height: 10.0,
             default_line_height: 10.0,

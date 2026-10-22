@@ -159,8 +159,11 @@ impl Renderer {
             let Some(atlas) = self.atlas_for(slot) else {
                 continue;
             };
-            let (mut rect, mut uv) = atlas.glyph_quad(&cell, pen, y, scale);
-            if self.hud.whole_advances {
+            let half_unit = self.hud.half_unit_glyphs && !self.hud.whole_advances;
+            let bare = oag_ui::font::Cell { extend: 0, ..cell };
+            let (mut rect, mut uv) =
+                atlas.glyph_quad(if half_unit { &bare } else { &cell }, pen, y, scale);
+            if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
                 // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of
                 // the Pulse grid, every glyph of every string), in its pixel-centre convention.

@@ -1042,12 +1042,15 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             text,
             wrap_width: None,
         };
-        match label.font {
-            Font::Small => frame.small_text.push(draw),
-            Font::Default => frame.default_text.push(draw),
-            Font::Skin => frame.skin_text.push(draw),
-            Font::Hud => frame.hud_text.push(draw),
-        }
+        let shadow = text_shadow(cx, &draw);
+        let list = match label.font {
+            Font::Small => &mut frame.small_text,
+            Font::Default => &mut frame.default_text,
+            Font::Skin => &mut frame.skin_text,
+            Font::Hud => &mut frame.hud_text,
+        };
+        list.extend(shadow);
+        list.push(draw);
     }
 
     // The whole HUD, sprites and text alike, slides with the drawn lean on the titles that
@@ -1066,6 +1069,37 @@ pub(super) fn lit_colour(cx: &Context<'_>, mut color: [f32; 4]) -> [f32; 4] {
         color[3] = lit.value.apply(color[3]);
     }
     color
+}
+
+/// The black twin the original draws under a text string ([`oag_title::HudArt::text_shadow`]): the
+/// same string `dx`, `dy` layout units over, in the string's own border colour (`HudBGColour`
+/// unless the widget authors one), at that colour's own alpha rather than [`lit_colour`]'s. `None`
+/// for a title that draws none.
+fn text_shadow(cx: &Context<'_>, draw: &Draw) -> Option<Draw> {
+    let shadow = cx.art.text_shadow?.value;
+    let Draw::Text {
+        x,
+        y,
+        scale,
+        border: Some(border),
+        align,
+        text,
+        wrap_width,
+        ..
+    } = draw
+    else {
+        return None;
+    };
+    Some(Draw::Text {
+        x: x + shadow.dx as f32,
+        y: y + shadow.dy as f32,
+        scale: *scale,
+        color: *border,
+        border: Some(*border),
+        align: *align,
+        text: text.clone(),
+        wrap_width: *wrap_width,
+    })
 }
 
 /// `draw` with a flat sprite's colour scaled by [`lit_colour`]; a gradient sprite is returned as it is.

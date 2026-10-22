@@ -25,6 +25,9 @@ pub(super) struct HudStretch {
     /// Whether right- and centre-aligned text ends on its last glyph's ink, see
     /// [`Renderer::set_ink_aligned_text`].
     pub(super) ink_aligned: bool,
+    /// Whether a glyph quad is its cell grown half a grid unit, see
+    /// [`Renderer::set_half_unit_glyph_quads`].
+    pub(super) half_unit_glyphs: bool,
 }
 
 impl Default for HudStretch {
@@ -34,6 +37,7 @@ impl Default for HudStretch {
             pixels_per_grid: 0.0,
             whole_advances: false,
             ink_aligned: false,
+            half_unit_glyphs: false,
         }
     }
 }
@@ -133,6 +137,13 @@ impl Renderer {
     /// bearing. Pulse's right-aligned rule rides on [`Self::set_whole_pixel_advances`] instead.
     pub fn set_ink_aligned_text(&mut self, on: bool) {
         self.hud.ink_aligned = on;
+    }
+
+    /// Draws each glyph as its cell grown half a grid unit on every side, with the uv grown half a
+    /// texel (`HudArt::half_unit_glyph_quads`), in place of the face's `borderExtendPixels` scaled
+    /// with the text.
+    pub fn set_half_unit_glyph_quads(&mut self, on: bool) {
+        self.hud.half_unit_glyphs = on;
     }
 
     /// Draws this renderer's atlases and sprites the way `mode` asks. Only

@@ -1322,7 +1322,7 @@ bar, the bottom bar and the left stem, mean of 13, theirs / ours): top bar 23.1 
 height 34.3 / 33.5 px, so ours is narrower by 1.1 to 1.35 px and shorter by 0.7 px on every pair (range -0.5 to
 -1.8). The pixel rows show where: the bars' left ends begin about one pixel further left in the original (column 231
 against 232 on the `talons` pair), with the bottom-right corner within 0.3 px, so it reads as a 0.5 px shift of the
-whole glyph plus about 1.2 % size. The cause is **unfound**. Read and ruled out: the layout scale (0.6 x 0.96 =
+whole glyph plus about 1.2 % size. The cause was **unfound** here and is found in [the text twin](#every-lit-text-string-has-a-black-twin-and-the-quad-is-half-a-unit-bigger-hd-hud-leftovers-2026-10-22) (half of it the quad rule, the rest HD's drop shadow, which ours never drew). Read and ruled out: the layout scale (0.6 x 0.96 =
 0.576, cell 43x80, the same font and engine as the `1`, which matches exactly); a pen rounding (the `0` and `1` would
 move too, and they do not); a missing outline (both sides draw the `HudBGColour` 25 % black halo, `125` against `128`
 at the bar's end). Nothing wired: a nudge for one label is what the lane's rules forbid.
@@ -1460,6 +1460,116 @@ for the alpha byte scaled before it is stored at vertex offset 12; a PPU write-w
 - **Omega**: checked, not checkable by capture (PS4); same HUD layout data, so the finding is a lead for Omega's HUD, not a measurement.
 - **2048**: not checked, a different HUD dialect.
 
+## Every lit text string has a black twin, and the quad is half a unit bigger (`hd-hud-leftovers`, 2026-10-22)
+
+**Item 1, the lap-count `3`: cause found and wired, two changes.** The lap-count `3` was 1.1 to 1.35 px narrower and 0.7 px
+shorter than the original's, fit scale 1.018, shifted 0.5 px up-left. The RPCS3 draw capture of the section above already holds the
+answer; its `3` quad (draw 818) was read for its geometry instead of its colour:
+
+| | lap `1` (scale 1.0) | lap-count `3` (scale 0.6) |
+| --- | --- | --- |
+| font cell (`PulseHud.fnt`) | `14 x 80` at `(775, 22)` | `43 x 80` at `(876, 22)` |
+| the original's quad, HUD units | `15 x 81` at `(132.5, 81.5)` | `26.8 x 49.0` at `(201.6, 64.3)` |
+| the original's uv, texels | `15 x 81` (`774.5..789.5`) | `44 x 81` (`875.5..919.5`) |
+| the twin drawn before it | black `00 00 00 40`, `(131.5, 80.5)` | black `00 00 00 40`, `(200.6, 63.3)` |
+
+1. **The quad is the cell grown half a HUD unit on every side, with the uv grown half a texel, at any text scale**: `43 * 0.6 + 1.0
+   = 26.8` and `80 * 0.6 + 1.0 = 49.0`. The `3`'s texels are therefore magnified `26.8 / 44 = 1.0152` in x and `49.0 / 81 = 1.0049`
+   in y, which is the 1.2 % the fit saw; the scale-1.0 `1` is exact, which is why it always matched. Ours grew the quad by the
+   face's authored `borderExtendPixels` (5) at the text's scale, which draws the same ink at exactly 0.6. **`HudArt::
+   half_unit_glyph_quads`** (HD measured, Omega inherited, retro skins `false` until item 3 below is answered) switches the
+   glyph quad to the original's rule, `Renderer::set_half_unit_glyph_quads`. Our quad for the `3` at the 1920x1080 frame is
+   `(231.916, 83.308)`, `25.768 x 47.08` against the capture's `231.94`, `83.33`, `25.73 x 47.04` (HUD units x 0.96 + the safe
+   offset): the half unit is 1.0 grid pixel in the renderer where the original's is 0.96, a **0.04 px residual** per glyph that is
+   written down rather than carried.
+2. **Every lit text glyph has a twin drawn first**: the same quad and uv, one HUD unit up and left (`-1, -1`, at both scales), vertex
+   colour `00 00 00 40`, which is `HudBGColour` and **not** scaled by the lit alpha. HD's atlas is plain coverage (the shader's `mask`
+   is 1, so `border` never reached the screen), so ours drew **no shadow at all**: the `hd-hud-digits` "both draw a halo, `125`
+   against `128`" reading was wrong, and the earlier "left at their own alpha: the text outline" in the wired-alpha section
+   described a draw that did not exist for HD. **`HudArt::text_shadow`** (`TextShadow { dx: -1, dy: -1 }`, HD measured, Omega
+   inherited) makes `oag_hud::draw_list` push a copy of every label's string at that offset, in the label's own outline colour
+   (`BorderColor`, or `HudBGColour`), before the string itself, as the capture orders it (816 before 817, 820 before 821, 824
+   before 825). The capture has a twin for every glyph of every text draw it lists, on both boots.
+
+   The arithmetic predicted from the capture and checked on the pixels: a `0x64` grey glyph at 0.8 alpha over a `143` box is
+   `0.8 * 100 + 0.2 * 143 = 108.6` without the twin and `0.8 * 100 + 0.2 * (0.75 * 143) = 101.5` with it; the original reads 101 to
+   104, ours read 109 to 112 before and 101 to 104 after. A 25 % black fringe also falls below the 50 % crossing of a **dark** glyph
+   on a light box, so it counts as ink there and widens the dark `3` while it never widened the bright `1` and `0`: that is why
+   only the `3` was ever off.
+
+**Result** (13 cold `hd/*` pairs, copies of the 2026-10-22 recaptures; ours re-rendered with `compare-rerender-ours.py`):
+
+| measure | before | after the quad rule | after the twin as well |
+| --- | --- | --- | --- |
+| `3` top bar span, ours minus theirs (mean, min..max) | -1.39 (-1.85..-0.93) | -0.90 (-1.40..-0.43) | **+0.04 (-0.40..+0.47)** |
+| `3` bottom bar span | -1.01 (-1.42..-0.58) | -0.32 (-0.72..+0.09) | **+0.11 (-0.31..+0.53)** |
+| `3` height | -0.82 (-1.29..-0.45) | -0.59 (-1.07..-0.25) | **-0.03 (-0.45..+0.39)** |
+| `3` fit scale, shift (dx, dy) | 1.021, (-0.52, -0.40) | 1.013, (-0.56, -0.35) | **1.000, (0.00, -0.04)** |
+| lap `1` and speed `0` fit scale | 1.000, 0.999 | 1.000, 0.999 | 1.000, 1.000 (shifts unchanged to 0.04) |
+| lap `1` alpha, `(R-B)/255` over the core | 0.788-0.800 | | 0.792-0.800 (theirs 0.796-0.804) |
+
+One pair's bottom-bar span is 0.03 px over the 0.5 px bar the lane set (`+0.53`); every other of the 39 numbers is inside it. The
+phase-correlation offsets of the ten HUD crops (`hd-sharp-hud`'s check) moved by at most 0.43 px (`lap_3box`, towards the original:
+its worst |offset| 0.55 -> 0.31) and the Record text's mean offset went from +1.65 to +0.10 px: **that +1.65 was one pair
+(`sebenco-climb`, a 20.8 px lock failure of the phase correlation on the old frame) and is not a regression of anyone's**. The
+shadow now fixes it because the original's text has the twin the correlation was missing. Whole-frame mean grey fell on all 13 (for
+example talons 7.96 -> 7.93, vineta-k 16.50 -> 16.46). Tests: `hd_hud_ground_truth::
+every_lit_text_string_has_a_black_twin_one_unit_up_and_left_drawn_first` (the twin's offset, colour and order on the real HD
+layout) and `render::tests::a_half_unit_glyph_quad_grows_by_half_a_unit_at_any_scale` (the quad rule); the
+`hud_overlay` line that hands the flag to the renderer is covered by the pixels above, not by a test of its own.
+
+- **Omega**: ported as inherited (`text_shadow`, `half_unit_glyph_quads`), unmeasured: same HUD engine and font, the PS4 draw is
+  not capturable.
+- **2048**: checked, differs / not wired, see item 4 below.
+
+### Item 2: the `0x32` strips are `Lap2Image` and `Lap1Image`
+
+Draw 823 of the capture (and 480 of the second boot) lists two `ffffff32` quads of `221 x 44` HUD units at `(70, 878)` and
+`(70, 918)`, uv `U = 542`, `V = 187` of `HUD_Components.gtf` - exactly the rectangles and the source of `Lap2Image` and `Lap1Image`
+of `HUD_lap_times.xml` (`Lap3Image` at `y = 838` and `Lap4Image` at `y = 798` are **not** drawn). They are drawn on the first
+frame after GO of a three-lap Time Trial, with no lap recorded, at vertex alpha `0x32` (0.196, authored 1.0). Not one of ours at the
+wrong alpha: **ours draws no row until its lap is recorded** (`lap_split_sprites`, "the row draws nothing until its lap is
+recorded", written at confidence 70 with no reference frame) and so draws nothing here. Nothing is wired, because the rule that
+picks which rows show is not measured: two boots at the same lap count (3) show rows 1 and 2, which fits "one row per lap still to
+be completed, the last lap needing none" and fits "the first two" equally. The alpha `0x32` is not the `0xCC` factor (`0x32 * 0xCC
+/ 255` would be `0x28`) and is not any `Hud_UpdateLapCounter` write: that function's two `li 0x5a` and `li 0x32` calls go to `0x2003d0`,
+which is a text **fit-to-width** (it scales the string's `+0xb8` so the string is at most `r4` pixels wide), not an alpha writer.
+Open: a capture with one lap recorded and a different lap count, and the writer of the `0x32`.
+
+### Item 3: the retro skins (`2097`, `wo3`)
+
+Unknown, and left as it is. The capture is the default skin only; the writer of the `0xCC` is not located (item 5), so there is no
+way to say whether it sits in the generic widget draw (every skin inherits it) or in the default layout's own state. The retro skins
+keep `lit_alpha: None`, and now say so explicitly for `text_shadow` and `half_unit_glyph_quads` too (`RETRO_ART` in `oag-hd` and
+`oag-omega`). A capture with `HUD Style: 2097` is the cheapest answer; it needs RPCS3 and was not run.
+
+### Item 4: 2048
+
+From the six Vita3K frames under `data/reference/2048-hud/` (960 x 544) and the layout XML:
+
+- **Lit alpha: checked, differs.** The text reaches `255, 255, 255` in every captured frame (`LAP`, `1/3`, `POS`, `8/8`), on a
+  background of about 10; at 0.8 alpha the same glyphs would read about `206`. 2048's `HudArt::lit_alpha` stays `None`.
+- **Text twin: checked, applies in the capture, not wired.** 2048's layouts author the same `BorderColor="FEConst->HudBGColour"` on
+  their text (18 labels in `HUD_positions.xml`, 10 in `HUD_lap_times.xml`). In the frame `21-race2-start.png` the pixels just above
+  a glyph are darker than those just below (76 against 111 mean grey over `TOTAL`/`CURRENT`; 74 against 92 over `POS`/`XP`), and the
+  left ring is 1 to 8 grey levels darker than the right ring: shadow-like, offset up (and a little left), but the geometry is not
+  measured, 2048's face carries its own outline (ours draws a black edge round it) and the dark scrim behind the text hides the rest.
+  `text_shadow` stays `None` on 2048.
+- **Ink alignment: not checkable here.** It needs a matched Vita frame (the six captures are of different race states from the one
+  ours draws by default) and Vita3K was not to be run.
+
+### Item 5: who writes the `0xCC` (open)
+
+Not located. Read, in `/hdfury/EBOOT-ps3-hdfury-eu.elf`: `Hud_UpdateLapCounter` (`0x96ef0`) writes the `Lap` text scale from the
+TOC constants (`1.0`, `0.5` over nine laps, `0.6` for the `Lap Outof` widget at `0x8a7940`, the same `0.6` the layout authors), and
+its two `0x2003d0` calls are the width-fit above. `li 0xcc` appears in 12 places in the image and none is a HUD alpha (a `memset`
+size in `0x4be068`, `0xcccd` immediates are the divide-by-10 magic of `0x95600`); `mulli 0xcc` appears nowhere; `0x204d58` (the
+static pair with `+0xc0`) is a `Widget` constructor over `0x165ba8` with `+0xbc = 1.0`, `+0xc4 = +0xc8 = 100.0`, nothing drawn. A search for `lis 0x3f4c` over the whole image finds nothing (the `0xcccd` hits are the integer divide-by-10 magic), so the `0.8` is
+not an immediate either: it is a data word the earlier walk of the 66 `0x3F4CCCCD` words already covered, an integer `204`, or a
+product of two floats neither of which is 0.8 (an alpha of `0.8` could also be `1.0 - 0.2`). Next: the `Text` and `Image` draw
+slots through `Widget_CreateChildByType` (`0x16aaa8`), or the PPU write-watch on the HUD vertex buffer
+(`scripts/build-rpcs3-watchpoints.sh`), which names the writer in one run and needs RPCS3.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of
@@ -1490,8 +1600,8 @@ lap splits, the time-gap icon and the Zone ladder.
 **The `0x48` row is explained.** `Hud_UpdatePickup` writes `0x5affffff` over `PickupBackground`, `PickupDamageBG` and
 `PickupAbsorbBG` when idle (see the pickup idle dim above), and `0x5A * 0xCC / 255 = 0x48` exactly, at the top-centre strips
 and box the capture lists. So the factor multiplies runtime-written colours as well, and ours scales the idle dim. The `0x32`
-strips (bottom left, HUD x 70..291, y 878..962) match no widget of the timetrial layout's always-on set; unexplained, not
-scaled. The `ffffffff` font-sheet quad at HUD x 847..1074, y 834..936 is centred on `AssistIndicatorParent` (960, 885): Pilot
+strips (bottom left, HUD x 70..291, y 878..962) match no widget of the timetrial layout's always-on set; **identified later as
+`Lap2Image` and `Lap1Image`** (see the section after this one). The `ffffffff` font-sheet quad at HUD x 847..1074, y 834..936 is centred on `AssistIndicatorParent` (960, 885): Pilot
 Assist, left unscaled.
 
 **Result** (13 cold `hd/*` pairs, copies of the 2026-10-22 recaptures; ours re-rendered with `compare-rerender-ours.py`).

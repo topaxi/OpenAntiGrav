@@ -226,6 +226,7 @@ impl Overlay {
             renderer.set_hud_scale(device, stretch);
             renderer.set_whole_pixel_advances(assets.art.raster);
             renderer.set_ink_aligned_text(assets.art.ink_aligned_text);
+            renderer.set_half_unit_glyph_quads(assets.art.half_unit_glyph_quads);
         }
 
         Ok(Some(Self {
