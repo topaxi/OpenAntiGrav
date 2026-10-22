@@ -104,8 +104,9 @@ fn main() -> anyhow::Result<()> {
                     })
                     .collect();
                 println!(
-                    "{path} slot {slot} {} frag@{:#x} n={} interp={:#x} lit [{}] params [{}] advert {:?} scan {:?} second {:?} bound-albedo {:?}",
+                    "{path} slot {slot} {} vert@{:#x} frag@{:#x} n={} interp={:#x} lit [{}] params [{}] advert {:?} scan {:?} second {:?} bound-albedo {:?}",
                     material.name.rsplit('/').next().unwrap_or(""),
+                    variant.vertex.offset,
                     variant.fragment.offset,
                     program.instructions.len(),
                     program.interpolators(),

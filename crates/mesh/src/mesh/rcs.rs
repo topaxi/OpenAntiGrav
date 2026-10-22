@@ -914,6 +914,7 @@ fn build_with_options(
                         });
                 let (lightmap_texcoords, texcoords2) = holo_billboard::route(
                     surface.roles,
+                    &out.emissive,
                     (mesh, model_blob, submesh, stride),
                     (
                         lightmap_texcoords,

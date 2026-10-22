@@ -8,7 +8,10 @@
 //!   where it is not;
 //! - the alpha is the scanline texture's blue channel;
 //! - dropping the role bit draws the generic reading instead, which is a
-//!   different colour on the same textures.
+//!   different colour on the same textures;
+//! - `scanlinebillboard`'s terms, carried by the entry after the rates: the
+//!   overlay times the tint, the advert mixed toward its red channel, the
+//!   alpha raised by the boost.
 //!
 //! `hd_holo_billboard_ground_truth.rs` checks a real circuit reaches this
 //! shader. Skips when there is no adapter. Runs in `just test`.
@@ -125,13 +128,18 @@ fn model_with(
         mesh_count: 1,
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
-        emissive: vec![Emissive {
-            tint,
-            offset: 0.0,
-            scale: 1.0,
-            rate: 0.0,
-            program: [0.0; 2],
-        }],
+        emissive: vec![
+            Emissive {
+                tint,
+                offset: 0.0,
+                scale: 1.0,
+                rate: 0.0,
+                program: [0.0; 2],
+            },
+            // The second entry the holographic shapes write: no tint, no boost,
+            // the advert as it is.
+            holo_finish(),
+        ],
         vertices: vec![
             vertex([-0.9, -0.9, 0.5], layer_uv, role),
             vertex([0.9, -0.9, 0.5], layer_uv, role),
@@ -189,6 +197,92 @@ fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines()
     // which does not combine them this way.
     let generic = at(&model(128, lines, 128, 0));
     assert_ne!(low, generic, "the role bit is what selects the combine");
+}
+
+/// The second entry of a holographic slot: tint 1, scales 1, no boost, no
+/// desaturation (`mesh::rcs::holo_billboard`'s module doc).
+fn holo_finish() -> Emissive {
+    Emissive {
+        tint: [1.0; 3],
+        offset: 1.0,
+        scale: 1.0,
+        rate: 0.0,
+        program: [0.0, 1.0],
+    }
+}
+
+#[test]
+fn scanlinebillboards_tint_desaturation_and_alpha_boost_reach_the_colour() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let at = |model: &Model| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        draw(&device, &queue, model, scene)
+    };
+    let encoded = |v: f32| (v.powf(1.0 / 2.2) * 255.0).round() as i32;
+    let lines = [128, 128, 255];
+    let with = |finish: Emissive, lines: [u8; 3]| {
+        let mut m = model(128, lines, 128, slots::HOLO_BILLBOARD);
+        m.emissive[1] = finish;
+        m
+    };
+
+    // The tint multiplies the overlay: 0.252 (the low case above) times 0.5.
+    let tinted = at(&with(
+        Emissive {
+            tint: [0.5, 0.5, 0.5],
+            ..holo_finish()
+        },
+        lines,
+    ));
+    assert!(
+        (i32::from(tinted[0]) - encoded(0.126)).abs() <= 3,
+        "the overlay times the tint: {tinted:?}"
+    );
+
+    // A red advert desaturated with weight 0 reads its red in every channel,
+    // so green comes up from 0 to red's level; weight 1 leaves it red.
+    let red = |weight: f32| {
+        let mut m = with(
+            Emissive {
+                program: [0.0, weight],
+                ..holo_finish()
+            },
+            lines,
+        );
+        m.textures[0] = Some(texture("red advert", [128, 0, 0]));
+        at(&m)
+    };
+    let (kept, grey) = (red(1.0), red(0.0));
+    assert!(kept[1] < 20, "weight 1 keeps the advert's hue: {kept:?}");
+    assert!(
+        (i32::from(grey[1]) - i32::from(grey[0])).abs() <= 2,
+        "weight 0 reads red in every channel: {grey:?}"
+    );
+
+    // The alpha is the scanline blue plus the boost: 0.5 alone, 0.75 boosted,
+    // and the target's alpha-over shows it in the colour.
+    let half = [128, 128, 128];
+    let plain = at(&with(holo_finish(), half));
+    let boosted = at(&with(
+        Emissive {
+            program: [0.25, 1.0],
+            ..holo_finish()
+        },
+        half,
+    ));
+    assert!(
+        boosted[0] > plain[0] + 10,
+        "the boost raises the alpha: {plain:?} vs {boosted:?}"
+    );
 }
 
 /// A two-texel-wide layer: dark on the left half, bright on the right.
