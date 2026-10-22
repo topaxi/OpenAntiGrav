@@ -1471,3 +1471,37 @@ for the alpha byte scaled before it is stored at vertex offset 12; a PPU write-w
 - [race-hud](../ghidra/functions/ps3-hdfury-eu/race-hud.md) - `Hud_LoadDefinition`
 - [hud-readouts](../ghidra/functions/ps3-hdfury-eu/hud-readouts.md) - what
   the per-tick update writes over the shield hexagon and the two arcs
+
+## The 0.8 is wired (`hd-hud-alpha-wire`, 2026-10-22)
+
+`oag_title::HudArt::lit_alpha` (`Sourced<LitAlpha { byte: 0xCC }>`) is HD's, **measured**; Omega carries it **inherited from HD**
+(same HUD files and engine, the PS4 draw code is not checkable); Pulse, Pure and 2048 are `None` (authored alpha). HD's retro
+skins (`2097_hud`, `wo3_hud`) are `None` too: the capture was the default skin only. `oag_hud::draw_list` applies it as
+`authored_byte * 0xCC / 255` (`0xFF -> 0xCC`, `0xB4 -> 0x90`, `0x5A -> 0x48`) to:
+
+- every label's text colour, after the runtime/message substitutions (the shield number included);
+- every always-on sprite that is not a bar fill (`SpeedBarBG`, `SpeedBarOverlay`, panels, the pickup pills and backdrop
+  through the runtime idle tint), and the lap and place arc segments.
+
+Left at their own alpha: the text outline (`border`, the `0x40` shadow), every `GradientSprite` (speed and thrust bar), the
+shield fill and its absorb flash, and what the capture did not show: pickup icons, sights, Pilot Assist, message backing,
+lap splits, the time-gap icon and the Zone ladder.
+
+**The `0x48` row is explained.** `Hud_UpdatePickup` writes `0x5affffff` over `PickupBackground`, `PickupDamageBG` and
+`PickupAbsorbBG` when idle (see the pickup idle dim above), and `0x5A * 0xCC / 255 = 0x48` exactly, at the top-centre strips
+and box the capture lists. So the factor multiplies runtime-written colours as well, and ours scales the idle dim. The `0x32`
+strips (bottom left, HUD x 70..291, y 878..962) match no widget of the timetrial layout's always-on set; unexplained, not
+scaled. The `ffffffff` font-sheet quad at HUD x 847..1074, y 834..936 is centred on `AssistIndicatorParent` (960, 885): Pilot
+Assist, left unscaled.
+
+**Result** (13 cold `hd/*` pairs, copies of the 2026-10-22 recaptures; ours re-rendered with `compare-rerender-ours.py`).
+The lap `1`'s alpha is read bias-free as `(R - B) / 255` over its eroded core (the glyph is `ffff00`, so the background cancels):
+theirs 0.796 to 0.804, ours before 0.996, **ours after 0.788 to 0.800** on all 13 (within 0.02 of 0.80). Core pixel
+(R,G,B) at talons: theirs (219,219,15), ours (223,223,21), the rest being the scene behind. Whole-frame mean grey against the
+original fell on all 13 (for example talons 8.51 -> 7.96, vineta-k 17.02 -> 16.50). No HUD element moved: the largest change in
+any of the ten offset crops of the `hd-sharp-hud` check is 0.24 px (a threshold effect of dimmer ink). Test:
+`hd_hud_ground_truth::lit_hud_quads_carry_the_captured_alpha_byte_and_the_outline_and_bars_do_not`.
+
+**2048 / Omega check:** Omega ported as inherited (above); 2048's HUD is a different dialect and was not captured: checked, not wired.
+Still open: the code that writes the byte (not located), the `0x32` strips, retro skins.
+

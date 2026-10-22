@@ -674,6 +674,9 @@ pub struct HudArt {
     pub runtime: Option<&'static RuntimeHud>,
     /// The lap counter's lap-one shift: `None` where unmeasured.
     pub lap_one_shift: Option<LapOneShift>,
+    /// The alpha the original multiplies into its lit HUD text and sprite quads: `None` draws
+    /// them at the authored alpha. See [`LitAlpha`].
+    pub lit_alpha: Option<crate::pre_race::Sourced<LitAlpha>>,
     /// How the speed and shield bars' fill, marker and label follow the bar's
     /// tip: `None` where unmeasured, which leaves the plain left-anchored crop.
     pub bar_tip: Option<BarTip>,
@@ -736,6 +739,30 @@ pub struct RuntimeHud {
     pub place_arc: SegmentArc,
     /// The pickup bar's idle look, `None` where unmeasured.
     pub pickup_idle: Option<PickupIdle>,
+}
+
+/// The alpha byte the original's HUD writes into the vertex colour of its lit text and sprite
+/// quads: the authored alpha times `byte / 255`.
+///
+/// HD **measured** (`docs/formats/hd-hud.md`, "The 0.8 is the vertex colour's alpha byte"): the
+/// lap `1` reads `ff ff 00 cc` in the draw's vertex buffer where the layout authors alpha `ff`,
+/// and the Record time `0x90` where it authors `0xB4`, so it multiplies (`0xFF` -> `0xCC`,
+/// `0xB4` -> `0x90`). The black outline/shadow (`0x40`), the speed bar's gradient and the
+/// shield bar (`0xFF`) are not scaled. Stored as the byte rather than `0.8` because
+/// [`HudArt`] compares by value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LitAlpha {
+    /// The multiplier's numerator over 255.
+    pub byte: u8,
+}
+
+impl LitAlpha {
+    /// `alpha` (0..1) as the original's byte arithmetic leaves it: `round(a * 255) * byte / 255`.
+    #[must_use]
+    pub fn apply(self, alpha: f32) -> f32 {
+        let authored = (alpha.clamp(0.0, 1.0) * 255.0).round() as u32;
+        (authored * u32::from(self.byte) / 255) as f32 / 255.0
+    }
 }
 
 /// The lap counter closes up on lap one: with a lap target and the lap equal to
@@ -1040,5 +1067,20 @@ mod tests {
         };
         assert_eq!(empty.id_for(0), None);
         assert_eq!(empty.id_for(7), None);
+    }
+
+    #[test]
+    fn the_lit_alpha_byte_reproduces_the_two_captured_points() {
+        let lit = LitAlpha { byte: 0xCC };
+        assert_eq!((lit.apply(1.0) * 255.0).round() as u32, 0xCC);
+        assert_eq!(
+            (lit.apply(f32::from(0xB4_u8) / 255.0) * 255.0).round() as u32,
+            0x90
+        );
+        assert_eq!(
+            (lit.apply(f32::from(0x5A_u8) / 255.0) * 255.0).round() as u32,
+            0x48
+        );
+        assert_eq!(lit.apply(0.0), 0.0);
     }
 }

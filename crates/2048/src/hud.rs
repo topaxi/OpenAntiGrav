@@ -78,6 +78,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: false,
+    lit_alpha: None,
     // **Concentric sprites, read off this title's own composed layouts, not
     // copied from HD.** Every one of the 26 layouts that authors a reticle at
     // all authors it as `<Image>` widgets named `MissileSightBG/Outer/Inner/

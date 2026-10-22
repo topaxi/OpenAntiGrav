@@ -113,6 +113,9 @@ pub const SKINS: &[oag_title::HudSkin] = &[
 const RETRO_ART: oag_title::HudArt = oag_title::HudArt {
     runtime: None,
     lap_one_shift: None,
+    // The capture was the default skin only; the retro skins' lit quads are unmeasured, so they
+    // keep the authored alpha rather than borrow the default skin's.
+    lit_alpha: None,
     bar_tip: None,
     boost_smear: None,
     ..*ART
@@ -217,6 +220,14 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: ALWAYS_ON,
     raster: false,
     ink_aligned_text: true,
+    // **Measured** (`hd-hud-alpha-capture`, 2026-10-22; wired `hd-hud-alpha-wire`): an RPCS3 draw
+    // capture on two cold boots reads the lap `1`'s vertex colour as `ff ff 00 cc` and the Record
+    // time's as `0x90` against authored `0xFF` and `0xB4`, so the lit text and panel quads carry
+    // alpha x `0xCC / 255`. The outline (`0x40`), the speed bar's gradient and the shield bar
+    // stay at their own alpha. `docs/formats/hd-hud.md`.
+    lit_alpha: Some(oag_title::pre_race::Sourced::measured(
+        oag_title::hud::LitAlpha { byte: 0xCC },
+    )),
     // **Concentric sprites, not brackets.** HD's arcade HUD composes to zero
     // `<Mode3D>` models; its reticle is six `<Image>` widgets off
     // `Data\HUD\Textures\missile_reticule.gtf`, authored at 128, 108, 80 and
