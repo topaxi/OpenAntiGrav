@@ -923,11 +923,16 @@ fn the_ladder_before_the_first_zone_is_the_layouts_own_placeholders() {
     let strings = oag_ui::language::StringTable::default();
     let mut notes = Vec::new();
     let sheet = oag_hud::sprite::Sheet::build(&[], &mut notes);
+    // The ladder is under test, not HD's drop shadow, which draws every string twice.
+    let art = oag_title::HudArt {
+        text_shadow: None,
+        ..*oag_hd::hud::ART
+    };
     let cx = hud::Context {
         layout: &layout,
         strings: &strings,
         sheet: &sheet,
-        art: oag_hd::hud::ART,
+        art: &art,
         hud_line_height: 92.0,
         small_line_height: 34.0,
         default_line_height: 34.0,
