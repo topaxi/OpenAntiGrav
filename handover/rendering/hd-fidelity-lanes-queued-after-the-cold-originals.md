@@ -8,6 +8,27 @@ another HD pair's mean grey difference by more than about 0.1-0.2.
 
 ## Open
 
+**The maintainer's eight scenery observations (2026-10-22, `hd-scenery-materials`)**, judged on the cold pairs by a box away
+from the craft (mean grey difference); 1-4 done, 5-8 not started. Evidence pages are named per item.
+
+1. ~~Talon's white grills~~ **wired**: `scanlinebillboard` (renderer.md, "`scanlinebillboard` is the fourth shape"). Box
+   51.08 to 43.57. Left: the original adds in gamma space, ours in linear (the panel reads greyer); the add is also about 3x
+   the program's `overlay * tint / 2`, source unread.
+2. Anulpha's black chevron panel: **cause measured, not wired** (hd-track-tone.md, "The chevron panel draws black").
+   `cf_chevron_pulse` needs five textures against four bindings; three routes written there; the wave's phase is the
+   material's own `offset` curve. Box 27.90 unchanged.
+3. Moa Therma's cut-off trees: **cause and mechanism read, not wired** (hd-track-tone.md, "Moa Therma's trees";
+   material-state.md, "State bit 2 is depth write, bit 7 is alpha-to-coverage"). Next: dump the tree draw's depth mask and
+   AA control on a cold Moa frame, then a depth-writing blend pipeline keyed on state bit 2. A temporary build drawing the
+   `_atoc` chunks as depth-writing cutouts took the box 27.05 to 17.85, no pair worse than +0.004.
+4. Sebenco's bare rocks: **cause measured, not wired** (rcsmaterial.md, "Sebenco's snow-capped rocks"). `sebenco_snow`'s
+   snow layer and its normal-driven blend; six textures. Decide the binding route together with item 2's.
+5. Modesto glass / banners / building texture; 6. Vineta's light and sky; 7. Chenghou's windows; 8. Tech de Ra's missing
+   details: **not started** (Tech de Ra carries 9 `scanlinebillboard` slots, now bound, none in the pair's view).
+
+Tooling found on the way: `OAG_ONLY_SLOT`, or an `OAG_SKIP_SLOT` list covering a whole draw list, panics with
+"buffer slice can not be empty" (an empty list reaches `wgpu`); skip in chunks of about 40 slots.
+
 - **Moa Therma pair** (`hd/moa-therma`): 15.05 to 10.32 mean grey (2026-10-21, `hd-one-pair-moa`; the other twelve HD pairs 0.00).
   The glass cause is closed: `paraboloidReflectionTex` is the circuit's `sky.gtf` as a 512x256 dual hemisphere map and
   `dc_windows_a` reads it (`docs/rendering/hd-track-tone.md`, "The reflection map is the sky"). Left on this pair: the cast
