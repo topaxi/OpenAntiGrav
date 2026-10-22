@@ -1261,6 +1261,38 @@ front end), `None`. Pulse and Pure: no option. The front end's own `0.904` scale
 rule would read 0.96 on the same save, so either the setting differed on that earlier day's profile (90
 reads `0.904`) or the front end scales differently; open.
 
+## Right- and centre-aligned text ends on the ink (`hd-sharp-hud`, 2026-10-22)
+
+**Measured.** Template matching (grayscale gradient phase correlation, sub-pixel peak) of fixed crops of
+`theirs.png` against `ours.png` on the 13 cold `hd/*` pairs (1920x1080, Resolution Scale 100), borders and
+fixed labels only, never digits. Offset is ours minus theirs, in px, mean over the pairs:
+
+| element | before (dx, dy) | after (dx, dy) | worst pair before | worst pair after |
+| --- | --- | --- | --- | --- |
+| lap ring | -0.06, +0.04 | +0.00, +0.02 | 0.28 | 0.26 |
+| `LAP` label (right) | -2.84, -0.00 | +0.22, -0.01 | 2.93 | 0.25 |
+| lap-count `3` box | -0.44, +0.25 | +0.06, +0.21 | 2.53 | 0.50 |
+| RECORD box | +0.23, +0.04 | +0.21, +0.04 | 0.38 | 0.36 |
+| `RECORD` label (right) | -3.60, -0.06 | -0.02, -0.04 | 4.03 | 0.37 |
+| timer box | +0.07, -0.07 | +0.07, -0.07 | 0.23 | 0.22 |
+| KM/H frame | -0.02, -0.03 | -0.02, -0.03 | 0.13 | 0.13 |
+| `KM/H` label (left) | -0.03, -0.08 | -0.03, -0.08 | 0.22 | 0.22 |
+| top hexagon | +0.10, +0.08 | +0.15, +0.09 | 0.54 | 0.36 |
+| `100` in the hexagon (centred) | -1.68, +0.17 | +0.13, +0.14 | 1.76 | 0.36 |
+
+(`RECORD` on `sebenco-climb`, and the `3` box on `vineta-k`, are failed matches on both sides of the change and
+excluded from the means; the worst-pair columns still include the latter.) Every frame, bar, box and left-aligned
+label was already within 0.5 px; the "few pixels off in a few labels" were the **right-aligned** and **centred**
+strings only, 1.7 to 4 px left of the original's, identically on all 13 pairs.
+
+**The law.** The same one Pulse's PSP list showed for right-aligned text (above): a string aligned right or
+centre uses its **ink** width, the advances less the last glyph's trailing bearing (advance less cell width).
+`oag_title::HudArt::ink_aligned_text` (HD `true`, measured; Omega `true`, inherited from HD's HUD engine and
+font, unmeasured; Pulse and Pure keep the narrower rule on `raster`; 2048 `false`, unmeasured) drives
+`Renderer::push_text`. No per-label constant. Whole-frame mean grey fell on 13 of 13 pairs by 0.08 to 0.13
+(the HUD text only). Cross-title: Pulse **ported earlier** for right-aligned text, centred text there still
+unmeasured; 2048 **checked, applies, not wired**: same engine, no capture of its text edge.
+
 ## See also
 
 - [hd-status](hd-status.md) - the format layer this sits on top of

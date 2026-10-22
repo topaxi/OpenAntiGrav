@@ -468,7 +468,7 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
         &oag_hud::sprite::Sheet::default(),
     )
     .expect("the ui pipeline");
-    let last_left = |renderer: &mut Renderer| {
+    let last_left_at = |renderer: &mut Renderer, align: Align| {
         renderer.quads.clear();
         renderer.push_text(
             GlyphSlot::Primary,
@@ -477,12 +477,13 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
             1.0,
             [1.0; 4],
             [0.0; 4],
-            Align::Right,
+            align,
             "ab",
             None,
         );
         *renderer.quads.last().expect("a glyph")
     };
+    let last_left = |renderer: &mut Renderer| last_left_at(renderer, Align::Right);
     let by_advance = last_left(&mut renderer);
     renderer.set_whole_pixel_advances(true);
     let by_ink = last_left(&mut renderer);
@@ -491,4 +492,12 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
     assert_eq!(by_ink.rect[0] - by_advance.rect[0], 3.0 - 0.5);
     assert_eq!((by_advance.rect[2], by_ink.rect[2]), (4.0, 5.0));
     assert_eq!((by_advance.uv[2], by_ink.uv[2]), (4.0, 5.0));
+    // HD's rule (`HudArt::ink_aligned_text`) is the same on whole-pixel-free advances, and a centred
+    // string loses half the bearing: 3 px right for the right-aligned one, 1.5 for the centred.
+    renderer.set_whole_pixel_advances(false);
+    let centred_by_advance = last_left_at(&mut renderer, Align::Centre);
+    renderer.set_ink_aligned_text(true);
+    assert_eq!(last_left(&mut renderer).rect[0] - by_advance.rect[0], 3.0);
+    let centred_by_ink = last_left_at(&mut renderer, Align::Centre);
+    assert_eq!(centred_by_ink.rect[0] - centred_by_advance.rect[0], 1.5);
 }

@@ -106,6 +106,13 @@ the absorb stamp - 3 of 3 stamps coincided with the absorb timer starting, 0 of 
 other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
 `oag-game --force-shield TICK:PERCENT` puts both sides in the same state.
 
+**2026-10-22, alignment against the cold originals (`hd-sharp-hud`).** All frames, boxes and left-aligned labels
+were within 0.5 px; right- and centre-aligned strings (`LAP`, `Record`, `0 kmh`, `100`, the lap digit) sat 1.7-4 px
+left on all 13 pairs. Cause: the strings end on their last glyph's ink, now `HudArt::ink_aligned_text`; table in
+[hd-hud.md](../../docs/formats/hd-hud.md#right--and-centre-aligned-text-ends-on-the-ink-hd-sharp-hud-2026-10-22).
+Left: the digits themselves look a little smaller and softer in the original (the lap `1`, `3`, `0 KM/H`'s `0`);
+not measured as a scale, only seen in a 2x crop. 2048 and Omega not captured.
+
 ## Open
 
 - **`ship+0x6958`** (the flash's other input) is set by
