@@ -11,6 +11,12 @@ lane wide is a scalar, not the colour".
   live draws". **Open from it**: a scene-target dump at race clock 0.00.3 to measure the exposure transient (our `--ticks 30`
   and `--ticks 2400` frames are identical, so the adaptation start-up is not modelled), and who ORs the gamma bits
   `0x700000` into the texture ADDRESS word.
+  **2026-10-22 (`hd-tone-vineta`)**: the port multiplied the tint into the encoded texel, so every circuit under 255
+  drew its sky at `byte / 255` of the texel in display terms (Vineta K 63 grey dark, Talon's 49). Fixed in
+  `sky_cube::build`; evidence in `docs/rendering/hd-track-tone.md`, "Vineta K's sky was dark because ours tinted the
+  encoded texel". Still open from it: Vineta K's sky is 9 grey under the original after the fix (bloom share or
+  adaptation), and the right-hand building's sunlit bands on the `hd/vineta-k` pair are +30 grey (a lit material,
+  not tone; name it with a slot mask). Omega's Vineta K has no `Sky colour` (a 2048 dome, `Sky brightness` 3): differs.
 - **Vineta's sea** (2026-10-07, `vineta-k-fidelity`; rcsmaterial.md "Vineta K against a draw capture"): HD binds
   `paraboloidReflectionTex` at unit 1 of the `water_test_2` draw, a 512x256 `A8R8G8B8` **render target** (a dual paraboloid of
   the environment, sky above the middle row, teal sea below) readable only with RPCS3's `Write Color Buffers`. Not a disc
