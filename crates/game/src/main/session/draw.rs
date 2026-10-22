@@ -71,7 +71,7 @@ impl Session {
     /// further window's of a multi-window race (the one controller's scale is applied to each
     /// window's own ceiling).
     pub(super) fn drs_limits_for(&self, surface: (u32, u32), ceiling: (u32, u32)) -> drs::Limits {
-        let rect = display::viewport(surface, self.settings.display.aspect);
+        let rect = self.scene_rect(surface);
         // Off the **render profile**, like the ceiling it pairs with: a target
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.
@@ -152,9 +152,10 @@ impl Session {
         // resize is the only thing that reallocates it.
         self.framebuffer
             .resize_output(&self.gpu.device, self.gpu.output.size());
+        let scene_rect = self.scene_rect(self.gpu.output.size());
         let own_wanted = oag_game::settings::web::render_target(
-            rect,
-            self.render_scale_for(rect),
+            scene_rect,
+            self.render_scale_for(scene_rect),
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         // **A multi-window race shares one scene allocation** (the scene's depth and

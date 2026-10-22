@@ -59,8 +59,9 @@ pub enum WindowMode {
     /// A borderless window filling the monitor it is on.
     ///
     /// This is what "fullscreen" means on a modern desktop: no mode switch, no
-    /// resolution change, and alt-tab does not black the screen. It also cannot
-    /// fail, which exclusive fullscreen can.
+    /// display resolution change, and alt-tab does not black the screen. It also
+    /// cannot fail, which exclusive fullscreen can. The scene is drawn at
+    /// [`FullscreenResolution`] and stretched to the monitor.
     Borderless,
 }
 
@@ -410,6 +411,93 @@ impl TryFrom<String> for Size {
 impl From<Size> for String {
     fn from(size: Size) -> Self {
         size.to_string()
+    }
+}
+
+/// The resolution the scene is drawn at in borderless fullscreen: `native` (the
+/// monitor's own size) or a [`Size`], spelled `1280x720`.
+///
+/// The scene is drawn at this size and stretched to the monitor, so a player
+/// on a high-DPI screen can ask for fewer pixels. The UI is composited at the
+/// monitor's size either way. Means nothing in a window, where
+/// `display.window_size` is the size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum FullscreenResolution {
+    /// The monitor's own size.
+    #[default]
+    Native,
+    /// A fixed size, whatever the monitor is.
+    Fixed(Size),
+}
+
+impl FullscreenResolution {
+    /// The spelling for the monitor's own size.
+    pub const NATIVE: &'static str = "native";
+
+    /// The size to draw the scene at for a surface of `surface` pixels.
+    #[must_use]
+    pub fn target(self, surface: (u32, u32)) -> (u32, u32) {
+        match self {
+            Self::Native => surface,
+            Self::Fixed(size) => (size.width, size.height),
+        }
+    }
+}
+
+impl std::str::FromStr for FullscreenResolution {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        if text.trim().eq_ignore_ascii_case(Self::NATIVE) {
+            Ok(Self::Native)
+        } else {
+            text.parse().map(Self::Fixed)
+        }
+    }
+}
+
+impl std::fmt::Display for FullscreenResolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Native => f.write_str(Self::NATIVE),
+            Self::Fixed(size) => size.fmt(f),
+        }
+    }
+}
+
+impl TryFrom<String> for FullscreenResolution {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<FullscreenResolution> for String {
+    fn from(resolution: FullscreenResolution) -> Self {
+        resolution.to_string()
+    }
+}
+
+#[cfg(test)]
+mod fullscreen_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn native_or_a_size_round_trips() {
+        assert_eq!("native".parse(), Ok(FullscreenResolution::Native));
+        let fixed: FullscreenResolution = "1280x720".parse().expect("size");
+        assert_eq!(fixed.to_string(), "1280x720");
+        assert!("nonsense".parse::<FullscreenResolution>().is_err());
+    }
+
+    #[test]
+    fn the_target_is_the_surface_only_when_native() {
+        let surface = (3840, 2160);
+        assert_eq!(FullscreenResolution::Native.target(surface), surface);
+        let fixed = FullscreenResolution::Fixed(Size::new(1280, 720));
+        assert_eq!(fixed.target(surface), (1280, 720));
     }
 }
 

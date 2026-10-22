@@ -204,6 +204,16 @@ impl Session {
                     return;
                 }
             },
+            "display.fullscreen_resolution" => {
+                match text.parse::<display::FullscreenResolution>() {
+                    // Read by the next frame's render target; no window call.
+                    Ok(resolution) => self.settings.display.fullscreen_resolution = resolution,
+                    Err(e) => {
+                        warn!("ignoring {setting} = {text:?}: {e}");
+                        return;
+                    }
+                }
+            }
             "display.aspect" => match text.parse::<display::Aspect>() {
                 // Applied by the next frame, because every stage takes its
                 // viewport from this on the way into its pass.

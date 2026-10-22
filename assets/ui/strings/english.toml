@@ -233,6 +233,7 @@ OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
 OAG_DISPLAY_MONITOR_GAMESCOPE = { text = "GAMESCOPE SHOWS ONE DISPLAY", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "WINDOW MODE", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "WINDOW SIZE", human = false }
+OAG_DISPLAY_FULLSCREEN_RESOLUTION = { text = "FULLSCREEN RESOLUTION", human = true }
 OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS SIZE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "ASPECT RATIO", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "FRONT END STYLE", human = false }

@@ -369,9 +369,21 @@ impl Session {
             .collect()
     }
 
+    /// The aspect rectangle the scene's resolution is measured against: the surface's, or in
+    /// borderless the fixed `display.fullscreen_resolution` when the player picked one. Only
+    /// the size is used, the scene is stretched into the surface's own rectangle afterwards.
+    pub(super) fn scene_rect(&self, surface: (u32, u32)) -> (f32, f32, f32, f32) {
+        let basis = if self.settings.display.window_mode == display::WindowMode::Borderless {
+            self.settings.display.fullscreen_resolution.target(surface)
+        } else {
+            surface
+        };
+        display::viewport(basis, self.settings.display.aspect)
+    }
+
     /// The render target a window of `surface` pixels wants at the profile's render scale.
     pub(super) fn target_for(&self, surface: (u32, u32)) -> (u32, u32) {
-        let rect = display::viewport(surface, self.settings.display.aspect);
+        let rect = self.scene_rect(surface);
         oag_game::settings::web::render_target(
             rect,
             self.render_scale_for(rect),

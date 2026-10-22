@@ -168,6 +168,7 @@ OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
 OAG_DISPLAY_MONITOR_GAMESCOPE = { text = "GAMESCOPE ZEIGT NUR EINE ANZEIGE", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "FENSTERMODUS", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
+OAG_DISPLAY_FULLSCREEN_RESOLUTION = { text = "VOLLBILDAUFLÖSUNG", human = true }
 OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS-GRÖSSE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }

@@ -262,9 +262,13 @@ pub struct Display {
     pub window_mode: oag_display::display::WindowMode,
     /// How big a *windowed* window is, spelled `1440x816`.
     ///
-    /// Means nothing in borderless, where the display decides.
+    /// Means nothing in borderless, where [`Self::fullscreen_resolution`] is the size.
     #[serde(default)]
     pub window_size: oag_display::display::Size,
+    /// The resolution the scene is drawn at in borderless: `native` or `1280x720`.
+    /// Means nothing in a window.
+    #[serde(default)]
+    pub fullscreen_resolution: oag_display::display::FullscreenResolution,
     /// How big the web build's canvas is: `fit` (the whole page) or a size in
     /// CSS pixels, `1280x720`. Means nothing on a desktop, where
     /// [`Self::window_size`] is the window; a page has no window, so the web
@@ -365,6 +369,7 @@ impl Default for Display {
             monitor: Default::default(),
             window_mode: Default::default(),
             window_size: Default::default(),
+            fullscreen_resolution: Default::default(),
             canvas_size: default_canvas_size(),
             aspect: Default::default(),
             front_end_style: String::new(),
@@ -784,6 +789,10 @@ pub fn menu_seeds(
         (
             "display.window_size",
             text(&settings.display.window_size.to_string()),
+        ),
+        (
+            "display.fullscreen_resolution",
+            text(&settings.display.fullscreen_resolution.to_string()),
         ),
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),

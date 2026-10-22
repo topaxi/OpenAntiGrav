@@ -655,6 +655,18 @@ label = "WINDOW SIZE"
 string_id = "OAG_DISPLAY_WINDOW_SIZE"
 setting = "display.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
+disabled_by = { setting = "display.window_mode", value = "borderless" }
+
+# What the scene is drawn at in borderless, stretched to the monitor (the UI is
+# drawn at the monitor's size). `native` is the monitor's own. Greyed, not hidden,
+# in a window, where WINDOW SIZE is the size.
+[[page.entry]]
+kind = "choice"
+label = "FULLSCREEN RESOLUTION"
+string_id = "OAG_DISPLAY_FULLSCREEN_RESOLUTION"
+setting = "display.fullscreen_resolution"
+values = ["native", "960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
+disabled_by = { setting = "display.window_mode", value = "windowed" }
 
 # The web build's stand-in for WINDOW SIZE: a page has no window, so this sizes
 # the canvas instead, `fit` being the whole page. Dropped on a desktop and
