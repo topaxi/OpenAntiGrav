@@ -253,6 +253,10 @@ different features each time (`0 3 1`, `3 2`), which a frame counter that
 starts at zero on every boot would not do. Whether the game seeds it is not
 read.
 
+**Its body is local (2026-10-22).** The stub switches TOC into `0x0043c280`, a Bays-Durham shuffle over
+the LCG `1664525 * x + 1013904223` that returns the low 30 bits (`RAND_MAX = 2^30 - 1`). Read in
+[`hull-shake.md`](hull-shake.md), "`rand` is centred".
+
 ### One boot constructs more than one screen
 
 Each of three scripted boots logged two or three `LOADING SCREEN TYPE` /

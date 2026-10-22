@@ -1058,10 +1058,10 @@ function decompiles (VMX code, 0x258 and 0x4a4 bytes). **Read from the disassemb
 points, one new point a second (x in `4 * (r - 0.5)`, y and z in `1.8 * (r - 0.5)`). The hull turns by roll `0.025 * x`, yaw
 `-0.01 * x` and pitch `0.025 * (y - z)` of the previous frame's value, and moves by `4 * (p - q)` (the spline's change over one frame).
 Both are scaled by `clamp((80 - thrust) * 0.02, 0, 1)` on a 0.99-per-frame smoothed engine thrust (body `+0x4c4`), so the shake is
-full at rest and nearly gone under full throttle. `HullShake_Apply` composes the rotations in the hull's own frame. `rand`'s range is
-not in the binary. A still pair cannot match a shake frame for frame; what can be ported is the law, and until then the pair pixels
+full at rest and nearly gone under full throttle. `HullShake_Apply` composes the rotations in the hull's own frame. `rand` returns 30
+bits, so the points are centred on zero. A still pair cannot match a shake frame for frame; what can be ported is the law, and until then the pair pixels
 carry it.
 
-**Next.** Sample `ship+0x6b00` live to pin `rand`'s range and the lane masks, then port the shake to `oag_raceplay`'s drawn model
+**Next.** Sample `ship+0x6b00` live for the lane masks, the frame time and what body `+0x4c4` is (thrust or speed), then port the shake to `oag_raceplay`'s drawn model
 matrix (view only, unhashed). Cross-title: Omega carries HD's engine, so the same
 object is expected, not checkable here; 2048 not compared.

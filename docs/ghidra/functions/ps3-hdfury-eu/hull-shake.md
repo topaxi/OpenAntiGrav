@@ -12,13 +12,14 @@ constants are TOC-relative off `0x008ad4d8`, the TOC both OPD entries carry (`0x
 
 | Address | Name | Confidence | Evidence |
 | --- | --- | --- | --- |
-| `0x000d0c70` | `HullShake_Update` | 75 | `(obj = ship+0x6b00, f1 = dt, f2 = (*(ship+0x6944))->f[0x4c4])`, called at `0x000ebc74`: a uniform cubic B-spline over four points at `obj+0x40..+0x70`, parameter at `obj+0x80` advanced by `dt`, refilled from three `rand()` calls when it passes 1; writes the angles to `obj+0x10` and the offset to `obj+0x00` ("The update") |
+| `0x000d0c70` | `HullShake_Update` | 78 | `(obj = ship+0x6b00, f1 = dt, f2 = (*(ship+0x6944))->f[0x4c4])`, called at `0x000ebc74`: a uniform cubic B-spline over four points at `obj+0x40..+0x70`, parameter at `obj+0x80` advanced by `dt`, refilled from three `rand()` calls when it passes 1; writes the angles to `obj+0x10` and the offset to `obj+0x00` ("The update") |
 | `0x000d39d0` | `HullShake_Apply` | 72 | `(obj, node, 0)`, called at `0x000ebc84`: `node = Ry(obj.y) * Rz(obj.z) * Rx(obj.x) * node`, then the node's translation moves by `obj+0x00` along its own rows ("The apply"). The `r5 != 0` path (`0x000d3dd0`) is not read |
 | `0x006ca948` | `Matrix_RotationX` | 85 | rows `(1,0,0)`, `(0,c,s)`, `(0,-s,c)`; reached through the stub `0x00677708` |
 | `0x006ca868` | `Matrix_RotationY` | 85 | rows `(c,0,-s)`, `(0,1,0)`, `(s,0,c)`; stub `0x006776f8` |
 | `0x006ca788` | `Matrix_RotationZ` | 85 | rows `(c,s,0)`, `(-s,c,0)`, `(0,0,1)`; stub `0x006776e8`, the same builder the drawn lean uses and whose sign `ship-lean.md` measured |
 | `0x00390c68` | `Math_CosPoly` | 80 | an even polynomial in `x^2` up to `x^8`; its result lands on the rotation builders' diagonal |
 | `0x00390ca0` | `Math_SinPoly` | 80 | an odd polynomial `x * p(x^2)`; its result lands off the diagonal, negated once |
+| `0x0043c280` | `Libc_RandImpl` | 85 | the body `Libc_Rand` (`0x006762f8`) branches to after its TOC switch: a Bays-Durham shuffle over the LCG `x = 1664525 * x + 1013904223`, returning the low 30 bits ("`rand` is centred", below) |
 
 All three builders wrap the angle the same way first: `trunc(a * 5340353.5)` (`0x4aa2f983`, `2^24 / pi`)
 sign-extended from 25 bits, then times `1.8725e-7` (`0x34490fdb`, `pi / 2^24`). The angle is radians,
@@ -51,8 +52,10 @@ obj[0x10] *= s
 obj[0x00] *= 0.8 * s                                        ; TOC -0x4a14
 ```
 
-The spline is evaluated at the parameter *before* the step. `rand` is `Libc_Rand` (`0x006762f8`,
-[`loading-screen.md`](loading-screen.md)), a stub into a PRX, so its range is not in this binary.
+The spline is evaluated at the parameter *before* the step. `dt` is `Ship_UpdateEntity`'s own `f1`
+(`fmr f26,f1` at `0x000eadd4`, added into `ship+0x6a30` at `0x000eaea4`), passed as `fmr f1,f26` at
+`0x000ebb74` with no write to `f1` before the call. That makes "one point a second" hold if `dt` is
+in seconds, which this code does not show.
 The three lane writes into `obj+0x10` go through `vsel` with masks loaded from `0x00c47730` (`+0x00`,
 `+0x10`, `+0x20`). That address is in BSS and filled at run time, so the x, y, z order of the three
 masks is assumed, not read. The constant `1.0` is TOC `-0x49c4`, `0.0` is `-0x49d8`.
@@ -60,9 +63,17 @@ masks is assumed, not read. The constant `1.0` is TOC `-0x49c4`, `0.0` is `-0x49
 `f2` is `(*(ship+0x6944))->f[0x4c4]`, the player's physics body's `+0x4c4`.
 [`physics.md`](physics.md) measured that field following the throttle (r = 0.94; about 77 held, about 1
 released). So the shake is at full size below a smoothed 30 and gone at 80: full while coasting or
-at rest, nearly gone under full throttle. The `0.99` filter and the one-frame difference `p - q` are
-per call, not scaled by `dt`, so their size depends on the frame rate. HD's 60 Hz is the rate they
-were tuned at.
+at rest, nearly gone under full throttle. The `0.99` filter runs once per call and ignores `dt`,
+so its time constant depends on the frame rate. The offset `4s(p - q)` is the spline's change over one
+frame, so it is proportional to `dt`. A port runs both on a fixed 60 Hz tick, HD's own rate, not per
+rendered frame.
+
+**The two live frames already fit this.** The offsets read on two consecutive frames,
+`(-0.013, +0.087, -0.086)` then `(-0.008, +0.054, -0.052)`
+([`hd-ship-materials.md`](../../../rendering/hd-ship-materials.md)), shrink by the same 0.61 in all three
+components while the angle barely moves (1.12 to 1.13 degrees). That is the slow spline under a frame time
+that dropped by about 0.6 between the frames. The interpreter's frame time was not steady, so those
+offsets are not a 60 Hz size.
 
 ## The apply, `0x000d39d0`
 
@@ -82,7 +93,7 @@ frame, the same composition as the drawn lean. The node's rows are the body's ba
 ([`ship-lean.md`](ship-lean.md), "The sign"), so the offset is scaled by 0.75 in world units. That basis
 is row 0 the hull's left, row 1 up, row 2 the nose. In it, `x` is pitch, `y` yaw and `z` roll:
 
-| Term | Law | Bound, if `rand()*2^-30` is in `[0, 1)` |
+| Term | Law | Bound |
 | --- | --- | --- |
 | roll | `0.025 * q.x` | `0.05` rad, 2.9 degrees |
 | yaw | `-0.01 * q.x` | `0.02` rad, 1.1 degrees |
@@ -93,14 +104,22 @@ Those are the bounds of the control points. The spline's weighted sum stays well
 time, which is how the live reads come out at 1.1 to 1.8 degrees. Roll and yaw share `q.x`, so roll is
 always 2.5 times yaw with the opposite sign.
 
-**What is not read (confidence stays at 72-75):**
-- **`rand`'s range.** If `RAND_MAX` is `2^31 - 1`, `rand()*2^-30 - 0.5` lies in `[-0.5, 1.5)`. The
-  points would then average `(2, 0.9, 0.9)`, a standing roll of about 2.9 degrees and yaw of -1.1.
-  The live reads (1.1 to 1.8 degrees, about an axis that changes) fit a centred range better.
-  Reading `P0..P3` live settles it.
+**`rand` is centred.** `0x006762f8` is only a TOC switch into `0x0043c280`. That code warms the LCG
+`x = 1664525 * x + 1013904223` (`0x19660d`, `0x3c6ef35f`) eight steps on first use and fills a 32-slot
+table. Each call then steps `x`, returns the slot picked by the previous output's top 5 bits and puts
+`x` there (a Bays-Durham shuffle). The return is `rldicl r3, r0, 0, 34`, the low 30 bits, so `RAND_MAX`
+is `2^30 - 1`. `rand() * 2^-30` is in `[0, 1)` and every point is centred on zero. The bounds in the
+table above hold. A port draws from its own seeded `Rng`: the shuffle state is global and shared with
+every other `rand` caller, so a sequence match is not on offer.
+
+**What is not read:**
 - The mask order at `0x00c47730`.
 - How the constructor seeds `P0..P3` and `obj+0x80`.
 - Whether any other code reads the 60-slot history.
+- What body `+0x4c4` is. [`physics.md`](physics.md) scored it against a throttle square wave as thrust.
+  [`xfade.md`](xfade.md) multiplies it by 3.6 (a m/s to km/h shape) and `magstrip-wake.md` calls it
+  speed. That decides whether a craft coasting fast shakes. A live read after a throttle release at
+  speed settles it: thrust drops at once, speed does not.
 - Whether opponents run the same block. It is inside the per-ship update, but no branch above
   `0x000ebb28` was read for a player test.
 
