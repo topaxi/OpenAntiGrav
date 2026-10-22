@@ -135,13 +135,21 @@ fn material(device: &wgpu::Device, queue: &wgpu::Queue, left: u8) -> wgpu::BindG
                 binding: 2,
                 resource: wgpu::BindingResource::TextureView(&lightmap),
             },
-            // The pad mask and the magstrip wave, never sampled by this pass.
+            // The third to sixth pictures, never sampled by this pass.
             wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::TextureView(&lightmap),
             },
             wgpu::BindGroupEntry {
                 binding: 4,
+                resource: wgpu::BindingResource::TextureView(&lightmap),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(&lightmap),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
                 resource: wgpu::BindingResource::TextureView(&lightmap),
             },
         ],

@@ -12,7 +12,7 @@
 //! `mesh.wesl`'s own `zone_glow` for the visualiser term this module now also
 //! feeds. [`write_vis`] is the seam a caller updates every frame; the rest of
 //! bind group 2's own contents are built once at model load, by
-//! [`scene_bind_group`] - except [`StageArt`]'s four texture views, which
+//! [`scene_bind_group`] - except [`StageArt`]'s two layered arrays, which
 //! [`rebind`] rebuilds alone, on the transition sphere's stage-change edge.
 
 use std::sync::Arc;
@@ -103,13 +103,17 @@ impl StageArt {
 /// (1 - meshUV)`, and runs outside `[0, 1]` wherever the file's own scale
 /// does. All four stage textures share both samplers: same coordinate, same
 /// filter, on either side of the transition sphere.
-pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
-    let texture_entry = |binding| wgpu::BindGroupLayoutEntry {
+///
+/// **Each set is one 2-layer array, Inner at layer 0 and Outer at layer 1**, rather than two
+/// textures: the fold frees two of the fragment stage's sampled-texture bindings so the material
+/// group's six fit in WebGPU's guaranteed 16 (`super::material_layout::FRAGMENT_SAMPLED_TEXTURES`).
+pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 6] {
+    let texture_entry = |binding, view_dimension| wgpu::BindGroupLayoutEntry {
         binding,
         visibility: wgpu::ShaderStages::FRAGMENT,
         ty: wgpu::BindingType::Texture {
             sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            view_dimension: wgpu::TextureViewDimension::D2,
+            view_dimension,
             multisampled: false,
         },
         count: None,
@@ -121,18 +125,16 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
         count: None,
     };
     [
-        texture_entry(1),
+        texture_entry(1, wgpu::TextureViewDimension::D2Array),
         sampler_entry(2),
         sampler_entry(3),
-        texture_entry(4),
+        texture_entry(4, wgpu::TextureViewDimension::D2),
         sampler_entry(5),
-        texture_entry(10),
-        texture_entry(11),
-        texture_entry(12),
+        texture_entry(10, wgpu::TextureViewDimension::D2Array),
     ]
 }
 
-/// Everything [`resources`] builds: the four stage textures' views and the
+/// Everything [`resources`] builds: the two stage arrays' views and the
 /// two samplers they share, and the visualiser lookup's texture, view and
 /// sampler.
 ///
@@ -141,14 +143,10 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 8] {
 /// stage texture is loaded once and never touched again.
 pub(super) struct Resources {
     pub sampler: wgpu::Sampler,
-    /// [`StageArt::track`].
+    /// [`StageArt::track`] and [`StageArt::track_outer`], layers 0 and 1.
     pub view: wgpu::TextureView,
-    /// [`StageArt::scene`].
+    /// [`StageArt::scene`] and [`StageArt::scene_outer`], layers 0 and 1.
     pub scene_view: wgpu::TextureView,
-    /// [`StageArt::track_outer`].
-    pub outer_view: wgpu::TextureView,
-    /// [`StageArt::scene_outer`].
-    pub scene_outer_view: wgpu::TextureView,
     /// The same texels as [`Self::view`], point-filtered - see
     /// [`layout_entries`].
     pub nearest_sampler: wgpu::Sampler,
@@ -188,30 +186,109 @@ fn upload_view(
         })
 }
 
-/// [`StageArt`]'s four views alone, rebuilt on a stage-change edge by
+/// [`StageArt`]'s two arrays alone, rebuilt on a stage-change edge by
 /// [`rebind`] - see [`RebindResources`] for what stays bound underneath
 /// them.
 pub(super) fn retexture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     stage: &StageArt,
-) -> [wgpu::TextureView; 4] {
+) -> [wgpu::TextureView; 2] {
+    let upload = |texture, label| upload_view(device, queue, texture, label);
     [
-        upload_view(device, queue, &stage.track, "no zone track stage"),
-        upload_view(device, queue, &stage.scene, "no zone scene stage"),
-        upload_view(
+        layered(
             device,
             queue,
-            &stage.track_outer,
-            "no zone track outer stage",
+            &upload(&stage.track, "no zone track stage"),
+            &upload(&stage.track_outer, "no zone track outer stage"),
+            "zone track stages",
         ),
-        upload_view(
+        layered(
             device,
             queue,
-            &stage.scene_outer,
-            "no zone scene outer stage",
+            &upload(&stage.scene, "no zone scene stage"),
+            &upload(&stage.scene_outer, "no zone scene outer stage"),
+            "zone scene stages",
         ),
     ]
+}
+
+/// `inner` and `outer` copied into one 2-layer array, layers 0 and 1, every mip level: the
+/// same texels the two textures held, so a sample of a layer is a sample of its texture.
+///
+/// An `outer` of another size, format or chain cannot share the array, and layer 1 repeats
+/// `inner`, which makes the transition sphere a no-op (logged). HD/Fury's 30 stage files are all
+/// one size, so this is the fallback for a title that ships otherwise.
+fn layered(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    inner: &wgpu::TextureView,
+    outer: &wgpu::TextureView,
+    label: &str,
+) -> wgpu::TextureView {
+    let (inner, outer) = (inner.texture(), outer.texture());
+    let shared = outer.size() == inner.size()
+        && outer.format() == inner.format()
+        && outer.mip_level_count() == inner.mip_level_count();
+    if !shared {
+        log::warn!(
+            "{label}: the outer stage ({:?} {:?}) cannot share the inner's array ({:?} {:?}); \
+             the transition sphere draws the inner stage on both sides",
+            outer.size(),
+            outer.format(),
+            inner.size(),
+            inner.format()
+        );
+    }
+    let array = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(label),
+        size: wgpu::Extent3d {
+            depth_or_array_layers: 2,
+            ..inner.size()
+        },
+        mip_level_count: inner.mip_level_count(),
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: inner.format(),
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
+    for (layer, source) in [inner, if shared { outer } else { inner }]
+        .into_iter()
+        .enumerate()
+    {
+        for mip in 0..inner.mip_level_count() {
+            encoder.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: source,
+                    mip_level: mip,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: &array,
+                    mip_level: mip,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: layer as u32,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                inner
+                    .size()
+                    .mip_level_size(mip, wgpu::TextureDimension::D2)
+                    .physical_size(inner.format()),
+            );
+        }
+    }
+    queue.submit(Some(encoder.finish()));
+    array.create_view(&wgpu::TextureViewDescriptor {
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        ..Default::default()
+    })
 }
 
 /// The samplers and the views to bind, for a model that has the Zone stage
@@ -256,7 +333,7 @@ pub(super) fn resources(
         min_filter: wgpu::FilterMode::Nearest,
         ..Default::default()
     });
-    let [view, scene_view, outer_view, scene_outer_view] = retexture(device, queue, stage);
+    let [view, scene_view] = retexture(device, queue, stage);
 
     let vis_texture = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("zone vis"),
@@ -310,8 +387,6 @@ pub(super) fn resources(
         sampler,
         view,
         scene_view,
-        outer_view,
-        scene_outer_view,
         nearest_sampler,
         vis_texture,
         vis_view,
@@ -321,7 +396,7 @@ pub(super) fn resources(
 
 /// Everything bind group 2 keeps across a stage-change edge: the layout, the
 /// two stage samplers, the visualiser lookup and the shadow map. What
-/// changes on the edge is [`StageArt`]'s four texture views alone, which
+/// changes on the edge is [`StageArt`]'s two arrays alone, which
 /// [`rebind`] rebuilds; this is what it rebuilds the bind group *against*.
 ///
 /// **`pub` only because it has to be.** [`Built`](super::Built) needs a
@@ -340,22 +415,20 @@ pub struct RebindResources {
     vis_view: wgpu::TextureView,
     vis_sampler: wgpu::Sampler,
     shadow: super::shadow_map::Resources,
-    /// The four stage views the group was first built with, for [`rebind_buffer`]: a drawable
+    /// The two stage arrays the group was first built with, for [`rebind_buffer`]: a drawable
     /// moved onto a shared buffer straight after it is built keeps the stage it was given.
-    stage: [wgpu::TextureView; 4],
+    stage: [wgpu::TextureView; 2],
 }
 
-/// Bind group 2 itself, from the stage's four texture views and everything
+/// Bind group 2 itself, from the stage's two arrays and everything
 /// [`RebindResources`] keeps underneath them. The one assembly
 /// [`scene_bind_group`]'s initial build and [`rebind`]'s later one share, so
-/// the fourteen entries are written down exactly once.
+/// the entries are written down exactly once.
 fn bind_group(
     device: &wgpu::Device,
     fog_buffer: &wgpu::Buffer,
     track: &wgpu::TextureView,
     scene_tex: &wgpu::TextureView,
-    track_outer: &wgpu::TextureView,
-    scene_outer: &wgpu::TextureView,
     kept: &RebindResources,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -411,14 +484,6 @@ fn bind_group(
             wgpu::BindGroupEntry {
                 binding: 10,
                 resource: wgpu::BindingResource::TextureView(scene_tex),
-            },
-            wgpu::BindGroupEntry {
-                binding: 11,
-                resource: wgpu::BindingResource::TextureView(track_outer),
-            },
-            wgpu::BindGroupEntry {
-                binding: 12,
-                resource: wgpu::BindingResource::TextureView(scene_outer),
             },
             wgpu::BindGroupEntry {
                 binding: 13,
@@ -518,11 +583,6 @@ pub(super) fn scene_bind_group(
             shadow_entries[1],
             shadow_entries[2],
             shadow_entries[3],
-            // The Outer half of the Zone stage's two texture sets - see
-            // [`StageArt::track_outer`]/[`StageArt::scene_outer`]. Numbered
-            // past the shadow map for the same reason binding 10 already is.
-            zone_entries[6],
-            zone_entries[7],
             // The per-craft sun-occlusion array, binding 13 - past everything
             // above for the same reason, and in this group because a hull
             // picks its layer by a uniform field rather than by a bind group.
@@ -567,8 +627,6 @@ pub(super) fn scene_bind_group(
         stage: [
             zone_resources.view.clone(),
             zone_resources.scene_view.clone(),
-            zone_resources.outer_view.clone(),
-            zone_resources.scene_outer_view.clone(),
         ],
     };
     let bind = bind_group(
@@ -576,8 +634,6 @@ pub(super) fn scene_bind_group(
         &fog_buffer,
         &zone_resources.view,
         &zone_resources.scene_view,
-        &zone_resources.outer_view,
-        &zone_resources.scene_outer_view,
         &kept,
     );
 
@@ -605,16 +661,8 @@ pub fn rebind(
     kept: &RebindResources,
     stage: &StageArt,
 ) -> wgpu::BindGroup {
-    let [track, scene_tex, track_outer, scene_outer] = retexture(device, queue, stage);
-    bind_group(
-        device,
-        fog_buffer,
-        &track,
-        &scene_tex,
-        &track_outer,
-        &scene_outer,
-        kept,
-    )
+    let [track, scene_tex] = retexture(device, queue, stage);
+    bind_group(device, fog_buffer, &track, &scene_tex, kept)
 }
 
 /// Bind group 2 again, over `buffer` instead of the one [`scene_bind_group`] made, with the
@@ -626,16 +674,8 @@ pub fn rebind_buffer(
     device: &wgpu::Device,
     kept: &RebindResources,
 ) -> wgpu::BindGroup {
-    let [track, scene_tex, track_outer, scene_outer] = &kept.stage;
-    bind_group(
-        device,
-        buffer,
-        track,
-        scene_tex,
-        track_outer,
-        scene_outer,
-        kept,
-    )
+    let [track, scene_tex] = &kept.stage;
+    bind_group(device, buffer, track, scene_tex, kept)
 }
 
 /// The visualiser's per-band peak-hold, which the original keeps in its own
