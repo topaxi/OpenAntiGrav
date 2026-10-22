@@ -154,8 +154,10 @@ output = [960, 544]
 output_note = "the Vita's own 960x544"
 aspect = "psp"
 profile_key = "Wipeout 2048 (Vita)"
-status = "no pair script: Vita3K tap walk reached an intro cinematic, no race (2026-10-20)"
+status = "scripts/vita-2048-pair.py: a grid-before-GO pair from a walked campaign event (2026-10-22)"
 [platform.2048.emulator]
 name = "Vita3K"
+version = "v0.2.1 4095-84184a36"
+renderer = "Vulkan"
 resolution_multiplier = 1     # 1x native 960x544
-capture = "vita3k-drive.py race --screenshot"
+capture = "vita-2048-pair.py (vita3k-drive.py display, launcher and input)"

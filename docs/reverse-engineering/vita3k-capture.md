@@ -270,6 +270,24 @@ Vineta K entry name (`Data\art\published\environments\<stem>\track.vex` with
 `rpcs3_place.py` (basis rows, w-0 rows, position w 1, transpose after them), with
 different offsets and little-endian; the role-word trick carries over.
 
+## A private profile, and a walk that waits on the screen (2026-10-22, pairs-2048)
+
+`scripts/vita-2048-pair.py` drives everything below; the recipe it replaces `vita3k-drive.py race` with is in `docs/tools/compare-page.md`, "2048 (Vita) pairs".
+
+- **A private profile needs four things.** `pref-path` at a directory of its own whose `ux0/app`, `ux0/addcont`, `ux0/license` and the other `ux0` entries are
+  symlinks to the real ones and whose `ux0/user` is a copy (4 MiB; the save in it is the maintainer's progress, which opens the campaign map), a **copy of
+  `ux0/temp/apps.dat`** (without it one launch of `-r PCSF00007` answered `CLI parsing error: --installed-path: PCSF00007 not in {}` and exited at once, after three
+  that had worked), a private `HOME` (the shader cache is `~/.cache/Vita3K/shaders`, 39 MiB, copied there so a first race does not compile everything) and
+  `SDL_AUDIODRIVER=dummy` (`audio-volume: 0` still opens a PipeWire stream).
+- **The title screen**: about 8 s after the window appears `Return`, then three `x` at 4 s spacing reach the Game Mode grid with the PSN prompt gone.
+- **Single Player Campaign opens on the second tap** of `(295, 162)` (the first highlights the tile) and shows the campaign map straight away on a save past Event 1.
+- **Screens are told apart by mean luma** of a 96x54 grey copy: menus and the loading screen 0.7 to 0.9, the ship flyby and the race 0.2 to 0.4, the pause menu 0.53; the race
+  HUD is the one dark frame with 150 or more pixels at or above 235 in the 150x70 box at `(10, 8)` ("LAP" and "TOTAL").
+- **The countdown**: after Retry the HUD's first frame comes 2.4 s after the confirm tap, the camera sweeps in for about 0.5 s, and the clock reads `0.00.00` for the
+  next ~4.5 s. `import -window` takes a frame in about 0.16 s.
+- **Metro Park's Time Trial never finishes loading** (56 %, three boots, with and without a private `HOME` and a dummy audio driver; the log's last line is a missing
+  `TrackProfiles/park_Profile.xml` and nothing is opened after it). Events 1 and 2 of the campaign load in 20 to 30 s. Not investigated further.
+
 ## What a frame is, legally
 
 A screenshot of the running game is game content, so no frame is committed.
