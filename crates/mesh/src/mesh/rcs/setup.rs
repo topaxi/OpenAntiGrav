@@ -217,10 +217,26 @@ pub(super) fn material_setup(
         report,
     );
     super::mag_wave::merge(&mut mag_emissive, ice_masks);
+    // Sebenco's snow-capped rock binds six pictures: its mask third, the snow's normal
+    // fourth, the rock and its normal fifth and sixth, and three entries.
+    let snow = super::snow_rock::snow_rock(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut skins,
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, snow.mask);
+    super::mag_wave::merge(&mut wave_maps, snow.snow_normal);
     // A hull's normal map rides the same third binding, and its materials are
     // none of the families above.
-    let (hull_maps, material_tangent) =
+    let (hull_maps, mut material_tangent) =
         super::hull_normal::hull_normal(model, &material_variants, textures, &mag_emissive, report);
+    for (tangent, snow) in material_tangent.iter_mut().zip(&snow.tangent) {
+        *tangent |= snow;
+    }
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
     // Water reads its picture as a normal map and has none to paint.
     super::water::water(
@@ -273,7 +289,7 @@ pub(super) fn material_setup(
     // After the curves, because it appends a track of its own (the outline's offset is its
     // material's curve driving a parameter), and after every glow-index family, because it
     // only takes a slot none of them did.
-    let (fifth_maps, sixth_maps) = super::chevron_pulse::chevron_pulse(
+    let (chevron_emasks, chevron_waves) = super::chevron_pulse::chevron_pulse(
         model,
         model_blob,
         &material_variants,
@@ -283,6 +299,9 @@ pub(super) fn material_setup(
         &mut anim_tracks,
         report,
     );
+    let (mut fifth_maps, mut sixth_maps) = (snow.rock, snow.rock_normal);
+    super::mag_wave::merge(&mut fifth_maps, chevron_emasks);
+    super::mag_wave::merge(&mut sixth_maps, chevron_waves);
     MaterialSetup {
         textures: skins,
         lightmaps: seconds,

@@ -246,6 +246,12 @@ pub struct Report {
     /// missing, the slot is not lit by its albedo's alpha or already names a glow entry, or a
     /// table is full. Drawn without.
     pub chevron_pulse_unread: usize,
+    /// Snow-capped rock materials whose six pictures and constants were bound - see
+    /// `super::snow_rock`.
+    pub snow_rock_bound: usize,
+    /// Snow-capped rock materials left as the generic reading drew them: a picture did not
+    /// decode, a value is missing, the slot names a glow entry, or the table is full.
+    pub snow_rock_unread: usize,
     /// Zone-mode light cells (`dg_zonelights1`) whose blue and mask were bound - see
     /// `super::damage_lights`.
     pub damage_lights_bound: usize,
@@ -462,6 +468,16 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} chevron-pulse material(s) whose emask or wave could not be read (drawn without)"
+            ),
+        } + &match self.snow_rock_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} snow-capped rock material(s) with their mask, rock and normals bound"
+            ),
+        } + &match self.snow_rock_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} snow-capped rock material(s) whose pictures or values could not be read (drawn as bare rock)"
             ),
         } + &match self.damage_lights_bound {
             0 => String::new(),

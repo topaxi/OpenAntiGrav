@@ -58,6 +58,7 @@ mod hd_quake_lift;
 mod hd_scenery_animation_ground_truth;
 mod hd_shadowed_track_redraw;
 mod hd_ship_hull_material_ground_truth;
+mod hd_snow_rock_ground_truth;
 mod hd_speed_pad_owner_ground_truth;
 mod hd_spu_vertex_light;
 mod hd_track_surface_ground_truth;

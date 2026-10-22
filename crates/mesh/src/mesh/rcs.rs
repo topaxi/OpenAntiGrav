@@ -197,6 +197,7 @@ mod pad_ne;
 mod pads;
 mod picture_tint;
 mod refraction;
+mod snow_rock;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;

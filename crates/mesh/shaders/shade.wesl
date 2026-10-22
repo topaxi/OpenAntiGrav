@@ -91,7 +91,28 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The mapped normal feeds the sun's `N.L`, the specular's `N.H` and the probe
     // lookups; a pad takes its own frame above and has no tangent.
     var n_hull = n;
-    if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
+    // **Sebenco's snow-capped rock** (`Emissive::program` mode 4, `oag_mesh::mesh::rcs::snow_rock`):
+    // the mask (third binding, second pair) mixes the snow's normal (fourth) with the rock's
+    // (sixth) before the frame, and the rock (fifth) into the snow below. Both normals and the
+    // rock are read at the diffuse coordinate times the entry's scale (the rock's; the snow's
+    // normal at the coordinate itself).
+    let snow_entry = (in.slots >> 24u) & 127u;
+    let snow = snow_entry != 0u && emissives.scale[snow_entry].z > 3.5
+        && emissives.scale[snow_entry].z < 4.5;
+    var snow_mask = 0.0;
+    var rock = vec4<f32>(0.0);
+    if snow {
+        let rock_uv = in.texcoord * emissives.scale[snow_entry].x;
+        snow_mask = material_sample(pad_mask, albedo_sampler, in.lightmap_texcoord.zw).x;
+        rock = material_sample(fifth_map, albedo_sampler, rock_uv);
+        let bump = mix(
+            material_sample(wave_map, albedo_sampler, in.texcoord),
+            material_sample(sixth_map, albedo_sampler, rock_uv),
+            snow_mask,
+        );
+        n_hull = hull_normal(bump, n, in.tangent);
+        n_lit = n_hull;
+    } else if dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         n_hull = hull_normal(material_sample(pad_mask, albedo_sampler, in.texcoord), n, in.tangent);
         n_lit = n_hull;
     }
@@ -797,7 +818,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // `NO_SPECULAR` (`oag_mesh::mesh::NO_SPECULAR`) is a hull program's with no
         // `pow(N.H, e)` in it; any other draw keeps the shared stand-in there.
         let no_specular = in.specular_exponent <= 0.0 && colour_factor;
-        let specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
+        var specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
         // **`slots::LIT_ALPHA`**: the program lights the albedo's alpha and tints the
         // specular with its RGB (`light * albedo.a + spec * albedo.rgb`, read off
         // `reversed_diffuse_specular_normal` and `cf_chevron_pulse` on Anulpha Pass);
@@ -806,9 +827,25 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // not its alpha, so the tint is the decoded colour and the grey albedo the
         // raw alpha. `docs/rendering/hd-track-tone.md`, "The blue cast".
         let lit_alpha = (in.slots & 2147483648u) != 0u;
-        let albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
-        let specular_mask = select(texel.a, 1.0, lit_alpha);
-        let specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
+        var albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
+        var specular_mask = select(texel.a, 1.0, lit_alpha);
+        var specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
+        // **Sebenco's snow-capped rock**: the snow shaded toward `pale` by `N.V` (the bumped
+        // normal), the rock mixed in by the mask, and the exponent and the alpha-weighted
+        // specular colour each mixed the same way - the program's `@0x29`..`@0x43`. `pale` is
+        // the program's constant beside the decoded texels, as its arithmetic has it.
+        if snow {
+            let snow_c = emissives.tint_offset[snow_entry];
+            let shaded = mix(snow_c.rgb, albedo_linear, dot(n_lit, to_eye));
+            albedo_linear = mix(shaded, pow(rock.rgb, vec3<f32>(2.2)), snow_mask);
+            specular_exponent = mix(snow_c.w, emissives.scale[snow_entry].w, snow_mask);
+            specular_mask = 1.0;
+            specular_tint = mix(
+                texel.a * emissives.tint_offset[snow_entry + 1u].rgb,
+                rock.a * emissives.tint_offset[snow_entry + 2u].rgb,
+                snow_mask,
+            );
+        }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))

@@ -154,6 +154,8 @@ fn the_report_names_both_kinds_of_absence() {
         mag_wave_unread: 0,
         chevron_pulse_bound: 0,
         chevron_pulse_unread: 0,
+        snow_rock_bound: 0,
+        snow_rock_unread: 0,
         damage_lights_bound: 0,
         damage_lights_unread: 0,
         vertex_scrolls: 0,

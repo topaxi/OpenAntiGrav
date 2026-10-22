@@ -70,6 +70,12 @@ pub const PROGRAM_BW_GLASS: f32 = 2.0;
 /// `super::rcs::chevron_pulse`.
 pub const PROGRAM_CHEVRON: f32 = 3.0;
 
+/// [`Emissive::program`]'s mode for `sebenco_snow`: snow and rock mixed by a
+/// painted mask (third binding, second coordinate pair), each with its own normal
+/// map (fourth and sixth), the rock fifth; the entry and the two after it carry
+/// the program's constants. See `super::rcs::snow_rock`.
+pub const PROGRAM_SNOW: f32 = 4.0;
+
 /// The `rate` an entry of [`Model::emissive`](super::Model::emissive) carries
 /// to say "this surface takes no Zone grade": a value no material's own entry
 /// reaches (rates are `0`, `1` and the water family's `2`), read by
