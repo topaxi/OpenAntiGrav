@@ -2018,12 +2018,12 @@ than between a thread and the code.
   backdrop samples as the same offset that reveals the digits crosses them -
   the timing and colours fit, but nothing has sampled the backdrop's own UV
   cell against the texture to confirm it, the way this page's own digit
-  windows are confirmed. Frames
-  from both renders in `scratch/lane-wire-report.md`.
+  windows are confirmed. The frames from both renders were a lane's scratch
+  output and are not kept.
 
   **The per-node `+0xe4` static UV override table this page used to name as
   a competing glyph-selection candidate is chased and ruled out, live and
-  separately from the above**: `scratch/gantry_dump_e4.py` reads the pointer
+  separately from the above**: a throwaway script (not kept; method in `billboards.md`) reads the pointer
   at `+0xe4` for all 19 of slot 8's own instances on Talon's Junction, at
   load, +3 s and +6 s into a real countdown, and it is `NULL` at every point
   checked, including the digit board's own submesh - see
@@ -2170,8 +2170,7 @@ fixed, deliberately, and recorded so it is not rediscovered.**
 > *"the gantry does have a black background, while ours is transparent"*
 
 Visible in the side-by-side capture taken the same day
-(`scratch/gantry-compare/side-by-side-countdown.png`, ours left, original
-right): the original's countdown board is an opaque dark panel that the
+(a scratch image, not kept: ours left, original right): the original's countdown board is an opaque dark panel that the
 digits sit on, so the arch reads as a screen. Ours lets the environment
 through behind the glyphs, which is why the board picks up the red-brown of
 the structure behind it and reads as a tint rather than a display.

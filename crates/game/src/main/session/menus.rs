@@ -575,7 +575,7 @@ impl Session {
         title: &'static oag_title::Title,
         platform: oag_disc::Platform,
     ) {
-        let rect = display::viewport(self.gpu.output.size(), self.aspect());
+        let rect = self.scene_rect(self.gpu.output.size());
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
             // The row reads what the game is drawn at, which under gamescope is not the stored
             // value until the player picks one.

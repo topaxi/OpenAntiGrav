@@ -838,6 +838,17 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
                 snow_mask,
             );
         }
+        // **A pane's specular** is weighted by `1 - a` alone (`pane_clear`, below): the traced
+        // `glass_texture_customr` program has no alpha gloss term, so the generic gloss-in-alpha
+        // mask must not weight it a second time.
+        let pane_entry = (in.slots >> 24u) & 127u;
+        if pane_entry != 0u
+            && emissives.scale[pane_entry].y > 8.5
+            && emissives.scale[pane_entry].y < 9.5
+            && emissives.tint_offset[pane_entry].y > 0.5
+        {
+            specular_mask = 1.0;
+        }
         let specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
                 * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))

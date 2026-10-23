@@ -7,7 +7,6 @@ use anyhow::{Context, Result};
 use log::{debug, error, info};
 use oag_core::{TickClock, TickRate};
 
-use oag_display::display;
 use oag_game::render::Renderer;
 use oag_game::{boot, launcher, loading, prefetch, settings};
 use oag_gameplay::ControlScheme;
@@ -200,7 +199,11 @@ impl App {
         // [`Self::race_profile`] - and using it here saves that first-frame
         // reallocation.
         let render_profile = self.race_profile();
-        let rect = display::viewport(gpu.output.size(), self.settings.display.aspect);
+        let rect = crate::window::scene_rect_of(
+            &self.settings.display,
+            crate::window::is_fullscreen(&gpu.output.window),
+            gpu.output.size(),
+        );
         let gamescope =
             crate::window::under_gamescope_cached(gpu.output.window.current_monitor().as_ref());
         let target = oag_game::settings::web::render_target(

@@ -25,7 +25,7 @@ clip itself) and
 | Joint (rotation/translation/scale) channels | **Absent on every clip checked** - all seven counts are zero | 85 |
 | What the four checked curves actually animate | `uvOffset.x`/`.y`, confirmed by parameter-table hash, not position | 92 |
 | What one curve's own shape is, in isolation | A per-material wipe/reveal ramp, not a four-state plateau | 85 - measured directly, see below |
-| How this connects to `3`/`2`/`1`/`GO` reading correctly | **Material 2's curve alone is the mechanism** - it drives both the digit glyph mesh and the backdrop panel; materials 1/3/4's curves belong to geometry the pre-existing panel-clip and `fx350` strip already remove before a frame draws | 88 - real headless captures plus a curve-disabled control render, `scratch/lane-wire-report.md`, one boot |
+| How this connects to `3`/`2`/`1`/`GO` reading correctly | **Material 2's curve alone is the mechanism** - it drives both the digit glyph mesh and the backdrop panel; materials 1/3/4's curves belong to geometry the pre-existing panel-clip and `fx350` strip already remove before a frame draws | 88 - real headless captures plus a curve-disabled control render, one boot (the frames were scratch output and are not kept) |
 
 ## What this is, and how it was found
 
@@ -303,8 +303,8 @@ every material's `anim` index forced to `0` (curve replay disabled): the
 backdrop panel and the digits vanish together at every tick checked, rather
 than only the digits going missing - which is what would have shown if a
 separate, curve-independent node swap did the red/green change, and is not
-what happened. Frames from both the real and the control render are in
-`scratch/lane-wire-report.md`.
+what happened. The frames from both the real and the control render were scratch output
+and are not kept.
 
 **What is still not settled**: `3` and `2` reveal together rather than
 strictly one after the other (consistent with two of the glyph's five UV

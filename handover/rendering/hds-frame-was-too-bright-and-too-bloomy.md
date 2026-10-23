@@ -504,8 +504,7 @@ unenumerated data source.
 **Net: three candidate mechanisms are now refuted, and the root cause is
 still not established.** No shading code changed - `mesh/`, `mesh.wgsl`,
 `emissive.rs`, `sky_cube.rs` are unchanged, per this project's own rule
-against tuning to a reference in the absence of a recovered term. Full
-findings, including the gate run, are in `scratch/lane-light-report.md`.
+against tuning to a reference in the absence of a recovered term. The lane's full report was scratch output and is not kept.
 
 2026-09-17, later still (`lane-hd-ceiling`): **the per-material microcode
 sweep two sessions asked for is done, and it names the wrong operation.**

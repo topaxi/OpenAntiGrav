@@ -745,8 +745,7 @@ start until `resume()` is called with every watch already in place.
 
 ### Result: one write, same PC, two independent boots
 
-Both runs (`scratch/gantry-watch-run1.log`, `scratch/gantry-watch-run3.log` in
-this lane's own worktree) landed on the exact same instance index and PC,
+Both runs (logs were scratch output and are not kept) landed on the exact same instance index and PC,
 from a fresh boot each time with a different heap layout:
 
 | Run | instance base | hit address | submesh index | node pointer |
@@ -1070,7 +1069,7 @@ replay correctly too, but their geometry - the chequered-flag state, slot
 from every frame by mechanisms this project already had
 (`oag_render::gantry::clip_to_panel`, `::strip_fx350_art`), so they never
 reach a player's eye regardless. Confirmed by actually playing it
-(`scratch/lane-wire-report.md`'s captures) and by a control render with
+(the lane's captures, scratch output not kept) and by a control render with
 every curve disabled, which drops the backdrop and the digits together -
 not by reading the curves' own sampled numbers in isolation, which is what
 made a single curve look like a wipe with no state to select in the first
@@ -1105,9 +1104,9 @@ re-derived.
 
 ### Live result: `node+0xe4` is `NULL` on every one of slot 8's 19 instances, at every point checked
 
-`scratch/gantry_dump_e4.py` (this lane's own script, reusing
-`scripts/rpcs3-drive.py`/`rpcs3_debugger.py` exactly as
-`scratch/gantry_watch.py` does - no new watchpoints, a plain memory read) walks
+A throwaway script (this lane's own, not kept; it reused
+`scripts/rpcs3-drive.py`/`rpcs3_debugger.py` exactly as the watchpoint script
+did - no new watchpoints, a plain memory read) walks
 to a race on Talon's Junction under the patched interpreter build, connects
 GDB the instant "Loading Screen Finished" prints (which pauses the CPU with
 zero game-time elapsed), and reads `*(node+0xe4)` for all 19 of slot 8's own
@@ -1167,7 +1166,7 @@ embedded `fx350` art, and the `FINAL LAP` state) is removed from every frame
 by `oag_render::gantry::clip_to_panel`/`::strip_fx350_art`, mechanisms this
 project already had before this lane. Confidence 88, from real headless
 captures across a countdown plus a curve-disabled control render
-(`scratch/lane-wire-report.md`), not from re-reading the curve bytes alone.
+(frames not kept), not from re-reading the curve bytes alone.
 
 **What is not settled**: `3` and `2` reveal together in the captures rather
 than strictly one after another, the full sequence takes about 4 s of the

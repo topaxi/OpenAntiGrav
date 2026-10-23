@@ -104,6 +104,38 @@ pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> disp
     if gamescope { display::WindowMode::Borderless } else { mode }
 }
 
+/// Whether a window is fullscreen right now: it is, by the compositor's report, or it is under
+/// gamescope, which opens every window borderless whatever the saved mode says
+/// ([`effective_mode`]). The saved `window_mode` alone misses both gamescope and an F11 toggle.
+pub(crate) fn is_fullscreen(window: &winit::window::Window) -> bool {
+    window.fullscreen().is_some() || under_gamescope_cached(window.current_monitor().as_ref())
+}
+
+/// The shape the game is drawn at: the setting, or in a fullscreen window a fixed fullscreen
+/// resolution's own shape under `free` ([`display::FullscreenResolution::letterboxed`]).
+pub(crate) fn scene_aspect(settings: &oag_game::settings::Display, fullscreen: bool) -> display::Aspect {
+    if fullscreen {
+        settings.fullscreen_resolution.letterboxed(settings.aspect)
+    } else {
+        settings.aspect
+    }
+}
+
+/// The aspect rectangle the scene's resolution is measured against: the surface's, or in a
+/// fullscreen window the fixed `display.fullscreen_resolution` when the player picked one.
+pub(crate) fn scene_rect_of(
+    settings: &oag_game::settings::Display,
+    fullscreen: bool,
+    surface: (u32, u32),
+) -> (f32, f32, f32, f32) {
+    let basis = if fullscreen {
+        settings.fullscreen_resolution.target(surface)
+    } else {
+        surface
+    };
+    display::viewport(basis, scene_aspect(settings, fullscreen))
+}
+
 /// The windows a multi-window layout opens. Under gamescope it is one: every window of a client
 /// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck,
 /// 2026-10-14; `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
