@@ -60,18 +60,23 @@ impl Session {
         // A multi-window race shares one scene allocation, the largest any window wants, so
         // window 1's ceiling is its own target rather than that allocation.
         let ceiling = if self.windowed_race() {
-            self.target_for(surface)
+            self.target_for(self.fullscreen(), surface)
         } else {
             self.framebuffer.allocation()
         };
-        self.drs_limits_for(surface, ceiling)
+        self.drs_limits_for(self.fullscreen(), surface, ceiling)
     }
 
-    /// The bounds for a window of `surface` pixels whose ceiling is `ceiling`: window 1's, or a
+    /// The bounds for a window of `surface` pixels, `fullscreen` or not, whose ceiling is `ceiling`: window 1's, or a
     /// further window's of a multi-window race (the one controller's scale is applied to each
     /// window's own ceiling).
-    pub(super) fn drs_limits_for(&self, surface: (u32, u32), ceiling: (u32, u32)) -> drs::Limits {
-        let rect = self.scene_rect(surface);
+    pub(super) fn drs_limits_for(
+        &self,
+        fullscreen: bool,
+        surface: (u32, u32),
+        ceiling: (u32, u32),
+    ) -> drs::Limits {
+        let rect = crate::window::scene_rect_of(&self.settings.display, fullscreen, surface);
         // Off the **render profile**, like the ceiling it pairs with: a target
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.

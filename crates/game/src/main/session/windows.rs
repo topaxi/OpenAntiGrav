@@ -365,32 +365,35 @@ impl Session {
     pub(super) fn screen_targets(&self) -> Vec<(u32, u32)> {
         self.screens
             .iter()
-            .map(|screen| self.target_for(screen.output.size()))
+            .map(|screen| {
+                self.target_for(crate::window::is_fullscreen(&screen.output.window), screen.output.size())
+            })
             .collect()
     }
 
-    /// The shape the game is drawn at ([`crate::window::scene_aspect`]), by window 1's actual
+    /// The shape window 1 is drawn at ([`crate::window::scene_aspect`]), by its actual
     /// fullscreen state.
     pub(super) fn aspect(&self) -> display::Aspect {
         crate::window::scene_aspect(&self.settings.display, self.fullscreen())
     }
 
     /// The aspect rectangle the scene's resolution is measured against
-    /// ([`crate::window::scene_rect_of`]). Only the size is used, the scene is stretched into
-    /// the surface's own rectangle afterwards.
+    /// ([`crate::window::scene_rect_of`]) for window 1. Only the size is used, the scene is
+    /// stretched into the surface's own rectangle afterwards.
     pub(super) fn scene_rect(&self, surface: (u32, u32)) -> (f32, f32, f32, f32) {
         crate::window::scene_rect_of(&self.settings.display, self.fullscreen(), surface)
     }
 
-    /// Whether window 1 is fullscreen now (gamescope, F11 and the saved mode all count). Every
-    /// window is sized by window 1's state, as it is the one the profile's mode opens.
-    fn fullscreen(&self) -> bool {
+    /// Whether window 1 is fullscreen now (gamescope, F11 and the saved mode all count). A
+    /// further window asks [`crate::window::is_fullscreen`] of its own window.
+    pub(super) fn fullscreen(&self) -> bool {
         crate::window::is_fullscreen(&self.gpu.output.window)
     }
 
-    /// The render target a window of `surface` pixels wants at the profile's render scale.
-    pub(super) fn target_for(&self, surface: (u32, u32)) -> (u32, u32) {
-        let rect = self.scene_rect(surface);
+    /// The render target a window of `surface` pixels, `fullscreen` or not, wants at the
+    /// profile's render scale.
+    pub(super) fn target_for(&self, fullscreen: bool, surface: (u32, u32)) -> (u32, u32) {
+        let rect = crate::window::scene_rect_of(&self.settings.display, fullscreen, surface);
         oag_game::settings::web::render_target(
             rect,
             self.render_scale_for(rect),
@@ -567,10 +570,14 @@ impl Session {
     /// rather than waiting for the end screens. What the end screens read
     /// ([`Self::end_screen_pointer`]).
     pub(crate) fn seat_pointers(&mut self) -> Vec<SeatPointer> {
-        let aspect = self.aspect();
+        let settings = &self.settings.display;
         self.screens
             .iter_mut()
             .map(|screen| {
+                let aspect = crate::window::scene_aspect(
+                    settings,
+                    crate::window::is_fullscreen(&screen.output.window),
+                );
                 let rect = display::viewport(screen.output.size(), aspect);
                 (screen.pointer.take(), rect)
             })
@@ -721,8 +728,9 @@ impl Session {
     ) {
         let profile = self.render_profile();
         let surface = screen.output.size();
-        let rect = display::viewport(surface, self.aspect());
-        let wanted = self.target_for(surface);
+        let fullscreen = crate::window::is_fullscreen(&screen.output.window);
+        let rect = display::viewport(surface, crate::window::scene_aspect(&self.settings.display, fullscreen));
+        let wanted = self.target_for(fullscreen, surface);
         let device = &self.gpu.device;
         screen.framebuffer.resize_output(device, surface);
         // Window 1's allocation, the scene's own; this window's extent inside it.
@@ -731,7 +739,7 @@ impl Session {
         // while every window holds one seat; the ceiling itself otherwise (`Session::drs_runs`).
         let wanted = if self.drs_runs() {
             self.drs
-                .extent(self.drs_limits_for(surface, wanted))
+                .extent(self.drs_limits_for(fullscreen, surface, wanted))
         } else {
             wanted
         };
