@@ -95,6 +95,12 @@ impl Session {
             // pairing; this is what stops it costing anything.
             profile.target_fps.at_most(self.limiter_hz()),
         )
+        // The blur rung's ceiling is the player's gather resolution, and
+        // there is nothing to shed with the blur off (ADR-0075).
+        .with_blur(
+            (profile.motion_blur != display::MotionBlur::Off)
+                .then_some(profile.motion_blur_resolution),
+        )
     }
 
     /// Draws whatever stage is on screen into the image [`Session::frame`]
@@ -243,6 +249,14 @@ impl Session {
         } else {
             self.drs.extent(drs_limits)
         });
+        // The controller's second output, the blur's gather resolution
+        // (ADR-0075), re-derived every frame the same way and held to the
+        // player's own wherever the extent is held.
+        let blur_resolution = if windowed && !self.drs_runs() {
+            self.render_profile().motion_blur_resolution
+        } else {
+            self.drs.blur_resolution(drs_limits)
+        };
 
         // **Two targets, and which one a stage draws into is whether it has a
         // scene**, per [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
@@ -357,7 +371,7 @@ impl Session {
                     parked.race.set_trail_order(render_profile.trail_order);
                     parked
                         .scene
-                        .set_blur_resolution(render_profile.motion_blur_resolution);
+                        .set_blur_resolution(blur_resolution);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -428,7 +442,7 @@ impl Session {
                 stage.race.set_trail_order(render_profile.trail_order);
                 stage
                     .scene
-                    .set_blur_resolution(render_profile.motion_blur_resolution);
+                    .set_blur_resolution(blur_resolution);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,
