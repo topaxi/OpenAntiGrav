@@ -121,39 +121,84 @@ pub(super) fn upscale_timestamps<'a>(
     Some(oag_post::fsr3::ChainTimestamps { scaled, presented })
 }
 
+/// Which of a frame's chains should have come back with a reading: the half of [`assemble`]'s
+/// rule that says whether a missing one did not run or was not measured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Expects {
+    /// The motion-blur chain encoded on this frame ([`Drawn`]).
+    pub(crate) blur: bool,
+    /// The scene has an HD bloom chain (`race::Scene::has_hd_bloom`).
+    pub(crate) hd_bloom: bool,
+    /// A temporal upscaler is resolving.
+    pub(crate) upscale: bool,
+}
+
 /// A frame's [`drs::Cost`] from what its rings read back, or `None` while a part that should
 /// have come back has not.
 ///
 /// **Absent-because-it-did-not-run is zero; absent-because-it-was-not-measured is a skipped
-/// frame**, and the two are told apart by whether anything temporal is resolving at all
-/// (`expects_upscale`) and whether the scene has an HD bloom chain (`has_hd_bloom`). Treating an
-/// unmeasured chain as free would inflate the budget by the largest single term in it. One
-/// function for window 1 and for every further window ([`Rings::cost`]), so the rule is stated
-/// once.
+/// frame**, and [`Expects`] tells the two apart for each chain. Treating an unmeasured chain as
+/// free would inflate the budget by the largest single term in it. One function for window 1
+/// and for every further window ([`Rings::cost`]), so the rule is stated once.
 pub(crate) fn assemble(
     scene: f32,
     blur: Option<f32>,
     hd_bloom: Option<f32>,
     upscale: Option<(f32, f32)>,
-    has_hd_bloom: bool,
-    expects_upscale: bool,
+    expects: Expects,
 ) -> Option<drs::Cost> {
-    let upscale = match (upscale, expects_upscale) {
-        (Some(pair), _) => Some(pair),
-        (None, false) => Some((0.0, 0.0)),
-        (None, true) => None,
-    };
-    let hd_bloom = match (hd_bloom, has_hd_bloom) {
+    let unless_expected = |reading: Option<f32>, expected: bool| match (reading, expected) {
         (Some(seconds), _) => Some(seconds),
         (None, false) => Some(0.0),
         (None, true) => None,
     };
-    let ((upscale_scaled, upscale_presented), hd_bloom) = upscale.zip(hd_bloom)?;
+    let upscale = match (upscale, expects.upscale) {
+        (Some(pair), _) => Some(pair),
+        (None, false) => Some((0.0, 0.0)),
+        (None, true) => None,
+    };
+    let hd_bloom = unless_expected(hd_bloom, expects.hd_bloom)?;
+    let blur = unless_expected(blur, expects.blur)?;
+    let (upscale_scaled, upscale_presented) = upscale?;
     Some(drs::Cost {
-        scalable: scene + blur.unwrap_or(0.0) + hd_bloom + upscale_scaled,
+        scalable: scene + blur + hd_bloom + upscale_scaled,
         fixed: upscale_presented,
-        blur: blur.unwrap_or(0.0),
+        blur,
     })
+}
+
+/// Whether each recent frame encoded the motion-blur chain, kept so its reading, which lands a
+/// frame or more later, can be told "did not run" from "was not measured" ([`Expects::blur`]).
+///
+/// **Per frame, not the setting**: the chain encodes nothing at `off`, before its scratch
+/// targets exist or when its shaders failed to build, and a setting that names a chain that will
+/// never be timed would skip every frame and freeze the controller. A frame this has forgotten
+/// reads as drawn, a skipped frame rather than a cheap one; it holds four times the readings a
+/// ring can have in flight, so a reading still to come is never that old.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Drawn {
+    frames: [Option<(u64, bool)>; Self::FRAMES],
+}
+
+impl Drawn {
+    const FRAMES: usize = 4 * oag_gpu::timing::PassTimer::SLOTS;
+
+    /// Records whether the chain encoded on `frame`.
+    pub(crate) fn mark(&mut self, frame: u64, drawn: bool) {
+        self.frames[Self::slot(frame)] = Some((frame, drawn));
+    }
+
+    /// Whether the chain encoded on `frame`, `true` once that frame is forgotten.
+    pub(crate) fn drawn(&self, frame: u64) -> bool {
+        match self.frames[Self::slot(frame)] {
+            Some((marked, drawn)) if marked == frame => drawn,
+            _ => true,
+        }
+    }
+
+    fn slot(frame: u64) -> usize {
+        (frame % Self::FRAMES as u64) as usize
+    }
 }
 
 /// Records one ring's reading in a frame's [`Seen`].
@@ -188,6 +233,7 @@ pub(crate) struct Rings {
     upscale: Option<oag_gpu::timing::PassTimer>,
     upscale_presented: Option<oag_gpu::timing::PassTimer>,
     seen: std::collections::BTreeMap<u64, Seen>,
+    blur_drawn: Drawn,
 }
 
 impl Rings {
@@ -200,6 +246,7 @@ impl Rings {
             upscale: ring(),
             upscale_presented: ring(),
             seen: Default::default(),
+            blur_drawn: Drawn::default(),
         }
     }
 
@@ -243,8 +290,14 @@ impl Rings {
     /// Gives back what the scene's render did not write into: **a claim nothing wrote into does not
     /// read back as zero** (see `claim_upscale`), so it is abandoned, as `Session::draw` does for
     /// window 1. `timed` is whether the window's scene pass was bracketed at all: a window of
-    /// several seats is a split and times none of them.
-    pub(crate) fn give_back(&mut self, stats: &oag_present::perf::SceneStats, timed: bool) {
+    /// several seats is a split and times none of them. `frame` is the one [`Self::claim`] took.
+    pub(crate) fn give_back(
+        &mut self,
+        frame: u64,
+        stats: &oag_present::perf::SceneStats,
+        timed: bool,
+    ) {
+        self.blur_drawn.mark(frame, stats.blur_encoded);
         for (timer, written) in [
             (&mut self.pass, timed),
             (&mut self.blur, stats.blur_encoded),
@@ -325,8 +378,11 @@ impl Rings {
             seen.blur,
             seen.hd_bloom,
             seen.upscale.zip(seen.upscale_presented),
-            has_hd_bloom,
-            expects_upscale,
+            Expects {
+                blur: self.blur_drawn.drawn(frame),
+                hd_bloom: has_hd_bloom,
+                upscale: expects_upscale,
+            },
         )
     }
 
@@ -604,8 +660,11 @@ impl Session {
                 blur,
                 hd_bloom,
                 upscale,
-                has_hd_bloom,
-                expects_upscale,
+                Expects {
+                    blur: self.blur_drawn.drawn(reading.frame),
+                    hd_bloom: has_hd_bloom,
+                    upscale: expects_upscale,
+                },
             ) {
                 // With further windows open the controller is fed the cost summed over every
                 // window of the frame, once all of them have come back for it

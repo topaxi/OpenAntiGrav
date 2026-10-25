@@ -277,7 +277,11 @@ once - it was doing it in `ceil(w / tile) * ceil(h / tile)` fragments, which
 at 1080p is 299 threads each running 7,569 serial `textureLoad`s. Splitting
 the reduction into a horizontal pass at `ceil(w / tile)` by `h` and a
 vertical one onto the tile grid puts the first pass's work in 24,840
-fragments instead, and what remains of tile-max is now within noise of free.
+fragments instead, and what remains of tile-max is now within noise of free
+at 1080p on that adapter. It is not at 4K: on a Raphael iGPU the horizontal pass alone
+cost 5.6 ms there, because its loop's runtime trip count kept every load serial. Unrolled
+sixteen wide it costs 1.7 ms (0.7 ms on a Steam Deck), with an identical tile grid; see
+[the half-gather blur rung](motion-blur-half-rung.md).
 This is worth knowing generally: **the reach cap doubles as the tile size, so
 a generous cap makes the tiles large**, and a square reduction over a large
 tile is the one shape where a fullscreen pass can starve the GPU.

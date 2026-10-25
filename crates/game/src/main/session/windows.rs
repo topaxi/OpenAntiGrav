@@ -801,7 +801,7 @@ impl Session {
         );
         screen
             .rings
-            .give_back(&stats, stage.race.window_drawn(window).len() == 1);
+            .give_back(frame, &stats, stage.race.window_drawn(window).len() == 1);
         let presentation = upscale::Presentation {
             reconstruction: profile.reconstruction,
             sharpness: profile.upscale_sharpness.stops(),

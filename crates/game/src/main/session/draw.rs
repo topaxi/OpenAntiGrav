@@ -521,6 +521,10 @@ impl Session {
         // Four unresolved claims end measurement for the run, so this is the
         // difference between "motion blur is off" and "nothing is timed any
         // more".
+        if has_scene {
+            self.blur_drawn
+                .mark(self.frame_index, scene_stats.is_some_and(|stats| stats.blur_encoded));
+        }
         if !scene_stats.is_some_and(|stats| stats.blur_encoded)
             && let Some(timer) = self.blur_timer.as_mut()
         {

@@ -481,6 +481,7 @@ impl App {
             upscale_presented_timer,
             blur_cost: perf::ChainCost::new(),
             blur_timer,
+            blur_drawn: Default::default(),
             hd_bloom_cost: perf::ChainCost::new(),
             hd_bloom_timer,
             cpu_cost: perf::Meter::new(),

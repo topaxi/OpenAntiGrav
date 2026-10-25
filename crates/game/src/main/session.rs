@@ -238,6 +238,10 @@ pub(crate) struct Session {
     /// reductions, a neighbour-max, a gather and a copy, and timing any single
     /// one of them would measure a fraction of the cost.
     pub(crate) blur_timer: Option<oag_gpu::timing::PassTimer>,
+    /// Which recent frames encoded the motion-blur chain, so a reading
+    /// [`Session::blur_timer`] has not brought back is told "blur did not run"
+    /// (free) from "not measured" (a skipped frame). See [`timing::Drawn`].
+    pub(crate) blur_drawn: timing::Drawn,
     /// What Wipeout HD/Fury's read bloom chain costs on the **GPU**, in the
     /// same seconds.
     ///
