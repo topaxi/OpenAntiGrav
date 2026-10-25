@@ -53,7 +53,8 @@ cost sums it like the rest.
 
 ### Why the shed has no patience of its own
 
-The lane's brief asked for patience slower than the extent loop in both directions. A
+Patience slower than the extent loop in both directions was asked for when this was
+designed. A
 shed that waited would either let the extent fall first, which inverts the order this
 exists for, or hold the extent over budget and drop frames. The patience lives on the
 restore side, where a wrong decision is a dropped frame; a single-frame shed costs a
@@ -73,6 +74,9 @@ of frames the same run flipped 3 times.
 - A machine that cannot hold its target with the full gather keeps more pixels: on the
   iGPU at 3840x2160 aiming at 30, mean pixels per frame went from 1.73 to 2.71 MP at the
   same median frame rate.
+- On a large overrun the first decision is now the shed, so the extent falls one
+  `COOLDOWN` (four readings) later than it did: about 133 ms at a 30 fps target, 67 ms at
+  60. The shed itself buys back half the blur chain in that time.
 - `Controller::record`'s return stays the extent; a flip is read off
   `Controller::blur_shed` before and after, and the session logs each one.
 - The thresholds are one set for every blur strength. The maintainer reports half is more

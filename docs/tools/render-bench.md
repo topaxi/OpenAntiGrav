@@ -131,7 +131,10 @@ not need the `perf-probe` feature.
 `--motion-blur-resolution full|half` sets `[render_profiles.<title>] motion_blur_resolution`
 for every run, the blur's gather resolution (`half` gathers a quarter of the pixels and blends
 the smear back at full size). It is recorded in `settings.motion_blur_resolution`, so `compare`
-warns when a full-gather result is set beside a half-gather one. The summary carries
+warns when a full-gather result is set beside a half-gather one. A result written
+before the key existed lacks it, so `compare` also warns between an older result and a
+newer one at the same gather: read the two `settings` dicts before reading that as a
+difference. The summary carries
 `gpu_blur_us` and `gpu_bloom_us` beside `gpu_scene_us` and `gpu_us` (since 2026-10-25; older
 results lack the two keys and `compare` says so instead of a delta).
 
