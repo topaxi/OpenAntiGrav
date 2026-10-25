@@ -164,7 +164,7 @@ pub struct Model {
     /// target's colour space was tried and was wrong both ways: HD's capture
     /// and viewer paths draw these models into a *gamma* target, where the
     /// guard never fired and they rendered dark, and on the linear target it
-    /// over-fired onto every other model including the sky cube. `model_probe`
+    /// over-fired onto every other model including the sky cube. a one-off model render
     /// is what caught the first half.
     pub vertex_colour_is_light: bool,
     /// Whether this model's draws stamp the bloom's glow mask the way the

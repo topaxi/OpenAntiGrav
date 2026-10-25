@@ -12,8 +12,8 @@ a measurement of a file, not a claim about the original.
 Raw captures and extracts are under a scratch directory, not kept (gitignored):
 `shots/` (PPSSPP and ours, same frame), `x/` (extracted fonts and atlases),
 `img/` (atlas montages). Reproducers: `oag-tools` examples `psarc_extract`
-(list or extract a PSARC entry by substring) and `hud_font_probe` (describe a
-`.fnt`, write its atlas as a PNG).
+(list or extract a PSARC entry by substring), and a one-off read that writes
+each `.fnt`'s atlas as a PNG.
 
 ## A. Why Pulse's HUD text reads poorly
 
@@ -107,7 +107,7 @@ unreferenced data, 40 that the engine could draw it.
 colour, 16 alphas, no baked outline), 165 glyphs - and its glyphs are **a
 different typeface**: heavy, squared-off capitals and a single-alphabet
 lowercase, against Pulse's thin rounded technical lowercase-looking face.
-Compared glyph by glyph on both atlases (`hud_font_probe`; montage
+Compared glyph by glyph on both atlases (montage
 `x/hd/DATA02/data/fe/fonts/pulsehud.fnt.atlas.png` against
 `x/pulse-psp-eu/PulseHud.fnt.atlas.png`). HD's own `definition.xml` declares
 `<Values name="HUD" ... Src="Data\FE\Fonts\PulseHud.fnt">` for every language, so

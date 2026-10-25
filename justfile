@@ -119,10 +119,7 @@ lint:
     # holds what it links; this holds that it builds.
     cargo clippy -p oag-net --lib --bins -- -D warnings
 
-# `--tests` builds what has tests to run - libraries, binaries, integration tests -
-# and leaves out the examples, which plain `cargo nextest run` also links but
-# never runs: 283 of them, about 216 CPU-s of a cold build (2026-10-13).
-# `just lint`'s `--all-targets` still type-checks every example.
+# `--tests` builds what has tests to run - libraries, binaries, integration tests.
 #
 # `--cargo-profile quick` builds the workspace at opt-level 0 (Cargo.toml's
 # `[profile.quick]`): nothing here runs a ground-truth test, so the opt-level 2

@@ -332,7 +332,7 @@ platform-specific constants, both read from disassembly rather than guessed:
 
 ### Corpus check: the largest cluster lands exactly on 48,000 Hz
 
-`cargo run -p oag-formats --example hd_rate_probe`, re-run with the new walk
+A one-off read, re-run with the new walk
 wired into `Sound::sample_rate` (the walk is selected by the bank's own
 [`ByteOrder`](../../../../crates/formats/src/byte_order.rs), `Big` on every HD
 bank):

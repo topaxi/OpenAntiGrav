@@ -112,8 +112,7 @@ for the full numbers; not pinned as an assertion there, since the split
 
 ### File/build-version, checked and ruled out; the world-space population does differ on X/Z
 
-2026-09-04, [`shadow_padding_probe.rs`](../../../../crates/vex/examples/shadow_padding_probe.rs)
-(`cargo run -q -p oag-formats --example shadow_padding_probe`) walked all 32
+2026-09-04, a one-off read walked all 32
 mismatching nodes by archive path and directory index to check the two
 remaining Open items directly, rather than guess further.
 

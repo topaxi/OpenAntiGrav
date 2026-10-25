@@ -8,7 +8,7 @@ because this engine's one shared `mesh::rcs` shader lights everything it draws
 and neither program takes a light at all.
 
 Tools: `scripts/ps3-microcode.py fp-file`/`vp-file` for the listings,
-`crates/render/examples/hd_unlit_probe.rs` for the raw material state,
+a one-off read for the raw material state,
 vertex layout and winding, `crates/render/examples/hd_unlit_census.rs` for the
 disc-wide survey, and `crates/raceplay/tests/hd_rim_glow_ground_truth.rs` for
 what is pinned.
@@ -147,8 +147,7 @@ chunks put `Uv1` first, 554 the colour - and nothing in the chunk or in the
 material's attribute slots predicts which (38,054 declared chunks run their
 offsets in slot order, 834 do not). So the rule is read off the data: an
 inline stride-18 chunk whose tail is non-finite on some vertex and whose
-`+0x0a` is finite on every one reads `+0x0a`. `hd_unlit_probe.rs
---undeclared`: 62 chunks qualify, 12 are non-finite in both places and keep the
+`+0x0a` is finite on every one reads `+0x0a`. Counted off the data: 62 chunks qualify, 12 are non-finite in both places and keep the
 tail, 118 have a finite tail and are untouched. Confidence 85.
 
 **This one changes pixels that were already drawn.** Of the 62, the Plasma
@@ -198,7 +197,7 @@ programs, the evidence and the frames are in
   deleted rather than flipped. The defect that held it off was not the cull
   (below), and the 2026-09-25 reading of it was wrong on that point.
   `HD_plasma_ball` is two coincident spheres, one wound outward and one
-  inward (`hd_unlit_probe.rs --built`: 760 of 760 triangles counter-clockwise
+  inward (a one-off read of the built mesh: 760 of 760 triangles counter-clockwise
   about their own normal in both, 760 and 0 wound outward, 760 and 0 with an
   outward vertex normal), under a material that culls; the cull and the
   winding are consistent. What was wrong is the eye: `rim = 1 - N.V` reads
@@ -254,8 +253,8 @@ pixels. **Checked against Omega: checked, applies, not wired** - Omega's
 2026-10-07. The three materials of HD's Bomb detonation
 ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md), 2026-10-07), read
 off their resolved fragment programs with `scripts/ps3-microcode.py` and the
-vertex programs beside them. Probes: `hd_bomb_programs.rs` (which block each
-model resolves to), `hd_unlit_probe.rs --program`.
+vertex programs beside them. Also `hd_bomb_programs.rs` (which block each
+model resolves to).
 
 **Four material parameters are bound by pointer** (`FUN_00677018`): `AlphaAnim`,
 `V_Anim` and `Shockwave_scalar` to the model's own clock (`node + 0xc0`, what
@@ -324,7 +323,7 @@ window).
 **The coordinate of an inline stride-22 chunk** that ends in two colours reads
 `NaN` out of its last four bytes (`ff 9f 00 4c` twice on
 `hd_bomb_shockwaves`). `oag_rcs::rcsmodel` now reads it at `+0x0a`, as it
-already did for stride 18: `hd_unlit_probe --undeclared` finds exactly four such
+already did for stride 18: a one-off read of the undeclared chunks finds exactly four such
 stride-22 chunks (`hd_bomb_shockwaves`, both of `hd_plasma_ring`'s and
 `hd_missile_explosion`'s), eleven others keep their tail. **This moves the
 Plasma explosion's ring** (its coordinate was `NaN`, zeroed): the same program

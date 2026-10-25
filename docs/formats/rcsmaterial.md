@@ -862,7 +862,7 @@ target/release/oag-game --race data/images/hdfury-ps3-eu-dec.iso \
 Nearest draw call to the craft at tick 295 (`[327.2, -42.0, -158.2]`), measured
 **point-to-triangle** rather than by nearest vertex, which on a long sparsely
 tessellated ribbon reads very differently
-(`crates/render/examples/hd_near_probe.rs`, `OAG_NEAREST=1`):
+(`OAG_NEAREST=1`):
 
 | distance | list | texture |
 | --- | --- | --- |
@@ -902,8 +902,7 @@ Every step of that reaches this renderer intact:
 
 So the coverage this renderer computes is the material's own texture, at the
 material's own coordinate, through the material's own channel. Sampled that way
-across all six of the circuit's `etched_glass_tech` draws
-(`crates/render/examples/hd_coverage_probe.rs`):
+across all six of the circuit's `etched_glass_tech` draws:
 
 ```text
 alpha channel 0: 0..214 mean ~33, ~51 % of vertices under 8, ~80 % under 64
@@ -914,14 +913,7 @@ u -3.58..5.66   v 0.13..1.00   on a 512x16 texture
 ~55 %, black across the right ~45 % - and the chunk's `u` tiles it about five
 times along its length. The floor therefore paints as iridescent bands with
 fully transparent gaps between them, which is what a top-down capture of just
-those six chunks shows:
-
-```sh
-OAG_ONLY_MATERIAL=etched_glass_tech cargo run --release -p oag-render \
-    --example model_probe -- \
-    data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
-    /data/environments/talons_junction/track.vex /tmp/glass_top.png
-```
+those six chunks shows.
 
 Two caveats on that histogram, because it is easy to over-read. It samples the
 ramp **at each vertex's own UV**, so it is a per-vertex sample of a tiling ramp
@@ -1341,14 +1333,7 @@ rendered as ragged noisy wisps; the hash puts its second texture
 as the smooth teardrop falloffs a light cone is. Both circuits that author it
 change the same way.
 
-```sh
-OAG_ONLY_MATERIAL=dc_lightcone cargo run --release -p oag-render \
-    --example model_probe -- \
-    data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC \
-    /data/environments/amphiseum/track.vex /tmp/cones.png
-```
-
-Swept for regressions on six circuit models through `model_probe`: five move
+Swept for regressions on six circuit models: five move
 by single-digit lit pixels and one (`01_vineta_k`) not at all; a full race
 frame on `amphiseum` at tick 400 is byte-identical. **What it did not fix is
 the glass floor**, and that was predicted rather than discovered: that
@@ -1845,7 +1830,7 @@ slot 330 at a squared error of 9.4 against a next-best candidate at 20.7 -
 `mag_effect_loop_opaque`. `crates/render/examples/hd_slot_check.rs` on that
 slot read **`no resolved variant`** and **`0 chunk(s)`**, even though a
 752-triangle opaque draw calling itself out by that exact texture sits 0.98
-units from the camera's forward ray (`hd_near_probe.rs`, `OAG_NEAREST=1`).
+units from the camera's forward ray (`OAG_NEAREST=1`).
 
 **Why zero chunks: the chunk-counting pass never walks a chunk's extra
 surfaces.** `oag_rcs::rcsmodel::Mesh::extra_surfaces` is a second (or later)
@@ -2155,7 +2140,7 @@ the discard register `R63`), a free correction found while tracing it for this c
 `data/reference/hd-capture/talons-matched/03.json` frames the *magstrip* panel, not this material (confirmed
 2026-09-13, above) - rendering that exact pose before and after this change is **byte-identical**
 (`frame03-before.png`/`frame03-after.png` under `data/reference/hd-capture/talons-glass-lane/`, gitignored;
-1,175,040 of 1,175,040 pixels equal). `model_probe --pose 76.9,-46,148 OAG_ONLY_MATERIAL=etched_glass_tech`
+1,175,040 of 1,175,040 pixels equal). Rendering that pose with only `etched_glass_tech` drawn
 (the pose this page's "Talon's Junction's missing floor is a glass floor" section already used) shows the same
 six chunks - the material's alpha, and therefore its screen coverage, is byte-for-byte unchanged (`grid.r` was
 already the alpha before this change, reached through `ALBEDO_FROM_SECOND`'s absence rather than
@@ -2475,7 +2460,7 @@ confidence 85 for the arithmetic, read instruction by instruction):
 The vertex program writes the attribute in slot 1 into the `w` of three
 interpolators and `eyePositionWorldSpace - position` into `TC2.xyz`. **That
 attribute is a constant `(0, 0, 1)` on every authored cone** (a `CMP` field,
-raw bytes `7f 80 00 00` in every vertex, `hd_unlit_probe`), not a surface
+raw bytes `7f 80 00 00` in every vertex), not a surface
 normal: the fade is against a fixed axis. Confidence 90.
 
 **The colour saturates before it blends.** With `K` = 100 an unclamped

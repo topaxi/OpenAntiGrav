@@ -202,7 +202,7 @@ impl VariantJoin {
 /// `oag_texture::ship_skin` - not a second one) and `PI_TeamModel
 /// name="Concept"` (`Values location="extra"`), each `Unlock`-gated. Confirmed
 /// against the archive: `extra.vex` resolves for all eight.
-/// `crates/game/examples/pulse_variant_probe.rs` reproduces both counts and
+/// The Pulse variant check reproduces both counts and
 /// the file list without printing the `Unlock` loyalty numbers themselves,
 /// which are shipped tuning data.
 ///

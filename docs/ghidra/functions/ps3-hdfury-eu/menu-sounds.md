@@ -10,7 +10,7 @@ four navigation cues, HD has eight, one per direction, with a second spelling of
 ## `frontend.bnk` has a name table
 
 A reviewer claimed HD's bank had none. It has: `SBlk` version 3, label `FRNTEND`, **27 named cues, 113 waveforms**
-(`crates/game/examples/hd_frontend_bnk_probe.rs` over `hdfury-ps3-eu-dec.iso`; entry `Data\Sound\frontend.bnk`, 2,058,896
+(a one-off read over `hdfury-ps3-eu-dec.iso`; entry `Data\Sound\frontend.bnk`, 2,058,896
 bytes). Only 2048's bank is nameless. Confidence 95.
 
 | Cue | Waveforms | Played by the executable |

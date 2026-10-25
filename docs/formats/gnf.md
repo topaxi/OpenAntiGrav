@@ -456,7 +456,7 @@ exactly.
 1,024 bytes) and no further: a level `w` x `h` texels is
 `ceil(ceil(w/4)/8) * ceil(ceil(h/4)/8) * 1024` bytes, with `w`/`h` halved (to a
 floor of 1) per level, and there are `last_mip_level - base_mip_level + 1` of
-them. `crates/texture/examples/gnf_mip_layout_probe.rs` sums that against the
+them. A one-off read sums that against the
 bytes each file holds past its header: **15,413 of the 15,525 BC7
 `TileMode(13)` files across all nine archives match to the byte.** The other
 112 are the files that carry more than one surface - cubemaps (`skyCube`,

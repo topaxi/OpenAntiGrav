@@ -384,8 +384,7 @@ pub const GUEST_TEAMS: [&str; 12] = [
 /// not depend on `oag-hd`, so this is 2048's own measurement of the same
 /// suffix scheme, not a reference to `oag_hd::race::TEAM_VARIANTS`. Confirmed
 /// to resolve identically under [`HD_SHIP_DIR`]:
-/// `crates/game/examples/hd_fury_variant_probe.rs`'s sibling reproducer,
-/// `team_variants_probe.rs`, covers this title too.
+/// The team-variant check covers this title too.
 pub const GUEST_TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
     teams: &GUEST_TEAMS,
     variants: &[

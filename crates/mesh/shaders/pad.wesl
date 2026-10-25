@@ -7,7 +7,7 @@
 // shape this function:
 //
 // - The authored `T` points along `dP/du` of its triangle (mean dot 0.94 to
-//   0.99 over 252 to 503 triangles per chunk, `hd_pad_tangent_probe`), so
+//   0.99 over 252 to 503 triangles per chunk), so
 //   `dP/du` from screen-space derivatives of the world position and the
 //   texture coordinate stands in for it, with no new vertex attribute.
 //   **The derived frame is chosen, not measured**: the authored stream is

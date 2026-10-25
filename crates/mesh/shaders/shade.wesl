@@ -1012,7 +1012,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     //
     // **This used to key on `linear_out` and that was wrong twice.** It missed
     // HD's capture and viewer paths, which draw the same models into a gamma
-    // target - `model_probe` found them rendering dark, 1,062 lit pixels of a
+    // target - an earlier model render found them rendering dark, 1,062 lit pixels of a
     // 1024x1024 frame against 6,988 once fixed. And it over-fired on the race
     // target, forcing *every* model's tint to white there including the sky
     // cube, whose vertex colour genuinely is a tint because `mesh/sky_cube.rs`

@@ -192,7 +192,7 @@ fn every_pulse_ps2_circuit_group_decodes_a_positive_distance() {
 }
 
 /// `16_Track`'s groups switch between 118.9 and 424.0 units - the figures
-/// `docs/formats/vex.md` quotes from `crates/vex/examples/lod_group_probe.rs`.
+/// `docs/formats/vex.md` quotes from a one-off read of the groups.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
 fn talons_junction_switches_between_119_and_424_units() {

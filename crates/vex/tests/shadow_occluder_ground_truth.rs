@@ -111,7 +111,7 @@ const PSP_OCCLUDERS_LOCAL_SPACE: usize = 119;
 ///
 /// The padded box is doing something shadow-relevant (most divergence pulls it
 /// toward the ground plane) but follows no clean exceptionless rule, and an
-/// earlier overclaim was corrected (2026-09-03/04, `examples/shadow_padding_probe.rs`):
+/// earlier overclaim was corrected (2026-09-03/04, a padding read):
 /// 12 of 14 nodes with a positive header `min.y` get `+0x30`'s floored to `0.0`;
 /// of 54 with the sentinel `max.y`, `+0x40`'s keeps the true value on 16 and is a
 /// hard `0.0` on 38. Not asserted here (circular on `vertex_extent`). See

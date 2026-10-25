@@ -32,7 +32,7 @@
 //! tap, so where the predicated `TEX` does not execute the alpha is
 //! `s * noise * noise`. `f[TC1].w` is the vertex normal's `y` and every
 //! authored cone's normal is the constant `(0, 0, 1)` (raw vertex bytes
-//! `7f 80 00 00` in a `CMP` attribute, `hd_unlit_probe`), so on the gated
+//! `7f 80 00 00` in a `CMP` attribute), so on the gated
 //! variant the tap is skipped everywhere. **That the condition register is
 //! set from `R0` by `FENCT` is a hypothesis**, not documented behaviour: the
 //! opcode writes no register (every one of 59,256 uses names register 63,

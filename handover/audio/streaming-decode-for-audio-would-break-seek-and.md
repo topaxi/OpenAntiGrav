@@ -40,7 +40,7 @@ frame/callback-adjacent thread while keeping the buffer whole.
 
 ## 2026-09-03: the memory number is measured, and it is not the whole question
 
-`cargo run --release -p oag-game --example audio_memory_probe` (new,
+A one-off read (new,
 committed alongside this update) decodes the longest track on each disc
 through the exact path `RaceMusicWorker` uses and reports both the
 `Sound` buffer size and the measured process RSS delta:
@@ -128,7 +128,7 @@ Verified two ways:
   (fake disc paths, no game data needed): the call never blocks, a failed
   fetch leaves state untouched, and a press back to the current release
   drops a switch still in flight.
-- `crates/game/examples/audio_source_switch_probe.rs`, against real discs
+- A one-off read against real discs
   (`pulse-psp-usa.chd`/`pulse-ps2-eu.chd`) and a real `ffmpeg` decode: the
   `set_music_source` call itself measures **0.0 ms**, and the playhead keeps
   advancing through the whole 3-second window the old synchronous version

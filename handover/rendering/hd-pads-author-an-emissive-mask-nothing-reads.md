@@ -64,14 +64,12 @@ is complete and this file is only what it did **not** close.
   normal and is threaded through a specular chain before the program's final
   blend, so register-tracing this pass did not confirm the canonical shape
   end to end for either pad. See `docs/rendering/pads.md`'s "The `_ne` file's
-  RGB is a normal map, not paint" section for the full measurement,
-  `crates/render/examples/hd_pad_ne_colour_probe.rs` and
-  `hd_pad_ne_tint_probe.rs` for the probes. **Do not re-derive this** - the
+  RGB is a normal map, not paint" section for the full measurement. **Do not re-derive this** - the
   question left open is where the red the maintainer saw actually comes
   from, not whether this file's colour explains it.
 - **Which alpha channel gates the accumulate - answered, asset-side,
   2026-09-07.** `_ne`'s own alpha, not the diffuse's. Extended
-  `hd_pad_ne_tint_probe.rs` to print swizzles and write masks and traced
+  a one-off read to print swizzles and write masks and traced
   `R0.w` (the raw `_ne` alpha, written once by the unit-1 `TEX` and never
   overwritten again) forward: it reaches an accumulate at instruction 41
   (`Speedup Pad`)/43 (`Weapon Pad`), `MAD dst.xyz, R0.wwww, C.xyzw,
@@ -283,7 +281,7 @@ whether to spend on wiring it at all, and the two RE leads.
    trap before touching it, twice over" text asked - does the `_ne`-gated
    term reach the program's output through ADDs alone, or through a multiply
    - is now settled by a register-level trace of both pad programs on
-   `12_sol_2`, reproducible from `hd_pad_ne_tint_probe.rs`: **through a
+   `12_sol_2`: **through a
    multiply.** The term is only ever added into the sum it shares with the
    diffuse-alpha-gated term (the earlier "Which alpha channel gates the
    accumulate" section's own equation was already right about that), but
@@ -328,7 +326,7 @@ whether to spend on wiring it at all, and the two RE leads.
    > of 59,256 uses - an exact invariant, not a sampled rate. Confidence 84
    > (`0x3b`/`DIVSQ`) and 90 (`0x3d`/`FENCT`, "no data effect"). Both pad
    > programs' specular chains use only `0x3b`, never `0x3d` - traced with
-   > `hd_pad_ne_tint_probe.rs`'s raw-opcode output. **What is still open,
+   > the raw-opcode output of that trace. **What is still open,
    > unchanged by this**: the tangent frame `mesh.wgsl` needs to build `N` for
    > this chain (this item's own second, smaller blocker, still unaddressed),
    > and the bind-group/third-texture change below, which still depends on

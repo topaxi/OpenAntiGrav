@@ -36,8 +36,7 @@ Evidence:
   the same cross-check `Game_Main`/`GameRoot_Construct` used.
 
 **What this fixes on the container itself**, checked against
-`data/art/published/environments/altima/track.rcsmodel` (17,445,934 bytes) via
-`cargo run -p oag-game --example vita_probe`, and confirmed at the
+`data/art/published/environments/altima/track.rcsmodel` (17,445,934 bytes) via a one-off read, and confirmed at the
 instruction level rather than only decompiled (the allocation size at
 `812f160a: ldr r1,[sp,#0x20]` reads the peeked buffer at its own `+0xc`, and
 the two further sizes at `812f1658`/`812f1664` are loaded from the

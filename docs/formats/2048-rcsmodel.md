@@ -537,8 +537,7 @@ it past 90, and it stays open.
 The three words beside it are still unread: `-0x20` and `-0x1c` are `0`,
 `-0x10` is `0xffffffff` and `-0x08` is `0x00010001` on every file sampled.
 
-Reproducers: `crates/game/examples/vita_rcsmodel_material_index_probe.rs` (the
-sweep and its control group) and `vita_rcsmodel_material_index_check.rs` (the
+Reproducers: `vita_rcsmodel_material_index_check.rs` (the
 craft and the circuit read out in full). Pinned by
 `crates/rcs/tests/psp2_rcsmodel_material_ground_truth.rs`.
 

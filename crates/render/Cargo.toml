@@ -47,7 +47,6 @@ oag-tables.workspace = true
 oag-pure.workspace = true
 oag-testdata.workspace = true
 oag-formats.workspace = true
-oag-pob.workspace = true
 oag-post.workspace = true
 
 [[test]]

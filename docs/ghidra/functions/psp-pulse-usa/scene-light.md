@@ -82,7 +82,7 @@ LIGHT3=0
   with scales `(250, 250, 250, 250)`.
 - `16_Track`'s own `track.vex` authors one `AmbientLight` `(0.1687, 0.1929,
   0.2070)` and three `DirectionalLight`s. Decoded through
-  `oag_vex::lighting` (`crates/vex/examples/light_rig_probe.rs`): colours
+  `oag_vex::lighting`: colours
   `x255` truncated are `(43, 49, 52)`, `(255, 238, 157)`, `(80, 98, 120)` and
   `(49, 60, 73)`, and each times `250 >> 8` is exactly the list above, to the
   unit. The three light vectors are **row 2** of each node's world matrix as
@@ -248,7 +248,7 @@ with the craft pointer at `+0x10`, and its model holds no position. The earlier 
 `+0x8b4` read on Tech de Ra hit the live one.) What the lists say:
 
 - **The rig matches ours to the byte**, scale aside. The vectors are row 2 of the two
-  `DirectionalLight`s' world matrices (`light_rig_probe`), the colours are
+  `DirectionalLight`s' world matrices (a one-off read), the colours are
   `trunc(c * 255) * scale >> 8` with **no intensity** (`0.31` and `0.71` on the ambient
   and the first directional do not enter, again), and the ambient is the sum.
 - **The live list takes no point light**: the craft on the grid is 75.5 units from the

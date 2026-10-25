@@ -2475,7 +2475,7 @@ pointwise exponent too, and 275 of Talon's Junction's 301 drawn materials
 take a lit formula `track_surface`'s own microcode reading does not cover -
 so this does not clear any individual material family, only the aggregate-
 as-one-mechanism reading. Settling a per-material transfer-function defect
-needs the per-material probe (`hd_light_probe.rs` run per material, or a
+needs a per-material read (one run per material, or a
 per-material `.envsettings` sweep), not this whole-region aggregate. The q1
 row is the residual worth carrying forward too: at pose `00` post-aspect-fix
 it is `ours 0.050, ref 0.078`, `+0.028` - a pure power law through the
@@ -2490,8 +2490,7 @@ an exact match.** Talon's Junction's raw `track.envsettings` (dumped with
 `scripts/psarc.py cat`) reads `"Lighting.Constant ambient color"=0.403922
 0.392157 0.509804`, `"Lighting.Sun color"=2.000000 1.827451 0.886275`,
 `"Lighting.Sun specular scale"=1.500000`, `"Lighting.Prelit ambient colour
-scale"=4.000000...`, `"...power"=2.000000...` - and `crates/render/examples/
-hd_light_probe.rs` (a pre-existing scratch probe, unmodified) echoes those
+scale"=4.000000...`, `"...power"=2.000000...` - and a pre-existing one-off read (unmodified) echoes those
 same values back verbatim after the full read/parse/upload path. Nothing is
 read short, scaled, or byte/float-confused for this circuit's core light
 terms.
@@ -3963,8 +3962,7 @@ maps byte 0 to `.x` is exactly the fact in question, and nothing in this
 codebase currently states it either way.
 
 **Tested by swapping R and B and reconstructing the same way
-`hd_amphiseum_ceiling_vertex_light.rs` already does** - new tool,
-`crates/render/examples/hd_amphiseum_ceiling_channel_order_probe.rs`
+`hd_amphiseum_ceiling_vertex_light.rs` already does** - new one-off read
 (committed), top-decile-by-luma then Amphiseum's own authored curve,
 before and after an R/B swap, on the same three materials this thread
 already has readings for:
@@ -7302,7 +7300,7 @@ A `_c1`/`_n1` variant carries the same `Distance`/`Radius` as its base team (`pi
 
 **Candidate 3's other reading, not measured.** The `SVC1` vertex program's decode writes `o[TC0]` (this page, "The `SVC1` combine is read": `14  MUL o[TC0].xyz, v[4].xyzx, R3.wwww`), a texture-coordinate output slot, not `o[COL0]`/`o[COL1]`. RSX-class hardware is documented to clamp colour-interpolator outputs to `[0, 1]` and not texcoord-shaped ones, which would rule out a per-vertex hardware clamp as a cause of the wash (an unclamped `TC0` interpolant would already match `mesh.wgsl`'s own unclamped `spu_light: vec3<f32>` varying) - but that hardware behaviour was not tested here, only read off which output slot the microcode targets, so it is a plausible reading and not a measurement.
 
-**Next step, if this is picked back up:** a live RPCS3 capture of a `Distance = 0.0` team (`assegai`, `harimau`, `ag_systems` or `triakis`) boosted at player size, the same way `bp-081.png` caught Piranha - a throwaway script, not kept already reads the player's hull record and the visible SPU light list at the same breakpoint a screenshot is taken on (`hits.jsonl`, `"lights"` field on `BP_TAKEN_PASS` hits), so the same script run gets both halves of the comparison at once. If that hull washes too, the "gap" reported from play is this engine correctly reproducing a boost effect the original also has on those ships, and the thread closes with no code change. If it does not, candidates 1 and 3 are closed, which leaves the vertex-side geometry itself (the hull's own panel-to-anchor distances against `D`, `hd_engine_light_reach_probe.rs`'s approach applied to the hull mesh instead of the track) as what is left to measure.
+**Next step, if this is picked back up:** a live RPCS3 capture of a `Distance = 0.0` team (`assegai`, `harimau`, `ag_systems` or `triakis`) boosted at player size, the same way `bp-081.png` caught Piranha - a throwaway script, not kept already reads the player's hull record and the visible SPU light list at the same breakpoint a screenshot is taken on (`hits.jsonl`, `"lights"` field on `BP_TAKEN_PASS` hits), so the same script run gets both halves of the comparison at once. If that hull washes too, the "gap" reported from play is this engine correctly reproducing a boost effect the original also has on those ships, and the thread closes with no code change. If it does not, candidates 1 and 3 are closed, which leaves the vertex-side geometry itself (the hull's own panel-to-anchor distances against `D`, the reach read's approach applied to the hull mesh instead of the track) as what is left to measure.
 
 ### The original does not wash a `Distance = 0.0` hull at the boost snap: Assegai and Harimau, live on RPCS3, player's own light read boosted (2026-10-02, confidence 75, "seen" on one verified boot per ship plus one unverified Harimau boot)
 

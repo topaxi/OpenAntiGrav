@@ -1191,7 +1191,7 @@ its own camera the two families share one card.
 `Data/fe/flyers/01_uplift/flyer.vex`, `flyer.rcsmodel`, `flyer_back.*` and
 `logo.gnf` (353 flyer entries in `data00.psarc`), but its `.rcsmodel` opens with
 `0xedad5cca`, PS4 little-endian, which HD's reader rejects (`version
-0xedad5cca, expected 0x000a0000`; `crates/game/examples/omega_flyer_probe.rs`).
+0xedad5cca, expected 0x000a0000`).
 Its campaign screens also draw through Pulse's path, not `hd_grid_draw_list`. Not
 wired: the Omega lane owns that reader.
 
@@ -2762,8 +2762,8 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     **Confirmed real, `pulse-campaign` lane, 2026-09-28 - a direct
     same-widget comparison, not another single-screenshot cap-height ratio.**
     A first check against the `.fnt` files' own `+0x10` line-height field
-    (`docs/formats/fnt.md`'s table, and a new scratch probe reading the raw
-    glyph records, `crates/tools/examples/campaign_font_probe.rs`:
+    (`docs/formats/fnt.md`'s table, and a new one-off read of the raw
+    glyph records:
     `pulse_text.fnt`'s own `'S'` glyph is 12px tall at line-height 13,
     `Pulse_20.fnt`'s is 19px at line-height 22) looked like it closed this as
     "two different bitmap fonts, cap-height ratios need not match line-height
@@ -3278,9 +3278,9 @@ button glyphs (`Buttons` role) are on screen in the same frame, so one slot
 cannot serve both.
 
 **Verified against the disc before wiring it up, not after.**
-`cargo run -p oag-tools --example hd_buttons_font_probe -- <hd iso>
-[out.png]` reads `PS_BUTTONS.fnt` through the same `Archives::read_font`
-production uses and dumps the codepoints this build actually asks it for:
+A one-off read of the HD disc's
+`PS_BUTTONS.fnt` through the same `Archives::read_font`
+production uses dumps the codepoints this build actually asks it for:
 `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/`DifficultyButtonIcon` (`ε`/`γ`/`δ`) all
 carry real glyph boxes, and the atlas dump
 
@@ -3806,7 +3806,7 @@ variant axis, so the hull never reloaded. It now keys on the variant id, reads
 the hull from `variant_location` (the team's directory joined with the suffix by
 the title's own `VariantJoin`: `Feisar` + `_c1` is `Data\Ships\Feisar_c1\ship.vex`,
 `oag_game::preview::variant`), and a variant whose hull is not on the disc draws
-the team's default and logs it (`model_or_default`; all 36 team directories exist, census `hd_fury_variant_probe`, and Feisar's three
+the team's default and logs it (`model_or_default`; all 36 team directories exist, per a one-off census of the disc, and Feisar's three
 hulls were loaded, so the fallback is for a missing hull rather than a known case). The headless `--menu-page ship-select` capture takes the same path
 (`PreviewRequest::fallback`). Test:
 `hd_ship_preview_ground_truth::each_variant_directory_has_a_hull_of_its_own`

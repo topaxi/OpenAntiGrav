@@ -118,7 +118,7 @@
   text". **What it lights is the craft's own engine housing, not the floor**:
   every one of the original's 40 captured records sits 3.0-4.4 units (a ride
   height) from the nearest track surface while `D` is 0.6-2.1, and ours sit
-  2.9-4.5 on the same circuit (`crates/game/examples/hd_engine_light_reach_probe.rs`),
+  2.9-4.5 on the same circuit,
   so the list is bound to the hulls as well as the track - **chosen, not
   measured**: 74 ship materials compile `SVC1` twins and nothing else is in
   range, but the runtime `SVC1` bit on a hull chunk is unobserved. Boosted,

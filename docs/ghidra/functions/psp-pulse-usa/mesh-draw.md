@@ -2147,7 +2147,7 @@ runtime trace: no breakpoint has seen the GE programmed this way.
 
 ### What it costs on screen
 
-`crates/render/examples/threshold_probe.rs` renders a circuit offscreen at
+A one-off offscreen render of a circuit at
 1024x1024 at four yaws, once with each batch's own reference and once with the
 old flat `1/255`:
 
@@ -2249,8 +2249,7 @@ a draw to the hull: `(8.4, -50.1, -197.0)` against the craft at
 ### Which batches: the `0x2000` bit, and the second texture
 
 This is the pass `vex.md` records as "the `0x2000` extra pass and its second
-texture index at material `+0x08`", never drawn until now. `Assegai\Ship.vex`
-(`crates/vex/examples/ship_shine_probe.rs`):
+texture index at material `+0x08`", never drawn until now. `Assegai\Ship.vex`:
 
 | Mesh | Mesh flags | `0x2000` batches (`pass_mask`) | Vertices | Material -> second texture |
 | --- | --- | --- | --- | --- |

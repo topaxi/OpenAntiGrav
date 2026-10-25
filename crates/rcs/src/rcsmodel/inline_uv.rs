@@ -33,7 +33,7 @@ impl Mesh {
     /// which four bytes are *not* a coordinate: a vertex whose tail reads
     /// non-finite is carrying a colour there, and the one other four-byte
     /// field of an 18-byte vertex is the coordinate. Measured disc-wide with
-    /// `crates/render/examples/hd_unlit_probe.rs --undeclared`: 62 inline
+    /// A disc-wide sweep: 62 inline
     /// stride-18 chunks read a non-finite tail on some vertex *and* a finite
     /// `+0x0a` on every vertex (the Plasma ball's and halo's shells, the
     /// LeachBall's sphere, `frontendscene_hd_atg`'s 43 chunks among them);

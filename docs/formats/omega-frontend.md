@@ -54,7 +54,6 @@ just link-data   # in a worktree, once
 cargo run -p oag-assets --example psarc_list -- data/extracted/ps4/omega-eu-patch/uroot/data09.psarc
 cargo run -p oag-assets --example psarc_cat -- data/extracted/ps4/omega-eu-patch/uroot/data09.psarc \
     data/plugins/frontend/gui/skin.xml
-cargo run -p oag-game --example omega_frontend_probe -- data/extracted/ps4/omega-eu-patch/uroot/data09.psarc
 ```
 
 `fd`/`rg` return nothing under `data/` without `--no-ignore` (`psarc.md`'s own
@@ -356,19 +355,13 @@ against HD's own file directly this pass).
 
 ## Does this project's own parser read it? Yes, for the globals and the boot chain
 
-**Deliverable 3, done rather than scoped.** A ten-line probe was cheap here:
-[`crates/game/examples/omega_frontend_probe.rs`](../../crates/game/examples/omega_frontend_probe.rs)
-reads a `.psarc` directly (`oag_assets::psarc::Archive`), runs
+**Deliverable 3, done rather than scoped.** A ten-line one-off read was cheap here:
+it reads a `.psarc` directly (`oag_assets::psarc::Archive`), runs
 `oag_tables::fexml::is_fexml`/`expand` the same way
 `crates/game/src/boot/screens.rs::load_screens` does, and parses the result
 through `oag_ui::screen::Screens::from_xml` - no Omega-specific code, no new
 dependency edge (`oag-game` already depends on both `oag-assets` and
 `oag-ui`).
-
-```sh
-cargo run -p oag-game --example omega_frontend_probe -- \
-    data/extracted/ps4/omega-eu-patch/uroot/data09.psarc
-```
 
 ```
 data/plugins/frontend/gui/skin.xml: 41150 bytes -> 27 screens, 74 globals, 24 LoadXML includes

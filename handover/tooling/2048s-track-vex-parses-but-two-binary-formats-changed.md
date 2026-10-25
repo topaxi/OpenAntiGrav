@@ -8,10 +8,9 @@ for the codebase-lineage question this corroborates further (confirmed
 `../oag-2048` (`git worktree add`), against `data/extracted/vita/PCSF00007/base/PSP2/data.psarc`
 (1.6 GiB, EU base package, decrypted per
 [the eboot thread](2048s-vita-eboots-are-imported-re-not-started.md)'s pipeline -
-the patch archives were deliberately not touched, see below). Two scratch probes
-are the reproducer for every claim here: `crates/game/examples/psarc_list.rs`
-(lists/filters a loose `.psarc`'s manifest) and `crates/game/examples/vita_probe.rs`
-(everything else, `cargo run -p oag-game --example vita_probe -- <psarc path>`).
+the patch archives were deliberately not touched, see below). Every claim
+here was read off a loose `.psarc` with `crates/assets/examples/psarc_list.rs`
+(lists/filters a loose `.psarc`'s manifest) and a one-off read for everything else.
 
 ## What already works, unmodified
 
@@ -358,7 +357,6 @@ are unrelated to anything above.
 Full evidence for both: `docs/formats/2048-rcsmodel.md`'s "`Uv1`'s type is
 cracked too" and "The material table is read" sections. Reproducers:
 `crates/game/examples/vita_rcsmodel_uv_oracle.rs` (the UV oracle),
-`vita_rcsmodel_material_probe.rs` (finding the table structurally),
 `vita_rcsmodel_material_count_bound.rs` (the 64-cap trap),
 `vita_rcsmodel_render_e2e_check.rs` and `vita_rcsmodel_texture_format_census.rs`
 (the PVRTII sweep).
@@ -434,7 +432,6 @@ Full evidence: [gxt.md](../../docs/formats/gxt.md) and
 `vita_gxt_hd_texture_pairs.rs` and `vita_gxt_hd_oracle.rs` (the HD pairing),
 `vita_gxt_pvrtc_smoothness.rs` (the metric that did not work, plus the
 hard-transition and palette-path census),
-`vita_rcsmodel_material_index_probe.rs` (the sweep and its control group) and
 `vita_rcsmodel_material_index_check.rs` (the craft and circuit read out).
 
 
@@ -502,7 +499,7 @@ reachability: 2048 has no front end, so before Race Remix the only team
 `oag_2048::race::DEFAULT_TEAM` (`feisar2048\3`, `--race` with no `--team`) -
 nothing before now ever tried a second one.
 
-**The reproducer**, `crates/game/examples/remix_2048_roster_probe.rs`: of the
+**Measured on the 2048 roster**: of the
 17 teams `crate::catalogue::teams` reads off 2048's plugin definition, **0
 resolve** against `craft_title.race.handling_dir` joined directly with the id
 - the same join that works for every other title. Two different reasons, by
@@ -516,7 +513,7 @@ roster half:
   to produce `feisar2048\3` from it, because nothing in the definition states
   which of the four numbered variants a bare pick should mean. All 20
   (5 teams x 4 variants) resolve fine once the number is supplied by hand -
-  confirmed variant by variant in the probe.
+  confirmed variant by variant in a one-off read.
 - **The 12 HD-derived teams** (`Feisar`, `Qirex`, `Assegai`, `Auricom`, ...)
   need [`HD_SHIP_DIR`](../../crates/2048/src/race.rs) instead of
   [`HANDLING_DIR`](../../crates/2048/src/race.rs) - the tree "What is left"
@@ -538,8 +535,8 @@ own five (`feisar2048\3`, a numbered *subdirectory*) and HD/Fury's twelve
 label. A VARIANT row now appears on both the RACE and RACE REMIX pages
 whenever the picked team is one `team_variants` names, defaulting to the
 first variant offered. Entry resolution for all 20 native combinations
-(5 teams x 4 ship types) is confirmed by
-`crates/game/examples/team_variants_probe.rs`; a full race actually loading
+(5 teams x 4 ship types) is confirmed by a
+one-off read of the 2048 data; a full race actually loading
 on a combined id neither title's own `DEFAULT_TEAM` reaches - HD's
 `Assegai_c1`, 2048's `Auricom2048\1` - is pinned in
 `race_remix_ground_truth::a_team_variant_races_on_both_join_shapes`. **Only

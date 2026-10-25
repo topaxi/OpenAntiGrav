@@ -29,8 +29,7 @@ side**, and only a free-play named mode takes `ready` / `go`.
 
 ## What the banks author
 
-Names are FNV-hashed (`Bank::is_hashed`), resolved with `oag_formats::sblk::cue::name_hash`
-(`crates/formats/examples/bank_name_probe.rs`).
+Names are FNV-hashed (`Bank::is_hashed`), resolved with `oag_formats::sblk::cue::name_hash`.
 
 | Cue | Bank | Cue / commands | Body |
 | --- | --- | --- | --- |

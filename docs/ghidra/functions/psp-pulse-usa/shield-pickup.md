@@ -313,8 +313,7 @@ Confidence **85**: both decompiles agree and the Concept hull's name has no othe
 source; the live registry value of a Concept race was **not** read (the
 Concept model is behind a loyalty unlock this profile does not have).
 
-**The PSP disc carries it**, for all eight teams, in both regions
-(`crates/game/examples/pulse_shield_probe.rs`): `extrashield.vex` is a
+**The PSP disc carries it**, for all eight teams, in both regions: `extrashield.vex` is a
 different file from `shipshield.vex` on every team (9,536 to 9,776 bytes), and it
 references `pulse_shield_extra_ADD.tga` for six teams and `pulse_shield_test_ADD.tga`
 for Feisar and Triakis. **`extrawreck.vex` is on the disc too** (19,536 to

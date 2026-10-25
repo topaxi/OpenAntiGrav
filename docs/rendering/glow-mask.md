@@ -83,8 +83,7 @@ table above:
    Confidence 85.
 
 On `16_Track`, `pass_mask & 0x80` is set on 214 of 2,079 batches over 21
-textures, and every one of the 21 is named `_GLOW`; no batch sets `0x40`
-(`crates/vex/examples/light_rig_probe.rs`). On Assegai's hull it is one of
+textures, and every one of the 21 is named `_GLOW`; no batch sets `0x40`. On Assegai's hull it is one of
 14 batches, the blink lights. The 2026-08-10 census on `bloom.md` counted
 `0x40` alone and found none, which is why the mask looked unused.
 

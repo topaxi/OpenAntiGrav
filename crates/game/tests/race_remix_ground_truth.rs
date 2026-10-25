@@ -195,7 +195,7 @@ fn a_2048_track_races_with_a_pure_craft() {
 }
 
 /// **A team the VARIANT row can pick actually races**, on both join shapes -
-/// not just that its handling-stats entry resolves (`team_variants_probe`
+/// not just that its handling-stats entry resolves (the team-variants check
 /// checks that alone), but that the whole race loads: the model, the livery,
 /// the HUD too, since a combined id feeds all of them through the same
 /// `dir\team\file` join `oag_tables::handling::entry_name_in` and
@@ -377,7 +377,7 @@ fn the_catalogue_offers_2048s_own_track_list() {
         .unwrap_or_else(|e| panic!("cataloguing {}: {e:#}", source.display()));
 
     // The ten circuits the base package ships - see
-    // `crates/game/examples/team_variants_probe.rs`'s sibling reproducer for
+    // the team-variants check, a sibling reproducer for
     // this fix, and `oag_2048::race::DEFAULT_TRACK` for `altima`, the one
     // every other 2048 test already exercises.
     assert_eq!(

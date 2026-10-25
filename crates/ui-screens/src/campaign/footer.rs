@@ -130,7 +130,7 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// rather than the one `face_atlas_slot` already spends on `Title`/`Default`,
 /// because the two are needed in the same frame (a screen title and this
 /// screen's own footer) and one slot cannot serve both. Verified against the
-/// disc: `oag-tools --example hd_buttons_font_probe` decodes real
+/// disc: a one-off read decodes real
 /// circled-glyph art at the codepoints `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/
 /// `DifficultyButtonIcon` resolve to (`ε`/`γ`/`δ`), a cross, a circle and a
 /// square, matching the RPCS3 captures shape for shape (compared by eye, not a pixel
@@ -322,8 +322,7 @@ impl NavigationLegend {
             // `DATA02` - `crates/game/src/boot/fonts.rs`'s own module doc);
             // [`face_role`] maps that to [`oag_ui::language::roles::BUTTONS`],
             // a real third atlas `oag_game::boot::fonts::load_buttons_font`
-            // loads (see [`face_role`]'s own doc for the `oag-tools --example
-            // hd_buttons_font_probe` verification this rests on: the
+            // loads (see [`face_role`]'s own doc for the read this rests on: the
             // codepoints these two widgets and `Cell Selection`'s own
             // `DifficultyButtonIcon` resolve to - `"ε"`/`"γ"`/`"δ"` - decode
             // to real circled cross/circle/square glyph art, not empty boxes).

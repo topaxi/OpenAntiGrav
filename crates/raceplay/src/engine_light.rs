@@ -57,7 +57,7 @@
 //! `data/traces/hd-spu-light-companion/` sits 2.98-4.41 units (mean 4.03)
 //! from the nearest collision triangle of the circuit it was captured on,
 //! against 2.85-4.53 (mean 4.09) for this project's lights on the same
-//! circuit over a 1,200-tick race - `crates/game/examples/hd_engine_light_reach_probe.rs`.
+//! circuit over a 1,200-tick race.
 //! Not one record on either side is within its own `D` of the floor. (That
 //! circuit is **Talon's Junction**, not the Amphiseum renderer.md's capture
 //! entry names: scored against all sixteen circuits' collision soups,

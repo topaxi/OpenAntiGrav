@@ -158,9 +158,6 @@ oag-shader-check.workspace = true
 workspace = true
 
 [dev-dependencies]
-# `examples/audio_memory_probe.rs` reads the process's resident set; the `perf`
-# overlay's own reading lives in `oag-present`.
-memory-stats = { version = "1.2.0", features = ["always_use_statm"] }
 oag-testdata.workspace = true
 oag-pob.workspace = true
 zip = { version = "8", default-features = false, features = ["deflate"] }

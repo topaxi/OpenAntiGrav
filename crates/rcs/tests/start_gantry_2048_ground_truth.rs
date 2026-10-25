@@ -341,7 +341,7 @@ fn translation_x_at(data: &[u8], nodes: &[vex::Node], name: &str, seconds: f32) 
 ///
 /// Values are the exact ones a real decode produces (frame times `/60`
 /// exactly land on the tenth of a millisecond this compares at), read with
-/// `cargo run -p oag-game --example gantry_2048_anim_probe`.
+/// a one-off sample of the animation tracks.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn each_digit_slides_on_screen_for_its_own_window_then_off() {

@@ -550,8 +550,7 @@ loaded by `Banks::load_countdown` from the mode's bank on a title whose
 
 What the port plays at the start, and what each title's own banks author. Render with
 `cargo run -p oag-game --example countdown_census -- <image> <out.wav>` (`CENSUS_SFX=1` keeps the effects bus
-on, which HD's speech needs: its speech bus rides the effects slider); list a bank's cues with
-`crates/formats/examples/bank_name_probe.rs`.
+on, which HD's speech needs: its speech bus rides the effects slider).
 
 | Title | Port plays now | Original authors | Trigger and timing |
 | --- | --- | --- | --- |
@@ -1290,7 +1289,7 @@ for the PSP's, `sas_pitch_scaled`/`sample_rate_hz_at` generalized for HD's
 own `HD_NEGATIVE_CENTRE_SCALE`/`HD_SAMPLE_RATE`), and `Sound::pitch`/
 `Sound::sample_rate` pick the pair off the bank's own byte order - `Big` on
 every HD bank, the same signal `Bank::order` already carries. Re-run against
-the real corpus (`cargo run -p oag-formats --example hd_rate_probe`, 50 banks,
+the real corpus (50 banks,
 6,548 descriptors): the near-standard-rate count barely moves (5,763 -> 5,773
 of 6,548), but which descriptors are exact does - the largest single cluster,
 1,803 descriptors at `(centre -60, fine 0)`, moves from 48,051 Hz (0.1% off,

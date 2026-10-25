@@ -28,7 +28,7 @@ census this page builds on.
 | Layer | Reads? | Notes |
 | --- | --- | --- |
 | [PSARC](psarc.md) container | **yes** | Nine archives across the base package and the patch; version and flags not diffed against HD's own PS3 copies this lane. |
-| Front-end XML (`Screens::from_xml`) | **yes** | `skin.xml`, `mainmenu_definition.xml`, `cellmode_definition.xml`, `additional_definition.xml` all parse with the same `oag_ui::screen::Screens` reader HD and Pulse/Pure use - confirmed both by `crates/game/examples/omega_frontend_probe.rs` (docs-only sweep) and by this lane's own boot (`Data\Plugins\Frontend\Gui\Skin.xml: 27 screens, 74 globals, 24 LoadXML includes`). |
+| Front-end XML (`Screens::from_xml`) | **yes** | `skin.xml`, `mainmenu_definition.xml`, `cellmode_definition.xml`, `additional_definition.xml` all parse with the same `oag_ui::screen::Screens` reader HD and Pulse/Pure use - confirmed both by a docs-only sweep and by this lane's own boot (`Data\Plugins\Frontend\Gui\Skin.xml: 27 screens, 74 globals, 24 LoadXML includes`). |
 | `FEGlobals` menu layout | **yes, bit-identical to HD's** | Ten of ten authored globals match HD's own `skin.xml` to the digit, re-derived directly against `data09.psarc` in `crates/omega/src/frontend.rs` rather than copied - see that module and its ground-truth test. |
 | Boot chain shape | **declared, not measured** | Same eight redirects in the same order as HD's `DATA00`/`DATA05`/`DATA06` family, no dead `LogoFMV`. `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it the way HD's RPCS3 capture did. |
 | Campaign schema (`CellMode_Definition.xml`) | **yes, HD's own schema** | `Grid Selection`/`Cell Selection` as `FlyerSelection`/`CellSelection` screens, plain UTF-8 (not Pulse's dictionary-shortened copy). Nineteen grids where HD has sixteen (`oag_omega::campaign::GRID_COUNT`), confirmed by direct listing. Sixteen of nineteen parse (2026-09-30; twelve when this row was written) - grids 16-18 carry no `RequiredPoints` attribute and are skipped with a logged warning; the rest fail per-row the same tolerant way a bad HD grid already does (`docs/formats/hd-frontend.md`'s note on `grid_04.xml`'s own broken tag). |
@@ -363,7 +363,7 @@ still (`--menu-page ship-select`) and a `--race --team Feisar --variant _c1`/`_n
 
 **2048 cross-check.**
 - *Team definition and ratings*: **checked, applies, not wired.** 2048's own `Data\plugins\teams\Definition.xml` is the same shape: the catalogue reader finds
-  17 teams and 104 `PI_TeamModel` with an `<FE>`, all 104 rated (`omega_ship_select_probe`, run on `PCSF00007/base`). 2048 authors no
+  17 teams and 104 `PI_TeamModel` with an `<FE>`, all 104 rated (run on `PCSF00007/base`). 2048 authors no
   `Team Selection` (and so no per-player pair), so nothing draws them.
 - *PS4/Vita `.rcsmodel` hull as a preview*: **checked, applies, not wired.** `psp2_scene::model` reads the Vita container too (`mesh::rcs::psp2::is_psp2`); 2048 has no ship screen to draw it.
 - *Numbered craft (`Subdirectory` join) in the honeycomb*: **done on Omega 2026-10-14** (`omega-2048-era-teams`, next section); 2048's own result is there.
@@ -1369,9 +1369,7 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
 - **Defaults are chosen, not measured:** `tech_de_ra` and `ag_systems`. Zone,
   boost, speed classes and every per-team variant table stay `None`.
 
-Reproducers: `crates/vex/examples/omega_track_probe.rs`, `omega_col_probe.rs`;
-`crates/rcs/examples/omega_rcsmodel_probe.rs`, `omega_rcsmodel_census.rs`,
-`omega_materials_probe.rs`; and the ground-truth suite
+Reproducers: `omega_rcsmodel_census.rs`; and the ground-truth suite
 `crates/raceplay/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
 `OAG_REQUIRE_GAME_DATA`) on a short-read extraction.
 

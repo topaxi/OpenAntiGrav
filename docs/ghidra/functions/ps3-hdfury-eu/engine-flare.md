@@ -175,11 +175,11 @@ The models' authored `Uv1` is neither `0..1` nor `0..0.5` - Feisar's ten flare
 nodes span roughly `0.19..0.81` in `u` and `0.37..0.86` in `v`, with one node
 running `-0.91..2.26` - so the doubling is a deliberate difference of scale
 between the noise and colour taps rather than an asset authored to be halved.
-`cargo run -p oag-render --example hd_flare_probe` prints those spans.
+A one-off read prints those spans.
 
 **The face-on 1.1 survives a race and clamps everywhere else.** A race draws
 into `post::hd_bloom::SCENE_FORMAT`, a linear float target, where a fragment
-alpha above 1.0 reaches the blend intact; `model_probe`, the asset viewer and
+alpha above 1.0 reaches the blend intact; the asset viewer and
 the capture path draw the same models into a gamma target, where it clamps to
 1.0 first. So the flame is measurably dimmer in those three than in the game,
 by up to 10 % of its own contribution. A property of the target, recorded
@@ -509,9 +509,3 @@ python3 scripts/ps3-microcode.py fp-file /tmp/flame_test.rcsmaterial
 python3 scripts/ps3-microcode.py vp-file /tmp/flame_test.rcsmaterial 1
 ```
 
-and the model side, which needs no decryption either:
-
-```sh
-cargo run --release -p oag-render --example hd_flare_probe /data/ships/feisar/engineflare
-cargo run --release -p oag-render --example hd_flare_tree  /data/ships/feisar/engineflare
-```

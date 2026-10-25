@@ -1019,7 +1019,7 @@ That is a format-recovery task in its own right, scoped to Edge's own
 container rather than to Wipeout's, and plausibly reusable well past this one
 billboard if Edge is used elsewhere in HD's animation system (nothing here
 checked that). Per this lane's own standing instruction, no value is
-synthesised in its place: `crates/rcs/examples/hd_gantry_curve_probe.rs`
+synthesised in its place: a one-off read
 reproduces every reading on this page directly off the extracted file and
 stops exactly where the bytes stop being Wipeout's own to read.
 

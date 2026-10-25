@@ -56,7 +56,7 @@
 //! same frame - the same clock the scenery's texture animation already rides.
 //!
 //! **Only a race binds it.** `mesh_render::Scene::off` - what the sky, the
-//! asset viewer and `model_probe` bind - carries a zero clock, so the flame
+//! asset viewer and a one-off model render bind - carries a zero clock, so the flame
 //! stands still in those and scrolls in a race. That is deliberate: a viewer
 //! showing one surface has no race clock to ride, and a frozen phase is what a
 //! still comparison wants anyway. Measured on screen at

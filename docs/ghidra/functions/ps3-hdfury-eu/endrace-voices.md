@@ -56,7 +56,7 @@ cell.
 None is chosen. Each cue is one timeline of two grains: `FIRST_PLACE` cmd 13..14 keys the pair at tick 200 (angle 30) and
 205 (angle 330) of the PS3 bank's 240 Hz clock; `gold_med` the same; `gold_med_shrt` 200 and 206. The two waveforms of a
 cue have the same length (24224/24224 for `FIRST_PLACE`), so they are the left and right of one recording, not
-alternates (`crates/game/examples/hd_frontend_bnk_probe.rs`, `CUES=FIRST_PLACE,gold_med`). The line therefore starts
+alternates (a one-off read of the `FIRST_PLACE` and `gold_med` cues). The line therefore starts
 **200 ticks (0.83 s) after the trigger**, authored in the bank. Confidence 90 (a direct read of the command list).
 
 **The Fury style**: neither site reads `FrontEnd_IsFuryStyle`, so there is no Fury spelling and no style choice. 85.

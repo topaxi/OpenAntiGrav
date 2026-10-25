@@ -364,8 +364,7 @@ the US disc, each set against this engine under the then-current
   `lodShape` over it, darkening the rear in a ring and hiding the decal. The
   pose is matched to the grid slot, not to the pixel.
 - **A track `LodGroup`** on `16_Track`'s grandstand, well inside every
-  authored switch distance (`118.9` to `424.0` units, from
-  `crates/vex/examples/lod_group_probe.rs`). The original shows tier 0's
+  authored switch distance (`118.9` to `424.0` units). The original shows tier 0's
   mottled grass texture; `both` lays tier 1's flat panels and seams over it;
   `single` matches the original. The pose is approximate: the original frame
   is from the absorb probe's grid run, its camera a few units off ours.
@@ -417,8 +416,7 @@ the walker that tests it.
 
 **The distances in practice.** `16_Track`'s groups switch at `118.9` to
 `424.0` units; every racing craft's own `lodGroup1` switches at **`30.0`**
-(`Data\Ships\Assegai\Ship.vex` and `Qirex`, via
-`crates/vex/examples/lod_group_probe.rs`). So tier 1 is in constant use:
+(`Data\Ships\Assegai\Ship.vex` and `Qirex`). So tier 1 is in constant use:
 almost every opponent more than 30 units ahead draws as its coarse
 `lodShape` (315 triangles on Assegai against tier 0's 1,130), and distant
 track scenery draws its coarse tier. Up close, only tier 0 shows, which is
@@ -1105,8 +1103,8 @@ the old threshold was already discarding a sliver of real Pulse geometry too,
 not only Pure's pad.
 
 **And moving from that flat `1/255` to the per-batch reference costs less than
-it sounds like it should.** The same instrument, rebuilt as
-`crates/render/examples/threshold_probe.rs` and run at four yaws rather than
+it sounds like it should.** The same instrument, rebuilt as a
+one-off read and run at four yaws rather than
 one, and re-measured under the `<=` discard: `01_Track` 85,704 -> 85,619 lit
 over four frames with 1,681 pixels differing, `16_Track` 520,731 -> 520,690
 with 6,553. Nothing structural leaves

@@ -317,8 +317,7 @@ detail, every crop path and the exact pixel measurements:
 `BackButton`/`DifficultyButtonIcon` (`font="buttons"`) now draw through a
 genuine third face atlas (`oag_ui::language::roles::BUTTONS`,
 `render::Renderer::set_buttons_atlas`) rather than being excluded - verified
-against the disc first with a new scratch tool,
-`cargo run -p oag-tools --example hd_buttons_font_probe`. The
+against the disc first with a new one-off read. The
 `Grid Selection` "third prompt" the previous pass on this thread named as
 open turned out not to exist: the RPCS3 capture it cited
 (`rpcs3-grid0-3-2/00-default.png`) is `Cell Selection`, not `Grid Selection

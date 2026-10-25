@@ -84,8 +84,7 @@ fn the_scale_is_not_a_rate_ratio_anyone_would_guess() {
 }
 
 /// Wipeout HD's walk: same tables, `HD_NEGATIVE_CENTRE_SCALE` and
-/// `HD_SAMPLE_RATE`. Cross-checked against `cargo run -p oag-formats --example
-/// hd_rate_probe` on the real disc; see
+/// `HD_SAMPLE_RATE`. Cross-checked against the real disc; see
 /// `docs/ghidra/functions/ps3-hdfury-eu/sound.md`'s "The pitch".
 #[test]
 fn hd_s_own_scale_lands_its_largest_cluster_on_an_exact_rate() {

@@ -116,7 +116,7 @@ fn texcoords_decode_for_the_same_fraction_the_census_found() {
         100.0 * with_texcoords as f64 / submeshes as f64
     );
     assert_eq!(files, 993, "the three EU packages ship 993 .rcsmodel");
-    // The census (vita_rcsmodel_texture_probe.rs) measured 92.5%; assert the
+    // The one-off texture census measured 92.5%; assert the
     // same order of magnitude rather than the exact figure, so an unrelated
     // change to submesh acceptance does not make this test flaky.
     assert!(

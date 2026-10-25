@@ -31,7 +31,7 @@
 //! texels; the 7,823 asking for `0x10` lose 431,576 of 17,005,223 (2.54 %),
 //! all alpha `1..=16`.
 //!
-//! **In pixels** (`crates/render/examples/threshold_probe.rs`, four yaws at
+//! **In pixels** (a four-yaw threshold read at
 //! 1024x1024, each bucket isolated), the picture is the other way round:
 //!
 //! | | `01_Track` | `16_Track` |

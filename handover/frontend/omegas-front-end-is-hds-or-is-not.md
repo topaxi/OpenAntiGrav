@@ -8,8 +8,7 @@ HD's own headline table (ten of ten authored globals match to the digit),
 the boot chain is declared identically (no dead `LogoFMV`, same eight
 screens), and this project's existing `oag_ui::screen::Screens` reader
 parses Omega's `skin.xml`/`mainmenu_definition.xml`/`cellmode_definition.xml`
-with zero code changes
-([`crates/game/examples/omega_frontend_probe.rs`](../../crates/game/examples/omega_frontend_probe.rs)).
+with zero code changes.
 2048's campaign is neither purely re-authored into HD's vocabulary nor kept
 as 2048's own: the screen *shape* (`Campaign Selection` -> `Grid Selection
 2048` -> `Cell Selection 2048`) is HD's `FlyerSelection`/`CellSelection`

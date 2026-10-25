@@ -28,9 +28,8 @@ open.
   the race-start prompts. They go through other renderers; each needs
   `set_prompt_substitution` from `session::prompts::refresh_prompts`.
 - **Pure and Omega tables.** Pure's glyphs were not read (`Prompts::UNREAD`).
-  Omega's `PS_BUTTONS.fnt` is HD's at 2x but its PS4 art was not rendered; run
-  `oag-tools --example prompt_glyph_probe` against it (it needs an `oag-omega`
-  dev-dependency) before filling a table.
+  Omega's `PS_BUTTONS.fnt` is HD's at 2x but its PS4 art was not rendered; render
+  it and read the cells before filling a table.
 - **HD's `Δ Γ Β Α`** (four arrow-like marks in `PS_BUTTONS.fnt`) stay the
   disc's: which direction each is was not established.
 - **A wide key on a small face.** The keyboard's backspace is fitted into the

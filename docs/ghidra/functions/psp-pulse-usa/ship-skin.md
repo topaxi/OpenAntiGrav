@@ -246,8 +246,7 @@ three offsets and the stride are certain; which corner each lands in is
 conditional on that.
 
 **The shipped assets corroborate the linear reading without settling it.**
-2026-09-09, measured off `pulse-psp-usa.chd` by
-`crates/game/examples/pulse_skin_probe.rs`: Assegai's *own* `texture4.tga`,
+2026-09-09, measured off `pulse-psp-usa.chd` by a one-off read: Assegai's *own* `texture4.tga`,
 the 64x64 slot the composite would replace, is itself a quarter atlas -
 three quadrants of hull panels and a near-black top-right (channel mean 16.7
 against 154.4, 149.0 and 148.9 for the other three). The `Alternative` skin's

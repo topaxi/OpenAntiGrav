@@ -373,8 +373,7 @@ to cover exactly the bars, the cheapest open question was whether the same
 file's RGB is red - which would make the lit state just this additive layer
 at a red texel, drawn at the module's own white default tint. **It is not
 red.** Decoded `12_sol_2`'s `ds_weaponup_ne.gtf` and `ds_speedup_ne.gtf`
-through `oag_texture::gtf::Texture::to_rgba`
-(`crates/render/examples/hd_pad_ne_colour_probe.rs`):
+through `oag_texture::gtf::Texture::to_rgba`:
 
 | File | Whole-texture RGB mean | Alpha-selected (bars) RGB mean | Alpha>0 coverage |
 | --- | --- | --- | --- |
@@ -390,7 +389,7 @@ rendered PNG's unmistakable embossed blue/purple look (rivets, panel edges
 and the bars themselves in bas-relief) together read as a tangent-space
 normal map, not a colour mask. **Independently confirmed from the shader's
 own use, not just the pixel statistics**: disassembling both pads' fragment
-programs (`crates/render/examples/hd_pad_ne_tint_probe.rs`) shows the very
+programs shows the very
 first instruction after the unit-1 `TEX` is `MAD R#, R#, {2.0, -1.0, ...},
 ...` on both pads - the standard `x*2-1` decode that turns a `[0,1]`-packed
 texture sample into a signed vector, applied to the same register the `_ne`
@@ -451,7 +450,7 @@ separate glow term at all, was not settled by tracing registers this pass.
 
 **One picture, chosen and not measured, to make one candidate shape
 concrete** - and, given the tension just found, this is not even the
-best-supported of the candidates: `crates/render/examples/hd_pad_emissive_composite_probe.rs`
+best-supported of the candidates: this picture
 composites `_cs` (diffuse) plus white scaled by `_ne`'s own alpha, applied
 offline, entirely outside the renderer (no change to `Pick`, `skin()` or
 `mesh.wgsl`). The tint is `emissive`'s own fallback default, `[1,1,1]` -
@@ -496,7 +495,7 @@ only the fallback tint value and each file's own alpha coverage.
 > the same play report independently corroborates ("only the light bars").
 
 The open question above is answered by tracing register writes with their
-own swizzle and write mask (`crates/render/examples/hd_pad_ne_tint_probe.rs`,
+own swizzle and write mask (the trace was
 extended this pass to print both - it previously showed only the opcode and
 the bare source list), cross-checked against `Program::output_texels()`, the
 codebase's own already-calibrated register-taint reader for exactly this
@@ -739,8 +738,7 @@ reads as if the diffuse alpha gates the accumulate itself rather than a
 sibling term - worth resolving properly before writing a bind-group change on
 top of it.
 
-Traced both pad programs to their true final instruction with
-`crates/render/examples/hd_pad_ne_tint_probe.rs` against
+Traced both pad programs to their true final instruction with a one-off read against
 `12_sol_2/track.vex` (`DATA02.PSARC` on the EU disc), by hand, register by
 register:
 
@@ -870,8 +868,7 @@ and `scripts/ps3-microcode.py`. Full evidence in
 `docs/formats/rcsmaterial.md` and `docs/ghidra/functions/ps3-hdfury-eu/
 renderer.md`'s "op3B resolves" section.
 
-**What this clears for the pad glow specifically: item 1, fully.** Re-running
-`hd_pad_ne_tint_probe.rs` with raw opcode numbers shown confirms all six
+**What this clears for the pad glow specifically: item 1, fully.** Re-running the trace with raw opcode numbers shown confirms all six
 chain instructions the hand trace above found (Speedup Pad instructions 15,
 23, 27; Weapon Pad 19, 21, 31) are `0x3b`/`DIVSQ` - **`0x3d` does not appear
 in either pad's specular chain at all**, so both pad programs' specular
@@ -893,7 +890,7 @@ exactly as before.
 
 **Correction first.** The "wiring attempted and stopped" section above reads the multiplier `R0.x`/`R0.z` on the pad programs' final `MAD` as a specular scalar. It is **EXP2 fog**. `fragment.rs` dropped every source's negate bit (bit 17 of its own word) until this change; with it decoded, instruction 19 (Speedup) / 15 (Weapon) is `MUL R.w, -R1.w, R1.w` - the negated square of `TC3.w * fogColour.w` (`TC3.w` is clip-space w, the view depth) - then `MUL log2(e)` and `EX2_SAT`: `f = exp(-(k d)^2)`. The tail `MAD R1.xyz, -K, f, K` is `K (1 - f)` with `K = fogColour.rgb` (parameter `0x3dc31258`, which also patches the `.w` coefficient), and the final `MAD H0, f, colour, R1` is `f * colour + (1 - f) * fog`. Confidence 85 (a straight-line program, the same shape `scripts/ps3-microcode.py` documents for every fogged variant). So the `_ne` term is **not** multiplied by anything but fog, and `mesh.wgsl`'s `fogged()` already does that part.
 
-The whole Speedup program, read with the negates (`hd_pad_ne_tint_probe`, now printing `IN<n>` and `-`):
+The whole Speedup program, read with the negates (the trace, now printing `IN<n>` and `-`):
 
 ```text
 N      = nx*TC3 + ny*TC0 + nz*TC2          ; _ne.xyz*2-1; TC3 tangent, TC0 bitangent, TC2 normal
@@ -911,7 +908,7 @@ Everything in it except the normal and the `_ne.a * W` term is what `mesh.wgsl`'
 - The `_ne` texel is decoded `x * 2 - 1` into the normal for `N.L` and `N.H`: `N = nx*T + nz*N0`.
 - `_ne.a * W` is added after the light, ungated by the diffuse alpha. `W` is the parameter the program's inline constant is patched by, found by `Program::alpha_gated_parameter` (the `MAD dst, T.wwww, C, acc` after the `_ne` fetch), read per material instance: red on `talons_junction`'s `Weapon Pad`, cyan on `12_sol_2`'s both (`hd_pad_ne_census`). It rides in the material's `Model::emissive` tint.
 
-**Measured, from the vertex program** (`vertex block #7` of `weapon_pads.rcsmaterial`, `ps3-microcode.py vp-file`): attribute `0xdbe5f417` (4 x ubyte, offset 10) is read `v[2].xyz*2-1` into `o[TC3]` (the tangent) and `v[2].w` multiplies `cross(N, T)` into `o[TC0]`. That `w` byte is `0` on 232 of 232 vertices of `12_sol_2`'s `Weapon Pad` chunks, 839 and 836 of 840 on `talons_junction`'s, 209 to 213 of 216 on `12_sol_2`'s `Speedup Pad`: **the bitangent is the zero vector and `ny` never reaches `N`**. The authored tangent points along `dP/du` (mean dot 0.94 to 0.99, `hd_pad_tangent_probe`). The earlier note that `+10` is an 11-11-10 tangent on stride 22 is not what the pad vertex program reads; the pad program reads it as ubytes.
+**Measured, from the vertex program** (`vertex block #7` of `weapon_pads.rcsmaterial`, `ps3-microcode.py vp-file`): attribute `0xdbe5f417` (4 x ubyte, offset 10) is read `v[2].xyz*2-1` into `o[TC3]` (the tangent) and `v[2].w` multiplies `cross(N, T)` into `o[TC0]`. That `w` byte is `0` on 232 of 232 vertices of `12_sol_2`'s `Weapon Pad` chunks, 839 and 836 of 840 on `talons_junction`'s, 209 to 213 of 216 on `12_sol_2`'s `Speedup Pad`: **the bitangent is the zero vector and `ny` never reaches `N`**. The authored tangent points along `dP/du` (mean dot 0.94 to 0.99, a one-off read of the tangents). The earlier note that `+10` is an 11-11-10 tangent on stride 22 is not what the pad vertex program reads; the pad program reads it as ubytes.
 
 **Chosen, not measured:** the tangent is derived per pixel from screen-space derivatives of world position and texture coordinate rather than decoded from the stream (no new vertex attribute); the diffuse `N.L` is clamped as the generic path clamps it where the pad program does not clamp it; `talons_junction`'s program is a different compile (64 instructions, `_ne` uv from `TC3.w`/`TC4.w`) and was read only for the structure the shader needs (the alpha-gated `MAD`), not traced end to end.
 

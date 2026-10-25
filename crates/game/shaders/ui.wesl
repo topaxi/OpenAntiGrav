@@ -271,7 +271,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
     // `from_atlas`'s own menu-font case - so this is not a third formula, only
     // a third sample. The buttons atlas is a fourth sample of the identical
     // formula, for the identical reason: `ps_buttons.fnt`'s own mask is
-    // constant too (`oag-tools --example hd_buttons_font_probe`'s own atlas
+    // constant too (the HD button font's own atlas
     // dump shows plain white glyph art, no baked outline).
     let face_ink = mix(in.border, in.color, face_mask);
     let from_face = vec4<f32>(face_ink.rgb, face_ink.a * face_coverage);

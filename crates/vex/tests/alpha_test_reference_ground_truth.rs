@@ -33,7 +33,7 @@
 //!    `0x7f` moves the cut there from "any coverage" to "half coverage". So a
 //!    leaf's silhouette tightens by a pixel or so. That is what the original's
 //!    own filtered sampler does too, and it is the whole of the measured
-//!    on-screen delta - see `crates/render/examples/threshold_probe.rs`, which
+//!    on-screen delta - see the threshold measurement, which
 //!    isolates the two buckets. **This assertion is a texel count and must not
 //!    be quoted as a claim about the picture.**
 //!

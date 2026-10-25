@@ -290,7 +290,7 @@ fn a_local_controllers_online_only_records_cycle_pair_never_resolves() {
 
 /// Wipeout HD/Fury's own icon glyph (`font="buttons"`) draws now, through
 /// its own `Buttons`-role atlas - see [`face_role`]'s own doc for the
-/// verification this rests on (`oag-tools --example hd_buttons_font_probe`
+/// verification this rests on (a one-off read
 /// decoding real circled cross/circle glyph art at these codepoints). The
 /// four remaining prompts - `Confirm`/`Back`'s own icon-then-word pairs,
 /// `Invite`'s pair excluded by the name filter regardless - resolve to all

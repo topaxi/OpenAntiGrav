@@ -12,7 +12,7 @@
 //! One triangle in the `z = 0.5` plane, facing the camera, with the diffuse
 //! `u` running along `+x`: the tangent the shader derives is `+x`, which is
 //! the authored tangent's own direction on every pad triangle measured
-//! (`hd_pad_tangent_probe`). The sun leans toward `+x`, so a normal map that
+//! (a one-off tangent read). The sun leans toward `+x`, so a normal map that
 //! tilts the pad toward `+x` is lit more than a flat one.
 
 use std::sync::Arc;

@@ -33,7 +33,7 @@
   underneath a blended `mageffectloop.rcsmaterial` glow - identified by
   `OAG_TINT_MATERIALS` (squared colour error 9.4 against a 20.7 runner-up)
   and by triangle-level distance (0.98 units from the camera's own forward
-  ray, `hd_near_probe.rs`). It read **`no resolved variant`**, not because
+  ray). It read **`no resolved variant`**, not because
   its permutation key misses every shipped row, but because
   `mesh/rcs/skin.rs`'s `variants()`/`flips()` counted a material's chunks by
   walking `model.meshes` directly, which only reaches a chunk's *first*

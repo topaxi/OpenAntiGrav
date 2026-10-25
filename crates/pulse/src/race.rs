@@ -72,7 +72,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     guest_roster: None,
     // It does author a second hull *file* per team, inside that one
     // directory - see `oag_title::race::HullVariant`'s own doc comment for
-    // the evidence (`crates/game/examples/pulse_variant_probe.rs`).
+    // the evidence.
     hull_variants: Some(HULL_VARIANTS),
     // Four rungs, and the four are the *per-team* file's, not the global
     // one's. Pulse's `Data\XML\HandlingStats.xml` authors five `<GlobalClass>`

@@ -130,7 +130,7 @@ pub const TEAMS: [&str; 12] = [
 
 /// Every one of [`TEAMS`] ships three directories, not one - confirmed
 /// against the manifest for all twelve:
-/// `crates/game/examples/hd_fury_variant_probe.rs`. The unsuffixed one is
+/// the HD Fury variant check. The unsuffixed one is
 /// the classic HD hull; `_c1` and `_n1` are Fury's two reskins - "the
 /// concept skin" and "the nitro one" respectively, in the words
 /// `race/load.rs`'s own `hd_trail_red` already used for the flag that reads

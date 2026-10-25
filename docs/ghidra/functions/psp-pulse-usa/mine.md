@@ -1242,7 +1242,7 @@ a scratch directory, not kept (not committed).
 
 ### The wide flat ring was a node that never moved
 
-`Pulse_Bomb.vex` (`oag-vex --example bomb_nodes_probe`) is one tree under `world`:
+`Pulse_Bomb.vex` is one tree under `world`:
 `orbit` (an `Anim Transform`, `0x3c0`) with `orbitShape`, a mesh of 79 triangles - the
 yellow ring - and `bomb` (another `Anim Transform`) with `bombShape`, the 92-triangle
 canister, plus a shadow hull. **Both transforms are keyframed rotations**, 180 frames at

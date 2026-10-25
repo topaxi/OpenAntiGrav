@@ -2,7 +2,7 @@
 //! the glyphs they claim to be.
 //!
 //! Each table row says "this codepoint draws this control". That was read off
-//! the rendered glyph cells (`oag-tools --example prompt_glyph_probe`), and
+//! the rendered glyph cells, and
 //! this pins it: the cell of every stand-in in the disc's own face, hashed, so
 //! a table that swaps two rows - or a face whose `ε` stops being a cross -
 //! fails here rather than showing a player the wrong button. The hash is of

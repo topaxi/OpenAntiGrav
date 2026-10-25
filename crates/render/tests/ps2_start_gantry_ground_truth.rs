@@ -227,7 +227,7 @@ fn one_glyph_is_lit_at_each_phase_in_order_on_ps2() {
         .resolve(&texture_name)
         .unwrap_or_else(|| panic!("{texture_name}: not in the preceding archive entry"));
     // **32x32, not PSP's 16x32** - measured with
-    // `examples/ps2_gantry_palette_probe.rs`: the staircase is re-authored at
+    // a one-off palette read: the staircase is re-authored at
     // double the column width (four columns per digit instead of two) and
     // the same three row bands (28-29, 26-27, 24-25). The mechanism is
     // resolution-independent - [`sample`] wraps against the texture's own

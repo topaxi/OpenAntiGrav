@@ -81,7 +81,7 @@ START RACE with cross held and logs every hit with the cue name (`r5`) and the S
 
 ## What the cues are
 
-`speech.bnk` (HD EU), read with `crates/formats/examples/bank_name_probe.rs`:
+`speech.bnk` (HD EU), read in a one-off pass:
 
 - `ready` is a lone `0x08` into the child `321_GO` ([sound.md](sound.md), `Scream_DoGrainBranch`, 85: it
   replaces the voice's own playback state with the child). `321_GO` is a goto to a marker at its tail, skipping

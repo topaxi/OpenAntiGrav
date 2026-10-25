@@ -27,7 +27,7 @@ Verified against `pulse-psp-usa.chd`
 all four of Assegai's `Ship.vex` texture slots take a block, at exactly the
 size the block declares, **100% of the player's own texels change** and every
 opponent's stay byte-identical. Eyeballed too, off
-`crates/game/examples/pulse_skin_probe.rs`' PNG dump: the alternative atlas is
+a PNG dump: the alternative atlas is
 the same panel layout in a different colour scheme, which is what a repaint
 should look like and not what garbage looks like.
 

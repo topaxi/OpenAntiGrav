@@ -222,7 +222,7 @@ is rare (1 in 15-25 pauses); the beam's hold was kept alive across retries by re
 
 | State | Value | Evidence |
 | --- | --- | --- |
-| blend | on; colour and alpha factors `SRC_ALPHA, ONE` (regs `0x314 = 0x03020302`, `0x318 = 0x00010001`), `FUNC_ADD` | draw regs; `hd_leachbeam.rcsmaterial`'s own state word `0x79` decodes to the same (`hd_unlit_probe`) |
+| blend | on; colour and alpha factors `SRC_ALPHA, ONE` (regs `0x314 = 0x03020302`, `0x318 = 0x00010001`), `FUNC_ADD` | draw regs; `hd_leachbeam.rcsmaterial`'s own state word `0x79` decodes to the same |
 | depth | test on, `LEQUAL`, write off | `0xa74/0xa70/0xa6c = 1/0/0x203` |
 | cull, alpha test | cull off, alpha test off | `0x183c`, `0x304` |
 | colour mask | RGB (`0x00010101`, alpha not written) | `0x324` |

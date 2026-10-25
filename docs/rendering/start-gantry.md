@@ -1122,10 +1122,9 @@ the 1.04 patch, and both DLC packages), with
 the executable form of every claim below. No Ghidra and no emulator - the
 same `oag-wad`-equivalent reading (`scripts/psarc.py` for the archive census,
 then `oag_formats::{trackstartup, vex, rcsmodel::psp2}` directly) the first
-three passes used, plus two throwaway probes kept in the tree:
-`crates/game/examples/gantry_2048_probe.rs` (node trees and `.rcsmodel`
-submesh dumps) and `gantry_2048_anim_probe.rs` (sampled transforms, generalised
-to take an archive spec and a node list so the same tool checks a claim
+three passes used, plus two one-off reads: one of node trees and `.rcsmodel`
+submesh dumps, and one of sampled transforms, generalised
+to take an archive spec and a node list so the same read checks a claim
 against HD's own disc, not only 2048's copy of it - see below).
 
 ### The archive census: eight `321Go_*`/`321Fight_*` files, plus `fx350.vex`
@@ -1226,7 +1225,7 @@ the background halves never move at all on this title, unlike Pulse's own
 
 **Position selects the state; scale is polish within it, not a second
 selector.** Every digit also carries a `scale` channel, sampled alongside
-translation with `gantry_2048_anim_probe`: each one opens at roughly its rest
+translation: each one opens at roughly its rest
 scale (`Three`, `GO` at exactly `1.0`; `Two`, `One` already at `0.988`, having
 inherited whatever `Two`/`One` last held), eases down to `0.5` partway through
 its own *visible* window (`Three`: `1.0 -> 0.5` between frames 0 and 40, while
@@ -1297,7 +1296,7 @@ findings. Checking 2048's own inherited copy of `321go_startfinish.vex`
 found the same three beats on its `pasted__Go_HD_start_light_321go` (6.000 s),
 `pasted__Final_Lap` (9.333 s entrance) and `polySurface7` (12.333 s) nodes -
 and rather than trust a title's *re-export* of another title's file,
-`gantry_2048_anim_probe` was pointed straight at
+a one-off read was pointed straight at
 `hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA02.PSARC`'s own
 `321go_startfinish.vex` to check HD's own disc directly. It carries the
 identical keys: `pasted__Final_Lap`'s translation times are exactly
@@ -2145,9 +2144,8 @@ tick 260 is the evidence for the word itself.
 `Data\Environments\GenericTrackTextures\startlights\321go_NOMIP.tga`) is
 32x32 - the same three-row staircase, re-authored at double the column width
 (four texture columns per digit instead of two), not a scaled copy of the
-same bitmap. Read with `examples/ps2_gantry_palette_probe.rs`, kept in the
-tree for the next texture that needs eyeballing rather than asserting on
-faith. Neither the shader nor `oag_render::TexAnims` cares about a texture's
+same bitmap. Read with a one-off palette read rather than
+asserted on faith. Neither the shader nor `oag_render::TexAnims` cares about a texture's
 absolute size - sampling wraps against whatever `width`/`height` the decoded
 texture reports - so this needed recording rather than fixing.
 
