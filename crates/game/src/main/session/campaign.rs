@@ -75,8 +75,11 @@ impl Session {
         let title_ref = shell.title;
         let platform = shell.platform;
         let circuit_names = shell.circuit_names.clone();
-        let tracks: Vec<oag_raceplay::catalogue::Track> =
-            shell.tracks.iter().map(|(track, _)| track.clone()).collect();
+        let tracks: Vec<oag_raceplay::catalogue::Track> = shell
+            .tracks
+            .iter()
+            .map(|(track, _)| track.clone())
+            .collect();
         let records = self.records.clone();
         let globals: Vec<(&str, &str)> = shell
             .globals
@@ -373,7 +376,8 @@ impl Session {
                 if let Stage::Menu(stage) = &mut self.stage
                     && let Some(campaign) = stage.campaign.as_mut()
                 {
-                    campaign.notice = Some(campaign.strings.get(id).unwrap_or(literal).to_string());
+                    campaign.notice =
+                        Some(campaign.strings.get_or_fallback(id, literal).to_string());
                 }
                 return;
             }

@@ -42,7 +42,7 @@ pub fn with_port(typed: &str) -> String {
 }
 
 fn say(strings: &StringTable, id: &str, english: &str) -> String {
-    strings.get(id).unwrap_or(english).to_string()
+    strings.get_or_fallback(id, english).to_string()
 }
 
 /// Fills `screen` (a list) with the lobby's `rooms`: the owner on the left, the title and the

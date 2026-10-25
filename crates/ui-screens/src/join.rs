@@ -66,7 +66,7 @@ impl Labels {
     /// LOCAL MULTIPLAYER's join step.
     #[must_use]
     pub fn read(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         let disc_or = |disc: &str, ours: &str, english: &str| {
             strings
                 .get(disc)
@@ -103,7 +103,7 @@ impl Labels {
     /// The words of LAN play's host lobby (the screen in its lobby form).
     #[must_use]
     pub fn read_lan_lobby(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         Self {
             title: say("OAG_LAN_LOBBY_TITLE", "LAN LOBBY"),
             hint: say(
@@ -122,7 +122,7 @@ impl Labels {
     /// The words of LAN play's host list (the screen in its list form).
     #[must_use]
     pub fn read_lan_list(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         Self {
             title: say("OAG_LAN_JOINLIST_TITLE", "JOIN GAME"),
             hint: say("OAG_LAN_JOINLIST_HINT", "CHOOSE A GAME ON YOUR NETWORK"),
@@ -137,7 +137,7 @@ impl Labels {
     /// row makes a room of one's own.
     #[must_use]
     pub fn read_online_list(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         Self {
             title: say("OAG_ONLINE_LIST_TITLE", "ONLINE GAMES"),
             hint: say("OAG_ONLINE_LIST_HINT", "CHOOSE A GAME TO JOIN, OR MAKE ONE"),
@@ -149,7 +149,7 @@ impl Labels {
     /// The words of a room on the online lobby (the screen in its lobby form).
     #[must_use]
     pub fn read_online_room(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         Self {
             title: say("OAG_ONLINE_ROOM_TITLE", "GAME LOBBY"),
             hint: say("OAG_ONLINE_ROOM_HINT", "THE HOST STARTS THE RACE"),

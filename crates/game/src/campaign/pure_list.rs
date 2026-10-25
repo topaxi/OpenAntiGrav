@@ -213,7 +213,7 @@ const WORDS: [(&str, &str); 3] = [
 pub fn wording(strings: &StringTable) -> Words {
     let say = |index: usize| {
         let (id, fallback) = WORDS[index];
-        strings.get(id).unwrap_or(fallback).to_string()
+        strings.get_or_fallback(id, fallback).to_string()
     };
     Words {
         gold: say(0),

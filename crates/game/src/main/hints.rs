@@ -21,7 +21,7 @@ use oag_ui::language::StringTable;
 /// override - the same fallback `resolve()` uses in `oag_ui::menu::definition`
 /// for a `menu.toml` row with no match.
 fn resolved(strings: &StringTable, id: &str, literal: &str) -> String {
-    strings.get(id).unwrap_or(literal).to_string()
+    strings.get_or_fallback(id, literal).to_string()
 }
 
 /// The window's title while the front end is on screen.

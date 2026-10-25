@@ -556,8 +556,8 @@ fn prompt_draws(
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
-    let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
-    let say_of = |id: &str, english: &str| strings.get(id).unwrap_or(english).replace("%s", name);
+    let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
+    let say_of = |id: &str, english: &str| strings.get_or_fallback(id, english).replace("%s", name);
     match kind {
         "tag-entry" | "tag-entry-typed" => {
             let source = source.context("tag-entry needs a --race source open")?;

@@ -577,7 +577,9 @@ impl Definition {
             return;
         };
         let say = |wording: oag_title::Wording| {
-            strings.get(wording.id).unwrap_or(wording.text).to_string()
+            strings
+                .get_or_fallback(wording.id, wording.text)
+                .to_string()
         };
         self.relabel_action(
             Action::OpenCampaign,
@@ -595,7 +597,9 @@ impl Definition {
             return;
         };
         let say = |wording: oag_title::Wording| {
-            strings.get(wording.id).unwrap_or(wording.text).to_string()
+            strings
+                .get_or_fallback(wording.id, wording.text)
+                .to_string()
         };
         let Some(page) = self.pages.iter().position(|page| page.id == "multiplayer") else {
             return;

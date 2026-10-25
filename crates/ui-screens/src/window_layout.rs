@@ -70,7 +70,7 @@ impl Labels {
     /// window-mode words are the DISPLAY page's own rows.
     #[must_use]
     pub fn read(strings: &oag_ui::language::StringTable) -> Self {
-        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
         Self {
             title: say("OAG_WINDOW_LAYOUT_TITLE", "WINDOW LAYOUT"),
             hint: say(

@@ -15,7 +15,7 @@ use oag_ui_screens::join::Join;
 /// The reason line for a state that cannot be joined, `None` for [`Compat::Joinable`].
 #[must_use]
 pub fn reason(state: Compat, strings: &StringTable) -> Option<String> {
-    let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+    let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
     match state {
         Compat::Joinable => None,
         Compat::OtherTitle => Some(say(
@@ -31,7 +31,7 @@ pub fn reason(state: Compat, strings: &StringTable) -> Option<String> {
 /// The one or two words a row says for its state, `JOINABLE` for a host that can be joined.
 #[must_use]
 pub fn state_word(state: Compat, strings: &StringTable) -> String {
-    let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+    let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
     match state {
         Compat::Joinable => say("OAG_LAN_STATE_JOINABLE", "JOINABLE"),
         Compat::OtherTitle => say("OAG_LAN_STATE_TITLE", "OTHER TITLE"),

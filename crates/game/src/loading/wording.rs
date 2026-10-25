@@ -25,7 +25,7 @@ use super::{Phase, Progress};
 /// translation is free to move `{done}`/`{total}`/`{verb}` anywhere in its
 /// own text; only the literal names have to match.
 fn resolved(table: &StringTable, id: &str, literal: &str, subs: &[(&str, &str)]) -> String {
-    let mut out = table.get(id).unwrap_or(literal).to_string();
+    let mut out = table.get_or_fallback(id, literal).to_string();
     for (name, value) in subs {
         out = out.replace(&format!("{{{name}}}"), value);
     }

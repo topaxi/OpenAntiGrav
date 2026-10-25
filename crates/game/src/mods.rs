@@ -179,7 +179,7 @@ impl Listing {
     /// The detail lines under the MODS page's row: label and value, in reading order.
     #[must_use]
     pub fn table(&self, strings: &StringTable) -> Vec<(String, String)> {
-        let say = |(id, english): (&str, &str)| strings.get(id).unwrap_or(english).to_string();
+        let say = |(id, english): (&str, &str)| strings.get_or_fallback(id, english).to_string();
         // A mod that is not in the game has no detail lines: its error is in the note slot
         // under the rows, where the same line would land.
         let (Some(license), None) = (&self.license, &self.error) else {

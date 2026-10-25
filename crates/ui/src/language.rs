@@ -293,6 +293,12 @@ impl StringTable {
         self.get(id).unwrap_or(id)
     }
 
+    /// Looks up an id, falling back to the english string if not found.
+    #[must_use]
+    pub fn get_or_fallback<'a>(&'a self, id: &'a str, fallback: &'a str) -> &'a str {
+        self.get(id).unwrap_or(fallback)
+    }
+
     /// Looks up an id with the case folded, walking the table.
     ///
     /// **Deliberately not the general accessor**, and not a shortcut past
