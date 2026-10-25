@@ -209,7 +209,7 @@ residual learns" below:
 | Pass | Category | Why |
 | --- | --- | --- |
 | The `race` pass (`race/scene/frame.rs`) | `drs::Cost::scalable` | Falls with the render extent, timed every frame |
-| `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes` |
+| `motion_blur` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain across six render passes since ADR-0042, via `PassTimer::half_writes`. Since 2026-10-25 each frame records whether the chain encoded (`session::timing::Drawn`), so a reading that did not come back from a frame that drew the blur is a skipped frame, and only a frame that drew none reads the blur as free |
 | `hd_bloom` | `drs::Cost::scalable` | Also falls with the extent; timed as one chain the same way since ADR-0043. `Scene::has_hd_bloom` tells "ring full" from "no chain to measure" - Pulse, Pure, and an HD circuit with no `HDR and Bloom` block all have none |
 | The FSR 3.1 chain's six render-resolution dispatches | `drs::Cost::scalable` | Also fall with the extent; timed as their own compute pass (`Session::upscale_cost`) since [ADR-0045](../architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md) |
 | The FSR 3.1 chain's `accumulate` and `rcas` | `drs::Cost::fixed` | Timed (`Session::upscale_presented_cost`), and the one part of the frame that genuinely does not fall with the extent: both run at presentation size. Until ADR-0045 the *whole* chain was counted here, which was deliberately conservative and, on a Steam Deck where the chain costs 4-5 ms, no longer a small thumb on the scale |

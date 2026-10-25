@@ -59,6 +59,59 @@ dearer than the race median, so read the split, not the totals.
 Confidence 80 for the savings (two rigs, two titles, whole races, GPU timestamps, which do
 not move with load), 60 for the split (one tick, one rig).
 
+### `tile-max (x)` unrolled (2026-10-25, `blur-floor`)
+
+The floor's largest term was latency, not bandwidth. `fs_tile_max_x` looped over
+`constants.tile`, a runtime trip count, so each fragment issued one `textureLoad`, waited
+for it and compared, 173 times at 2160 lines. Commit `43dba7cb9` unrolls the loop sixteen
+wide: sixteen loads in flight, then sixteen comparisons in the same scan order with the same
+strict `>`, then a one-at-a-time tail for what is left (`173 = 10 * 16 + 13` at 4K; 64 at
+800 lines has no tail). Of two equally long velocities the first still wins, so the tile
+grid, and so the frame, is bit-identical by construction.
+
+Rigs: D is rig C's machine and method (one tick at 1500, re-drawn 40 times,
+`OAG_RENDER_PERF=1`, blur `high`), release `perf-probe` builds of `e8d6dfc7e` (base) and
+`43dba7cb9` (unrolled), load 3.6 to 10, gate lock held. E is the Steam Deck (`RADV
+VANGOGH`), the same two commits container-built (glibc 2.36), the same tick at 3840x2160,
+load 0.3 to 2, `deck.lock` held.
+
+`tile-max (x)`, median microseconds, base -> unrolled:
+
+| Rig, title, size | Full gather | Half gather |
+| --- | --- | --- |
+| D, Pulse 3840x2160 | 6,061 -> 1,755 | 6,231 -> 1,687 |
+| D, HD 3840x2160 | 5,757 -> 1,679 | 5,922 -> 1,699 |
+| D, Pulse 1280x800 | 449 -> 220 | 445 -> 217 |
+| D, HD 1280x800 | 441 -> 218 | 446 -> 220 |
+| E, Pulse 3840x2160 | 2,392 -> 686 | 2,677 -> 731 |
+
+Eight wide measured 1,951 us on rig D (Pulse 4K full), against 1,651 for sixteen in the
+same session. **Every frame is identical**: the base and unrolled screenshots of all eight
+rig D cells (Pulse and HD, both sizes, both gathers) and both rig E cells differ in 0
+pixels (max channel difference 0).
+
+Whole race, `scripts/bench-render.py run --size 3840x2160 --motion-blur high
+--motion-blur-resolution <r> --binary <bin> pulse`, median milliseconds, base -> unrolled
+(6,836 frames each):
+
+| Rig | `gpu_blur_us`, full | `gpu_blur_us`, half | GPU frame, full | GPU frame, half |
+| --- | --- | --- | --- | --- |
+| E (Deck) | 18.81 -> 17.40 | 10.47 -> 9.03 | 29.74 -> 28.36 | 21.37 -> 19.96 |
+
+On the Deck at 4K the unrolled pass saves about 1.4 ms of a race's median blur chain at
+either gather, and half the floor this section measured is now a third smaller. What is
+left of the floor on rig E's tick at half: `prepare` 1.1 ms, `composite` 2.2 ms, `tile-max
+(x)` 0.7 ms, `copy` 0.5 ms.
+
+Not tried, and why: wider loads or `textureGather` (a gather returns one channel of four
+texels, so velocity needs two and the result is the same loads in another shape), a
+pairwise or tree max (it changes which of two equal lengths wins, so the grid would no
+longer be bit-identical), folding the reduction into `prepare` or a compute pass with
+workgroup memory (a bigger change for at most the 0.7 ms left on the Deck).
+
+Confidence 85 for the pass timings (two machines, two titles, GPU timestamps, A/B binaries
+on the same day), 90 for "identical" (by construction and by ten pixel diffs).
+
 ## What a player sees
 
 The maintainer compared Pulse and HD at 3840x2160, FSR 3, blur `high`, tick 1500, one
@@ -105,5 +158,25 @@ predicted to fit for its 32 frames and undone by the scene's next spike 1 to 5 s
 later. With three seconds of patience and a relapse window as long as the longest
 backed-off wait (ADR-0075), the same run shed, restored once, shed again and held.
 
-Not checked: the rung on the Deck (the 4K numbers above are its motivation, not a run of
-it), HD in a running session, and a player's eye on a flip in motion.
+### On the Steam Deck
+
+Steam Deck (`RADV VANGOGH`, Mesa 26.2.0-devel), headless gamescope at 3840x2160,
+container-built `perf-probe` builds, Pulse PSP EU, seed 1, autopilot, `--frame-log`,
+`--script 90:quit` (88 logged seconds), `render_scale = 100` (chosen),
+`minimum_resolution = 25`, blur `high` at `full`, target 30 fps, private XDG dirs,
+`deck.lock` held, load about 1. Base is `2c926e4` (the commit the rung's branch was cut
+from), rung is `db8d821`. Run by the lead.
+
+| Build | Median fps | Median p99 ms | Mean pixels | Gather flips |
+| --- | --- | --- | --- | --- |
+| base, run 1 | 35.3 | 33.8 | 6.76 MP | - |
+| base, run 2 | 35.5 | 33.6 | 6.75 MP | - |
+| rung, run 1 | 38.5 | 31.4 | 7.91 MP | 5 |
+| rung, run 2 | 38.5 | 31.2 | 7.91 MP | 3 |
+
+The rung held the full 3812x2160 for the whole race and ran 3 fps faster, where the base
+settled near 81 % of that area. Two runs of one build differ by under 0.5 fps. Confidence
+75: one machine, one title, two runs each, a chosen target.
+
+Not checked: HD in a running session (on the Deck or the iGPU), and a player's eye on a
+flip in motion.
