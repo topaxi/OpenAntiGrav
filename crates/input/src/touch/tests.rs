@@ -67,13 +67,13 @@ fn every_control_is_thumb_sized_by_the_window_height() {
             "{control:?}"
         );
     }
-    let tall = go_rect((1000.0, 500.0));
-    let wide = go_rect((2000.0, 500.0));
+    let tall = go_rect((1000.0, 500.0), STANDARD);
+    let wide = go_rect((2000.0, 500.0), STANDARD);
     assert_eq!(tall.w, wide.w, "the size follows the height, not the width");
 }
 
 fn go_at(fx: f32, fy: f32) -> (f32, f32) {
-    let r = go_rect(SIZE);
+    let r = go_rect(SIZE, STANDARD);
     (r.x + r.w * fx, r.y + r.h * fy)
 }
 
@@ -84,8 +84,15 @@ fn live() -> Touches {
 }
 
 #[test]
-fn go_is_thrust_alone_in_the_centre_and_above() {
-    for (fx, fy) in [(0.5, 0.95), (0.1, 0.3), (0.9, 0.3), (0.5, 0.1), (0.2, 0.6)] {
+fn go_is_thrust_alone_in_its_core_at_any_height() {
+    let core = (GO_ZONE_SIDE + 0.01, 1.0 - GO_ZONE_SIDE - 0.01);
+    for (fx, fy) in [
+        (0.5, 0.95),
+        (core.0, 0.3),
+        (core.1, 0.3),
+        (0.5, 0.1),
+        (core.0, 1.0),
+    ] {
         let mut touches = live();
         touches.down(1, go_at(fx, fy), SIZE);
         assert_eq!(
@@ -97,64 +104,63 @@ fn go_is_thrust_alone_in_the_centre_and_above() {
 }
 
 #[test]
-fn go_adds_an_analogue_brake_in_its_bottom_corners() {
+fn go_adds_an_analogue_brake_in_its_side_wings() {
     let mut touches = live();
-    touches.down(1, go_at(0.0, 1.0), SIZE);
+    touches.down(1, go_at(0.0, 0.5), SIZE);
     let reading = touches.reading(SIZE);
     assert_eq!(reading.buttons, Button::Cross.bit(), "an axis, not a bit");
     assert!((reading.airbrake_left - 1.0).abs() < 1e-4);
     assert_eq!(reading.airbrake_right, 0.0);
     let mut touches = live();
-    touches.down(1, go_at(1.0, 1.0), SIZE);
+    touches.down(1, go_at(1.0, 0.0), SIZE);
     let reading = touches.reading(SIZE);
     assert!((reading.airbrake_right - 1.0).abs() < 1e-4);
     assert_eq!(reading.airbrake_left, 0.0);
 }
 
 #[test]
-fn the_brake_is_zero_on_the_zones_inner_edge_and_top() {
+fn the_brake_is_zero_on_the_wings_inner_edge_and_full_at_the_outer() {
     for zone in [GoZone::Left, GoZone::Right] {
         let (inner, outer) = match zone {
             GoZone::Left => (GO_ZONE_SIDE, 0.0),
             GoZone::Right => (1.0 - GO_ZONE_SIDE, 1.0),
         };
-        assert_eq!(zone.strength((inner, 1.0)), 0.0, "inner edge");
-        assert_eq!(zone.strength((outer, 1.0 - GO_ZONE_BOTTOM)), 0.0, "top");
-        assert!((zone.strength((outer, 1.0)) - 1.0).abs() < 1e-5, "corner");
+        for fy in [0.0, 0.5, 1.0] {
+            assert_eq!(zone.strength((inner, fy)), 0.0, "inner edge");
+            assert!(
+                (zone.strength((outer, fy)) - 1.0).abs() < 1e-5,
+                "outer edge"
+            );
+        }
     }
 }
 
 #[test]
-fn the_brake_only_grows_sliding_down_or_out() {
+fn the_brake_only_grows_sliding_out_and_ignores_the_height() {
     let steps = [0.0f32, 0.1, 0.25, 0.5, 0.75, 1.0];
     for zone in [GoZone::Left, GoZone::Right] {
         let x_of = |depth: f32| match zone {
             GoZone::Left => GO_ZONE_SIDE * (1.0 - depth),
             GoZone::Right => 1.0 - GO_ZONE_SIDE * (1.0 - depth),
         };
-        let y_of = |depth: f32| 1.0 - GO_ZONE_BOTTOM * (1.0 - depth);
-        for &other in &steps {
-            let mut last_out = -1.0f32;
-            let mut last_down = -1.0f32;
-            for &depth in &steps {
-                let out = zone.strength((x_of(depth), y_of(other)));
-                let down = zone.strength((x_of(other), y_of(depth)));
-                assert!(
-                    out >= last_out && down >= last_down,
-                    "{zone:?} {depth} {other}"
-                );
-                (last_out, last_down) = (out, down);
+        let mut last = -1.0f32;
+        for &depth in &steps {
+            let pull = zone.strength((x_of(depth), 0.5));
+            assert!(pull >= last, "{zone:?} {depth}");
+            for &fy in &steps {
+                assert_eq!(zone.strength((x_of(depth), fy)), pull, "{zone:?} {fy}");
             }
+            last = pull;
         }
-        assert!(zone.strength((x_of(0.5), y_of(0.5))) > 0.0);
-        assert!(zone.strength((x_of(0.5), y_of(0.5))) < zone.strength((x_of(1.0), y_of(1.0))));
+        assert!(zone.strength((x_of(0.5), 0.5)) > 0.0);
+        assert!(zone.strength((x_of(0.5), 0.5)) < zone.strength((x_of(1.0), 0.5)));
     }
 }
 
 #[test]
 fn a_partial_pull_reaches_the_reading_and_thrust_stays_full() {
     let mut touches = live();
-    touches.down(1, go_at(0.2, 0.8), SIZE);
+    touches.down(1, go_at(GO_ZONE_SIDE / 2.0, 0.5), SIZE);
     let reading = touches.reading(SIZE);
     assert!(reading.airbrake_left > 0.0 && reading.airbrake_left < 1.0);
     assert_eq!(reading.buttons & Button::Cross.bit(), Button::Cross.bit());
@@ -174,10 +180,10 @@ fn sliding_inside_go_changes_the_zone_without_lifting() {
 }
 
 #[test]
-fn a_thumb_in_the_slop_below_go_still_reads_the_corner() {
+fn a_thumb_in_the_slop_beside_go_still_reads_the_wing() {
     let mut touches = live();
-    let r = go_rect(SIZE);
-    touches.down(1, (r.x + 5.0, r.y + r.h + SIZE.1 * SLOP * 0.5), SIZE);
+    let r = go_rect(SIZE, STANDARD);
+    touches.down(1, (r.x - SIZE.1 * SLOP * 0.5, r.y + r.h / 2.0), SIZE);
     assert!(touches.zone_down(GoZone::Left));
 }
 
@@ -185,9 +191,11 @@ fn a_thumb_in_the_slop_below_go_still_reads_the_corner() {
 fn the_zones_are_off_when_the_setting_is() {
     let mut touches = Touches::default();
     touches.set_setup(Setup::new(Scheme::Standard, false), SIZE);
-    touches.down(1, go_at(0.1, 0.9), SIZE);
+    touches.down(1, go_at(0.5, 0.9), SIZE);
     assert_eq!(touches.reading(SIZE).buttons, Button::Cross.bit());
+    assert!(!touches.zone_down(GoZone::Left));
     touches.set_setup(STANDARD, SIZE);
+    touches.moved(1, go_at(0.05, 0.5), SIZE);
     assert!(touches.zone_down(GoZone::Left), "turned on mid-hold");
 }
 
@@ -231,8 +239,8 @@ fn the_brake_buttons_exist_only_with_zones_off() {
     let spot = centre(Control::AirbrakeRight);
     assert_eq!(
         control_at(spot, SIZE, STANDARD),
-        None,
-        "no hit area with zones on"
+        Some(Control::Accelerate),
+        "GO's left wing covers it with zones on"
     );
     on.down(1, spot, SIZE);
     assert_eq!(on.reading(SIZE).airbrake_right, 0.0);
@@ -326,12 +334,12 @@ fn the_column_is_fire_go_absorb_top_to_bottom_and_absorb_is_the_thinnest() {
         fire.y + fire.h <= go.y && go.y + go.h < absorb.y,
         "a gap each side of GO"
     );
-    assert!(absorb.h < fire.h && absorb.w == go.w);
+    assert!(absorb.h < fire.h && absorb.w == fire.w && (absorb.w - GO_CORE * SIZE.1).abs() < 0.01);
 }
 
 #[test]
 fn a_finger_in_go_is_not_stolen_by_the_absorb_slop_below_it() {
-    let r = go_rect(SIZE);
+    let r = go_rect(SIZE, STANDARD);
     let near_bottom = (r.x + r.w / 2.0, r.y + r.h - 1.0);
     assert_eq!(
         control_at(near_bottom, SIZE, STANDARD),
@@ -342,11 +350,7 @@ fn a_finger_in_go_is_not_stolen_by_the_absorb_slop_below_it() {
 #[test]
 fn the_brake_reads_full_at_85_percent_depth() {
     let mut touches = live();
-    touches.down(
-        1,
-        go_at(0.0, 1.0 - GO_ZONE_BOTTOM * (1.0 - GO_FULL_DEPTH)),
-        SIZE,
-    );
+    touches.down(1, go_at(GO_ZONE_SIDE * (1.0 - GO_FULL_DEPTH), 0.5), SIZE);
     assert!((touches.reading(SIZE).airbrake_left - 1.0).abs() < 1e-4);
     let mut touches = easy(true);
     touches.down(1, go_at(0.5, 1.0 - EASY_BAND * (1.0 - GO_FULL_DEPTH)), SIZE);
@@ -445,7 +449,7 @@ fn easy_with_the_zone_off_splits_the_bar_into_brake_and_absorb() {
     let at = |c| rects.iter().find(|(k, _)| *k == c).unwrap().1;
     let (brake, absorb) = (at(Control::Brake), at(Control::Absorb));
     assert!(brake.x + brake.w <= absorb.x && brake.y == absorb.y);
-    let go = go_rect(SIZE);
+    let go = go_rect(SIZE, EASY_OFF);
     assert!((brake.w - absorb.w).abs() < 1e-3, "equal halves");
     assert!((brake.x - go.x).abs() < 1e-3 && (absorb.x + absorb.w - (go.x + go.w)).abs() < 1e-3);
     // GO is thrust alone in the zone-off mode.
@@ -513,7 +517,7 @@ fn latched_at(setup: Setup, to: (f32, f32)) -> Touches {
 
 #[test]
 fn the_brake_carries_on_past_gos_edge_like_a_stick_held_past_its_ring() {
-    let go = go_rect(SIZE);
+    let go = go_rect(SIZE, STANDARD);
     let left_of_go = (go.x - 0.2 * SIZE.1, go.y + go.h * 0.95);
     let reading = latched_at(STANDARD, left_of_go).reading(SIZE);
     assert!(
@@ -523,8 +527,8 @@ fn the_brake_carries_on_past_gos_edge_like_a_stick_held_past_its_ring() {
     );
     assert_eq!(reading.airbrake_right, 0.0);
     assert_eq!(reading.buttons, Button::Cross.bit(), "thrust stays on");
-    let below_corner = (go.x + go.w * 0.05, go.y + go.h + 0.15 * SIZE.1);
-    let reading = latched_at(STANDARD, below_corner).reading(SIZE);
+    let above_the_wing = (go.x - 0.02 * SIZE.1, go.y - 0.15 * SIZE.1);
+    let reading = latched_at(STANDARD, above_the_wing).reading(SIZE);
     assert!((reading.airbrake_left - 1.0).abs() < 1e-4);
     let right_of_go = (go.x + go.w + 0.2 * SIZE.1, go.y + go.h * 0.95);
     let reading = latched_at(STANDARD, right_of_go).reading(SIZE);
@@ -533,10 +537,10 @@ fn the_brake_carries_on_past_gos_edge_like_a_stick_held_past_its_ring() {
 
 #[test]
 fn coming_back_inside_go_returns_the_brake_to_analogue() {
-    let go = go_rect(SIZE);
+    let go = go_rect(SIZE, STANDARD);
     let mut touches = latched_at(STANDARD, (go.x - 0.2 * SIZE.1, go.y + go.h * 0.95));
     assert!((touches.reading(SIZE).airbrake_left - 1.0).abs() < 1e-4);
-    touches.moved(1, go_at(0.25, 0.8), SIZE);
+    touches.moved(1, go_at(GO_ZONE_SIDE / 2.0, 0.8), SIZE);
     let partial = touches.reading(SIZE).airbrake_left;
     assert!(partial > 0.0 && partial < 1.0, "{partial}");
     touches.moved(1, go_at(0.5, 0.8), SIZE);
@@ -544,19 +548,44 @@ fn coming_back_inside_go_returns_the_brake_to_analogue() {
 }
 
 #[test]
-fn past_the_edge_above_the_brake_zone_there_is_no_brake() {
-    let go = go_rect(SIZE);
-    let beside_the_top = (go.x - 0.2 * SIZE.1, go.y + go.h * 0.1);
-    assert_eq!(
-        latched_at(STANDARD, beside_the_top)
-            .reading(SIZE)
-            .airbrake_left,
-        0.0
-    );
+fn a_full_brake_on_either_side_never_reaches_fire_or_absorb() {
+    let go = go_rect(SIZE, STANDARD);
+    for fy in [0.0, 0.5, 1.0] {
+        for (fx, past) in [(0.0, -0.3), (1.0, 0.3)] {
+            for to in [
+                go_at(fx, fy),
+                (go.x + go.w * fx + past * SIZE.1, go.y + go.h * fy),
+            ] {
+                let touches = latched_at(STANDARD, to);
+                let reading = touches.reading(SIZE);
+                assert_eq!(reading.buttons, Button::Cross.bit(), "{fx},{fy} {to:?}");
+                assert!(reading.airbrake_left.max(reading.airbrake_right) > 0.99);
+                assert!(!touches.is_down(Control::Fire) && !touches.is_down(Control::Absorb));
+            }
+        }
+    }
 }
 
 #[test]
-fn a_finger_below_a_corner_brakes_and_absorbs_at_once() {
+fn fire_and_absorb_sit_over_gos_core_clear_of_its_wings() {
+    let go = go_rect(SIZE, STANDARD);
+    let wing = go.w * GO_ZONE_SIDE;
+    for control in [Control::Fire, Control::Absorb] {
+        let r = layout_for(SIZE, STANDARD)
+            .into_iter()
+            .find(|(c, _)| *c == control)
+            .unwrap()
+            .1;
+        assert!((r.x - (go.x + wing)).abs() < 0.01, "{control:?}");
+        assert!(
+            (r.x + r.w - (go.x + go.w - wing)).abs() < 0.01,
+            "{control:?}"
+        );
+    }
+}
+
+#[test]
+fn a_latched_finger_still_rolls_from_a_wing_onto_absorb() {
     let touches = latched_at(STANDARD, {
         let absorb = layout_for(SIZE, STANDARD)
             .into_iter()
@@ -567,12 +596,12 @@ fn a_finger_below_a_corner_brakes_and_absorbs_at_once() {
     });
     let reading = touches.reading(SIZE);
     assert_eq!(reading.buttons, Button::Cross.bit() | Button::Circle.bit());
-    assert!(reading.airbrake_left > 0.9, "{}", reading.airbrake_left);
+    assert_eq!(reading.airbrake_left, 0.0, "ABSORB is under the core");
 }
 
 #[test]
 fn easys_band_pull_carries_on_past_gos_bottom_and_still_picks_the_steered_side() {
-    let go = go_rect(SIZE);
+    let go = go_rect(SIZE, STANDARD);
     let mut touches = latched_at(EASY_ZONES, (go.x + go.w * 0.5, go.y + go.h + 0.2 * SIZE.1));
     assert!((touches.brake_pull() - 1.0).abs() < 1e-4);
     stick_drag(&mut touches, -0.5);

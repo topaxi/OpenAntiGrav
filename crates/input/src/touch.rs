@@ -16,9 +16,11 @@
 //!   the right thumb, with fire ([`Button::Square`]) at its left in the
 //!   thumb's arc.
 //! - **Dynamic GO.** Where the finger is *within* GO, tracked while held, adds
-//!   an airbrake: the bottom-left corner is [`Button::L`], the bottom-right is
-//!   [`Button::R`], the centre column and everything above is thrust alone
-//!   (see [`GoZone`]). Switched by [`Touches::set_go_zones`].
+//!   an airbrake: GO widens by a brake wing on each side, the left wing is
+//!   [`Button::L`], the right [`Button::R`], and the centre under FIRE and
+//!   ABSORB is thrust alone (see [`GoZone`]). A pull is a sideways slide, and
+//!   nothing sits beside GO, so braking never lands on FIRE or ABSORB.
+//!   Switched by `[controls] touch_go_zones`.
 //! - **Upper left:** pause ([`Button::Start`]) and camera ([`Button::Select`]),
 //!   with BRAKE L beside them in Standard when GO's zones are off, because
 //!   Wipeout HD draws its shield meter at the top centre.
@@ -67,17 +69,22 @@ pub const SAFE_X: f32 = 0.05;
 /// of the height.
 pub const SAFE_Y: f32 = 0.03;
 
-/// The share of GO's width, from each side, that is a brake corner.
-pub const GO_ZONE_SIDE: f32 = 0.42;
+/// GO's thrust-only core, square, as a fraction of the window's height; FIRE
+/// and ABSORB are its width.
+pub const GO_CORE: f32 = 0.36;
 
-/// The share of GO's height, from the bottom, that carries the brake corners.
-/// A finger latched on GO keeps the pull it had at GO's edge when it slides
-/// past it.
-pub const GO_ZONE_BOTTOM: f32 = 0.50;
+/// The width of each brake wing either side of GO's core, as a fraction of
+/// the window's height, in Standard with GO's zones on. **Chosen, not
+/// measured**: about 9 mm on a 6.2 in phone, the thumb's minimum.
+pub const GO_WING: f32 = 0.14;
 
-/// How deep into a brake zone, as a share of its extent, the pull already
-/// reads full: a thumb need not reach GO's very edge, which is where ABSORB
-/// starts. **Chosen, not measured.**
+/// The share of GO's width, from each side, that is a brake wing. A finger
+/// latched on GO keeps the pull it had at GO's edge when it slides past it.
+pub const GO_ZONE_SIDE: f32 = GO_WING / (GO_CORE + 2.0 * GO_WING);
+
+/// How deep into a brake wing, as a share of its width, the pull already
+/// reads full: a thumb need not reach GO's very edge. **Chosen, not
+/// measured.**
 pub const GO_FULL_DEPTH: f32 = 0.85;
 
 /// The share of GO's height, from the bottom, that is Easy's single BRAKE
@@ -206,24 +213,22 @@ impl Rect {
     }
 }
 
-/// Which airbrake corner of GO a finger is in.
+/// Which airbrake wing of GO a finger is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GoZone {
-    /// The bottom-left corner: [`Button::L`].
+    /// The left wing: [`Button::L`].
     Left,
-    /// The bottom-right corner: [`Button::R`].
+    /// The right wing: [`Button::R`].
     Right,
 }
 
 impl GoZone {
     /// The zone at `fraction` of GO's rectangle (see [`Rect::fraction`]):
-    /// the bottom [`GO_ZONE_BOTTOM`] split left and right, with a dead
-    /// centre column. **Chosen, not measured.**
+    /// the outer [`GO_ZONE_SIDE`] either side at any height, the core
+    /// between them none. **Chosen, not measured.**
     #[must_use]
     pub fn at(fraction: (f32, f32)) -> Option<Self> {
-        if fraction.1 < 1.0 - GO_ZONE_BOTTOM {
-            None
-        } else if fraction.0 <= GO_ZONE_SIDE {
+        if fraction.0 <= GO_ZONE_SIDE {
             Some(Self::Left)
         } else if fraction.0 >= 1.0 - GO_ZONE_SIDE {
             Some(Self::Right)
@@ -234,17 +239,15 @@ impl GoZone {
 
     /// How hard the airbrake is pulled with a finger at `fraction` of GO's
     /// rectangle, 0 to 1: **analogue, chosen, not measured**. Zero on the
-    /// zone's inner edge (the dead centre column) and on its top, one in the
-    /// outer bottom corner, the geometric mean of the depth on each axis so
-    /// sliding down and sliding out both strengthen it.
+    /// wing's inner edge against the core, rising with the slide outward to
+    /// one at [`GO_FULL_DEPTH`] of the wing; the height does not count.
     #[must_use]
     pub fn strength(self, fraction: (f32, f32)) -> f32 {
         let across = match self {
             Self::Left => GO_ZONE_SIDE - fraction.0,
             Self::Right => fraction.0 - (1.0 - GO_ZONE_SIDE),
         } / (GO_ZONE_SIDE * GO_FULL_DEPTH);
-        let down = band_depth(fraction.1, GO_ZONE_BOTTOM);
-        (across.clamp(0.0, 1.0) * down).sqrt()
+        across.clamp(0.0, 1.0)
     }
 
     fn bit(self) -> u8 {
@@ -354,7 +357,8 @@ pub fn layout(size: (f32, f32)) -> Vec<(Control, Rect)> {
 
 /// The controls on screen and under a finger. **Chosen, not measured.**
 ///
-/// The right column is one width: FIRE above GO, a bar below it. The bar is
+/// FIRE above GO, a bar below it, both GO's core wide; in Standard with the
+/// zones on, GO is [`GO_WING`] wider on each side than that core. The bar is
 /// ABSORB, or in Easy with GO's zone off split into two equal halves across
 /// GO's width, BRAKE on the left and ABSORB on the right. Standard with the zone off keeps the separate BRAKE
 /// L/R buttons (BRAKE L upper left with PAUSE and VIEW beside it, BRAKE R in
@@ -370,13 +374,18 @@ pub fn layout_for(size: (f32, f32), setup: Setup) -> Vec<(Control, Rect)> {
         w: rw * h,
         h: rh * h,
     };
-    let (go, go_y, fire, bar, gap) = (0.36, 0.34, 0.18, 0.11, 0.03);
-    let x = right - go;
+    let (go, go_y, fire, bar, gap) = (GO_CORE, 0.34, 0.18, 0.11, 0.03);
+    let wing = if setup.scheme == Scheme::Standard && setup.zones {
+        GO_WING
+    } else {
+        0.0
+    };
+    let x = right - go - wing;
     let bar_y = go_y + go + gap;
     let (brake, brake_y, small) = (0.17, 0.20, 0.13);
     let separate = setup.scheme == Scheme::Standard && !setup.zones;
     let mut out = vec![
-        (Control::Accelerate, r(x, go_y, go, go)),
+        (Control::Accelerate, r(x - wing, go_y, go + 2.0 * wing, go)),
         (Control::Fire, r(x, go_y - 0.02 - fire, go, fire)),
     ];
     if setup.scheme == Scheme::Easy && !setup.zones {
@@ -411,10 +420,10 @@ pub fn layout_for(size: (f32, f32), setup: Setup) -> Vec<(Control, Rect)> {
     out
 }
 
-/// GO's rectangle.
+/// GO's rectangle under `setup`.
 #[must_use]
-pub fn go_rect(size: (f32, f32)) -> Rect {
-    layout_for(size, Setup::default())[0].1
+pub fn go_rect(size: (f32, f32), setup: Setup) -> Rect {
+    layout_for(size, setup)[0].1
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -549,7 +558,7 @@ impl Touches {
         self.zones = 0;
         self.pulled = [0.0; 2];
         self.brake = 0.0;
-        let go = go_rect(size);
+        let go = go_rect(size, self.setup);
         for finger in &self.fingers {
             if finger.role != Role::Buttons {
                 continue;

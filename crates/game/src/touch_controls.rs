@@ -42,8 +42,8 @@ const DIVIDER: [f32; 4] = [1.0, 1.0, 1.0, 0.30];
 /// to `.1` at a full one.
 const ZONE_LIT: [f32; 4] = [1.0, 0.75, 0.2, 0.0];
 const ZONE_ALPHA: (f32, f32) = (0.22, 0.60);
-/// The share of the corner a feather-light pull already lights; the lit
-/// patch grows from here to the whole corner at a full pull.
+/// The share of the wing a feather-light pull already lights; the lit
+/// patch grows from here to the whole wing at a full pull.
 const ZONE_MIN_REACH: f32 = 0.4;
 const STICK_BODY: [f32; 4] = [1.0, 1.0, 1.0, 0.08];
 const STICK_EDGE: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
@@ -89,20 +89,21 @@ fn fill(rect: [f32; 4], color: [f32; 4]) -> Draw {
     Draw::Fill { rect, color }
 }
 
-/// GO's brake corners: the pulled one lit inside GO's own outline, growing
-/// and brightening with the pull, a faint divider either side of the dead
-/// centre, and the `L` and `R` letters.
+/// GO's brake wings: the pulled one lit inside GO's own outline, widening
+/// from the outer edge and brightening with the pull, a faint divider
+/// against the core either side, and an outward arrow over `L` and `R`.
 fn go_zones(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut Vec<Draw>) {
     let [x, y, w, h] = body.rect;
     let side = w * touch::GO_ZONE_SIDE;
-    let top = y + h * (1.0 - touch::GO_ZONE_BOTTOM);
-    let band = y + h - top;
     let inner = body.inset(body.border());
-    for (zone, cell_x, word) in [(GoZone::Left, x, "L"), (GoZone::Right, x + w - side, "R")] {
+    let ink = scaled(GLYPH, opacity);
+    for (zone, cell_x, word, turn) in [
+        (GoZone::Left, x, "L", -QUARTER),
+        (GoZone::Right, x + w - side, "R", QUARTER),
+    ] {
         if touches.zone_down(zone) {
             let pull = touches.zone_strength(zone);
-            let reach = ZONE_MIN_REACH + (1.0 - ZONE_MIN_REACH) * pull;
-            let (lit_w, lit_h) = (side * reach, band * reach);
+            let lit_w = side * (ZONE_MIN_REACH + (1.0 - ZONE_MIN_REACH) * pull);
             let lit_x = if zone == GoZone::Left {
                 cell_x
             } else {
@@ -113,21 +114,25 @@ fn go_zones(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut
             shape::fill(
                 art,
                 inner,
-                Some([lit_x, top + band - lit_h, lit_w, lit_h]),
+                Some([lit_x, y, lit_w, h]),
                 scaled(colour, opacity),
                 out,
             );
         }
-        out.push(text(
-            cell_x + side / 2.0,
-            top + (band - LABEL_HEIGHT) / 2.0,
-            word,
-            opacity,
-        ));
+        let (cx, cy) = (cell_x + side / 2.0, y + h / 2.0);
+        let g = side * 0.45;
+        shape::sprite(
+            [cx - g / 2.0, cy - g - 2.0, g, g],
+            art.triangle,
+            turn,
+            ink,
+            out,
+        );
+        out.push(text(cx, cy + 2.0, word, opacity));
     }
     for line_x in [x + side, x + w - side] {
         out.push(fill(
-            [line_x, top + 2.0, 0.5, band - 5.0],
+            [line_x, y + h * 0.15, 0.5, h * 0.7],
             scaled(DIVIDER, opacity),
         ));
     }
@@ -208,8 +213,8 @@ fn go_band(art: &Art, touches: &Touches, body: Rounded, opacity: f32, out: &mut 
 }
 
 /// The glyph for `control`, centred in `rect`. GO's stays in its upper part
-/// so the lower band keeps its brake corners; only GO and the airbrakes
-/// carry a word.
+/// so Easy's lower band keeps its word; only GO and the airbrakes carry a
+/// word.
 fn glyph(
     art: &Art,
     control: Control,
@@ -313,9 +318,9 @@ pub enum Demo {
     /// Nothing held, with `touch_go_zones` off: GO is thrust alone and the
     /// separate airbrake buttons are back.
     IdleButtons,
-    /// A finger well into GO's bottom-left corner: nearly a full brake.
+    /// A finger well into GO's left wing: nearly a full brake.
     GoLeft,
-    /// A finger partway into GO's bottom-right corner: a partial brake.
+    /// A finger partway into GO's right wing: a partial brake.
     GoRight,
     /// A finger in GO's centre, with another on the floating stick pushed
     /// right.
@@ -333,8 +338,8 @@ pub enum Demo {
     EasyBarBrake,
     /// Standard: a finger that began on GO slid up onto FIRE.
     GoFire,
-    /// Standard: a finger that began on GO dragged well past its bottom-left
-    /// corner: the brake holds full.
+    /// Standard: a finger that began on GO dragged well past its left wing:
+    /// the brake holds full.
     GoLeftPast,
 }
 
@@ -380,7 +385,7 @@ impl Demo {
         let setup = self.setup();
         let mut touches = Touches::default();
         touches.set_setup(setup, size);
-        let go = touch::go_rect(size);
+        let go = touch::go_rect(size, setup);
         let at = |fx: f32, fy: f32| (go.x + go.w * fx, go.y + go.h * fy);
         let of = |control: Control| {
             touch::layout_for(size, setup)
@@ -395,8 +400,8 @@ impl Demo {
         };
         match self {
             Self::Idle | Self::IdleButtons | Self::EasyIdle | Self::EasyZonesOff => {}
-            Self::GoLeft => touches.down(1, at(0.03, 0.97), size),
-            Self::GoRight => touches.down(1, at(0.88, 0.88), size),
+            Self::GoLeft => touches.down(1, at(0.03, 0.5), size),
+            Self::GoRight => touches.down(1, at(0.88, 0.6), size),
             Self::StickAndGo => {
                 touches.down(1, at(0.5, 0.35), size);
                 drag(&mut touches, 0.10, -0.03);
@@ -412,7 +417,7 @@ impl Demo {
             }
             Self::GoLeftPast => {
                 touches.down(1, at(0.5, 0.5), size);
-                touches.moved(1, at(-0.45, 1.25), size);
+                touches.moved(1, at(-0.45, 0.6), size);
             }
             Self::GoFire => {
                 touches.down(1, at(0.5, 0.5), size);
@@ -529,7 +534,7 @@ pub fn draw(
             rect.h * scale,
         ];
         let radius = if control == Control::Accelerate {
-            rect[2] * GO_ROUND
+            rect[2].min(rect[3]) * GO_ROUND
         } else {
             rect[2].min(rect[3]) / 2.0
         };
@@ -550,7 +555,7 @@ pub fn draw(
         if control == Control::Accelerate {
             let at = match (zones, easy) {
                 (true, true) => 0.51,
-                (true, false) => 0.55,
+                (true, false) => 0.62,
                 _ => 0.62,
             };
             out.push(text(
