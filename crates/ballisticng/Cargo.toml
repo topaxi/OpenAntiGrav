@@ -9,6 +9,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+oag-bytes.workspace = true
 oag-unity.workspace = true
 oag-texture.workspace = true
 

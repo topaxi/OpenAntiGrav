@@ -15,7 +15,9 @@
 //! ranseq    u32 rules, rules, u32 items, items (30 bytes each, depth first)
 //! ```
 
-use super::hirc::Kind;
+use oag_bytes::{Le, Reader};
+
+use super::hirc::{Kind, bundle};
 
 #[cfg(test)]
 mod tests;
@@ -61,48 +63,9 @@ impl std::fmt::Display for MusicError {
 
 impl std::error::Error for MusicError {}
 
-struct Cursor<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn take(&mut self, n: usize) -> Result<&'a [u8], MusicError> {
-        let at = self.at;
-        let end = at.checked_add(n).ok_or(MusicError::Truncated { at })?;
-        let out = self
-            .bytes
-            .get(at..end)
-            .ok_or(MusicError::Truncated { at })?;
-        self.at = end;
-        Ok(out)
-    }
-
-    fn u8(&mut self) -> Result<u8, MusicError> {
-        Ok(self.take(1)?[0])
-    }
-
-    fn u16(&mut self) -> Result<u16, MusicError> {
-        Ok(u16::from_le_bytes(self.take(2)?.try_into().expect("two")))
-    }
-
-    fn u32(&mut self) -> Result<u32, MusicError> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().expect("four")))
-    }
-
-    fn f64(&mut self) -> Result<f64, MusicError> {
-        Ok(f64::from_le_bytes(self.take(8)?.try_into().expect("eight")))
-    }
-
-    fn bundle(&mut self, width: usize) -> Result<(), MusicError> {
-        let n = usize::from(self.u8()?);
-        self.take(n)?;
-        self.take(n * width)?;
-        Ok(())
-    }
-
-    fn rest(&self) -> &'a [u8] {
-        &self.bytes[self.at..]
+impl From<oag_bytes::Truncated> for MusicError {
+    fn from(err: oag_bytes::Truncated) -> Self {
+        Self::Truncated { at: err.at }
     }
 }
 
@@ -127,7 +90,7 @@ pub struct MusicNode {
     pub beats: (u8, u8),
 }
 
-fn node(c: &mut Cursor<'_>) -> Result<MusicNode, MusicError> {
+fn node(c: &mut Reader<'_, Le>) -> Result<MusicNode, MusicError> {
     c.u8()?;
     c.u8()?;
     let fx = usize::from(c.u8()?);
@@ -139,8 +102,8 @@ fn node(c: &mut Cursor<'_>) -> Result<MusicNode, MusicError> {
     c.u32()?;
     let parent = Some(c.u32()?).filter(|&p| p != 0);
     c.u8()?;
-    c.bundle(4)?;
-    c.bundle(8)?;
+    bundle(c, 4)?;
+    bundle(c, 8)?;
     let flags: [u8; 4] = c.take(4)?.try_into().expect("four");
     let props = c.u32()?;
     if props != 0 {
@@ -209,7 +172,7 @@ impl Segment {
     /// A [`MusicError`] naming what did not fit.
     pub fn parse(kind: Kind, body: &[u8]) -> Result<Self, MusicError> {
         expect(kind, Kind::MusicSegment)?;
-        let mut c = Cursor { bytes: body, at: 0 };
+        let mut c = Reader::le(body);
         let node = node(&mut c)?;
         let duration = c.f64()?;
         let n = c.u32()?;
@@ -222,7 +185,7 @@ impl Segment {
             markers.push((id, at));
         }
         if !c.rest().is_empty() {
-            return Err(MusicError::TrailingBytes { at: c.at });
+            return Err(MusicError::TrailingBytes { at: c.position() });
         }
         Ok(Self {
             node,
@@ -236,14 +199,14 @@ impl Segment {
 /// 21-byte source rule, a 24-byte destination rule and a flag byte that, when
 /// `1`, precedes a 30-byte transition object. Nothing in them decides what
 /// plays, so they are counted, not kept.
-fn skip_rules(c: &mut Cursor<'_>, rules: u32) -> Result<(), MusicError> {
+fn skip_rules(c: &mut Reader<'_, Le>, rules: u32) -> Result<(), MusicError> {
     for _ in 0..rules {
         for _ in 0..2 {
             let n = c.u32()? as usize;
             c.take(n.checked_mul(4).ok_or(MusicError::BadTree)?)?;
         }
         c.take(21 + 24)?;
-        let at = c.at;
+        let at = c.position();
         match c.u8()? {
             0 => {}
             1 => {
@@ -286,7 +249,7 @@ impl Switch {
     /// A [`MusicError`] naming what did not fit.
     pub fn parse(kind: Kind, body: &[u8]) -> Result<Self, MusicError> {
         expect(kind, Kind::MusicSwitch)?;
-        let mut c = Cursor { bytes: body, at: 0 };
+        let mut c = Reader::le(body);
         let node = node(&mut c)?;
         let rules = c.u32()?;
         skip_rules(&mut c, rules)?;
@@ -304,7 +267,7 @@ impl Switch {
         }
         let raw = c.take(size)?;
         if !c.rest().is_empty() {
-            return Err(MusicError::TrailingBytes { at: c.at });
+            return Err(MusicError::TrailingBytes { at: c.position() });
         }
         let tree = raw
             .as_chunks::<12>()
@@ -407,7 +370,7 @@ impl RanSeq {
     /// A [`MusicError`] naming what did not fit.
     pub fn parse(kind: Kind, body: &[u8]) -> Result<Self, MusicError> {
         expect(kind, Kind::MusicRanSeq)?;
-        let mut c = Cursor { bytes: body, at: 0 };
+        let mut c = Reader::le(body);
         let node = node(&mut c)?;
         let rules = c.u32()?;
         skip_rules(&mut c, rules)?;
@@ -440,7 +403,7 @@ impl RanSeq {
             });
         }
         if !c.rest().is_empty() {
-            return Err(MusicError::TrailingBytes { at: c.at });
+            return Err(MusicError::TrailingBytes { at: c.position() });
         }
         // The root's descendants account for every item: a tree whose child
         // counts do not add up to the list is not this layout.
@@ -491,7 +454,8 @@ pub struct Clip {
 ///
 /// A [`MusicError`] for a body that ends inside them.
 pub fn track_clips(body: &[u8]) -> Result<Vec<Clip>, MusicError> {
-    let mut c = Cursor { bytes: body, at: 1 };
+    let mut c = Reader::le(body);
+    c.skip(1)?;
     let sources = c.u32()? as usize;
     c.take(sources.checked_mul(14).ok_or(MusicError::BadTree)?)?;
     let n = c.u32()?;

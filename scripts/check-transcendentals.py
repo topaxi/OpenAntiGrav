@@ -61,9 +61,11 @@ ROOT = Path(__file__).resolve().parent.parent
 # quietly narrow what this gate covers: every crate carved out of `oag-formats`
 # joins this tuple on the way out, whether or not its arithmetic looks like it
 # could reach a hash. Narrowing the list is a separate, argued change.
+# `bytes` joined 2026-10-25 by the same rule: the readers `replay`, `formats`
+# and `vex` decode their numbers with moved into it.
 SCANNED_CRATES = (
     "core", "physics", "weapons", "gameplay", "ai", "race", "formats", "video", "tables",
-    "texture", "vex", "pob", "rcs", "display", "ui", "ui-screens", "replay", "trackfile",
+    "texture", "vex", "pob", "rcs", "display", "ui", "ui-screens", "replay", "trackfile", "bytes",
 )
 
 # Not required by IEEE-754 to be correctly rounded, so not portable. `sqrt` is

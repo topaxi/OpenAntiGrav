@@ -13,6 +13,7 @@ autotests = false
 # block swizzle. Notably *not* `oag-texture`: a `.vex` embeds texture payloads
 # but only ever unswizzles them, and unswizzling is byte layout.
 [dependencies]
+oag-bytes.workspace = true
 oag-formats.workspace = true
 
 # Ground-truth tests read real scenes out of a disc image. Tests only: the

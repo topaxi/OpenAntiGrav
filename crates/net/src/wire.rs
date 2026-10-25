@@ -16,6 +16,7 @@
 //! arrived at, which the client checks. A hash that disagrees is a determinism bug
 //! or different content, never a misprediction. Chosen, not measured.
 
+use oag_bytes::{Le, Reader};
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::Input;
 
@@ -87,13 +88,13 @@ impl Held {
         }
     }
 
-    fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
+    fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         Ok(Self {
             buttons: reader.u32()?,
-            stick_x: f32::from_bits(reader.u32()?),
-            stick_y: f32::from_bits(reader.u32()?),
-            airbrake_left: f32::from_bits(reader.u32()?),
-            airbrake_right: f32::from_bits(reader.u32()?),
+            stick_x: reader.f32()?,
+            stick_y: reader.f32()?,
+            airbrake_left: reader.f32()?,
+            airbrake_right: reader.f32()?,
         })
     }
 }
@@ -264,47 +265,26 @@ impl std::fmt::Display for Malformed {
 
 impl std::error::Error for Malformed {}
 
-pub(crate) struct Reader<'a> {
-    pub(crate) bytes: &'a [u8],
+impl From<oag_bytes::Truncated> for Malformed {
+    fn from(_: oag_bytes::Truncated) -> Self {
+        Self("truncated")
+    }
 }
 
-impl<'a> Reader<'a> {
-    pub(crate) fn take(&mut self, n: usize) -> Result<&'a [u8], Malformed> {
-        if self.bytes.len() < n {
-            return Err(Malformed("truncated"));
-        }
-        let (head, tail) = self.bytes.split_at(n);
-        self.bytes = tail;
-        Ok(head)
-    }
+/// What the wire adds to a little-endian [`Reader`].
+pub(crate) trait ReaderExt {
+    fn string(&mut self) -> Result<String, Malformed>;
+    fn end(&self) -> Result<(), Malformed>;
+}
 
-    pub(crate) fn u8(&mut self) -> Result<u8, Malformed> {
-        Ok(self.take(1)?[0])
-    }
-
-    pub(crate) fn u16(&mut self) -> Result<u16, Malformed> {
-        let b = self.take(2)?;
-        Ok(u16::from_le_bytes([b[0], b[1]]))
-    }
-
-    pub(crate) fn u32(&mut self) -> Result<u32, Malformed> {
-        let b = self.take(4)?;
-        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    }
-
-    pub(crate) fn u64(&mut self) -> Result<u64, Malformed> {
-        let lo = u64::from(self.u32()?);
-        let hi = u64::from(self.u32()?);
-        Ok(lo | hi << 32)
-    }
-
-    pub(crate) fn string(&mut self) -> Result<String, Malformed> {
+impl ReaderExt for Reader<'_, Le> {
+    fn string(&mut self) -> Result<String, Malformed> {
         let len = usize::from(self.u16()?);
         String::from_utf8(self.take(len)?.to_vec()).map_err(|_| Malformed("string is not UTF-8"))
     }
 
-    pub(crate) fn end(&self) -> Result<(), Malformed> {
-        if self.bytes.is_empty() {
+    fn end(&self) -> Result<(), Malformed> {
+        if self.is_empty() {
             Ok(())
         } else {
             Err(Malformed("trailing bytes"))
@@ -355,7 +335,7 @@ impl Confirmed {
         }
     }
 
-    fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
+    fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         let first = reader.u32()?;
         let people = usize::from(reader.u8()?);
         let count = usize::from(reader.u16()?);
@@ -410,7 +390,7 @@ impl RaceParams {
         out.push(self.zone_target);
     }
 
-    fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
+    fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         let title = reader.string()?;
         let track = reader.string()?;
         let team = reader.string()?;
@@ -518,7 +498,7 @@ impl Control {
     /// [`Malformed`] for a truncated or unknown message, a hello without the
     /// magic, or bytes left over.
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
-        let mut reader = Reader { bytes };
+        let mut reader = Reader::new(bytes);
         let message = match reader.u8()? {
             1 => {
                 if reader.take(4)? != MAGIC {
@@ -594,7 +574,7 @@ impl Datagram {
     ///
     /// [`Malformed`] for a truncated or unknown datagram, or bytes left over.
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
-        let mut reader = Reader { bytes };
+        let mut reader = Reader::new(bytes);
         let message = match reader.u8()? {
             0x10 => {
                 let seat = reader.u8()?;

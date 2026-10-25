@@ -16,6 +16,7 @@
 //! entry runs to the end of the file.
 
 use crate::error::{Error, Result};
+use oag_bytes::{Le, Reader};
 
 const MAGIC: &[u8] = b"Workshop Track (Version 1)";
 const BUNDLE_SIGNATURE: &[u8] = b"UnityFS\0";
@@ -55,50 +56,19 @@ impl Wtrk {
     }
 }
 
-struct Cursor<'a> {
-    data: &'a [u8],
-    at: usize,
-}
-
-impl<'a> Cursor<'a> {
-    fn take(&mut self, n: usize) -> Result<&'a [u8]> {
-        let end = self.at.checked_add(n).filter(|&e| e <= self.data.len());
-        let end = end.ok_or(Error::Wrapper("a field runs past the end of the file"))?;
-        let s = &self.data[self.at..end];
-        self.at = end;
-        Ok(s)
-    }
-
-    fn u8(&mut self) -> Result<u8> {
-        Ok(self.take(1)?[0])
-    }
-
-    fn u32(&mut self) -> Result<u32> {
-        Ok(u32::from_le_bytes(
-            self.take(4)?.try_into().expect("4 bytes"),
-        ))
-    }
-
-    fn u64(&mut self) -> Result<u64> {
-        Ok(u64::from_le_bytes(
-            self.take(8)?.try_into().expect("8 bytes"),
-        ))
-    }
-
-    /// A .NET `BinaryWriter` string: a 7-bit-encoded length, then UTF-8.
-    fn string(&mut self) -> Result<String> {
-        let mut len = 0usize;
-        for shift in (0..35).step_by(7) {
-            let b = self.u8()?;
-            len |= usize::from(b & 0x7f) << shift;
-            if b & 0x80 == 0 {
-                let bytes = self.take(len)?;
-                return String::from_utf8(bytes.to_vec())
-                    .map_err(|_| Error::Wrapper("a string is not UTF-8"));
-            }
+/// A .NET `BinaryWriter` string: a 7-bit-encoded length, then UTF-8.
+fn string(r: &mut Reader<'_, Le>) -> Result<String> {
+    let mut len = 0usize;
+    for shift in (0..35).step_by(7) {
+        let b = r.u8()?;
+        len |= usize::from(b & 0x7f) << shift;
+        if b & 0x80 == 0 {
+            let bytes = r.take(len)?;
+            return String::from_utf8(bytes.to_vec())
+                .map_err(|_| Error::Wrapper("a string is not UTF-8"));
         }
-        Err(Error::Wrapper("a string length does not end"))
     }
+    Err(Error::Wrapper("a string length does not end"))
 }
 
 impl Wtrk {
@@ -106,7 +76,7 @@ impl Wtrk {
     /// an unknown or repeated entry, a length that disagrees with the entry's,
     /// a bundle that does not start with the `UnityFS` signature.
     pub fn parse(file: &[u8]) -> Result<Self> {
-        let mut c = Cursor { data: file, at: 0 };
+        let mut c = Reader::le(file);
         let magic_len = usize::from(c.u8()?);
         if c.take(magic_len)? != MAGIC {
             return Err(Error::Wrapper("not a Workshop Track (Version 1)"));
@@ -127,7 +97,7 @@ impl Wtrk {
             }
             entries.push((name, offset));
         }
-        let table_end = c.at;
+        let table_end = c.position();
 
         let mut out = Self {
             workshop_id: 0,
@@ -144,35 +114,32 @@ impl Wtrk {
             if *offset < table_end {
                 return Err(Error::Wrapper("an entry starts inside the table"));
             }
-            let mut v = Cursor {
-                data: file,
-                at: *offset,
-            };
-            let len = v.u32()? as usize;
-            let end =
-                v.at.checked_add(len)
-                    .filter(|&e| e <= file.len())
-                    .ok_or(Error::Wrapper("an entry runs past the end of the file"))?;
+            let mut body = Reader::le(file);
+            body.seek(*offset)
+                .map_err(|_| Error::Wrapper("an entry starts past the end of the file"))?;
+            let len = body.u32()? as usize;
+            let end = body
+                .position()
+                .checked_add(len)
+                .filter(|&e| e <= file.len())
+                .ok_or(Error::Wrapper("an entry runs past the end of the file"))?;
             let next = entries.get(i + 1).map_or(file.len(), |(_, o)| *o);
             if end != next {
                 return Err(Error::Wrapper(
                     "an entry does not end where the next starts",
                 ));
             }
-            let mut body = Cursor {
-                data: &file[..end],
-                at: v.at,
-            };
+            body.limit(end)?;
             match name.as_str() {
                 "WorkshopID" if len == 8 => out.workshop_id = body.u64()?,
                 "WorkshopVisibility" if len == 8 => out.visibility = body.u64()?,
-                "WorkshopTitle" => out.title = body.string()?,
-                "WorkshopDescription" => out.description = body.string()?,
-                "WorkshopPreview" => out.preview = body.string()?,
+                "WorkshopTitle" => out.title = string(&mut body)?,
+                "WorkshopDescription" => out.description = string(&mut body)?,
+                "WorkshopPreview" => out.preview = string(&mut body)?,
                 "WorkshopTags" => {
                     let n = body.u32()?;
                     for _ in 0..n {
-                        out.tags.push(body.string()?);
+                        out.tags.push(string(&mut body)?);
                     }
                 }
                 "TrackFile" => {
@@ -180,15 +147,15 @@ impl Wtrk {
                     if inner + 4 != len {
                         return Err(Error::Wrapper("the bundle length disagrees with its entry"));
                     }
-                    if !file[body.at..end].starts_with(BUNDLE_SIGNATURE) {
+                    if !file[body.position()..end].starts_with(BUNDLE_SIGNATURE) {
                         return Err(Error::Wrapper("the track file is not a UnityFS bundle"));
                     }
-                    out.bundle_start = body.at;
+                    out.bundle_start = body.position();
                     out.bundle_len = inner;
                 }
                 _ => return Err(Error::Wrapper("an entry this reader has no layout for")),
             }
-            if name != "TrackFile" && body.at != end {
+            if name != "TrackFile" && body.position() != end {
                 return Err(Error::Wrapper("an entry has bytes left after its fields"));
             }
             seen += 1;

@@ -8,7 +8,8 @@
 //! shapes follow Omega's lobby (`docs/networking/online-lobby.md`), the bytes are ours.
 
 use super::board::Board;
-use super::{Malformed, PROTOCOL, RaceParams, Reader, put_string};
+use super::{Malformed, PROTOCOL, RaceParams, ReaderExt, put_string};
+use oag_bytes::{Le, Reader};
 
 /// The first four bytes of a lobby hello, so a race client dialling a lobby is refused by name.
 pub const MAGIC: [u8; 4] = *b"OAGL";
@@ -318,7 +319,7 @@ impl RaceJob {
     ///
     /// [`Malformed`] for truncated bytes or bytes left over.
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
-        let mut r = Reader { bytes };
+        let mut r = Reader::new(bytes);
         let params = RaceParams::take(&mut r)?;
         let count = r.u8()?;
         let seats = (0..count)
@@ -354,7 +355,7 @@ fn put_editions(out: &mut Vec<u8>, list: &[Edition]) {
     }
 }
 
-fn take_editions(r: &mut Reader<'_>) -> Result<Vec<Edition>, Malformed> {
+fn take_editions(r: &mut Reader<'_, Le>) -> Result<Vec<Edition>, Malformed> {
     let count = r.u8()?;
     (0..count)
         .map(|_| {
@@ -381,7 +382,7 @@ fn put_settings(out: &mut Vec<u8>, s: &RoomSettings) {
     out.push(s.zone_target);
 }
 
-fn take_settings(r: &mut Reader<'_>) -> Result<RoomSettings, Malformed> {
+fn take_settings(r: &mut Reader<'_, Le>) -> Result<RoomSettings, Malformed> {
     Ok(RoomSettings {
         title: r.string()?,
         track: r.string()?,
@@ -404,7 +405,7 @@ fn put_strings(out: &mut Vec<u8>, list: &[String]) {
     }
 }
 
-fn take_strings(r: &mut Reader<'_>) -> Result<Vec<String>, Malformed> {
+fn take_strings(r: &mut Reader<'_, Le>) -> Result<Vec<String>, Malformed> {
     let count = r.u8()?;
     (0..count).map(|_| r.string()).collect()
 }
@@ -424,7 +425,7 @@ fn put_phase(out: &mut Vec<u8>, phase: Phase) {
     }
 }
 
-fn take_phase(r: &mut Reader<'_>) -> Result<Phase, Malformed> {
+fn take_phase(r: &mut Reader<'_, Le>) -> Result<Phase, Malformed> {
     Ok(match r.u8()? {
         0 => Phase::Open,
         1 => Phase::Queued { position: r.u16()? },
@@ -554,7 +555,7 @@ impl Message {
     /// [`Malformed`] for a truncated or unknown message, a hello without the magic, or
     /// bytes left over.
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
-        let mut r = Reader { bytes };
+        let mut r = Reader::new(bytes);
         let message = match r.u8()? {
             0x20 => {
                 if r.take(4)? != MAGIC {

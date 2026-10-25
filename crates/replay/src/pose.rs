@@ -9,7 +9,8 @@
 
 use oag_core::math::{Quat, Vec3};
 
-use crate::codec::{Cursor, Truncated, put_varint};
+use crate::codec::{Truncated, put_varint};
+use oag_bytes::{Le, Reader};
 
 /// Where a craft was and which way it faced, at one tick.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,10 +39,10 @@ impl Pose {
         }
     }
 
-    fn read(cursor: &mut Cursor<'_>) -> Result<Self, Truncated> {
+    fn read(cursor: &mut Reader<'_, Le>) -> Result<Self, Truncated> {
         let mut values = [0.0f32; 7];
         for value in &mut values {
-            *value = f32::from_bits(cursor.u32()?);
+            *value = cursor.f32()?;
         }
         Ok(Self {
             position: Vec3::new(values[0], values[1], values[2]),
@@ -98,7 +99,7 @@ impl GhostLap {
     }
 
     pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Truncated> {
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = Reader::le(bytes);
         let lap_ticks = u32::try_from(cursor.varint()?).map_err(|_| Truncated(0))?;
         let count = usize::try_from(cursor.varint()?).map_err(|_| Truncated(0))?;
         if count.saturating_mul(Pose::BYTES) != bytes.len() - cursor.position() {

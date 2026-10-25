@@ -30,6 +30,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 
 | Crate | Path | Purpose |
 | --- | --- | --- |
+| `oag-bytes` | `crates/bytes` | A generic byte reading and manipulation library, endian aware |
 | `oag-core` | `crates/core` | Deterministic math, fixed-timestep clock, seeded PRNG, state hashing. Depended on by everything. |
 | `oag-disc` | `crates/disc` | CHD and raw ISO readers, ISO 9660 walker, console identification. |
 | `oag-display` | `crates/display` | The picture's configuration vocabulary, and the grid a source authors in. Extracted from `oag-game` because it was the most-named module in the composition root, and a shared vocabulary living inside one of its own consumers is not shared. |
@@ -40,7 +41,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-texture` | `crates/texture` | Every pixel format the originals ship. Four consoles in one crate deliberately: `gtf` and `gxt` share the same S3TC block maths, so a console cut would run through it. |
 | `oag-tables` | `crates/tables` | Every table a title authors as XML, and the tag reader underneath them. The only crate in the workspace with no dependencies at all. |
 | `oag-video` | `crates/video` | Video containers - what the originals wrap a bitstream in, plus this project's own movie cache. The first crate carved off `oag-formats`, and the one with no workspace dependencies at all. |
-| `oag-unity` | `crates/unity` | A generic Unity asset-bundle reader: UnityFS containers (LZMA, LZ4, LZ4HC), SerializedFiles v17 to v23, a typetree-driven value reader and the built-in classes. Knows no game and no title; `check-dependency-rules.py` rule 4 gives it an empty allowlist of workspace dependencies, and a game-specific layer sits on top as a separate crate, [ADR-0062](adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md). Outside the determinism-bound crates. |
+| `oag-unity` | `crates/unity` | A generic Unity asset-bundle reader: UnityFS containers (LZMA, LZ4, LZ4HC), SerializedFiles v17 to v23, a typetree-driven value reader and the built-in classes. Knows no game and no title; `check-dependency-rules.py` rule 4 allowlists `oag-bytes` and nothing else, and a game-specific layer sits on top as a separate crate, [ADR-0062](adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md). Outside the determinism-bound crates. |
 | `oag-schema` | `crates/schema` | The `[toml-schema]` header every TOML file of ours carries: kind and major read from its `location`, refused by name when unknown. Depends on `toml`, `serde`, `thiserror` only; its `validate` feature (the reference TOML Schema validator, a pinned git dependency) is switched on by dev-dependencies alone. Read by `oag-ui`, `oag-raceplay` and `oag-trackfile`. [ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md). |
 | `oag-trackfile` | `crates/trackfile` | This project's own custom-track format (glb plus TOML manifest) and the `Track` model every importer and exporter targets. Depends on `oag-vex` for the types, `gltf` (no `image`), `serde_json`, `serde`, `toml`. In the determinism scan; forbidden to gameplay crates. [ADR-0063](adr/0063-the-own-track-format-is-glb-plus-a-toml-manifest.md). |
 | `oag-tools` | `crates/tools` | Command line tools: `oag-unpack`, `oag-wad`. |

@@ -45,3 +45,9 @@ impl From<oag_unity::Error> for Error {
 
 /// This crate's result.
 pub type Result<T> = std::result::Result<T, Error>;
+
+impl From<oag_bytes::Truncated> for Error {
+    fn from(_: oag_bytes::Truncated) -> Self {
+        Self::Wrapper("a field runs past the end of the file")
+    }
+}
