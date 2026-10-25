@@ -10,6 +10,7 @@ just bench-render                      # every title that is on disk, release bu
 just bench-render pulse hd --repeat    # two titles, each run twice, tick count and state hash compared
 just bench-render pulse --views 1,2h,2v --size 1280x800   # one view, then a split cut both ways
 just bench-render pulse --views 2h,2v --motion-blur medium   # the blur on (the default is off), in a split too
+just bench-render pulse --motion-blur high --motion-blur-resolution half   # the blur gathered at half resolution
 just bench-render pulse --binary /path/to/oag-game --tag before   # a binary built from another commit
 just bench-render pulse --tag before   # results in data/bench/before/
 # ... change something, rebuild ...
@@ -127,6 +128,16 @@ not need the `perf-probe` feature.
 | `draws`, `culled`, `triangles` | what the scene submitted |
 | `lap` | the lap the player was on |
 
+`--motion-blur-resolution full|half` sets `[render_profiles.<title>] motion_blur_resolution`
+for every run, the blur's gather resolution (`half` gathers a quarter of the pixels and blends
+the smear back at full size). It is recorded in `settings.motion_blur_resolution`, so `compare`
+warns when a full-gather result is set beside a half-gather one. A result written
+before the key existed lacks it, so `compare` also warns between an older result and a
+newer one at the same gather: read the two `settings` dicts before reading that as a
+difference. The summary carries
+`gpu_blur_us` and `gpu_bloom_us` beside `gpu_scene_us` and `gpu_us` (since 2026-10-25; older
+results lack the two keys and `compare` says so instead of a delta).
+
 Keep them apart: `frame_us` is *not* `cpu_us + gpu_us`. On a fast GPU the frame
 is CPU-bound and `frame_us` tracks `tick_us + cpu_us`; the GPU passes are the
 second-order term.
@@ -137,7 +148,7 @@ second-order term.
 and everything needed to reproduce the run:
 
 - `title`, `run.source`, `run.track`, `run.command`, `mode`, `laps_target`,
-  `tick_cap`, `settings` (size, MSAA, shadows, motion blur, anisotropy, detail,
+  `tick_cap`, `settings` (size, MSAA, shadows, motion blur and its gather resolution, anisotropy, detail,
   culling, camera, FOV, autopilot), the seed is in `run.command`
 - `git_hash`, `build` (debug assertions or release), `run.profile`
 - `adapter` (name, type, backend, driver, driver info, whether GPU timestamps

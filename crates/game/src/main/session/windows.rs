@@ -737,11 +737,11 @@ impl Session {
         screen.framebuffer.resize(device, self.framebuffer.allocation());
         // The one controller's scale on this window's own ceiling (the target it wants),
         // while every window holds one seat; the ceiling itself otherwise (`Session::drs_runs`).
-        let wanted = if self.drs_runs() {
-            self.drs
-                .extent(self.drs_limits_for(fullscreen, surface, wanted))
+        let (wanted, blur_resolution) = if self.drs_runs() {
+            let limits = self.drs_limits_for(fullscreen, surface, wanted);
+            (self.drs.extent(limits), self.drs.blur_resolution(limits))
         } else {
-            wanted
+            (wanted, profile.motion_blur_resolution)
         };
         screen.framebuffer.set_extent(wanted);
         let extent = screen.framebuffer.extent();
@@ -769,7 +769,7 @@ impl Session {
         // (`Scene::render_window`): a window of one seat draws them, one of several is a split
         // and does not. The jitter's length is a property of the upscaler resolving this
         // window's frames, as for window 1.
-        stage.scene.set_blur_resolution(profile.motion_blur_resolution);
+        stage.scene.set_blur_resolution(blur_resolution);
         let effects = oag_raceplay::WindowEffects {
             motion_blur: profile.motion_blur,
             camera_jitter: upscale::jitter_phases(

@@ -56,12 +56,26 @@
 //! downward with every session on a loaded machine - and this module cannot
 //! do it by construction, because it does not import [`crate::settings`] and
 //! is handed [`Limits`] by value.
+//!
+//! # A second, discrete output
+//!
+//! Since [ADR-0075] the controller also emits the motion blur's gather
+//! resolution, shed to `half` before the extent falls and restored to `full`
+//! after it is back at its ceiling. The same invariant binds it: the player's
+//! `motion_blur_resolution` reaches it as a ceiling inside [`Limits`], and the
+//! answer is re-derived every frame by [`Controller::blur_resolution`]. See
+//! [`blur`].
+//!
+//! [ADR-0075]: ../../../docs/architecture/adr/0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md
 
+use oag_display::display::BlurResolution;
 use serde::{Deserialize, Serialize};
 
+pub mod blur;
 pub mod policy;
 pub mod residual;
 
+pub use blur::{MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
 pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };
@@ -147,6 +161,10 @@ pub struct Cost {
     /// Zero on every frame no temporal reconstruction ran, which is honest
     /// rather than a default: nothing fixed was paid.
     pub fixed: f32,
+    /// How much of [`Self::scalable`] was the motion-blur chain: what the
+    /// blur rung ([`blur`]) can shed. Zero when the chain did not run, and
+    /// also when its timer did not come back, which only ever stops a shed.
+    pub blur: f32,
 }
 
 impl Cost {
@@ -350,6 +368,9 @@ pub struct Limits {
     floor: (u32, u32),
     /// The rate aimed for, or [`Target::OFF`].
     target: Target,
+    /// The player's blur gather resolution, the most the rung may ask for, or
+    /// `None` when no blur is drawn and there is nothing to shed.
+    blur: Option<BlurResolution>,
 }
 
 impl Limits {
@@ -368,7 +389,22 @@ impl Limits {
             ceiling,
             floor: (floor.0.clamp(1, ceiling.0), floor.1.clamp(1, ceiling.1)),
             target,
+            blur: None,
         }
+    }
+
+    /// These bounds with the player's blur gather resolution as the blur
+    /// rung's ceiling, or `None` when the blur is off.
+    #[must_use]
+    pub fn with_blur(self, blur: Option<BlurResolution>) -> Self {
+        Self { blur, ..self }
+    }
+
+    /// The blur rung's ceiling: the player's gather resolution, or `None`
+    /// when no blur is drawn.
+    #[must_use]
+    pub fn blur(self) -> Option<BlurResolution> {
+        self.blur
     }
 
     /// The allocation: what the frame is drawn at with no controller running.

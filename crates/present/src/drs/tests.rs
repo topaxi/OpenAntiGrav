@@ -28,6 +28,7 @@ fn cost(scalable: f32) -> Cost {
     Cost {
         scalable,
         fixed: 0.0,
+        blur: 0.0,
     }
 }
 
@@ -464,7 +465,8 @@ fn a_measured_fixed_cost_shrinks_the_budget_by_exactly_itself() {
         idle.record(
             Cost {
                 scalable,
-                fixed: 0.0
+                fixed: 0.0,
+                blur: 0.0,
             },
             None,
             limits(target)
@@ -473,7 +475,15 @@ fn a_measured_fixed_cost_shrinks_the_budget_by_exactly_itself() {
         "inside the deadband with nothing fixed"
     );
     let mut busy = Controller::new();
-    let moved = busy.record(Cost { scalable, fixed }, None, limits(target));
+    let moved = busy.record(
+        Cost {
+            scalable,
+            fixed,
+            blur: 0.0,
+        },
+        None,
+        limits(target),
+    );
     assert!(
         moved.is_some() && busy.scale() < 1.0,
         "the same frame is over budget once the fixed cost is counted"
@@ -500,6 +510,7 @@ fn an_unreachable_target_falls_to_the_floor_and_says_so() {
     let cost = Cost {
         scalable: period * 0.2,
         fixed: period * 1.1,
+        blur: 0.0,
     };
     for _ in 0..64 {
         drs.record(cost, None, limits);
@@ -516,6 +527,7 @@ fn an_unreachable_target_falls_to_the_floor_and_says_so() {
     let affordable = Cost {
         scalable: target.scalable_budget(0.0, Residual::new()).expect("on") * 0.9,
         fixed: 0.0,
+        blur: 0.0,
     };
     drs.record(affordable, None, limits);
     assert!(!drs.unreachable());
@@ -533,6 +545,7 @@ fn a_fixed_cost_over_the_period_still_honours_the_minimum_resolution() {
     let cost = Cost {
         scalable: 0.044,
         fixed: 0.011_99,
+        blur: 0.0,
     };
     for floor in [0.25, 0.33, 0.5] {
         let limits = Limits::new(
@@ -569,6 +582,7 @@ fn sitting_at_the_floor_over_budget_reports_unreachable() {
     let cost = Cost {
         scalable: budget * 20.0,
         fixed: 0.0,
+        blur: 0.0,
     };
     for _ in 0..256 {
         drs.record(cost, None, limits);
@@ -609,6 +623,7 @@ fn a_rise_that_would_overshoot_the_band_is_refused() {
             Cost {
                 scalable: budget * 8.0,
                 fixed: 0.0,
+                blur: 0.0,
             },
             None,
             limits,
@@ -623,6 +638,7 @@ fn a_rise_that_would_overshoot_the_band_is_refused() {
     let tempting = Cost {
         scalable: budget * 0.77,
         fixed: 0.0,
+        blur: 0.0,
     };
     for _ in 0..(COOLDOWN + RISE_PATIENCE + 4) {
         assert_eq!(
@@ -638,6 +654,7 @@ fn a_rise_that_would_overshoot_the_band_is_refused() {
     let roomy = Cost {
         scalable: budget * 0.4,
         fixed: 0.0,
+        blur: 0.0,
     };
     let mut rose = false;
     for _ in 0..64 {
@@ -688,6 +705,7 @@ fn the_residual_converges_on_what_a_tight_frame_keeps_saying() {
     let cost = Cost {
         scalable: period,
         fixed: 0.0,
+        blur: 0.0,
     };
     let frame = cost.total() + truth;
     for _ in 0..400 {
@@ -740,6 +758,7 @@ fn a_sleeping_frame_cannot_teach_the_residual_anything() {
     let tight = Cost {
         scalable: period,
         fixed: 0.0,
+        blur: 0.0,
     };
     for _ in 0..400 {
         drs.record(tight, Some(tight.total() + period * 0.05), limits);
@@ -893,6 +912,7 @@ fn a_stall_does_not_unlearn_the_residual() {
     let tight = Cost {
         scalable: period,
         fixed: 0.0,
+        blur: 0.0,
     };
     for _ in 0..400 {
         drs.record(tight, Some(tight.total() + period * 0.05), limits);
@@ -902,4 +922,5 @@ fn a_stall_does_not_unlearn_the_residual() {
     assert_eq!(drs.residual().learned(), Some(learned));
 }
 
+mod blur;
 mod machines;

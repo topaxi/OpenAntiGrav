@@ -13,7 +13,7 @@
 //! [ADR-0043]: ../../../../docs/architecture/adr/0043-hd-bloom-joins-the-scalable-budget.md
 //! [ADR-0045]: ../../../../docs/architecture/adr/0045-fsr3-splits-into-a-scaled-and-a-presented-reading.md
 
-use log::{trace, warn};
+use log::{info, trace, warn};
 use oag_game::settings;
 use oag_present::drs;
 
@@ -152,6 +152,7 @@ pub(crate) fn assemble(
     Some(drs::Cost {
         scalable: scene + blur.unwrap_or(0.0) + hd_bloom + upscale_scaled,
         fixed: upscale_presented,
+        blur: blur.unwrap_or(0.0),
     })
 }
 
@@ -360,6 +361,7 @@ pub(crate) fn complete_frames(
                 drs::Cost {
                     scalable: own.scalable + others.scalable,
                     fixed: own.fixed + others.fixed,
+                    blur: own.blur + others.blur,
                 },
             ));
         } else if frame + MAX_LAG < newest {
@@ -633,6 +635,7 @@ impl Session {
         frame_seconds: Option<f32>,
         drs_limits: drs::Limits,
     ) {
+        let shed = self.drs.blur_shed();
         if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
             // **The reserve is printed beside the costs**, because
             // since ADR-0044 it is not a constant a reader can look up:
@@ -655,6 +658,20 @@ impl Session {
                 } else {
                     " (assumed)"
                 }
+            );
+        }
+        // One line per flip of the blur rung (ADR-0075): it moves seldom by
+        // construction, and a run that never says it moved cannot show it did.
+        if self.drs.blur_shed() != shed {
+            info!(
+                "dynamic resolution: motion blur gathers at {} resolution - scalable {:.3} ms, \
+                 blur {:.3} ms, at {:.0}% of {}x{}",
+                if shed { "full" } else { "half" },
+                cost.scalable * 1000.0,
+                cost.blur * 1000.0,
+                self.drs.scale() * 100.0,
+                drs_limits.ceiling().0,
+                drs_limits.ceiling().1,
             );
         }
         // Said once per spell rather than per frame - see
@@ -711,6 +728,7 @@ impl Session {
             let mut total = drs::Cost {
                 scalable: 0.0,
                 fixed: 0.0,
+                blur: 0.0,
             };
             let seats = |window: usize| {
                 race.filter(|race| windowed && race.windowed())
@@ -729,6 +747,7 @@ impl Session {
                 )?;
                 total.scalable += cost.scalable;
                 total.fixed += cost.fixed;
+                total.blur += cost.blur;
             }
             Some(total)
         });

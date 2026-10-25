@@ -619,6 +619,16 @@ adapter capability is neither. An earlier version of this page claimed the
 `check_condition`, and this is the correction. The row is stored and inert,
 which is the same thing `restart_required` already means.
 
+## A second output: the blur gather (2026-10-25)
+
+The controller also chooses the motion blur's gather resolution: it sheds the full
+gather on the overrun the extent would have fallen on, and restores it only at the
+extent's ceiling, after three seconds of frames predicted to land under the deadband
+([ADR-0075](../architecture/adr/0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md),
+`drs::blur`). The player's `motion_blur_resolution` is its ceiling, carried in
+`drs::Limits`, and it writes no setting either. Measurements and the running-race check
+are in [the half-gather blur rung](motion-blur-half-rung.md).
+
 ## Three properties the controller does not break
 
 - **It never writes `settings.graphics.render_scale`**, and cannot: `drs.rs`

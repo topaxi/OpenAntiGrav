@@ -49,6 +49,7 @@ fn settle(target: Target, pace: f32, flat: f32, per_pixel: f32, truth: f32) -> (
             let cost = Cost {
                 scalable,
                 fixed: 0.0,
+                blur: 0.0,
             };
             let moved = drs
                 .record(cost, learning.then_some(frame), limits)

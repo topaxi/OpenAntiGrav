@@ -83,6 +83,7 @@ out to be wrong.
 | [0071](0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md) | Weapons are predicted simulation, with a discrete-state correction trigger | **Proposed** (2026-10-19); answers ADR-0069 condition 2 |
 | [0073](0073-an-unreachable-resolution-target-falls-to-the-floor.md) | An unreachable resolution target falls to the floor | **Proposed** (2026-10-19); supersedes ADR-0042's hold-when-unreachable half |
 | [0074](0074-curated-screenshots-may-be-published-no-content-may-be-shipped.md) | Curated screenshots may be published, game content may not be shipped | Accepted (2026-10-20); adds a publishing permission beside ADR-0006, which stands |
+| [0075](0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md) | Dynamic resolution sheds the blur gather before pixels | **Proposed** (2026-10-25); a second, discrete controller output beside ADR-0040/0042/0044/0073, which stand |
 
 ## Format
 

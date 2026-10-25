@@ -221,6 +221,10 @@
   and sub-pixel camera jitter by
   [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md).
   No renderer-side prerequisite is outstanding; the port itself is
+- [The half-gather blur rung](motion-blur-half-rung.md) - **built**, 2026-10-25: dynamic
+  resolution sheds the motion blur's full gather before it gives up pixels and restores it
+  last ([ADR-0075](../architecture/adr/0075-dynamic-resolution-sheds-the-blur-gather-before-pixels.md));
+  the savings on three rigs, the per-pass floor, and the rung in a running race
 - [Dynamic resolution](dynamic-resolution.md) has its **structural half built
   and nothing else**: the scene target is allocated at the `render_scale`
   ceiling and drawn into a sub-rectangle of it, per
