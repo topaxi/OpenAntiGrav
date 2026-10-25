@@ -44,6 +44,11 @@ pub(super) struct Wrecks {
 }
 
 impl Wrecks {
+    /// The wreck drawn for `slot`, if its team has one.
+    pub(super) fn hull(&self, slot: usize) -> Option<&Drawable> {
+        self.hull.get(slot).and_then(Option::as_ref)
+    }
+
     /// Moves every wreck's matrices onto the shared buffer.
     pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
         for wreck in self.hull.iter_mut().flatten() {

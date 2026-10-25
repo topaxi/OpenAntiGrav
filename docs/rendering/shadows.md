@@ -53,7 +53,7 @@ fraction of one tick.
 | `off` | nothing | - | - |
 | `blob` | each craft | HD: the disc's own `ambient_shadow.gtf`; 2048 and Omega: theirs for the Zone craft. Elsewhere: a generated radial falloff, **as a substitute for a missing asset only** | the track ribbon under the craft |
 | `original` | what the title itself authors | Pulse: `Dynamic Shadow Occluder` `0x3c3` hulls. HD: the disc's four shadow jobs and its `ShadowToAlpha`/`ShadowMap` material flags. Pure: **nothing, and it says so** | per title |
-| `mapped` | every mesh in the scene | a depth map rendered from the light | every mesh in the scene |
+| `mapped` | what moves: craft, wrecks, weapon bodies, the circuit's animated parts (since 2026-10-25; every mesh before) | a two-layer depth map rendered from the light | every mesh in the scene |
 
 **`mapped` is a change of *scope*, not a promotion over `original`.** On a title
 whose own mechanism is already a shadow map - which is HD, and possibly 2048 -
@@ -388,8 +388,8 @@ measuring*, and on one axis it is a regression.
 | --- | --- | --- | --- |
 | what `original` is | 129 authored occluders, mechanism unread | a real shadow-map pipeline, **models onto the track**, plus a stencil-volume path | a track-proximity projection plus precomputed per-circuit ship environment shadows |
 | the light it casts from | **none** - no usable rig, see below | the sun in `.envsettings` | **its own `ShadowLight`**, stated apart from the sun |
-| `mapped` adds | dynamic shadows where the disc has one hand-placed hull per object | ship-on-ship, ship-on-scenery, scenery-on-scenery; cascades; a resolution the PS3 could not afford | the same, plus shadows that are not tied to track proximity |
-| `mapped` **costs** | little; there is no authored lighting to lose | **the baked shadows in the lightmap's alpha**, which are art, not an approximation of a real-time result | the precomputed environment shadows, which are likewise authored |
+| `mapped` adds | a craft's real silhouette where the disc has one hand-placed hull per object, on the road, walls and other craft | ship-on-ship, ship-on-scenery, moving scenery; cascades; a resolution the PS3 could not afford | the same, plus shadows that are not tied to track proximity |
+| `mapped` **costs** | the hand-placed hull's look | nothing authored since 2026-10-25: the still scenery casts nothing, so the lightmap's baked shadows stand alone, and the hull keeps the sun-occlusion map's road darkness | likewise; the precomputed environment shadows stand |
 
 That middle-column cost is the reason `original` stays the default on HD even
 once `mapped` exists. HD's static shadows are painted into the lightmap alpha
@@ -1211,30 +1211,69 @@ bridge.
    CPU a view on a discrete card, and 1 to 1.6 ms of iGPU time a view because the whole
    circuit is drawn into every map - see [split-screen.md](split-screen.md#cost).
 
-   **Two layers since 2026-10-25, because one left a visible edge that moved with
-   the craft.** The first cut had one box, `MAPPED_RADIUS` (70) across the sun and
-   centred `MAPPED_AHEAD` (40) in front of the player, and a receiver outside it read
-   *lit*. Under a long roof that drew the road shadowed up to about 110 units ahead
-   and lit past that, along a straight line that travelled with the craft - a
-   maintainer's report on Moa Therma White, reproduced at tick 1500 under the
-   stadium's roof by diffing `--shadows mapped` against `off`. The depth map is now a
-   two-layer array at one binding: layer 0 is that near box, layer 1 a far box
-   (`MAPPED_FAR_RADIUS` 400, centred `MAPPED_FAR_AHEAD` 280 ahead) that
-   `Map::render_depth_far` fills from the same casters, the track's draw ranges culled
-   to its own wider box. `shadow.wesl` reads the near layer inside its box, blends
-   into the far layer across the near box's outer tenth (`CASCADE_RIM`), and fades the
-   far layer to lit across its own outer tenth, so neither edge is a line. The far
-   bias is the near one rescaled to the deeper box, so both push a receiver the same
-   world distance. Checked: the same frame now shadows the roof, walls and road to
-   the horizon, and the one remaining edge is the roof's real end, which stays put
-   in the world (gone from the road by tick 1540); the near box is inside the far one
-   for every heading and light tilt tried (`the_near_box_sits_inside_the_far_one`,
-   which fails with the far radius cut to 100). **Cost**, the same frame
-   (`OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, `perf-probe` release, RX 7800 XT,
-   load 8-10, alternating runs against the commit before): `Scene::render` GPU median
-   725 to 830 us, the scene pass 355 to 372 us of it, CPU 143 to 161 us. Not measured
-   on the Deck or an iGPU, where the near layer alone already cost 1 to 1.6 ms a view;
-   the far pass draws more of the circuit than the near one, so expect more there.
+   **Since 2026-10-25 what moves casts, and the still circuit does not.** Every
+   title already authors the scenery's shadows in its own lighting (Pulse's vertex
+   colours, HD's and later titles' lightmaps), so casting the circuit too darkened
+   them a second time from a sun of our choosing - and gave the map's box an edge.
+   The maintainer's report on Moa Therma White: under the stadium's roof the road
+   was shadowed to about 110 units ahead and lit past that, along a straight line
+   that travelled with the craft, because a receiver outside the one box
+   `MAPPED_RADIUS` (70) across read lit. Reproduced at tick 1500 by diffing
+   `--shadows mapped` against `off`.
+
+   The casters now are the craft (a wreck once eliminated), the weapon bodies in
+   flight - rockets, mines, bombs, shurikens; the plasma ball and cannon round are
+   light and cast nothing, **chosen** - and the circuit's animated parts. Those
+   are grouped per `Anim Transform` node at load (`drawable::moving`) and cast at
+   the node's world matrix this frame, the one the vertex shader applies, which
+   also closes the suspicion recorded below that a node cast from its time-zero
+   place. A node casts into a layer only when its bound at this frame's matrix
+   reaches the layer's box: Pulse's circuits author 2 to 69 nodes, and at most 7
+   reach the near box and 21 the far one in the frames sampled.
+   `the_mapped_depth_map_never_records_the_static_track` counts every range drawn
+   from the circuit's own buffers and fails if a static one comes back.
+
+   **Two layers**, because a shadow box still has an edge for small casters: the
+   depth map is a two-layer array at one binding, layer 0 the near box (radius 70,
+   40 ahead) and layer 1 a far box (`MAPPED_FAR_RADIUS` 400, `MAPPED_FAR_AHEAD`
+   280 ahead) filled by `Map::render_depth_far`. `shadow.wesl` reads the near
+   layer inside its box, blends into the far one across the near box's outer tenth
+   (`CASCADE_RIM`) and fades the far one to lit across its own, so a craft ahead
+   does not gain its shadow at a line. The far bias is the near one rescaled to
+   the deeper box. `the_near_box_sits_inside_the_far_one` holds for every heading
+   and light tilt tried and fails with the far radius cut to 100. The caster
+   uniforms are one dynamic-offset bind group, `MAX_DEPTH_CASTERS` (512) a layer.
+
+   **The craft under a roof.** With the circuit not casting, a craft under a deck
+   would read full sun. On HD that is answered by the title's own law: under
+   `mapped` the sun-occlusion maps render as under `original` - the road's baked
+   lightmap darkness under the craft multiplies the hull's sun - with the
+   self-shadow layer left empty, because the depth map already shadows the hull
+   with itself. HD single race at tick 3000, hull mean grey: `off` 187.0,
+   `original` 180.7, `mapped` 180.6. Pulse needs nothing: its own `original`
+   leaves the hull at full sun under Moa Therma's roof too (194.71 under both
+   `original` and `off`), so darkening it would be an invention.
+
+   Checked on the reporting frame: the diff against `off` is the craft's own shadow
+   and nothing else; HD's single race likewise.
+
+   **2048 and Omega: checked, applies.** The occlusion path runs under `mapped` on
+   the same condition as under `original` (no authored hulls, the rig's light on),
+   so on both it does what `original` already did there: single race at ticks 900
+   and 2400, hull-box mean grey `original` within 0.75 of `off` on both titles, and
+   `mapped` 0.5 to 1.3 below `off` - the craft's own shadow on the road inside the
+   box. Every title authors animated nodes, so moving scenery casts on all of them:
+   the default circuit's count is HD 37, 2048 122 (`2048-PCSF00007.vpk`), Omega 81,
+   with 2 to 9 reaching the far box at tick 900.
+
+   **Cost**, `OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, `perf-probe` release,
+   RX 7800 XT, load 1 to 5, against the merge base, medians of two runs (GPU / CPU,
+   us): Moa Therma White's roof frame 721 / 142 to 715 / 138; Pulse single race at
+   tick 2100, eight craft, 1197 / 267 to 1223 / 268; HD single race at tick 3000
+   1517 / 394 to 1686 / 525, which is the sun-occlusion pass `original` already
+   pays there. Not measured on the Deck or an iGPU, where drawing the whole circuit
+   into the map was the cost - 1 to 1.6 ms a view
+   ([split-screen.md](split-screen.md#cost)) - and is now gone.
 
    **Nothing in it is recovered.** The depth format, the 2048 resolution, the
    two cascades and their fits, the four-tap comparison, the slope-scaled bias,

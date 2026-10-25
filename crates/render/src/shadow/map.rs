@@ -352,10 +352,12 @@ pub struct Map {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     pipeline: wgpu::RenderPipeline,
-    /// One uniform slot per caster the pass can hold, each a
-    /// `light view-projection * model`.
+    /// One uniform slot per caster a pass can hold, each a
+    /// `light view-projection * model`: [`MAX_CASTERS`] for the atlas, then
+    /// [`MAX_DEPTH_CASTERS`] per depth layer.
     uniforms: wgpu::Buffer,
-    binds: Vec<wgpu::BindGroup>,
+    /// The one bind group over [`Self::uniforms`]; a dynamic offset picks the slot.
+    bind: wgpu::BindGroup,
     /// Each craft's projection and atlas square as the last [`Map::render`]
     /// left them, for the receiver; [`CraftShadow::NONE`] for a craft that
     /// drew nothing.
@@ -398,6 +400,20 @@ pub const MAX_CASTERS: usize = 8;
 /// alignment every backend accepts.
 const UNIFORM_STRIDE: u64 = 256;
 
+/// The most casters one depth layer draws: every craft, every weapon body in
+/// flight and every animated node of the circuit whose bound reaches the
+/// layer's box. A circuit authors up to [`oag_mesh::mesh::NODE_ANIM_LIMIT`]
+/// nodes, so this is room for every one of them twice over a full grid.
+pub const MAX_DEPTH_CASTERS: usize = 512;
+
+/// Every uniform slot: the atlas's, then each depth layer's.
+const UNIFORM_SLOTS: usize = MAX_CASTERS + MAX_DEPTH_CASTERS * DEPTH_LAYERS as usize;
+
+/// A slot's dynamic offset into the caster uniforms.
+fn slot_offset(slot: usize) -> u32 {
+    (UNIFORM_STRIDE * slot as u64) as u32
+}
+
 impl Map {
     /// Builds the map and its caster pipeline.
     #[must_use]
@@ -437,8 +453,8 @@ impl Map {
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size: std::num::NonZeroU64::new(64),
                 },
                 count: None,
             }],
@@ -494,29 +510,26 @@ impl Map {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("shadow caster uniforms"),
-            // Twice over: the far layer's pass writes its own slots, because every
-            // write lands before either pass runs and a shared slot would leave
-            // both passes drawing the far layer's matrices.
-            size: UNIFORM_STRIDE * (MAX_CASTERS * DEPTH_LAYERS as usize) as u64,
+            // The coverage atlas's slots, then each depth layer's own: every
+            // write lands before any pass runs, so two passes sharing a slot
+            // would both draw whichever matrix was written last.
+            size: UNIFORM_STRIDE * UNIFORM_SLOTS as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let binds = (0..MAX_CASTERS * DEPTH_LAYERS as usize)
-            .map(|slot| {
-                device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("shadow caster"),
-                    layout: &layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &uniforms,
-                            offset: UNIFORM_STRIDE * slot as u64,
-                            size: std::num::NonZeroU64::new(64),
-                        }),
-                    }],
-                })
-            })
-            .collect();
+        // One bind group over the whole buffer, a dynamic offset picking the slot.
+        let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("shadow caster"),
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &uniforms,
+                    offset: 0,
+                    size: std::num::NonZeroU64::new(64),
+                }),
+            }],
+        });
 
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("shadow depth map"),
@@ -611,7 +624,7 @@ impl Map {
             view,
             pipeline,
             uniforms,
-            binds,
+            bind,
             crafts: [CraftShadow::NONE; MAX_CASTERS],
             drawn: 0,
             depth,
@@ -674,7 +687,7 @@ impl Map {
         casters: &[Caster<'_>],
     ) {
         self.depth_matrix = fit.matrix();
-        self.depth_drawn = casters.len().min(MAX_CASTERS);
+        self.depth_drawn = casters.len().min(MAX_DEPTH_CASTERS);
         self.render_layer(queue, encoder, 0, self.depth_matrix, casters);
     }
 
@@ -691,7 +704,7 @@ impl Map {
         casters: &[Caster<'_>],
     ) {
         self.far_matrix = fit.matrix();
-        self.far_drawn = casters.len().min(MAX_CASTERS);
+        self.far_drawn = casters.len().min(MAX_DEPTH_CASTERS);
         self.render_layer(queue, encoder, 1, self.far_matrix, casters);
     }
 
@@ -720,14 +733,18 @@ impl Map {
         }
         self.depth_clear[layer] = casters.is_empty();
         self.passes += 1;
-        let first = layer * MAX_CASTERS;
-        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
-            let mvp = matrix * caster.model;
-            queue.write_buffer(
-                &self.uniforms,
-                UNIFORM_STRIDE * (first + slot) as u64,
-                bytemuck::cast_slice(&mvp.to_cols_array()),
-            );
+        // Past the cap the rest are dropped; the caller sizes its list to it.
+        let casters = &casters[..casters.len().min(MAX_DEPTH_CASTERS)];
+        let first = MAX_CASTERS + layer * MAX_DEPTH_CASTERS;
+        // One write for the layer: a slot per caster, each padded to the stride.
+        if !casters.is_empty() {
+            let mut bytes = vec![0u8; UNIFORM_STRIDE as usize * casters.len()];
+            for (slot, caster) in casters.iter().enumerate() {
+                let mvp = (matrix * caster.model).to_cols_array();
+                let at = UNIFORM_STRIDE as usize * slot;
+                bytes[at..at + 64].copy_from_slice(bytemuck::cast_slice(&mvp));
+            }
+            queue.write_buffer(&self.uniforms, UNIFORM_STRIDE * first as u64, &bytes);
         }
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow depth map"),
@@ -745,11 +762,11 @@ impl Map {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.depth_pipeline);
-        for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
+        for (slot, caster) in casters.iter().enumerate() {
             if caster.ranges.is_empty() {
                 continue;
             }
-            pass.set_bind_group(0, &self.binds[first + slot], &[]);
+            pass.set_bind_group(0, &self.bind, &[slot_offset(first + slot)]);
             pass.set_vertex_buffer(0, caster.vertices.slice(..));
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in caster.ranges {
@@ -856,7 +873,7 @@ impl Map {
             // out of the neighbouring squares.
             pass.set_viewport(x as f32, y as f32, side as f32, side as f32, 0.0, 1.0);
             pass.set_scissor_rect(x, y, side, side);
-            pass.set_bind_group(0, &self.binds[index], &[]);
+            pass.set_bind_group(0, &self.bind, &[slot_offset(index)]);
             pass.set_vertex_buffer(0, craft.caster.vertices.slice(..));
             pass.set_index_buffer(craft.caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in craft.caster.ranges {
