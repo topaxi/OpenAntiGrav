@@ -97,6 +97,11 @@ Whole race, `scripts/bench-render.py run --size 3840x2160 --motion-blur high
 | Rig | `gpu_blur_us`, full | `gpu_blur_us`, half | GPU frame, full | GPU frame, half |
 | --- | --- | --- | --- | --- |
 | E (Deck) | 18.81 -> 17.40 | 10.47 -> 9.03 | 29.74 -> 28.36 | 21.37 -> 19.96 |
+| D (iGPU), load 7.7 to 1.1 | 80.89 -> 79.61 | 30.34 -> 26.16 | 114.20 -> 112.11 | 62.48 -> 58.18 |
+
+On the iGPU the full gather's reconstruct (about 77 ms of a 4K frame there) dwarfs the
+pass, so the full-gather saving reads small against its own run-to-run spread; the half
+gather's 4.2 ms is the pass's whole saving.
 
 On the Deck at 4K the unrolled pass saves about 1.4 ms of a race's median blur chain at
 either gather, and half the floor this section measured is now a third smaller. What is
