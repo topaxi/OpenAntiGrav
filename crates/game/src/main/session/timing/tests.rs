@@ -2,7 +2,11 @@ use super::*;
 use std::collections::BTreeMap;
 
 fn cost(scalable: f32, fixed: f32) -> drs::Cost {
-    drs::Cost { scalable, fixed }
+    drs::Cost {
+        scalable,
+        fixed,
+        blur: 0.0,
+    }
 }
 
 #[test]

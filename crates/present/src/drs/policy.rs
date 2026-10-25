@@ -5,7 +5,9 @@
 //! sit together, because two of them are only correct with respect to each
 //! other. See [`DEADBAND`].
 
-use super::{Cost, Limits, Residual};
+use oag_display::display::BlurResolution;
+
+use super::{Cost, Limits, Residual, blur::Rung};
 
 /// The band around the budget in which nothing happens, as a fraction of it.
 ///
@@ -114,6 +116,9 @@ pub struct Controller {
     /// carries no `Serialize` and this module cannot reach `crate::settings`
     /// to write one anyway.
     residual: Residual,
+    /// The blur rung: whether the half gather is in force, and what earns the
+    /// full one back - see [`super::blur`].
+    rung: Rung,
 }
 
 impl Default for Controller {
@@ -132,6 +137,7 @@ impl Controller {
             under: 0,
             unreachable: 0,
             residual: Residual::new(),
+            rung: Rung::default(),
         }
     }
 
@@ -176,6 +182,7 @@ impl Controller {
         limits: Limits,
     ) -> Option<(u32, u32)> {
         let period = limits.target().period()?;
+        self.rung.begin_frame(limits);
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
             return None;
@@ -213,6 +220,23 @@ impl Controller {
         } else {
             scalable / budget
         };
+        // **The blur rung first in both directions** (ADR-0075): an overrun
+        // sheds the full gather before the extent falls, and the full gather
+        // comes back only at the extent's ceiling, so a restore is the last
+        // thing the controller gives back.
+        if ratio > *DEADBAND.end() && self.rung.try_shed(cost.blur, self.steps, limits) {
+            self.cooldown = COOLDOWN;
+            self.under = 0;
+            return None;
+        }
+        if self
+            .rung
+            .try_restore(cost.blur, scalable, budget, self.steps == GRID)
+        {
+            self.cooldown = COOLDOWN;
+            self.under = 0;
+            return None;
+        }
         if DEADBAND.contains(&ratio) {
             // Comfortable, and comfortable is not headroom: a frame in the
             // band breaks the run a rise has to earn.
@@ -347,6 +371,7 @@ impl Controller {
         self.cooldown = COOLDOWN;
         self.under = 0;
         self.unreachable = 0;
+        self.rung.reset();
     }
 
     /// The extent to draw at, re-derived from the bounds in force now.
@@ -363,6 +388,24 @@ impl Controller {
             return limits.ceiling();
         }
         limits.pixels(steps_scale(self.steps.clamp(floor_steps(limits), GRID)))
+    }
+
+    /// The blur's gather resolution to draw at, re-derived from the bounds in
+    /// force now, every frame, like [`Self::extent`].
+    ///
+    /// The player's own choice whenever the target is off, the blur is off or
+    /// that choice is already `half`; `half` while the rung has shed the full
+    /// gather. Never above the ceiling [`Limits::blur`] carries.
+    #[must_use]
+    pub fn blur_resolution(&self, limits: Limits) -> BlurResolution {
+        self.rung.resolution(limits)
+    }
+
+    /// Whether the rung holds the half gather, for the log line that says it
+    /// moved. Not a resolution to draw at: see [`Self::blur_resolution`].
+    #[must_use]
+    pub fn blur_shed(&self) -> bool {
+        self.rung.is_shed()
     }
 
     /// The scale in force, as a fraction of the ceiling. For tests and the
