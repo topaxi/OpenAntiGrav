@@ -231,7 +231,7 @@ impl Controller {
         }
         if self
             .rung
-            .try_restore(cost.blur, scalable, budget, self.steps == GRID)
+            .try_restore(cost.blur, scalable, budget, self.steps)
         {
             self.cooldown = COOLDOWN;
             self.under = 0;

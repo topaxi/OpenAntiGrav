@@ -361,3 +361,34 @@ fn noisy_readings_do_not_make_the_gather_flicker() {
         assert_eq!(flips, 1, "seed {seed}: the gather flickered");
     }
 }
+
+/// The full gather a restore would bring back is predicted from the half
+/// gather measured now, at the saving the shed measured, rather than
+/// remembered from the moment of the shed: a scene whose blur has grown since
+/// does not restore on a cost that is no longer true.
+#[test]
+fn a_restore_predicts_the_full_gather_from_the_half_one_measured_now() {
+    let limits = blur_limits(FULL);
+    let budget = budget();
+    let mut drs = Controller::new();
+    // Shed on a cheap blur (0.1 budget), then read its half at 0.05: the
+    // machine's saving is a half.
+    drs.record(blurred(budget * 1.1, budget * 0.1), None, limits);
+    for _ in 0..COOLDOWN {
+        drs.record(blurred(budget * 0.5, budget * 0.05), None, limits);
+    }
+    drs.record(blurred(budget * 0.5, budget * 0.05), None, limits);
+    // Now the blur grows: a half gather of 0.2 stands for a full one of 0.4,
+    // so 0.65 restored would be 0.85 of the budget. Never restored.
+    for _ in 0..(RESTORE_PATIENCE << MAX_BACKOFF) * 2 {
+        drs.record(blurred(budget * 0.65, budget * 0.2), None, limits);
+    }
+    assert!(drs.blur_shed(), "restored on a remembered cost");
+    // The same frame with the remembered estimate would have restored: 0.65 -
+    // 0.2 + 0.1 is 0.55 of the budget. A little less scene and the predicted
+    // 0.75 fits.
+    for _ in 0..RESTORE_PATIENCE {
+        drs.record(blurred(budget * 0.55, budget * 0.2), None, limits);
+    }
+    assert!(!drs.blur_shed());
+}

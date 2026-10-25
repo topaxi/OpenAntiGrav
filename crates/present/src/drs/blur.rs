@@ -23,13 +23,21 @@
 //!   restored cost is predicted to land at or under [`super::DEADBAND`]'s
 //!   lower edge**, for [`RESTORE_PATIENCE`] frames running. The prediction is
 //!   the cost now, minus the half gather measured now, plus the full gather
-//!   measured on the frame that shed it. Landing at or under 0.80 of the
-//!   budget cannot shed again, which needs more than 0.95: the same margin
+//!   it stands for. Landing at or under 0.80 of the budget cannot shed again,
+//!   which needs more than 0.95: the same margin
 //!   [`super::Controller::record`]'s rise refusal takes.
-//! - **A restore that does not hold backs off.** The full gather's cost is
-//!   remembered from the shed, so it goes stale as the scene changes. A shed
-//!   within [`RELAPSE_WINDOW`] frames of a restore doubles the patience the
-//!   next restore needs, up to [`MAX_BACKOFF`] doublings, so a stale estimate
+//! - **The full gather it stands for is measured, twice.** The frame that
+//!   sheds reads the full gather's cost; the first reading the controller acts
+//!   on after it (the cooldown later, at the same scale) reads the half
+//!   gather's. Their ratio is this machine's saving, and from then on the full
+//!   gather is predicted as the half gather measured now over that ratio, so
+//!   the prediction follows the scene rather than the moment of the shed. The
+//!   blur's cost moves a lot with motion: on a Raphael iGPU at 4K one run read
+//!   a full gather of 2.3 ms at the start and 15.3 ms half a minute later.
+//! - **A restore that does not hold backs off.** The ratio can still go stale
+//!   (a scene whose blur floor and gather move differently). A shed within
+//!   [`RELAPSE_WINDOW`] frames of a restore doubles the patience the next
+//!   restore needs, up to [`MAX_BACKOFF`] doublings, so a stale estimate
 //!   costs a bounded number of flips rather than a flip every second.
 //!
 //! # The player's choice is the ceiling
@@ -57,7 +65,7 @@ use super::{GRID, Limits, RISE_PATIENCE};
 /// **Four times [`RISE_PATIENCE`], chosen, not measured.** Slower than the
 /// extent loop's rise on purpose: a restore is the larger of the two jumps
 /// (half the blur chain at once against one grid step), and its prediction
-/// rests on a cost remembered from the shed rather than read this frame.
+/// rests on a saving ratio read once, after the shed, rather than on this frame.
 pub const RESTORE_PATIENCE: u32 = 4 * RISE_PATIENCE;
 
 /// How many frames after a restore a shed counts as the restore not holding.
@@ -68,12 +76,42 @@ pub const RELAPSE_WINDOW: u32 = 300;
 /// frames becomes at most 1,024, about seventeen seconds at 60. **Chosen.**
 pub const MAX_BACKOFF: u32 = 5;
 
+/// The smallest saving ratio, half over full, that is believed. The half gather
+/// reads a quarter of the pixels and keeps every other pass of the chain, so
+/// it cannot cost less than a quarter of the full one; a lower reading is a
+/// scene that changed under the cooldown, and clamping it keeps the
+/// prediction from multiplying a noisy reading by more than four.
+const MIN_SAVING_RATIO: f32 = 0.25;
+
+/// What a shed remembers.
+#[derive(Debug, Clone, Copy)]
+struct Shed {
+    /// The full gather's cost at the ceiling, read on the frame that shed it.
+    full: f32,
+    /// The half gather's cost over the full gather's, read on the first frame
+    /// after the shed that was not cooled down, or `None` until then.
+    ratio: Option<f32>,
+}
+
+impl Shed {
+    /// The full gather's cost at the ceiling, predicted from the half
+    /// gather's now (`half`, also at the ceiling's scale).
+    fn full_now(&mut self, half: f32) -> f32 {
+        if half <= 0.0 {
+            return self.full;
+        }
+        let ratio = *self
+            .ratio
+            .get_or_insert((half / self.full).clamp(MIN_SAVING_RATIO, 1.0));
+        half / ratio
+    }
+}
+
 /// The rung's state inside a [`super::Controller`].
 #[derive(Debug, Clone, Default)]
 pub(super) struct Rung {
-    /// The full gather's cost at the ceiling, measured on the frame that shed
-    /// it, or `None` while the full gather is in force.
-    shed: Option<f32>,
+    /// What the shed measured, or `None` while the full gather is in force.
+    shed: Option<Shed>,
     /// Consecutive frames at the ceiling a restore was predicted to fit.
     run: u32,
     /// Frames since the last restore, while it is still inside
@@ -145,8 +183,10 @@ impl Rung {
         // ceiling is scaled up to what it costs there, where a restore is
         // decided. A gather has a floor that does not scale, so this
         // over-estimates, which only makes a restore harder to earn.
-        let scale = f64::from(GRID) / f64::from(steps.max(1));
-        self.shed = Some((f64::from(blur) * scale * scale) as f32);
+        self.shed = Some(Shed {
+            full: at_ceiling(blur, steps),
+            ratio: None,
+        });
         self.run = 0;
         if self.since_restore.take().is_some() {
             self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
@@ -155,17 +195,16 @@ impl Rung {
     }
 
     /// Counts one frame toward a restore and takes it once the run is long
-    /// enough. `predicted_ratio` is `None` when the frame cannot be judged
-    /// (the extent is below its ceiling, or the budget is gone), which breaks
-    /// the run.
+    /// enough. Called on every frame past a cooldown; a frame below the
+    /// extent's ceiling, or with no budget left, breaks the run.
     pub(super) fn try_restore(
         &mut self,
         blur_now: f32,
         scalable: f32,
         budget: f32,
-        at_ceiling: bool,
+        steps: u32,
     ) -> bool {
-        let Some(full) = self.shed else {
+        let Some(shed) = self.shed.as_mut() else {
             return false;
         };
         let blur_now = if blur_now.is_finite() && blur_now > 0.0 {
@@ -173,7 +212,10 @@ impl Rung {
         } else {
             0.0
         };
-        let fits = at_ceiling
+        // Learned on the first frame here whatever the scale, so the ratio is
+        // read at the scale the shed was.
+        let full = shed.full_now(at_ceiling(blur_now, steps));
+        let fits = steps == GRID
             && budget > 0.0
             && (scalable - blur_now + full) / budget <= *super::DEADBAND.start();
         if !fits {
@@ -191,7 +233,18 @@ impl Rung {
     }
 
     /// A stall throws the run away, as it does the extent's.
+    ///
+    /// The ratio stays: like the controller's residual it is a property of the
+    /// machine and the scene, and a load is the one moment it cannot be read.
     pub(super) fn reset(&mut self) {
         self.run = 0;
     }
+}
+
+/// A blur cost measured at `steps` grid points, scaled to what it costs at the
+/// ceiling. Cost goes as the pixel count; a gather has a floor that does not
+/// scale, so this over-estimates, which only makes a restore harder to earn.
+fn at_ceiling(blur: f32, steps: u32) -> f32 {
+    let scale = f64::from(GRID) / f64::from(steps.max(1));
+    (f64::from(blur) * scale * scale) as f32
 }
