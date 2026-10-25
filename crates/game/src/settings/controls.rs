@@ -51,8 +51,8 @@ pub struct Controls {
     /// than a control discovered by feel to do nothing.
     #[serde(default)]
     pub trigger_sensitivity: TriggerSensitivity,
-    /// Whether the on-screen GO button adds an airbrake in its bottom-left
-    /// and bottom-right corners (`true`), or is thrust alone (`false`). Only a
+    /// Whether the on-screen GO button adds an airbrake in a wing on its left
+    /// and right side (`true`), or is thrust alone (`false`). Only a
     /// touchscreen's overlay reads it.
     ///
     /// **On by default - chosen, not measured**, at the maintainer's request;

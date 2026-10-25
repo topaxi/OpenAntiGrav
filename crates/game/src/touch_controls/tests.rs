@@ -5,7 +5,7 @@ const SIZE: (f32, f32) = (2340.0, 1080.0);
 const SCALE: f32 = 272.0 / 1080.0;
 
 fn go() -> touch::Rect {
-    touch::go_rect(SIZE)
+    touch::go_rect(SIZE, Setup::new(Scheme::Standard, true))
 }
 
 fn at(fx: f32, fy: f32) -> (f32, f32) {
@@ -45,7 +45,7 @@ fn words(list: Vec<Draw>) -> Vec<String> {
 }
 
 #[test]
-fn go_carries_the_l_and_r_corners_when_zones_are_on() {
+fn go_carries_the_l_and_r_wings_when_zones_are_on() {
     let mut on = words(list(&Touches::default(), false, true, 1.0));
     on.sort();
     assert_eq!(on, ["GO", "L", "R"]);
@@ -70,7 +70,7 @@ fn the_lit_zone_stays_inside_gos_own_shape() {
     let (gx, gy, gw, gh) = (go.x * SCALE, go.y * SCALE, go.w * SCALE, go.h * SCALE);
     for (rect, _) in fills(&list(&touches, false, true, 1.0)).filter(|(_, c)| is_lit(*c)) {
         assert!(rect[0] >= gx && rect[0] + rect[2] <= gx + gw * touch::GO_ZONE_SIDE + 0.01);
-        assert!(rect[1] >= gy + gh * (1.0 - touch::GO_ZONE_BOTTOM) - 0.01);
+        assert!(rect[1] >= gy - 0.01);
         assert!(rect[1] + rect[3] <= gy + gh + 0.01);
     }
 }
@@ -217,8 +217,8 @@ fn the_lit_segment_grows_and_brightens_with_the_pull() {
         touches.down(1, at(fx, fy), SIZE);
         list(&touches, false, true, 1.0)
     };
-    let light = pulled(0.30, 0.70);
-    let full = pulled(0.0, 1.0);
+    let light = pulled(touch::GO_ZONE_SIDE * 0.7, 0.5);
+    let full = pulled(0.0, 0.5);
     assert!(lit_area(&full) > lit_area(&light));
     let alpha = |l: &[Draw]| {
         fills(l)
@@ -271,7 +271,7 @@ fn easys_band_lights_inside_go_only_while_pulled() {
     assert_eq!(lit(&easy_list(&Demo::EasyIdle.touches(SIZE), true)), 0);
     let pulled = easy_list(&Demo::EasyBrake.touches(SIZE), true);
     assert!(lit(&pulled) > 0);
-    let go = go();
+    let go = touch::go_rect(SIZE, Setup::new(Scheme::Easy, true));
     let scale = SCALE;
     for (rect, colour) in fills(&pulled).filter(|(_, c)| is_lit(*c)) {
         assert!(colour[3] > 0.0);

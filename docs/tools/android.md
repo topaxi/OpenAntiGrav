@@ -240,9 +240,9 @@ pass.
 | Control | Where | Button |
 | --- | --- | --- |
 | steering stick | a finger landing in the left 40% below the top strip is the stick; where it landed is centre, 16% of the window height is full lock (20% in Easy); X steers, Y pitches | stick axes |
-| FIRE | top of the right column, a pill 0.36 wide and 0.18 of the height tall, a crosshair | `Square` |
-| GO | the column's middle, mid-height, largest (0.36 of the height), a rounded square | `Cross` (thrust), plus `L`/`R` in its brake corners |
-| ABSORB | below GO with a 0.03 gap, 0.36 wide and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (labelled `ABSORB`) | `Circle` |
+| FIRE | top of the right column, a pill 0.36 wide (over GO's core) and 0.18 of the height tall, a crosshair | `Square` |
+| GO | the column's middle, mid-height, largest (a 0.36 square core; in Standard with the zones on a 0.14 brake wing either side, 0.64 wide), a rounded rectangle | `Cross` (thrust), plus `L`/`R` in its side wings |
+| ABSORB | below GO with a 0.03 gap, 0.36 wide (under GO's core) and 0.11 tall (the thinnest), a shield; in Easy with the zones off it is the right half of the bar (labelled `ABSORB`) | `Circle` |
 | BRAKE L, BRAKE R | **only Standard with GO's brake zones off**: BRAKE L upper left, BRAKE R in the thumb's arc left of GO (0.17), a side arrow and `L`/`R`; otherwise neither is drawn nor hit-tested | `L`, `R` (airbrakes) |
 | BRAKE (bar half) | **only Easy with the zones off**: the left half of the bar under GO | the airbrake axes, no button |
 | PAUSE, VIEW | top-left corner (0.13), beside BRAKE L in Standard with the zones off; pause bars (a play triangle while paused) and a camera | `Start` (pause), `Select` (camera cycle) |
@@ -269,20 +269,20 @@ analogue `airbrake_left`/`right` axes.
 
 - **GO latches (both schemes).** The finger that has been on GO keeps thrust until it lifts, wherever it
   slides. Sliding it onto FIRE or ABSORB (or Easy's bar BRAKE) also presses that while it is over it. A
-  finger that began on FIRE or ABSORB does not latch until it reaches GO. The L/R corners and the
+  finger that began on FIRE or ABSORB does not latch until it reaches GO. The L/R wings and the
   Easy band read only while the finger is over GO itself. A finger inside a rectangle beats a rectangle
   whose slop it is only in (the 0.03 gap and the nearest-edge rule keep a thumb at GO's bottom from
   being read as ABSORB).
 - **The brake carries on past GO's edge (chosen, not measured; the maintainer: the drag "should behave a
   little like the stick").** For a finger latched on GO the pull is read off its position clamped to GO's
   rectangle, not gated on being inside it: past GO's left or right side the pull holds the value it had at the edge
-  at that height, below GO's bottom it holds the bottom value at that column, and thrust stays on. Above the
-  brake zone (or over FIRE) there is none, and coming back inside returns to the analogue value. The same
-  holds for Easy's band, whose side still comes from `novice_airbrakes(pull, stick_x)`. A finger dragged below a
-  corner onto ABSORB brakes **and** absorbs at once.
-- **Standard's brake corners** are bigger: 42% of GO's width each and the bottom 50% (were 34% and 34%),
-  leaving a 16% dead centre column; still analogue, and the pull reads **full at 85% of the way into
-  the zone** (`GO_FULL_DEPTH`) so a thumb need not reach GO's very edge, where ABSORB starts.
+  at that height, above or below GO it holds the value of that column, and thrust stays on. Over the
+  core there is none, and coming back inside returns to the analogue value. The same
+  holds for Easy's band, whose side still comes from `novice_airbrakes(pull, stick_x)`. A finger dragged
+  from a wing onto ABSORB or FIRE (both sit over the core) presses it and loses the brake.
+- **Standard's brake wings** (since 2026-10-25, see below) are full height, each 0.14 of the window
+  height beside GO's 0.36 core (`GO_WING`, `GO_ZONE_SIDE` = 22% of GO's width); still analogue, and the
+  pull reads **full at 85% of the way out** (`GO_FULL_DEPTH`).
 - **Easy** keeps GO and the right column, and mimics the original's novice scheme
   (`oag_gameplay::controls::novice_airbrakes`, measured, `input-bindings.md`) without being
   measured itself. The stick is a ring of 0.20 of the height with a guide ring at 60%.
@@ -311,6 +311,17 @@ analogue `airbrake_left`/`right` axes.
   the earlier ones.
 
 
+**Side wings (2026-10-25, chosen, not measured; the maintainer: L/R "on the left and right side of
+the GO button, so that fire and absorb are not accidentally triggered").** The brake corners in GO's
+bottom half made a full pull a slide *down*, toward ABSORB, and a thumb resting low on GO braked.
+GO is now a 0.36 core with a 0.14 wing on each side, the left wing `L` and the right `R` at any
+height, the pull rising with the slide *outward* and the height ignored. FIRE and ABSORB keep the
+core's width and sit over it, and nothing is beside GO (its right edge is the safe margin), so no
+braking slide crosses either: `a_full_brake_on_either_side_never_reaches_fire_or_absorb` holds it.
+GO widens only in Standard with the zones on; Easy and the zones-off layout keep the 0.36 square.
+Each wing draws an outward arrow over its letter, and the lit patch widens from the outer edge. The
+paragraph below is the corner design this replaced.
+
 **Dynamic GO (2026-10-07, touch-go lane, chosen, not measured; analogue since the touch-design lane).** The finger's
 position *within* GO, tracked while it is held, adds an airbrake: the bottom half of
 GO is split into a left corner (42% of its width, `L`), a dead centre column and a
@@ -338,8 +349,8 @@ the left and right and 0.03h from the top and bottom; the cutout itself is **not
 queried** (winit 0.30 has no insets API). The look is the common phone overlay: round
 buttons with a thin outline (60% white), a dark 28% body so the white glyph reads on
 HD's bright track, and a held state that is a 40% cyan body with a brighter outline,
-never opaque. GO is a rounded square, not a circle, so the L and R brake corners
-the player presses are inside what is drawn; the lit corner is a translucent amber
+never opaque. GO is a rounded rectangle, not a circle, so the L and R brake wings
+the player presses are inside what is drawn; the lit wing is a translucent amber
 clipped to GO's own outline. The stick is a ring with a knob where the thumb landed.
 There is **no round `Draw` primitive**, so the shapes are four antialiased textures
 generated in code at startup (`touch_controls/art.rs`: disc, ring, triangle, shield, white on
