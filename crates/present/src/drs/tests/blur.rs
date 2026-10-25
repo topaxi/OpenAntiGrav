@@ -18,6 +18,11 @@ fn blur_limits(blur: Option<BlurResolution>) -> Limits {
     limits(Target::OFFERED[2]).with_blur(blur)
 }
 
+/// The 60 fps target's period.
+fn period() -> f32 {
+    Target::OFFERED[2].period().expect("on")
+}
+
 /// The scalable budget at 60 with no fixed cost and the assumed residual.
 fn budget() -> f32 {
     on_budget(Target::OFFERED[2])
@@ -234,13 +239,13 @@ fn a_restore_needs_room_for_the_whole_saving_and_a_run_of_frames() {
     // Restored, these would land at 0.81 of the budget: inside the band,
     // above its lower edge. Never restored however long it lasts.
     let marginal = budget * 0.81 - full_blur + half_blur;
-    for _ in 0..(RESTORE_PATIENCE << MAX_BACKOFF) * 2 {
+    for _ in 0..relapse_frames(period()) * 2 {
         drs.record(blurred(marginal, half_blur), None, limits);
     }
     assert!(drs.blur_shed());
     // At 0.79 it fits: restored after exactly the patience, not before.
     let roomy = budget * 0.79 - full_blur + half_blur;
-    for _ in 1..RESTORE_PATIENCE {
+    for _ in 1..restore_frames(period()) {
         drs.record(blurred(roomy, half_blur), None, limits);
         assert!(drs.blur_shed());
     }
@@ -317,7 +322,7 @@ fn a_restore_that_holds_forgets_its_backoff() {
     let second = wait(&mut drs);
     assert!(second > first);
     // Hold for the whole window, then relapse: back to the first wait.
-    for _ in 0..RELAPSE_WINDOW {
+    for _ in 0..relapse_frames(period()) {
         drs.record(room, None, limits);
     }
     assert_eq!(wait(&mut drs), first);
@@ -332,6 +337,17 @@ fn turning_the_blur_off_and_on_starts_the_rung_clean() {
     drs.record(blurred(over, 0.0), None, blur_limits(None));
     assert!(!drs.blur_shed());
     assert_eq!(drs.blur_resolution(blur_limits(FULL)), BlurResolution::Full);
+    // The target turned off and on again does the same.
+    for _ in 0..=COOLDOWN {
+        drs.record(blurred(over, over * 0.3), None, blur_limits(FULL));
+    }
+    assert!(drs.blur_shed());
+    drs.record(
+        blurred(over, over * 0.3),
+        None,
+        limits(Target::OFF).with_blur(FULL),
+    );
+    assert!(!drs.blur_shed());
 }
 
 /// Noise on every reading does not make the gather flicker: the closed loop
@@ -380,15 +396,48 @@ fn a_restore_predicts_the_full_gather_from_the_half_one_measured_now() {
     drs.record(blurred(budget * 0.5, budget * 0.05), None, limits);
     // Now the blur grows: a half gather of 0.2 stands for a full one of 0.4,
     // so 0.65 restored would be 0.85 of the budget. Never restored.
-    for _ in 0..(RESTORE_PATIENCE << MAX_BACKOFF) * 2 {
+    for _ in 0..relapse_frames(period()) * 2 {
         drs.record(blurred(budget * 0.65, budget * 0.2), None, limits);
     }
     assert!(drs.blur_shed(), "restored on a remembered cost");
     // The same frame with the remembered estimate would have restored: 0.65 -
     // 0.2 + 0.1 is 0.55 of the budget. A little less scene and the predicted
     // 0.75 fits.
-    for _ in 0..RESTORE_PATIENCE {
+    for _ in 0..restore_frames(period()) {
         drs.record(blurred(budget * 0.55, budget * 0.2), None, limits);
     }
     assert!(!drs.blur_shed());
+}
+
+/// A machine whose restored frame fits on the median and spikes past the
+/// shed line now and then: the shape a Raphael iGPU at 1280x800 aiming at 90
+/// showed, which flipped the gather 21 times in 90 seconds while every
+/// restore had been predicted to fit for the frames it was given.
+///
+/// The scene spikes 40 % every 400 frames: the full gather lands at 0.77 of
+/// the budget and spikes to 0.96, past the shed line; the half one never
+/// does. **A restore has to wait out the scene's spikes, not a few
+/// frames between them**, so this sheds, may try once or twice more, and then
+/// holds the half gather.
+#[test]
+fn a_restore_waits_out_the_scene_s_spikes() {
+    let limits = blur_limits(FULL);
+    let budget = budget();
+    let mut drs = Controller::new();
+    let mut flips = 0;
+    for frame in 0..6_000 {
+        let spike = if frame % 400 == 399 { 1.4 } else { 1.0 };
+        let resolution = drs.blur_resolution(limits);
+        let blur = match resolution {
+            BlurResolution::Full => 0.3,
+            BlurResolution::Half => 0.15,
+        };
+        let cost = blurred((0.47 * spike + blur) * budget, blur * budget);
+        drs.record(cost, None, limits);
+        if drs.blur_resolution(limits) != resolution {
+            flips += 1;
+        }
+    }
+    assert!(flips <= 5, "{flips} flips in 6,000 frames");
+    assert!(drs.blur_shed());
 }

@@ -181,8 +181,10 @@ impl Controller {
         frame_seconds: Option<f32>,
         limits: Limits,
     ) -> Option<(u32, u32)> {
-        let period = limits.target().period()?;
+        // Before the early return, so a target turned off clears the rung as
+        // a blur turned off does.
         self.rung.begin_frame(limits);
+        let period = limits.target().period()?;
         let scalable = cost.scalable;
         if !scalable.is_finite() || scalable <= 0.0 {
             return None;

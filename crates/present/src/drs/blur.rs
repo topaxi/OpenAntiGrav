@@ -21,7 +21,7 @@
 //!   gather in them never reach a decision.
 //! - **A restore happens only at the extent's ceiling, and only when the
 //!   restored cost is predicted to land at or under [`super::DEADBAND`]'s
-//!   lower edge**, for [`RESTORE_PATIENCE`] frames running. The prediction is
+//!   lower edge**, for [`RESTORE_SECONDS`] of frames running. The prediction is
 //!   the cost now, minus the half gather measured now, plus the full gather
 //!   it stands for. Landing at or under 0.80 of the budget cannot shed again,
 //!   which needs more than 0.95: the same margin
@@ -34,11 +34,24 @@
 //!   the prediction follows the scene rather than the moment of the shed. The
 //!   blur's cost moves a lot with motion: on a Raphael iGPU at 4K one run read
 //!   a full gather of 2.3 ms at the start and 15.3 ms half a minute later.
-//! - **A restore that does not hold backs off.** The ratio can still go stale
-//!   (a scene whose blur floor and gather move differently). A shed within
-//!   [`RELAPSE_WINDOW`] frames of a restore doubles the patience the next
-//!   restore needs, up to [`MAX_BACKOFF`] doublings, so a stale estimate
-//!   costs a bounded number of flips rather than a flip every second.
+//! - **A restore waits out the scene's spikes.** The run a restore needs is a
+//!   duration, not a handful of frames: every frame in it must predict a fit,
+//!   so it is a maximum over the stretch, and a stretch shorter than the gap
+//!   between the scene's spikes predicts a fit that the next spike undoes. A
+//!   32-frame run on a Raphael iGPU at 1280x800 aiming at 90 restored between
+//!   spikes 1 to 5 seconds apart and flipped 21 times in 90 seconds.
+//! - **A restore that does not hold backs off.** A shed within the relapse
+//!   window ([`relapse_frames`], the longest backed-off patience) of a restore
+//!   doubles the patience the next restore needs, up to [`MAX_BACKOFF`]
+//!   doublings, and every window that holds pays one doubling back. A scene
+//!   that keeps fooling the prediction costs a bounded number of flips.
+//!
+//! **The shed side has no patience of its own, deliberately.** The brief this
+//! was built to asked for patience in both directions; a shed that waited
+//! would let the extent fall first, which is the order this exists to invert,
+//! or would hold the extent over budget and drop frames. A single-frame shed
+//! is harmless once a restore needs a spike-free stretch: the patience lives
+//! on the restore side, where a wrong decision is a dropped frame.
 //!
 //! # The player's choice is the ceiling
 //!
@@ -57,24 +70,41 @@
 
 use oag_display::display::BlurResolution;
 
-use super::{GRID, Limits, RISE_PATIENCE};
+use super::{GRID, Limits};
 
-/// How many frames running a restore must be predicted to fit before it is
-/// taken, before any backoff.
+/// How long, in the target's own frames, a restore must be predicted to fit
+/// before it is taken, before any backoff.
 ///
-/// **Four times [`RISE_PATIENCE`], chosen, not measured.** Slower than the
-/// extent loop's rise on purpose: a restore is the larger of the two jumps
-/// (half the blur chain at once against one grid step), and its prediction
-/// rests on a saving ratio read once, after the shed, rather than on this frame.
-pub const RESTORE_PATIENCE: u32 = 4 * RISE_PATIENCE;
+/// **Chosen, not measured**, against one observation: the scene's cost spikes
+/// 1 to 5 seconds apart on a Pulse race, and a run shorter than that gap
+/// restores between spikes. Counted in frames of the target period (180 at
+/// 60, 270 at 90) rather than read off a clock, so the policy stays a pure
+/// function of what it is fed; a machine running faster than its target
+/// waits a little less wall time, which is the cheap direction.
+pub const RESTORE_SECONDS: f32 = 3.0;
 
-/// How many frames after a restore a shed counts as the restore not holding.
-/// Five seconds at 60. **Chosen, not measured.**
-pub const RELAPSE_WINDOW: u32 = 300;
+/// The most doublings of the restore patience a run of relapses earns: three
+/// seconds becomes at most twenty-four. **Chosen.**
+pub const MAX_BACKOFF: u32 = 3;
 
-/// The most doublings of [`RESTORE_PATIENCE`] a run of relapses earns: 32
-/// frames becomes at most 1,024, about seventeen seconds at 60. **Chosen.**
-pub const MAX_BACKOFF: u32 = 5;
+/// The restore patience at a target `period`, before any backoff.
+#[must_use]
+pub fn restore_frames(period: f32) -> u32 {
+    let frames = (RESTORE_SECONDS / period).ceil();
+    if frames.is_finite() && frames >= 1.0 {
+        frames as u32
+    } else {
+        1
+    }
+}
+
+/// How many frames after a restore a shed counts as the restore not holding:
+/// the longest backed-off patience, so a relapse that the longest wait would
+/// have seen is never forgiven early.
+#[must_use]
+pub fn relapse_frames(period: f32) -> u32 {
+    restore_frames(period) << MAX_BACKOFF
+}
 
 /// The smallest saving ratio, half over full, that is believed. The half gather
 /// reads a quarter of the pixels and keeps every other pass of the chain, so
@@ -114,11 +144,13 @@ pub(super) struct Rung {
     shed: Option<Shed>,
     /// Consecutive frames at the ceiling a restore was predicted to fit.
     run: u32,
-    /// Frames since the last restore, while it is still inside
-    /// [`RELAPSE_WINDOW`].
+    /// Frames since the last restore, or since the last relapse window that
+    /// held, while a backoff is still being paid back.
     since_restore: Option<u32>,
-    /// Doublings of [`RESTORE_PATIENCE`] earned by restores that did not hold.
+    /// Doublings of the restore patience earned by restores that did not hold.
     backoff: u32,
+    /// The restore patience at this frame's target, before backoff.
+    frames: u32,
 }
 
 impl Rung {
@@ -143,8 +175,8 @@ impl Rung {
     }
 
     /// The restore patience in force, after backoff.
-    pub(super) fn patience(&self) -> u32 {
-        RESTORE_PATIENCE << self.backoff.min(MAX_BACKOFF)
+    fn patience(&self) -> u32 {
+        self.frames << self.backoff.min(MAX_BACKOFF)
     }
 
     /// Called once per recorded frame, before any decision.
@@ -154,16 +186,18 @@ impl Rung {
     /// starts from a clean state rather than from a remembered cost that
     /// belongs to another scene.
     pub(super) fn begin_frame(&mut self, limits: Limits) {
-        if !Self::eligible(limits) {
+        let Some(period) = limits.target().period().filter(|_| Self::eligible(limits)) else {
             *self = Self::default();
             return;
-        }
+        };
+        self.frames = restore_frames(period);
         if let Some(since) = self.since_restore.as_mut() {
             *since += 1;
-            if *since >= RELAPSE_WINDOW {
-                // The restore held: it has paid back what the backoff was for.
-                self.since_restore = None;
-                self.backoff = 0;
+            if *since >= relapse_frames(period) {
+                // A window held: one doubling paid back, and the next window
+                // starts counting.
+                self.backoff = self.backoff.saturating_sub(1);
+                self.since_restore = (self.backoff > 0).then_some(0);
             }
         }
     }
@@ -188,6 +222,8 @@ impl Rung {
             ratio: None,
         });
         self.run = 0;
+        // Inside a window: either a restore that did not hold, or one paying
+        // back an earlier backoff, which did not hold either.
         if self.since_restore.take().is_some() {
             self.backoff = (self.backoff + 1).min(MAX_BACKOFF);
         }

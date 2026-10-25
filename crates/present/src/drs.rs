@@ -75,7 +75,7 @@ pub mod blur;
 pub mod policy;
 pub mod residual;
 
-pub use blur::{MAX_BACKOFF, RELAPSE_WINDOW, RESTORE_PATIENCE};
+pub use blur::{MAX_BACKOFF, RESTORE_SECONDS, relapse_frames, restore_frames};
 pub use policy::{
     COOLDOWN, Controller, DEADBAND, FALL_STEPS, GRID, RISE_PATIENCE, RISE_STEPS, STEP,
 };
