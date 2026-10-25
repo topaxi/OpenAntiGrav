@@ -795,7 +795,7 @@ default there; the rest of this section is what was learned and what blocks it.
 
 ## Pushing it further, and what it is actually blocked on
 
-The `mapped` tier - one cascaded shadow map, everything casts, everything
+The `mapped` tier - a two-layer cascaded shadow map, everything casts, everything
 receives - is this project's own enhancement and not a recovery, so it belongs
 behind the same opt-in that any backported effect does, and its doc must say so
 the way `BoostFovKick` and `MotionBlur` already say it of themselves.
@@ -1197,7 +1197,7 @@ bridge.
 6. ~~**Measure 2048**~~ - **done 2026-09-02**, and it moved the design: 2048 has
    a shadow runtime of its own, a shadow light of its own, and six occluders
    that re-proved the payload closure on a second platform.
-7. **`mapped` - landed 2026-09-04, one cascade, and with a named gap.** A
+7. **`mapped` - landed 2026-09-04, two cascades since 2026-10-25, and with a named gap.** A
    depth map every surface casts into and every lit surface reads, opt-in, this
    project's own: `shadow::map::Map::render_depth` fills it and `mesh.wgsl`
    compares against it. Offered on every title, because unlike `original` it
@@ -1211,8 +1211,33 @@ bridge.
    CPU a view on a discrete card, and 1 to 1.6 ms of iGPU time a view because the whole
    circuit is drawn into every map - see [split-screen.md](split-screen.md#cost).
 
+   **Two layers since 2026-10-25, because one left a visible edge that moved with
+   the craft.** The first cut had one box, `MAPPED_RADIUS` (70) across the sun and
+   centred `MAPPED_AHEAD` (40) in front of the player, and a receiver outside it read
+   *lit*. Under a long roof that drew the road shadowed up to about 110 units ahead
+   and lit past that, along a straight line that travelled with the craft - a
+   maintainer's report on Moa Therma White, reproduced at tick 1500 under the
+   stadium's roof by diffing `--shadows mapped` against `off`. The depth map is now a
+   two-layer array at one binding: layer 0 is that near box, layer 1 a far box
+   (`MAPPED_FAR_RADIUS` 400, centred `MAPPED_FAR_AHEAD` 280 ahead) that
+   `Map::render_depth_far` fills from the same casters, the track's draw ranges culled
+   to its own wider box. `shadow.wesl` reads the near layer inside its box, blends
+   into the far layer across the near box's outer tenth (`CASCADE_RIM`), and fades the
+   far layer to lit across its own outer tenth, so neither edge is a line. The far
+   bias is the near one rescaled to the deeper box, so both push a receiver the same
+   world distance. Checked: the same frame now shadows the roof, walls and road to
+   the horizon, and the one remaining edge is the roof's real end, which stays put
+   in the world (gone from the road by tick 1540); the near box is inside the far one
+   for every heading and light tilt tried (`the_near_box_sits_inside_the_far_one`,
+   which fails with the far radius cut to 100). **Cost**, the same frame
+   (`OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, `perf-probe` release, RX 7800 XT,
+   load 8-10, alternating runs against the commit before): `Scene::render` GPU median
+   725 to 830 us, the scene pass 355 to 372 us of it, CPU 143 to 161 us. Not measured
+   on the Deck or an iGPU, where the near layer alone already cost 1 to 1.6 ms a view;
+   the far pass draws more of the circuit than the near one, so expect more there.
+
    **Nothing in it is recovered.** The depth format, the 2048 resolution, the
-   single cascade and its fit, the four-tap comparison, the slope-scaled bias,
+   two cascades and their fits, the four-tap comparison, the slope-scaled bias,
    the darkness - all this project's. The one thing it takes from a title is
    the *direction*: the circuit's own sun where there is one, and the direction
    that title's own shadows are cast along where there is not

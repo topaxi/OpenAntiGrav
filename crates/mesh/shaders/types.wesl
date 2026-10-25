@@ -246,7 +246,11 @@ struct ShadowMap {
     // depth map's own units. Ours; a depth comparison without it makes a lit
     // surface shadow itself.
     depth_bias: f32,
-    _pad0: f32,
+    // `depth_bias` for the far layer, in its own depth units.
+    far_depth_bias: f32,
+    // World to the far layer's clip space: the `mapped` tier's second cascade,
+    // out past the near box's edge. See `mesh_render::ShadowMap::far_matrix`.
+    far_matrix: mat4x4<f32>,
 };
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for

@@ -46,15 +46,26 @@ const MAPPED_STRENGTH: f32 = 0.4;
 /// leaves at zero.
 const MAPPED_DEPTH_BIAS: f32 = 0.0004;
 
-/// How far ahead of the player the `mapped` tier's own box is centred, and how
+/// How far ahead of the player the `mapped` tier's near box is centred, and how
 /// wide it is.
 ///
-/// **Ours.** One cascade has to choose where its texels go; putting the box
-/// around the craft and the road ahead of it spends them where the player is
-/// heading. A cascade ladder would not have to choose - see
-/// `docs/rendering/shadows.md`.
+/// **Ours.** The near layer spends its texels around the craft and the road
+/// just ahead of it, where a shadow is largest on screen.
 const MAPPED_AHEAD: f32 = 40.0;
 const MAPPED_RADIUS: f32 = 70.0;
+
+/// The same for the far layer: a box wide enough to reach the road towards the
+/// horizon, centred far enough ahead that the near box sits inside it with
+/// room behind the craft for a chase camera's view down to the road.
+///
+/// **Ours.** At [`oag_render::shadow::map::DEPTH_SIZE`] texels across, a texel
+/// here is about 0.4 units against the near layer's 0.07 - coarse up close,
+/// which is why the near layer covers that, and finer than a pixel at the
+/// distance this layer is read from. Without it a receiver past the near box
+/// read lit, so under a long roof the shadow ended in a straight line that
+/// moved with the craft.
+const MAPPED_FAR_AHEAD: f32 = 280.0;
+const MAPPED_FAR_RADIUS: f32 = 400.0;
 
 impl super::super::Scene {
     /// Both shadow maps, once for a frame, ahead of its first view.
@@ -205,8 +216,7 @@ impl super::super::Scene {
                     matrix: Mat4::IDENTITY.to_cols_array_2d(),
                     strength: MAP_STRENGTH,
                     mode: oag_mesh::mesh_render::ShadowMap::COVERAGE,
-                    depth_bias: 0.0,
-                    _pad: 0.0,
+                    ..oag_mesh::mesh_render::ShadowMap::off()
                 }
             }
             oag_display::display::Shadows::Mapped if map.depth_casters() > 0 => {
@@ -215,7 +225,8 @@ impl super::super::Scene {
                     strength: MAPPED_STRENGTH,
                     mode: oag_mesh::mesh_render::ShadowMap::DEPTH,
                     depth_bias: MAPPED_DEPTH_BIAS,
-                    _pad: 0.0,
+                    far_depth_bias: far_depth_bias(),
+                    far_matrix: map.far_matrix().to_cols_array_2d(),
                 }
             }
             // Every other case, `off` included: a strength of zero is what
@@ -252,6 +263,7 @@ impl super::super::Scene {
         if shadows != oag_display::display::Shadows::Original || hulls {
             map.render(queue, encoder, &[]);
             map.render_depth(queue, encoder, &default_fit(), &[]);
+            map.render_depth_far(queue, encoder, &default_fit(), &[]);
             return 0;
         }
         let drawn = usize::from(race.ship_count());
@@ -566,6 +578,15 @@ impl super::super::Scene {
         mapped_fit(race.ship_model_matrix_of(slot), mapped_light(&self.light))
     }
 
+    /// The `mapped` tier's far-layer fit around the craft in `slot`.
+    pub(crate) fn mapped_far_fit_for(
+        &self,
+        race: &Race,
+        slot: usize,
+    ) -> oag_render::shadow::map::Fit {
+        mapped_far_fit(race.ship_model_matrix_of(slot), mapped_light(&self.light))
+    }
+
     /// The projection the `mapped` depth map was last drawn with.
     #[cfg(test)]
     pub(crate) fn mapped_matrix(&self) -> Mat4 {
@@ -585,16 +606,21 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
     ) -> usize {
-        let fit = self.mapped_fit_for(race, self.mapped_slot(race));
-        // The track is the whole circuit and the map covers a box of
-        // `MAPPED_RADIUS` around one craft, so only the draws that touch that
-        // box are recorded: the rest lie wholly outside it and the pass would
-        // clip every triangle. Per map, so each view of a split draws its own.
-        let in_box =
+        let slot = self.mapped_slot(race);
+        let fit = self.mapped_fit_for(race, slot);
+        let far_fit = self.mapped_far_fit_for(race, slot);
+        // The track is the whole circuit and each layer covers a box around one
+        // craft, so only the draws that touch that box are recorded: the rest
+        // lie wholly outside it and the pass would clip every triangle. Per
+        // map, so each view of a split draws its own.
+        let ranges_in = |fit: &oag_render::shadow::map::Fit| {
             self.track
                 .opaque_ranges_in(&oag_core::math::frustum::Frustum::from_view_projection(
                     fit.matrix(),
-                ));
+                ))
+        };
+        let in_box = ranges_in(&fit);
+        let in_far_box = ranges_in(&far_fit);
         #[cfg(test)]
         self.frame_work.update(|w| FrameWork {
             track_ranges_in_depth_map: in_box.len() as u32,
@@ -619,6 +645,10 @@ impl super::super::Scene {
             map.render(queue, encoder, &[]);
         }
         map.render_depth(queue, encoder, &fit, &casters);
+        // The same casters into the far layer, the track's ranges swapped for
+        // the ones its wider box touches.
+        casters[0].ranges = &in_far_box;
+        map.render_depth_far(queue, encoder, &far_fit, &casters);
         casters.len()
     }
 }
@@ -701,6 +731,33 @@ fn mapped_light(light: &oag_mesh::mesh_render::Light) -> Vec3 {
     -Vec3::from_array(oag_pulse::shadow::WORLD_AXIS)
 }
 
+/// The far layer's fit: [`mapped_fit`]'s lead and snap, at the far layer's
+/// own distance and width.
+fn mapped_far_fit(
+    player: oag_core::math::Mat4,
+    towards_light: Vec3,
+) -> oag_render::shadow::map::Fit {
+    let position = player.transform_point3(Vec3::ZERO);
+    let lead = mapped_centre(player) - position;
+    oag_render::shadow::map::Fit {
+        centre: position + lead * (MAPPED_FAR_AHEAD / MAPPED_AHEAD),
+        radius: MAPPED_FAR_RADIUS,
+        towards_light,
+    }
+    .snapped(oag_render::shadow::map::DEPTH_SIZE)
+}
+
+/// [`MAPPED_DEPTH_BIAS`] in the far layer's own depth units.
+///
+/// [`oag_render::shadow::map::Fit::matrix`] makes a box's depth grow with its
+/// radius, so the same world-space floor is a smaller fraction of the far
+/// layer's deeper box. Scaled by the ratio, so both layers push a receiver the
+/// same distance towards the light.
+fn far_depth_bias() -> f32 {
+    let depth = |radius: f32| radius + oag_render::shadow::map::NEAR_MARGIN;
+    MAPPED_DEPTH_BIAS * depth(MAPPED_RADIUS) / depth(MAPPED_FAR_RADIUS)
+}
+
 /// The fit an empty pass uses: anywhere, one unit across, straight down.
 ///
 /// A cleared map needs a projection for nothing to be drawn with, and this is
@@ -718,7 +775,10 @@ fn default_fit() -> oag_render::shadow::map::Fit {
 mod tests {
     use oag_core::math::Mat4;
 
-    use super::{MAPPED_AHEAD, mapped_centre, mapped_fit, rank_by_distance};
+    use super::{
+        MAPPED_AHEAD, MAPPED_DEPTH_BIAS, far_depth_bias, mapped_centre, mapped_far_fit, mapped_fit,
+        rank_by_distance,
+    };
     use oag_core::math::Vec3;
 
     /// The rank is by squared distance to the nearest reference point, nearest
@@ -861,5 +921,56 @@ mod tests {
             "a sub-texel nudge to the player's own position was not absorbed - \
              is mapped_fit still snapping?"
         );
+    }
+
+    /// The near box lies wholly inside the far one, whichever way the craft
+    /// heads and whatever the light's tilt: a receiver that leaves the near
+    /// layer must land in the far one, or the old straight-edged end of shadow
+    /// comes back as a ring of lit road between them.
+    #[test]
+    fn the_near_box_sits_inside_the_far_one() {
+        let lights = [
+            Vec3::Y,
+            Vec3::new(0.4, 1.0, 0.2).normalize(),
+            Vec3::new(-0.7, 0.5, 0.3).normalize(),
+        ];
+        let headings = [0.0_f32, 0.8, 2.0, 3.5, 5.1];
+        for towards_light in lights {
+            for yaw in headings {
+                let player = Mat4::from_translation(Vec3::new(120.0, -7.0, 45.0))
+                    * Mat4::from_rotation_y(yaw);
+                let near = mapped_fit(player, towards_light);
+                let far = mapped_far_fit(player, towards_light).matrix();
+                // The near box's eight corners, through the far box's own
+                // projection: each must land inside its unit square and depth.
+                let near_inverse = near.matrix().inverse();
+                for corner in 0..8 {
+                    let ndc = Vec3::new(
+                        if corner & 1 == 0 { -1.0 } else { 1.0 },
+                        if corner & 2 == 0 { -1.0 } else { 1.0 },
+                        if corner & 4 == 0 { 0.0 } else { 1.0 },
+                    );
+                    let world = near_inverse.project_point3(ndc);
+                    let in_far = far.project_point3(world);
+                    assert!(
+                        in_far.x.abs() <= 1.0 && in_far.y.abs() <= 1.0,
+                        "near corner {corner} at {world} falls outside the far box \
+                         ({in_far}) for light {towards_light}, yaw {yaw}"
+                    );
+                    assert!(
+                        (0.0..=1.0).contains(&in_far.z),
+                        "near corner {corner} is past the far box's depth ({in_far})"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Both layers push a receiver the same world distance towards the light,
+    /// so the far one's bias is smaller in its own deeper units and never zero.
+    #[test]
+    fn the_far_bias_is_the_near_one_in_the_far_layers_units() {
+        let far = far_depth_bias();
+        assert!(far > 0.0 && far < MAPPED_DEPTH_BIAS, "far bias {far}");
     }
 }

@@ -98,7 +98,7 @@ pub const CRAFT_REACH: f32 = 70.0;
 /// light's frustum contains it, and the fit below is built from the casters'
 /// own bounding sphere rather than from the scene, so anything above them -
 /// a bridge, a tube's ceiling - is *not* a caster and does not need to fit.
-const NEAR_MARGIN: f32 = 8.0;
+pub const NEAR_MARGIN: f32 = 8.0;
 
 /// Where the light's view is placed and how much it covers.
 ///
@@ -292,6 +292,15 @@ pub struct Caster<'a> {
 /// more texels to keep a usable world size per texel.
 pub const DEPTH_SIZE: u32 = 2048;
 
+/// The depth map's layers: the near box around the player, and the far one
+/// out towards the horizon that [`Map::render_depth_far`] fills.
+///
+/// **Ours**, the smallest cascade ladder that ends the near box's edge being
+/// visible: a receiver past the near box reads the far layer instead of
+/// reading lit. Both layers share [`DEPTH_SIZE`], so the far one's texels are
+/// as much coarser as its box is wider.
+pub const DEPTH_LAYERS: u32 = 2;
+
 /// The record the receiver reads for a craft whose map is rendered at `rank`:
 /// its box snapped to the texels of that rank's side, projected, and the
 /// square it occupies in the atlas as a `0..1` rectangle.
@@ -357,17 +366,24 @@ pub struct Map {
     /// it - built beside the coverage map so one type carries both tiers'
     /// plumbing and a caller switches between them per frame.
     depth: wgpu::Texture,
+    /// Both layers, as the `D2Array` the receiver binds.
     depth_view: wgpu::TextureView,
+    /// Each layer on its own, as a pass's depth attachment.
+    depth_layers: [wgpu::TextureView; DEPTH_LAYERS as usize],
     depth_pipeline: wgpu::RenderPipeline,
     /// The matrix the last [`Map::render_depth`] projected with.
     depth_matrix: Mat4,
+    /// The matrix the last [`Map::render_depth_far`] projected with.
+    far_matrix: Mat4,
     /// How many casters that pass drew.
     depth_drawn: usize,
+    /// How many casters the far pass drew.
+    far_drawn: usize,
     /// Whether the atlas is known to hold nothing: the last pass that touched it
     /// was a clear with no craft. A second empty pass over it is skipped.
     atlas_clear: bool,
-    /// The same for the depth map (everything at the far plane).
-    depth_clear: bool,
+    /// The same for each depth layer (everything at the far plane).
+    depth_clear: [bool; DEPTH_LAYERS as usize],
     /// Passes recorded over both targets, so a test can tell a skipped clear from a recorded one.
     passes: u64,
 }
@@ -478,11 +494,14 @@ impl Map {
 
         let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("shadow caster uniforms"),
-            size: UNIFORM_STRIDE * MAX_CASTERS as u64,
+            // Twice over: the far layer's pass writes its own slots, because every
+            // write lands before either pass runs and a shared slot would leave
+            // both passes drawing the far layer's matrices.
+            size: UNIFORM_STRIDE * (MAX_CASTERS * DEPTH_LAYERS as usize) as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let binds = (0..MAX_CASTERS)
+        let binds = (0..MAX_CASTERS * DEPTH_LAYERS as usize)
             .map(|slot| {
                 device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("shadow caster"),
@@ -504,7 +523,7 @@ impl Map {
             size: wgpu::Extent3d {
                 width: DEPTH_SIZE,
                 height: DEPTH_SIZE,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: DEPTH_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -515,7 +534,19 @@ impl Map {
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let depth_view = depth.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_view = depth.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+        let depth_layers = [0, 1].map(|layer| {
+            depth.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("shadow depth map layer"),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: layer,
+                array_layer_count: Some(1),
+                ..Default::default()
+            })
+        });
         let depth_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("shadow caster depth"),
             layout: Some(&pipeline_layout),
@@ -585,16 +616,20 @@ impl Map {
             drawn: 0,
             depth,
             depth_view,
+            depth_layers,
             depth_pipeline,
             depth_matrix: Mat4::IDENTITY,
+            far_matrix: Mat4::IDENTITY,
             depth_drawn: 0,
+            far_drawn: 0,
             atlas_clear: false,
-            depth_clear: false,
+            depth_clear: [false; DEPTH_LAYERS as usize],
             passes: 0,
         }
     }
 
-    /// The depth map's view, for the `mapped` tier's own binding.
+    /// Both depth layers as one `D2Array` view, for the `mapped` tier's own
+    /// binding: layer 0 the near box, layer 1 the far one.
     #[must_use]
     pub fn depth_view(&self) -> &wgpu::TextureView {
         &self.depth_view
@@ -640,16 +675,57 @@ impl Map {
     ) {
         self.depth_matrix = fit.matrix();
         self.depth_drawn = casters.len().min(MAX_CASTERS);
-        if casters.is_empty() && self.depth_clear {
+        self.render_layer(queue, encoder, 0, self.depth_matrix, casters);
+    }
+
+    /// Fills the far layer: [`Self::render_depth`] again, into layer 1, from a
+    /// wider box, so a receiver past the near box's edge still finds what is
+    /// between it and the light.
+    ///
+    /// Its own uniform slots, so both passes can sit in one encoder.
+    pub fn render_depth_far(
+        &mut self,
+        queue: &dyn oag_gpu::writes::Writes,
+        encoder: &mut wgpu::CommandEncoder,
+        fit: &Fit,
+        casters: &[Caster<'_>],
+    ) {
+        self.far_matrix = fit.matrix();
+        self.far_drawn = casters.len().min(MAX_CASTERS);
+        self.render_layer(queue, encoder, 1, self.far_matrix, casters);
+    }
+
+    /// The projection [`Self::render_depth_far`] last used.
+    #[must_use]
+    pub fn far_matrix(&self) -> Mat4 {
+        self.far_matrix
+    }
+
+    /// How many casters the far pass drew.
+    #[must_use]
+    pub fn far_casters(&self) -> usize {
+        self.far_drawn
+    }
+
+    fn render_layer(
+        &mut self,
+        queue: &dyn oag_gpu::writes::Writes,
+        encoder: &mut wgpu::CommandEncoder,
+        layer: usize,
+        matrix: Mat4,
+        casters: &[Caster<'_>],
+    ) {
+        if casters.is_empty() && self.depth_clear[layer] {
             return;
         }
-        self.depth_clear = casters.is_empty();
+        self.depth_clear[layer] = casters.is_empty();
         self.passes += 1;
+        let first = layer * MAX_CASTERS;
         for (slot, caster) in casters.iter().take(MAX_CASTERS).enumerate() {
-            let mvp = self.depth_matrix * caster.model;
+            let mvp = matrix * caster.model;
             queue.write_buffer(
                 &self.uniforms,
-                UNIFORM_STRIDE * slot as u64,
+                UNIFORM_STRIDE * (first + slot) as u64,
                 bytemuck::cast_slice(&mvp.to_cols_array()),
             );
         }
@@ -657,7 +733,7 @@ impl Map {
             label: Some("shadow depth map"),
             color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_view,
+                view: &self.depth_layers[layer],
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
                     store: wgpu::StoreOp::Store,
@@ -673,7 +749,7 @@ impl Map {
             if caster.ranges.is_empty() {
                 continue;
             }
-            pass.set_bind_group(0, &self.binds[slot], &[]);
+            pass.set_bind_group(0, &self.binds[first + slot], &[]);
             pass.set_vertex_buffer(0, caster.vertices.slice(..));
             pass.set_index_buffer(caster.indices.slice(..), wgpu::IndexFormat::Uint32);
             for range in caster.ranges {
