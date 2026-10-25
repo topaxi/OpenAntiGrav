@@ -3,6 +3,7 @@
 
     scripts/bench-render.py run [--out DIR] [--tag NAME] [--profile release|debug]
                                 [--repeat] [--views 1,2h,2v] [--size WxH] [--motion-blur off|low|medium|high]
+                                [--motion-blur-resolution full|half]
                                 [--binary PATH] [title ...]
     scripts/bench-render.py compare A B        (two result files, or two run directories)
     scripts/bench-render.py selftest
@@ -65,7 +66,7 @@ TITLES = {
     "omega": {"source": "data/extracted/ps4", "extra": []},
 }
 
-METRICS = ["tick_us", "record_us", "submit_us", "cpu_us", "frame_us", "gpu_us", "draws", "triangles"]
+METRICS = ["tick_us", "record_us", "submit_us", "cpu_us", "frame_us", "gpu_us", "gpu_blur_us", "draws", "triangles"]
 DEFAULT_SIZE = "1280x720"
 # Case name -> the flags that make it. `1` adds none, so a one-view result is
 # exactly what it was before the cases existed.
@@ -111,14 +112,15 @@ class GateLock:
             os.close(self.fd)
 
 
-def run_one(binary, title, out, profile, case="1", size=DEFAULT_SIZE, repeat_name=None, blur=None):
+def run_one(binary, title, out, profile, case="1", size=DEFAULT_SIZE, repeat_name=None, blur=None, blur_resolution=None):
     spec = TITLES[title]
     source = ROOT / spec["source"]
     if not source.exists():
         return None, f"{source} is missing"
     name = title if case == "1" else f"{title}-{case}"
     stem = out / (repeat_name or name)
-    flags = [*COMMON, "--size", size, *CASES[case], *(["--motion-blur", blur] if blur else [])]
+    flags = [*COMMON, "--size", size, *CASES[case], *(["--motion-blur", blur] if blur else []),
+             *(["--motion-blur-resolution", blur_resolution] if blur_resolution else [])]
     tmp = pathlib.Path(tempfile.mkdtemp(prefix=f"oag-bench-{title}-"))
     try:
         env = dict(os.environ)
@@ -174,7 +176,7 @@ def cmd_run(args):
         print(f"bench: gate lock {'held' if enabled else 'SKIPPED (OAG_BENCH_NO_LOCK)'}; load average {load_average()}; results in {out}", flush=True)
         for title, case in [(t, c) for t in titles for c in cases]:
             name = title if case == "1" else f"{title}-{case}"
-            first, why = run_one(binary, title, out, profile, case, args.size, blur=args.motion_blur)
+            first, why = run_one(binary, title, out, profile, case, args.size, blur=args.motion_blur, blur_resolution=args.motion_blur_resolution)
             if first is None:
                 print(f"bench: {name}: FAILED: {why}")
                 failures += 1
@@ -184,7 +186,7 @@ def cmd_run(args):
             pathlib.Path(out / f"{name}.json").write_text(json.dumps(first, indent=2) + "\n")
             print(summary_line(name, first), flush=True)
             if args.repeat:
-                second, why = run_one(binary, title, out, profile, case, args.size, repeat_name=f"{name}-repeat", blur=args.motion_blur)
+                second, why = run_one(binary, title, out, profile, case, args.size, repeat_name=f"{name}-repeat", blur=args.motion_blur, blur_resolution=args.motion_blur_resolution)
                 if second is None:
                     print(f"bench: {name}: repeat FAILED: {why}")
                     failures += 1
@@ -328,6 +330,7 @@ def main():
     run.add_argument("--profile", choices=["release", "debug"], default="release")
     run.add_argument("--views", default="1", help="cases to run, comma separated: 1 (one view), 2h (two views cut horizontally), 2v (side by side); default 1")
     run.add_argument("--size", default=DEFAULT_SIZE, help=f"offscreen target WxH (default {DEFAULT_SIZE}; the Steam Deck's panel is 1280x800)")
+    run.add_argument("--motion-blur-resolution", choices=["full", "half"], help="the blur gather resolution for every run (default: the settings default, full); recorded in the result's settings and command")
     run.add_argument("--motion-blur", choices=["off", "low", "medium", "high"], help="the blur strength for every run (default: the settings default, which is off); recorded in the result's settings and command")
     run.add_argument("--binary", help="an oag-game to run instead of target/<profile>/oag-game, for a before/after pair built from two commits")
     run.add_argument("--repeat", action="store_true", help="run each title twice and check tick count and final state hash agree")

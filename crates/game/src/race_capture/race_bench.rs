@@ -477,13 +477,15 @@ fn summary_line(values: impl Iterator<Item = f64>) -> String {
 /// The metrics a summary reports: name and how to read it off a frame.
 type Read = fn(&Frame) -> f64;
 
-const METRICS: [(&str, Read); 9] = [
+const METRICS: [(&str, Read); 11] = [
     ("tick_us", |f| f.tick_us),
     ("record_us", |f| f.record_us),
     ("submit_us", |f| f.submit_us),
     ("cpu_us", Frame::cpu_us),
     ("frame_us", |f| f.frame_us),
     ("gpu_scene_us", Frame::gpu_scene_us),
+    ("gpu_blur_us", |f| f.gpu_chain_us(1)),
+    ("gpu_bloom_us", |f| f.gpu_chain_us(2)),
     ("gpu_us", Frame::gpu_us),
     ("draws", |f| f64::from(f.draws)),
     ("triangles", |f| f64::from(f.triangles)),
@@ -499,6 +501,10 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
         ("msaa", format!("{:?}", o.msaa)),
         ("shadows", format!("{:?}", o.shadows)),
         ("motion_blur", format!("{:?}", o.motion_blur)),
+        (
+            "motion_blur_resolution",
+            o.motion_blur_resolution.name().to_string(),
+        ),
         ("anisotropy", format!("{:?}", o.anisotropy)),
         ("model_detail", format!("{:?}", o.model_detail)),
         ("texture_detail", format!("{:?}", o.texture_detail)),
