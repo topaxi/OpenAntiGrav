@@ -61,8 +61,8 @@ pub(crate) struct FrameWork {
     /// the composites [`Scene::composite_bloom`] added for them.
     pub(crate) bloom_views_prepared: u32,
     pub(crate) bloom_views_composited: u32,
-    /// How many of the track's opaque draws the latest `mapped` depth map recorded:
-    /// those whose bounds touch that map's box, not the whole circuit.
+    /// How many of the track's draws the latest `mapped` near layer recorded: the
+    /// animated nodes whose bound reaches that layer's box, and never a static one.
     #[cfg(test)]
     pub(crate) track_ranges_in_depth_map: u32,
 }

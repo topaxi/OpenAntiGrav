@@ -678,8 +678,19 @@ pub struct ShadowMap {
     /// per-texel derivative. Ignored in [`ShadowMap::COVERAGE`], which
     /// compares nothing.
     pub depth_bias: f32,
-    /// Padding to the 16-byte boundary a uniform's own size needs.
-    pub _pad: f32,
+    /// [`Self::depth_bias`] for the far layer, in that layer's own depth
+    /// units: its box is deeper, so the same world distance is fewer units.
+    pub far_depth_bias: f32,
+    /// World to the far layer's clip space, for [`ShadowMap::DEPTH`] only.
+    ///
+    /// **The second cascade, ours like the first.** The near layer's box
+    /// covers [`Self::matrix`]'s few dozen units around the player, and a
+    /// receiver past its edge used to read lit - so under a long roof the
+    /// shadow ended in a straight line that travelled with the craft. The far
+    /// layer covers the road out towards the horizon at a coarser texel, and
+    /// the shader blends from one to the other inside the near box's rim.
+    /// The identity with [`Self::strength`] at zero reads nothing.
+    pub far_matrix: [[f32; 4]; 4],
 }
 
 impl ShadowMap {
@@ -707,7 +718,13 @@ impl ShadowMap {
             strength: 0.0,
             mode: 0.0,
             depth_bias: 0.0,
-            _pad: 0.0,
+            far_depth_bias: 0.0,
+            far_matrix: [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ],
         }
     }
 }
@@ -953,8 +970,8 @@ const _: () = assert!(
     "and Scene.shadow, whose first field is a mat4x4"
 );
 const _: () = assert!(
-    std::mem::size_of::<ShadowMap>() == 80,
-    "shaders/types.wesl's ShadowMap is a mat4x4 and one padded vec4"
+    std::mem::size_of::<ShadowMap>() == 144,
+    "shaders/types.wesl's ShadowMap is a mat4x4, four scalars and a second mat4x4"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),

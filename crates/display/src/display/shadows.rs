@@ -72,21 +72,20 @@ pub enum Shadows {
     /// what that shares with the original's stencil volume and what it does
     /// not.
     Original,
-    /// A shadow map every surface casts into and every surface reads.
+    /// A shadow map what moves casts into and every surface reads: the craft,
+    /// their wrecks, the weapon bodies in flight and the circuit's animated
+    /// parts. **The still circuit casts nothing**, because every title already
+    /// has that shadow in its own baked lighting.
     ///
     /// **This project's own, and offered on every title**, because unlike the
     /// tier above it asks the disc for nothing but geometry. It is a change of
-    /// *scope* rather than a promotion: on a title whose own mechanism is
-    /// already a map it renders **more** shadows - a craft on another craft, a
-    /// bridge on the road - and in doing so ignores what the disc's own
-    /// mechanism would have drawn. `original` stays the default for the titles
-    /// that have one.
+    /// *scope* rather than a promotion: a craft shadows another craft, a wall
+    /// and the curve of the road under it, which no title's own mechanism
+    /// does, and the authored shadows of the scenery stay exactly as the disc
+    /// paints them. `original` stays the default for the titles that have one.
     ///
-    /// **One cascade, not several.** The design page asks for a cascaded map
-    /// and this is the first landing of it: a single depth map fitted around
-    /// the camera's own focus. What that costs is resolution far from the
-    /// craft, which is where a split ladder would buy the most - see
-    /// `docs/rendering/shadows.md`.
+    /// Two cascades around the player, near and far, so a craft's shadow does
+    /// not pop in at a distance - see `docs/rendering/shadows.md`.
     Mapped,
 }
 

@@ -87,7 +87,7 @@ impl Drawable {
             zone_vis: self.zone_vis.clone(),
             zone_rebind: self.zone_rebind.clone(),
             opaque_ranges: self.opaque_ranges.clone(),
-            opaque_reach: self.opaque_reach.clone(),
+            moving: self.moving.clone(),
             lod: super::lod_switches(&self.model.lod_groups),
             bound: self.bound.clone(),
             ripple: std::sync::Mutex::new(None),

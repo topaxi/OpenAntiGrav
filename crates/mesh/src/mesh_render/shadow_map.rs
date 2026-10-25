@@ -107,7 +107,7 @@ pub(super) fn layout_entries() -> [wgpu::BindGroupLayoutEntry; 9] {
             visibility: wgpu::ShaderStages::FRAGMENT,
             ty: wgpu::BindingType::Texture {
                 sample_type: wgpu::TextureSampleType::Depth,
-                view_dimension: wgpu::TextureViewDimension::D2,
+                view_dimension: wgpu::TextureViewDimension::D2Array,
                 multisampled: false,
             },
             count: None,
@@ -329,7 +329,10 @@ pub(super) fn resources(
                     | wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             });
-            texture.create_view(&wgpu::TextureViewDescriptor::default())
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            })
         }
     };
     let occlusion_view = match occlusion {

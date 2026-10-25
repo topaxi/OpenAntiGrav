@@ -964,6 +964,9 @@ track was one caster, not culled to the map's box). The shared-map alternative c
 single map does (the "before" column), so that is the price of views two and up getting their
 shadows. The `mapped` tier is opt-in and the iGPU split is Pulse and Pure only, and eight views
 at 18.9 ms missed 60 Hz. **Culled since, below** ("The track caster is culled to each map's box").
+**And gone since 2026-10-25**: the `mapped` tier casts only what moves (craft, weapon bodies,
+the circuit's animated nodes), so no view's map draws the static circuit at all - see
+[shadows.md](shadows.md), step 7. Not re-measured on the iGPU.
 
 *The floor rays ask the road once per point* (2026-10-13, `shadow-floor-rays`). The hull gather's
 cost was `conform_to_floor`: one `Race::floor_above` ray (a `raycast_all` over the circuit's BVH)
@@ -1010,7 +1013,8 @@ the scene passes (4.8 to 8.0 ms) and the pipelined column does not move (4.83 ->
 5.72, 7.67 -> 7.58, 9.83 -> 9.37 at K=1, inside the spread); its CPU column falls the same way
 (2.17 -> 1.50, 2.98 -> 2.15, 4.38 -> 3.66, 7.38 -> 6.62 ms).
 
-*The track caster is culled to each map's box* (same lane). `render_depth_map` draws the track,
+*The track caster is culled to each map's box* (same lane; **superseded 2026-10-25**, when the static
+track stopped casting at all - the culling below is history). `render_depth_map` draws the track,
 every craft and nothing else into the `mapped` tier's depth map, and the map covers a box of
 `MAPPED_RADIUS` (70) around one craft. Each opaque track draw carries its own world-space
 bounding sphere (`DrawCall::bounds`, the one the scene pass frustum-culls with), so the pass now

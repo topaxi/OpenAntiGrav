@@ -90,7 +90,7 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 // The `mapped` tier's depth map and its **non-filtering** sampler: a filtered
 // depth is the average of two surfaces and belongs to neither.
-@group(2) @binding(8) var shadow_depth_tex: texture_depth_2d;
+@group(2) @binding(8) var shadow_depth_tex: texture_depth_2d_array;
 
 @group(2) @binding(9) var shadow_depth_sampler: sampler;
 

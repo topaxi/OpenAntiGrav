@@ -134,29 +134,64 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     if coverage_mode {
         return craft_shadow_coverage(world);
     }
-    let clip = scene.shadow.matrix * vec4<f32>(world, 1.0);
+    // The depth mode: two layers of one map, the near box around the player
+    // and the far one out towards the horizon. **Inside the near box the near
+    // layer alone**; across its rim the two blend; past it the far layer
+    // alone, faded out across its own rim. Before the far layer existed a
+    // receiver past the near box read lit, and under a long roof that drew a
+    // straight-edged end of shadow that travelled with the craft.
+    let near = depth_layer_coords(scene.shadow.matrix, world);
+    let far = depth_layer_coords(scene.shadow.far_matrix, world);
+    let near_weight = clamp(near.w / CASCADE_RIM, 0.0, 1.0);
+    var shadow = 0.0;
+    if near_weight > 0.0 {
+        shadow = depth_layer_shadow(near, 0, scene.shadow.depth_bias);
+    }
+    if near_weight < 1.0 && far.w > 0.0 {
+        let far_weight = clamp(far.w / CASCADE_RIM, 0.0, 1.0);
+        let far_shadow = depth_layer_shadow(far, 1, scene.shadow.far_depth_bias) * far_weight;
+        shadow = mix(far_shadow, shadow, near_weight);
+    }
+    return shadow;
+}
+
+// How much of a layer's own half-width, in `uv`, the blend between the depth
+// map's two layers spans: the near layer hands over to the far one across the
+// outer tenth of its box, and the far one fades to lit across the outer tenth
+// of its own. **Ours**: wide enough that neither edge reads as a line, narrow
+// enough that the near layer's sharper texels cover most of its box.
+const CASCADE_RIM: f32 = 0.1;
+
+// Where `world` lands in one layer of the `mapped` depth map: `uv` in `xy`, its
+// depth in that layer's `0..1` in `z`, and in `w` how far inside the layer's
+// rectangle it is - `0.0` at the edge, `0.5` at the centre, negative outside the
+// rectangle or past the box's depth.
+//
+// **Outside reads as uncovered, never as the border**: the clamped sampler
+// would smear the border texel across the whole circuit.
+fn depth_layer_coords(matrix: mat4x4<f32>, world: vec3<f32>) -> vec4<f32> {
+    let clip = matrix * vec4<f32>(world, 1.0);
     if clip.w <= 0.0 {
-        return 0.0;
+        return vec4<f32>(0.0, 0.0, 0.0, -1.0);
     }
     let ndc = clip.xyz / clip.w;
-    // Behind the map's near plane or past its far one: nothing to sample.
+    // Behind the box's near plane or past its far one: nothing to sample.
     if ndc.z < 0.0 || ndc.z > 1.0 {
-        return 0.0;
+        return vec4<f32>(0.0, 0.0, 0.0, -1.0);
     }
     // The same `0.5 - ndc.y * 0.5` flip `craft_shadow_coverage` documents.
     let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    // Outside the map's own rectangle the clamped sampler would smear its
-    // border across the whole circuit, so a receiver the map does not cover is
-    // lit rather than edge-coloured.
-    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 {
-        return 0.0;
-    }
-    // The depth mode: four taps a texel apart, each compared, and their mean.
-    // **The softening is in the comparison, not in the sample** - filtering
-    // the depth itself would average two surfaces into one that is neither.
-    // Four rather than sixteen because this runs on every lit pixel of the
-    // frame; it is a choice, and it is ours, like everything else in this
-    // tier.
+    let inside = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+    return vec4<f32>(uv, ndc.z, inside);
+}
+
+// How much of a point one layer of the depth map shadows, `0.0` to `1.0`, from
+// `depth_layer_coords`' answer: four taps a texel apart, each compared, and
+// their mean. **The softening is in the comparison, not in the sample** -
+// filtering the depth itself would average two surfaces into one that is
+// neither. Four rather than sixteen because this runs on every lit pixel of the
+// frame; it is a choice, and it is ours, like everything else in this tier.
+fn depth_layer_shadow(coords: vec4<f32>, layer: i32, bias: f32) -> f32 {
     let texel = 1.0 / f32(textureDimensions(shadow_depth_tex).x);
     var lit = 0.0;
     for (var i = 0; i < 4; i = i + 1) {
@@ -167,12 +202,13 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
         let nearest = textureSampleLevel(
             shadow_depth_tex,
             shadow_depth_sampler,
-            uv + offset,
+            coords.xy + offset,
+            layer,
             // A depth texture's own `textureSampleLevel` takes an `i32` mip
             // level, not the `f32` a colour texture's does.
             0
         );
-        lit = lit + select(0.0, 1.0, ndc.z - scene.shadow.depth_bias <= nearest);
+        lit = lit + select(0.0, 1.0, coords.z - bias <= nearest);
     }
     return 1.0 - lit * 0.25;
 }
