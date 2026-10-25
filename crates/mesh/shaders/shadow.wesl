@@ -134,7 +134,9 @@ const TRACED_REACH: f32 = 2000.0;
 //   shadow - full within `TRACED_FADE_NEAR`, down to `TRACED_FADE_FLOOR` of it by
 //   `TRACED_FADE_FAR` - the way a wide penumbra thins its umbra. The edge stays hard.
 // - **More** (`high`): that many rays spread across a sun `TRACED_SUN_SPREAD` wide, the
-//   fraction blocked. The edge blurs with the caster's distance, a real penumbra.
+//   fraction blocked. The edge blurs with the caster's distance, a real penumbra. Three
+//   probes go first and settle every point outside a penumbra, so the full set is cast
+//   only along shadow edges.
 //
 // The direction is read out of the same matrix the `mapped` tier fits, so the two tiers
 // agree on where the sun is by construction (a circuit's authored sun, or Pulse's borrowed
@@ -162,6 +164,20 @@ const TRACED_REACH: f32 = 2000.0;
     let u = normalize(cross(towards, side));
     let v = cross(towards, u);
     let turn = traced_hash(world) * 6.2831853;
+    // **Probes first**: the disc's centre and two opposite points of its rim. Where all
+    // three agree the point is wholly lit or wholly shadowed - most of a frame - and the
+    // answer stands; only a point where they disagree is in a penumbra and casts the
+    // full set. The centre catches a caster thin enough to pass between the two rim rays.
+    let rim = (u * cos(turn) + v * sin(turn)) * TRACED_SUN_SPREAD;
+    let probes = select(0, 1, traced_blocked(world, towards))
+        + select(0, 1, traced_blocked(world, normalize(towards + rim)))
+        + select(0, 1, traced_blocked(world, normalize(towards - rim)));
+    if probes == 0 {
+        return 0.0;
+    }
+    if probes == 3 {
+        return 1.0;
+    }
     var blocked = 0.0;
     for (var i = 0; i < rays; i = i + 1) {
         let radius = sqrt((f32(i) + 0.5) / f32(rays)) * TRACED_SUN_SPREAD;

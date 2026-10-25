@@ -278,10 +278,16 @@ separate question). So `graphics.traced_quality` (per render profile, `--traced-
 
 All the numbers are ours and chosen: nothing in the lineage traces a ray.
 
-**Cost not measured yet.** The first bench of `medium` against `high` was spoiled (a rebuild
-without `perf-probe` mid-run, and a second job on the GPU). Expect `medium` a little over the old
-single ray, since it traverses to the nearest hit rather than stopping at the first, and `high`
-about eight times `traced`'s ray cost, which on the Deck was already +11 ms over `mapped` on HD.
+**Cost**, `OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, `perf-probe` release, RX 7800 XT, load 3
+to 6, `Scene::render` GPU median of two runs, single race: Pulse (tick 2100) `medium` 8.0 ms, `high`
+33.3 ms; HD (tick 3000) 3.7 and 14.2 ms. **`high` probes first**: the disc's centre and two opposite
+rim points, and only a point where they disagree casts the full eight. That took `high` to 20.3 ms on
+Pulse and 9.3 on HD (-39 % and -35 %), not the four times the ray count suggested: a lit point's ray
+traverses to the end of the structure and a shadowed one stops at its first hit, and most of a frame
+is lit, so the three probes are the expensive kind. Against the full eight it changes 0.04 to 0.08 %
+of the posed frames' pixels by more than 1 %, all on a penumbra's outer fringe. The maintainer
+finds `medium` smooth and `high` heavy on this card; NVIDIA's traversal in hardware is the obvious
+next measurement, and a denoised two-ray `high` the next design if it is still heavy there.
 
 ## Building it
 
