@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use crate::common_strings::common_string;
 use crate::error::{Error, Result};
-use crate::reader::Reader;
 use crate::value::{PPtr, Struct, Value};
+use oag_bytes::{Be, Endian, Le, Reader};
 
 const META_ALIGN: u32 = 0x4000;
 const MAX_DEPTH: usize = 64;
@@ -34,10 +34,10 @@ struct FlatNode {
 }
 
 /// Reads a typetree blob (SerializedFile versions 12 and up).
-pub fn read_blob(r: &mut Reader<'_>, version: u32) -> Result<TypeNode> {
+pub fn read_blob<E: Endian>(r: &mut Reader<'_, E>, version: u32) -> Result<TypeNode> {
     if version >= 23 {
         // `mhtt`, then the format version again.
-        if r.bytes(4)? != b"mhtt" || r.u32()? != version {
+        if r.take(4)? != b"mhtt" || r.u32()? != version {
             return Err(Error::Malformed("typetree blob magic or version"));
         }
     }
@@ -53,10 +53,9 @@ pub fn read_blob(r: &mut Reader<'_>, version: u32) -> Result<TypeNode> {
             "typetree blob is empty or larger than the file",
         ));
     }
-    let raw = r.bytes(count * node_size)?;
-    let strings = r.bytes(strings_len)?;
-    let nr_endian = r.endian();
-    let mut nr = Reader::new(raw, nr_endian);
+    let raw = r.take(count * node_size)?;
+    let strings = r.take(strings_len)?;
+    let mut nr = Reader::<E>::new(raw);
     let name_at = |off: u32| -> Result<Arc<str>> {
         if off & 0x8000_0000 != 0 {
             let o = off & 0x7fff_ffff;
@@ -140,26 +139,30 @@ fn build_tree(flat: Vec<FlatNode>) -> Result<TypeNode> {
     Ok(stack.pop().expect("root").1)
 }
 
-struct Walk<'a, 'b> {
-    r: &'b mut Reader<'a>,
+struct Walk<'a, 'b, E> {
+    r: &'b mut Reader<'a, E>,
     budget: usize,
 }
 
 /// Reads one object's bytes through `root`, returning the value and how many
 /// bytes the walk consumed.
-pub fn read_value(
-    root: &TypeNode,
-    data: &[u8],
-    endian: crate::reader::Endian,
-) -> Result<(Value, usize)> {
-    let mut r = Reader::new(data, endian);
+pub fn read_value(root: &TypeNode, data: &[u8], big: bool) -> Result<(Value, usize)> {
+    if big {
+        read_value_in::<Be>(root, data)
+    } else {
+        read_value_in::<Le>(root, data)
+    }
+}
+
+fn read_value_in<E: Endian>(root: &TypeNode, data: &[u8]) -> Result<(Value, usize)> {
+    let mut r = Reader::<E>::new(data);
     let budget = data.len().saturating_mul(16).saturating_add(4096);
     let mut w = Walk { r: &mut r, budget };
     let v = w.node(root, 0)?;
-    Ok((v, r.pos()))
+    Ok((v, r.position()))
 }
 
-impl Walk<'_, '_> {
+impl<E: Endian> Walk<'_, '_, E> {
     fn node(&mut self, n: &TypeNode, depth: usize) -> Result<Value> {
         if depth > MAX_DEPTH * 2 {
             return Err(Error::LimitExceeded {
@@ -199,7 +202,7 @@ impl Walk<'_, '_> {
             "double" => Value::Double(r.f64()?),
             "string" => {
                 let len = bounded_len(r, 1)?;
-                let s = std::str::from_utf8(r.bytes(len)?)
+                let s = std::str::from_utf8(r.take(len)?)
                     .map_err(|_| Error::InvalidUtf8)?
                     .to_string();
                 // The `string` node carries the alignment flag on its
@@ -214,7 +217,7 @@ impl Walk<'_, '_> {
             }
             "TypelessData" => {
                 let len = bounded_len(r, 1)?;
-                Value::Bytes(r.bytes(len)?.to_vec())
+                Value::Bytes(r.take(len)?.to_vec())
             }
             t if t.starts_with("PPtr<") => {
                 let fields = self.children(n, depth)?;
@@ -263,7 +266,7 @@ impl Walk<'_, '_> {
             matches!(&*elem.type_name, "UInt8" | "SInt8" | "char") && elem.children.is_empty();
         let len = bounded_len(self.r, 1)?;
         if one_byte {
-            return Ok(Value::Bytes(self.r.bytes(len)?.to_vec()));
+            return Ok(Value::Bytes(self.r.take(len)?.to_vec()));
         }
         let mut out = Vec::with_capacity(len.min(1 << 16));
         for _ in 0..len {
@@ -275,7 +278,7 @@ impl Walk<'_, '_> {
 
 /// Reads an `i32` length and checks it against the bytes left, assuming each
 /// element takes at least `min_elem` byte(s).
-fn bounded_len(r: &mut Reader<'_>, min_elem: usize) -> Result<usize> {
+fn bounded_len<E: Endian>(r: &mut Reader<'_, E>, min_elem: usize) -> Result<usize> {
     let n = r.i32()?;
     let limit = r.remaining() / min_elem;
     usize::try_from(n)

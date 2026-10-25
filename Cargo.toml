@@ -6,6 +6,7 @@ members = [
   "crates/assets",
   "crates/audio",
   "crates/ballisticng",
+  "crates/bytes",
   "crates/core",
   "crates/disc",
   "crates/display",
@@ -68,6 +69,7 @@ oag-ai = { path = "crates/ai" }
 oag-assets = { path = "crates/assets" }
 oag-audio = { path = "crates/audio" }
 oag-ballisticng = { path = "crates/ballisticng" }
+oag-bytes = { path = "crates/bytes" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }

@@ -2,7 +2,9 @@
 //! and the external references, for versions 17 through 22.
 
 use crate::error::{Error, Result};
-use crate::reader::{Endian, Reader};
+use oag_bytes::{Endian, Le, Reader};
+
+use crate::reader::ReaderExt;
 use crate::typetree::{self, TypeNode};
 use crate::value::Value;
 
@@ -87,11 +89,11 @@ pub struct SerializedFile<'a> {
     pub script_types: Vec<(i32, i64)>,
     /// The externals, which a PPtr's `file_id` indexes 1-based.
     pub externals: Vec<External>,
-    endian: Endian,
+    big_endian: bool,
     data: &'a [u8],
 }
 
-fn count(r: &mut Reader<'_>, what: &'static str, min_elem: usize) -> Result<usize> {
+fn count<E: Endian>(r: &mut Reader<'_, E>, what: &'static str, min_elem: usize) -> Result<usize> {
     let n = r.i32()?;
     let limit = r.remaining() / min_elem;
     usize::try_from(n)
@@ -104,8 +106,8 @@ fn count(r: &mut Reader<'_>, what: &'static str, min_elem: usize) -> Result<usiz
         })
 }
 
-fn read_type(
-    r: &mut Reader<'_>,
+fn read_type<E: Endian>(
+    r: &mut Reader<'_, E>,
     version: u32,
     has_trees: bool,
     is_ref: bool,
@@ -115,24 +117,24 @@ fn read_type(
     let script_type_index = r.i16()?;
     let mut script_id = None;
     if (is_ref && script_type_index >= 0) || (!is_ref && class_id == class_id::MONO_BEHAVIOUR) {
-        script_id = Some(r.bytes(16)?.try_into().expect("16 bytes"));
+        script_id = Some(r.take(16)?.try_into().expect("16 bytes"));
     }
-    let old_type_hash: [u8; 16] = r.bytes(16)?.try_into().expect("16 bytes");
+    let old_type_hash: [u8; 16] = r.take(16)?.try_into().expect("16 bytes");
     let mut tree = None;
     if has_trees {
         // Version 23 prefixes the blob with a content hash and its byte size (0 =
         // no tree stored for this type).
         let mut blob_len = None;
         if version >= 23 {
-            r.bytes(16)?;
+            r.take(16)?;
             let n = r.i32()?;
             blob_len = Some(usize::try_from(n).map_err(|_| Error::Malformed("typetree size"))?);
         }
         if blob_len != Some(0) {
-            let start = r.pos();
+            let start = r.position();
             tree = Some(typetree::read_blob(r, version)?);
             if let Some(n) = blob_len
-                && r.pos() - start != n
+                && r.position() - start != n
             {
                 return Err(Error::Malformed(
                     "typetree blob differs from its declared size",
@@ -146,7 +148,7 @@ fn read_type(
                 r.cstr()?;
             } else {
                 let n = count(r, "type dependencies", 4)?;
-                r.bytes(n * 4)?;
+                r.take(n * 4)?;
             }
         }
     }
@@ -163,7 +165,7 @@ fn read_type(
 impl<'a> SerializedFile<'a> {
     /// Parses a SerializedFile (a bundle node, or a standalone `.assets`).
     pub fn parse(data: &'a [u8]) -> Result<Self> {
-        let mut r = Reader::new(data, Endian::Big);
+        let mut r = Reader::be(data);
         let mut metadata_size = u64::from(r.u32()?);
         let mut file_size = u64::from(r.u32()?);
         let version = r.u32()?;
@@ -171,12 +173,12 @@ impl<'a> SerializedFile<'a> {
         if !SUPPORTED_VERSIONS.contains(&version) {
             return Err(Error::UnsupportedSerializedVersion(version));
         }
-        let endian = match r.u8()? {
-            0 => Endian::Little,
-            1 => Endian::Big,
+        let big_endian = match r.u8()? {
+            0 => false,
+            1 => true,
             _ => return Err(Error::Malformed("endianness flag")),
         };
-        r.bytes(3)?;
+        r.take(3)?;
         if version >= 22 {
             metadata_size = u64::from(r.u32()?);
             file_size = r.u64()?;
@@ -187,9 +189,23 @@ impl<'a> SerializedFile<'a> {
             return Err(Error::Malformed("serialized header sizes exceed the file"));
         }
         let _ = metadata_size;
-        r.set_endian(endian);
 
-        let unity_version = r.cstr()?.to_string();
+        // The header is always big-endian; its flag says what the rest is.
+        if big_endian {
+            Self::read_body(r, data, version, data_offset, true)
+        } else {
+            Self::read_body(r.into_endian::<Le>(), data, version, data_offset, false)
+        }
+    }
+
+    fn read_body<E: Endian>(
+        mut r: Reader<'a, E>,
+        data: &'a [u8],
+        version: u32,
+        data_offset: u64,
+        big_endian: bool,
+    ) -> Result<Self> {
+        let unity_version = r.cstring()?.to_string();
         let target_platform = r.i32()?;
         let has_type_trees = r.u8()? != 0;
         let n = count(&mut r, "type count", 20)?;
@@ -240,9 +256,9 @@ impl<'a> SerializedFile<'a> {
         let mut externals = Vec::with_capacity(n);
         for _ in 0..n {
             r.cstr()?;
-            let guid: [u8; 16] = r.bytes(16)?.try_into().expect("16 bytes");
+            let guid: [u8; 16] = r.take(16)?.try_into().expect("16 bytes");
             let kind = r.i32()?;
-            let path = r.cstr()?.to_string();
+            let path = r.cstring()?.to_string();
             externals.push(External { path, guid, kind });
         }
         if version >= 20 {
@@ -262,7 +278,7 @@ impl<'a> SerializedFile<'a> {
             objects,
             script_types,
             externals,
-            endian,
+            big_endian,
             data,
         })
     }
@@ -288,7 +304,7 @@ impl<'a> SerializedFile<'a> {
             class_id: o.class_id,
         })?;
         let bytes = self.object_bytes(o);
-        let (v, used) = typetree::read_value(tree, bytes, self.endian)?;
+        let (v, used) = typetree::read_value(tree, bytes, self.big_endian)?;
         if used != bytes.len() {
             return Err(Error::SizeMismatch {
                 expected: bytes.len(),

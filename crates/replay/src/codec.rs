@@ -14,6 +14,7 @@
 //! exactly what it received the first time, and an axis rounded to a byte
 //! would be a different input.
 
+use oag_bytes::Reader;
 use oag_gameplay::InputSnapshot;
 use oag_gameplay::input::Input;
 
@@ -58,110 +59,14 @@ pub fn put_varint(out: &mut Vec<u8>, mut value: u64) {
     }
 }
 
-/// A cursor over a byte slice, for the decoders here and in [`crate::file`].
-#[derive(Debug)]
-pub struct Cursor<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
 /// A read ran off the end of its input, or a varint did not fit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("truncated or malformed data at byte {0}")]
 pub struct Truncated(pub usize);
 
-impl<'a> Cursor<'a> {
-    /// A cursor at the start of `bytes`.
-    #[must_use]
-    pub fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, at: 0 }
-    }
-
-    /// Whether every byte has been read.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.at >= self.bytes.len()
-    }
-
-    /// Where the cursor is.
-    #[must_use]
-    pub fn position(&self) -> usize {
-        self.at
-    }
-
-    /// The next `n` bytes.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] when fewer than `n` remain.
-    pub fn take(&mut self, n: usize) -> Result<&'a [u8], Truncated> {
-        let end = self.at.checked_add(n).ok_or(Truncated(self.at))?;
-        let slice = self.bytes.get(self.at..end).ok_or(Truncated(self.at))?;
-        self.at = end;
-        Ok(slice)
-    }
-
-    /// One byte.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] at the end of the input.
-    pub fn u8(&mut self) -> Result<u8, Truncated> {
-        Ok(self.take(1)?[0])
-    }
-
-    /// A little-endian `u16`.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] when fewer than two bytes remain.
-    pub fn u16(&mut self) -> Result<u16, Truncated> {
-        let b = self.take(2)?;
-        Ok(u16::from_le_bytes([b[0], b[1]]))
-    }
-
-    /// A little-endian `u32`.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] when fewer than four bytes remain.
-    pub fn u32(&mut self) -> Result<u32, Truncated> {
-        let b = self.take(4)?;
-        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
-    }
-
-    /// A little-endian `u64`.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] when fewer than eight bytes remain.
-    pub fn u64(&mut self) -> Result<u64, Truncated> {
-        let b = self.take(8)?;
-        let mut word = [0; 8];
-        word.copy_from_slice(b);
-        Ok(u64::from_le_bytes(word))
-    }
-
-    /// An unsigned LEB128 varint of at most ten bytes.
-    ///
-    /// # Errors
-    ///
-    /// [`Truncated`] at the end of the input or on an overlong encoding.
-    pub fn varint(&mut self) -> Result<u64, Truncated> {
-        let start = self.at;
-        let mut value = 0u64;
-        for shift in (0..70).step_by(7) {
-            let byte = self.u8()?;
-            let bits = u64::from(byte & 0x7f);
-            if shift == 63 && bits > 1 {
-                return Err(Truncated(start));
-            }
-            value |= bits << shift;
-            if byte & 0x80 == 0 {
-                return Ok(value);
-            }
-        }
-        Err(Truncated(start))
+impl From<oag_bytes::Truncated> for Truncated {
+    fn from(err: oag_bytes::Truncated) -> Self {
+        Self(err.at)
     }
 }
 
@@ -204,7 +109,7 @@ pub fn encode_inputs(snapshots: &[InputSnapshot]) -> Vec<u8> {
 /// [`Truncated`] on input that ends early, a zero-length run, or runs that do
 /// not add up to the stated tick count.
 pub fn decode_inputs(bytes: &[u8]) -> Result<Vec<InputSnapshot>, Truncated> {
-    let mut cursor = Cursor::new(bytes);
+    let mut cursor = Reader::le(bytes);
     let total = usize::try_from(cursor.varint()?).map_err(|_| Truncated(0))?;
     // Bounded by what the bytes could possibly describe, so a corrupt count
     // cannot ask for a huge allocation up front.
@@ -259,7 +164,7 @@ mod tests {
         ] {
             let mut out = Vec::new();
             put_varint(&mut out, value);
-            let mut cursor = Cursor::new(&out);
+            let mut cursor = Reader::le(&out);
             assert_eq!(cursor.varint(), Ok(value));
             assert!(cursor.is_empty());
         }

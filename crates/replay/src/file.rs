@@ -20,9 +20,10 @@
 use oag_core::StateHasher;
 use oag_gameplay::{InputSnapshot, PlayerInputs};
 
-use crate::codec::{Cursor, Truncated, decode_inputs, encode_inputs, put_varint};
+use crate::codec::{Truncated, decode_inputs, encode_inputs, put_varint};
 use crate::header::Header;
 use crate::pose::GhostLap;
+use oag_bytes::Reader;
 
 /// The version this build writes, and the only one it reads.
 ///
@@ -53,6 +54,12 @@ pub enum ReadError {
     /// The chunks parse but disagree with each other.
     #[error("replay is inconsistent: {0}")]
     Inconsistent(String),
+}
+
+impl From<oag_bytes::Truncated> for ReadError {
+    fn from(err: oag_bytes::Truncated) -> Self {
+        Self::Truncated(err.into())
+    }
 }
 
 /// A recorded run: its header, its inputs, its hashes, and its ghost.
@@ -151,7 +158,7 @@ impl Replay {
     /// [`ReadError`] for anything that is not a complete, self-consistent
     /// replay of [`FORMAT_VERSION`].
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ReadError> {
-        let mut cursor = Cursor::new(bytes);
+        let mut cursor = Reader::le(bytes);
         if cursor.take(4).map_err(|_| ReadError::BadMagic)? != MAGIC {
             return Err(ReadError::BadMagic);
         }
@@ -186,7 +193,7 @@ impl Replay {
                     inputs.push((slot, decode_inputs(stream)?));
                 }
                 b"HASH" => {
-                    let mut chunk = Cursor::new(payload);
+                    let mut chunk = Reader::le(payload);
                     let initial = chunk.u64()?;
                     let count = usize::try_from(chunk.varint()?).map_err(|_| Truncated(start))?;
                     let list = (0..count.min(payload.len() / 8))
@@ -199,7 +206,7 @@ impl Replay {
                 }
                 b"GHST" => ghost = Some(GhostLap::decode(payload)?),
                 b"END_" => {
-                    let stored = Cursor::new(payload).u64()?;
+                    let stored = Reader::le(payload).u64()?;
                     if stored != checksum(&bytes[..start]) {
                         return Err(ReadError::Checksum);
                     }

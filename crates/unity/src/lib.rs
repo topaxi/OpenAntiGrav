@@ -11,7 +11,7 @@ pub mod classes;
 pub mod common_strings;
 pub mod compress;
 pub mod error;
-pub mod reader;
+mod reader;
 pub mod serialized;
 pub mod typetree;
 pub mod value;

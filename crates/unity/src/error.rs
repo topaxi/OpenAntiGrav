@@ -7,16 +7,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     /// A read ran past the end of the bytes it was given.
-    Truncated {
-        /// What was being read.
-        what: &'static str,
-        /// Offset the read started at.
-        at: usize,
-        /// Bytes it needed.
-        need: usize,
-        /// Bytes that were left.
-        have: usize,
-    },
+    Truncated(oag_bytes::Truncated),
     /// The bytes do not start with the `UnityFS` signature.
     BadSignature,
     /// An archive version this reader has no layout for.
@@ -84,12 +75,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Truncated {
-                what,
-                at,
-                need,
-                have,
-            } => write!(f, "truncated {what} at {at}: need {need}, have {have}"),
+            Self::Truncated(err) => err.fmt(f),
             Self::BadSignature => write!(f, "not a UnityFS bundle"),
             Self::UnsupportedArchiveVersion(v) => write!(f, "unsupported UnityFS version {v}"),
             Self::UnsupportedCompression(c) => write!(f, "unsupported compression type {c}"),

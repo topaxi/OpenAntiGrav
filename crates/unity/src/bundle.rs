@@ -4,7 +4,9 @@
 
 use crate::compress;
 use crate::error::{Error, Result};
-use crate::reader::{Endian, Reader};
+use oag_bytes::Reader;
+
+use crate::reader::ReaderExt;
 
 /// What this reader will allocate or believe. Untrusted input is bounded by
 /// these, never by a count read from the file alone.
@@ -86,16 +88,16 @@ impl Bundle {
 
     /// [`Self::parse`] with explicit limits.
     pub fn parse_with(bytes: &[u8], limits: &Limits) -> Result<Self> {
-        let mut r = Reader::new(bytes, Endian::Big);
-        if r.cstr().map_err(|_| Error::BadSignature)? != SIGNATURE {
+        let mut r = Reader::be(bytes);
+        if r.cstring().map_err(|_| Error::BadSignature)? != SIGNATURE {
             return Err(Error::BadSignature);
         }
         let archive_version = r.u32()?;
         if !(6..=8).contains(&archive_version) {
             return Err(Error::UnsupportedArchiveVersion(archive_version));
         }
-        let player_version = r.cstr()?.to_string();
-        let engine_version = r.cstr()?.to_string();
+        let player_version = r.cstring()?.to_string();
+        let engine_version = r.cstring()?.to_string();
         let total_size = r.i64()?;
         let info_csize = r.u32()?;
         let info_usize = r.u32()?;
@@ -116,12 +118,12 @@ impl Bundle {
                 .len()
                 .checked_sub(info_csize as usize)
                 .ok_or(Error::Malformed("blocks info larger than the file"))?;
-            if start < r.pos() {
+            if start < r.position() {
                 return Err(Error::Malformed("blocks info overlaps the header"));
             }
             &bytes[start..]
         } else {
-            r.bytes(info_csize as usize)?
+            r.take(info_csize as usize)?
         };
         if u64::from(info_usize) > limits.max_decompressed {
             return Err(Error::LimitExceeded {
@@ -136,8 +138,8 @@ impl Bundle {
             info_usize as usize,
         )?;
 
-        let mut ir = Reader::new(&info, Endian::Big);
-        ir.bytes(16)?; // the info's own hash, not verified
+        let mut ir = Reader::be(&info);
+        ir.take(16)?; // the info's own hash, not verified
         let block_count = ir.i32()?;
         let block_count = usize::try_from(block_count)
             .ok()
@@ -179,7 +181,7 @@ impl Bundle {
             let offset = ir.i64()?;
             let size = ir.i64()?;
             let flags = ir.u32()?;
-            let path = ir.cstr()?.to_string();
+            let path = ir.cstring()?.to_string();
             if offset < 0 || size < 0 || offset as u64 + size as u64 > total {
                 return Err(Error::Malformed("node range outside the block data"));
             }
@@ -197,7 +199,7 @@ impl Bundle {
         }
         let mut data = Vec::with_capacity((total as usize).min(64 << 20));
         for b in &blocks {
-            let comp = r.bytes(b.csize as usize)?;
+            let comp = r.take(b.csize as usize)?;
             let out = compress::decompress(
                 u32::from(b.flags) & FLAG_COMPRESSION_MASK,
                 comp,

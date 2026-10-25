@@ -143,15 +143,15 @@ TITLE_FREE_RENDER_CRATES = {
 }
 
 # Rule 4: `oag-unity` is a generic Unity asset-bundle reader and reaches no other
-# crate of this workspace at all, so it cannot grow a title, a game-specific
-# crate or anything above it by a `cargo add`. Written as an allowlist
-# (empty today) rather than a denylist: a new workspace crate is forbidden to it
-# by default, and widening the allowlist is a deliberate edit to this line with
+# crate of this workspace but `oag-bytes`, the generic byte reader (it depends
+# on nothing itself), so it cannot grow a title, a game-specific crate or
+# anything above it by a `cargo add`. Written as an allowlist rather than a
+# denylist: a new workspace crate is forbidden to it by default, and widening the allowlist is a deliberate edit to this line with
 # a reason beside it. Content-specific layers (a game's classes, a track
 # source) are separate crates that depend on `oag-unity`, never the reverse.
 # ADR-0062.
 GENERIC_READERS = {
-    "oag-unity": set(),
+    "oag-unity": {"oag-bytes"},
 }
 
 # Rule 5: a game-specific Unity layer builds on `oag-unity` and the texture
@@ -160,7 +160,7 @@ GENERIC_READERS = {
 # engine is the consumer's choice (`oag-raceplay`), not the layer's reading.
 # `oag-formats` is here because `oag-texture` carries it.
 CONTENT_LAYERS = {
-    "oag-ballisticng": {"oag-unity", "oag-texture", "oag-formats"},
+    "oag-ballisticng": {"oag-unity", "oag-texture", "oag-formats", "oag-bytes"},
 }
 
 # Rule 2: no crate may depend on the composition root.

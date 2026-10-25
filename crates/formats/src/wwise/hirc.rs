@@ -8,6 +8,8 @@
 
 use std::ops::Range;
 
+use oag_bytes::{Le, Reader, Truncated};
+
 use super::Error;
 
 /// A `HIRC` object's type byte.
@@ -107,49 +109,11 @@ pub(super) fn index(data: &[u8], chunk: Range<usize>) -> Result<Vec<Object>, Err
     Ok(objects)
 }
 
-/// A cursor over a body that refuses to run off its end.
-struct Reader<'a> {
-    bytes: &'a [u8],
-    at: usize,
-}
-
-impl<'a> Reader<'a> {
-    fn new(bytes: &'a [u8], at: usize) -> Self {
-        Self { bytes, at }
-    }
-
-    fn take(&mut self, n: usize) -> Option<&'a [u8]> {
-        let end = self.at.checked_add(n)?;
-        let out = self.bytes.get(self.at..end)?;
-        self.at = end;
-        Some(out)
-    }
-
-    fn u8(&mut self) -> Option<u8> {
-        self.take(1).map(|b| b[0])
-    }
-
-    fn u16(&mut self) -> Option<u16> {
-        self.take(2)
-            .map(|b| u16::from_le_bytes(b.try_into().expect("two bytes")))
-    }
-
-    fn u32(&mut self) -> Option<u32> {
-        self.take(4)
-            .map(|b| u32::from_le_bytes(b.try_into().expect("four bytes")))
-    }
-
-    /// A property bundle: `u8 n`, `n` ids, then `n` values of `width` bytes.
-    fn bundle(&mut self, width: usize) -> Option<()> {
-        let n = usize::from(self.u8()?);
-        self.take(n)?;
-        self.take(n.checked_mul(width)?)?;
-        Some(())
-    }
-
-    fn done(&self) -> bool {
-        self.at == self.bytes.len()
-    }
+/// A property bundle: `u8 n`, `n` ids, then `n` values of `width` bytes.
+pub(super) fn bundle(r: &mut Reader<'_, Le>, width: usize) -> Result<(), Truncated> {
+    let n = usize::from(r.u8()?);
+    r.skip(n)?;
+    r.skip(n * width)
 }
 
 /// An event: the actions it runs.
@@ -162,10 +126,10 @@ impl Event {
     /// Reads an event body: `u32 n`, then `n` action ids, exactly.
     #[must_use]
     pub fn parse(body: &[u8]) -> Option<Self> {
-        let mut r = Reader::new(body, 0);
-        let n = r.u32()? as usize;
-        let actions = (0..n).map(|_| r.u32()).collect::<Option<Vec<_>>>()?;
-        r.done().then_some(Self { actions })
+        let mut r = Reader::le(body);
+        let n = r.u32().ok()? as usize;
+        let actions = (0..n).map(|_| r.u32().ok()).collect::<Option<Vec<_>>>()?;
+        r.is_empty().then_some(Self { actions })
     }
 }
 
@@ -198,17 +162,17 @@ impl Action {
     /// Reads an action body.
     #[must_use]
     pub fn parse(body: &[u8]) -> Option<Self> {
-        let mut r = Reader::new(body, 0);
-        let kind = r.u16()?;
-        let target = r.u32()?;
-        let target_flags = r.u8()?;
+        let mut r = Reader::le(body);
+        let kind = r.u16().ok()?;
+        let target = r.u32().ok()?;
+        let target_flags = r.u8().ok()?;
         let play = (kind == Self::PLAY)
             .then(|| {
-                r.bundle(4)?;
-                r.bundle(8)?;
-                let fade_curve = r.u8()?;
-                let bank_id = r.u32()?;
-                r.done().then_some(Play {
+                bundle(&mut r, 4).ok()?;
+                bundle(&mut r, 8).ok()?;
+                let fade_curve = r.u8().ok()?;
+                let bank_id = r.u32().ok()?;
+                r.is_empty().then_some(Play {
                     fade_curve,
                     bank_id,
                 })
@@ -238,15 +202,15 @@ impl SetState {
     /// every one (a state is global).
     #[must_use]
     pub fn parse(body: &[u8]) -> Option<Self> {
-        let mut r = Reader::new(body, 0);
-        (r.u16()? == Self::KIND).then_some(())?;
-        r.u32()?;
-        r.u8()?;
-        r.bundle(4)?;
-        r.bundle(8)?;
-        let group = r.u32()?;
-        let state = r.u32()?;
-        r.done().then_some(Self { group, state })
+        let mut r = Reader::le(body);
+        (r.u16().ok()? == Self::KIND).then_some(())?;
+        r.u32().ok()?;
+        r.u8().ok()?;
+        bundle(&mut r, 4).ok()?;
+        bundle(&mut r, 8).ok()?;
+        let group = r.u32().ok()?;
+        let state = r.u32().ok()?;
+        r.is_empty().then_some(Self { group, state })
     }
 }
 
@@ -333,13 +297,13 @@ pub struct Source {
 const SOURCE_LEN: usize = 14;
 
 impl Source {
-    fn read(r: &mut Reader<'_>) -> Option<Self> {
+    fn read(r: &mut Reader<'_, Le>) -> Option<Self> {
         Some(Self {
-            plugin: Plugin(r.u32()?),
-            stream: StreamType::from_byte(r.u8()?),
-            media_id: r.u32()?,
-            in_memory_size: r.u32()?,
-            bits: r.u8()?,
+            plugin: Plugin(r.u32().ok()?),
+            stream: StreamType::from_byte(r.u8().ok()?),
+            media_id: r.u32().ok()?,
+            in_memory_size: r.u32().ok()?,
+            bits: r.u8().ok()?,
         })
     }
 
@@ -362,7 +326,7 @@ impl Sound {
     /// Reads a sound body: a source, then the node's base parameters.
     #[must_use]
     pub fn parse(body: &[u8]) -> Option<Self> {
-        let mut r = Reader::new(body, 0);
+        let mut r = Reader::le(body);
         let source = Source::read(&mut r)?;
         Some(Self {
             source,
@@ -382,8 +346,9 @@ impl MusicTrack {
     /// What follows (playlist, clip automation) is not read.
     #[must_use]
     pub fn parse(body: &[u8]) -> Option<Self> {
-        let mut r = Reader::new(body, 1);
-        let n = r.u32()? as usize;
+        let mut r = Reader::le(body);
+        r.skip(1).ok()?;
+        let n = r.u32().ok()? as usize;
         let sources = (0..n)
             .map(|_| Source::read(&mut r))
             .collect::<Option<Vec<_>>>()?;
@@ -402,16 +367,17 @@ impl MusicTrack {
 /// in the node's own bank; a sound in `Ship_NGP` has its parent in another) and
 /// `0`, the root, on the other 110 - none dangles.
 fn parent_at(body: &[u8], at: usize) -> Option<u32> {
-    let mut r = Reader::new(body, at);
-    r.u8()?;
-    let effects = usize::from(r.u8()?);
+    let mut r = Reader::le(body);
+    r.seek(at).ok()?;
+    r.u8().ok()?;
+    let effects = usize::from(r.u8().ok()?);
     if effects > 0 {
-        r.u8()?;
-        r.take(effects.checked_mul(7)?)?;
+        r.u8().ok()?;
+        r.skip(effects.checked_mul(7)?).ok()?;
     }
-    r.u8()?;
-    r.u32()?;
-    r.u32().filter(|&parent| parent != 0)
+    r.u8().ok()?;
+    r.u32().ok()?;
+    r.u32().ok().filter(|&parent| parent != 0)
 }
 
 /// The parent of a node object, or `None` for a root, a kind with no node

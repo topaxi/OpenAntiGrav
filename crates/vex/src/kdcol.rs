@@ -64,6 +64,7 @@
 //! and `docs/ghidra/functions/vita-2048-eu-v104/track-and-collision-loaders.md`
 //! for the two loaders this is read from.
 
+use oag_bytes::{Le, Reader};
 use std::fmt;
 
 use crate::collision::{
@@ -338,25 +339,25 @@ pub struct KdCollision {
 /// naming nothing, and bytes left after the last tag. Each is a decode failure,
 /// not a track with no collision; the caller should say so.
 pub fn parse(file: &[u8]) -> Result<KdCollision> {
-    let mut r = Reader { file, at: 0 };
-    let magic: [u8; 4] = r.array("magic")?;
+    let mut r = Reader::le(file);
+    let magic: [u8; 4] = r.array().what("magic")?;
     if &magic != MAGIC {
         return Err(Error::BadMagic { magic });
     }
-    let raw: [u8; 4] = r.array("version")?;
+    let raw: [u8; 4] = r.array().what("version")?;
     let text = String::from_utf8_lossy(&raw).into_owned();
     if u32::from_str_radix(text.trim(), 16).ok() != Some(VERSION) {
         return Err(Error::BadVersion { version: text });
     }
 
     r.tag("nodes")?;
-    let stride = r.u32("node stride")? as usize;
+    let stride = r.u32().what("node stride")? as usize;
     let layout = match stride {
         NODE_LEN => NodeLayout::Wide,
         NODE_LEN_PACKED => NodeLayout::Packed,
         _ => return Err(Error::BadNodeStride { stride }),
     };
-    let node_count = r.u32("node count")? as usize;
+    let node_count = r.u32().what("node count")? as usize;
     let mut nodes = Vec::with_capacity(node_count.min(r.remaining() / layout.len()));
     for _ in 0..node_count {
         nodes.push(match layout {
@@ -366,22 +367,26 @@ pub fn parse(file: &[u8]) -> Result<KdCollision> {
     }
 
     r.tag("leaf indices")?;
-    let leaf_count = r.u32("leaf index count")? as usize;
+    let leaf_count = r.u32().what("leaf index count")? as usize;
     let mut leaves = Vec::with_capacity(leaf_count.min(r.remaining() / 2));
     for _ in 0..leaf_count {
-        leaves.push(r.u16("leaf index")?);
+        leaves.push(r.u16().what("leaf index")?);
     }
 
     r.tag("tree bounds")?;
     let bounds = r.bounds()?;
 
     r.tag("triangle soup")?;
-    let vertex_count = usize::from(r.u16("vertex count")?);
+    let vertex_count = usize::from(r.u16().what("vertex count")?);
     let mut vertices = Vec::with_capacity(vertex_count.min(r.remaining() / 12));
     for _ in 0..vertex_count {
-        vertices.push([r.f32("vertex")?, r.f32("vertex")?, r.f32("vertex")?]);
+        vertices.push([
+            r.f32().what("vertex")?,
+            r.f32().what("vertex")?,
+            r.f32().what("vertex")?,
+        ]);
     }
-    let stride = r.u32("triangle stride")? as usize;
+    let stride = r.u32().what("triangle stride")? as usize;
     if stride != TRIANGLE_LEN {
         return Err(Error::BadStride {
             what: "triangle",
@@ -389,12 +394,12 @@ pub fn parse(file: &[u8]) -> Result<KdCollision> {
             expected: TRIANGLE_LEN,
         });
     }
-    let triangle_count = usize::from(r.u16("triangle count")?);
+    let triangle_count = usize::from(r.u16().what("triangle count")?);
     let mut triangles = Vec::with_capacity(triangle_count.min(r.remaining() / TRIANGLE_LEN));
     for _ in 0..triangle_count {
         let mut corners = [0u16; 3];
         for corner in &mut corners {
-            let index = r.u16("vertex")?;
+            let index = r.u16().what("vertex")?;
             if usize::from(index) >= vertex_count {
                 return Err(Error::BadIndex {
                     what: "vertex",
@@ -406,8 +411,8 @@ pub fn parse(file: &[u8]) -> Result<KdCollision> {
         }
         triangles.push(corners);
     }
-    let surface_count = usize::from(r.u16("surface byte count")?);
-    let surfaces = r.bytes("surface bytes", surface_count)?.to_vec();
+    let surface_count = usize::from(r.u16().what("surface byte count")?);
+    let surfaces = r.take(surface_count).what("surface bytes")?.to_vec();
     let mesh_bounds = r.bounds()?;
 
     for &index in &leaves {
@@ -609,39 +614,33 @@ pub fn sibling_name(track: &str) -> Option<String> {
 /// The suffix that turns `track` into the reversed circuit's `track_reversed`.
 const REVERSED: &str = "_reversed";
 
-/// A cursor that refuses to read past the end.
-struct Reader<'a> {
-    file: &'a [u8],
-    at: usize,
+trait Fields {
+    fn tag(&mut self, what: &'static str) -> Result<()>;
+    fn wide_node(&mut self, count: usize) -> Result<Node>;
+    fn packed_node(&mut self, count: usize) -> Result<Node>;
+    fn child(&mut self, what: &'static str, count: usize) -> Result<Option<usize>>;
+    fn bounds(&mut self) -> Result<Bounds>;
 }
 
-impl<'a> Reader<'a> {
-    fn remaining(&self) -> usize {
-        self.file.len().saturating_sub(self.at)
-    }
+/// Names the field a failed read was for.
+trait Named<T> {
+    fn what(self, what: &'static str) -> Result<T>;
+}
 
-    fn bytes(&mut self, what: &'static str, len: usize) -> Result<&'a [u8]> {
-        let end = self.at.checked_add(len).ok_or(Error::OutOfBounds {
+impl<T> Named<T> for std::result::Result<T, oag_bytes::Truncated> {
+    fn what(self, what: &'static str) -> Result<T> {
+        self.map_err(|e| Error::OutOfBounds {
             what,
-            end: usize::MAX,
-            len: self.file.len(),
-        })?;
-        let slice = self.file.get(self.at..end).ok_or(Error::OutOfBounds {
-            what,
-            end,
-            len: self.file.len(),
-        })?;
-        self.at = end;
-        Ok(slice)
+            end: e.at.saturating_add(e.wanted),
+            len: e.at + e.available,
+        })
     }
+}
 
-    fn array<const N: usize>(&mut self, what: &'static str) -> Result<[u8; N]> {
-        Ok(self.bytes(what, N)?.try_into().expect("N bytes"))
-    }
-
+impl Fields for Reader<'_, Le> {
     fn tag(&mut self, what: &'static str) -> Result<()> {
-        let at = self.at;
-        let tag: [u8; 4] = self.array("section tag")?;
+        let at = self.position();
+        let tag: [u8; 4] = self.array().what("section tag")?;
         if &tag == SECTION_TAG {
             Ok(())
         } else {
@@ -649,17 +648,13 @@ impl<'a> Reader<'a> {
         }
     }
 
-    fn u8(&mut self, what: &'static str) -> Result<u8> {
-        Ok(u8::from_le_bytes(self.array(what)?))
-    }
-
     fn wide_node(&mut self, count: usize) -> Result<Node> {
         let low = self.child("k-d node child", count)?;
         let high = self.child("k-d node child", count)?;
-        let axis = self.u32("k-d node axis")?;
-        let split = self.f32("k-d node split")?;
-        let counts = self.u32("k-d node leaf run")?;
-        let first_leaf = self.u32("k-d node leaf start")? as usize;
+        let axis = self.u32().what("k-d node axis")?;
+        let split = self.f32().what("k-d node split")?;
+        let counts = self.u32().what("k-d node leaf run")?;
+        let first_leaf = self.u32().what("k-d node leaf start")? as usize;
         Ok(Node {
             low,
             high,
@@ -675,10 +670,10 @@ impl<'a> Reader<'a> {
     fn packed_node(&mut self, count: usize) -> Result<Node> {
         let low = self.child("k-d node child", count)?;
         let high = self.child("k-d node child", count)?;
-        let axis = self.u8("k-d node axis")?;
-        let triangle_count = usize::from(self.u16("k-d node leaf run")?);
-        let split = self.f32("k-d node split")?;
-        let first_leaf = self.u32("k-d node leaf start")? as usize;
+        let axis = self.u8().what("k-d node axis")?;
+        let triangle_count = usize::from(self.u16().what("k-d node leaf run")?);
+        let split = self.f32().what("k-d node split")?;
+        let first_leaf = self.u32().what("k-d node leaf start")? as usize;
         Ok(Node {
             low,
             high,
@@ -690,20 +685,8 @@ impl<'a> Reader<'a> {
         })
     }
 
-    fn u16(&mut self, what: &'static str) -> Result<u16> {
-        Ok(u16::from_le_bytes(self.array(what)?))
-    }
-
-    fn u32(&mut self, what: &'static str) -> Result<u32> {
-        Ok(u32::from_le_bytes(self.array(what)?))
-    }
-
-    fn f32(&mut self, what: &'static str) -> Result<f32> {
-        Ok(f32::from_le_bytes(self.array(what)?))
-    }
-
     fn child(&mut self, what: &'static str, count: usize) -> Result<Option<usize>> {
-        let raw = self.u32(what)? as i32;
+        let raw = self.u32().what(what)? as i32;
         if raw == NULL_CHILD {
             return Ok(None);
         }
@@ -718,14 +701,14 @@ impl<'a> Reader<'a> {
     fn bounds(&mut self) -> Result<Bounds> {
         Ok(Bounds {
             centre: [
-                self.f32("bounds")?,
-                self.f32("bounds")?,
-                self.f32("bounds")?,
+                self.f32().what("bounds")?,
+                self.f32().what("bounds")?,
+                self.f32().what("bounds")?,
             ],
             extent: [
-                self.f32("bounds")?,
-                self.f32("bounds")?,
-                self.f32("bounds")?,
+                self.f32().what("bounds")?,
+                self.f32().what("bounds")?,
+                self.f32().what("bounds")?,
             ],
         })
     }

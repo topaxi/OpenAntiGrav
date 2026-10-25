@@ -13,6 +13,7 @@ autotests = false
 # Inflate, for `psarc`. See the workspace manifest for why this one format is
 # not hand-rolled like the rest.
 miniz_oxide.workspace = true
+oag-bytes.workspace = true
 
 # Ground-truth tests read real tracks out of a disc image. These are
 # dev-dependencies only: the library itself knows nothing about discs.

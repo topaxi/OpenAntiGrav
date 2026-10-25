@@ -2700,9 +2700,17 @@ dependencies = [
 name = "oag-ballisticng"
 version = "0.1.0"
 dependencies = [
+ "oag-bytes",
  "oag-testdata",
  "oag-texture",
  "oag-unity",
+]
+
+[[package]]
+name = "oag-bytes"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -2742,6 +2750,7 @@ version = "0.1.0"
 dependencies = [
  "miniz_oxide",
  "oag-assets",
+ "oag-bytes",
  "oag-disc",
  "oag-testdata",
 ]
@@ -3017,6 +3026,7 @@ dependencies = [
  "log",
  "oag-ai",
  "oag-assets",
+ "oag-bytes",
  "oag-core",
  "oag-gameplay",
  "oag-log",
@@ -3232,6 +3242,7 @@ dependencies = [
 name = "oag-replay"
 version = "0.1.0"
 dependencies = [
+ "oag-bytes",
  "oag-core",
  "oag-gameplay",
  "serde",
@@ -3446,6 +3457,7 @@ name = "oag-unity"
 version = "0.1.0"
 dependencies = [
  "lzma-rs-perf-exp",
+ "oag-bytes",
  "oag-testdata",
  "oag-texture",
 ]
@@ -3455,6 +3467,7 @@ name = "oag-vex"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-bytes",
  "oag-disc",
  "oag-formats",
  "oag-pulse",

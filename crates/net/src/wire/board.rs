@@ -6,7 +6,8 @@
 //! client checks its own against, and where the people's names come from (the race itself only
 //! knows a slot is a person). Chosen, not measured: the original has no network race.
 
-use super::{Malformed, Reader, put_string};
+use super::{Malformed, ReaderExt, put_string};
+use oag_bytes::{Le, Reader};
 
 /// One craft's line of the board.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,7 +85,7 @@ impl Board {
         }
     }
 
-    pub(crate) fn take(r: &mut Reader<'_>) -> Result<Self, Malformed> {
+    pub(crate) fn take(r: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         let count = r.u8()?;
         let rows = (0..count)
             .map(|_| {
@@ -117,7 +118,7 @@ impl Board {
     /// [`Malformed`] for text that is not hex or not a board.
     pub fn from_line(line: &str) -> Result<Self, Malformed> {
         let bytes = super::from_hex(line)?;
-        let mut r = Reader { bytes: &bytes };
+        let mut r = Reader::new(&bytes);
         let board = Self::take(&mut r)?;
         r.end()?;
         Ok(board)
