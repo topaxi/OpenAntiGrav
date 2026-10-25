@@ -144,24 +144,73 @@ fn fs_prepare_ms(in: VertexOutput) -> @location(0) vec4<f32> {
 // `textureLoad`s inside only `ceil(w / tile) * ceil(h / tile)` fragments,
 // which at 1080p is 7,569 loads across 299 threads and left most of the GPU
 // idle. Measured on this project's development adapter, splitting it cut the
-// whole chain from 2.6 ms to 1.2 ms a frame - within noise of stubbing the
-// reduction out entirely, so what is left of it is now free. See
+// whole chain from 2.6 ms to 1.2 ms a frame at 1080p. See
 // `docs/rendering/motion-blur.md` for the machine and the method.
+//
+// **The horizontal half loads sixteen texels before it compares any.** Its
+// trip count is `constants.tile`, a runtime value, so a plain loop issues one
+// load, waits for it and compares: 173 serial round trips per fragment at
+// 4K. Unrolled, sixteen loads are in flight at once and the comparisons still
+// run in scan order with the strict `>`, so the first of two equally long
+// velocities wins exactly as before and the output is bit-identical. On a
+// Raphael iGPU at 3840x2160 this pass fell from 5.6 ms to 1.65 ms (8 wide:
+// 1.95 ms); see `docs/rendering/motion-blur-half-rung.md`.
+// One step of a tile reduction: `v` replaces the best so far only when it is
+// strictly longer, so of equal velocities the first in scan order is kept.
+fn keep_longest(v: vec2<f32>, best: ptr<function, vec2<f32>>, best_len: ptr<function, f32>) {
+    let len = dot(v, v);
+    if len > *best_len {
+        *best_len = len;
+        *best = v;
+    }
+}
+
 @fragment
 fn fs_tile_max_x(in: VertexOutput) -> @location(0) vec2<f32> {
     let row = i32(in.position.y);
     let first = i32(in.position.x) * i32(constants.tile);
     let limit = vec2<i32>(textureDimensions(prepared_tex)) - vec2<i32>(1);
+    let tile = i32(constants.tile);
     var best = vec2<f32>(0.0);
     var best_len = 0.0;
-    for (var x = 0u; x < constants.tile; x += 1u) {
-        let p = min(vec2<i32>(first + i32(x), row), limit);
-        let v = textureLoad(prepared_tex, p, 0).xy;
-        let len = dot(v, v);
-        if len > best_len {
-            best_len = len;
-            best = v;
-        }
+    var x = 0;
+    for (; x + 16 <= tile; x += 16) {
+        let at = first + x;
+        let v0 = textureLoad(prepared_tex, min(vec2<i32>(at, row), limit), 0).xy;
+        let v1 = textureLoad(prepared_tex, min(vec2<i32>(at + 1, row), limit), 0).xy;
+        let v2 = textureLoad(prepared_tex, min(vec2<i32>(at + 2, row), limit), 0).xy;
+        let v3 = textureLoad(prepared_tex, min(vec2<i32>(at + 3, row), limit), 0).xy;
+        let v4 = textureLoad(prepared_tex, min(vec2<i32>(at + 4, row), limit), 0).xy;
+        let v5 = textureLoad(prepared_tex, min(vec2<i32>(at + 5, row), limit), 0).xy;
+        let v6 = textureLoad(prepared_tex, min(vec2<i32>(at + 6, row), limit), 0).xy;
+        let v7 = textureLoad(prepared_tex, min(vec2<i32>(at + 7, row), limit), 0).xy;
+        let v8 = textureLoad(prepared_tex, min(vec2<i32>(at + 8, row), limit), 0).xy;
+        let v9 = textureLoad(prepared_tex, min(vec2<i32>(at + 9, row), limit), 0).xy;
+        let v10 = textureLoad(prepared_tex, min(vec2<i32>(at + 10, row), limit), 0).xy;
+        let v11 = textureLoad(prepared_tex, min(vec2<i32>(at + 11, row), limit), 0).xy;
+        let v12 = textureLoad(prepared_tex, min(vec2<i32>(at + 12, row), limit), 0).xy;
+        let v13 = textureLoad(prepared_tex, min(vec2<i32>(at + 13, row), limit), 0).xy;
+        let v14 = textureLoad(prepared_tex, min(vec2<i32>(at + 14, row), limit), 0).xy;
+        let v15 = textureLoad(prepared_tex, min(vec2<i32>(at + 15, row), limit), 0).xy;
+        keep_longest(v0, &best, &best_len);
+        keep_longest(v1, &best, &best_len);
+        keep_longest(v2, &best, &best_len);
+        keep_longest(v3, &best, &best_len);
+        keep_longest(v4, &best, &best_len);
+        keep_longest(v5, &best, &best_len);
+        keep_longest(v6, &best, &best_len);
+        keep_longest(v7, &best, &best_len);
+        keep_longest(v8, &best, &best_len);
+        keep_longest(v9, &best, &best_len);
+        keep_longest(v10, &best, &best_len);
+        keep_longest(v11, &best, &best_len);
+        keep_longest(v12, &best, &best_len);
+        keep_longest(v13, &best, &best_len);
+        keep_longest(v14, &best, &best_len);
+        keep_longest(v15, &best, &best_len);
+    }
+    for (; x < tile; x += 1) {
+        keep_longest(textureLoad(prepared_tex, min(vec2<i32>(first + x, row), limit), 0).xy, &best, &best_len);
     }
     return best;
 }
