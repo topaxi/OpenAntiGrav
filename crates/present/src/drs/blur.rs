@@ -206,9 +206,10 @@ impl Rung {
     /// stepping the extent, and sheds it if so.
     ///
     /// **Only when the blur was measured to cost something.** A reading with
-    /// no blur in it (`blur` folded to zero by a timer that did not come back)
-    /// would shed for no saving, and the no-oscillation argument above rests
-    /// on every shed buying the cost it remembers.
+    /// no blur in it would shed for no saving, and the no-oscillation argument
+    /// above rests on every shed buying the cost it remembers. The caller
+    /// already skips a frame whose blur ran and was not timed, so a zero here
+    /// is a blur that did not run; this keeps the rung safe without that.
     pub(super) fn try_shed(&mut self, blur: f32, steps: u32, limits: Limits) -> bool {
         if !Self::eligible(limits) || self.shed.is_some() || !(blur.is_finite() && blur > 0.0) {
             return false;
