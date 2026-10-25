@@ -188,7 +188,6 @@ impl Scene {
             sky: self.sky.as_ref(),
             track_shine: self.track_shine.as_ref().map(shine::TrackShine::parts),
             sections: self.visibility.as_ref().map(|v| &v.sections),
-            sorts_opaque: super::circuit_prepass(self.hd.is_some(), self.omega.is_some()),
             ghost: self.ghost.pipeline(),
             attachments: &self.attachment_views,
         }
@@ -202,8 +201,6 @@ pub(super) struct Recorder<'a> {
     sky: Option<&'a Drawable>,
     track_shine: Option<(&'a Drawable, &'a [usize])>,
     sections: Option<&'a DrawSections>,
-    /// Whether the circuit's opaque depth goes down nearest first: the depth prepass.
-    sorts_opaque: bool,
     ghost: Option<&'a oag_render::ghost::Pipeline>,
     attachments: &'a motion::Attachments,
 }
@@ -392,9 +389,7 @@ impl Recorder<'_> {
             match stage {
                 TrackStage::Solid => {
                     oag_gpu::perfprobe::marks::mark(render, "track solid");
-                    let order = self
-                        .sorts_opaque
-                        .then(|| opaque_order(self.track, pass.eye));
+                    let order = opaque_order(self.track, pass.eye);
                     stats.add(self.track.draw_lists(
                         render,
                         block,
@@ -403,7 +398,7 @@ impl Recorder<'_> {
                         chunks,
                         frustum,
                         Lists::Solid {
-                            order: order.as_deref(),
+                            order: Some(&order),
                         },
                     ));
                 }
