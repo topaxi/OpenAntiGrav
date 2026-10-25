@@ -114,18 +114,27 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
 }
 
 // How far along the sun a traced shadow ray starts, in world units, so a surface does not
-// shadow itself through its own triangle. **Ours, chosen, not measured**: a sixth of a
-// craft-height is above any coplanar-surface noise on the circuits tried.
-const TRACED_START: f32 = 0.12;
+// shadow itself. **Measured on Moa Therma White, then chosen**: the circuit carries a
+// second surface hovering about 0.12 to 0.4 above parts of its road, never drawn but in the
+// structure, which at the first value (0.12) shadowed the road in triangle-shaped patches;
+// 0.4 left a few, 0.8 none. Six tenths clears it with room and stays far under a craft's
+// hover of about 3.5, so no craft loses its shadow. What that surface is is not read.
+const TRACED_START: f32 = 0.6;
 
 // How far a traced shadow ray looks for an occluder. The sun is at infinity and a bridge's
 // shadow can fall from far above, so this is past any circuit's height rather than a
 // cascade's box. **Ours.**
 const TRACED_REACH: f32 = 2000.0;
 
-// How much of this point the `traced` tier says is in shadow: `1.0` if anything opaque is
-// between it and the sun, else `0.0`. **One ray per pixel, hard-edged**: no cascade, no
-// resolution, no bias slope, and everything casts and everything receives.
+// How much of this point the `traced` tier says is in shadow, `0.0` to `1.0`: rays toward
+// the sun, everything casting and everything receiving, no cascade, no resolution and no
+// bias slope. How many rays is the player's `traced_quality` (`scene.shadow.traced_rays`):
+//
+// - **One** (`medium`): the nearest occluder decides, and its distance lightens the
+//   shadow - full within `TRACED_FADE_NEAR`, down to `TRACED_FADE_FLOOR` of it by
+//   `TRACED_FADE_FAR` - the way a wide penumbra thins its umbra. The edge stays hard.
+// - **More** (`high`): that many rays spread across a sun `TRACED_SUN_SPREAD` wide, the
+//   fraction blocked. The edge blurs with the caster's distance, a real penumbra.
 //
 // The direction is read out of the same matrix the `mapped` tier fits, so the two tiers
 // agree on where the sun is by construction (a circuit's authored sun, or Pulse's borrowed
@@ -138,15 +147,81 @@ const TRACED_REACH: f32 = 2000.0;
         return 0.0;
     }
     let towards = -normalize(away);
+    let rays = max(1, i32(scene.shadow.traced_rays + 0.5));
+    if rays == 1 {
+        let t = traced_nearest(world, towards);
+        if t < 0.0 {
+            return 0.0;
+        }
+        return mix(1.0, TRACED_FADE_FLOOR, smoothstep(TRACED_FADE_NEAR, TRACED_FADE_FAR, t));
+    }
+    // A basis across the sun's disc, and the disc's samples on a golden-angle spiral
+    // turned by a hash of the point, so neighbouring pixels sample different parts of the
+    // disc and the penumbra reads as fine grain rather than as a stack of hard bands.
+    let side = select(vec3<f32>(0.0, 1.0, 0.0), vec3<f32>(1.0, 0.0, 0.0), abs(towards.y) > 0.9);
+    let u = normalize(cross(towards, side));
+    let v = cross(towards, u);
+    let turn = traced_hash(world) * 6.2831853;
+    var blocked = 0.0;
+    for (var i = 0; i < rays; i = i + 1) {
+        let radius = sqrt((f32(i) + 0.5) / f32(rays)) * TRACED_SUN_SPREAD;
+        let angle = f32(i) * 2.3999632 + turn;
+        let direction = normalize(towards + (u * cos(angle) + v * sin(angle)) * radius);
+        blocked = blocked + select(0.0, 1.0, traced_blocked(world, direction));
+    }
+    return blocked / f32(rays);
+}
+
+// The `medium` fade: a caster within `TRACED_FADE_NEAR` world units shadows fully, one past
+// `TRACED_FADE_FAR` at `TRACED_FADE_FLOOR` of that. **Ours, all three**: near enough that
+// a craft's own shadow on the road keeps its full weight, far enough that a canopy or a
+// deck overhead reads paler than the craft under it.
+const TRACED_FADE_NEAR: f32 = 4.0;
+const TRACED_FADE_FAR: f32 = 60.0;
+const TRACED_FADE_FLOOR: f32 = 0.35;
+
+// The `high` sun's half-width, as the tangent of its half-angle: 2.5 degrees. **Ours**:
+// the real sun's quarter degree leaves a canopy's edge as hard as one ray does; this blurs
+// it across about four units at fifty, and a craft's at a few tenths.
+const TRACED_SUN_SPREAD: f32 = 0.0437;
+
+// The distance to the nearest opaque thing along `direction` from `world`, or `-1.0` for
+// none within `TRACED_REACH`. Traverses to the closest hit, which a fade needs.
+@if(ray) fn traced_nearest(world: vec3<f32>, direction: vec3<f32>) -> f32 {
     var query: ray_query;
     rayQueryInitialize(
         &query,
         sun_tlas,
-        RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, TRACED_START, TRACED_REACH, world, towards)
+        RayDesc(0u, 0xFFu, TRACED_START, TRACED_REACH, world, direction)
     );
     while rayQueryProceed(&query) {}
     let hit = rayQueryGetCommittedIntersection(&query);
-    return select(0.0, 1.0, hit.kind != RAY_QUERY_INTERSECTION_NONE);
+    return select(-1.0, hit.t, hit.kind != RAY_QUERY_INTERSECTION_NONE);
+}
+
+// Whether anything opaque lies along `direction` from `world`: the first hit found ends
+// the traversal, since only whether, not where, is asked.
+@if(ray) fn traced_blocked(world: vec3<f32>, direction: vec3<f32>) -> bool {
+    var query: ray_query;
+    rayQueryInitialize(
+        &query,
+        sun_tlas,
+        RayDesc(RAY_FLAG_TERMINATE_ON_FIRST_HIT, 0xFFu, TRACED_START, TRACED_REACH, world, direction)
+    );
+    while rayQueryProceed(&query) {}
+    return rayQueryGetCommittedIntersection(&query).kind != RAY_QUERY_INTERSECTION_NONE;
+}
+
+// A value in `0..1` from a world position's own bits (a PCG step over each axis), stable
+// for a point of a surface from frame to frame, so the `high` grain does not crawl.
+fn traced_hash(world: vec3<f32>) -> f32 {
+    var h = bitcast<vec3<u32>>(world);
+    h = h * 747796405u + 2891336453u;
+    h.x = h.x + h.y * h.z;
+    h.y = h.y + h.z * h.x;
+    h.z = h.z + h.x * h.y;
+    h = h ^ (h >> vec3<u32>(16u));
+    return f32((h.x ^ h.y ^ h.z) & 0xFFFFFFu) / 16777216.0;
 }
 
 // How much of this surface point the shadow map covers, `0.0` to `1.0`: the

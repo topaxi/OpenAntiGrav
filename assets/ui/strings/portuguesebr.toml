@@ -186,6 +186,7 @@ OAG_GRAPHICS_MSAA = { text = "MSAA", human = false }
 OAG_GRAPHICS_MOTION_BLUR = { text = "DESFOQUE DE MOVIMENTO", human = false }
 OAG_GRAPHICS_MOTION_BLUR_RESOLUTION = { text = "RESOLUÇÃO DO DESFOQUE", human = false }
 OAG_GRAPHICS_SHADOWS = { text = "SOMBRAS", human = false }
+OAG_GRAPHICS_TRACED_QUALITY = { text = "QUALIDADE DO RAY TRACING", human = false }
 OAG_GRAPHICS_MODEL_DETAIL = { text = "DETALHE DOS MODELOS", human = false }
 OAG_GRAPHICS_TEXTURE_DETAIL = { text = "DETALHE DAS TEXTURAS", human = false }
 OAG_GRAPHICS_TRAIL_ORDER = { text = "ORDEM DO RASTRO", human = false }

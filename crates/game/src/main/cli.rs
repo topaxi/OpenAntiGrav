@@ -823,6 +823,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) shadows: Option<oag_display::display::Shadows>,
 
+    /// How the `traced` shadow tier softens: medium or high.
+    ///
+    /// Overrides `[render_profiles.<title>] traced_quality` for every title,
+    /// for this run only, the way `--shadows` does.
+    #[arg(long)]
+    pub(crate) traced_quality: Option<oag_display::display::TracedQuality>,
+
     /// Ours: ask the device for hardware ray queries, where the adapter has them.
     ///
     /// The ray tier is an enhancement no original draws (`docs/rendering/ray-tracing.md`),

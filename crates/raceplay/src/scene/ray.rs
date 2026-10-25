@@ -12,6 +12,13 @@ use super::*;
 /// A frame's TLAS inputs: animated node matrices, then each craft's slot and model matrix.
 type Instances = (Vec<[f32; 16]>, Vec<(usize, [f32; 16])>);
 
+/// The rays a `high` quality `traced` pixel casts across the sun's disc.
+///
+/// **Ours.** Eight is the fewest that keep the penumbra from banding into
+/// visible steps at a canopy's distance; each is one more ray query per lit
+/// pixel, so `high` costs that many times `medium`'s traversal.
+const TRACED_SOFT_RAYS: f32 = 8.0;
+
 /// What a race holds when the tier is on.
 #[derive(Debug)]
 pub(super) struct RayTier {
@@ -112,6 +119,21 @@ impl Scene {
             return Shadows::Mapped;
         }
         shadows
+    }
+
+    /// How the `traced` tier softens from the next frame on. Called before every
+    /// draw, as [`Scene::set_blur_resolution`] is, so the menu row applies live.
+    pub fn set_traced_quality(&self, quality: oag_display::display::TracedQuality) {
+        self.traced_quality.set(quality);
+    }
+
+    /// How many rays a `traced` pixel casts at the current quality: one for
+    /// `medium`, [`TRACED_SOFT_RAYS`] for `high`.
+    pub(super) fn traced_rays(&self) -> f32 {
+        match self.traced_quality.get() {
+            oag_display::display::TracedQuality::Medium => 1.0,
+            oag_display::display::TracedQuality::High => TRACED_SOFT_RAYS,
+        }
     }
 
     /// Whether this race has acceleration structures.

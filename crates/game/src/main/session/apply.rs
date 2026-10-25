@@ -501,6 +501,19 @@ impl Session {
             // tier fresh - the pass is built with every race whatever this
             // says, the same shape `graphics.motion_blur` above has. See
             // `race::Scene::shadows`.
+            // Live: the frame hands it to the race before every draw - see
+            // `race::Scene::set_traced_quality`.
+            "graphics.traced_quality" => match text.parse::<display::TracedQuality>() {
+                Ok(quality) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.traced_quality = quality;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "graphics.shadows" => match text.parse::<display::Shadows>() {
                 Ok(tier) => {
                     if let Some(profile) = self.render_profile_mut() {

@@ -251,6 +251,13 @@ struct ShadowMap {
     // World to the far layer's clip space: the `mapped` tier's second cascade,
     // out past the near box's edge. See `mesh_render::ShadowMap::far_matrix`.
     far_matrix: mat4x4<f32>,
+    // How many rays a `traced` pixel casts: 1 is one hard ray faded by the
+    // caster's distance, more spread across the sun's disc. See
+    // `mesh_render::ShadowMap::traced_rays`.
+    traced_rays: f32,
+    _pad1: f32,
+    _pad2: f32,
+    _pad3: f32,
 };
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for

@@ -170,3 +170,69 @@ impl From<Shadows> for String {
         mode.to_string()
     }
 }
+
+/// How the `traced` tier softens its shadows. Meaningless on every other tier.
+///
+/// **A cost against a look, so the player's to make**, and all of it ours: no
+/// title in the lineage traces a ray.
+///
+/// `Medium` casts one ray per pixel, hard-edged, and lightens a shadow the
+/// further its caster is from the receiver, the way a wide penumbra thins its
+/// umbra - a craft's shadow stays dark, a canopy's far overhead reads paler.
+/// `High` casts several rays across the sun's disc and averages them, so the
+/// edge itself blurs with distance from the caster: a real penumbra, at that
+/// many times the rays. See `docs/rendering/ray-tracing.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub enum TracedQuality {
+    /// One ray, faded with the caster's distance.
+    #[default]
+    Medium,
+    /// Several rays across the sun's disc: a soft penumbra.
+    High,
+}
+
+impl TracedQuality {
+    /// The spelling used in a settings file and on a menu row.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+
+    /// Every choice, for the menus and for error messages.
+    pub const ALL: [Self; 2] = [Self::Medium, Self::High];
+}
+
+impl std::str::FromStr for TracedQuality {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        Self::ALL
+            .into_iter()
+            .find(|mode| mode.name().eq_ignore_ascii_case(text))
+            .ok_or_else(|| format!("{text:?} is not a traced shadow quality; try medium or high"))
+    }
+}
+
+impl std::fmt::Display for TracedQuality {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl TryFrom<String> for TracedQuality {
+    type Error = String;
+
+    fn try_from(text: String) -> Result<Self, Self::Error> {
+        text.parse()
+    }
+}
+
+impl From<TracedQuality> for String {
+    fn from(mode: TracedQuality) -> Self {
+        mode.to_string()
+    }
+}

@@ -493,6 +493,7 @@ pub fn run(
                 msaa: render_profile.msaa,
                 motion_blur: render_profile.motion_blur,
                 motion_blur_resolution: render_profile.motion_blur_resolution,
+                traced_quality: render_profile.traced_quality,
                 hud_scale: options.settings.graphics.hud_scale,
                 hud_safe_area: options.settings.graphics.hud_safe_area,
                 shadows: render_profile.shadows,

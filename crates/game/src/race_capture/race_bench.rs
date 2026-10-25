@@ -500,6 +500,7 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
         ("size", format!("{}x{}", o.size.0, o.size.1)),
         ("msaa", format!("{:?}", o.msaa)),
         ("shadows", format!("{:?}", o.shadows)),
+        ("traced_quality", o.traced_quality.name().to_string()),
         ("motion_blur", format!("{:?}", o.motion_blur)),
         (
             "motion_blur_resolution",

@@ -1155,11 +1155,11 @@ values = ["full", "half"]
 # report says so, rather than quietly becoming `blob`; on Wipeout Pure that is
 # also the correct picture, since it authors no shadow class at all.
 #
-# `mapped` is this project's own: a shadow map everything casts into and
-# everything reads, offered on every title because it asks the disc for nothing
-# but geometry. It is **more** shadows rather than better ones - on a title with
-# its own mechanism it ignores what the disc would have drawn, which is why
-# `original` stays the one to prefer where it exists.
+# `mapped` is this project's own: a shadow map what moves casts into - craft,
+# weapon bodies, the circuit's animated parts - and everything reads, offered on
+# every title because it asks the disc for nothing but geometry. The still
+# scenery keeps the shadows the disc paints into its lighting; `original` stays
+# the one to prefer where it exists.
 #
 # `traced` is ours too, and one shadow ray per pixel against hardware ray-tracing
 # structures: crisp, every surface casts and receives. It needs a GPU with ray queries
@@ -1174,6 +1174,18 @@ label = "SHADOWS"
 string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped", "traced"]
+
+# How the `traced` tier above softens, and nothing on any other tier. `medium` is
+# one ray per pixel, hard-edged, lightened by how far its caster is - a craft's
+# shadow stays dark, a canopy far overhead reads paler. `high` casts eight rays
+# across the sun's disc for a real penumbra, at eight times the rays. Both ours.
+# Applies live: the frame hands it to the race before every draw.
+[[page.entry]]
+kind = "choice"
+label = "TRACED QUALITY"
+string_id = "OAG_GRAPHICS_TRACED_QUALITY"
+setting = "graphics.traced_quality"
+values = ["medium", "high"]
 
 # How far out an authored `LodGroup` switches to its coarser tiers. `original`
 # is the recovered rule - `LodGroup_SelectChild`'s per-frame switch at the

@@ -43,6 +43,9 @@ impl Cli {
         if let Some(shadows) = self.shadows {
             profile.shadows = shadows;
         }
+        if let Some(quality) = self.traced_quality {
+            profile.traced_quality = quality;
+        }
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }

@@ -242,6 +242,47 @@ measured: `TRACED_START` 0.12 and `TRACED_REACH` 2000 world units, strength the 
 matches the raster; 2048 could not be opened here). Pure's sun is still unchecked. The menu offers `traced` on every
 device (it falls back to `mapped` with a log line and applies at the next launch); greying it by adapter is not done.
 
+## `traced` after play: a hidden road layer, and two qualities (2026-10-26)
+
+The maintainer raced `traced` on Pulse's Moa Therma White and reported banked turns whose triangles
+were shaded harshly apart, and shadow shapes that looked uncanny; three positions were read off the
+trace (ticks 1320, 1980 and 2460) and captured with `--pose` and `--anim-seconds`.
+
+**The triangles were a surface nobody draws.** The road at tick 1320 under open sky read wholly
+shadowed. Drawing the hit distance as the shadow showed the rays meeting something a few units up in
+triangle-shaped patches, and `--ray-debug` from the camera showed nothing there. Two causes, both in
+the structure and not in the raster:
+
+- **Every `LodGroup` tier was in the BLAS**, the coarse road a hair above or below the fine one by
+  turns. `ModelAccel::build` now takes the finest tier only, as the `mapped` caster always did
+  (`lod_groups.shows_nearest`): Moa Therma's circuit 143,105 to 137,817 triangles. Not enough alone.
+- **A second surface hovers about 0.12 to 0.4 above parts of the road**: starting the ray at 0.4
+  left a few patches, 0.8 none. `TRACED_START` is 0.6 now (was 0.12, chosen); a craft hovers about
+  3.5, so no craft's shadow changes. **What that surface is is not read** - a duplicated batch, a
+  pass the raster hides by its flags, or an authored volume - and a traced reflection would meet it
+  too, so it is the open thread here.
+
+**The shapes were real, and hard.** At tick 1980 the straight edge across the road is the overhanging
+building's canopy: cutting `TRACED_REACH` to 150 changes nothing. What made it uncanny is that it is
+razor-hard at fifty units, at the same 0.4 as a craft's own shadow, cast from a sun Pulse does not
+author (the hull axis borrowed for `mapped`; whether the painted lighting implies a better one is a
+separate question). So `graphics.traced_quality` (per render profile, `--traced-quality`, live):
+
+- **`medium`** (default): one ray to the nearest hit (no first-hit cut, so the distance is the
+  nearest), lightened by that distance - full within 4 units, `TRACED_FADE_FLOOR` 0.35 of it by 60.
+  The canopy reads pale, the craft's own shadow keeps its weight.
+- **`high`**: eight first-hit rays on a golden-angle spiral across a sun 2.5 degrees in half-width
+  (`TRACED_SUN_SPREAD`), turned per point by a hash of its world position so the penumbra is fine
+  grain that does not crawl. The craft's shadow at tick 2460 keeps the same mean darkness as
+  `medium` (146.6 against `off` 157.2 in a box under it) with a soft edge.
+
+All the numbers are ours and chosen: nothing in the lineage traces a ray.
+
+**Cost not measured yet.** The first bench of `medium` against `high` was spoiled (a rebuild
+without `perf-probe` mid-run, and a second job on the GPU). Expect `medium` a little over the old
+single ray, since it traverses to the nearest hit rather than stopping at the first, and `high`
+about eight times `traced`'s ray cost, which on the Deck was already +11 ms over `mapped` on HD.
+
 ## Building it
 
 **Static track BLAS, once per load.** The mesh crate keeps `Model::vertices: Vec<GpuVertex>` and `indices: Vec<u32>`

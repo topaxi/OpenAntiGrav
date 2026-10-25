@@ -136,7 +136,16 @@ impl ModelAccel {
         let started = Instant::now();
 
         let mut by_node: std::collections::BTreeMap<u32, Vec<u32>> = Default::default();
-        for draw in model.draws.iter().chain(&model.alpha_tested_draws) {
+        // **The finest `LodGroup` tier only**, as the shadow map's caster takes it
+        // (`Drawable::caster`): a circuit carries its coarse road as well, a hair above or
+        // below the fine one by turns, and with both in the structure the coarse copy
+        // shadowed the fine road in triangle-shaped patches.
+        for draw in model
+            .draws
+            .iter()
+            .chain(&model.alpha_tested_draws)
+            .filter(|draw| model.lod_groups.shows_nearest(draw))
+        {
             let (start, end) = (draw.range.start as usize, draw.range.end as usize);
             let Some(run) = model.indices.get(start..end) else {
                 continue;

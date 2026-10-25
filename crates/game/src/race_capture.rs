@@ -280,6 +280,9 @@ pub struct CaptureOptions {
     /// The blur's gather resolution - `--motion-blur-resolution`, or the
     /// profile's. See `Scene::set_blur_resolution`.
     pub motion_blur_resolution: oag_display::display::BlurResolution,
+    /// How the `traced` shadow tier softens - `--traced-quality`, or the
+    /// profile's. See `Scene::set_traced_quality`.
+    pub traced_quality: oag_display::display::TracedQuality,
     /// `--touch-overlay`: the on-screen racing controls, drawn in this pose.
     pub touch_demo: Option<crate::touch_controls::Demo>,
     /// `[graphics] hud_scale`, which only a raster HUD obeys.
@@ -626,6 +629,7 @@ pub fn capture(
         behind_glass,
     )?;
     scene.set_blur_resolution(options.motion_blur_resolution);
+    scene.set_traced_quality(options.traced_quality);
     scene.attach_ripples(ripples);
     scene.attach_mist(
         &device,

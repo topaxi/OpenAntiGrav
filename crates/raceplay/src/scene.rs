@@ -408,6 +408,9 @@ pub struct Scene {
     /// `motion_blur_resolution`, handed in before each frame by
     /// [`Scene::set_blur_resolution`].
     blur_half: std::cell::Cell<bool>,
+    /// How the `traced` shadow tier softens - the profile's `traced_quality`,
+    /// handed in before each frame by [`Scene::set_traced_quality`].
+    traced_quality: std::cell::Cell<oag_display::display::TracedQuality>,
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
@@ -1070,6 +1073,7 @@ impl Scene {
             omega,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
+            traced_quality: std::cell::Cell::default(),
             velocity,
             histories: (0..motion::HISTORY_COUNT)
                 .map(|_| motion::History::default())

@@ -372,6 +372,9 @@ impl Session {
                     parked
                         .scene
                         .set_blur_resolution(blur_resolution);
+                    parked
+                        .scene
+                        .set_traced_quality(render_profile.traced_quality);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -443,6 +446,9 @@ impl Session {
                 stage
                     .scene
                     .set_blur_resolution(blur_resolution);
+                stage
+                    .scene
+                    .set_traced_quality(render_profile.traced_quality);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

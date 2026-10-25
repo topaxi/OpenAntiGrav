@@ -220,6 +220,7 @@ OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
 OAG_GRAPHICS_MINIMUM_RESOLUTION = { text = "RÉSOLUTION MINIMALE", human = false }
 OAG_GRAPHICS_MOTION_BLUR = { text = "FLOU DE MOUVEMENT", human = false }
 OAG_GRAPHICS_SHADOWS = { text = "OMBRES", human = false }
+OAG_GRAPHICS_TRACED_QUALITY = { text = "QUALITÉ DU LANCER DE RAYONS", human = false }
 OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "FILTRAGE ANISOTROPE", human = false }
 OAG_GRAPHICS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CHAMP DE VISION", human = false }

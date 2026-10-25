@@ -221,6 +221,7 @@ impl super::super::Scene {
                     .to_cols_array_2d(),
                 strength: MAPPED_STRENGTH,
                 mode: oag_mesh::mesh_render::ShadowMap::TRACED,
+                traced_rays: self.traced_rays(),
                 ..oag_mesh::mesh_render::ShadowMap::off()
             },
             oag_display::display::Shadows::Original if map.casters() > 0 => {
@@ -241,6 +242,7 @@ impl super::super::Scene {
                     depth_bias: MAPPED_DEPTH_BIAS,
                     far_depth_bias: far_depth_bias(),
                     far_matrix: map.far_matrix().to_cols_array_2d(),
+                    ..oag_mesh::mesh_render::ShadowMap::off()
                 }
             }
             // Every other case, `off` included: a strength of zero is what

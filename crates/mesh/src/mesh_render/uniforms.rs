@@ -691,6 +691,12 @@ pub struct ShadowMap {
     /// the shader blends from one to the other inside the near box's rim.
     /// The identity with [`Self::strength`] at zero reads nothing.
     pub far_matrix: [[f32; 4]; 4],
+    /// How many rays a [`ShadowMap::TRACED`] pixel casts toward the sun: `1.0`
+    /// is one hard ray faded by the caster's distance, more spreads them across
+    /// the sun's disc for a penumbra. Ignored by every other mode.
+    pub traced_rays: f32,
+    /// Padding to the 16-byte boundary a uniform's own size needs.
+    pub _pad: [f32; 3],
 }
 
 impl ShadowMap {
@@ -730,6 +736,8 @@ impl ShadowMap {
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ],
+            traced_rays: 1.0,
+            _pad: [0.0; 3],
         }
     }
 }
@@ -981,8 +989,8 @@ const _: () = assert!(
     "and Scene.shadow, whose first field is a mat4x4"
 );
 const _: () = assert!(
-    std::mem::size_of::<ShadowMap>() == 144,
-    "shaders/types.wesl's ShadowMap is a mat4x4, four scalars and a second mat4x4"
+    std::mem::size_of::<ShadowMap>() == 160,
+    "shaders/types.wesl's ShadowMap is a mat4x4, four scalars, a second mat4x4 and a padded vec4"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, spu_lights).is_multiple_of(16),

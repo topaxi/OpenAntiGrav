@@ -226,6 +226,12 @@ pub struct RenderProfile {
     /// default. Read fresh every frame, so the setting applies live.
     #[serde(default)]
     pub shadows: oag_display::display::Shadows,
+    /// How the `traced` shadow tier softens: `medium`, one ray faded by the
+    /// caster's distance, or `high`, a penumbra from several rays. Ignored on
+    /// every other tier. Per title for the reason `shadows` is - see
+    /// `oag_display::display::TracedQuality`.
+    #[serde(default)]
+    pub traced_quality: oag_display::display::TracedQuality,
     /// Which screen filter draws the finished frame: `off`, or the id of a
     /// preset - a built-in such as `psp-3000` or `crt-interlaced`, or the
     /// stem of a `.wgsl` file in the player's own `shaders/` directory. See
@@ -437,6 +443,7 @@ impl Default for RenderProfile {
             motion_blur: oag_display::display::MotionBlur::default(),
             motion_blur_resolution: oag_display::display::BlurResolution::default(),
             shadows: oag_display::display::Shadows::default(),
+            traced_quality: oag_display::display::TracedQuality::default(),
             screen_filter: default_screen_filter(),
             screen_filter_strength: oag_display::display::FilterStrength::default(),
             model_detail: oag_mesh::mesh::ModelDetail::default(),
@@ -473,7 +480,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 15] = [
+pub(super) const PROFILE_KEYS: [&str; 16] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -484,6 +491,7 @@ pub(super) const PROFILE_KEYS: [&str; 15] = [
     "motion_blur",
     "motion_blur_resolution",
     "shadows",
+    "traced_quality",
     "screen_filter",
     "screen_filter_strength",
     "model_detail",

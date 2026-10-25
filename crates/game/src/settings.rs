@@ -892,6 +892,10 @@ pub fn menu_seeds(
         ),
         ("graphics.shadows", text(&profile.shadows.to_string())),
         (
+            "graphics.traced_quality",
+            text(&profile.traced_quality.to_string()),
+        ),
+        (
             "graphics.model_detail",
             text(&profile.model_detail.to_string()),
         ),
