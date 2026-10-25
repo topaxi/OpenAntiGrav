@@ -65,6 +65,7 @@ mod controls;
 mod online;
 mod race;
 mod render_profile;
+mod rescue;
 pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
@@ -670,9 +671,8 @@ fn migrate(table: &mut toml::Table) {
 /// Loads settings from [`path`], creating the file - or filling in whatever
 /// keys it is missing - with defaults.
 ///
-/// A malformed value is an error rather than a silently discarded default: a
-/// typo should be visible, not swallowed. Absence is not malformed, so a
-/// missing file or config directory is created rather than reported.
+/// Value that fail to parse (an unknown spelling, a wrong type) fall back to
+/// their default and are logged as a warning.
 ///
 /// A file or directory the process may not read or write (an Android
 /// reinstall can restore the app's files under another owner) is not a reason
@@ -697,11 +697,20 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         }
     };
 
+    let mut keep_file = false;
     let mut settings: Settings = match &on_disk {
         Some(text) => {
-            let mut table: toml::Table = text
-                .parse()
-                .with_context(|| format!("parsing {}", path.display()))?;
+            let mut table: toml::Table = match text.parse() {
+                Ok(table) => table,
+                Err(e) => {
+                    warn!(
+                        "could not parse {}: {e}; running on default settings, nothing is written back",
+                        path.display()
+                    );
+                    return Ok(Settings::default());
+                }
+            };
+
             migrate(&mut table);
             migrate_render_profiles(&mut table);
             // After it, not before - see `migrate_reconstruction_keys`.
@@ -714,9 +723,21 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
             // After the split, so the keys it looks up are the final ones.
             seed_shadow_defaults(&mut table);
             seed_render_scale_chosen(&mut table);
-            table
-                .try_into()
-                .with_context(|| format!("parsing {}", path.display()))?
+
+            match table.clone().try_into() {
+                Ok(settings) => settings,
+                Err(e) => {
+                    warn!("{} does not parse as a whole: {e}", path.display());
+                    let rescued = rescue::rescue(&table);
+                    for line in &rescued.rejected {
+                        warn!(
+                            "settings: ignoring {line}; using the default, nothing is written back"
+                        );
+                    }
+                    keep_file = true;
+                    rescued.settings
+                }
+            }
         }
         None => Settings::default(),
     };
@@ -730,7 +751,7 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         "{HEADER}{}",
         toml::to_string_pretty(&settings).context("serialising settings")?
     );
-    if on_disk.as_deref() != Some(canonical.as_str()) {
+    if !keep_file && on_disk.as_deref() != Some(canonical.as_str()) {
         let written = path
             .parent()
             .map_or(Ok(()), crate::profile::create_dir_all)
