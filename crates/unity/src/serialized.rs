@@ -143,9 +143,9 @@ fn read_type<E: Endian>(
         }
         if version >= 21 {
             if is_ref {
-                r.cstr()?;
-                r.cstr()?;
-                r.cstr()?;
+                r.cstring()?;
+                r.cstring()?;
+                r.cstring()?;
             } else {
                 let n = count(r, "type dependencies", 4)?;
                 r.take(n * 4)?;
@@ -255,7 +255,7 @@ impl<'a> SerializedFile<'a> {
         let n = count(&mut r, "external count", 6)?;
         let mut externals = Vec::with_capacity(n);
         for _ in 0..n {
-            r.cstr()?;
+            r.cstring()?;
             let guid: [u8; 16] = r.take(16)?.try_into().expect("16 bytes");
             let kind = r.i32()?;
             let path = r.cstring()?.to_string();
@@ -267,7 +267,7 @@ impl<'a> SerializedFile<'a> {
                 read_type(&mut r, version, has_type_trees, true)?;
             }
         }
-        r.cstr()?; // user information, normally empty
+        r.cstring()?; // user information, normally empty
 
         Ok(Self {
             version,

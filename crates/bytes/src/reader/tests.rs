@@ -47,7 +47,14 @@ fn seek_and_rest() {
     let mut r = Reader::le(&[1, 2, 3, 4]);
     r.seek(3).unwrap();
     assert_eq!(r.rest(), [4]);
-    assert!(r.seek(5).is_err());
+    assert_eq!(
+        r.seek(5),
+        Err(Truncated {
+            at: 3,
+            wanted: 2,
+            available: 1
+        })
+    );
     assert_eq!(r.position(), 3);
     r.seek(4).unwrap();
     assert!(r.is_empty());
@@ -65,6 +72,14 @@ fn align_is_relative_to_the_start() {
     let mut short = Reader::le(&[0; 2]);
     short.skip(1).unwrap();
     assert!(short.align(4).is_err());
+}
+
+#[test]
+fn align_to_zero_skips_nothing() {
+    let mut r = Reader::le(&[0; 4]);
+    r.skip(1).unwrap();
+    assert_eq!(r.align(0), Ok(()));
+    assert_eq!(r.position(), 1);
 }
 
 #[test]
@@ -88,11 +103,20 @@ fn varint_round_trips_and_refuses_overlong() {
 
     let mut over = vec![0xff; 9];
     over.push(0x02);
+    over.push(0x00);
     let mut r = Reader::le(&over);
-    assert!(r.varint().is_err());
+    assert_eq!(r.varint(), Err(VarintError::Overlong { at: 0 }));
     assert_eq!(r.position(), 0);
 
-    let mut r = Reader::le(&[0x80, 0x80]);
-    assert!(r.varint().is_err());
-    assert_eq!(r.position(), 0);
+    let mut r = Reader::le(&[0x00, 0x80, 0x80]);
+    r.skip(1).unwrap();
+    assert_eq!(
+        r.varint(),
+        Err(VarintError::Truncated(Truncated {
+            at: 1,
+            wanted: 3,
+            available: 2
+        }))
+    );
+    assert_eq!(r.position(), 1);
 }

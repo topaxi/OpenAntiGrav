@@ -50,6 +50,26 @@ pub struct Truncated {
     pub available: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum VarintError {
+    #[error(transparent)]
+    Truncated(#[from] Truncated),
+    /// Longer than ten bytes, or a tenth byte that overflows a `u64`.
+    #[error("varint at offset {at} overflows a u64")]
+    Overlong { at: usize },
+}
+
+impl VarintError {
+    /// The offset the varint started at.
+    #[must_use]
+    pub fn at(&self) -> usize {
+        match self {
+            Self::Truncated(err) => err.at,
+            Self::Overlong { at } => *at,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Reader<'a, E> {
     data: &'a [u8],
@@ -128,11 +148,7 @@ impl<'a, E: Endian> Reader<'a, E> {
     /// [`Truncated`] when `pos` is past the end.
     pub fn seek(&mut self, pos: usize) -> Result<(), Truncated> {
         if pos > self.data.len() {
-            return Err(Truncated {
-                at: self.pos,
-                wanted: pos,
-                available: self.data.len(),
-            });
+            return Err(self.truncated(pos - self.pos));
         }
 
         self.pos = pos;
@@ -148,15 +164,16 @@ impl<'a, E: Endian> Reader<'a, E> {
         self.take(n).map(|_| ())
     }
 
-    /// Skips to the next multiple of `n` from the start of the input.
+    /// Skips to the next multiple of `n` from the start of the input. An `n`
+    /// of zero, as a corrupt padding field may hold, skips nothing.
     ///
     /// # Errors
     ///
     /// [`Truncated`] when the padding runs past the end.
     pub fn align(&mut self, n: usize) -> Result<(), Truncated> {
-        match self.pos % n {
-            0 => Ok(()),
-            rem => self.skip(n - rem),
+        match self.pos.checked_rem(n) {
+            None | Some(0) => Ok(()),
+            Some(rem) => self.skip(n - rem),
         }
     }
 
@@ -206,19 +223,18 @@ impl<'a, E: Endian> Reader<'a, E> {
     ///
     /// # Errors
     ///
-    /// [`Truncated`] at the end of the input, or on an overlong encoding. The
-    /// position is left at the start of the varint either way.
-    pub fn varint(&mut self) -> Result<u64, Truncated> {
+    /// [`VarintError::Truncated`] when the input ends inside it, measured from
+    /// its first byte, or [`VarintError::Overlong`]. The position is left at
+    /// the start of the varint either way.
+    pub fn varint(&mut self) -> Result<u64, VarintError> {
         let start = self.pos;
         let mut value = 0u64;
 
         for shift in (0..70).step_by(7) {
-            let byte = match self.u8() {
-                Ok(byte) => byte,
-                Err(err) => {
-                    self.pos = start;
-                    return Err(err);
-                }
+            let Ok(byte) = self.u8() else {
+                let wanted = self.pos - start + 1;
+                self.pos = start;
+                return Err(VarintError::Truncated(self.truncated(wanted)));
             };
 
             let bits = u64::from(byte & 0x7f);
@@ -235,7 +251,7 @@ impl<'a, E: Endian> Reader<'a, E> {
         }
 
         self.pos = start;
-        Err(self.truncated(1))
+        Err(VarintError::Overlong { at: start })
     }
 
     /// One byte.

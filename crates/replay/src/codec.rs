@@ -70,6 +70,12 @@ impl From<oag_bytes::Truncated> for Truncated {
     }
 }
 
+impl From<oag_bytes::VarintError> for Truncated {
+    fn from(err: oag_bytes::VarintError) -> Self {
+        Self(err.at())
+    }
+}
+
 /// Encodes one slot's snapshots, one per tick.
 #[must_use]
 pub fn encode_inputs(snapshots: &[InputSnapshot]) -> Vec<u8> {

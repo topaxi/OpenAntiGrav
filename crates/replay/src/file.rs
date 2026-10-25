@@ -195,7 +195,8 @@ impl Replay {
                 b"HASH" => {
                     let mut chunk = Reader::le(payload);
                     let initial = chunk.u64()?;
-                    let count = usize::try_from(chunk.varint()?).map_err(|_| Truncated(start))?;
+                    let count = usize::try_from(chunk.varint().map_err(Truncated::from)?)
+                        .map_err(|_| Truncated(start))?;
                     let list = (0..count.min(payload.len() / 8))
                         .map(|_| chunk.u64())
                         .collect::<Result<Vec<_>, _>>()?;
