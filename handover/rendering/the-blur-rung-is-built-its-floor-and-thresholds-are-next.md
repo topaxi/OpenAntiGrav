@@ -18,9 +18,9 @@ check: [the half-gather blur rung](../../docs/rendering/motion-blur-half-rung.md
   strength) and `drs::blur`'s constants (one set today). Blur strength moves the frame
   cost only a little (iGPU 1280x800, `low` 7.0 ms against `high` 8.7 ms GPU), so the case
   for it is the picture, not the budget.
-- **HD in a running session.** Pulse ran on the Deck at 4K (rendering page, "On the Steam
-  Deck": full scale held, 38.5 against 35.4 fps, 3 to 5 flips). HD has not run with the
-  rung on either machine yet, and nobody has looked at a flip in motion.
+- **A flip in motion, and HD's p99.** Pulse and HD both ran with the rung on the Deck at
+  4K (rendering page, "On the Steam Deck"). On HD the rung buys 35 % more pixels for 0.7 fps
+  and about 1.5 ms of p99. Nobody has looked at a flip in motion yet.
 - **The restore constants are chosen.** `RESTORE_SECONDS = 3.0` and `MAX_BACKOFF = 3`
   fit one machine's spike spacing (1 to 5 s on Pulse). A machine with rarer, larger
   spikes would relapse up to three times before the backoff holds it.
@@ -32,5 +32,5 @@ check: [the half-gather blur rung](../../docs/rendering/motion-blur-half-rung.md
    against the current numbers on the Deck at 3840x2160 (`OAG_RENDER_GPU_BENCH=40 OAG_RENDER_PERF=1 oag-game <pulse image> --race --mode
    single_race --seed 1 --autopilot --no-audio --size 3840x2160 --ticks 1500 --motion-blur
    high --motion-blur-resolution half --screenshot out.png`, `deck.lock`).
-2. Run the rung on HD at 4K with a target it cannot hold (the gamescope command in the
-   rendering page, Deck build, `deck.lock`) and record the flips and pixels beside Pulse's.
+2. Watch a gather flip in motion on the Deck (Pulse or HD at 4K, target 30), and decide
+   whether HD's worse p99 under the rung needs a guard.

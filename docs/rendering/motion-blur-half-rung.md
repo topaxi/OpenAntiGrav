@@ -183,5 +183,22 @@ The rung held the full 3812x2160 for the whole race and ran 3 fps faster, where 
 settled near 81 % of that area. Two runs of one build differ by under 0.5 fps. Confidence
 75: one machine, one title, two runs each, a chosen target.
 
-Not checked: HD in a running session (on the Deck or the iGPU), and a player's eye on a
-flip in motion.
+HD on the same rig, except the title (Wipeout HD, PS3, the decrypted EU ISO) and the
+display aspect `free`, so it fills 16:9 (ceiling 3840x2160):
+
+| Build | Median fps | Median p99 ms | Mean pixels | Gather flips |
+| --- | --- | --- | --- | --- |
+| base, run 1 | 35.4 | 31.5 | 4.79 MP | - |
+| base, run 2 | 35.3 | 31.6 | 4.79 MP | - |
+| rung, run 1 | 34.5 | 33.3 | 6.49 MP | 1 |
+| rung, run 2 | 34.8 | 33.0 | 6.47 MP | 1 |
+
+The rung settles the extent at about 3456x1944, then 3264x1836 for the rest of the race.
+The base settles at about 57 % of the full area, so the rung draws 35 % more pixels. It
+costs about 0.7 fps and **about 1.5 ms of p99**, though both builds stay above the 30 fps
+target. Pulse got more pixels *and* a faster frame. HD's scene alone is about 22 ms at 4K
+here, which the half gather cannot fit, so the extent still falls: the rung shed once and
+never restored, in both runs. Two runs of one build differ by under 0.3 fps. Confidence 70:
+one 88-second autopilot race per run, and a worse p99 that a player may notice.
+
+Not checked: a player's eye on a flip in motion, on either title.
