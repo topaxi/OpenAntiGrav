@@ -1,6 +1,15 @@
 use std::marker::PhantomData;
 
+/// A byte order as a value, for a format that names its own at run time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ByteOrder {
+    Little,
+    Big,
+}
+
 pub trait Endian {
+    const ORDER: ByteOrder;
+
     fn read_u16(bytes: [u8; 2]) -> u16;
     fn read_u32(bytes: [u8; 4]) -> u32;
     fn read_u64(bytes: [u8; 8]) -> u64;
@@ -13,6 +22,8 @@ pub struct Be;
 pub struct Le;
 
 impl Endian for Be {
+    const ORDER: ByteOrder = ByteOrder::Big;
+
     fn read_u16(bytes: [u8; 2]) -> u16 {
         u16::from_be_bytes(bytes)
     }
@@ -27,6 +38,8 @@ impl Endian for Be {
 }
 
 impl Endian for Le {
+    const ORDER: ByteOrder = ByteOrder::Little;
+
     fn read_u16(bytes: [u8; 2]) -> u16 {
         u16::from_le_bytes(bytes)
     }
@@ -152,6 +165,21 @@ impl<'a, E: Endian> Reader<'a, E> {
         }
 
         self.pos = pos;
+        Ok(())
+    }
+
+    /// Ends the input at absolute offset `end`, so a read past it fails as at
+    /// the end of the input.
+    ///
+    /// # Errors
+    ///
+    /// [`Truncated`] when `end` is past the input, or before the position.
+    pub fn limit(&mut self, end: usize) -> Result<(), Truncated> {
+        if end > self.data.len() || end < self.pos {
+            return Err(self.truncated(end.saturating_sub(self.pos)));
+        }
+
+        self.data = &self.data[..end];
         Ok(())
     }
 

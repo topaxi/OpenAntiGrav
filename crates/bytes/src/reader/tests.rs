@@ -120,3 +120,16 @@ fn varint_round_trips_and_refuses_overlong() {
     );
     assert_eq!(r.position(), 1);
 }
+
+#[test]
+fn limit_ends_the_input_early() {
+    let mut r = Reader::le(&[1, 2, 3, 4]);
+    r.skip(1).unwrap();
+    assert!(r.limit(5).is_err());
+    assert!(r.limit(0).is_err());
+    r.limit(3).unwrap();
+    assert_eq!(r.rest(), [2, 3]);
+    assert!(r.u32().is_err());
+    assert_eq!(r.u16(), Ok(0x0302));
+    assert!(r.is_empty());
+}

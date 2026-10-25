@@ -1,3 +1,3 @@
 mod reader;
 
-pub use reader::{Be, Endian, Le, Reader, Truncated, VarintError};
+pub use reader::{Be, ByteOrder, Endian, Le, Reader, Truncated, VarintError};

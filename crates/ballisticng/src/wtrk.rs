@@ -114,10 +114,11 @@ impl Wtrk {
             if *offset < table_end {
                 return Err(Error::Wrapper("an entry starts inside the table"));
             }
-            let mut v = Reader::le(file);
-            v.seek(*offset)?;
-            let len = v.u32()? as usize;
-            let end = v
+            let mut body = Reader::le(file);
+            body.seek(*offset)
+                .map_err(|_| Error::Wrapper("an entry starts past the end of the file"))?;
+            let len = body.u32()? as usize;
+            let end = body
                 .position()
                 .checked_add(len)
                 .filter(|&e| e <= file.len())
@@ -128,8 +129,7 @@ impl Wtrk {
                     "an entry does not end where the next starts",
                 ));
             }
-            let mut body = Reader::le(&file[..end]);
-            body.seek(v.position())?;
+            body.limit(end)?;
             match name.as_str() {
                 "WorkshopID" if len == 8 => out.workshop_id = body.u64()?,
                 "WorkshopVisibility" if len == 8 => out.visibility = body.u64()?,

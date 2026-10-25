@@ -2,7 +2,7 @@
 //! and the external references, for versions 17 through 22.
 
 use crate::error::{Error, Result};
-use oag_bytes::{Endian, Le, Reader};
+use oag_bytes::{ByteOrder, Endian, Le, Reader};
 
 use crate::reader::ReaderExt;
 use crate::typetree::{self, TypeNode};
@@ -89,7 +89,7 @@ pub struct SerializedFile<'a> {
     pub script_types: Vec<(i32, i64)>,
     /// The externals, which a PPtr's `file_id` indexes 1-based.
     pub externals: Vec<External>,
-    big_endian: bool,
+    order: ByteOrder,
     data: &'a [u8],
 }
 
@@ -173,9 +173,9 @@ impl<'a> SerializedFile<'a> {
         if !SUPPORTED_VERSIONS.contains(&version) {
             return Err(Error::UnsupportedSerializedVersion(version));
         }
-        let big_endian = match r.u8()? {
-            0 => false,
-            1 => true,
+        let order = match r.u8()? {
+            0 => ByteOrder::Little,
+            1 => ByteOrder::Big,
             _ => return Err(Error::Malformed("endianness flag")),
         };
         r.take(3)?;
@@ -191,10 +191,9 @@ impl<'a> SerializedFile<'a> {
         let _ = metadata_size;
 
         // The header is always big-endian; its flag says what the rest is.
-        if big_endian {
-            Self::read_body(r, data, version, data_offset, true)
-        } else {
-            Self::read_body(r.into_endian::<Le>(), data, version, data_offset, false)
+        match order {
+            ByteOrder::Big => Self::read_body(r, data, version, data_offset),
+            ByteOrder::Little => Self::read_body(r.into_endian::<Le>(), data, version, data_offset),
         }
     }
 
@@ -203,7 +202,6 @@ impl<'a> SerializedFile<'a> {
         data: &'a [u8],
         version: u32,
         data_offset: u64,
-        big_endian: bool,
     ) -> Result<Self> {
         let unity_version = r.cstring()?.to_string();
         let target_platform = r.i32()?;
@@ -278,7 +276,7 @@ impl<'a> SerializedFile<'a> {
             objects,
             script_types,
             externals,
-            big_endian,
+            order: E::ORDER,
             data,
         })
     }
@@ -304,7 +302,7 @@ impl<'a> SerializedFile<'a> {
             class_id: o.class_id,
         })?;
         let bytes = self.object_bytes(o);
-        let (v, used) = typetree::read_value(tree, bytes, self.big_endian)?;
+        let (v, used) = typetree::read_value(tree, bytes, self.order)?;
         if used != bytes.len() {
             return Err(Error::SizeMismatch {
                 expected: bytes.len(),

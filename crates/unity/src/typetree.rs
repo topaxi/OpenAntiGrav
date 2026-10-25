@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::common_strings::common_string;
 use crate::error::{Error, Result};
 use crate::value::{PPtr, Struct, Value};
-use oag_bytes::{Be, Endian, Le, Reader};
+use oag_bytes::{Be, ByteOrder, Endian, Le, Reader};
 
 const META_ALIGN: u32 = 0x4000;
 const MAX_DEPTH: usize = 64;
@@ -146,11 +146,10 @@ struct Walk<'a, 'b, E> {
 
 /// Reads one object's bytes through `root`, returning the value and how many
 /// bytes the walk consumed.
-pub fn read_value(root: &TypeNode, data: &[u8], big: bool) -> Result<(Value, usize)> {
-    if big {
-        read_value_in::<Be>(root, data)
-    } else {
-        read_value_in::<Le>(root, data)
+pub fn read_value(root: &TypeNode, data: &[u8], order: ByteOrder) -> Result<(Value, usize)> {
+    match order {
+        ByteOrder::Big => read_value_in::<Be>(root, data),
+        ByteOrder::Little => read_value_in::<Le>(root, data),
     }
 }
 

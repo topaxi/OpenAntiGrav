@@ -91,10 +91,10 @@ impl Held {
     fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         Ok(Self {
             buttons: reader.u32()?,
-            stick_x: f32::from_bits(reader.u32()?),
-            stick_y: f32::from_bits(reader.u32()?),
-            airbrake_left: f32::from_bits(reader.u32()?),
-            airbrake_right: f32::from_bits(reader.u32()?),
+            stick_x: reader.f32()?,
+            stick_y: reader.f32()?,
+            airbrake_left: reader.f32()?,
+            airbrake_right: reader.f32()?,
         })
     }
 }

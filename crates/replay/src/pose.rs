@@ -42,7 +42,7 @@ impl Pose {
     fn read(cursor: &mut Reader<'_, Le>) -> Result<Self, Truncated> {
         let mut values = [0.0f32; 7];
         for value in &mut values {
-            *value = f32::from_bits(cursor.u32()?);
+            *value = cursor.f32()?;
         }
         Ok(Self {
             position: Vec3::new(values[0], values[1], values[2]),
