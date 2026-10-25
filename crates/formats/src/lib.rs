@@ -31,6 +31,7 @@
 
 pub mod byte_order;
 pub mod coverage;
+pub mod crc32;
 pub mod entropy;
 pub mod lzss;
 pub mod ps2_music;

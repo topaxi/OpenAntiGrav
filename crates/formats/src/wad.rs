@@ -33,6 +33,8 @@
 
 use std::fmt;
 
+use crate::crc32::crc32_step;
+
 pub const HEADER_LEN: usize = 8;
 
 pub const ENTRY_LEN: usize = 16;
@@ -403,9 +405,6 @@ pub fn decompress_zlib(input: &[u8]) -> std::result::Result<Vec<u8>, String> {
     miniz_oxide::inflate::decompress_to_vec_zlib(input).map_err(|e| format!("{e:?}"))
 }
 
-/// Reflected CRC-32 polynomial, as used by the game's table builder.
-const CRC32_POLY: u32 = 0xEDB8_8320;
-
 /// Hashes an entry name the way the game does.
 ///
 /// CRC-32 with the standard reflected polynomial but **initialised to zero
@@ -444,21 +443,6 @@ pub fn hash_name_bytes(name: &[u8]) -> u32 {
     }
 
     !crc
-}
-
-/// One byte of reflected CRC-32.
-///
-/// Computed, not table-driven: hashing is once per lookup on a handful of names.
-fn crc32_step(crc: u32, byte: u8) -> u32 {
-    let mut v = (crc ^ u32::from(byte)) & 0xff;
-    for _ in 0..8 {
-        v = if v & 1 != 0 {
-            (v >> 1) ^ CRC32_POLY
-        } else {
-            v >> 1
-        };
-    }
-    v ^ (crc >> 8)
 }
 
 /// The leading bytes of a blob.

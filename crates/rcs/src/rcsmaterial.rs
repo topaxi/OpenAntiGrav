@@ -37,20 +37,7 @@ use oag_formats::ByteOrder;
 /// [`crc32.md`](../../../docs/formats/rcsmaterial.md).
 #[must_use]
 pub fn name_hash(name: &str) -> u32 {
-    !crc32(name.as_bytes())
-}
-
-/// Bare CRC-32 (the reflected, `0xedb88320` variant), uninverted.
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = 0xffff_ffffu32;
-    for &b in bytes {
-        crc ^= u32::from(b);
-        for _ in 0..8 {
-            let mask = (crc & 1).wrapping_neg();
-            crc = (crc >> 1) ^ (0xedb8_8320 & mask);
-        }
-    }
-    !crc
+    !oag_formats::crc32::crc32(name.as_bytes())
 }
 
 /// Bytes in one variant record.
