@@ -1055,3 +1055,75 @@ fn trail_order_defaults_to_the_original_and_round_trips_its_names() {
         assert_eq!(order.name().parse(), Ok(order));
     }
 }
+
+/// Writes `text` as a settings file in a scratch directory, loads it, and
+/// returns what loaded with the file's contents afterwards.
+fn load_text(text: &str) -> (Settings, String) {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "oag-settings-fallback-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let file = dir.join("settings.toml");
+    std::fs::write(&file, text).expect("write");
+    let loaded = load_from(&file).expect("a bad value must not stop the load");
+    let after = std::fs::read_to_string(&file).expect("read back");
+    std::fs::remove_dir_all(&dir).ok();
+    (loaded, after)
+}
+
+/// A value from another build (an unknown spelling) falls back to its default
+/// and the rest of the file is kept; the file itself is left for the player.
+#[test]
+fn an_unknown_value_falls_back_alone_and_leaves_the_file() {
+    let text = "[graphics]\nanisotropy = \"4x\"\nhud_scale = \"crisp\"\n\n\
+                [render_profiles.\"Wipeout Pulse (PSP)\"]\nshadows = \"traced\"\nmsaa = \"4x\"\n";
+    let (loaded, after) = load_text(text);
+    assert_eq!(
+        loaded.graphics.hud_scale,
+        Settings::default().graphics.hud_scale
+    );
+    assert_eq!(
+        loaded.graphics.anisotropy,
+        Anisotropy::X4,
+        "a good key survives"
+    );
+    let profile = &loaded.render_profiles["Wipeout Pulse (PSP)"];
+    assert_eq!(profile.shadows, RenderProfile::default().shadows);
+    assert_eq!(
+        profile.msaa.to_string(),
+        "4x",
+        "a good key beside the bad one survives"
+    );
+    assert_eq!(after, text, "nothing is written back");
+}
+
+/// The wrong type is as unparsable as the wrong spelling.
+#[test]
+fn a_value_of_the_wrong_type_falls_back_alone() {
+    let (loaded, _) = load_text("[graphics]\nfov = \"wide\"\nanisotropy = \"2x\"\n");
+    assert_eq!(loaded.graphics.fov, Settings::default().graphics.fov);
+    assert_eq!(loaded.graphics.anisotropy, Anisotropy::X2);
+}
+
+/// A file that is not TOML at all boots on defaults and is not overwritten.
+#[test]
+fn a_file_that_is_not_toml_boots_on_defaults_and_is_kept() {
+    let text = "[graphics\nanisotropy = ";
+    let (loaded, after) = load_text(text);
+    assert_eq!(
+        loaded.graphics.anisotropy,
+        Settings::default().graphics.anisotropy
+    );
+    assert_eq!(after, text);
+}
+
+/// A clean file is still rewritten to the canonical form, as before.
+#[test]
+fn a_clean_file_is_still_rewritten() {
+    let (_, after) = load_text("[graphics]\nanisotropy = \"4x\"\n");
+    assert!(after.contains("[render_profiles"), "{after}");
+}
