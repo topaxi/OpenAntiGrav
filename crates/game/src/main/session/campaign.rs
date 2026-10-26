@@ -444,17 +444,13 @@ impl Session {
                 self.campaign_cursor = campaign.cursor_on_close();
             }
         }
-        // A title that flies Zone in its own craft has no team to pick for it,
-        // as the RACE page's own launch skips the screen
-        // (`Session::handle_picker`).
-        let own_zone_craft = mode == oag_race::Mode::Zone
-            && self.shell.as_ref().is_some_and(|shell| {
-                matches!(
-                    shell.title.race.zone_craft,
-                    oag_title::ZoneCraft::OwnShip(_)
-                )
-            });
-        if own_zone_craft || !self.open_ship_picker() {
+        // A title whose own chain has no team step in Zone launches without the screen, as the
+        // RACE page's own launch does (`Session::handle_picker`).
+        let skipped = self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| super::picker::skips_team_step(shell.title, mode));
+        if skipped || !self.open_ship_picker() {
             self.launch_campaign_race();
         }
     }

@@ -18,7 +18,7 @@ use crate::menu_stage::{Backdrop, MenuStage, menu_playhead};
 use crate::stage::Stage;
 use crate::window::monitor_names;
 
-use super::{Session, remix_menu};
+use super::{Session, picker, remix_menu};
 
 /// Moved to `oag_game::scoreboard::speed_class_choices`, re-exported here
 /// under its own name so every call site in this module (and
@@ -670,10 +670,14 @@ impl Session {
     /// HD/Fury authors both, in files of their own
     /// (`oag_title::FrontEnd::track_select`/`team_select`), and takes the same
     /// path: `Track Creation` redirects to `Team Selection` by default. Zone
-    /// skips the ship screen either way, since it forces its own hull.
+    /// takes the same path, except on a title whose own chain has no team step
+    /// in it ([`picker::skips_team_step`]).
     pub(crate) fn start_race_box(&mut self) {
-        let zone = self.race_mode() == oag_race::Mode::Zone;
-        if self.open_track_picker() || (!zone && self.open_ship_picker()) {
+        let skipped = self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| picker::skips_team_step(shell.title, self.race_mode()));
+        if self.open_track_picker() || (!skipped && self.open_ship_picker()) {
             return;
         }
         self.launch_from_settings();

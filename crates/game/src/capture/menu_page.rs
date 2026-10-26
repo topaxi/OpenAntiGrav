@@ -786,12 +786,7 @@ pub(super) fn picker_page(
                             label: team.label(strings).to_string(),
                             details: Details::Ship {
                                 loyalty: gates.then(|| saved.loyalty_total(title, &team.id)),
-                                rating: team.rating.map(|rating| oag_ui_screens::picker::Rating {
-                                    speed: rating.speed,
-                                    thrust: rating.thrust,
-                                    handling: rating.handling,
-                                    shield: rating.shield,
-                                }),
+                                rating: crate::livery_row::ship_rating(title, Some(team), mode),
                                 variants,
                                 stats,
                                 models,
@@ -819,7 +814,8 @@ pub(super) fn picker_page(
             Some(settings.race.opening_variant(title)),
         ),
     };
-    let mut picker = Picker::new(kind, entries, Some(selected), variant);
+    let mut picker = Picker::new(kind, entries, Some(selected), variant)
+        .with_fixed_livery(kind == Kind::Ship && crate::livery_row::fixed_row(title, mode));
     if layout.hd_track.is_some() {
         picker = picker.with_rows(grid_columns);
     }

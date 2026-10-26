@@ -40,6 +40,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // HD/Fury circuits belong in the Zone picker too, not just these four.
     zone: oag_title::ZoneCircuit::Separate(ZONE_TRACKS, true),
     zone_craft: oag_title::ZoneCraft::OwnShip(ZONE_SHIP),
+    // Not measured: HD's `Team Selection` was not read in Zone, so Pulse's rule.
+    zone_team_step: oag_title::ZoneTeamStep::Offered,
     // **Not a claim HD has no boost plume** - HD ships `EF_Boost`, a subtree
     // inside `engineflare.vex` rather than a standalone `.vex`, so there is
     // no per-team stem to name here at all. It loads and draws through

@@ -349,6 +349,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     effect_dir_by_circuit: &[],
     zone: ZoneCircuit::Prefixed("zone_"),
     zone_craft: ZoneCraft::PlayerShip,
+    zone_team_step: ZoneTeamStep::Offered,
     // Not exercised by any test in this file.
     boost: None,
     sounds: &SOUNDS,

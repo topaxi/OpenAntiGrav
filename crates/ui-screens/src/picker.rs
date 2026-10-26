@@ -202,6 +202,8 @@ pub struct Picker {
     /// Whether this seat has confirmed on a split screen's shared Ship Select
     /// and is waiting for the others - see [`Self::lock`].
     locked: bool,
+    /// Whether the livery is fixed by the mode - see [`Self::with_fixed_livery`].
+    fixed_livery: bool,
 }
 
 impl Picker {
@@ -230,6 +232,7 @@ impl Picker {
             scroll: oag_ui::kinetic::Kinetic::default(),
             grabbed: true,
             locked: false,
+            fixed_livery: false,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -247,6 +250,24 @@ impl Picker {
     pub fn with_entries_across(mut self) -> Self {
         self.across = true;
         self
+    }
+
+    /// Draws the livery as the screen's `skin fixed` label instead of its `skin` cycler: the
+    /// mode picks the craft's livery, so there is nothing to step through. The original's
+    /// `TeamSelection_Update` hides the cycler and its two arrows and shows `skin fixed` in
+    /// Zone (`Zone`) and in an Eliminator race (`Eliminator`), where every other mode shows the
+    /// cycler (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`). The label is the chosen
+    /// livery's own ([`Self::variant`]); a screen that authors no `skin fixed` text draws none.
+    #[must_use]
+    pub fn with_fixed_livery(mut self, fixed: bool) -> Self {
+        self.fixed_livery = fixed;
+        self
+    }
+
+    /// Whether the livery is the mode's rather than the player's - see [`Self::with_fixed_livery`].
+    #[must_use]
+    pub fn fixed_livery(&self) -> bool {
+        self.fixed_livery
     }
 
     /// Lays the entries out as rows of `columns`, the way Wipeout HD/Fury's

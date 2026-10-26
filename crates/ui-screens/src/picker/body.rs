@@ -88,7 +88,7 @@ pub(super) fn body(
                 fraction = Rating::fraction(*value);
             }
             Some("skin left arrow" | "skin right arrow") => {
-                if variants == 0 {
+                if variants == 0 || picker.fixed_livery() {
                     continue;
                 }
                 // Dim with nothing to cycle to, the way the capture shows a
@@ -200,10 +200,14 @@ pub(super) fn body(
                     .find(|(bar, _)| *bar == name)
                     .map(|(_, value)| value.to_string())
             }),
+            "skin" if picker.fixed_livery() => None,
             "skin" => picker.variant().map(|(_, label)| label.clone()),
-            // Only ever shown for a forced or suggested craft, and for a
-            // team with nothing to cycle - neither of which this build has
-            // a rule for yet.
+            // The mode's own livery (Zone, Eliminator) in place of the cycler.
+            "skin fixed" if picker.fixed_livery() => {
+                picker.variant().map(|(_, label)| label.clone())
+            }
+            // `Suggest` is shown for a craft the campaign cell suggests or forces, which this
+            // build has no rule for yet.
             "skin fixed" | "Suggest" => None,
             "Loyalty" => loyalty_total.map(|total| total.to_string()),
             _ => text.string.clone(),

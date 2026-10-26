@@ -30,6 +30,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         hull: ships::ZONE_HULL,
         boost: ships::ZONE_BOOST,
     },
+    // Measured: `Team Selection` runs in Zone - `zone-mode.md`, "`Team Selection` runs in Zone".
+    zone_team_step: oag_title::ZoneTeamStep::OfferedAtFullRatings,
     // The one title with a standalone plume: `%s\%sboost.vex`, recovered at
     // `docs/ghidra/functions/psp-pulse-usa/exhaust.md`. `ships::BOOST` stays
     // where it is - see that constant's own doc comment - this just reads it

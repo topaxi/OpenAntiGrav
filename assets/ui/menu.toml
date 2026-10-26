@@ -335,13 +335,15 @@ setting = "race.kill_target"
 values_from = "kill_targets"
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
 
+# Live in Zone too: every craft flies the one Zone hull, but the team is the one the race and
+# its loyalty credit use, and on some titles the paint on that hull
+# (`oag_title::ZoneTeamStep`). VARIANT below stays greyed there - the hull has no variant to pick.
 [[page.entry]]
 kind = "choice"
 label = "TEAM"
 string_id = "OAG_RACE_TEAM"
 setting = "race.team"
 values_from = "teams"
-disabled_by = { setting = "race.mode", value = "zone" }
 
 # Most teams offer nothing here - `values_from = "race_variant"` is supplied
 # empty for them, and a row with fewer than two values to choose between is
@@ -463,7 +465,6 @@ label = "TEAM"
 string_id = "OAG_RACE_TEAM"
 setting = "remix.team"
 values_from = "remix_teams"
-disabled_by = { setting = "race.mode", value = "zone" }
 
 # Most teams offer nothing here - `values_from = "remix_variant"` is supplied
 # empty for them, the same idiom MUSIC SOURCE uses on a machine with one

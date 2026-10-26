@@ -13,6 +13,7 @@
 
 use oag_raceplay::catalogue::{self, Team};
 use oag_ui::menu;
+use oag_ui_screens::picker::Rating;
 
 use crate::records::Store;
 use crate::unlock::{gates_variants, loyalty_unlocked};
@@ -26,6 +27,40 @@ pub struct Livery {
     pub skins: Vec<(String, String)>,
     /// The row's values, `(id, label)`, the first being what a bare Confirm picks.
     pub variants: Vec<(String, String)>,
+}
+
+/// Whether the livery row of a `mode` race is the mode's rather than the player's: Zone's one hull
+/// and an Eliminator race's forced skin. The picker draws such a row as the screen's `skin fixed`
+/// label, with no cycler (`oag_ui_screens::picker::Picker::with_fixed_livery`).
+#[must_use]
+pub fn fixed_row(title: &oag_title::Title, mode: oag_race::Mode) -> bool {
+    mode == oag_race::Mode::Zone
+        || (mode == oag_race::Mode::Eliminator && title.race.eliminator_skin.is_some())
+}
+
+/// The rating bars Ship Select draws for a team in `mode`: the team's own, except where the title
+/// measured Zone's screen forcing them full ([`oag_title::ZoneTeamStep::full_ratings`]) - the
+/// craft is one shared hull, so the team's ratings say nothing about it.
+#[must_use]
+pub fn ship_rating(
+    title: &oag_title::Title,
+    team: Option<&Team>,
+    mode: oag_race::Mode,
+) -> Option<Rating> {
+    if mode == oag_race::Mode::Zone && title.race.zone_team_step.full_ratings() {
+        return Some(Rating {
+            speed: 10,
+            thrust: 10,
+            handling: 10,
+            shield: 10,
+        });
+    }
+    team.and_then(|team| team.rating).map(|rating| Rating {
+        speed: rating.speed,
+        thrust: rating.thrust,
+        handling: rating.handling,
+        shield: rating.shield,
+    })
 }
 
 /// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to `team`, or - when that

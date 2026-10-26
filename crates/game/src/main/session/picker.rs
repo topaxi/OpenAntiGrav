@@ -11,10 +11,12 @@
 //! authors neither screen (`Shell::track_select` is `None`) launches from
 //! START exactly as before.
 //!
-//! **Zone skips the ship picker.** The mode forces the shared Zone hull
-//! whatever team is set - see `oag_raceplay::ship_entry_name` - and the
-//! RACE page already greys its TEAM row for the same reason, so a picker
-//! there would offer a choice the race ignores.
+//! **Zone goes through the ship picker too**, on a title whose own front end does
+//! ([`skips_team_step`]). The mode forces the shared Zone hull whatever team is
+//! picked - see `oag_raceplay::ship_entry_name` - but the team is still the one the
+//! race and its loyalty credit use, and on Pulse it is the paint on that hull: the
+//! original's `Team Selection` runs in Zone with the livery cycler replaced by a
+//! fixed `Zone` label (`docs/ghidra/functions/psp-pulse-usa/zone-mode.md`).
 
 use std::sync::{Arc, Mutex};
 
@@ -27,6 +29,16 @@ use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
 use crate::stage::Stage;
 
 use super::Session;
+
+/// Whether a `mode` race on `title` launches without the ship picker: Zone on a title whose own
+/// chain has no team step in it (`oag_title::RaceDefaults::zone_team_step`, Pure's).
+pub(crate) fn skips_team_step(title: &oag_title::Title, mode: oag_race::Mode) -> bool {
+    mode == oag_race::Mode::Zone && !title.race.zone_team_step.offered()
+}
+
+#[cfg(test)]
+#[path = "picker/tests.rs"]
+mod tests;
 
 #[path = "picker/seat.rs"]
 mod seat;
@@ -256,14 +268,7 @@ impl Session {
                         id: choice.value.clone(),
                         label: choice.label.clone(),
                         details: Details::Ship {
-                            rating: details.and_then(|team| team.rating).map(|rating| {
-                                picker::Rating {
-                                    speed: rating.speed,
-                                    thrust: rating.thrust,
-                                    handling: rating.handling,
-                                    shield: rating.shield,
-                                }
-                            }),
+                            rating: oag_game::livery_row::ship_rating(title, details, mode),
                             variants,
                             stats,
                             models,
@@ -319,7 +324,8 @@ impl Session {
             entries,
             Some(team_id.as_str()),
             Some(livery.as_str()),
-        );
+        )
+        .with_fixed_livery(oag_game::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
         let model = if layout.hd.is_some() {
@@ -611,8 +617,11 @@ impl Session {
                 if let Some(id) = chosen {
                     self.speak_name(Kind::Track, &id);
                 }
-                let zone = self.race_mode() == oag_race::Mode::Zone;
-                if zone || !self.open_ship_picker() {
+                let skipped = self
+                    .shell
+                    .as_ref()
+                    .is_some_and(|shell| skips_team_step(shell.title, self.race_mode()));
+                if skipped || !self.open_ship_picker() {
                     self.launch_from_settings();
                 }
             }
