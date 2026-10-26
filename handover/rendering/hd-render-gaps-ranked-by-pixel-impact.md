@@ -255,9 +255,7 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
    in linear light"). Panel (teal pixels of the card mask) red bias +11.1 to +6.3 and panel error 7.34 to 6.14 on the 13
    pairs, no pair worse; card-mask error 9.77 to 9.06 (the glyph's phase is the rest). Acceptance **not met**: the panel red
    is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia
-   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's
-   0.267 (8-bit gamma filtering in the card pass where the console decodes each texel first; the original's own card put into ours
-   leaves Chenghou +1.7, Sebenco +2.7); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
+   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
    combine; (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
 2. **`ds_booth_glass` and `glass_reflect`: measure then wire, one family per commit.** Claim: these two
    families, each on 11 to 12 circuits, cost about 7 M (4.5% of the frame, 19% of block 3 for booth alone)

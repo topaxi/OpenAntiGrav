@@ -1064,14 +1064,24 @@ outside the mask):
 
 Mean: card-mask MAE 9.77 to 9.06, panel MAE 7.34 to 6.14, panel R bias 11.1 to 6.3.
 Every pair's panel error falls, including `anulpha-pass` and `ubermall` (their card mask carries the glyph's phase, which this
-does not touch). **Not closed:** the panel red is still +4 to +14 over the scenery on 11 of the 13 pairs. Putting the
-original's own card into ours (`OAG_CARD_RAW`, a scratch patch that wrote the read card over the render) leaves Chenghou at
-+1.7 and Sebenco at +2.7, so most of the rest is the card ours renders: its red level mean is 0.294 against the original's
-0.267, because the card pass draws the honeycomb with 8-bit gamma filtering where the console decodes each texel before it
-filters. Metropia keeps red +14 and **green +14** whatever the card holds (+12.9 and +14.4 with the original's), so its
-residual is the board's own program (`cf_vex_billboard`'s lit combine), not the card; open. A variant that decodes with the
-2.2 power instead of the sRGB curve lands the mean red bias at -3.7 and the panel error at 5.71 (against 6.14), closer in
-the frame and further from the card, **not chosen**: the card is the measurement.
+does not touch). **Not closed:** the panel red is still +4 to +14 over the scenery on 11 of the 13 pairs. Where it comes from, on Chenghou's panel strip (frame x 840-900, y 265-375,
+away from the glyph so its phase and bloom do not count): red bias **+12.6 before, +6.1 with this card, +3.0 with the original's own
+card** (a scratch patch, not committed, wrote the GDB-read card over ours' render; green and blue move by under 1.5). So the 5-6-5
+rounding closes about half of the gap and the card's content (ours' red level mean is 0.294 against the original's 0.267, 89 % of the
+texels equal) about a quarter; the other quarter, +3.0, is downstream of any card (bloom and the board's own program). **The cause of the
+higher red level density is unread**: it is not the card pass's texture filtering order (decoding each texel before filtering raises
+dark linear values, the wrong way). Metropia keeps red +14 and **green +14** with the original's card too (+12.9 and +14.4 over the panel),
+so its residual is the board's own program (`cf_vex_billboard`'s lit combine), not the card; open. The sRGB decode is the measurement and
+is kept over the 2.2 power: on the same strip the 2.2-power card reads **-5.9** against the original card's +3.0 (the sRGB card +6.1), so the
+sRGB card is the nearer to what the original's card gives (8.9 against 3.1 away), whatever the whole-panel mean says (-3.7 against +6.3).
+The test pins the curve (the panel's red mean 0.22 to 0.36 levels).
+
+Whole frame, per pair (blur 7, mean absolute RGB over 1920 x 1080), before to after: anulpha-pass 8.652 to 8.615, chenghou-project 5.357 to 5.288,
+metropia 6.863 to 6.800, moa-therma 6.241 to 6.218, modesto-heights 7.227 to 7.219, sebenco-climb 5.952 to 5.920, sol-2 4.964 to 4.834, talons 4.644 to
+4.585, talons-assegai-c1 4.964 to 4.932, tech-de-ra 5.317 to 5.262, the-amphiseum 8.014 to 7.955, ubermall 5.651 to 5.606, vineta-k 6.260 to 6.139; every pair
+down, mean 6.162 to 6.106. The HD race pair `hd-race/talons-pack`, rendered from its flags with the field off and on, is **byte-identical** (no advert quad
+in view). The change rounds every HD advert card (slots 2, 3, 5, 7 and the Zone board), not only the gantry's; the side cards' FX-350 advert shows no banding
+at player size.
 
 **2048 and Omega: checked, applies, not wired.** Neither title's `Title::adverts` is set (no card pass; Omega reads the
 `321Go` files and leaves the pass off, `omega-status.md` "Adverts"), so there is no card to round. When a pass is wired for

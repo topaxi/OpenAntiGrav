@@ -545,6 +545,21 @@ fn hd_gantry_card_holds_565_levels_of_linear_light() {
         share > 0.8,
         "only {share:.2} of the gantry card sits on the 5-6-5 grid"
     );
+    // The decode curve: the live card's red averages 0.267 levels over the panel (card rows 20
+    // to 236, columns 5 to 70); the sRGB curve gives 0.29 here and the 2.2 power 0.14.
+    let (mut sum, mut count) = (0.0_f32, 0.0_f32);
+    for y in 20..236 {
+        for x in 5..70 {
+            let red = f32::from(pixels[(y * 512 + x) * 4]) / 255.0;
+            sum += (red.powf(2.2) * 31.0).round();
+            count += 1.0;
+        }
+    }
+    let red_level = sum / count;
+    assert!(
+        (0.22..0.36).contains(&red_level),
+        "the panel's red averages {red_level:.3} levels, the live card's is 0.267"
+    );
 }
 
 /// A Pulse race loaded from `source`, for the gantry card tests below.
