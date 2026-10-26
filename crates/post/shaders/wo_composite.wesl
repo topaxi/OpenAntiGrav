@@ -60,6 +60,13 @@ fn scene_uv(uv: vec2<f32>) -> vec2<f32> {
     return min(uv * params.scene_scale + params.scene_offset, params.scene_max);
 }
 
+// A gate tap kept inside the drawn rectangle of the scene, half a texel in from
+// either edge, so a split view's glow never reads across the cut. At the
+// frame's own edges it reads what the sampler's clamp would.
+fn scene_tap(uv: vec2<f32>) -> vec2<f32> {
+    return clamp(uv, params.scene_offset + params.scene_texel * 0.5, params.scene_max);
+}
+
 // A coordinate inside the drawn rectangle of a quarter target.
 fn quarter_uv(uv: vec2<f32>) -> vec2<f32> {
     return min(uv * params.quarter_scale, params.quarter_max);
@@ -76,10 +83,10 @@ fn quarter_uv(uv: vec2<f32>) -> vec2<f32> {
 fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = scene_uv(in.uv);
     let d = params.scene_texel;
-    let s = textureSampleLevel(source_tex, source_sampler, min(uv + vec2<f32>(-d.x, -d.y), params.scene_max), 0.0).rgb
-        + textureSampleLevel(source_tex, source_sampler, min(uv + vec2<f32>(d.x, -d.y), params.scene_max), 0.0).rgb
-        + textureSampleLevel(source_tex, source_sampler, min(uv + vec2<f32>(-d.x, d.y), params.scene_max), 0.0).rgb
-        + textureSampleLevel(source_tex, source_sampler, min(uv + d, params.scene_max), 0.0).rgb;
+    let s = textureSampleLevel(source_tex, source_sampler, scene_tap(uv + vec2<f32>(-d.x, -d.y)), 0.0).rgb
+        + textureSampleLevel(source_tex, source_sampler, scene_tap(uv + vec2<f32>(d.x, -d.y)), 0.0).rgb
+        + textureSampleLevel(source_tex, source_sampler, scene_tap(uv + vec2<f32>(-d.x, d.y)), 0.0).rgb
+        + textureSampleLevel(source_tex, source_sampler, scene_tap(uv + d), 0.0).rgb;
     let lg = dot(s, LUMINANCE * 0.25);
     let k = exposed.exposure * clamp(lg - params.bloom_gate, 0.0, 1.0);
     return vec4<f32>(k * k * s, lg * 0.25);
