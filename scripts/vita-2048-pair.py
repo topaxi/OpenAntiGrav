@@ -24,6 +24,19 @@ original's camera sweeps in for ~0.5 s after the HUD appears). The phase inside 
 race clock reads zero for the whole countdown, so no clock can tell the tick, and `--grid-seconds` is the offset
 after the HUD appears at the grab; ours renders `round(60 * offset)` ticks (the grab's own spacing, 0.15 s, is the
 phase uncertainty). No pose is read: ours spawns the same grid slot the original does.
+
+    --walk also patches the original's drawn-hull shake out, the way `rpcs3-hd-pair.py` does on RPCS3 (`rpcs3-hd-no-hull-shake.py`):
+    2048's ship carries the same random B-spline shake as HD's (`HullShake_Update` at `0x811b51bc`, `HullShake_Apply` at
+    `0x811b5500`, `docs/ghidra/functions/ps3-hdfury-eu/hull-shake.md`, "Cross-title"), ours is drawn with `--no-hull-shake`, and
+    the shake moves the hull a few px between frames. Vita3K has no patch mechanism and its GDB stub halts the guest (see
+    `patch_hull_shake`), so the two `bl HullShake_Apply` calls of the drawn hull are overwritten with `nop`s in the process's
+    memory (`/proc/<pid>/mem`) right after the launch, which needs Vita3K to be this script's own child. `--no-patch-hull-shake`
+    keeps the stock game; a Vita3K that was already running is not patched, and the pair records that.
+
+    --read-pose (with --walk) reads the original's grid pose out of the same memory before the Retry (the drawn hull matrix nearest ours' slot),
+    records it against ours' (`original.pose_read`, `pose_delta`) and renders a second ours on the original's pose, `ours-original-pose.png`
+    (`--pose-ours-height` for an HD-derived hull, whose node sits above ours' craft position). `docs/tools/compare-page.md`, "The hull shake and
+    the grid pose", has the method and the numbers.
 """
 
 import argparse
@@ -58,6 +71,177 @@ RETRY_YES = (402, 312)
 #: The campaign map's first open node of a save that has finished "2048 - Event 1": Queens Mall.
 DEFAULT_NODE = (270, 68)
 
+
+
+#: The two `bl HullShake_Apply` of the drawn hull in the EU v1.04 `eboot.bin` (Thumb-2, `bl 0x811b5500`): `0x812cb010` in the drawn
+#: hull matrix function (`0x812caf1c`, the only caller is `0x812cb4da`) and `0x811c15a0`; both load the hull scale (`DAT_8151fdd0`
+#: / `DAT_8151fdf4`) right after. The third caller, `0x811be926`, shakes the ship's "internal tripod" (the camera node, `ship+0x5650`)
+#: with `r2 = 1`, which also turns the node into the view matrix: a `nop` there blanks the camera (the HUD never came up, 2026-10-26),
+#: so it is left alone. `HullShake_Update` keeps running, so `rand` is drawn exactly as before.
+HULL_SHAKE_APPLY = 0x811B5500
+HULL_SHAKE_SITES = (0x812CB010, 0x811C15A0)
+NOP_NOP = bytes.fromhex("00bf00bf")
+#: Where Vita3K maps the guest's 4 GiB: guest address `a` is at `GUEST_BASE + a` in the process (read off `/proc/<pid>/maps` and
+#: confirmed by the bytes at the call sites; the scan below finds it again if a build moves it).
+GUEST_BASE = 0x400000000
+HOST_WINDOW = (0x400000000, 0x500000000)
+
+
+def bl_bytes(site, target):
+    """The Thumb-2 `bl target` at `site`, encoded (so a patch site is checked against what it must be, not trusted)."""
+    off = target - (site + 4)
+    s, i1, i2 = (off >> 24) & 1, (off >> 23) & 1, (off >> 22) & 1
+    j1, j2 = (~(i1 ^ s)) & 1, (~(i2 ^ s)) & 1
+    hw1 = 0xF000 | (s << 10) | ((off >> 12) & 0x3FF)
+    hw2 = 0xD000 | (j1 << 13) | (j2 << 11) | ((off >> 1) & 0x7FF)
+    return hw1.to_bytes(2, "little") + hw2.to_bytes(2, "little")
+
+
+def quick_base(mem, probe_site, probe_bytes):
+    """`GUEST_BASE` when the probe bytes are there (the guest's code is mapped), else None."""
+    try:
+        mem.seek(GUEST_BASE + probe_site)
+        return GUEST_BASE if mem.read(len(probe_bytes)) == probe_bytes else None
+    except OSError:
+        return None
+
+
+def scan_base(mem, pid, probe_site, probe_bytes):
+    """The host address of guest address 0 found by scanning the readable mappings of the guest window for the probe bytes
+    (they must be found exactly once): for a build that maps the guest elsewhere than `GUEST_BASE`."""
+    found = []
+    for line in open("/proc/%d/maps" % pid):
+        span, perms = line.split()[:2]
+        lo, hi = (int(x, 16) for x in span.split("-"))
+        if not perms.startswith("r") or lo < HOST_WINDOW[0] or lo >= HOST_WINDOW[1]:
+            continue
+        try:
+            mem.seek(lo)
+            data = mem.read(hi - lo)
+        except OSError:
+            continue
+        at = data.find(probe_bytes)
+        while at >= 0:
+            found.append(lo + at - probe_site)
+            at = data.find(probe_bytes, at + 1)
+    if len(found) != 1:
+        sys.exit("the eboot's call site bytes were found %d times in Vita3K's memory (want exactly 1): nothing patched" % len(found))
+    return found[0]
+
+
+def patch_hull_shake(pid, timeout=30.0):
+    """Overwrite the drawn hull's `bl HullShake_Apply` calls with `nop`s in the running Vita3K `pid` (a child of this process: Yama's
+    `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else), before the guest has run the code. Returns what was read back.
+
+    Vita3K's GDB stub is not usable for this: it halts the guest at the connect, and the game then never got past the
+    "Sony Computer Entertainment presents" screen or hung at 56 % of the first load (four boots, 2026-10-26), where the same
+    config with `gdbstub: false` boots in about 30 s."""
+    probe_site = HULL_SHAKE_SITES[0]
+    probe = bl_bytes(probe_site, HULL_SHAKE_APPLY)
+    sites = list(HULL_SHAKE_SITES)
+    try:
+        mem = open("/proc/%d/mem" % pid, "r+b", 0)
+    except OSError as e:
+        sys.exit("cannot open /proc/%d/mem (%s): Vita3K must be this script's own child" % (pid, e))
+    end = time.monotonic() + timeout
+    base = quick_base(mem, probe_site, probe)
+    while base is None and time.monotonic() < end:
+        time.sleep(0.5)
+        base = quick_base(mem, probe_site, probe)
+    if base is None:
+        base = scan_base(mem, pid, probe_site, probe)
+    record = {"method": "write to /proc/<pid>/mem of two Thumb nops over each `bl 0x811b5500`, before the guest ran the code", "host_base": hex(base),
+              "sites": {}}
+    for site in sites:
+        want = bl_bytes(site, HULL_SHAKE_APPLY)
+        mem.seek(base + site)
+        before = mem.read(4)
+        if before != want:
+            sys.exit("%#x holds %s, not `bl %#x`: this is not the EU v1.04 eboot, nothing more patched" % (site, before.hex(), HULL_SHAKE_APPLY))
+        mem.seek(base + site)
+        mem.write(NOP_NOP)
+        mem.seek(base + site)
+        after = mem.read(4)
+        if after != NOP_NOP:
+            sys.exit("%#x reads %s after the write" % (site, after.hex()))
+        record["sites"]["%#x" % site] = {"before": before.hex(), "after": after.hex()}
+    mem.close()
+    return record
+
+
+def scan_original_pose(pid, near, tol=6.0):
+    """The original's grid pose, read out of Vita3K's guest memory: the drawn hull's matrix (rows left, up, forward, scaled by the hull
+    scale `0.75`, then the position) nearest `near`, the position of ours' craft at the same tick. The renderer keeps a copy per draw, so the
+    best match is the one found most often. Returns `[(count, position, rows)]`, most frequent first; needs numpy and a Vita3K that is this
+    process's child."""
+    import numpy as np
+    mem = open("/proc/%d/mem" % pid, "rb", 0)
+    found = {}
+    for line in open("/proc/%d/maps" % pid):
+        span, perms = line.split()[:2]
+        lo, hi = (int(v, 16) for v in span.split("-"))
+        if not perms.startswith("rw") or not HOST_WINDOW[0] <= lo < HOST_WINDOW[1]:
+            continue
+        try:
+            mem.seek(lo)
+            data = mem.read(hi - lo)
+        except OSError:
+            continue
+        f = np.frombuffer(data[: len(data) // 4 * 4], dtype="<f4")
+        if len(f) < 16:
+            continue
+        with np.errstate(invalid="ignore"):
+            hit = np.where((abs(f[12:-2] - near[0]) < tol) & (abs(f[13:-1] - near[1]) < tol) & (abs(f[14:] - near[2]) < tol))[0] + 12
+        for i in hit:
+            rows = f[i - 12:i].reshape(3, 4)
+            lengths = np.linalg.norm(rows[:, :3], axis=1)
+            if np.any(abs(rows[:, 3]) > 1e-6) or np.any(abs(lengths - 0.75) > 0.06) or np.any(abs(lengths - lengths[0]) > 1e-3):
+                continue
+            key = (tuple(round(float(v), 4) for v in f[i:i + 3]), tuple(round(float(v), 4) for v in rows[:, :3].ravel()))
+            found[key] = found.get(key, 0) + 1
+    return sorted(((n, pos, rows) for (pos, rows), n in found.items()), reverse=True)
+
+
+def pose_delta(ours_pos, ours_rows, theirs_pos, theirs_rows):
+    """Original minus ours: position (units), heading (degrees, + is left turn seen from above) and pitch (degrees, + nose up) of the
+    forward row. Rows are (left, up, forward), any scale."""
+    import math
+
+    def heading_pitch(fwd):
+        n = math.sqrt(sum(v * v for v in fwd))
+        x, y, z = (v / n for v in fwd)
+        return math.degrees(math.atan2(-x, -z)), math.degrees(math.asin(max(-1.0, min(1.0, y))))
+
+    (h0, p0), (h1, p1) = heading_pitch(ours_rows[6:9]), heading_pitch(theirs_rows[6:9])
+    wrap = (h1 - h0 + 180.0) % 360.0 - 180.0
+    return {"position": [round(t - o, 4) for t, o in zip(theirs_pos, ours_pos)], "heading_deg": round(wrap, 3), "pitch_deg": round(p1 - p0, 3),
+            "ours": {"heading_deg": round(h0, 3), "pitch_deg": round(p0, 3)}, "original": {"heading_deg": round(h1, 3), "pitch_deg": round(p1, 3)}}
+
+
+def write_pose_csv(trace_csv, pose, path):
+    """A one-row trace for `oag-game --pose-from`: ours' last row with the pose columns replaced by the original's. The trace's `right_*`
+    columns hold row 0, the craft's LEFT (`Basis::LeftUpForward`)."""
+    import csv
+    rows = list(csv.DictReader(open(trace_csv)))
+    row = rows[-1]
+    pos, mat = pose
+    for k, vec in (("right", mat[0:3]), ("up", mat[3:6]), ("fwd", mat[6:9]), ("pos", pos)):
+        n = (sum(v * v for v in vec) ** 0.5) if k != "pos" else 1.0
+        for axis, v in zip("xyz", vec):
+            row["%s_%s" % (k, axis)] = repr(v / n)
+    row["tick"] = "0"
+    writer = csv.DictWriter(open(path, "w", newline=""), fieldnames=list(rows[0].keys()))
+    writer.writeheader()
+    writer.writerow(row)
+
+
+def read_trace_pose(trace_csv):
+    """Ours' position and (left, up, forward) rows from the last row of a `--trace-out` file; its `right_*` columns hold the true right here."""
+    import csv
+    row = list(csv.DictReader(open(trace_csv)))[-1]
+    g = lambda k: [float(row[k + a]) for a in ("_x", "_y", "_z")]
+    right, up, fwd = g("right"), g("up"), g("fwd")
+    return g("pos"), [-v for v in right] + up + fwd
 
 
 def load_drive():
@@ -130,7 +314,12 @@ def boot_and_walk(s, args):
     d = s.drive
     d.bring_up_display(args.display, args.socket)
     if d.vita3k_alive() is None:
-        d.launch_vita3k(TITLE, args.display)
+        pid = d.launch_vita3k(TITLE, args.display)
+        args.vita_pid = pid
+        if args.patch_hull_shake:
+            args.hull_shake = patch_hull_shake(pid)
+    elif args.patch_hull_shake:
+        print("WARNING: Vita3K was already running, so it cannot be patched: the original's hull shake is ON", file=sys.stderr)
     s.window(args.boot_timeout)
     # The title: Return starts the intro, then three presses reach the Game Mode grid with the PSN prompt gone.
     time.sleep(8.0)
@@ -267,6 +456,15 @@ def main():
                     help="the hull's nose tip in the original's frame, read by eye off a 4x crop: for a craft with no yellow livery to find "
                          "(the HD Campaign's Feisar), where the centroid offset cannot be measured; needs --nose-ours")
     ap.add_argument("--nose-ours", type=float, nargs=2, metavar=("X", "Y"), help="the same in ours' frame")
+    ap.add_argument("--no-patch-hull-shake", dest="patch_hull_shake", action="store_false",
+                    help="keep the original's drawn-hull shake (default with --walk: patched out in the process's memory, see the docstring)")
+    ap.add_argument("--read-pose", action="store_true",
+                    help="with --walk (Vita3K this script launched): read the original's grid pose out of the guest's memory and record it against "
+                         "ours' (`original.pose_read`, `pose_delta`), and render a second ours with the craft put on the original's pose "
+                         "(`ours-original-pose.png`)")
+    ap.add_argument("--pose-ours-height", action="store_true",
+                    help="with --read-pose: keep ours' own height in the posed render. The drawn node of an HD-derived hull (the DLC's Feisar) "
+                         "sits 1.85 units above ours' craft position (floor 33 px off if taken as is); 2048's own hulls agree to 0.05")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -295,11 +493,33 @@ def main():
     profile_dir = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, profile_dir)
 
+    args.hull_shake = None
+    args.vita_pid = None
+    which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
+    which += ["--team", args.team] if args.team else []
+    env = {**os.environ, **ce.ours_env(profile_dir)}
+    ours_trace = None
+    if args.read_pose:
+        if not args.walk:
+            sys.exit("--read-pose needs --walk: the memory can only be read of a Vita3K this script launched")
+        # ours' craft at the grid tick, to know where in the original's memory to look and what to compare with
+        ours_trace = out / "ours-trace.csv"
+        run([args.oag_game, args.source, "--race"] + which + ["--ticks", args.ours_ticks or 179, "--no-audio", "--no-hull-shake",
+                                                              "--trace-out", ours_trace], stdout=subprocess.DEVNULL, env=env)
     s = Session(args.display, out / "frames")
     if args.walk:
         boot_and_walk(s, args)
     else:
         s.window(10.0)
+    original_pose = None
+    if args.read_pose:
+        ours_pos, ours_rows = read_trace_pose(ours_trace)
+        found = scan_original_pose(args.vita_pid, ours_pos)
+        pair.check("the original's grid pose was found in its memory", bool(found),
+                   "%d distinct poses within 6 units of ours' slot; the most frequent seen %d times" % (len(found), found[0][0]) if found else "none")
+        if found:
+            count, pos, rows = found[0]
+            original_pose = {"position": list(pos), "rows_left_up_forward_scaled": list(rows), "seen": count, "others": len(found) - 1}
     burst = restart_and_burst(s, args.burst, "burst")
     picked = pick_grid_frame(burst, args.grid_seconds)
     pair.check("the countdown's HUD came up after Retry", picked is not None,
@@ -310,6 +530,8 @@ def main():
     frame = burst[pick_i][1]
     (out / "theirs.png").write_bytes(Path(frame).read_bytes())
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
+    pair.rec["original"]["hull_shake"] = (
+        {"state": "patched out", "camera_tripod_shake": "on", **args.hull_shake} if args.hull_shake else "on")
     pair.rec["original"]["grab"] = {"hud_first_frame_s": t_hud, "grid_frame_s": t_pick, "burst_frames": len(burst),
                                     "burst_interval_s": (burst[-1][0] - burst[0][0]) / (len(burst) - 1),
                                     "grid_offset_s": t_pick - t_hud}
@@ -342,12 +564,21 @@ def main():
     pair.rec["ours"]["event"] = args.track or args.event
     pair.check("ours renders before GO", ticks < ce.go_tick(plat), "tick %d, GO at tick %d" % (ticks, ce.go_tick(plat)))
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
-    which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
-    which += ["--team", args.team] if args.team else []
     base = [args.oag_game, args.source, "--race"] + which + ["--ticks", ticks] + ce.ours_flags(plat)
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
-    env = {**os.environ, **ce.ours_env(profile_dir)}
     run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
+    if original_pose:
+        pair.rec["original"]["pose_read"] = {
+            **original_pose, "method": "float-triple scan of the guest's memory (/proc/<pid>/mem) for the drawn hull's matrix nearest ours' "
+            "slot, read on the first countdown of the walk, hull scale 0.75"}
+        pair.rec["pose_delta"] = pose_delta(ours_pos, ours_rows, original_pose["position"], original_pose["rows_left_up_forward_scaled"])
+        print("MEASURED original minus ours: %s" % json.dumps(pair.rec["pose_delta"]), file=sys.stderr)
+        pose_csv = out / "original-pose.csv"
+        posed = list(original_pose["position"])
+        if args.pose_ours_height:
+            posed[1] = ours_pos[1]
+        write_pose_csv(ours_trace, (posed, original_pose["rows_left_up_forward_scaled"]), pose_csv)
+        run(base + ["--pose-from", pose_csv, "--pose-hold", "--screenshot", out / "ours-original-pose.png"], stdout=subprocess.DEVNULL, env=env)
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got
     for b in bad:
