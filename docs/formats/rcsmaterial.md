@@ -2477,12 +2477,84 @@ makes the alpha `s * noise^2`. `R0` is `f[TC1]`, whose `w` is the normal's
 opcode writes no register, 59,256 of 59,256 uses name 63). The alternative
 reading draws the shafts as an opaque white wall; the skipped-ramp reading
 reproduces the translucent streaks of `talons-matched/03`. Amphiseum's
-variant, whose tap is unconditional, is read from its microcode only: no
-matched pose frames its cone.
+variant, whose tap is unconditional, was read from its microcode only; the 2026-10-26
+section below has a matched frame and a live draw for it, and both taps are sRGB-decoded.
 
 Implemented in `mesh::rcs::light_cone` (`slots::LIGHT_CONE`, bit 19, which
 moved `MATERIAL_SHIFT` from 19 to 20) and `mesh.wgsl`; pinned by
 `hd_light_cone_lit_path` (fixture) and `hd_light_cone_ground_truth` (disc).
+
+## A program with no `LG2` reading a dot product draws no specular; the cone's taps are sRGB-decoded (2026-10-26, `hd-top-right-band`)
+
+**The gap.** On the 13 HD compare pairs (`compare-page/hd/`, Harimau classic, Time Trial start) the
+top-right band (120 px tiles tx 9-12, ty 0-1) ran the brightest of any block (+6.3 luma, 9.9 error per
+pixel). Per-slot ablation on the two worst pairs (`OAG_TINT_MATERIALS` to name the slot under a pixel,
+`OAG_SKIP_SLOT` to remove it) split it in two.
+
+### 1. Vineta K: white lines on the ramp edges are a specular the program does not compute (confidence 85)
+
+Slot 257 (`lambertzeroalpha.rcsmaterial`, `martin_alum_grill.gtf`) carries 70 % of the band's net luma
+error; removing it takes the band from +14.9 to +1.9, and `OAG_ALBEDO_ONLY` has no lines, so they come
+from the light. The program (27 instructions, `Program` dump) has **three `LG2`s, all on the lightmap
+tap** (`TEX unit1`, then `LG2` / `MUL k` / `EX2`, the `pow(lightmap, k)` curve), an `N.L` `DP3` and the
+fog `EX2`; there is no `DP3` of the normal against a half vector and no `LG2` of a dot product. It
+has no `pow(N.H, e)`, and `material_specular_exponent` gave it the shared stand-in 32 because
+`Program::specular_exponent` returns `None` for it, **and also for `jd_simplespecular`**, whose
+`DP3`, `DIVSQ`, `LG2`, `MUL 32` shape its plain-`DP3` filter refuses. `None` is therefore no proof of a
+program without a specular term, and neither is "has an `LG2`" (the lightmap curve has one).
+
+`Program::has_dot_power` asks the question both ways round: does any `LG2` read a value that depends,
+through registers and every instruction but a texture fetch, on a `DP3`? A program for which it is
+`false` gets `NO_SPECULAR` (`skin::light_inputs`), hull or track surface, and `mesh.wesl`'s
+`no_specular` is now that exponent alone (it was `&& colour_factor`, which turned a no-chain track
+program back into the stand-in). Registers are keyed `(index, half)`, as `dp3_feeding` reads them; a
+first version that merged the halves lost `diffuse_normal_specular`'s real specular on Moa Therma
+(`LG2 R1.y` after a half-register `TEX` wrote `R1`), which the 13-pair re-score caught.
+
+Band luma bias, ours minus the original (mean per-pixel abs RGB error in brackets), before to after:
+Vineta K +14.9 (25.1) to -3.1 (9.1); Moa Therma +7.1 (11.6) to -1.3 (5.1); Sebenco Climb +8.4 (15.1) to
++5.5 (13.0); Chenghou Project +2.7 to +1.2; Tech de Ra +2.9 to +2.1. Whole frame on Vineta K +3.1 to
+-0.2. The craft block (tx 6-9, ty 5-8) and the track blocks (tx 0-5 and 10-15, ty 5-6) moved by under 0.3
+luma on 12 of 13 pairs; Vineta K's craft block moved +0.7 (error 7.7 to 7.5) and its track block +0.4
+(error 5.6 to 5.7). Left wall: Talon's pairs 0.5 worse in absolute error (the cone streaks, below). Pinned by
+`hd_lightmapped_albedo_ground_truth::vinetas_lightmap_only_lambert_slot_draws_no_specular` (slot 257
+is `NO_SPECULAR`, every `jd_simplespecular` slot is not; it fails with the rule dropped).
+
+**Open:** Vineta K's band is now 3.1 luma dark, not bright. Slot 96 (`mt_uvanim_diffuse_emissive2`,
+`and_lightstripv01_d`, no dot power, `add_second`) draws grey where the original's strip is blue: a
+hue, not a specular, left alone. The Amphiseum frame is not touched by this rule (global no-specular
+moves its band +16.1 to +15.3).
+
+### 2. The Amphiseum's light cone: its noise and ramp taps are gamma-7 units (confidence 80)
+
+Slot 610 (`dc_lightcone`) is the whole of the Amphiseum band's excess: skipping it takes +16.1 to +2.3.
+The section above has the program; what it could not say was the cone's brightness, because "raw
+samples, the program applies no transfer function" was read off the program, and the transfer function is
+the **sampler's**. A live RPCS3 frame dump (the pair's save state, `hd-draw-dump.py`, then
+`rsx-fp-match-material.py`) matched two draws (724 and 730 of 855) to `dc_lightcone` block #3 at
+`@0x1520`, the Amphiseum variant, and read their sampler words: unit 0 (the noise, 256x256)
+`SET_TEXTURE_ADDRESS` `0x60710101` and unit 1 (the ramp, 128x128) `0x60750102`, **gamma nibble 7 on
+both**, as on every HD colour unit read live (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`). Blend
+`SRC_ALPHA, ONE` on the draw, which is the file's authored pair (`0302`/`0001`, `Blend::Factors`).
+
+`mesh.wesl` now decodes both taps. Amphiseum's band luma bias +16.1 to +5.7 (error 23.5 to 14.4),
+shafts the same translucent streaks in the same places at the same brightness class (crops read at
+player size). The remaining +3.4 over the no-cone floor is unexplained: shaft width or the `s`
+scale, not measured. Pinned by `hd_light_cone_lit_path` (a noise byte of 128 draws alpha 0.2158, not
+0.5, on the GPU fixture). Talon's Junction's cone takes the same decode (same material, same program,
+`K` = 100, gated ramp); its `talons-matched/03` was judged raw, and the compare pairs
+`talons`/`talons-assegai-c1` now show no streaks where the original shows none (they did before), but
+those pairs are capture-mismatched and do not frame a cone, so Talon's is not independently verified.
+
+### 2048 / Omega check
+
+- **Omega: ships both materials, not checkable at program level.** `lambertZeroAlpha(_1,_2)` is in
+  `data00.psarc`/`data05`/`data08` and `DC_LightCone`(`_2`) for Amphiseum and Talon's Junction in
+  `data02`/`data05`/`data08`, re-cooked as PS4 containers (176-222 KiB, recompiled shaders). The
+  `has_dot_power` reader and the gamma nibble are NV40 microcode and `SET_TEXTURE_ADDRESS` facts; Omega's
+  containers and its texture-state setup are unread here. The way to ask is `eboot.bin` in Ghidra.
+- **2048: not checkable.** Neither name is in the Vita `data.psarc` listing; its shaders are GXP, no NV40
+  microcode.
 
 ## A lightmapped material's picture must be a sampler its variant declares (2026-10-07, `hd-vineta-floor`)
 

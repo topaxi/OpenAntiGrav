@@ -611,6 +611,12 @@ impl Program {
     /// later partial write to any of those lanes clobbers it before `at`, or
     /// when the covering writer is not a saturated `DP3`.
     fn dp3_feeding(&self, at: usize) -> Option<usize> {
+        self.dot_feeding(at, &["DP3"])
+    }
+
+    /// The writer of the register `at`'s first operand reads, when it is one of
+    /// `writers` with saturate set and nothing overwrote the lanes since.
+    fn dot_feeding(&self, at: usize, writers: &[&str]) -> Option<usize> {
         let reader = &self.instructions[at];
         let Some(Source::Register { index, half }) = reader.operands().next() else {
             return None;
@@ -625,13 +631,55 @@ impl Program {
             .enumerate()
             .rev()
             .find(|(_, insn)| (insn.dst, insn.dst_half) == reg && insn.mask & needed == needed)?;
-        if writer.name() != Some("DP3") || !writer.saturate {
+        if !writer.name().is_some_and(|n| writers.contains(&n)) || !writer.saturate {
             return None;
         }
         let clobbered = self.instructions[w + 1..at]
             .iter()
             .any(|insn| (insn.dst, insn.dst_half) == reg && insn.mask & needed != 0);
         (!clobbered).then_some(w)
+    }
+
+    /// Whether any `LG2` in the program takes the logarithm of a value that
+    /// depends on a `DP3`: the `pow(N.H, e)` of a specular term, as opposed to
+    /// the `LG2`s that read a texture sample (the lightmap's `pow(lightmap, k)`
+    /// curve), which are the only other `LG2`s a lit program carries.
+    ///
+    /// Dependence is tracked per register (a half register and its full register
+    /// are two, as [`Self::dp3_feeding`] reads them) through every instruction but a
+    /// texture fetch (its result is the texture's), and a register counts as dependent
+    /// when any operand's register is, so the answer errs towards `true`.
+    /// It does not ask [`Self::specular_exponent`]'s questions (a plain saturated
+    /// `DP3` straight into the `LG2`, a constant `MUL` and an `EX2` that reach
+    /// the output): that method returns `None` for `jd_simplespecular`, whose
+    /// `DP3`, `DIVSQ`, `LG2`, `MUL 32` shape it refuses, so `None` is no proof
+    /// of a program without a specular term. `false` here is: no `LG2` reads
+    /// anything a dot product touched, so there is no `pow` of one to draw.
+    #[must_use]
+    pub fn has_dot_power(&self) -> bool {
+        let key = |index: u8, half: bool| (usize::from(index) & 63) * 2 + usize::from(half);
+        let mut dot = [false; 128];
+        for insn in &self.instructions {
+            let fed = insn
+                .operands()
+                .any(|s| matches!(s, Source::Register { index, half } if dot[key(index, half)]));
+            if insn.name() == Some("LG2") && fed {
+                return true;
+            }
+            let dst = key(insn.dst, insn.dst_half);
+            let writes_whole = insn.mask == 0xf;
+            let value = match insn.name() {
+                Some("DP3") => true,
+                _ if insn.is_texture() => false,
+                _ => fed,
+            };
+            dot[dst] = if writes_whole {
+                value
+            } else {
+                dot[dst] || value
+            };
+        }
+        false
     }
 
     /// Whether the value the instruction at `from` writes survives, by

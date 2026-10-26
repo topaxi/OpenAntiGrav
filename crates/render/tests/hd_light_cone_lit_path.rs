@@ -146,9 +146,11 @@ fn the_cone_saturates_its_colour_and_skips_a_predicated_ramp() {
     // The cone is drawn into a black target through the blend list, so the red
     // channel is `colour * alpha * 255`.
     //
-    // Noise 0.5, ramp 1.0. K = 100 saturates the colour to 1, and the ramp tap
-    // runs on the ungated variant, so alpha is 0.5 * 1.0 * 1.0: red is 128.
-    let ungated = at(&model(128, 255, entry(100.0, 0.0)));
+    // Both taps are sRGB-decoded on fetch (the live draw's sampler words carry gamma
+    // nibble 7), so a noise byte of 188 reads 0.5. Noise 0.5, ramp 1.0. K = 100
+    // saturates the colour to 1, and the ramp tap runs on the ungated variant, so alpha
+    // is 0.5 * 1.0 * 1.0: red is 128.
+    let ungated = at(&model(188, 255, entry(100.0, 0.0)));
     assert!(
         (i32::from(ungated[0]) - 128).abs() <= 3,
         "saturated white at alpha noise * ramp = 0.5: {ungated:?}"
@@ -157,20 +159,34 @@ fn the_cone_saturates_its_colour_and_skips_a_predicated_ramp() {
     // The gated variant (the normal's y is 0) leaves the noise in the register
     // the ramp would have overwritten: alpha is noise * noise = 0.25, whatever
     // the ramp holds.
-    let gated = at(&model(128, 255, entry(100.0, 1.0)));
+    let gated = at(&model(188, 255, entry(100.0, 1.0)));
     assert!(
         (i32::from(gated[0]) - 64).abs() <= 3,
         "a predicated-away ramp leaves alpha at noise^2 = 0.25: {gated:?}"
     );
-    let gated_dark_ramp = at(&model(128, 0, entry(100.0, 1.0)));
+    let gated_dark_ramp = at(&model(188, 0, entry(100.0, 1.0)));
     assert_eq!(gated, gated_dark_ramp, "the skipped ramp is never read");
 
     // K = 1 does not saturate: the colour is the noise's own 0.5, so the red is
     // 0.5 * alpha 0.5.
-    let plain = at(&model(128, 255, entry(1.0, 0.0)));
+    let plain = at(&model(188, 255, entry(1.0, 0.0)));
     assert!(
         (i32::from(plain[0]) - 64).abs() <= 3,
         "K = 1 leaves the noise's mid grey: {plain:?}"
+    );
+
+    // The decode itself: a raw byte of 128 is 0.2158 linear, so the same saturated cone
+    // at alpha 0.2158 * 1.0 reads 55, not the 128 an undecoded tap would give. Dropping
+    // the shader's `decode` on either tap fails here.
+    let decoded = at(&model(128, 255, entry(100.0, 0.0)));
+    assert!(
+        (i32::from(decoded[0]) - 55).abs() <= 3,
+        "an sRGB-decoded noise byte of 128 is 0.2158: {decoded:?}"
+    );
+    let dark_ramp = at(&model(188, 188, entry(100.0, 0.0)));
+    assert!(
+        (i32::from(dark_ramp[0]) - 64).abs() <= 3,
+        "a ramp byte of 188 reads 0.5 decoded, so alpha 0.5 * 0.5 = 0.25: {dark_ramp:?}"
     );
 }
 

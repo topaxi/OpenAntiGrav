@@ -27,12 +27,4 @@ impl Program {
             && self.output_lit_by() & (1 << input) != 0
             && reads.all(|i| matches!(i.name(), Some("MOV" | "MUL")))
     }
-
-    /// Whether the program has a `LG2` at all - the `log2` of a `pow(N.H, e)`
-    /// specular chain. A program with none carries no specular term, whatever
-    /// the shared stand-in exponent would say.
-    #[must_use]
-    pub fn has_specular_chain(&self) -> bool {
-        self.instructions.iter().any(|i| i.name() == Some("LG2"))
-    }
 }

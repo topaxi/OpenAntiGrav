@@ -392,7 +392,7 @@ fragment block only `MOV`s or `MUL`s `f[TCn]`; `Program::input_is_only_a_factor`
 marks its chunks' `sun_mask` as `-1 - mask`, and a hull (`receives_shadow` not
 the track's `2`) lights `colour * (ambient + sun * N.L * occlusion + spu light)`
 with no prelit or added vertex term, specular `* colour`, and none at all for a
-material with no `LG2` (`NO_SPECULAR`). **Tracks keep the additive reading**:
+material with no `LG2` (`NO_SPECULAR`; since 2026-10-26 any material, track surfaces included, whose program has no `LG2` reading a dot product, see [rcsmaterial.md](../formats/rcsmaterial.md), "A program with no `LG2` reading a dot product draws no specular"). **Tracks keep the additive reading**:
 the rule also matches materials on `01_vineta_k`, `04_chenghou_project` and
 `amphiseum`, whose frames move only through the craft's exposure effect (<= 2
 levels outside the craft on Vineta K) but are unmeasured against their own

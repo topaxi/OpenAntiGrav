@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD error blocks 1 and 3 split by cause: gantry boards 49% of block 1, ds_booth/glass_reflect glass 30% of block 3, lit opaque diffuse"
+summary: "HD gaps by tile: band cut +6.3 to +3.0; blocks 1+3 split: gantry card panels 9% of frame, booth/reflect glass 4.5% next"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -110,19 +110,10 @@ cause. What the crops show:
 
 ## Next Steps
 
-1. **Measure first, then lane: ceiling light beams and glow (row 5).** Claim:
-   ours draws the ceiling's additive light beams and glow brighter than the
-   original on Amphiseum and Vineta K, and that is most of row 5's +6.3 luma
-   bias. The rim highlights on Vineta K's ramp edges are a second candidate
-   (the stand-in specular in
-   [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md),
-   ready-to-wire) and are not yet separated from the beams. Method: one
-   per-draw ablation on `the-amphiseum` and `vineta-k` (skip the additive
-   light-shaft draws; then skip the no-LG2 specular on the ceiling families),
-   and compare row 5's luma bias after each. Acceptance region: tiles tx 9-12,
-   ty 0-1 on those two pairs, luma bias within +2, with the craft and track
-   blocks unchanged within noise. If the beams account for the bias, the lane
-   is the light-shaft material; if the rims do, it is the specular lane.
+1. ~~**Measure first, then lane: ceiling light beams and glow (row 5).**~~ Measured and wired 2026-10-26, see
+   "Top-right band, measured and wired" below. The beams are `dc_lightcone` read raw (its taps are gamma-7 units);
+   Vineta K's rim lines were a stand-in specular on a program with no half-vector power. Rows left: the open list
+   below.
 2. **Measure, not a lane: HUD-only share.** Claim: the HUD's own pixels carry
    under 5% of the 13-pair error, so the HUD row is an estimate artifact.
    Method: mask the HUD layout rects from
@@ -284,6 +275,45 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
 Not lanes: opaque scenery elsewhere (diffuse, 12% of the frame, fails the falsifier), the `talons` pair
 differences (capture mismatch), the `glow`-material banners on Tech de Ra (one circuit, 1.2 M, unread), the
 GO board's pulse phase on the pairs that already pin it.
+
+## Top-right band, measured and wired (2026-10-26, `hd-top-right-band`)
+
+Claim (row 5): ours runs too bright in tx 9-12, ty 0-1; acceptance, mean luma bias within +2 on
+`the-amphiseum` and `vineta-k` with the craft and track blocks unchanged. **Half true, half open.**
+Evidence and method are in `docs/formats/rcsmaterial.md`, "A program with no `LG2` reading a dot product
+draws no specular; the cone's taps are sRGB-decoded". Per-slot ablation on both pairs, then a live RPCS3 frame
+dump for the cone's sampler words.
+
+- **`vineta-k` (ramp-edge lines): a specular the program does not compute.** Slot 257 (`lambertzeroalpha`
+  `martin_alum_grill`) has `LG2`s on its lightmap curve only; `Program::has_dot_power` is `false`, so it
+  and every program like it draws no specular. Band +14.9 to -3.1 (error 25.1 to 9.1), whole frame +3.1
+  to -0.2. Overshoots the acceptance the other way: -3.1.
+- **`the-amphiseum` (light shafts): the cone's taps are gamma-7 units** (live draws 724 and 730, `@0x1520`
+  matched, address words `0x60710101` and `0x60750102`). Band +16.1 to +5.7 (error 23.5 to 14.4). Not within
+  +2.
+- **`talons` sky particles and `anulpha-pass` pillar glow: not touched, still open** (not measured; the first
+  is capture-mismatched).
+- 13-pair band mean +6.3 to +3.0 (error 13.1 to 10.4). Per pair, before to after (bias, error): moa-therma
+  +7.1/11.6 to -1.3/5.1, sebenco-climb +8.4/15.1 to +5.5/13.0, chenghou-project +2.7/8.3 to +1.2/7.2,
+  tech-de-ra +2.9/6.1 to +2.1/5.5; the other seven moved under 0.5. Worse in absolute error: Talon's and
+  Talon's Assegai left wall +0.5 (the cone streaks the original does not show), Vineta K track block +0.1.
+- Omega ships both materials as PS4 containers (unread); 2048 neither: not checkable, reasons on the page.
+
+### Open from this lane
+
+1. **Amphiseum band +5.7, 3.4 over the no-cone floor.** Shaft width or the `s` scale (0.49596); alpha
+   composition is the same as the authored blend `SRC_ALPHA, ONE`. Needs the cone's geometry against
+   the original's at the same pose, or the live `s` read off the draw's fragment constants.
+2. **Vineta K band -3.1.** Slot 96's strip is grey where the original's is blue (hue); the tower's
+   yellow-lit glass is dimmer than the original's.
+3. **Modesto Heights, Metropia and the Talon's pairs band** are unmoved by either rule (+5.6, +0.3 with
+   15.6 error, +9.2): another cause, never ablated.
+4. **Talon's cone:** same decode applied, not independently verified (no matched frame that frames a
+   cone).
+
+**Note (lead, at merge):** the band lane above landed `Program::has_dot_power` (no specular where a
+program has no dot-product power). That is lane claim 3's guessed cause for Vineta K's ledge strips, so
+re-measure claim 3 on the merged main before drawing it.
 
 ## Later
 

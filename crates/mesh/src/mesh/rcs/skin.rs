@@ -723,7 +723,6 @@ pub(super) fn roles(
         specular_exponent.push(light_inputs::specular_exponent(
             program.as_ref(),
             material,
-            factor,
             report,
         ));
         colour_factor.push(factor);

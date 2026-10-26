@@ -55,6 +55,59 @@ fn vinetas_wet_floor_binds_its_floor_texture_not_the_paraboloid() {
     assert!(checked > 0, "Vineta K should carry d_s_n_customr slots");
 }
 
+/// **A program with no `LG2` reading a dot product draws no specular.** Vineta K's
+/// `lambertzeroalpha` slot 257 (`martin_alum_grill`, the ramp-edge trim of the
+/// top-right band) carries `LG2`s, but only for its lightmap curve: no `pow(N.H, e)`,
+/// so the stand-in exponent drew white highlight lines the original does not. Its
+/// `jd_simplespecular` slots do carry the chain (`DP3`, `DIVSQ`, `LG2`, `MUL 32`)
+/// and keep theirs. Dropping `Program::has_dot_power` from
+/// `skin::light_inputs::specular_exponent` fails the first assertion; making it too
+/// strict (a plain `DP3` straight into the `LG2`) fails the second.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn vinetas_lightmap_only_lambert_slot_draws_no_specular() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let path = "/data/environments/01_vineta_k/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, _) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Vineta K builds");
+
+    let trim = &rcs.materials[257];
+    assert!(
+        trim.name.ends_with("/lambertzeroalpha.rcsmaterial")
+            && trim.texture.ends_with("martin_alum_grill.gtf"),
+        "slot 257 is {} / {}",
+        trim.name,
+        trim.texture
+    );
+    assert_eq!(
+        model.material_specular_exponent[257],
+        mesh::NO_SPECULAR,
+        "the ramp-edge trim draws a specular its program has no half-vector power for"
+    );
+
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if material.name.ends_with("/jd_simplespecular.rcsmaterial") {
+            assert_ne!(
+                model.material_specular_exponent[slot],
+                mesh::NO_SPECULAR,
+                "slot {slot} ({}) lost the specular its program computes",
+                material.texture
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "Vineta K should carry jd_simplespecular slots");
+}
+
 /// Names the picture each lightmapped slot of `material` binds on Sebenco Climb,
 /// forward and reversed, and asserts `ok` of its label.
 fn sebenco_slots(material: &str, ok: impl Fn(&str) -> bool, why: &str) {
