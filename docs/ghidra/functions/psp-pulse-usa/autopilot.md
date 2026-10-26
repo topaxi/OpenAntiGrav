@@ -103,7 +103,16 @@ one word past the `entity+0x54` that `Shield_Activate` writes `~SHIELD`'s handle
 into, so the autopilot has a held loop and this is where it stops. What opens it
 is not on this page; see below.
 
-## Firing cancels it
+## Absorbing cancels it (was "Firing cancels it")
+
+**Corrected 2026-10-26 (`autopilot-re`): this function is the absorb path, not
+the fire path, and the law is "absorb cancels it".** `0x08844ec4` is
+`Ship_AbsorbHeldPickup` (named on
+[cannon-quake-leachbeam.md](cannon-quake-leachbeam.md), 85): it gates on the
+control record's byte `+0x17`, absorb, where `Ship_FireHeldWeapon` gates on
+`+0x15`, fire. The paragraph below keeps its original reading and its 85 for
+the record; the measured law, with the live run, is in
+[the 2026-10-26 section](#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re).
 
 `FUN_08844ec4`, the player's fire path, opens with:
 
@@ -393,4 +402,138 @@ contact ([ai-controls.md](ai-controls.md#the-players-own-driver-the-autopilot)).
   `Autopilot_Update`, by analogy with the Shield's pair, and did not verify it.
 - **Nothing here is runtime-verified.** One PPSSPP breakpoint on
   `Autopilot_Fire` with the pickup collected would settle the duration and the
-  teardown in a single run.
+  teardown in a single run. *(2026-10-26: the countdown, the teardown and the
+  cancel are now watched live, in the section below.)*
+
+## Absorb cancels it, fire does not, and no corner holds it (2026-10-26, `autopilot-re`)
+
+The maintainer, 2026-10-26: "autopilot powerup should be able to be cancelled (I
+think via the absorb button? unsure, needs recovery) and there's also some logic
+in the original that prevents it from automatically stopping at sharp turns."
+The first half is right. The second is not, on Pulse, and not on HD or Pure as
+read.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0883f540` | `Ship_UpdateWeapons` | 80 |
+| `0x0883efb4` | `Ship_TestWeaponPads` | 65 |
+
+`Ship_UpdateWeapons` is every craft's per-tick weapon step: `Ship_TestWeaponPads`,
+the pending weapon damage and repair, the collision impulse, the lock for held
+ids `1` and `10`, then, when the craft has a control record
+(`*(craft+0x94)+0x78 != 0`), `Ship_FireHeldWeapon`, `Cannon_UpdateReload` and
+`Ship_AbsorbHeldPickup` in that order. Its one caller is `Ship_UpdateEntity`
+(`0x0884230c`), and only when the race settings (`0x08b30f90`, `s4` from
+`0x08841918`) have the byte `+0x18` set or the game mode is one of a short list
+(`0x08842270..0x088422fc`). That byte is the race's weapons switch: in a Weapons
+OFF race neither button reaches a pickup path at all, which the first live run
+below ran into.
+
+### The law
+
+1. **Absorb cancels a running Autopilot**, in every mode, with or without a
+   pickup held. `Ship_AbsorbHeldPickup` tests the absorb byte and
+   `Ship_State == 1`, then (outside Eliminator) goes straight to
+   `craft+0x1b8 & 0x800` (`0x08844fe8`) and, when it is set, stores `0.0` to the
+   timer `+0x148` (`0x08845034`) and skips the whole absorb switch, so a held
+   pickup is neither paid out nor spent. `Autopilot_Update` tears it down through
+   its own `<= 0` arm on the next dispatch. In Eliminator (game mode `8` or
+   `0x12`) a held pickup is first requested as a fire (the Shield there) and the
+   same cancel follows, which is the edge `crates/raceplay/src/eliminator.rs`
+   records. **Confidence 95**: static, and the live run below.
+2. **The player's absorb reaches that test under the Autopilot, and fire does
+   not.** `Ship_UpdateCraft` copies the pad record's absorb byte into the
+   driver's record: `craft+0x78` holds `*(craft+0x3c)`, the pad record, from
+   `0x08849638`; `lbu a0,0x17(a0)` at `0x0884967c`; `sb a0,0x17(a2)` into
+   `a2 = *(craft+0x40)` at `0x08849684`. With the blend non-zero it then copies
+   the pad record into `craft+0x44`, copies the driver's whole record over it
+   (`0x088496b8..0x08849768`, ten words) and points `craft+0x78` there. The fire
+   byte `+0x15` that reaches `Ship_FireHeldWeapon` is the driver's own.
+   **Confidence 92**: static, and the live run below.
+3. **A held Autopilot cannot be fired into a running one.**
+   `Ship_FireHeldWeapon` refuses `held == 6 && (flags & 0x800)` (`0x08844b44`)
+   and leaves the pickup held. **Confidence 90**, static and live.
+4. **No pickup is collected while it runs.** `Ship_TestWeaponPads` asks
+   `WeaponPads_TestCraft` only with an empty slot, and calls the grant request
+   `FUN_08862bb4` (a store of `1` to `record+0x1c4`; not renamed, "grant
+   pending" is inferred from this one use) only when `craft+0x1b8 & 0x800` is
+   clear (`0x0883f0c0`). `Autopilot_Fire` spends the slot (`held = -1`), so the
+   slot stays empty for the whole stint and fire has nothing to fire.
+   **Confidence 80**, static only.
+5. **Nothing holds it through a corner.** The timer `+0x148` has three writers
+   on a pickup record (`psp-relocate.py field 0x148`, every `sw`/`swc1`):
+   `Autopilot_Fire` (`0x088613ec`), `Autopilot_Update` (`0x0886142c`) and the
+   absorb cancel (`0x08845034`); the other hits are the body's velocity
+   (`body+0x140..0x148`) and unrelated structures. `Weapons_DispatchFire` calls
+   `Autopilot_Update` with the frame's `dt` whenever the bit is set
+   (`0x08861c40..0x08861c5c`, `f20` from its own `f12`), with no test of track
+   state; the byte `0x08ab0fec` at its top is a one-time init latch. The release
+   in `PlayerStatus_Update` has two guards, `entity+0x860 & 0x8` and `& 0x10`
+   (`0x0883beec..0x0883bf18`), and **neither bit has a setter**: every `sw` to
+   `+0x860` (55 sites) was read with up to 96 bytes before it, `masked 0x860
+   0x8`/`0x10` find the release as the only reader, and only `Craft_Construct_q`
+   clears them. The byte `entity+0x6c`, which forces blend `1.0` when set, has
+   byte stores only in `Craft_Construct_q` (a clear), `Ai_Construct` and
+   `FUN_08854e7c` (the driver's own `+0x6c`), `FUN_0887eba8` (not read) and an
+   unrelated global's setter. A word store to it is not excluded statically, so
+   it was watched live instead. **Confidence 90** for "no corner hold", static
+   and live.
+
+### Measured live
+
+PPSSPP v1.20.4, `pulse-psp-usa`, the saved Single Race
+`race-talons-venom-alongside` (Talon's Junction White, VENOM, Weapons OFF, the
+player's Autopilot already running at `1e9`). `scripts/psp-autopilot-cancel.py`
+stops once a frame on `Weapons_DispatchFire` and logs the pickup record, the
+blend, the engine bits, the record's two button bytes, `entity+0x860`,
+`entity+0x6c` and `entity+0x912`. `--weapons-on` writes the race's weapons byte
+`0x08b30fa8 = 1` after the load. Without it the absorb press below did nothing
+(the absorb byte read `1`, the timer stayed at `1e9`), which is
+`Ship_UpdateEntity`'s gate above.
+
+| Phase (weapons byte set) | Input | What the original did |
+| --- | --- | --- |
+| absorb, empty slot | CIRCLE, 4 frames | absorb byte `1` on frame 22; timer `1e9 -> 0.0` the same frame; frame 23 bit `0x800` clear, timer `-0.017`, engine bits `0xd -> 0x1`, blend `0.0` |
+| fire, empty slot | SQUARE, 4 frames | the record's fire byte stayed `0`; nothing changed for 30 frames |
+| fire, held Autopilot (`held = 6` written) | SQUARE, 4 frames | held stayed `6`, the timer stayed at `1e9`, nothing changed |
+| expiry, racing | timer set to `0.25 s`, re-armed on the frame it ran out | 152 of 152 expiries released: blend `0.0` and engine bits `0x1` on the expiry frame, the pad record selected on the next. The sharpest averaged 4.86 degrees of heading a frame over the six frames before (about 290 degrees a second), the next 3.76, 2.48 and 2.42 |
+| expiry, finished | the same, after the finish | 108 of 108 kept blend `1.0` and bits `0xd`: `PlayerStatus_Update`'s finished-racer arm, the after-the-finish flight, not a hold |
+
+`entity+0x860 & 0x18` and `entity+0x6c` were never non-zero across the 4,596
+frames. The countdown runs on through a corner and releases mid-corner. What can
+read as a hold is only that the controls hand back in one tick with the craft
+already at the Autopilot's speed and line.
+
+### Ours
+
+`Race::spend_pickup` (`crates/raceplay/src/weapons.rs`) returns when the slot is
+empty before it reaches its cancel, and its cancel is on SQUARE. In the
+original's flow the slot is always empty under a running Autopilot, so in play
+ours cancels on **neither** button, which is what the maintainer saw. Measured
+on this tree with a scratch test (not committed): armed through the pickup, then
+CIRCLE and SQUARE with the slot empty, `flown_for_the_player` stayed `true`
+after both. Ours also grants from a pad while the Autopilot runs
+(`Race::test_weapon_pads`, `crates/raceplay/src/pads.rs`, has no running test).
+The fix is open, tracked in HANDOVER.md.
+
+### The other titles
+
+- **HD/Fury: the same cancel.** `Ship_UpdatePickup_q` (`0x000e9160`) tests the
+  control record's byte `+0x1b` and the state word `ship+0x5fa4 == 1`, then
+  `slot+0x200 & 0x800` (`0x000e92a0..0x000e92b0`), and stores `0` to the timer
+  `slot+0x158` (`0x000e92b8`). `0x000f1958` copies the pad record's `+0x1b` into
+  the driver's (`lbz r0,0x1b(r6)` / `stb r0,0x1b(r5)` at `0x000f1a08..0x000f1a10`)
+  right before its blend test, the shape of Pulse's pass-through, so `+0x1b` is
+  HD's absorb byte. `Autopilot_Update` (`0x00129988`) has no hold; at expiry it
+  also plays a cue when `entity+0x628c == 0`. The release guards
+  `ship+0x6a64 & 0x8`/`0x10` have no `ori`/`rlwimi` setter in the eight
+  instructions before any of the 60 `stw` to `+0x6a64`, and nothing stores a
+  byte at `+0x6a67`. Static only, **confidence 80**.
+- **Pure: no cancel, no hold.** `Autopilot_Fire` (`0x0884c770`) and
+  `Autopilot_Update` (`0x0884c794`) keep the running flag as a byte (`+0x154`)
+  and the timer at `+0x15c`, see
+  [psp-pure-usa/autopilot.md](../psp-pure-usa/autopilot.md). Static only,
+  **confidence 70** for "absorb does not cancel in Pure".
+- **2048: not checked.** The `disengaging` cue is passed at
+  `0x8120ed52..0x8120ed5e` of the v1.04 executable, inside a function Ghidra has
+  not delimited; its update was not read. Omega not checked.

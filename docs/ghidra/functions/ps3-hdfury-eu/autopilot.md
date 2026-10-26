@@ -217,3 +217,14 @@ output and plays each local person's), applied to `Cue::Disengaging` at its rais
 and to the held `~AUTOPILOT` level (`Race::autopilot_is_active`). Pulse and Pure have
 no split screen. Omega and 2048: not checked, the announcer path is
 unread there, so the same chosen rule applies to both.
+
+## Absorb cancels it here too (2026-10-26, `autopilot-re`)
+
+`Ship_UpdatePickup_q` (`0x000e9160`) tests the control record's byte `+0x1b`,
+then the slot's running bit (`0x000e92a0..0x000e92b0`), and stores `0` to the
+timer `slot+0x158` (`0x000e92b8`). `0x000f1958` copies the pad record's `+0x1b`
+into the driver's (`0x000f1a08..0x000f1a10`) before its blend test, so the
+player's absorb reaches it while the driver flies. `Autopilot_Update` above has
+no hold through a corner. Static only, confidence 80; Pulse's live run and the
+full reading are in
+[psp-pulse-usa/autopilot.md](../psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re).

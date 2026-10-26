@@ -620,8 +620,8 @@ seen from the authoring side.
       `Autopilot_Update` (`0x08861404`) give the duration's source
       (`<Weapon type="Autopilot"><Stats time>`, 5 s on both shipped tables), the
       running bit, the countdown, the announcer's `disengaging` on the tick the
-      remainder crosses one second, and the fact that **pressing fire cancels it
-      and fires nothing** while keeping the pickup. See
+      remainder crosses one second, and the fact that **pressing absorb cancels it**
+      (corrected 2026-10-26; this said fire until then). See
       [autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md). Three
       parts stay ours and each says so where it is written: the takeover reuses
       `oag_ai::Driver` because the original's control-source swap was not found;
