@@ -288,6 +288,7 @@ impl App {
             if let Some(title) = self.race_title {
                 music_place.resume(&mut audio, &self.music_discs, title.name);
             }
+            oag_game::sound::hold_race_song(&mut audio, loaded.title);
             audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,

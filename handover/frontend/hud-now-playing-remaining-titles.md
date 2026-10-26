@@ -8,8 +8,14 @@ How and what differs: `docs/formats/now-playing.md`. Evidence:
 
 ## Open
 
-- The race music starts at load; the originals start it, and the display, at the green light.
-  The display waits for the light, the sound does not.
+- Pulse's fly-over plays a pre-race voice-over through the music player
+  (`MusicPlayer_StartPreRaceDialogue`, `Data\Sound\PreRaceDialogue\%d\...`); it is not played
+  here, so the fly-over is silent (`docs/gameplay/race-intro.md`).
+- The playlist resumes mid-track at the green light after a visit to the menus; the originals
+  start the next song. A resume is not a new song, so the marquee depends on whether the race
+  before it showed one.
+- The race song's start at the release (`docs/formats/now-playing.md`, "When the song starts")
+  is read off Pulse's and HD's executables, not watched running; Pure, Omega and 2048 inherit it.
 - No `Dynamic HUD` setting to hide the display (Pulse and HD gate on it), and no marquee on a
   split screen.
 - The 60 Hz step and HD's black bar tint are read from code, not confirmed on a frame of the
@@ -21,6 +27,6 @@ How and what differs: `docs/formats/now-playing.md`. Evidence:
 
 ## Next Steps
 
-- Move the race music's start to the green light on the titles that show the display, then
-  drop `advance_now_playing`'s wait.
+- Watch the song's start on a muted PPSSPP capture of Pulse and an RPCS3 one of HD, in the same
+  captures as the timing below, to move the two start rules from read to watched.
 - Confirm Pulse's timing on PPSSPP and HD's bar on RPCS3 with a muted capture.

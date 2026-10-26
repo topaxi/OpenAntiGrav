@@ -10,6 +10,8 @@ the arbiter for the 60 Hz assumption in the last section).
 | `0x0882be1c` | `RaceManager_UpdateNowPlaying` | 85 | Per-update state machine: fade in and scroll, scroll, fade out, clear |
 | `0x088290bc` | `RaceManager_ApplyNowPlayingAlpha` | 80 | Writes the text alpha and the background's four vertex alphas |
 | `0x08938e70` | `MusicPlayer_StartNextSong` | 65 | Picks the next song, loads it, copies its strings, calls `ShowNowPlaying` |
+| `0x089385b4` | `MusicPlayer_Stop` | 75 | Stops the stream the music player holds and sets its state to 0 |
+| `0x089387e8` | `MusicPlayer_StartPreRaceDialogue` | 65 | Plays the circuit's pre-race voice-over through the music player |
 
 ## Layout (authored)
 
@@ -55,6 +57,37 @@ with no delta time, so every step is per update.
 | 3 | text cleared, display off | |
 
 `ShowNowPlaying` starts it with alpha 0, step 5, text x = the authored origin.
+
+## When the song starts (read 2026-10-26, lane `race-music-at-green`)
+
+Read from the decompiler, **not watched on a running original**. The race song, and with it the
+display, starts on the step that voices `go`; nothing sounds on the music player between the
+fly-over and then.
+
+- `MusicPlayer_StartNextSong(player, pick)` opens with `if (g_race_manager == 0 ||
+  race_manager+0x7c8 <= 1) { player+0x3c0 = pick; player+0x48 = pick; return 0; }`. The mode
+  state `+0x7c8` is 0 in the fly-over and 1 in the countdown: there it **only stores the pick**
+  and starts nothing.
+- `RaceMode_SetState(mode, 1)` (`0x08827350`, the countdown's start) calls
+  `MusicPlayer_Stop(player, 0, 1)` before the `ready` cue. `MusicPlayer_Stop` switches on the
+  player's source kind (`+0x3bc`: 0 is the ATRAC stream, whose stop flag it sets and whose
+  thread and Atrac id `0x0893be54` releases; 1 is a second player type, stopped by
+  `0x0893c7a4`), then writes `+0x3bc = 0` and the state `+0x3c = 0`. Silence from `ready` to `go`, no fade.
+- `RaceMode_UpdateIntro_q` (`0x08829e6c`), substate 1: at the fly-over counter's 0 it calls
+  `MusicPlayer_StartPreRaceDialogue` (`Data\Sound\PreRaceDialogue\%d\Tr...`, the circuit's
+  voice-over, through the same player); when the fly-over ends it calls `MusicPlayer_Stop`
+  again. This build plays no pre-race dialogue, so the fly-over is silent here.
+- `RaceMode_UpdateCountdown` (`0x088274b4`), when the whole seconds left reach zero:
+  `Race_StartRacing`, `RaceMode_SetState(mode, 2)`, the `go` cue, `player+0x9c |= 2`, then
+  `MusicPlayer_StartNextSong(player, -1)`. The other start site, `0x08825bb0` (a countdown
+  that waits on a master-clock list, `MasterClList`, rather than a local timer), makes the same
+  calls in the same order.
+- The pick at that moment: the stored `+0x3c0` when it is in range, else the song after
+  `player+0x48` (random when `+0x9c & 1`, the previous one when `+0x9c & 4`). `+0x3c0` is the
+  stored pick above; who writes a pick other than -1 was not chased.
+
+Confidence 80 for the timing (two call sites agree and `SetState(1)` is the stop); the player's
+`+0x3bc` source-kind reading is 65.
 
 ## Other titles
 

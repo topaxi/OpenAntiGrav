@@ -160,6 +160,15 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     tracks: None,
     state_tracks: None,
     now_playing: Some(NOW_PLAYING),
+    // Silent through the fly-over and the countdown, the song starts at the release:
+    // `RaceMode_SetState(1)` stops the music player, `RaceMode_UpdateCountdown` calls
+    // `MusicPlayer_StartNextSong` after `RaceMode_SetState(2)`
+    // (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`, "When the song starts"). Read on the
+    // PSP; the PS2 pressing is the same title data and carries the PSP's rule, its executable's
+    // music player unread (as `particle_laws` carries the PSP's law).
+    race_song_start: oag_title::pre_race::Sourced::measured(
+        oag_title::race_song::RaceSongStart::AtGo,
+    ),
 };
 
 /// The race screen's now-playing marquee: `item InGameMusicDisplay` in

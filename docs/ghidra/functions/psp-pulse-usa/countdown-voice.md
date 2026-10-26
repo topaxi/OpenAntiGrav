@@ -171,5 +171,6 @@ read of its body.
   they are lent Pulse's `ready`/`go` timing and the mode's speech bank (`RaceDefaults::countdown_voice`
   is `Some`, chosen, not measured, no confidence score; Omega is lent it the same way).
 - **The PS2 pressing** is the same title package and is lent the PSP's ticks.
-- What `FUN_089385b4(g_music_player_ptr, 0, 1)` does beside the `ready` cue (it
-  is in the same branch) - the race music's start, by its argument shape, unread.
+- ~~What `FUN_089385b4(g_music_player_ptr, 0, 1)` does beside the `ready` cue.~~ Read
+  2026-10-26: it is `MusicPlayer_Stop`, so the race is silent from `ready` to `go` and the song
+  starts at `go` ([now-playing.md](now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green)).

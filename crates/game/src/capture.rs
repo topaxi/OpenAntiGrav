@@ -414,6 +414,7 @@ pub fn run(
         // The same handoff `App::launch_race` makes: the menu voice this loop
         // started above stops, and the race playlist takes over - one music
         // rule for every way a race is reached, screenshot captures included.
+        crate::sound::hold_race_song(audio, loaded.title);
         audio.start_race_music(
             &options.music_discs,
             options.settings.audio.music_source,

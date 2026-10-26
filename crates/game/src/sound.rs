@@ -8,6 +8,7 @@
 //! - [`GameLibrary`] opens a source through [`oag_source::title::open_source`] and
 //!   lists the disc images [`oag_source::source::search_path`] names, which is what
 //!   [`oag_sound::library::Library`] asks of its host;
+//! - [`hold_race_song`] arms the race song for the title's start rule;
 //! - [`race_tick`] turns a race's state into the plain-data
 //!   [`oag_sound::sfx::RaceFrame`] the effects read, so the sound crate never
 //!   depends on `Race`;
@@ -119,6 +120,14 @@ pub fn play_nav(
 ) -> (oag_gameplay::cue::Cue, bool) {
     let cue = menu_cue(nav, pad);
     (cue, sfx.play(audio, cue))
+}
+
+/// Arms the race song for the title about to race: when its original starts the song at the
+/// release (`oag_title::Music::race_song_start`), the race hand-off holds it until
+/// [`race_tick`] sees the race leave its countdown. Called before every fresh race starts its
+/// music, whichever way it was reached; a resume mid-race does not call it.
+pub fn hold_race_song(audio: &mut Audio, title: &oag_title::Title) {
+    audio.hold_race_song(title.music.is_some_and(oag_title::Music::song_waits_for_go));
 }
 
 /// Plays one tick of `race`'s sound effects. See [`Audio::race_tick`].

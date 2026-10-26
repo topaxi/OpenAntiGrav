@@ -69,6 +69,7 @@ fn a_menu_source_switch_does_not_block_the_caller() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.music = audio
         .output
@@ -177,6 +178,7 @@ fn a_press_back_to_the_current_release_drops_a_switch_still_in_flight() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.music = audio
         .output

@@ -13,6 +13,7 @@ use super::*;
 
 mod no_audio;
 mod race_pick;
+mod race_song;
 mod race_switch;
 mod resume;
 mod source_switch;
@@ -297,6 +298,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
     assert_eq!(
@@ -395,6 +397,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
 
     audio.start_music(&discs, MusicSource::Auto, Path::new("unused"));
@@ -455,6 +458,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.start_music(&nothing, MusicSource::Auto, Path::new("unused"));
     assert!(audio.music.is_none(), "there was nothing to play");
@@ -533,6 +537,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.music = audio
         .output
@@ -596,6 +601,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     for _ in 0..120 {
         audio.tick();
@@ -650,6 +656,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     assert!(audio.start_movie(sound), "a free voice");
 
@@ -707,6 +714,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     let sound = Sound::new(vec![0i16; 44_100 * 2], 2, 44_100).expect("a sound");
     assert!(audio.start_movie(sound), "a free voice");
@@ -749,6 +757,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     assert_eq!(audio.movie_playhead(), None, "nothing started");
 
@@ -788,6 +797,7 @@ fn a_run_with_no_dump_accumulates_nothing() {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     for _ in 0..120 {
         audio.tick();
@@ -846,6 +856,7 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         source_switch: None,
         sfx: None,
         hd: Default::default(),
+        song_hold: Default::default(),
     };
     audio.music = audio
         .output
