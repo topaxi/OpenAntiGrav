@@ -124,3 +124,22 @@ fn another_seats_view_wears_none() {
     race.reset_viewpoint();
     assert!(race.cockpit_hit_strips().is_some());
 }
+
+/// Which titles bind the noise: Pulse measured, Pure by Pulse's law, and none of
+/// HD, 2048 or Omega (no `noisematt` string in HD's or 2048's executable, and
+/// Omega follows HD). A title that binds none requests nothing and draws nothing.
+#[test]
+fn only_pulse_and_pure_bind_the_cockpit_hit_noise() {
+    let entry = |title: &oag_title::Title| title.weapon_models.cockpit_hit.map(|hit| hit.entry);
+    assert_eq!(entry(&oag_pulse::TITLE), Some(r"Data\Tex\noisematt.mip"));
+    assert_eq!(entry(&oag_pure::TITLE), Some(r"Data\Tex\noisematt.mip"));
+    for other in [&oag_hd::TITLE, &oag_2048::TITLE, &oag_omega::TITLE] {
+        assert_eq!(entry(other), None, "{} binds a cockpit static", other.name);
+    }
+    let origin = |title: &oag_title::Title| title.weapon_models.cockpit_hit.map(|hit| hit.origin);
+    assert_eq!(origin(&oag_pulse::TITLE), Some(oag_title::Origin::Measured));
+    assert_eq!(
+        origin(&oag_pure::TITLE),
+        Some(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
+    );
+}

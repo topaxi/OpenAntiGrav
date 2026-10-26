@@ -43,6 +43,7 @@ mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;
 mod chase_camera_ground_truth;
 mod circuit_length_ground_truth;
+mod cockpit_hit_noise_ground_truth;
 mod countdown_voice_hd_ground_truth;
 mod craft_sticking_ground_truth;
 mod damage_fx_ground_truth;
