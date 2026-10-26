@@ -3515,7 +3515,12 @@ Ours now runs this law: `oag_weapons::projectile::quake` (`raw_lift`, `update_li
 `apply_hits` on the rising edge of `h > 0.1`), the mine trip in `Race::advance_quake`, and
 `oag_render::camera::internal::eye` taking `Ship::quake_lift`. Held at the peak (12 units) on a
 standing craft, the cockpit view's gantry sign edge moves 285 px down in a 1440x816 frame
-(184 to 469). Per-title as `Weapons::quake_hit`. **2048 / Omega check:** checked, applies, wired
-by inheritance (HD's `Quake_UpdateSpan` uses Pulse's span record and constants; the gate itself
-is unread there, so it carries `Origin::InheritedFrom`). `QuakeStats::radius` is no longer read
-by the hit path.
+(184 to 469; an upper bound, about 24 px per unit of `h`). On a real pass over a standing craft
+`h` rises over 7 ticks to 6.72 (0, 1.57, 2.93, 4.10, 5.11, 5.97, 6.72) and decays by `1 - 8 * dt` a
+tick after the bump leaves. The road ripple is drawn to the full 12 while the eye follows the
+smoothed `h`, so the cockpit eye sits inside the lifted road for those frames: the original does
+the same by construction (the hull and body are not lifted, only the road and the eye). Per-title as `Weapons::quake_hit`.
+**2048 / Omega:** not checkable as a measurement. Omega's executable cannot be read here and 2048's
+gate is unread; both inherit through HD, whose `Quake_UpdateSpan` uses Pulse's span record and
+constants but whose own gate is unread, so each carries `Origin::InheritedFrom`. `QuakeStats::radius`
+is no longer read by the hit path.
