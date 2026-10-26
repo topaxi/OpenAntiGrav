@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-10-13
-summary: "Trail ribbons, particles and the reticle still step per tick; a 240 Hz panel watch by the maintainer"
+updated: 2026-10-27
+summary: "Trail ribbons, particles, reticle and per-tick scalars still step at 60 Hz; maintainer priority; particles via the GPU, no Deck CPU cost"
 ---
 
 # Drawing between ticks: what is still stepped
@@ -64,15 +64,37 @@ motion blur measures per drawn frame now, see
    extrapolation would draw at already describes the moment after the
    acquire's wait.
 
+## Cost on a CPU-bound target (2026-10-27, the Steam Deck)
+
+The Deck is CPU bound (`docs/rendering/frame-thread-cpu.md`, "On the Steam Deck": wgpu's bookkeeping in
+`submit`, and the frames that also run a 60 Hz tick are the slow ones at 90 fps), so every item here must
+add no measurable CPU per frame. What exists runs on the CPU but per object, not per vertex: one blend per
+camera, craft, projectile, ghost, trail head and clock, a few dozen in all, into matrices that are uploaded
+every frame anyway, so the interpolation changes which numbers go up, not how many. The `original` shadow
+tier's floor rays were the one per-vertex case and already run per tick with a lerp between.
+
+The open items, by where they should run (estimates, not measured):
+
+- Reticle (item 4), flare axis, muzzle flash, flaps, shield swell (item 3): CPU, a handful of blends; negligible.
+- Trail rings (item 1): CPU; the ribbon's vertices are already rebuilt every frame for its head, only the ages change.
+- Particles (item 2): **GPU**. Keep a velocity per particle and pass one alpha uniform; the vertex shader draws
+  at `position + velocity * (alpha - 1) * dt`. Moving each particle on the CPU and re-uploading per frame is
+  the one way this lane could cost real time on the Deck: do not build it that way.
+- Extrapolation (item 6): the same blend with `t > 1`; negligible.
+
+Acceptance for any of it: a before/after `frame-phases` total on the Deck (HD Anulpha Pass, moving race, the
+recipe in `the-decks-60-fps-is-anulpha-pass-submit-cost.md` in this directory) with no measurable rise.
+
 ## Next Steps
 
 1. Watch a windowed race at the 240 limit on a high-refresh panel, chase view
    and cockpit, and note anything that still steps. Ten minutes, maintainer.
 2. Fractional-age trail rings (item 1), with a unit test that the ribbon is
    continuous in alpha across a tick boundary. Two to three hours.
-3. Particle positions between ticks (item 2), if item 1's look says it is
-   worth it. Half a day.
-4. Local-craft and chase-camera extrapolation (item 6), behind an off-by-default
+3. Particle positions between ticks (item 2), in the vertex shader (see "Cost on
+   a CPU-bound target"). Half a day.
+4. The reticle split (item 4) and the per-tick scalars (item 3). Two to three hours together.
+5. Local-craft and chase-camera extrapolation (item 6), behind an off-by-default
    setting, with a test that a contact tick never extrapolates. After the
    acquire hoist lands and an input-to-photon number exists to judge it by.
    Half a day to a day.
