@@ -224,6 +224,7 @@ OAG_GRAPHICS_SHADOWS = { text = "OMBRES", human = false }
 OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "FILTRAGE ANISOTROPE", human = false }
 OAG_GRAPHICS_CAMERA_VIEW = { text = "VUE DE LA CAMÉRA", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "CHAMP DE VISION", human = false }
+OAG_GRAPHICS_ADVANCED = { text = "AVANCÉ", human = false }
 
 # AUDIO's own rows.
 OAG_AUDIO_MUSIC_VOLUME = { text = "VOLUME DE LA MUSIQUE", human = false }

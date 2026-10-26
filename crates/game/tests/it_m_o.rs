@@ -17,6 +17,7 @@ mod magstrip_wire_2048_ground_truth;
 mod magstrip_wire_hd_ground_truth;
 mod medal_message_ground_truth;
 mod menu_definition_settings;
+mod menu_graphics_advanced;
 mod menu_screen_filter;
 mod menu_sfx_ground_truth;
 mod menu_web_rows;

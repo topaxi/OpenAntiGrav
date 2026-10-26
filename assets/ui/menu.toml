@@ -862,6 +862,7 @@ setting = "graphics.renderer"
 values_from = "renderers"
 restart_required = "RESTART THE GAME TO DRAW WITH THIS"
 
+
 # What percentage of the displayed size the game is actually rendered at.
 # Below 100 is the usual internal-resolution knob, above it is supersampling,
 # and it is measured against the aspect rectangle so it means the same thing at
@@ -880,6 +881,7 @@ label = "RENDER SCALE"
 string_id = "OAG_GRAPHICS_RENDER_SCALE"
 setting = "graphics.render_scale"
 values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"]
+
 
 # The frame rate a resolution controller aims for, and the row that turns it
 # on: `off` is one of the values rather than a toggle beside it, because two
@@ -925,6 +927,7 @@ warn_when = [
         { setting = "display.vsync", values = ["off", "smooth"] },
     ] },
 ]
+
 
 # Warned *and* clamped when it is above the frame limiter, which are two halves
 # of one answer: the row says what was asked for, and `drs::Target::at_most`
@@ -998,6 +1001,7 @@ warn_when = [
         { setting = "graphics.render_scale", values = ["25", "33", "50", "67", "75", "100", "125", "150", "200"] },
     ] },
 ]
+
 
 # What resolves the frame onto the surface. Directly below the render scale
 # because the pairing is what makes several of these mean anything: at 100 %
@@ -1075,6 +1079,7 @@ warn_when = [
     ] },
 ]
 
+
 # How hard FSR 1's and FSR 3.1's RCAS pass sharpens, in **stops**: 0 is maximum
 # and each whole step halves it, which is upstream FidelityFX's own scale and
 # runs the opposite way to what a reader expects. Greyed out on the three
@@ -1086,6 +1091,7 @@ string_id = "OAG_GRAPHICS_UPSCALER_SHARPNESS"
 setting = "graphics.upscale_sharpness"
 values = ["0.0", "0.2", "0.5", "1.0", "2.0"]
 disabled_by = { setting = "graphics.reconstruction", values = ["off", "fxaa", "smaa"] }
+
 
 # How many samples the rasterizer takes. **Its own axis since ADR-0041**, where
 # it used to be a fourth value of an anti-aliasing row, competing with two
@@ -1127,6 +1133,58 @@ values = ["off", "4x"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 disabled_by = { setting = "graphics.reconstruction", value = "fsr3" }
 
+
+# Applies to the next race built rather than immediately: the sampler is made
+# when a race's pipelines are.
+[[page.entry]]
+kind = "choice"
+label = "ANISOTROPIC FILTERING"
+string_id = "OAG_GRAPHICS_ANISOTROPIC_FILTERING"
+setting = "graphics.anisotropy"
+values = ["off", "2x", "4x", "8x", "16x"]
+
+
+# Which of the original's three in-race perspectives to fly with. The set and the
+# order are **recovered** (confidence 88): `Camera_UpdatePlayerView` rotates one
+# profile setting through exactly these three, in this order, wrapping - see
+# `docs/ghidra/functions/psp-pulse-usa/camera.md`. Which one a fresh install
+# starts on is *not* recovered; `far` is this project's choice, being what the
+# game rendered before the other two existed.
+#
+# The values are listed in the cycle's own order rather than nearest-first, so
+# moving the row and pressing the in-race cycle button (SELECT, or TAB on a
+# keyboard) walk the same sequence. No `restart_required`: this one applies to a
+# race already running, which is the whole point of there being a button for it.
+[[page.entry]]
+kind = "choice"
+label = "CAMERA VIEW"
+string_id = "OAG_GRAPHICS_CAMERA_VIEW"
+setting = "graphics.camera_view"
+values = ["internal", "close", "far"]
+
+# Everything on this page that is not the original's picture or a performance
+# control: the rows that change how the game looks beyond what the disc drew, and
+# the ones whose values include the original beside this project's own. A
+# submenu, not a header, because the menu has no section entry. Presentation
+# only: every row keeps its setting key and stored values.
+[[page.entry]]
+kind = "submenu"
+label = "ADVANCED"
+string_id = "OAG_GRAPHICS_ADVANCED"
+target = "graphics_advanced"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+
+[[page]]
+id = "graphics_advanced"
+title = "ADVANCED"
+title_string_id = "OAG_GRAPHICS_ADVANCED"
+
+
 # A strength, not a boolean - each value is a shutter fraction of one
 # simulation tick, and the technique underneath can improve without this row
 # or anyone's settings file moving; it already has once, camera reprojection
@@ -1141,6 +1199,7 @@ string_id = "OAG_GRAPHICS_MOTION_BLUR"
 setting = "graphics.motion_blur"
 values = ["off", "low", "medium", "high"]
 
+
 # Where the blur above spends its cost. `half` gathers a quarter of the pixels
 # and blends the smear back by depth: about a third of the chain's cost on an
 # integrated GPU, and a grainier smear, which is why `full` is the default.
@@ -1151,6 +1210,7 @@ label = "BLUR RESOLUTION"
 string_id = "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION"
 setting = "graphics.motion_blur_resolution"
 values = ["full", "half"]
+
 
 # What casts a shadow, and what draws it. **A technique, not a strength** - the
 # ladder is not monotonic in quality, which is what `docs/rendering/shadows.md`
@@ -1187,6 +1247,7 @@ string_id = "OAG_GRAPHICS_SHADOWS"
 setting = "graphics.shadows"
 values = ["off", "blob", "original", "mapped"]
 
+
 # How far out an authored `LodGroup` switches to its coarser tiers. `original`
 # is the recovered rule - `LodGroup_SelectChild`'s per-frame switch at the
 # distances the disc authors, 30 units on a Pulse craft - and the default.
@@ -1200,6 +1261,7 @@ label = "MODEL DETAIL"
 string_id = "OAG_GRAPHICS_MODEL_DETAIL"
 setting = "graphics.model_detail"
 values = ["original", "high", "maximum"]
+
 
 # How far out a PSP `.vex` model keeps its finer texture levels. `original` is
 # the recovered rule - the GE's slope law, `Gu_TexLodSlope` at 1/256 with bias 1,
@@ -1215,6 +1277,7 @@ label = "TEXTURE DETAIL"
 string_id = "OAG_GRAPHICS_TEXTURE_DETAIL"
 setting = "graphics.texture_detail"
 values = ["original", "high", "maximum"]
+
 
 # Where a craft's engine ribbon draws against the circuit's translucent floors.
 # `original` is the measured order and the default: the original queues every
@@ -1232,6 +1295,7 @@ label = "TRAIL ORDER"
 string_id = "OAG_GRAPHICS_TRAIL_ORDER"
 setting = "graphics.trail_order"
 values = ["original", "over-floors"]
+
 
 # A simulation of the display the title ran on, drawn over the finished frame
 # - menus, HUD and all - just before brightness and gamma. The list is
@@ -1252,6 +1316,7 @@ string_id = "OAG_GRAPHICS_SCREEN_FILTER"
 setting = "graphics.screen_filter"
 values_from = "screen_filters"
 
+
 # How much of the filter shows: a mix between the untouched frame and the
 # filter's output, applied by the pass itself so it means the same for every
 # preset. Greyed while no filter is selected.
@@ -1263,32 +1328,6 @@ setting = "graphics.screen_filter_strength"
 disabled_by = { setting = "graphics.screen_filter", value = "off" }
 values = ["25", "50", "75", "90", "100"]
 
-# Applies to the next race built rather than immediately: the sampler is made
-# when a race's pipelines are.
-[[page.entry]]
-kind = "choice"
-label = "ANISOTROPIC FILTERING"
-string_id = "OAG_GRAPHICS_ANISOTROPIC_FILTERING"
-setting = "graphics.anisotropy"
-values = ["off", "2x", "4x", "8x", "16x"]
-
-# Which of the original's three in-race perspectives to fly with. The set and the
-# order are **recovered** (confidence 88): `Camera_UpdatePlayerView` rotates one
-# profile setting through exactly these three, in this order, wrapping - see
-# `docs/ghidra/functions/psp-pulse-usa/camera.md`. Which one a fresh install
-# starts on is *not* recovered; `far` is this project's choice, being what the
-# game rendered before the other two existed.
-#
-# The values are listed in the cycle's own order rather than nearest-first, so
-# moving the row and pressing the in-race cycle button (SELECT, or TAB on a
-# keyboard) walk the same sequence. No `restart_required`: this one applies to a
-# race already running, which is the whole point of there being a button for it.
-[[page.entry]]
-kind = "choice"
-label = "CAMERA VIEW"
-string_id = "OAG_GRAPHICS_CAMERA_VIEW"
-setting = "graphics.camera_view"
-values = ["internal", "close", "far"]
 
 # A **percentage of the field of view the disc's own data authored**, not an
 # angle. `<ExternalCameraFar fov>` comes off the disc and its unit is
@@ -1302,6 +1341,7 @@ label = "FIELD OF VIEW"
 string_id = "OAG_GRAPHICS_FIELD_OF_VIEW"
 setting = "graphics.fov"
 values = ["75", "90", "100", "110", "125", "150", "175"]
+
 
 # How much a boost pad widens the field of view for a moment. **Invented, not
 # recovered** - nothing read out of either binary does this; the force it
@@ -1323,6 +1363,7 @@ setting = "graphics.boost_fov_kick"
 values = ["0", "8", "16", "32"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+
 # HD's boost zoom-streak ring, borrowed by the titles that draw nothing of the
 # kind: Pulse and Pure. **An enhancement of this project's, off by default** -
 # neither original has it, and the ring's numbers are HD's own, chosen rather than
@@ -1336,6 +1377,7 @@ string_id = "OAG_GRAPHICS_BOOST_ZOOM"
 setting = "graphics.boost_zoom"
 values = ["off", "on"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
 
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
@@ -1354,6 +1396,7 @@ values = ["off", "fps", "pacing", "dev"]
 kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
+
 
 [[page]]
 id = "audio"
