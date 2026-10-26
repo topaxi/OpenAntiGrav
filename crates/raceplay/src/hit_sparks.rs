@@ -80,6 +80,9 @@ use oag_livery::SparkAnchor;
 /// `intensity * 2.0 + 0.4` at the hardcoded intensity `1.0`.
 pub const HIT_SPARK_SEVERITY: f32 = oag_fx::sparks::SEVERITY_SLOPE + oag_fx::sparks::SEVERITY_FLOOR;
 
+/// The proximity gate's squared range, `Ship_DispatchCollisionFx`'s `(0, 10000)`.
+const CAMERA_GATE_SQUARED: f32 = 10_000.0;
+
 /// The loop bound `Ship_GatherCollisionFxNodes` collects up to.
 const MAX_NODES: usize = 10;
 
@@ -301,49 +304,94 @@ impl Race {
         } else {
             Trigger::HitSpark
         };
-        let effect = self.view.handles.get(trigger).cloned();
         let rng = &mut self.view.hit_sparks.rng;
         let first = rng.below(nodes as u32) as usize;
         let second = rng.below(nodes as u32) as usize;
-        let ship = &self.sim.world.ships[slot];
-        let model = model_matrix_of(ship);
         for node in [Some(first), (second != first).then_some(second)]
             .into_iter()
             .flatten()
         {
-            let sparks = &mut self.view.hit_sparks;
-            if sparks.cooldown[slot][node] > 0.0 {
-                continue;
-            }
-            // The locator's own gate (`instance + 100`) opens the cue and the
-            // spark together, so the sound plays whether or not the spark's
-            // particle file loaded.
-            sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-            if self.draws() {
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                    oag_gameplay::cue::Cue::Collision,
-                    slot,
-                ));
-            }
-            let Some(effect) = &effect else {
-                continue;
-            };
-            let sparks = &self.view.hit_sparks;
-            let anchor = sparks.anchors[slot][node];
-            let at = model.transform_point3(anchor.position);
-            let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
-            let Some(playing) = self.view.stage.play_riding(effect, at, HIT_SPARK_SEVERITY) else {
-                continue;
-            };
-            self.view.stage.orient(playing, up);
-            let sparks = &mut self.view.hit_sparks;
-            sparks.riding.push(Riding {
-                slot,
-                node,
-                playing,
-            });
-            sparks.started += 1;
+            self.fire_locator(slot, node, trigger, HIT_SPARK_SEVERITY);
         }
+    }
+
+    /// A craft-to-craft or cage contact on `slot` at `point`, impulse magnitude `impulse`:
+    /// `FUN_088418e0`'s contact-ring loop reaching `Ship_DispatchCollisionFx`
+    /// (`0x0883de90`) with `min(|p| * 0.0125, 1.0)`. It fires the locator nearest `point`,
+    /// the damaged variant (a pair contact's friction is `0.02`, a cage contact's is
+    /// positive, so `damaged` holds), with `ShipCollisionFx_Trigger`'s `intensity * 2 + 0.4`.
+    /// The locator's own 0.8 s gate is the one a weapon hit shares, so the same call also
+    /// raises the `.COLLISIONS` cue.
+    ///
+    /// **Nothing for a shielded craft** (the loop's `craft + 0x1b8 & 0x10` branch skips the
+    /// dispatch, `0x0884255c`). **The proximity gate** (the squared distance from the camera
+    /// object to a stored position in `(0, 10000)`, read as the camera's, `contact-response.md`)
+    /// is applied from the person-flown seat's craft, which the chase camera sits a few units
+    /// behind: **chosen, not measured**.
+    pub(super) fn throw_contact_spark(&mut self, slot: usize, point: Vec3, impulse: f32) {
+        let ship = &self.sim.world.ships[slot];
+        if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
+            return;
+        }
+        let seat = self.sim.world.ships[self.player_slot()].physics.body.position;
+        let away = seat.distance_squared(point);
+        if away <= 0.0 || away >= CAMERA_GATE_SQUARED {
+            return;
+        }
+        let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
+            return;
+        };
+        let model = model_matrix_of(ship);
+        let Some(node) = anchors
+            .iter()
+            .map(|anchor| model.transform_point3(anchor.position))
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                a.distance_squared(point)
+                    .total_cmp(&b.distance_squared(point))
+            })
+            .map(|(node, _)| node)
+        else {
+            return;
+        };
+        let severity = oag_fx::sparks::severity(impulse);
+        self.fire_locator(slot, node, Trigger::HitSpark, severity);
+    }
+
+    /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)
+    /// opens the cue and the spark together, so the sound plays whether or not the spark's
+    /// particle file loaded.
+    fn fire_locator(&mut self, slot: usize, node: usize, trigger: Trigger, severity: f32) {
+        let effect = self.view.handles.get(trigger).cloned();
+        let sparks = &mut self.view.hit_sparks;
+        if sparks.cooldown[slot][node] > 0.0 {
+            return;
+        }
+        sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
+        if self.draws() {
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Collision,
+                slot,
+            ));
+        }
+        let Some(effect) = effect else {
+            return;
+        };
+        let anchor = self.view.hit_sparks.anchors[slot][node];
+        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let at = model.transform_point3(anchor.position);
+        let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
+        let Some(playing) = self.view.stage.play_riding(&effect, at, severity) else {
+            return;
+        };
+        self.view.stage.orient(playing, up);
+        let sparks = &mut self.view.hit_sparks;
+        sparks.riding.push(Riding {
+            slot,
+            node,
+            playing,
+        });
+        sparks.started += 1;
     }
 
     /// Counts the cooldowns down and keeps every emitting spark on its

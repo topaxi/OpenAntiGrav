@@ -390,3 +390,55 @@ fn only_hd_throws_the_cannon_craft_hit_spark() {
     let liveries: Vec<oag_livery::Livery> = Vec::new();
     assert!(crate::hit_sparks::weapon_anchors(oag_omega::TITLE, &liveries).is_empty());
 }
+
+/// Two craft that hit each other: both bodies' contact rings get the record, so each hull
+/// throws one spark from its own nearest locator with its own `.COLLISIONS`, and the
+/// locator's 0.8 s gate holds a second hit on the same pair.
+#[test]
+fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
+    let mut setup = setup_with_locators(six_locators());
+    setup.mode = Mode::SingleRace;
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.view.hit_sparks = crate::hit_sparks::HitSparks::new(vec![six_locators(), six_locators()]);
+    let at = race.sim.world.ships[0].physics.body.position;
+    race.sim.world.ships[1].physics.body.position = at + Vec3::new(0.0, 0.0, 1.0);
+    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    let _ = race.drain_cues();
+
+    race.resolve_craft_pairs();
+    assert_eq!(race.hit_sparks_started_for_tests(), 2, "one spark per hull");
+    let cues = race.drain_cues();
+    for slot in 0..2 {
+        assert_eq!(
+            cues.iter()
+                .filter(|e| e.cue == Cue::Collision && e.slot == slot)
+                .count(),
+            1,
+            "slot {slot} did not sound its contact once"
+        );
+    }
+
+    race.sim.world.ships[1].physics.body.position =
+        race.sim.world.ships[0].physics.body.position + Vec3::new(0.0, 0.0, 1.0);
+    race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(0.0, 0.0, 8.0);
+    race.sim.world.ships[1].physics.body.linear_velocity = Vec3::new(0.0, 0.0, -8.0);
+    race.resolve_craft_pairs();
+    assert_eq!(
+        race.hit_sparks_started_for_tests(),
+        2,
+        "a locator fired again inside its 0.8 s gate"
+    );
+
+    let mut shielded = race_with_locators(six_locators());
+    shielded.sim.world.ships[0].physics.shield_pickup_timer = 5.0;
+    shielded.throw_contact_spark(0, shielded.sim.world.ships[0].physics.body.position, 100.0);
+    assert_eq!(
+        shielded.hit_sparks_started_for_tests(),
+        0,
+        "a shielded craft threw sparks"
+    );
+}

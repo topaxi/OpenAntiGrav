@@ -1195,7 +1195,17 @@ impl Race {
                     &mut ship_b.physics,
                     &b_size,
                 );
-                if touched.is_some() {
+                if let Some(contact) = touched {
+                    // Both bodies' rings get the record (`Body_RecordPairContact`), so each
+                    // hull throws from its own nearest locator.
+                    #[cfg(feature = "view")]
+                    if self.draws() {
+                        for slot in [a, b] {
+                            self.throw_contact_spark(slot, contact.point, contact.impulse);
+                        }
+                    }
+                    #[cfg(not(feature = "view"))]
+                    let _ = contact;
                     #[cfg(feature = "view")]
                     for slot in [a, b] {
                         self.view.pair_spoil[slot] |=
