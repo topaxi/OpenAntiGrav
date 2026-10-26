@@ -307,7 +307,10 @@ fn the_start_line_is_its_constant_diffuse_not_its_normal_map() {
 /// its `.rcsmaterial`) and never as colour, so the surface is its authored
 /// constant (`0x7611a2d8`) times the light. Binding the map as the picture
 /// drew the arch's glass band pure white, where the original's is dark.
-/// Dropping the family from `skin::DIFFUSE_PARAMETER` fails this.
+/// Since 2026-10-27 the picture is the map's size and carries its alpha (the
+/// program's reflection gate, `hd_sky_reflection_ground_truth`), so every
+/// texel's colour is the constant. Dropping the family from `skin`'s constant
+/// tables fails this.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
@@ -331,13 +334,7 @@ fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
         let texture = model.textures[slot]
             .as_ref()
             .expect("the authored constant is bound");
-        assert_eq!(
-            (texture.width, texture.height),
-            (1, 1),
-            "slot {slot} binds {} instead of its constant",
-            texture.label
-        );
-        let rgba = texture.to_rgba().expect("a one-texel picture");
+        let rgba = texture.to_rgba().expect("RGBA texels");
         let want = material
             .parameters
             .iter()
@@ -345,11 +342,14 @@ fn the_booth_glass_is_its_constant_diffuse_not_its_normal_map() {
             .expect("the glass authors 0x7611a2d8")
             .value;
         let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
-        assert_eq!(
-            [rgba[0], rgba[1], rgba[2]],
-            [byte(want[0]), byte(want[1]), byte(want[2])],
-            "slot {slot}"
-        );
+        for texel in rgba.chunks(4) {
+            assert_eq!(
+                texel[..3],
+                [byte(want[0]), byte(want[1]), byte(want[2])],
+                "slot {slot} binds {} instead of its constant",
+                texture.label
+            );
+        }
         checked += 1;
     }
     assert!(checked > 0, "Sebenco Climb carries booth glass slots");

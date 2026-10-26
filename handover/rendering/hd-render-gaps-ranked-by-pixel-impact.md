@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-26
-summary: "HD gaps by tile: gantry card panels read R+11 to +6 (card is 5-6-5 linear, wired); booth/reflect glass 4.5% of frame is next"
+updated: 2026-10-27
+summary: "HD gaps by tile: gantry card panels read R+11 to +6 (card is 5-6-5 linear, wired); booth glass wired 2026-10-27, glass_reflect next"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -257,7 +257,9 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
    is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia
    +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's 0.267 (cause unread; on Chenghou's strip red is +12.6 before, +6.1 now, +3.0 with the original's own card); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
    combine; (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
-2. **`ds_booth_glass` and `glass_reflect`: measure then wire, one family per commit.** Claim: these two
+2. **~~`ds_booth_glass`~~ (wired 2026-10-27, `hd-tech-de-ra-2`: modesto-heights booth 34.5 to 4.2, sebenco-climb 31.3 to 6.2, no
+   pair worse by more than 0.01 whole; hd-track-tone.md, "`ds_booth_glass` reflects the sky through its normal map's alpha") and
+   `glass_reflect`: measure then wire, one family per commit.** Claim: these two
    families, each on 11 to 12 circuits, cost about 7 M (4.5% of the frame, 19% of block 3 for booth alone)
    because ours draws them without their own programs. Acceptance: block 3 box on **modesto-heights** and
    **sebenco-climb** (booth 0.85 M and 1.04 M, bias -27 and -23) and **sol-2** (`glass_reflect` 1.18 M, +42):

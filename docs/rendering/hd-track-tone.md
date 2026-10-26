@@ -730,6 +730,59 @@ byte-identical.
 **Omega: checked, applies, not wired.** Omega's Anulpha ships `MT_Windows_A` (and `_1`, `_2`, under `Materials/` and
 `materials_DLC/`); its PS4 programs are not decoded and its `psp2` material route does not run `window_glass`.
 
+### `ds_booth_glass` reflects the sky through its normal map's alpha (2026-10-27, `hd-tech-de-ra-2`, confidence 85)
+
+**What a player sees.** The glass band above the pit-lane arches (Sebenco, Talon's, Modesto) and the booth windows behind the stand
+railings (Tech de Ra, Sol 2, Vineta K) drew solid black; the originals show a dim blue-grey glass with the sky's streaks in it. Found by a
+slot-skip census of the Tech de Ra pair (`OAG_SKIP_SLOT` bisection on the black strip behind the right-hand railing: slot 389).
+
+**The program.** Both circuits' slots resolve to the lightmapped block #7 (`@0x5f80` on Tech de Ra, `@0x5ca0` on Sebenco Climb; the
+vertex block #7 at `@0x5d60` writes `TC0.xyz` and `TC1.xyz` as 0, so no vertex light reaches it), read with `scripts/ps3-microcode.py
+fp-file`:
+
+`rgb = fog(light * C + Texture1.a * mix(T * sky, T * luma(sky), T.w)) / 2`, `alpha = 0`, drawn opaque (`Transparency::Opaque`,
+factors `0x302`/`0x303` unused),
+
+with `C` the constant `0x7611a2d8` (`0, 0, 0` on every booth the 13 pairs show), `T` `iblScalePower` (`0x7480de6d`, `ProbeTint::SCENERY`),
+`sky` `paraboloidReflectionTex` (unit 2) at `reflect(-V, N)` through the dual-paraboloid address, and `Texture1` the tangent normal map at
+unit 0 (`ds_glass_panels_ns.gtf`, alpha 0..31 over the whole 128x128, mean 18). The gate is the unit-0 fetch's own `w`: `MUL H0.xyz,
+R1.wwww, H0` on Tech de Ra, `MUL H1.xyz, R0.wwww, H5` on Sebenco, a register the `TEX` wrote and no later instruction overwrote. So the
+glass is the sky at about 7 % before the store's encode, which reads as the original's dim glass. (The table in `rcsmaterial.md`'s
+"near-white pit-wall arches" section read the Sebenco gate as a literal; corrected there.)
+
+**Wired** (`mesh::rcs::window_glass`, row `ds_booth_glass`, mode `Gated`, `tint` `[1, 0, 2]`; `skin`'s `AlphaUse::Gate` builds the
+picture as the constant with the map's alpha; `shade.wesl` weights the reflection by `a` when `tint.z` is 2). **Left out, named**: the
+normal map's tilt, as on every glass family here. Test: `hd_sky_reflection_ground_truth::tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha`.
+
+**Measured** on the 13 cold pairs (blur sigma 7, mean absolute RGB, and signed luma `ours - theirs`; "changed" is the pixels the change
+moved by more than 4):
+
+| Pair | whole before | after | changed px | changed before | after | luma bias before | after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| anulpha-pass | 7.81 | 7.82 | 16,665 | 4.0 | 4.9 | -2.1 | +2.5 |
+| chenghou-project | 4.62 | 4.63 | 17,930 | 6.7 | 5.6 | -6.8 | +5.6 |
+| metropia | 5.73 | 5.73 | 0 | | | | |
+| moa-therma | 4.70 | 4.63 | 10,154 | 18.0 | 5.1 | -18.6 | +0.8 |
+| modesto-heights | 5.89 | 5.51 | 23,126 | 34.5 | 4.2 | -34.1 | +3.8 |
+| sebenco-climb | 4.87 | 4.43 | 31,347 | 31.3 | 6.2 | -30.8 | +1.4 |
+| sol-2 | 3.71 | 3.58 | 20,276 | 16.4 | 5.5 | -15.7 | +3.4 |
+| talons | 3.78 | 3.56 | 15,144 | 31.3 | 4.4 | -31.2 | +2.5 |
+| talons-assegai-c1 | 4.05 | 3.82 | 16,083 | 31.1 | 4.1 | -31.0 | +2.7 |
+| tech-de-ra | 4.30 | 4.20 | 28,187 | 13.0 | 6.6 | -12.9 | +4.9 |
+| the-amphiseum | 7.00 | 7.00 | 9,714 | 5.2 | 4.5 | -4.7 | +1.9 |
+| ubermall | 3.76 | 3.74 | 19,116 | 5.6 | 3.2 | -4.9 | +1.6 |
+| vineta-k | 5.22 | 5.11 | 17,991 | 16.9 | 4.3 | -17.6 | +3.1 |
+| **mean of 13** | **5.033** | **4.905** | | | | | |
+
+Mean grey difference (the compare page's score) 10 better, Anulpha +0.01 and Amphiseum +0.02. The glass now reads 1 to 5 luma over the
+original's: the omitted normal map is the candidate (it tilts each texel's reflection off the vertex normal's).
+
+**2048: checked, differs.** 2048 ships `ds_booth_glass` on its DLC circuits (`DLC1/environments/Anulpha_Pass`, `Chenghou_Project`); the
+file declares `Constant1` and `Texture1` and no reflection sampler at all, so its glass is the lit constant (as `gxp.md` already draws
+it). **Omega: checked, differs, not wired.** Omega's `DS_booth_Glass*` (Moa Therma, Anulpha, Amphiseum, Tech de Ra) declares
+`Texture1`, `Constant1` and `cubeReflectionTex` with `reflectiveBlurCoeffs`: a cube capture, not HD's paraboloid sky, through a program
+not decoded; its `psp2` route does not run `window_glass`.
+
 ## The chevron panel draws black: the emask and its swept outline are unbound (2026-10-22, `hd-scenery-materials`)
 
 **Claim**: Anulpha Pass's hexagon panel on the left wall (`hd/anulpha-pass`, cold RPCS3 original, 1920x1080 scale 100) draws

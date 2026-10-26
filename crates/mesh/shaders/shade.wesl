@@ -918,7 +918,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // `a * light * picture + (1 - a) * (specular + reflection)`, alpha `a`, drawn
         // `One`/`OneMinusSrcAlpha`, so the clear part of the pane shows what is behind it.
         // `tint.z` 1 weights the reflection by `1 - a` (the pane, and
-        // `glass_2nduv_reflect_glow`'s opaque windows).
+        // `glass_2nduv_reflect_glow`'s opaque windows), `tint.z` 2 by `a` (`ds_booth_glass`, whose
+        // picture is its constant with the normal map's alpha).
         var sky_reflection = vec3<f32>(0.0);
         var pane_cover = 1.0;
         var pane_clear = 1.0;
@@ -930,7 +931,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
                 pane_cover = texel.a;
                 pane_clear = 1.0 - texel.a;
             }
-            let reflect_clear = select(1.0, 1.0 - texel.a, emissives.tint_offset[sky_entry].z > 0.5);
+            let gate = emissives.tint_offset[sky_entry].z;
+            let reflect_clear = select(select(1.0, 1.0 - texel.a, gate > 0.5), texel.a, gate > 1.5);
             sky_reflection = probe_tint(sky) * (emissives.tint_offset[sky_entry].x * reflect_clear);
             // `offset` 1: the program also adds `colour * (1 - mask.a)`, the colour in the next
             // entry's tint and the mask bound third at the second coordinate set
