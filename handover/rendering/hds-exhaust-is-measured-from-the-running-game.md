@@ -10,6 +10,12 @@ below. Do not requote this file - `engine-trail.md`'s "Open, in rough order
 of visible cost" section (and, for the boost timer, its own dedicated
 section) is the current, authoritative state.
 
+- **2026-10-26 (`hd-render-fidelity`): the white rest flame and its rays were the colour tap read raw.** Unit 0 of
+  every flame draw is sRGB-decoded on fetch (gamma nibble 7) and the trail tube's two units likewise; both now decode
+  on HD's encoded store (engine-trail.md, "The flame's colour tap is decoded on fetch", "The trail's colour taps are
+  decoded on fetch"). The rest flame matches the original's blue-with-pink block on the 13 grid pairs. Still open: the
+  trail on `hd-race/talons-pack` reads whiter, wider and brighter at its core than the original's (candidates: the
+  warm-up's full thrust, the trail brightness `+0x11d8`, bloom).
 - **The flame's `Speed*time` clock is drawn, not just read.** `time` is
   engine parameter slot 0, a global seconds clock every draw-state builder
   writes; the flame's noise tap scrolls at `Speed * time` = `2.0 * seconds`
