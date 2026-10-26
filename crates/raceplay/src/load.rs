@@ -1304,14 +1304,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report,
     };
     #[cfg(feature = "view")]
-    let platform = archives.layout.platform;
-    let track_shine =
-        vex_geometry && options.track_shine && title.looks.track_shine.applies(platform);
-    if !track_shine {
-        loaded.track_model.shine_draws.clear();
-    } else if !title.looks.track_shine_weighted.applies(platform) {
-        oag_mesh::mesh::shine_pass::unweight(&mut loaded.track_model);
-    }
+    let track_shine = {
+        let platform = archives.layout.platform;
+        let track_shine =
+            vex_geometry && options.track_shine && title.looks.track_shine.applies(platform);
+        if !track_shine {
+            loaded.track_model.shine_draws.clear();
+        } else if !title.looks.track_shine_weighted.applies(platform) {
+            oag_mesh::mesh::shine_pass::unweight(&mut loaded.track_model);
+        }
+        track_shine
+    };
     #[cfg(feature = "view")]
     pulse_psp::finish(
         &mut loaded,
