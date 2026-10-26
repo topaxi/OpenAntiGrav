@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-07
+summary: "A residual 3-6 dB race mix gap on Pulse is unexplained; the per-voice SAS volume would settle it"
+---
+
 # The race mix saturates; the per-voice SAS volume would settle whether it should
 
 **2026-09-07, sixth pass: the three wrapper names landed, and this thread's

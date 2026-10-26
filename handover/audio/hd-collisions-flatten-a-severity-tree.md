@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-08-31
+summary: "Which child of HD's .COLLISIONS severity tree the original plays is unrecovered; the fade is unheard"
+---
+
 # HD's cues end loud and were cut dead, and its `.COLLISIONS` is a flattened tree
 
 Reported from play on 2026-08-31: a thump *"a bit like a bad bass drum"*,

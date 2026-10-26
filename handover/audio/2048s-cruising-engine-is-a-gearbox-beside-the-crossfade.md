@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048]
+updated: 2026-10-05
+summary: "Port 2048's engine gearbox cues (251 of 254 resolve) beside the crossfade; channel and level checks open"
+---
+
 # 2048's cruising engine is a gearbox beside the crossfade
 
 2026-10-05, lane `v2048-engine`. The crossfade half is wired ([2048-xfx.md](../../docs/formats/2048-xfx.md)): a 2048 craft sounds on the grid and at low speed. At cruising speed the crossfade's layers are silent by their own curves, and the original plays the rest as a **gearbox of named cues**.

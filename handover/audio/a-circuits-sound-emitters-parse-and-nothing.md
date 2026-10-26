@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-06
+summary: "What reclaims the original's latched emitter voice is unread, and the emitter mix clips (7,932 samples in 30 s)"
+---
+
 # A circuit's sound emitters parse, and nothing plays them
 
 2026-09-04. The three `.vex` audio classes are decoded whole and the evidence

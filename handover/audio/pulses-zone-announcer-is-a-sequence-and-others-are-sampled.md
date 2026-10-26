@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-30
+summary: "Live PPSSPP check of the Zone announcer timeline; 15 of 33 wired cues still sampled, not layered"
+---
+
 # Pulse's Zone announcer is a sequence; a wider set of cues is still sampled instead of played
 
 2026-09-29. The maintainer heard "clear" alone at zone 5 (other milestones: "zone" alone, or a bare number). **Cause found and fixed**: each `zone_N` cue is a timeline - child `ZONE`, the number, child `CLEAR` on authored delays, every word a left/right pair of one waveform at pan angles 30/330 - and `load_named_cue` flattened it to six leaves that `Announcer::pick` drew from at random. `oag_formats::sblk::timeline` now walks it and `oag_sound::sfx::compose` lays it down as one stereo `Bus::Speech` voice. Evidence, delay word, and the live-measured 258.4 Hz master tick: [psp-audio.md](../../docs/formats/psp-audio.md#a-cue-can-be-a-sequence-and-zone_n-is-one) and [sound.md](../../docs/ghidra/functions/psp-pulse-usa/sound.md#the-master-tick-and-the-delay-word-2026-09-29). Pulse has no class announcer, so the "voice stolen on the same tick" idea does not apply to it.

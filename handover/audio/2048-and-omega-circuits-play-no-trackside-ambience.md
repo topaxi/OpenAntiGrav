@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega, hd]
+updated: 2026-10-06
+summary: "Omega trackside ambience needs its Wwise banks read (oag_formats::wwise); HD ambience unchecked on RPCS3"
+---
+
 # 2048's and Omega's circuits play no trackside ambience
 
 2026-10-06, found reading a `just play --race` log. `oag_sound::sfx::TrackEmitters::load`

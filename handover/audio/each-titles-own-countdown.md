@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd, 2048, pure]
+updated: 2026-10-19
+summary: "HD's ready-to-go spacing is inherited, not measured (RaceManager+0x1958 unread); 2048 needs a Vita3K cue log"
+---
+
 # Each title's own countdown: what is left
 
 2026-10-19, lanes `race-countdown-audio` and `countdown-audio-2`. Census and evidence:

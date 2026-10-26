@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-21
+summary: "Route Cue::Message and is_player by the listening seat for two local seats on one machine"
+---
+
 # The Autopilot's "disengaging" call plays for every seat
 
 Reported by the maintainer on 2026-10-21. Landed on the `autopilot-seat-cue` branch for a network client; local seats left on purpose.

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, pure]
+updated: 2026-10-16
+summary: "Menu cues not compared with a PPSSPP audio dump; session-path seam partial; other front-end sounds open"
+---
+
 # Pulse's menus play four cues; the rest of the front end's sounds are open
 
 2026-10-08, lane `pulse-menu-sfx`. Evidence: [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md),

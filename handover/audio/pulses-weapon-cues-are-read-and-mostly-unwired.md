@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, pure, hd]
+updated: 2026-10-21
+summary: "Pure, HD, Omega and 2048 roll-call cues unread; Missile fuse SHURIKENEXPL unheard against a capture"
+---
+
 # Pulse's weapon cues are read and mostly unwired - the wiring plan
 
 2026-09-23. Landed the same evening the plan below was drafted: every "wire"
