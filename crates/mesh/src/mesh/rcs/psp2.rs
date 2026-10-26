@@ -258,7 +258,7 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} draw(s) blended off the state word ({} with HD's authored factors for the same material name, the rest alpha-over, chosen: neither title authors factors) and {} alpha-tested at 0.5 (chosen)",
+                "; {} draw(s) blended off the state word ({} with HD's authored factors, for the same material name or by equivalence (the start-grid laser), the rest alpha-over, chosen: neither title authors factors) and {} alpha-tested at 0.5 (chosen)",
                 self.blended_draws, self.inherited_blend_draws, self.cutout_draws
             )
         };

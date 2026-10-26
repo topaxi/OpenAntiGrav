@@ -141,6 +141,23 @@ pub const INHERITED: &[(&str, u16, u16)] = &[
     ("zonebattle_shield", FACTOR_SRC_ALPHA, FACTOR_ONE),
 ];
 
+/// A name Omega and 2048 author that HD has no material of, mapped to the HD material that
+/// plays the same part - **inherited from HD by equivalence, not by the same name**. Each row's
+/// second name is a row of [`INHERITED`], so the factors are never written twice.
+///
+/// `fc01_effects_vscroll_emissive_alpha_glow` is the **start-grid laser**: every one of the 29
+/// entries over 2048's base package, its patch and both DLC packs and Omega's `trackZone` models
+/// binds a `start_grid_laser_da` picture (`cf_startline` on Tech De Ra's DLC circuit), state word
+/// `0x39` or `0x3d` (a blend, no alpha test), one submesh per circuit variant. HD's start-line
+/// laser is `cf_startbeam_glow` on `cf_startline.gtf`, the same picture file Tech De Ra's DLC
+/// ships (`docs/ghidra/functions/ps3-hdfury-eu/material-state.md`, draw 551), and Pulse's is
+/// `startline_laser_ADD_GLOW`. Neither 2048 nor Omega authors a factor pair.
+/// `crates/rcs/tests/hd_lineage_blend_ground_truth.rs` re-derives the census.
+pub const EQUIVALENT: &[(&str, &str)] = &[(
+    "fc01_effects_vscroll_emissive_alpha_glow",
+    "cf_startbeam_glow",
+)];
+
 /// A material's own name from its `.rcsmaterial` path, as [`INHERITED`] keys it.
 fn stem(path: &str) -> String {
     path.rsplit(['/', '\\'])
@@ -156,9 +173,11 @@ fn stem(path: &str) -> String {
 #[must_use]
 pub fn inherited(material_path: &str) -> Option<(Factor, Factor)> {
     let stem = stem(material_path);
-    let at = INHERITED
-        .binary_search_by(|row| row.0.cmp(stem.as_str()))
-        .ok()?;
+    let stem = EQUIVALENT
+        .iter()
+        .find(|row| row.0 == stem)
+        .map_or(stem.as_str(), |row| row.1);
+    let at = INHERITED.binary_search_by(|row| row.0.cmp(stem)).ok()?;
     let (_, src, dst) = INHERITED[at];
     Some((Factor::from_rsx(src)?, Factor::from_rsx(dst)?))
 }
@@ -189,6 +208,17 @@ mod tests {
             Some((Factor::One, Factor::OneMinusSrcAlpha))
         );
         assert_eq!(inherited("basicalpha.rcsmaterial"), None);
+    }
+
+    #[test]
+    fn the_start_grid_laser_takes_hds_start_beam_pair_by_equivalence() {
+        let path = "data/art/published/environments/altima/materials/fc01_effects_vscroll_emissive_alpha_glow.rcsmaterial";
+        assert_eq!(inherited(path), Some((Factor::SrcColour, Factor::One)));
+        for (name, hd) in EQUIVALENT {
+            assert!(INHERITED.iter().any(|row| row.0 == *hd), "{name} -> {hd}");
+            assert!(INHERITED.binary_search_by(|row| row.0.cmp(name)).is_err());
+        }
+
         assert_eq!(inherited("nothing_like_it.rcsmaterial"), None);
     }
 }

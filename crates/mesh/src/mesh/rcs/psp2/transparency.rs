@@ -16,7 +16,10 @@
 //! HD's own pair for a material of the **same name** where
 //! [`oag_rcs::rcsmodel::psp2::lineage_blend`] holds one (inherited, not
 //! measured here: `emissive_bloom`, `hd_enginetrail` and the light barriers are
-//! `SRC_ALPHA`/`ONE` there), and alpha-over (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`)
+//! `SRC_ALPHA`/`ONE` there), or, for the start-grid laser
+//! (`fc01_effects_vscroll_emissive_alpha_glow`), HD's `cf_startbeam_glow` pair
+//! `SRC_COLOUR`/`ONE` **by equivalence, not by name**
+//! ([`oag_rcs::rcsmodel::psp2::lineage_blend::EQUIVALENT`]), and alpha-over (`SRC_ALPHA`, `ONE_MINUS_SRC_ALPHA`)
 //! for every other name, **chosen, not measured**. The alpha test's reference is
 //! HD's `0.5` for the same reason (HD's `GL_GREATER`/`0.5` holds on every one of
 //! its mode-2 materials).

@@ -2328,6 +2328,20 @@ share material names.**
   effects that a stationary lap never meets, and Altima and Tower, whose floors are `fc01`/`fc12` families HD
   does not have, are byte-identical. HD's `talons-matched/03` pose is byte-identical before and after (the
   code path is Omega and 2048's only).
+- **The start-grid laser is inherited by equivalence, not by name.** Altima's red beam across the grid
+  (`fc01_effects_vscroll_emissive_alpha_glow`, picture `start_grid_laser_da`) drew as a near-opaque red line:
+  routed to the blended list, but alpha-over because no HD material has its name (2048 start-of-race frame, tick 1500,
+  proved by hiding material 508 of `altima/track.rcsmodel` in a local patch: `OAG_SKIP_MATERIAL` is not honoured on the
+  psp2 path). The census over 2048's base package, patch and both DLC packs and Omega's archives is 29 material entries (patch copies included), all of
+  them this name, all state `0x39`/`0x3d` (a blend, no test), all one submesh, all on `start_grid_laser_da` (`cf_startline`
+  on Tech De Ra's DLC circuit, the picture HD's `cf_startbeam_glow` draws). `lineage_blend::EQUIVALENT` maps the name to
+  `cf_startbeam_glow`, so the draw takes HD's `SRC_COLOUR`/`ONE`; depth and test stay 2048's own state word.
+  **Inherited from HD by equivalence, not measured on 2048**: no GXP read (the pair is not in the program, see above), so no
+  confidence score. **Omega: ported** (same `transparency::route`; the census holds Omega's `trackZone` models, and
+  `psp2_glow_ground_truth` pins the draw on both). Not wired: Pulse's start laser (`startline_laser_ADD_GLOW`) stamps the glow mask
+  (`crates/game/tests/glow_stamp_ground_truth.rs`); whether HD's `cf_startbeam_glow` does is not documented, and the psp2
+  path stamps for no draw, so the beam is additive but does not bloom through a mask.
+  The texture's own alpha is 0.13 to 0.57, yet the alpha-over draw read near-opaque; why was not chased.
 - **A third mode.** 16 2048 materials (`fc06_lambert_alpha`) carry low bits `3`, which `Material::mode`
   reads as none and draws opaque; on HD's register reading that is a blend and an alpha test together. Not wired.
 
