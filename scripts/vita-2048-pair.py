@@ -47,6 +47,9 @@ TITLE = "PCSF00007"
 
 #: Touch coordinates in the 960x544 game window (`vita3k-capture.md`'s walk-in table, re-measured 2026-10-22).
 GAME_MODE_SINGLE_PLAYER = (295, 162)
+#: The HD Campaign tile beside it (the DLC's own campaign, `vita3k-capture.md`'s walk-in table).
+GAME_MODE_HD_CAMPAIGN = (477, 162)
+GAME_MODES = {"single": GAME_MODE_SINGLE_PLAYER, "hd": GAME_MODE_HD_CAMPAIGN}
 CONFIRM = (882, 480)
 PAUSE_RETRY = (750, 480)
 RETRY_YES = (402, 312)
@@ -134,9 +137,10 @@ def boot_and_walk(s, args):
         time.sleep(4.0)
         s.key("x")
     time.sleep(2.0)
-    s.tap(GAME_MODE_SINGLE_PLAYER)
+    tile = GAME_MODES[args.game_mode]
+    s.tap(tile)
     time.sleep(3.0)
-    s.tap(GAME_MODE_SINGLE_PLAYER)  # the first tap highlights the tile, the second opens it (measured)
+    s.tap(tile)  # the first tap highlights the tile, the second opens it (measured)
     time.sleep(3.0)
     s.tap(args.node)
     time.sleep(3.0)
@@ -144,8 +148,15 @@ def boot_and_walk(s, args):
     time.sleep(3.0)
     s.tap(CONFIRM)  # the mode card
     # The menus are light (0.7-0.9 mean luma), the loading screen 0.9, the flyby and the race dark (0.2-0.4).
-    s.wait("the load to finish (a dark frame after the light menus and loading screen)", lambda f: mean_luma(f) < 0.55,
-           args.load_timeout, every=2.0, name="walk-load.png")
+    # The HD Campaign's event card is a blurred picture of the circuit behind a white panel (mean luma under 0.55 long before
+    # the load), so the load is not told by luma there: the tap loop below waits for the HUD itself.
+    if args.game_mode == "single":
+        s.wait("the load to finish (a dark frame after the light menus and loading screen)", lambda f: mean_luma(f) < 0.55,
+               args.load_timeout, every=2.0, name="walk-load.png")
+    else:
+        # No tap while it loads: a tap every 3 s through the HD Campaign's load left it at 56 % for five minutes (2026-10-26),
+        # the same stall Metro Park's Time Trial shows; without them the load took under 20 s.
+        time.sleep(25.0)
     # The ship flyby holds a check mark at the bottom right until it is tapped; the first tap may land on the load's tail.
     for _ in range(6):
         s.tap(CONFIRM)
@@ -232,6 +243,12 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--event", default="2048 - Event 2", help="our --event, the campaign event the original was walked into")
+    ap.add_argument("--game-mode", choices=sorted(GAME_MODES), default="single",
+                    help="the Game Mode tile to open: `single` (Single Player Campaign) or `hd` (the DLC's HD Campaign)")
+    ap.add_argument("--track", default=None,
+                    help="ours races this circuit (`--track <vex entry> --mode`) instead of `--event`: a circuit no campaign event of ours names, "
+                         "such as a DLC one (`Data\\art\\published\\DLC1\\environments\\Vineta_K\\track.vex`)")
+    ap.add_argument("--mode", default="single_race", help="ours' race mode with --track")
     ap.add_argument("--node", type=int, nargs=2, default=DEFAULT_NODE, metavar=("X", "Y"),
                     help="the event's node on the campaign map, in the 960x544 window")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
@@ -306,10 +323,11 @@ def main():
 
     ticks = args.ours_ticks if args.ours_ticks is not None else round(60 * (t_pick - t_hud))
     pair.rec["ours"]["ticks"] = ticks
-    pair.rec["ours"]["event"] = args.event
+    pair.rec["ours"]["event"] = args.track or args.event
     pair.check("ours renders before GO", ticks < ce.go_tick(plat), "tick %d, GO at tick %d" % (ticks, ce.go_tick(plat)))
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
-    base = [args.oag_game, args.source, "--race", "--event", args.event, "--ticks", ticks] + ce.ours_flags(plat)
+    which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
+    base = [args.oag_game, args.source, "--race"] + which + ["--ticks", ticks] + ce.ours_flags(plat)
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
     env = {**os.environ, **ce.ours_env(profile_dir)}
     run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
