@@ -1,199 +1,124 @@
-# Omega lacks HD's projectile bodies, hit sparks and adverts: ranked wiring list
+# Omega lacks HD's adverts, plume flags and hit effects: what is left of the wiring list
 
-Scout lane `omega-from-hd-scout`, 2026-10-26. Question: which HD-wired behaviour
-or asset could Omega take cheaply. Read-only; no code changed.
+Scout lane `omega-from-hd-scout` ranked the list on 2026-10-26; wire lane
+`omega-from-hd-wire` landed its first two items the same day. What it found and
+decided is in `docs/formats/omega-status.md` ("Weapon bodies") and
+`docs/gameplay/weapon-lineage.md`; this thread holds only what is still open.
 
 Cost tiers: **A** one `Title` field or table reference, no new code. **B**
 small wiring, but the provenance or the render needs a check first. **C** not
 cheap: it needs reverse-engineering or a capture first.
 
 Provenance rule for every entry: inherited from Wipeout HD unless Omega's own
-data proves it. **Census** means the entry names of an Omega archive were read
-directly from the PSARC name table: `data00`, `data02`, `data03`, `data04` and
-the patch's `data05` and `data09`. `data01`, `data07` and `data08` were not read.
+data proves it.
 
 ## Open
 
-### Worth a lane now (tier A or B, ranked by player impact)
+### Landed by the wire lane (nothing left to do)
 
-1. **Projectile bodies: the Omega table is empty (tier A, bodies only).**
-   - Where: `crates/omega/src/lib.rs:149-155` sets `weapon_models` to
-     `..WeaponModels::EMPTY` plus `ghost_static`. HD fills the bodies at
-     `crates/hd/src/race.rs:640-712`: rocket, mine, bomb, plasma ball, the plasma
-     blast trio, the bomb blast set, the missile blast and the LeachBeam ball.
-   - What happens: `crates/raceplay/src/load/weapon_models.rs:181-189`
-     (`load_optional`) returns `None` for an absent entry. `crates/raceplay/src/options.rs:908-911`
-     says a round with no model "draws as nothing at all". So on Omega a rocket,
-     a mine, a bomb, a plasma bolt and a missile blast draw nothing in any race
-     with a weapon. The exception is the cannon round, which falls back to
-     Pulse's bolt quads (`weapon_models.rs:268-274`), so its body is missing but
-     not the round.
-   - Stale comment: `crates/hd/src/race.rs:684` says Omega's table "is still
-     `EMPTY` (it does not race)". Omega races from its own data since 2026-09-29
-     (`crates/omega/src/race.rs`, module doc).
-   - Census: the body files exist in `data00`: `Data/weapons/HD_rocket.vex`,
-     `HD_mine.vex`, `HD_bomb.vex`, `HD_plasma_ball.vex`, `HD_plasma_sphere.vex`,
-     `HD_missile_explosion.vex`, `hd_muzzleflash.vex`, `HD_leachbeam_ball.vex`,
-     `HD_bomb_sphere.vex`, and the rest of HD's names.
-   - Rocket path, with its limit: `docs/ghidra/functions/ps4-omega-eu/weapons.md:107-115`
-     records that `Rocket_Construct` picks `Data/Weapons` or `Data/Weapons2048`
-     by `DAT_01f999e4 < 0x17`. The page does not say which branch an HD-lineage
-     race takes; that mapping is this lane's inference from the lineage byte
-     (`crates/omega/src/race.rs`, `ORIGINAL_DRIVER` comment). `WeaponModels`
-     holds one path per weapon, with no per-circuit field, so a `environments2048`
-     circuit would draw HD's rocket where the original draws 2048's. That is a
-     choice to make, not a finding.
-   - Expected win (estimate): every projectile visible on Omega.
-   - Verify: the shadPS4 pair (`scripts/shadps4-omega-pair.py`) on a start grid
-     plus a headless `oag-game` race with a fire input; the load report names
-     each body as loaded, none as missing. Template for the HD side:
-     `crates/raceplay/tests` weapon-scene tests.
-   - Risk: render only; the simulation reads no model.
+- **Projectile bodies:** the rocket, mine, bomb, the cannon's muzzle flash, the
+  plasma blast trio and the missile blast load from Omega's `data00` through the
+  Vita/PS4 container branch of the weapon loader. The rocket root is decided by
+  the mode (`DAT_01f999e4 < 0x17`), not the circuit, so HD's root serves every
+  race the port launches.
+- **`magstrip_wake`:** both textures are executable literals, `.gnf`; the wake
+  draws on contact. `rocket_trail` stays unwired, as HD's own comment says.
+- **Doc drift:** the weapon-lineage cells, the stale comment in
+  `crates/hd/src/race.rs`, `ai-tables.md`'s Omega `original_opponent` and the
+  "no PS4 emulator" sentences in `omega-status.md` are corrected.
 
-2. **Texture fields on the same struct (tier B, per-field census).**
-   - `magstrip_wake` (`crates/hd/src/race.rs:686-690`): the atlas is at
-     `Data/particles/Tex/HD_electric_arc_8x8.gnf` on Omega, not HD's `Data\Tex\`
-     path. Contact texture not checked.
-   - `leach_strip` (`crates/hd/src/race.rs:703-706`): noise texture is
-     `Data/art/published/ships/weapons/textures/HD_waketrail_clouds.gnf` in the census.
-   - `rocket_trail` (`crates/hd/src/race.rs:696-700`): HD's own comment says
-     Omega ships the textures but no opacity ramp, so it stays unwired. Leave it.
-   - `cannon_look` (`crates/hd/src/race.rs:709`): HD names `.gtf`; Omega's
-     spelling is not read.
+### Held back inside the weapon table (tier C, needs the PS4 shading read)
 
-3. **HD's hit sparks, damage smoke and bomb rays are not triggered on Omega
-   (tier B, one decision first).**
-   - Where: HD adds them at `crates/hd/src/effects.rs:37-70`: `WeaponSpark`,
-     `DamageMild`, `DamageModerate`, `DamageCritical`, `LeachHitSpark`,
-     `ShieldAbsorb`, `BombRays`. Omega's `EFFECTS` at `crates/omega/src/lib.rs:208-217`
-     only removes Pulse's triggers. Its comment at `lib.rs:157-162` says the
-     spark and absorb triggers are left off because their wiring is unread.
-   - Census: the `.pob` files exist: `Data/particles/WO_DAMAGE_MILD.pob`,
-     `WO_DAMAGE_MODERATE.pob`, `WO_DAMAGE_CRITICAL.pob`,
-     `WO_SHIP_SPARK_DAMAGE_WEAPON.pob`, `WO_SHIP_SPARK_DAMAGE_LEACHBEAM.pob`,
-     `WO_WEAPON_ABSORB.pob`, `WO_BOMB_RAYS.pob` (`data00` and patch `data05`).
-   - Why it is B, not A: `CLAUDE.md` says an effect with no recovered trigger
-     stays unwired. The cheap pre-check is a cross-reference search for
-     `WO_DAMAGE_MILD` and `WO_SHIP_SPARK_DAMAGE_WEAPON` in Omega's `eboot.bin`
-     (headless Ghidra, `docs/reverse-engineering/toolchain.md`). If the xrefs
-     show the call sites, this becomes a tier A `.with(...)` per effect.
-     Otherwise it is a lead's decision.
-   - Expected win (estimate): a struck craft sparks and smokes as on HD.
-   - Verify: a still of a damaged craft, Omega against HD, the same state.
+1. **Plasma bolt head, bomb blast set and halo, LeachBeam ball
+   (`plasma_ball`, `bomb_blast_hd`, `leachbeam_ball` all `None`).** The bodies
+   load and build; they draw wrong because HD's `RIM_EDGE`, `RIM_GLOW` and
+   `BOMB_FIRE` bits come from fingerprinting RSX fragment programs
+   (`oag_mesh::mesh::rcs::rim_glow`) and the PS4 builder sets none. The cheap
+   route is a name-keyed inheritance table in the style of
+   `psp2::lineage_blend`; the honest one is reading the PS4 shader programs.
+   Flip a field only with a still pair, Omega against HD, that matches.
+2. **`leach_strip`.** Omega's `leachbeam_triangle.rcsmodel` names `hd_leechbeam`
+   (128x32) and `hd_waketrail_clouds`, where HD's names `hd_leechbeam_glow`
+   (256x256), a file no Omega archive holds. Read the PS4 `HD_Leachbeam`
+   material's samplers before wiring. 2048 ships the same `hd_leechbeam.gxt`.
+3. **2048's own bodies.** 2048 ships the same body names, only under
+   `Data/Weapons2048/` and with its own bytes, so it cannot borrow Omega's table.
+   Its paths come off 2048's executable. Checked, applies, not wired.
 
-4. **Adverts pass is off on Omega (tier B).**
-   - Where: `crates/omega/src/lib.rs:190` `adverts: None`. HD's block is at
-     `crates/hd/src/lib.rs:217-239`: target 512x256, `near` 0.5, `far` 5500,
-     `gantry_card`, `zone_gantry` at `/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex`.
-   - Census: `Data/billboards/HD_Adverts/321Go/` is in `data00`, with
-     `321Go_Zone.vex` present (case-insensitive match). `Billboard_ConstructResource`
-     and the `Type` attribute are read on Omega
-     (`docs/ghidra/functions/ps4-omega-eu/billboards.md`).
-   - Provenance: HD's block is measured on RPCS3 (`lib.rs:217-223` comment).
-     On Omega it stays inherited until a still confirms card placement.
-   - Verify: the shadPS4 pair on the start grid, against HD at the same camera.
+### Worth a lane now (tier B)
 
-5. **Engine light and front-face flags on the plume (tier B, render-critical).**
-   - Where: Omega `crates/omega/src/lib.rs:111-113` sets `engine_light: false`
-     and `front_faces_only: false`, with the comment "Off, chosen, not
-     measured, as on 2048". HD sets both `true` at `crates/hd/src/lib.rs:157-158`.
-   - Why it matters: the maintainer's render priority puts the hull and plume
-     first (`docs/` render notes, memory "Render fidelity priorities").
-   - Provenance: HD measured (its comment is not on those two lines, so the
-     measured claim is read from the struct's neighbours; confirm before flipping).
-   - Verify: the shadPS4 pair on a grid still at the plume, Omega against HD.
-
-6. **Opponents fly the player's variant on HD, not on Omega (tier B, RE check).**
-   - Where: `crates/omega/src/race.rs:180` `opponents_match_player_variant: false`,
-     and the comment at `race.rs:159-161` says it is a choice because Omega's
-     `Ship_Construct` was not read. HD's `true` was read off HD's executable.
-   - Verify first: read Omega's `Ship_Construct`. Then flip if it matches.
-
-7. **Render laws HD measured on RPCS3 are off on Omega (tier B, risky).**
-   - Where: `crates/omega/src/lib.rs:163-166` `looks: Looks::unread(...)`.
-     HD's `crates/hd/src/effects.rs:110-150` sets `absorb_shell` (measured),
-     `material_render_state`, `blends_encoded`, `lit_output_halved` and
-     `skips_language_picker`.
-   - Why it is risky: these were read off RSX frames. Omega is PS4 with
-     recompiled shaders (`docs/formats/omega-status.md`, re-shipped note).
-     `absorb_shell` and `material_render_state` are the two to try. Leave
-     `lit_output_halved` alone.
-   - Verify: the shadPS4 pair on a hit hull, against HD.
-
-8. **Shadow tier is `Unbuilt` on Omega, though HD's mechanism is built (tier B).**
-   - Where: `crates/omega/src/lib.rs:133` `OriginalShadows::Unbuilt`;
-     `crates/hd/src/lib.rs:172` `Built`. The enum's doc (`crates/title/src/shadow.rs:9-24`)
-     calls Omega's state an "untried carry-over from HD".
-   - Unverified: whether Omega's occluder hulls and coverage data match HD's.
-     Not censused in this lane.
-   - Verify: a census of the shadow hulls (`docs/rendering/shadows.md`) first,
-     then a shadPS4 still with `original` shadows.
+4. **Adverts pass is off on Omega.** `crates/omega/src/lib.rs` `adverts: None`;
+   HD's block is `crates/hd/src/lib.rs:217-239`. `Data/billboards/HD_Adverts/321Go/`
+   is in `data00`. It is not a field flip: `gantry::build` builds an
+   external-geometry `.vex` through `mesh::rcs::build` only, which fails on the
+   PS4 container the way the weapon bodies did, so Omega's `321Go_Zone.vex` needs
+   a `mesh::rcs::psp2` branch there first. Then a still against the shadPS4
+   start-grid pair (`scripts/shadps4-omega-pair.py`) decides whether card
+   placement carries over.
+5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
+   sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
+   measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
+   in `FUN_0130e090` (`Distance` to `ship+0xbc`, `Radius` to `ship+0xc0`); the
+   consumer of those two fields is unread. Needs it read, then a thrust frame
+   pair, Omega against HD, on the same circuit. With the light on a grid still
+   gains a warm cast at the nozzle; with `front_faces_only` on nothing changed at
+   the two ticks checked, because the flame is not visible there.
+6. **HD's hit sparks, damage smoke and bomb rays are not triggered on Omega.**
+   The names are located, the triggers are not (no wiring on a guess):
+   `WO_SHIP_SPARK_DAMAGE_WEAPON` in `ShipCollisionFx_Trigger` (`0x01723ae0`,
+   `kind 1`), `WO_DAMAGE_MILD`, `_MODERATE`, `_CRITICAL` in `FUN_016f3ef0`,
+   `WO_WEAPON_ABSORB` in `FUN_01722810` (an object built per ship by
+   `FUN_01307560`), `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` in `FUN_016f0f20`,
+   `WO_BOMB_RAYS` in `FUN_013594d0` (a 107 KB decompile). Read what raises each,
+   then each is one `.with(...)` in `crates/omega/src/lib.rs` `EFFECTS`. The `.pob`
+   files are in `data00` and the patch's `data05`.
+7. **Opponents fly the player's variant on HD, not on Omega.**
+   `crates/omega/src/race.rs` `opponents_match_player_variant: false` is a
+   choice, because Omega's `Ship_Construct` was not read. Read it, then flip if
+   it matches.
+8. **Render laws HD measured on RPCS3 are off on Omega.** `crates/omega/src/lib.rs`
+   `looks: Looks::unread(...)`; HD's `crates/hd/src/effects.rs` sets
+   `absorb_shell` (measured), `material_render_state`, `blends_encoded`,
+   `lit_output_halved` and `skips_language_picker`. Risky: they were read off RSX
+   frames and Omega's shaders are recompiled. Try `absorb_shell` and
+   `material_render_state` against a hit-hull still pair; leave `lit_output_halved`.
+   The rocket and missile bodies on Omega draw darker than HD's (no lit-output or
+   weapon-light law), which this item would also move.
+9. **Shadow tier is `Unbuilt` on Omega, though HD's mechanism is built.**
+   `crates/title/src/shadow.rs` calls Omega's state an "untried carry-over from
+   HD". Census the shadow hulls (`docs/rendering/shadows.md`) first, then a
+   shadPS4 still with `original` shadows.
 
 ### Already covered by a thread, not re-reported
 
 - **Zone speed ladder and handling classes:** `handover/gameplay/zone-handling-needs-a-speed-law-per-title-and-a-ladder-as-data.md`.
-  The `speed_classes` gap on Omega (`crates/omega/src/race.rs:125` `None`) is in that thread.
-- **Trackside ambience is silent on Omega** (0 of 32 emitters on Tech De Ra):
-  `handover/audio/2048-and-omega-circuits-play-no-trackside-ambience.md`.
-- **Omega's end-race screens:** `docs/formats/hd-endrace-screens.md:324` ("Omega
-  (checked, applies, not wired)"), with `crates/omega/src/frontend.rs:258-264`
-  leaving `endrace_entry: None`. The dead end is `EndRace Menu` drawing no
-  option blocks.
-- **Omega's campaign selection overlay:** `crates/hd/src/psn.rs:76` says the
-  ids `selection_strings` overlays are `DATA06`'s alone. Omega has no `DATA06`,
-  so `false` is correct.
-- **Omega's pt-BR disc text:** `docs/ui/project-languages.md:28-29` and `:47` say
-  Omega ships its own `portuguesebr`, so `disc_strings: None` is correct.
+- **Trackside ambience is silent on Omega:** `handover/audio/2048-and-omega-circuits-play-no-trackside-ambience.md`.
+- **Omega's end-race screens:** `docs/formats/hd-endrace-screens.md` ("Omega
+  (checked, applies, not wired)"); `endrace_entry: None` in `crates/omega/src/frontend.rs`.
+- **Omega's campaign selection overlay:** `DATA06` is HD's alone; `false` is right.
+- **Omega's pt-BR disc text:** Omega ships its own `portuguesebr`; `disc_strings: None` is right.
 
 ### Tier C: not cheap, listed not ranked
 
-- **Grid hover and hover rig.** `crates/omega/src/race.rs:98-100` sets
-  `launch_hover`, `hover_rig` and `zone_hover_rig` to `None`; HD sets them at
-  `crates/hd/src/race.rs:57-59`. The lead's `launch_hover` example is not a
-  field flip. HD's value is read from its craft update (`crates/hd/src/race.rs:54-56`
-  comment), and Omega's craft update is not read in any doc. The shadPS4 pair
-  can measure the grid clamp, but the law needs the update read first.
-  `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md:136-138` and `:246-252`
-  say Omega's spring and probe offsets are unread.
-- **Zone mode.** `crates/omega/src/race.rs:94-120` sets `zone_palette`, `zone_stages`,
-  `zone_transition`, `zoom_ring`, `zone_stage_textures`, `zone_sky`,
-  `zone_announcer` and `zone_handling` to `None`. Zone is unmeasured on Omega.
-- **Pre-race flyby.** HD's `crates/hd/src/pre_race.rs:15` is
-  `on: Platforms::Only(&[Platform::Ps3])`. Census: about 22 `start_grid.vex` entries (case variants included)
-  exist in Omega's archives. The flyby's timing is unread on Omega. The
-  shadPS4 pair is the way to read it.
-- **Prompt glyphs.** `crates/omega/src/lib.rs:123-124` is `Prompts::UNREAD`; HD
-  is read (`crates/hd/src/lib.rs:165`).
-- **Loading screen.** `crates/omega/src/lib.rs:129` `loading: None`; HD's
-  `crates/hd/src/lib.rs:168` is read. No Omega row in `docs/formats/omega-status.md`.
-- **Fresh profile variant.** `crates/omega/src/race.rs:124` `None`; HD's
-  `crates/hd/src/race.rs:102` is `Chosen`. A product choice, not a finding.
-
-## Doc drift found while checking (fix in the wire lane)
-
-- `docs/gameplay/weapon-lineage.md:249` says Omega's rocket has "no model named";
-  `:255` says the mine is "not drawn". Both are wrong against item 1.
-- `crates/hd/src/race.rs:681-684`: "Omega's `WEAPON_MODELS` is still `EMPTY` (it
-  does not race)" is out of date.
-- `docs/formats/ai-tables.md:77` says Omega's `original_opponent` is `false`.
-  `crates/omega/src/race.rs:111` is `true`.
-- `docs/formats/omega-status.md:33`, `:197`, `:554` and `:1449` say no PS4 emulator
-  exists in this toolchain. `scripts/shadps4-omega-pair.py` now drives shadPS4 for
-  Omega, so those statements need an update.
+- **Grid hover and hover rig.** `launch_hover`, `hover_rig`, `zone_hover_rig` are
+  `None` on Omega; HD's value is read from its craft update and Omega's is not.
+- **Zone mode.** `zone_palette`, `zone_stages`, `zone_transition`, `zoom_ring`,
+  `zone_stage_textures`, `zone_sky`, `zone_announcer`, `zone_handling` are `None`;
+  Zone is unmeasured on Omega.
+- **Pre-race flyby.** HD's is `Platforms::Only(&[Platform::Ps3])`; about 22
+  `start_grid.vex` entries exist in Omega's archives; its timing is unread.
+- **Prompt glyphs** (`Prompts::UNREAD`), **loading screen** (`loading: None`) and
+  **fresh profile variant** (`None`, a product choice).
 
 ## Next Steps
 
-1. Wire item 1 (bodies) in one change: fill `crates/omega/src/lib.rs`
-   `weapon_models` with the body files above. Cite the rocket row to
-   `weapons.md:107-115` and label the lineage mapping as inference. Update
-   `docs/gameplay/weapon-lineage.md` rows 249 and 255 in the same change, and run
-   `just check-weapon-lineage`.
-2. Item 3's xref pre-check (Omega's `eboot.bin`, headless Ghidra). It decides
-   whether the sparks and smoke are a tier A wire or a lead's decision.
-3. Items 4, 5 and 7 each need one shadPS4 still pair, Omega against HD, on the
-   same circuit and state. Start with item 4 (census proof exists).
-4. Item 6 needs `Ship_Construct` read in Ghidra before any flip.
-5. Item 8 needs the shadow census first.
+1. Item 4: add the `psp2` branch to `gantry::build` and read `321Go_Zone.vex`
+   through it; then one start-grid still pair decides `adverts`.
+2. Item 6: read the call sites of the six functions above, in the order
+   `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
+3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.
+4. Item 1: decide between the name-keyed table and reading the PS4 programs.
+5. Items 7, 8 and 9 each need their read or census first.
 
 Commands: `just play [--screenshot out.png] [--until "text"] [--press ...]` for
 headless stills (the options in `CLAUDE.md`). For the shadPS4 pair, see the

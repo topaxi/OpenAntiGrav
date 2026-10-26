@@ -132,9 +132,18 @@ fn texture(
     }
 }
 
-/// The wake's texture as pixels: a `.gxt` on the Vita (2048), a `.gtf` on every
-/// other title that names one (HD; the shadow silhouette reads one the same way).
+/// The wake's texture as pixels: a `.gxt` on the Vita (2048), a `.gnf` on the
+/// PS4 (Omega), a `.gtf` on every other title that names one (HD; the shadow
+/// silhouette reads one the same way).
 pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<FlareTexture> {
+    if platform == oag_assets::Platform::Ps4 {
+        let sprite = oag_fx::psys::sprite::Sprite::from_gnf(blob)?;
+        return Some(FlareTexture {
+            width: u32::from(sprite.width),
+            height: u32::from(sprite.height),
+            rgba: sprite.rgba.to_vec(),
+        });
+    }
     if platform == oag_assets::Platform::Vita {
         let gxt = oag_texture::gxt::Gxt::parse(blob).ok()?;
         let texture = gxt.only()?;
