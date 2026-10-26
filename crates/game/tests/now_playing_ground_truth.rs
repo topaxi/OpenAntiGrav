@@ -423,6 +423,15 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
 fn race_with_a_named_song(
     image: &str,
 ) -> Option<(oag_raceplay::Race, oag_music::song_names::SongName)> {
+    race_with_a_named_song_and(image, false)
+}
+
+/// [`race_with_a_named_song`] with the AI field on the grid when `opponents` is set, which a
+/// split screen needs a craft per view for.
+fn race_with_a_named_song_and(
+    image: &str,
+    opponents: bool,
+) -> Option<(oag_raceplay::Race, oag_music::song_names::SongName)> {
     let source = oag_testdata::image(image)?.display().to_string();
     let (_, names) = library::named_listing(&GameLibrary, &source)
         .expect("listing")
@@ -431,6 +440,7 @@ fn race_with_a_named_song(
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source,
         seed: Some(1),
+        opponents,
         ..oag_raceplay::Options::default()
     })
     .expect("loading the race");
@@ -486,6 +496,32 @@ fn pulse_with_the_dynamic_hud_off_shows_no_song_and_the_next_one_shows_again() {
         race.readout().now_playing.is_none(),
         "and switching it back does not bring it back"
     );
+}
+
+/// A split screen shows no song display: HD's code shows it only for one human entrant, and the
+/// split layouts author none. The race still steps the display, so one view again shows it.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_split_screen_shows_no_song_display() {
+    use oag_gameplay::PlayerInputs;
+
+    let Some((mut race, name)) = race_with_a_named_song_and("data/images/pulse-psp-eu.chd", true)
+    else {
+        return;
+    };
+    race.note_song(Some(&oag_sound::NowPlaying {
+        serial: 1,
+        name: Some(name),
+    }));
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.readout().now_playing.is_some(), "one view shows it");
+    assert_eq!(race.set_viewport_count(2), 2, "a two-way split");
+    assert!(race.readout().now_playing.is_none(), "split: none");
+    assert!(race.now_playing().is_none());
+    race.set_viewport_count(1);
+    assert!(race.readout().now_playing.is_some(), "and back to one view");
 }
 
 /// The setting is read only by a title whose options list it: Pure borrows Pulse's marquee and

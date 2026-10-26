@@ -150,9 +150,17 @@ impl Race {
         }
     }
 
-    /// The marquee as this tick draws it.
+    /// The marquee as this tick draws it. **None in a split screen**: HD's
+    /// `RaceManager_ShowNowPlaying` shows the display only while `g_GameState+0xe4`, the count of
+    /// human entrants (1 in single player, 2 in split screen), is 1, and its split-screen layouts
+    /// author no such item; Omega and 2048 follow it, Pulse's and Pure's originals have no split
+    /// screen to read (`docs/formats/now-playing.md`). The song's state keeps stepping, so a race
+    /// that goes back to one view shows what is left of it.
     #[must_use]
     pub fn now_playing(&self) -> Option<oag_hud::now_playing::Marquee> {
+        if self.viewport_count() > 1 {
+            return None;
+        }
         self.view.now_playing.as_ref()?.display.marquee()
     }
 }

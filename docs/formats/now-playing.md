@@ -54,7 +54,14 @@ A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left thr
   Omega and 2048 carry no string for it; those titles ignore the setting and the row is not
   offered ([Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#dynamic-hud-read-and-poked-2026-10-26-lane-now-playing-leftovers),
   [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md)).
-- Single view only. A split-screen race draws no marquee.
+- Single view only, and that is the original's rule where it can be read: HD's
+  `RaceManager_ShowNowPlaying` shows the display only while `g_GameState+0xe4` is 1, the count of
+  human entrants (1 in single player, 2 in split screen,
+  [opponent-handling](../ghidra/functions/ps3-hdfury-eu/opponent-handling.md)), and its
+  `splitscreen_hud` layouts author no such item, so a split race shows none; Omega and 2048
+  inherit it (Omega's executable is unread). Pulse's and Pure's PSP originals have no split
+  screen, so theirs is the same choice, **chosen, not measured**; the PS2 Pulse's split is unread.
+  `oag_raceplay::Race::now_playing` returns nothing while the race has more than one view.
 - The executable's per-update step is assumed to be 60 Hz; no capture of the original confirms
   it.
 - A PS2 boot of Pulse shows nothing: its soundtrack archive carries no names.

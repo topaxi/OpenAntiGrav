@@ -17,7 +17,10 @@ Ghidra's xrefs to them land in shared string-pool tails).
 ## Show
 
 `RaceManager_ShowNowPlaying(manager, artist, title, title_is_id)`: runs when the HUD flag
-(`*(g_hud) + 0x115`) is set and `g_GameState[0xe4] == 1`. An empty artist becomes the string
+(`*(g_hud) + 0x115`) is set and `g_GameState[0xe4] == 1`: that byte counts the human entrants (1 in
+single player, 2 in split screen, [opponent-handling.md](opponent-handling.md), confidence 55 for
+that reading), so **a split-screen race shows no song display**; none of the 82 files extracted
+from `splitscreen_hud` authors one either (checked 2026-10-26). An empty artist becomes the string
 `FE_UNKNOWN_ARTIST`; an empty title `FE_UNKNOWN_TRACK` (both for custom music); when
 `title_is_id` the title is looked up as a string id. The text is `"%.256s - %.256s"`:
 **artist - title**. Then alpha 0, state 0 (`+0x2d44`), step 5 (`+0x2d6c`), the text's x back to its
