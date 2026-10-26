@@ -117,6 +117,21 @@ pub struct Classes {
     pub absorb: Option<u32>,
     /// The road-span table a Quake ripples - see [`crate::quake`].
     pub quake: Option<u32>,
+    /// A flat colour added everywhere ([`super::CLASS_AMBIENT_LIGHT`] in
+    /// version 6), decoded by [`crate::lighting::ambient_lights`].
+    pub ambient_light: Option<u32>,
+    /// A parallel light ([`super::CLASS_DIRECTIONAL_LIGHT`] in version 6),
+    /// decoded by [`crate::lighting::directional_lights`].
+    pub directional_light: Option<u32>,
+    /// A light that falls off with distance ([`super::CLASS_POINT_LIGHT`] in
+    /// version 6), decoded by [`crate::lighting::point_lights`].
+    pub point_light: Option<u32>,
+    /// The track's point light the hull's GE list takes a free slot from
+    /// ([`crate::world_lights::CLASS_WOPOINT`] in version 6).
+    pub wopoint: Option<u32>,
+    /// The track's spot light, the same list's other class
+    /// ([`crate::world_lights::CLASS_WOSPOT`] in version 6).
+    pub wospot: Option<u32>,
 }
 
 /// The table used by every file Pulse ships except one; recovered in full (see
@@ -151,6 +166,11 @@ pub const V6: Classes = Classes {
     // Same reason as `track_wall_collision`: HD's registration, no Pulse file.
     absorb: Some(CLASS_ABSORB),
     quake: Some(crate::quake::CLASS_QUAKE),
+    ambient_light: Some(super::CLASS_AMBIENT_LIGHT),
+    directional_light: Some(super::CLASS_DIRECTIONAL_LIGHT),
+    point_light: Some(super::CLASS_POINT_LIGHT),
+    wopoint: Some(crate::world_lights::CLASS_WOPOINT),
+    wospot: Some(crate::world_lights::CLASS_WOSPOT),
 };
 
 /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -258,6 +278,30 @@ pub const V4: Classes = Classes {
     ship_collision_fx: Some(0x382),
     absorb: None,
     quake: None,
+    // **`AmbientLight` and `DirectionalLight`**, generic Maya classes outside the
+    // run, seven below Pulse's `0x12c`/`0x131` as `Mesh` is (`0x125` -> `0x11e`).
+    // Every one of Pure's 16 circuits carries one or two `0x125` and up to five
+    // `0x12a` (none on the four classics), each a 16-byte payload under a
+    // `Transform`, and the exporter kept Maya's own shape names on them
+    // (`ambientLightShape1`, `directionalLightShape1`, ...):
+    // `crates/pure/tests/class_table_ground_truth.rs`. Pure's own
+    // light-list builder (`FUN_08841648`) is Pulse's `SceneLight_BuildLightingList`
+    // instruction for instruction, so the nodes reach the hull the same way.
+    // Confidence **90**: exact names, sizes and count on every circuit, the
+    // consumer read; not watched live.
+    ambient_light: Some(0x125),
+    directional_light: Some(0x12a),
+    // Not recovered: Pure's circuits author no node that names itself a point light.
+    point_light: None,
+    // **`wopoint` and `wospot`**, the run's tail: Pulse orders `Reset Collision`
+    // `0x3cd`, `wospot` `0x3ce`, `wopoint` `0x3cf`, `Ship Collision Fx` `0x3d0`,
+    // and Pure's `Reset Collision` `0x37f` and `Ship Collision Fx` `0x382` frame
+    // the same pair at `0x380`/`0x381`, and the nodes say so: 32-byte payloads
+    // named `wospotShapeN` (`0x380`) and `wopointShapeN` (`0x381`), on 7 of 16
+    // circuits (`crates/pure/tests/class_table_ground_truth.rs`). Confidence
+    // **90**, as for the lights above.
+    wopoint: Some(0x381),
+    wospot: Some(0x380),
 };
 
 /// The table Pure's 15 version-3 files use. Nothing is recovered; version 3 also
@@ -289,6 +333,11 @@ pub const V3: Classes = Classes {
     ship_collision_fx: None,
     absorb: None,
     quake: None,
+    ambient_light: None,
+    directional_light: None,
+    point_light: None,
+    wopoint: None,
+    wospot: None,
 };
 
 /// The class table for a file's version word, or `None` for a version this

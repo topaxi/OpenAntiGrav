@@ -32,6 +32,14 @@
 //! circuit, says nothing, honestly, because the circuit's own manifest says
 //! nothing.
 
+//! # The hull's light list, on the same load
+//!
+//! The one race this file loads also carries the hull-lights claim, so a second
+//! test does not pay the load again: Vineta K authors one `AmbientLight` and two
+//! `DirectionalLight`s under Pure's own class ids (`0x125`, `0x12a`), and the
+//! hull is lit by them as Pulse's is, not by the stand-in rig
+//! (`docs/ghidra/functions/psp-pure-usa/scene-light.md`).
+
 use std::path::PathBuf;
 
 use oag_raceplay as race;
@@ -42,7 +50,7 @@ fn image() -> Option<PathBuf> {
 
 #[test]
 #[ignore = "needs data/images/pure-psp-usa.chd"]
-fn pures_default_track_names_no_gantry_and_no_billboard_location() {
+fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_hull() {
     let Some(image) = image() else { return };
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -66,5 +74,21 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location() {
         report.contains("0 naming a model"),
         "Pure's default track (01_Vineta_K) now names a billboard model - \
          re-check whether it is the gantry: {report}"
+    );
+    hull_lights_are_the_circuits_own(&report);
+}
+
+/// Vineta K's light nodes, as `SceneLight_BuildLightingList`'s Pure twin packs
+/// them at the bare scale: the ambient `(72, 78, 84)` and a first directional of
+/// full white. Dropping `oag_pure::effects::LOOKS.hull_lights`, or reading the
+/// lights under Pulse's class ids again, leaves the stand-in line instead.
+fn hull_lights_are_the_circuits_own(report: &str) {
+    let line = report
+        .lines()
+        .find(|l| l.starts_with("hull lights:"))
+        .unwrap_or_else(|| panic!("no hull lights line: {report}"));
+    assert!(
+        line.starts_with("hull lights: the circuit's own, ambient [0.28235295, 0.30588236, 0.32941177, 1.0], diffuse [[1.0, 1.0, 1.0, 0.0], [0.21176471, 0.21176471, 0.18039216, 0.0]"),
+        "Pure's hull is not lit by Vineta K's own light nodes: {line}"
     );
 }

@@ -148,16 +148,21 @@ impl PlacedLight {
 }
 
 /// Every `wopoint` then every `wospot` the file authors, each in node order, with
-/// the chain of each that moves.
+/// the chain of each that moves. The classes are the file's own table's
+/// (`0x3cf`/`0x3ce` in version 6, `0x381`/`0x380` in Pure's version 4).
 ///
 /// That is the order the original's two lists are walked in (points first),
 /// which decides which light a tie keeps.
 #[must_use]
 pub fn placed_lights(data: &[u8], nodes: &[Node]) -> Vec<PlacedLight> {
+    let Ok(classes) = vex::classes_of(data) else {
+        return Vec::new();
+    };
     let chain = vex::world_transforms(data, nodes);
     let order = vex::byte_order(data);
     let mut out = Vec::new();
-    for (class, spot) in [(CLASS_WOPOINT, false), (CLASS_WOSPOT, true)] {
+    for (class, spot) in [(classes.wopoint, false), (classes.wospot, true)] {
+        let Some(class) = class else { continue };
         out.extend(
             nodes
                 .iter()

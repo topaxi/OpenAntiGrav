@@ -105,11 +105,12 @@ inner and outer radius): classes `0x381` (`wopoint`) and `0x380` (`wospot`) - Pu
 `0x3cf`/`0x3ce` less `0x4e`, the offset `WO Track` (`0x3bb` against `0x36d`) and `Skycube` (`0x3c6`
 against `0x378`) carry
 ([pure-status.md](../../../formats/pure-status.md)) - in seven circuit files (148, 45,
-72, 100, 153, 130 and 14 nodes), `crates/pure/examples/pure_light_nodes.rs`. The
+72, 100, 153, 130 and 14 nodes), `crates/pure/tests/class_table_ground_truth.rs`. The
 executable's strings are `WOPoint_ImportNode`, `WOSpot_ImportNode` and
-`DirectionalLight_ImportNode`. **Checked, applies (data), not wired**: Pure's hull-light
-builder was not located, and no Pure hull takes any circuit light today (the `hull_lights`
-rule is unset).
+`DirectionalLight_ImportNode`. **Ported** (2026-10-26): Pure's builder is
+`SceneLight_BuildLightingList` at `0x08841648`, its `AmbientLight`/`DirectionalLight` are
+`0x125`/`0x12a`, `vex::classes::V4` carries all four ids, and Pure's `hull_lights` rule is
+on for the PSP ([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)).
 
 ## Open
 

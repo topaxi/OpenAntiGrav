@@ -33,7 +33,7 @@
 //! See `docs/formats/pure-status.md` and `docs/formats/collision.md`.
 
 use oag_tables::fexml;
-use oag_vex::{collision, fog, track, vex};
+use oag_vex::{collision, fog, lighting, track, vex, world_lights};
 
 const PURE: &str = "data/images/pure-psp-usa.chd";
 const PULSE: &str = "data/images/pulse-psp-usa.chd";
@@ -624,4 +624,93 @@ fn anim_transform_parses_on_every_pure_circuit() {
         "expected several hundred Anim Transform nodes, found {total}"
     );
     assert_eq!(parsed, total, "every Anim Transform node should parse");
+}
+
+/// The four light classes the hull's GE list is built from (2026-10-26), all
+/// generic or tail classes this file's run does not name by string:
+///
+/// - `AmbientLight` `0x125` and `DirectionalLight` `0x12a`, seven below Pulse's
+///   `0x12c`/`0x131` as `Mesh` is. Every circuit authors one or two ambients and
+///   up to five directionals (none on the four classics), each a 16-byte payload
+///   whose node keeps Maya's own shape name, and each decodes through
+///   `oag_vex::lighting`.
+/// - `wopoint` `0x381` and `wospot` `0x380`: 32-byte payloads named
+///   `wopointShapeN`/`wospotShapeN`, every one placed by
+///   `world_lights::placed_lights`.
+///
+/// Before this the lights were looked for under Pulse's ids and every Pure circuit
+/// read as authoring none.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_light_classes_are_on_every_pure_circuit() {
+    let Some(source) = image(PURE) else { return };
+    let mut archives = oag_pure::open(&source).expect("Pure's disc opens as Pure");
+    let v4 = vex::classes::V4;
+    let ambient = v4.ambient_light.expect("recovered");
+    let directional = v4.directional_light.expect("recovered");
+    let wopoint = v4.wopoint.expect("recovered");
+    let wospot = v4.wospot.expect("recovered");
+
+    let circuits = circuits(&mut archives);
+    let mut read = 0;
+    let mut totals = [0; 3];
+    for circuit in &circuits {
+        let Ok(blob) = archives.read_name(circuit) else {
+            continue;
+        };
+        let nodes = vex::nodes(&blob).unwrap_or_else(|e| panic!("{circuit}: {e}"));
+        let named = |class: u32, word: &str| {
+            let of: Vec<_> = nodes.iter().filter(|n| n.class_id == class).collect();
+            for node in &of {
+                let name = node
+                    .name
+                    .as_deref()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase();
+                assert!(
+                    name.contains(word),
+                    "{circuit}: class {class:#x} node {name:?} does not name itself {word:?}"
+                );
+            }
+            of.len()
+        };
+        let ambients = named(ambient, "light");
+        let directionals = named(directional, "directionallight");
+        let wopoints = named(wopoint, "wopoint") + named(wospot, "wospot");
+        assert!(
+            (1..=2).contains(&ambients),
+            "{circuit}: {ambients} AmbientLight nodes"
+        );
+        assert!(
+            directionals <= 5,
+            "{circuit}: {directionals} DirectionalLight nodes"
+        );
+        assert_eq!(
+            lighting::ambient_lights(&blob, &nodes).len(),
+            ambients,
+            "{circuit}"
+        );
+        assert_eq!(
+            lighting::directional_lights(&blob, &nodes).len(),
+            directionals,
+            "{circuit}"
+        );
+        assert_eq!(
+            world_lights::placed_lights(&blob, &nodes).len(),
+            wopoints,
+            "{circuit}: every wopoint and wospot should place"
+        );
+        totals[0] += ambients;
+        totals[1] += directionals;
+        totals[2] += wopoints;
+        read += 1;
+    }
+    // Sixteen circuits: the four classics author one ambient and no directional,
+    // the four Zone circuits and Sol 2 author no wopoint or wospot.
+    assert_eq!(read, 16, "Pure's sixteen circuits");
+    assert_eq!(
+        totals,
+        [21, 30, 662],
+        "ambient, directional, wopoint + wospot nodes"
+    );
 }

@@ -66,7 +66,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.colour = in.colour;
     out.lit = in.lit;
     out.glow = in.glow;
-    // **Pulse's hull, lit the way the GE lights it**: per vertex, the circuit's
+    // **A PSP hull (Pulse, Pure), lit the way the GE lights it**: per vertex, the circuit's
     // own ambient plus each directional light's `N . L`, clamped to `0..1` and
     // carried to the fragment as the vertex colour the texel is modulated by.
     // The material is white, so nothing else multiplies it. It replaces both
