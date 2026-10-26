@@ -78,7 +78,7 @@
 use oag_core::math::{Mat4, Vec3};
 
 use crate::texgen;
-use oag_mesh::mesh::shine_pass::plain;
+use oag_mesh::mesh::shine_pass::{self, plain};
 use oag_mesh::mesh::{DrawCall, GpuVertex, Model};
 
 /// Whether a race draws the pass at all: **on**, because the original draws it
@@ -183,7 +183,19 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
     model.anim_nodes = track.anim_nodes.clone();
     model.centre = track.centre;
     model.radius = track.radius;
+    // The circuit's weighted batches (`Batch::weights_extra_pass_by_alpha`) paired
+    // their environment slot with the batch's own texture in `lightmaps`; the hull's
+    // extra pass is built the same way (`oag_mesh::mesh::shine_pass::build`). A track
+    // model whose `lightmaps` the loader emptied draws the pass unweighted.
+    let lightmaps = (0..model.textures.len())
+        .map(|i| {
+            used.contains(&i)
+                .then(|| track.lightmaps.get(i).cloned().flatten())
+                .flatten()
+        })
+        .collect();
     plain(&mut model);
+    shine_pass::mask(&mut model, lightmaps);
     Some(TrackPass {
         model,
         sources,

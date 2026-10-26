@@ -373,3 +373,52 @@ fn an_angle_for_a_flap_the_model_lacks_changes_nothing() {
         bytemuck::cast_slice::<_, u8>(&b)
     );
 }
+
+fn weighted_circuit() -> Model {
+    let tex = |label: &str| {
+        Some(std::sync::Arc::new(oag_mesh::mesh::ModelTexture::rgba8(
+            label.to_string(),
+            1,
+            1,
+            vec![255, 255, 255, 128],
+            None,
+        )))
+    };
+    let mut track = circuit();
+    track.textures = vec![tex("base"), tex("other"), tex("env")];
+    let mut lightmaps = Vec::new();
+    let slot = oag_mesh::mesh::shine_pass::masked_slot(&mut track.textures, &mut lightmaps, 2, 1);
+    track.lightmaps = lightmaps;
+    track.shine_draws = vec![draw(3..6, slot)];
+    track
+}
+
+/// A circuit batch carrying the alpha-weight bit draws its pass through a slot
+/// pairing the chrome map with the batch's own texture, weighted by its alpha.
+#[test]
+fn a_weighted_circuit_batch_draws_weighted_by_its_own_textures_alpha() {
+    let pass = build_track(&weighted_circuit()).unwrap();
+    assert!(oag_mesh::mesh::shine_pass::is_masked(
+        &pass.model,
+        &pass.model.draws[0]
+    ));
+    assert_eq!(pass.model.emissive.len(), 1);
+    assert_eq!(
+        pass.model.emissive[0].program[0],
+        oag_mesh::mesh::PROGRAM_SHINE_MASK
+    );
+}
+
+/// A title whose circuit pass is unweighted (Pulse's) has the loader drop the
+/// pairs; the same draw is then the plain chrome map.
+#[test]
+fn an_unweighted_circuit_pass_draws_the_plain_chrome_map() {
+    let mut track = weighted_circuit();
+    oag_mesh::mesh::shine_pass::unweight(&mut track);
+    let pass = build_track(&track).unwrap();
+    assert!(!oag_mesh::mesh::shine_pass::is_masked(
+        &pass.model,
+        &pass.model.draws[0]
+    ));
+    assert!(pass.model.emissive.is_empty());
+}

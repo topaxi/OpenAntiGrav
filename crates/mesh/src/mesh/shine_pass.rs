@@ -69,7 +69,7 @@ pub fn is_masked(model: &Model, draw: &super::DrawCall) -> bool {
 /// `texcoord` every frame) and the glow-table entry whose
 /// [`super::PROGRAM_SHINE_MASK`] mode `shade.wesl` multiplies the picture by
 /// that texture's alpha under.
-fn mask(model: &mut Model, lightmaps: TextureSlots) {
+pub fn mask(model: &mut Model, lightmaps: TextureSlots) {
     let masked = |slot: Option<usize>| {
         slot.and_then(|s| lightmaps.get(s))
             .is_some_and(Option::is_some)
@@ -93,6 +93,13 @@ fn mask(model: &mut Model, lightmaps: TextureSlots) {
         }
     }
     model.lightmaps = lightmaps;
+}
+
+/// Drops the weights from a circuit model whose extra pass is to draw unweighted:
+/// [`oag_render::shine::build_track`] reads them off [`Model::lightmaps`], and a
+/// weighted draw's slot then reads as the plain environment texture it copies.
+pub fn unweight(model: &mut Model) {
+    model.lightmaps.clear();
 }
 
 /// Turns `model` into the extra pass's: unlit white vertices, no animation,
