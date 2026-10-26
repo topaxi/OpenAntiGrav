@@ -367,7 +367,15 @@ Authored and **left unread**: the `Fog Region Colour Override 0..11` and
 Distance` (what selects a region is unlocated), `Fog Alternate Color`,
 `Fog sun colour`/`direction`, `Depth Fog Offset RecipRange` (0, 0.01 on every
 circuit), and everything `HDR and Bloom`-shaped (`BloomFactor`, `BloomGate`,
-`Exposure*`). Pinned per base circuit by
+`Exposure*`): **read off the executable since 2026-10-26** (the race
+composite's exposure, adapted per frame to `ExposureScale` over a luminance
+readback, clamped at `ExposureMax`, at `ExposureSpeed` per frame; `BloomGate`
+is the bloom gate's threshold and `BloomFactor` the bloom's weight in the
+composite), see
+[exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md); still not
+drawn by ours. A DLC circuit's values come from the pack's copy of the file,
+not the one inside `data.psarc` (Vineta K: 0.5 / 8 / 0.05 against 0.6 / 12 /
+0.05, read live). Pinned per base circuit by
 [psp2_sky_fog_ground_truth.rs](../../crates/raceplay/tests/psp2_sky_fog_ground_truth.rs).
 
 **Omega: ported.** Omega's `track.envsettings` carries the same
