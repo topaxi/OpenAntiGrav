@@ -219,6 +219,20 @@ to be the standard reason an AppImage would not start on SteamOS. It does need
 `APPIMAGE_EXTRACT_AND_RUN=1 ./OpenAntiGrav-x86_64.AppImage` unpacks to a
 temporary directory instead and needs no FUSE at all.
 
+**On a Deck running the 64-bit Steam client (`steamrt64`), that variable is
+required for a non-Steam shortcut.** The older 32-bit client (`ubuntu12_32`)
+started a shortcut on the host. `steamrt64` starts it inside the Steam Runtime
+container (`steam-runtime-launch-client --alongside-steam` in
+`~/.local/share/Steam/logs/console_log.txt`), where the AppImage cannot mount
+itself. It exits before `oag-game` writes a single log line. The only trace is
+`Cannot mount AppImage, please check your FUSE setup.` in `journalctl --user`.
+The same file still mounts from an ssh or Desktop Mode terminal. The fix is the
+shortcut's launch options (Properties, Launch Options):
+
+```
+APPIMAGE_EXTRACT_AND_RUN=1 %command%
+```
+
 ## <a id="glibc"></a>The glibc floor
 
 **The one real portability constraint.** A dynamically linked binary records the
