@@ -185,13 +185,15 @@ fn every_cue_has_something_that_raises_it() {
         // An Autopilot armed once, long enough to reach its own one-second
         // warning inside this run. Set directly for the same reason the shield
         // above is: this is a fixture reaching an edge, not a pickup grant.
-        if tick == 0 {
-            race.sim.world.ships[0].autopilot_timer = 2.0;
+        // After the Mine's absorb below, not before: an absorb under a running
+        // Autopilot only cancels it and raises nothing of its own.
+        if tick == 41 {
+            race.sim.world.ships[0].autopilot_timer = 1.4;
         }
         // A Plasma, pressed once the Autopilot above has run out -
         // `spend_pickup` ignores a fire press while
-        // `autopilot_timer > 0.0`, and `2.0` seconds clears by tick 120 at
-        // 60 Hz. `Cue::Plasma` fires on this same tick; the one-second
+        // `autopilot_timer > 0.0`, and `1.4` seconds from tick 41 clears by
+        // tick 125 at 60 Hz. `Cue::Plasma` fires on this same tick; the one-second
         // wind-up releases the bolt around tick 190, comfortably inside the
         // wall it is re-aimed at every tick, and `Cue::PlasmaHitWall` follows
         // within a tick or two of that.
