@@ -38,7 +38,28 @@ pub const EFFECTS: &Effects = &{
         // (`docs/ghidra/functions/psp-pure-usa/weapons.md`).
         .without(Trigger::LeachbeamEnergy)
         .without(Trigger::LeachbeamCharging)
-        .without(Trigger::LeachbeamAbsorb);
+        .without(Trigger::LeachbeamAbsorb)
+        // Names the engine table carries from Pulse, HD and 2048 that Pure's
+        // executable never requests: its whole `WO_*` list is 24 effect names
+        // (`0x08a47f50`..`0x08a7a49c`, `search_strings` over
+        // `/pure/BOOT-psp-pure-usa.BIN`; `docs/formats/pure-status.md`) and none
+        // of these is among them, nor in its `Data.wad`, so each load reported
+        // them absent.
+        .without(Trigger::PlasmaLightningExpand)
+        .without(Trigger::PlasmaLightningCollapse)
+        .without(Trigger::ShurikenFlare)
+        .without(Trigger::ShurikenTrail)
+        .without(Trigger::ShurikenBounce)
+        .without(Trigger::ShurikenExpire)
+        .without(Trigger::TrackBlast)
+        .without(Trigger::CannonSparks)
+        .without(Trigger::EngineFlare)
+        .without(Trigger::TrailHitship)
+        .without(Trigger::TrailHitshipRed)
+        .without(Trigger::RepulserBlast)
+        .without(Trigger::Repulser)
+        .without(Trigger::MagstripSparks)
+        .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
     effects.quake_look = QUAKE_LOOK;
     effects
@@ -135,6 +156,32 @@ mod tests {
             Trigger::LeachbeamEnergy,
             Trigger::LeachbeamCharging,
             Trigger::LeachbeamAbsorb,
+        ] {
+            assert!(EFFECTS.on(trigger).is_none(), "{trigger:?}");
+        }
+    }
+
+    /// None of these names is in Pure's executable's `WO_*` list: dropping a
+    /// `.without` above brings an inherited engine name back, and with it a
+    /// load report line for an effect no Pure disc carries.
+    #[test]
+    fn pure_names_no_effect_its_executable_does_not() {
+        for trigger in [
+            Trigger::PlasmaLightningExpand,
+            Trigger::PlasmaLightningCollapse,
+            Trigger::ShurikenFlare,
+            Trigger::ShurikenTrail,
+            Trigger::ShurikenBounce,
+            Trigger::ShurikenExpire,
+            Trigger::TrackBlast,
+            Trigger::CannonSparks,
+            Trigger::EngineFlare,
+            Trigger::TrailHitship,
+            Trigger::TrailHitshipRed,
+            Trigger::RepulserBlast,
+            Trigger::Repulser,
+            Trigger::MagstripSparks,
+            Trigger::MagstripZone,
         ] {
             assert!(EFFECTS.on(trigger).is_none(), "{trigger:?}");
         }

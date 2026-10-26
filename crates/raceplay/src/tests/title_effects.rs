@@ -48,11 +48,11 @@ fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
         assert_eq!(has(trigger), [pulse, pure, hd, false, false], "{trigger:?}");
     }
     for trigger in [Trigger::MagstripSparks, Trigger::MagstripZone] {
-        // Pulse reads neither (`PULSE_ABSENT`) and neither does HD (`HD_ABSENT`);
-        // only Omega drops them here.
+        // Pulse reads neither (`PULSE_ABSENT`), nor HD (`HD_ABSENT`), nor Pure
+        // (`PURE_ABSENT`); only Omega drops them here.
         assert_eq!(
             has(trigger),
-            [false, true, false, true, false],
+            [false, false, false, true, false],
             "{trigger:?}"
         );
     }
@@ -125,14 +125,30 @@ const PULSE_ABSENT: [Trigger; 8] = [
     Trigger::EngineFlare,
 ];
 
-/// The LeachBeam's three engine-table effects, which Pure does not ask for:
-/// it ships no LeachBeam (`docs/ghidra/functions/psp-pure-usa/weapons.md`, "Pure
-/// ships no LeachBeam"), so its table leaves them unread rather than inheriting
-/// Pulse's names for entries no Pure disc carries.
-const PURE_ABSENT: [Trigger; 3] = [
+/// The engine-table effects Pure does not ask for: the LeachBeam's three (it
+/// ships no LeachBeam, `docs/ghidra/functions/psp-pure-usa/weapons.md`, "Pure
+/// ships no LeachBeam") and the fifteen names its executable's `WO_*` list does
+/// not carry (`oag_pure::effects::EFFECTS`), so its table leaves them unread
+/// rather than inheriting names for entries no Pure disc carries.
+const PURE_ABSENT: [Trigger; 18] = [
     Trigger::LeachbeamEnergy,
     Trigger::LeachbeamCharging,
     Trigger::LeachbeamAbsorb,
+    Trigger::PlasmaLightningExpand,
+    Trigger::PlasmaLightningCollapse,
+    Trigger::ShurikenFlare,
+    Trigger::ShurikenTrail,
+    Trigger::ShurikenBounce,
+    Trigger::ShurikenExpire,
+    Trigger::TrackBlast,
+    Trigger::CannonSparks,
+    Trigger::EngineFlare,
+    Trigger::TrailHitship,
+    Trigger::TrailHitshipRed,
+    Trigger::RepulserBlast,
+    Trigger::Repulser,
+    Trigger::MagstripSparks,
+    Trigger::MagstripZone,
 ];
 
 /// The 2048-lineage magstrip pair, which no archive of HD's disc carries and
@@ -151,6 +167,9 @@ fn hd_asks_for_none_of_the_effects_its_disc_does_not_author() {
         assert!(oag_hd::TITLE.effect_on(trigger).is_none(), "{trigger:?}");
         for title in [oag_pure::TITLE, oag_2048::TITLE] {
             if trigger == Trigger::EngineFlare && title.name == oag_2048::TITLE.name {
+                continue;
+            }
+            if std::ptr::eq(title, oag_pure::TITLE) && PURE_ABSENT.contains(&trigger) {
                 continue;
             }
             assert!(
@@ -298,7 +317,8 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
             .count(),
         1
     );
-    assert_eq!(crate::RACE_EFFECTS.len(), 44);
+    // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`.
+    assert_eq!(crate::RACE_EFFECTS.len(), 43);
 }
 
 #[test]
