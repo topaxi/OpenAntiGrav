@@ -954,7 +954,7 @@ whole list (read 2026-10-12, all passing):
 | Pure USA (checked, differs) | same | the same without `Teasers` |
 | HD / Fury | `<HorizMenu name="Mode">`, all five archives agree | `FE_RC` (campaign), `FE_RACEBOX` (racebox), `FE_ONLINE`, `FE_OPT_PLUS` (options), `FE_RECORDS` (records); the built-in extras add MULTIPLAYER after RACEBOX (the `FE_ONLINE` tab builds nothing) |
 | Omega | the same file in its base package and `data09.psarc` | HD's five, in HD's order (checked, applies) |
-| 2048 | `NEWGUI/Definition.xml` `GameModeChoice` | base: `FE_SP_CAMPAIGN`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`; with `data2.psarc` (v1.04): `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`. `data1.psarc` (the earlier patch) authors the four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it. The grid is the touch front end's own, so no row is built from a tile. |
+| 2048 | `NEWGUI/Definition.xml` `GameModeChoice` | base: `FE_SP_CAMPAIGN`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`; with `data2.psarc` (v1.04): `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`. `data1.psarc` (the earlier patch) authors the four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it. The grid is the touch front end's own, so no row is built from a tile. `FE_RC_HD` and `FE_RC_FURY` open a campaign map of their own when `dlc1.psarc` / `dlc2.psarc` is mounted and keep their "another title's campaign" note when it is not ([2048-dlc.md](../formats/2048-dlc.md)). |
 
 A row this build has nothing behind (multiplayer, a website, profile, extras, online,
 teasers, the 2048 network tiles) is **not drawn**: it stays in the list so the list is

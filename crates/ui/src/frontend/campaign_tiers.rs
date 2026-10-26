@@ -132,5 +132,14 @@ impl Frontend {
         self.campaign.each_map(|events, _, shut| {
             *shut = events.iter().map(|event| closed(&event.name)).collect();
         });
+        // A map not yet opened starts on its first open node, where a player
+        // can act, instead of on a closed one the grids happen to list first.
+        for map in &mut self.campaign.parked {
+            if map.closed.get(map.selected).copied().unwrap_or(false)
+                && let Some(open) = map.closed.iter().position(|&shut| !shut)
+            {
+                map.selected = open;
+            }
+        }
     }
 }

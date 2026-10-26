@@ -185,6 +185,17 @@ fn a_save_and_a_lock_reach_a_map_that_is_not_on_screen() {
 }
 
 #[test]
+fn a_map_opens_on_its_first_open_node_when_the_grids_list_a_closed_one_first() {
+    let (mut frontend, mut input) = on_the_grid(vec![hd()]);
+    frontend.refresh_campaign_locks(|name| name == "grid0_3_1");
+    choose(&mut frontend, &mut input, 1);
+    assert_eq!(
+        frontend.selected_event().map(|event| event.name.as_str()),
+        Some("grid0_1_2")
+    );
+}
+
+#[test]
 fn the_map_a_single_player_save_colours_keeps_its_own_events() {
     let (mut frontend, mut input) = on_the_grid(vec![hd()]);
     frontend

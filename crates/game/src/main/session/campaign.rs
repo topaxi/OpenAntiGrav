@@ -445,11 +445,13 @@ impl Session {
             }
         }
         // A title whose own chain has no team step in Zone launches without the screen, as the
-        // RACE page's own launch does (`Session::handle_picker`).
-        let skipped = self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| super::picker::skips_team_step(shell.title, mode));
+        // RACE page's own launch does (`Session::handle_picker`). So does a campaign that flies
+        // its own craft: the screen lists the native roster, which that craft is not on.
+        let skipped = self.campaign_craft.is_some()
+            || self
+                .shell
+                .as_ref()
+                .is_some_and(|shell| super::picker::skips_team_step(shell.title, mode));
         if skipped || !self.open_ship_picker() {
             self.launch_campaign_race();
         }

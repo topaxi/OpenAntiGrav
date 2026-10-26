@@ -344,24 +344,13 @@ fn a_network_mode_stays_on_the_grid_with_a_note() {
         input.begin_frame(0);
         frontend.update(1.0 / 60.0, input, None);
     };
-    // The v1.04 grid reads SP, HD, FURY across the top: the HD tile is one right.
-    step(&mut frontend, &mut input, Button::Right);
-    step(&mut frontend, &mut input, Button::Cross);
-    assert_eq!(frontend.chosen_mode(), Some("FE_RC_HD"));
-    step(&mut frontend, &mut input, Button::Cross);
-    assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
-    assert!(
-        frontend
-            .take_notes()
-            .iter()
-            .any(|note| note.contains("FE_RC_HD is another title's campaign")),
-        "an HD tile stays on the grid with its own note"
-    );
-    // Then FURY, and ONLINE CAMPAIGN is the first tile of the second row.
-    step(&mut frontend, &mut input, Button::Right);
-    step(&mut frontend, &mut input, Button::Cross);
-    assert_eq!(frontend.chosen_mode(), Some("FE_RC_FURY"));
-    step(&mut frontend, &mut input, Button::Right);
+    // The v1.04 grid reads SP, HD, FURY across the top, and ONLINE CAMPAIGN is
+    // the first tile of the second row. The HD and FURY tiles open a map of
+    // their own when their packages are mounted, which this source has:
+    // `vita_2048_dlc_menus_ground_truth` holds those.
+    for _ in 0..3 {
+        step(&mut frontend, &mut input, Button::Right);
+    }
     step(&mut frontend, &mut input, Button::Cross);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
     step(&mut frontend, &mut input, Button::Cross);
