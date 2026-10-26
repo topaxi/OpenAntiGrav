@@ -1,0 +1,176 @@
+# Wipeout Pure's sun lens flare
+
+Measured 2026-10-26 (lane `pure-lens-flare-re`) from Pure's `BOOT.BIN` and live on
+PPSSPP (software renderer, Vineta K, Time Trial grid). The functions, addresses and
+the live dumps are in
+[`ghidra/functions/psp-pure-usa/lensflare.md`](../ghidra/functions/psp-pure-usa/lensflare.md).
+Nothing here is drawn by our renderer yet. Confidence is per claim, rubric as in
+[`confidence-rubric.md`](../reverse-engineering/confidence-rubric.md).
+
+The flare is **ten additive quads on a 2x2 atlas, laid along the line from the sun's
+screen position through the screen centre**, faded by the angle to the sun and by how
+much of the sun's pixel is hidden behind scenery. It is drawn in 2D after the 3D scene
+(depth test off), so it overlays the track.
+
+## What the disc authors, what the executable owns
+
+| Item | Source | Confidence |
+| --- | --- | ---: |
+| Sun **direction** | the `lensflare` node (class `0x390`, `oag_vex::lensflare`): payload row 3 (`+0x30`, three `f32`), **normalised, no parent transform** | 90 |
+| Flare **colour** | node header attributes `ColourR`, `ColourG`, `ColourB` (`f32`, name match without case, missing = 0) | 90 |
+| Atlas | the circuit's `LensflareComponents.tga`, 64 x 64, 8 bpp, 256-colour palette, identical on all seven circuits | 95 |
+| Ring count 10, ring spacing, ring sizes, cell choice, alpha, blend, occlusion | **the executable**, not authored | 90 |
+
+The 80-byte payload is a 4x4 matrix (row-major) then a `u32` (`187` on Vineta K) and 12
+more bytes. Only row 3 is read; the word and the tail are not (the importer allocates
+`0x44` bytes for the block and reads `+0x30` alone). Rows 0-2 are the identity on Vineta K.
+
+Seven circuits author one (`lensflare` nodes, plus a `*shape_` child that is another
+class): Vineta K, Modesto Heights, Chenghou Project, Blue Ridge, Citta Nuova V, Sebenco
+Climb, Sol 2. None of Sinucit, the four Classics, the four Zone circuits
+(`crates/pure/tests/class_table_ground_truth.rs`):
+
+| Circuit | Direction | Colour |
+| --- | --- | --- |
+| Vineta K | `(-0.8897, 0.2193, 0.4004)` | `(0.7107, 0.7107, 0.7107)` |
+| Modesto Heights | `(-0.7458, 0.4781, -0.4639)` | `(1.0, 0.6, 0.0)` |
+| Chenghou Project | `(-0.2286, 0.3591, -0.9049)` | `(0.923, 0.6317, 0.4043)` |
+| Blue Ridge | `(-0.7009, 0.6100, -0.3697)` | `(1.0, 0.9457, 0.866)` |
+| Citta Nuova V | `(-0.4386, 0.4980, 0.7481)` | `(0.5759, 0.6033, 0.3421)` |
+| Sebenco Climb | `(-0.7791, 0.4323, -0.4540)` | `(1.0, 1.0, 1.0)` |
+| Sol 2 | `(-0.9413, 0.0790, -0.3283)` | `(0.3967, 0.3967, 0.3967)` |
+
+The earlier note's Vineta K anchor `(-51.65, 12.76, 23.4)` was off by a few tenths; the
+file reads `(-51.826, 12.774, 23.323)`, which is what the game holds live.
+
+## The law
+
+Let `d` be the node's direction, `fwd` the camera's forward axis, `S_ndc = (x, y)` the sun's
+normalised device coordinates (the direction rotated by the camera, projected; the
+camera's translation cancels), and `S = (x * 16/9, y)` that point in the draw's own
+screen space: **x in `[-16/9, 16/9]`, y in `[-1, 1]`, y up, one unit is 136 px**
+(480 x 272 output).
+
+**1. Visibility angle** (`FxLensflare_UpdateIntensity`, confidence 92, matched to four digits on Vineta K:
+`0.4736` computed, `0.47363` read)
+
+```text
+c      = dot(d, -fwd)            ; > 0 required, else nothing is drawn
+c      = clamp(c, -0.999, 0.999)
+angle  = acos(c)                 ; radians
+if angle > 1.0: nothing is drawn
+intensity = 1.0 - angle          ; 0 .. 0.955
+```
+
+`-fwd` is `-(cam[0x40].z, cam[0x50].z, cam[0x60].z)`, the third column of the camera's
+3x3, not a row. The sun is visible inside a one-radian cone (57 degrees) and fades
+linearly to nothing at its edge. Nothing else fades at the screen edge.
+
+**2. Occlusion** (`Lensflare_QueueOcclusionProbe` + `Lensflare_ReadOcclusion`, confidence 90;
+live 12/16 = `0.75`):
+
+```text
+(px, py) = the sun's pixel in the 480 x 272 output, y down
+if the sun is behind the camera, or px outside (-4, 484), or py outside (-4, 276): occ = 0
+else: occ = (count of the 16 depth samples at px+{-3,-1,1,3}, py+{-3,-1,1,3} whose
+         16-bit depth word is below 0x3b3) / 16
+```
+
+Depth runs 65535 near to 0 far; the sky box reads `23`, a pole `4300`. In our renderer
+that is "no scenery in front of the sky at this pixel" for each of the sixteen
+points; any equivalent gives `occ` in steps of 1/16. A sample off the 480 x 272 area
+does not count. **Unread:** which frame's depth buffer the probe sees (the signal
+runs inside the frame; the value used by the draw may be one frame old).
+
+**3. Alpha base**
+
+```text
+a0 = occ * intensity              ; 0.75 * 0.4736 = 0.355 on the live frame
+```
+
+**4. Ring layout**, with `S` above, `t = |S| / (5/3)`, `fade = 1.0` when `t >= 0.2` else
+`1.0 - (0.2 - t) * 5.0` (the rings vanish as the sun reaches screen centre; **ring 0 does not**):
+
+| Ring | Centre | Half-size (square, x and y) | Alpha | Cell |
+| ---: | --- | --- | --- | ---: |
+| 0 | `S` | `(5/3 - \|S\|) * 1.5 + 0.8` | `a0` (no random) | 0 |
+| 1 | `0.8 S` | `0.2 t j * 1.0` | `a0 fade r * colour.a` | 1 |
+| 2 | `0.7 S` | `0.2 t j * 1.45 * 2.0` | same | 1 |
+| 3 | `0.55 S` | `0.2 t j * 1.45^2 * 0.5` | same | 1 |
+| 4 | `0.325 S` | `0.2 t j * 1.45^3 * 1.2` | same | 2 |
+| 5 | `-0.0125 S` | `0.2 t j * 1.45^4 * 1.0` | same | 2 |
+| 6 | `-0.51875 S` | `0.2 t j * 1.45^5 * 2.0` | same | 3 |
+| 7 | `-1.278 S` | `0.2 t j * 1.45^6 * 0.5` | same | 3 |
+| 8 | `-2.417 S` | `0.2 t j * 1.45^7 * 1.2` | same | 3 |
+| 9 | `-4.126 S` | `0.2 t j * 1.45^8 * 1.0` | same | 3 |
+
+Ring `k >= 1` sits at `(1 - 0.2 * 1.5^(k-1)) S`, size factor `1.45^(k-1)` times the cycle
+`[1.0, 2.0, 0.5, 1.2][(k-1) & 3]`. `j` is one random per frame in `[0.98, 1.02]`, `r` one
+per ring in `[0.5, 0.9]` (when the engine's flag `DAT_002883fc` is set: `j = 1.0`, `r = 0.7`;
+who sets it is unread). Ring 5 sits within `0.0125 |S|` of the screen centre whatever `S` is: **that is the
+faint circle the maintainer sees at the start line**.
+Confidence 92 on positions (ten live centres matched to three decimals), 88 on sizes (within `j`'s
+band on the ten live quads, ring 0 exact), 85 on alpha (ring 0 `0.353` against `0.355`; ring `1..9`
+`0.20..0.31`, all in `a0 * [0.5, 0.9]`).
+
+The atlas cell by ring is **`[0, 1, 1, 1, 2, 2, 3, 3, 3, 3]`** (confidence 90 live; the
+constructor builds blocks in cell order `0,1,2,3,3,1,2,3,3,1` and sorts them by cell,
+the sort's key inferred from its result, 75). Cell `c` is the quad of the 2x2 atlas with
+`u0 = (c & 1) / 2`, `v0 = (c >> 1) / 2`, each half wide, texture v down.
+
+**5. Colour.** Ring 0 is `ColourR/G/B`. Each next ring converts the **previous ring's**
+colour to HSV with hue in sextants `0..6`, adds `-0.01 * k` (`k` = 1 for ring 1), wraps to
+`0..6` and converts back, so hue drifts `-0.005 k (k + 1)` sextants from ring 0 (about `-27` degrees
+at ring 9); saturation and value are unchanged, and a grey stays grey. Confidence 70 (a
+static read; Vineta K's grey colour cannot show it live). The six coloured circuits above need it.
+Vertex colour is the ring's `RGB` as 8-bit (`0.7107 -> 0xb5`), vertex alpha the ring's alpha.
+
+**6. Draw state** (read from the recorded GE list, confidence 92):
+
+- additive: `out = src.rgb * src.a + dst` (`BLENDMODE 0xA2`, `FIXB 0xFFFFFF`); texture `modulate`
+  by the vertex colour (the function register is never written in the list, so the engine default);
+  linear magnify, mipmap-linear minify on the four authored mips
+- depth test off, depth writes off, culling off, lighting off, alpha test off
+- one triangle strip of 60 vertices, ten blocks of six, in **memory block order** (not ring
+  order); additive, so the order does not change the sum
+- queue key `0x4e000000` (the node's occlusion callback `0x4b000001`); where that lands
+  relative to the HUD and the ship is **unread**
+
+## Live check
+
+Vineta K grid, one frame, the sun at NDC `(-0.4515, 0.4343)`, so `S = (-0.8026, 0.4343)` and
+`|S| = 0.9126`, `t = 0.5476`. Ten quad centres read from the vertex buffer
+`(x / S.x)`: `1.0, 0.80, 0.70, 0.55, 0.325, -0.0125, -0.518, -1.278, -2.417, -4.126`,
+the table's. Ring 0's half-size `1.931` is `(5/3 - 0.9126) * 1.5 + 0.8 = 1.9312`;
+ring 1's `0.108` is `0.2 * 0.5476 * 0.986`. Alphas are `0x5a 0x4d 0x4c 0x50 0x4e 0x48 0x3a 0x38 0x4e
+0x33` by block. Frame, read by eye: a flare-on and flare-off pair of the same
+countdown tick (the ring alphas zeroed in the live colour buffer for the second) differs by
+soft glows around the predicted places: the large halo near the sun's pixel `(262, 154)`,
+the centre disc at `(484, 272)`, the ring-7 glow at `(757, 423)`. At 0.7 grey and alpha
+around 0.3 each ring adds a faint tint, which is why a still shows it so weakly.
+
+## What our code has
+
+`oag_vex::lensflare` (`Lensflare`, `lensflares`) reads the node and the colour;
+`classes::V4.lensflare` is `0x390`. The census is `crates/pure/tests/class_table_ground_truth.rs`
+(`the_light_classes_are_on_every_pure_circuit`). Nothing draws it: the wire lane needs the
+camera's rotation (the sun is a direction), a depth sample of the sun's pixel and a 2D
+additive pass after the scene.
+
+## Cross-title
+
+- **HD, 2048, Omega: checked, differs.** HD's strings name `LensFlare.cpp`, shaders
+  `LensFlare_vp`/`_fp`, `LensflareComponents_256x256.gtf` and `_Rays.gtf`, and the key
+  `Lighting.Use Lens Flare` in `.envsettings`; Omega adds H-ray keys and a sun scale
+  (`handover` census). So they have a ray texture and a flag, Pure has neither, and HD's track
+  files carry no `lensflare` node by name. Pure's law is not assumed for HD; HD's `LensFlare.cpp`
+  (`0x002aee58`) is unread.
+- **Pulse: absent** (`0x3de` is in the name table, zero nodes, zero strings).
+- **Pure's DLC packs and the EU disc:** the same Vineta K node is on the EU disc; the packs are not searched.
+
+## Open
+
+- The queue order of key `0x4e000000` against the HUD, ship and sky, and whether the depth sample is one frame old.
+- The hue rotation on a coloured circuit, live (Modesto Heights `(1, 0.6, 0)` is the first to try).
+- The random source and the `DAT_002883fc` flag.
+- What the node's `lensflare_shape_` child and the payload's word `187` are for (neither is read by the flare).
