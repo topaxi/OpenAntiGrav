@@ -328,7 +328,10 @@ pub(super) fn grid(
                 && craft_title.looks.hull_overlay.applies_everywhere(),
             hull_shine: oag_render::shine::DRAWN
                 && options.hull_shine
-                && craft_title.looks.hull_shine.applies_everywhere(),
+                && craft_title
+                    .looks
+                    .hull_shine
+                    .applies(archives.layout.platform),
             hull_wreck: options.hull_wreck
                 && craft_title
                     .looks

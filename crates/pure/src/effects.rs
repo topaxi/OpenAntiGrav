@@ -103,6 +103,18 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The hull's `0x2000` extra pass, as on Pulse: Feisar's `feisarShape` mesh
+    // word and batches read `0x3001`, its materials name `envtest4.tga` as the
+    // second texture, and Pure's draw (`FUN_0886f9ec`) brackets the pass in
+    // `FUN_0886e144`, which programs what Pulse's `Mesh_BeginTransparentPass`
+    // does call for call (`Gu_TexMapMode(2, 0, 1)` included). Its fixed light
+    // pair is built from the same `-1.0`/`0.3` radian literals
+    // (`0x08a8e8ec`) in `FUN_08864018`
+    // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`).
+    hull_shine: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,

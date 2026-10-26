@@ -383,14 +383,15 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     let every = |t: &Title| {
         [
             t.looks.hull_overlay.applies_everywhere(),
-            t.looks.hull_shine.applies_everywhere(),
+            t.looks.hull_shine.applies(Platform::Psp),
             t.looks.laid_pose.applies_everywhere(),
             t.looks.absorb_shell.applies_everywhere(),
         ]
     };
     assert_eq!(every(oag_pulse::TITLE), [true, true, true, false]);
     assert_eq!(every(oag_hd::TITLE), [false, false, false, true]);
-    for other in [oag_pure::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+    assert_eq!(every(oag_pure::TITLE), [false, true, false, false]);
+    for other in [oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(every(other), [false; 4], "{}", other.name);
     }
 
