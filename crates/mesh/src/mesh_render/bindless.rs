@@ -28,6 +28,11 @@
 //! allows; and one fixed layout keeps a pipeline [`super::pipeline_cache`] built for one
 //! drawable valid for another's group.
 //!
+//! **Only the slots a draw names** ([`used_slots`]). A drawable built over a circuit's
+//! whole material table (HD's speed and weapon pads) bound all 269 of Anulpha Pass's
+//! textures to draw a few pads; keeping the slots its own draws reach took the elements
+//! bound per frame there from 1,370 to 842, the same picture byte for byte.
+//!
 //! **The samplers are a small array too.** A drawable binds one sampler for every slot
 //! (`build`'s repeat sampler), and the only other a mesh draw binds is the billboard
 //! card's sampler ([`super::card_material`]), which an advert slot swaps in:
@@ -219,17 +224,20 @@ pub fn layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
 #[derive(Clone, Debug)]
 pub struct Bindless {
     materials: Vec<Material>,
+    used: Vec<bool>,
     group: wgpu::BindGroup,
     rows: Vec<Row>,
+    elements: usize,
 }
 
 impl Bindless {
-    /// The group over `materials`, slot for slot, or `None` past [`CAPACITY`] distinct
-    /// textures or [`SAMPLERS`] samplers (or for no slot at all, which `build` never
-    /// makes: slot 0 is its white).
+    /// The group over the slots of `materials` that `used` marks (see [`used_slots`]), or
+    /// `None` past [`CAPACITY`] distinct textures or [`SAMPLERS`] samplers (or for no slot
+    /// at all, which `build` never makes: slot 0 is its white). A slot `used` leaves out
+    /// reads slot 0's row.
     #[must_use]
-    pub fn new(device: &wgpu::Device, materials: Vec<Material>) -> Option<Self> {
-        let Some((group, rows)) = group(device, &materials) else {
+    pub fn new(device: &wgpu::Device, used: Vec<bool>, materials: Vec<Material>) -> Option<Self> {
+        let Some((group, rows, elements)) = group(device, &materials, &used) else {
             log::info!(
                 "bindless: {} material slots name more than {CAPACITY} textures or \
                  {SAMPLERS} samplers: per-slot groups",
@@ -239,14 +247,17 @@ impl Bindless {
         };
         Some(Self {
             materials,
+            used,
             group,
             rows,
+            elements,
         })
     }
 
     /// The group, bound once per drawable at group 1.
     #[must_use]
     pub fn group(&self) -> &wgpu::BindGroup {
+        oag_gpu::perfprobe::array_bind(self.elements);
         &self.group
     }
 
@@ -266,8 +277,10 @@ impl Bindless {
             return;
         }
         let previous = std::mem::replace(&mut self.materials[slot], material);
-        match group(device, &self.materials) {
-            Some((group, rows)) => (self.group, self.rows) = (group, rows),
+        match group(device, &self.materials, &self.used) {
+            Some((group, rows, elements)) => {
+                (self.group, self.rows, self.elements) = (group, rows, elements);
+            }
             None => {
                 log::warn!("bindless: slot {slot}'s new material does not fit; kept the old");
                 self.materials[slot] = previous;
@@ -291,10 +304,50 @@ fn distinct<T: Clone + Eq + std::hash::Hash>(all: impl Iterator<Item = T>) -> (V
     (items, indices)
 }
 
-/// The group over `materials`, their distinct textures and samplers, and each slot's
-/// [`Row`] of indices into them.
-fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGroup, Vec<Row>)> {
-    let (views, view_index) = distinct(materials.iter().flat_map(|m| {
+/// Which of a model's `slots` material slots a draw can bind: slot 0 (the white
+/// fallback, and the row [`Bindless::row`] falls back to) and each slot a draw of
+/// any of the model's lists names, clamped as the drawing side clamps it.
+///
+/// **Only these go into the arrays.** wgpu tracks every element of the group each
+/// time it is bound in a pass, whether a draw reads it or not, and a drawable built
+/// over a circuit's whole material table draws a few of its slots: HD's Anulpha
+/// Pass builds its speed pads and its weapon pads that way, and each bound the
+/// circuit's 269 distinct textures to draw a handful of pads.
+#[must_use]
+pub fn used_slots(model: &crate::mesh::Model, slots: usize) -> Vec<bool> {
+    let mut used = vec![false; slots];
+    if let Some(white) = used.first_mut() {
+        *white = true;
+    }
+    let last = slots.saturating_sub(1);
+    for draw in model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .chain(&model.shine_draws)
+    {
+        if let Some(slot) = used.get_mut(draw.texture.map_or(0, |t| t + 1).min(last)) {
+            *slot = true;
+        }
+    }
+    used
+}
+
+/// The group over the slots of `materials` that `used` marks, their distinct textures
+/// and samplers, and each slot's [`Row`] of indices into them (slot 0's for a slot
+/// `used` leaves out), with the group's element count.
+fn group(
+    device: &wgpu::Device,
+    materials: &[Material],
+    used: &[bool],
+) -> Option<(wgpu::BindGroup, Vec<Row>, usize)> {
+    let kept: Vec<&Material> = materials
+        .iter()
+        .zip(used.iter().chain(std::iter::repeat(&true)))
+        .filter_map(|(m, &used)| used.then_some(m))
+        .collect();
+    let (views, view_index) = distinct(kept.iter().flat_map(|m| {
         [
             &m.albedo,
             &m.lightmap,
@@ -304,9 +357,10 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
             &m.sixth,
         ]
     }));
-    let (samplers, sampler_index) = distinct(materials.iter().map(|m| &m.sampler));
+    let (samplers, sampler_index) = distinct(kept.iter().map(|m| &m.sampler));
     log::debug!(
-        "bindless: {} slots, {} textures, {} samplers",
+        "bindless: {} of {} slots, {} textures, {} samplers",
+        kept.len(),
         materials.len(),
         views.len(),
         samplers.len()
@@ -314,7 +368,7 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
     if views.is_empty() || views.len() > CAPACITY as usize || samplers.len() > SAMPLERS as usize {
         return None;
     }
-    let rows = view_index
+    let mut kept_rows = view_index
         .as_chunks::<6>()
         .0
         .iter()
@@ -323,8 +377,20 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
             |(&[albedo, lightmap, pad_mask, wave, fifth, sixth], &sampler)| {
                 [albedo, lightmap, pad_mask, wave, sampler, fifth, sixth]
             },
-        )
-        .collect();
+        );
+    // Slot 0 is always kept, so the first kept row is its row.
+    let mut white = None;
+    let mut rows = Vec::with_capacity(materials.len());
+    for &used in used
+        .iter()
+        .chain(std::iter::repeat(&true))
+        .take(materials.len())
+    {
+        let row = if used { kept_rows.next() } else { white };
+        let row = row?;
+        white.get_or_insert(row);
+        rows.push(row);
+    }
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("material arrays"),
         layout: &layout(device),
@@ -339,5 +405,31 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
             },
         ],
     });
-    Some((group, rows))
+    Some((group, rows, views.len() + samplers.len()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::used_slots;
+
+    /// A drawable over a circuit's whole material table keeps only white and the slots its
+    /// own draws name, in every list, clamped as the drawing side clamps them.
+    #[test]
+    fn the_arrays_keep_only_the_slots_a_draw_names() {
+        let mut model = super::super::pipeline_cache::tests::triangle_model();
+        let draw = model.draws[0].clone();
+        let with = |texture| crate::mesh::DrawCall {
+            texture,
+            ..draw.clone()
+        };
+        model.draws = vec![with(Some(2)), with(None)];
+        model.alpha_tested_draws = vec![with(Some(4))];
+        model.transparent_draws = vec![with(Some(40))];
+        let used = used_slots(&model, 8);
+        assert_eq!(
+            used,
+            [true, false, false, true, false, true, false, true],
+            "white, texture 2 as slot 3, texture 4 as slot 5, and 40 clamped to the last"
+        );
+    }
 }
