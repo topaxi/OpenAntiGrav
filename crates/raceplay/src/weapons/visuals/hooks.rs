@@ -57,6 +57,42 @@ impl Race {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Missile, slot)
     }
 
+    /// Launches craft `slot`'s Quake with its bump centred on the player, for
+    /// `--force-quake`: the wave reaches the player on the next tick and the
+    /// ordinary hit path runs (the cue, the lift, the slowdown, the hull's
+    /// sparks and the shake). The original's Quake is launched
+    /// [`oag_weapons::projectile::quake::LAUNCH_LEAD`] ahead of the shooter, so
+    /// it starts that far behind the player's progress here. **Chosen, not
+    /// measured:** a shooter sitting on the player's own road, where a real one
+    /// is behind and the wave takes a second or two to arrive. `false` when
+    /// `slot` is the player or not racing, a wave is already up, the title
+    /// authors no Quake or the player is not yet on the course. A verification
+    /// aid and nothing else.
+    pub fn force_quake(&mut self, slot: usize) -> bool {
+        let player = self.player_slot();
+        if slot == player || !self.ship_active(slot) || self.sim.world.quake.is_some() {
+            return false;
+        }
+        let Some(stats) = self
+            .sim
+            .weapons
+            .as_ref()
+            .and_then(oag_tables::weapons::WeaponStats::quake)
+        else {
+            return false;
+        };
+        let Some(progress) = self.sim.world.ships[player].standing.progress else {
+            return false;
+        };
+        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+            slot as u8,
+            progress - oag_weapons::projectile::quake::LAUNCH_LEAD,
+            1.0,
+            &stats,
+        ));
+        true
+    }
+
     fn put_craft_on_projectile(&mut self, kind: oag_tables::weapons::Weapon, slot: usize) -> bool {
         if !self.ship_active(slot) {
             return false;

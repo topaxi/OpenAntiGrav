@@ -8,6 +8,7 @@ fn main() {
         &[
             "beam",
             "cloud",
+            "cockpit_hit",
             "distort",
             "exhaust",
             "flash",

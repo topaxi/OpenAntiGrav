@@ -1073,6 +1073,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             #[cfg(feature = "view")]
             weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
             #[cfg(feature = "view")]
+            cockpit_hit_noise: weapon_models::load_cockpit_hit(&mut archives, wm, &mut report),
+            #[cfg(feature = "view")]
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
             #[cfg(feature = "view")]
             destroy_stations: super::destroy_camera::stations(circuit_fx, &track_blob, &mut report),

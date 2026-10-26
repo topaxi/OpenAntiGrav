@@ -556,6 +556,7 @@ impl Race {
             if let Some(flash) = &mut self.view.screen_flash {
                 flash.advance(self.sim.dt, eye);
             }
+            self.advance_cockpit_hit();
 
             // Advanced here, on the fixed tick, and not in the frame loop. That is
             // what makes the headless `capture` path - which calls only `tick` -

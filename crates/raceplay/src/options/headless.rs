@@ -108,6 +108,8 @@ impl Setup {
             #[cfg(feature = "view")]
             weapon_spark_anchors: Vec::new(),
             #[cfg(feature = "view")]
+            cockpit_hit_noise: None,
+            #[cfg(feature = "view")]
             wreck_anchors: Vec::new(),
             #[cfg(feature = "view")]
             magstrip_wake: None,

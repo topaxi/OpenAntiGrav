@@ -10,8 +10,8 @@ the five title crates (text only, no compiler) and fails when
 - a cell's value differs from the source: a table path, `PerTick`/`PerTrip`,
   and `set`/`none` for a model field or an effect trigger;
 - the provenance word differs from the source, **where the source carries an
-  `Origin`**: `ghost_static`, the `effects.*` rows and the two `Sourced` bools of
-  `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`).
+  `Origin`**: `ghost_static`, `cockpit_hit`, the `effects.*` rows and the two `Sourced`
+  bools of `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`).
 
 What it does not check, and the page says so: the provenance of a `Weapons`
 axis or of any other `WeaponModels` field (comments only), every cell of the
@@ -205,7 +205,7 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
         for field, value in models.items():
             if field.startswith("."):
                 continue
-            origin = origin_word(value) if field == "ghost_static" else None
+            origin = origin_word(value) if field in ("ghost_static", "cockpit_hit") else None
             cells.setdefault(f"weapon_models.{field}", {})[title] = (model_value(value), origin)
         # `..EMPTY` fills every field the literal does not spell out.
         for field in model_fields:

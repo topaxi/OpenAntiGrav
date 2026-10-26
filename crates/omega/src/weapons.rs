@@ -75,6 +75,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         entry: r"Data\Tex\staticglow.mip",
         origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
     }),
+    // `cockpit_hit` stays `None`: HD, whose front end Omega carries forward, draws
+    // none, and Omega's own executable cannot be read to say otherwise.
     ..WeaponModels::EMPTY
 };
 

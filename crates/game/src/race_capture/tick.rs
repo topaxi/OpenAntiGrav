@@ -119,6 +119,14 @@ pub(super) fn advance_one_tick(
             "--force-missile-hit: no Missile in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
         );
     }
+    if let Some((at, slot)) = options.force_quake
+        && at == tick
+        && !race.force_quake(slot)
+    {
+        log::warn!(
+            "--force-quake: slot {slot} is not an opponent racing (pass --opponents), a Quake is already up, or the title authors none"
+        );
+    }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
         && !race.force_leach_lock(0, target as u8)

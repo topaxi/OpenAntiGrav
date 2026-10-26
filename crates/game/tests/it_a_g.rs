@@ -20,6 +20,7 @@ mod boot_legal_wrap_ground_truth;
 mod campaign_cell_class_census_ground_truth;
 mod campaign_medal;
 mod campaign_pointer_ground_truth;
+mod cockpit_hit_ground_truth;
 mod countdown_voice_ground_truth;
 mod dlc_ground_truth;
 mod endrace_split_ground_truth;

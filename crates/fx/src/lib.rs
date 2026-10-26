@@ -14,7 +14,8 @@
 //! - [`exhaust`] is the engine flare and trail.
 //! - [`mist`], [`cloud`] and [`ranrot`] are the weather: the mist sheet, the
 //!   cloud field and the generator the field reseeds with.
-//! - [`beam`] is the Leach beam, [`flash`] the screen flash and
+//! - [`beam`] is the Leach beam, [`flash`] the screen flash,
+//!   [`cockpit_hit`] the static a weapon hit throws over the cockpit view and
 //!   [`weapon_quads`] the Cannon's hand-built quads.
 //! - [`hull_overlay`] and [`absorb_shell`] are the weapon-absorb effect drawn
 //!   over a hull.
@@ -22,6 +23,7 @@
 pub mod absorb_shell;
 pub mod beam;
 pub mod cloud;
+pub mod cockpit_hit;
 pub mod exhaust;
 pub mod flash;
 pub mod hull_overlay;

@@ -711,6 +711,8 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
     cannon_look: Some(CANNON_LOOK),
     // No `staticglow` string in HD's EBOOT: it never binds a ghost static.
     ghost_static: None,
+    // No `noisematt` string in HD's EBOOT: it never binds the cockpit hit static.
+    cockpit_hit: None,
 };
 
 /// How HD draws a Cannon round, off `CannonBullet`'s own constructor, update

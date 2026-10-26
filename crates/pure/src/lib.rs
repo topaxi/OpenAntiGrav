@@ -158,6 +158,13 @@ pub const TITLE: &Title = &Title {
             entry: r"Data\Tex\staticglow.mip",
             origin: oag_title::Origin::Measured,
         }),
+        // Pure's BOOT.BIN names `noisematt.mip` (grep, both pressings), and a second,
+        // `noisemattvr.mip`, that Pulse's main executable does not. Its `Ship_Damage`
+        // is unread, so the arm and the draw are Pulse's.
+        cockpit_hit: Some(oag_title::weapons::CockpitHit {
+            entry: r"Data\Tex\noisematt.mip",
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        }),
     },
     effects: effects::EFFECTS,
     looks: effects::LOOKS,

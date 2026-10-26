@@ -21,6 +21,7 @@ mod camera;
 mod campaign_event;
 mod cannon_draw;
 mod catch_up;
+mod cockpit_hit;
 mod correction;
 mod countdown;
 mod craft_cull;
@@ -243,6 +244,7 @@ fn setup(handling: Handling) -> Setup {
         absorb_anchors: Vec::new(),
         hit_spark_anchors: Vec::new(),
         weapon_spark_anchors: Vec::new(),
+        cockpit_hit_noise: None,
         wreck_anchors: Vec::new(),
         magstrip_wake: None,
         magstrip_pob: false,
