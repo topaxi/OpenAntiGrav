@@ -585,22 +585,27 @@ fn one(
     };
     let [absorb_overlay, leach_overlay] = [absorb::ABSORB, absorb::LEACH]
         .map(|which| absorb::overlay(archives, &hull, &blob, which, ctx.hull_overlay, report));
-    let shine =
-        if ctx.hull_shine {
-            let shine = mesh::shine_pass::build(&hull);
-            report.push(match &shine {
-            Some(model) => format!(
-                "{hull_name}: {} extra-pass batch(es) under their second texture, {} weighted by \
-                 their own texture's alpha (oag_render::shine)",
-                model.draws.len(),
-                model.draws.iter().filter(|d| mesh::shine_pass::is_masked(model, d)).count()
-            ),
+    let shine = if ctx.hull_shine {
+        let shine = mesh::shine_pass::build(&hull);
+        report.push(match &shine {
+            Some(model) => {
+                let weighted = model
+                    .draws
+                    .iter()
+                    .filter(|d| mesh::shine_pass::is_masked(model, d))
+                    .count();
+                format!(
+                    "{hull_name}: {} extra-pass batch(es) under their second texture, \
+                     {weighted} weighted by their own texture's alpha (oag_render::shine)",
+                    model.draws.len()
+                )
+            }
             None => format!("{hull_name}: no 0x2000 extra-pass batch - no shine pass"),
         });
-            shine
-        } else {
-            None
-        };
+        shine
+    } else {
+        None
+    };
     Ok(Livery {
         team: team.to_string(),
         hull,
