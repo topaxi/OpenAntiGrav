@@ -1,0 +1,29 @@
+# Dependency update PRs. Weekly, grouped, so one PR per ecosystem carries the
+# minor and patch bumps instead of one PR per crate; a major bump still gets its
+# own PR, because that is the one that needs reading.
+#
+# CI on the PR runs fmt, clippy and the non-disc test suite. It cannot run
+# `just test-data` (no disc images in CI), so a bump to anything the simulation
+# or a decoder links still wants a local `just test-data` before merging.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      # Its tag is the Rust toolchain version, pinned to match rust-toolchain.toml
+      # on purpose; a toolchain bump is deliberate, never a bot's side effect.
+      - dependency-name: dtolnay/rust-toolchain
