@@ -102,7 +102,14 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 - **Glass road mid and far brightness** (Tech de Ra, Talon's): the original's pixel implies the facing
   ramp read at `u` about 0.36-0.5 where ours reads 0.10-0.20. Next: dump draw 354's vertex constant
   `c[209]` (`eyePositionWorldSpace`, `0x3466fc0e`) at the cold pair's tick against our view eye, then
-  the chunk's packed normal (same page, same section).
+  the chunk's packed normal (same page, same section). **Measured 2026-10-27 (`hd-tech-de-ra-2`), small, not a lane on its
+  own**: the `etched_glass` slots (`OAG_SKIP_MATERIAL=etched_glass`, mask = pixels the skip moves) cover 233,622 px on
+  `hd/tech-de-ra` at a blur-7 error of 2.8 and luma bias -0.1 (0.66 M), 4,551 / 4,571 px on the two Talon's pairs (7.5, 9.6;
+  bias -7, -10) and 7,685 px on Modesto (14.4, bias -12): 0.85 M over the 13 pairs, against 3.83 M the booth glass cost. The
+  eye half is already settled on Talon's (rcsmaterial.md, "The glass floor's gamma, curve and sun weight", item 5: `c[209]` is
+  the camera matrix's eye to 1e-4, and the pairs replay that camera), so the open read is the chunk's normal: the vertex
+  stream of draw 354 from `hd-draw-dump.py` without `HOOK_LIGHT` (`HOOK_TGT` the scene target), its `normal` attribute against
+  `oag_rcs`'s decode of the same chunk.
 - ~~**The chevron's emissive pulse**~~ **wired** (2026-10-22, `hd-texture-slots`, item 2 above); what is left is the
   clock its curve runs on.
 - **HD's scenery clock** (2026-10-27, `hd-tech-de-ra-2`; one measurement, several symptoms): ours runs every world mesh on the race
@@ -138,9 +145,17 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
 2. **`hd-tech-de-ra`** (opus, mesh). **Done 2026-10-26 for the glow banner only**: the `glow` needle's +30 on Tech de
    Ra was `nr_twinblend` (slot 133, the banner behind the gantry), now drawn by its program (rcsmaterial.md,
    "`nr_twinblend`: two pictures, a scrolling wipe and bars"; mask bias +1.13). **2026-10-27 (`hd-tech-de-ra-2`)**: the
-   missing-details census found `ds_booth_glass` (wired). **Still open from this item:** the glass road's mid and far
-   brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
-   (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).
+   missing-details census found `ds_booth_glass` (wired). **Measured, not wired (2026-10-27)**, each by area x error on the cold
+   pairs (blur sigma 7, mean abs RGB): the glass road 0.85 M (above, "Glass road mid and far brightness"); **Vineta K's right-hand
+   building: the "sunlit bands about 30 grey over" claim is false on today's tree** (box `1300,0 620x540` luma -1.4, no 60x30 block
+   over +7.7; the no-dot-power specular went with `hd-top-right-band`), and what is left there is the windows' hue, slot 147
+   `jd_simplespecular` (`and_metalshine2.gtf`, no sky sampler in any of its 41 blocks), 6,853 px at 5.6 (0.04 M); **Modesto's
+   background**: the tower box `1300,0 220x240` (21 grey) is sky traffic in another phase (an airship in ours, a balloon in the
+   original: the scenery clock below), and the left-hand steps behind the crowd are slot 349 (`diffuse`, `steps1.gtf`, no lightmap)
+   at +18 luma over 9,812 px (0.17 M). Also found on Tech de Ra: warm highlights along the pit box's top edge (slot 408,
+   `track_surface` with `ds_pit_box_cs.gtf`, exponent 50.5) that the original does not show, box `1050,735 400x40` 12.9 grey,
+   gone with `OAG_ALBEDO_ONLY=1`, so a light term (about 0.2 M). Slots are `hd_material_probe_dump` ordinals; the bisection is
+   `OAG_SKIP_SLOT` halving on one pixel.
 3. **Additive source strength** (mesh): Talon's grill source about 1.5x the original's, and Amphiseum's hologram
    stand-in about 70 grey over; then Chenghou's `glass_2nduv_reflect_glow` (reflection plus glow 4 grey over) and
    Modesto's `uvanim_diffuse_emissivealpha` LCD banners (program unread).
