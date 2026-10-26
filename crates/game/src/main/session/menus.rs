@@ -684,6 +684,9 @@ impl Session {
     /// takes the same path, except on a title whose own chain has no team step
     /// in it ([`picker::skips_team_step`]).
     pub(crate) fn start_race_box(&mut self) {
+        // The RACE page's own race: a cell left over from an abandoned campaign launch must not
+        // make the selection screens read its mode ([`Self::pending_race`]).
+        self.campaign_cell = None;
         let skipped = self
             .shell
             .as_ref()
