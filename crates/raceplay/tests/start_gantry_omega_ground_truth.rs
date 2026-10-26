@@ -29,7 +29,10 @@ fn archives() -> Option<oag_assets::Archives> {
 
 /// Loads every model circuit `name`'s manifest names, returning `(slot, draws,
 /// decoded textures)` per slot and the report.
-fn load_circuit(name: &str) -> Option<(Vec<(u32, usize, usize)>, Vec<String>)> {
+/// `(slot, draws, decoded textures)` per slot, and the load report.
+type Loaded = (Vec<(u32, usize, usize)>, Vec<String>);
+
+fn load_circuit(name: &str) -> Option<Loaded> {
     let mut archives = archives()?;
     let manifest = archives
         .read_name(&format!("/data/environments/{name}/trackstartup.xml"))
