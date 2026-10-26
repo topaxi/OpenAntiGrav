@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD render error by 120 px tile on 13 pairs: ceiling light beams and rims lead the bias; scenery, HUD and wall are not lanes yet"
+summary: "HD error blocks 1 and 3 split by cause: gantry boards 49% of block 1, ds_booth/glass_reflect glass 30% of block 3, lit opaque diffuse"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -129,11 +129,161 @@ cause. What the crops show:
    [hd-hud.md](../../docs/formats/hd-hud.md) and take the low-frequency error
    inside the mask over the 13 pairs. Acceptance: one number in this thread.
    If it is above 10%, open a HUD text-alpha lane.
-3. **Measure, not a lane: left wall and centre gate.** Claim: rows 1 and 3
-   (39% of low-frequency error together) are many draws, not one. Method: a
-   per-draw ablation on two circuits at the same moment. Acceptance: one or two
-   named draws explain at least half the block's low-frequency error on both
-   circuits. Only then name a lane.
+3. ~~**Measure, not a lane: left wall and centre gate.**~~ Measured 2026-10-26, see
+   "Blocks 1 and 3 split by cause" below. The falsifier was met for the gantry boards (block 1) and the
+   `ds_booth_glass` / `glass_reflect` families (block 3); the lit opaque remainder is many draws and stays
+   unlaned.
+
+## Blocks 1 and 3 split by cause (2026-10-26, lane `hd-diagnose-blocks`)
+
+**Falsifier, written before the sweep.** One or two named toggles must explain at least half of a block's
+low-frequency error on two circuits; if none does, the honest result is "many draws, no lane" and no lane is
+proposed for that block. Result: **met for block 1** (the gantry cards, at least half of the block on
+Anulpha Pass 69%, Chenghou 54% and Ubermall 52%; Talon's Assegai 54% is a capture mismatch) and **met for
+block 3 only on two circuits** (glass, 64% on Sol 2 and 59% on Modesto Heights; 30% over all 13). Opaque
+scenery fails it in both blocks.
+
+**Method (reproducible, no code changed).** Ours re-rendered per pair from its own recorded flags with the
+pair's own `ours-profile` `settings.toml` and the `oag-game` build that made `ours.png`
+(`oag-game <hd image> <pair.json ours.flags> --screenshot`; the baseline re-render differs from `ours.png` by
+0.000 on all 13 pairs). Nine ablations per pair, each a whole-frame render:
+`OAG_OPAQUE_ONLY=1` (every blended chunk removed), `OAG_SKIP_MATERIAL` with `321go`, `billboards`, `glow`,
+`light`, `sky,cloud`, `glass`, `palm` (a needle matches the material path or either texture path), and
+`OAG_ALBEDO_ONLY=1` (light rig off). A pixel belongs to a toggle when `|blur7(base) - blur7(toggle)|`
+(mean over RGB) exceeds 3 of 255; the pixel goes to the specific toggle with the largest delta (ties go to
+the earlier of `321go`, `billboards`, `glow`, `light`, `glass`, `sky`, `palm`), then to "other blended"
+(opaque-only delta), then to "opaque scenery, light-sensitive" (albedo-only delta above 12), else "rest".
+Masks are exclusive, so shares sum to 100%. The error summed in a mask is the same low-frequency map the
+table above uses (PIL Gaussian blur 7, mean abs RGB), so the denominators match: block 1 is 33.6 M (21.8%)
+and block 3 26.3 M (17.1%) of 154.2 M, as before; dropping both `talons` pairs moves no cause by more than
+3 points; the threshold at 2 and 5 moves every share by at most 3 points. A mask is where ours draws a
+material, **not** where the original differs from it: a skipped material shows what lies behind, so no
+"error removed by the toggle" number is used as a share. What each needle matches (from the draw dumps):
+`321go` is the textures under `data/billboards/hd_adverts/321go/` (`321_go_64` the GO glyph, `fx350_nomip`
+the side cards' advert, `honeyblue_noalpha`); `glow` matches **any material or texture path containing
+"glow"**, which on Metropia and Sebenco removes the whole card (the cards' own material) but on Tech de Ra
+removes the `banner_*_glow` emissive banners and elsewhere trackside and landscape glow strips;
+`cf_vex_billboard` as a needle matches only Metropia and Vineta K and is not the card's name on the others.
+`billboards` removes real draws (203k pixels on Vineta K), but every advert except the 321go cards totals
+only 0.2 M in block 1.
+
+| Block 1 cause (33.6 M) | Impact | Share of block | Share of frame | Bias (ours - theirs, luma) | Pairs it leads on | Covered by |
+|---|---:|---:|---:|---:|---|---|
+| **Gantry cards** (`321go` mask 10.2 M plus the `glow`-material pixels within 40 px of it) | 14.0 M | **41.7%** | 9.1% | +1.7, sign varies by pair | anulpha-pass, chenghou, ubermall (52 to 69% each) | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("The GO board", "Still open on the board"); [start-gantry.md](../../docs/rendering/start-gantry.md) |
+| Opaque scenery, light-sensitive (albedo-only differs by more than 12; **not a lighting attribution**, see below) | 9.4 M | 28.0% | 6.1% | +2.4 | the-amphiseum (61% of its block), vineta-k, sebenco-climb | partly [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md); else none |
+| `glow`-material surfaces away from the cards (emissive banners, glow strips, halo spill) | 3.5 M | 10.4% | 2.3% | +34 on Tech de Ra, +10 on Metropia and Sebenco | tech-de-ra, metropia, sebenco-climb | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) (the glow mask); banners none |
+| Glass | 2.0 M | 5.9% | 1.3% | -0.6 | tech-de-ra, sebenco-climb, metropia | [hd-fidelity-lanes-queued-after-the-cold-originals.md](hd-fidelity-lanes-queued-after-the-cold-originals.md) |
+| Other blended (Talon's pose, particles) | 2.0 M | 5.9% | 1.3% | +7.1 | talons, talons-assegai-c1 (capture mismatch) | none |
+| Rest (opaque, not light-sensitive) | 1.7 M | 5.1% | 1.1% | +0.6 | modesto-heights | none |
+| Ceiling light cones (`light`) | 1.6 M | 4.6% | 1.0% | +6.1 | the-amphiseum, vineta-k, ubermall | the top-right band lane (`hd-top-right-band`, same cones) |
+| Sky, non-gantry adverts, palms | 0.5 M | 1.5% | 0.3% | mixed | none | none |
+
+(The cards and `glow` lines split the 17.5 M the `321go` and `glow` masks cover inside block 1's box, x 720-1560,
+y 120-600 without the top-right band, by distance to the `321go` mask; the other lines are the exclusive
+masks of the first pass, whose `321go` plus `glow` was 16.4 M, so the column sums to 103%.)
+
+| Block 3 cause (26.3 M) | Impact | Share of block | Share of frame | Bias | Pairs it leads on | Covered by |
+|---|---:|---:|---:|---:|---|---|
+| Opaque scenery, light-sensitive | 9.4 M | 35.9% | 6.1% | +0.9 | chenghou-project, sebenco-climb, anulpha-pass (spread, 0.3 to 1.2 M per pair) | none |
+| **Glass** (the left arch's panes) | 8.1 M | **30.7%** | 5.2% | -2.1, per circuit -26 to +42 | sol-2 64%, modesto-heights 59%, sebenco-climb 46% | [hd-fidelity-lanes-queued-after-the-cold-originals.md](hd-fidelity-lanes-queued-after-the-cold-originals.md) ("The other families that declare the sky map"); [hd-track-tone.md](../../docs/rendering/hd-track-tone.md) |
+| `321go` and `glow` surfaces (the left FX-350 side card, which runs on its own advert timeline, and `glow`-material surfaces) | 4.3 M | 16.2% | 2.8% | +1.1 to +3.4 | vineta-k, ubermall 40% | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("Still open on the board") |
+| Other blended | 1.8 M | 7.0% | 1.2% | +1.0 | moa-therma | none |
+| Rest | 1.8 M | 6.7% | 1.1% | -1.2 | talons | none |
+| Cones, sky, palms, other adverts | 0.9 M | 3.5% | 0.6% | mixed | none | none |
+
+**Gantry cards, split further.** Using the `321go` mask only (the cards, 10.2 M in block 1; 11.4 M inside
+the box):
+
+- **Phase is about 11% of the board.** Ours re-rendered at ten `--gantry-seconds` values over one 0.6 s pulse
+  (period confirmed: 3.90, 4.50 and 5.10 are identical) against each pair's `theirs.png`, in the union box
+  above. Nine pairs carry a pin: on six (Vineta K, Chenghou, Amphiseum, Sol 2, Moa, Tech de Ra) the pinned
+  phase is within 0.1 M of the best; Metropia and Ubermall are 0.31 M and 0.25 M off; **Anulpha Pass is 1.13 M
+  off** (2.81 M against 1.68 M at its best phase; the glyph reads 164 against the original's 229). Summed
+  over the 11 pairs swept: pinned 16.4 M, best phase 14.5 M. **Modesto Heights and Sebenco Climb carry no
+  `--gantry-seconds` at all** (the RAM search found no windowed node), so their board runs on the race clock;
+  both land on a bright phase, which is luck, not a match.
+- **Glyph and halo (theirs or ours luma above 150): 3.4 M.** Ours brighter on Metropia (+26) and Ubermall
+  (+27), dimmer on Anulpha (-54, the phase) and Talon's Assegai (-33, pose).
+- **Panel and side cards (not bright): 8.0 M, the one consistent signal.** On 9 of 13 pairs ours reads
+  **R +6 to +17** (Chenghou +10, Metropia +16, Moa +7, Modesto +6, Sebenco +17, Sol 2 +8, Talon's +14,
+  Amphiseum +11, Vineta K +9; mean about +11) against G -0 to +10 and B -1 to +5 inside the cards. On Anulpha, Ubermall,
+  Tech de Ra and Talon's Assegai it is R +0 to +3 and G, B -1 to -4. **It is not the frame's tone:** the same
+  box's opaque scenery outside every mask reads R -1 to +4 on 11 pairs (Amphiseum and Tech de Ra, +6 to +8 on
+  all channels, are the exceptions), so the cards carry about +6 to +9 R over the scenery. The cause is
+  **unread**. The documented leftover that ours adds the second texture to the albedo where
+  `cf_vex_billboard`'s program multiplies (`hd-glow-mask.md`) is a candidate, but the same page says the GO
+  card "reads right through the halo" with the current path, which cuts against it, and there is no switch
+  to test it.
+- **The original moves too.** Inside the `321go` mask the original's two captures per pair
+  (`capture/00.png`, `01.png`, 0.1 to 1.4 s apart) differ by 9.6 M, 94% of ours-against-theirs there. That
+  is the pulse and the capture offset, **not** an irreducible floor (the pinned phase is right on most pairs);
+  it only says a board comparison needs both frames at one pinned phase. Elsewhere the same capture-to-capture
+  difference is 10 to 18% of ours-against-theirs (opaque scenery 13%, glow 14%, glass 5 to 10%).
+
+**Glass in block 3: two unwired families, not one pane.** Skipping by material name inside the block 3 box
+(x 0-720, y 120-600), 13 pairs: **`ds_booth_glass` 4.97 M** on 12 pairs (biggest: Sebenco 1.04 M, bias -23;
+Modesto 0.85 M, -27; Sol 2 0.79 M, +4; Tech de Ra 0.69 M, +13; Talon's 0.35 M, -13; Vineta K 0.26 M, -15) and
+**`glass_reflect` 1.99 M** in block 3 plus 0.98 M in block 1 (Sol 2 1.18 M, +42 brighter; Sebenco 0.29 M and
+0.62 M; Chenghou, Ubermall, Metropia 0.1 to 0.2 M). Together about 7 M, 4.5% of the frame. Signs differ by
+circuit (ours darker where the pane sits over the arch on Modesto, Sebenco, Talon's and Vineta K; brighter on
+Sol 2 and Tech de Ra), consistent with ours drawing a stand-in over a program that reads the circuit's sky
+map (a reading). (Sol 2 and Sebenco both show 26,102 pixels in their `glass_reflect` block 3 masks; the
+shapes differ, 41% overlap, so it is a coincidence of the threshold.) Both families are listed as open,
+unread in `hd-fidelity-lanes-queued-after-the-cold-originals.md` and `hd-track-tone.md`; this measurement says
+where they cost most. `glass_texture_customr` (Modesto, wired 2026-10-22) still reads +23 bright over 1.14 M
+there.
+
+**Opaque scenery: no lane, and no lighting attribution.** 18.8 M (12.2% of the frame) across both blocks,
+about 0.2 to 1.2 M per pair per block, bias +0.9 to +2.8: many draws, fails the falsifier. The
+"light-sensitive" label is a threshold artefact: about 82% of the opaque pixels clear the albedo-only delta
+of 12 (1.86 M against 0.40 M "rest" in block 1), as expected when the whole light rig and the exposure
+adaptation change, so it does not separate lighting from texture. Two named exceptions:
+**the-amphiseum** block 1 (2.42 M, bias +7.0: ceiling and cone surfaces, overlaps `hd-top-right-band`) and
+**vineta-k**'s right building (box x 1300-1920, y 0-540: 8.6 M, bias +21), where skipping `and_concretestrip`
+(0.99 M inside, bias +32) and `and_solidwhite` (0.54 M, +14.5) removes the bright ledge strips. Those strips
+are present with `OAG_OPAQUE_ONLY` and vanish with `OAG_ALBEDO_ONLY`, so they are a lighting term on opaque
+geometry. **Guess, not measured:** the no-LG2 stand-in specular in
+`hd-lit-billboard-specular-and-gantry-leftovers.md`; no switch exists to turn it off in a scratch render.
+
+**Not measured, named so nobody reads them as zero.**
+
+- Missing geometry in ours: an ablation can only remove what ours draws. The "rest" and "sky" masks carry
+  1.5 to 2 M each and the crops read (all 13 pairs, blocks 1 and 3) show no missing structure, but absence
+  is not tested.
+- Fog and haze: no toggle exists (`rg` finds fog code in `crates/raceplay` and `crates/render`, no environment
+  variable), so it is **unmeasured**, not zero.
+- Hue beyond the card panels (RGB bias was taken in the card and scenery masks only), normal maps (the glass
+  and wall programs omit them), and high-frequency error (this section is all low-frequency).
+- The cones and top-right band belong to `hd-top-right-band`; not repeated here.
+
+### Lane claims, ranked by impact
+
+1. **Gantry card panels: measure, then wire.** Claim (a reading, not shown by a toggle): the three cards'
+   panels read R about +9 over the scenery on 9 of 13 pairs because ours draws their second texture
+   differently from the original's `cf_vex_billboard` program. Impact 14.0 M, 9.1% of the frame, 41.7% of
+   block 1; the panel part is 8.0 M. Acceptance: card mask (the 321go pixels, box x 720-1560, y 120-600) on
+   **metropia**, **sebenco-climb**, **chenghou-project** and **vineta-k**, panel R bias within +2 of the
+   scenery's and card-mask error down by a third, with `anulpha-pass` and `ubermall` not worse (their sign is
+   the other way). Unread: the program's constants (`scripts/ps3-microcode.py fp-file` on the card's fragment
+   block, recipe in `hd-track-tone.md`; the card's material name on each circuit is not `cf_vex_billboard`
+   except on Metropia and Vineta K). Separate measure item: pin the gantry phase on `modesto-heights` and
+   `sebenco-climb` (no window node was found) and on `anulpha-pass` (1.13 M off its best phase).
+2. **`ds_booth_glass` and `glass_reflect`: measure then wire, one family per commit.** Claim: these two
+   families, each on 11 to 12 circuits, cost about 7 M (4.5% of the frame, 19% of block 3 for booth alone)
+   because ours draws them without their own programs. Acceptance: block 3 box on **modesto-heights** and
+   **sebenco-climb** (booth 0.85 M and 1.04 M, bias -27 and -23) and **sol-2** (`glass_reflect` 1.18 M, +42):
+   each mask's error halved, no worse on `ubermall`, `anulpha-pass`, `chenghou-project`. Unread: the two
+   fragment blocks (`ds_booth_glass` unit table is in `hd-track-tone.md`, rows `#102` and `#76`; its albedo
+   carries gamma nibble 0). Covered by the existing queue thread; this gives it an order.
+3. **Vineta K ledge strips and the no-LG2 specular: wire lane, small.** Claim: `and_concretestrip` and
+   `and_solidwhite` read +32 and +14 luma on Vineta K's right building because they draw a stand-in specular
+   (a guess until the family's `LG2` census, recipe in the specular thread, is run). Acceptance: Vineta K box
+   x 1300-1920, y 0-540, bias from +21 to within +8, craft and track blocks unchanged. Only 1.5 M sits inside
+   the strips, so it is third by size.
+
+Not lanes: opaque scenery elsewhere (diffuse, 12% of the frame, fails the falsifier), the `talons` pair
+differences (capture mismatch), the `glow`-material banners on Tech de Ra (one circuit, 1.2 M, unread), the
+GO board's pulse phase on the pairs that already pin it.
 
 ## Later
 
