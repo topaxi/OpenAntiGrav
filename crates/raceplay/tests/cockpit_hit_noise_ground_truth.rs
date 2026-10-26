@@ -10,7 +10,14 @@
 
 use oag_raceplay as race;
 
-fn noise_of(image: &str) -> Option<(Option<(u32, u32)>, Vec<String>)> {
+/// What a title's load made of the noise: its size when it loaded, and the
+/// report lines that name it.
+struct Noise {
+    size: Option<(u32, u32)>,
+    lines: Vec<String>,
+}
+
+fn noise_of(image: &str) -> Option<Noise> {
     let path = oag_testdata::image(image)?;
     let loaded = race::load(&race::Options {
         source: path.display().to_string(),
@@ -28,7 +35,7 @@ fn noise_of(image: &str) -> Option<(Option<(u32, u32)>, Vec<String>)> {
         .into_iter()
         .filter(|line| line.contains("noisematt") || line.contains("cockpit view's hit static"))
         .collect();
-    Some((size, lines))
+    Some(Noise { size, lines })
 }
 
 #[test]
@@ -41,20 +48,24 @@ fn the_noise_loads_off_every_disc_that_ships_it() {
         "pure-psp-usa.chd",
         "pure-psp-eu.chd",
     ] {
-        let Some((size, lines)) = noise_of(image) else {
+        let Some(noise) = noise_of(image) else {
             continue;
         };
-        println!("{image}: {size:?} {lines:?}");
-        assert_eq!(size, Some((64, 64)), "{image}: {lines:?}");
+        println!("{image}: {:?} {:?}", noise.size, noise.lines);
+        assert_eq!(noise.size, Some((64, 64)), "{image}: {:?}", noise.lines);
     }
 }
 
 #[test]
 #[ignore = "needs disc images in data/images/"]
 fn hd_binds_none_and_reports_none_absent() {
-    let Some((size, lines)) = noise_of("hdfury-ps3-eu-dec.iso") else {
+    let Some(noise) = noise_of("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    assert_eq!(size, None);
-    assert!(lines.is_empty(), "HD asked for a cockpit static: {lines:?}");
+    assert_eq!(noise.size, None);
+    assert!(
+        noise.lines.is_empty(),
+        "HD asked for a cockpit static: {:?}",
+        noise.lines
+    );
 }

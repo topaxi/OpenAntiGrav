@@ -145,12 +145,7 @@ fn render(node: &Node) -> Option<Vec<[u8; 4]>> {
         .get_mapped_range()
         .expect("mapped")
         .to_vec();
-    Some(
-        bytes
-            .chunks_exact(4)
-            .map(|texel| [texel[0], texel[1], texel[2], texel[3]])
-            .collect(),
-    )
+    Some(bytes.as_chunks::<4>().0.to_vec())
 }
 
 /// How far column `x`'s red strays from the background: the mean of

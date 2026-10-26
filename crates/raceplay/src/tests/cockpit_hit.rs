@@ -131,15 +131,15 @@ fn another_seats_view_wears_none() {
 #[test]
 fn only_pulse_and_pure_bind_the_cockpit_hit_noise() {
     let entry = |title: &oag_title::Title| title.weapon_models.cockpit_hit.map(|hit| hit.entry);
-    assert_eq!(entry(&oag_pulse::TITLE), Some(r"Data\Tex\noisematt.mip"));
-    assert_eq!(entry(&oag_pure::TITLE), Some(r"Data\Tex\noisematt.mip"));
-    for other in [&oag_hd::TITLE, &oag_2048::TITLE, &oag_omega::TITLE] {
+    assert_eq!(entry(oag_pulse::TITLE), Some(r"Data\Tex\noisematt.mip"));
+    assert_eq!(entry(oag_pure::TITLE), Some(r"Data\Tex\noisematt.mip"));
+    for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(entry(other), None, "{} binds a cockpit static", other.name);
     }
     let origin = |title: &oag_title::Title| title.weapon_models.cockpit_hit.map(|hit| hit.origin);
-    assert_eq!(origin(&oag_pulse::TITLE), Some(oag_title::Origin::Measured));
+    assert_eq!(origin(oag_pulse::TITLE), Some(oag_title::Origin::Measured));
     assert_eq!(
-        origin(&oag_pure::TITLE),
+        origin(oag_pure::TITLE),
         Some(oag_title::Origin::InheritedFrom("Wipeout Pulse"))
     );
 }

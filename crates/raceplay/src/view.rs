@@ -179,7 +179,11 @@ pub struct RaceView {
     pub(super) hit_sparks: super::hit_sparks::HitSparks,
     /// The static a weapon hit throws over the cockpit view, on a title that
     /// draws one - see `race::cockpit_hit`.
-    pub(super) cockpit_hit: Option<super::cockpit_hit::CockpitHit>,
+    ///
+    /// Boxed: a race is copied about on the stack more times than a test thread's 2 MiB
+    /// allows for another hundred bytes (`correction::smoothing_changes_the_picture_and_not_the_hash`
+    /// overflowed at its edge).
+    pub(super) cockpit_hit: Option<Box<super::cockpit_hit::CockpitHit>>,
     /// HD's damage smoke after a weapon hit - see `race::damage_fx`.
     pub(super) damage_fx: super::damage_fx::DamageFx,
     /// Seconds since each craft's last pickup absorb, `None` once past the
