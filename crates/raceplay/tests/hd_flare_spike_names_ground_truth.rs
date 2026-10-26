@@ -67,6 +67,7 @@ fn every_hd_and_fury_flare_draws_every_spike_it_authors() {
                     hull_wreck: false,
                     absorb_shell: false,
                     zone_liveries: &[],
+                    forced_skins: &[],
                 },
                 None,
                 None,

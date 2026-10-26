@@ -55,6 +55,7 @@ pub use oag_gameplay::input;
 pub use oag_input::keys;
 pub mod lan_list;
 pub mod launcher;
+pub mod livery_row;
 pub mod loading;
 pub mod logfile;
 pub mod medal_watch;

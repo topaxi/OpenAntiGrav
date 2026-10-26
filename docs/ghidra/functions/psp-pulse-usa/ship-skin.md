@@ -317,6 +317,36 @@ tracing the six non-lobby callers listed under "Callers" below settles the same
 question without either address if the resolve comes back empty. The structural
 claim above does not depend on either address.
 
+## `Ship_LoadModel` settles the mode: 8 and `0x12` force the plain hull in the Eliminator skin (2026-10-26)
+
+Decompiled `Ship_LoadModel` (`0x08843258`), switching on `g_game_mode` (`0` when
+`g_debug_mode_override` is set). **This supersedes the 55 above**: `0x12` is not a lobby id, it
+shares a `case` with 8, which `ai-controls.md` and `ai-stats.md` already measured as the
+Eliminator (`DAT_08b31048 = 8`, measured in play). Confidence 85 that 8 is the Eliminator and
+that `0x12` is its multiplayer twin (the twin is read, not measured).
+
+| `g_game_mode` | hull built | skin applied |
+| --- | --- | --- |
+| 3, 4, 5, 7, 9, 10, `0xb` | `%s\%s.vex` (the picked `FE_TeamModel`'s `location`) | the picked `FE_ModelSkin`: `Eliminator`, else `Alternative`, else none |
+| 6 (Zone) | `%s\Zone.vex` | none (`local_40 = 0`) |
+| 8, `0x12` (Eliminator) | `%s\Ship.vex`, the team model ignored | always `Eliminator`, no unlock consulted |
+| anything else | `%s\%s.vex` | none |
+
+So the Eliminator is a forced **livery on the plain hull**, not a hull of its own: `Eliminator`
+is a `PI_ModelSkin` under `PI_TeamModel name="Normal"`, not a `PI_TeamModel`. It applies to every
+craft (the mode is global), is available on a fresh profile, and a picked Concept hull or
+`Alternative` skin does not survive it. Wired as `oag_title::RaceDefaults::eliminator_skin`
+(Pulse `Some("Eliminator")`, every other title `None`): `oag_livery::load` paints every slot
+(`forced_paint`), Ship Select's livery row holds that skin alone (`oag_game::livery_row`).
+Ground truth: `livery_ground_truth::an_eliminator_race_forces_the_plain_hull_and_the_eliminator_skin_on_every_craft`.
+Zone is the same shape: the row holds the one Zone hull.
+
+Other titles: Pure's `Definition.xml` has no `PI_ModelSkin`/`Eliminator` text (checked, differs);
+HD, 2048 and Omega take their variants as `TeamVariants` directories, not skins (checked,
+differs; not traced in their executables, so no title carries a mode-forced skin). Seven of the
+seven `FE_ModelSkin` modes (3, 4, 5, 7, 9, 10, `0xb`) are recorded only: this build does not wire
+the picked-skin gating by mode.
+
 ## What this build does, and it is chosen rather than measured
 
 **This build has the player name the skin, and paints the player's craft

@@ -182,6 +182,14 @@ pub struct RaceDefaults {
     /// `None` rather than a guessed ladder for a title whose bank has not been
     /// read - see [`ZoneAnnouncer`]'s own docs for which that is today.
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
+    /// The `PI_ModelSkin` name every craft wears in an Eliminator race, on the plain
+    /// hull, whatever the player picked - or `None` where no title measured one.
+    ///
+    /// Pulse's `Ship_LoadModel` (`0x08843258`) switches on `g_game_mode`: modes 8 and `0x12` build
+    /// `%s\Ship.vex` (not the team-model file) and always apply the skin named `Eliminator`,
+    /// with no unlock consulted; only modes 3, 4, 5, 7, 9, 10 and 0xb read the picked
+    /// `FE_ModelSkin`. See `docs/ghidra/functions/psp-pulse-usa/ship-skin.md`.
+    pub eliminator_skin: Option<&'static str>,
     /// Measured `ready`/`go` start-voice banks, or `None` (plays nothing): [`CountdownVoice`].
     pub countdown_voice: Option<&'static CountdownVoice>,
     /// The hover target the craft holds on the grid and releases after the green light, or `None`

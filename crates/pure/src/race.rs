@@ -77,6 +77,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    eliminator_skin: None,
     // Measured on PSP USA, Time Trial (2026-10-19): see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
     launch_hover: None,

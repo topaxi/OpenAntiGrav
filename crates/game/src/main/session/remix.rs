@@ -3,7 +3,7 @@
 //! Split out of [`super::menus`] under this project's 1,000-line ceiling
 //! (`scripts/check-file-size.py`) - a move, with no behaviour change, except
 //! for the CRAFT TITLE/TEAM/VARIANT guest-roster fold this file introduced
-//! alongside the split. [`super::menus::variant_choices`]/
+//! alongside the split. [`oag_game::livery_row::variant_choices`]/
 //! [`super::menus::combine_variant`] stay there: they are shared with the
 //! ordinary RACE page's own VARIANT row, not Race Remix's alone.
 
@@ -18,7 +18,8 @@ use crate::stage::Stage;
 
 use super::Session;
 use oag_game::custom_tracks::{self, CUSTOM};
-use super::menus::{combine_variant, variant_choices};
+use super::menus::combine_variant;
+use oag_game::livery_row::variant_choices;
 
 /// Brings a stored `remix.*` setting into step with the list its row is
 /// about to be given, by **`Menu::supply`'s own rule**: keep the stored value

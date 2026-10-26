@@ -48,6 +48,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    eliminator_skin: None,
     // The cues and triggers are measured (`ready`, `HBEAT`, `go`); the 180 tick spacing is Pulse's,
     // inherited: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),

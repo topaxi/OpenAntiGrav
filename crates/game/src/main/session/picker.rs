@@ -24,7 +24,6 @@ use oag_raceplay::catalogue;
 use oag_ui_screens::picker::{self, Details, Entry, Event, Kind, Picker};
 
 use crate::picker_stage::{Distances, LiveryAxis, PickerStage, PreviewSource};
-use crate::session::menus::variant_choices;
 use crate::stage::Stage;
 
 use super::Session;
@@ -222,6 +221,7 @@ impl Session {
         } else {
             records::Store::default()
         };
+        let mode = self.race_mode();
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
             .teams
             .iter()
@@ -232,46 +232,18 @@ impl Session {
                     .team_details
                     .iter()
                     .find(|team| team.id == choice.value);
-                // The livery row: the team's own skins where it declares
-                // any - the original's `Classic`/`Alternative`, `Classic`
-                // being the disc's own string id for the baseline paint -
-                // and the title's variant table otherwise.
-                let skins: Vec<(String, String)> = details
-                    .map(|team| {
-                        team.skins
-                            .iter()
-                            .filter(|skin| {
-                                !gates
-                                    || unlock::loyalty_unlocked(&skin.unlock, &records, title)
-                            })
-                            .map(|skin| (skin.name.clone(), skin.location.clone()))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                let mut variants: Vec<(String, String)> =
-                    if skins.is_empty() {
-                        variant_choices(title, &choice.value)
-                            .into_iter()
-                            .map(|variant| (variant.value, variant.label))
-                            .collect()
-                    } else {
-                        std::iter::once((
-                            String::new(),
-                            shell
-                                .strings
-                                .get_or_id(catalogue::BASELINE_SKIN)
-                                .to_string(),
-                        ))
-                        .chain(skins.iter().map(|(name, _)| {
-                            (name.clone(), shell.strings.get_or_id(name).to_string())
-                        }))
-                        .collect()
-                    };
-                if variants.is_empty()
-                    && let Some(own) = details.and_then(|team| team.own_directory_variant())
-                {
-                    variants.push(own);
-                }
+                // The livery row, one rule with the `--menu-page` still: see
+                // `oag_game::livery_row`.
+                let oag_game::livery_row::Livery {
+                    skins, variants, ..
+                } = oag_game::livery_row::ship_livery(
+                    title,
+                    &choice.value,
+                    details,
+                    &shell.strings,
+                    &records,
+                    mode,
+                );
                 let join = title.race.join_for(&choice.value);
                 let stats = details
                     .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
@@ -318,13 +290,18 @@ impl Session {
         // variant table opens on the classic hull's empty suffix too, which
         // read as a skin row and sent `_c1`/`_n1` to `race.skin`.
         let (team_id, seat_livery) = self.seat_opening(seat, &entries);
-        let selected = entries
-            .iter()
-            .position(|entry| entry.id == team_id)
-            .unwrap_or(0);
-        let axis = match sources.get(selected) {
-            Some(PreviewSource::Ship { skins, .. }) if !skins.is_empty() => LiveryAxis::Skin,
-            _ => LiveryAxis::Variant,
+        // Decided by what the team **declares**, not by what is left after its locked skins are
+        // cut: a fresh profile's list is empty, and that read as the variant axis, which offered
+        // a locked Concept hull until the first skin unlocked.
+        let axis = if self
+            .shell
+            .as_ref()
+            .and_then(|shell| shell.team_details.iter().find(|team| team.id == team_id))
+            .is_some_and(|team| !team.skins.is_empty())
+        {
+            LiveryAxis::Skin
+        } else {
+            LiveryAxis::Variant
         };
         // A profile that has not picked a model opens on the title's own
         // fresh-profile row - `Race::opening_variant`.

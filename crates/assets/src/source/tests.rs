@@ -83,6 +83,7 @@ const TITLE: &Title = &Title {
         },
         // Unread here too: nothing in this crate reads the Zone ladder.
         zone_announcer: None,
+        eliminator_skin: None,
         countdown_voice: None,
         launch_hover: None,
         hover_rig: None,

@@ -1,65 +1,8 @@
-//! The RACE page's own VARIANT row: what it offers, and what launching with
-//! it means. Shared with RACE REMIX - see `super::remix`.
+//! What launching with the RACE page's VARIANT row's pick means; the row's own
+//! choices are `oag_game::livery_row`. Shared with RACE REMIX - see `super::remix`.
 //!
 //! Split out of `menus.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
-
-use oag_ui::menu;
-
-/// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to
-/// `team`, or - when that names no such axis - [`oag_title::RaceDefaults::hull_variants`],
-/// which is not team-scoped at all. The VARIANT row's supply, on both the
-/// RACE page and RACE REMIX. Empty when neither source has anything to offer:
-/// `team` names no [`oag_title::TeamVariants`]/[`oag_title::GuestRoster`] axis
-/// and the title authors no [`oag_title::race::HullVariant`] either - the
-/// same idiom [`menu::ValueSource::MusicSources`] uses for a choice that
-/// cannot be made.
-pub(crate) fn variant_choices(title: &'static oag_title::Title, team: &str) -> Vec<menu::Choice> {
-    if let Some(team_variants) = title.race.team_variants_for(team) {
-        return team_variants
-            .variants
-            .iter()
-            .map(|variant| menu::Choice::labelled(variant.suffix, variant.label))
-            .collect();
-    }
-    title
-        .race
-        .hull_variants
-        .into_iter()
-        .flatten()
-        .map(|variant| menu::Choice::labelled(variant.stem, variant.label))
-        .collect()
-}
-
-/// [`variant_choices`] with Pulse's hull variants cut to the ones `team`'s own
-/// `<Unlock>` rows let through (`Definition_IsUnlocked`, via
-/// [`oag_game::unlock::loyalty_unlocked`]): a locked craft is absent from the
-/// row, as it is from Team Selection's. `details` is the booted title's own
-/// team catalogue; a team it does not hold, a title that does not gate
-/// ([`oag_game::unlock::gates_variants`]) and an axis that is a
-/// [`oag_title::TeamVariants`] one are returned whole.
-pub(crate) fn gated_variant_choices(
-    title: &'static oag_title::Title,
-    team: &str,
-    details: &[oag_raceplay::catalogue::Team],
-) -> Vec<menu::Choice> {
-    let mut choices = variant_choices(title, team);
-    if !oag_game::unlock::gates_variants(title) || title.race.team_variants_for(team).is_some() {
-        return choices;
-    }
-    let Some(declared) = details.iter().find(|candidate| candidate.id == team) else {
-        return choices;
-    };
-    let records = oag_game::records::load();
-    choices.retain(|choice| {
-        declared
-            .hull_unlocks
-            .iter()
-            .filter(|(stem, _)| stem.eq_ignore_ascii_case(&choice.value))
-            .all(|(_, rows)| oag_game::unlock::loyalty_unlocked(rows, &records, title))
-    });
-    choices
-}
 
 /// Combines `team` with whichever variant `stored` names, for launching.
 ///

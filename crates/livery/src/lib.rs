@@ -208,6 +208,10 @@ pub struct LoadContext<'a> {
     /// definition's `PI_TeamModel name="zone"` - empty outside Zone and for a
     /// title that authors none. See `zone_livery`.
     pub zone_liveries: &'a [(String, String)],
+    /// Each craft's Eliminator skin, `(team id, archive entry)`: the `PI_ModelSkin` named by
+    /// [`oag_title::RaceDefaults::eliminator_skin`], resolved per team. Empty outside an
+    /// Eliminator race and for a title that forces none. See [`forced_paint`].
+    pub forced_skins: &'a [(String, String)],
 }
 
 /// A hull file and a paint job picked for one craft.
@@ -220,6 +224,20 @@ pub struct Paint<'a> {
     pub hull_variant: Option<&'a str>,
     /// A `PI_ModelSkin`'s archive entry, already resolved by [`ship_skin::resolve`].
     pub skin: Option<&'a str>,
+}
+
+/// The paint an Eliminator race gives `team`: the plain hull and the title's forced skin, whatever
+/// the player picked. `Ship_LoadModel`'s `case 8`/`case 0x12` builds `%s\Ship.vex` and applies the
+/// `Eliminator` skin with no unlock check ([`oag_title::RaceDefaults::eliminator_skin`]). A team
+/// with no entry in `forced_skins` keeps the plain paint rather than a skin the disc does not name.
+fn forced_paint<'a>(forced_skins: &'a [(String, String)], team: &str) -> Paint<'a> {
+    Paint {
+        hull_variant: None,
+        skin: forced_skins
+            .iter()
+            .find(|(id, _)| id == team)
+            .map(|(_, entry)| entry.as_str()),
+    }
 }
 
 /// Loads one [`Livery`] per entry of `teams`, in that order.
@@ -261,12 +279,20 @@ pub fn load(
     seats: &[Paint<'_>],
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
-    let mut out: Vec<Livery> = Vec::with_capacity(teams.len());
-    for (slot, team) in teams.iter().enumerate() {
-        let paint = match slot {
+    let forced = ctx.mode == Mode::Eliminator && ctx.race.eliminator_skin.is_some();
+    let hull_variant = hull_variant.filter(|_| !forced);
+    let paint_of = |slot: usize, team: &str| -> Paint<'_> {
+        if forced {
+            return forced_paint(ctx.forced_skins, team);
+        }
+        match slot {
             0 => Paint { hull_variant, skin },
             _ => seats.get(slot - 1).copied().unwrap_or_default(),
-        };
+        }
+    };
+    let mut out: Vec<Livery> = Vec::with_capacity(teams.len());
+    for (slot, team) in teams.iter().enumerate() {
+        let paint = paint_of(slot, team);
         let seated = (1..=seats.len()).contains(&slot);
         // Already loaded for an earlier slot: clone rather than re-read, which
         // is what makes a repeated livery cost nothing. Never true for slot 0
@@ -277,12 +303,7 @@ pub fn load(
             let other_seated = (1..=seats.len()).contains(&index);
             other.team == *team
                 && if seated {
-                    let other_paint = if index == 0 {
-                        Paint { hull_variant, skin }
-                    } else {
-                        seats[index - 1]
-                    };
-                    other_paint == paint
+                    paint_of(index, &other.team) == paint
                 } else {
                     !other_seated
                 }
