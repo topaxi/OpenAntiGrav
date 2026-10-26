@@ -162,7 +162,7 @@ only 0.2 M in block 1.
 |---|---:|---:|---:|---:|---|---|
 | **Gantry cards** (`321go` mask 10.2 M plus the `glow`-material pixels within 40 px of it) | 14.0 M | **41.7%** | 9.1% | +1.7, sign varies by pair | anulpha-pass, chenghou, ubermall (52 to 69% each) | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("The GO board", "Still open on the board"); [start-gantry.md](../../docs/rendering/start-gantry.md) |
 | Opaque scenery, light-sensitive (albedo-only differs by more than 12; **not a lighting attribution**, see below) | 9.4 M | 28.0% | 6.1% | +2.4 | the-amphiseum (61% of its block), vineta-k, sebenco-climb | partly [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md); else none |
-| `glow`-material surfaces away from the cards (emissive banners, glow strips, halo spill) | 3.5 M | 10.4% | 2.3% | +34 on Tech de Ra, +10 on Metropia and Sebenco | tech-de-ra, metropia, sebenco-climb | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) (the glow mask); banners none |
+| `glow`-material surfaces away from the cards (emissive banners, glow strips, halo spill) | 3.5 M | 10.4% | 2.3% | +34 on Tech de Ra (**+1.1 since `hd-tech-de-ra`**), +10 on Metropia and Sebenco | tech-de-ra, metropia, sebenco-climb | [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) (the glow mask); Tech de Ra's is `nr_twinblend`, wired: rcsmaterial.md, "`nr_twinblend`: two pictures, a scrolling wipe and bars" |
 | Glass | 2.0 M | 5.9% | 1.3% | -0.6 | tech-de-ra, sebenco-climb, metropia | [hd-fidelity-lanes-queued-after-the-cold-originals.md](hd-fidelity-lanes-queued-after-the-cold-originals.md) |
 | Other blended (Talon's pose, particles) | 2.0 M | 5.9% | 1.3% | +7.1 | talons, talons-assegai-c1 (capture mismatch) | none |
 | Rest (opaque, not light-sensitive) | 1.7 M | 5.1% | 1.1% | +0.6 | modesto-heights | none |
@@ -273,7 +273,9 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
    the strips, so it is third by size.
 
 Not lanes: opaque scenery elsewhere (diffuse, 12% of the frame, fails the falsifier), the `talons` pair
-differences (capture mismatch), the `glow`-material banners on Tech de Ra (one circuit, 1.2 M, unread), the
+differences (capture mismatch), the `glow`-material banners on Tech de Ra (**closed 2026-10-26, `hd-tech-de-ra`**:
+the surface was `nr_twinblend` slot 133, not the `banner_*_glow` banners; mask bias +30.35 to +1.13, error 0.809 to
+0.087 M; Metropia +11.4 and Sebenco +4.7 unchanged, the other 12 pairs byte-identical), the
 GO board's pulse phase on the pairs that already pin it.
 
 ## Top-right band, measured and wired (2026-10-26, `hd-top-right-band`)
