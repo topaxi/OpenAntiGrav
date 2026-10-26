@@ -48,6 +48,16 @@ in isolated worktrees.
 
    Substitute the real budget for N.
 
+   **Try a debounce instead first (maintainer, 2026-10-26).** Wanted: a check
+   only after an hour with no member message, not one every hour. Run the
+   `loop` skill with no interval (dynamic mode) and call `ScheduleWakeup`
+   (3600 s, the same prompt) at the end of **every** lead turn, so each member
+   report pushes the wake-up an hour out. Unverified: whether a new
+   `ScheduleWakeup` replaces the pending one or stacks. If wake-ups stack
+   (checks arrive closer than an hour after activity), fall back to the fixed
+   1h cron above, and have each tick do nothing when the lead acted in the last
+   hour.
+
 5. **Then start**: check state, draw threads, fill to budget.
 
 ## The loop, every cycle
