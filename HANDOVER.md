@@ -57,7 +57,7 @@ categories: [rendering] # optional: extra categories on top of the directory
 - **re-first**: a recovered law, field or trigger is still missing.
 - **measure**: needs a capture, a live read or a run to settle a number.
 - **blocked-maintainer**: waits on the maintainer's decision, review or listen.
-- **blocked-hardware**: needs a device this machine lacks (Steam Deck, S24, a Mac, iOS).
+- **blocked-hardware**: the next step needs a device or a machine beyond the workstation (Steam Deck, S24, a Mac, iOS, a second monitor); a lane runs it when the maintainer offers the device.
 - **parked**: nothing scoped; revisit on demand.
 
 List them with `just threads [--status S] [--title T] [--category C]` (`--counts` prints the tally). "What is ready to wire for Pulse?" is `just threads --status ready-to-wire --title pulse`. `just check-handover` refuses a thread with missing or invalid frontmatter, a status outside the set, or a summary over 150 characters.

@@ -92,6 +92,6 @@ Use `--no-audio` on every `oag-game` run, headless or on your own Xvfb display
 
 Lead with the result in numbers (before, after, command, load). Then what
 changed and why it is safe for determinism, what you measured and dropped, and
-what is still open (as a `handover/` thread item with its measuring command).
+what is still open (as a `handover/` thread item with its measuring command; a new thread needs frontmatter, see `HANDOVER.md`).
 Make your work durable (commit, or leave the worktree clean) before your final
 report and say which.

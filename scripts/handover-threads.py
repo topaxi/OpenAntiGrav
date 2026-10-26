@@ -63,7 +63,8 @@ def split_frontmatter(text: str) -> tuple[list[str] | None, str | None]:
 def parse_value(raw: str):
     raw = raw.strip()
     if raw.startswith('"'):
-        return json.loads(raw)
+        return json.JSONDecoder().raw_decode(raw)[0]
+    raw = re.split(r"\s#", raw, maxsplit=1)[0].strip()
     if raw.startswith("["):
         if not raw.endswith("]"):
             raise ValueError("unterminated list")
@@ -74,6 +75,9 @@ def parse_value(raw: str):
 
 def parse(path: Path) -> tuple[dict | None, list[str]]:
     """Parse and validate one thread. Returns (fields, errors)."""
+    parts = path.relative_to(HANDOVER).parts
+    if len(parts) < 2 or parts[0] not in CATEGORIES:
+        return None, [f"a thread lives in handover/<{'|'.join(CATEGORIES)}>/, not here"]
     block, err = split_frontmatter(path.read_text(encoding="utf-8"))
     if err:
         return None, [err]
@@ -128,7 +132,7 @@ def parse(path: Path) -> tuple[dict | None, list[str]]:
 
 
 def threads() -> list[Path]:
-    return sorted(HANDOVER.glob("*/**/*.md")) if HANDOVER.is_dir() else []
+    return sorted(HANDOVER.rglob("*.md")) if HANDOVER.is_dir() else []
 
 
 def categories_of(path: Path, fields: dict) -> list[str]:
