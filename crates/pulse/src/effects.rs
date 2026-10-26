@@ -104,15 +104,18 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
-    // The circuit's chrome-map pass, `oag_render::shine::build_track`, unweighted:
-    // Pulse's circuit batches carry the alpha-weight bit (3,446 on the PSP) and the
-    // original's treatment of them is unmeasured, so `track_shine_weighted` stays unread
-    // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "The circuits").
+    // The circuit's chrome-map pass, `oag_render::shine::build_track`, each batch's ordinary
+    // pass weighted by its own texture's alpha when it carries the weight bit: a recorded
+    // Pulse PSP GE list draws those ordinary passes with BLENDMODE `0x2a`, as Pure's
+    // (`docs/ghidra/functions/psp-pulse-usa/circuit-shine.md`).
     track_shine: Rule {
         on: PSP,
         origin: Origin::Measured,
     },
-    track_shine_weighted: Rule::UNREAD,
+    track_shine_weighted: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
     // GE lights, glow mask, quake: `scene-light.md`, `docs/rendering/glow-mask.md`.
     measured_draws: Rule {
         on: PSP,

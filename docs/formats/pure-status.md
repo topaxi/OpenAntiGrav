@@ -1640,5 +1640,5 @@ pixel-identical. Chenghou's sky cube, which has no vertex colours and no normals
 GE does (frame MAD 20.6 to 13.1). The circuits' own chrome-map pass draws on Pure too (`Looks::track_shine` and
 `track_shine_weighted`, 2026-10-26, lane `pure-chrome-map`): Vineta K's blue windows read 6.5 grey from the original in a
 160x105 box at (320,45), from 20.7 with the pass off; frame MAD 11.4/9.4/8.6/9.2 to 8.8/8.7/8.1/9.0 (Vineta K, Chenghou,
-Blue Ridge, Modesto); Pulse pairs unchanged. Evidence and the open ends (the `249/255` light scale, Modesto's second
+Blue Ridge, Modesto); Pulse pairs unchanged at that date (Pulse weighted since, [circuit-shine.md](../ghidra/functions/psp-pulse-usa/circuit-shine.md)). Evidence and the open ends (the `249/255` light scale, Modesto's second
 directional): [`psp-pure-usa/hull-shine.md`](../ghidra/functions/psp-pure-usa/hull-shine.md).

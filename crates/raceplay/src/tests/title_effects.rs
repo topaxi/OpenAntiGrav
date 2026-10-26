@@ -489,18 +489,18 @@ fn the_shield_tint_is_hds_own_and_everyone_elses_is_pulses_by_inheritance() {
     );
 }
 
-/// Both PSP titles draw the circuit's chrome-map pass; only Pure weights it by
-/// the batch texture's alpha (measured on its GE lists), Pulse's weighting is
-/// unmeasured and stays off. No other title draws it.
+/// Both PSP titles draw the circuit's chrome-map pass and weight it by
+/// the batch texture's alpha (measured on GE lists of each; Pulse's lists show
+/// the same `0x2a` ordinary pass). No other title draws it.
 #[test]
-fn the_circuit_chrome_pass_is_pulses_and_pures_and_only_pures_is_weighted() {
+fn the_circuit_chrome_pass_is_pulses_and_pures_and_both_are_weighted() {
     let rules = |t: &Title| {
         (
             t.looks.track_shine.applies(Platform::Psp),
             t.looks.track_shine_weighted.applies(Platform::Psp),
         )
     };
-    assert_eq!(rules(oag_pulse::TITLE), (true, false));
+    assert_eq!(rules(oag_pulse::TITLE), (true, true));
     assert_eq!(rules(oag_pure::TITLE), (true, true));
     for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert_eq!(rules(other), (false, false), "{}", other.name);
