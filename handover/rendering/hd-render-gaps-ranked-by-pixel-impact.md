@@ -31,11 +31,14 @@ over each whole frame removes only 5% of raw error (fit/raw 0.95). There is no
 frame-wide exposure lane. The luma error is spatial: the top rows run ours
 brighter (+3.7 to +6.3 luma), the lower left runs darker. The vertical split is
 already recorded in [hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-too-bright-and-too-bloomy.md)
-(2026-09-17, one circuit); the 13-pair grid confirms it on every circuit.
+(2026-09-17, one circuit). The 13-pair mean shows the same split; it does not
+hold on every pair (anulpha-pass: whole-frame bias -2.2, row-5 bias +0.1).
 
 **Totals.** Raw error per pair: mean 6.2 to 11.0 per pixel (13-pair mean 8.8).
 65% of the raw error survives the sigma-7 blur, so most of it is low frequency.
-Sharpness is not the gap: ours-over-theirs gradient is 0.98 to 1.06 per block.
+Sharpness is not the gap: ours-over-theirs gradient is 0.98 to 1.06 per block
+(6 pairs: the-amphiseum, vineta-k, sol-2, talons, metropia, modesto-heights).
+Hue is not measured; only luma is in this table.
 
 **Ranked table.** Ranked by low-frequency share, the part a lane can fix.
 Raw share of all 13-pair error in brackets. Low impact is low share times the
@@ -49,14 +52,15 @@ total low error (about 153 M, the sum of per-pixel error over 13 pairs at
 | 2 | Tiles containing HUD (LAP, shield, RECORD, bottom gauges) | 18.8% (29 M) | [16.7%] | 5.5 | +2.4 | amphiseum, vineta-k, anulpha | tiles include track and wall behind the HUD, so the HUD-only share is unmeasured; [hd-hud.md](../../docs/formats/hd-hud.md) |
 | 3 | Left wall and stands (tx 0-5, ty 1-4) | 17.1% (26 M) | [17.5%] | 5.9 | +0.6 | sol-2, modesto-heights, sebenco-climb | position bucket; the FX-350 advert is a timed board, see [hd-glow-mask.md](../../docs/rendering/hd-glow-mask.md) ("Still open on the board") |
 | 4 | Track left and right (tx 0-5 or 10-15, ty 5-6) | 11.2% (17 M) | [11.7%] | 3.8 | +2.3 | moa-therma, anulpha, sol-2 | [hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-too-bright-and-too-bloomy.md) (blown lightmap); crops match closely |
-| 5 | **Ceiling and light shafts (tx 9-12, ty 0-1)** | 9.6% (15 M) | [8.3%] | **9.9** | **+6.3** | vineta-k, amphiseum, modesto-heights | **new lane candidate, cause split**: see Next Steps 1 |
-| 6 | Craft hull and plume (tx 6-9, ty 5-8) | 7.8% (12 M) | [10.3%] | 4.0 | +1.0 | ubermall, moa-therma, anulpha | [hds-engine-light-washes-the-hull-on-boost.md](hds-engine-light-washes-the-hull-on-boost.md); half its error is high frequency (low/raw 0.50) |
-| 7 | Other scenery (tx 0-15, ty 2-4, outside 1-3) | 7.3% (11 M) | [7.3%] | 6.7 | +1.7 | position bucket | position bucket |
-| 8 | Other sky and track (rest of rows 0-1 and 5-8) | 6.5% (10 M) | [6.5%] | 3.9-6.0 | +1.0 | position bucket | position bucket |
+| 5 | **Top-right band (tx 9-12, ty 0-1)** | 9.6% (15 M) | [8.3%] | **9.9** | **+6.3** | vineta-k, amphiseum, modesto-heights | **new lane candidate, cause split**: see Next Steps 1 |
+| 6 | Craft hull and plume (tx 6-9, ty 5-8) | 7.8% (12 M) | [10.3%] | 4.0 | +0.3 | anulpha, ubermall, sol-2 | [hds-engine-light-washes-the-hull-on-boost.md](hds-engine-light-washes-the-hull-on-boost.md); half its error is high frequency (low/raw 0.50) |
+| 7 | Right wall and sky (tx 13-15, ty 2-4) | 7.3% (11 M) | [7.3%] | 6.7 | +2.5 | vineta-k, modesto-heights, ubermall | position bucket; no crop of its own |
+| 8 | Other sky and track (rest of rows 0-1 and 5-8) | 6.5% (10 M) | [6.5%] | 3.9-6.0 | +1.0 | position bucket | position bucket; no crop of its own |
 
 Row 5 has the highest error per pixel of any block and the largest luma bias.
-It is the first lane candidate, not the largest block. Rows 1 to 3 are big
-because they are big, and their content differs on each circuit.
+It is the first lane candidate, not the largest block. Rows 1 to 3 are large
+because they cover the most tiles, and their content differs on each circuit.
+Row 5 is named for its place: on Vineta K and Talon's it is open sky.
 
 **Luma bias by tile.** Top row, columns 6-15: ours brighter by +6 to +12. Row 1,
 columns 6-12: +3 to +13. Rows 2-4: +2 to +5. Left columns of rows 0 to 3 and
