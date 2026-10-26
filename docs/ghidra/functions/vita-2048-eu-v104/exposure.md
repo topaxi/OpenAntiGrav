@@ -9,8 +9,8 @@ plus live reads and writes of the guest's memory in Vita3K through
 This closes what [envsettings.md](../../../formats/envsettings.md) listed as
 "authored and left unread" for 2048: `Lighting.ExposureScale`,
 `Lighting.ExposureMax`, `Lighting.ExposureSpeed`, `Lighting.BloomFactor` and
-`Lighting.BloomGate`. Ours reads none of them and draws 2048 with no post chain
-at all, which is the subsystem the 2048 pairs' brightness gap sits in.
+`Lighting.BloomGate`. Since 2026-10-26 (`2048-exposure-wire`) ours reads all
+five and runs this chain, `oag_post::wo_composite` (see "Ours" below).
 
 ## The law
 
@@ -22,9 +22,14 @@ once per rendered frame, when the adapt flag 0x8151c5bc is set:
     E   += (Scale / a - E) * Speed                     no dt, no lower clamp
     E    = min(E, Max)
 gate pass (wo_bloom_gate_fp, into the quarter-res target 0x816aef1c):
-  s      = sum of 4 taps of the scene                  (offset0..3)
+  s      = sum of 4 taps of the scene                  (offset0..3, one scene
+                                                        texel out on each diagonal)
   Lg     = dot(s, lum * 0.25)                          mean luminance of the taps
-  rgb    = (E * clamp(Lg - Gate, 0, 1))^2 * s          alpha = Lg
+  rgb    = (E * clamp(Lg - Gate, 0, 1))^2 * s          alpha = Lg * 0.25
+two blur passes (wo_blur_fp), quarter target to quarter target:
+  o      = (0.5 / w, 0.5 / h), then (-0.5 / w, 0.5 / h)  w, h the quarter size
+  out    = 0.217041 * sum over k in (1, 3, 5) of
+           weight_k * (tex(uv - k o) + tex(uv + k o))    weights 1.0, 0.7998, 0.5
 composite (wo_composite_nocc_fp), per pixel:
   c      = alpha.rgb + (1 - alpha.a) * main.rgb
   e      = E * c
@@ -41,7 +46,9 @@ a lightmapped track program decodes its diffuse texel by squaring it and
 multiplies the raw lightmap scale-bias in (Vita3K's translation of the program,
 read the same way as the composite below). The final `sqrt` is the matching
 encode. Confidence for the composite as a whole: **85**; for the adaptation
-step: **85**; for "hardware adapts where Vita3K does not": **75**. Parts below.
+step: **85**; for "hardware adapts where Vita3K does not": **75**; for the
+gate's `alpha = Lg * 0.25` and so `a` = the mean gate luminance: **80**; for
+the blur kernel: **75**. Parts below.
 
 ## Addresses
 
@@ -140,14 +147,80 @@ the static half of "on hardware the readback holds the gate's alpha".
 
 So **every 2048 original-side frame captured on Vita3K is drawn at E = 1.15**,
 the constant `Exposure_Set` resets to, not at the adapted value a Vita would
-reach. **Where a Vita settles is unknown.** The naive inference (inverting the
-composite on the three reference frames gives a mean scene luminance of 0.24,
-0.39 and 0.16, so E = `Scale / (4 * L)` = about 0.42, 0.32 and 0.78) puts every
-circuit at `e` near `Scale / 4` and a frame mean of 23 to 29, nearly the same on
-all three: an implausibly dark, near-constant picture for a shipped game. That
-points at a link still unread (which channel the gate surface's byte 3 is in its
-format, or the range the 1/64 assumes), not at hardware being darker. It also
-ignores bloom, the vignette and the HUD-free full frame the gate averages.
+reach.
+
+## Where a Vita settles: `E -> ExposureScale / mean luminance` (2026-10-26, `2048-exposure-wire`)
+
+The link the first reading left open (which channel byte 3 of the gate surface
+is, and the range the 1/64 assumes) is closed, and the earlier estimate of a
+frame mean of 23 to 29 on every circuit was a misread alpha:
+
+- **The gate writes `alpha = Lg * 0.25`, not `Lg`.** The alpha lane of
+  `wo_bloom_gate_fp` (Vita3K's SPIR-V of the container, walked by hand as the
+  composite was) multiplies the taps' mean luminance by the half literal
+  `0x3400`, 0.25.
+- **Byte 3 is that alpha.** `PostFx_CreateTargets` creates the three quarter
+  targets with the format `sceGxmColorSurfaceGetFormat` (NID `0xF3C1C6C6`)
+  returns for the current display buffer (`FUN_812ede9c`, a copy of one of the
+  three buffers `FUN_812f5b98` returns at `0x81978fb8`). `FUN_812f51fa` creates
+  those three with format `0` (`U8U8U8U8_ABGR`, A8B8G8R8) at 960x544 and hands
+  them to `sceDisplaySetFrameBuf` (`SceDisplayUser_7A410B64`) with pixel format
+  `0`, A8B8G8R8. So the gate target is 8 bits a channel, 4 bytes a pixel, red
+  in byte 0 and alpha in byte 3, and the readback's `vld1.8` of byte `+3` every
+  16 bytes reads the alpha of every fourth pixel. Only the scene surface
+  (`0x816ae340`, created in `FUN_81035b10`) has the float format `0x41000000`,
+  `U2F10F10F10`.
+- **So `a = round(255 * Lg / 4) / 64`, `255/256` of the mean gate luminance**,
+  and `E` settles at `ExposureScale / mean Lg`: a Reinhard key value, 0.4 to 0.6
+  on every raced circuit. On the three reference frames' inverted luminance
+  (0.24, 0.39, 0.16) that is about 1.7, 1.3 and 3.1: a Vita draws these frames
+  brighter than Vita3K does, Vineta K most of all.
+
+The `--ram-fill` measurement above is consistent with it: alpha byte 64 is
+`a = 1`, and `E` settled at `Scale`.
+
+## Ours (2026-10-26, `2048-exposure-wire`)
+
+`oag_post::wo_composite` runs the gate, the two blurs, the composite and the
+step on the GPU, over a scene target whose pipelines square a texel instead of
+raising it to 2.2 (`oag_gpu::formats::SceneStore::Squared`). A title takes it
+through `oag_title::Looks::wo_composite`, measured on 2048 and unread
+everywhere else; the five keys are read by
+`oag_raceplay`'s environment staging, from an add-on pack's copy of the file
+before the base archive's (the setters read `dlc1.psarc`'s on Vineta K, the
+table above). The race report says which copy and which values.
+
+- **The play default adapts**, as a Vita does: the link above is closed, so
+  2048's own law is used and not Omega's `Tonemap.*` value. Origin: measured.
+- **`oag-game --hold-exposure E` holds it** (`Options::exposure_hold`), a
+  comparison switch and never the play default. The compare tooling passes
+  `--hold-exposure 1.15` for every 2048 pair, because Vita3K draws at 1.15, and
+  the page labels each such pair "exposure held at 1.15"
+  ([compare-page.md](../../../tools/compare-page.md)).
+- **Chosen, not the disc's**: the first frame starts settled on its own
+  readback instead of walking from 1.15; the step runs once per rendered frame
+  with no readback latency (60 a second here, about 30 on Vita3K); the scene
+  target is `Rgba16Float` rather than `U2F10F10F10`; the vignette and the
+  screen tint are left out (`v = 1`, tint 0) and `alphaTex` reads as empty, all
+  three unread; a split screen runs one chain per view with its own exposure.
+- **Which of 2048's other programs square their texel is unread.** The
+  lightmapped track program does (above); ours squares every texel a pipeline
+  built for the scene's store decodes (meshes, clouds, exhaust, beams, ghosts),
+  and the particle, mist, flash and weapon-quad pipelines keep their 2.2.
+
+Frame means on the three pairs, original against ours (`-alpha off`):
+
+| Pair | Original (Vita3K, E = 1.15) | Ours before | Ours, E held at 1.15 | Ours adapting |
+| --- | --- | --- | --- | --- |
+| Queens Mall | 60.2 | 106.2 | 54.9 | 85.7 |
+| Empire Climb | 83.1 | 107.7 | 61.4 | 111.4 |
+| Vineta K | 48.1 | 80.1 | 36.7 | 80.3 |
+
+The mean grey difference falls from 55.4 to 26.3 (Queens Mall), 45.7 to 39.0
+(Empire Climb) and 41.4 to 23.4 (Vineta K). Held at 1.15 ours is now darker
+than the original, by 5 to 22 grey levels: Empire Climb's track and walls still
+draw in flat colours where the original's are lit and textured, and Vineta K's
+sky draws darker than the original's.
 
 ## Omega: checked, differs
 
@@ -161,13 +234,25 @@ keeps `wo_composite_nocc_fp` registered and unused. Its frames already match
 the original's brightness: frame means original against ours (alpha off)
 96.3 / 90.9 on Anulpha Pass and 79.3 / 78.1 on Vineta K.
 
+Re-checked when the chain was wired (2026-10-26, `2048-exposure-wire`): still
+**checked, differs**, nothing forward-ported. `Looks::wo_composite` is unread on
+Omega, so an Omega race builds only its `Tonemap` chain, and the Omega pairs on
+Vineta K and Anulpha Pass draw 0 differing pixels against the binary before the
+change (as do HD's two, Pulse PSP and PS2 and Pure).
+
 ## Open
 
 - The vignette: `wo_composite_vp`'s third output and the `vignetteTint`
   values `PostFx_RenderChain` packs (`local_348`/`local_344`).
 - The screen tint's source (`FUN_813b1d28` of the vector at the composite's
-  bind) and `accumFactor`'s.
+  bind) and `accumFactor`'s; what `alphaTex` holds in a race.
 - When `FUN_81071300` resets E to 1.15 (race load, Retry, or both).
-- The blur passes' weights and `bloomScaleBias`.
+- `bloomScaleBias` and `mainScaleBias` (ours maps the bloom over the scene's
+  own rectangle); `wo_blur_ds_fp`, registered and not in the race chain.
+- The Zone race's composites (`0x816a4d80`, `0x816a4d84`).
+- **The light and fog keys of a DLC circuit still come from the base copy.**
+  Only these five keys prefer the pack's copy (`envsettings_exposure`); on
+  Vineta K the pack's copy authors a sun diffuse twice the base copy's, and
+  ours lights it with the base's.
 - Every number above on a real Vita: the readback is the one step Vita3K does
   not perform.

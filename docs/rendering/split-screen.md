@@ -276,8 +276,10 @@ things make that more than a loop:
      below the bar) used to resolve the scene from its top-left while the views had been
      drawn below the bar: the old picture was shifted by the bar and its second view cut off.
      Each view reads its rectangle where it was drawn now.
-   2048 draws through HD's `hd_bloom::Chain` and so **ported**, with its own still looked at
-   (2h and 2v, one view `cmp`-identical); **Omega ported** (`omega_tonemap::Chain::run_view`,
+   2048 drew through HD's `hd_bloom::Chain` until 2026-10-26 and runs its own `wo_*` chain
+   since (`oag_post::wo_composite::Chain::run_view`, a lane per seat, the gate's taps kept
+   inside the view on all four edges; a 2h still at tick 600 looked at, two pictures and a
+   black gap); **Omega ported** (`omega_tonemap::Chain::run_view`,
    a `split_tests` case, one view `cmp`-identical, 2h and 2v looked at). HD's own boost zoom
    streak, drawn inside its chain, is not drawn under a split (the borrowed ring of Pulse and
    Pure draws in each view from that seat's own pulse) and Omega's distortion offsets are
