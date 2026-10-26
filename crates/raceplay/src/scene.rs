@@ -1149,8 +1149,15 @@ impl Scene {
         };
         scene.share_scene_blocks(device);
         scene.share_uniform_blocks(device);
-        scene.ray = ray::RayTier::build(device, queue, ray_tlas, &scene.track, &scene.ships)
-            .map(std::cell::RefCell::new);
+        scene.ray = ray::RayTier::build(
+            device,
+            queue,
+            ray_tlas,
+            &scene.track,
+            scene.visibility.as_ref().map(|v| &v.sections),
+            &scene.ships,
+        )
+        .map(std::cell::RefCell::new);
         Ok(scene)
     }
 }

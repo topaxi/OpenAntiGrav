@@ -1434,7 +1434,14 @@ pub fn capture(
         std::fs::write(&path, png).with_context(|| format!("writing {}", path.display()))?;
         println!("wrote {} ({width}x{height})", path.display());
         if options.ray_debug {
-            match scene.ray_debug(&device, &queue, &race, options.fov, (width, height)) {
+            match scene.ray_debug(
+                &device,
+                &queue,
+                &race,
+                options.fov,
+                options.pvs_culling,
+                (width, height),
+            ) {
                 Some(mut pixels) => {
                     oag_mesh::capture::make_opaque(&mut pixels);
                     let png = oag_texture::png::encode_rgba(width, height, &pixels);

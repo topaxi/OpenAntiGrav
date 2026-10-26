@@ -27,6 +27,11 @@ Built on the branch 2026-10-19 (lane A and spike 1, numbers in the docs page): t
 - The menu offers `traced` everywhere and falls back to `mapped` with a log line; greying it by adapter, and applying on
   restart with the RENDERER row's note, are not done. Cutout fences cast solid. Hull flaps and wrecks are not in the
   structures (hulls at rest pose).
+- The TLAS follows the frame's PVS sections since 2026-10-26 (`ray-tracing.md`, "`traced` after play"), with
+  `TRACED_START` back to 0.12. Left open there: an unplaced viewpoint (a respawn in flight, a craft off the line, a posed
+  capture at `--ticks 0`) instances every section, so the far-LOD patches return for those frames, worse at 0.12 than
+  at the old 0.6; keeping the last placed mask, or `--pose` locating `Ship::segment`, would close it. A split's union
+  of masks can re-admit a swap pair. Rendered on Moa Therma only; Pulse circuit 01 (25 swap pairs) is the cheap check.
 - Branch only: not merged to main. Merging needs the ADR re-read and a decision on the `unsafe` exception.
 
 ## Next Steps

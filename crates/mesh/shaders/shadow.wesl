@@ -114,12 +114,12 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
 }
 
 // How far along the sun a traced shadow ray starts, in world units, so a surface does not
-// shadow itself. **Measured on Moa Therma White, then chosen**: the circuit carries a
-// second surface hovering about 0.12 to 0.4 above parts of its road, never drawn but in the
-// structure, which at the first value (0.12) shadowed the road in triangle-shaped patches;
-// 0.4 left a few, 0.8 none. Six tenths clears it with room and stays far under a craft's
-// hover of about 3.5, so no craft loses its shadow. What that surface is is not read.
-const TRACED_START: f32 = 0.6;
+// shadow itself. **Chosen, then measured on Moa Therma White**: 0.6 while every PVS section
+// was in the structure (a circuit's far-LOD copy of its road hovers 0.02 to 1.0 off the
+// detailed one, and shadowed it in triangle-shaped patches); back to 0.12 once a frame
+// instances only the sections its raster shows (`ray::accel::instanced`), which left no
+// patches at the three posed frames. A craft hovers about 3.5, far above either.
+const TRACED_START: f32 = 0.12;
 
 // How far a traced shadow ray looks for an occluder. The sun is at infinity and a bridge's
 // shadow can fall from far above, so this is past any circuit's height rather than a

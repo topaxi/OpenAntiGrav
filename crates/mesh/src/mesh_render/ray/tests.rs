@@ -144,9 +144,10 @@ fn a_ray_finds_the_track_where_the_raster_draws_it_and_a_craft_where_its_matrix_
         contents: bytemuck::cast_slice(&model.vertices),
         usage: wgpu::BufferUsages::VERTEX | blas_input(&device),
     });
-    let track = ModelAccel::build(&device, &queue, "track", &model, &vertices).expect("a BLAS");
+    let track =
+        ModelAccel::build(&device, &queue, "track", &model, None, &vertices).expect("a BLAS");
     assert_eq!(track.stats.triangles, 1);
-    let hull = ModelAccel::build(&device, &queue, "hull", &model, &vertices).expect("a BLAS");
+    let hull = ModelAccel::build(&device, &queue, "hull", &model, None, &vertices).expect("a BLAS");
     let mut scene = Scene::new(create_tlas(&device), track, vec![hull], 2);
 
     // The hull is nearer the camera and moved right by 0.8: a transposed matrix would put it
@@ -162,6 +163,7 @@ fn a_ray_finds_the_track_where_the_raster_draws_it_and_a_craft_where_its_matrix_
         &Frame {
             nodes: &[],
             craft: &[(0, moved)],
+            visible: ALWAYS,
         },
         IDENTITY_MATRIX,
         size,
@@ -181,4 +183,115 @@ fn a_ray_finds_the_track_where_the_raster_draws_it_and_a_craft_where_its_matrix_
     // Nothing: above both.
     assert_eq!(texel(&image, size, (-0.9, 0.9)), [0, 0, 0, 255]);
     assert_eq!(scene.live(), 2);
+}
+
+/// Two copies of one triangle a hair apart, in sections 0 and 1 of a track's partition:
+/// the near copy (depth 0.5) is draw 0, the far one (depth 0.52, moved right by 0.4) is
+/// draw 1, so a pixel left of both reads which copies the structure holds.
+fn swap_pair() -> (Model, [u64; 2]) {
+    let mut model = triangle();
+    let mut far = model.draws[0].clone();
+    far.range = 3..6;
+    model.draws.push(far);
+    model.indices.extend([3, 4, 5]);
+    model.vertices.extend([
+        vertex([-0.4, -0.8, 0.52]),
+        vertex([1.2, -0.8, 0.52]),
+        vertex([0.4, 0.8, 0.52]),
+    ]);
+    (model, [1 << 0, 1 << 1])
+}
+
+#[test]
+fn each_section_is_a_part_of_its_own_and_a_model_without_sections_is_always_in() {
+    let (model, sections) = swap_pair();
+    let split = accel::partition(
+        &model,
+        Some(Sections {
+            opaque: &sections,
+            alpha_tested: &[],
+        }),
+    );
+    assert_eq!(
+        split.keys().copied().collect::<Vec<_>>(),
+        [(0, 1 << 0), (0, 1 << 1)]
+    );
+    assert_eq!(split[&(0, 1 << 1)], [3, 4, 5]);
+    // A hull, or a circuit with no partition: one part, in every frame.
+    let whole = accel::partition(&model, None);
+    assert_eq!(whole.keys().copied().collect::<Vec<_>>(), [(0, ALWAYS)]);
+    // A list shorter than its draws shows too much, never too little.
+    let short = accel::partition(
+        &model,
+        Some(Sections {
+            opaque: &sections[..1],
+            alpha_tested: &[],
+        }),
+    );
+    assert_eq!(
+        short.keys().copied().collect::<Vec<_>>(),
+        [(0, 1 << 0), (0, ALWAYS)]
+    );
+    // The frame's visible set decides: one copy, the other, both only when the set names
+    // both, and an unplaced part always.
+    assert!(instanced(1 << 0, 0b01) && !instanced(1 << 1, 0b01));
+    assert!(instanced(1 << 1, 0b10) && !instanced(1 << 0, 0b10));
+    assert!(instanced(ALWAYS, 0b10));
+}
+
+#[test]
+fn a_ray_meets_only_the_copy_whose_section_the_frame_shows() {
+    let Some((device, queue)) = ray_device() else {
+        return;
+    };
+    let (model, sections) = swap_pair();
+    let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("test vertices"),
+        contents: bytemuck::cast_slice(&model.vertices),
+        usage: wgpu::BufferUsages::VERTEX | blas_input(&device),
+    });
+    let track = ModelAccel::build(
+        &device,
+        &queue,
+        "track",
+        &model,
+        Some(Sections {
+            opaque: &sections,
+            alpha_tested: &[],
+        }),
+        &vertices,
+    )
+    .expect("a BLAS");
+    assert_eq!(track.stats.blases, 2, "one BLAS per section");
+    let mut scene = Scene::new(create_tlas(&device), track, Vec::new(), 0);
+    let debug = Debug::new(&device);
+    let size = (64, 64);
+    let mut shoot = |visible| {
+        let image = debug.render(
+            &device,
+            &queue,
+            &mut scene,
+            &Frame {
+                nodes: &[],
+                craft: &[],
+                visible,
+            },
+            IDENTITY_MATRIX,
+            size,
+        );
+        (
+            texel(&image, size, (-0.5, -0.7)),
+            texel(&image, size, (0.9, -0.7)),
+        )
+    };
+    let empty = [0, 0, 0, 255];
+    // Left of the far copy, inside the near one; and right of the near copy, inside the far.
+    let (near, far) = shoot(1 << 0);
+    assert_ne!(near, empty, "section 0 shows the near copy");
+    assert_eq!(far, empty, "and not the far one");
+    let (near, far) = shoot(1 << 1);
+    assert_eq!(near, empty, "section 1 hides the near copy");
+    assert_ne!(far, empty, "and shows the far one");
+    let (near, far) = shoot(ALWAYS);
+    assert!(near != empty && far != empty, "everything shows both");
 }

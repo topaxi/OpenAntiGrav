@@ -236,7 +236,7 @@ triangle estimate below stands, unmeasured.
 **Look.** `traced` against `mapped` on HD at tick 900 differs in 11 % of pixels by more than 8/255 (max 60): crisp
 shadow edges, and everything beyond `mapped`'s 70-unit box now shadows (the tunnel ceilings), because there is no cascade
 to fit. The picture is a sun-shadow multiply like `mapped`'s, over the lightmap, never replacing it. Chosen, not
-measured: `TRACED_START` 0.12 and `TRACED_REACH` 2000 world units, strength the `mapped` 0.4.
+measured: `TRACED_START` 0.12 (0.6 for a while, see below) and `TRACED_REACH` 2000 world units, strength the `mapped` 0.4.
 
 **Open after this lane.** Omega and 2048 `traced` frames were not judged separately (Omega builds and its debug picture
 matches the raster; 2048 could not be opened here). Pure's sun is still unchecked. The menu offers `traced` on every
@@ -256,11 +256,57 @@ the structure and not in the raster:
 - **Every `LodGroup` tier was in the BLAS**, the coarse road a hair above or below the fine one by
   turns. `ModelAccel::build` now takes the finest tier only, as the `mapped` caster always did
   (`lod_groups.shows_nearest`): Moa Therma's circuit 143,105 to 137,817 triangles. Not enough alone.
-- **A second surface hovers about 0.12 to 0.4 above parts of the road**: starting the ray at 0.4
-  left a few patches, 0.8 none. `TRACED_START` is 0.6 now (was 0.12, chosen); a craft hovers about
-  3.5, so no craft's shadow changes. **What that surface is is not read** - a duplicated batch, a
-  pass the raster hides by its flags, or an authored volume - and a traced reflection would meet it
-  too, so it is the open thread here.
+- **A second surface hovers 0.02 to 1.0 off the road, by turns above and below it**: the
+  circuit's far-LOD copy of its own road (section 62's group, nodes 885/887/889) interleaving
+  with the detailed road (section 50, node 518), the copy [ADR-0014](../architecture/adr/0014-authored-section-placement.md) and
+  [`track.md`](../formats/track.md) describe. Not a `LodGroup` member, so the filter above
+  cannot catch it. The raster never shows both: the authored visibility masks keep them apart
+  (no section's mask names both 50 and 62; `SwapConflicts` reports the pair). Starting the ray
+  at 0.6 (it was 0.12) hid most of it and still left patches on the far road.
+
+**The fix: the structure follows the frame's visible set.** `ModelAccel::build` takes the
+circuit's per-draw section masks (`DrawSections`, passed in as `ray::Sections` since
+`oag-mesh` cannot reach `oag_render::pvs`) and builds one BLAS per `(moving node, section)`
+pair; geometry no section governs is `ray::ALWAYS`. Each frame `Scene::update` instances only
+the parts whose sections share a bit with the frame's mask (`ray::instanced`, the raster's own
+`VisibleSet::allows` test). Moa Therma White: 67 parts, 33 to 35 instanced at the posed frames.
+The TLAS was already rebuilt every frame, so this costs nothing extra.
+
+- **The mask** is `Race::ray_visible_mask`: `VisibleSet::around` for the viewed craft and its
+  camera with the spline padding and the swap filter (or a station camera's own row), **not
+  narrowed to the view**, so a canopy behind or above the camera still casts. Where the raster
+  hides nothing - `pvs_culling` off, or a circuit with no section partition - it is
+  `ALWAYS`. `--ray-debug` takes the same mask.
+- **Split screen and multiple windows share one TLAS**, built from the union of every drawn
+  seat's mask (`Race::drawn_slots`). One view's mask never names both halves of a swap; a union
+  can, so a split whose craft straddle a swap can show the patches again for those frames. A
+  TLAS per view was not built: it doubles the per-frame build for a few frames' patch. Chosen.
+- **An unplaced viewpoint instances everything**, as the raster draws everything there: a
+  respawn in flight, a craft off the track, and a posed capture at `--ticks 0` (no tick has
+  located the craft, `Ship::segment` is 0). The raster z-fights both copies in those frames
+  and the patches come back with it, more of them at 0.12 than at the old 0.6 (`TRACED_START`
+  below). A posed check needs `--ticks 1 --pose-hold`.
+- **`TRACED_START` is back to 0.12.** At 0.12, 0.2, 0.3, 0.4 and 0.6 with the filter on, the
+  three posed frames (ticks 1320, 1980, 2460) show no triangle patches; lowering the start
+  adds 0.1 to 0.4 % of pixels against 0.6, all thin contact lines where a wall meets the road or a kerb's
+  top edge, grainy at `high` as any penumbra is. The second near-surface caster the
+  investigation saw on the right wall and kerb at 0.12 was in a section the placed mask leaves
+  out: it appeared only at `--ticks 0`, where everything was instanced, and is gone at 0.12
+  with the filter. Which section (Moa Therma's other swap pair is (49, 57)) was not isolated.
+- **Cost: cheaper, not dearer.** `OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, `perf-probe`
+  release, RX 7800 XT, load 3.4 to 5.1, Moa Therma White at tick 1320, two runs each against
+  the commit before: `Scene::render` GPU median `medium` 2.79 to 2.54 ms, `high` 12.8 to
+  11.7 ms (-9 % both), all of it in the track's solid pass where the shadow rays are cast:
+  half the instances, and no far copy for a ray to traverse.
+- **Generality.** By a `SwapConflicts::find` census, 11 of the 12 Pulse PSP circuits with a `track.vex` author swap pairs (01 has
+  25), so the fix is circuit-wide; rendered on Moa Therma only.
+- **HD, 2048 and Omega: checked, differs, left as they were.** Their partition is one bit per
+  `.rcsmodel` chunk ([`hd-pvs.md`](../formats/hd-pvs.md)): 983 to 1,125 chunks on HD's
+  circuits and up to 1,258 mesh objects on 2048's, so a BLAS per chunk overruns
+  `MAX_INSTANCES` (1,024), and no swap relation is recovered for chunks. The far-only chunks
+  `hd-pvs.md` measures (26 on Talon's Junction, 4 on Anulpha Pass) are landmarks, not a road
+  copy, and whether any of them overlaps near geometry is not measured. Their circuits keep one
+  static BLAS in every frame.
 
 **The shapes were real, and hard.** At tick 1980 the straight edge across the road is the overhanging
 building's canopy: cutting `TRACED_REACH` to 150 changes nothing. What made it uncanny is that it is

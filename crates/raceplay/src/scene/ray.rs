@@ -29,11 +29,17 @@ pub(super) struct RayTier {
 impl RayTier {
     /// Builds the circuit's BLASes from `track` and one hull BLAS per ship drawable.
     /// `None` when the circuit has nothing opaque to trace.
+    ///
+    /// `sections` is the circuit's PVS placement (`TrackVisibility::sections`), so each
+    /// section's geometry is a BLAS of its own and a frame instances only the sections its
+    /// raster shows ([`Scene::ray_visible`]). `None` for a circuit with no section
+    /// partition: one BLAS for its static geometry, in every frame.
     pub(super) fn build(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         tlas: Option<wgpu::Tlas>,
         track: &Drawable,
+        sections: Option<&DrawSections>,
         ships: &[Drawable],
     ) -> Option<Self> {
         let tlas = tlas?;
@@ -42,6 +48,10 @@ impl RayTier {
             queue,
             "circuit",
             track.model(),
+            sections.map(|s| ray::Sections {
+                opaque: &s.opaque,
+                alpha_tested: &s.alpha_tested,
+            }),
             track.vertex_buffer(),
         )?;
         let hulls: ray::Hulls = ships
@@ -53,6 +63,7 @@ impl RayTier {
                     queue,
                     &format!("hull {slot}"),
                     ship.model(),
+                    None,
                     ship.vertex_buffer(),
                 )
             })
@@ -91,12 +102,36 @@ impl Scene {
     /// **Every frame the tier is on, whatever the shadow setting**: every drawable's scene
     /// group names the TLAS, and wgpu refuses a draw whose bind group holds one that was
     /// never built.
-    pub(super) fn update_ray_scene(&self, encoder: &mut wgpu::CommandEncoder, race: &Race) {
+    pub(super) fn update_ray_scene(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        race: &Race,
+        pvs_cull: bool,
+    ) {
         let Some(tier) = &self.ray else {
             return;
         };
         let (nodes, craft) = self.ray_instances(race);
-        tier.borrow_mut().scene.update(encoder, &nodes, &craft);
+        let visible = self.ray_visible(race, pvs_cull);
+        let mut tier = tier.borrow_mut();
+        tier.scene.update(encoder, &nodes, &craft, visible);
+    }
+
+    /// The sections the TLAS instances this frame: what the raster may draw in any direction
+    /// from every view of the frame (`Race::ray_visible_mask`), or everything where the
+    /// raster hides nothing - `pvs_culling` off, or a circuit with no section partition
+    /// (Pure, and every PS3, Vita and PS4 circuit, whose chunk partition is not applied here).
+    ///
+    /// **Why it follows the raster.** A Pulse circuit authors alternative copies of one road
+    /// in different sections (a far-LOD copy a few hundredths of a unit above or below the
+    /// detailed one, by turns), and its visibility masks never name both. A structure
+    /// holding every section let each copy shadow the other in triangle-shaped patches.
+    fn ray_visible(&self, race: &Race, pvs_cull: bool) -> u64 {
+        self.visibility
+            .as_ref()
+            .filter(|_| pvs_cull)
+            .filter(|visibility| visibility.has_sections())
+            .map_or(ray::ALWAYS, |visibility| race.ray_visible_mask(visibility))
     }
 
     /// The shadow tier this frame draws: `shadows`, except that `traced` on a race without
@@ -144,7 +179,8 @@ impl Scene {
 
     /// The `--ray-debug` picture of `race` as the raster frames it: one primary ray per
     /// pixel from the camera `Scene::render` would use for a `width` by `height`
-    /// viewport, RGBA8 with row 0 on top. `None` without the tier.
+    /// viewport, RGBA8 with row 0 on top, over the sections the frame's shadows trace
+    /// against (`pvs_cull` as the frame was drawn with). `None` without the tier.
     #[must_use]
     pub fn ray_debug(
         &self,
@@ -152,12 +188,14 @@ impl Scene {
         queue: &wgpu::Queue,
         race: &Race,
         fov: oag_display::display::Fov,
+        pvs_cull: bool,
         (width, height): (u32, u32),
     ) -> Option<Vec<u8>> {
         let tier = self.ray.as_ref()?;
         let aspect = width.max(1) as f32 / height.max(1) as f32;
         let view_projection = race.projection(aspect, self.far, fov) * race.view();
         let (nodes, craft) = self.ray_instances(race);
+        let visible = self.ray_visible(race, pvs_cull);
         let mut tier = tier.borrow_mut();
         let RayTier { scene, debug } = &mut *tier;
         Some(debug.render(
@@ -167,6 +205,7 @@ impl Scene {
             &ray::Frame {
                 nodes: &nodes,
                 craft: &craft,
+                visible,
             },
             view_projection.inverse().to_cols_array(),
             (width, height),

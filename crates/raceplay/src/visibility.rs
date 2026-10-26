@@ -162,7 +162,9 @@ impl TrackVisibility {
 
     /// What may be drawn with the craft in `craft` and the camera in `camera`,
     /// narrowed to the sections whose authored box `view_projection` reaches -
-    /// the original's second tier, see `oag_render::pvs::sections_in_view`.
+    /// the original's second tier, see `oag_render::pvs::sections_in_view`. The race
+    /// narrows [`Self::around`] itself (`Race::visible_set`); this is that, for the tests.
+    #[cfg(test)]
     #[must_use]
     pub(super) fn set(
         &self,
@@ -170,25 +172,31 @@ impl TrackVisibility {
         camera: u8,
         view_projection: &oag_core::math::Mat4,
     ) -> VisibleSet {
+        self.narrowed(self.around(craft, camera), view_projection)
+    }
+
+    /// `set` narrowed to the sections whose authored box `view_projection` reaches: the
+    /// second tier `Race::visible_set` applies to [`Self::around`] or [`Self::row_only`].
+    #[must_use]
+    pub(super) fn narrowed(
+        &self,
+        set: VisibleSet,
+        view_projection: &oag_core::math::Mat4,
+    ) -> VisibleSet {
+        set.within_view(&self.pvs, view_projection)
+    }
+
+    /// What may be drawn with the craft in `craft` and the camera in `camera`, in every
+    /// direction: [`Self::set`] before the view narrows it.
+    #[must_use]
+    pub(super) fn around(&self, craft: u8, camera: u8) -> VisibleSet {
         VisibleSet::around(&self.pvs, &self.padding, &self.swaps, craft, camera)
-            .within_view(&self.pvs, view_projection)
     }
 
     /// What may be drawn with the camera placed by `section` alone: that section's own row,
     /// with no padding and no second viewpoint, as the original masks a camera that stands on
-    /// an authored station ([`Race::station_camera_section`]).
-    #[must_use]
-    pub(super) fn set_exact(
-        &self,
-        section: u8,
-        view_projection: &oag_core::math::Mat4,
-    ) -> VisibleSet {
-        self.row_only(section)
-            .within_view(&self.pvs, view_projection)
-    }
-
-    /// `section`'s own row, before the view narrows it.
-    fn row_only(&self, section: u8) -> VisibleSet {
+    /// an authored station ([`Race::station_camera_section`]). Before the view narrows it.
+    pub(super) fn row_only(&self, section: u8) -> VisibleSet {
         VisibleSet::around(
             &self.pvs,
             &SectionPadding::default(),
@@ -305,7 +313,8 @@ mod tests {
     use oag_core::math::{Vec3, camera};
 
     /// The race scene narrows the visible set to the sections the view reaches
-    /// (`Visibility::set`'s `within_view`), on a real circuit.
+    /// (`TrackVisibility::narrowed`, which `Race::visible_set` and `set` both call), on a
+    /// real circuit.
     ///
     /// **The wiring, not the law**: `oag_render::pvs`'s unit tests hold the
     /// corner test, and a call site that dropped `within_view` would pass all
@@ -360,7 +369,7 @@ mod tests {
 
     /// A camera that stands on an authored station is masked by one section's row and nothing
     /// else (`FUN_0891e908`), where the chase camera's set adds the spline neighbours' own
-    /// geometry: on a real circuit `set_exact` is the circuit's own row, section by section,
+    /// geometry: on a real circuit `row_only` is the circuit's own row, section by section,
     /// and the padded `set` is wider for at least one of them. The row for section 11 read
     /// off PPSSPP at `g_display + 0x5bb8 + 11 * 8` is `0x08000003f0003c02`.
     #[test]
@@ -396,5 +405,67 @@ mod tests {
             padded_wider += usize::from(padded != exact);
         }
         assert!(padded_wider > 0, "the padding added nothing anywhere");
+    }
+
+    /// The ray tier's structure never holds both copies of an authored LOD swap for one
+    /// frame: on Moa Therma White (whose detailed road, section 50, and far-LOD copy,
+    /// section 62, interleave 0.02 to 1.0 apart), for every placed craft and camera section,
+    /// the parts [`oag_mesh::mesh_render::ray::instanced`] admits from the circuit's own
+    /// [`oag_mesh::mesh_render::ray::partition`] never span both halves of any swap pair.
+    /// An unplaced viewpoint draws everything by design and is left out.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn a_frames_ray_parts_never_hold_both_halves_of_a_swap() {
+        use oag_mesh::mesh_render::ray;
+        let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+            return;
+        };
+        let entry = r"Data\Environments\03_Track\track.vex";
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+        let blob = archives.read_name(entry).expect("track.vex");
+        let model = oag_mesh::mesh::build_with_textures(entry, &blob, None).expect("model");
+        let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
+        let node = oag_vex::track::find_node(&blob, &nodes).expect("a WO Track node");
+        let ai = oag_vex::track::parse(&blob[node.payload()]).expect("spline");
+        let visibility =
+            TrackVisibility::build(&model, &blob, &ai).expect("the circuit's sections");
+        assert_ne!(
+            visibility.swaps.partners_of(1 << 50) & (1 << 62),
+            0,
+            "(50, 62) is a swap pair"
+        );
+        let parts: Vec<u64> = ray::partition(
+            &model,
+            Some(ray::Sections {
+                opaque: &visibility.sections.opaque,
+                alpha_tested: &visibility.sections.alpha_tested,
+            }),
+        )
+        .keys()
+        .map(|&(_, sections)| sections)
+        .collect();
+        assert!(
+            parts.contains(&(1 << 50)) && parts.contains(&(1 << 62)),
+            "each copy is a part of its own"
+        );
+        let ids: Vec<u8> = visibility.pvs.ids().collect();
+        let mut frames = 0;
+        for &craft in &ids {
+            for &camera in &ids {
+                let visible = visibility.around(craft, camera).mask();
+                let held = parts
+                    .iter()
+                    .filter(|&&sections| sections != ray::ALWAYS)
+                    .filter(|&&sections| ray::instanced(sections, visible))
+                    .fold(0, |held, sections| held | sections);
+                assert_eq!(
+                    held & visibility.swaps.partners_of(held),
+                    0,
+                    "craft {craft}, camera {camera}: {held:#x} holds both halves of a swap"
+                );
+                frames += 1;
+            }
+        }
+        assert!(frames > 0);
     }
 }

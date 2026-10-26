@@ -14,12 +14,13 @@ pub const MAX_RAY_LENGTH: f32 = 20_000.0;
 
 const SHADER: &str = include_str!(concat!(env!("OUT_DIR"), "/ray_debug.wgsl"));
 
-/// What the TLAS holds this frame: the circuit's animated node matrices and each craft's
-/// hull index and model matrix (see [`Scene::update`]).
+/// What the TLAS holds this frame: the circuit's animated node matrices, each craft's
+/// hull index and model matrix, and the visible section mask (see [`Scene::update`]).
 #[derive(Clone, Copy, Debug)]
 pub struct Frame<'a> {
     pub nodes: &'a [[f32; 16]],
     pub craft: &'a [(usize, [f32; 16])],
+    pub visible: u64,
 }
 
 /// The pipeline. Created only on a device with the tier: the module declares `ray_query`.
@@ -67,7 +68,11 @@ impl Debug {
         inverse_view_projection: [f32; 16],
         (width, height): (u32, u32),
     ) -> Vec<u8> {
-        let Frame { nodes, craft } = *frame;
+        let Frame {
+            nodes,
+            craft,
+            visible,
+        } = *frame;
         let mut params = [0.0f32; 20];
         params[..16].copy_from_slice(&inverse_view_projection);
         params[16] = MAX_RAY_LENGTH;
@@ -92,7 +97,7 @@ impl Debug {
         });
         let view = target.create_view(&Default::default());
         let mut encoder = device.create_command_encoder(&Default::default());
-        scene.update(&mut encoder, nodes, craft);
+        scene.update(&mut encoder, nodes, craft, visible);
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("ray debug"),
             layout: &self.pipeline.get_bind_group_layout(0),

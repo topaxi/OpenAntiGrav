@@ -95,7 +95,7 @@ Measured across all 382 version-6 `.vex` files in every `.wad` on
 | `textureBlob` `0x3df` | **0** | inert |
 | `Dynamic Point Light` `0x3c2` | **0** | inert |
 | `lensflare` `0x3de` | **0** | inert |
-| `DirectionalLight` `0x131` | 142 | already a converged negative; see the roadmap |
+| `DirectionalLight` `0x131` | 142 | lights the craft hull, not a shadow: loaded as `HullLights` ([scene-light](../ghidra/functions/psp-pulse-usa/scene-light.md)) |
 
 Wipeout Pure authors **none of the seven**, across all 222 of its `.vex` files
 on `pure-psp-eu.chd`. Its shadow tier is honest absence, stated in the loader
@@ -800,17 +800,22 @@ receives - is this project's own enhancement and not a recovery, so it belongs
 behind the same opt-in that any backported effect does, and its doc must say so
 the way `BoostFovKick` and `MotionBlur` already say it of themselves.
 
-**Ray tracing is a documented future tier with no enum variant** (the support survey and ranked spikes are in [`ray-tracing.md`](ray-tracing.md); point 2 below is out of date for wgpu 30.0.1, which also reports ray query on DX12 and Metal), blocked on
-three things in this order:
+**Ray tracing was a documented future tier** (the support survey and ranked spikes are in [`ray-tracing.md`](ray-tracing.md); point 2 below is out of date for wgpu 30.0.1, which also reports ray query on DX12 and Metal), blocked on
+three things in this order. It has since been built as `graphics.shadows = traced`, see [`ray-tracing.md`](ray-tracing.md); the three points are kept as the reasoning it started from:
 
-1. **A light to trace against.** Pulse has none: `DirectionalLight` is a
-   converged negative with no reader and no `GU_LIGHT0..3` slot ever enabled,
-   `AmbientLight`'s colour never reaches the render path, `PointLight` is never
-   registered, and `Dynamic Point Light` is authored zero times. **HD and 2048
-   both have one** - HD a sun in `.envsettings`, 2048 a `ShadowLight` with its
-   own direction authored specifically for ship shadows - so those two are
-   where a traced shadow has a defensible direction rather than an invented
-   one, and Pulse is where it would have to be invented.
+1. **A light to trace against.** Pulse circuits author `DirectionalLight`
+   nodes, and row 2 of each node's world
+   matrix is the direction the original hands the GE to light the craft hull,
+   live-verified in
+   [`scene-light.md`](../ghidra/functions/psp-pulse-usa/scene-light.md) and
+   loaded as `oag_mesh::mesh_render::HullLights` (`HullLights::from_track`).
+   They light the hull; nothing in that page casts a shadow along them, so a
+   traced Pulse shadow along one is still a choice, but it is the circuit's own direction
+   rather than an invented one. `AmbientLight`'s colour never reaches the
+   render path, `PointLight` is never registered, and `Dynamic Point Light`
+   is authored zero times. **HD and 2048 both have one** - HD a sun in
+   `.envsettings`, 2048 a `ShadowLight` with its own direction authored
+   specifically for ship shadows.
 2. **Acceleration structures in wgpu.** Ray queries are experimental and
    effectively Vulkan-only, so a variant would be absent on most adapters -
    exactly the failure `Msaa` documents for a `2x` level, where a pipeline
@@ -819,7 +824,7 @@ three things in this order:
 3. **A reason.** The cheaper win on the same infrastructure is ray-queried
    *contact* shadows layered on top of `mapped`, not a full traced pass.
 
-Until all three move, this stays a paragraph and not a row.
+All three moved: wgpu 30 brought the structures, HD and 2048 author a sun, and Pulse authors the hull lights above.
 
 ## The plan, in order
 

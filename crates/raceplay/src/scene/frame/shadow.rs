@@ -87,6 +87,7 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
+        pvs_cull: bool,
     ) {
         let shadows = self.resolve_shadows(shadows);
         if !self.does_frame_work() {
@@ -105,7 +106,7 @@ impl super::super::Scene {
             shadow_maps: w.shadow_maps + 1,
             ..w
         });
-        self.update_ray_scene(encoder, race);
+        self.update_ray_scene(encoder, race, pvs_cull);
         self.render_shadow_map(queue, encoder, race, shadows);
         self.render_sun_occlusion(queue, encoder, race, shadows);
     }

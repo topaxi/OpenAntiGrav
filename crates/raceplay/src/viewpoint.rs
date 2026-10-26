@@ -294,6 +294,26 @@ impl Race {
         }
     }
 
+    /// Every slot a view follows this frame, across every split view and every window:
+    /// [`Self::window_drawn`] of each window when the views are dealt across windows, the
+    /// first [`Self::views_drawn`] slots of a split (view `i` follows slot `i`), and the
+    /// craft the view being drawn follows otherwise.
+    #[must_use]
+    pub fn drawn_slots(&self) -> Vec<usize> {
+        if self.windowed() {
+            let mut slots: Vec<usize> = (0..self.view.viewpoints.windows.len())
+                .flat_map(|window| self.window_drawn(window))
+                .collect();
+            slots.sort_unstable();
+            slots.dedup();
+            return slots;
+        }
+        match self.views_drawn() {
+            1 => vec![self.viewed_slot()],
+            n => (0..n).collect(),
+        }
+    }
+
     /// Splits the screen into `count` views, clamped to the grid that is fielded
     /// and to [`oag_render::viewport::MAX_VIEWPORTS`], and returns what it
     /// settled on. View `i` follows slot `i`. `1` turns the split off.

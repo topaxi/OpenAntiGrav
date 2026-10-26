@@ -1,7 +1,8 @@
 //! Bottom and top level acceleration structures over the buffers the raster draws.
 //!
-//! A [`ModelAccel`] is the BLASes of one [`Model`]: its static geometry as one, and each
-//! `Anim Transform` node's geometry as one of its own (the nodes are rigid, so a moving
+//! A [`ModelAccel`] is the BLASes of one [`Model`]: its static geometry as one per track
+//! section (so a frame instances only the sections its raster shows, [`instanced`]), and
+//! each `Anim Transform` node's geometry as one of its own (the nodes are rigid, so a moving
 //! node costs a TLAS instance per frame, not a rebuild). A [`Scene`] is the TLAS over a
 //! circuit's [`ModelAccel`] and the craft hulls.
 //!
@@ -37,7 +38,8 @@ pub struct Stats {
     pub triangles: u32,
     /// Triangles of those that belong to an animated node.
     pub moving_triangles: u32,
-    /// Distinct BLASes: the static one, if any, plus one per animated node.
+    /// Distinct BLASes: one per `(moving node, section mask)` pair, the static geometry
+    /// being node `0`.
     pub blases: u32,
     /// Of those, the ones under an animated node.
     pub moving_blases: u32,
@@ -79,6 +81,10 @@ struct Part {
     blas: wgpu::Blas,
     /// The `xform` slot of the node it moves under, `0` for the static part.
     xform: u32,
+    /// The track sections its draws belong to ([`ALWAYS`] for geometry no section governs,
+    /// and for every hull): the part is instanced only in a frame whose visible set shares
+    /// a bit with it ([`instanced`]).
+    sections: u64,
     _indices: wgpu::Buffer,
 }
 
@@ -118,10 +124,83 @@ fn xform_of(model: &Model, draw: &DrawCall) -> u32 {
         .map_or(0, |v| v.xform)
 }
 
+/// Geometry no section governs, or a model with no partition: in every frame's set.
+/// `oag_render::pvs::ALWAYS`'s value, which this crate cannot name.
+pub const ALWAYS: u64 = u64::MAX;
+
+/// A track's per-draw section masks, index-parallel to [`Model::draws`] and
+/// [`Model::alpha_tested_draws`]: `oag_render::pvs::DrawSections::opaque` and
+/// `::alpha_tested`. A list shorter than its draws answers [`ALWAYS`] past its end, so a
+/// drift between the two shows too much rather than too little.
+#[derive(Clone, Copy, Debug)]
+pub struct Sections<'a> {
+    pub opaque: &'a [u64],
+    pub alpha_tested: &'a [u64],
+}
+
+/// Whether a part in `sections` is in a frame whose visible set is `visible`: the raster's
+/// own test (`oag_render::pvs::VisibleSet::allows`), so a section the frame does not draw
+/// casts nothing either. This is what keeps a circuit's two copies of one road (an authored
+/// LOD swap, which no visibility mask names together) from shadowing each other.
+#[must_use]
+pub fn instanced(sections: u64, visible: u64) -> bool {
+    sections & visible != 0
+}
+
+/// The index runs each BLAS is built from, keyed by `(xform, sections)`: the opaque and
+/// alpha-tested draws of the finest `LodGroup` tier, split by the node they move under and
+/// the section mask they belong to.
+///
+/// **The finest `LodGroup` tier only**, as the shadow map's caster takes it
+/// (`Drawable::caster`): a circuit carries its coarse road as well, a hair above or below
+/// the fine one by turns, and with both in the structure the coarse copy shadowed the fine
+/// road in triangle-shaped patches. The PVS's far-LOD copies are not `LodGroup` members;
+/// the section key is what separates those.
+#[must_use]
+pub fn partition(
+    model: &Model,
+    sections: Option<Sections<'_>>,
+) -> std::collections::BTreeMap<(u32, u64), Vec<u32>> {
+    let at = |list: Option<&[u64]>, index: usize| {
+        list.and_then(|l| l.get(index).copied()).unwrap_or(ALWAYS)
+    };
+    let opaque = model
+        .draws
+        .iter()
+        .enumerate()
+        .map(|(i, draw)| (draw, at(sections.map(|s| s.opaque), i)));
+    let alpha_tested = model
+        .alpha_tested_draws
+        .iter()
+        .enumerate()
+        .map(|(i, draw)| (draw, at(sections.map(|s| s.alpha_tested), i)));
+    let mut by_part: std::collections::BTreeMap<(u32, u64), Vec<u32>> = Default::default();
+    for (draw, sections) in opaque
+        .chain(alpha_tested)
+        .filter(|(draw, _)| model.lod_groups.shows_nearest(draw))
+    {
+        let (start, end) = (draw.range.start as usize, draw.range.end as usize);
+        let Some(run) = model.indices.get(start..end) else {
+            continue;
+        };
+        by_part
+            .entry((xform_of(model, draw), sections))
+            .or_default()
+            .extend_from_slice(run);
+    }
+    by_part
+}
+
 impl ModelAccel {
     /// Builds the model's BLASes from `vertex_buffer`, which must be the buffer holding
     /// `model.vertices` and have been created with `BLAS_INPUT` (see `super::blas_input`).
     /// `None` for a model with nothing opaque in it.
+    ///
+    /// `sections` is the track's per-draw section masks, index-parallel to `model.draws`
+    /// and `model.alpha_tested_draws` (`oag_render::pvs::DrawSections`, which this crate
+    /// cannot name): one BLAS per moving node **and per governing section**, so a frame
+    /// instances only what its visible set shows ([`Scene::update`]). `None` (a hull, or a
+    /// circuit with no section partition) puts every draw in [`ALWAYS`].
     ///
     /// Submits and waits for the build, so the stats carry a real time: this runs once per
     /// load, never in a frame.
@@ -131,30 +210,12 @@ impl ModelAccel {
         queue: &wgpu::Queue,
         label: &str,
         model: &Model,
+        sections: Option<Sections<'_>>,
         vertex_buffer: &wgpu::Buffer,
     ) -> Option<Self> {
         let started = Instant::now();
 
-        let mut by_node: std::collections::BTreeMap<u32, Vec<u32>> = Default::default();
-        // **The finest `LodGroup` tier only**, as the shadow map's caster takes it
-        // (`Drawable::caster`): a circuit carries its coarse road as well, a hair above or
-        // below the fine one by turns, and with both in the structure the coarse copy
-        // shadowed the fine road in triangle-shaped patches.
-        for draw in model
-            .draws
-            .iter()
-            .chain(&model.alpha_tested_draws)
-            .filter(|draw| model.lod_groups.shows_nearest(draw))
-        {
-            let (start, end) = (draw.range.start as usize, draw.range.end as usize);
-            let Some(run) = model.indices.get(start..end) else {
-                continue;
-            };
-            by_node
-                .entry(xform_of(model, draw))
-                .or_default()
-                .extend_from_slice(run);
-        }
+        let by_part = partition(model, sections);
         let skipped = model
             .transparent_draws
             .iter()
@@ -173,7 +234,7 @@ impl ModelAccel {
         // The entries borrow the buffers and BLASes, so they are collected first and built
         // in one call.
         let mut staged = Vec::new();
-        for (xform, indices) in &by_node {
+        for (&(xform, mask), indices) in &by_part {
             let triangles = indices.len() as u32 / 3;
             if triangles == 0 {
                 continue;
@@ -202,19 +263,19 @@ impl ModelAccel {
             );
             stats.triangles += triangles;
             stats.index_bytes += indices.len() as u64 * 4;
-            if *xform != 0 {
+            if xform != 0 {
                 stats.moving_triangles += triangles;
                 stats.moving_blases += 1;
             }
             stats.blases += 1;
-            staged.push((size, blas, index_buffer, *xform));
+            staged.push((size, blas, index_buffer, xform, mask));
         }
         if staged.is_empty() {
             return None;
         }
         let entries: Vec<_> = staged
             .iter()
-            .map(|(size, blas, index_buffer, _)| wgpu::BlasBuildEntry {
+            .map(|(size, blas, index_buffer, _, _)| wgpu::BlasBuildEntry {
                 blas,
                 geometry: wgpu::BlasGeometries::TriangleGeometries(vec![
                     wgpu::BlasTriangleGeometry {
@@ -234,10 +295,11 @@ impl ModelAccel {
         drop(entries);
         queue.submit([encoder.finish()]);
         let _ = device.poll(wgpu::PollType::wait_indefinitely());
-        for (_, blas, indices, xform) in staged {
+        for (_, blas, indices, xform, sections) in staged {
             parts.push(Part {
                 blas,
                 xform,
+                sections,
                 _indices: indices,
             });
         }
@@ -254,7 +316,8 @@ impl ModelAccel {
 /// Craft hulls: the BLASes of each distinct hull model.
 pub type Hulls = Vec<ModelAccel>;
 
-/// The most instances a race's TLAS holds: the circuit's parts (a few dozen) and each craft's
+/// The most instances a race's TLAS holds: the circuit's parts (at most one per section and
+/// moving node, under a hundred on a Pulse circuit) and each craft's
 /// hull parts, far below this. Chosen, not measured.
 pub const MAX_INSTANCES: u32 = 1024;
 
@@ -319,18 +382,24 @@ impl Scene {
         self.track.stats
     }
 
-    /// Rebuilds the TLAS: the circuit's static part at the identity, each moving node at
+    /// Rebuilds the TLAS: the circuit's static parts at the identity, each moving node at
     /// `nodes[xform - 1]` (`Model::sample_anim_nodes`), and each `(hull, model)` craft at
     /// its model matrix - the matrices the raster draws with, so a traced result and the
-    /// picture cannot disagree. Records into `encoder`; nothing is submitted.
+    /// picture cannot disagree. Only the circuit's parts whose sections share a bit with
+    /// `visible` ([`instanced`]; [`ALWAYS`] for a frame that hides nothing). Records into
+    /// `encoder`; nothing is submitted.
     pub fn update(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         nodes: &[[f32; 16]],
         craft: &[(usize, [f32; 16])],
+        visible: u64,
     ) {
         let mut next = 0usize;
         for part in &self.track.parts {
+            if !instanced(part.sections, visible) {
+                continue;
+            }
             let (transform, kind) = if part.xform == 0 {
                 (IDENTITY, KIND_STATIC)
             } else {

@@ -497,13 +497,42 @@ impl Race {
         visibility: &super::visibility::TrackVisibility,
         view_projection: &Mat4,
     ) -> VisibleSet {
+        visibility.narrowed(self.visible_set_around(visibility), view_projection)
+    }
+
+    /// [`Self::visible_set`] before the view narrows it: every section the view being drawn
+    /// may show in any direction, which is what a shadow caster behind or above the camera
+    /// still needs.
+    pub(super) fn visible_set_around(
+        &self,
+        visibility: &super::visibility::TrackVisibility,
+    ) -> VisibleSet {
         match self.station_camera_section() {
-            Some(section) => visibility.set_exact(section, view_projection),
+            Some(section) => visibility.row_only(section),
             None => {
                 let (craft, camera) = self.visibility_sections();
-                visibility.set(craft, camera, view_projection)
+                visibility.around(craft, camera)
             }
         }
+    }
+
+    /// The sections the ray tier's acceleration structure holds this frame: the union of
+    /// [`Self::visible_set_around`] over every view drawn this frame, every split view and
+    /// every window ([`Self::drawn_slots`]), since one TLAS serves them all.
+    ///
+    /// **Ours.** One view's set never names both copies of an authored LOD swap
+    /// (`VisibleSet::around`), but a union of two views' sets can, so a split whose craft
+    /// straddle a swap may show the two copies shadowing each other again. A TLAS per view
+    /// was weighed and not built: it doubles the per-frame build for a few frames' patch.
+    pub(super) fn ray_visible_mask(&self, visibility: &super::visibility::TrackVisibility) -> u64 {
+        let drawing = self.viewed_slot();
+        let mut mask = 0;
+        for slot in self.drawn_slots() {
+            self.set_viewpoint(slot);
+            mask |= self.visible_set_around(visibility).mask();
+        }
+        self.set_viewpoint(drawing);
+        mask
     }
 
     /// The one section the draws are masked with when the camera stands on an authored station
