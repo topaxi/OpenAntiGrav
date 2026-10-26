@@ -43,4 +43,9 @@ pub enum SceneStore {
     /// Clamped to `[0, 1]` and encoded with the `2.2` power the HD chain
     /// decodes with where it reads the scene.
     Encoded,
+    /// The value as computed, in the gamma-2 space Wipeout 2048's programs
+    /// light in: a draw decodes a gamma-authored colour by squaring it, not with
+    /// the `2.2` power, and the race composite's square root is the encode
+    /// (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`).
+    Squared,
 }

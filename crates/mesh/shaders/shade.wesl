@@ -9,7 +9,7 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
-import oag_shaders::target::linear_out;
+import oag_shaders::target::{decode, linear_out};
 import package::shading_modes::{colour_is_light, nova_prelit};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
@@ -495,9 +495,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
     } else if (in.slots & 4194304u) != 0u {
         let ice_slot = (in.slots >> 24u) & 127u;
-        let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
-        let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));
-        let pale = pow(emissives.tint_offset[ice_slot + 2u].rgb, vec3<f32>(2.2));
+        let deep = decode(emissives.tint_offset[ice_slot].rgb);
+        let cyan = decode(emissives.tint_offset[ice_slot + 1u].rgb);
+        let pale = decode(emissives.tint_offset[ice_slot + 2u].rgb);
         let pond = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.zw).x;
         let facing = clamp(ramp_facing, 0.0, 1.0);
         let water = deep + facing * (cyan - deep);
@@ -596,7 +596,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // gamma field) at `0x7` on the ramp (unit 2) and the grid (unit 0) and
     // `0x0` on the normal maps, so the arithmetic below runs on linear values
     // and so does the output alpha (`MOV H0.w, H6.x`).
-    let ramp_linear = pow(first.rgb, vec3<f32>(2.2));
+    let ramp_linear = decode(first.rgb);
     let grid_linear = pow(sheen_grid, 2.2);
     // **Times the program's output scale**, as the authored path above is: block #7 ends on
     // `ADD /2 H0.xyz, R0, H2` (read live on Tech de Ra, fragment `0x76fac0`), so the scene holds
@@ -671,7 +671,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // and the table in renderer.md - and the principle rather than the
     // brightness is what chose.
     let glow_linear =
-        pow(glow_sample.rgb, vec3<f32>(2.2)) * glow_tint_offset.rgb * glow_gate;
+        decode(glow_sample.rgb) * glow_tint_offset.rgb * glow_gate;
     // **HD's pad light bars**: `_ne.a * colour`, the program's `MAD H.xyz,
     // R0.wwww, C, lit` - added after the light on the far side of the albedo
     // multiply, ungated by the diffuse alpha, and not decoded in either
@@ -707,7 +707,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // these surfaces as the ordinary Zone surface and this term, and the floor
     // combine below, stay off. The condition is a branch and not a mix so the
     // Time Trial picture is untouched to the byte.
-    var mag_glow = pow(cell_picture, vec3<f32>(2.2));
+    var mag_glow = decode(cell_picture);
     if (in.slots & 131072u) != 0u && !is_cell && scene.zone.enabled == 0.0 {
         let e = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         let w = material_sample(MATERIAL_WAVE_MAP, in.texcoord * glow_scale.x + vec2<f32>(scene.time.x * glow_scale.y),
@@ -736,8 +736,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     if chevron {
         let e = material_sample(MATERIAL_FIFTH_MAP, in.texcoord);
         let w = material_sample(MATERIAL_SIXTH_MAP, in.lightmap_texcoord.zw);
-        chevron_surface = pow(e.rgb, vec3<f32>(2.2));
-        chevron_glow = e.a * glow_tint_offset.rgb * pow(w.rgb, vec3<f32>(2.2));
+        chevron_surface = decode(e.rgb);
+        chevron_glow = e.a * glow_tint_offset.rgb * decode(w.rgb);
     }
 
     // The Zone surface, in both domains, from one sample. See `zone_sample`.
@@ -772,7 +772,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let zone_colours = zone_set(in.slots, in.world);
         let zone_base = zone_base_term(1.0 - dot(n, zone_to_eye), zone_colours);
         let zone = zone_sample(in.texcoord, in.slots, in.world);
-        zone_linear = pow(zone, vec3<f32>(2.2)) * zone_colours.effect.rgb + zone_base;
+        zone_linear = decode(zone) * zone_colours.effect.rgb + zone_base;
         zone_gamma = zone * zone_colours.effect.rgb + zone_base;
         // The visualiser glow - see `zone_glow`. Gated by `enabled` explicitly
         // rather than trusting `effect.w` to be zero off a Zone race, the same
@@ -819,7 +819,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // not its alpha, so the tint is the decoded colour and the grey albedo the
         // raw alpha. `docs/rendering/hd-track-tone.md`, "The blue cast".
         let lit_alpha = (in.slots & 2147483648u) != 0u;
-        var albedo_linear = pow(texel.rgb, vec3<f32>(2.2));
+        var albedo_linear = decode(texel.rgb);
         var specular_mask = select(texel.a, 1.0, lit_alpha);
         var specular_tint = select(vec3<f32>(1.0), albedo_linear, lit_alpha);
         // **Sebenco's snow-capped rock**: the snow shaded toward `pale` by `N.V` (the bumped
@@ -829,7 +829,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         if snow {
             let snow_c = emissives.tint_offset[snow_entry];
             let shaded = mix(snow_c.rgb, albedo_linear, dot(n_lit, to_eye));
-            albedo_linear = mix(shaded, pow(rock.rgb, vec3<f32>(2.2)), snow_mask);
+            albedo_linear = mix(shaded, decode(rock.rgb), snow_mask);
             specular_exponent = mix(snow_c.w, emissives.scale[snow_entry].w, snow_mask);
             specular_mask = 1.0;
             specular_tint = mix(
@@ -958,7 +958,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // are decoded like every other texture on this path. The glass's `bwgradient` gamma
         // bits were not read off a live draw: decoded like its picture is **chosen, not
         // measured**.
-        let glow_decoded = pow(glow_sample.rgb, vec3<f32>(2.2));
+        let glow_decoded = decode(glow_sample.rgb);
         let program_light = select(
             authored,
             glow_tint_offset.x * (vec3<f32>(glow_sample.a) + authored * glow_decoded),
@@ -1031,7 +1031,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // decode either way.
     let plain = mix(texel.rgb, zone_gamma, zone_weight) * tint * light
         + glow + zone_glow_term + pad_glow + mag_glow_gamma;
-    let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
+    let plain_rgb = mix(plain, decode(plain), linear_out);
 
     // Vertex colour modulates the texture on all four channels, as the GE's
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the

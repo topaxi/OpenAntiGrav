@@ -19,10 +19,11 @@ pub fn is_linear_target(format: wgpu::TextureFormat) -> bool {
 }
 
 /// The pipeline-constant list that switches a shader's `linear_out` override
-/// for `format`, and its `encoded_out` for a scene target that stores encoded
-/// values ([`SceneStore::Encoded`], ignored on a gamma target) - `&[]` on a gamma
-/// target, so a pipeline built against one is bit-identical to what it was
-/// before linear targets existed.
+/// for `format`, its `encoded_out` for a scene target that stores encoded
+/// values ([`SceneStore::Encoded`]) and its `square_decode` for one in 2048's
+/// gamma-2 space ([`SceneStore::Squared`]), both ignored on a gamma target -
+/// `&[]` on a gamma target, so a pipeline built against one is bit-identical to
+/// what it was before linear targets existed.
 #[must_use]
 pub fn linear_constants(
     format: wgpu::TextureFormat,
@@ -30,6 +31,7 @@ pub fn linear_constants(
 ) -> &'static [(&'static str, f64)] {
     match (is_linear_target(format), store) {
         (true, SceneStore::Encoded) => &[("linear_out", 1.0), ("encoded_out", 1.0)],
+        (true, SceneStore::Squared) => &[("linear_out", 1.0), ("square_decode", 1.0)],
         (true, SceneStore::Computed) => &[("linear_out", 1.0)],
         (false, _) => &[],
     }
