@@ -985,6 +985,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     #[cfg(feature = "view")]
     let hull_lights = vex_geometry && title.looks.hull_lights.applies(archives.layout.platform);
+    #[cfg(feature = "view")]
+    let psp_glow_mask = vex_geometry && title.looks.psp_glow_mask.applies(archives.layout.platform);
     let pulse_ps2_data =
         vex_geometry && title.looks.ps2_glow_mask.applies(archives.layout.platform);
     let track_stats = track_stats::read(
@@ -1318,11 +1320,20 @@ pub fn load(options: &Options) -> Result<Loaded> {
     #[cfg(feature = "view")]
     pulse_psp::finish(
         &mut loaded,
-        (pulse_psp, circuit_fx, road_ripple, hull_lights),
+        (circuit_fx, road_ripple, hull_lights),
+        psp_glow_mask,
         track_shine,
         &track_blob,
         (&mut archives, &track),
     );
+    #[cfg(feature = "view")]
+    {
+        loaded.setup.scenery_fx.bloom_under_hud = psp_glow_mask
+            && title
+                .looks
+                .bloom_under_hud
+                .applies(archives.layout.platform);
+    }
     #[cfg(feature = "view")]
     if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
         loaded.setup.scenery_fx.lens_flare =

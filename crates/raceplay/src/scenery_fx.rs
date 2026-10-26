@@ -53,6 +53,9 @@ pub struct Plan {
     /// Boxed: the plan is copied by value through `start` in an unoptimised build, where the
     /// race tests' stacks have no room for a bigger one.
     pub lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
+    /// The PSP bloom's composite lands before the HUD, on a title whose
+    /// `Looks::bloom_under_hud` applies.
+    pub bloom_under_hud: bool,
 }
 
 /// Seed for the scenery effects' own spawn parameters. Any constant: render
@@ -69,6 +72,7 @@ const SEVERITY: f32 = 1.0;
 pub struct SceneryFx {
     weather: Weather,
     lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
+    bloom_under_hud: bool,
     placed: Vec<Placed>,
     playing: Vec<Option<psys::Playing>>,
     stage: psys::Stage,
@@ -90,9 +94,11 @@ impl SceneryFx {
             placed,
             weather,
             lens_flare,
+            bloom_under_hud,
         } = plan;
         Self {
             lens_flare,
+            bloom_under_hud,
             weather: Weather::new(weather),
             playing: vec![None; placed.len()],
             placed,
@@ -132,6 +138,13 @@ impl SceneryFx {
     #[must_use]
     pub fn lens_flare(&self) -> Option<&oag_fx::lens_flare::Setup> {
         self.lens_flare.as_deref()
+    }
+
+    /// Whether the bloom's composite lands before the HUD (`Looks::bloom_under_hud`)
+    /// rather than over it.
+    #[must_use]
+    pub fn bloom_under_hud(&self) -> bool {
+        self.bloom_under_hud
     }
 
     /// The circuit's weather.

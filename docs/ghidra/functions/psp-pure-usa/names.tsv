@@ -267,3 +267,11 @@
 0x0886e1c8	function	Mesh_SetBatchDrawState	85	hull-shine.md
 0x08866ecc	function	Gfx_BuildBatchStateList	85	hull-shine.md
 
+0x0886277c	function	Bloom_Construct	85	bloom.md
+0x08862d50	function	Bloom_BuildBrightPassList	85	bloom.md
+0x08862e60	function	Bloom_BuildBlurHorizontalList	85	bloom.md
+0x08862efc	function	Bloom_BuildBlurVerticalList	85	bloom.md
+0x08862f7c	function	Bloom_BuildCompositeList	85	bloom.md
+0x088630c4	function	Bloom_EmitBlurTaps	85	bloom.md
+0x08a8e898	data	g_bloom_composite_strength	90	bloom.md
+0x08a8e89c	data	g_bloom_blur_weights	92	bloom.md

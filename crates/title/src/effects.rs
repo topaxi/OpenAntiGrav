@@ -704,6 +704,14 @@ pub struct Looks {
     /// bloom's glow mask, the quake, weather and track stats.
     /// Keyed on the race's own archive.
     pub measured_draws: Rule,
+    /// The PSP's glow mask and the bloom over it: every `.vex` model the race draws
+    /// stamps the framebuffer's alpha through the stencil, per batch, and the four-pass
+    /// bloom reads it (`docs/rendering/glow-mask.md`). Keyed on the race's own archive.
+    pub psp_glow_mask: Rule,
+    /// The PSP bloom's composite lands before the HUD, so the HUD is not hazed. Pure's
+    /// list draws it ahead of every HUD sprite; Pulse's queue key puts it after them, so
+    /// Pulse leaves this unread. Only meaningful where [`Self::psp_glow_mask`] applies.
+    pub bloom_under_hud: Rule,
     /// Pulse's particle laws, read off the PSP executable: the extent law that
     /// places a spawn over its emitter's shape, the streak strips, the sprite
     /// frame advance, the run law, templates and rotation (`psys::Effect`'s
@@ -821,6 +829,8 @@ impl Looks {
             laid_pose_scaled: Rule::UNREAD,
             laid_from_rear: Rule::UNREAD,
             measured_draws: Rule::UNREAD,
+            psp_glow_mask: Rule::UNREAD,
+            bloom_under_hud: Rule::UNREAD,
             particle_laws: Rule::UNREAD,
             ps2_glow_mask: Rule::UNREAD,
             ps2_trail: Rule::UNREAD,

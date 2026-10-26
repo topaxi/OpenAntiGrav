@@ -367,6 +367,10 @@ pub struct Scene {
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
+    /// Whether the composite lands before the HUD ([`Scene::composite_bloom_under_hud`]) rather
+    /// than over it ([`Scene::composite_bloom`]): Pure's order, set by
+    /// [`Scene::attach_bloom_order`].
+    bloom_under_hud: std::cell::Cell<bool>,
     /// A split screen's glow, prepared once per view after the last view was drawn
     /// ([`Scene::prepare_split_bloom`]) and still owing its composites to
     /// [`Scene::composite_bloom`]. Empty for a frame of one view, which owes
@@ -1063,6 +1067,7 @@ impl Scene {
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
+            bloom_under_hud: std::cell::Cell::new(false),
             bloom_views: std::cell::RefCell::new(Vec::new()),
             layer: std::cell::Cell::new(viewports::Layer::Whole),
             flaps_stowed: std::cell::Cell::new([true; oag_gameplay::MAX_SHIPS]),

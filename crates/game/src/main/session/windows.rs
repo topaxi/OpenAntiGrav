@@ -835,6 +835,9 @@ impl Session {
         if upscaling && !encoded {
             screen.rings.abandon_upscale();
         }
+        stage
+            .scene
+            .composite_bloom_under_hud(encoder, screen.framebuffer.output(), rect);
         // The results and the end screens are the one flow every window draws at its own size
         // (`RaceStage::draw_end_screens`); a race still running gets this window's panel and HUD.
         if !stage.draw_end_screens(

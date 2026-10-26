@@ -1,6 +1,6 @@
 ---
 status: measure
-titles: [pulse, hd]
+titles: [pulse, pure, hd]
 updated: 2026-10-26
 summary: "Pulse PSP bloom 1.2-1.6x on a racing straight unexplained; matched boost-pad pair; HD strength; Zone grid strip"
 categories: [rendering]
@@ -105,7 +105,7 @@ original's own look (same size in both). The glow-mask value of the pad is a tex
 | --- | --- | --- | --- |
 | Pulse PSP | `post::bloom`, four passes, constants from `BOOT.BIN` | yes | always runs (121 of 121 frames) |
 | Pulse PS2 | `post::ps2_bloom`, its own three passes (7 integer taps, 320x224, `127/128 * 64/128` add) over its own mask (`GlowMask::StampedByTexel`), both read off replayed GS dumps, `docs/rendering/ps2-bloom.md` | n/a | always runs (every race field) |
-| Pure | none, same reason | n/a | unread |
+| Pure PSP | `post::bloom` over the same stencil stamps (`Looks::psp_glow_mask`), composited before the HUD (`Looks::bloom_under_hud`), 2026-10-26 | no setting | read: Modesto GE list, [`psp-pure-usa/bloom.md`](../../docs/ghidra/functions/psp-pure-usa/bloom.md) |
 | HD / Fury | `post::hd_bloom`, five stages, per-circuit `HDR and Bloom` values | yes, as `Glow::Drawn` or `Suppressed` (the chain still runs; only the glow term goes) | read, not measured as a player option |
 | Omega | none: the patch carries no `HDR and Bloom` block | n/a | n/a |
 | 2048 | none | n/a | unread |
