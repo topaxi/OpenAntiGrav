@@ -5,13 +5,13 @@ description: Drive a team of subagents through the handover backlog - pre-draw t
 
 # OAG drive: orchestrate a team over the handover backlog
 
-You are the coordinator. You do not do the work; you draw the threads, brief the
-members, verify what comes back, merge it, and keep the slots full. Members do
-the work in isolated worktrees.
+You are the coordinator. You do not do the work: you draw threads, brief
+members, verify what comes back, merge it, and keep the slots full. Members work
+in isolated worktrees.
 
 ## On load, before anything else
 
-1. **Tell the user the slot model and the model costs**, in a short table:
+1. **Tell the user the slot model**:
 
    | model | slots |
    | --- | --- |
@@ -20,23 +20,23 @@ the work in isolated worktrees.
    | sonnet | 1 |
    | opus | 2 |
 
-   Explain in one line: the budget caps *concurrent* members, an opus member
-   costs two, so a budget of 3 is either three sonnets or one opus and one
-   sonnet. You are excluded from the budget, and so is a read-only haiku
-   `oag-scout` (maintainer, 2026-10-26): it runs no builds and writes only a
-   handover file, so it is spawned whenever a scout is wanted, on top of the
-   budget. Any other haiku member (a mechanical `oag-docs` sweep) costs 0.5.
+   The budget caps *concurrent* members (3 is either three sonnets or one opus
+   and one sonnet). You are excluded, and so is a read-only haiku `oag-scout`
+   (maintainer, 2026-10-26: no builds, writes only a handover file), which may
+   be spawned on top of the budget. Another haiku member (a mechanical
+   `oag-docs` sweep) costs 0.5.
 
-2. **Ask how many slots to drive** with `AskUserQuestion`. Offer 2, 3 and 4, and
-   say what each means in practice (2 is easy to supervise; 3 is the usual
-   working figure; 4 is the most that has been driven at once). Do not guess;
-   wait for the answer.
+2. **Ask how many slots to drive** with `AskUserQuestion`: 2 (easy to
+   supervise), 3 (usual), 4 (most ever driven). Wait for the answer.
 
-3. **Set up the recurring check.** Invoke the `loop` skill with an interval of
-   one hour and a prompt that re-enters this one, so the loop survives you
-   stopping. It used to be 30 minutes; the user raised it to an hour because iterations have become slower and longer, and a tick that
-   finds nothing finished is pure overhead - a member's own report wakes the
-   lead immediately regardless of the tick, so nothing waits on it:
+3. **Agent janitor.** Read `last-run:` in `.claude/skills/agent-janitor/SKILL.md`.
+   If it is more than 14 days old, queue an `agent-janitor` lane (sonnet
+   `oag-docs`) first and hold any freed slot empty until it merges, so later
+   members start on the compacted instruction files.
+
+4. **Set up the recurring check.** Invoke the `loop` skill at one hour
+   (iterations are slow, and a member's own report wakes the lead regardless of
+   the tick) with a prompt that re-enters this skill:
 
    > `1h Check subagent slot occupation and status. Run ListAgents and total the
    > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N). For each finished member:
@@ -48,124 +48,52 @@ the work in isolated worktrees.
 
    Substitute the real budget for N.
 
-4. **Then start**: check the state, draw threads, and fill to budget.
+5. **Then start**: check state, draw threads, fill to budget.
 
 ## The loop, every cycle
 
-1. `ListAgents`. Total the running cost. **Peer sessions are not yours** - only
-   subagents you spawned count against the budget.
-2. `git log --oneline -1`, `git status --porcelain`, and per-branch
-   `git log --oneline main..<branch> | wc -l` so you can see who has committed.
-3. **For each finished member**: verify, merge, gate, reap (below).
-4. **Only if usage is under budget**, fill to budget. Never replace
-   one-for-one - a finished opus frees two slots and may become two sonnets.
-5. Report: slot usage, what merged, what is still running, and anything that
-   needs the user.
+1. `ListAgents`; total the running cost. **Peer sessions are not yours**; only subagents you spawned count.
+2. `git log --oneline -1`, `git status --porcelain`, and per branch `git log --oneline main..<branch> | wc -l`.
+3. For each finished member: verify, merge, gate, reap (below).
+4. Only if under budget, fill to budget (a finished opus frees two slots and may become two sonnets).
+5. Report: slot usage, what merged, what is running, anything needing the user.
 
 ## Merging a member
 
-- **Read the diff before merging.** `git diff --stat main...<branch>`, and read
-  the actual change for anything load-bearing. A commit subject saying `docs(...)`
-  with no doc file in the diff has happened twice; so has a member's findings
-  living only in a scratch file outside git.
+- **Read the diff before merging**: `git diff --stat main...<branch>` and the load-bearing change. A `docs(...)` subject with no doc file in the diff has happened twice, as have findings living only in scratch.
 - **Merge with `--no-ff`** and the project's attribution trailers.
-- **`cargo check --workspace --all-targets` and `cargo nextest run --workspace`
-  (no disc data, about ten seconds once built) after every merge**, before the next
-  one. Members gate their branch as it is and do not merge `main` first; when a
-  merge conflicts, goes red or looks suspicious, send that member back to merge
-  `main` and resolve it themselves, then re-gate (maintainer, 2026-10-12: every
-  member re-merging on each move of `main` ran each gate several times). On the same day `toml-schemas`
-  dropped menu.toml's `version = 1` while `track-picker` added a test fixture
-  using it: it compiled, and only the test run caught it. Two branches that each gated green
-  can conflict semantically with no textual conflict: on 2026-10-12 `speed-class`
-  removed `SpeedClass::from_name` while `pure-orig-driver` added a call to it, and
-  `main` did not compile until a member noticed.
-- **Run the right gate**, and run it *separately* from the merge - chaining a
-  sub-second merge to a multi-minute gate makes the merge look hung and has
-  caused the user to abort a healthy run:
-  - any `.rs` logic changed -> the full `just` plus
-    `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch** rather
-    than once per merge, and at once after any merge whose `scripts/affected.py`
-    selection is `FULL` (see "Who runs which gate")
-  - docs/handover only -> `just check-docs`, `check-names` if `names.tsv` moved,
-    `check-handover`, `check-captures` if captures moved
-- **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`,
-  then stop the member itself with `TaskStop` (its name as `task_id`) and check
-  `ListAgents` no longer shows it. Only after the work is merged. A member left
-  idle after its report still sits in the roster; the maintainer asked for a
-  full teardown (2026-10-12).
-- **Never reap a worktree whose agent may still resume.** A `completed`
-  notification is not terminal - the same agent can be resumed and will find its
-  Bash unusable. Merge first, then reap. **`ListAgents` cannot tell you this** -
-  a finished, merged, fully-reaped lane still showed there as `pane` an hour
-  later, indistinguishable from the live members beside it. The member's own
-  report is the ending signal; `git worktree list` and
-  `git log --oneline main..<branch>` are the ground truth.
+- **After every merge, before the next**: `cargo check --workspace --all-targets` and `cargo nextest run --workspace` (no disc data, about ten seconds once built). Members gate their branch as it is and do not merge `main` first (maintainer, 2026-10-12); when a merge conflicts, goes red or looks suspicious, send that member back to merge `main`, resolve and re-gate. Two branches that each gated green can conflict semantically (a removed `SpeedClass::from_name` vs a new call to it), and only the merged test run catches it.
+- **Run the gate separately from the merge** (chaining a sub-second merge to a multi-minute gate looks hung; a user aborted a healthy run):
+  - any `.rs` logic changed: full `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`, **once per merge batch**, and at once after a merge whose `scripts/affected.py` selection is `FULL`;
+  - docs/handover only: `just check-docs`, `check-names` if `names.tsv` moved, `check-handover`, `check-captures` if captures moved.
+- **Reap**: `git worktree remove <path> -f -f`, `git branch -d <branch>`, then `TaskStop` the member (its name as `task_id`) and check `ListAgents` (a member left idle stays in the roster; maintainer, 2026-10-12). Only after the work is merged.
+- **Never reap a worktree whose agent may still resume**: a `completed` notification is not terminal. `ListAgents` cannot tell you (a reaped lane still showed as `pane` an hour later); the member's own report is the ending signal, and `git worktree list` plus `git log --oneline main..<branch>` are ground truth.
 
 ## Who runs which gate
 
-**The gate is the most expensive thing this skill does.** Until 2026-10-07
-every member ran the full `just` and the full `test-data` (7,270 tests,
-350-560 s under load) through one shared lock, so the lock waits stacked and the
-lead re-ran both after merges. The split now is:
+The gate is the most expensive thing this skill does.
 
-- **A member runs the affected gate on its own tree**, before reporting:
+- **A member runs the affected gate on its own tree** before reporting:
 
   ```sh
   flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
   flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data-affected
   ```
 
-  `scripts/affected.py` selects the packages the branch changed since its merge
-  base with `main`, plus every package that depends on them, and prints what it
-  chose and why. Every `check-*` script, `fmt-check` and `lint` still run in
-  full. A change to `oag-core`, a simulation crate (`oag-physics`,
-  `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`), `Cargo.toml`,
-  `Cargo.lock`, the toolchain, the `justfile`, `.config/` or any `build.rs`
-  selects **the full suite by itself**, so such a member is running the full gate
-  without being told to. A docs-only change selects no tests. The member still
-  gates: a member that does not reports untested work.
-- **The lead runs the full gate once per merge batch** - after merging the
-  members that finished together, on the merged `main`, in the `lead-gate`
-  worktree (below): `flock -o ... just` and
-  `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. This is now the only
-  place the whole suite runs with the disc images, so it is not skippable on
-  the grounds that each member was green: each member was green **on its
-  selection**. The same goes at once, without waiting for a batch, after
-  merging a branch whose affected selection was `FULL`.
-- **A red batch gate is bisected by branch**, not by commit: re-gate `main` at
-  the merge before the newest member's, and the failure names its lane. Send it
-  back to that member (or a fresh one) as a fix lane.
-- **CI** (`.github/workflows/ci.yml`) runs `fmt`, `clippy` and the whole
-  non-disc `cargo nextest run --workspace` on every push to `main` and every
-  pull request; `nightly.yml` builds and publishes binaries and runs no tests.
-  **No CI job can run `test-data`**: the images are not in the repository and
-  never will be. The lead's batch gate is the only full `test-data` there is.
+  `scripts/affected.py` selects the packages changed since the merge base with `main` plus their dependents and prints what and why. Every `check-*`, `fmt-check` and `lint` still run in full. A change to `oag-core`, a simulation crate (`oag-physics`, `oag-gameplay`, `oag-ai`, `oag-race`, `oag-formats`), `Cargo.toml`, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or any `build.rs` selects the full suite by itself; a docs-only change selects no tests, and the member still gates.
+- **The lead runs the full gate once per merge batch**, on merged `main`, in the `lead-gate` worktree: `flock -o ... just` and `flock -o ... env OAG_REQUIRE_GAME_DATA=1 just test-data`. It is the only place the whole suite runs with disc images (each member was green only on its selection), so it is not skippable. At once, without waiting for a batch, after merging a branch whose selection was `FULL`.
+- **A red batch gate is bisected by branch**, not by commit: re-gate `main` at the merge before the newest member's; the failure names its lane. Send it back as a fix lane.
+- **CI** (`.github/workflows/ci.yml`) runs `fmt`, `clippy` and the non-disc `cargo nextest run --workspace`; `nightly.yml` builds binaries and runs no tests. **No CI job can run `test-data`** (no images); the lead's batch gate is the only full run.
 
-**Never merge into the main checkout while the lead's own gate is running
-on it.** The gate compiles the working tree as it finds it, so a merge
-landing mid-run produces a half-old, half-new tree. That once read
-as six `E0425`/`E0599` compile errors against code that was fine. Either
-hold the next merge until the gate finishes, or gate a detached worktree
-(`git worktree add --detach ../OpenAntiGrav-worktrees/lead-gate <sha>`, then
-`just link-data`) so merges can keep landing. A red lead gate that overlapped
-a merge proves nothing; re-run it.
+**Never merge into the main checkout while the lead's gate is running on it**: the gate compiles the tree as it finds it, and a mid-run merge gave six bogus `E0425`/`E0599` errors. Hold the merge, or gate a detached worktree (`git worktree add --detach ../OpenAntiGrav-worktrees/lead-gate <sha>`, then `just link-data`). A red gate that overlapped a merge proves nothing; re-run.
 
-**The `lead-gate` worktree holds one gate at a time.** Before `git checkout`
-there for a new batch, check that no gate is still running in it (`pgrep -af
-'flock -o .*gate.lock'`). A second chain started on top checked out the next
-merge under a running `just`. It produced `E0599` errors against code that
-compiled. Both chains also wrote the same log files.
+**The `lead-gate` worktree holds one gate at a time.** Before `git checkout` there, check no gate runs in it (`pgrep -af 'flock -o .*gate.lock'`); two chains once produced `E0599` against code that compiled and wrote the same logs.
 
-**Prefer `nice -n 10 ionice -c 3` for the lead's own gate.** The lead's run is
-never on the critical path - members are the ones blocked on their own results.
+Prefer `nice -n 10 ionice -c 3` for the lead's own gate: it is never on the critical path.
 
 ## Serialise gates with `flock`
 
-Four members each running `just` plus `OAG_REQUIRE_GAME_DATA=1 just test-data`
-put a 16-core machine at load average 40 with six concurrent `nextest`
-processes. Wrap every gate invocation in a shared lock, the affected gate a
-member runs and the full gate the lead runs alike:
+Four members gating at once reached load average 40. Wrap every gate (affected or full) in one shared lock:
 
 ```sh
 flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
@@ -174,83 +102,23 @@ flock -o "$HOME/.cache/oag/gate.lock" just                     # lead, per batch
 flock -o "$HOME/.cache/oag/gate.lock" env OAG_REQUIRE_GAME_DATA=1 just test-data
 ```
 
-Four things about this that are easy to get wrong:
+- **Always pass `-o`**: it closes flock's own descriptor before the command, so no child inherits the lock. Without it the `sccache` server a gate spawns outlives the gate by its idle timeout (ten minutes) holding the lock (`lsof "$HOME/.cache/oag/gate.lock"` shows it). If a stale server still holds it (a gate started without `-o`), run `sccache --stop-server` then `sccache --start-server` from the lead's shell; the waiting gate proceeds in seconds. Members never kill it; the lead owns the lock's health.
+- **The lockfile lives outside every worktree** so all members contend on one inode.
+- **`flock` wraps the outermost `just`** (`check:` is a dependency-list recipe, so a `flock` inside a recipe body does not hold across it).
+- **Put in every brief that waiting on the lock is not a hang** (sixteen members have ended a turn "waiting for a background job"): the gate may sit several minutes before it starts.
 
-- **Always pass `-o`.** It makes `flock` close its own lock descriptor
-  before running the command, so no child process inherits it; `flock`
-  still holds the lock and releases it when the command exits. Without it,
-  the `sccache` server a gate spawns keeps the lock after the gate is over -
-  see below.
-
-- **The lockfile must live outside every worktree** so all members contend on
-  one inode. A path inside the repo gives each worktree its own lock and
-  serialises nothing.
-- **`flock` must wrap the outermost `just`.** `check:` is a dependency-list
-  recipe, not a `#!/usr/bin/env bash` one, so a `flock` placed inside a recipe
-  body does not hold across the recipe's other lines.
-- **Put in every brief that waiting on the lock is not a hang.** A member
-  blocked here looks exactly like the "ended a turn waiting for a background
-  job" failure that has now hit sixteen members. Tell them the gate may sit
-  for several minutes before it starts, and that this is correct.
-
-**`sccache` inherits the lock and holds it after the gate exits.** Found
-with two members' gates both "waiting for the lock" and no gate
-running: `cargo` under a `flock`-wrapped `just` spawns the `sccache` server
-with the lock's file descriptor open, and that server outlives the `just`
-by its idle timeout (ten minutes by default), holding the lock the whole
-time. `lsof "$HOME/.cache/oag/gate.lock"` shows it - a line for `sccache`
-beside the waiting `flock`s. This is most of the "the gate may sit for
-minutes" folklore above. **The fix is `flock -o`**, adopted after
-it recurred: the old fix - start the server outside any lock before the
-first gate - only lasts until that server idles out and the next gate
-spawns a fresh one inside the lock, which is what happened. If a stale
-server is still holding the lock anyway (a gate started without `-o`),
-`sccache --stop-server` then `sccache --start-server` from the lead's own
-shell - the waiting gate proceeds within seconds. Do not tell members to
-kill it themselves; the lead owns the lock's health.
-
-**Do not solve this with a dedicated gate-runner member** - it costs one of
-four slots and needs cross-agent request/response plumbing invented for
-something one line of `flock` already does. **Do not cap per-member `-j` as the
-primary fix** either: `.config/nextest.toml` documents that `test-data` is
-*tail-bound* - 2,323 tests finish in about the time the single slowest test
-takes - so fewer threads would slow the throughput-bound compile phase without
-touching the tail that actually sets the wall clock.
+Do not add a dedicated gate-runner member (costs a slot, needs plumbing `flock` already gives) and do not cap per-member `-j`: `.config/nextest.toml` documents `test-data` as *tail-bound*, so fewer threads slow the compile phase without touching the tail.
 
 ## Drawing threads
 
-- **Pre-draw them. Never let members pick at random** - two members picking
-  independently land in the same crate and collide at merge.
-- **Lanes disjoint by function set first, crate second - a binary may be
-  shared.** Relaxed by the user: two members may work the *same*
-  Ghidra program at once, as long as their briefs name disjoint sets of
-  functions/addresses so no two renames land on one function, and each
-  appends its own dated section and its own `names.tsv` rows rather than
-  editing the other's - the lead resolves the append-append conflict at
-  merge. Every brief still repeats the rule from `docs/ghidra/workflow.md`'s
-  "Bridge quirks" section: pass `program=` explicitly on every call (by path
-  when names collide, e.g. `/psp-pulse-usa/BOOT.BIN`), never call
-  `switch_program`. Skipping that once caused the incident in
-  `HANDOVER.md` where one member's rename landed on another's active binary.
-  Emulators are not shared either way: **each member spawns its own
-  instance** (PPSSPP with its own `HOME`/`XDG_CONFIG_HOME`, debugger port and
-  Xvfb display; RPCS3 with its own config copy), never attaching to one
-  another member started. Say in every brief which ports/displays are taken.
-- Sources for threads: `handover/*.md` (now sorted into `rendering/`, `gameplay/`,
-  `frontend/`, `tooling/`, `audio/` - `fd`/`find` still reach them recursively),
-  `HANDOVER.md`'s open-threads index, a
-  red test on `main`, and whatever the previous member's report left open.
-- **Prefer player-facing value.** The user's standing instruction. A pass that
-  produces only another analysis document is a weak pass.
+- **Pre-draw them; never let members pick at random** (two independent picks collide at merge).
+- **Lanes are disjoint by function set first, crate second; a Ghidra binary may be shared.** Two members may work the same program if their briefs name disjoint function/address sets, each appends its own dated section and `names.tsv` rows (the lead resolves append-append conflicts at merge). Every brief repeats `docs/ghidra/workflow.md`'s "Bridge quirks": pass `program=` explicitly on every call (by path when names collide, e.g. `/psp-pulse-usa/BOOT.BIN`), never `switch_program` (one rename once landed on another member's active binary). **Each member spawns its own emulator** (own `HOME`/`XDG_CONFIG_HOME`, debugger port and Xvfb for PPSSPP; own config copy for RPCS3); say in every brief which ports and displays are taken.
+- Sources: `handover/**/*.md`, `HANDOVER.md`'s open-threads index, a red test on `main`, what the previous member's report left open.
+- **Prefer player-facing value** (standing instruction); a pass that produces only another analysis document is weak.
 
 ## The roster
 
-Spawn every member as a named member (no `isolation` flag) of one of these
-agent types, defined under `.claude/agents/`. Each carries its role's
-guidance and tells the member to read
-[`member-rules.md`](member-rules.md) first. That file holds the shared
-boilerplate that used to be pasted into every brief: step zero, safety on a
-shared machine, the `flock -o` gate, commits and the report format.
+Spawn every member as a named member (no `isolation` flag) of an agent type under `.claude/agents/`. Each tells the member to read [`member-rules.md`](member-rules.md) first (step zero, shared-machine safety, the `flock -o` gate, commits, report).
 
 | agent | model / effort | use for |
 | --- | --- | --- |
@@ -258,114 +126,48 @@ shared machine, the `flock -o` gate, commits and the report format.
 | `oag-wire` | sonnet / xhigh | ready-to-wire threads: the RE is done, wire it so a player sees or hears it |
 | `oag-format` | sonnet / xhigh | a file family to decode: census, reader, every-file ground truth, format page |
 | `oag-capture` | sonnet / high | a question only the running original can answer: PPSSPP, PCSX2 or RPCS3 measurement |
-| `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; spawn with `model: haiku` (0.5 slot) only for purely mechanical sweeps such as link fixes or index cleanup |
-| `oag-scout` | haiku / high | read-only opportunity sweeps (render performance, memory allocations): a ranked, measurable list in a handover thread, checked by its advisor before it reports; changes no code and runs no builds, so it costs **0 slots** |
-| `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, sequential, comments only; the checker `strip_rs_comments.py` sits beside this skill and the lead runs it before every compact merge |
+| `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; `model: haiku` (0.5 slot) only for mechanical sweeps (link fixes, index cleanup) |
+| `oag-scout` | haiku / high | read-only opportunity sweeps (render performance, allocations): a ranked, measurable list in a handover thread, advisor-checked; no code, no builds, **0 slots** |
+| `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, sequential, comments only; the lead runs `strip_rs_comments.py` (beside this skill) before every compact merge |
+| `oag-perf` | opus / high | a measured speed, memory or size win with before and after |
 
-Pick by the lane's **main output**, not by its subject. A lane that is mostly
-wiring with one small decompile is `oag-wire`, and the member reads the RE
-rules in `oag-re`'s file if it needs them. Overriding `model` at spawn time
-works (a hard RE lane on sonnet to save a slot, say); say so in the report.
-Sonnet at xhigh is the default workhorse. The maintainer found xhigh a
-significant improvement for Sonnet 5.5.
+Pick by the lane's **main output**, not its subject (mostly wiring with one small decompile is `oag-wire`). Overriding `model` at spawn works (say so in the report). Sonnet at xhigh is the default workhorse (maintainer: a significant improvement for Sonnet 5.5). AI-behaviour and physics lanes run on opus.
 
 ## The brief
 
-Members inherit none of your context. `member-rules.md` covers the shared
-rules, so the brief carries only what is specific to the lane:
+Members inherit none of your context. `member-rules.md` carries the shared rules, so the brief carries only:
 
-0. **One claim and its acceptance evidence** (maintainer, 2026-10-21, from an
-   advisor review). The claim is one sentence that is true or false at the end
-   ("Tech de Ra's hexagon panels render within 10 grey of the clean original in
-   the box (x,y,w,h)"). The acceptance evidence is the exact pair id and region
-   whose metric must move, or the exact test that must go from red to green. A
-   whole-frame delta of 0.3-1.0 grey is not acceptance: it is inside the noise of
-   a re-capture. Say whether the lane is a **measure** lane (ends with a number,
-   a confidence, a doc page and a thread marked ready to wire; "one value
-   unread, here is its address and read recipe" is a success) or a **wire**
-   lane (starts from a ready-to-wire thread, ends with a test and a pair). Do
-   not brief one lane to do both. If you cannot write the claim, spawn a scout
-   lane to produce it.
-1. **The lane-specific values `member-rules.md` refers to**: the `<lane>` name
-   (worktree, branch and scratch directory), the member's Xvfb display `:9N`,
-   and any emulator ports. Say which displays and ports other members hold.
-2. **The lane**, in priority order, and who owns the lanes they may not touch,
-   by crate and by Ghidra function set.
-3. **What is already established**, with a "do not re-derive this" marker. Cite
-   the scratch reports and doc pages by path.
-4. **The hard rules below that apply** and are not already in
-   `member-rules.md`, such as the regression gate or golden hashes for a
-   racing lane.
-5. **The baseline failure count**, naming the exact expected failures, so a
-   member can tell its own breakage from inherited red.
+0. **One claim and its acceptance evidence** (maintainer, 2026-10-21). The claim is one sentence that is true or false at the end ("Tech de Ra's hexagon panels render within 10 grey of the clean original in box (x,y,w,h)"). The evidence is the exact pair id and region whose metric must move, or the exact test going red to green; a whole-frame delta of 0.3-1.0 grey is inside re-capture noise and is not acceptance. Say whether it is a **measure** lane (ends with a number, a confidence, a doc page and a thread marked ready to wire; "one value unread, here is its address and read recipe" is a success) or a **wire** lane (starts from a ready-to-wire thread, ends with a test and a pair). Never both. If you cannot write the claim, spawn a scout lane.
+1. **The lane-specific values**: `<lane>` name, the member's Xvfb `:9N`, emulator ports, and which displays and ports other members hold.
+2. **The lane**, in priority order, and who owns the lanes it may not touch, by crate and Ghidra function set.
+3. **What is already established**, marked "do not re-derive", citing scratch reports and doc pages by path.
+4. **The hard rules below that apply** and are not in `member-rules.md`.
+5. **The baseline failure count**, naming the exact expected failures.
+6. "Report every commit, including any made after your report."
 
-If a new failure mode shows up mid-drive, relay it to the running members at
-once, then add it to `member-rules.md` so the next spawn inherits it. Don't
-bury it in one brief.
+If a new failure mode shows up mid-drive, relay it to running members at once, then add it to `member-rules.md` so the next spawn inherits it.
 
-**Do not widen a running lane by message.** A scope extension sent mid-lane
-was dropped twice: Omega particles and Omega music each went to
-a member already deep in its brief, and each report came back without a word
-about Omega. Put the extra scope in a fresh member's brief instead, or in the
-original brief if it is known at spawn time. Short corrections, such as "main
-moved" or a new rule, do arrive and are acted on.
+**Do not widen a running lane by message**: scope extensions were dropped twice (Omega particles, Omega music). Put extra scope in a fresh member's brief, or the original brief. Short corrections ("main moved", a new rule) do arrive.
 
-**Extra scope often lands after the "done" report, not in it.** A member reads
-its messages at its next tool round, and one finishing up reports first and
-picks up the message afterwards. On 2026-10-14 this happened three times: the
-niri window fix (`window-layout-picker`), the multiplayer-only countdown decision
-(`pause-timeout`) and the seats-per-window model (`multi-window`) each arrived as
-commits after a report that did not mention them. So after sending scope
-mid-lane: do not read its absence from the report as dropped, and do not reap on
-that report. Check `git log --oneline main..<branch>` again, wait for the
-follow-up report, and only then merge and stop the member. A member stopped on
-the first report leaves its late commits unmerged on the branch, and
-`git branch -d` refusing ("not fully merged") is the sign. Put "report every
-commit, including any made after your report" in every brief.
+**Extra scope often lands after the "done" report**: a member reads messages at its next tool round, so late commits followed three scope messages on 2026-10-14. After sending scope mid-lane, do not read its absence from the report as dropped and do not reap on that report: check `git log --oneline main..<branch>` again, wait for the follow-up report, then merge and stop the member. `git branch -d` refusing ("not fully merged") means late commits.
 
 ## Hard rules to put in briefs, as they apply
 
-- **Never invent what the assets already author.** Parse it and play it, or draw
-  nothing and say so. Anything genuinely chosen is labelled **chosen, not
-  measured**, with NO confidence score - a score means measured off the original.
-- **Committed golden hashes are never edited to make a test pass.** If behaviour
-  legitimately moves, regenerate from the member's own tree in a **separate**
-  commit that names the behaviour change.
-- **The regression gate**: `race_ground_truth::a_lone_craft_gets_round_the_
-  circuits_it_is_known_to_get_round` stays all-twelve-clean; quote it verbatim
-  before and after. Check the current `01_Track` respawn index yourself and state
-  it - it moves when AI tuning changes.
+The rest is in `member-rules.md`. Brief-only items:
+
+- **The regression gate**: `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round` stays all-twelve-clean; quote it verbatim before and after. State the current `01_Track` respawn index yourself (it moves with AI tuning).
 - **Report per-lap and end-of-run shield separately, always labelled.**
-- **Judge it as a player would.** More than one frame, at the size a player sees.
-  A countdown once passed every test while a player saw nothing on screen.
-- **Below 70 confidence a Ghidra name gets `_q`; below 50, no rename at all.**
-  Every name lands in `names.tsv` in the same change as its evidence page.
-- **Do not pipe `just test-data` into `tail`** - it exits 100 on failure and a
-  pipe masks it as 0.
-- **`fd` and `rg` respect `.gitignore`** and return nothing under `data/` with
-  exit code 0.
-- **Write findings into `docs/` and `handover/`, not only scratch.** Two passes
-  had to be sent back for this.
+- **Committed golden hashes are never edited to make a test pass**; regenerate in a separate commit naming the behaviour change.
+- **Below 70 confidence a Ghidra name gets `_q`; below 50, no rename.** Every name lands in `names.tsv` with its evidence page.
+- **Judge it as a player would** (a countdown once passed every test while a player saw nothing).
 
 ## Judging a report
 
-- **A negative result reported honestly is a good outcome.** Several of this
-  project's best passes killed a theory and invented nothing.
-- **Be suspicious of a green claim you did not see.** Ask whether the member
-  watched the gate finish. Three members were misled by builds that died on the
-  errors above and read as flaky.
-- **Check the diff against the claim.** A `docs(...)` subject with no docs in it
-  means the findings are outside git.
-- **A member that says "I could not determine X, here is its address"** has done
-  the job. That is what made a later weapon buildable.
-- **Verify visual claims yourself** with the Read tool on the screenshot. Do not
-  take "a player would see it" on report.
+- **A negative result reported honestly is a good outcome**; so is "I could not determine X, here is its address".
+- **Be suspicious of a green claim you did not see**: ask whether the member watched the gate finish (three were misled by builds that died on disk or LLVM errors and read as flaky).
+- **Check the diff against the claim.**
+- **Verify visual claims yourself** with Read on the screenshot.
 
 ## When the user reports something from play
 
-Treat it as a reliable oracle - their observations have repeatedly beaten static
-analysis on this project. Turn the observation into a *measurement* for a member,
-give them the discriminating question, and tell them what would falsify it. Do
-not have them tune to match a memory: one "concrete wave" report turned out to be
-an accurate memory of a **different title**, and tinting ours would have been
-wrong.
+Treat it as a reliable oracle (their observations repeatedly beat static analysis). Turn it into a *measurement* for a member with the discriminating question and what would falsify it. Do not have members tune to match a memory (one "concrete wave" report was an accurate memory of a **different title**).
