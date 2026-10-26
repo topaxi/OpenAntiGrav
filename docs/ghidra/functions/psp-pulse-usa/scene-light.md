@@ -212,12 +212,13 @@ before `(78,76,74) (61,70,81) (91,85,75)`, original `(87,105,115) (62,73,86)
 `(93,102,115) (75,96,111) (87,82,82)`, original `(108,131,145) (90,123,142)
 (119,133,129)`, after `(107,129,144) (87,120,140) (121,136,131)`.
 
-Not reproduced: the countdown timers (a pure function of distance is equivalent, since a
-light cannot come into range before the craft has moved the remaining distance), and
-non-player craft use the same list from their own position (the original rebuilds each
-craft's list; the player's was the only one read live). **Pulse PS2: checked, applies
-in the data, not wired** (2026-10-20, `hull-points-ps2`). The PS2 builds the same vector and
-colour bytes for the same `wopoint` (read live on PCSX2), but composes its own rig around
+Not reproduced: the countdown timers (a pure function of distance is equivalent for a light
+that stays where it is, since it cannot come into range before the craft has moved the remaining
+distance; a light that moves is re-tested on every call, so it is equivalent there too - see "A
+light that moves" below), and non-player craft use the same list from their own position (the
+original rebuilds each craft's list; the player's was the only one read live). **Pulse PS2:
+checked, applies in the data, not wired** (2026-10-20, `hull-points-ps2`). The PS2 builds the same
+vector and colour bytes for the same `wopoint` (read live on PCSX2), but composes its own rig around
 it, and our PS2 hull has never taken any of the rig: its vertices carry a colour, so
 `lit = 0` and `mesh.wesl` skips the branch. Evidence and the open items on
 [`ps2-pulse-eu/hull-lights.md`](../ps2-pulse-eu/hull-lights.md). **Pure: checked, applies
@@ -271,6 +272,89 @@ with the craft pointer at `+0x10`, and its model holds no position. The earlier 
   ours has white edge highlights; both are suspects, neither measured.
   Confidence 40 that the rest is a post effect and not the light list, which now matches.
 
+## A light that moves: Arc Prime's floor spotlights (2026-10-26, `arcprime-spotlights`)
+
+**What the spotlights are.** The pools of light on Arc Prime's finish stretch are four additive
+floor meshes (`SL_Spotlight_ADD_GLOW`, `10_Track` nodes 195, 250, 253 and 268, the same in the
+reversed layout) whose material authors a UV offset loop of 5 s, so the bright patch sweeps along
+the floor. The circuit authors **no `wospot` at all**; its 43 lights are `wopoint`s, and two of
+them, white `(1.0, 0.921, 0.986)` with radii 45 and 55, hang under the `Anim Transform`s
+`#991` and `#993` (node numbers of the forward file), which loop in **5.0 s** too. They rest at
+`(-472.6, 6.8, -232.8)` and `(-162.2, 6.8, -219.8)` and sweep `(172, 22, 70)` and `(197, 11, 57)`
+units, `(-248.0, 17.9, -227.6)` being the second one at 2 s. So the spotlights are the floor
+patch **and** a light that rides with it; the hull is lit by the light the way the floor is lit
+by the patch. They are the only `wopoint`s of the twelve circuits (both layouts each) that sit under
+an `Anim Transform`, and the PS2 disc's `10_Track` authors the same two at the same places.
+
+The other spotlights on the circuit (a lamp, `SL_Spotlight_a`, nodes 385 and 427, throwing a
+`col_spotlightalpha_GLOW_BLEND` cone, nodes 387 and 429, onto a building face lit by an additive
+7-key sweep, nodes 393 and 425) light a façade about 100 units off the racing line and **author
+no light node**: animation only. The cone points up and away from the line, so no craft is ever
+in it; nothing to wire for them.
+
+**What the original does with a light that moves.** The `wopoint` vtable is `0x08ad24fc`
+(`WoPoint_GetStrength` is its `+0x94` slot):
+
+- `+0x7c`, `WoPoint_Init` (`0x0892ca04`): points `obj+0x60` at the 32-byte payload, copies the
+  node's world translation into `obj+0x50`, then walks the parent links (`obj+8`) for an
+  `Anim Transform` (`AnimTransform_ClassTag`). Found: `obj+0x64 = 1`. Not found: `obj+0x64 = 0`.
+- `+0x24`, the update slot (`Weather_Update` is the same slot of its vtable),
+  `WoPoint_Update` (`0x0892cd00`): refreshes the node's world matrix when its dirty bit
+  (`+0x2c & 0x1000`) is set and **copies its row 3 into `obj+0x50`, every update**.
+- The list builder, for the `wopoint` list: `if (obj+0x64 == 0) { if ((countdown -= dt) <= 0)
+  retest } else { retest }`. A light with the byte set is re-tested on **every call**, so the
+  `+0xac` countdown (distance minus outer radius) never holds a moving light back. The builder
+  reads the same `+0x50` position the update wrote.
+
+So the original's hull light is where the sweep has put it, this frame. Before this lane ours read
+every light once, at time zero, and lit the hull under the pool's **resting** place.
+
+**Read live** (PPSSPP v1.20.4, `UCUS98712`, Time Trial on Arc Prime White, the saved grid state;
+nothing in the original was changed except the craft's place for the stills). The world context
+holding the lists is `0x08fc8960` (found by scanning RAM for the `+0x3c == 1`, `+0x40 == 2`,
+`+0x4c == 43` shape: the hull list builder's own `a1` was another context, with no lights).
+**43** `wopoint` objects, and `obj+0x64` is set on **exactly two** (`0x097cf5f0`, `0x097cf760`).
+**Fourteen samples** of both lights' `obj+0x50` over 7 s of race clock (the clock at
+`0x08b344b0`, 34.985 s to 42.025 s) fitted against `oag_vex::world_lights::PlacedLight::at` over
+all phases in 1 ms steps: **mean error 0.03 units, worst 0.15**, at an anim clock of the race clock
+plus 3.636 s (mod 5); the next-best distinct phase has a mean error of 0.34. That is the offset a
+different lane read for the world meshes' texture clock on this state, 23.64 s (23.64 mod 5 =
+3.64): the lights and the meshes ride one clock. The craft's colour moves with it: the same
+hull, placed at `(-248.0, 13.0, -227.6)`, reads blue-white with the light 22 units off and dark
+blue with it 75 or more away (stills, below).
+
+Confidence **90** that a light under an `Anim Transform` moves with it and the hull takes it where it
+is (both slot bodies read, the flag and the builder's branch read, 14 live samples to 0.15 units),
+**85** for the two names, **70** that the `wospot` twin of `WoPoint_Init` does the same (not read: no
+`wospot` moves in any shipped circuit, ours places one by the same chain).
+
+**Wired 2026-10-26.** `oag_vex::vex::NodeChain` (lifted out of `placed_psys`, which the placed
+particle effects use too) keeps a node's ancestry as a function of time;
+`oag_vex::world_lights::placed_lights` returns each light with its chain when an `Anim Transform`
+is above it, `PlacedLight::at(seconds)`; `HullPointLights::at(position, seconds, scales)`;
+`Race::ship_hull_points(slot, seconds)` is handed `Scene`'s animation clock, the one the track's
+`Anim Transform` meshes are drawn at, so `--anim-seconds` and the capture clock offset keep the
+pool and its light in step. No setting: this is the original's behaviour, not an addition. The
+sweep and the pool's UV loop are both 5.0 s, so they stay in phase over a race; in top-down stills
+the light sits about 25 units behind the pool's bright centre at 1 s and 2 s (rough, off 960x544
+frames), which is where the file puts it.
+
+Before and after, the same craft (Assegai, the default team) and `--anim-seconds`, 480x272:
+`(-248, 13, -227.6)` at 2 s, the light's own place then: hull brown before, blue-white after;
+`(-162.5, 3.6, -224.7)` at 2 s, where the light rests and no longer is: blue-white before, dark
+after; at 0 s there: blue-white both. `crates/render/tests/hull_lights_ground_truth.rs`
+(`arc_primes_floor_light_lights_the_hull_where_the_sweep_has_put_it`) pins it: the craft under
+the 2 s spot takes `(254, 233, 250)` at 2 s and none of it at 0 s, and the reverse at the
+resting spot. `crates/vex/tests/world_lights_ground_truth.rs` pins the chain against
+`world_transforms_at` for every light on the disc and that exactly Arc Prime's two move.
+
+Other titles and the PS2: **Pulse PS2, checked, applies in the data, not wired**: the same two
+nodes at the same places in both layouts, and the PS2 hull takes none of the rig (see above).
+**Pure: not checkable** for this lane: its Arc Prime does not exist, and its hull takes no circuit
+light (`hull-lights.md`). **HD, 2048, Omega: not applicable**: their hulls are lit by their authored
+envsettings rig (`ship-sun-occlusion.md`), and the `wopoint` class is absorbed with no consumer
+(`../ps3-hdfury-eu/vex-classes.md`).
+
 ## Applied names
 
 Mirrored in [`names.tsv`](names.tsv).
@@ -287,6 +371,8 @@ Mirrored in [`names.tsv`](names.tsv).
 | `0x0892d410` | function | `WoSpot_GetStrength` | 85 |
 | `0x0892d640` | function | `WoSpot_GetVectorFromLight` | 90 |
 | `0x0892d688` | function | `WoSpot_GetDistanceBeyondRadius` | 80 |
+| `0x0892ca04` | function | `WoPoint_Init` | 85 |
+| `0x0892cd00` | function | `WoPoint_Update` | 85 |
 
 `SceneLight_BuildLightingList` loses its `_q`: its return value is still not
 read, but the list it writes is now matched to the disc field by field.
@@ -300,3 +386,5 @@ read, but the list it writes is now matched to the disc field by field.
   mapped.
 - The point and spot slots are reproduced for a craft's own position (see above);
   the AI craft's lists and the PS2 executable's own were not read.
+- `WoSpot_Init` (the `wospot` twin of `WoPoint_Init`) was not read; no shipped circuit
+  authors a `wospot` under an `Anim Transform`, so nothing depends on it.

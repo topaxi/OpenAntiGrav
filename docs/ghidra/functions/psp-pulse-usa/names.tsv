@@ -1420,3 +1420,5 @@
 0x08938e70	function	MusicPlayer_StartNextSong	65	now-playing.md
 0x089385b4	function	MusicPlayer_Stop	75	now-playing.md
 0x089387e8	function	MusicPlayer_StartPreRaceDialogue	65	now-playing.md
+0x0892ca04	function	WoPoint_Init	85	scene-light.md
+0x0892cd00	function	WoPoint_Update	85	scene-light.md

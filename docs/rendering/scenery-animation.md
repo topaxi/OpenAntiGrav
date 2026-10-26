@@ -168,7 +168,7 @@ so it could not recover the parent's matrix even where it exists:
 | `Transform` `0x06e` | 84 |
 | `Anim Transform` `0x3c0` (nested) | 14 |
 | `ParticleSystem` `0x3c4` | 2 |
-| `wopoint` `0x3cf` | 2 |
+| `wopoint` `0x3cf` | 2 (Arc Prime's floor-spotlight lights, which the hull follows: [`scene-light.md`](../ghidra/functions/psp-pulse-usa/scene-light.md), "A light that moves") |
 
 Two examples of the 245, both measured:
 
