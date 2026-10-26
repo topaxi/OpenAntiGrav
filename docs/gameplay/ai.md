@@ -1166,6 +1166,13 @@ title's own `Easy`/`Medium`/`Hard` exist only as campaign rungs and reach only
 the original's pack shuffle (`oag_game::ai_choice::free_level`: Novice easy,
 Skilled and Elite medium, Ace hard, chosen).
 
+**One later change this sweep does not cover (2026-10-26, `autopilot-wire`):** a craft
+whose Autopilot runs is no longer granted a pickup from a weapon pad
+(`Weapons::autopilot_pad_grants`, [autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re)),
+and that includes an opponent on this rule. The cells below were measured with
+grants mid-stint; they were not re-run, and the change only removes pickups an
+opponent could have picked up while the driver flew it.
+
 **Method** as in the next section: `opponent_autopilot_sweep`, paired forks
 every 600 ticks from tick 900, 8 seeds of 8 forks, each cell at the five
 `perturb::GATE` scales, so a cell is five runs of 64 forks. Every cell was

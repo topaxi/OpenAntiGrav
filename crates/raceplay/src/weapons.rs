@@ -142,6 +142,9 @@ impl Race {
     /// Edge-triggered on both, so holding a button spends one pickup rather than
     /// one a tick. Nothing happens with an empty slot, including no sound - the
     /// original's "nothing to fire" cue is not implemented.
+    ///
+    /// **While the craft's Autopilot runs, neither button reaches the pickup.**
+    /// See [`Self::spend_pickup_under_autopilot`].
     pub(super) fn spend_pickup(&mut self, slot: usize, snapshot: &InputSnapshot) {
         let fire = snapshot
             .buttons
@@ -150,6 +153,10 @@ impl Race {
             .buttons
             .is_pressed(oag_gameplay::input::Button::Circle);
         if !fire && !absorb {
+            return;
+        }
+        if self.sim.world.ships[slot].autopilot_timer > 0.0 {
+            self.spend_pickup_under_autopilot(slot, absorb);
             return;
         }
         let Some(weapon) = self.sim.world.ships[slot].pickup.weapon else {
@@ -164,18 +171,6 @@ impl Race {
         // spend it, so the two can only race on a tick where the player pressed
         // both.
         if fire {
-            // **Firing while the autopilot is running cancels it and fires
-            // nothing**, and that is recovered: `FUN_08844ec4` tests
-            // `craft->0x1b8 & 0x800` before its held-weapon jump table and,
-            // when it is set, stores `0.0` into the timer and branches past the
-            // table entirely. The pickup is untouched on that path - the
-            // original clears `craft+0x1bc` in the grant and in each handler,
-            // never here - so the player keeps whatever they were holding. See
-            // `docs/ghidra/functions/psp-pulse-usa/autopilot.md`.
-            if self.sim.world.ships[slot].autopilot_timer > 0.0 {
-                self.sim.world.ships[slot].autopilot_timer = 0.0;
-                return;
-            }
             match weapon {
                 oag_tables::weapons::Weapon::Turbo => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -227,13 +222,14 @@ impl Race {
                         // *for*, so the pickup is kept rather than spent.
                         return;
                     };
-                    // **Re-arming is allowed here and is not for the Shield**,
-                    // and the difference is read rather than chosen:
-                    // `Shield_Fire` wraps its whole body in
-                    // `if ((craft->0x1b8 & 0x10) == 0)` and `Autopilot_Fire`
-                    // has no such guard - it assigns the timer unconditionally.
-                    // It cannot fire into a running one anyway, because the
-                    // branch above cancels instead.
+                    // **Never reached with one already running**: a press under a
+                    // running Autopilot is [`Self::spend_pickup_under_autopilot`]'s,
+                    // which is where the original's refusal sits
+                    // (`Ship_FireHeldWeapon` returns on held id `6` with
+                    // `craft+0x1b8 & 0x800` set, `0x08844b44`, and leaves the
+                    // pickup held). `Autopilot_Fire` itself has no such guard - it
+                    // assigns the timer unconditionally - so the refusal is the
+                    // caller's, as it is here.
                     self.sim.world.ships[slot].autopilot_timer = simple.time;
                     // The driver has to be told where the craft is before it
                     // flies it, for the windowed-search reason

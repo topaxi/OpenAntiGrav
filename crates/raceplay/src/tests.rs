@@ -345,6 +345,8 @@ fn setup(handling: Handling) -> Setup {
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,
         },
+        autopilot_absorb_cancels: true,
+        autopilot_pad_grants: false,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

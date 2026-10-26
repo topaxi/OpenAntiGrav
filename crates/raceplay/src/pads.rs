@@ -187,24 +187,28 @@ impl Race {
     /// [`Self::test_speedup_pads`]' verbatim, and what differs is only what
     /// happens on a hit.
     ///
-    /// # Three things happen here and only one of them is recovered
+    /// # Three things happen here and one of them is partly recovered
     ///
     /// Worth separating at the call site rather than only in
     /// `docs/gameplay/pickups.md`, because they are easy to read as one ported
     /// branch:
     ///
     /// 1. **Stamping the pad** with `<WeaponPad refresh_time>` is the whole of
-    ///    what the original's function does on a hit, at confidence 90. It is
-    ///    done here on **any** hit, including one that grants nothing, because
-    ///    that is what the original does - the stamp is unconditional.
+    ///    what the original's `WeaponPads_TestCraft` does on a hit, at confidence
+    ///    90. It is done here on **any** hit, including one that grants nothing.
     /// 2. **Granting a pickup at all** is ours. No pickup-grant call site has
-    ///    been found anywhere, so a crossing handing something over is this
-    ///    project's reading of what a weapon pad is for.
-    /// 3. **Only granting into an empty slot** is ours too, and is the one rule
-    ///    here with no evidence in either direction. A craft that already holds
-    ///    something still stamps the pad, so a full inventory costs the pad its
-    ///    cooldown - which is the conservative reading, and the one that cannot
-    ///    hand out two pickups from one crossing.
+    ///    been found, so a crossing handing something over is this project's
+    ///    reading of what a weapon pad is for. What is read is the gate around
+    ///    it: `Ship_TestWeaponPads` (`0x0883efb4`) asks the pad only with an
+    ///    **empty slot** and raises its grant request only with the Autopilot's
+    ///    running bit clear (`0x0883f0c0`), so a craft flying the pickup is handed
+    ///    nothing while the pad is still stamped. That half is
+    ///    [`oag_title::weapons::Weapons::autopilot_pad_grants`].
+    /// 3. **Only granting into an empty slot** agrees with that gate, with one
+    ///    divergence: the original does not ask the pad at all while the slot is
+    ///    full, so a full craft leaves the pad unstamped there, and here it
+    ///    stamps. Left as it was, which costs a full craft the pad's cooldown
+    ///    and cannot hand out two pickups from one crossing.
     ///
     /// Called once a tick with the position the tick *starts* at, like the speed
     /// pad's, and **after** it, so both spend the same `moved` and neither can
@@ -269,6 +273,16 @@ impl Race {
             return;
         }
         self.sim.weapon_pad_refresh_left[index] = self.sim.weapon_pad_refresh;
+
+        // **Nothing is granted to a craft whose Autopilot runs**, on any slot, an
+        // opponent on this project's Autopilot included: `Ship_TestWeaponPads`
+        // (`0x0883efb4`) raises the grant request only with `craft+0x1b8 & 0x800`
+        // clear (`0x0883f0c0`), after `WeaponPads_TestCraft` has stamped the pad,
+        // so the stamp above stays. Read statically on Pulse, confidence 80 - see
+        // [`oag_title::weapons::Weapons::autopilot_pad_grants`].
+        if self.sim.world.ships[slot].autopilot_timer > 0.0 && !self.sim.autopilot_pad_grants {
+            return;
+        }
 
         // Points 2 and 3.
         if !self.sim.world.ships[slot].pickup.is_empty() {

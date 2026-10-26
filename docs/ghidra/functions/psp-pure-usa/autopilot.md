@@ -74,3 +74,13 @@ nothing writes the timer to zero. Nothing holds the Autopilot through a corner
 either. **Confidence 70** for the absence of a cancel: a cancel through another
 base register is not excluded by a field scan, and nothing here was watched
 running.
+
+**Ported 2026-10-26 (`autopilot-wire`).** Pure's `Weapons::autopilot_absorb_cancels` is
+`false`, `Origin::Measured` (static, 70): an absorb under its running Autopilot does
+nothing, where Pulse's and HD's cancel it. The disc-backed trace is
+`crates/raceplay/tests/autopilot_cancel_ground_truth.rs` (`pure_has_no_cancel`: the
+timer runs on through the press). Pure's weapon pad grant, its fire path under a
+running stint and any `disengaging` call outside the countdown's own are unread, so
+ours runs Pulse's pad gate and fire suppression there (inherited). A PPSSPP run of
+`scripts/psp-autopilot-cancel.py` adapted to this page's offsets (running byte `+0x154`,
+timer `+0x15c`) would settle the absence.

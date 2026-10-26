@@ -10,7 +10,8 @@ the five title crates (text only, no compiler) and fails when
 - a cell's value differs from the source: a table path, `PerTick`/`PerTrip`,
   and `set`/`none` for a model field or an effect trigger;
 - the provenance word differs from the source, **where the source carries an
-  `Origin`**: `ghost_static` and the `effects.*` rows.
+  `Origin`**: `ghost_static`, the `effects.*` rows and the two `Sourced` bools of
+  `Weapons` (`autopilot_absorb_cancels`, `autopilot_pad_grants`).
 
 What it does not check, and the page says so: the provenance of a `Weapons`
 axis or of any other `WeaponModels` field (comments only), every cell of the
@@ -189,6 +190,16 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
         quake = weapons["quake_hit"]
         variant = re.search(r"QuakeHit::(\w+)", quake).group(1)
         cells.setdefault("weapons.quake_hit", {})[title] = (variant, origin_word(quake))
+
+        # `Sourced::measured(true)`: the bool is the value (`set` is true, `none`
+        # is false) and the constructor is the provenance, which is checked.
+        for field in ("autopilot_absorb_cancels", "autopilot_pad_grants"):
+            sourced = re.search(r"Sourced::(\w+)\(\s*(true|false)", weapons[field])
+            if sourced is None:
+                raise SystemExit(f"check-weapon-lineage: {title}: `{field}` is not a `Sourced` bool")
+            word = {"measured": "measured", "chosen": "chosen", "inherited": "inherited"}[sourced.group(1)]
+            value = "set" if sourced.group(2) == "true" else "none"
+            cells.setdefault(f"weapons.{field}", {})[title] = (value, word)
 
         models = models_block(title)
         for field, value in models.items():

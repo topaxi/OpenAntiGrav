@@ -14,12 +14,17 @@ use oag_gameplay::PlayerInputs;
 const FIXTURE_AUTOPILOT_TIME: f32 = 3.5;
 
 /// The Autopilot's own fixture, with `time` unlike the Turbo's and the
-/// Shield's for the reason [`one_shield_table`] gives.
+/// Shield's for the reason [`one_shield_table`] gives. A Rocket is authored but
+/// never dealt, so a test that puts one in the slot has something to fire or
+/// to pay out, and the pads still only hand out the Autopilot.
 fn one_autopilot_table() -> oag_tables::weapons::WeaponStats {
     oag_tables::weapons::parse(
         r#"<WeaponStats>
              <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
              <Weapon type="Autopilot"><Stats absorb="4" time="3.5"/></Weapon>
+             <Weapon type="Rocket"><Stats absorb="11" blastforce="12" blastradius="13"
+               damage="14" slowdown_time="15" venomspeed="600" flashspeed="700"
+               rapierspeed="800" phantomspeed="900" launchSpeed="16" spread="0.2"/></Weapon>
              <Pickupodds class="Venom">
                <Weapon type="Autopilot"><Stats ai="1" back="1" front="1" human="1"/></Weapon>
              </Pickupodds>
@@ -134,13 +139,10 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
     );
 }
 
-/// Pressing fire while it runs cancels it and fires nothing.
-///
-/// `FUN_08844ec4` tests the running bit before its held-weapon jump table and
-/// zeroes the timer instead of dispatching. The pickup survives, because that
-/// path never touches `craft+0x1bc`.
-#[test]
-fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
+/// A race one tick past the Autopilot's arming, with the craft handed over and
+/// the slot empty: the state every stint is in from its first tick, because
+/// `Autopilot_Fire` spends the pickup.
+fn race_under_autopilot() -> (Race, Buttons) {
     let mut race = race_with_weapon_table(
         Mode::SingleRace,
         enveloping_pad(),
@@ -150,28 +152,223 @@ fn firing_under_autopilot_cancels_it_and_keeps_the_pickup() {
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert!(race.flown_for_the_player(0));
-
-    // A second pickup put in the slot directly - the pad only grants on a *new*
-    // entry and the craft is already standing on this one. A fixture, like the
-    // shield timer two tests up, not a grant.
-    let held = Some(oag_tables::weapons::Weapon::Rocket);
-    race.sim.world.ships[0].pickup.weapon = held;
-    assert!(
-        race.flown_for_the_player(0),
-        "it let go before the test began"
-    );
-
-    // Released first: the fire button is edge-triggered, so a second press
+    assert!(race.flown_for_the_player(0), "the Autopilot did not arm");
+    assert_eq!(race.ship_pickup(), None, "arming must spend the pickup");
+    // Released first: both buttons are edge-triggered, so a second press
     // without a gap is not a press at all.
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    (race, buttons)
+}
+
+/// The absorb press cancels a running Autopilot with nothing held, and the
+/// craft goes back to its pilot on the tick after.
+///
+/// `Ship_AbsorbHeldPickup` tests the running bit before it reads the slot, so
+/// the empty slot every stint is in does not stop it. Live on PPSSPP: the
+/// timer went to `0.0` on the press frame and the craft was the pad's on the
+/// next (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`, "Absorb cancels
+/// it, fire does not").
+#[test]
+fn absorbing_under_autopilot_cancels_it_with_an_empty_slot() {
+    let (mut race, mut buttons) = race_under_autopilot();
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
+    assert!(!race.flown_for_the_player(0), "absorb did not cancel it");
+    assert_eq!(race.sim.world.ships[0].autopilot_timer, 0.0);
+    assert_eq!(race.ship_pickup(), None, "the cancel invented a pickup");
+}
+
+/// Under the Autopilot the driver's controls fly the press tick and the
+/// player's own fly the one after: the controls are chosen before the weapon
+/// step, as the original's craft update runs before its weapon update.
+#[test]
+fn the_craft_is_handed_back_on_the_tick_after_the_absorb() {
+    let (mut race, mut buttons) = race_under_autopilot();
+
+    // A hard right on the stick throughout, which only a person's controls obey.
+    let mut held = |mask| {
+        let mut snapshot = buttons.tick(mask);
+        snapshot.stick_x = 1.0;
+        PlayerInputs::single(snapshot)
+    };
+    let pilot = race.last_controls[0].steer_x;
+    race.tick(&held(CIRCLE));
+    assert_eq!(
+        race.last_controls[0].steer_x, pilot,
+        "the press tick was already the person's"
+    );
+    race.tick(&held(0));
+    assert!(
+        race.last_controls[0].steer_x > pilot,
+        "the person did not get the craft back"
+    );
+}
+
+/// An absorb under the Autopilot only cancels it: a held pickup is neither
+/// paid out nor spent, and no energy moves.
+#[test]
+fn absorbing_under_autopilot_keeps_a_held_pickup() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    let held = Some(oag_tables::weapons::Weapon::Rocket);
+    race.sim.world.ships[0].pickup.weapon = held;
+    // Below the cap, so a pay-out would show: the Rocket absorbs for 11.
+    race.sim.world.ships[0].physics.shield = 50.0;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
+    assert!(!race.flown_for_the_player(0), "absorb did not cancel it");
+    assert_eq!(race.ship_pickup(), held, "the cancel spent the pickup");
+    assert_eq!(
+        race.sim.world.ships[0].physics.shield, 50.0,
+        "the cancel paid the pickup out"
+    );
+}
+
+/// Fire does nothing while the driver flies: the original passes only the
+/// absorb byte into the driver's control record, so the player's fire never
+/// reaches its fire path. Live: `SQUARE` for four frames changed nothing, with
+/// the slot empty and with an Autopilot held.
+#[test]
+fn firing_under_autopilot_does_nothing() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    let held = Some(oag_tables::weapons::Weapon::Rocket);
+    race.sim.world.ships[0].pickup.weapon = held;
+    let timer = race.sim.world.ships[0].autopilot_timer;
+
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert!(!race.flown_for_the_player(0), "firing did not cancel it");
+    assert!(race.flown_for_the_player(0), "firing cancelled it");
+    assert_eq!(race.ship_pickup(), held, "the press fired the pickup");
+    assert_eq!(
+        race.sim.world.projectiles.live(),
+        0,
+        "a projectile left the craft"
+    );
+    assert!(race.sim.world.ships[0].autopilot_timer < timer);
+}
+
+/// A held Autopilot cannot be fired into a running one: `Ship_FireHeldWeapon`
+/// refuses held id `6` while the running bit is set (`0x08844b44`), and the
+/// pickup stays held.
+#[test]
+fn a_held_autopilot_cannot_be_fired_into_a_running_one() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    let held = Some(oag_tables::weapons::Weapon::Autopilot);
+    race.sim.world.ships[0].pickup.weapon = held;
+    let timer = race.sim.world.ships[0].autopilot_timer;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
+    assert_eq!(race.ship_pickup(), held, "the press spent the held pickup");
+    let now = race.sim.world.ships[0].autopilot_timer;
+    assert!(
+        (now - (timer - race.dt())).abs() < 1e-5,
+        "the timer was re-armed or cancelled: {timer} then {now}"
+    );
+}
+
+/// A pad crossed mid-stint grants nothing: `Ship_TestWeaponPads` raises the
+/// grant request only with the running bit clear (`0x0883f0c0`), confidence
+/// 80, static.
+#[test]
+fn no_pad_grant_while_the_autopilot_runs() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    // Off the pad and back on it: the grant is an entry edge, and the pad has
+    // to be ready to stamp again.
+    race.sim.weapon_pad_current[0] = None;
+    race.sim.weapon_pad_refresh_left[0] = 0.0;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    assert!(race.flown_for_the_player(0));
+    assert_eq!(race.ship_pickup(), None, "a pad granted mid-stint");
+    assert!(
+        race.sim.weapon_pad_refresh_left[0] > 0.0,
+        "the pad was not stamped: the entry never happened"
+    );
+}
+
+/// A title whose executable has no cancel hands nothing back on an absorb:
+/// Pure's `Weapons::autopilot_absorb_cancels` is `false` (`psp-pure-usa/autopilot.md`).
+#[test]
+fn absorbing_under_autopilot_does_not_cancel_it_where_the_title_has_no_cancel() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    race.sim.autopilot_absorb_cancels = false;
+    let held = Some(oag_tables::weapons::Weapon::Rocket);
+    race.sim.world.ships[0].pickup.weapon = held;
+    race.sim.world.ships[0].physics.shield = 50.0;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
+    assert!(
+        race.flown_for_the_player(0),
+        "a title with no cancel cancelled"
+    );
+    assert_eq!(race.ship_pickup(), held, "the absorb reached the pickup");
+    assert_eq!(race.sim.world.ships[0].physics.shield, 50.0);
+}
+
+/// The pad gate is the title's: where `autopilot_pad_grants` is set a pad
+/// crossed mid-stint hands a pickup over as it always did.
+#[test]
+fn a_title_whose_pads_grant_mid_stint_still_hands_one_over() {
+    let (mut race, mut buttons) = race_under_autopilot();
+    race.sim.autopilot_pad_grants = true;
+    race.sim.weapon_pad_current[0] = None;
+    race.sim.weapon_pad_refresh_left[0] = 0.0;
+
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert_eq!(
         race.ship_pickup(),
-        held,
-        "the cancel spent the pickup, which the original's branch never touches"
+        Some(oag_tables::weapons::Weapon::Autopilot)
     );
+}
+
+/// Cancelling with more than a second left raises the `disengaging` call, as
+/// the original's next `Autopilot_Update` does when its remainder crosses one
+/// second from above; cancelling inside the last second does not, because the
+/// ordinary warning has already been given.
+#[test]
+fn cancelling_with_time_left_says_disengaging_and_the_last_second_does_not() {
+    let disengaging = |race: &mut Race| {
+        race.drain_cues()
+            .into_iter()
+            .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
+            .count()
+    };
+
+    let (mut race, mut buttons) = race_under_autopilot();
+    race.drain_cues();
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
+    assert_eq!(
+        disengaging(&mut race),
+        1,
+        "no call on a cancel with time left"
+    );
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
+    }
+    assert_eq!(disengaging(&mut race), 0, "the call came twice");
+
+    let (mut race, mut buttons) = race_under_autopilot();
+    race.sim.world.ships[0].autopilot_timer = 0.5;
+    race.drain_cues();
+    race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
+    assert!(!race.flown_for_the_player(0));
+    assert_eq!(disengaging(&mut race), 0, "the last second was announced");
+}
+
+/// In an Eliminator an absorb with a weapon held first requests it as a fire -
+/// the Shield there - and then cancels the Autopilot, in that order.
+#[test]
+fn an_eliminator_absorb_arms_the_shield_and_cancels_the_autopilot() {
+    // No pad, so nothing grants into the slot the cancel leaves empty.
+    let mut race = race_with_weapon_table(Mode::Eliminator, Vec::new(), 1.0, one_autopilot_table());
+    race.sim.world.ships[0].autopilot_timer = 3.0;
+    race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Rocket);
+    let mut buttons = Buttons::new();
+    race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
+
+    assert!(
+        !race.flown_for_the_player(0),
+        "the absorb did not cancel it"
+    );
+    assert_eq!(race.ship_pickup(), None, "the held weapon was kept");
 }
 
 /// The player's engine bits under the Autopilot come from the title's own law,

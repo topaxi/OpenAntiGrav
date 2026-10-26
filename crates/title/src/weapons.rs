@@ -53,6 +53,24 @@ pub struct Weapons {
     /// How a Quake's wave reaches a craft: what gates its hit and whether the
     /// cockpit eye rides it.
     pub quake_hit: QuakeHit,
+    /// Whether the absorb press cancels a running Autopilot pickup.
+    ///
+    /// Pulse's `Ship_AbsorbHeldPickup` tests the running bit before it reads the
+    /// slot and stores `0.0` to the timer, so the craft is handed back on the next
+    /// tick whatever is held, and the held pickup is neither paid out nor spent
+    /// (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`, "Absorb cancels it,
+    /// fire does not"). HD's `Ship_UpdatePickup_q` does the same. `false` is a
+    /// measurement on Pure: no function on its absorb side reads the running byte.
+    /// The fire press never cancels on any title; see `Race::spend_pickup`.
+    pub autopilot_absorb_cancels: crate::pre_race::Sourced<bool>,
+    /// Whether a weapon pad hands out a pickup to a craft whose Autopilot is
+    /// running.
+    ///
+    /// Pulse's `Ship_TestWeaponPads` raises the grant request only with the running
+    /// bit clear (`0x0883f0c0`), so a pad crossed mid-stint grants nothing. The
+    /// pad still stamps its refresh timer. Read on Pulse alone; the other titles
+    /// run its law.
+    pub autopilot_pad_grants: crate::pre_race::Sourced<bool>,
 }
 
 /// How a Quake's wave reaches a craft.

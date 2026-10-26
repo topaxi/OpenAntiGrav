@@ -161,7 +161,7 @@ impl Race {
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
         // `tick_autopilot` after it, so a pickup armed this tick gets its whole
-        // duration rather than a tick less, and so the cancel-on-fire branch
+        // duration rather than a tick less, and so the cancel-on-absorb branch
         // inside `spend_pickup` is not immediately undone by a decrement.
         for slot in 0..MAX_PLAYERS {
             if self.sim.world.person_flown(slot) {

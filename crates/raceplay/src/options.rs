@@ -761,6 +761,12 @@ pub struct Setup {
     pub leach_drain: oag_title::weapons::LeachDrain,
     /// How a Quake's wave reaches a craft, `oag_title::weapons::Weapons::quake_hit`.
     pub quake_hit: oag_title::weapons::QuakeHit,
+    /// Whether an absorb press cancels a running Autopilot,
+    /// `oag_title::weapons::Weapons::autopilot_absorb_cancels`.
+    pub autopilot_absorb_cancels: bool,
+    /// Whether a weapon pad grants a craft whose Autopilot runs,
+    /// `oag_title::weapons::Weapons::autopilot_pad_grants`.
+    pub autopilot_pad_grants: bool,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

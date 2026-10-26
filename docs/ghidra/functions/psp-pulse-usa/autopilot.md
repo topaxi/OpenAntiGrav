@@ -509,15 +509,54 @@ already at the Autopilot's speed and line.
 
 ### Ours
 
-`Race::spend_pickup` (`crates/raceplay/src/weapons.rs`) returns when the slot is
-empty before it reaches its cancel, and its cancel is on SQUARE. In the
-original's flow the slot is always empty under a running Autopilot, so in play
-ours cancels on **neither** button, which is what the maintainer saw. Measured
-on this tree with a scratch test (not committed): armed through the pickup, then
-CIRCLE and SQUARE with the slot empty, `flown_for_the_player` stayed `true`
-after both. Ours also grants from a pad while the Autopilot runs
-(`Race::test_weapon_pads`, `crates/raceplay/src/pads.rs`, has no running test).
-The fix is open, tracked in HANDOVER.md.
+**Wired 2026-10-26 (`autopilot-wire`).** Until then `Race::spend_pickup` returned on an
+empty slot before it reached its cancel, and its cancel sat on SQUARE. In the
+original's flow the slot is always empty under a running Autopilot, so in play ours
+cancelled on **neither** button, which is what the maintainer saw, and a pad granted
+mid-stint. Measured on that tree with a scratch test: armed through the pickup, then
+CIRCLE and SQUARE with the slot empty, `flown_for_the_player` stayed `true` after both.
+
+Now a press under a running Autopilot is `Race::spend_pickup_under_autopilot`'s
+(`crates/raceplay/src/field.rs`): an absorb zeroes the timer (before the empty-slot
+test, so with nothing held too), pays nothing and spends nothing, and the controls
+are the person's again on the next tick; a fire press is ignored, which also keeps a
+held Autopilot from being fired into a running one. In an Eliminator a held weapon is
+first requested as the Shield (`Race::eliminator_absorb`) and the cancel follows.
+`Race::test_weapon_pads` stamps the pad as before and grants nothing to a craft whose
+timer runs. Both are per-title data on `oag_title::weapons::Weapons`
+(`autopilot_absorb_cancels`, `autopilot_pad_grants`, each `Sourced`): Pulse measured,
+HD measured (static) for the cancel, Pure `false` (measured absence, static), 2048 and
+Omega inherited from HD, and the pad gate Pulse's everywhere but Pulse itself
+(inherited: HD's and Pure's pad grants are unread). The fire suppression and the
+refusal of a held Autopilot are not per-title: they follow from the driver flying the
+craft, and no title's executable was read to differ.
+
+**One thing is inferred rather than measured: the `disengaging` call on a cancel.**
+`Autopilot_Update` above runs on the next dispatch with the timer at `-dt` and
+`craft+0x144` still holding last frame's value, so with more than a second left its
+`now < 1.0 && previous > 1.0` edge is crossed and the announcer speaks. Ours raises
+`Cue::Disengaging` from the cancel when more than a second was left (confidence 85,
+static; the live run above logged state, not cues, and it has not been heard).
+Pinned by `cancelling_with_time_left_says_disengaging_and_the_last_second_does_not`.
+
+**Known one-tick difference, not fixed here.** The timer zeroes on the press tick, as
+the original's does on its frame 22, and the controls are the person's on the next tick
+(`the_craft_is_handed_back_on_the_tick_after_the_absorb`). But `Race::autopilot_engine_flags`
+reads the timer inside `step_player`, which runs after `spend_pickup`, so ours drops the
+x1.2 and uncapped engine bits on the press tick, where the original's frame 22 still read
+`0xd` and dropped them on frame 23. The old fire-cancel had the same one-tick shape. In the
+trace below `flown` is read after the tick, so the absorb row already reads `false`.
+
+Disc-backed trace, `crates/raceplay/tests/autopilot_cancel_ground_truth.rs` on Pulse
+(Pure's reads the same up to the last two rows, where its timer runs on):
+
+```text
+tick  333  arm      buttons 0x00a0  timer   4.983  flown true   slot None
+tick  335  fire     buttons 0x00a0  timer   4.950  flown true   slot Some(Rocket)
+tick  337  refire   buttons 0x00a0  timer   4.917  flown true   slot Some(Autopilot)
+tick  339  absorb   buttons 0x0030  timer   0.000  flown false  slot None
+tick  340  after    buttons 0x0020  timer   0.000  flown false  slot None
+```
 
 ### The other titles
 
@@ -540,4 +579,7 @@ The fix is open, tracked in HANDOVER.md.
   **confidence 70** for "absorb does not cancel in Pure".
 - **2048: not checked.** The `disengaging` cue is passed at
   `0x8120ed52..0x8120ed5e` of the v1.04 executable, inside a function Ghidra has
-  not delimited; its update was not read. Omega not checked.
+  not delimited; its update was not read. Omega not checked. Ours runs HD's law
+  on both, `Origin::InheritedFrom`, by the rule that an unmeasured 2048 rule takes
+  HD's through Omega (checked, applies, wired as inherited; their own update and
+  cancel stay unread).

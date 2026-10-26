@@ -98,6 +98,12 @@ pub const TITLE: &Title = &Title {
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
             eye_origin: oag_title::Origin::Chosen,
         },
+        // A measured absence, static only, confidence 70: nothing on Pure's absorb side reads
+        // the running byte and nothing stores zero to the timer (`psp-pure-usa/autopilot.md`,
+        // "No cancel and no hold").
+        autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(false),
+        // Pulse's law, inherited: Pure's pad grant is unread.
+        autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
     // Every Pulse literal this table used to carry (`Pulse_Mine.vex`,
@@ -746,6 +752,25 @@ mod tests {
         };
         assert_eq!(origin, Origin::InheritedFrom("Wipeout Pulse"));
         assert_eq!(eye_origin, Origin::Chosen);
+    }
+
+    /// Pure has no Autopilot cancel while Pulse does: its executable has no absorb-side reader of
+    /// the running byte (static, `psp-pure-usa/autopilot.md`). The pad gate is Pulse's, inherited.
+    #[test]
+    fn pure_has_no_autopilot_cancel_while_pulse_has_one() {
+        use oag_title::Origin;
+
+        assert!(!TITLE.weapons.autopilot_absorb_cancels.value);
+        assert_eq!(
+            TITLE.weapons.autopilot_absorb_cancels.origin,
+            Origin::Measured
+        );
+        assert!(oag_pulse::TITLE.weapons.autopilot_absorb_cancels.value);
+        assert!(!TITLE.weapons.autopilot_pad_grants.value);
+        assert_eq!(
+            TITLE.weapons.autopilot_pad_grants.origin,
+            Origin::InheritedFrom("Wipeout Pulse")
+        );
     }
 
     /// A pressing's row carries the very cut its region names, so the table the

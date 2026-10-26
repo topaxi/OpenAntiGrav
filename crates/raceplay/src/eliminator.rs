@@ -297,9 +297,10 @@ impl Race {
     /// A running Shield is not refreshed (`Shield_Fire`'s own guard, the same
     /// one the player's Shield arm follows), and the weapon is gone either way.
     /// Id 5 is the Cannon in `ai-stats.md`'s naming; what the press does is
-    /// whatever bit `0x20` does, and that is the Shield. One edge is not ported:
-    /// the original requests the Shield *before* its autopilot-cancel test, so
-    /// an absorb under a running Autopilot also cancels it.
+    /// whatever bit `0x20` does, and that is the Shield. The original requests
+    /// the Shield *before* its autopilot-cancel test, so an absorb under a
+    /// running Autopilot with a weapon held arms the Shield and then cancels the
+    /// Autopilot: `Race::spend_pickup_under_autopilot` calls this first.
     pub(super) fn eliminator_absorb(&mut self, slot: usize) {
         let time = self
             .sim

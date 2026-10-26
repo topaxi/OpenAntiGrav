@@ -31,7 +31,8 @@ This subsystem is unusually mixed, so the split comes before anything else.
 | **That a crossing grants anything at all** | **recovered 2026-08-17** - `WeaponPickup_Grant` (`0x08861d20`), called on the pad-crossing flag | 85 |
 | **The weighted draw**: `rand() % total` then a cumulative walk over `<Pickupodds>` | **recovered 2026-08-17** | 92 |
 | **The inventory's shape** - one slot holding a weapon id, `-1` for empty (`craft+0x1bc`) | **recovered 2026-08-17** | 88 |
-| **Granting only into an empty slot** | **ours** | - |
+| **Granting only into an empty slot** | **recovered 2026-10-26, static**: `Ship_TestWeaponPads` (`0x0883efb4`) asks the pad only with an empty slot. Ours also stamps a full craft's pad, which the original does not (open) | 80 |
+| **A craft whose Autopilot runs is granted nothing**, though the pad is still stamped | **recovered 2026-10-26, static**: the grant request sits behind `craft+0x1b8 & 0x800` clear (`0x0883f0c0`); wired as `Weapons::autopilot_pad_grants`, [autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re) | 80 |
 | **The free Turbo arrives on every forward line crossing: the first one, which starts lap 1, and each completed lap** (`TimeTrial_UpdateRacing`, `0x0882ddd8`, sets `held = 4` when `craft+0x911` is set; not at the release, which the 2026-09-07 row had) | **recovered 2026-10-04**, read, [gantry-clock.md](../ghidra/functions/psp-pulse-usa/gantry-clock.md#the-free-turbo-granted-on-the-line-crossing-not-on-the-release) | 85 |
 | `<Rocket>`: `damage`, `blastforce`, `blastradius`, `launchSpeed`, a speed per class | **recovered** | 92 |
 | `Ship_Damage`'s `source == 2` being a weapon hit | **recovered** | 75 |
