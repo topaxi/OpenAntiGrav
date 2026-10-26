@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Re-render only OUR side of every comparison pair, leaving each original untouched.
 
-    just compare-rerender-ours [--only <substring>] [--no-build] [DIR]   # DIR default data/reference/compare-page
+    just compare-rerender-ours [--only <substring>] [--no-build] [--jobs N] [DIR]   # DIR default data/reference/compare-page
 
 No emulator runs. Each pair's `pair.json` records the exact `oag-game` flags that drew `ours.png` (`ours.flags`), and
 the pose, camera, field and clock in those flags were read out of the original's RAM when `theirs.png` was captured.
@@ -15,6 +15,9 @@ a private settings directory written from the pair's profile; on success `ours.p
 `ours.rendered_at`, `overlap` and the environment are replaced, and the old overlap is kept as `previous_ours`. The
 original's fields, provenance and checks are not touched. Then the page manifests are rewritten from the pairs they
 already list and the page is rebuilt.
+
+Pairs render `--jobs` at a time (default 3, each its own `oag-game` process); results print in pair order, with one
+status line on a terminal naming the pairs still running.
 """
 
 import argparse
@@ -26,6 +29,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import tomllib
 from pathlib import Path
 
@@ -129,6 +134,7 @@ SCORES = (("mean_grey", "mean grey", "%.2f", True), ("rmse", "rmse", "%.3f", Tru
 COLOUR = (sys.stdout.isatty() and "NO_COLOR" not in os.environ) or bool(os.environ.get("FORCE_COLOR"))
 GREEN, RED, DIM, RESET = "\033[32m", "\033[31m", "\033[2m", "\033[0m"
 TALLY = {"better": 0, "worse": 0, "same": 0}
+TALLY_LOCK = threading.Lock()
 
 
 def paint(text, code):
@@ -145,7 +151,8 @@ def changes(old, new):
         a, b = fmt % old[key], fmt % new[key]
         verdict = "same" if a == b else "better" if (float(b) < float(a)) == lower else "worse"
         if key == "mean_grey":
-            TALLY[verdict] += 1
+            with TALLY_LOCK:
+                TALLY[verdict] += 1
         parts.append(paint("%s %s -> %s" % (label, a, b), {"same": DIM, "better": GREEN, "worse": RED}[verdict]))
     return ", ".join(parts) if parts else "no previous scores"
 
@@ -160,23 +167,66 @@ def rewrite_manifests(d):
             ce.manifest(toml, dirs)
 
 
+def render_all(pairs, root, jobs):
+    """Renders `pairs` `jobs` at a time and prints each result in pair order as soon as every earlier one is in; on a
+    terminal one status line below the rows names what is still running. Returns how many were not re-rendered."""
+    live = sys.stdout.isatty()
+    names = [str(pj.parent.relative_to(root)) for pj in pairs]
+    results, running, cond = {}, set(), threading.Condition()
+
+    def work(i):
+        with cond:
+            running.add(i)
+            cond.notify()
+        try:
+            result = rerender(pairs[i], BINARY)
+        except Exception as e:  # one pair's crash is that pair's row, not the run's end
+            result = "FAILED: %s" % e
+        with cond:
+            running.discard(i)
+            results[i] = result
+            cond.notify()
+
+    bad, printed = 0, 0
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        for i in range(len(pairs)):
+            pool.submit(work, i)
+        with cond:
+            while printed < len(pairs):
+                cond.wait_for(lambda: printed in results or bool(running))
+                if live:
+                    sys.stdout.write("\r\033[K")
+                while printed in results:
+                    result = results[printed]
+                    bad += not result.startswith(("ok", "skipped: refused"))
+                    if not result.startswith(("ok", "skipped")):
+                        result = paint(result, RED)
+                    print("%-55s %s" % (names[printed], result))
+                    printed += 1
+                if live and printed < len(pairs):
+                    now = ", ".join(names[i] for i in sorted(running)) or "starting"
+                    status = "[%d/%d] %s" % (printed, len(pairs), now)
+                    width = shutil.get_terminal_size().columns - 1
+                    sys.stdout.write(paint(status[:width], DIM))
+                sys.stdout.flush()
+                if printed < len(pairs) and printed not in results:
+                    cond.wait()
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dir", nargs="?", type=Path, default=ROOT / "data/reference/compare-page")
     ap.add_argument("--only", help="substring of the pair directory path")
     ap.add_argument("--no-build", action="store_true", help="use target/debug/oag-game as it is")
     ap.add_argument("--no-page", action="store_true", help="leave the manifests and the page alone")
+    ap.add_argument("--jobs", type=int, default=3, choices=range(1, 5), metavar="N",
+                    help="pairs rendered at once, 1-4 (default 3)")
     args = ap.parse_args()
     if not args.no_build:
         subprocess.run(["cargo", "build", "-p", "oag-game"], cwd=ROOT, check=True)
     pairs = [pj for pj in sorted(args.dir.rglob("pair.json")) if not args.only or args.only in str(pj.parent)]
-    bad = 0
-    for pj in pairs:
-        result = rerender(pj, BINARY)
-        bad += not result.startswith(("ok", "skipped: refused"))
-        if not result.startswith(("ok", "skipped")):
-            result = paint(result, RED)
-        print("%-55s %s" % (pj.parent.relative_to(args.dir), result), flush=True)
+    bad = render_all(pairs, args.dir, args.jobs)
     if not args.no_page:
         rewrite_manifests(args.dir)
         subprocess.run([sys.executable, str(HERE / "compare-page.py"), str(args.dir), "--out", str(ROOT / "data/compare")], check=True)
