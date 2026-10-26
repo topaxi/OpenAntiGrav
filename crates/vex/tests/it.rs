@@ -42,6 +42,7 @@ mod vex_layer_ground_truth;
 mod vex_node_normals_ground_truth;
 mod vex_ps2_ground_truth;
 mod weather_ground_truth;
+mod world_lights_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

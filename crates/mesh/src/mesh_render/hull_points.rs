@@ -27,10 +27,12 @@
 //! ```
 //!
 //! The list is rebuilt from where the craft is, so this is a pure function of
-//! the craft's position and scale bytes.
+//! the craft's position, its scale bytes and the scenery clock: a light under an
+//! `Anim Transform` is re-placed every call, as the original re-tests it every
+//! call (`scene-light.md`, "A light that moves").
 
 use oag_vex::vex;
-use oag_vex::world_lights::{self, WorldLight};
+use oag_vex::world_lights::{self, PlacedLight, WorldLight};
 
 /// The most point or spot lights a hull ever takes: the GE has four slots and
 /// every shipped circuit authors two or three directionals.
@@ -45,7 +47,7 @@ pub type HullPoint = [f32; 4];
 /// leave them.
 #[derive(Debug, Clone, Default)]
 pub struct HullPointLights {
-    lights: Vec<WorldLight>,
+    lights: Vec<PlacedLight>,
     slots: usize,
 }
 
@@ -60,12 +62,12 @@ impl HullPointLights {
     /// four slots already taken.
     #[must_use]
     pub fn from_track(data: &[u8], nodes: &[vex::Node], directionals: usize) -> Self {
-        Self::from_lights(world_lights::world_lights(data, nodes), directionals)
+        Self::from_lights(world_lights::placed_lights(data, nodes), directionals)
     }
 
-    /// A set of lights already built, with `directionals` of the four slots taken.
+    /// A set of lights already placed, with `directionals` of the four slots taken.
     #[must_use]
-    pub fn from_lights(lights: Vec<WorldLight>, directionals: usize) -> Self {
+    pub fn from_lights(lights: Vec<PlacedLight>, directionals: usize) -> Self {
         Self {
             lights,
             slots: 4usize.saturating_sub(directionals).min(HULL_POINT_SLOTS),
@@ -84,18 +86,25 @@ impl HullPointLights {
         self.lights.is_empty() || self.slots == 0
     }
 
-    /// The slots for a craft at `position`, with the craft's third and fourth
-    /// spline scale bytes (`point`, `spot`).
+    /// The slots for a craft at `position` with the scenery clock at `seconds`
+    /// (a light under an `Anim Transform` is where that clock has put it), and the
+    /// craft's third and fourth spline scale bytes (`point`, `spot`).
     #[must_use]
-    pub fn at(&self, position: [f32; 3], [point, spot]: [u8; 2]) -> [HullPoint; HULL_POINT_SLOTS] {
+    pub fn at(
+        &self,
+        position: [f32; 3],
+        seconds: f32,
+        [point, spot]: [u8; 2],
+    ) -> [HullPoint; HULL_POINT_SLOTS] {
         let mut out = [[0.0; 4]; HULL_POINT_SLOTS];
         if self.is_empty() {
             return out;
         }
-        let mut chosen: Vec<(&WorldLight, f32)> = Vec::new();
+        let mut chosen: Vec<(WorldLight, f32)> = Vec::new();
         let mut weakest = f32::MAX;
-        for light in &self.lights {
-            let s = strength(light, position) * 255.0;
+        for placed in &self.lights {
+            let light = placed.at(seconds);
+            let s = strength(&light, position) * 255.0;
             if s.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater)
                 || (chosen.len() == self.slots && weakest > s)
             {

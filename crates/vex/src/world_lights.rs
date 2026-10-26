@@ -26,8 +26,17 @@
 //! **negated row 1** of that matrix: the runtime object's `+0x60` read
 //! `(0.4865, -0.621, -0.6146)` against a node matrix row 1 of
 //! `(-0.486, 0.621, 0.615)`.
+//!
+//! **A light under an `Anim Transform` moves.** The class's init (`0x0892ca04`)
+//! walks the node's ancestors for one, sets the object's `+0x64` byte if it finds
+//! it, and its update slot (`0x0892cd00`) copies the node's world translation into
+//! `+0x50` every frame; the hull's list builder re-tests a light with the byte set
+//! on every call instead of waiting out its countdown. Arc Prime authors two such
+//! lights, the white pair that sweep with its floor spotlights; no other Pulse
+//! circuit has one. [`placed_lights`] keeps the chain, [`PlacedLight::at`] reads
+//! the light where the clock has put it.
 
-use crate::vex::{self, Node};
+use crate::vex::{self, Node, NodeChain};
 use oag_formats::ByteOrder;
 
 /// Class ID of a `wopoint` node.
@@ -86,12 +95,65 @@ impl WorldLight {
     }
 }
 
-/// Every `wopoint` then every `wospot` the file authors, each in node order.
+/// A `wopoint` or `wospot` as the circuit places it: where it rests, and how it
+/// moves if an `Anim Transform` is above it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlacedLight {
+    rest: WorldLight,
+    motion: Option<Motion>,
+}
+
+/// What re-places a light at a time: its payload and the chain above it.
+#[derive(Debug, Clone, PartialEq)]
+struct Motion {
+    payload: [u8; PAYLOAD_LEN],
+    order: ByteOrder,
+    spot: bool,
+    chain: NodeChain,
+}
+
+impl PlacedLight {
+    /// A light that does not move, standing as `light` says.
+    #[must_use]
+    pub fn fixed(light: WorldLight) -> Self {
+        Self {
+            rest: light,
+            motion: None,
+        }
+    }
+
+    /// Whether an `Anim Transform` sits above the light: the original's `+0x64`
+    /// byte, and the only lights whose position depends on the clock.
+    #[must_use]
+    pub fn moves(&self) -> bool {
+        self.motion.is_some()
+    }
+
+    /// The light at `seconds` into the scenery clock: position, and a spot's axis,
+    /// from its node's world matrix then. A light that does not move is the same
+    /// at every time.
+    #[must_use]
+    pub fn at(&self, seconds: f32) -> WorldLight {
+        let Some(motion) = &self.motion else {
+            return self.rest;
+        };
+        WorldLight::parse(
+            &motion.payload,
+            motion.chain.world_at(seconds),
+            motion.order,
+            motion.spot,
+        )
+        .unwrap_or(self.rest)
+    }
+}
+
+/// Every `wopoint` then every `wospot` the file authors, each in node order, with
+/// the chain of each that moves.
 ///
 /// That is the order the original's two lists are walked in (points first),
 /// which decides which light a tie keeps.
 #[must_use]
-pub fn world_lights(data: &[u8], nodes: &[Node]) -> Vec<WorldLight> {
+pub fn placed_lights(data: &[u8], nodes: &[Node]) -> Vec<PlacedLight> {
     let chain = vex::world_transforms(data, nodes);
     let order = vex::byte_order(data);
     let mut out = Vec::new();
@@ -102,8 +164,17 @@ pub fn world_lights(data: &[u8], nodes: &[Node]) -> Vec<WorldLight> {
                 .enumerate()
                 .filter(|(_, node)| node.class_id == class)
                 .filter_map(|(index, node)| {
+                    let payload = data.get(node.payload())?;
                     let to_world = chain.get(index).copied()?;
-                    WorldLight::parse(data.get(node.payload())?, to_world, order, spot)
+                    let rest = WorldLight::parse(payload, to_world, order, spot)?;
+                    let chain = NodeChain::of(data, nodes, index, vex::IDENTITY);
+                    let motion = chain.moves().then(|| Motion {
+                        payload: payload[..PAYLOAD_LEN].try_into().expect("parse checked it"),
+                        order,
+                        spot,
+                        chain,
+                    });
+                    Some(PlacedLight { rest, motion })
                 }),
         );
     }
