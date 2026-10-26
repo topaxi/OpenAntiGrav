@@ -179,6 +179,18 @@ frame mean of 23 to 29 on every circuit was a misread alpha:
 The `--ram-fill` measurement above is consistent with it: alpha byte 64 is
 `a = 1`, and `E` settled at `Scale`.
 
+**Confidence for the closed link as a whole: 75.** Every step is static. The
+gate's 0.25 is read off the program; the A8B8G8R8 step is read off the format
+call and the display buffers' creation (`FUN_812f51fa`'s format argument and
+the `sceDisplaySetFrameBuf` pixel format), **not watched**: Vita3K never writes
+the gate target back, so no live byte of it was ever seen, and a real Vita
+running the readback is the only capture that would.
+
+The alternative considered before the link closed (the lead's option 2 of
+2026-10-26): take `a` as the frame's plain mean luma, which estimated frame
+means of 86 to 104 on the three pairs. Ours adapting, as wired, draws 85.7,
+111.4 and 80.3 ("Ours" below).
+
 ## Ours (2026-10-26, `2048-exposure-wire`)
 
 `oag_post::wo_composite` runs the gate, the two blurs, the composite and the
