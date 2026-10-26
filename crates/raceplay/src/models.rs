@@ -144,13 +144,17 @@ impl Race {
     /// craft the course has not located or a circuit with no course.
     fn hull_light_scale(&self, slot: usize) -> Option<[u8; 4]> {
         let at = self.ship_model_matrix_of(slot).w_axis;
-        self.sim
-            .course
-            .as_ref()
-            .zip(self.sim.world.ships[slot].standing.course_index)
-            .and_then(|(course, index)| {
-                course.light_scale_at(index as usize, oag_core::math::Vec3::new(at.x, at.y, at.z))
-            })
+        let at = oag_core::math::Vec3::new(at.x, at.y, at.z);
+        let course = self.sim.course.as_ref()?;
+        // A craft no tick has located yet (a posed capture runs none, and a race's first frame is drawn before its first)
+        // is found where it stands, as the next tick would; without it the scale falls to the default 255 and the hull
+        // reads at full light inside a tunnel the original darkens (`scene-light.md`, "The scales"). Read only: the
+        // standing's own fix is simulation state and stays as the tick left it.
+        let index = match self.sim.world.ships[slot].standing.course_index {
+            Some(index) => index as usize,
+            None => course.locate(at, None)?.index,
+        };
+        course.light_scale_at(index, at)
     }
 
     /// The point and spot lights Pulse's GE list gives a craft's hull in the slots its
