@@ -135,6 +135,53 @@ fn every_view_resolves_into_its_own_rectangle_with_a_lane_of_its_own() {
     }
 }
 
+/// One view's frame reaches the caller's view through the chain the scene was built with, over
+/// the store that chain asks for: 2048's squares a texel, HD's (as configured here) and Omega's
+/// store the value as computed. Fails when a chain's single-view run is dropped (the scene stays
+/// in the linear target and the frame is never written) and when 2048's chain stops asking for
+/// the gamma-2 store.
+#[test]
+fn a_single_view_frame_resolves_through_its_chain() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    for chain in CHAINS {
+        let race = race_with_a_grid();
+        let scene = scene_of(&device, &queue, &race, chain);
+        let store = match chain {
+            Chain::Wo => oag_gpu::formats::SceneStore::Squared,
+            Chain::Hd | Chain::Omega => oag_gpu::formats::SceneStore::Computed,
+        };
+        assert_eq!(scene.store(), store, "{chain:?}");
+        let target = target(&device);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        scene.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &target.create_view(&Default::default()),
+            &race,
+            AREA,
+            Fov::AUTHORED,
+            true,
+            true,
+            None,
+            MotionBlur::Off,
+            Shadows::Off,
+            None,
+            &[],
+            None,
+            None,
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+        assert!(
+            drawn(&pixels(&device, &queue, &target)),
+            "{chain:?}: the frame is written"
+        );
+    }
+}
+
 /// The first single-view frame after a split forgets the seats' lanes, as it forgets their
 /// camera histories: a seat that comes back settles from its own first frame again.
 #[test]

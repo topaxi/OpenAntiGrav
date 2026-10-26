@@ -144,7 +144,7 @@ impl Scene {
     }
 
     /// What the scene target stores - see `oag_gpu::formats::SceneStore`.
-    pub(super) fn store(&self) -> oag_gpu::formats::SceneStore {
+    pub(crate) fn store(&self) -> oag_gpu::formats::SceneStore {
         store(self.hd.as_ref(), self.wo.is_some())
     }
 
