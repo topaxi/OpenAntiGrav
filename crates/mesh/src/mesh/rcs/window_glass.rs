@@ -29,6 +29,14 @@
 //! and `glow` the colour `0xfc21467a`. The reflection carries no weight parameter. The mask sits
 //! at entry 0, so the generic reading bound it as the picture.
 //!
+//! **`ds_booth_glass` is an opaque mirror over a constant** (block #7, `@0x5f80` on Tech de Ra and
+//! `@0x5ca0` on Sebenco Climb, the lightmapped variant both circuits' slots resolve to):
+//! `rgb = fog(light * C + Texture1.a * sky) / 2`, alpha 0, drawn opaque, with `C` the constant
+//! `0x7611a2d8` (black on every booth on the disc's race circuits) and `Texture1` the normal map
+//! at unit 0. The reflection carries no weight parameter and its tint is `iblScalePower`'s, as
+//! the window's. The light term and the gate both ride the picture `skin` builds for the family
+//! (the constant, with the map's alpha), so the reflection is weighted by `a`.
+//!
 //! **Left out, named**: the program perturbs `N` with a tangent-space normal map (`Texture` at
 //! unit 0) before the reflection and the specular, which a track vertex carries no frame for in
 //! this renderer, so the reflection reads the vertex normal. A slot that already holds a glow
@@ -64,16 +72,20 @@ enum Mode {
     Pane,
     /// `glass_2nduv_reflect_glow`: opaque, the reflection times `1 - a` added to the lit picture.
     Reflective,
+    /// `ds_booth_glass`: opaque, the reflection times `a` added to the lit picture.
+    Gated,
 }
 
 impl Mode {
     /// `tint.y` and `tint.z` of the entry: whether the lit picture is weighted by the coverage
-    /// (and the specular by its complement), and whether the reflection is weighted by `1 - a`.
+    /// (and the specular by its complement), and what weights the reflection: `0` nothing, `1`
+    /// `1 - a`, `2` `a`.
     fn flags(self) -> [f32; 2] {
         match self {
             Self::Window => [0.0, 0.0],
             Self::Pane => [1.0, 1.0],
             Self::Reflective => [0.0, 1.0],
+            Self::Gated => [0.0, 2.0],
         }
     }
 }
@@ -120,6 +132,13 @@ const FAMILIES: &[Row] = &[
         picture: Some(GLOW_WINDOW_PICTURE),
         mode: Mode::Reflective,
         glow: Some((GLOW_MASK, GLOW_COLOUR)),
+    },
+    Row {
+        family: "ds_booth_glass",
+        weight: None,
+        picture: None,
+        mode: Mode::Gated,
+        glow: None,
     },
 ];
 

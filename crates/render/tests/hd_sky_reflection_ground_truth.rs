@@ -71,10 +71,12 @@ fn moas_window_glass_is_tagged_to_read_the_sky() {
     })
     .expect("Moa Therma builds");
     assert!(report.window_glass_bound > 0, "{}", report.describe());
+    // The window mode's entries (`tint.y` and `tint.z` 0); Moa's `ds_booth_glass` reflects
+    // unweighted through its normal map's alpha (`tint.z` 2) beside them.
     let weights: Vec<f32> = model
         .emissive
         .iter()
-        .filter(|e| e.rate == mesh::WINDOW_REFLECTION_RATE)
+        .filter(|e| e.rate == mesh::WINDOW_REFLECTION_RATE && e.tint[1] == 0.0 && e.tint[2] == 0.0)
         .map(|e| e.tint[0])
         .collect();
     assert!(
@@ -259,6 +261,65 @@ fn anulphas_windows_reflect_the_sky_by_their_own_weight() {
         checked += 1;
     }
     assert_eq!(checked, 3, "Anulpha names mt_windows_a in three slots");
+}
+
+/// Tech de Ra's `ds_booth_glass` (`docs/formats/rcsmaterial.md`, "`ds_booth_glass` reflects through its
+/// normal map's alpha"): block #7 lights the black constant `0x7611a2d8` and adds the sky times the
+/// unit-0 normal map's alpha. So the slot's picture is the constant carrying `Texture1`'s alpha texel
+/// for texel, and its entry reflects unweighted through `a` (`tint` `[1, 0, 2]`). Dropped, the glass
+/// draws black where the original shows the sky in it.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn tech_de_ras_booth_glass_reflects_the_sky_through_its_normal_maps_alpha() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let path = "/data/environments/tech_de_ra/track.vex";
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let rcs = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+    let (model, report) = mesh::rcs::build_scene(path, &data, &geometry, &mut |name| {
+        archive_cache::read(&spec, name)
+    })
+    .expect("Tech de Ra builds");
+    assert_eq!(report.window_glass_blocked, 0, "{}", report.describe());
+    let mut checked = 0;
+    for (slot, material) in rcs.materials.iter().enumerate() {
+        if !material.name.ends_with("/ds_booth_glass.rcsmaterial") {
+            continue;
+        }
+        let index = (model.material_slots[slot] >> mesh::slots::MATERIAL_SHIFT) & 127;
+        assert!(index > 0, "slot {slot} carries no glow-table entry");
+        let entry = model.emissive[index as usize - 1];
+        assert_eq!(entry.rate, mesh::WINDOW_REFLECTION_RATE, "slot {slot}");
+        assert_eq!(entry.tint, [1.0, 0.0, 2.0], "slot {slot}");
+        let normal_path = material
+            .samplers
+            .iter()
+            .find(|(hash, _)| *hash == 0x3bdc_0403)
+            .and_then(|(_, path)| path.clone())
+            .expect("the glass names its normal map");
+        let blob = archive_cache::read(&spec, &format!("/{normal_path}")).expect("the map reads");
+        let normal = mesh::ModelTexture::from_gtf(&normal_path, &blob).expect("the map decodes");
+        let normal = normal.to_rgba().expect("RGBA texels");
+        let picture = model.textures[slot].as_ref().expect("a picture is bound");
+        let texels = picture.to_rgba().expect("RGBA texels");
+        assert_eq!(
+            texels.len(),
+            normal.len(),
+            "slot {slot}: the picture is the map's size"
+        );
+        for (texel, map) in texels.chunks(4).zip(normal.chunks(4)) {
+            assert_eq!(texel[..3], [0, 0, 0], "slot {slot}: the constant is black");
+            assert_eq!(texel[3], map[3], "slot {slot}: the alpha is the map's");
+        }
+        checked += 1;
+    }
+    assert!(
+        checked >= 1,
+        "Tech de Ra names ds_booth_glass in a drawn slot"
+    );
 }
 
 /// The same build, honouring HD's render-state rule

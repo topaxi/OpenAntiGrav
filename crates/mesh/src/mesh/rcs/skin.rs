@@ -71,7 +71,7 @@ pub(super) fn skin(
     let mut alpha_maps: std::collections::HashMap<String, Option<ModelTexture>> =
         Default::default();
     let mut alpha_pictures: std::collections::HashMap<
-        (String, [u32; 4]),
+        (String, [u32; 4], AlphaUse),
         Option<Arc<ModelTexture>>,
     > = Default::default();
     let mut tinted_pictures: std::collections::HashMap<
@@ -102,8 +102,8 @@ pub(super) fn skin(
                 report.picture_unsampled += 1;
                 // One picture per (map, constant): a circuit names a family's
                 // map in a dozen slots and the product is a full-size copy.
-                let alpha = alpha_diffuse(material).and_then(|(path, colour)| {
-                    let key = (path.to_string(), colour.map(f32::to_bits));
+                let alpha = alpha_diffuse(material).and_then(|(path, colour, usage)| {
+                    let key = (path.to_string(), colour.map(f32::to_bits), usage);
                     alpha_pictures
                         .entry(key)
                         .or_insert_with(|| {
@@ -114,7 +114,7 @@ pub(super) fn skin(
                                         .and_then(|blob| ModelTexture::from_gtf(path, &blob))
                                 })
                                 .as_ref()?;
-                            scale_alpha(map, colour).map(Arc::new)
+                            scale_alpha(map, colour, usage).map(Arc::new)
                         })
                         .clone()
                 });
@@ -192,8 +192,9 @@ const DIFFUSE: u32 = 0x515e_298e;
 /// `H0` the vertex colour plus the light - the same final step
 /// `diffuse_spec_constant` takes with `diffuse`, and `ds_booth_glass`'s lit
 /// block (#7, traced 2026-10-20) multiplies the same light sum by it - the
-/// constant is black on Sebenco Climb, so the glass is its reflection alone
-/// (`paraboloidReflectionTex`, not drawn). The pipe family reads it times a
+/// constant is black on Sebenco Climb and Tech de Ra, so the glass is its
+/// reflection alone (`mesh::rcs::window_glass`), weighted by the normal map's
+/// alpha, which rides this constant's picture ([`AlphaUse::Gate`]). The pipe family reads it times a
 /// map's alpha instead ([`ALPHA_DIFFUSE`]); `metallic`, `dc_metallic` and
 /// `mesh_colour_constant` end `MAD H0.xyz, light, C, specular` with their own
 /// `C`, and `dc_constantglow`/`cf_constantcolourglow` are fog over a constant
@@ -266,15 +267,41 @@ const TEXTURE1: u32 = 0x3bdc_0403;
 /// light sum by `H2`. The `_nc` pipe textures this is authored for carry the
 /// colour in alpha; bound as RGB they were a normal map (or, refused as one,
 /// white).
-const ALPHA_DIFFUSE: &[(&str, u32)] = &[("m_diffuse_normal_constantspecular", 0x7611_a2d8)];
+///
+/// `ds_booth_glass` reads the same `Texture1` alpha for another job: its lit
+/// block (#7, `@0x5f80` on Tech de Ra, `@0x5ca0` on Sebenco Climb) multiplies
+/// the sky reflection by it (`MUL H0.xyz, R1.wwww, H0` and `MUL H1.xyz,
+/// R0.wwww, H5`, the register the unit-0 fetch wrote and nothing else wrote
+/// over), and lights the constant alone. So its picture is the constant with
+/// the map's alpha as coverage, which `mesh::rcs::window_glass` weights the
+/// reflection by.
+const ALPHA_DIFFUSE: &[(&str, u32, AlphaUse)] = &[
+    (
+        "m_diffuse_normal_constantspecular",
+        0x7611_a2d8,
+        AlphaUse::Product,
+    ),
+    ("ds_booth_glass", 0x7611_a2d8, AlphaUse::Gate),
+];
 
-/// The path of the alpha map and the constant that scales it, for a material
-/// of one of the [`ALPHA_DIFFUSE`] families that names both.
-fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4])> {
+/// What a family's program does with `Texture1`'s alpha beside its constant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum AlphaUse {
+    /// The light multiplies `alpha * constant`: the picture is the product, opaque.
+    Product,
+    /// The light multiplies the constant and something else reads the alpha: the
+    /// picture is the constant, its alpha the map's.
+    Gate,
+}
+
+/// The path of the alpha map, the constant beside it and what the program does
+/// with the pair, for a material of one of the [`ALPHA_DIFFUSE`] families that
+/// names both.
+fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4], AlphaUse)> {
     let family = super::emissive::family(material);
-    let hash = ALPHA_DIFFUSE
+    let (hash, usage) = ALPHA_DIFFUSE
         .iter()
-        .find_map(|&(name, hash)| (name == family).then_some(hash))?;
+        .find_map(|&(name, hash, usage)| (name == family).then_some((hash, usage)))?;
     let value = material.parameters.iter().find(|p| p.hash == hash)?.value;
     let path = material
         .samplers
@@ -282,20 +309,31 @@ fn alpha_diffuse(material: &rcsmodel::Material) -> Option<(&str, [f32; 4])> {
         .find(|(h, _)| *h == TEXTURE1)?
         .1
         .as_deref()?;
-    Some((path, value))
+    Some((path, value, usage))
 }
 
 /// `map`'s alpha times `colour`, as the grey-to-colour picture the program
-/// computes per texel (unorm bytes, opaque).
-fn scale_alpha(map: &ModelTexture, colour: [f32; 4]) -> Option<ModelTexture> {
+/// computes per texel (unorm bytes, opaque); or, for [`AlphaUse::Gate`],
+/// `colour` with the map's alpha kept as the texel's own.
+fn scale_alpha(map: &ModelTexture, colour: [f32; 4], usage: AlphaUse) -> Option<ModelTexture> {
     let texels = map.to_rgba()?;
     let mut out = Vec::with_capacity(texels.len());
     for texel in texels.as_chunks::<4>().0 {
         let alpha = f32::from(texel[3]) / 255.0;
-        for c in &colour[..3] {
-            out.push(raw_to_texel(alpha * c));
+        match usage {
+            AlphaUse::Product => {
+                for c in &colour[..3] {
+                    out.push(raw_to_texel(alpha * c));
+                }
+                out.push(255);
+            }
+            AlphaUse::Gate => {
+                for c in &colour[..3] {
+                    out.push(raw_to_texel(*c));
+                }
+                out.push(texel[3]);
+            }
         }
-        out.push(255);
     }
     Some(crate::mesh_render::offer_to_texture_sink(
         ModelTexture::rgba8(
