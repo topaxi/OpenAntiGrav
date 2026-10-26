@@ -22,7 +22,7 @@ cp = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cp)
 
 
-def make_pair(root, name, times, meta=True):
+def make_pair(root, name, times, meta=True, flags=None):
     d = root / name
     d.mkdir(parents=True)
     for img, colour in (("theirs.png", "gray30"), ("ours.png", "gray40")):
@@ -37,6 +37,8 @@ def make_pair(root, name, times, meta=True):
         rec["ours"]["rendered_at"] = "2026-10-21T09:05:00+02:00"
     if meta:
         rec["meta"] = {"id": name, "title": "Readable " + name}
+    if flags is not None:
+        rec["ours"]["flags"] = flags
     assert plat["game"]
     (d / "pair.json").write_text(json.dumps(rec))
     return d
@@ -48,6 +50,7 @@ def main():
         root = Path(t)
         make_pair(root / "pairs", "timed", True)
         make_pair(root / "pairs", "untimed", False)
+        make_pair(root / "pairs", "held", False, flags=ce.exposure_hold_flags(ce.platform("2048")["ours"]))
         ce.manifest(root / "m.toml", [root / "pairs"])
         doc = tomllib.loads((root / "m.toml").read_text())
         by_id = {e["id"]: e for e in doc["entry"]}
@@ -61,6 +64,10 @@ def main():
             assert k in env, f"metric {k} missing"
         assert by_id["timed"]["title"] == "Readable timed"
         assert "captured_at" not in by_id["untimed"]["environment"] and "rendered_at" not in by_id["untimed"]["environment"]
+        # A 2048 pair holds ours' exposure at the original's 1.15 and the page says so; no other pair carries the line.
+        assert by_id["held"]["environment"]["ours_exposure"].startswith("exposure held at 1.15"), by_id["held"]["environment"]
+        assert "ours_exposure" not in by_id["timed"]["environment"]
+        assert "ours_exposure" not in ce.platform("pulse-psp")["ours"]
         loaded = cp.load_manifest(root / "m.toml")
         assert isinstance(loaded["entry"][0]["environment"], dict)
         assert set(ce.METRICS[i][0] for i in range(3)) == {"rmse", "edge_ncc", "mean_grey"}

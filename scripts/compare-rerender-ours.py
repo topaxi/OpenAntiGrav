@@ -74,6 +74,9 @@ def rerender(pj, binary):
     if problems:
         return "skipped: " + "; ".join(problems)
     plat = ce.platform(rec["profile"])
+    # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
+    if "--hold-exposure" not in flags:
+        flags += ce.exposure_hold_flags(plat["ours"])
     # The pair scripts record the flags after the disc image (`base[2:]`): the image is the pair's `--image`, else its
     # profile's, the same rule the scripts apply.
     argv = rec.get("argv") or []
