@@ -547,7 +547,7 @@ impl Stage {
             gpu.device(),
             gpu.queue(),
             gpu.format(),
-            setup.scenery_fx.lens_flare.as_ref(),
+            setup.scenery_fx.lens_flare.as_deref(),
         );
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(

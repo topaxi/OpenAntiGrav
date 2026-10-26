@@ -49,7 +49,10 @@ pub struct Plan {
     pub weather: Option<weather::Setup>,
     /// Its sun's lens flare: the `lensflare` node and the atlas, on a title whose
     /// `Looks::lens_flare` applies.
-    pub lens_flare: Option<oag_fx::lens_flare::Setup>,
+    ///
+    /// Boxed: the plan is copied by value through `start` in an unoptimised build, where the
+    /// race tests' stacks have no room for a bigger one.
+    pub lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
 }
 
 /// Seed for the scenery effects' own spawn parameters. Any constant: render
@@ -65,7 +68,7 @@ const SEVERITY: f32 = 1.0;
 #[derive(Debug, Clone)]
 pub struct SceneryFx {
     weather: Weather,
-    lens_flare: Option<oag_fx::lens_flare::Setup>,
+    lens_flare: Option<Box<oag_fx::lens_flare::Setup>>,
     placed: Vec<Placed>,
     playing: Vec<Option<psys::Playing>>,
     stage: psys::Stage,
@@ -128,7 +131,7 @@ impl SceneryFx {
     /// The circuit's sun flare, when its title draws one and the circuit authors it.
     #[must_use]
     pub fn lens_flare(&self) -> Option<&oag_fx::lens_flare::Setup> {
-        self.lens_flare.as_ref()
+        self.lens_flare.as_deref()
     }
 
     /// The circuit's weather.

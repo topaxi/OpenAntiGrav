@@ -1315,7 +1315,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
     #[cfg(feature = "view")]
     if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
-        loaded.setup.scenery_fx.lens_flare = lens_flare::read(&track_blob, &mut loaded.report);
+        loaded.setup.scenery_fx.lens_flare =
+            lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
     }
     #[cfg(feature = "view")]
     pulse_ps2::finish(
