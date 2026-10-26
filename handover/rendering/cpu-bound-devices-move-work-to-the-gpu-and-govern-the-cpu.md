@@ -63,6 +63,14 @@ resolution controller (`crates/present/src/drs`), which does nothing while the G
 - Three upstreamable wgpu-core changes (skip init-action registration for fully initialised textures; a
   sparse usage scope; skip re-merging a bind group already merged in the pass). Upstream, not a fork.
 
+## Low priority: measure, never ship (maintainer, 2026-10-27)
+
+- What `InstanceFlags::VALIDATION_INDIRECT_CALL` costs once lane 1 issues indirect draws. It is the only wgpu
+  validation flag on in release (`InstanceFlags::from_build_config`) and adds a GPU pre-pass sanitising indirect
+  arguments. A measurement only: the maintainer's rule is no unsafe wgpu paths, so it stays on. Our instance
+  (`crates/game/src/adapter.rs`, `InstanceDescriptor::new_without_display_handle`) does not read
+  `WGPU_VALIDATION_INDIRECT_CALL`, so the A/B needs a local build that clears the flag, not an env var.
+
 ## Next Steps
 
 1. Lane 6 (governor) started 2026-10-27 alongside the last lane of that drive.
