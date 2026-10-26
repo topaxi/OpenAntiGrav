@@ -36,6 +36,7 @@ use oag_audio::mixer::MUSIC_MASTER_TRIM;
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
+use oag_music::song_names::SongName;
 use serde::{Deserialize, Serialize};
 
 use oag_display::percentage;
@@ -1037,7 +1038,7 @@ struct Soundtrack {
     tracks: Vec<Track>,
     /// What the disc calls each track, parallel to [`Self::tracks`]; empty when this release
     /// names none (the PS2's archive carries no names).
-    names: Vec<Option<oag_music::song_names::SongName>>,
+    names: Vec<Option<SongName>>,
 }
 
 /// One soundtrack track, addressed the way its own disc addresses it.
@@ -1157,15 +1158,15 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     ))
 }
 
+/// A listing's tracks and, parallel to them, what the disc calls each.
+type TrackNames = (Vec<Track>, Vec<Option<SongName>>);
+
 /// The soundtrack entries of a source whose music is inside an archive (every
 /// release but PS2).
 ///
 /// Which entries depends on the booted title, so it is asked in `oag_music`;
 /// [`Track::at`] is opaque ([`oag_music::Entry::at`]).
-fn archived_soundtrack(
-    library: &dyn Library,
-    source: &str,
-) -> Result<Option<(Vec<Track>, Vec<Option<oag_music::song_names::SongName>>)>> {
+fn archived_soundtrack(library: &dyn Library, source: &str) -> Result<Option<TrackNames>> {
     Ok(
         library::named_listing(library, source)?.map(|(entries, names)| {
             let tracks = entries

@@ -73,20 +73,18 @@ pub fn listing(library: &dyn Library, source: &str) -> Result<Option<Vec<oag_mus
     oag_music::listing(title, &mut archives).map(Some)
 }
 
+/// A soundtrack's entries and, parallel to them, what the disc calls each.
+pub type NamedListing = (
+    Vec<oag_music::Entry>,
+    Vec<Option<oag_music::song_names::SongName>>,
+);
+
 /// The soundtrack a source lists with what the disc calls each entry, parallel to it.
 ///
 /// # Errors
 ///
 /// An archive that opens and then will not parse.
-pub fn named_listing(
-    library: &dyn Library,
-    source: &str,
-) -> Result<
-    Option<(
-        Vec<oag_music::Entry>,
-        Vec<Option<oag_music::song_names::SongName>>,
-    )>,
-> {
+pub fn named_listing(library: &dyn Library, source: &str) -> Result<Option<NamedListing>> {
     let Some((title, mut archives)) = open_archived(library, source) else {
         return Ok(None);
     };

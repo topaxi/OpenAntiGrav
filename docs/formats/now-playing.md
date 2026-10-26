@@ -37,8 +37,34 @@ Ground truth: `crates/game/tests/now_playing_ground_truth.rs`.
 
 ## HD / Fury
 
-`ingame_definition.xml` has `item InGameMusicDisplay OffsetX=310 OffsetY=52 SDOffsetY=80`: an
-`InGameMusicBG` image (`HUD_Components.gtf`, 230x48 from 145,653) and an `InGameMusicText`
-(`IG_HUD_ARTIST`, `HUDSmall`, scale 0.8, x=230, y=10) in a viewport of x=19 width=192, in the
-1920x1080 grid. The executable has `InGameMusicDisplay` and `FE_UNKNOWN_ARTIST` strings. Its
-`PI_Music` nodes carry `Artist` and `Label`. The timing is not read.
+`/data/plugins/frontend/gui/ingame_definition.xml` has `item InGameMusicDisplay OffsetX=310
+OffsetY=52 SDOffsetY=80`: an `InGameMusicBG` image (`HUD_Components.gtf`, 230x48 from 145,653)
+and an `InGameMusicText` (`IG_HUD_ARTIST`, `HUDSmall`, scale 0.8, x=230, y=10) in a viewport of
+x=19 width=192, in the 1920x1080 grid. The executable carries `InGameMusicDisplay`,
+`InGameMusicText`, `InGameMusicBG` and `FE_UNKNOWN_ARTIST`. The soundtrack's `PI_Music` nodes
+(`/data/plugins/frontend/definition.xml`) carry `Artist` and `Label`; HD already declares its
+tracks through them (`oag_title::Music::tracks`), so `oag_music::song_names` would name them
+with only a `NowPlaying` row on the title. **Timing not read**: the `.opd` call sites that
+Ghidra lists for the three name strings are string-pool tails shared with an unrelated
+`RankingsConfigTagModule`, not the display's code; the real consumer reaches the strings through
+the data table at `0x008a7974` (display) and `0x008a6920` (text). Unwired.
+
+## Omega
+
+`data09.psarc` carries the same `item InGameMusicDisplay` as HD, byte for byte but for a
+`reset="true"` on its viewport (**checked, applies, not wired**). Omega's songs are Wwise states
+named by `PI_Music` in `data/plugins/music/Definition.xml`; `oag_music::omega::Song` has the
+title. The Omega executable's display code is not read.
+
+## 2048
+
+**Checked, differs**: `data/plugins/frontend/NEWGUI/InGame_Definition.xml` and
+`LegacyInGame_Definition.xml` author no music item; the executable has `InGameMusic` strings
+(three), so the layout lives in a file this pass did not find or is built in code. Not wired.
+
+## Pure
+
+**Checked, differs**: Pure's `BOOT.BIN` has no `InGameMusic` string (Pulse's has), and its
+`InGame_Definition.xml` holds no music item. Pure authors no display. By the lineage rule Pure
+inherits Pulse's, which would be **chosen, not measured**, labelled borrowed; the brief says to
+ask before designing one, so it is left to the lead.
