@@ -82,7 +82,7 @@ Three findings, the first two by-products of the same frame:
   RAM the pose, clock and gantry time come from (the HUD's lap clock read `0.21.0` against RAM's `21.2`, and ours at the RAM time pulsed a half cycle off). `OAG_CAPTURE_FLUSH`
   (3 s in `rpcs3-hd-pair.py`) lets it catch up: the HUD then reads `0.12.1` against RAM's `12.208`, about one tick.
 
-**Still open on the board:** the side cards. Ours shows the `FX-350` advert on the two side boards and the original's are plain teal in that frame (the advert's own timeline, not the gantry's;
+**Closed 2026-10-26:** the cards' panel red read about +9 over the scenery because the original's card is `R5G6B5` in linear light (`start-gantry.md`, "The card is 5-6-5 in linear light"), not the multiply-versus-add leftover below, which `cf_vex_billboard`'s mode 1 already settled. **Still open on the board:** the side cards. Ours shows the `FX-350` advert on the two side boards and the original's are plain teal in that frame (the advert's own timeline, not the gantry's;
 `adverts.rs` runs it off the race clock); and `cf_vex_billboard`'s program is a multiply by the card (`card * (glow.a * k + glow.rgb * light)`) where ours adds the second texture to the
 albedo: the GO card reads right through the halo, Vineta K's yellow `harimau` billboard (`(255, 255, 28)` against ours `(164, 183, 118)`) does not (rcsmaterial.md, "Not drawn, named").
 

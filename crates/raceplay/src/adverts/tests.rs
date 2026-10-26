@@ -476,6 +476,92 @@ fn hd_and_pulse_draw_their_gantry_as_a_card() {
     );
 }
 
+/// HD's cards are 5-6-5 targets and Pulse's are not measured to be.
+#[test]
+fn hd_declares_its_cards_565_and_pulse_does_not() {
+    let hd = oag_hd::TITLE.adverts.expect("HD measured its advert pass");
+    let pulse = oag_pulse::TITLE
+        .adverts
+        .expect("Pulse measured its advert pass");
+    assert!(
+        hd.card_565,
+        "RPCS3 2026-10-26: the card reads R5G6B5 in linear light"
+    );
+    assert!(!pulse.card_565, "Pulse's card format is unmeasured");
+}
+
+/// The share of pixels of `rgba` (gamma 8-bit, as the card holds them) whose decoded linear
+/// colour sits on a 5-6-5 level in all three channels, within the 8-bit encode's own error.
+fn on_the_565_grid(rgba: &[u8]) -> f32 {
+    let levels = [31.0_f32, 63.0, 31.0];
+    let pixels = rgba.as_chunks::<4>().0;
+    let on_grid = pixels
+        .iter()
+        .filter(|p| {
+            (0..3).all(|c| {
+                let level = (f32::from(p[c]) / 255.0).powf(2.2) * levels[c];
+                (level - level.round()).abs() <= 0.06
+            })
+        })
+        .count();
+    on_grid as f32 / pixels.len() as f32
+}
+
+/// HD's slot 8 card holds linear light rounded to 31, 63 and 31 levels: a GDB read of the live
+/// target (`0x02ae0000`, RPCS3, 2026-10-26, Chenghou Project) is the panel texture decoded and
+/// rounded to the nearest level, 89 % of its red, 86 % of its green and 90 % of its blue texels
+/// equal to that rounding of ours. A card that kept the 8-bit gamma texel puts few pixels on the
+/// grid in all three channels at once; dropping the title's `card_565` fails this.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
+fn hd_gantry_card_holds_565_levels_of_linear_light() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("card 565 test", &adapter)),
+    ) else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let cards = Cards::new(&device, &queue, loaded.billboards.adverts, Anisotropy::Off)
+        .expect("building the cards");
+    let (_, _, pixels) = cards
+        .read_back(&device, &queue, 4.5)
+        .into_iter()
+        .find(|(slot, _, _)| *slot == 8)
+        .expect("slot 8 is a card");
+    let share = on_the_565_grid(&pixels);
+    assert!(
+        share > 0.8,
+        "only {share:.2} of the gantry card sits on the 5-6-5 grid"
+    );
+    // The decode curve: the live card's red averages 0.267 levels over the panel (card rows 20
+    // to 236, columns 5 to 70); the sRGB curve gives 0.29 here and the 2.2 power 0.14.
+    let (mut sum, mut count) = (0.0_f32, 0.0_f32);
+    for y in 20..236 {
+        for x in 5..70 {
+            let red = f32::from(pixels[(y * 512 + x) * 4]) / 255.0;
+            sum += (red.powf(2.2) * 31.0).round();
+            count += 1.0;
+        }
+    }
+    let red_level = sum / count;
+    assert!(
+        (0.22..0.36).contains(&red_level),
+        "the panel's red averages {red_level:.3} levels, the live card's is 0.267"
+    );
+}
+
 /// A Pulse race loaded from `source`, for the gantry card tests below.
 fn pulse_race(source: &str) -> Option<crate::Loaded> {
     let image = oag_testdata::image(source)?;

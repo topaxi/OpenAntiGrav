@@ -912,7 +912,7 @@ window (`--window 12.35,13.3`): `HOOK_LIGHT=1 HOOK_NEED_SCREEN=1 ... lapboard --
 scripts/rpcs3_draw_hook.py --hook-shots 1 --dump 0x40000000:0x20000 --laps ""` (464 s on 2026-10-18). **A render
 target's pixels are not readable this way (a GDB read of its VRAM range is, with `Write Color Buffers` on: `hd-one-pair-moa` read the 512x256 sky reflection map at
 `0xc4065380` that way on four cold boots, 524,288 bytes `A R G B`; but not after a hook dump, whose pause came back with a gamma-decoded copy)**: `--dump 0xC2AE0000:0x40000` (a 512 x 256 card) returns all zeros, the RSX keeps
-the target on the host side.
+the target on the host side. **Read through the GDB stub on a paused state restore it came back (2026-10-26, `hd-card-panels`)**: 262,144 bytes of big-endian `R5G6B5`, retried after a pause that read zeros (`docs/rendering/start-gantry.md`, "The card is 5-6-5 in linear light").
 
 **What measured here (confidence 90 unless stated):**
 

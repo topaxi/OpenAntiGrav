@@ -242,6 +242,7 @@ pub const TITLE: &Title = &Title {
         zone_shares_one_texture: true,
         gantry_card: true,
         adverts_unlit: true,
+        card_565: true,
         card_unlit: true,
         zone_gantry: Some(oag_title::adverts::ZoneGantry {
             entry: "/Data/Billboards/HD_Adverts/321Go/321Go_Zone.vex",

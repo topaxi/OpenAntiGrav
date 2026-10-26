@@ -101,6 +101,18 @@ pub struct Adverts {
     /// every prim of every run (slot 7 on `16_Track`'s home straight, four adverts near `01_Track`'s
     /// grid) has `LIGHTINGENABLE` 0.
     pub adverts_unlit: bool,
+    /// Whether the target the cards are drawn into is a 5-6-5 colour target holding linear light,
+    /// so a card's colour reaches the track quad rounded to 31, 63 and 31 levels.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-26, Chenghou Project)**: the quad draws read the
+    /// 512 x 256 targets as `R5G6B5` (2026-10-18, `fmt 0x1a429`), and a GDB read of the slot 8
+    /// card (`0x02ae0000`, pitch `0x400`, big-endian words) is the panel texture decoded to linear
+    /// light and rounded to the nearest level: 85 to 90 % of its pixels equal that rounding
+    /// (green 0.98 and blue 0.97 correlated), where ours kept the gamma texel at 8 bits. The panel's
+    /// red, 25 of 255, is 0.0098 linear, under a third of the first level, so most of it
+    /// rounds to 0 and the quad's red reads about 13 lower. `false` for a title whose card
+    /// format is not measured: Pulse's PSP and PS2 cards keep the 8-bit colour.
+    pub card_565: bool,
     /// The board slot 8 shows instead of the circuit's own while the race is a
     /// Zone race, or `None` where the title keeps one gantry for every mode.
     pub zone_gantry: Option<ZoneGantry>,
