@@ -11,6 +11,7 @@
 mod blocks;
 mod drawing;
 mod frame;
+mod hide;
 mod nav;
 mod navigation;
 mod pointer;

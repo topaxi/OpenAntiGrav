@@ -38,6 +38,9 @@ pub struct Page {
     pub subtitles: Vec<Option<String>>,
     /// Each row's id and attachment, parallel to [`Self::entries`].
     pub meta: Vec<RowMeta>,
+    /// Rows [`Menu::supply`](super::Menu::supply) took out because their source
+    /// offers nothing to choose, waiting to come back. See `hide.rs`.
+    pub(super) parked: Vec<super::hide::Parked>,
 }
 
 impl Page {
