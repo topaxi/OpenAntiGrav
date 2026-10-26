@@ -26,9 +26,9 @@
 //!   Wipeout HD draws its shield meter at the top centre.
 //!
 //! Sizes are fractions of the window's height, so a button is the same
-//! physical size on every phone: GO is 0.36 of the height (about 24 mm on a
-//! 6.2 in phone), the small buttons 0.16 to 0.22 (11 to 15 mm), none under
-//! the 9 to 12 mm a thumb needs. Everything is kept inside [`SAFE_X`] and
+//! physical size on every phone: GO's core is 0.25 wide and 0.305 tall (about
+//! 17 by 20 mm on a 6.2 in phone), the small buttons 0.16 to 0.22 (11 to 15
+//! mm), none under the 9 to 12 mm a thumb needs. Everything is kept inside [`SAFE_X`] and
 //! [`SAFE_Y`] of the edges for rounded corners and a camera cutout, and
 //! clear of the HUD's four corner readouts.
 //!
@@ -69,18 +69,38 @@ pub const SAFE_X: f32 = 0.05;
 /// of the height.
 pub const SAFE_Y: f32 = 0.03;
 
-/// GO's thrust-only core, square, as a fraction of the window's height; FIRE
-/// and ABSORB are its width.
-pub const GO_CORE: f32 = 0.36;
+/// GO's thrust-only core width, as a fraction of the window's height; FIRE
+/// and ABSORB are its width. **Chosen, not measured**: 30% under the 0.36 the
+/// core was a square of, at the maintainer's ask (2026-10-26). The brake wings
+/// do not follow it, see [`GO_WING`].
+pub const GO_CORE_W: f32 = 0.25;
+
+/// GO's height, wings included, as a fraction of the window's height.
+/// **Chosen, not measured**: 15% under the 0.36 it was, at the same ask.
+pub const GO_CORE_H: f32 = 0.305;
+
+/// Where GO's centre sits down the window, as a fraction of its height. The
+/// column is laid out around it, so GO's resting place does not move when it
+/// shrinks. **Chosen, not measured.**
+const GO_CENTRE_Y: f32 = 0.52;
+
+/// Easy's bar under GO with the zone off, as a fraction of the window's
+/// height: two halves wide enough for the words `BRAKE` and `ABSORB` (about
+/// 0.13 each), which GO's narrower core no longer is. Right-aligned with GO.
+/// **Chosen, not measured.**
+pub const EASY_BAR_W: f32 = 0.36;
 
 /// The width of each brake wing either side of GO's core, as a fraction of
 /// the window's height, in Standard with GO's zones on. **Chosen, not
-/// measured**: about 9 mm on a 6.2 in phone, the thumb's minimum.
+/// measured**: about 9 mm on a 6.2 in phone, the thumb's minimum. Unchanged
+/// when the core narrowed: a wing is a thumb's reach, not a share of GO.
 pub const GO_WING: f32 = 0.14;
 
-/// The share of GO's width, from each side, that is a brake wing. A finger
-/// latched on GO keeps the pull it had at GO's edge when it slides past it.
-pub const GO_ZONE_SIDE: f32 = GO_WING / (GO_CORE + 2.0 * GO_WING);
+/// The share of GO's width, from each side, that is a brake wing: always
+/// [`GO_WING`] of the window's height, so it grows as the core narrows. A
+/// finger latched on GO keeps the pull it had at GO's edge when it slides
+/// past it.
+pub const GO_ZONE_SIDE: f32 = GO_WING / (GO_CORE_W + 2.0 * GO_WING);
 
 /// How deep into a brake wing, as a share of its width, the pull already
 /// reads full: a thumb need not reach GO's very edge. **Chosen, not
@@ -360,7 +380,8 @@ pub fn layout(size: (f32, f32)) -> Vec<(Control, Rect)> {
 /// FIRE above GO, a bar below it, both GO's core wide; in Standard with the
 /// zones on, GO is [`GO_WING`] wider on each side than that core. The bar is
 /// ABSORB, or in Easy with GO's zone off split into two equal halves across
-/// GO's width, BRAKE on the left and ABSORB on the right. Standard with the zone off keeps the separate BRAKE
+/// [`EASY_BAR_W`], right-aligned with GO, BRAKE on the left and ABSORB on the
+/// right. Standard with the zone off keeps the separate BRAKE
 /// L/R buttons (BRAKE L upper left with PAUSE and VIEW beside it, BRAKE R in
 /// the thumb's arc left of GO);
 /// otherwise those two sit in the top-left corner.
@@ -374,24 +395,29 @@ pub fn layout_for(size: (f32, f32), setup: Setup) -> Vec<(Control, Rect)> {
         w: rw * h,
         h: rh * h,
     };
-    let (go, go_y, fire, bar, gap) = (GO_CORE, 0.34, 0.18, 0.11, 0.03);
+    let (go, go_h, fire, bar, gap) = (GO_CORE_W, GO_CORE_H, 0.18, 0.11, 0.03);
+    let go_y = GO_CENTRE_Y - go_h / 2.0;
     let wing = if setup.scheme == Scheme::Standard && setup.zones {
         GO_WING
     } else {
         0.0
     };
     let x = right - go - wing;
-    let bar_y = go_y + go + gap;
+    let bar_y = go_y + go_h + gap;
     let (brake, brake_y, small) = (0.17, 0.20, 0.13);
     let separate = setup.scheme == Scheme::Standard && !setup.zones;
     let mut out = vec![
-        (Control::Accelerate, r(x - wing, go_y, go + 2.0 * wing, go)),
+        (
+            Control::Accelerate,
+            r(x - wing, go_y, go + 2.0 * wing, go_h),
+        ),
         (Control::Fire, r(x, go_y - 0.02 - fire, go, fire)),
     ];
     if setup.scheme == Scheme::Easy && !setup.zones {
-        let half = go / 2.0;
-        out.push((Control::Brake, r(x, bar_y, half, bar)));
-        out.push((Control::Absorb, r(x + half, bar_y, half, bar)));
+        let half = EASY_BAR_W / 2.0;
+        let bar_x = x + go - EASY_BAR_W;
+        out.push((Control::Brake, r(bar_x, bar_y, half, bar)));
+        out.push((Control::Absorb, r(bar_x + half, bar_y, half, bar)));
     } else {
         out.push((Control::Absorb, r(x, bar_y, go, bar)));
     }
@@ -414,7 +440,7 @@ pub fn layout_for(size: (f32, f32), setup: Setup) -> Vec<(Control, Rect)> {
         out.push((Control::AirbrakeLeft, r(SAFE_X, brake_y, brake, brake)));
         out.push((
             Control::AirbrakeRight,
-            r(x - gap - brake, go_y + (go - brake) / 2.0, brake, brake),
+            r(x - gap - brake, go_y + (go_h - brake) / 2.0, brake, brake),
         ));
     }
     out

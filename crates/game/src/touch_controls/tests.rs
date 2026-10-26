@@ -306,3 +306,114 @@ fn easys_stick_draws_a_full_lock_guide_ring() {
         "the guide ring is an extra draw"
     );
 }
+
+fn chevrons(list: &[Draw]) -> Vec<[f32; 4]> {
+    let triangle = Art::flat().triangle;
+    list.iter()
+        .filter_map(|d| match d {
+            Draw::Sprite { rect, uv, .. } if *uv == triangle => Some(*rect),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_drawn_wing_is_as_wide_as_it_was_before_the_core_narrowed() {
+    let mut touches = Touches::default();
+    touches.set_setup(Setup::new(Scheme::Standard, true), SIZE);
+    touches.down(1, at(0.0, 0.5), SIZE);
+    let full = list(&touches, false, true, 1.0);
+    let wing = 0.14 * SIZE.1 * SCALE;
+    let lit_rects: Vec<_> = fills(&full)
+        .filter(|(_, c)| is_lit(*c))
+        .map(|(r, _)| r)
+        .collect();
+    let left = lit_rects.iter().map(|r| r[0]).fold(f32::MAX, f32::min);
+    let right = lit_rects.iter().map(|r| r[0] + r[2]).fold(0.0f32, f32::max);
+    // The lit patch is clipped to GO's outline, one border in from its edge.
+    assert!(
+        (right - left - wing).abs() < 1.5,
+        "the lit wing is {} grid units, the wing was {wing}",
+        right - left
+    );
+    let go = go();
+    assert!((go.w * SCALE - (0.25 + 2.0 * 0.14) * SIZE.1 * SCALE).abs() < 0.01);
+}
+
+#[test]
+fn gos_chevrons_are_the_same_size_in_every_layout_and_inside_the_core() {
+    let core = touch::GO_CORE_W * SIZE.1 * SCALE;
+    for (setup, demo) in [
+        (Setup::new(Scheme::Standard, true), Demo::Idle),
+        (Setup::new(Scheme::Standard, false), Demo::IdleButtons),
+        (Setup::new(Scheme::Easy, true), Demo::EasyIdle),
+        (Setup::new(Scheme::Easy, false), Demo::EasyZonesOff),
+    ] {
+        let drawn = draw(
+            &Art::flat(),
+            &demo.touches(SIZE),
+            SIZE,
+            SCALE,
+            false,
+            setup,
+            1.0,
+        );
+        let marks = chevrons(&drawn);
+        assert_eq!(marks.len(), 2, "{setup:?}");
+        let go = touch::go_rect(SIZE, setup);
+        let centre = (go.x + go.w / 2.0) * SCALE;
+        for m in marks {
+            assert!((m[2] - core * GO_CHEVRON).abs() < 0.01, "{setup:?} {m:?}");
+            assert!(
+                (m[0] + m[2] / 2.0 - centre).abs() < 0.01,
+                "{setup:?} centred"
+            );
+            assert!(m[1] >= go.y * SCALE && m[1] + m[3] <= (go.y + go.h) * SCALE);
+        }
+    }
+}
+
+#[test]
+fn easys_go_word_clears_the_chevrons_and_the_bands_divider() {
+    let drawn = easy_list(&Demo::EasyIdle.touches(SIZE), true);
+    let go = touch::go_rect(SIZE, Setup::new(Scheme::Easy, true));
+    let word = drawn
+        .iter()
+        .find_map(|d| match d {
+            Draw::Text { y, text, .. } if text == "GO" => Some(*y),
+            _ => None,
+        })
+        .expect("GO is drawn");
+    let chevron_bottom = chevrons(&drawn)
+        .iter()
+        .map(|m| m[1] + m[3])
+        .fold(0.0f32, f32::max);
+    let divider = (go.y + go.h * (1.0 - touch::EASY_BAND)) * SCALE;
+    assert!(
+        word >= chevron_bottom,
+        "{word} under the chevrons {chevron_bottom}"
+    );
+    assert!(
+        word + LABEL_HEIGHT <= divider,
+        "{word} over the band at {divider}"
+    );
+}
+
+#[test]
+fn easys_bar_is_drawn_where_it_is_hit() {
+    let drawn = easy_list(&Demo::EasyZonesOff.touches(SIZE), false);
+    let rects = touch::layout_for(SIZE, Setup::new(Scheme::Easy, false));
+    let at = |c| rects.iter().find(|(k, _)| *k == c).unwrap().1;
+    let (brake, absorb) = (at(Control::Brake), at(Control::Absorb));
+    let words: Vec<_> = drawn
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Text { x, text, .. } => Some((text.as_str(), *x)),
+            _ => None,
+        })
+        .collect();
+    for (word, half) in [("BRAKE", brake), ("ABSORB", absorb)] {
+        let x = words.iter().find(|(w, _)| *w == word).expect("drawn").1;
+        assert!((x - half.centre().0 * SCALE).abs() < 0.01, "{word}");
+    }
+}
