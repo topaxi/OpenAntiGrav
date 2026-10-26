@@ -653,8 +653,8 @@ fn build_class(
         // the full 4x3 world matrix, into GE `WORLDMATRIXDATA` words per mesh,
         // and the GE takes a normal through that matrix's 3x3 for lighting and
         // for environment-map coordinates. 75,750 of Pulse PSP's 7.1 M normals
-        // sit under a rotated node (the airbrake flaps, circuit scenery, 6
-        // circuits' shine batches); left local they face the wrong way - see
+        // sit under a rotated node (the airbrake flaps, circuit scenery and
+        // some of its shine batches); left local they face the wrong way - see
         // `vex_node_normals_ground_truth.rs` and `docs/formats/vex.md`.
         // Under an `Anim Transform` the matrix is the one from the anchor to
         // the node, and the vertex shader applies the anchor's.

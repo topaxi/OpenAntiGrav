@@ -632,7 +632,7 @@ colour, so the GE draws it with lighting off
 normal reaches the picture only through environment-map coordinates: the
 circuit's `*_shinemap` batches (`oag_render::shine`, 7,898 of the turned
 normals; its `TrackNormals` takes a static node's normal as already in the
-model's space). 4 lit vertices over all 40 circuit files sit under a turned node.
+model's space). 14 lit vertices over all 40 circuit files (`05_Track` and `13_Track`'s zone variants) sit under a turned node.
 A hull batch has no colour and is lit by the circuit's authored lights through
 the node's matrix, so the flaps' lighting and `oag_mesh::mesh::Flap::swung`
 (which rotates a normal beside its position, in the hull's space) were wrong
@@ -654,9 +654,9 @@ picture of those pods was not captured.
 
 | Title | Answer |
 | --- | --- |
-| Pulse PS2 | **ported.** The same `mesh.rs` loop reads the VIF batches' normals; 99.9% against its faces once rotated, 58.4% before. The PS2 executable's mesh draw is not read (PSP is the reference). |
+| Pulse PS2 | **ported.** The same `mesh.rs` loop reads the VIF batches' normals; 99.9% against its faces once rotated, 58.4% before. The PSP-format batches this disc also carries are rotated by the same loop but the face test could not judge them (above), so they are **ported, unverified**. The PS2 executable's mesh draw is not read (PSP is the reference). |
 | Pure PSP | **ported.** Version-4 files, same loop: 78.2% before, 99.9% after. The 15 version-3 files are not read. |
-| Wipeout HD, Wipeout 2048, Omega | **checked, differs.** Their geometry is `.rcsmodel`; `oag_mesh::mesh::rcs` already carries a normal through `to_world` (PS3, `rcs.rs`) or its inverse transpose (Vita and PS4, `psp2.rs`). The `.vex` of those titles authors no batches. |
+| Wipeout HD, Wipeout 2048, Omega | **checked, differs.** Their geometry is `.rcsmodel`, placed by `oag_mesh::mesh::rcs`, which already carries a normal through `to_world` (PS3, `rcs.rs`) or its inverse transpose (Vita and PS4, `psp2.rs`). Their `.vex` files were not run through the batch loop changed here and are **not censused**. |
 
 ### The vertex type is not misdeclared, and `u8` texcoords really are one byte each
 
