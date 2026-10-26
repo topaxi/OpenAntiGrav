@@ -7,6 +7,7 @@
 
 use crate::Uploads;
 use crate::drawable::HullLayers;
+use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::Placement;
@@ -81,12 +82,17 @@ impl super::super::Scene {
     /// drew; its picture is the one it drew when it redrew them. **The `mapped`
     /// tier's depth map is fitted on the craft its view follows**, so each later
     /// view redraws that one, alone.
+    ///
+    /// `frustum` is the view's hull-culling frustum ([`super::super::craft_cull`]); a
+    /// craft whose hull it leaves out gets no sun-occlusion or self-shadow pass, see
+    /// [`Self::hull_seen`].
     pub(super) fn render_shadow_passes(
         &self,
         queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
+        frustum: Option<&Frustum>,
     ) {
         if !self.does_frame_work() {
             // The `mapped` tier's map is fitted on the craft the view follows, so
@@ -105,7 +111,38 @@ impl super::super::Scene {
             ..w
         });
         self.render_shadow_map(queue, encoder, race, shadows);
-        self.render_sun_occlusion(queue, encoder, race, shadows);
+        // The frame's work serves every view of a split, and `frustum` is this view's alone.
+        let frustum = frustum.filter(|_| self.layer.get() == Layer::Whole);
+        self.render_sun_occlusion(queue, encoder, race, shadows, frustum);
+    }
+
+    /// Whether the hull of the craft in `slot` is drawn in the view `frustum` culls by:
+    /// the test the hull's own draw takes (`craft_cull::hull_in_view`), so `false` means
+    /// no pixel of the hull is in the picture. Always `true` without a frustum.
+    ///
+    /// Only the hull (and the wreck, which is never culled) reads the craft's
+    /// sun-occlusion and self-shadow layers and its environment-probe layers, so a craft
+    /// this leaves out skips them: the layer keeps last frame's contents, which no pixel
+    /// reads, and the frame the hull comes back into view draws them first. On Anulpha
+    /// Pass most of a field of eight is behind the camera or off to a side.
+    pub(in crate::scene) fn hull_seen(
+        &self,
+        race: &Race,
+        slot: usize,
+        frustum: Option<&Frustum>,
+    ) -> bool {
+        if frustum.is_none() || self.is_wrecked(race, slot) {
+            return true;
+        }
+        self.ships.get(slot).is_none_or(|ship| {
+            let (centre, radius) = ship.bound();
+            super::super::craft_cull::hull_in_view(
+                frustum,
+                race.ship_model_matrix_of(slot),
+                centre,
+                radius,
+            )
+        })
     }
 
     /// What the camera-independent work has run so far.
@@ -389,6 +426,7 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
+        frustum: Option<&Frustum>,
     ) {
         let mut maps = self.sun_occlusion.borrow_mut();
         let hulls = self.shadow_hulls.iter().any(Option::is_some);
@@ -412,6 +450,9 @@ impl super::super::Scene {
                 if maps.drawn(slot) > 0 {
                     maps.clear(encoder, slot);
                 }
+                continue;
+            }
+            if !self.hull_seen(race, slot, frustum) {
                 continue;
             }
             let model = race.ship_model_matrix_of(slot);

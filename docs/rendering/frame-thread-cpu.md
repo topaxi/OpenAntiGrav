@@ -282,6 +282,7 @@ to 1.5, on AC. Ms per frame:
 | Anulpha, before | 0.90 | 2.92 | 5.33 | 10.12 | 75.5 | 19.8 |
 | Anulpha, arrays hold used slots | 0.83 | 2.92 | 5.11 | 9.83 | 81.0 | 17.1 |
 | Anulpha, plus pooled buffers | 0.84 | 2.94 | 4.70 | 9.49 | 82.8 | 16.1 |
+| Anulpha, plus no shadow passes for culled hulls (other runs) | 0.78 | 2.84 | 4.49 | 9.09 | 85.5 | 14.3 |
 | HD default circuit, before | 0.25 | 1.63 | 2.75 | 5.66 | 90.0 | 11.2 |
 | HD default circuit, after | 0.25 | 1.58 | 2.42 | 5.22 | 90.0 | 11.2 |
 | Pulse default circuit, before | 0.19 | 1.63 | 2.14 | 5.00 | 90.0 | 11.2 |
@@ -309,9 +310,20 @@ A frame on Anulpha opens about 54 render passes.
 2. **Projectile pool slots sub-allocate one buffer per pool** (`Drawable::instances`). There are
    128 slots per weapon model, and each slot had its own uniform buffer and three animation
    buffers, so 6,235 buffers were alive. Every pass's scope was sized to that count. Now 907.
+3. **No sun-occlusion or self-shadow pass for a craft whose hull is culled**
+   (`Scene::hull_seen`, single-view frames only). Only that hull and its wreck read the two
+   layers, and the test is the hull draw's own (`craft_cull::hull_in_view`, same frustum), so a
+   skipped layer is one no pixel reads. Against the row above, in a separate pair of runs:
+   total 9.51 to 9.09 ms, submit 4.75 to 4.49.
 
-Measured and dropped: reusing `probes::mix`'s buffers, and eliding the repeated per-draw binds in
-the sun-occlusion pass. Neither moved scene or submit on the Deck (scene 2.92 against 2.93).
+Measured and dropped:
+
+- reusing `probes::mix`'s buffers, and eliding the repeated per-draw binds in the sun-occlusion
+  pass: neither moved scene or submit on the Deck (scene 2.92 against 2.93);
+- drawing each still advert card once: all seven of Anulpha's cards animate, so seven passes a
+  frame remain;
+- merging back-to-back draws whose index ranges touch: submit 4.48 to 4.40, total inside the
+  run-to-run noise.
 
 The binding-array and buffer counts come from `perf-probe` (`array_binds` on the `perf frame`
 line) and from a local probe in a copy of wgpu-core (not committed). The probe counted usage

@@ -410,7 +410,7 @@ impl Scene {
         // casters in it, so a pass encoded after this block would leave the
         // first frame - which is the only frame a `--screenshot` capture
         // draws - reading an empty map at zero strength.
-        self.render_shadow_passes(queue, encoder, race, shadows);
+        self.render_shadow_passes(queue, encoder, race, shadows, frustum.as_ref());
         let scene = mesh_render::Scene {
             fog: fog.with_texture_detail(race.texture_detail()),
             // Pulse's hull lights reach the craft alone - see `ship_scene`.
