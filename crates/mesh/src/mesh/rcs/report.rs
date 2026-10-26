@@ -198,6 +198,9 @@ pub struct Report {
     /// population to be all false negative, but too large to wave off as
     /// "mostly unlit" without checking either; unread, deliberately, rather
     /// than assumed.
+    /// Since 2026-10-26 a material whose program has no `LG2` reading a dot product
+    /// (`Program::has_dot_power`) takes [`crate::mesh::NO_SPECULAR`] before this counter,
+    /// so the share above has dropped by that population (the figure is unrecounted).
     pub specular_exponent_unresolved: usize,
     /// Materials whose fragment program structurally accumulates its second
     /// texture (see [`crate::mesh::slots::ADD_SECOND`]) but whose *actually

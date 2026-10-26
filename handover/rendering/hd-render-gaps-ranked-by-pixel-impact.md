@@ -110,19 +110,10 @@ cause. What the crops show:
 
 ## Next Steps
 
-1. **Measure first, then lane: ceiling light beams and glow (row 5).** Claim:
-   ours draws the ceiling's additive light beams and glow brighter than the
-   original on Amphiseum and Vineta K, and that is most of row 5's +6.3 luma
-   bias. The rim highlights on Vineta K's ramp edges are a second candidate
-   (the stand-in specular in
-   [hd-lit-billboard-specular-and-gantry-leftovers.md](hd-lit-billboard-specular-and-gantry-leftovers.md),
-   ready-to-wire) and are not yet separated from the beams. Method: one
-   per-draw ablation on `the-amphiseum` and `vineta-k` (skip the additive
-   light-shaft draws; then skip the no-LG2 specular on the ceiling families),
-   and compare row 5's luma bias after each. Acceptance region: tiles tx 9-12,
-   ty 0-1 on those two pairs, luma bias within +2, with the craft and track
-   blocks unchanged within noise. If the beams account for the bias, the lane
-   is the light-shaft material; if the rims do, it is the specular lane.
+1. ~~**Measure first, then lane: ceiling light beams and glow (row 5).**~~ Measured and wired 2026-10-26, see
+   "Top-right band, measured and wired" below. The beams are `dc_lightcone` read raw (its taps are gamma-7 units);
+   Vineta K's rim lines were a stand-in specular on a program with no half-vector power. Rows left: the open list
+   below.
 2. **Measure, not a lane: HUD-only share.** Claim: the HUD's own pixels carry
    under 5% of the 13-pair error, so the HUD row is an estimate artifact.
    Method: mask the HUD layout rects from

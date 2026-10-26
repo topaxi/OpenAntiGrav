@@ -24,6 +24,6 @@ Ranked by what a player notices.
 ## Next Steps
 
 1. ~~Run the per-material tone probe on Amphiseum pose 00~~ done 2026-10-05; the light-sum/encode question is closed (Open item 1). All three shapes of `nr_billboardholographicscanlines` are wired (2026-10-12: inline literals, `wes_`/Modesto's parameter-driven one, the `02_track` predicated one). Next: take a WCB-on RPCS3 frame of a board (Amphiseum's, Modesto's) and of a `wes_` plume to compare brightness and hue; `scanlinebillboard*` (Talon's Junction, Tech de Ra) is another program and still draws pale.
-2. Capture a matched Amphiseum pose that frames `dc_lightcone` and confirm the ungated-ramp variant.
+2. ~~Capture a matched Amphiseum pose that frames `dc_lightcone` and confirm the ungated-ramp variant.~~ Done 2026-10-26 (`hd-top-right-band`): `hd/the-amphiseum` frames the cone and a live RPCS3 dump matched its block #3 (`@0x1520`, ungated); the taps are gamma-7 units, see `docs/formats/rcsmaterial.md`. The ungated reading itself still has only that pair's evidence.
 3. Test the `FENCT`-sets-the-condition-register reading (confidence 60) with an RPCS3 register watch on a Talon's Junction cone draw, or a second matched frame that frames a cone.
 4. Boot RPCS3 and compare ships, exhaust, boost, shield hits and pads at a matched pose; this pass did not.
