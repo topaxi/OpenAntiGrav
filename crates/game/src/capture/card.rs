@@ -52,12 +52,7 @@ impl CardTarget {
     pub(super) fn reached(&self, frontend: &Frontend) -> bool {
         match self.page {
             Some(page) => frontend.event_card_page() == Some(page),
-            None => {
-                self.event.is_none()
-                    && frontend
-                        .machine()
-                        .is(oag_2048::frontend::states::NEW_FE_SHELL)
-            }
+            None => self.event.is_none() && on_the_map(frontend),
         }
     }
 
@@ -66,9 +61,7 @@ impl CardTarget {
     /// right.
     pub(super) fn step(&mut self, frontend: &mut Frontend, pressed: u32) -> anyhow::Result<u32> {
         if let Some(name) = &self.event
-            && frontend
-                .machine()
-                .is(oag_2048::frontend::states::NEW_FE_SHELL)
+            && on_the_map(frontend)
             && !frontend.event_card_open()
         {
             anyhow::ensure!(
@@ -85,4 +78,11 @@ impl CardTarget {
             pressed
         })
     }
+}
+
+/// The campaign shell is current: the map a card opens over.
+fn on_the_map(frontend: &Frontend) -> bool {
+    frontend
+        .machine()
+        .is(oag_2048::frontend::states::NEW_FE_SHELL)
 }

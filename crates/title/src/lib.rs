@@ -851,6 +851,50 @@ pub struct AddOn {
     /// The team the campaign flies when the player's own pick is not on its
     /// roster: the id Select Team opens on in that campaign.
     pub default_team: &'static str,
+    /// Where the campaign's cells sit on the campaign map.
+    pub nodes: NodeMap,
+}
+
+/// Where a downloadable campaign's cells land on the campaign map: a node's
+/// position in canvas units is the bias, plus the offset of the grid it is in,
+/// plus the cell's own `(x, y)` scaled. The numbers are the title's, read off its
+/// executable, so they live with the title and this is the arithmetic alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NodeMap {
+    /// Canvas units one cell step moves a node, across and down.
+    pub scale: (u32, u32),
+    /// Added to every node of the campaign.
+    pub bias: (u32, u32),
+    /// The offset of each grid, by the grid's index (`grid0`, `grid1`...).
+    pub group_offsets: &'static [(u32, u32)],
+}
+
+impl NodeMap {
+    /// A node's position in canvas units. `None` for a grid with no offset row.
+    #[must_use]
+    pub fn node(&self, group: usize, cell: (u32, u32)) -> Option<(u32, u32)> {
+        let (dx, dy) = *self.group_offsets.get(group)?;
+        Some((
+            self.bias.0 + dx + self.scale.0 * cell.0,
+            self.bias.1 + dy + self.scale.1 * cell.1,
+        ))
+    }
+
+    /// A node's position in cell steps, with the first row and column of the map
+    /// at `1`, the way a single-player event's coordinates are: [`Self::node`]
+    /// less the bias, over the scale, and one more. `None` as [`Self::node`].
+    #[must_use]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "canvas units are a few hundred at most"
+    )]
+    pub fn step(&self, group: usize, cell: (u32, u32)) -> Option<(f32, f32)> {
+        let (x, y) = self.node(group, cell)?;
+        Some((
+            (x - self.bias.0) as f32 / self.scale.0 as f32 + 1.0,
+            (y - self.bias.1) as f32 / self.scale.1 as f32 + 1.0,
+        ))
+    }
 }
 
 /// A serial positively identified as belonging to some other title.

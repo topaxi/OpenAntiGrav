@@ -61,7 +61,7 @@ REACH = re.compile(r"\boag_(?:pulse|pure|hd|omega|2048)::")
 # when a file drops; delete it at zero. Never raise one.
 BASELINE: dict[str, int] = {
     "crates/game/src/boot.rs": 2,
-    "crates/game/src/boot/campaign2048.rs": 27,
+    "crates/game/src/boot/campaign2048.rs": 26,
     "crates/game/src/boot/fury.rs": 1,
     "crates/game/src/boot/movies.rs": 1,
     "crates/game/src/boot/sprites.rs": 1,

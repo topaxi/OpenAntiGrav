@@ -10,6 +10,8 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
+use oag_2048::campaign::EClass;
+use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
 use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
@@ -76,7 +78,7 @@ pub(super) fn map_events(
             .unwrap_or_else(|| "no circuit".to_string());
         let class = event
             .speed_class
-            .and_then(oag_2048::campaign::EClass::from_ordinal)
+            .and_then(EClass::from_ordinal)
             .map(|class| class.as_str());
         let mode = oag_2048::campaign::engine_mode(event).unwrap_or("unknown mode");
         // The disc's own four mode icons - see `EventIcon`'s own doc
@@ -522,9 +524,8 @@ fn craft_caption(strings: &StringTable, team: &str, variant: &str) -> String {
 /// What the weapon callout draws for `callout`, `None` when it draws nothing.
 pub(super) fn card_weapons(
     strings: &StringTable,
-    callout: oag_2048::campaign::callout::Callout,
+    callout: Callout,
 ) -> Option<oag_ui::frontend::CardWeapons> {
-    use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
     let single = |stem: &str, id: &str| oag_ui::frontend::CardWeapons {
         icons: vec![texture(stem)],
         caption: strings.get(id).map(str::to_string).unwrap_or_default(),
@@ -543,6 +544,20 @@ pub(super) fn card_weapons(
                 .join(SEPARATOR),
         },
     })
+}
+
+/// The weapon callout of a cell that races with weapons off.
+pub(super) fn weapons_off(strings: &StringTable) -> Option<oag_ui::frontend::CardWeapons> {
+    card_weapons(strings, Callout::WeaponsOff)
+}
+
+/// The ordinal of the speed class `name` spells, `None` for a name that is not
+/// one (a Zone cell's `class` is the word `Zone`).
+pub(super) fn class_ordinal(name: &str) -> Option<i64> {
+    EClass::ALL
+        .into_iter()
+        .find(|class| class.as_str().eq_ignore_ascii_case(name))
+        .map(EClass::ordinal)
 }
 
 /// Every texture the cards of `events` ask for beyond the fixed set.

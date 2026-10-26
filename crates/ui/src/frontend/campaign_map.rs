@@ -313,7 +313,7 @@ pub struct MapEvent {
     pub name: String,
     /// `M_X`/`M_Y`, the file's own cell, in cell steps: whole numbers on the
     /// single-player map, and a downloadable campaign's nodes land between them
-    /// (`oag_2048::campaign::tier::step`).
+    /// (`oag_title::NodeMap::step`).
     pub x: f32,
     pub y: f32,
     /// What to say about it: the circuit's display name, the kind, the

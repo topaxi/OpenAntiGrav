@@ -493,10 +493,12 @@ fn each_groups_label_sits_over_the_first_row_of_its_grids_nodes() {
     let labels = group_labels(&xml);
     assert_eq!(labels.len(), 16, "eight HD and eight Fury wordmarks");
 
-    let mut by_grid: Vec<(usize, Vec<(f32, f32)>)> = Vec::new();
+    let mut by_grid: Vec<(usize, Vec<(u32, u32)>)> = Vec::new();
     for (_, _, cell) in campaigns.cells() {
         let index = grid_of(&cell.name);
-        let node = tier::node(index, cell.grid_coords().expect("a grid cell")).expect("a row");
+        let node = tier::NODES
+            .node(index, cell.grid_coords().expect("a grid cell"))
+            .expect("a row");
         match by_grid.iter_mut().find(|(i, _)| *i == index) {
             Some((_, nodes)) => nodes.push(node),
             None => by_grid.push((index, vec![node])),
@@ -505,12 +507,11 @@ fn each_groups_label_sits_over_the_first_row_of_its_grids_nodes() {
     by_grid.sort_by_key(|(index, _)| *index);
     assert_eq!(by_grid.len(), 16);
     for ((index, nodes), (name, x, y, width, height)) in by_grid.iter().zip(&labels) {
-        let top = nodes.iter().map(|n| n.1).fold(f32::MAX, f32::min);
-        let (left, right) = nodes
-            .iter()
-            .fold((f32::MAX, f32::MIN), |(l, r), n| (l.min(n.0), r.max(n.0)));
+        let top = nodes.iter().map(|n| n.1).min().expect("a node");
+        let left = nodes.iter().map(|n| n.0).min().expect("a node");
+        let right = nodes.iter().map(|n| n.0).max().expect("a node");
         assert!(
-            (y + height - top).abs() <= 1.0,
+            (y + height).abs_diff(top) <= 1,
             "grid{index} {name}: label bottom {} against first row {top}",
             y + height
         );
@@ -525,7 +526,7 @@ fn each_groups_label_sits_over_the_first_row_of_its_grids_nodes() {
 /// `(name, x, y, width, height)` of the group wordmarks: the `<CanvasLabel>`s
 /// named `<Group>Label`, which no trophy (`Trophy-2048-2-3`) or ship unlock
 /// shares a spelling with, in file order.
-fn group_labels(xml: &str) -> Vec<(String, f32, f32, f32, f32)> {
+fn group_labels(xml: &str) -> Vec<(String, u32, u32, u32, u32)> {
     const OPEN: &str = "<CanvasLabel name=\"";
     let mut labels = Vec::new();
     let mut rest = xml;
@@ -538,7 +539,7 @@ fn group_labels(xml: &str) -> Vec<(String, f32, f32, f32, f32)> {
         };
         let values = &rest[values..];
         let values = &values[..values.find('>').unwrap_or(values.len())];
-        let field = |key: &str| -> Option<f32> {
+        let field = |key: &str| -> Option<u32> {
             let start = values.find(&format!("{key}=\""))? + key.len() + 2;
             values[start..].split('"').next()?.parse().ok()
         };

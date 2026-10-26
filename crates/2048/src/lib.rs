@@ -415,6 +415,7 @@ const ADD_ONS: &[oag_title::AddOn] = &[
         campaign: "HD",
         tile: "FE_RC_HD",
         default_team: "Feisar",
+        nodes: campaign::tier::NODES,
     },
     oag_title::AddOn {
         archive: "dlc2.psarc",
@@ -423,6 +424,7 @@ const ADD_ONS: &[oag_title::AddOn] = &[
         campaign: "Fury",
         tile: "FE_RC_FURY",
         default_team: "Feisar",
+        nodes: campaign::tier::NODES,
     },
 ];
 

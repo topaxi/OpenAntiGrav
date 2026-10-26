@@ -23,7 +23,7 @@ use oag_tables::race_campaign::{Cell, Grid, Medal, Mode};
 use oag_ui::frontend::{EventCard, EventIcon, MapEvent, Tier};
 use oag_ui::language::{CircuitNames, StringTable};
 
-use super::campaign2048::{card_tabs, card_weapons, class_icon, class_label};
+use super::campaign2048::{card_tabs, class_icon, class_label, class_ordinal, weapons_off};
 
 /// One mounted package's campaign: the package and the grids that carry its
 /// `Campaign=` tag, in file order.
@@ -124,20 +124,23 @@ pub fn tiers(
                         .iter()
                         .filter_map(move |cell| Some((index?, cell)))
                 })
-                .filter_map(|(index, cell)| node(index, cell, tracks, names, strings))
+                .filter_map(|(index, cell)| {
+                    node(&tier.add_on.nodes, index, cell, tracks, names, strings)
+                })
                 .collect(),
         })
         .collect()
 }
 
 fn node(
+    nodes: &oag_title::NodeMap,
     grid: usize,
     cell: &Cell,
     tracks: &[Track],
     names: &CircuitNames,
     strings: &StringTable,
 ) -> Option<MapEvent> {
-    let (x, y) = oag_2048::campaign::tier::step(grid, cell.grid_coords()?)?;
+    let (x, y) = nodes.step(grid, cell.grid_coords()?)?;
     let track = cell
         .track
         .as_deref()
@@ -189,10 +192,7 @@ fn card(
     kind: EventIcon,
     strings: &StringTable,
 ) -> EventCard {
-    let ordinal = oag_2048::campaign::EClass::ALL
-        .into_iter()
-        .find(|class| class.as_str().eq_ignore_ascii_case(&cell.class))
-        .map(oag_2048::campaign::EClass::ordinal);
+    let ordinal = class_ordinal(&cell.class);
     let has_class = kind != EventIcon::Zone;
     let kind_id = match (kind, &cell.mode) {
         (EventIcon::Race, _) => "IG_HUD_RACE",
@@ -226,9 +226,7 @@ fn card(
             };
             Some(strings.get(id)?.replace("%d", &laps.to_string()))
         }),
-        weapons: (!cell.weapons)
-            .then(|| card_weapons(strings, oag_2048::campaign::callout::Callout::WeaponsOff))
-            .flatten(),
+        weapons: (!cell.weapons).then(|| weapons_off(strings)).flatten(),
         tabs: card_tabs(strings),
         photo,
         emblem,
