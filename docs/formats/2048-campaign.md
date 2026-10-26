@@ -428,6 +428,10 @@ no authored formula connecting them found in the data. Left open rather than
 fitted; per this lane's own scope, no Ghidra session was opened to chase it
 further.
 
+The DLC campaigns' nodes are the exception, and are placed with that table:
+[2048-dlc.md](2048-dlc.md) has how their maps are built from HD's own grids and
+which tile opens each.
+
 ## Craft choice: forced on some events, restricted on others, never through `WOShipCreatorParams`
 
 **2026-09-28, answering the user's own play observation directly**: 2048 is

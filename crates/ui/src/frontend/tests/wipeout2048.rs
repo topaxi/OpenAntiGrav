@@ -10,7 +10,7 @@ use super::*;
 use crate::pointer::Pointer;
 use oag_2048::frontend::states as w2048;
 
-const XML: &str = r#"
+pub(super) const XML: &str = r#"
 <Screen>
   <Variable global="Blue2048"><Values String="0xff19295d"></Values></Variable>
   <Variable global="Orange2048"><Values String="0xffdd580b"></Values></Variable>
@@ -69,6 +69,12 @@ const VITA: (u32, u32) = (960, 544);
 /// movie's plan as given - `0` frames is "no demuxer", the state every run
 /// is in until `oag-video` reads MP4.
 pub(super) fn boot(intro_frames: usize) -> Frontend {
+    boot_on(XML, intro_frames)
+}
+
+/// [`boot`] over another copy of the screens, for a test that needs a tile
+/// the fixture does not carry.
+pub(super) fn boot_on(xml: &str, intro_frames: usize) -> Frontend {
     let mut frontend = Frontend::booting(
         Sequence {
             steps: vec![
@@ -100,7 +106,7 @@ pub(super) fn boot(intro_frames: usize) -> Frontend {
             ],
             backdrop_parent: None,
         },
-        Screens::from_xml(XML),
+        Screens::from_xml(xml),
         StringTable::default(),
         Vec::new(),
         Vec::new(),
@@ -119,7 +125,7 @@ pub(super) fn press(frontend: &mut Frontend, input: &mut Input, button: Button) 
     tick(frontend, input, 0);
 }
 
-fn reach_the_grid(frontend: &mut Frontend, input: &mut Input) {
+pub(super) fn reach_the_grid(frontend: &mut Frontend, input: &mut Input) {
     tick(frontend, input, 0);
     assert!(frontend.machine().is(w2048::BOOT_STUDIO_LOGO));
     // The fixture's intro has no picture, so it leaves by itself on the tick
@@ -372,11 +378,11 @@ pub(super) fn reach_the_shell(frontend: &mut Frontend, input: &mut Input) {
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
 }
 
-fn three_events() -> Vec<MapEvent> {
+pub(super) fn three_events() -> Vec<MapEvent> {
     [
-        ("2048 - Event 2", 3, 5),
-        ("2048 - Event 1", 1, 5),
-        ("2049 - Event 1", 11, 9),
+        ("2048 - Event 2", 3.0, 5.0),
+        ("2048 - Event 1", 1.0, 5.0),
+        ("2049 - Event 1", 11.0, 9.0),
     ]
     .into_iter()
     .map(|(name, x, y)| MapEvent {
@@ -401,8 +407,8 @@ fn a_gated_event() -> Vec<MapEvent> {
     vec![
         MapEvent {
             name: "2048 - Event 1".to_string(),
-            x: 1,
-            y: 5,
+            x: 1.0,
+            y: 5.0,
             detail: "circuit / mode".to_string(),
             requires: None,
             kind: EventIcon::Race,
@@ -412,8 +418,8 @@ fn a_gated_event() -> Vec<MapEvent> {
         },
         MapEvent {
             name: "2048 - Event 2".to_string(),
-            x: 3,
-            y: 5,
+            x: 3.0,
+            y: 5.0,
             detail: "circuit / mode".to_string(),
             requires: Some("2048 - Event 1".to_string()),
             kind: EventIcon::Race,
@@ -556,7 +562,7 @@ fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
 }
 
 /// A tap on the event card's Launch button - the centre of its hit rect.
-fn launch_button_tap() -> Pointer {
+pub(super) fn launch_button_tap() -> Pointer {
     Pointer {
         at: Some((880.0, 480.0)),
         moved: true,
@@ -640,8 +646,8 @@ fn a_gated_event_with_nothing_earned_yet_refuses_a_launch() {
 pub(super) fn a_restricted_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1,
-        y: 5,
+        x: 1.0,
+        y: 5.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,
@@ -659,8 +665,8 @@ pub(super) fn a_restricted_event() -> Vec<MapEvent> {
 pub(super) fn a_forced_event() -> Vec<MapEvent> {
     vec![MapEvent {
         name: "2048 - Event 1".to_string(),
-        x: 1,
-        y: 5,
+        x: 1.0,
+        y: 5.0,
         detail: "circuit / mode".to_string(),
         requires: None,
         kind: EventIcon::Race,

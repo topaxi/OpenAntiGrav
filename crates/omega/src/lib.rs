@@ -66,6 +66,7 @@ pub const TITLE: &Title = &Title {
         // instead of in `extra`.
         fe: &[],
         extra: EXTRA_CANDIDATES,
+        add_ons: &[],
     },
     // **Empty, on 2048's own terms.** A foreign serial is how one title's
     // archive names are told apart from another's positively-identified disc

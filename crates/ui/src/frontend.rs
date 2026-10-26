@@ -95,6 +95,7 @@ use oag_hd::frontend::states as hd_states;
 /// redirects, `touch.rs` the two icon grids after them, `campaign_map.rs`
 /// the map the grids lead to. See each module's own docs.
 mod campaign_map;
+mod campaign_tiers;
 mod event_card;
 mod faces;
 mod options2048;
@@ -105,6 +106,7 @@ pub use campaign_map::{
     CampaignMap, EarnedTier, EventIcon, HEX_FILLED, HEX_OUTLINE, HEX_SELECT, MapEvent,
     ProgressState,
 };
+pub use campaign_tiers::Tier;
 pub use event_card::{
     CARD_TEXTURES, CardCraft, CardRestriction, CardState, CardTabs, CardTrophy, CardWeapons,
     EventCard,

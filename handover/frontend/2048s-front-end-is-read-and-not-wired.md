@@ -85,6 +85,20 @@ shape, not by screen, and would have mis-fired on `Team`'s own
 
 ## Open
 
+- **2026-10-26: the DLC campaigns are wired, with these left open**
+  ([2048-dlc.md](../../docs/formats/2048-dlc.md), lane `2048-dlc-menus`).
+  The `FE_RC_HD` and `FE_RC_FURY` tiles open a map of HD's own grids (87 and
+  80 cells) while `dlc1.psarc` / `dlc2.psarc` is mounted, 142 of 167 cells
+  launch, and a pack's circuits reach the catalogue only while it is mounted.
+  Open: (1) a DLC circuit's card shows its id, not `VINETA K` - the rule that
+  names them is unread (the pack's `trackNN` folder name is wrong for
+  `Zone_1`..`4`); (2) Detonator (12) and Nitro Battle (13), Fury only, are
+  drawn closed - modes this engine does not run; (3) the end of a cell's race
+  and its medal are untried; (4) `canvasTextureHD.gxt`'s group wordmarks are
+  not drawn; (5) the Fury craft is `Feisar`, chosen; (6) the unlock law is
+  HD's, unmeasured on 2048; (7) what `CP_TrackGrid` lists in the online game
+  setup, the one circuit list the original keeps for a chosen race.
+
 - **Resolved 2026-09-21: the intro plays, picture and sound.**
   `oag_video::mp4` reads the container ([mp4.md](../../docs/formats/mp4.md)),
   `movie::open` returns a `Movie` for `ftyp`, and the AAC track plays through

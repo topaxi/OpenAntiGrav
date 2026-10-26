@@ -10,6 +10,8 @@
 //! language are in hand, so the front end receives text and cells and never
 //! opens a file.
 
+use oag_2048::campaign::EClass;
+use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
 use oag_ui::frontend::{EventCard, EventIcon, ExtraTile, Launch, MapEvent};
 use oag_ui::language::StringTable;
 
@@ -76,7 +78,7 @@ pub(super) fn map_events(
             .unwrap_or_else(|| "no circuit".to_string());
         let class = event
             .speed_class
-            .and_then(oag_2048::campaign::EClass::from_ordinal)
+            .and_then(EClass::from_ordinal)
             .map(|class| class.as_str());
         let mode = oag_2048::campaign::engine_mode(event).unwrap_or("unknown mode");
         // The disc's own four mode icons - see `EventIcon`'s own doc
@@ -123,8 +125,16 @@ pub(super) fn map_events(
         };
         out.push(MapEvent {
             name: event.name.clone(),
-            x,
-            y,
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a map cell is a small integer in the file"
+            )]
+            x: x as f32,
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "a map cell is a small integer in the file"
+            )]
+            y: y as f32,
             detail,
             requires,
             kind,
@@ -139,6 +149,23 @@ pub(super) fn map_events(
         out.len()
     ));
     out
+}
+
+/// The campaign map and the extra tiles of a touch front end, both empty on a
+/// title without one.
+pub(super) fn touch_menus(
+    touch: bool,
+    (archives, strings, report): (&mut oag_assets::Archives, &StringTable, &mut Vec<String>),
+    (language, title): (Option<&str>, &oag_title::Title),
+) -> (Vec<MapEvent>, Vec<ExtraTile>) {
+    if !touch {
+        return (Vec::new(), Vec::new());
+    }
+    let updated = !archives.patch.is_empty();
+    (
+        map_events(archives, strings, report),
+        extra_tiles(language, title, updated),
+    )
 }
 
 /// This build's own two tiles: the rows of the menu tree built for 2048 that open
@@ -295,6 +322,39 @@ fn ship_class_icon(team: &str, variant: &str) -> Option<&'static str> {
     })
 }
 
+/// The speed class glyph's texture for an `M_SPEEDCLASS` ordinal.
+pub(super) fn class_icon(class: i64) -> Option<String> {
+    let class = usize::try_from(class).ok()?;
+    oag_ui::frontend::CARD_TEXTURES
+        .iter()
+        .copied()
+        .filter(|t| t.contains(r"speedclass\"))
+        .nth(class)
+        .map(str::to_string)
+}
+
+/// The class's caption under the glyph on the rules page. `FUN_812b26cc`:
+/// ordinals `0` and `1` both read `Speed_Class_C_0`.
+pub(super) fn class_label(strings: &StringTable, class: i64) -> Option<String> {
+    let id = match class {
+        0 | 1 => "Speed_Class_C_0",
+        2 => "Speed_Class_B_0",
+        3 => "Speed_Class_A_0",
+        4 => "Speed_Class_A_Plus_0",
+        _ => return None,
+    };
+    strings.get(id).map(str::to_string)
+}
+
+/// The leaderboard page's own words.
+pub(super) fn card_tabs(strings: &StringTable) -> oag_ui::frontend::CardTabs {
+    let word = |id: &str| strings.get(id).map(str::to_string).unwrap_or_default();
+    oag_ui::frontend::CardTabs {
+        tabs: [word("FE_PERSONAL"), word("FE_FRIENDS"), word("FE_GLOBAL")],
+        current_best: word("FE_CURRENT_BEST"),
+    }
+}
+
 /// What one event's card says, off the same instances the map already read.
 fn event_card(
     doc: &oag_2048::campaign::Document,
@@ -331,18 +391,7 @@ fn event_card(
     // `FUN_810535fe` and `FUN_81055150` draw the class glyph only when the
     // mode ordinal `+0x190` is not `0`: a Zone event has none.
     let has_class = kind != EventIcon::Zone;
-    let class_icon = event
-        .speed_class
-        .filter(|_| has_class)
-        .and_then(|class| usize::try_from(class).ok())
-        .and_then(|class| {
-            oag_ui::frontend::CARD_TEXTURES
-                .iter()
-                .copied()
-                .filter(|t| t.contains(r"speedclass\"))
-                .nth(class)
-        })
-        .map(str::to_string);
+    let class_icon = event.speed_class.filter(|_| has_class).and_then(class_icon);
     // `FUN_812b021a`: the line under the title, by the same ordinal. The
     // timed class says `SPEED LAP` when `M_BUTTONSHAPE` is `5` or `6` and
     // `TIME TRIAL` otherwise; Elimination's own word is `FE_GAMEMODE_ELIM`
@@ -359,17 +408,10 @@ fn event_card(
         EventIcon::Elimination => "FE_GAMEMODE_ELIM",
     };
     let instance = doc.instance(event.instance_id);
-    let class_label = event.speed_class.filter(|_| has_class).and_then(|class| {
-        // `FUN_812b26cc`: ordinals `0` and `1` both read `Speed_Class_C_0`.
-        let id = match class {
-            0 | 1 => "Speed_Class_C_0",
-            2 => "Speed_Class_B_0",
-            3 => "Speed_Class_A_0",
-            4 => "Speed_Class_A_Plus_0",
-            _ => return None,
-        };
-        strings.get(id).map(str::to_string)
-    });
+    let class_label = event
+        .speed_class
+        .filter(|_| has_class)
+        .and_then(|class| class_label(strings, class));
     let lap_label = event.laps.filter(|&laps| laps > 0).and_then(|laps| {
         let id = if laps == 1 {
             "Callout_Lap"
@@ -439,10 +481,7 @@ fn event_card(
         lap_label,
         forced_craft,
         allowed_classes,
-        tabs: oag_ui::frontend::CardTabs {
-            tabs: [word("FE_PERSONAL"), word("FE_FRIENDS"), word("FE_GLOBAL")],
-            current_best: word("FE_CURRENT_BEST"),
-        },
+        tabs: card_tabs(strings),
         title: track.map(|track| track.display_name).unwrap_or_default(),
         kind_label: strings.get(kind_id).map(str::to_string),
         pass_label: strings.get("FE_PASS").map(str::to_string),
@@ -483,11 +522,10 @@ fn craft_caption(strings: &StringTable, team: &str, variant: &str) -> String {
 }
 
 /// What the weapon callout draws for `callout`, `None` when it draws nothing.
-fn card_weapons(
+pub(super) fn card_weapons(
     strings: &StringTable,
-    callout: oag_2048::campaign::callout::Callout,
+    callout: Callout,
 ) -> Option<oag_ui::frontend::CardWeapons> {
-    use oag_2048::campaign::callout::{Callout, ICONS, NAME_IDS, SEPARATOR, texture};
     let single = |stem: &str, id: &str| oag_ui::frontend::CardWeapons {
         icons: vec![texture(stem)],
         caption: strings.get(id).map(str::to_string).unwrap_or_default(),
@@ -506,6 +544,20 @@ fn card_weapons(
                 .join(SEPARATOR),
         },
     })
+}
+
+/// The weapon callout of a cell that races with weapons off.
+pub(super) fn weapons_off(strings: &StringTable) -> Option<oag_ui::frontend::CardWeapons> {
+    card_weapons(strings, Callout::WeaponsOff)
+}
+
+/// The ordinal of the speed class `name` spells, `None` for a name that is not
+/// one (a Zone cell's `class` is the word `Zone`).
+pub(super) fn class_ordinal(name: &str) -> Option<i64> {
+    EClass::ALL
+        .into_iter()
+        .find(|class| class.as_str().eq_ignore_ascii_case(name))
+        .map(EClass::ordinal)
 }
 
 /// Every texture the cards of `events` ask for beyond the fixed set.

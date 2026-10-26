@@ -1,29 +1,39 @@
-//! `--until card[:N[:EVENT NAME]]`: stop with Wipeout 2048's campaign-map event
-//! card open, rather than on a state-machine state (the card is a sub-state
+//! `--until card[:N[:EVENT NAME]]` and `--until map:EVENT NAME`: stop with
+//! Wipeout 2048's campaign map's event card open, or with the map showing the
+//! named event, rather than on a state-machine state (the card is a sub-state
 //! of `newFEshell`, so `--until` has no name for it).
 //!
 //! The pulsed `--press` buttons open the card, and once it is open the pulse
 //! turns to the right button so `N` pages are stepped through. `EVENT NAME`
-//! puts the map's cursor on that event first; a locked event's card never
-//! opens, so name an unlocked one.
+//! puts the map's cursor on that event first - a downloadable campaign's cell
+//! (`grid0_3_1`) brings its own map up - and a locked event's card never opens,
+//! so name an unlocked one. `map:` stops there, with no card.
 
 use oag_gameplay::input::Button;
 use oag_ui::frontend::Frontend;
 
-/// What `--until card...` asked for.
+/// What `--until card...` or `--until map:...` asked for.
 pub(super) struct CardTarget {
-    page: usize,
+    /// The card's page, `None` for a map with no card.
+    page: Option<usize>,
     /// The event to select, taken (`None`) once the cursor is on it.
     event: Option<String>,
 }
 
 impl CardTarget {
-    /// `None` when `until` is not a `card` request at all.
+    /// `None` when `until` is not a `card` or `map` request at all.
     pub(super) fn parse(until: Option<&str>) -> Option<Self> {
-        let rest = until?.strip_prefix("card")?;
+        let until = until?;
+        if let Some(event) = until.strip_prefix("map:") {
+            return Some(Self {
+                page: None,
+                event: Some(event.to_string()),
+            });
+        }
+        let rest = until.strip_prefix("card")?;
         if rest.is_empty() {
             return Some(Self {
-                page: 0,
+                page: Some(0),
                 event: None,
             });
         }
@@ -33,14 +43,17 @@ impl CardTarget {
             None => (rest, None),
         };
         Some(Self {
-            page: page.parse().ok()?,
+            page: Some(page.parse().ok()?),
             event,
         })
     }
 
     /// The card is open on the page asked for.
     pub(super) fn reached(&self, frontend: &Frontend) -> bool {
-        frontend.event_card_page() == Some(self.page)
+        match self.page {
+            Some(page) => frontend.event_card_page() == Some(page),
+            None => self.event.is_none() && on_the_map(frontend),
+        }
     }
 
     /// Puts the cursor on the named event once the map is up, and says which
@@ -48,9 +61,7 @@ impl CardTarget {
     /// right.
     pub(super) fn step(&mut self, frontend: &mut Frontend, pressed: u32) -> anyhow::Result<u32> {
         if let Some(name) = &self.event
-            && frontend
-                .machine()
-                .is(oag_2048::frontend::states::NEW_FE_SHELL)
+            && on_the_map(frontend)
             && !frontend.event_card_open()
         {
             anyhow::ensure!(
@@ -61,8 +72,17 @@ impl CardTarget {
         }
         Ok(if frontend.event_card_open() {
             Button::Right.bit()
+        } else if self.page.is_none() && self.event.is_none() {
+            0
         } else {
             pressed
         })
     }
+}
+
+/// The campaign shell is current: the map a card opens over.
+fn on_the_map(frontend: &Frontend) -> bool {
+    frontend
+        .machine()
+        .is(oag_2048::frontend::states::NEW_FE_SHELL)
 }

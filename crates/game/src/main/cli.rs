@@ -313,7 +313,9 @@ pub(crate) struct Cli {
     /// with the campaign map's event card open on page `N` (default `0`), of
     /// the named event if one is given. The pulsed `--press` buttons open the
     /// card, then the right button turns its pages. A locked event's card
-    /// never opens, so name an unlocked one.
+    /// never opens, so name an unlocked one. `map:EVENT NAME` stops on the
+    /// map with that event under the cursor and no card. A mounted package's
+    /// cell (`grid0_3_1`) brings its own campaign's map up.
     #[arg(long)]
     pub(crate) until: Option<String>,
 

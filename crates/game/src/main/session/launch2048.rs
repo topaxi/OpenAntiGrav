@@ -11,6 +11,7 @@
 
 use log::{debug, warn};
 
+use oag_game::boot;
 use oag_ui::frontend::Launch;
 
 use crate::stage::Stage;
@@ -31,6 +32,7 @@ impl Session {
                     log::error!("cannot start the campaign event: {e:#}");
                 }
             }
+            Some(Launch::Cell(name)) => self.launch_tier_cell(&name),
             // Walked into rather than jumped to, so BACK from either page
             // lands on the menu root the way it does from the root's own
             // row - `oag_ui::menu::Menu::push`.
@@ -38,6 +40,25 @@ impl Session {
             Some(Launch::Remix) => self.push_page("remix"),
             Some(Launch::Multiplayer) => self.push_page("multiplayer"),
         }
+    }
+
+    /// A cell of a downloadable campaign: found in the grids its package opens,
+    /// then launched the way every other title's campaign cell is, flying the
+    /// campaign's own craft (`oag_title::AddOn::default_team`).
+    fn launch_tier_cell(&mut self, name: &str) {
+        let Some(mut archives) = self.open_title_archives("a downloadable campaign's cell") else {
+            return;
+        };
+        let tiers = boot::tiers2048::read(&mut archives, &mut Vec::new());
+        let Some((tier, _, cell)) = boot::tiers2048::find(&tiers, name) else {
+            warn!("no cell named {name:?} in the campaigns this source mounts");
+            return;
+        };
+        debug!("Launch 2048: starting {} cell {name:?}", tier.add_on.campaign);
+        let cell = cell.clone();
+        self.campaign_craft = Some(tier.add_on.default_team);
+        self.launch_campaign_cell(cell, None);
+        self.campaign_craft = None;
     }
 
     fn push_page(&mut self, id: &str) {

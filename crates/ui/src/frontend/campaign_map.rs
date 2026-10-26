@@ -307,13 +307,15 @@ impl EventIcon {
 }
 
 /// One campaign event, in the terms the map draws it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MapEvent {
     /// The `SP.xml` instance name - what `Launch::Event` carries.
     pub name: String,
-    /// `M_X`/`M_Y`, the file's own cell.
-    pub x: i32,
-    pub y: i32,
+    /// `M_X`/`M_Y`, the file's own cell, in cell steps: whole numbers on the
+    /// single-player map, and a downloadable campaign's nodes land between them
+    /// (`oag_title::NodeMap::step`).
+    pub x: f32,
+    pub y: f32,
     /// What to say about it: the circuit's display name, the kind, the
     /// class and the laps, already resolved to text by the caller.
     pub detail: String,
@@ -381,10 +383,20 @@ pub struct CampaignMap {
     /// event a save has no result for yet. Absence here reads exactly like
     /// "never played", which is correct both before the first refresh and
     /// after it.
-    earned: Vec<Option<EarnedTier>>,
+    pub(super) earned: Vec<Option<EarnedTier>>,
     pub(super) selected: usize,
+    /// Which map is on screen: the `GameModeChoice` tile that opened it, `None`
+    /// for the single-player map. See [`super::campaign_tiers`].
+    pub(super) tile: Option<String>,
+    /// Events a caller has closed, indexed the same as `events` - a
+    /// downloadable campaign's grids stay shut until the one before them has
+    /// earned its points (`oag_tables::race_campaign::grid_points_met`). Empty
+    /// closes nothing.
+    pub(super) closed: Vec<bool>,
+    /// The maps not on screen. See [`super::campaign_tiers`].
+    pub(super) parked: Vec<super::campaign_tiers::Parked>,
     /// The view's scroll over the canvas, x then y, in grid units.
-    scroll: [Kinetic; 2],
+    pub(super) scroll: [Kinetic; 2],
     /// The craft a fresh boot is about to race, before the player ever
     /// touches `Team` this session - `settings.race.team`/`variant`,
     /// combined the same way a campaign launch eventually loads with
@@ -405,8 +417,8 @@ pub struct CampaignMap {
 impl CampaignMap {
     fn marker(event: &MapEvent) -> [f32; 4] {
         [
-            ORIGIN.0 + (event.x - 1) as f32 * PITCH.0,
-            ORIGIN.1 + (event.y - 1) as f32 * PITCH.1,
+            ORIGIN.0 + (event.x - 1.0) * PITCH.0,
+            ORIGIN.1 + (event.y - 1.0) * PITCH.1,
             MARKER,
             MARKER,
         ]
@@ -440,7 +452,7 @@ impl CampaignMap {
 
     /// Scrolls so the selected marker is as close to the middle of the
     /// view as the canvas allows.
-    fn follow(&mut self, view: (f32, f32)) {
+    pub(super) fn follow(&mut self, view: (f32, f32)) {
         let Some(event) = self.events.get(self.selected) else {
             return;
         };
@@ -492,6 +504,9 @@ impl CampaignMap {
         let Some(event) = self.events.get(index) else {
             return ProgressState::Locked;
         };
+        if self.closed.get(index).copied().unwrap_or(false) {
+            return ProgressState::Locked;
+        }
         let open = event.requires.as_deref().is_none_or(|gate| {
             self.events
                 .iter()
@@ -528,6 +543,7 @@ impl Frontend {
             .position(|event| event.name == "2048 - Event 1")
             .unwrap_or(0);
         self.campaign.earned = vec![None; events.len()];
+        self.campaign.closed = Vec::new();
         self.campaign.events = events;
         self.campaign.scroll = Default::default();
         self.campaign.follow(self.space.size);
@@ -540,13 +556,14 @@ impl Frontend {
     /// A plain closure rather than a `Store` reference, on purpose - see
     /// this module's own "Progression" section for why `oag-ui` cannot
     /// depend on `oag_game::records` at all.
+    ///
+    /// Every map gets it, the one on screen and the parked ones
+    /// ([`super::campaign_tiers`]): a downloadable campaign's cells are asked
+    /// for by their own names, which no single-player event shares.
     pub fn refresh_campaign_progress(&mut self, earned: impl Fn(&str) -> Option<EarnedTier>) {
-        self.campaign.earned = self
-            .campaign
-            .events
-            .iter()
-            .map(|event| earned(&event.name))
-            .collect();
+        self.campaign.each_map(|events, tiers, _| {
+            *tiers = events.iter().map(|event| earned(&event.name)).collect();
+        });
     }
 
     /// Tells the map what craft a launch will fly before the player ever
@@ -623,8 +640,8 @@ impl Frontend {
             .enumerate()
             .filter(|(at, _)| *at != self.campaign.selected)
             .filter_map(|(at, event)| {
-                let dx = (event.x - from.x) as f32;
-                let dy = (event.y - from.y) as f32;
+                let dx = event.x - from.x;
+                let dy = event.y - from.y;
                 let along = dx * direction.0 + dy * direction.1;
                 if along < 1.0 {
                     return None;
@@ -689,7 +706,11 @@ impl Frontend {
             event.name,
             w2048::LAUNCH_2048
         ));
-        self.touch.launch = Some(Launch::Event(event.name.clone()));
+        self.touch.launch = Some(if self.campaign.tile.is_some() {
+            Launch::Cell(event.name.clone())
+        } else {
+            Launch::Event(event.name.clone())
+        });
         self.machine.fire(w2048::LAUNCH_2048);
     }
 

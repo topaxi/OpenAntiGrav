@@ -240,21 +240,29 @@ impl Frontend {
         self.campaign.card.is_some()
     }
 
-    /// Puts the campaign map's cursor on the event called `name`. `false`
-    /// when there is none. A capture-harness hook (`--until card:N:NAME`).
+    /// Puts the campaign map's cursor on the event called `name`, bringing the
+    /// downloadable campaign's map on screen first when that is where it is.
+    /// `false` when there is none. A capture-harness hook (`--until card:N:NAME`).
     pub fn select_campaign_event(&mut self, name: &str) -> bool {
-        match self
-            .campaign
-            .events
-            .iter()
-            .position(|event| event.name == name)
-        {
-            Some(index) => {
-                self.campaign.selected = index;
-                true
-            }
-            None => false,
+        let named = |events: &[MapEvent]| events.iter().position(|event| event.name == name);
+        if named(&self.campaign.events).is_none() {
+            let Some(tile) = self
+                .campaign
+                .parked
+                .iter()
+                .find(|map| named(&map.events).is_some())
+                .map(|map| map.tile.clone())
+            else {
+                return false;
+            };
+            self.show_campaign_map(tile.as_deref());
         }
+        let Some(index) = named(&self.campaign.events) else {
+            return false;
+        };
+        self.campaign.selected = index;
+        self.campaign.follow(self.space.size);
+        true
     }
 
     /// Which page the card shows, `None` while it is closed.

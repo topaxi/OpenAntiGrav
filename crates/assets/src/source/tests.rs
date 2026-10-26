@@ -31,6 +31,7 @@ const TITLE: &Title = &Title {
         // candidate that is always present adds nothing to them. The set-shaped
         // role has its own test below.
         extra: &[],
+        add_ons: &[],
     },
     foreign_serials: &[ForeignSerial {
         serial: "UCUS-98612",
@@ -266,6 +267,7 @@ pub(super) fn mounted(
         extra: Vec::new(),
         packs: mounted,
         manifests,
+        add_ons: Vec::new(),
         read_memo: None,
         overrides: None,
         fallback: None,
@@ -502,6 +504,7 @@ fn every_extra_archive_present_resolves_and_a_missing_one_is_skipped() {
                 // Not in the extract below, and therefore not in the layout.
                 ("USRDIR/DATA99.PSARC", Platform::Ps3),
             ],
+            add_ons: &[],
         },
         ..*TITLE
     };

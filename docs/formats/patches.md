@@ -271,6 +271,8 @@ Searched 2026-10-05; nothing was downloaded. Confidence is in the source, not in
 
 ## What each title mounts (2026-10-07, `title-patches` lane)
 
+The 2048 downloadable archives are mounted behind the patch and are also an `oag_title::AddOn` each: the circuit list they carry and the campaign they open are read from the pack, only while it is mounted ([2048-dlc.md](2048-dlc.md)).
+
 | Title | Update content in `data/` | Mounted | Order and evidence |
 | --- | --- | --- | --- |
 | 2048 EU / USA | `patch-v104/PSP2/data1.psarc`, `data2.psarc` (identical in both regions) | **yes**, as `ArchiveCandidates::patch` | `data2`, `data1`, `data`, then `dlc1`, `dlc2`. The v1.04 executable mounts `data`, `data1`, `data2`, `dlc1`, `dlc2` at one FIOS2 mount point ([archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md), confidence 80); the base is shadowed by the patch (Vita3K, confidence 85); `data2` over `data1` and DLC against patch are **chosen, not measured** |

@@ -379,11 +379,23 @@ fn the_catalogue_offers_2048s_own_track_list() {
     // The ten circuits the base package ships - see
     // the team-variants check, a sibling reproducer for
     // this fix, and `oag_2048::race::DEFAULT_TRACK` for `altima`, the one
-    // every other 2048 test already exercises.
+    // every other 2048 test already exercises. This source mounts both
+    // downloadable packages, whose own list adds the twenty-eight under
+    // `DLC1` (`add_on_circuits_ground_truth` holds that list).
+    let native = catalogue
+        .tracks
+        .iter()
+        .filter(|(track, _)| !track.location.contains("DLC1"))
+        .count();
+    assert_eq!(
+        native, 10,
+        "2048's base package declares ten circuits; was {:#?}",
+        catalogue.tracks
+    );
     assert_eq!(
         catalogue.tracks.len(),
-        10,
-        "2048's base package declares ten circuits; was {:#?}",
+        10 + 28,
+        "with both packages mounted; was {:#?}",
         catalogue.tracks
     );
     assert!(

@@ -240,6 +240,15 @@ impl Session {
                     records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
                 })
         });
+        if let Some(race_options) = &self.race_options {
+            boot::tiers2048::refresh_locks(
+                &mut loaded.frontend,
+                loaded.title,
+                &race_options.source,
+                &self.records,
+                &title_name,
+            );
+        }
         // What a launch off the map would fly before the player ever
         // touches `Team` this session - see `oag_ui::frontend::campaign_map`'s
         // own `CampaignMap::craft_seed` doc for why a restricted event's own
