@@ -55,6 +55,8 @@ def check_menu_route(root):
     assert cmd[2:4] == ["--menu-page", "track-select"], cmd
     assert "--no-hull-shake" not in cmd and "--pilot-assist" not in cmd, cmd
     assert cmd[cmd.index("--size") + 1] == "1920x1080", cmd
+    routed = cm.ours_menu_command("oag-game", "img", plat, "home", "960x544", ["--until", "Home", "--press", "start"])
+    assert routed[2:6] == ["--until", "Home", "--press", "start"] and "--menu-page" not in routed, routed
     theirs = root / "theirs.png"
     subprocess.run(["magick", "-size", "1920x1080", "xc:gray20", str(theirs)], check=True)
 

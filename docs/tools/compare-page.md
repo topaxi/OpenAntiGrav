@@ -827,6 +827,62 @@ data/reference/compare-page/menus.toml data/reference/compare-page/hd/menu-* dat
 (9 entries; **name the `menu-*` directories**: `manifest` walks every `pair.json` under a directory and `hd/` and `omega/`
 also hold the race pairs of `fresh.toml` and `omega.toml`, which would appear twice), then `just compare-page`.
 
+## Menu pairs: Wipeout 2048 front-end screens (2026-10-27, `menu-pairs-2048`)
+
+The Vita3K counterpart of the HD and Omega menu route (`scripts/vita3k-2048-menu-pair.py`, on `vita-2048-pair.py`'s `Session` and
+`vita3k-drive.py`'s display, launcher and xdotool input; `scripts/compare_menu.py` gained `route=`, the oag-game arguments that
+draw ours when the title has no `--menu-page` tree). 2048's front end is a touch front end (ADR-0054) with no `menu.toml` page behind
+it, so **ours is drawn through `--until STATE --press BUTTONS`** (the sequence: `--press` is one mask held on alternate ticks, see
+`docs/formats/2048-frontend.md`) from the disc's own XML: `Skin.xml` and `Definition.xml` screens (`TitleScreen`, `GameModeChoice`,
+`Home`, `newFEshell`), `SP.xml`'s events, `Team_Definition.xml`. `--screen NAME` draws one screen on black without the shell
+around it, so it is not a comparable still. A cold-booted Vita3K on a **fresh save** (the profile's savedata removed before each
+boot) and a fresh ours profile; 960x544 on both sides, English (`sys-lang: 1`), Vita3K muted (`SDL_AUDIODRIVER=dummy`,
+`audio-volume: 0`), its own weston and Xwayland on `:91`. Vita3K has no screen log: the screen of each frame is **declared** in
+`WALK` and read by eye, the walk itself waits on frame luma and the logo (`pu:` steps), because the first Return of a cold boot is
+swallowed while shaders compile and a fixed-sleep walk ran one screen behind (both boots of the first attempt).
+
+**Campaign difficulty.** The brief asked for the same campaign difficulty on both sides. 2048's map and event card show **no
+difficulty control** on either side (the card reads `PASS FINISH THE EVENT`, a class, three laps and weapons-off icons), the walk
+never touched one, and ours wrote no `records.toml` (so no campaign difficulty row exists for 2048 there; `[ai] difficulty` in
+`settings.toml` is the race AI level, `elite` by default, which neither screen shows). Nothing to match; recorded rather than set.
+
+**The pairs** (two cold boots, `overlap RMSE / edge correlation / mean grey`, then the share of pixels that differ by more than 40
+grey, run 1; the pair images were read side by side):
+
+| Pair | Ours drawn from | Overlap | Differs | Most visible difference |
+| --- | --- | --- | --- | --- |
+| Title | `TitleScreen` entry (`Skin.xml`) | 0.237 / 0.19 / 22.9 | 11.0 % | state not matched: ours stops on the tick the screen is entered, a white frame with the legal line, no logo, no `PRESS ANY BUTTON TO START`, no triangle pattern |
+| Game Mode | `GameModeChoice` | 0.308 / 0.33 / 36.3 | 19.3 % | ours adds a RACEBOX / REMIX / MULTIPLAYER column the original does not show, a check mark, and rings Single Player Campaign; the original has the header icon and its underline, ours a plain navy square; ours' tile rows sit about 14 px lower |
+| Campaign map | `newFEshell`, `SP.xml` events | 0.203 / -0.01 / 21.7 | 12.6 % | the original's map is a scrolled hexagonal canvas with the `A.G.R.C 2048` banner, the `TOUCH TO START` tag, the home button, three badges and two corner buttons; ours is bare hex nodes on a different layout (known: the cell-to-pixel mapping is chosen) |
+| Event card, page 0 | `newFEshell` card | 0.140 / 0.39 / 10.5 | 4.9 % | closest pair; the subtitle reads `RACE` against `NO WEAPONS`, the map shows through ours' card instead of a blurred white ground, and ours has no home button or badges |
+| Event card, page 1 | `newFEshell` card | 0.146 / 0.41 / 9.5 | 4.3 % | as page 0; the `CURRENT BEST` bar is orange in the original and grey-blue in ours |
+| Home | `Home` | 0.102 / 0.56 / 10.1 | 3.8 % | nearest of all; the header icon and underline are missing, the original's backdrop is a blurred map, ours rings the Team tile |
+| Select Team | `Team_Definition.xml` | 0.495 / 0.05 / 94.9 (run 2: 0.511 / 0.06 / 99.6) | 56.7 % | the largest: the original is a 5x4 grid of locked hexagons under the five team badges, the hull turntable and a statistics table (`FEISAR SPEED`, 8, 7, 4, 6); ours is two rows of labelled buttons and a skin list of `FE_SKIN_*` ids (chosen stand-ins, `docs/formats/2048-frontend.md`) |
+
+**Repeat noise** (run 1 against run 2, cold boots): the pairs' overlap moves by at most 0.001 RMSE and 0.4 mean grey on every pair
+but Select Team (0.016 RMSE, 4.7 grey: the hull's turntable). The original against itself: RMSE 0.000 (Game Mode) to 0.028
+(map) and 0.134 (Select Team, the turntable); ours against itself exactly 0 on all seven.
+
+**Gaps** (original kept under `gap-*` with `gap.json`): `PSN prompt` (the system's dialog over Game Mode), `Campaign welcome
+panel` (`SPTutorial`, the first visit to the map; ours draws it only through `--screen` on black), `Options`, `Profile` and
+`Extras` (ours draws them in the live flow but has no headless still route past Home's first tile, and a windowed `--script` run
+is a 1440x816 window at llvmpipe speed, so no same-size frame), and the **pause menu** (`GAME PAUSED`: Options and Photo Mode
+tiles, the event card, quit, retry and resume; ours' pause is `menu.toml`'s). Single Race setup and Track Select have no 2048
+counterpart in either side's front end: `--menu-page track-select` and `ship-select` refuse on 2048 (`Wipeout 2048 authors no Track
+selection screen`), and the campaign's circuit is the event's. The Racebox, Remix and Multiplayer rows of ours' Game Mode column are
+`oag-extras` rows (ADR-0066), absent in the original.
+
+**Omega and HD check:** checked, differs - Omega's front end is HD's `PI001` XML (not 2048's touch front end), so none of these seven pairs
+transfers to Omega's, and HD's `CellMode` route (`campaign-select`, `grid-select`) refuses on 2048 as it does on Omega.
+
+**Reproduce:** `source <scratch>/env.sh` (HOME, `OAG_VITA3K_CACHE`, `OAG_VITA3K_CONFIG`, `OAG_VITA3K_DISPLAY`, ours' `XDG_*` under
+`data/scratch/<lane>/`), the private config's `pref-path` a copy of the Vita3K tree with its `ux0/app` and friends symlinked and
+`savedata/PCSF00007` removed, then `uv run --with evdev python3 scripts/emu-run.py --silence 200 --total 270 --status S -- python3
+scripts/vita3k-2048-menu-pair.py pairs --out D --oag-game target/release/oag-game --autopilot off [--pause-png P]` (about 110 s;
+`walk --plan "wait:8,pu:Return:title,..." --keep` photographs any plan, `--attach` reuses the running Vita3K). The pause frame is a
+`walk` of `PAUSE_PLAN`. Adopt: name the `menu-*` directories, `python3 scripts/compare_env.py manifest
+data/reference/compare-page/menus-2048.toml data/reference/compare-page/2048/menu-*`, then `just compare-page`.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
