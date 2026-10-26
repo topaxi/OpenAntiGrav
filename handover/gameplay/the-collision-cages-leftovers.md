@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-10-26
-summary: "The cage flash's fade and scale need one live capture at a cage contact; the rest (cage and pair sparks, hull order) landed"
+summary: "Cage flash fade/scale need one live capture; hull sample order measured but held (05 Autopilot hits the cage); sparks draw as glow, not spokes"
 ---
 
 # The collision cage's leftovers
@@ -37,10 +37,12 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 - **The denominator** (contact-response.md's open question): Fort Gale 1341, a
   cage contact on a rolled craft, leans body-frame (share ratio `0.91` against
   the world-axis `0.82`, cosine `0.99` both). One capture, confidence 55.
-- ~~**Our hull's sample order is the mirror of the original's.**~~ **Landed 2026-10-26**:
-  `hull_sample_points` lists lower left front first, every sample of 4,200 captured ticks
-  matching; the determinism reference's two 3,600-tick rows were regenerated (own commit), the
-  twelve lone-craft circuits stay clean with the same shield per lap and at the end.
+- **Our hull's sample order is the mirror of the original's: measured, held (2026-10-26).** The original's
+  sample 0 is lower LEFT front; the faithful order matched every sample of 4,200 captured ticks (commit
+  `18cfe598f`, reverted before merge). Held because with it
+  `autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_05`
+  fails: the original Autopilot meets 05's cage and resets. Likely another mirrored term the old order was
+  hiding. Next lane: re-apply the order, find why 05's run reaches the cage, fix that, land both.
 - **HD Chenghou Project's pull-down (2026-10-20, `hd-chenghou-jumps`): closed.** HD's
   original runs no cage. Ours now holds it off by the title
   (`CraftLaws::cage_from_track_header`), and the jumps' vy follows the original's

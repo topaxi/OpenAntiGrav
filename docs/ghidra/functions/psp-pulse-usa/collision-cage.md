@@ -171,11 +171,12 @@ mesh reproduces **818 of 818** of the original's contacts on the weave run and
 **1,466 of 1,466** on the pulse-steer run, at the same sample, normal and depth,
 with 2 and 0 extras (two at depth `0.000`). The capture also fixes the sample
 order: the body's row 0 is its left, so the original's sample 0 is lower left
-front. Ours (`oag_physics::wall::hull_sample_points`) listed the mirror image
-first until 2026-10-26, when it took the original's order (left first, flanks
-included): every one of the ten samples of 2,000 ticks (the weave) and 2,200
-(the pulse run) now lands on the recorded collider's, which the sweep asserts.
-The physics determinism reference moved with it (two 3,600-tick rows). The two captures are kept (gitignored) at `data/reference/wall-contact-miss/`
+front. Ours (`oag_physics::wall::hull_sample_points`) still lists the mirror image
+first. The original's order (left first, flanks included) was tried on
+2026-10-26: every one of the ten samples of 2,000 ticks (the weave) and 2,200
+(the pulse run) then landed on the recorded collider's. It was held back
+because the original Autopilot on `05` then resets at the cage
+(`autopilot_original_ground_truth`), which points at a second mirrored term. The two captures are kept (gitignored) at `data/reference/wall-contact-miss/`
 (`talons-weave1`, `talons-pulse1`: the CSV and the `.contacts.jsonl`); flatten with
 `scripts/psp-contacts-flat.py` and run
 `collision_cage_ground_truth::the_originals_contacts_against_our_mesh` with
