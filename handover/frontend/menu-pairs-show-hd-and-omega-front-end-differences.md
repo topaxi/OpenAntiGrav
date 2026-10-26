@@ -1,9 +1,9 @@
 ---
 status: ready-to-wire
-titles: [hd, omega, 2048]
+titles: [hd, omega, 2048, pulse, pure]
 updated: 2026-10-27
 categories: [frontend, rendering]
-summary: "Menu pairs HD 5, Omega 4, 2048 7 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
+summary: "Menu pairs HD 5, Omega 4, 2048 7, Pulse 5, Pure 8 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
 ---
 
 # Menu pairs show HD's and Omega's front-end differences, ranked by visible area
@@ -79,6 +79,32 @@ PAUSED`, ours' pause is `menu.toml`'s). A `--script`-driven still route past Hom
 most of these.
 
 
+## Pulse and Pure (PPSSPP), `menu-pairs-pulse-pure` 2026-10-27
+
+Five Pulse pairs and eight Pure pairs of the screens ours draws from the disc, two or three boots each (the Pulse walk three: two on one instance, one fresh; the title two further boots) (method and numbers:
+`docs/tools/compare-page.md`, "Menu pairs: Wipeout Pulse and Wipeout Pure"). The **campaign pair** is made for both: Pulse's Grid
+Selection and Cell Selection (the footer reads `AI difficulty (Medium)` on both sides), Pure's Tournament Selection (Alpha, class Vector;
+Pure shows no difficulty control). No renderer or UI code changed. Ranked by the share of pixels that differ by more than 40 grey:
+
+**Pulse**
+1. **Track Select** (16.2 %): ours lists 11 circuits where a fresh profile has 3 (`1/11` against `1/3`; the same under both `race.mode`
+   values and `[dev] unlock_everything = false` survives the rewrite, so the cause is open), the photo cards show another view, distance `5094` against `5178`, empty records `-` against `-.--.--`.
+2. **Ship Select** (7.1 %): the hull's livery and size (the original's blue-white Assegai, large and tilted; ours dark and smaller), `1/12`
+   against `1/8` craft.
+3. **Title** (2.6 %, `--until "Show Logo" --press cross --ticks 200`; the `--screen` route lacks the ray backdrop and reads 6.0 %): the
+   wide `PRESS START BUTTON` and legal-line type face is small mixed case in ours; the rays are at another phase.
+4. **Grid Selection, Cell Selection** (2.1 %, 1.8 %): the cursor hex glow and the scrolling footer ticker (empty at tick 0).
+
+**Pure**
+1. **Team Selection** (8.6 %): 17 teams in small type against the original's eight in large, the hull outline's angle, crowded stat labels.
+2. **Track Selection** (5.5 %): the `SINGLE RACE - VENOM - ALPHA` context line (chosen), record format `0.00.00` against `0'00"00`, `m` unit case, no description.
+3. **Every chain screen** (2.4 to 3.4 %): the context line (ours' chosen stand-in; Class, League, Tournament Selection), no description
+   line along the bottom (a missing element: ours is drawn 5 s in), and the footer `BACK BUTTON` drawn over itself where the original has a triangle and `BACK`.
+4. **Title** (0.3 %): no visible difference.
+
+Gaps (original kept, no pair): Pulse `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), the pause menu;
+Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no still route.
+
 ## Next Steps
 
 1. Omega's campaign selector (2048, HD, Fury cards) and the flyer on Omega's source: one lane, the biggest area.
@@ -91,3 +117,6 @@ most of these.
 5. 2048: a still route for Options, Profile, Extras and the Select Team grid (a `--screen` that draws the shell around the screen, or an
    `--until` that takes a button script), then pair them with `scripts/vita3k-2048-menu-pair.py` (move the `WALK` entries from
    `route: None` to a route).
+6. Pulse and Pure: find why Track Select lists 11 circuits and Ship Select 12 craft on a fresh profile where the original lists 3 and 8, check Pure's chain context line against the original's text, make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired), and give the `BACK` prompt its triangle (the doubled `BACK BUTTON`); then re-run
+   `scripts/psp-menu-pair.py pairs`.
+7. Pulse and Pure pause menus: a `--menu-page pause` still would turn those two gaps into pairs.
