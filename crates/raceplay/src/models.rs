@@ -159,6 +159,9 @@ impl Race {
     /// and fourth spline scale bytes the craft sits under (`255` where the course has not
     /// located it).
     ///
+    /// `seconds` is the scenery clock the track's `Anim Transform` nodes are drawn at, so a
+    /// light that sweeps with them (Arc Prime's floor spotlights) is where the picture shows it.
+    ///
     /// # Panics
     ///
     /// If `slot` is not a ship slot.
@@ -166,13 +169,16 @@ impl Race {
     pub fn ship_hull_points(
         &self,
         slot: usize,
+        seconds: f32,
     ) -> [oag_mesh::mesh_render::HullPoint; oag_mesh::mesh_render::HULL_POINT_SLOTS] {
         if self.view.hull_points.is_empty() {
             return Default::default();
         }
         let at = self.ship_model_matrix_of(slot).w_axis;
         let [.., point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
-        self.view.hull_points.at([at.x, at.y, at.z], [point, spot])
+        self.view
+            .hull_points
+            .at([at.x, at.y, at.z], seconds, [point, spot])
     }
 
     /// Where a craft's environment probes are blended: its body, one tick back.

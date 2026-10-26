@@ -489,7 +489,7 @@ impl super::super::Scene {
                     HullLayers {
                         sun_occlusion: self.sun_occlusion_layer(slot),
                         scale: race.ship_hull_scale(slot),
-                        point: race.ship_hull_points(slot),
+                        point: race.ship_hull_points(slot, self.anim_clock.get()),
                         env: env_layer,
                         env_tint: if self.zone_grade.is_some() {
                             crate::env_probes::ProbeTint::ZONE

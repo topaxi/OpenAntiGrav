@@ -25,15 +25,6 @@ use crate::vex::{self, Node};
 /// its instance, by something unread.
 pub const CLASS_ANIMATION_TRIGGER: u32 = 0x3dc;
 
-/// One step of a node's ancestry, node first.
-#[derive(Debug, Clone, PartialEq)]
-enum Link {
-    /// A fixed local matrix: the node's own payload, or a `Transform`'s.
-    Fixed([f32; 16]),
-    /// An `Anim Transform`, sampled on the scenery clock.
-    Anim(Box<vex::AnimTransform>),
-}
-
 /// A `ParticleSystem` node the circuit spawns at load.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Placed {
@@ -42,7 +33,7 @@ pub struct Placed {
     /// Its `Name` attribute: the effect, `Data\Psys\<name>.POB`.
     pub name: String,
     /// The node's own matrix, then each ancestor's, root last.
-    chain: Vec<Link>,
+    chain: vex::NodeChain,
 }
 
 impl Placed {
@@ -54,19 +45,13 @@ impl Placed {
     /// Transform` contribute theirs, every other class the identity.
     #[must_use]
     pub fn world_at(&self, seconds: f32) -> [f32; 16] {
-        self.chain.iter().fold(vex::IDENTITY, |world, link| {
-            let local = match link {
-                Link::Fixed(m) => *m,
-                Link::Anim(anim) => anim.sample(seconds),
-            };
-            vex::multiply(&world, &local)
-        })
+        self.chain.world_at(seconds)
     }
 
     /// Whether any ancestor moves, so [`Self::world_at`] depends on time.
     #[must_use]
     pub fn moves(&self) -> bool {
-        self.chain.iter().any(|link| matches!(link, Link::Anim(_)))
+        self.chain.moves()
     }
 }
 
@@ -105,22 +90,7 @@ pub fn placed(data: &[u8], nodes: &[Node]) -> Vec<Placed> {
         let Some(own) = fixed(node) else {
             continue;
         };
-        let mut chain = vec![Link::Fixed(own)];
-        let mut at = node.parent;
-        while let Some(p) = at {
-            let ancestor = &nodes[p];
-            if Some(ancestor.class_id) == classes.transform {
-                chain.push(Link::Fixed(fixed(ancestor).unwrap_or(vex::IDENTITY)));
-            } else if Some(ancestor.class_id) == classes.anim_transform {
-                chain.push(
-                    vex::anim_transform_of(data, ancestor)
-                        .map_or(Link::Fixed(vex::IDENTITY), |anim| {
-                            Link::Anim(Box::new(anim))
-                        }),
-                );
-            }
-            at = ancestor.parent;
-        }
+        let chain = vex::NodeChain::of(data, nodes, index, own);
         out.push(Placed {
             node: index,
             name,

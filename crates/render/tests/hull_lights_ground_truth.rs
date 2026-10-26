@@ -97,6 +97,7 @@ fn point_slots(
     track: &str,
     directionals: usize,
     craft: [f32; 3],
+    seconds: f32,
     scale: u8,
 ) -> [oag_mesh::mesh_render::HullPoint; 2] {
     let image = oag_testdata::image("pulse-psp-usa.chd").expect("image");
@@ -105,8 +106,11 @@ fn point_slots(
         .read_name(&format!(r"Data\Environments\{track}.vex"))
         .expect("track vex");
     let nodes = vex::nodes(&blob).expect("nodes");
-    oag_mesh::mesh_render::HullPointLights::from_track(&blob, &nodes, directionals)
-        .at(craft, [scale, scale])
+    oag_mesh::mesh_render::HullPointLights::from_track(&blob, &nodes, directionals).at(
+        craft,
+        seconds,
+        [scale, scale],
+    )
 }
 
 /// Tech de Ra's grid, read live from PPSSPP (2026-10-20): three directionals, so one
@@ -118,7 +122,13 @@ fn tech_de_ras_fourth_hull_light_is_the_wopoint_the_ge_was_handed() {
     if oag_testdata::image("pulse-psp-usa.chd").is_none() {
         return;
     }
-    let got = point_slots("04_Track\\track", 3, [-58.02138, -9.513782, 79.93865], 249);
+    let got = point_slots(
+        "04_Track\\track",
+        3,
+        [-58.02138, -9.513782, 79.93865],
+        0.0,
+        249,
+    );
     assert_eq!(unpack(got[0][3]), [61, 142, 157]);
     let want = unit([-0.0030, 4.0426, 9.4211]);
     for k in 0..3 {
@@ -144,6 +154,7 @@ fn fort_gales_two_free_hull_slots_take_the_lights_the_ge_was_handed() {
         "14_Track\\track_reversed",
         2,
         [102.8246, 111.6629, 560.3614],
+        0.0,
         251,
     );
     let live = [
@@ -180,5 +191,45 @@ fn talons_junctions_grid_takes_no_point_light() {
     // LIGHT3=0 with the craft on the grid at (104.8, -48.4, -203.7), the probe's own
     // reference point.
     let lights = oag_mesh::mesh_render::HullPointLights::from_track(&blob, &nodes, 3);
-    assert_eq!(lights.at([104.8, -48.4, -203.7], [250, 250]), [[0.0; 4]; 2]);
+    assert_eq!(
+        lights.at([104.8, -48.4, -203.7], 0.0, [250, 250]),
+        [[0.0; 4]; 2]
+    );
+}
+
+/// Arc Prime's two white floor lights sweep with its spotlights, so the hull they
+/// light is the one under them *now*. The second rests at `(-162.2, 6.8, -219.8)`
+/// and is at `(-248.0, 17.9, -227.6)` two seconds in (`oag_vex`'s
+/// `world_lights_ground_truth`): a craft 3 units below that spot takes it at full
+/// strength, `(1.0, 0.921, 0.986) * 255 * 255 >> 8` = `(254, 233, 250)`, at two
+/// seconds and takes none of it at zero, when the light is 86 units away and its
+/// reach is 55.
+///
+/// The original keeps a light under an `Anim Transform` in a list it re-tests on every
+/// call (`WoPoint_Init` sets the object's `+0x64` byte, the list builder skips its
+/// countdown), and its update slot refreshes the position every frame.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn arc_primes_floor_light_lights_the_hull_where_the_sweep_has_put_it() {
+    if oag_testdata::image("pulse-psp-usa.chd").is_none() {
+        return;
+    }
+    let under_it_at_two = [-248.0, 14.9, -227.6];
+    let white = |slots: &[oag_mesh::mesh_render::HullPoint; 2]| {
+        slots
+            .iter()
+            .map(|slot| unpack(slot[3]))
+            .find(|bytes| bytes.iter().all(|c| *c >= 230))
+    };
+    let at_two = point_slots("10_Track\\track", 2, under_it_at_two, 2.0, 255);
+    assert_eq!(white(&at_two), Some([254, 233, 250]), "{at_two:?}");
+    let at_zero = point_slots("10_Track\\track", 2, under_it_at_two, 0.0, 255);
+    assert_eq!(white(&at_zero), None, "{at_zero:?}");
+    // And the other way round: under the spot the light rests on, it is lit at
+    // zero and has left by two seconds.
+    let under_it_at_rest = [-162.2, 3.8, -219.8];
+    let rest = point_slots("10_Track\\track", 2, under_it_at_rest, 0.0, 255);
+    assert_eq!(white(&rest), Some([254, 233, 250]), "{rest:?}");
+    let gone = point_slots("10_Track\\track", 2, under_it_at_rest, 2.0, 255);
+    assert_eq!(white(&gone), None, "{gone:?}");
 }

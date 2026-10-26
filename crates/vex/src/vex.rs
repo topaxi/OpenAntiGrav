@@ -64,8 +64,8 @@ pub mod classes;
 pub mod matrix;
 
 pub use matrix::{
-    Anchored, IDENTITY, anchor_world, anim_anchors, class_world_transforms, leaves_directions,
-    multiply, transform, transform_direction, transform_point, world_transforms,
+    Anchored, IDENTITY, NodeChain, anchor_world, anim_anchors, class_world_transforms,
+    leaves_directions, multiply, transform, transform_direction, transform_point, world_transforms,
     world_transforms_at,
 };
 

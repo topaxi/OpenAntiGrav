@@ -632,10 +632,14 @@ fn a_projectile_takes_a_flare_slot_and_hands_it_back() {
 #[test]
 fn a_hull_takes_the_point_light_standing_over_it() {
     use oag_mesh::mesh_render::HullPointLights;
-    use oag_vex::world_lights::WorldLight;
+    use oag_vex::world_lights::{PlacedLight, WorldLight};
 
     let mut race = race_with_a_grid();
-    assert_eq!(race.ship_hull_points(0), [[0.0; 4]; 2], "no rig, no slot");
+    assert_eq!(
+        race.ship_hull_points(0, 0.0),
+        [[0.0; 4]; 2],
+        "no rig, no slot"
+    );
     let at = race.ship_model_matrix_of(0).w_axis;
     let over = WorldLight {
         position: [at.x, at.y + 3.0, at.z],
@@ -644,8 +648,8 @@ fn a_hull_takes_the_point_light_standing_over_it() {
         outer_radius: 15.0,
         cone: None,
     };
-    race.view.hull_points = HullPointLights::from_lights(vec![over], 3);
-    let slots = race.ship_hull_points(0);
+    race.view.hull_points = HullPointLights::from_lights(vec![PlacedLight::fixed(over)], 3);
+    let slots = race.ship_hull_points(0, 0.0);
     assert!(slots[0][1] > 0.99, "straight up: {:?}", slots[0]);
     let w = slots[0][3] as u32;
     // Full strength, no spline under the synthetic course, so the scale is 255.

@@ -53,6 +53,80 @@ pub fn named_class_world_transforms<'a>(
         .collect()
 }
 
+/// One step of a node's ancestry, node first.
+#[derive(Debug, Clone, PartialEq)]
+enum Link {
+    /// A fixed local matrix: the node's own, or a `Transform`'s.
+    Fixed([f32; 16]),
+    /// An `Anim Transform`, sampled on the scenery clock.
+    Anim(Box<super::AnimTransform>),
+}
+
+/// One node's world matrix as a function of time, with nothing else of the file.
+///
+/// What [`world_transforms_at`] computes for the whole tree, kept for the one node
+/// that is asked about every frame: a placed effect or a light a craft passes. The
+/// chain owns its matrices and tracks, so it outlives the file's bytes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeChain {
+    links: Vec<Link>,
+}
+
+impl NodeChain {
+    /// The chain of `nodes[index]`: `own` as its local matrix, then each ancestor's
+    /// `Transform` matrix or `Anim Transform` track, every other class the identity,
+    /// root last. The same product [`world_transforms_at`] builds for that node.
+    ///
+    /// `own` is the node's payload matrix for a class that carries one (a
+    /// particle system) and [`IDENTITY`] for a class that does not (a light),
+    /// which is what [`world_transforms_at`] gives every class but those two.
+    #[must_use]
+    pub fn of(data: &[u8], nodes: &[Node], index: usize, own: [f32; 16]) -> Self {
+        let classes = classes_of(data).ok();
+        let transform_class = classes.and_then(|classes| classes.transform);
+        let anim_class = classes.and_then(|classes| classes.anim_transform);
+        let order = byte_order(data);
+        let mut links = vec![Link::Fixed(own)];
+        let mut at = nodes.get(index).and_then(|node| node.parent);
+        while let Some(p) = at {
+            let ancestor = &nodes[p];
+            if Some(ancestor.class_id) == transform_class {
+                links.push(Link::Fixed(
+                    data.get(ancestor.payload())
+                        .and_then(|payload| transform(payload, order))
+                        .unwrap_or(IDENTITY),
+                ));
+            } else if Some(ancestor.class_id) == anim_class {
+                links.push(
+                    super::anim_transform_of(data, ancestor)
+                        .map_or(Link::Fixed(IDENTITY), |anim| Link::Anim(Box::new(anim))),
+                );
+            }
+            at = ancestor.parent;
+        }
+        Self { links }
+    }
+
+    /// The node's world matrix at `seconds` into the scenery clock, row-major
+    /// with the translation in row 3.
+    #[must_use]
+    pub fn world_at(&self, seconds: f32) -> [f32; 16] {
+        self.links.iter().fold(IDENTITY, |world, link| {
+            let local = match link {
+                Link::Fixed(m) => *m,
+                Link::Anim(anim) => anim.sample(seconds),
+            };
+            multiply(&world, &local)
+        })
+    }
+
+    /// Whether any ancestor moves, so [`Self::world_at`] depends on time.
+    #[must_use]
+    pub fn moves(&self) -> bool {
+        self.links.iter().any(|link| matches!(link, Link::Anim(_)))
+    }
+}
+
 /// Where every node sits **relative to the `Anim Transform` above it**, and which
 /// one that is.
 ///
