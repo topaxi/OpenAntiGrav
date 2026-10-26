@@ -302,8 +302,8 @@ distinguishable from the original's own motion, and Queens Mall's (-26 to -32, -
 **What is not measured:** the phase inside the countdown is wall clock (the HUD's first frame is tick 0, the grab 2.98 +- 0.16 s later), no pose is read from
 Vita3K (until 2026-10-26: `--read-pose` now reads it out of the guest's memory), and the original's hull shake is on while ours is drawn with `--no-hull-shake`
 (until 2026-10-26: `--walk` now patches it out, see below).
-**How the walk works** (the 2026-10-20 fixed-timing walk never left the intro): Return, then three `x`, reach the Game Mode grid with the PSN prompt gone; two taps on
-Single Player Campaign (the first highlights, the second opens it); one tap on the event's node; two taps on `(882, 480)` (Play, the mode card); then the loading
+**How the walk works** (the 2026-10-20 fixed-timing walk never left the intro): Return, then three `x`, reach the Game Mode grid with the PSN prompt gone; one tap on
+Single Player Campaign (it opens at once); one tap on the event's node; two taps on `(882, 480)` (Play, the mode card); then the loading
 screen, which is light (mean luma 0.9), is waited out until a dark frame; the ship flyby's check mark is tapped until the HUD's white `LAP` text is up; pause, Retry
 (`(750, 480)`, `(402, 312)`) restarts the grid and the burst starts at the confirm. **The node coordinates are this save's campaign map** (a save that has finished
 Event 1: Empire Climb `(190, 25)`, Queens Mall `(270, 68)`); another save needs its own `--node`. **Metro Park's Time Trial hangs Vita3K at 56 % on the loading bar**

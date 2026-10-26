@@ -55,13 +55,12 @@ fn on_the_grid(tiers: Vec<Tier>) -> (Frontend, Input) {
     (frontend, input)
 }
 
-/// Chooses the tile `steps` to the right of the single-player one and
-/// confirms it.
+/// Chooses the tile `steps` to the right of the single-player one; the
+/// press confirms it.
 fn choose(frontend: &mut Frontend, input: &mut Input, steps: usize) {
     for _ in 0..steps {
         press(frontend, input, Button::Right);
     }
-    press(frontend, input, Button::Cross);
     press(frontend, input, Button::Cross);
 }
 
@@ -96,12 +95,10 @@ fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
         ..Pointer::default()
     };
     let tile = [410.0, 110.0, 135.0, 135.0];
-    // Chosen, then confirmed through the tick, as every tile is.
+    // One tap chooses and confirms, as it does on every mode tile.
     assert!(frontend.pointer(&tap(tile)));
     tick(&mut frontend, &mut input, 0);
     assert_eq!(frontend.chosen_mode(), Some("FE_RC_HD"));
-    assert!(frontend.pointer(&tap(tile)));
-    tick(&mut frontend, &mut input, 0);
     assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
     assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
     let marker = frontend

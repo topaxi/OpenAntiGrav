@@ -290,7 +290,7 @@ different offsets and little-endian; the role-word trick carries over.
     `/proc/<pid>/mem` of a Vita3K you launched as a child (`vita3k-mem.py`, or `vita-2048-pair.py`'s `patch_hull_shake` for a write).
   - One launch of 12 sat on "Sony Computer Entertainment presents" with the GPU thread busy until killed, with no stub involved. Relaunch.
 - **The title screen**: about 8 s after the window appears `Return`, then three `x` at 4 s spacing reach the Game Mode grid with the PSN prompt gone.
-- **Single Player Campaign opens on the second tap** of `(295, 162)` (the first highlights the tile) and shows the campaign map straight away on a save past Event 1.
+- **Single Player Campaign opens on the first tap** of `(295, 162)` and shows the campaign map straight away on a save past Event 1; HD Campaign `(477, 162)` the same (re-measured 2026-10-26, `2048-mode-tile-single-tap`, which corrects an earlier "the first tap highlights the tile"; a second tap lands on the map). The pad does nothing on this grid.
 - **Screens are told apart by mean luma** of a 96x54 grey copy: menus and the loading screen 0.7 to 0.9, the ship flyby and the race 0.2 to 0.4, the pause menu 0.53; the race
   HUD is the one dark frame with 150 or more pixels at or above 235 in the 150x70 box at `(10, 8)` ("LAP" and "TOTAL").
 - **The countdown**: after Retry the HUD's first frame comes 2.4 s after the confirm tap, the camera sweeps in for about 0.5 s, and the clock reads `0.00.00` for the

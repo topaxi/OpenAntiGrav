@@ -232,7 +232,7 @@ fn the_parsed_touch_grids_match_the_title_table() {
 }
 
 /// From `Boot Connect` to the campaign shell on the pad alone: the movie is
-/// skipped (no picture), cross through the title screen, two crosses on the mode grid.
+/// skipped (no picture), cross through the title screen, one cross on the mode grid.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
@@ -255,7 +255,7 @@ fn the_pad_walks_from_boot_connect_to_the_campaign_shell() {
         &[Button::Cross],
         w2048::GAME_MODE_CHOICE
     ));
-    // First cross chooses the single-player campaign, the second confirms.
+    // One cross chooses the single-player campaign and confirms it.
     assert!(drive_until(
         &mut frontend,
         &[Button::Cross],
@@ -353,7 +353,6 @@ fn a_network_mode_stays_on_the_grid_with_a_note() {
     }
     step(&mut frontend, &mut input, Button::Cross);
     assert_eq!(frontend.chosen_mode(), Some("FE_MP_CAMPAIGN"));
-    step(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.machine().is(w2048::GAME_MODE_CHOICE));
     let notes = frontend.take_notes();
     assert!(
