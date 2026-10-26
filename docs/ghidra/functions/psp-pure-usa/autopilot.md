@@ -84,3 +84,43 @@ running stint and any `disengaging` call outside the countdown's own are unread,
 ours runs Pulse's pad gate and fire suppression there (inherited). A PPSSPP run of
 `scripts/psp-autopilot-cancel.py` adapted to this page's offsets (running byte `+0x154`,
 timer `+0x15c`) would settle the absence.
+
+## Expiry mid-corner, live (2026-10-26, `autopilot-expiry`)
+
+The pasted claim (the timer is extended in a turn zone, a bank or at high g, and it
+disengages only on a straight; its example was Chenghou Project) was run on Pure's own
+Chenghou Project, which Pure does ship. **No hold, measured live, confidence 88** (one
+boot, one circuit; the timer only, see the limits below). Pulse's, HD's and 2048's:
+[Pulse](../psp-pulse-usa/autopilot.md#expiry-mid-corner-and-the-pasted-extended-in-a-turn-zone-claim-2026-10-26-autopilot-expiry),
+[HD](../ps3-hdfury-eu/autopilot.md#expiry-mid-corner-2026-10-26-autopilot-expiry),
+[2048](../vita-2048-eu-v104/autopilot.md).
+
+`scripts/psp-pure-autopilot-expiry.py`, PPSSPP v1.20.4 on `pure-psp-usa.chd` (disc `UCUS98612`,
+2.00), the Time Trial state `time-trial-chenghou-vector-feisar-restart`, Vector, Feisar. The
+pickup record is found at the per-craft weapons loop's tail (`0x0884d0d4`, `a1`); the craft
+is read once a frame at `Ship_UpdateCraft` (`0x0892d214`). The craft is flown on the throttle
+for 40 frames, then armed as `Autopilot_Fire` does (`+0x154 = 1`, timer `+0x15c`). Pure runs
+its simulation at 30 Hz: the timer fell `0.0333` a frame. Pure's Autopilot flies the lap
+(the craft covered 1 to 4 units a frame for 600 frames). Policy `corner` with the trigger at
+1.2 degrees of heading a frame (36 degrees a second), the stint 5 s, the forced timer 0.05 s.
+
+| | |
+| --- | ---: |
+| Expiries, all forced into the hairpin | 20 |
+| Heading rate at the trigger | 1.20 to 2.71 degrees a frame (36 to 81 a second) |
+| Mean over the six frames before the expiry | 0.8 to 2.2 degrees a frame |
+| Released on the first frame with the timer `<= 0` (the frame before it above 0) | 20 of 20 |
+| Frames with the byte set and the timer `<= 0` | **0** |
+| Timer rises while the byte is set | **0** |
+
+So the static reading above holds: `Autopilot_Update` clears the byte the first time the timer
+reads `<= 0`, in the middle of Pure's tightest corner as everywhere. The "no hold" lines of
+this page's "No cancel and no hold" section are now measured; their confidence 70 stays only
+for the **absence of a cancel**.
+
+**Limits.** Only the timer and the byte were read: Pure's controls' blend and engine bits are
+not located in this tree's offsets, so the hand-back's tick count and the `disengaging`
+timing are Pulse's and HD's, not watched on Pure. A face-button probe (CIRCLE, TRIANGLE, then
+SQUARE held 10 frames against a 30 s stint) left the byte set and the timer falling, but
+the race's weapons switch in Pure is not found, so the buttons may never have reached a
+pickup path and the probe has **no positive control**: the cancel's absence stays static, 70.

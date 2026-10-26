@@ -507,6 +507,72 @@ delays the expiry nor gates the release. The countdown runs on through a corner 
 read as a hold is only that the controls hand back in one tick with the craft
 already at the Autopilot's speed and line.
 
+### Expiry mid-corner, and the pasted "extended in a turn zone" claim (2026-10-26, `autopilot-expiry`)
+
+The maintainer pasted an unsourced claim: *the timer is extended while the craft is banked,
+pulling high g, or inside a predefined turn zone; it disengages only after the apex, on a
+straight, and then plays "Disengaging"*. Its example was Chenghou Project's hairpins.
+**Verdict on Pulse: refuted on every clause, measured live, confidence 92.** (Pulse ships no
+Chenghou Project; the sharpest corners here are de Konstruct Black's. Pure does ship it, see
+[psp-pure-usa/autopilot.md](../psp-pure-usa/autopilot.md#expiry-mid-corner-live-2026-10-26-autopilot-expiry)
+and HD's own, [ps3-hdfury-eu/autopilot.md](../ps3-hdfury-eu/autopilot.md#expiry-mid-corner-2026-10-26-autopilot-expiry).)
+
+**Falsifiers, written before the capture.** A hold shows as the running bit still set on a
+frame whose timer has reached `<= 0`, or a timer that fails to fall by the frame's `dt` (or
+rises) while the bit is set, or an expiry that lands later than the stint armed. An ease shows
+as the controls' blend between `0` and `1` while `craft+0x78` is neither the pad's record nor
+the driver's, or steering values interpolating over more than one frame after the bit clears.
+
+**Method.** `scripts/psp-autopilot-expiry.py`, PPSSPP v1.20.4, Time Trial save states
+(`time-trial-de-konstruct-black-venom-grid`, Venom), the weapons byte `0x08b30fa8` written to
+`1` after the load so `Autopilot_Update` runs (a Time Trial's own game mode `5` leaves it `0`
+and the timer then never falls). The craft flies 40 to 420 frames on the throttle, then the
+Autopilot is armed as `Autopilot_Fire` does (`craft_record+0x1b8 |= 0x800`, timer `+0x148`)
+and one row is logged per stop on `Weapons_DispatchFire`. Policy `corner`: the first frame the
+heading rate passes 2.0 degrees a frame the timer is written down to 0.05 s, so the expiry
+falls in the corner by construction; policy `cue`: a breakpoint on the `jal` to
+`Sound_PlayDry` inside `Autopilot_Update` (`0x0886145c`). The summary of a capture is
+`scripts/autopilot-expiry-summary.py pulse <file>`. Same circuit and class across the runs;
+3 loads of one save state in one PPSSPP boot, plus the 152 expiries of the run above on
+Talon's Junction (so two circuits).
+
+| What | Result |
+| --- | --- |
+| Expiries logged on de Konstruct Black (15 in one run), 8 of them forced into a corner | 15 of 15 released on the frame the timer first read `<= 0` (`-0.0000` to `-0.0170`), the frame before reading above 0 |
+| Running frames with the timer at or below 0 | **0** |
+| Timer rises while running | **0**; the timer fell 0.0163 to 0.0170 a frame, which is the frame's `dt` |
+| Heading rate in the six frames before an expiry | 0.1 to 4.84 degrees a frame (up to about 290 degrees a second), the corner expiries 2.0 to 4.56 on average; the lap's median is 0.35 |
+| Roll out of the horizontal in the same span | up to 89 degrees (a banked section of the circuit, the craft flying it at 2.2 to 2.3 units a frame, its straight-line speed), expiries at 72.6, 75.3, 75.9, 86.1 and 88.9 degrees among them |
+| At the expiry frame | blend `0.00`, engine bits `0xd -> 0x1`, `craft+0x78` still the driver's record; **the next frame it is the pad's record** (15 of 15) |
+| The blend before it | equals the timer for the last second, one frame behind (`0.05`, `0.03`, `0.01`); the controls are the driver's whole record for all of it |
+
+So: a corner, a steep bank and a high centripetal load (4.6 degrees a frame at 138 units a
+second, 13 times the lap's median heading rate) delay nothing, and release is on a corner as
+readily as on a straight. The first run of the day (stick held to give the pad a steering
+value) left the craft wrecked after three expiries and is not counted.
+
+**The hand-back is one tick, not eased.** The blend ramps `1 -> 0` over the last second (it
+is `min(timer, 1.0)`, [above](#what-the-running-bit-does-to-the-craft-2026-10-19-autopilot-rail)),
+but `Ship_UpdateCraft` only tests it against zero, so the driver's record is used at full
+strength until the frame after the bit clears. The steering the driver sends in that last
+second is the autopilot's own tracking of the line (it falls from `-100` to about `-10` as the
+craft straightens), not an interpolation towards the pad's. Confidence 90.
+
+**The `disengaging` call, timed.** With a breakpoint on `0x0886145c` alone (only the most
+recently added execution breakpoint fires on v1.20.4, so the per-frame stop is removed first)
+the call is taken **once**, on the frame the timer first reads below 1.0 (`0.9985`, previous
+`1.0152`), with the running bit still set; the release followed 59 frames and 0.984 s of timer
+later. So the announcer's line begins one second before the hand-back and is not tied to
+a corner, a straight or an apex. Confidence 90 for the call and its timing; that the voice
+is audible was not checked (no audio runs here).
+
+**An absorb with time left says it too (the open read above is closed).** Arming a 4 s stint
+and pressing CIRCLE with 3.83 s left (weapons byte set): the timer went to `-0.0167` on the
+next dispatch with the previous value still `3.80`, and the same `0x0886145c` breakpoint
+**hit**. So the original calls `Sound_PlayDry` with `disengaging` on a cancel, not only on
+the timer's own last second, and ours raising `Cue::Disengaging` there is measured, not
+inferred. The pad record was selected on the next frame, bits `0xd -> 0x1`. Confidence 90.
+
 ### Ours
 
 **Wired 2026-10-26 (`autopilot-wire`).** Until then `Race::spend_pickup` returned on an
@@ -531,13 +597,13 @@ Omega inherited from HD, and the pad gate Pulse's everywhere but Pulse itself
 refusal of a held Autopilot are not per-title: they follow from the driver flying the
 craft, and no title's executable was read to differ.
 
-**One thing is inferred rather than measured: the `disengaging` call on a cancel.**
-`Autopilot_Update` above runs on the next dispatch with the timer at `-dt` and
-`craft+0x144` still holding last frame's value, so with more than a second left its
-`now < 1.0 && previous > 1.0` edge is crossed and the announcer speaks. Ours raises
-`Cue::Disengaging` from the cancel when more than a second was left (confidence 85,
-static; the live run above logged state, not cues, and it has not been heard).
-Pinned by `cancelling_with_time_left_says_disengaging_and_the_last_second_does_not`.
+**The `disengaging` call on a cancel is measured (2026-10-26, `autopilot-expiry`).**
+`Autopilot_Update` runs on the next dispatch with the timer at `-dt` and `craft+0x144` still
+holding last frame's value, so with more than a second left its `now < 1.0 && previous > 1.0`
+edge is crossed and the announcer speaks; a breakpoint on the call's `jal` (`0x0886145c`)
+hit on a live absorb with 3.8 s left ([above](#expiry-mid-corner-and-the-pasted-extended-in-a-turn-zone-claim-2026-10-26-autopilot-expiry)).
+Ours raises `Cue::Disengaging` from the cancel when more than a second was left. Pinned by
+`cancelling_with_time_left_says_disengaging_and_the_last_second_does_not`.
 
 **Known one-tick difference, not fixed here.** The timer zeroes on the press tick, as
 the original's does on its frame 22, and the controls are the person's on the next tick

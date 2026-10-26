@@ -231,3 +231,87 @@ and 2048 and Omega inherit it; the disc-backed trace is
 `crates/raceplay/tests/autopilot_cancel_ground_truth.rs`. HD's pad grant is unread
 and runs Pulse's gate, inherited. Pulse's live run and the full reading are in
 [psp-pulse-usa/autopilot.md](../psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re).
+
+## Expiry mid-corner (2026-10-26, `autopilot-expiry`)
+
+The maintainer pasted an unsourced claim: *the timer is extended while the craft is banked,
+pulling high g, or inside a predefined turn zone; it disengages only after the apex, on a
+straight, and then plays "Disengaging"*, naming Chenghou Project's hairpins. **Verdict on HD:
+refuted, read statically and measured live on Chenghou Project, confidence 90.** The same
+test on [Pulse](../psp-pulse-usa/autopilot.md#expiry-mid-corner-and-the-pasted-extended-in-a-turn-zone-claim-2026-10-26-autopilot-expiry),
+[Pure](../psp-pure-usa/autopilot.md#expiry-mid-corner-live-2026-10-26-autopilot-expiry) and
+[2048](../vita-2048-eu-v104/autopilot.md) reads the same.
+
+### Static: who writes the pickup's timer, and what the blend does
+
+A search of every `stfs` and `stw` with displacement `0x158` (the pickup slot's timer) in the
+whole image, then each hit followed to its base register:
+
+| Store | What it is |
+| --- | --- |
+| `0x00129b40` (`Autopilot_Fire`) and an inlined copy in `0x0012b2c0` at `0x0012b628` (`ori 0x800` into `+0x200`, `+0x204`, then `lfs 0xb4(table)`) | arm: the authored `time` |
+| `0x001299b8` (`Autopilot_Update`) | `timer -= dt` |
+| `0x000e92b8` (`Ship_UpdatePickup_q`) | the absorb cancel: `0` |
+| `0x000cc800`, `0x000cca64` (`PlayerStatus_Update`) | **not the slot**: `r31` is the HUD's `this`, a message timer it adds `dt` to; the slot is loaded separately (`lwz r9,0x5edc(r11)` at `0x000cca94`, then `lfs f1,0x158(r9)` for the `%1.2f`) |
+| `0x0013a38c`, `0x0013a91c` | `fcfid` of a random number into `+0x154`/`+0x158` of another object |
+| `0x0013ae68`, `0x0013c430` | constructors zeroing `+0x158` |
+
+So nothing adds to the timer: the only writes that touch a running Autopilot's slot timer
+are the arm, the decrement and the cancel. A field scan does not exclude a write through a
+copied record or a vector store, so this is 80 and not more; the live run below is what
+carries the 90.
+
+`Craft_Update` (`0x000f1958`) is where the hand-back happens. At `0x000f19fc` it loads the
+blend `craft+0x278` and compares it with the TOC word at `r2-0x438c`, which is
+`0x008a914c` and holds `0.0` (read from the image). Equal: it keeps the pad's record
+(`craft+0x84 = [craft+0x44]`). Not equal: it copies the driver's whole record, word by word
+with no multiply, over `craft+0x4c` and points `craft+0x84` at it (`0x000f1a18..0x000f1ab0`).
+The other reader, `0x000ecab4` in `Ship_UpdateEntity`, is the same zero test, feeding the
+two distance counters (`+0x198`, `+0x208`). **So the blend's fade over the last second never
+reaches the handling: the hand-back is one tick, not eased.** Confidence 90 (two sites,
+the constant read, and the live rows below).
+
+### Live: 34 expiries on Chenghou Project, two restores
+
+`scripts/rpcs3-hd-autopilot-expiry.py`, RPCS3 0.0.42, HD EU, the Racebox Time Trial state
+`hd-timetrial-chenghou-project-harimau-classic-start` restored twice (private config, Write
+Color Buffers on, audio off, display `:98`). The Autopilot is armed through `/proc` memory
+(`slot+0x200 |= 0x800`, `slot+0x158 = stint`; the slot's timer fell from the first row, so
+Time Trial needs no weapons switch here) and one row is logged per new body position, about
+60 to 100 a second. Policy `corner`: the first row the heading rate passes 60 (80 on the
+second restore) degrees a second the timer is written down to 0.15 s (0.3 s), so the expiry
+lands in the corner. Summary: `scripts/autopilot-expiry-summary.py hd <file>`.
+
+| | Restore 1 (stint 6 s) | Restore 2 (stint 4 s, stick held at 0.5) |
+| --- | ---: | ---: |
+| Expiries | 18 | 16 |
+| Forced into a corner (heading rate at the trigger) | 16 (60 to 86 degrees a second) | 8 (81 to 122 degrees a second) |
+| Released on the first row with the timer `<= 0` (the row before it above 0) | 18 | 16 |
+| Rows with the bit set and the timer `<= 0` | **0** | **0** |
+| Timer rises while the bit is set | **0** | **0** |
+| Rows from the bit clearing to `craft+0x84` pointing at the pad record | 2 to 4 (32 to 35 ms) | 2 to 4 (24 to 61 ms) |
+| Engine bits at the release | `0xd -> 0x1` (`0xc -> 0x0` airborne) | the same |
+
+Speeds at the expiries were 70 to 165 on `craft+0x340`, the roll out of the horizontal at
+most 29 degrees (HD's circuit has no steep banks at these corners; the Pulse run covers
+that clause). The timer fell by the row's `dt` (0.0166 or 0.0333 between rows).
+
+**No ease.** The last driver record before the hand-back carried values such as
+`(-100, 100, 100)` and `(87.5, 100, 0)`; the first row on the pad record carried the pad's
+own, `(0, 100, 0)` with the stick centred and `(18.7, 100, 0)` with the stick held: one step,
+no intermediate row between them. The blend's own value ran `timer` down to `0.01`
+(one frame behind the timer, as a `min(timer, 1.0)` set in `PlayerStatus_Update`) while the
+driver's record stayed in use at full strength.
+
+**A trap that read as a hold.** A first corner run on this state, started after a 100 s scan
+on the same restore, logged 18 of 18 expiries "held": bit clear, but blend `1.0` and engine
+bits `0xd` for the whole twelve rows after. The race had finished (`ship+0x7002`), and
+`PlayerStatus_Update`'s finished arm (`0x000cbff8..0x000cc0bc`, above) keeps the blend at
+`1.0` and the cap lifted after the flag, exactly as the Pulse run's "108 of 108 kept blend
+`1.0`". The script now stops at the finished flag, and the table above is from fresh restores.
+
+**The `disengaging` call is not timed live on HD.** It is the edge in `Autopilot_Update`
+(`timer < 1.0 && previous > 1.0`, `0x00129a80`), so on a stint it falls one second before
+the release, and on a forced early expiry it is crossed on the first dispatch after the
+write. No RPCS3 breakpoint was set (the stub fires them only under the interpreter), so the
+cue's position against the hand-back is read, not watched; Pulse's is watched. Confidence 80.
