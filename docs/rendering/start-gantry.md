@@ -1006,9 +1006,77 @@ On HD slot 8 goes through the advert card path (`oag_raceplay::gantry::place_car
 model is drawn through its own camera into the 512 x 256 target and the track's `billboard8`
 quad samples it. The gantry's clock, per-window cull and `GO` edge are the ones
 [`gantry-clock.md`](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md) measured; they now drive the
-card. **Not reproduced:** the card's R5G6B5 format (ours is RGBA8, chosen). Pulse's frame is
+card. The card's R5G6B5 format was reproduced on 2026-10-26 ([below](#the-card-is-5-6-5-in-linear-light-2026-10-26-hd-card-panels)). Pulse's frame is
 byte-identical before and after (a scratch directory, not kept, sha256 `6318e31c...` at tick
 150, `72fc7de6...` at tick 273).
+
+### The card is 5-6-5 in linear light (2026-10-26, `hd-card-panels`)
+
+**Answer.** The three cards' panels read red about +9 over the scenery because the original's card target is
+`R5G6B5` and holds **linear light**: the card pass writes the texture decoded to linear and **rounded to the
+nearest of 31 (R), 63 (G) and 31 (B) levels**, and the track quad samples those levels. The panel's red is dark
+(`honeyblue_noalpha`'s texel R is about 25 of 255, 0.0098 linear), under a third of the first level
+(0.0323), so most red texels round to **0** and the rest to 1; the quad's red falls by 12 to 14 after the
+encode while green and blue (levels 4 and 2.5 on average) keep their value. Ours kept the 8-bit gamma texel,
+so the dark red survived. Confidence 90 (a live read of the original's card; the law fits 89 to 90 % of its
+red and blue texels and 86 % of its green, the rest being ours' own 8-bit, filtered card).
+
+**Evidence.** RPCS3, Chenghou Project time-trial start save, game paused, `Write Color Buffers` on: a GDB
+read of VRAM at `0xC0000000 + 0x02ae0000` (512 x 256, pitch `0x400`, **big-endian 16-bit words**, red in bits
+15-11) is the slot 8 card; the `fx350` card is at `0x02aa0000`. On the panel region (rows 20-236, columns
+5-70 of the card, away from the glyph): original mean levels **R 0.267, G 4.348, B 2.697** (R levels:
+10,317 zeros, 3,702 ones, 21 twos); the same texels from ours' card, decoded and rounded, give R 0.281, G 4.384,
+B 2.671 with the sRGB curve and R 0.139 with the 2.2 power, so the decode is the **piecewise sRGB curve** the
+texture unit applies and the rounding is to nearest (a floor drops the green and blue means to 3.74 and 2.03).
+Metropia's card read the same panel means (0.267, 4.348, 2.697), so the card is circuit-independent.
+A card read does not come back from a hooked frame's dump (the older note in `rpcs3-capture.md`); with the
+game paused after a state restore it did, on the second pause of a retry loop on Metropia (the first read all zeros).
+
+**What ours does now.** `oag_title::adverts::Adverts::card_565` (HD `true`, measured; Pulse `false`, its card
+format unmeasured) makes `oag_raceplay::adverts::Cards` draw the card with `SceneStore::Packed565`, which sets
+the shader override `packed_out`; `oag_shaders::target::target_out` (the one place every colour fragment
+stage ends on) then rounds the colour to the 5-6-5 levels in linear light by the sRGB curve and stores it encoded with
+the 2.2 power the track quad's sampler decodes with, so the quad receives the rounded level itself. Test:
+`hd_gantry_card_holds_565_levels_of_linear_light` (disc-backed, fails at 0.24 of the card on the grid when the
+title field is dropped, passes above 0.8) and `hd_declares_its_cards_565_and_pulse_does_not`.
+
+**Result, 13 HD pairs** (`compare-page/hd/<pair>`, ours re-rendered from each pair's recorded flags, theirs unchanged;
+blur 7, mean absolute RGB; the card mask is the pixels that change when `OAG_SKIP_MATERIAL=321go` drops the gantry
+model, inside x 720-1560, y 120-600; the **panel** is that mask where the original reads teal, green and blue each
+25 above red, and both sides are under luma 150, which leaves the glyph and its halo out; the scenery is the box
+outside the mask):
+
+| pair | card-mask MAE | panel MAE | panel R bias | scenery R |
+| --- | ---: | ---: | ---: | ---: |
+| anulpha-pass | 16.70 to 16.47 | 5.46 to 4.85 | +7.6 to +3.7 | -1.5 |
+| chenghou-project | 7.62 to 6.60 | 7.59 to 5.83 | +12.2 to +7.7 | +0.9 |
+| metropia | 18.27 to 16.84 | 19.04 to 16.79 | +22.3 to +14.4 | -0.1 |
+| moa-therma | 5.41 to 5.08 | 3.95 to 3.25 | +8.5 to +6.0 | +1.6 |
+| modesto-heights | 5.16 to 4.97 | 5.42 to 4.77 | +8.2 to +7.2 | +4.0 |
+| sebenco-climb | 7.26 to 6.43 | 6.95 to 5.61 | +14.2 to +9.4 | +4.0 |
+| sol-2 | 4.35 to 4.01 | 4.35 to 3.80 | +8.4 to +6.6 | +1.9 |
+| talons | 11.28 to 10.03 | 7.59 to 6.24 | +12.7 to +7.7 | +5.3 |
+| talons-assegai-c1 | 16.62 to 16.09 | 7.39 to 6.23 | +10.2 to +5.7 | +5.4 |
+| tech-de-ra | 9.42 to 8.72 | 6.93 to 5.34 | +10.1 to +0.8 | +3.1 |
+| the-amphiseum | 8.26 to 7.01 | 5.95 to 4.18 | +11.2 to +3.8 | +4.7 |
+| ubermall | 11.07 to 10.44 | 9.32 to 8.38 | +6.7 to +1.0 | +0.4 |
+| vineta-k | 5.62 to 5.07 | 5.51 to 4.59 | +11.4 to +7.6 | +0.1 |
+
+Mean: card-mask MAE 9.77 to 9.06, panel MAE 7.34 to 6.14, panel R bias 11.1 to 6.3.
+Every pair's panel error falls, including `anulpha-pass` and `ubermall` (their card mask carries the glyph's phase, which this
+does not touch). **Not closed:** the panel red is still +4 to +14 over the scenery on 11 of the 13 pairs. Putting the
+original's own card into ours (`OAG_CARD_RAW`, a scratch patch that wrote the read card over the render) leaves Chenghou at
++1.7 and Sebenco at +2.7, so most of the rest is the card ours renders: its red level mean is 0.294 against the original's
+0.267, because the card pass draws the honeycomb with 8-bit gamma filtering where the console decodes each texel before it
+filters. Metropia keeps red +14 and **green +14** whatever the card holds (+12.9 and +14.4 with the original's), so its
+residual is the board's own program (`cf_vex_billboard`'s lit combine), not the card; open. A variant that decodes with the
+2.2 power instead of the sRGB curve lands the mean red bias at -3.7 and the panel error at 5.71 (against 6.14), closer in
+the frame and further from the card, **not chosen**: the card is the measurement.
+
+**2048 and Omega: checked, applies, not wired.** Neither title's `Title::adverts` is set (no card pass; Omega reads the
+`321Go` files and leaves the pass off, `omega-status.md` "Adverts"), so there is no card to round. When a pass is wired for
+either, HD's `R5G6B5` linear card is the inherited law by the maintainer's rule; the Vita's and PS4's own target format is
+not measured (RPCS3 has no Vita or PS4 counterpart; Vita3K gives no VRAM readout and shadPS4 no memory readout).
 
 ### "Zone levels have a different gantry animation": the mode picks the file
 

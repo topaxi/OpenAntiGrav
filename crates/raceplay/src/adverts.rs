@@ -53,6 +53,9 @@ pub struct Card {
     /// Whether a track quad samples the target wrapping, the title's
     /// [`oag_title::adverts::Adverts::wrap`].
     pub wrap: bool,
+    /// Whether the target is a 5-6-5 colour card in linear light, the title's
+    /// [`oag_title::adverts::Adverts::card_565`].
+    pub card_565: bool,
     /// The gantry's clock and board-window cull, on the card that is slot 8 of
     /// a title that draws it as one; `None` for an advert, which runs on the
     /// scenery clock.
@@ -203,6 +206,7 @@ pub(super) fn card_from(
         view_projection,
         size: spec.target,
         wrap: spec.wrap,
+        card_565: spec.card_565,
         timeline: None,
     })
 }
@@ -320,7 +324,11 @@ impl Cards {
                 queue,
                 card.model,
                 FORMAT,
-                oag_gpu::formats::SceneStore::Computed,
+                if card.card_565 {
+                    oag_gpu::formats::SceneStore::Packed565
+                } else {
+                    oag_gpu::formats::SceneStore::Computed
+                },
                 anisotropy,
                 1,
                 mesh_render::Depth::Scene,

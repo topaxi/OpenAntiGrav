@@ -27,7 +27,8 @@ pub const DISTORTION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Floa
 /// to output linear light - see `oag_mesh::mesh_render::is_linear_target`.
 pub const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// What a [`SCENE_FORMAT`] target stores of a draw's linear-light output.
+/// What a target stores of a draw's linear-light output: a [`SCENE_FORMAT`] one keeps
+/// it or its encoding, and a card keeps it rounded to its few bits.
 ///
 /// The format says the draws compute in linear light; this says whether the
 /// target then keeps that value or its display encoding. It matters only to a
@@ -48,4 +49,9 @@ pub enum SceneStore {
     /// the `2.2` power, and the race composite's square root is the encode
     /// (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`).
     Squared,
+    /// A 5-6-5 colour card, not a scene: Wipeout HD's 512 x 256 advert and gantry
+    /// cards hold linear light rounded to 31, 63 and 31 levels
+    /// (`docs/rendering/start-gantry.md`, "The card is 5-6-5 in linear light"). Drawn
+    /// into a gamma target, which keeps the rounded value encoded.
+    Packed565,
 }

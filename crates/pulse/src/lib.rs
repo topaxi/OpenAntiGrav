@@ -144,6 +144,7 @@ pub const TITLE: &Title = &Title {
         // advert passes share the gantry's 128 x 128 target and every prim of every run has
         // `LIGHTINGENABLE` 0, as the gantry's own pass does.
         adverts_unlit: true,
+        card_565: false,
         card_unlit: true,
         zone_gantry: None,
         origin: oag_title::Origin::Measured,

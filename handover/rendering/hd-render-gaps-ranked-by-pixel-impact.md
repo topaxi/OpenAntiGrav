@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD gaps by tile: band cut +6.3 to +3.0; blocks 1+3 split: gantry card panels 9% of frame, booth/reflect glass 4.5% next"
+summary: "HD gaps by tile: gantry card panels read R+11 to +6 (card is 5-6-5 linear, wired); booth/reflect glass 4.5% of frame is next"
 ---
 
 # HD/Fury render gaps ranked by pixel impact
@@ -249,16 +249,16 @@ geometry. **Guess, not measured:** the no-LG2 stand-in specular in
 
 ### Lane claims, ranked by impact
 
-1. **Gantry card panels: measure, then wire.** Claim (a reading, not shown by a toggle): the three cards'
-   panels read R about +9 over the scenery on 9 of 13 pairs because ours draws their second texture
-   differently from the original's `cf_vex_billboard` program. Impact 14.0 M, 9.1% of the frame, 41.7% of
-   block 1; the panel part is 8.0 M. Acceptance: card mask (the 321go pixels, box x 720-1560, y 120-600) on
-   **metropia**, **sebenco-climb**, **chenghou-project** and **vineta-k**, panel R bias within +2 of the
-   scenery's and card-mask error down by a third, with `anulpha-pass` and `ubermall` not worse (their sign is
-   the other way). Unread: the program's constants (`scripts/ps3-microcode.py fp-file` on the card's fragment
-   block, recipe in `hd-track-tone.md`; the card's material name on each circuit is not `cf_vex_billboard`
-   except on Metropia and Vineta K). Separate measure item: pin the gantry phase on `modesto-heights` and
-   `sebenco-climb` (no window node was found) and on `anulpha-pass` (1.13 M off its best phase).
+1. **Gantry card panels: DONE 2026-10-26 (`hd-card-panels`), partly.** The cause was the card's format, not the
+   board's program: the original's card is `R5G6B5` holding linear light, so the dark red rounds to 0
+   (`oag_title::adverts::Adverts::card_565`, `SceneStore::Packed565`; `docs/rendering/start-gantry.md`, "The card is 5-6-5
+   in linear light"). Panel (teal pixels of the card mask) red bias +11.1 to +6.3 and panel error 7.34 to 6.14 on the 13
+   pairs, no pair worse; card-mask error 9.77 to 9.06 (the glyph's phase is the rest). Acceptance **not met**: the panel red
+   is not within +2 of the scenery's on any of the four named pairs (Chenghou +7.7, Sebenco +9.4, Vineta K +7.6, Metropia
+   +14.4) and the card-mask error fell 8 to 13 %, not a third. Open: (a) ours' card red level mean 0.294 against the original's
+   0.267 (8-bit gamma filtering in the card pass where the console decodes each texel first; the original's own card put into ours
+   leaves Chenghou +1.7, Sebenco +2.7); (b) **Metropia green +14 and red +14 whatever the card holds**, its `cf_vex_billboard` lit
+   combine; (c) the gantry phase pinning on `modesto-heights`, `sebenco-climb` and `anulpha-pass`, untouched.
 2. **`ds_booth_glass` and `glass_reflect`: measure then wire, one family per commit.** Claim: these two
    families, each on 11 to 12 circuits, cost about 7 M (4.5% of the frame, 19% of block 3 for booth alone)
    because ours draws them without their own programs. Acceptance: block 3 box on **modesto-heights** and
