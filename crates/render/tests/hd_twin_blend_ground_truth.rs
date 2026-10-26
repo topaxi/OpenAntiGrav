@@ -61,6 +61,12 @@ fn bound(model: &mesh::Model) -> Vec<(usize, [String; 4], bool)> {
             1.875,
             "slot {slot}: the wipe's rate, the vertex block's literal"
         );
+        // 2048 and Omega inherit this number rather than read it: it must stay HD's.
+        assert_eq!(
+            mesh::rcs::psp2::TWIN_BLEND_RATE,
+            model.emissive[slots::material_index(vertices[0].slots) as usize - 1].tint[0],
+            "slot {slot}: the psp2 builder's inherited rate"
+        );
         assert!(
             vertices.iter().all(|v| v.slots & slots::ADD_SECOND == 0),
             "slot {slot}: the generic additive second texture is cleared"

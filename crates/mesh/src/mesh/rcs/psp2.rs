@@ -45,6 +45,9 @@ use oag_rcs::rcsmodel::psp2::lighting_only;
 mod glow;
 pub mod placement;
 mod transparency;
+mod twin_blend;
+
+pub use twin_blend::INHERITED_RATE as TWIN_BLEND_RATE;
 
 pub use placement::Animation;
 
@@ -131,6 +134,12 @@ pub struct Report {
     /// Of those, the ones admitted without a readable shader program to
     /// confirm the vertex stage declares `time` (every Omega one: GCN).
     pub inherited_unread: usize,
+    /// `nr_twinblend` materials drawn by HD's law - **inherited from HD**, no 2048 or Omega
+    /// instruction read - see `twin_blend`.
+    pub twin_blend_materials: usize,
+    /// `nr_twinblend` materials left as the generic reading drew them: a picture would not
+    /// decode, or a submesh carries no `barsUV_blendUV`.
+    pub twin_blend_unread: usize,
     /// Submeshes on a placeholder shader (`fc01_dummy`), drawn as the fog colour - see
     /// [`psp2::material::Material::is_placeholder`].
     pub placeholder_submeshes: usize,
@@ -211,6 +220,14 @@ impl Report {
                  (rates chosen, not measured), {} scroll(s) inherited from HD's vertex law by \
                  shader name and authored rate (no instruction read here)",
                 self.glow_layers, self.scrolling_materials, self.inherited_scrolls
+            )
+        };
+        let twins = if self.twin_blend_materials + self.twin_blend_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} nr_twinblend material(s) drawn by HD's law (two pictures, a wipe scrolling at HD's rate, bars; inherited from HD, not measured here), {} left as the generic reading",
+                self.twin_blend_materials, self.twin_blend_unread
             )
         };
         let zone_colours = if self.zone_colour_submeshes == 0 {
@@ -297,7 +314,7 @@ impl Report {
         };
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
@@ -485,7 +502,9 @@ fn build_planned(
     // Each material's own scroll, resolved before any vertex is written; the
     // glow layer's emissive texture is decoded here too, so a layer exists
     // only where its picture does.
-    let glow = glow::plan(&decoded.materials, &mut *textures, &mut report);
+    let mut glow = glow::plan(&decoded.materials, &mut *textures, &mut report);
+    // `nr_twinblend` takes one more entry of the same table.
+    let twin = twin_blend::plan(&decoded, &mut glow.emissive, &mut *textures, &mut report);
     model.emissive = glow.emissive.clone();
     model.anim_tracks = glow.tracks.clone();
     // Every draw is pushed in submesh order below, and `bind_textures`
@@ -532,7 +551,16 @@ fn build_planned(
             .and_then(|m| decoded.materials.get(m))
             .and_then(|m| m.zone_colour());
         report.zone_colour_submeshes += usize::from(zone.is_some());
+        // HD's `nr_twinblend`: unlit, three coordinate pairs, one glow-table entry.
+        let twin_here = twin.of(submesh.material);
         let (colour, lit, role) = match zone {
+            None if twin_here.is_some() => (
+                [1.0; 4],
+                0.0,
+                crate::mesh::slots::NO_AMBIENT
+                    | crate::mesh::slots::NO_SUN
+                    | twin_here.map_or(0, |t| t.slot << crate::mesh::slots::MATERIAL_SHIFT),
+            ),
             None if placeholder => (
                 FOG_FLAT,
                 0.0,
@@ -613,6 +641,11 @@ fn build_planned(
                 .get(i)
                 .copied()
                 .unwrap_or([0.0, 0.0]);
+            // The wipe's pair rides the lightmap coordinate and the bars' the second set, as
+            // HD's `nr_twinblend` binds them.
+            let pair = twin_here.and_then(|_| submesh.bars_blend_texcoords.get(i));
+            let lightmap_texcoord = pair.map_or(lightmap_texcoord, |p| [p[2], p[3]]);
+            let texcoord2 = pair.map_or([0.0, 0.0], |p| [p[0], p[1]]);
             model.vertices.push(GpuVertex {
                 quake: 0.0,
                 position,
@@ -622,7 +655,7 @@ fn build_planned(
                 lit,
                 lightmap_texcoord,
                 anim: glow.anim(submesh.material),
-                slots: if submesh.lightmap_texcoords.is_empty() {
+                slots: if submesh.lightmap_texcoords.is_empty() && twin_here.is_none() {
                     role | glow.role(submesh.material)
                 } else {
                     role
@@ -631,7 +664,7 @@ fn build_planned(
                 sun_mask: 1.0,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                 glow: 0.0,
-                texcoord2: [0.0, 0.0],
+                texcoord2,
                 tangent: 0,
             });
         }
@@ -701,7 +734,7 @@ fn build_planned(
     finish_bounds(&mut model);
 
     let ps4 = psp2::is_ps4(model_blob);
-    bind_textures(&decoded, &glow, &mut model, &mut report, textures, ps4);
+    bind_textures(&decoded, (&glow, &twin), &mut model, &mut report, textures, ps4);
     transparency::route(&decoded, &mut model, &mut report);
     Ok((model, report))
 }
@@ -716,7 +749,7 @@ fn build_planned(
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    glow: &glow::Plan,
+    (glow, twin): (&glow::Plan, &twin_blend::Plan),
     model: &mut Model,
     report: &mut Report,
     textures: Textures<'_>,
@@ -749,10 +782,12 @@ fn bind_textures(
         };
         let resolved = *slot.get_or_insert_with(|| {
             let layer = glow.layers.get(index).and_then(Option::as_ref);
+            let twin_here = twin.of(Some(index));
             let material = &decoded.materials[index];
             let rule = lighting_rule(material, ps4, &mut rules, &mut *textures);
             let refused: Vec<u32> = rule.as_ref().map_or_else(Vec::new, |r| r.refused.clone());
             let path = match layer {
+                _ if twin_here.is_some() => twin_here.map(|t| t.first.as_str()),
                 Some(layer) => Some(layer.diffuse.as_str()),
                 None => material.diffuse_texture_without(&refused),
             };
@@ -791,9 +826,14 @@ fn bind_textures(
             // Positionally beside the diffuse, as `Model::lightmaps` is
             // defined; left empty for a model no material of which names one,
             // which is every Vita model.
-            if glow.has_layers() || decoded.materials.iter().any(|m| m.lightmap.is_some()) {
+            if twin.any() {
+                debug_assert_eq!(model.pad_masks.len(), at);
+                model.pad_masks.push(twin_here.map(|t| t.wipe.clone()));
+                model.wave_maps.push(twin_here.map(|t| t.bars.clone()));
+            }
+            if glow.has_layers() || twin.any() || decoded.materials.iter().any(|m| m.lightmap.is_some()) {
                 debug_assert_eq!(model.lightmaps.len(), at);
-                let atlas = layer.map(|l| l.texture.clone()).or_else(|| {
+                let atlas = twin_here.map(|t| t.second.clone()).or_else(|| layer.map(|l| l.texture.clone())).or_else(|| {
                     decoded.materials[index]
                         .lightmap
                         .as_deref()
