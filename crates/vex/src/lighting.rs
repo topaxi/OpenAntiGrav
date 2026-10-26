@@ -211,55 +211,57 @@ impl PointLight {
     }
 }
 
-/// Every `AmbientLight` a `.vex` file authors, in node order.
+/// The nodes of the class `pick` names in this file's own class table, each
+/// with its world matrix, in node order. A file whose version has no table, or
+/// whose table has not recovered the class, yields none.
+fn of_class<'a>(
+    data: &'a [u8],
+    nodes: &'a [Node],
+    pick: fn(&vex::classes::Classes) -> Option<u32>,
+) -> impl Iterator<Item = (&'a [u8], [f32; 16])> + 'a {
+    let class = vex::classes_of(data).ok().as_ref().and_then(pick);
+    let chain = if class.is_some() {
+        vex::world_transforms(data, nodes)
+    } else {
+        Vec::new()
+    };
+    nodes
+        .iter()
+        .enumerate()
+        .filter(move |(_, node)| Some(node.class_id) == class)
+        .filter_map(move |(index, node)| Some((data.get(node.payload())?, *chain.get(index)?)))
+}
+
+/// Every `AmbientLight` a `.vex` file authors, in node order, by the file's own
+/// class table (`0x12c` in version 6, `0x125` in Pure's version 4).
 ///
 /// Placement is [`vex::world_transforms`], **not**
 /// [`vex::class_world_transforms`], which would silently drop every light (see
 /// the module docs).
 #[must_use]
 pub fn ambient_lights(data: &[u8], nodes: &[Node]) -> Vec<AmbientLight> {
-    let chain = vex::world_transforms(data, nodes);
     let order = vex::byte_order(data);
-    nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| node.class_id == vex::CLASS_AMBIENT_LIGHT)
-        .filter_map(|(index, node)| {
-            let to_world = chain.get(index).copied()?;
-            AmbientLight::parse(data.get(node.payload())?, to_world, order)
-        })
+    of_class(data, nodes, |c| c.ambient_light)
+        .filter_map(|(payload, to_world)| AmbientLight::parse(payload, to_world, order))
         .collect()
 }
 
-/// Every `DirectionalLight` a `.vex` file authors, in node order.
+/// Every `DirectionalLight` a `.vex` file authors, in node order (`0x131` in
+/// version 6, `0x12a` in version 4).
 #[must_use]
 pub fn directional_lights(data: &[u8], nodes: &[Node]) -> Vec<DirectionalLight> {
-    let chain = vex::world_transforms(data, nodes);
     let order = vex::byte_order(data);
-    nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| node.class_id == vex::CLASS_DIRECTIONAL_LIGHT)
-        .filter_map(|(index, node)| {
-            let to_world = chain.get(index).copied()?;
-            DirectionalLight::parse(data.get(node.payload())?, to_world, order)
-        })
+    of_class(data, nodes, |c| c.directional_light)
+        .filter_map(|(payload, to_world)| DirectionalLight::parse(payload, to_world, order))
         .collect()
 }
 
 /// Every `PointLight` a `.vex` file authors, in node order.
 #[must_use]
 pub fn point_lights(data: &[u8], nodes: &[Node]) -> Vec<PointLight> {
-    let chain = vex::world_transforms(data, nodes);
     let order = vex::byte_order(data);
-    nodes
-        .iter()
-        .enumerate()
-        .filter(|(_, node)| node.class_id == vex::CLASS_POINT_LIGHT)
-        .filter_map(|(index, node)| {
-            let to_world = chain.get(index).copied()?;
-            PointLight::parse(data.get(node.payload())?, to_world, order)
-        })
+    of_class(data, nodes, |c| c.point_light)
+        .filter_map(|(payload, to_world)| PointLight::parse(payload, to_world, order))
         .collect()
 }
 

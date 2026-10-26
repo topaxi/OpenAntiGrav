@@ -91,6 +91,18 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::InheritedFrom("Wipeout Pulse"),
     },
+    // The hull's GE light list is the circuit's own `AmbientLight` and
+    // `DirectionalLight` nodes, as on Pulse: Pure's builder `FUN_08841648` is
+    // Pulse's `SceneLight_BuildLightingList` read instruction for instruction
+    // (the context's light list at `+0x6d0` where Pulse's is at `+0x6cc`), and
+    // every Pure circuit authors the nodes under its own class ids (`0x125`,
+    // `0x12a`). Turned on, the four compare pairs' teal body moves with the
+    // circuit as the original's does
+    // (`docs/ghidra/functions/psp-pure-usa/scene-light.md`).
+    hull_lights: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,
