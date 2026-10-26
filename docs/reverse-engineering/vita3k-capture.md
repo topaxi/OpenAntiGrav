@@ -130,7 +130,8 @@ driving does not reach, so the single-player campaign's Zone event was not
 reached. **The HD campaign (DLC) opens its first group at once**: Game Mode,
 tap `(477, 162)` HD Campaign, and the `Uplift` group has a Race and a **Zone**
 event on Vineta K (`(505, 345)` and `(600, 395)`) with nothing to unlock
-first - that is where the Zone frames came from.
+first - that is where the Zone frames came from. **Confirm the craft on Select Team before the first Play** (the wrench button `(622, 480)` on the event card, its check mark `(882, 480)`, then the node again):
+without it the load stalls at 56 to 75 percent and Vita3K wedges in a loop of `Unhandled SIGSEGV` that ignores `SIGTERM` (`kill -9` by pid), five boots out of five (2026-10-26, `2048-dlc-pair`).
 
 **Pilot Assist: Extreme** is what makes an unattended lap possible. Pause
 (`key Return`), tap `(139, 192)` Options, `(296, 322)` Pilot Assist, the

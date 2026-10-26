@@ -47,7 +47,12 @@ TITLE = "PCSF00007"
 
 #: Touch coordinates in the 960x544 game window (`vita3k-capture.md`'s walk-in table, re-measured 2026-10-22).
 GAME_MODE_SINGLE_PLAYER = (295, 162)
+#: The HD Campaign tile beside it (the DLC's own campaign, `vita3k-capture.md`'s walk-in table).
+GAME_MODE_HD_CAMPAIGN = (477, 162)
+GAME_MODES = {"single": GAME_MODE_SINGLE_PLAYER, "hd": GAME_MODE_HD_CAMPAIGN}
 CONFIRM = (882, 480)
+#: The craft button left of the event card's Close and Play buttons (HD Campaign).
+HD_SELECT_TEAM = (622, 480)
 PAUSE_RETRY = (750, 480)
 RETRY_YES = (402, 312)
 #: The campaign map's first open node of a save that has finished "2048 - Event 1": Queens Mall.
@@ -134,18 +139,34 @@ def boot_and_walk(s, args):
         time.sleep(4.0)
         s.key("x")
     time.sleep(2.0)
-    s.tap(GAME_MODE_SINGLE_PLAYER)
+    tile = GAME_MODES[args.game_mode]
+    s.tap(tile)
     time.sleep(3.0)
-    s.tap(GAME_MODE_SINGLE_PLAYER)  # the first tap highlights the tile, the second opens it (measured)
+    s.tap(tile)  # the first tap highlights the tile, the second opens it (measured)
     time.sleep(3.0)
     s.tap(args.node)
     time.sleep(3.0)
+    if args.game_mode == "hd":
+        # The HD Campaign's load stalls at 56 to 75 percent unless the craft was confirmed on Select Team first (four cold boots,
+        # 2026-10-26): the wrench opens it on the default craft (Feisar HD), its check mark returns to the map, the node again.
+        s.tap(HD_SELECT_TEAM)
+        time.sleep(3.0)
+        s.tap(CONFIRM)
+        time.sleep(3.0)
+        s.tap(args.node)
+        time.sleep(3.0)
     s.tap(CONFIRM)  # Play
     time.sleep(3.0)
     s.tap(CONFIRM)  # the mode card
     # The menus are light (0.7-0.9 mean luma), the loading screen 0.9, the flyby and the race dark (0.2-0.4).
-    s.wait("the load to finish (a dark frame after the light menus and loading screen)", lambda f: mean_luma(f) < 0.55,
-           args.load_timeout, every=2.0, name="walk-load.png")
+    # The HD Campaign's event card is a blurred picture of the circuit behind a white panel (mean luma under 0.55 long before
+    # the load), so the load is not told by luma there: wait it out blind (about 6 s once the craft is confirmed), then the
+    # tap loop below waits for the HUD itself.
+    if args.game_mode == "single":
+        s.wait("the load to finish (a dark frame after the light menus and loading screen)", lambda f: mean_luma(f) < 0.55,
+               args.load_timeout, every=2.0, name="walk-load.png")
+    else:
+        time.sleep(20.0)
     # The ship flyby holds a check mark at the bottom right until it is tapped; the first tap may land on the load's tail.
     for _ in range(6):
         s.tap(CONFIRM)
@@ -232,8 +253,20 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--event", default="2048 - Event 2", help="our --event, the campaign event the original was walked into")
+    ap.add_argument("--game-mode", choices=sorted(GAME_MODES), default="single",
+                    help="the Game Mode tile to open: `single` (Single Player Campaign) or `hd` (the DLC's HD Campaign)")
+    ap.add_argument("--track", default=None,
+                    help="ours races this circuit (`--track <vex entry> --mode`) instead of `--event`: a circuit no campaign event of ours names, "
+                         "such as a DLC one (`Data\\art\\published\\DLC1\\environments\\Vineta_K\\track.vex`)")
+    ap.add_argument("--mode", default="single_race", help="ours' race mode with --track")
+    ap.add_argument("--team", default=None,
+                    help="ours' `--team` id; the DLC's HD Campaign flies the HD-derived roster (`Feisar`, under `hdships`), not 2048's own `feisar2048`")
     ap.add_argument("--node", type=int, nargs=2, default=DEFAULT_NODE, metavar=("X", "Y"),
                     help="the event's node on the campaign map, in the 960x544 window")
+    ap.add_argument("--nose-original", type=float, nargs=2, metavar=("X", "Y"),
+                    help="the hull's nose tip in the original's frame, read by eye off a 4x crop: for a craft with no yellow livery to find "
+                         "(the HD Campaign's Feisar), where the centroid offset cannot be measured; needs --nose-ours")
+    ap.add_argument("--nose-ours", type=float, nargs=2, metavar=("X", "Y"), help="the same in ours' frame")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -306,10 +339,12 @@ def main():
 
     ticks = args.ours_ticks if args.ours_ticks is not None else round(60 * (t_pick - t_hud))
     pair.rec["ours"]["ticks"] = ticks
-    pair.rec["ours"]["event"] = args.event
+    pair.rec["ours"]["event"] = args.track or args.event
     pair.check("ours renders before GO", ticks < ce.go_tick(plat), "tick %d, GO at tick %d" % (ticks, ce.go_tick(plat)))
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
-    base = [args.oag_game, args.source, "--race", "--event", args.event, "--ticks", ticks] + ce.ours_flags(plat)
+    which = ["--track", args.track, "--mode", args.mode] if args.track else ["--event", args.event]
+    which += ["--team", args.team] if args.team else []
+    base = [args.oag_game, args.source, "--race"] + which + ["--ticks", ticks] + ce.ours_flags(plat)
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
     env = {**os.environ, **ce.ours_env(profile_dir)}
     run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
@@ -319,17 +354,26 @@ def main():
         pair.check("ours settings", False, b)
     pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
     pair.check_size("ours", out / "ours.png")
-    off = craft_offset(out / "theirs.png", out / "ours.png")
-    pair.rec["craft_offset_px"] = off
-    found = "error" not in off
-    pair.check("the livery-yellow hull is found in both frames", found, off.get("error", "original %d px, ours %d px" % (
-        off["original"]["count"], off["ours"]["count"])))
-    if found:
-        text = ("hull centroid offset (%+.1f, %+.1f) px, bounding box %.2fx wide, %.2fx high (original over ours)"
-                % (off["dx"], off["dy"], off["width_ratio"], off["height_ratio"]))
-        print("MEASURED %s" % text, file=sys.stderr)
-        if abs(off["dx"]) > 6 or abs(off["dy"]) > 6 or not 0.9 <= off["width_ratio"] <= 1.1:
-            pair.caveat("the grid pose or camera is not matched: " + text)
+    if args.nose_original and args.nose_ours:
+        dx, dy = args.nose_original[0] - args.nose_ours[0], args.nose_original[1] - args.nose_ours[1]
+        pair.rec["craft_offset_px"] = {"nose_tip": {"dx": dx, "dy": dy, "original": args.nose_original, "ours": args.nose_ours,
+                                                     "read": "by eye, 4x crops, +-1 px"}}
+        pair.check("the hull's nose tip is read in both frames", True, "nose tip offset (%+.1f, %+.1f) px, original minus ours" % (dx, dy))
+        print("MEASURED nose tip offset (%+.1f, %+.1f) px" % (dx, dy), file=sys.stderr)
+        if abs(dx) > 6 or abs(dy) > 6:
+            pair.caveat("the grid pose or camera is not matched: nose tip offset (%+.1f, %+.1f) px" % (dx, dy))
+    else:
+        off = craft_offset(out / "theirs.png", out / "ours.png")
+        pair.rec["craft_offset_px"] = off
+        found = "error" not in off
+        pair.check("the livery-yellow hull is found in both frames", found, off["error"] if not found else "original %d px, ours %d px" % (
+            off["original"]["count"], off["ours"]["count"]))
+        if found:
+            text = ("hull centroid offset (%+.1f, %+.1f) px, bounding box %.2fx wide, %.2fx high (original over ours)"
+                    % (off["dx"], off["dy"], off["width_ratio"], off["height_ratio"]))
+            print("MEASURED %s" % text, file=sys.stderr)
+            if abs(off["dx"]) > 6 or abs(off["dy"]) > 6 or not 0.9 <= off["width_ratio"] <= 1.1:
+                pair.caveat("the grid pose or camera is not matched: " + text)
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
     if args.meta:
         pair.rec["meta"] = json.loads(args.meta)
