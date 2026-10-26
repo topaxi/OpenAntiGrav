@@ -75,6 +75,7 @@ pub const TITLE: &Title = &Title {
         // [`EXTRA_CANDIDATES`], which is the role they fit.
         fe: &[],
         extra: EXTRA_CANDIDATES,
+        add_ons: ADD_ONS,
     },
     // **Empty, and not a hole.** A foreign serial is how one title's archive
     // names are told apart from another's, and nothing else in this lineage
@@ -298,6 +299,12 @@ pub mod names {
     /// read where [`oag_title::Title::plugin_definition`] cannot reach it.
     pub const TRACK_PLUGIN_DEFINITION: &str = r"Data\Plugins\tracks\Definition.xml";
 
+    /// The circuit list the two downloadable packages each carry: HD's own
+    /// twenty-eight `PI_Track` block, with `hdfury`, `reversed` and `zone`
+    /// flags. The base package ships a smaller copy at the same path, so this is
+    /// read out of the package itself - see [`oag_title::AddOn`].
+    pub const DLC_TRACK_DEFINITION: &str = r"Data\art\published\DLC1\plugins\tracks\Definition.xml";
+
     /// The soundtrack plugin, on the same terms as [`TRACK_PLUGIN_DEFINITION`].
     pub const MUSIC_PLUGIN_DEFINITION: &str = r"Data\Plugins\music\Definition.xml";
 
@@ -381,6 +388,31 @@ const DATA_CANDIDATES: &[(&str, Platform)] = &[("PSP2/data.psarc", Platform::Vit
 const EXTRA_CANDIDATES: &[(&str, Platform)] = &[
     ("PSP2/dlc1.psarc", Platform::Vita),
     ("PSP2/dlc2.psarc", Platform::Vita),
+];
+
+/// What each of the two packages says about itself.
+///
+/// **Both ship the same circuit list** (`dlc1.psarc` and `dlc2.psarc` hold one
+/// byte-identical `Definition.xml`, twenty-eight `PI_Track`s, the reversed
+/// ones as `_R` entries), so owning either declares all twenty-eight and
+/// `oag_game`'s catalogue drops the ones whose geometry is in the package
+/// the player does not own. `data.psarc` carries a sixteen-circuit forward-only
+/// skeleton of the same entry, which the search order serves by name; this
+/// reads the package's own. The `Campaign=` values are the `PI_Grid` tiers the
+/// two packages open: every circuit the `HD` grids race is in `dlc1.psarc` or
+/// the base, every one the `Fury` grids race is in `dlc2.psarc`
+/// (`docs/formats/2048-dlc.md`).
+const ADD_ONS: &[oag_title::AddOn] = &[
+    oag_title::AddOn {
+        archive: "dlc1.psarc",
+        tracks: names::DLC_TRACK_DEFINITION,
+        campaign: "HD",
+    },
+    oag_title::AddOn {
+        archive: "dlc2.psarc",
+        tracks: names::DLC_TRACK_DEFINITION,
+        campaign: "Fury",
+    },
 ];
 
 /// Opens whichever packages `source` carries, as Wipeout 2048.

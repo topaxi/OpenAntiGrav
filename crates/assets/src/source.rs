@@ -233,6 +233,10 @@ pub struct Archives {
     /// that mounts packs also needs to know what they added, and threading two
     /// values through the same six call sites is two chances to thread one.
     pub manifests: Vec<String>,
+    /// The [`oag_title::AddOn`]s of the title that are mounted, in the title's
+    /// order: the downloadable packages this player owns. Their circuit lists
+    /// are already in [`Self::manifests`].
+    pub add_ons: Vec<&'static oag_title::AddOn>,
     /// What [`Self::read_name`] has already read, once
     /// [`Self::memoising_reads`] asked for it. `None` reads every time.
     pub read_memo: Option<crate::read_memo::ReadMemo>,
@@ -330,13 +334,14 @@ impl Archives {
             .map(|spec| mount(spec))
             .collect::<Result<Vec<_>>>()?;
         let fe = layout.fe.as_deref().map(mount).transpose()?;
-        let extra = layout
+        let mut extra = layout
             .extra
             .iter()
             .map(|spec| mount(spec))
             .collect::<Result<Vec<_>>>()?;
 
         let mut manifests = Vec::new();
+        let add_ons = mount_add_ons(title, &layout, &mut extra, &mut manifests);
         let mut mounted = Vec::new();
         for pack in packs {
             manifests.extend(pack.manifests);
@@ -355,6 +360,7 @@ impl Archives {
             extra,
             packs: mounted,
             manifests,
+            add_ons,
             read_memo: None,
             overrides: None,
             fallback: None,
@@ -720,6 +726,44 @@ impl Archives {
         let at = self.holder_of_hash(hash).unwrap_or(Held::Data);
         self.held(at).as_wad_mut("a name hash")?.read_hash(hash)
     }
+}
+
+/// The title's [`oag_title::AddOn`]s among the `extra` archives that mounted,
+/// with each one's own circuit list appended to `manifests`.
+///
+/// Read out of the package itself and not by name through the search order:
+/// the base archive carries a skeleton of the same entry and wins a name. A
+/// package whose entry will not read is still mounted, so its files resolve,
+/// and says so in the log.
+fn mount_add_ons(
+    title: &Title,
+    layout: &Layout,
+    extra: &mut [Container],
+    manifests: &mut Vec<String>,
+) -> Vec<&'static oag_title::AddOn> {
+    let mut mounted = Vec::new();
+    for add_on in title.archives.add_ons {
+        let Some(index) = layout.extra.iter().position(|spec| {
+            let spec = spec.replace('\\', "/").to_ascii_lowercase();
+            spec.ends_with(&format!("/{}", add_on.archive.to_ascii_lowercase()))
+        }) else {
+            continue;
+        };
+        match extra[index]
+            .read_entry(add_on.tracks)
+            .map_err(|e| e.to_string())
+            .and_then(|blob| oag_tables::fexml::text(&blob).map_err(|e| e.to_string()))
+        {
+            Ok(xml) => manifests.push(xml),
+            Err(error) => log::warn!(
+                "{}: its circuit list {} will not read: {error}",
+                add_on.archive,
+                add_on.tracks
+            ),
+        }
+        mounted.push(add_on);
+    }
+    mounted
 }
 
 /// Which mounted archive an entry was found in.

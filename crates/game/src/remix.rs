@@ -81,11 +81,9 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
     // one field is not enough there. `None` on every other title, so this is
     // the same read twice on Pulse/Pure/HD, not a second archive open.
     let track_definition = title.track_plugin_definition.unwrap_or(definition);
-    let track_xml = if track_definition == definition {
-        team_xml.clone()
-    } else {
-        plugin_xml(&mut archives, source, track_definition)?
-    };
+    if track_definition != definition {
+        plugin_xml(&mut archives, source, track_definition)?;
+    }
 
     let language_plugins = title.front_end.map_or::<&[&str], _>(&[], |front_end| {
         front_end.offered_languages(archives.layout.serial.as_deref())
@@ -100,7 +98,15 @@ pub fn catalogue(source: &str) -> anyhow::Result<Catalogue> {
     let strings =
         oag_ui::language::load::load_strings(&mut archives, &languages, None, &mut report);
 
-    let track_list = oag_raceplay::catalogue::tracks(&track_xml);
+    // The circuits the boot's own catalogue offers: the definitions and what a
+    // mounted add-on package declares, minus a declared circuit whose geometry
+    // is in a package the player does not own.
+    let documents =
+        oag_raceplay::catalogue::documents(&mut archives, &[definition, track_definition]);
+    let track_list: Vec<_> = oag_raceplay::catalogue::all_tracks(&documents)
+        .into_iter()
+        .filter(|track| archives.locate(&track.entry_name()).is_some())
+        .collect();
     let circuit_names = crate::boot::roster::load_circuit_names(
         &mut archives,
         language,

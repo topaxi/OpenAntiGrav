@@ -75,6 +75,7 @@ pub const TITLE: &Title = &Title {
         data: DATA_CANDIDATES,
         fe: FE_CANDIDATES,
         extra: EXTRA_CANDIDATES,
+        add_ons: &[],
     },
     foreign_serials: FOREIGN_SERIALS,
     // **A watched order since 2026-09-05.** See `frontend::BOOT`'s provenance

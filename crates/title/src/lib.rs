@@ -816,6 +816,32 @@ pub struct ArchiveCandidates {
     ///
     /// Empty for both PSP titles, so nothing about their load changes.
     pub extra: &'static [(&'static str, Platform)],
+    /// The members of [`Self::extra`] that are optional downloadable packages,
+    /// each with what it declares for itself. Empty for every title whose
+    /// extras are all part of the release.
+    pub add_ons: &'static [AddOn],
+}
+
+/// A downloadable package the release mounts when the player owns it, in the
+/// original and here: Wipeout 2048's `dlc1.psarc` and `dlc2.psarc`.
+///
+/// It is one of [`ArchiveCandidates::extra`], so its files resolve through the
+/// search order like any other; what this adds is what the package says about
+/// *itself*. That has to be read out of the package and not by name through
+/// the search order, because the base archive carries a skeleton of the same
+/// file (2048's `data.psarc` holds a sixteen-circuit, forward-only copy of the
+/// circuit list the packages ship in full) and the base wins a name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AddOn {
+    /// The archive's file name, matched case-insensitively against the end of
+    /// a mounted extra archive's specifier.
+    pub archive: &'static str,
+    /// The entry the package declares its circuits in: `PI_Track` nodes in the
+    /// schema [`Title::track_plugin_definition`] names, read from this archive
+    /// alone.
+    pub tracks: &'static str,
+    /// The `Campaign=` value of the `PI_Grid` files this package opens.
+    pub campaign: &'static str,
 }
 
 /// A serial positively identified as belonging to some other title.
