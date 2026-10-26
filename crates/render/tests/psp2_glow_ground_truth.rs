@@ -132,6 +132,35 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
     assert!(model.emissive.is_empty());
 }
 
+/// Altima's start-grid laser (`fc01_effects_vscroll_emissive_alpha_glow`, one draw on its
+/// `start_grid_laser_da` picture) is the one blended draw that takes HD's `cf_startbeam_glow`
+/// pair `SRC_COLOUR`/`ONE` by equivalence (`psp2::lineage_blend::EQUIVALENT`), so it adds light
+/// rather than blending alpha-over. Drop the equivalence row and it draws alpha-over, red.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn altimas_start_laser_is_additive_by_equivalence_with_hds_start_beam() {
+    let Some((model, report)) = build("altima") else {
+        return;
+    };
+    let laser: Vec<_> = model
+        .transparent_draws
+        .iter()
+        .filter(|d| {
+            d.texture
+                .and_then(|t| model.textures.get(t))
+                .and_then(Option::as_ref)
+                .is_some_and(|t| t.label.to_ascii_lowercase().contains("start_grid_laser_da"))
+        })
+        .collect();
+    assert_eq!(laser.len(), 1, "{}", report.describe());
+    let additive = oag_mesh::mesh::rcs::blend_state(
+        oag_rcs::rcsmodel::Factor::SrcColour,
+        oag_rcs::rcsmodel::Factor::One,
+    );
+    assert_eq!(laser[0].blend_state, Some(additive));
+    assert!(report.inherited_blend_draws >= 1, "{}", report.describe());
+}
+
 /// Anulpha Pass is an HD circuit ported into 2048's DLC1: its
 /// `mt_uvanim_diffuse_emissive` and `cf_uvanim_emssive*` records carry HD's own
 /// values (`docs/formats/2048-material-params.md`, "Inherited from HD"). Its
@@ -263,4 +292,50 @@ fn vineta_ks_authored_time_is_not_its_rate() {
     };
     assert!(report.glow_layers >= 10, "{}", report.describe());
     assert_eq!(distinct_rates(&model), vec![1.0], "{:?}", model.emissive);
+}
+
+/// The same equivalence on Omega's Altima `trackZone` model (the one that carries the laser
+/// material there): one blended draw on the `start_grid_laser_da` picture, `SRC_COLOUR`/`ONE`.
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omegas_altima_start_laser_is_additive_by_equivalence_with_hds_start_beam() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4");
+    let entry = "Data/environments2048/altima/trackZone.rcsmodel";
+    let mut archives = Vec::new();
+    for dir in ["omega-eu", "omega-eu-patch"] {
+        for i in 0..10 {
+            let path = root.join(dir).join("uroot").join(format!("data0{i}.psarc"));
+            if let Ok(archive) = oag_assets::psarc::Archive::open_file(&path) {
+                archives.push(archive);
+            }
+        }
+    }
+    let Some(at) = archives.iter().position(|a| a.contains(entry)) else {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but Omega's Altima is missing"
+        );
+        return;
+    };
+    let blob = archives[at].read_path(entry).expect("the model");
+    let (model, report) = psp2::build("omega altima", &blob, None, &mut |p| {
+        archives.iter_mut().find_map(|a| a.read_path(p).ok())
+    })
+    .expect("builds");
+    let laser: Vec<_> = model
+        .transparent_draws
+        .iter()
+        .filter(|d| {
+            d.texture
+                .and_then(|t| model.textures.get(t))
+                .and_then(Option::as_ref)
+                .is_some_and(|t| t.label.to_ascii_lowercase().contains("start_grid_laser_da"))
+        })
+        .collect();
+    assert_eq!(laser.len(), 1, "{}", report.describe());
+    let additive = oag_mesh::mesh::rcs::blend_state(
+        oag_rcs::rcsmodel::Factor::SrcColour,
+        oag_rcs::rcsmodel::Factor::One,
+    );
+    assert_eq!(laser[0].blend_state, Some(additive));
 }
