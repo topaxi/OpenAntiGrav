@@ -488,6 +488,12 @@ pub(super) fn emit_chunk(
                     ),
                 ),
             );
+            let (texcoords, lightmap_texcoords, texcoords2) = super::twin_blend::route(
+                surface.roles,
+                &out.emissive,
+                (mesh, model_blob, submesh, stride),
+                (texcoords, lightmap_texcoords, texcoords2),
+            );
             // The authored tangent, where the material reads a normal map (`hull_normal`); the
             // circuits' road and walls are world-pass chunks and carried none until this read it.
             let tangents = if surface.tangent {

@@ -198,6 +198,7 @@ mod pads;
 mod picture_tint;
 mod refraction;
 mod snow_rock;
+mod twin_blend;
 pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
@@ -935,6 +936,12 @@ fn build_with_options(
                             stride,
                         ),
                     ),
+                );
+                let (texcoords, lightmap_texcoords, texcoords2) = twin_blend::route(
+                    surface.roles,
+                    &out.emissive,
+                    (mesh, model_blob, submesh, stride),
+                    (texcoords, lightmap_texcoords, texcoords2),
                 );
                 let tangents = if surface.tangent {
                     mesh.tangents(model_blob, submesh, stride).ok().flatten()

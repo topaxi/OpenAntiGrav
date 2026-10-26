@@ -90,6 +90,13 @@ pub struct Instruction {
     /// [`Self::dest_is_output`] (`d0` bits 15-20, as `scripts/ps3-microcode.py`
     /// reads it).
     pub dest_temp: u32,
+    /// The constant register every constant source of this instruction names
+    /// (`d1` bits 12-19, `c[n]` with the parameter table's `+256` removed); one
+    /// per instruction, like [`Self::input`].
+    pub constant: u32,
+    /// The vector half's write mask, `x` = 8, `y` = 4, `z` = 2, `w` = 1
+    /// (`d3` bits 13-16).
+    pub write_mask: u8,
 }
 
 impl Instruction {
@@ -106,7 +113,15 @@ impl Instruction {
             dest: (d3 >> 2) & 0x1f,
             dest_is_output: d0 & (1 << 30) != 0,
             dest_temp: (d0 >> 15) & 0x3f,
+            constant: (d1 >> 12) & 0xff,
+            write_mask: ((d3 >> 13) & 0xf) as u8,
         }
+    }
+
+    /// The lane a source field reads where it broadcasts one (`.yyyy` is 1):
+    /// the swizzle's first selector.
+    fn source_lane(source: u32) -> usize {
+        ((source >> 14) & 3) as usize
     }
 
     /// Whether any source this opcode reads is vertex input `slot`, negated.
@@ -146,13 +161,34 @@ impl Instruction {
 }
 
 /// One vertex `SHO` block: what it is fed, and what it does with it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Program {
     /// Every vertex attribute the block declares, as `(name hash, input
     /// register)`.
     pub attributes: Vec<(u32, u32)>,
     /// The instruction stream.
     pub instructions: Vec<Instruction>,
+    /// The literal constants the block carries, as `(c[n], value)`: the
+    /// "defaults section" the code start is probed past. At the program
+    /// sub-header's `+0x14`, a `u32` count, that many `u32` register numbers
+    /// (stored `+256`, like the parameter table's), then the values as
+    /// `float4`s from the next 16-byte boundary (`scripts/ps3-microcode.py`'s
+    /// `show_vp_literals`, read off eight `RadioHead`/`FEBackgroundAnim`
+    /// blocks there and `nr_twinblend`'s `c[207] = (0, 1.875, 0, 0)` here).
+    pub literals: Vec<(u32, [f32; 4])>,
+}
+
+/// What [`Program::clock_rate`] reads: `o[TC n].lane = rate * time + v[k].from`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ClockRate {
+    /// The output interpolator, `0` for `o[TC0]`.
+    pub texcoord: u32,
+    /// The lane of that interpolator written (`0` = `x`).
+    pub lane: usize,
+    /// The attribute lane the product is added to (`2` = `.z`).
+    pub from: usize,
+    /// The literal the clock is multiplied by.
+    pub rate: f32,
 }
 
 fn u16_at(data: &[u8], at: usize) -> Option<u16> {
@@ -218,9 +254,25 @@ impl Program {
         let instructions = (0..count)
             .map(|k| words(base + probe + k * 16).map(Instruction::decode))
             .collect::<Option<Vec<_>>>()?;
+        let literal_count = u32_at(data, base + 0x14).map_or(0, |n| n as usize);
+        let literals = if (1..=32).contains(&literal_count) {
+            let values_at = (base + 0x18 + 4 * literal_count + 15) & !15;
+            (0..literal_count)
+                .map(|i| {
+                    let register = u32_at(data, base + 0x18 + 4 * i)?.checked_sub(256)?;
+                    let lane =
+                        |l: usize| u32_at(data, values_at + 16 * i + 4 * l).map(f32::from_bits);
+                    Some((register, [lane(0)?, lane(1)?, lane(2)?, lane(3)?]))
+                })
+                .collect::<Option<Vec<_>>>()
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         Some(Self {
             attributes,
             instructions,
+            literals,
         })
     }
 
@@ -237,6 +289,64 @@ impl Program {
             .iter()
             .find(|&&(name, _)| name == hash)
             .map(|&(_, slot)| slot)
+    }
+
+    /// The clock scroll this program writes from attribute `attribute`:
+    /// `MAD o[TC n].lane, R.l, c[clock], v[k].from` (either order of the first
+    /// two sources), where the temporary's lane was last written by a `MOV`
+    /// from one of the block's own [`Self::literals`]. `clock` is the `c[]`
+    /// number the vertex block's parameter table gives the engine's `time`
+    /// (its `vreg` less 256).
+    ///
+    /// `None` when no instruction has that shape, or the multiplier is not a
+    /// literal this block carries: a rate that is a material parameter, or
+    /// computed, is not read here.
+    #[must_use]
+    pub fn clock_rate(&self, clock: u32, attribute: u32) -> Option<ClockRate> {
+        const VEC_MAD: u8 = 0x04;
+        const SOURCE_CONSTANT: u32 = 3;
+        let slot = self.attribute_slot(attribute)?;
+        self.instructions.iter().enumerate().find_map(|(n, i)| {
+            if i.vec_op != VEC_MAD
+                || !i.dest_is_output
+                || i.dest < FIRST_TEXCOORD_DEST
+                || i.constant != clock
+                || u32::from(i.input) != slot
+                || i.sources[2] & 3 != SOURCE_INPUT
+                || i.sources.iter().any(|&s| s & SOURCE_NEGATE != 0)
+                || i.write_mask.count_ones() != 1
+            {
+                return None;
+            }
+            let temp = match (i.sources[0] & 3, i.sources[1] & 3) {
+                (SOURCE_TEMPORARY, SOURCE_CONSTANT) => i.sources[0],
+                (SOURCE_CONSTANT, SOURCE_TEMPORARY) => i.sources[1],
+                _ => return None,
+            };
+            let (register, lane) = ((temp >> 2) & 0x1f, Instruction::source_lane(temp));
+            let bit = 8u8 >> lane;
+            // The last write to that lane of the temporary before the MAD.
+            let writer = self.instructions[..n].iter().rev().find(|w| {
+                w.vec_op != 0
+                    && !w.dest_is_output
+                    && w.dest_temp == register
+                    && w.write_mask & bit != 0
+            })?;
+            let source = writer.sources[0];
+            if writer.vec_op != VEC_MOV
+                || source & 3 != SOURCE_CONSTANT
+                || source & SOURCE_NEGATE != 0
+            {
+                return None;
+            }
+            let (_, value) = self.literals.iter().find(|(c, _)| *c == writer.constant)?;
+            Some(ClockRate {
+                texcoord: i.dest - FIRST_TEXCOORD_DEST,
+                lane: i.write_mask.leading_zeros() as usize - 4,
+                from: Instruction::source_lane(i.sources[2]),
+                rate: value[Instruction::source_lane(source)],
+            })
+        })
     }
 
     /// The texture-coordinate interpolators (`0` for `o[TC0]`) this program

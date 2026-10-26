@@ -9,7 +9,7 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, encoded_out, linear_out};
+import oag_shaders::target::{decode, encoded_out, linear_out, square_decode};
 import package::shading_modes::{colour_is_light, nova_prelit};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
@@ -503,6 +503,28 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         let water = deep + facing * (cyan - deep);
         let ice = pale + facing * (first.rgb - pale);
         picture = vec4<f32>(water + pond * (ice - water), picture.a);
+    }
+    // **HD's `nr_twinblend`** (`Emissive::program` mode 6, `oag_mesh::mesh::rcs::twin_blend`):
+    //
+    //     w   = (1 - wipe(uv_w.x + rate * time, uv_w.y).x)^4
+    //     out = bars(uv_b) * lerp(first, second, w)
+    //
+    // the wipe third at `lightmap_texcoord.xy`, the bars fourth at `.zw`, `rate` the entry's
+    // tint `x` (the vertex block's literal). The colour taps are decoded and the wipe read
+    // raw (chosen, not measured); the product is put back in the domain `picture` is
+    // decoded from below.
+    let twin_entry = (in.slots >> 24u) & 127u;
+    if twin_entry != 0u && emissives.scale[twin_entry].z > 5.5 && emissives.scale[twin_entry].z < 6.5 {
+        let wipe_uv = vec2<f32>(
+            in.lightmap_texcoord.x + emissives.tint_offset[twin_entry].x * scene.time.x,
+            in.lightmap_texcoord.y,
+        );
+        let fade = 1.0 - material_sample(MATERIAL_PAD_MASK, wipe_uv).x;
+        let w = (fade * fade) * (fade * fade);
+        let bars = decode(material_sample(MATERIAL_WAVE_MAP, in.lightmap_texcoord.zw).rgb);
+        let linear = bars * mix(decode(first.rgb), decode(second.rgb), vec3<f32>(w));
+        let gamma = select(1.0 / 2.2, 0.5, square_decode > 0.5);
+        picture = vec4<f32>(pow(max(linear, vec3<f32>(0.0)), vec3<f32>(gamma)), first.a);
     }
     // **HD's Zone-mode light cells** (`slots::MAG_WAVE` with the glow entry's rate 3,
     // `oag_mesh::mesh::rcs::damage_lights`): the picture gains a scrolling flash,
