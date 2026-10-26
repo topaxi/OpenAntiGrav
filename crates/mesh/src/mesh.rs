@@ -647,6 +647,18 @@ fn build_class(
             bounds_matrix,
         } = anim_node::placement(&anchors, &anchor_world, &anim_slot, index);
         let mut contributed = false;
+        // **A vertex normal is authored in the node's own space, like its
+        // position**, and the original carries both through the node's world
+        // matrix: `FUN_0890f288` and `Mesh_DrawBatchSet` pack `*(mesh + 0x30)`,
+        // the full 4x3 world matrix, into GE `WORLDMATRIXDATA` words per mesh,
+        // and the GE takes a normal through that matrix's 3x3 for lighting and
+        // for environment-map coordinates. 75,750 of Pulse PSP's 7.1 M normals
+        // sit under a rotated node (the airbrake flaps, circuit scenery and
+        // some of its shine batches); left local they face the wrong way - see
+        // `vex_node_normals_ground_truth.rs` and `docs/formats/vex.md`.
+        // Under an `Anim Transform` the matrix is the one from the anchor to
+        // the node, and the vertex shader applies the anchor's.
+        let turns_normals = !vex::leaves_directions(&to_world);
         // Where this node's own vertices start, for the airbrake flaps below.
         // Taken per *node* rather than per batch: a flap is one mesh node and
         // has to move as one, whatever it is split into for drawing.
@@ -750,7 +762,13 @@ fn build_class(
                         position,
                         // A batch without normals is prelit, so face it at the
                         // camera rather than leaving it black.
-                        normal: v.normal.unwrap_or([0.0, 0.0, 1.0]),
+                        normal: v.normal.map_or([0.0, 0.0, 1.0], |n| {
+                            if turns_normals {
+                                vex::transform_direction(&to_world, n)
+                            } else {
+                                n
+                            }
+                        }),
                         colour: v.colour.map_or([0.75, 0.78, 0.82, 1.0], |c| {
                             [
                                 f32::from(c[0]) / 255.0,

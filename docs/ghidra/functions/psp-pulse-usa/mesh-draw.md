@@ -2402,8 +2402,10 @@ Runtime trace; one title, one team, one circuit.
   mean `(with - without)` is `(21, 51, 51)` and `(20, 50, 50)`. Whole-top mean
   absolute error against the original falls from 18.26 to 18.11 and from 19.80 to
   18.24 (the yawed pose). **Chosen, not measured**: normals are the file's own
-  (the world matrix is a pure scale on 85 of 88 draws, so no rotation is lost), and
-  the depth function is `LessEqual` where the original's ordinary pass is `EQUAL`.
+  (the world matrix is a pure scale on 85 of 88 draws - the other 3 are rotated nodes,
+  whose normals the loader left node-local until 2026-10-26, see "The GE world matrix a
+  mesh draws under"), and the depth function is `LessEqual` where the original's
+  ordinary pass is `EQUAL`.
 - **Not explained, and not this pass**: the original draws a bright cyan (grid pose)
   or yellow-green (yawed pose) neon strip along the pipe rims that we draw dull. At
   the grid pose the original reads RGB `(134, 246, 248)` on 2,721 strip pixels
@@ -2419,6 +2421,39 @@ Runtime trace; one title, one team, one circuit.
 | --- | --- | --- |
 | `0x0890db54` | `Mesh_DrawExtraPassBatches` | 85 |
 | `0x0890d508` | `Mesh_CompileExtraPass` | 85 |
+
+## The GE world matrix a mesh draws under (2026-10-26)
+
+Lane `pulse-vex-normals`. Static read of `psp-pulse-usa/BOOT.BIN`; confidence **90**
+that every mesh draws under its node's full world matrix, rotation included. The
+GE's use of that matrix for a normal is the PPSSPP reading already on this page
+("The uvgen-2 equation", confidence 88), not a read of the executable.
+
+Four sites build the per-mesh GE fragment at `mesh + 0xd8`:
+
+| Address | Function | What it writes |
+| --- | --- | --- |
+| `0x0890e998` | `Mesh_InitFromPayload`, at load (`0x0890f15c`) | the same twelve words, after `Vex_UpdateNodeWorldMatrix` when `mesh+0x2c & 0x1000`; the position scale is read for the bounds (`mesh+0x54`, `1/scale`) and nothing else here |
+| `0x0890c2bc` | the `Mesh` node constructor (`Node_ConstructBase`, `Mesh_ClassTag`) | `0x3a000000` (`WORLDMATRIXNUMBER` 0), then twelve `0x3b000000 \| (word >> 8)` from the node's world matrix, then `0x0b000000` (`RET`) |
+| `0x0890f288` | the per-mesh draw (list A or B, extra pass, geometry pass, absorb and leach overlays) | refreshes the same twelve words when `mesh+0x2c & 0x11000` (dirty), calling `Vex_UpdateNodeWorldMatrix` first when `& 0x1000`, then `Gu_CallList(mesh + 0xd8)` **before any batch** |
+| `0x0893021c` | `Mesh_DrawBatchSet` | the same refresh for every mesh of the batch set (`+0xa0`, count `+0x9c`) |
+
+The source is `*(mesh + 0x30)`, the cached pointer to the node's world matrix
+(`bad-memory-access-halt.md`), and the twelve words are matrix words 0, 1, 2, 4, 5,
+6, 8, 9, 10, 12, 13, 14: the 3x3 and the translation, four rows of three. A
+`lui *, 0x3b00` search finds 20 sites: the four above, twelve in `FUN_08811d64`
+(the `Gu_SetMatrix` clone, which sets any of the GE's matrices) and four in
+`FUN_089307b4`'s uncompiled path, which is not read. The matrix at `*(mesh + 0x30)`
+is whatever `Vex_UpdateNodeWorldMatrix` builds; the 07_Track GE record reads it as
+a pure scale (the 16-bit position scale) on 85 of 88 draws, so the scale is in that
+matrix and a normal it turns is renormalised by the GE (the PPSSPP reading above),
+which drops it. So **a mesh's batches are drawn with the node's rotation in the GE world
+matrix, and the GE takes a vertex normal through it** for lighting (hull batches,
+`scene-light.md`) and for the uvgen-2 environment coordinates of the circuit's and
+hull's `0x2000` pass. Vertex normals on the disc are therefore node-local, which
+`crates/vex/tests/vex_node_normals_ground_truth.rs` measures against the faces of
+every `.vex` of three discs (`docs/formats/vex.md`, "A vertex normal is in its
+node's space"). The loader carries them since 2026-10-26.
 
 ## The list-B queue key: `Mesh_SubmitNode` orders a mesh by view depth (2026-10-19)
 

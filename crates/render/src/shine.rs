@@ -69,8 +69,11 @@
 //! 88 mode-2 circuit draws of a frame carry lights 0 and 1 equal to **rows 0 and
 //! 1 of the view matrix** (confirmed at a second, yawed camera where rows and
 //! columns differ), the matcap `Vex_UpdateLightLists_q` writes for a model whose
-//! `+0x1a8` is 0. [`build_track`] and [`write_view`] draw it; animated nodes are
-//! not drawn (their normals need the node's matrix) and say so.
+//! `+0x1a8` is 0. [`build_track`] and [`write_view`] draw it, animated nodes
+//! included: a vertex normal reaches here already carried through its node's
+//! rotation (`oag_mesh::mesh`), and an animated node's matrix turns it again per
+//! frame. The 3 of those 88 draws whose world matrix is more than a scale are the
+//! rotated nodes, and they are why that step exists.
 
 use oag_core::math::{Mat4, Vec3};
 

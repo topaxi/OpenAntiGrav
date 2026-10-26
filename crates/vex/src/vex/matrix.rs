@@ -211,6 +211,32 @@ pub fn transform_point(m: &[f32; 16], p: [f32; 3]) -> [f32; 3] {
     ]
 }
 
+/// Applies the rotation part of a row-major matrix to a direction (no
+/// translation, no `w`): `n * M3x3`, the product the GE takes a vertex normal
+/// through, by the world matrix and by nothing else.
+///
+/// Not renormalised. The GE does, so a caller drawing through a matrix that
+/// scales has to; every node matrix on the discs is orthonormal (the largest
+/// deviation over the rotated `Mesh` nodes is 1.2e-7,
+/// `vex_node_normals_ground_truth.rs`), where this and the inverse transpose
+/// are the same thing.
+#[must_use]
+pub fn transform_direction(m: &[f32; 16], n: [f32; 3]) -> [f32; 3] {
+    [
+        n[0] * m[0] + n[1] * m[4] + n[2] * m[8],
+        n[0] * m[1] + n[1] * m[5] + n[2] * m[9],
+        n[0] * m[2] + n[1] * m[6] + n[2] * m[10],
+    ]
+}
+
+/// Whether the rotation part of `m` is exactly the identity, so a direction
+/// carried through it comes out bit-for-bit as it went in. The 3x3 only: a node
+/// that is nothing but a translation (most of a circuit's) qualifies.
+#[must_use]
+pub fn leaves_directions(m: &[f32; 16]) -> bool {
+    (0..3).all(|row| (0..3).all(|col| m[row * 4 + col] == IDENTITY[row * 4 + col]))
+}
+
 /// World matrix of every node, composed down the tree, at time zero.
 ///
 /// [`world_transforms_at`] at `0.0`: what callers placing static geometry want.
