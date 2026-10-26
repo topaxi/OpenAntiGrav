@@ -129,12 +129,10 @@ Vineta's window box mean reads 89.9 against the original's 89.2 (74.4 before). T
 separated from the unweighted one on these pairs (only the pass on/off was scored). Whether the original
 weights it was read from the batch bit and the hull's law, not from a circuit-pass-only replay.
 
-**Pulse: left unweighted, open.** Pulse PSP's circuit pass still draws unweighted (`track_shine_weighted`
-unread): 3 Pulse pairs (Talons white, Metropia black, Vertica white) render AE 0 before and after. No Pulse GE
-list was recorded for the circuit's ordinary-pass blend (`0x2a` against `0xaa`), so weighting Pulse's 3,446
-batches would be a guess. To decide: record a Pulse GE list with `scripts/psp-ge-dump.py` and read the
-ordinary pass's `BLENDMODE` at a circuit mode-2 PRIM. **Checked against Omega/2048:** not applicable, a PSP
-`.vex` rule; HD/2048/Omega circuits author no `TEXMAPMODE` pass.
+**Pulse: weighted, measured 2026-10-26** (lane `pulse-circuit-weighting`): two Pulse PSP GE lists draw the weight-bit
+batches' ordinary pass `0x2a` after a replace-form environment pass, as Pure's; `track_shine_weighted` is on for Pulse
+PSP. Evidence and the before/after on five Pulse pairs: [circuit-shine.md](../psp-pulse-usa/circuit-shine.md).
+**Checked against Omega/2048:** not applicable, a PSP `.vex` rule; HD/2048/Omega circuits author no `TEXMAPMODE` pass.
 
 ## The sky
 
