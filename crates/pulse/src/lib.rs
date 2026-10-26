@@ -86,6 +86,10 @@ pub const TITLE: &Title = &Title {
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
+        // Measured on PPSSPP: `cannon-quake-leachbeam.md`, "2026-10-26: what a Quake does to the craft it reaches".
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::Measured,
+        },
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

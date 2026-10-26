@@ -393,17 +393,14 @@ pub struct QuakeStats {
     pub absorb: f32,
     /// Energy the wave costs a craft it passes over.
     pub damage: f32,
-    /// **The wave's own hit radius, not a blast radius.**
+    /// Authored, and **not read by the hit path**.
     ///
-    /// No fire handler, `Quake_Init` or `Quake_Update` reads it. Its one
-    /// candidate consumer is the wave branch of `FUN_088418e0`, the proximity
-    /// test behind the `entity+0x860 & 0x40` latch (see that page's "The latch
-    /// setter, found 2026-09-07"). The original gates on a smoothed intensity
-    /// against a flat `0.1`, with constants (`200.0`, `0.1`) in
-    /// `Quake_ProximityToCraft` and `Quake_SpanIntensityAt` that are not
-    /// authored anywhere found. As the only authored number in the mechanism,
-    /// this port spends `radius` as the proximity gate rather than inventing a
-    /// second.
+    /// `Weapon_FireQuake` copies it into the firing record's `+0x190`, whose
+    /// reader is unidentified. The hit is gated on the craft's smoothed wave
+    /// height crossing `0.1` (`oag_weapons::projectile::quake`, "2026-10-26: what
+    /// a Quake does to the craft it reaches" on the evidence page), which
+    /// supersedes the 2026-09-07 reading that `radius` was that gate. Decoded
+    /// here so the table stays whole.
     pub radius: f32,
     /// Seconds of slowdown to a craft it passes over; see [`RocketStats::slowdown_time`].
     pub slowdown_time: f32,

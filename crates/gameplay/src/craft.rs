@@ -36,6 +36,14 @@ impl Craft for Ship {
         &mut self.pending_slowdown
     }
 
+    fn quake_lift(&self) -> f32 {
+        self.quake_lift
+    }
+
+    fn quake_lift_mut(&mut self) -> &mut f32 {
+        &mut self.quake_lift
+    }
+
     fn pending_thrust_scale_mut(&mut self) -> &mut f32 {
         &mut self.pending_thrust_scale
     }

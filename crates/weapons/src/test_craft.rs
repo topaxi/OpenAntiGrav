@@ -19,6 +19,7 @@ pub(crate) struct Ship {
     pub standing: oag_race::Standing,
     pub pending_slowdown: f32,
     pub pending_thrust_scale: f32,
+    pub quake_lift: f32,
     pub disruption: Disruption,
     pub active: bool,
 }
@@ -31,6 +32,7 @@ impl Default for Ship {
             standing: oag_race::Standing::default(),
             pending_slowdown: 0.0,
             pending_thrust_scale: 1.0,
+            quake_lift: 0.0,
             disruption: Disruption::default(),
             active: false,
         }
@@ -55,6 +57,12 @@ impl Craft for Ship {
     }
     fn pending_slowdown_mut(&mut self) -> &mut f32 {
         &mut self.pending_slowdown
+    }
+    fn quake_lift(&self) -> f32 {
+        self.quake_lift
+    }
+    fn quake_lift_mut(&mut self) -> &mut f32 {
+        &mut self.quake_lift
     }
     fn pending_thrust_scale_mut(&mut self) -> &mut f32 {
         &mut self.pending_thrust_scale

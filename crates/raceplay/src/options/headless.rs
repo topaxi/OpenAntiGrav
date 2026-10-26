@@ -191,6 +191,9 @@ impl Setup {
             zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             leach_drain: oag_title::weapons::LeachDrain::PerTick,
+            quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+                origin: oag_title::Origin::Chosen,
+            },
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,

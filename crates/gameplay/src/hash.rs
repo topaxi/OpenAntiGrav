@@ -126,6 +126,7 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
         autopilot_timer,
         pending_slowdown,
         pending_thrust_scale,
+        quake_lift,
         disruption,
         active,
     } = ship;
@@ -166,6 +167,10 @@ fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
     // more fixed bytes per ship per tick, and the history note in
     // `tests/determinism.rs` records the move.
     hasher.write_f32(*pending_thrust_scale);
+    // The Quake's smoothed wave height at this craft: zero through every
+    // scenario the gate runs that fires no Quake, four more fixed bytes per ship
+    // per tick. A hit gate, so it must be hashed.
+    hasher.write_f32(*quake_lift);
     // A Disruptor hit's kind and its seconds left. The kind is
     // `DisruptorEffectKind::ALL`'s index plus one, `0` for none - the same
     // shape `write_weapon` gives a pickup. Zero and `0.0` through every
@@ -510,7 +515,6 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
                 progress,
                 direction,
                 damage,
-                radius,
                 slowdown_time,
                 hit,
                 age,
@@ -519,7 +523,6 @@ fn write_quake(hasher: &mut StateHasher, quake: &Option<Wave>) {
             hasher.write_f32(*progress);
             hasher.write_f32(*direction);
             hasher.write_f32(*damage);
-            hasher.write_f32(*radius);
             hasher.write_f32(*slowdown_time);
             hasher.write_f32(*age);
             for latch in hit {

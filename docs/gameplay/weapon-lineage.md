@@ -51,8 +51,9 @@ Four mechanisms, from most shared to most title-specific:
    `WeaponStats_*.xml` (race and Eliminator) and the `WeaponAIstats.xml`
    the shared code reads its numbers from. The numbers are the title's own
    whenever the file is.
-3. **A law the title selects.** `Weapons::leach_drain` is the one: Pulse
-   drains every tick, HD once per ball trip. A new per-title law is a new field
+3. **A law the title selects.** `Weapons::leach_drain` is one: Pulse
+   drains every tick, HD once per ball trip. `Weapons::quake_hit` is the other:
+   the smoothed wave-height gate and cockpit lift. A new per-title law is a new field
    here, with provenance, not a `title.name` branch (ADR-0058, `just
    check-title-branching`).
 4. **What a title draws.** `oag_title::weapons::WeaponModels` names each
@@ -83,6 +84,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.elimination` | `Data\XML\WeaponStats_Elimination.xml` - measured | `none` - measured | `Data\XML\WeaponStats_Elimination.xml` - measured | `Data\XML\weaponstats_Elimination_2048.xml` - chosen | `Data\XML\WeaponStats_Elimination.xml` - chosen |
 | `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
 | `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
+| `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
 | `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.bomb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
@@ -156,7 +158,7 @@ has it; only its table moves.
 | --- | --- | --- |
 | Rocket | `oag_weapons::projectile::rocket` on the `flight` floor follower; player glue `oag_raceplay::weapons`, opponents `field/opponent_weapons.rs` | `Weapons.race`/`.elimination` (numbers); `WeaponModels.rocket`, `.rocket_trail`; `Effects` `RocketFlare`, `TrackBlast`, `CraftBlast` |
 | Missile | `projectile::missile` (lock, guidance, five bounces); `oag_raceplay::weapons::reticle` | the table; `WeaponModels.missile_blast_hd`; `Effects` `MissileFlare`, `MissileExplo`, `MissileBounce` |
-| Quake | `projectile::quake`; the road ripple in `oag_render::ripple` | the table; `Effects.quake_look` (`QuakeLook`: up, lift, wash), `.extents`, `.sprites`; `Effects` `Quake` |
+| Quake | `projectile::quake` (the wave, `raw_lift`, `update_lift`); the road ripple in `oag_render::ripple`; the cockpit eye in `oag_render::camera::internal` | the table; **`Weapons.quake_hit`** (`WaveHeight`); `Effects.quake_look` (`QuakeLook`: up, lift, wash), `.extents`, `.sprites`; `Effects` `Quake` |
 | Cannon | `projectile::cannon` | the table; `WeaponModels.cannon`, `.cannon_look` (`CannonLook`, `CannonBody`); `Effects` `CannonSparks`, `WeaponSpark` |
 | Turbo | `oag_weapons::pickup`, then `oag_physics::engine` | the table only |
 | Shield | `oag_weapons::pickup`, then `oag_physics::damage` | the table; `Looks` (`ShieldPalettes`, hull overlay rule) |
@@ -181,7 +183,7 @@ has it; only its table moves.
 | --- | --- | --- | --- | --- | --- | --- |
 | Rocket | M: ground truth, [rocket_floor_trace.rs](../../crates/raceplay/tests/rocket_floor_trace.rs), [pickups.md](pickups.md) | I:Pulse PSP | I:Pulse; same code, Pure's table | I:Pulse; `Rocket_Construct` read, law unread ([weapons.md](../ghidra/functions/ps3-hdfury-eu/weapons.md)) | I:Pulse; unread | ?: constructors read ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)), law unread |
 | Missile | M: [missile.md](../ghidra/functions/psp-pulse-usa/missile.md), [missile_ground_truth.rs](../../crates/raceplay/tests/missile_ground_truth.rs) | I:Pulse PSP | I:Pulse; same code, no Pure test | I:Pulse; `MissileManager_Construct` read | I:Pulse; unread | ?: read, not ported |
-| Quake | M: the travelling instance and the road ripple, [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md) | I:Pulse PSP | M: its own wave extent, frame and wash, [quake.md](../ghidra/functions/psp-pure-usa/quake.md); road ripple open | I:Pulse; `QuakeManager_Construct` read | I:Pulse; unread | ?: read, not ported |
+| Quake | M: the travelling instance, the road ripple, the hit gate (rising edge of the craft's smoothed wave height `> 0.1`) and the cockpit eye lift by that height, [cannon-quake-leachbeam.md](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-10-26-what-a-quake-does-to-the-craft-it-reaches-quake-craft-re-lane) | I:Pulse PSP | M: its own wave extent, frame and wash, [quake.md](../ghidra/functions/psp-pure-usa/quake.md); road ripple open | I:Pulse; `QuakeManager_Construct` read | I:Pulse; unread | ?: read, not ported |
 | Cannon | M: [cannon_ground_truth.rs](../../crates/raceplay/tests/cannon_ground_truth.rs) | I:Pulse PSP | A: not in Pure's roster ([weapon-stats.md](../formats/weapon-stats.md)) | I:Pulse; `CannonManager_Construct` read; `recharge_time` authored, unread | I:Pulse; unread | ?: read, not ported |
 | Turbo | M: [pickups.md](pickups.md#what-a-fired-turbo-does); the running bit, the stun escape, the pad fade and the d-pad Up boost lift, [craft-flags.md](../ghidra/functions/psp-pulse-usa/craft-flags.md) | I:Pulse PSP | I:Pulse; the same four engine reads of `0x200` and a pad clock at `craft+0x284`, read not watched | M: the running bit is `craft+0x264 & 0x20`, mirrored from the slot's `0x200` a frame later, with Pulse's stun escape, pad fade (clock `craft+0x320` held at `0`, watched live) and d-pad Up lift (read), [craft-flags.md](../ghidra/functions/ps3-hdfury-eu/craft-flags.md#ship_updateturboflag-0x000cf7a8-and-the-pad-fade); no manager class located | I:HD; 2048's `craft+0x264` bit `0x20` has a writer (`0x811bf0b4`, v1.04), its readers unread | ?: no manager located |
 | Shield | M: [shield-pickup.md](../ghidra/functions/psp-pulse-usa/shield-pickup.md) | M: same law, own model ([ps2 page](../ghidra/functions/ps2-pulse-eu/shield-pickup.md), [ps2_shield_ground_truth.rs](../../crates/raceplay/tests/ps2_shield_ground_truth.rs)) | I:Pulse | M: same law as Pulse, two colours moved ([shield.md](../ghidra/functions/ps3-hdfury-eu/shield.md)) | I:Pulse; unread | ?: HD's `Shield` table applies, law unread |

@@ -184,6 +184,11 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
             cells.setdefault(f"weapons.{field}", {})[title] = (path_of(weapons[field]), None)
         drain = weapons["leach_drain"].rsplit("::", 1)[-1]
         cells.setdefault("weapons.leach_drain", {})[title] = (drain, None)
+        # `QuakeHit::WaveHeight { origin: Origin::X }`: the variant is the value,
+        # and the source carries an `Origin`, so the provenance is checked.
+        quake = weapons["quake_hit"]
+        variant = re.search(r"QuakeHit::(\w+)", quake).group(1)
+        cells.setdefault("weapons.quake_hit", {})[title] = (variant, origin_word(quake))
 
         models = models_block(title)
         for field, value in models.items():

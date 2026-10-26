@@ -33,6 +33,13 @@ pub trait Craft {
     /// [`Self::pending_slowdown`], writable.
     fn pending_slowdown_mut(&mut self) -> &mut f32;
 
+    /// The smoothed height of a Quake's wave at this craft, `entity+0x870`.
+    /// See [`crate::projectile::quake::smooth_lift`].
+    fn quake_lift(&self) -> f32;
+
+    /// [`Self::quake_lift`], writable.
+    fn quake_lift_mut(&mut self) -> &mut f32;
+
     /// The thrust scale the craft's next engine step consumes; a beam's slow
     /// effect arms it.
     fn pending_thrust_scale_mut(&mut self) -> &mut f32;

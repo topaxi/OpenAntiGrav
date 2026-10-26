@@ -753,6 +753,8 @@ pub struct Setup {
     /// When a locked LeachBeam moves energy,
     /// `oag_title::weapons::Weapons::leach_drain`.
     pub leach_drain: oag_title::weapons::LeachDrain,
+    /// How a Quake's wave reaches a craft, `oag_title::weapons::Weapons::quake_hit`.
+    pub quake_hit: oag_title::weapons::QuakeHit,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

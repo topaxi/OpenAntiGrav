@@ -82,17 +82,23 @@ pub struct InternalParams {
     pub pitch: f32,
 }
 
-/// Where the eye sits: rigidly on the ship, with no spring.
+/// Where the eye sits: rigidly on the ship, with no spring, raised by `lift`.
+///
+/// `lift` is the craft's smoothed Quake wave height (`entity+0x870`), added to
+/// the eye height along the ship's up (confidence 92, measured 2026-10-26,
+/// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`). The caller
+/// passes the value after this tick's update, where the original's rig reads
+/// last frame's: one tick apart, **chosen, not measured**.
 #[must_use]
-pub fn eye(target: Target, params: &InternalParams) -> Vec3 {
-    target.position + target.forward * params.length + target.up * params.height
+pub fn eye(target: Target, params: &InternalParams, lift: f32) -> Vec3 {
+    target.position + target.forward * params.length + target.up * (params.height + lift)
 }
 
 /// The point the camera aims at: [`AIM_DISTANCE`] ahead of the eye, raised by
 /// `pitch`.
 #[must_use]
-pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
-    eye(target, params) + target.forward * AIM_DISTANCE + target.up * params.pitch
+pub fn look_at_point(target: Target, params: &InternalParams, lift: f32) -> Vec3 {
+    eye(target, params, lift) + target.forward * AIM_DISTANCE + target.up * params.pitch
 }
 
 /// The view matrix for the cockpit view.
@@ -119,9 +125,15 @@ pub fn look_at_point(target: Target, params: &InternalParams) -> Vec3 {
 /// matrix in `FUN_088418e0` was. Labelled here so that distinction is not
 /// lost: the ship's roll is measured, the cockpit's is inferred from it.
 #[must_use]
-pub fn view(target: Target, params: &InternalParams, roll_phase: f32, camera_lean: f32) -> Mat4 {
-    let eye = eye(target, params);
-    let aim = look_at_point(target, params);
+pub fn view(
+    target: Target,
+    params: &InternalParams,
+    roll_phase: f32,
+    camera_lean: f32,
+    lift: f32,
+) -> Mat4 {
+    let eye = eye(target, params, lift);
+    let aim = look_at_point(target, params, lift);
     let up = tilted_up(target, params, aim - eye, camera_lean);
     let up = crate::roll::rotation(target.forward, roll_phase) * up;
     camera::look_at(eye, aim, up)
@@ -186,7 +198,25 @@ mod tests {
     /// own measured sample pins: the cockpit is at the **nose**, not behind.
     #[test]
     fn the_eye_sits_ahead_of_the_ship_by_length() {
-        assert_eq!(eye(target(), &params()), Vec3::new(3.0, 2.0, 0.0));
+        assert_eq!(eye(target(), &params(), 0.0), Vec3::new(3.0, 2.0, 0.0));
+    }
+
+    /// A Quake's wave height lifts the eye along the ship's up, and the aim point
+    /// with it (`eye + forward * 10 + up * pitch`).
+    #[test]
+    fn the_wave_height_lifts_the_eye_and_the_aim_point_along_up() {
+        let lifted = eye(target(), &params(), 1.5) - eye(target(), &params(), 0.0);
+        assert_eq!(lifted, Vec3::new(0.0, 1.5, 0.0));
+        let aim = look_at_point(target(), &params(), 1.5) - look_at_point(target(), &params(), 0.0);
+        assert_eq!(aim, lifted);
+        let tilted_ship = Target {
+            up: Vec3::Z,
+            ..target()
+        };
+        assert_eq!(
+            eye(tilted_ship, &params(), 1.5) - eye(tilted_ship, &params(), 0.0),
+            Vec3::new(0.0, 0.0, 1.5)
+        );
     }
 
     #[test]
@@ -196,13 +226,13 @@ mod tests {
             length: 0.0,
             ..params()
         };
-        assert_eq!(eye(target(), &params), Vec3::ZERO);
+        assert_eq!(eye(target(), &params, 0.0), Vec3::ZERO);
     }
 
     #[test]
     fn the_aim_point_is_ten_units_ahead_of_the_eye() {
         let params = params();
-        let ahead = look_at_point(target(), &params);
+        let ahead = look_at_point(target(), &params, 0.0);
         assert_eq!(ahead, Vec3::new(3.0 + AIM_DISTANCE, 2.0, 0.0));
     }
 
@@ -212,9 +242,9 @@ mod tests {
     fn pitch_raises_the_aim_point_and_leaves_the_eye_alone() {
         let flat = params();
         let tilted = InternalParams { pitch: 1.0, ..flat };
-        assert_eq!(eye(target(), &tilted), eye(target(), &flat));
+        assert_eq!(eye(target(), &tilted, 0.0), eye(target(), &flat, 0.0));
 
-        let raised = look_at_point(target(), &tilted) - look_at_point(target(), &flat);
+        let raised = look_at_point(target(), &tilted, 0.0) - look_at_point(target(), &flat, 0.0);
         assert_eq!(raised, Vec3::Y);
         // And the angle it produces is `atan(pitch / AIM_DISTANCE)`, stated as a
         // test because reading the attribute as degrees is the mistake this
@@ -233,7 +263,7 @@ mod tests {
             up: -Vec3::Y,
         };
         let params = params();
-        assert_eq!(eye(target, &params), Vec3::new(3.0, -2.0, 0.0));
+        assert_eq!(eye(target, &params, 0.0), Vec3::new(3.0, -2.0, 0.0));
     }
 
     /// The view has to look at what `look_at_point` reports: the eye maps to the
@@ -243,12 +273,12 @@ mod tests {
     fn the_view_matrix_looks_from_the_eye_at_the_aim_point() {
         let params = params();
         let target = target();
-        let matrix = view(target, &params, 0.0, 0.0);
+        let matrix = view(target, &params, 0.0, 0.0, 0.0);
 
-        let at_eye = matrix.transform_point3(eye(target, &params));
+        let at_eye = matrix.transform_point3(eye(target, &params, 0.0));
         assert!(at_eye.length() < 1e-5, "{at_eye}");
 
-        let at_aim = matrix.transform_point3(look_at_point(target, &params));
+        let at_aim = matrix.transform_point3(look_at_point(target, &params, 0.0));
         assert!(at_aim.x.abs() < 1e-4 && at_aim.y.abs() < 1e-4, "{at_aim}");
         assert!(at_aim.z < 0.0, "the aim point is down -Z: {at_aim}");
     }
@@ -262,8 +292,8 @@ mod tests {
             ..params()
         };
         assert_eq!(
-            view(target(), &tilted, 0.0, 0.0),
-            view(target(), &params(), 0.0, 0.0)
+            view(target(), &tilted, 0.0, 0.0, 0.0),
+            view(target(), &params(), 0.0, 0.0, 0.0)
         );
     }
 
@@ -292,8 +322,8 @@ mod tests {
         };
         assert_eq!(tilted_up(target, &none, Vec3::X, 0.4), target.up);
         assert_ne!(
-            view(target, &tilted, 0.0, 0.4),
-            view(target, &tilted, 0.0, 0.0)
+            view(target, &tilted, 0.0, 0.4, 0.0),
+            view(target, &tilted, 0.0, 0.0, 0.0)
         );
     }
 
@@ -305,10 +335,10 @@ mod tests {
         let target = target();
         let params = params();
         assert_eq!(
-            view(target, &params, 0.0, 0.0),
+            view(target, &params, 0.0, 0.0, 0.0),
             camera::look_at(
-                eye(target, &params),
-                look_at_point(target, &params),
+                eye(target, &params, 0.0),
+                look_at_point(target, &params, 0.0),
                 target.up
             )
         );
@@ -324,14 +354,14 @@ mod tests {
     fn the_roll_moves_neither_the_eye_nor_the_aim_point() {
         let target = target();
         let params = params();
-        let matrix = view(target, &params, 0.4, 0.0);
+        let matrix = view(target, &params, 0.4, 0.0, 0.0);
 
-        let at_eye = matrix.transform_point3(eye(target, &params));
+        let at_eye = matrix.transform_point3(eye(target, &params, 0.0));
         assert!(at_eye.length() < 1e-4, "{at_eye}");
 
-        let at_aim = matrix.transform_point3(look_at_point(target, &params));
-        let unrolled_aim =
-            view(target, &params, 0.0, 0.0).transform_point3(look_at_point(target, &params));
+        let at_aim = matrix.transform_point3(look_at_point(target, &params, 0.0));
+        let unrolled_aim = view(target, &params, 0.0, 0.0, 0.0)
+            .transform_point3(look_at_point(target, &params, 0.0));
         assert!(
             (at_aim.length() - unrolled_aim.length()).abs() < 1e-4,
             "at_aim = {at_aim}, unrolled_aim = {unrolled_aim}"
@@ -345,9 +375,9 @@ mod tests {
     fn opposite_roll_phases_produce_different_and_symmetric_views() {
         let target = target();
         let params = params();
-        let level = view(target, &params, 0.0, 0.0);
-        let rolled_one_way = view(target, &params, 0.5, 0.0);
-        let rolled_the_other_way = view(target, &params, -0.5, 0.0);
+        let level = view(target, &params, 0.0, 0.0, 0.0);
+        let rolled_one_way = view(target, &params, 0.5, 0.0, 0.0);
+        let rolled_the_other_way = view(target, &params, -0.5, 0.0, 0.0);
         assert_ne!(level, rolled_one_way);
         assert_ne!(rolled_one_way, rolled_the_other_way);
     }

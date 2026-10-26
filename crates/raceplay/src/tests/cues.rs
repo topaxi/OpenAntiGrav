@@ -532,12 +532,10 @@ fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
 
 /// The Quake's own travelling wave reaching a second craft.
 ///
-/// **The radius is wide on purpose.** [`one_quake_table`]'s own `200`-unit
-/// radius is bigger than [`setup`]'s whole synthetic course (a ~136.6-unit
-/// ring - see that function's own doc comment), so the wave reaches every
-/// craft on it the instant it launches: this is about `Cue::QuakeHit`'s own
-/// edge, not the wave's travel time, and neither craft needs to be placed
-/// anywhere in particular for it.
+/// **The ring is tiny on purpose.** [`setup`]'s whole synthetic course is a
+/// ~136.6-unit ring (see that function's own doc comment), so the wave's bump
+/// passes both craft within a handful of ticks wherever they stand: this is
+/// about `Cue::QuakeHit`'s own edge, not the wave's travel time.
 ///
 /// Fired on the second tick rather than the first: `Race::spend_pickup` runs
 /// before `Race::update_standings` inside `Race::tick`, so a press on the

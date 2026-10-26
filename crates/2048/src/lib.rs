@@ -149,6 +149,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIStats2048.xml"),
         // HD's law, inherited through Omega: 2048's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // HD's law, inherited through Omega: 2048's own gate is unread.
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::InheritedFrom("Wipeout Omega Collection"),
+        },
     },
     // Unread, like `exhaust` and `flare` above: 2048 is a Vita/PSP2 asset
     // tree, not Pulse's, so reusing Pulse's `.vex` paths the way `oag_pure`

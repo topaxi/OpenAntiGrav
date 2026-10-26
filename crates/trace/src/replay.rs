@@ -492,6 +492,7 @@ pub fn replay<R: Raycaster + ?Sized>(
         // same reason the pickup above is.
         pending_slowdown: 0.0,
         pending_thrust_scale: 1.0,
+        quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
         active: true,
@@ -730,6 +731,7 @@ where
         // same reason the pickup above is.
         pending_slowdown: 0.0,
         pending_thrust_scale: 1.0,
+        quake_lift: 0.0,
         // Nor a Disruptor bolt to land one, for the same reason again.
         disruption: oag_weapons::disruption::Disruption::default(),
         active: true,

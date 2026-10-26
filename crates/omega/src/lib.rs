@@ -145,6 +145,10 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // HD's law, inherited: Omega's own executable is not checkable here.
         leach_drain: oag_title::weapons::LeachDrain::PerTrip,
+        // HD's law, inherited: Omega's own executable is not checkable here.
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        },
     },
     weapon_models: &oag_title::weapons::WeaponModels {
         // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.
