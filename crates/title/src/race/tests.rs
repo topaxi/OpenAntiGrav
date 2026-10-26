@@ -562,3 +562,15 @@ fn split_reads_a_combined_id_back() {
     assert_eq!(MATCHING.split("EGX"), Some(("EGX", "")));
     assert_eq!(MATCHING.split("Goteki_c1"), None);
 }
+
+/// The three answers a title can give for a Zone race's team step: only [`ZoneTeamStep::Skipped`]
+/// takes the player out of the choice, and only the Pulse-measured one forces the ratings full.
+#[test]
+fn a_zone_team_step_is_offered_unless_skipped_and_full_only_when_measured() {
+    assert!(!ZoneTeamStep::Skipped.offered());
+    assert!(ZoneTeamStep::Offered.offered());
+    assert!(ZoneTeamStep::OfferedAtFullRatings.offered());
+    assert!(!ZoneTeamStep::Skipped.full_ratings());
+    assert!(!ZoneTeamStep::Offered.full_ratings());
+    assert!(ZoneTeamStep::OfferedAtFullRatings.full_ratings());
+}

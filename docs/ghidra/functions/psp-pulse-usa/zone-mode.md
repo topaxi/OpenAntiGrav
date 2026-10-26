@@ -104,8 +104,12 @@ the embedded block is the ordinary `Vex_LoadModel` path every hull takes).
   - the `skin` widget (`0x08a84550`, the livery cycler with its two arrows as children) is hidden and
     the `skin fixed` widget (`0x08a84640`) is shown, its text set to the literal at `0x08a8464c`,
     `Zone` (the XML's own default text is `Zone Model`);
-  - the team's child node named `Zone` (a `PI_TeamModel name="Zone"`) is looked up and handed to the
-    preview loader, which is the `Zone_FE.vex` the lobby template `%s\%s_FE.vex` builds;
+  - the team's child node named `Zone` (a `PI_TeamModel name="Zone"`, `location="zone01"`) is looked up and handed to the preview loader `FUN_088ea7bc(screen,
+    node, 1)`. With its third argument set that loader builds `%s\%s_FE.vex` from the team directory
+    and the **literal** `zone` (`0x08a845b8`), so the preview is `Zone_FE.vex` and not
+    `zone01_FE.vex`, and registers the node's own location (`zone01`) as the `FE_TeamModel` value;
+    the race ignores that value in mode 6 (`case 6` builds `%s\Zone.vex`). What `zone01.vex` is
+    for stays open;
   - **the four rating bars are forced to `10`** (`Speed`, `Thrust`, `Handling` and `Shield` each read
     `10` where every other mode reads the team's record at `+0xb4`/`+0xb8`/`+0xbc`/`+0xc0`): the
     craft is one shared hull, so the team's own ratings say nothing about it;

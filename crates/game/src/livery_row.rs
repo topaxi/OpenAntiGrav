@@ -63,6 +63,19 @@ pub fn ship_rating(
     })
 }
 
+/// The hex grid's model row for a Zone race on a title whose Zone hull is not one of the team's own
+/// models (`crate::preview::zone_race_hull_entry`): the one hull, open, with no thumbnail, since
+/// the thumbnails the disc authors are the team's race hulls and the race will not fly any of
+/// them. An absent picture, not a padlock row and not a wrong craft.
+#[must_use]
+pub fn zone_model_cells() -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
+    vec![oag_ui_screens::picker::hd::hex::ModelCell {
+        thumb: None,
+        open: true,
+        variant: Some(0),
+    }]
+}
+
 /// `title`'s own [`oag_title::RaceDefaults::team_variants_for`], scoped to `team`, or - when that
 /// names no such axis - [`oag_title::RaceDefaults::hull_variants`], which is not team-scoped at
 /// all. Empty when neither source has anything to offer.
@@ -125,8 +138,9 @@ pub fn ship_livery(
     mode: oag_race::Mode,
 ) -> Livery {
     let gates = gates_variants(title);
-    // A Zone race flies one hull and carries no skin (`oag_title::ZoneCraft`): the row holds
-    // that hull alone, so there is nothing to pick.
+    // A Zone race flies one hull and applies no `PI_ModelSkin` (`oag_title::ZoneCraft`; the
+    // team's own paint is embedded in its `Zone.vex`): the row holds that hull alone, so there is
+    // nothing to pick, and the screen draws it as its fixed label (`fixed_row`).
     if mode == oag_race::Mode::Zone {
         return Livery {
             skinned: details.is_some_and(|team| !team.skins.is_empty()),

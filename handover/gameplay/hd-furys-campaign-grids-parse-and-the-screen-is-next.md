@@ -415,6 +415,7 @@ press 12 is Vineta K again, cursor on the same top hex row, no reverse glyph in
 2. ~~**Up/down = direction** and the **reverse row's order** are chosen.~~ Measured 2026-09-29 (confidence 90, one walk).
 3. **RECORDS cells**: no per-circuit record in (name, team, time) shape.
 4. **The `Squares` page dots** (12, first red) are code-filled.
-5. **Zone**: Zone skips the ship screen here as on Pulse, but HD's
-   `TrackRedirect` sends it to `Team Selection` like every other mode; unmeasured
-   whether the original does too.
+5. **Zone**: HD's `TrackRedirect` sends it to `Team Selection` like every other mode,
+   and since 2026-10-26 the build does too (Pulse's `Team Selection` runs in Zone,
+   `zone-mode.md`; `oag_title::ZoneTeamStep::Offered`, chosen, not measured for
+   HD). Unmeasured whether HD's own screen forces its rating bars full there.

@@ -260,9 +260,18 @@ impl Session {
                 let stats = details
                     .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
-                let models = details
-                    .map(|team| team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str())))
-                    .unwrap_or_default();
+                // Zone's one hull is not any of the team's own models, and the grid's thumbnails
+                // are theirs: see `oag_game::livery_row::zone_model_cells`.
+                let zone_entry = oag_game::preview::zone_race_hull_entry(title, &choice.value, mode);
+                let models = if zone_entry.is_some() {
+                    oag_game::livery_row::zone_model_cells()
+                } else {
+                    details
+                        .map(|team| {
+                            team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()))
+                        })
+                        .unwrap_or_default()
+                };
                 (
                     Entry {
                         id: choice.value.clone(),
@@ -285,6 +294,7 @@ impl Session {
                         skins,
                         join: title.race.team_variants_for(&choice.value).map(|v| v.join),
                         hull_file: oag_game::preview::zone_hull_file(title, mode),
+                        zone_entry,
                     },
                 )
             })

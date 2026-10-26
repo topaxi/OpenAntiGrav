@@ -132,6 +132,27 @@ mod tests {
         assert_eq!(options.team.as_deref(), Some("Goteki45"));
     }
 
+    /// **A Zone race keys its loyalty credit on the picked team like any other mode** (the maintainer,
+    /// 2026-10-26: "the team matters for loyalty"). The EndRace row and `Records::record_loyalty`
+    /// read `options.team`, so a launch that left a stale team there would credit the wrong one;
+    /// nothing about the Zone hull (shared by every craft) reaches it.
+    #[test]
+    fn a_zone_race_takes_the_picked_team_too() {
+        let mut options = race::Options {
+            mode: oag_race::Mode::Zone,
+            team: Some("Feisar".to_string()),
+            ..race::Options::default()
+        };
+        apply_race_team(
+            oag_pulse::TITLE,
+            &teams(&["Feisar", "Goteki45"]),
+            &picked("Goteki45"),
+            &mut options,
+        );
+        assert_eq!(options.mode, oag_race::Mode::Zone);
+        assert_eq!(options.team.as_deref(), Some("Goteki45"));
+    }
+
     /// The livery rides with the team: an empty skin is the baseline paint
     /// (`None`), a named one is carried by name.
     #[test]

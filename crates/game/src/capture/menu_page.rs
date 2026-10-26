@@ -779,7 +779,13 @@ pub(super) fn picker_page(
                     let join = title.race.join_for(&team.id);
                     let stats =
                         team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str()));
-                    let models = team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()));
+                    // The live screen's rule, `session::picker`.
+                    let zone_entry = crate::preview::zone_race_hull_entry(title, &team.id, mode);
+                    let models = if zone_entry.is_some() {
+                        crate::livery_row::zone_model_cells()
+                    } else {
+                        team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()))
+                    };
                     (
                         Entry {
                             id: team.id.clone(),
@@ -793,7 +799,9 @@ pub(super) fn picker_page(
                                 logo: Some(oag_ui_screens::picker::hd::logo_src(&team.location)),
                             },
                         },
-                        Some(crate::preview::ship_entry(title, &team.location, mode)),
+                        Some(zone_entry.unwrap_or_else(|| {
+                            crate::preview::ship_entry(title, &team.location, mode)
+                        })),
                     )
                 })
                 .unzip()
@@ -835,7 +843,8 @@ pub(super) fn picker_page(
     // preview follows the selected one; the default hull stands in where a
     // variant ships none.
     let variant_entry = match kind {
-        Kind::Ship if crate::preview::draws_hull(title, kind) => {
+        // Not in a mode that fixes the livery: Zone's one hull has no variant directory.
+        Kind::Ship if crate::preview::draws_hull(title, kind) && !picker.fixed_livery() => {
             let chosen = picker.variant().map_or("", |(id, _)| id.as_str());
             teams.get(picker.index()).map(|team| {
                 crate::preview::ship_entry(

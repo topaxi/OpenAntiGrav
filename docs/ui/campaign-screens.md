@@ -4105,8 +4105,11 @@ original fills them from code. That id choice is **chosen, not measured**.
   the hex frame's top/bottom halves switch the direction row, the circuit model
   frame confirms, the secondary button backs out
   (`oag_ui_screens::picker::hd::track::targets`).
-- **Confirm** opens `Team Selection` (the redirect's default), except in Zone,
-  which forces its own hull as on Pulse. **Back** reopens the RACE page; Back from
+- **Confirm** opens `Team Selection` (the redirect's default), in Zone too since
+  2026-10-26 (`oag_title::ZoneTeamStep::Offered`: the original's Zone `Team
+  Selection` is unread on HD, so Pulse's rule, chosen, not measured; the screen
+  previews the shared Zone ship and its model grid holds that one hull, with no
+  thumbnail). **Back** reopens the RACE page; Back from
   `Team Selection` returns here on the same circuit and direction.
 - **The three RACE page rows** (`TEAM`, `VARIANT`, `TRACK`) are dropped: both
   screens exist now, and HD's `Single Player` page carries none of them.

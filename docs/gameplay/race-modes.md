@@ -288,6 +288,9 @@ craft directory - `Data\Ships\Zone_01` on both PSP titles, `/data/ships/zone` on
 per team, the `Zone.vex` hull), and `Ship_LoadHandlingStats`, `Ship_LoadModel` and `Ship_InitCraft` all go through the
 player's own team directory and `craft+0x70 = stats + class * 0x80 + 0x94`, with no Zone test. So this engine flying the
 player's team numbers **is** the original's behaviour on Pulse, and the file is a leftover from Pure.
+**The team is also the player's pick, and its loyalty credit** (2026-10-26): `Team Selection` runs in
+Zone and `Race_ComputeLoyaltyAward` banks a Zone race to the picked team
+([zone-mode.md](../ghidra/functions/psp-pulse-usa/zone-mode.md), "`Team Selection` runs in Zone").
 
 What Zone does replace, inside that handling: the engine (the auto-speed law), the brakes (disabled) and the hover
 variant (`Ship_HoverFourCorner`, whose bank-to-yaw gain is `50.0` against the two-point law's `30.0`; ported).

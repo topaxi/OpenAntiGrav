@@ -661,7 +661,8 @@ pub enum ZoneCraft {
     ///
     /// The hull is shared geometry with a per-team paint: all eight teams'
     /// `Zone.vex` decode to the same 1213 vertices / 1149 triangles, so the team
-    /// still chooses the livery and no longer chooses the shape.
+    /// still chooses the livery and no longer chooses the shape. The paint is the texture
+    /// block each file embeds; the eight differ (`zone-mode.md`).
     ModelsInTeam {
         /// Model stem for the hull, in place of the usual one.
         hull: &'static str,
