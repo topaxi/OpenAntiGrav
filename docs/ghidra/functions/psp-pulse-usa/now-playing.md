@@ -1,8 +1,8 @@
 # The in-race "now playing" display (Pulse, PSP)
 
 Addresses are `pulse-psp-usa` `BOOT.BIN`, image base `0x08804000`. Read 2026-10-26
-from the decompiler; **not yet compared against a running original** (a capture is
-the arbiter for the 60 Hz assumption in the last section).
+from the decompiler; the update rate, the display's start at the release and the next-song pick
+were then **watched on PPSSPP** ([Watched](#watched-on-ppsspp-2026-10-26-lane-now-playing-leftovers)).
 
 | Address | Name | Conf | What it is |
 | --- | --- | ---: | --- |
@@ -136,6 +136,31 @@ a song starts: with it clear the text is blanked and the display state cleared, 
 starts while the HUD is off is never shown later, and switching the HUD on again shows nothing
 until the next song. `Hud_Update` calls it itself on the `FE_OFF` transition, which takes a
 marquee that is up down at once. Wired as `oag_raceplay::Race::set_dynamic_hud`.
+
+## Watched on PPSSPP (2026-10-26, lane `now-playing-leftovers`)
+
+PPSSPP 1.20.4 (software renderer, muted, private config), USA disc, Amphiseum Black (a restart from the pause menu); the
+debugger's breakpoint and memory reads, a screenshot per sample. One race, one profile.
+
+- **One update per frame, so the 60 Hz step holds.** A breakpoint on `RaceManager_UpdateNowPlaying`
+  (`0x0882be1c`) counted the cycles between 150 consecutive hits: median 3,703,722, against
+  3,703,700 for one frame (222 MHz at 59.94 Hz). The text's x falls by about one unit an update.
+  Confidence 90. A run here that steps per tick at 60 Hz is therefore the original's rate.
+- **The display starts at the release.** After the pause menu's restart the race clock read 0.4 s
+  on the first sampled frame that held text, the bar already translucent and the text entering
+  from its right edge; the later samples (race clock 0.7, 1.0, 1.7, 2.4, 3.0, 4.0, 5.0 s) show it
+  scrolling right to left through the bar in `HUDSmall`, the last characters leaving at about 5 s,
+  and nothing at 6.7 s. The scroll length and the fade-out agree with the table above. Nothing was
+  sampled during the countdown, so **the silence from `ready` to `go` was not watched**: the
+  capture was muted, as every emulator run here is.
+- **A race start picks the next song.** The profile's first race had played `Aphex Twin - Fenix
+  Funk 5 (Wipeout Edit)`; after the restart the player held `DJ Fresh - X-Project (100% Pure Mix)`
+  with `player+0x48` at 3 and the pick (`+0x3c0`) at -1, so the song came from the player's own
+  "after `+0x48`" rule rather than a resume. This build resumes instead, by the maintainer's
+  decision (`docs/architecture/race-music-resume.md`).
+- Ours at the same crop (`--screenshot` at 960x544, ticks after the release) matches the bar,
+  the face, the direction and the timing; the song, the ship and the track differ, so no pixel
+  comparison was made.
 
 ## Other titles
 
