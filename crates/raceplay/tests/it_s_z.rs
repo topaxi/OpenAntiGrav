@@ -29,6 +29,7 @@ mod start_gantry_clock_inherit_ground_truth;
 mod start_gantry_go_hold_ground_truth;
 mod start_gantry_hd_laps_ground_truth;
 mod start_gantry_hd_mount_ground_truth;
+mod start_gantry_omega_ground_truth;
 mod start_gantry_report_ground_truth;
 mod start_gantry_report_pure_ground_truth;
 mod start_line_ground_truth;

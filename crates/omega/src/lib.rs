@@ -192,6 +192,14 @@ pub const TITLE: &Title = &Title {
     },
     pressings: None,
     pre_race: None,
+    // **Off, and why** (2026-10-26, `docs/rendering/start-gantry.md`, "Omega"):
+    // `gantry::build` now reads Omega's `321Go` files through the Vita/PS4
+    // container, but with the pass on, a start-grid still against the shadPS4
+    // pair does not match. Placement does (same quads, same sizes); the look
+    // does not: the countdown board shows a static red face where the original
+    // shows its blank teal one and then counts down, because the PS4 materials'
+    // texture curves are unread, and the unlit side cards lose their logo. The
+    // fields to set when it does are HD's, inherited, not re-measured on PS4.
     adverts: None,
 };
 

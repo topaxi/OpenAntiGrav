@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-10-26
-summary: "Omega adverts need a psp2 branch in gantry::build; plume flags, hit-effect triggers, Looks, shadows still open"
+summary: "Omega adverts: reader landed, pass off until PS4 material curves are read; plume flags, hit-effect triggers, Looks, shadows still open"
 ---
 
 # Omega lacks HD's adverts, plume flags and hit effects: what is left of the wiring list
@@ -54,14 +54,16 @@ data proves it.
 
 ### Worth a lane now (tier B)
 
-4. **Adverts pass is off on Omega.** `crates/omega/src/lib.rs` `adverts: None`;
-   HD's block is `crates/hd/src/lib.rs:217-239`. `Data/billboards/HD_Adverts/321Go/`
-   is in `data00`. It is not a field flip: `gantry::build` builds an
-   external-geometry `.vex` through `mesh::rcs::build` only, which fails on the
-   PS4 container the way the weapon bodies did, so Omega's `321Go_Zone.vex` needs
-   a `mesh::rcs::psp2` branch there first. Then a still against the shadPS4
-   start-grid pair (`scripts/shadps4-omega-pair.py`) decides whether card
-   placement carries over.
+4. **Adverts pass is off on Omega: the reader landed, the look did not.**
+   `gantry::build` reads Omega's `321Go_*.vex` through `mesh::rcs::psp2::build_with_vex`
+   (landed 2026-10-26, `start_gantry_omega_ground_truth.rs`). `adverts: None` stays
+   because the Vineta K start-grid pair against shadPS4 does not match: placement does,
+   the look does not. Open: (a) read the PS4 materials' texture curves (the countdown
+   digits; the GO-edge finder reports no animated texture), tier C, `crates/mesh` and
+   `oag_rcs::rcsmodel::psp2`; (b) add `.gnf` spellings of `billboard1-8` and `fx350_nomip`
+   to `oag_render::gantry` (`SLOT_PLACEHOLDER_TEXTURES`, `mount()`, `FX350_TEXTURE`), which
+   also strips Omega's `?` icons, so only together with the pass; (c) set `adverts` to HD's
+   values (inherited) and repeat the pair. Details: `docs/formats/omega-status.md`, "Adverts".
 5. **Engine light and front-face flags on the plume.** `crates/omega/src/lib.rs`
    sets `engine_light: false` and `front_faces_only: false` ("Off, chosen, not
    measured, as on 2048"); HD sets both `true`. Omega reads `EngineLightData.xml`
@@ -119,8 +121,8 @@ data proves it.
 
 ## Next Steps
 
-1. Item 4: add the `psp2` branch to `gantry::build` and read `321Go_Zone.vex`
-   through it; then one start-grid still pair decides `adverts`.
+1. Item 4: read the PS4 material curves, add the `.gnf` spellings, then repeat the
+   Vineta K pair and set `adverts`.
 2. Item 6: read the call sites of the six functions above, in the order
    `ShipCollisionFx_Trigger`, `FUN_016f3ef0`, `FUN_01722810`.
 3. Item 5: read the consumer of `ship+0xbc`/`ship+0xc0`, then the thrust frame pair.
