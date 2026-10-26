@@ -225,6 +225,9 @@ then the slot's running bit (`0x000e92a0..0x000e92b0`), and stores `0` to the
 timer `slot+0x158` (`0x000e92b8`). `0x000f1958` copies the pad record's `+0x1b`
 into the driver's (`0x000f1a08..0x000f1a10`) before its blend test, so the
 player's absorb reaches it while the driver flies. `Autopilot_Update` above has
-no hold through a corner. Static only, confidence 80; Pulse's live run and the
-full reading are in
+no hold through a corner. Static only, confidence 80. **Ported 2026-10-26
+(`autopilot-wire`)**: HD's `Weapons::autopilot_absorb_cancels` is `true`, measured,
+and 2048 and Omega inherit it; the disc-backed trace is
+`crates/raceplay/tests/autopilot_cancel_ground_truth.rs`. HD's pad grant is unread
+and runs Pulse's gate, inherited. Pulse's live run and the full reading are in
 [psp-pulse-usa/autopilot.md](../psp-pulse-usa/autopilot.md#absorb-cancels-it-fire-does-not-and-no-corner-holds-it-2026-10-26-autopilot-re).
