@@ -130,9 +130,10 @@ impl Survey {
 
     fn report(&self, label: &str) {
         eprintln!(
-            "{label}: {} mesh(es), {} turned ({} mirrored); {} normals, {} under a turned node \
+            "{label}: {} file(s), {} mesh(es), {} turned ({} mirrored); {} normals, {} under a turned node \
              ({} static, {} anchored, {} in shine batches, {} lit); {} unjudged; skew {:.1e}; identity {:.4}, local \
              {:.4}, placed {:.4}",
+            self.files,
             self.meshes,
             self.turned_meshes,
             self.mirrored_meshes,

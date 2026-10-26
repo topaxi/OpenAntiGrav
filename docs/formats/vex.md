@@ -556,6 +556,108 @@ GE state we have not recovered. `oag-view` treats vertex colour as prelit and
 skips its own light rig for those batches, which is the viewer's choice and not a
 claim about the game.
 
+### A vertex normal is in its node's space, and the node's rotation carries it
+
+**Confidence: 90.** The loader's placement of normals changed on 2026-10-26.
+Measured on every `.vex` of three discs by
+[`crates/vex/tests/vex_node_normals_ground_truth.rs`](../../crates/vex/tests/vex_node_normals_ground_truth.rs);
+the original's side is a static read of `BOOT.BIN`, not a live capture.
+
+A batch's `s16` positions and its `s8` normals are authored in the space of the
+`Mesh` node that holds them. The loader carries the positions into the model's
+space with the node's matrix ([`vex::anim_anchors`](../../crates/vex/src/vex/matrix.rs))
+and, until the change above, **left the normals as authored**: a normal under a
+rotated node faced the wrong way while its face stood where it belonged.
+
+**The original takes both through the node's world matrix.** The per-mesh draw
+`FUN_0890f288` and `Mesh_DrawBatchSet` (`0x0893021c`) write `*(mesh + 0x30)`, the
+node's world matrix, into the display-list fragment at `mesh + 0xd8`, and the
+mesh's constructor `FUN_0890c2bc` builds the same fragment: a `0x3a` word
+(`WORLDMATRIXNUMBER`, 0) and twelve `0x3b` words (`WORLDMATRIXDATA`), each
+`(float bits >> 8) | 0x3b000000`, from matrix words 0, 1, 2, 4, 5, 6, 8, 9, 10
+and 12, 13, 14. That is the whole 4x3 matrix, rotation rows included, and
+`Gu_CallList(mesh + 0xd8)` runs before the batches draw. The GE takes a normal
+through that matrix's 3x3 for lighting and for environment-map coordinates
+([`mesh-draw.md`](../ghidra/functions/psp-pulse-usa/mesh-draw.md), "The GE
+world matrix a mesh draws under"). Pure and PS2 Pulse share the node walk, not
+the executable: PS2 is not read.
+
+**What the data says, independent of any reader.** For every (vertex, triangle)
+pair of every `Mesh` node, does the vertex normal point to the side of the
+triangle's face that the placed positions say is outward (a mirrored node
+reverses the winding, so the face is read with the determinant's sign)?
+
+| Corpus | `Mesh` nodes | turned | mirrored | normals | under a turned node | identity node agrees | as authored | rotated |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Pulse PSP, 307 `.vex` of version 6 | 21,055 | 720 | 17 | 7,127,767 | 75,750 (1.06%) | 99.66% | **75.6%** | **99.5%** |
+| Pulse PS2, VIF batches | 30,884 | 1,439 | 17 | 2,041,273 | 23,428 (1.15%) | 99.94% | **58.4%** | **99.9%** |
+| Pure PSP, 156 `.vex` of version 4 | 11,025 | 771 | 1 | 2,344,382 | 64,314 (2.74%) | 99.90% | **78.2%** | **99.9%** |
+
+Under an identity node the two columns are the same number; under a turned node
+the authored normals score like noise and the rotated ones return to the
+baseline, so the normals are authored node-local. All 720 + 1,439 + 771 turned
+nodes are **orthonormal to 2.4e-7**, so the GE's plain `n * M3x3` is also the
+inverse transpose, and `vex::transform_direction` is that product. PS2's
+PSP-format batches (vertex types `0x121` to `0x13f`, 697,765 vertices) agree
+with their faces on about 52% of pairs under an identity node, against 99.9%
+for its VIF batches, so the face test cannot judge them and they are counted
+apart; **why is open**. Pure's 15 version-3 files break the batch header and are
+not read.
+
+**Per circuit, Pulse PSP `track.vex`** (turned = rotation part not the
+identity; shine = in a batch the circuit's `0x2000` extra pass redraws):
+
+| Circuit | normals | turned meshes | normals under a turned node | share | of those, shine batches |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `01_Track` | 174,297 | 14 | 936 | 0.54% | 161 |
+| `02_Track` | 175,699 | 11 | 1,347 | 0.77% | 0 |
+| `03_Track` | 164,774 | 7 | 193 | 0.12% | 144 |
+| `04_Track` | 186,818 | 2 | 181 | 0.10% | 61 |
+| `05_Track` | 195,197 | 1 | 116 | 0.06% | 0 |
+| `06_Track` | 196,220 | 39 | 4,285 | 2.18% | 1,506 |
+| `07_Track` | 181,114 | 70 | 10,344 | 5.71% | 294 |
+| `09_Track` | 199,997 | 12 | 1,862 | 0.93% | 0 |
+| `10_Track` | 180,159 | 28 | 2,803 | 1.56% | 0 |
+| `13_Track` | 169,620 | 0 | 0 | 0.00% | 0 |
+| `14_Track` | 186,014 | 31 | 4,485 | 2.41% | 0 |
+| `16_Track` | 179,648 | 10 | 771 | 0.43% | 0 |
+
+The hulls are the other place: each team's `AirBrake_*Shape` flaps (and, on
+Feisar and Triakis, their under-flash lights) sit under a hinge that rolls them
+about 175 degrees, 54 to 124 vertices a hull, 2,966 lit vertices over the disc.
+
+**Who reads the normal, and so what moved.** A circuit batch authors a vertex
+colour, so the GE draws it with lighting off
+([`scene-light.md`](../ghidra/functions/psp-pulse-usa/scene-light.md)) and its
+normal reaches the picture only through environment-map coordinates: the
+circuit's `*_shinemap` batches (`oag_render::shine`, 7,898 of the turned
+normals; its `TrackNormals` takes a static node's normal as already in the
+model's space). 4 lit vertices over all 40 circuit files sit under a turned node.
+A hull batch has no colour and is lit by the circuit's authored lights through
+the node's matrix, so the flaps' lighting and `oag_mesh::mesh::Flap::swung`
+(which rotates a normal beside its position, in the hull's space) were wrong
+the same way. Pads author no normal at all and do not move.
+
+**Before and after** (Pulse PSP, `06_Track`, the two rotated pod structures at
+`(-336, 87, 57)` and `(-300, 103, 100)`, 1440x816): 66,208 and 71,679 of
+1,175,040 pixels differ by more than 8 in the two pod views; the chrome
+highlight on the end cap, the barrel's glass and the struts is brighter and
+sits somewhere else, which is the map's coordinate following the face instead
+of the node's own axes. A grid-start frame of the hull differs in
+1,310 pixels, all on the flaps. Reproduce with `just play --race --track
+'Data\Environments\06_Track\track.vex' --ticks 0 --camera-fov 60
+--camera-pose=-306,97,87,-0.688,-0.229,-0.688,0,1,0` at this commit and at
+the one before it (the second view is `-270,111,70,-0.695,-0.185,0.695,0,1,0`). **Not compared against an emulator frame**: the original's
+picture of those pods was not captured.
+
+**Other titles** (2026-10-26):
+
+| Title | Answer |
+| --- | --- |
+| Pulse PS2 | **ported.** The same `mesh.rs` loop reads the VIF batches' normals; 99.9% against its faces once rotated, 58.4% before. The PS2 executable's mesh draw is not read (PSP is the reference). |
+| Pure PSP | **ported.** Version-4 files, same loop: 78.2% before, 99.9% after. The 15 version-3 files are not read. |
+| Wipeout HD, Wipeout 2048, Omega | **checked, differs.** Their geometry is `.rcsmodel`; `oag_mesh::mesh::rcs` already carries a normal through `to_world` (PS3, `rcs.rs`) or its inverse transpose (Vita and PS4, `psp2.rs`). The `.vex` of those titles authors no batches. |
+
 ### The vertex type is not misdeclared, and `u8` texcoords really are one byte each
 
 **Confidence: 95.** Checked by
