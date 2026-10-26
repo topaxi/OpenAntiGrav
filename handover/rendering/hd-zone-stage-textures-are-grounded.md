@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-09-15
-summary: "HD Zone stage textures grounded; what remains is the shader's use of them and live confirmation"
+summary: "HD Zone palette arrays at 0x00c81330 (zoneAnisoPalette, GradientColour0..3) have no known fill; zoneMode*.gtf are fifteen identical blanks"
 ---
 
 # HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not

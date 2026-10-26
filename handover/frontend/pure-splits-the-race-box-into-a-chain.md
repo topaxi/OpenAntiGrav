@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pure]
 updated: 2026-10-12
-summary: "Add Pure's fifth class to the fifth-handling-class thread; other race-box chain leftovers"
+summary: "Pure's screen ordering (88) rests on Redirect targets only and was never confirmed against a capture; fifth class note"
 ---
 
 # Pure splits the race box into a chain, and 2048 has none at all

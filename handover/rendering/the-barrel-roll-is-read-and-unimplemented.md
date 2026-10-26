@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-10-20
-summary: "Confirm the barrel-roll gesture off the original with a capture; the chain is a static read"
+summary: "Barrel roll gesture is a static read; AI_ROLL_SHIELD_FLOOR (20 percent) is invented and unmeasured; confirm against a capture"
 ---
 
 # The barrel roll is playable; its visual is read but not drawn

@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-09-25
-summary: "Pilot editor landed; the keyboard layout is ours, chosen; reuse Keyboard for the next name entry"
+summary: "Pilot name keyboard layout is ours, chosen; no uppercase or space; Pulse's TagInput alphabet cannot spell every name"
 ---
 
 # Players should be able to build pilots in game, and a naive editor would eat their comments

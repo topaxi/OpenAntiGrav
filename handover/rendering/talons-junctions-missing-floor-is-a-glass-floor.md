@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-09-17
-summary: "Glass floor facing-ramp is done; the c parameter, vertexLight's composition, normal and specular maps remain"
+summary: "Glass floor: the c parameter, vertexLight's composition, normal and specular maps remain; renders clip 21 percent against 15"
 ---
 
 # Talon's Junction's "missing floor" is a glass floor drawn with the wrong texture: rendered, not absent

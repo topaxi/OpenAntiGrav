@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048]
 updated: 2026-10-05
-summary: "2048 campaign: GameModeFactory::OnNewInst type mapping undecided; SP.xml read, launch path closed"
+summary: "2048 campaign: M_RankRequired gate on side events unmodelled (needs a progressed save); GameModeObjective leftovers"
 ---
 
 # 2048's campaign is read from `SP.xml`, not a `PI_Grid` grid

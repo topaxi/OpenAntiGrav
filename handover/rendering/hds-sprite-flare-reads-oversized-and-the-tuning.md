@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-09-15
-summary: "HD sprite flare law landed; a live confirmation against the original and the tuning rows' effect remain"
+summary: "HD flare tuning consumers unlocated (Flare Max Rotate Angle +0x478, Size Clamp +0x4b0, Depth Bias +0x4b4); no live confirmation"
 ---
 
 # HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read

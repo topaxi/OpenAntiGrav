@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse, pure, hd]
 updated: 2026-09-16
-summary: "PS2 pitch arithmetic and three unnamed child-cue functions (FUN_0898f6a4, 089929a4, 08993944) still unread"
+summary: "The track's own authored sound sources remain open; PS2 pitch arithmetic and three unnamed child-cue functions unread"
 ---
 
 # Audio: race SFX plays on all three titles

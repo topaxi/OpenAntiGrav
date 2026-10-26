@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-10-20
-summary: "Lobby server: remote runs only Pulse and only max-ticks endings; HD/Omega/2048 memory on a 1 GB host unmeasured"
+summary: "Lobby: session takeover re-send, spectate, chat, invite-only and quick match unbuilt; remote runs cover only Pulse"
 ---
 
 # Online lobby server: the spike is built, what is left

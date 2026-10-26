@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-13
-summary: "A mixed-title race box needs four rows off the title; SPEED CLASS done, the rest of the list still hardcoded"
+summary: "Race box rows off the title: a WEAPONS on/off row is absent; the rest of the numbered list still hardcoded"
 ---
 
 # A race box that mixes titles needs four rows off the title, not one flow

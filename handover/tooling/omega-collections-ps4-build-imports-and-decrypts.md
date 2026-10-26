@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-10-12
-summary: "Omega asset-level access leftovers: race lighting, remaining unread Wwise and eboot areas"
+summary: "Omega PS4 asset-level leftovers beyond racing start (lighting, Wwise, eboot reads); the block-location questions were an extraction bug"
 ---
 
 # Omega Collection's PS4 build imports, decrypts and is mapped; asset-level access is not there yet

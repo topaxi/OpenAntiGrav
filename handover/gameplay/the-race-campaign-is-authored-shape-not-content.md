@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-09-30
-summary: "Campaign medal law implemented; remaining persistence and unread cell attributes still open"
+summary: "Campaign: FUN_088085d0 and FUN_08808624 deliberately unnamed (a fourth argument Ghidra drops); further unread cell attributes"
 ---
 
 # The Race Campaign is authored, all of it - shape *and* content

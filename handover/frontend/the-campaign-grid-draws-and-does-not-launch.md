@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-10-02
-summary: "Campaign grid leftovers on Pulse: cell cursor and stray-hex questions from the original still open"
+summary: "SelectorGlow is not drawn: a phase-synced halo is seen on the original; refine against it"
 ---
 
 # The campaign grid draws and does not launch

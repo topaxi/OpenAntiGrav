@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-09-15
-summary: "How HD's executable resolves HUD texture names to .gtf is unread; the rule measures 129 of 133"
+summary: "Whether HD's original picks our archive copy for six duplicated HUD roots is unread; the .gtf rule measures 129 of 133"
 categories: [frontend, tooling]
 ---
 

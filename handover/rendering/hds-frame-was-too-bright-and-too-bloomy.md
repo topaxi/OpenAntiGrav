@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-21
-summary: "HD Anulpha floor bluer than the original is real and open; reference exposure explains the 23 darker"
+summary: "HD frame brightness: floor tone and hull light mostly closed; read the Open list for the remaining bloom and resolve-scale items"
 ---
 
 # HD's frame was too bright and too bloomy; the bloom chain was not what was wrong

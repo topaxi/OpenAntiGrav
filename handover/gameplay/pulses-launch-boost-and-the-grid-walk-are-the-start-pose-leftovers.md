@@ -2,7 +2,7 @@
 status: parked
 titles: [pulse]
 updated: 2026-10-04
-summary: "Pulse start pose: the junction hop in grid_walk::locate only if a grid ever sits within a control point of a path end"
+summary: "04_Track RAPIER AI board moved to Died after regen (one death at tick 17714); grid_walk junction hop only if a grid needs it"
 ---
 
 # Pulse's start pose: the grid walk is what is left

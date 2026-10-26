@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse, hd]
 updated: 2026-10-12
-summary: "Race start: unscanned lap states of the gantry after GO and whether Zone shows a different countdown remain"
+summary: "CountdownTime, ReadyText and GoText have no code xref; Pure's Ghidra programs did not answer; Zone countdown unchecked"
 categories: [gameplay, frontend, rendering]
 ---
 

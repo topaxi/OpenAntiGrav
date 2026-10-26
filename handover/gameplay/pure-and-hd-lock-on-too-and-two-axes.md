@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, pure]
 updated: 2026-10-19
-summary: "Whether HD's Missile LockedOn toggle is the LeachBeam's threshold reveal or an all-or-nothing pair-add"
+summary: "Weapons::elimination (Pure's Eliminator tuning) is carried and unread; the second axis row is read by nothing"
 ---
 
 # Pure and HD lock on too, and it cost two axes rather than any new recovery

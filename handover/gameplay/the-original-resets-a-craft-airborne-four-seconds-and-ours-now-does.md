@@ -2,7 +2,7 @@
 status: re-first
 titles: [pulse]
 updated: 2026-10-13
-summary: "Reset leftovers: the player's shield charge on reset and the remaining relocation details"
+summary: "Reset distance trigger (0x08841cec) is read, not ported; 05_Track autopilot grinds a wall at samples 1605-1675"
 ---
 
 # The original resets a craft airborne for four seconds, and ours now does

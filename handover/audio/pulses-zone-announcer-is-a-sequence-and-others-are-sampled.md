@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-09-30
-summary: "Live PPSSPP check of the Zone announcer timeline; 15 of 33 wired cues still sampled, not layered"
+summary: "Zone announcer word order and timing unconfirmed live; ZM ~ENGINE and circuit emitters still flat; Pure, HD, 2048 tick unmeasured"
 ---
 
 # Pulse's Zone announcer is a sequence; a wider set of cues is still sampled instead of played

@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-10-20
-summary: "HD per-material shader leftovers: normal and specular maps, mag_effect_loop_op and other families"
+summary: "HD per-material shader path: the RigidBody class hardcode in skin variants() remains; two general rules were refuted"
 ---
 
 # HD needs a per-material shader path, and two general rules for finding one have been refuted

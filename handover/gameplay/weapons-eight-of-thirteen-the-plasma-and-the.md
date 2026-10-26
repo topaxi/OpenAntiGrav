@@ -2,7 +2,7 @@
 status: measure
 titles: [pulse]
 updated: 2026-10-06
-summary: "Repulser leftovers and Plasma cue timing: chosen cues unmeasured; most player-visible first"
+summary: "Repulser blast bead ring starts wide (13.6 units) where the original stays compact; more Repulser leftovers inside"
 ---
 
 # Weapons: thirteen of thirteen, the Repulser last (2026-10-04), and the dispatch table read whole

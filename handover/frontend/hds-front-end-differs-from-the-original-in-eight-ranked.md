@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-10
-summary: "HD front end: Ship Select pose, Safe Area scale at default and other ranked differences still open"
+summary: "HD front end: hull_orbit pose fitted to the classic Feisar only, no _n1 frame, Safe Area 0.904 scale at default unchecked"
 ---
 
 # HD's front end differs from the original in eight ranked ways; Ship Select's craft is closed
