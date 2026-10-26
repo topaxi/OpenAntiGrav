@@ -53,3 +53,20 @@ Under gamescope VSYNC `off` already ran `Mailbox` with two queued (gamescope's W
 `[Mailbox, Fifo]`, no `Immediate`), so there only `on` changes. A headless gamescope
 (`gamescope --backend headless`) composites and never scans out, so it does not reproduce the
 wait; the workstation check is the decision line above.
+
+## The Steam Deck's 60 (a different cause)
+
+A second report (maintainer, 2026-10-26: a Steam Deck OLED at 90 Hz reading 60 fps with a
+spiky graph and an 8 ms `CPU` row) is **not** this mechanism. Settings there were
+`vsync = "smooth"` with `frame_limit = "90"`, which already queues two frames, and gamescope's
+WSI keeps three images either way. Native under the Deck's gamescope with `vsync = "on"` at
+200 % render scale, the build before and after this change wrote byte-identical frame logs.
+
+The cause is the frame thread's CPU on one circuit. The maintainer raced HD's Anulpha Pass:
+`frame-phases` total 9.4 ms (submit 5.1, scene 2.5, ticks 1.0). Past 11.1 ms a frame takes two
+vblanks, so frames alternate one and two: 60 fps, p99 22.3 ms. Autopilot on the same Deck and
+circuit: submit 5.0 to 5.3 ms, total 7.5 to 7.8, still 90; on `--race`'s default circuit submit
+is 2.5 and total 5.1. The present wait of about 6.6 ms under `smooth` is normal under gamescope
+and shows at a flat 90 too. A profile of the submit puts wgpu-core's per-element texture
+tracking of the binding-array group on top (`crates/mesh/src/mesh_render/bindless.rs`); see
+[`frame-thread-cpu.md`](frame-thread-cpu.md) for the Deck method.
