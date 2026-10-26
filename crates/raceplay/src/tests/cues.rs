@@ -188,8 +188,8 @@ fn every_cue_has_something_that_raises_it() {
         if tick == 0 {
             race.sim.world.ships[0].autopilot_timer = 2.0;
         }
-        // A Plasma, pressed once the Autopilot cancel above has cleared -
-        // `spend_pickup`'s fire arm cancels instead of firing while
+        // A Plasma, pressed once the Autopilot above has run out -
+        // `spend_pickup` ignores a fire press while
         // `autopilot_timer > 0.0`, and `2.0` seconds clears by tick 120 at
         // 60 Hz. `Cue::Plasma` fires on this same tick; the one-second
         // wind-up releases the bolt around tick 190, comfortably inside the

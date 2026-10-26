@@ -194,6 +194,11 @@ pub const TITLE: &Title = &Title {
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         },
+        // Read statically off HD's own `Ship_UpdatePickup_q` (`0x000e9160`), confidence 80:
+        // `ps3-hdfury-eu/autopilot.md`, "Absorb cancels it here too".
+        autopilot_absorb_cancels: oag_title::pre_race::Sourced::measured(true),
+        // Pulse's law, inherited: HD's pad grant is unread.
+        autopilot_pad_grants: oag_title::pre_race::Sourced::inherited(false, "Wipeout Pulse"),
     },
     weapon_models: race::WEAPON_MODELS,
     effects: effects::EFFECTS,

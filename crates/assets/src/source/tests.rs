@@ -138,6 +138,8 @@ const TITLE: &Title = &Title {
         quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
             origin: oag_title::Origin::Chosen,
         },
+        autopilot_absorb_cancels: oag_title::pre_race::Sourced::chosen(true),
+        autopilot_pad_grants: oag_title::pre_race::Sourced::chosen(false),
     },
     // Unread on the same terms as `weapons` above: this fixture is about
     // archive discovery, not about any weapon's own model.

@@ -196,6 +196,8 @@ impl Setup {
             quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
                 origin: oag_title::Origin::Chosen,
             },
+            autopilot_absorb_cancels: true,
+            autopilot_pad_grants: false,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,

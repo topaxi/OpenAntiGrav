@@ -376,6 +376,10 @@ pub struct RaceSim {
     pub(super) leach_drain: oag_title::weapons::LeachDrain,
     /// How a Quake's wave reaches a craft - see [`Setup::quake_hit`].
     pub(super) quake_hit: oag_title::weapons::QuakeHit,
+    /// Whether an absorb cancels a running Autopilot - see [`Setup::autopilot_absorb_cancels`].
+    pub(super) autopilot_absorb_cancels: bool,
+    /// Whether a pad grants a craft whose Autopilot runs - see [`Setup::autopilot_pad_grants`].
+    pub(super) autopilot_pad_grants: bool,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// Which gravity term that scale multiplies, the title's craft law.

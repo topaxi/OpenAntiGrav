@@ -269,7 +269,9 @@ impl Race {
     /// **The original keeps last tick's value in `craft+0x144` and this does
     /// not need to.** That field exists only to make the warning an edge, and
     /// with a fixed timestep the previous value *is* `timer + dt` exactly -
-    /// ADR-0007. One consequence is recorded rather than hidden: a pickup armed
+    /// ADR-0007. A cancel is the one place that breaks it, because it zeroes the
+    /// timer between two updates; [`Self::spend_pickup_under_autopilot`] raises
+    /// the warning itself there. One consequence is recorded rather than hidden: a pickup armed
     /// with less than a second on it would fire the warning on the original's
     /// first tick and not here, because there is no stale previous value to
     /// cross. No authored `<Weapon type="Autopilot"><Stats time>` is anywhere
@@ -281,17 +283,66 @@ impl Race {
         }
         let now = timer - self.sim.dt;
         self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
-        // The announcer speaks to a person; an opponent's stint is silent, and so is
-        // another machine's person's: the call is dry, so it would be in this ear.
-        if now < AUTOPILOT_WARNING_SECONDS
-            && timer > AUTOPILOT_WARNING_SECONDS
-            && self.sim.world.person_flown(slot)
-            && self.heard_here(slot)
-        {
+        if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
+            self.raise_disengaging(slot);
+        }
+    }
+
+    /// The announcer's `disengaging` call for `slot`'s Autopilot.
+    ///
+    /// The announcer speaks to a person; an opponent's stint is silent, and so is
+    /// another machine's person's: the call is dry, so it would be in this ear.
+    fn raise_disengaging(&mut self, slot: usize) {
+        if self.sim.world.person_flown(slot) && self.heard_here(slot) {
             self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Disengaging,
                 slot,
             ));
+        }
+    }
+
+    /// A fire or absorb press while `slot`'s Autopilot pickup runs.
+    ///
+    /// **Absorb cancels it, fire does nothing.** The driver flies the craft, and
+    /// `Ship_UpdateCraft` copies only the pad record's absorb byte into the
+    /// driver's record, so the player's fire never reaches `Ship_FireHeldWeapon`
+    /// and the absorb reaches `Ship_AbsorbHeldPickup` (`0x08844ec4`), which tests
+    /// the running bit before it reads the slot: it stores `0.0` to the timer and
+    /// skips the whole absorb switch. A held pickup is therefore neither paid out
+    /// nor spent, and the empty slot every stint is in does not stop it. The craft
+    /// goes back to its pilot on the next tick: the controls are chosen before the
+    /// weapon step, as the original's craft update runs before its weapon update.
+    /// Pulse live on PPSSPP (confidence 95 for the cancel, 92 for the fire
+    /// suppression), HD static; see
+    /// `docs/ghidra/functions/psp-pulse-usa/autopilot.md`, "Absorb cancels it,
+    /// fire does not, and no corner holds it". [`oag_title::weapons::Weapons::autopilot_absorb_cancels`]
+    /// says which titles cancel; Pure's executable has no cancel at all, and a press
+    /// there does nothing.
+    ///
+    /// **A held Autopilot is not fired into a running one** (`Ship_FireHeldWeapon`
+    /// refuses held id `6` with the bit set, `0x08844b44`): the same suppression,
+    /// not a guard of its own, so the pickup stays held and the timer runs on.
+    ///
+    /// In an Eliminator a held pickup is first requested as a fire - the Shield
+    /// there - and the same cancel follows ([`Self::eliminator_absorb`]).
+    ///
+    /// **The `disengaging` call is a static inference, confidence 85:**
+    /// `Autopilot_Update` runs on the next dispatch with the timer at `-dt` and
+    /// `craft+0x144` still holding last frame's value, so with more than a second
+    /// left the original's `now < 1.0 && previous > 1.0` edge is crossed. It is
+    /// raised here, a tick before the original's, and has not been heard live.
+    pub(super) fn spend_pickup_under_autopilot(&mut self, slot: usize, absorb: bool) {
+        if !absorb || !self.sim.autopilot_absorb_cancels {
+            return;
+        }
+        let ship = &self.sim.world.ships[slot];
+        if !self.sim.world.mode().pickups_absorb() && !ship.pickup.is_empty() {
+            self.eliminator_absorb(slot);
+        }
+        let left = self.sim.world.ships[slot].autopilot_timer;
+        self.sim.world.ships[slot].autopilot_timer = 0.0;
+        if left > AUTOPILOT_WARNING_SECONDS {
+            self.raise_disengaging(slot);
         }
     }
 

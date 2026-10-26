@@ -75,8 +75,8 @@
 //!   until the last is out, which is why [`Held`] carries two counters.
 //! - **Autopilot.** `Autopilot_Fire` (`0x088613bc`) and `Autopilot_Update`
 //!   (`0x08861404`) give the duration, running bit, countdown, the one-second
-//!   `disengaging` warning, and that pressing fire cancels it
-//!   (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`). Ours: the takeover
+//!   `disengaging` warning, and that pressing absorb cancels it while fire does
+//!   nothing (`docs/ghidra/functions/psp-pulse-usa/autopilot.md`). Ours: the takeover
 //!   itself (the original hands the craft to the driver `Ai_Construct` names
 //!   `"autopilot input"`; the swap was not found), so this reuses
 //!   `oag_ai::Driver` as `Race::set_autopilot` did.
