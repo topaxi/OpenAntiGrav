@@ -95,7 +95,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Chosen, not measured: Pulse's start voice lent to this title, from its mode's speech bank.
     // Omega's own start is Wwise events (`_321_NGP`, `Go_NGP`) this loader cannot play.
     countdown_voice: Some(COUNTDOWN_VOICE),
-    launch_hover: None,
+    // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
+    launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: None,
     zone_hover_rig: None,
     // Unread: whether this title's Zone reads a Zone file, and which (`hover-four-point.md`).
@@ -457,3 +458,21 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     event: None,
     beat: None,
 };
+
+/// Omega's grid hover: [`oag_title::launch_hover::LaunchHover`].
+///
+/// Omega's craft update (`FUN_01316960`, the object `+0x654` target, `+0x658` clamp, `+0x65c`
+/// countdown, `+0x2c4` bit 1 the grid state) is HD's `Craft_Update` field for field, shifted by
+/// `0x310`: in the grid state it copies the clamp into the target (`0x01316e13`-`0x01316e23`), re-rolls
+/// the clamp to `3.0 + rand8 * 0.0003` and the countdown to `rand8 * 0.002` (`0x01316e3d`-`0x01316ea1`),
+/// and once raced it adds `dt` to the clamp every frame (`0x01316df3`). Read statically in
+/// `docs/ghidra/functions/ps4-omega-eu/hover-target.md`.
+pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
+    oag_title::launch_hover::LaunchHover {
+        // The mean of `3.0 + rand8 * 0.0003`; the mean is chosen, as on HD.
+        grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
+        // `+= dt` once the grid state ends: one unit a second, read off the instruction.
+        release_rate: oag_title::pre_race::Sourced::measured(1.0),
+        // HD skips both on Zone modes; whether Omega's craft update does is not read.
+        in_zone: oag_title::pre_race::Sourced::inherited(false, "Wipeout HD"),
+    };

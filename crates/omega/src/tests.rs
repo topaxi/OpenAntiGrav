@@ -99,3 +99,22 @@ fn the_two_player_hud_is_the_one_the_disc_authors() {
     }
     assert_eq!(split.arcade.len() + split.elimination.len(), 4);
 }
+
+/// Omega carries HD's grid hover, so its craft is held low on the grid and released after GO.
+/// Dropping the `launch_hover` wiring from `race.rs` leaves a craft that floats at its race height.
+#[test]
+fn omega_carries_the_grid_hover_hd_does() {
+    let hover = TITLE.race.launch_hover.expect("Omega's grid hover");
+    assert_eq!(hover.grid_cap.value, 3.03825);
+    assert_eq!(hover.release_rate.value, 1.0);
+    assert_eq!(hover.release_rate.origin, oag_title::Origin::Measured);
+    assert_eq!(
+        hover.grid_cap.value,
+        oag_hd::TITLE
+            .race
+            .launch_hover
+            .expect("HD's")
+            .grid_cap
+            .value
+    );
+}

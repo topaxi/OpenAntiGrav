@@ -63,7 +63,7 @@ not measured: Time Trial had no AI).
 
 Other titles: Pulse's craft update is the PSP/PS2 `Ship_UpdateCraft`; whether it carries the same
 grid-state branch is **not read** (Pulse measured no lowered flyby craft; its target block is
-unchecked). Omega and 2048: not checkable here (no PS4 emulator; 2048's craft is a separate build).
+unchecked). Omega: **checked, same block** (2026-10-26, [ps4-omega-eu/hover-target.md](../ps4-omega-eu/hover-target.md)), wired. 2048: inherited via Omega, wired, not read on its own executable.
 
 ## Zone skips both (2026-10-20, hd-zone-handling)
 
