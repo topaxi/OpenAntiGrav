@@ -55,8 +55,9 @@ empty, `flown_for_the_player` stayed `true` after both.
   and skip only the grant.
 - `crates/raceplay/src/eliminator.rs`: drop "One edge is not ported" from
   `eliminator_absorb`'s doc. That edge is now item 1.
-- Gate the law per title (`oag_title`, ADR-0058): Pulse PSP/PS2 and HD measured, Pure
-  absent, 2048 and Omega inherited from HD. Use a `Title` field with provenance, not a
+- Gate the law per title (`oag_title`, ADR-0058): Pulse measured (one `Title` for both
+  pressings; PS2 not read), HD measured (static), Pure absent, 2048 and Omega
+  inherited from HD. Use a `Title` field with provenance, not a
   title-name branch.
 - `docs/gameplay/weapon-lineage.md`: move the "Autopilot cancel and release" row's cells
   for ours.

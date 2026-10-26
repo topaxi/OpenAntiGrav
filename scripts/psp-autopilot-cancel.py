@@ -25,9 +25,9 @@ Phases, all on one load:
 Not a physics reference: the Autopilot flies (maintainer, 2026-10-20). Raw output is derived
 game data: keep it under `data/`, never commit it.
 
-    source data/scratch/<lane>/pp/env.sh
+    source <the env.sh scripts/ppsspp-start.sh wrote>
     uv run --with websocket-client python3 scripts/psp-autopilot-cancel.py \\
-        --port $OAG_PPSSPP_PORT --out data/scratch/<lane>/cancel.json
+        --port $OAG_PPSSPP_PORT --out data/<dir>/cancel.json
 """
 
 import argparse

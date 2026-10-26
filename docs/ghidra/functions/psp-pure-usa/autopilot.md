@@ -50,17 +50,27 @@ the threshold, the edge and the cue match Pulse's instruction for instruction.
 
 ## No cancel and no hold
 
-- **Nothing outside these two writes the timer** in the weapon code
-  (`psp-relocate.py field 0x15c`: `0x0884c788` and `0x0884c7bc` between
-  `0x08830000` and `0x08860000`; the other `swc1` hits are stack slots and
-  other structures elsewhere in the image).
+- **Nothing outside these two writes the timer as a cancel.** `psp-relocate.py
+  field 0x15c` finds 15 non-stack `sw`/`swc1` stores. Two are these
+  (`0x0884c788`, `0x0884c7bc`). Every other was read with the seven
+  instructions before it, and none stores zero to a pickup record: a call's
+  return (`0x0882198c`, `0x089781d0`), two accumulators with their own limits
+  (`0x0889e198..0x0889e1b4` against `5.0`, `0x08946f88`), two stores in the
+  AI driver's code (`0x0891a350`, `0x0891a3a0`, after `Ai_Construct` at
+  `0x08919024`), constructor stores in the driver and in other objects
+  (`0x08919098`, `0x089466f8`, and `0x08978c80`, whose struct gets `8` at
+  `+0x154` as a word), a VFPU block (`0x08888858`) and a field-by-field struct
+  copy (`0x089793cc`).
 - **The running byte is cleared only by the update and by a whole-record
   reset** (`0x0884e194`, among a run of clears from `0x0884e174`). Its readers
   are the dispatch (`0x0884d068`, `0x0884d080`) and two outside the weapon code
   (`0x08922344`, which is the `SubWeapon` timer's HUD read, and `0x08929b78`,
   next to the `~AUTOPILOT` open at `0x08929c40`).
 
-So Pure has no absorb cancel of the kind Pulse and HD have, and nothing holds
-the Autopilot through a corner. **Confidence 70** for the absence of a cancel:
-a cancel through another base register or a whole-record copy is not excluded
-by a field scan, and nothing here was watched running.
+So Pure has no absorb cancel of the kind Pulse and HD have: no function on
+the absorb side reads the running byte (its only byte reads are the four
+above, and the other `+0x154` hits are word accesses to other structures), and
+nothing writes the timer to zero. Nothing holds the Autopilot through a corner
+either. **Confidence 70** for the absence of a cancel: a cancel through another
+base register is not excluded by a field scan, and nothing here was watched
+running.

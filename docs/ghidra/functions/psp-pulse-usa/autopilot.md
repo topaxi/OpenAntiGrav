@@ -500,7 +500,10 @@ blend, the engine bits, the record's two button bytes, `entity+0x860`,
 | expiry, finished | the same, after the finish | 108 of 108 kept blend `1.0` and bits `0xd`: `PlayerStatus_Update`'s finished-racer arm, the after-the-finish flight, not a hold |
 
 `entity+0x860 & 0x18` and `entity+0x6c` were never non-zero across the 4,596
-frames. The countdown runs on through a corner and releases mid-corner. What can
+frames. **The timer is not extended either:** the 152 racing expiries came every
+17 or 18 frames (a `0.25 s` stint, the expiry frame and the two logged unarmed
+frames), through the sharpest corner as on the straights, so a corner neither
+delays the expiry nor gates the release. The countdown runs on through a corner and releases mid-corner. What can
 read as a hold is only that the controls hand back in one tick with the craft
 already at the Autopilot's speed and line.
 
@@ -524,8 +527,9 @@ The fix is open, tracked in HANDOVER.md.
   `slot+0x158` (`0x000e92b8`). `0x000f1958` copies the pad record's `+0x1b` into
   the driver's (`lbz r0,0x1b(r6)` / `stb r0,0x1b(r5)` at `0x000f1a08..0x000f1a10`)
   right before its blend test, the shape of Pulse's pass-through, so `+0x1b` is
-  HD's absorb byte. `Autopilot_Update` (`0x00129988`) has no hold; at expiry it
-  also plays a cue when `entity+0x628c == 0`. The release guards
+  HD's absorb byte. `Autopilot_Update` (`0x00129988`) has no hold; at expiry,
+  when `entity+0x628c == 0`, it also calls `FUN_00676a38` and then `FUN_006778e8`
+  (not read). The release guards
   `ship+0x6a64 & 0x8`/`0x10` have no `ori`/`rlwimi` setter in the eight
   instructions before any of the 60 `stw` to `+0x6a64`, and nothing stores a
   byte at `+0x6a67`. Static only, **confidence 80**.
