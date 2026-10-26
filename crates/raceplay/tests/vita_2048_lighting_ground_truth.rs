@@ -231,6 +231,13 @@ fn a_dlc_circuit_lights_and_fogs_with_the_packs_copy() {
             "{entry}: the sun is the pack's (base {base_sun:?}); {:#?}",
             loaded.report
         );
+        let pack_ambient = pack
+            .vec3(oag_tables::envsettings::PSP2_AMBIENT_COLOUR)
+            .expect("the pack authors an ambient");
+        assert_eq!(
+            loaded.light.ambient, pack_ambient,
+            "{entry}: the ambient is the pack's"
+        );
         let pack_fog = pack.vec4(oag_tables::envsettings::PSP2_FOG_COLOUR);
         if let Some(fog) = loaded.authored_fog.as_ref().zip(pack_fog) {
             assert_eq!(

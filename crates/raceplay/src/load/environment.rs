@@ -312,7 +312,12 @@ pub(super) fn read_circuit_envsettings(
         .iter()
         .position(|(label, _)| from_pack(label))
         .unwrap_or(0);
-    copies.into_iter().nth(at)
+    // A name only a loose layer (override or fallback) holds is no archive's
+    // copy, so `read_every_name` lists none of it; `read_name` still finds it.
+    copies.into_iter().nth(at).or_else(|| {
+        let blob = archives.read_name(name).ok()?;
+        Some((String::new(), blob))
+    })
 }
 
 /// The last path component of an archive label or name, either separator.
