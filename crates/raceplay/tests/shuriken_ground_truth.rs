@@ -307,6 +307,11 @@ fn a_thrown_blade_rides_its_head_and_trail_and_has_a_model_pose() {
     for ship in &mut race.sim.world.ships[1..] {
         ship.active = false;
     }
+    // Let the sparks the pack's contacts threw while the others were still in the race finish, so
+    // the count below is the blade's alone.
+    for _ in 0..120 {
+        race.tick(&PlayerInputs::none());
+    }
     let before = race.stage().playing_count();
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Shuriken);
     let mut buttons = Input::new();
