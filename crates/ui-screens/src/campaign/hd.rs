@@ -972,18 +972,6 @@ impl CellSelection {
         targets: &[Target],
         difficulty_rect: Option<[f32; 4]>,
     ) -> Vec<Event> {
-        if pointer.is_idle() {
-            return Vec::new();
-        }
-        if !self.help_open()
-            && pointer.clicked
-            && let Some(at) = pointer.at
-            && let Some(rect) = difficulty_rect
-            && contains(rect, at)
-        {
-            self.cycle_difficulty();
-            return vec![Event::DifficultyChanged];
-        }
-        self.pointer(pointer, targets)
+        self.pointer_with_difficulty(pointer, targets, difficulty_rect)
     }
 }

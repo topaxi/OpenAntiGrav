@@ -238,10 +238,15 @@ pub(super) fn campaign_pointer(
             oag_game::campaign::hit::cell_targets(model, campaign.cell_layout(), &campaign.sprites)
         }
     };
+    let difficulty_rect = oag_ui_screens::campaign::pointer::difficulty_button_rect(
+        &campaign.cell_layout().screen,
+    );
     match &mut campaign.screen {
         crate::campaign_stage::Screen::Selection(_) => Vec::new(),
         crate::campaign_stage::Screen::Grid(model) => model.pointer(pointer, &targets),
-        crate::campaign_stage::Screen::Cell { model, .. } => model.pointer(pointer, &targets),
+        crate::campaign_stage::Screen::Cell { model, .. } => {
+            model.pointer_with_difficulty(pointer, &targets, difficulty_rect)
+        }
     }
 }
 

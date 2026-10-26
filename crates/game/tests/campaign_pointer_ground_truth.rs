@@ -183,3 +183,49 @@ fn pulse_cells_answer_a_pointer_on_their_own_hexagon() {
     let pulse = load_on(&mut archives, oag_pulse::TITLE, [480.0, 272.0]);
     every_cell_answers_a_pointer_on_its_own_hexagon(&pulse);
 }
+
+/// Pulse's `AI difficulty` footer takes a click on the disc's own layout: the
+/// authored `DifficultyButton` is found, a click on the label cycles the rung
+/// (Medium to Hard to Easy), and the rect overlaps no hexagon target, so it
+/// cannot steal a cell click. Fails if the footer has no pointer route.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_difficulty_footer_answers_a_click() {
+    use oag_tables::race_campaign::Difficulty;
+    use oag_ui::pointer::Pointer;
+    let Some(source) = oag_testdata::exact("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let opened =
+        oag_source::title::open_source(&source.display().to_string(), Vec::new(), Vec::new())
+            .expect("open pulse");
+    let mut archives = opened.archives;
+    let pulse = load_on(&mut archives, oag_pulse::TITLE, [480.0, 272.0]);
+    let campaign = &pulse.campaign;
+    let rect = pointer::difficulty_button_rect(&campaign.cell_layout.screen)
+        .expect("Pulse authors DifficultyButton");
+    let mut model = CellSelection::new(campaign.grids[0].cells.clone());
+    let targets =
+        oag_game::campaign::hit::cell_targets(&model, &campaign.cell_layout, &campaign.sprites);
+    assert!(
+        targets.iter().all(|target| {
+            let [x, y, w, h] = target.rect;
+            x + w <= rect[0] || rect[0] + rect[2] <= x || y + h <= rect[1] || rect[1] + rect[3] <= y
+        }),
+        "the footer rect must not cover a hexagon"
+    );
+    let label = (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
+    let click = Pointer {
+        at: Some(label),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    assert_eq!(model.difficulty(), Difficulty::Medium);
+    let events = model.pointer_with_difficulty(&click, &targets, Some(rect));
+    assert_eq!(
+        events,
+        vec![oag_ui_screens::campaign::Event::DifficultyChanged]
+    );
+    assert_eq!(model.difficulty(), Difficulty::Hard);
+}
