@@ -11,7 +11,7 @@
 // assertion the mesh path already has.
 
 import oag_shaders::scene_vertex::{Uniforms, VertexInput};
-import oag_shaders::target::{linear_out, gamma_to_target, target_out};
+import oag_shaders::target::{decode, encoded_out, linear_out, gamma_to_target, target_out};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 @group(1) @binding(0) var flare: texture_2d<f32>;
@@ -130,19 +130,25 @@ fn shade(in: VertexOutput) -> vec4<f32> {
     let facing = saturate(clamp(abs(facing_dot), 0.0, 0.15) / 0.15);
     let depth_fade = saturate(in.clip.z * 0.75);
     let hd_fade = mix(1.0, facing * depth_fade, trail_shape);
-    let rgb = mix(picture.rgb, red.rgb, in.red_mix * trail_shape) * in.colour.rgb;
+    // **HD's two colour taps are sRGB-decoded on fetch**: units 0 and 1 of the
+    // tube's draw (954 indices, 53 segments of three fins) carry gamma nibble 7
+    // (`SET_TEXTURE_ADDRESS` `0x60710101`, RGB decoded, alpha raw) on every live
+    // dump that holds one (engine-trail.md, "The trail's colour taps are decoded
+    // on fetch"), so the noise and the coverage, both alphas, stay raw. On the
+    // encoded store the packer then encodes the product, as for the flame.
+    // Gated on `encoded_out` (HD's measured store) so no other title moves.
+    let tap_decode = encoded_out * linear_out * trail_shape;
+    let picture_rgb = mix(picture.rgb, decode(picture.rgb), tap_decode);
+    let red_rgb = mix(red.rgb, decode(red.rgb), tap_decode);
+    let rgb = mix(picture_rgb, red_rgb, in.red_mix * trail_shape) * in.colour.rgb;
     // On the linear float target the flare's gamma-authored colour is decoded
     // so the additive blend and the encode after it round-trip; on a gamma
     // target this is the identity.
     //
-    // **The HD tube skips that decode on purpose.** Its own fragment program
-    // multiplies the raw texture samples into the output with no transfer
-    // function anywhere in its 29 instructions, so the original adds
-    // gamma-space values into its linear scene target as they are - decoding
-    // them here cut the trail's green and blue channels to a third and was
-    // most of why it read too faint. The sampler's sRGB-remap state is the
-    // one unread bit; if it turns out to be on, this line is where that
-    // lands. See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+    // **The HD tube skips this decode.** Its program applies no transfer
+    // function of its own; the decode its units do on fetch is applied to the
+    // two taps above, on HD's encoded store only, and the vertex colour is not
+    // decoded. See docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
     let decoded = gamma_to_target(rgb, linear_out);
     let out_rgb = mix(decoded, rgb, trail_shape);
     return vec4<f32>(target_out(out_rgb), shape * in.colour.a * hd_fade);
