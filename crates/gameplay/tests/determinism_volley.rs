@@ -286,9 +286,17 @@ fn run_volley(ticks: u32) -> (u64, u64) {
 ///   same way: with that one write removed the previous constants reproduced
 ///   bit for bit. Replaces `0x8731_a61e_e41b_a9e8` / `0x9df3_6a61_7315_16d6` at 60 ticks and `0x1a03_923d_2d2f_0787` /
 ///   `0xaefe_b285_a14e_81a1` at 600.
+///
+/// - **Moved 2026-10-26**, when `Ship::quake_lift` (the Quake's smoothed wave
+///   height at each craft) joined the ship's hash: four more bytes per ship per
+///   tick, zero here because no scenario fires a Quake. The same change moved the
+///   Quake's hit gate from the flat `radius` test to the wave-height edge, which
+///   these runs do not reach. Isolated the same way: with that one write removed
+///   the previous constants reproduced bit for bit. Replaces `0x46d8_ed88_4c17_9c28` /
+///   `0x315d_2753_13b0_7b16` at 60 ticks and `0xc349_6025_7e65_1567` / `0x9648_2860_d2cc_25a1` at 600.
 const REFERENCE_VOLLEY: &[(u32, u64, u64)] = &[
-    (60, 0x46d8_ed88_4c17_9c28, 0x315d_2753_13b0_7b16),
-    (600, 0xc349_6025_7e65_1567, 0x9648_2860_d2cc_25a1),
+    (60, 0x1838_d473_be4f_b9a8, 0x67fb_a4d7_c593_9356),
+    (600, 0xb78b_f87e_581c_2d47, 0x8a73_c5e9_2d4e_a721),
 ];
 
 #[test]
