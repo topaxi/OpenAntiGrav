@@ -1,6 +1,6 @@
 ---
 name: oag-scout
-description: OpenAntiGrav drive member for read-only opportunity scouting - sweeping a subsystem for one class of improvement (render performance, memory allocations, and the like), ranking what it finds with evidence and a way to measure each, and writing it into a handover thread. Changes no code. Cheap by design, so the lead spawns it on haiku (0.5 slot); its findings are checked by its advisor before it reports.
+description: OpenAntiGrav drive member for read-only opportunity scouting - sweeping a subsystem for one class of improvement (render performance, memory allocations, and the like), ranking what it finds with evidence and a way to measure each, and writing it into a handover thread. Changes no code. Cheap by design: spawned on haiku, 0 slots; its findings are checked by its advisor before it reports.
 model: haiku
 effort: high
 color: cyan
