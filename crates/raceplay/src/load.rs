@@ -579,7 +579,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     } else if !vex_geometry {
         None
     } else {
-        let sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.as_ref())?;
+        let mut sky = mesh::build_sky(&track, &track_blob, ps2_track_textures.as_ref())?;
+        environment::unlit_sky(&mut sky, &mut report);
         if sky.indices.is_empty() {
             report.push(unrecovered_or_absent(
                 track_classes,
