@@ -77,8 +77,9 @@ const SCALE_X4: u8 = 2;
 const SCALE_HALF: u8 = 5;
 
 /// Whether a resolved fragment block is the fogged unlit combine: exactly the four samplers,
-/// nothing declared but the fog colour, the `LG2 x4` of the wipe's fourth power and the
-/// closing `/2`. The unfogged block #2 has no `/2` and the lit blocks declare the light; both
+/// nothing declared but the fog colour, the `LG2 x4` of the wipe's fourth power and a `/2`
+/// (the closing `ADD /2` on Tech de Ra, the fog's `MAD /2` before `MOV H0.w` in the `DATA02`
+/// circuits' copy, block #3 `@0x13e0`, the same law with its registers renumbered). The unfogged block #2 has no `/2` and the lit blocks declare the light; both
 /// are counted, not bound.
 fn is_twin_blend(declared: &rcsmaterial::Declared, program: &Program) -> bool {
     let mut hashes: Vec<u32> = declared.samplers.iter().map(|s| s.0).collect();
@@ -91,10 +92,7 @@ fn is_twin_blend(declared: &rcsmaterial::Declared, program: &Program) -> bool {
             .instructions
             .iter()
             .any(|i| i.name() == Some("LG2") && i.scale == SCALE_X4)
-        && program
-            .instructions
-            .last()
-            .is_some_and(|i| i.end && i.scale == SCALE_HALF)
+        && program.instructions.iter().any(|i| i.scale == SCALE_HALF)
 }
 
 /// Whether a block declares the family's four samplers, whatever program it runs.
@@ -104,8 +102,9 @@ fn declares_the_four(declared: &rcsmaterial::Declared) -> bool {
         .all(|h| declared.samplers.iter().any(|&(s, _)| s == *h))
 }
 
-/// The wipe's scroll rate: the vertex block's literal times `time`, added to `v[8].z` and
-/// written to the interpolator's `x`.
+/// The wipe's scroll rate: the vertex block's literal times `time`, added to `v[8].z`. Which
+/// interpolator lane carries it differs by copy (`o[TC4].x` on Tech de Ra, `o[TC0].w` in the
+/// `DATA02` circuits'), and the fragment block reads it back from there either way.
 fn rate(blob: &[u8], variant: rcsmaterial::Variant) -> Option<f32> {
     let declared = rcsmaterial::Declared::parse(blob, variant.vertex.offset)?;
     let (_, register, _) = declared
@@ -114,7 +113,7 @@ fn rate(blob: &[u8], variant: rcsmaterial::Variant) -> Option<f32> {
         .find(|(h, ..)| *h == TIME)?;
     let program = vertex::Program::of(blob, variant.vertex)?;
     let read = program.clock_rate(u32::from(*register).checked_sub(256)?, PAIRS)?;
-    (read.from == 2 && read.lane == 0).then_some(read.rate)
+    (read.from == 2).then_some(read.rate)
 }
 
 /// What [`twin_blend`] binds third and fourth, per material slot.
