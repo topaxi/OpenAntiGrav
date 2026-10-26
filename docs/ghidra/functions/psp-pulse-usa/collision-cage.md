@@ -171,8 +171,12 @@ mesh reproduces **818 of 818** of the original's contacts on the weave run and
 **1,466 of 1,466** on the pulse-steer run, at the same sample, normal and depth,
 with 2 and 0 extras (two at depth `0.000`). The capture also fixes the sample
 order: the body's row 0 is its left, so the original's sample 0 is lower left
-front, and ours (`oag_physics::wall::hull_sample_points`) lists the mirror image
-first. The two captures are kept (gitignored) at `data/reference/wall-contact-miss/`
+front. Ours (`oag_physics::wall::hull_sample_points`) still lists the mirror image
+first. The original's order (left first, flanks included) was tried on
+2026-10-26: every one of the ten samples of 2,000 ticks (the weave) and 2,200
+(the pulse run) then landed on the recorded collider's. It was held back
+because the original Autopilot on `05` then resets at the cage
+(`autopilot_original_ground_truth`), which points at a second mirrored term. The two captures are kept (gitignored) at `data/reference/wall-contact-miss/`
 (`talons-weave1`, `talons-pulse1`: the CSV and the `.contacts.jsonl`); flatten with
 `scripts/psp-contacts-flat.py` and run
 `collision_cage_ground_truth::the_originals_contacts_against_our_mesh` with
@@ -205,8 +209,8 @@ between). Outside the Eliminator a wreck reaches state 6 1.5 s after it finishes
 which `oag_physics::damage::in_state_6` holds. On de Konstruct Black (12 forward cells by
 nine perturbation scales, `cage_effect_sweep`) it changes 5 of 108 races and moves
 destroyed 59 to 60: a wreck's pose decides nothing else. HD runs no cage (below). Still not ported: the finished
-player, which also reads `6`, and `CageEffect_Spawn`'s visual (the trigger is now known: one per cage
-contact, at the boundary point). Our own track format carries the cage bytes but
+player, which also reads `6`, and `CageEffect_Spawn`'s visual (the trigger is known: one per cage
+contact, at the boundary point; the pose is decoded, the fade is not: "The cage's spark and sound" below). Our own track format carries the cage bytes but
 not the header flag, so a track file runs no cage.
 
 **Other titles.** Pure: off by its own data (header word `0`), and Pure's
@@ -217,6 +221,32 @@ there: measured live on both of its jumps, and ours holds it off by the title si
 2026-10-20 ([ps3-hdfury-eu/collision-cage.md](../ps3-hdfury-eu/collision-cage.md)). 2048 and Omega (version
 `0x107`, 96-byte points): not checkable from data, as the points end before
 `+0x68`, so no cage; their executables keep the `collisionCageEnabled` string but no definition sets it (ps3-hdfury-eu page).
+
+### The cage's spark and sound, and the flash's decode (2026-10-26, `collision-cages-and-contact-sparks`)
+
+**Ported: the spark and the sound.** The cage's contact reaches `FUN_088418e0`'s ring loop like any
+other, with friction `0`, so the dispatch throws `WO_SHIP_COLL_SPARK_NODAMAGE` from the locator
+nearest the boundary point and plays `.COLLISIONS` inside the locator's gate, skips a shielded craft,
+and charges no shield ([contact-response.md](contact-response.md#live-2026-10-26-a-craft-to-craft-contact-sparks-both-hulls-and-the-dispatch-has-no-distance-gate)).
+`oag_physics::cage::CageResponse::resolved` lists each corner (boundary point, impulse), and both of
+`oag_raceplay`'s cage call sites hand it to `Race::throw_cage_sparks`.
+
+**Not wired: the flash.** `CageEffect_Spawn` is called from two places, `Cage_ResolveCraft` (`0x08831fdc`,
+`a1` the boundary point, `a2` the contact normal, `a3` a quad of the located section's slot at `+0x60`)
+and the segment sweep's fallback `FUN_08832134` (`0x08832428`), so the camera's own sweep raises it too.
+Read 2026-10-26 (decompiled, VFPU, confidence 70): it walks the four pooled objects (`effect + 0x734`)
+and reuses the first whose age (`object + 0x44`, `-1` parked) is in `[0.1, 0.25)` and whose stored point
+(`+0x80`) is under `7.0` from the new one; else it takes the ring's cursor (`effect + 0x744`) and
+advances it. `FUN_08832fb0` poses the object: age `0`, translation `+0x80` the point (`w = 1`), rows
+`+0x50` the slot quad normalised, `+0x60` its cross with the normal normalised, `+0x70` the normal
+normalised and scaled by `2.0` (a 1, 1, 2 scale), then sets the model's draw bit (`model + 0x2c |= 4`).
+`FUN_08832f38` is the per-object update: while the age is not negative it sets the model's world matrix
+(`FUN_08945284`), adds `dt` to the age and, past `5.0`, parks it (`FUN_08833168` clears the draw bit and
+writes `-1`). The model is the additive `pSphereShape1` with `cage_collision2_ADD.tga`
+([frame-audit.md](../../../rendering/frame-audit.md)), drawn about 40 units across in the one capture that
+caught it. **Unread, so nothing is drawn:** what the slot quad at `+0x60` is, whether the sphere fades over
+its 5 s (nothing in the update touches alpha; a material animation on the model's own clock would), and
+the scale's origin. A live capture at a cage contact (a GE list or a frame pair) settles all three.
 
 ### What the cage does to our AI (2026-10-20, `ai-gate-robustness`)
 

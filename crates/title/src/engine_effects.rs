@@ -487,6 +487,11 @@ pub const MAGSTRIP_ZONE_EFFECT: &str = "WO_MAGSTRIP_ZONE";
 /// `oag_fx::sparks::DAMAGE_EFFECT`, which a `oag-raceplay` test pins.
 pub const COLLISION_SPARK_EFFECT: &str = "WO_SHIP_COLL_SPARK_DAMAGE";
 
+/// What `ShipCollisionFx_Trigger` spawns for a contact that cannot damage (its record's friction
+/// is not positive): a two-emitter tree, the damage file's bright fountain plus `bits`. The
+/// collision cage's contacts are these. Equal to `oag_fx::sparks::NO_DAMAGE_EFFECT`.
+pub const NO_DAMAGE_COLLISION_SPARK_EFFECT: &str = "WO_SHIP_COLL_SPARK_NODAMAGE";
+
 /// What a landed LeachBeam drain throws on the struck hull instead of
 /// [`COLLISION_SPARK_EFFECT`] (`craft+0x138 == 7`).
 pub const LEACHBEAM_HIT_SPARK_EFFECT: &str = "WO_SHIP_SPARK_DAMAGE_LEACHBEAM";

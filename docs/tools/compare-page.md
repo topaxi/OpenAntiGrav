@@ -707,6 +707,42 @@ PPSSPP's own toast ("turning off software rendering") lands in the top rows of s
 metric. A replay of the whole list reproduces the original's frame; `--nop-prims 85:8242` style ranges that remove the
 first PRIM (`ci` 75) blank it.
 
+
+## A posed race shot had no contact sparks (Pulse PSP, 2026-10-26, `collision-cages-and-contact-sparks`)
+
+`pulse-psp-race/talons-boost` shows orange spokes at x 222..262, y 118..152 of `theirs.png`: the
+player's nose and the craft ahead's tail, a craft-to-craft hit five ticks before the frame (live read,
+[contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#live-2026-10-26-a-craft-to-craft-contact-sparks-both-hulls-and-the-dispatch-has-no-distance-gate)).
+Ours drew nothing there for two reasons: a pair contact threw no sparks at all (only wall contacts did),
+and a posed frame runs no tick, so a hit that happened before the frame cannot happen in it.
+
+- **Pair contacts spark now** (`Race::throw_contact_spark`), so a race that runs ticks shows them with no flag.
+- **A posed capture is seeded, not re-simulated.** `scripts/psp-contact-fx-read.py` loads the state, runs
+  to the pair's `--target-clock` (the pair script's own functions) and logs the original's
+  `ShipCollisionFx_Trigger` calls over the last 0.6 s, keeping those whose instance gate had opened (the
+  trigger's own spawn test). It prints each as a `--pose-spark SLOT:NODE:AGE_SECONDS:SEVERITY` flag with
+  the slot already mapped to ours' `--field-from` row (by team name) and the severity from the call's
+  clamped intensity: `--pose-spark 3:0:0.0831:0.7238 --pose-spark 0:2:0.0831:0.7238` for this state.
+  `--pose-spark` (needs `--field-warmup`, whose straight-line velocities it uses) throws each spark that long
+  before the frame and runs the effect stage on to it (`Race::warm_up_contact_sparks`); nothing else
+  moves. A re-simulated lead-in was not tried: a posed craft already turned twice and left its line
+  within 0.8 s (above), and a pair hit on the exact tick is unlikely to recur.
+- **Result**, `data/scratch` re-render with the flags above, window `--world-clock-offset 217.421`,
+  box (205,115,70,50): bright orange pixels (r > 170, 80 < g < 220, b < 140, r - b > 80) **0 before, 31
+  after, 20 in the original**, centroid (240.6, 154.4) against the original's (236.0, 148.9). Read by eye
+  at 4x over the four consecutive frames the pair script records (`shots/tick0000{0..3}.png`, ages 4 to 7 ticks): the
+  burst is where the original's is and fades over the same ticks, but it is a soft orange glow on the hull
+  edge where the original draws thin bright spokes 30 to 40 px long, and its glow is brighter. **Whole-frame
+  mean absolute grey difference 9.38 before, 10.01 after; the box 16.95 before, 18.66 after: the pixel
+  metric prefers no spark to ours.** Not the age (4 to 7 ticks all lack the spokes) and not the
+  severity as measured (0.724; a larger one draws spokes but floods the box white). The particle draw's
+  streak length against severity is the open lead (`oag_fx::psys`, not this lane's).
+- **Not measured:** the sparks' age is the HUD clock between the call and the frame (5 ticks); the stamps
+  read off the world clock say 6 to 10 ticks in two runs (the clock does not tick at exactly 60 Hz in the
+  emulator), and the pair's stored `theirs.png` came from an earlier run than the reader's.
+- To adopt: add the printed `--pose-spark` flags to `pair.json`'s `ours.flags` and re-render with
+  `compare-rerender-ours.py` (not written from a worktree).
+
 ## Zone pairs (Pulse PSP, 2026-10-21, `zone-pairs`)
 
 A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.

@@ -39,6 +39,9 @@ pub struct PairContact {
     pub normal: Vec3,
     /// How far the two hulls interpenetrate.
     pub depth: f32,
+    /// The contact point: the midpoint of the two box centres (see [`overlap`]), the record the
+    /// original's pair contact ring entries carry for the spark dispatch.
+    pub point: Vec3,
     /// The magnitude of the impulse that was applied along the normal.
     pub impulse: f32,
 }
@@ -291,6 +294,7 @@ pub fn respond(
     Some(PairContact {
         normal,
         depth,
+        point,
         impulse,
     })
 }

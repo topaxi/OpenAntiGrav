@@ -51,14 +51,9 @@ const SYSTEMS: usize = 35;
 /// is not a recovered trigger, and firing one on that basis is the invention
 /// this project keeps removing.
 const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
-    (
-        "WO_SHIP_COLL_SPARK_NODAMAGE",
-        "the trigger IS read: `Ship_DispatchCollisionFx` picks it for a contact \
-         whose combined friction is not positive (`record+0x30`, `0x0883df38`) - \
-         a floor or magstrip contact, the same predicate that spares it damage. \
-         320 live contacts on Outpost 7 never produced one, so it waits for a \
-         live `damaged == 0` hit before it is wired.",
-    ),
+    // **Not `WO_SHIP_COLL_SPARK_NODAMAGE`**, as of 2026-10-26: it is the collision cage's contact
+    // spark (`Ship_DispatchCollisionFx`'s `damaged` is the record's friction above zero, the cage's
+    // is `0`), wired as `Trigger::CollisionSparkNoDamage` off `Race::throw_cage_sparks`.
     (
         "WO_SHIP_COLL_SPARK_TRAIL_SMOKE",
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \

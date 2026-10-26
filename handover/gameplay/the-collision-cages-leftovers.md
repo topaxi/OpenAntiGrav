@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: measure
 titles: [pulse]
-updated: 2026-10-20
-summary: "Wire the cage visual and the contact sparks and sound; swap the hull sample order to the original's"
+updated: 2026-10-26
+summary: "Cage flash fade/scale need one live capture; hull sample order measured but held (05 Autopilot hits the cage); sparks draw as glow, not spokes"
 ---
 
 # The collision cage's leftovers
@@ -17,11 +17,18 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 
 - **`CageEffect_Spawn` (`0x08832b0c`) has its trigger now**: one call per cage
   contact, at the boundary point, before the resolve. Its visual
-  (`cage_collision_curved.vex`, four pooled instances) is unwired. Render lane.
-- **Cage contacts make no spark or sound in ours.** The original records them in
-  the body's contact ring like any other, and `FUN_088418e0`'s ring loop
-  dispatches collision effects from it without a friction test (damage is gated
-  on friction, so a cage contact costs no shield).
+  (`cage_collision_curved.vex`, four pooled instances) is unwired, and **not ready to
+  wire**: 2026-10-26 decoded the pool, the pose rows, the 5 s life and the park
+  ([collision-cage.md](../../docs/ghidra/functions/psp-pulse-usa/collision-cage.md#the-cages-spark-and-sound-and-the-flashs-decode-2026-10-26-collision-cages-and-contact-sparks)),
+  but not the fade, the scale's origin or what the section quad at `+0x60` is. One capture at
+  a cage contact (a GE list or a frame pair on `03_Track`, the craft driven into the tube's edge) settles them.
+- ~~**Cage contacts make no spark or sound in ours.**~~ **Landed 2026-10-26.** The cage's
+  contact goes through the ring loop's dispatch with friction `0`: the no-damage spark from the
+  nearest locator and `.COLLISIONS` inside the locator's gate, nothing for a shielded craft
+  (`Race::throw_cage_sparks`; `cage_sparks_ground_truth`). A craft-to-craft contact now sparks
+  both hulls the same way, live-read on `talons-boost`
+  ([contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#live-2026-10-26-a-craft-to-craft-contact-sparks-both-hulls-and-the-dispatch-has-no-distance-gate)).
+  The shape of the burst against the original's spokes is open: [compare-page.md](../../docs/tools/compare-page.md).
 - **The finished player keeps the cage in ours.** The original skips a craft
   whose `entity+0x8c` reads `6` (`beq` against `s1 = 6` at `0x08842364`); a single
   race's wreck in state 6 is skipped since 2026-10-20 (`oag_physics::damage::in_state_6`,
@@ -30,10 +37,12 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 - **The denominator** (contact-response.md's open question): Fort Gale 1341, a
   cage contact on a rolled craft, leans body-frame (share ratio `0.91` against
   the world-axis `0.82`, cosine `0.99` both). One capture, confidence 55.
-- **Our hull's sample order is the mirror of the original's.** The original's
-  sample 0 is lower *left* front (`body.right()` is `-row0`), ours lower right
-  front. The order decides the sequence contacts resolve in. One-law change,
-  measured against the weave capture below.
+- **Our hull's sample order is the mirror of the original's: measured, held (2026-10-26).** The original's
+  sample 0 is lower LEFT front; the faithful order matched every sample of 4,200 captured ticks (commit
+  `18cfe598f`, reverted before merge). Held because with it
+  `autopilot_original_ground_truth::the_original_autopilot_finishes_every_pulse_circuit_without_a_rescue_05`
+  fails: the original Autopilot meets 05's cage and resets. Likely another mirrored term the old order was
+  hiding. Next lane: re-apply the order, find why 05's run reaches the cage, fix that, land both.
 - **HD Chenghou Project's pull-down (2026-10-20, `hd-chenghou-jumps`): closed.** HD's
   original runs no cage. Ours now holds it off by the title
   (`CraftLaws::cage_from_track_header`), and the jumps' vy follows the original's
@@ -56,10 +65,9 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 
 ## Next Steps
 
-1. The hull sample order: swap to the original's order in
-   `oag_physics::wall::hull_sample_points` and re-run the contact-by-contact
-   sweep (`collision_cage_ground_truth::the_originals_contacts_against_our_mesh`)
-   and the wall-angular test. An hour, plus gates.
+1. The cage flash: one capture at a cage contact on `03_Track` (PPSSPP software renderer; a
+   write watch on a pooled object's `+0x44` shows it start, a GE list or screenshot pair shows the
+   sphere), then draw `cage_collision_curved.vex` at the pose the page decodes. An afternoon.
 2. Re-capture with `scripts/psp-autopilot-contacts.py --weave 100 --pulse 12` on
    other circuits for the contact-by-contact check (only Talon's Junction is
    done; its two runs are at `data/reference/wall-contact-miss/`, flattened by

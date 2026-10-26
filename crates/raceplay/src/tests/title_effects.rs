@@ -317,8 +317,9 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
             .count(),
         1
     );
-    // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`.
-    assert_eq!(crate::RACE_EFFECTS.len(), 43);
+    // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
+    // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark.
+    assert_eq!(crate::RACE_EFFECTS.len(), 44);
 }
 
 #[test]

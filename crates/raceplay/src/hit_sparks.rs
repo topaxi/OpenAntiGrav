@@ -80,6 +80,20 @@ use oag_livery::SparkAnchor;
 /// `intensity * 2.0 + 0.4` at the hardcoded intensity `1.0`.
 pub const HIT_SPARK_SEVERITY: f32 = oag_fx::sparks::SEVERITY_SLOPE + oag_fx::sparks::SEVERITY_FLOOR;
 
+/// One contact spark a posed capture recorded off the original: the locator whose gate stamp
+/// (`instance + 100`) says it fired `age` seconds before the frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContactSeed {
+    /// The craft's grid slot.
+    pub slot: usize,
+    /// The locator's index in the hull's `Ship Collision Fx` list.
+    pub node: usize,
+    /// Seconds between the fire and the frame.
+    pub age: f32,
+    /// The spawn scale, `intensity * 2 + 0.4`.
+    pub severity: f32,
+}
+
 /// The loop bound `Ship_GatherCollisionFxNodes` collects up to.
 const MAX_NODES: usize = 10;
 
@@ -180,6 +194,8 @@ pub(super) struct HitSparks {
     started: u32,
     /// How many Cannon-hit bursts have started, ever - for tests.
     weapon_started: u32,
+    /// How many of [`Self::started`] were a collision cage's contact, ever - for tests.
+    cage_started: u32,
 }
 
 impl HitSparks {
@@ -192,6 +208,7 @@ impl HitSparks {
             rng: Rng::new(HIT_SPARKS_SEED),
             started: 0,
             weapon_started: 0,
+            cage_started: 0,
         }
     }
 
@@ -301,49 +318,158 @@ impl Race {
         } else {
             Trigger::HitSpark
         };
-        let effect = self.view.handles.get(trigger).cloned();
         let rng = &mut self.view.hit_sparks.rng;
         let first = rng.below(nodes as u32) as usize;
         let second = rng.below(nodes as u32) as usize;
-        let ship = &self.sim.world.ships[slot];
-        let model = model_matrix_of(ship);
         for node in [Some(first), (second != first).then_some(second)]
             .into_iter()
             .flatten()
         {
-            let sparks = &mut self.view.hit_sparks;
-            if sparks.cooldown[slot][node] > 0.0 {
-                continue;
-            }
-            // The locator's own gate (`instance + 100`) opens the cue and the
-            // spark together, so the sound plays whether or not the spark's
-            // particle file loaded.
-            sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-            if self.draws() {
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                    oag_gameplay::cue::Cue::Collision,
-                    slot,
-                ));
-            }
-            let Some(effect) = &effect else {
-                continue;
-            };
-            let sparks = &self.view.hit_sparks;
-            let anchor = sparks.anchors[slot][node];
-            let at = model.transform_point3(anchor.position);
-            let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
-            let Some(playing) = self.view.stage.play_riding(effect, at, HIT_SPARK_SEVERITY) else {
-                continue;
-            };
-            self.view.stage.orient(playing, up);
-            let sparks = &mut self.view.hit_sparks;
-            sparks.riding.push(Riding {
-                slot,
-                node,
-                playing,
-            });
-            sparks.started += 1;
+            self.fire_locator(slot, node, trigger, HIT_SPARK_SEVERITY);
         }
+    }
+
+    /// A craft-to-craft or cage contact on `slot` at `point`, impulse magnitude `impulse`:
+    /// `FUN_088418e0`'s contact-ring loop reaching `Ship_DispatchCollisionFx`
+    /// (`0x0883de90`) with `min(|p| * 0.0125, 1.0)`. It fires the locator nearest `point`,
+    /// the damaged variant (a pair contact's friction is `0.02`, a cage contact's is
+    /// positive, so `damaged` holds), with `ShipCollisionFx_Trigger`'s `intensity * 2 + 0.4`.
+    /// The locator's own 0.8 s gate is the one a weapon hit shares, so the same call also
+    /// raises the `.COLLISIONS` cue.
+    ///
+    /// **Nothing for a shielded craft** (the loop's `craft + 0x1b8 & 0x10` branch skips the
+    /// dispatch, `0x0884255c`). **No distance gate:** the loop tests a value in `(0, 10000)` at
+    /// `0x08842614`-`0x0884262c` that `contact-response.md` read as a camera distance, but the
+    /// live read of `talons-boost` found the nearest-the-camera craft's locators quiet and a
+    /// craft 291 units off with a fresh stamp, so no range from the seat is applied here (the
+    /// value is two quads' dot product, not identified).
+    pub(super) fn throw_contact_spark(
+        &mut self,
+        slot: usize,
+        point: Vec3,
+        impulse: f32,
+        damaged: bool,
+    ) {
+        let ship = &self.sim.world.ships[slot];
+        if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
+            return;
+        }
+        let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
+            return;
+        };
+        let model = model_matrix_of(ship);
+        let Some(node) = anchors
+            .iter()
+            .map(|anchor| model.transform_point3(anchor.position))
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                a.distance_squared(point)
+                    .total_cmp(&b.distance_squared(point))
+            })
+            .map(|(node, _)| node)
+        else {
+            return;
+        };
+        let severity = oag_fx::sparks::severity(impulse);
+        let trigger = if damaged {
+            Trigger::HitSpark
+        } else {
+            Trigger::CollisionSparkNoDamage
+        };
+        self.fire_locator(slot, node, trigger, severity);
+    }
+
+    /// The collision cage's contacts on `slot` this tick, each through the same ring-loop dispatch
+    /// ([`Self::throw_contact_spark`]) with `damaged` clear: the cage's record carries friction `0`.
+    /// Nothing is lost to a shield (the loop's shield branch precedes the dispatch) and nothing is
+    /// charged: the damage call is the friction test's.
+    pub(super) fn throw_cage_sparks(
+        &mut self,
+        slot: usize,
+        response: &oag_physics::cage::CageResponse,
+    ) {
+        if !self.draws() {
+            return;
+        }
+        let before = self.view.hit_sparks.started;
+        for contact in &response.resolved[..response.contacts as usize] {
+            self.throw_contact_spark(slot, contact.point, contact.impulse, false);
+        }
+        self.view.hit_sparks.cage_started += self.view.hit_sparks.started - before;
+    }
+
+    /// A posed capture's recorded contact sparks: each seed's locator fired `age` seconds before
+    /// the frame and the stage run on to it, the hull flying on a straight path at its captured
+    /// velocity (`velocities`, slot order) that ends on the pose it holds now - the way
+    /// [`Self::warm_up_field`] lays an exhaust trail. A capture runs no tick, so a spark the
+    /// original threw a few ticks before its frame would otherwise not exist. Only the effect
+    /// stage and the sparks' own gates move; no craft, physics or cue state is touched beyond the
+    /// `.COLLISIONS` cue the fire raises. **Chosen, not measured:** the straight path (the
+    /// original's hull curved) and each seed's severity when it is not read.
+    pub fn warm_up_contact_sparks(&mut self, velocities: &[Vec3], seeds: &[ContactSeed]) {
+        let dt = self.sim.dt;
+        let ticks_before = |seed: &ContactSeed| (seed.age / dt).round() as u32;
+        let Some(oldest) = seeds.iter().map(ticks_before).max() else {
+            return;
+        };
+        let count = (self.sim.world.ship_count as usize).min(velocities.len());
+        let at: Vec<Vec3> = (0..count)
+            .map(|slot| self.sim.world.ships[slot].physics.body.position)
+            .collect();
+        for behind in (0..=oldest).rev() {
+            for slot in 0..count {
+                self.sim.world.ships[slot].physics.body.position =
+                    at[slot] - velocities[slot] * (dt * behind as f32);
+            }
+            for seed in seeds.iter().filter(|seed| ticks_before(seed) == behind) {
+                if seed.slot < count {
+                    self.fire_locator(seed.slot, seed.node, Trigger::HitSpark, seed.severity);
+                }
+            }
+            self.advance_hit_sparks();
+            if behind > 0 {
+                self.view.stage.advance(dt, &mut self.view.stage_rng);
+            }
+        }
+        for (slot, at) in at.into_iter().enumerate() {
+            self.sim.world.ships[slot].physics.body.position = at;
+        }
+    }
+
+    /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)
+    /// opens the cue and the spark together, so the sound plays whether or not the spark's
+    /// particle file loaded.
+    fn fire_locator(&mut self, slot: usize, node: usize, trigger: Trigger, severity: f32) {
+        let effect = self.view.handles.get(trigger).cloned();
+        let sparks = &mut self.view.hit_sparks;
+        if sparks.cooldown[slot][node] > 0.0 {
+            return;
+        }
+        sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
+        if self.draws() {
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Collision,
+                slot,
+            ));
+        }
+        let Some(effect) = effect else {
+            return;
+        };
+        let anchor = self.view.hit_sparks.anchors[slot][node];
+        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let at = model.transform_point3(anchor.position);
+        let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
+        let Some(playing) = self.view.stage.play_riding(&effect, at, severity) else {
+            return;
+        };
+        self.view.stage.orient(playing, up);
+        let sparks = &mut self.view.hit_sparks;
+        sparks.riding.push(Riding {
+            slot,
+            node,
+            playing,
+        });
+        sparks.started += 1;
     }
 
     /// Counts the cooldowns down and keeps every emitting spark on its
@@ -382,6 +508,13 @@ impl Race {
     #[must_use]
     pub fn weapon_sparks_started_for_tests(&self) -> u32 {
         self.view.hit_sparks.weapon_started
+    }
+
+    /// How many sparks a collision cage's contacts have ever started, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn cage_sparks_started_for_tests(&self) -> u32 {
+        self.view.hit_sparks.cage_started
     }
 
     /// How many hit sparks have ever started, for tests.

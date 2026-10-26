@@ -39,6 +39,7 @@ mod billboard_adverts_ground_truth;
 mod boost_plume_ground_truth;
 mod branch_progress_ground_truth;
 mod cage_effect_sweep;
+mod cage_sparks_ground_truth;
 mod campaign_skill_scale_ground_truth;
 mod cannon_ground_truth;
 mod cannon_tilt_ground_truth;

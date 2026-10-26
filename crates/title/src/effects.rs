@@ -72,6 +72,9 @@ pub enum Origin {
 pub enum Trigger {
     /// A craft's damaging wall contact.
     CollisionSpark,
+    /// A contact that cannot damage: the collision cage's, whose contact record carries
+    /// friction `0` (`Ship_DispatchCollisionFx`'s `damaged` is `friction > 0`).
+    CollisionSparkNoDamage,
     /// A weapon hit lands on a craft, thrown from its own hull's locators.
     HitSpark,
     /// A Rocket in flight.
@@ -157,8 +160,9 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 40] = [
+    pub const ALL: [Self; 41] = [
         Self::CollisionSpark,
+        Self::CollisionSparkNoDamage,
         Self::HitSpark,
         Self::RocketFlare,
         Self::MissileFlare,
@@ -476,6 +480,10 @@ impl Effects {
         e.with(
             T::CollisionSpark,
             EffectSpec::new(n::COLLISION_SPARK_EFFECT, origin),
+        )
+        .with(
+            T::CollisionSparkNoDamage,
+            EffectSpec::new(n::NO_DAMAGE_COLLISION_SPARK_EFFECT, origin),
         )
         .with(
             T::RocketFlare,

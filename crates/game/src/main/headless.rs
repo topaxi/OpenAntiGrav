@@ -500,6 +500,29 @@ fn field_warmup_velocities(cli: &Cli) -> Result<Option<Vec<oag_core::math::Vec3>
     }
 }
 
+/// `--pose-spark`: the contact sparks a posed capture throws before its frame.
+fn pose_sparks(cli: &Cli) -> Result<Vec<oag_raceplay::ContactSeed>> {
+    cli.pose_spark
+        .iter()
+        .map(|text| {
+            let parts: Vec<&str> = text.split(':').collect();
+            anyhow::ensure!(
+                (3..=4).contains(&parts.len()),
+                "--pose-spark {text:?} is not SLOT:NODE:AGE[:SEVERITY]"
+            );
+            Ok(oag_raceplay::ContactSeed {
+                slot: parts[0].parse()?,
+                node: parts[1].parse()?,
+                age: parts[2].parse()?,
+                severity: match parts.get(3) {
+                    Some(severity) => severity.parse()?,
+                    None => oag_raceplay::HIT_SPARK_SEVERITY,
+                },
+            })
+        })
+        .collect()
+}
+
 /// `--pose-lean`: the lean and roll phase of the row `--pose-from` poses from.
 fn pose_lean(cli: &Cli) -> Result<Option<oag_game::race_capture::pose_lean::PoseLean>> {
     match (cli.pose_lean, &cli.pose_from) {
@@ -729,6 +752,7 @@ pub(crate) fn run_race(
                 pose_hold: cli.pose_hold,
                 pose_lean: pose_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
+                pose_sparks: pose_sparks(cli)?,
                 presented: cli.presented.then_some(oag_game::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {
