@@ -63,8 +63,19 @@ Pulse's `craft+0x1c0` and `craft+0x2a0` are HD's `craft+0x264` and `craft+0x2f0`
         craft+0x2f0 = 0.0; craft+0x264 &= ~0x4                  # 0x000cc080..0x000cc090
 
 Pulse's branch is the same (`0x0883bdc0..0x0883bf5c`): the same three arms, the same
-`min(timer, 1.0)`, the same `1.2`, the same message `6`, and the same two guard bits
+`min(timer, 1.0)`, the same `1.2`, the same `6`, and the same two guard bits
 (`entity+0x860 & 0x8`, `& 0x10` there).
+
+**The `6` is the pickup icon id, not a message** (2026-10-26, `cannon-ammo-hud`): `this+0xa4`
+is set from the held weapon's id by a switch just above this branch, `-1` giving `0`, and
+`6` is the Autopilot's own icon, so it stays up while the Autopilot runs with nothing held.
+**The `sprintf` string goes to the `SubWeapon` text**, written once per frame at `0x000cc124`
+(`bl 0x00202d28`, the widget `hud+0x2a4`): the Autopilot's seconds, then, for
+`slot+0x204 == 3` (the Cannon, `0x000cca40..0x000cca50`), `sprintf("%d", slot+0x164)` over it,
+the rounds left (the formats are the two strings at `0x00781b40` and `0x00781b48`). The same
+line as Pulse's: [sub-weapon.md](../psp-pulse-usa/sub-weapon.md). Ported to ours as
+`oag_hud::SubWeapon`; HD's `hud_pickups.xml` authors the widget under the icon (`HUDSmall`,
+scale `0.9`, centred, `y=22`).
 
 **The blend is only zero-tested.** The two craft-side readers of `craft+0x278` compare it
 against `0.0`: `Craft_Update` at `0x000f19fc` (non-zero copies the driver's record into

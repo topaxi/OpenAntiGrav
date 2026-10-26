@@ -1143,6 +1143,17 @@ alone.
   warning up. The always-on set outside Zone still rests on that single state,
   which is why it is deliberately short.
 
+## `SubWeapon` is the Cannon's rounds and the Autopilot's seconds (`cannon-ammo-hud`, 2026-10-26)
+
+Every pickup layout authors a `<Text name="SubWeapon">` under the icon (`hud_pickups.xml`:
+`HUDSmall`, scale `0.9`, centred, `y=22` in `PickupParent`; the `wo3` skin right-aligns it at
+`x=-86 y=-36`, scale `0.4`), and `PlayerStatus_Update` (`0x000cb928`) writes it every frame:
+`"%1.2f"` of the Autopilot's timer while it runs, `"%d"` of the Cannon's rounds over it. The
+evidence is [sub-weapon.md](../ghidra/functions/psp-pulse-usa/sub-weapon.md); ours draws it as
+`oag_hud::SubWeapon`, so a held Cannon reads `30` under the hexagon and counts down as it fires.
+Omega's executable carries the same writer (`FUN_012e5470`) and draws the same widget through
+HD's layouts.
+
 ## The lap hexagon: `CurrentTimeTxt` is the lap number
 
 **2026-10-21, `hud-leftovers` (lap 1) and `hd-lap-hexagon` (later laps), confidence 85, watched live.**

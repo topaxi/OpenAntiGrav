@@ -955,8 +955,10 @@ the original does: the stamp is unconditional and the grant is not.
   (`0x0892c034`) packs a grey into `pad+0x6c` while cooling down and cross-fades
   a small colour table once it is collectable. Observed, not implemented, so a
   spent pad looks the same as a fresh one.
-- **`SubWeapon`.** The layouts author it, which suggests a craft can hold two.
-  Nothing read says so, and the inventory here is one slot.
+- **`SubWeapon` is not a second weapon.** It is the text line under the icon: the Cannon's
+  rounds left or a running Autopilot's seconds left (read 2026-10-26,
+  [sub-weapon.md](../ghidra/functions/psp-pulse-usa/sub-weapon.md)), drawn through
+  `oag_hud::SubWeapon`. The inventory is one slot.
 - **The `front`/`back` odds columns**, which need race positions, which need
   opponents that move.
 ## The determinism gate, and the hole that used to be here

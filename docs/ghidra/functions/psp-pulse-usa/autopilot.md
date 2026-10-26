@@ -126,11 +126,13 @@ player's fire path rather than some other caller's.
 
 ## The HUD prints the remaining time
 
-`FUN_0883b3b8` tests the same `0x800` bit and, when it is set, formats
-`craft+0x148` through `"%1.2f"` (`0x08a7b5ac`), then compares the timer against
-`1.0` and branches - a second consumer of the same one-second boundary the
-warning uses, presumably to restyle the text. Not chased further; recorded so the
-next reader has the address.
+`PlayerStatus_Update` (`0x0883b3b8`) tests the same `0x800` bit and, when it is set, formats
+`craft+0x148` through `"%1.2f"` (`0x08a7b5ac`) into the `SubWeapon` text, and keeps the
+Autopilot's icon up when nothing else is held. The compare against `1.0` that follows feeds
+`Craft_SetAutopilotBlend` (the controls' blend, below), **not a restyle of the text** - this
+paragraph guessed "presumably to restyle" until 2026-10-26. Seen live: the original prints
+`5.00` under the hexagon, ours the same glyphs in the same place. Full reading, with the
+Cannon's `%d` that shares the line: [sub-weapon.md](sub-weapon.md).
 
 ## Which craft: a sixth use of `racer+0x368`
 

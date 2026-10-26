@@ -1,4 +1,4 @@
-# Zone's HUD: the speed-class line, the unwritten `SubWeapon`, and the lap counter
+# Zone's HUD: the speed-class line, the `SubWeapon` timer the capture armed, and the lap counter
 
 **Binary:** `pulse-psp-usa` `BOOT.BIN`, image base `0x08804000`. **Read 2026-10-21** (`pulse-zone-render`):
 one disassembly, the string table, and live PPSSPP reads of the HUD object on the two Zone states the
@@ -46,26 +46,24 @@ page) while still drawing the `speed class` caption. Left as it was.
 Wired as `oag_pulse::hud::ZONE_SPEED_CLASSES` (`rung_zones`, `caption_hidden_from_zone`), read by
 `oag_hud::draw::text_for`. Pulse has no `ZONE_STAGES`, so no grade follows from it.
 
-## The `1000000000.00` line: a leftover in `SubWeapon`'s text buffer, not a Zone law
+## The `1000000000.00` line: the Autopilot's timer, armed by the capture, not a Zone law
 
 `hud+0x248` is `SubWeapon` (`Zone_HUD.xml` authors it at `(240, 45)`, `HUD` font, scale 1; `TimeTrial_HUD.xml` the
-same, `Arcade_HUD.xml` at scale 0.6). The only code that touches it is the bind at the end of `Hud_BindWidgets`
-(it is the only by-name load of the `"SubWeapon"` string); no update function writes its text, and its visibility
-flag (`+0x2c` bit `0x4`) stays set (`0xf086`, like `Zone` and `Score`; the lap-gap widgets read `0xb082`, hidden).
-Both Zone states read its buffer (`0x08b561b0`, in the executable's static text pool, `+0x98` of the widget) as
-`1000000000.00`, the float formatter's output for `1e9`, and the original draws it under the class name on both
-pairs. **It is not a Zone rule and it is not drawn by ours.** Three observations say the bytes are whatever last used
-that pool slot:
-- a Time Trial grid state (`time-trial-talons-venom-grid`) holds the widget's buffer at another slot
-  (`0x08b56130`), **empty**, with the same visible flag;
-- the single-race pair `pulse-psp-race/talons-alongside` shows the same `1000000000.00` at the top centre in the
-  original (at the Arcade scale), so it is not Zone's;
-- `1e9` reads as a "no record" sentinel, so a player with a stored record could see a number there.
+same, `Arcade_HUD.xml` at scale 0.6). **Its text is written every frame by `PlayerStatus_Update`** (`0x0883b3b8`):
+the Autopilot's remaining time as `"%1.2f"` while the running bit is set, the Cannon's rounds as `"%d"` -
+[sub-weapon.md](sub-weapon.md). This page said on 2026-10-21 that no update function writes it, having found the
+bind and missed the second `"SubWeapon"` string (`0x08a7b574`) in `PlayerStatus_Update` itself, and read the
+digits as a leftover in a pool slot. They are not: both Zone states and the single-race pair
+`pulse-psp-race/talons-alongside` were saved with the player's Autopilot armed for good (`1.0e9` s, which
+`scripts/psp-autopilot-rail.py`, `psp-postrace.py` and `psp-ai-thrust.py` write so a state keeps flying), and the HUD
+prints that timer: `%1.2f` of `1e9` is `1000000000.00`. The Time Trial grid state, no Autopilot, reads **empty**,
+which is the status update's empty string. Its visibility flag (`+0x2c` bit `0x4`) stays set (`0xf086`, like `Zone` and
+`Score`; the lap-gap widgets read `0xb082`, hidden).
 
-The writer was not found (a memory write watch on a restarted race was not run). Wiring it would copy one
-profile's menu history into the picture, so nothing is drawn and the residual stays: a line of white digits in
-the original on these three frames. If a later lane finds a per-race writer on a fixed input, the line becomes a
-law and `HudArt` is the place for it.
+So it is a capture artefact and not a law of the mode; ours prints a running Autopilot's real timer
+(`oag_hud::SubWeapon::Autopilot`) and nothing on these frames, where the original shows the digits. The pair
+scripts' `restore_autopilot_timer` puts the authored `5.0` back before the screenshot, after which the original
+prints `5.00` under the Autopilot's hexagon too.
 
 ## The top-left counter is the lap, not a zone count
 
@@ -111,7 +109,7 @@ replay's velocity, which is why they sit so far from the originals. `psp-pulse-p
 ## Cross-title (static)
 
 - **Pure PSP:** no `MSC_SRAPIER` string in `BOOT.BIN`, so no class ladder of this shape (checked, differs); it has
-  a `SubWeapon` widget too (`0x08a7a244`), its text unmeasured. The lap counter and the speed readout are
+  a `SubWeapon` widget too (`0x08a7a244`), written by its status update with the Autopilot's timer ([sub-weapon.md](sub-weapon.md)). The lap counter and the speed readout are
   title-independent reads of `PLAYER_HUD` (not checked in Pure's own binary). Pure authors no shadow pass
   (`docs/rendering/shadows.md`), so the darkness measurement is Pulse's alone. The warm-up fix is engine-side and
   applies to every title's pairs.
