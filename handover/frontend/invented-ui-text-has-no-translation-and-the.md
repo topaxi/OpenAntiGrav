@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-09
+summary: "Invented UI text: more languages need their untranslated ids converted; a fluent speaker's pass"
+---
+
 # Invented UI text has no translation - all four sources are wired, but nothing is translated yet
 
 The disc's own localisation works and is already read: each language is a

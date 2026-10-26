@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-25
+summary: "Pulse text-entry input mapping unsettled at 65; PPSSPP capture not taken; entry b94fe6f9 unnamed"
+---
+
 # Pulse authors its own text entry, and it is not a keyboard
 
 Found 2026-09-06, while checking whether the disc had a keyboard to play

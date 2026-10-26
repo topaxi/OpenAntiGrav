@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [pure]
+updated: 2026-10-12
+summary: "Add Pure's fifth class to the fifth-handling-class thread; other race-box chain leftovers"
+---
+
 # Pure splits the race box into a chain, and 2048 has none at all
 
 2026-09-05. The two titles whose race setup is *not* Pulse's, kept in one

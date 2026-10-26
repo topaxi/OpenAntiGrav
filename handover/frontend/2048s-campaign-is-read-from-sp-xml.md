@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-05
+summary: "2048 campaign: GameModeFactory::OnNewInst type mapping undecided; SP.xml read, launch path closed"
+---
+
 # 2048's campaign is read from `SP.xml`, not a `PI_Grid` grid
 
 2026-09-21, branch `lane/2048-campaign-data`. Full write-up in

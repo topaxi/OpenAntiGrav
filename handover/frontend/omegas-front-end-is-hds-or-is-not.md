@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega]
+updated: 2026-10-09
+summary: "Omega front end: circuit names show ids, load order unresolved, campaign pages open"
+---
+
 # Omega's front end is HD's `PI001` plugin, carried forward - and load order is unresolved
 
 2026-09-21. A player-level sweep ("Omega's menu looks like HD/Fury's"),

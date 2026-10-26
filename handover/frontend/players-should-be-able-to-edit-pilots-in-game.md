@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [all]
+updated: 2026-09-25
+summary: "Pilot editor landed; the keyboard layout is ours, chosen; reuse Keyboard for the next name entry"
+---
+
 # Players should be able to build pilots in game, and a naive editor would eat their comments
 
 ## Landed 2026-09-08: the string_id backlog

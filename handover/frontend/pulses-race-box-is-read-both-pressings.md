@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-30
+summary: "Nine unlock-predicate functions untraced; the two-axis unlock reading rests on XML plus one capture"
+---
+
 # Pulse's race box is read on both pressings, and the code side is unblocked
 
 2026-09-05, updated 2026-09-10. The Pulse half of the race-box investigation,

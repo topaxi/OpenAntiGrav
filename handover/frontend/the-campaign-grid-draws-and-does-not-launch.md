@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-02
+summary: "Campaign grid leftovers on Pulse: cell cursor and stray-hex questions from the original still open"
+---
+
 # The campaign grid draws and does not launch
 
 **Update, 2026-10-02, `pulse-cursor-live` lane: the cursor measured and fixed, the loyalty slope pinned.**

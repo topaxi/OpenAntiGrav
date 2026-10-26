@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-06
+summary: "Brazilian Portuguese needs a native-speaker review; every entry is human=false"
+---
+
 # Brazilian Portuguese: nobody has reviewed it, and a German reader artifact
 
 `PortugueseBR` is offered on every title and all four titles that need one have

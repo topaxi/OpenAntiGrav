@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [all]
+updated: 2026-10-19
+summary: "LAN menu on two real machines, split on a LAN client, lobby on Android, iOS and web, LAN rematch"
 categories: [gameplay]
 ---
 

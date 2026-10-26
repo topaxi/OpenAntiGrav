@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [2048, omega]
+updated: 2026-10-16
+summary: "XP rank bar not kept on 2048 or Omega; a keep-XP lane only if the maintainer wants it; Omega dispatch untraced"
+---
+
 # 2048 and Omega XP: read, not kept
 
 2026-10-16, lane `xp-loyalty`. 2048's XP is a per-profile rank system, not loyalty (falsified,

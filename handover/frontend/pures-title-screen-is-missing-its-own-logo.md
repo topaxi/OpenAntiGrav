@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure]
+updated: 2026-09-28
+summary: "Pure Title Screen reveal timeline and the rasteriser that reads widget rects are unlocated"
+---
+
 # Pure's `Title Screen`/`FE Screen` runtime mechanism is read; the reveal timeline is not
 
 Comparing `oag-game`'s own render against the real PPSSPP capture: the big "WipEout"/"pure" logo (`TitleFrame`, `x=0 y=76 width=480 height=128`, `StartEnabled="false"`) never gets a `src` in `Skin.xml` at all - it is set programmatically on the original, the same way Pulse's own dangling globals are, and finding it needs either Ghidra (where `TitleFrame`'s texture gets assigned) or a full image-content scan of `Data.wad`/`FE.wad`, not a name guess - one guess (`Data\FE\Images\Logo.mip`, hash `be900df4`) did resolve to a real entry but at 2064 bytes is far too small to be a 480x128 texture, so it was not pursued.

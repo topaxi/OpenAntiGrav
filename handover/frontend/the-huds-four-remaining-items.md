@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-09-30
+summary: "Medal target best keyed by circuit, mode and class is chosen; measure a stored best on a live frame"
+---
+
 # The HUD's four remaining items
 
 The layout was never an RE problem - Pulse ships five layouts as `Data\XML\*_HUD.xml`. What is left is on [hud.md](../../docs/ui/hud.md).

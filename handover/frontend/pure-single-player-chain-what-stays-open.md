@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pure]
+updated: 2026-10-12
+summary: "What opens Flash, Rapier, Phantom, Vector on Pure; capture a medal profile, Zone Track Selection, Team Selection"
+---
+
 # Pure's SINGLE PLAYER is the disc's chain; what stays open
 
 ## Open

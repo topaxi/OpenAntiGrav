@@ -1,4 +1,8 @@
 ---
+status: ready-to-wire
+titles: [omega]
+updated: 2026-10-09
+summary: "Omega backdrop under the end-of-race screens, HD's own style and two unread passes; unvalidated against the original"
 categories: [frontend, rendering]
 ---
 

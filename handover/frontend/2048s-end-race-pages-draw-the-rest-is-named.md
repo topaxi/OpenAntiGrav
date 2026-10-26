@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048]
+updated: 2026-10-06
+summary: "2048 Results table (FUN_810cd0b8 populate), result-line wording, XP and parade laps unread"
+---
+
 # 2048's end-race pages draw; Results' table, XP, parade laps and the way back are open
 
 2026-10-06, lane `2048-endrace`. After a 2048 race the player now gets

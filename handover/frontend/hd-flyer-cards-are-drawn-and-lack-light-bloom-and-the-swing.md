@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-08
+summary: "Fury flyer card light writer unfound; bloom, swing and the widget pose (0x001d3f08) open"
+---
+
 # HD/Fury's flyer cards are drawn; light, bloom, the swing and the widget's own pose are open
 
 All sixteen `Grid Selection` cards and `Campaign Selection`'s two draw, through

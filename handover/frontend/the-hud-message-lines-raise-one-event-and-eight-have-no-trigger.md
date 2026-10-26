@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, pure, hd, 2048, omega]
+updated: 2026-10-16
+summary: "HUD message lines: capture a lap line on PPSSPP and RPCS3; 2048 gap routine, HD Speed Lap trophy model, split tables unread"
+---
+
 # The HUD's message lines: lap lines and the split gap run on five titles; the rest is open
 
 2026-10-06 `hud-medal`, 2026-10-12 `pulse-hud-messages` and `hud-messages-port`.

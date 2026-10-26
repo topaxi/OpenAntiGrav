@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse, hd]
+updated: 2026-10-26
+summary: "Pulse's pre-race voice-over is unplayed; HD's song start and bar tint are read, not watched"
+---
+
 # Now-playing display: all five titles wired, what is left
 
 2026-10-26, lane `hud-now-playing`. The song's `Artist - name` scrolls through a bar on the race

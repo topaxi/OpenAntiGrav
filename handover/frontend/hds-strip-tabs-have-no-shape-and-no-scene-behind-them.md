@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd]
+updated: 2026-10-14
+summary: "HD strip tab label sits 8.7 units low; the background scene's sampler and blend pass are unread"
 categories: [frontend, rendering]
 ---
 

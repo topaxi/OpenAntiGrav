@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd]
+updated: 2026-09-15
+summary: "What sets the float Hud_UpdateZoneSpeedClass compares is untraced; zone 60 and beyond unproven"
 categories: [frontend, rendering]
 ---
 

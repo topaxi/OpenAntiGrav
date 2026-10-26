@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-13
+summary: "A mixed-title race box needs four rows off the title; SPEED CLASS done, the rest of the list still hardcoded"
+---
+
 # A race box that mixes titles needs four rows off the title, not one flow
 
 2026-09-05. The architecture half of the race-box investigation. The per-title
