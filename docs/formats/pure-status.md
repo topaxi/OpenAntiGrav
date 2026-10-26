@@ -1616,12 +1616,26 @@ decompile comparison and the before/after table:
 
 Teal patch, original / before / after: Vineta K `110 128 113` / `60 75 68` / `88 110 98`; Chenghou Project
 `108 121 100` / `62 71 58` / `87 107 88`; Blue Ridge `108 128 110` / `59 75 71` / `99 121 109`; Modesto Heights
-`80 94 83` / `46 52 41` / `77 91 80`. Modesto's yellow panels turn the original's orange. Still open on the hull: the
-canopy, near white in the original and dark teal in ours, and the remaining 10 to 20 % on Vineta and Chenghou,
-whose whole frames also read darker in ours (sky, track and HUD alike, so not a hull term). Other titles: 2048 and
+`80 94 83` / `46 52 41` / `77 91 80`. Modesto's yellow panels turn the original's orange. The canopy (near white in
+the original, dark teal in ours) closed the same day; see the next section. Vineta's and Chenghou's whole frames
+read darker in ours for a reason that is not the hull's (sky, track and HUD alike). Other titles: 2048 and
 Omega ship no Pure hull and no `.vex` circuit light rig (not applicable).
 
 The 2026-10-26 normals change (a vertex normal carried through its node's rotation) is also right for Pure: Pure's
 `Mesh` constructor (`0x0886cf04`) packs the node's full 4x3 world matrix into the GE as Pulse's does. It moved the
 four pairs' hull region by 0.17 to 0.27 grey (MAD) under the stand-in rig, all on the airbrake flaps; under the
 circuit's lights rotated and unrotated normals score within 0.13 of each other.
+
+## Pure's hull draws its extra pass, weighted by its texture's alpha (2026-10-26)
+
+Measured on four recorded GE lists of the original, one per compare pair, and replays of edited copies.
+Every Pure hull authors the `0x2000` extra pass (Feisar: 9 batches, `envtest4.tga` second). The roster had
+asked `applies_everywhere()` of a PSP-scoped rule, so the pass never drew. The code is Pulse's
+(`Mesh_BeginTransparentPass` `0x0886e144`, `Gfx_BuildBatchStateList` `0x08866ecc`), and the
+lights are `ENV_BASIS_0`/`_1` to four places. One word differs: Pure's ordinary pass blends what the extra pass left by
+`GU_SRC_ALPHA` (`BLENDMODE 0x2a`, selected by `header_flags & 0x02`), so the highlight is weighted by
+the `*_shinemap` texture's alpha. Replays confirm it: an opaque CLUT turns the hull into an unmasked wash. Hull MAD
+33.8/27.2/20.5/15.7 to 20.6/14.5/12.7/5.6 (Vineta K, Chenghou, Blue Ridge, Modesto); three Pulse pairs render
+pixel-identical. Chenghou's sky cube, which has no vertex colours and no normals, now draws unlit at white as the
+GE does (frame MAD 20.6 to 13.1). Evidence and the open ends (the circuits' own chrome-map pass, the `249/255` light
+scale, Modesto's second directional): [`psp-pure-usa/hull-shine.md`](../ghidra/functions/psp-pure-usa/hull-shine.md).

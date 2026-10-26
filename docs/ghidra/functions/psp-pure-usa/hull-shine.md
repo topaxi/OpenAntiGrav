@@ -113,6 +113,32 @@ never weights it. **Checked, applies, not wired**, on both titles: the circuit b
 bit as well (Pulse's 3,446 weighted batches), and wiring the weight there would move Pulse's
 pairs.
 
+## The sky
+
+Chenghou Project's sky cube draws last among the scene, six faces of 81 vertices with neither colours
+nor normals (vertex type `0x101`), lighting off and `MATERIALAMBIENT` `0xffffff`. So the texel is drawn
+as it is. Ours took `mesh::build`'s defaults for a colourless vertex, the stand-in rig and a placeholder
+grey `(0.75, 0.78, 0.82)` from the first model render. The sky band read 72 grey where the original
+reads 108 to 128. `oag_raceplay::load::environment::unlit_sky` draws a colourless sky vertex unlit at
+white (loader line `sky: 486 vertices author no colour, ...`). Frame MAD on Chenghou 20.64 to 13.12, top band 49.75 to
+15.47. Vineta's, Blue Ridge's and Modesto's skies author colours and do not move, and nor do three Pulse pairs.
+
+The GE's material colour is not always white. Vineta's layered water plane at `y = -50` draws with material
+ambient `(107, 216, 255)` and `(128, 128, 128)`, and where that colour comes from is not read. A texture node's
+`+0x1c` is a per-texture average, not it. So only the sky is wired, where the list says white.
+
+## The scene darkness on Vineta K and Chenghou
+
+Vineta K and Chenghou each draw one more camera-space additive PRIM just before the post chain: 60 vertices,
+`BLENDMODE 0xa2` (`src * SRC_ALPHA + dst`), depth test off, a 64x64 CLUT8 texture. Vineta adds a 4-vertex
+one beside it. Blue Ridge and Modesto draw none. With those PRIMs removed, the replay drops to ours' level.
+Vineta: sky 153.9 to 128.8 (ours 126.6), near road 150.5 to 125.3 (ours 124.2), hull 118.6 to 98.4 (ours 101.1).
+Chenghou: sky, track and hull the same way. It is the sun's lens flare, wired by its own lane
+(`docs/rendering/lens-flare.md`). Before that, four other terms were checked and ruled
+out: vertex colours (405 of 497 joined PRIMs carry the file's bytes), CLUTs (the circuit's found byte for
+byte in the file), fog (ranges as ours) and the post composite (`FIXA 175` over a 256x256 target, which moves
+the sky by 0.1).
+
 ## Light scale
 
 The ordinary pass's lights are the circuit's nodes times `249/255` on all four grids: Vineta K's
@@ -120,5 +146,11 @@ ambient `(70, 76, 82)` against the nodes' `(72, 78, 84)`, its first directional 
 `255`; Blue Ridge `(110, 133, 166)` against `(113, 137, 171)`; Chenghou's directionals
 `(249, 231, 178)` and `(249, 204, 174)` against `(255, 237, 183)` and `(255, 209, 179)`. Modesto's
 list also carries a second directional, `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised,
-which ours does not draw (all four light types read directional). Neither is wired; see the
-handover thread.
+which ours does not draw (all four light types read directional).
+
+`249` is `(255 * 250) >> 8` and reproduces every channel: ambient `72 -> 70`, `78 -> 76`, `84 -> 82`,
+`113 -> 110`, `137 -> 133`, `171 -> 166`. So each grid's scale is `250`, Pulse's own live grid value
+([scene-light.md](../psp-pulse-usa/scene-light.md), "The scales"): `Spline_AccumulateLightScale`'s double
+truncation of a blend of `255` points. Ours takes the nearest point's `255`, a 2 % gap shared with Pulse.
+Pure's copy onto the hull (its twin of `Craft_ApplyHullLightScale`) was not located. Neither this nor
+Modesto's light is wired.
