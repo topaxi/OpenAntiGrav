@@ -15,10 +15,10 @@
 //!
 //! Like [`oag_2048`], this crate holds only what was actually measured.
 //!
-//! - **No PS4 emulator capture exists in this project's toolchain**, so
-//!   [`frontend::BOOT`]'s provenance is
-//!   [`oag_title::Provenance::Declared`], never `Measured` - nobody has
-//!   watched an Omega boot the way [ADR-0025] asks for before it upgrades.
+//! - **Nobody has watched an Omega boot yet**, so [`frontend::BOOT`]'s
+//!   provenance is [`oag_title::Provenance::Declared`], not `Measured`, until
+//!   one is watched the way [ADR-0025] asks for. shadPS4 runs Omega (frame
+//!   captures, no memory readout), so the watch is possible.
 //! - **A race starts** - real spline, collision, hull and circuit geometry, see
 //!   [`race`]'s module doc and `docs/formats/omega-status.md` - but this crate
 //!   is honest about what it has not read (Zone, boost, speed classes, the

@@ -9,10 +9,10 @@
 //! # What is *not* here, and why
 //!
 //! - **[`BOOT`]'s provenance is [`oag_title::Provenance::Declared`], and
-//!   stays that way for this lane.** No PS4 emulator exists in this
-//!   project's toolchain (`oag_trace`'s own list is PCSX2/PPSSPP/RPCS3), so
-//!   nothing has watched an Omega boot the way HD's three RPCS3 runs did
-//!   before [`oag_hd::frontend::BOOT`] upgraded. See [ADR-0025].
+//!   stays that way for this lane.** shadPS4 runs Omega, but `oag_trace`
+//!   has no transport to it (its list is PCSX2/PPSSPP/RPCS3) and nothing has
+//!   watched an Omega boot the way HD's three RPCS3 runs did before
+//!   [`oag_hd::frontend::BOOT`] upgraded. See [ADR-0025].
 //! - **[`MENU_BLOCKS`] is HD's, inherited and not measured on Omega.** The
 //!   numbers are read out of HD's `EBOOT.elf`, nothing is authored in any XML,
 //!   and nobody has disassembled Omega's PS4 executable. It is carried over

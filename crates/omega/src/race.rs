@@ -289,8 +289,8 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
 };
 
 /// Where Omega's original opponent differs from Pulse's, read off the base
-/// package's `eboot.bin` with no capture behind it (no PS4 emulator in this
-/// toolchain): `docs/ghidra/functions/ps4-omega-eu/ai-controls.md`.
+/// package's `eboot.bin` with no capture behind it (shadPS4 has no memory
+/// readout here): `docs/ghidra/functions/ps4-omega-eu/ai-controls.md`.
 ///
 /// These are the laws of an **HD-lineage** mode, the only one this project's
 /// Omega campaign launches: a `CellMode_Definition.xml` grid cell's `Mode`

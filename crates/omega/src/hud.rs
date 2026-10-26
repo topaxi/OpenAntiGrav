@@ -302,7 +302,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     boost_smear: None,
     // Inherited from HD: Omega's race HUD is HD's own files, whose roots are `<Screen name="HUD">`
     // (read off `data00.psarc`, both the default and the `2048_hud` sets). The consumer in the
-    // PS4 executable is not located, and no PS4 emulator can check it.
+    // PS4 executable is not located, and no shadPS4 capture of the sway has been made.
     sway: Some(oag_title::pre_race::Sourced::inherited(
         oag_title::hud::HudSway { x_per_lean: -15 },
         "hd",

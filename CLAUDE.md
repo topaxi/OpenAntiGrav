@@ -279,7 +279,7 @@ Existing crates:
 | `oag-pulse` | `crates/pulse` | What Wipeout Pulse ships: archive and entry names, hashes, and its presentation tables (HUD, front end, loading wave, animated textures, race defaults). |
 | `oag-pure` | `crates/pure` | The same for Wipeout Pure, deliberately thinner - it holds only what `docs/formats/pure-status.md` measured. |
 | `oag-hd` | `crates/hd` | The same for Wipeout HD / Fury, and the one that is shaped differently: seven PSARC archives on a PS3 disc rather than two WADs. Its front end was wired off a **declared** boot chain until 2026-09-05, when three cold boots on RPCS3 made it `Measured` - the distinction the type carries per [ADR-0025](docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md); see `docs/formats/hd-frontend.md`. |
-| `oag-omega` | `crates/omega` | The same for Wipeout: Omega Collection on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory day-one patch whose `data09.psarc` is the only archive carrying a complete front end. Boot chain `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it. A race starts on Omega's own data (2026-09-29) but is incomplete: Zone, the boost plume and the speed classes are unmeasured - see `docs/formats/omega-status.md`. |
+| `oag-omega` | `crates/omega` | The same for Wipeout: Omega Collection on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory day-one patch whose `data09.psarc` is the only archive carrying a complete front end. Boot chain `Provenance::Declared`: nobody has watched an Omega boot yet, though shadPS4 0.20 runs Omega (since 2026-10-16; frame captures through `scripts/shadps4-omega-pair.py` since 2026-10-22, no memory or pose readout) and its `eboot.bin` is in Ghidra (`docs/ghidra/functions/ps4-omega-eu/`). A race starts on Omega's own data (2026-09-29) but is incomplete: Zone, the boost plume and the speed classes are unmeasured - see `docs/formats/omega-status.md`. |
 | `oag-2048` | `crates/2048` | What Wipeout 2048 ships: its Vita PSARC packages and the paths inside them, deliberately thin. |
 | `oag-tools` | `crates/tools` | CLI: `oag-unpack`, `oag-wad`. |
 | `oag-physics` | `crates/physics` | Ship dynamics and collision queries. Depends on `oag-core` and nothing else, deliberately. |
@@ -459,7 +459,8 @@ as one of:
 - **checked, applies, not wired**: same data or code, wiring left open, named in a
   `handover/` thread;
 - **checked, differs**: what differs, with evidence;
-- **not checkable**: why (no capture path for Omega's executable, say), never silence.
+- **not checkable**: why (no memory readout on shadPS4 for a live Omega value, say), never silence.
+  Omega's executable is in Ghidra and shadPS4 runs it, so "no PS4 emulator" is not a reason.
 
 The check is quick by design - a census and a reader run, not a second lane. When it
 turns into real work, write it down as open rather than widening the current lane.

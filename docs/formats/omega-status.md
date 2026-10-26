@@ -458,8 +458,8 @@ shared with HD:
   face; the face height is the disc's, the rule "one line of the widget's font"
   is the inference. The selected row's band is drawn the full row and 300 wide,
   **chosen, not measured**. No reference exists: HD's picker was never caught on
-  RPCS3 (`hd-frontend.md`, the redirect fires in milliseconds) and no PS4
-  emulator exists here. Pulse, Pure and 2048 still use the table, byte-identical.
+  RPCS3 (`hd-frontend.md`, the redirect fires in milliseconds) and Omega's
+  picker was never captured on shadPS4. Pulse, Pure and 2048 still use the table, byte-identical.
 - *The confirm glyph was a box* (HD too). `ControlTextConfirmButton` authors
   `font="menu"`, HD's language plugins declare no `menu` role, and `FE_CONFIRM_BUTTON`
   is a single Buttons-face codepoint. The picker now draws it (and the back
