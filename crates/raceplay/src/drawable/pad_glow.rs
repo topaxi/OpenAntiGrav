@@ -69,6 +69,10 @@ impl Drawable {
             state.position[i] = position;
             table.tint_offset[entry][..3].copy_from_slice(&colour);
         }
-        queue.write_buffer(&self.emissive, 0, bytemuck::bytes_of(&table));
+        queue.write_buffer(
+            &self.emissive,
+            self.offsets.emissive,
+            bytemuck::bytes_of(&table),
+        );
     }
 }

@@ -32,6 +32,8 @@ pub static TEXTURE_VIEWS: AtomicU64 = AtomicU64::new(0);
 pub static TEXTURE_BINDS: AtomicU64 = AtomicU64::new(0);
 pub static TEXTURE_BINDS_REDUNDANT: AtomicU64 = AtomicU64::new(0);
 pub static PIPELINE_SETS: AtomicU64 = AtomicU64::new(0);
+pub static ARRAY_BINDS: AtomicU64 = AtomicU64::new(0);
+pub static ARRAY_ELEMENTS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFERS: AtomicU64 = AtomicU64::new(0);
 pub static WRITE_BUFFER_BYTES: AtomicU64 = AtomicU64::new(0);
 
@@ -105,6 +107,8 @@ pub fn reset() {
         &TEXTURE_BINDS,
         &TEXTURE_BINDS_REDUNDANT,
         &PIPELINE_SETS,
+        &ARRAY_BINDS,
+        &ARRAY_ELEMENTS,
         &WRITE_BUFFERS,
         &WRITE_BUFFER_BYTES,
     ] {
@@ -119,13 +123,16 @@ pub fn report_frame(frame: u64) {
     }
     println!(
         "perf frame {frame}: allocs {} ({} KiB)  bind_groups {}  texture_views {}  \
-         tex_binds {} (redundant {})  pipeline_sets {}  write_buffer {} ({} KiB)",
+         tex_binds {} (redundant {})  array_binds {} ({} elements)  pipeline_sets {}  \
+         write_buffer {} ({} KiB)",
         ALLOCS.load(Relaxed),
         ALLOC_BYTES.load(Relaxed) / 1024,
         BIND_GROUPS.load(Relaxed),
         TEXTURE_VIEWS.load(Relaxed),
         TEXTURE_BINDS.load(Relaxed),
         TEXTURE_BINDS_REDUNDANT.load(Relaxed),
+        ARRAY_BINDS.load(Relaxed),
+        ARRAY_ELEMENTS.load(Relaxed),
         PIPELINE_SETS.load(Relaxed),
         WRITE_BUFFERS.load(Relaxed),
         WRITE_BUFFER_BYTES.load(Relaxed) / 1024,
@@ -252,6 +259,16 @@ impl Binds {
             TEXTURE_BINDS_REDUNDANT.fetch_add(1, Relaxed);
         }
         self.last = Some(slot);
+    }
+}
+
+/// Records one `set_bind_group` of a binding-array group carrying `elements`
+/// descriptors, each of which wgpu tracks per bind.
+#[inline]
+pub fn array_bind(elements: usize) {
+    if counting() {
+        ARRAY_BINDS.fetch_add(1, Relaxed);
+        ARRAY_ELEMENTS.fetch_add(elements as u64, Relaxed);
     }
 }
 

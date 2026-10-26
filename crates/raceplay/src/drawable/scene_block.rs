@@ -479,7 +479,7 @@ impl Drawable {
             None => oag_gpu::perfprobe::write_buffer(
                 uploads,
                 &self.uniforms,
-                0,
+                self.offsets.uniforms,
                 bytemuck::bytes_of(&uniforms),
             ),
         }

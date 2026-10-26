@@ -256,3 +256,63 @@ Ablation: `--render-scale 50 --shadows off|--reconstruction off|--motion-blur of
 off`. Profile: `PREFIX="perf record -D 9000 -F 1999 -o F" ./run.sh ... 20 "3:start,20:quit"` and
 `PREFIX="perf stat -e task-clock,cycles:u,instructions:u -o F" ./run.sh ... 15`. The lane
 directory was removed afterwards; the maintainer's install and settings were not touched.
+
+## HD Anulpha Pass on the Deck (2026-10-26, `deck-anulpha-submit`)
+
+The maintainer's 60 fps on Anulpha Pass (vsync `smooth`, `frame_limit` 90, 1280x800) is the
+frame thread passing 11.1 ms, so frames alternate one and two vblanks.
+
+**Measure a moving race: `--no-intro`.** Without it, `--race` on HD plays the pre-race flyby
+(`start_grid.vex`) for as long as the run lasts: ticks 0.06 to 0.08 ms, compose 0.01, total 7.5 to
+8.4, a steady 90. With `--no-intro --autopilot` the race moves (ticks 0.9, compose 0.2) and
+reproduces the maintainer's played numbers (submit 5.3 against 5.1, total 10.1 against 9.4,
+fps 75, p99 19 to 20).
+
+Native on the Deck, under the gaming-mode gamescope (`DISPLAY=:1`, `ENABLE_GAMESCOPE_WSI=1`,
+`GAMESCOPE_WAYLAND_DISPLAY=gamescope-0`). Private `XDG_*` with a copy of the maintainer's
+`settings.toml` (`pause_on_focus_loss = false`), release build (`-C target-cpu=znver2 -C
+force-frame-pointers=yes`, Debian bookworm container). `--race --autopilot --no-audio
+--frame-log --seed 1 --no-intro --script 30:quit`, plus `--track
+'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race` for Anulpha. Two interleaved
+runs each; the first four `frame-phases` lines are dropped and the rest averaged. Deck load 0.6
+to 1.5, on AC. Ms per frame:
+
+| Run | ticks | scene | submit | total | fps | p99 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Anulpha, before | 0.90 | 2.92 | 5.33 | 10.12 | 75.5 | 19.8 |
+| Anulpha, arrays hold used slots | 0.83 | 2.92 | 5.11 | 9.83 | 81.0 | 17.1 |
+| Anulpha, plus pooled buffers | 0.84 | 2.94 | 4.70 | 9.49 | 82.8 | 16.1 |
+| HD default circuit, before | 0.25 | 1.63 | 2.75 | 5.66 | 90.0 | 11.2 |
+| HD default circuit, after | 0.25 | 1.58 | 2.42 | 5.22 | 90.0 | 11.2 |
+| Pulse default circuit, before | 0.19 | 1.63 | 2.14 | 5.00 | 90.0 | 11.2 |
+| Pulse default circuit, after | 0.15 | 1.39 | 1.72 | 4.19 | 90.0 | 11.2 |
+
+### Where `submit` goes (Deck profile, `perf record -g --call-graph fp -F 999`)
+
+`encode_render_pass` is about 40 % of the frame thread. Before the changes:
+
+- per-element tracking of bound groups, about 13 %: `flush_bindings` 8.3 % (texture init actions
+  for each element) and `merge_bind_group` 5.0 %;
+- per-pass setup and teardown, about 8 %: wgpu-core sizes each pass's usage scope to the
+  device's whole buffer and texture count, then clears it;
+- `begin_render_pass` in wgpu-hal, 3.6 %;
+- per-draw validation, the rest of `draw_indexed`.
+
+A frame on Anulpha opens about 54 render passes.
+
+### What changed (pictures byte-identical: HD Anulpha, HD and Pulse defaults, five HD weapons and two Pulse weapons live)
+
+1. **A drawable's binding arrays hold only the slots its draws name**
+   (`oag_mesh::mesh_render::bindless::used_slots`). The speed pads and weapon pads are built over
+   the circuit's 593-slot material table, and each bound its 269 distinct textures to draw a few
+   pads. Elements bound per frame: 1,370 to 842.
+2. **Projectile pool slots sub-allocate one buffer per pool** (`Drawable::instances`). There are
+   128 slots per weapon model, and each slot had its own uniform buffer and three animation
+   buffers, so 6,235 buffers were alive. Every pass's scope was sized to that count. Now 907.
+
+Measured and dropped: reusing `probes::mix`'s buffers, and eliding the repeated per-draw binds in
+the sun-occlusion pass. Neither moved scene or submit on the Deck (scene 2.92 against 2.93).
+
+The binding-array and buffer counts come from `perf-probe` (`array_binds` on the `perf frame`
+line) and from a local probe in a copy of wgpu-core (not committed). The probe counted usage
+scopes and the tracker sizes at `Queue::submit`.

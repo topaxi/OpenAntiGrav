@@ -2,55 +2,45 @@
 status: measure
 titles: [pulse, hd]
 updated: 2026-10-26
-summary: "Deck 60 fps / 8 ms CPU row is HD Anulpha Pass: 5 ms submit in wgpu-core texture tracking of the binding-array group; cut it to hold 90"
+summary: "Deck HD Anulpha Pass, moving race: total 10.1 -> 9.5 ms, fps 75 -> 83 after two submit cuts; about 1 ms more to hold 90"
 categories: [rendering, tooling]
 ---
 
-# The Deck's 60 fps is Anulpha Pass's submit cost, not pacing
+# The Deck's 60 fps is Anulpha Pass's frame-thread cost, not pacing
 
-2026-10-26 (`fullscreen-pacing`). Background: `docs/rendering/frame-thread-cpu.md` ("On the Steam
-Deck") and `docs/rendering/frame-pacing.md` ("The Steam Deck's 60").
+2026-10-26 (`fullscreen-pacing`, then `deck-anulpha-submit`). Numbers, recipe and profile:
+`docs/rendering/frame-thread-cpu.md` ("HD Anulpha Pass on the Deck").
 
-The maintainer's Steam launch (HD, Anulpha Pass, single race, human-flown, `vsync = "smooth"`,
-`frame_limit = "90"`, 1280x800) sat at 60 fps, p99 22.3 ms, CPU row 8.8 ms
-(`cpu_ms` 15.5 minus `present_ms` 6.7), `frame-phases` ticks 1.0, scene 2.5, submit 5.1,
-total 9.4. Frames over 11.1 ms alternate one and two vblanks at 90 Hz: 60 fps, spiky graph.
+The maintainer's Steam launch (HD, Anulpha Pass, human-flown, `vsync = "smooth"`,
+`frame_limit = "90"`) sat at 60 fps, p99 22.3: frames over 11.1 ms alternate one and two vblanks.
+**Measure with `--no-intro`**: without it `--race` sits in the pre-race flyby (ticks 0.06), which
+holds 90 and hides the cost. A moving autopilot race reproduces the maintainer's numbers.
 
-Native on the same Deck (433c4a0-equivalent build, maintainer's settings copy, autopilot,
-`--race --track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race`): submit 5.0
-to 5.3 ms, total 7.5 to 7.8, still 90 fps. **A floor, not the racing cost**: ticks read 0.06 ms
-and compose 0.01 (default circuit 0.21 and 0.16), so the craft was probably held on the grid
-with motion blur skipped; get a moving race before taking a before number. On `--race`'s default circuit submit is 2.5, total 5.1.
-The 6.6 ms present wait is normal under gamescope (also at a flat 90). Fullscreen queue depth
-does not matter there (gamescope's WSI keeps three images either way: frame logs within 0.1 ms).
-
-`perf record -g --call-graph fp -F 999` of the frame thread on Anulpha Pass (Deck): the top
-self entries are wgpu-core's `TextureUsageScope::merge_single` 5.2 %,
-`CommandBufferTextureMemoryActions::register_init_action` 4.3 %,
-`TextureInitTracker::check_action` 3.7 %, `BufferUsageScope::clear` 2.6 %,
-`UsageScope::merge_bind_group` 2.2 %: per-element work each time a binding-array group is bound
-in a pass (`crates/mesh/src/mesh_render/bindless.rs` describes the per-element cost). Anulpha
-Pass's track has 593 material slots.
+Landed: the binding arrays hold only the slots a drawable's draws name (pads bound 269 textures
+each), and projectile pool slots share one buffer per pool (6,235 buffers alive to 907; wgpu sizes
+every pass's scope to that count). Deck, moving Anulpha: submit 5.33 -> 4.70, total 10.12 -> 9.49,
+fps 75.5 -> 82.8, p99 19.8 -> 16.1. Default circuits gained too (HD total 5.66 -> 5.22, Pulse
+5.00 -> 4.19).
 
 ## Open
 
-- Anulpha Pass's submit: count how many times each drawable's group 1 is (re)bound per pass and
-  how many elements each carries; fewer rebinds or shorter arrays (one group per pass, split per
-  drawable) is the lever. `crates/mesh` was off limits to this lane.
-- Ticks of 1.0 ms in a human-flown race against 0.06 to 0.2 under autopilot: what a played race
-  adds per tick (weapons, AI, sound cues). Not measured.
-- Pulse's post-chain step (any one of SMAA, medium blur or `psp-3000` off removes the same 1 ms
-  of submit): look in `oag-post` (intermediate targets, init actions).
-- Whether a paused scene needs re-recording at all (render bundles or a held scene). Not attempted.
+- About 1 ms more on Anulpha to hold 90. The fix2 profile: `encode_render_pass` about 36 % of the
+  frame thread (per-draw `flush_bindings` 7.8 %, `set_bind_group` merge 6.5 %, `begin_render_pass`
+  4.5 %); scene prep: per-craft env-probe writes and sun-occlusion passes (8 craft, 2 passes each).
+- About 54 render passes a frame: count them by label (a patched local wgpu-core is the quickest
+  way) and merge or skip the empty ones.
+- Sun occlusion walks every track draw for each of 8 craft per frame (`within`, a `Vec<&DrawCall>`
+  per craft): same set found more cheaply.
+- `probes::decode` 1.4 % self: the decoded cache clears whole at 64 entries; count its hit rate.
+- Ticks of 1.0 ms in a human-flown race: matches the autopilot's 0.9, so not a separate cost.
+- Pulse's post-chain step (any one of SMAA, medium blur or `psp-3000` off removes the same 1 ms of
+  submit): look in `oag-post`.
 
 ## Next Steps
 
-1. On the Deck, under `flock -o ~/.cache/oag/deck.lock`, native on `DISPLAY=:1` with the
-   gamescope env (`ENABLE_GAMESCOPE_WSI=1 GAMESCOPE_WAYLAND_DISPLAY=gamescope-0`), private
-   `XDG_*`, maintainer settings copy with `pause_on_focus_loss = false`:
-   `oag-game <hd image> --race --autopilot --no-audio --frame-log --seed 1 --script 40:quit
-   --track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race`; read `submit`
-   in `frame-phases` (before: 5.0 to 5.3 ms).
-2. Prefix `perf record -g --call-graph fp -D 20000 -F 999 -o F` for the profile.
-3. Acceptance: total under about 6 ms on Anulpha Pass, so a played race (plus about 1 ms of
-   ticks and 1 ms of scene) stays under 11.1 ms and holds 90.
+1. On the Deck under `flock -o ~/.cache/oag/deck.lock`, the recipe in the doc section, two
+   interleaved runs per build: `--race --autopilot --no-audio --frame-log --seed 1 --no-intro
+   --script 30:quit --track 'Data\Environments\15_Anulpha_Pass\track.vex' --mode single_race`.
+2. Profile: prefix `perf record -g --call-graph fp -D 15000 -F 999` with a build carrying
+   `-C force-frame-pointers=yes`.
+3. Acceptance: fps 90 and p99 near 11.1 ms in that moving run; default circuit and Pulse no worse.

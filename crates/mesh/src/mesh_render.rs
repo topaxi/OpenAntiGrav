@@ -1047,8 +1047,12 @@ pub fn build_with(
             materials.len()
         );
         Some(
-            bindless::Bindless::new(device, materials)
-                .expect("`bindless::fits` bounds the textures, and every slot shares the sampler"),
+            bindless::Bindless::new(
+                device,
+                bindless::used_slots(model, materials.len()),
+                materials,
+            )
+            .expect("`bindless::fits` bounds the textures, and every slot shares the sampler"),
         )
     } else {
         None
