@@ -200,9 +200,10 @@ the measured `0.4736` (`0.8649` raw cosine against `0.8848`). The sun's NDC posi
 - Ring 0's half-size, were it negative (a sun beyond the screen's corner), is clamped to zero.
 - The atlas is the base level alone: a version-4 `.vex` authors no mips below it (`oag_vex::vex::textures`), so
   minify is linear where the original samples four.
-- Not drawn when the sun's pixel is beyond the 4 px margin (the original's occlusion is then `0`), or off the
-  16:9 aspect: ring spacing is in the original's `16/9` screen space and maps to NDC, so it holds on any aspect and
-  squares stay square.
+- Not drawn when the sun's pixel is beyond the 4 px margin (the original's occlusion is then `0`). Ring spacing is in
+  the original's `16/9` screen space and maps to NDC, so it holds on any aspect; the quads are squared on the viewport
+  actually drawn (`half_x = half_y * h / w`), where the original's `480 x 272` differs from `16/9` by 0.7%. A two-player
+  split's views (about 3.5:1) and a 16:10 Deck keep square rings.
 
 **Checked against the original** (PPSSPP software, Vineta K, Feisar Vector, Time Trial; ours posed from the state's own
 RAM through our own chase rig):
@@ -214,6 +215,14 @@ RAM through our own chase rig):
 
 The grid frame is the finding: most of the old "ours is darker" gap on circuits with a `lensflare` node was this
 halo (ring 0, half-size `1.93` of the screen's half-height, additive at `a0`), not scene or hull lighting.
+The straight's pair cannot place the chain by position (the pair is refused: hull yaw and camera differ), but the rings seen
+are the same two: a larger and a smaller circle of atlas cell 2 (rings 4 and 5, which sit at `0.325 S` and `-0.0125 S`, the
+latter always within `0.0125 |S|` of screen centre) in both frames. A third frame at 190 km/h on the first straight has the
+sun at the cone's far edge in both, with no chain on screen in either. Controls: where no flare draws (Modesto Heights,
+Blue Ridge: sun behind or outside the view) ours is within noise of the original already (masked mean `-6.7, -2.2, -2.3` and
+`-0.2, -0.8, -1.3` before the flare existed), so the grid's `-29` was the halo; Chenghou Project, whose sun is in view,
+goes from `-25.9, -18.5, -14.5` to `-9.9, -10.0, -8.1`. Occlusion proxy at the sun's pixel: ours and the original both show
+the pole at columns 133-135 and sky at 128, 130, 132, so ours counts the original's 12 of 16.
 Multi-view: a two-player split of Vineta K shows each view's own haze inside its own rectangle. MSAA on and off
 render the same wash. Modesto Heights' sun is behind the grid camera and draws nothing in the pair, as in the original.
 

@@ -19,6 +19,7 @@
 //!   and before the post chain and the HUD (the original draws it inside the scene's
 //!   queue at key `0x4e000000`, so mist and the screen flash, keys `0x4f`, land after
 //!   it there and before it here).
+//! - Quads are square on the viewport drawn, whatever its aspect (the original's are on 480 x 272).
 //! - A sun ring-0 whose half-size would be negative (the sun beyond the corner of the
 //!   screen) is clamped to zero.
 //! - Occlusion is the 16 depth samples of the original's 4 x 4 grid at one pixel pitch of
@@ -266,8 +267,15 @@ impl Placement {
             return None;
         }
         let s = [ndc[0] * ASPECT, ndc[1]];
+        let mut rings = rings(s, intensity, colour, random);
+        // The layout is in the original's 16:9 screen space, which maps to NDC as `1 / (16/9)`
+        // across; the squares of the original are squares on the viewport actually drawn, so a
+        // split view (about 3.5:1) or a Deck (16:10) takes its own `h / w`. Chosen, not measured.
+        for ring in &mut rings {
+            ring.half[0] = ring.half[1] * h / w;
+        }
         Some(Self {
-            rings: rings(s, intensity, colour, random),
+            rings,
             sun_pixel,
             viewport,
             pixel_scale: scale,

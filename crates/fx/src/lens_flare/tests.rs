@@ -48,7 +48,8 @@ fn ring_zero_and_ring_one_have_the_live_half_sizes() {
     );
     // Ring 2 is the cycle's 2.0 at 1.45.
     assert!((rings[2].half[1] - 0.2 * 0.5476 * 1.45 * 2.0).abs() < 1e-3);
-    // Squares on a 16:9 screen: the x half is the y half over 16/9.
+    // `rings` is the layout in the original's 16:9 space: the x half is the y half over 16/9
+    // (`Placement::new` then squares it on the viewport drawn).
     assert!((rings[1].half[0] * ASPECT - rings[1].half[1]).abs() < 1e-6);
 }
 
@@ -214,4 +215,32 @@ fn the_live_camera_gives_the_measured_intensity_and_sun_position() {
         "{:?}",
         placement.sun_pixel
     );
+}
+
+#[test]
+fn quads_are_square_on_any_viewport_aspect() {
+    let (view, projection) = camera(Vec3::NEG_Z);
+    let sun = Vec3::new(-0.2, 0.1, -1.0).normalize();
+    for viewport in [
+        [0.0, 0.0, 960.0, 270.0],
+        [0.0, 0.0, 1280.0, 800.0],
+        [0.0, 0.0, 480.0, 272.0],
+    ] {
+        let p = Placement::new(
+            sun.into(),
+            [1.0; 3],
+            view,
+            projection,
+            viewport,
+            Random::FLAGGED,
+        )
+        .expect("the sun is in view");
+        for (k, ring) in p.rings.iter().enumerate() {
+            let (w, h) = (ring.half[0] * viewport[2], ring.half[1] * viewport[3]);
+            assert!(
+                (w - h).abs() <= 1e-3 * h.max(1.0),
+                "ring {k} on {viewport:?}: {w} x {h} px"
+            );
+        }
+    }
 }
