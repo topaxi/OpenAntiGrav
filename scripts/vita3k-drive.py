@@ -299,6 +299,12 @@ def launch_vita3k(title_id, display_num):
     config = ensure_config()
     env = os.environ.copy()
     env.pop("WAYLAND_DISPLAY", None)
+    if os.environ.get("OAG_VITA3K_CACHE"):
+        # A private instance resolves `-r <title>` against $XDG_CONFIG_HOME/Vita3K/config.yml (else $HOME/.config/Vita3K/config.yml),
+        # not against `-c`: the pair scripts export XDG_CONFIG_HOME for ours' profile, which would send Vita3K to an empty pref-path
+        # and `CLI parsing error: --installed-path: PCSF00007 not in {}` (2026-10-26).
+        for var in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"):
+            env.pop(var, None)
     env["DISPLAY"] = ":%d" % display_num
     env["SDL_VIDEODRIVER"] = "x11"
     env["SDL_VIDEO_DRIVER"] = "x11"

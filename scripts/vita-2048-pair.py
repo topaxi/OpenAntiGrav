@@ -24,12 +24,22 @@ original's camera sweeps in for ~0.5 s after the HUD appears). The phase inside 
 race clock reads zero for the whole countdown, so no clock can tell the tick, and `--grid-seconds` is the offset
 after the HUD appears at the grab; ours renders `round(60 * offset)` ticks (the grab's own spacing, 0.15 s, is the
 phase uncertainty). No pose is read: ours spawns the same grid slot the original does.
+
+    --walk also patches the original's drawn-hull shake out, the way `rpcs3-hd-pair.py` does on RPCS3 (`rpcs3-hd-no-hull-shake.py`):
+    2048's ship carries the same random B-spline shake as HD's (`HullShake_Update` at `0x811b51bc`, `HullShake_Apply` at
+    `0x811b5500`, `docs/ghidra/functions/ps3-hdfury-eu/hull-shake.md`, "Cross-title"), ours is drawn with `--no-hull-shake`, and
+    the shake moves the hull a few px between frames. The patch is two `bl HullShake_Apply` calls overwritten with `nop` through
+    Vita3K's GDB stub (`gdbstub: true` in the private config), the only code-patch channel Vita3K has: the stub serves ONE
+    connection per launch and **halts the guest at the connect**, so the script connects straight after the launch, writes,
+    reads the bytes back, sends `vCont;c` and walks on (a bare `D` left the emulator black at 0 % CPU). `--no-patch-hull-shake`
+    keeps the stock game. A Vita3K already running is not patched (its stub is spent, or off): the pair records that.
 """
 
 import argparse
 import importlib.util
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -58,6 +68,94 @@ RETRY_YES = (402, 312)
 #: The campaign map's first open node of a save that has finished "2048 - Event 1": Queens Mall.
 DEFAULT_NODE = (270, 68)
 
+
+
+#: Vita3K's GDB stub port (fixed; `gdbstub: true` in the config turns it on).
+GDB_PORT = 2159
+#: The two `bl HullShake_Apply` of the drawn hull in the EU v1.04 `eboot.bin` (Thumb-2, `bl 0x811b5500`): `0x812cb010` in the drawn
+#: hull matrix function (`0x812caf1c`, the only caller is `0x812cb4da`) and `0x811c15a0`; both load the hull scale (`DAT_8151fdd0`
+#: / `DAT_8151fdf4`) right after. The third caller, `0x811be926`, shakes the ship's "internal tripod" (the camera node, `ship+0x5650`,
+#: `r2 = 1`) and is patched only with `--patch-tripod-shake`. `HullShake_Update` keeps running, so `rand` is drawn exactly as before.
+HULL_SHAKE_APPLY = 0x811B5500
+TRIPOD_SHAKE_CALL = 0x811BE926
+NOP_NOP = bytes.fromhex("00bf00bf")
+
+
+def bl_bytes(site, target):
+    """The Thumb-2 `bl target` at `site`, encoded (so a patch site is checked against what it must be, not trusted)."""
+    off = target - (site + 4)
+    s, i1, i2 = (off >> 24) & 1, (off >> 23) & 1, (off >> 22) & 1
+    j1, j2 = (~(i1 ^ s)) & 1, (~(i2 ^ s)) & 1
+    hw1 = 0xF000 | (s << 10) | ((off >> 12) & 0x3FF)
+    hw2 = 0xD000 | (j1 << 13) | (j2 << 11) | ((off >> 1) & 0x7FF)
+    return hw1.to_bytes(2, "little") + hw2.to_bytes(2, "little")
+
+
+class GdbStub:
+    """The little of the GDB remote protocol Vita3K's stub needs: `m`, `M`, `vCont;c`."""
+
+    def __init__(self, port=GDB_PORT, timeout=60.0):
+        end = time.monotonic() + timeout
+        while True:
+            try:
+                self.sock = socket.create_connection(("127.0.0.1", port), timeout=5.0)
+                break
+            except OSError:
+                if time.monotonic() > end:
+                    sys.exit("STALLED: Vita3K's GDB stub (port %d) never accepted: is `gdbstub: true` in the config, and is the port free?" % port)
+                time.sleep(0.5)
+        self.buf = b""
+        self.cmd("qSupported:multiprocess+")
+
+    def cmd(self, text):
+        body = text.encode()
+        self.sock.sendall(b"$" + body + b"#" + b"%02x" % (sum(body) & 0xFF))
+        end = time.monotonic() + 10.0
+        while time.monotonic() < end:
+            if b"$" in self.buf and b"#" in self.buf[self.buf.index(b"$"):] and len(self.buf) >= self.buf.index(b"#", self.buf.index(b"$")) + 3:
+                i = self.buf.index(b"$")
+                j = self.buf.index(b"#", i)
+                reply = self.buf[i + 1:j].decode()
+                self.buf = self.buf[j + 3:]
+                self.sock.sendall(b"+")
+                return reply
+            try:
+                self.buf += self.sock.recv(4096)
+            except socket.timeout:
+                pass
+        sys.exit("STALLED: no reply from Vita3K's GDB stub to %r" % text)
+
+    def read(self, addr, n):
+        return bytes.fromhex(self.cmd("m%x,%x" % (addr, n)))
+
+    def write(self, addr, data):
+        if self.cmd("M%x,%x:%s" % (addr, len(data), data.hex())) != "OK":
+            sys.exit("the GDB stub refused a write at %#x" % addr)
+
+    def resume(self):
+        self.sock.sendall(b"$vCont;c#a8")
+        time.sleep(0.5)
+        self.sock.close()
+
+
+def patch_hull_shake(tripod=False):
+    """Overwrite the drawn hull's `bl HullShake_Apply` calls with `nop`s and resume the guest. Returns what was read back."""
+    sites = [0x812CB010, 0x811C15A0] + ([TRIPOD_SHAKE_CALL] if tripod else [])
+    stub = GdbStub()
+    record = {"method": "Vita3K GDB stub, `M` write of two Thumb nops over each `bl 0x811b5500`", "sites": {}}
+    try:
+        for site in sites:
+            before = stub.read(site, 4)
+            if before != bl_bytes(site, HULL_SHAKE_APPLY):
+                sys.exit("%#x holds %s, not `bl %#x`: this is not the EU v1.04 eboot, nothing patched" % (site, before.hex(), HULL_SHAKE_APPLY))
+            stub.write(site, NOP_NOP)
+            after = stub.read(site, 4)
+            if after != NOP_NOP:
+                sys.exit("%#x reads %s after the write" % (site, after.hex()))
+            record["sites"]["%#x" % site] = {"before": before.hex(), "after": after.hex()}
+    finally:
+        stub.resume()
+    return record
 
 
 def load_drive():
@@ -131,6 +229,11 @@ def boot_and_walk(s, args):
     d.bring_up_display(args.display, args.socket)
     if d.vita3k_alive() is None:
         d.launch_vita3k(TITLE, args.display)
+        if args.patch_hull_shake:
+            # the stub halts the guest at the connect and serves one connection: patch first, before anything else touches it
+            args.hull_shake = patch_hull_shake(args.patch_tripod_shake)
+    elif args.patch_hull_shake:
+        print("WARNING: Vita3K was already running, so its GDB stub cannot be used: the original's hull shake is ON", file=sys.stderr)
     s.window(args.boot_timeout)
     # The title: Return starts the intro, then three presses reach the Game Mode grid with the PSN prompt gone.
     time.sleep(8.0)
@@ -267,6 +370,10 @@ def main():
                     help="the hull's nose tip in the original's frame, read by eye off a 4x crop: for a craft with no yellow livery to find "
                          "(the HD Campaign's Feisar), where the centroid offset cannot be measured; needs --nose-ours")
     ap.add_argument("--nose-ours", type=float, nargs=2, metavar=("X", "Y"), help="the same in ours' frame")
+    ap.add_argument("--no-patch-hull-shake", dest="patch_hull_shake", action="store_false",
+                    help="keep the original's drawn-hull shake (default with --walk: patched out through the GDB stub, see the docstring)")
+    ap.add_argument("--patch-tripod-shake", action="store_true",
+                    help="also patch the shake of the ship's internal tripod (the camera node, `0x811be926`); not part of HD's recipe")
     ap.add_argument("--walk", action="store_true", help="boot and walk from the title to the HUD (else Vita3K is on a race already)")
     ap.add_argument("--display", type=int, default=int(os.environ.get("OAG_VITA3K_DISPLAY", 0)) or None)
     ap.add_argument("--socket", default=None, help="weston's socket name (with --walk, if the display is not up)")
@@ -295,6 +402,7 @@ def main():
     profile_dir = Path(os.environ["XDG_CONFIG_HOME"]).parent
     ce.write_ours_settings(plat, profile_dir)
 
+    args.hull_shake = None
     s = Session(args.display, out / "frames")
     if args.walk:
         boot_and_walk(s, args)
@@ -310,6 +418,8 @@ def main():
     frame = burst[pick_i][1]
     (out / "theirs.png").write_bytes(Path(frame).read_bytes())
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
+    pair.rec["original"]["hull_shake"] = (
+        {"state": "patched out", "tripod": args.patch_tripod_shake, **args.hull_shake} if args.hull_shake else "on")
     pair.rec["original"]["grab"] = {"hud_first_frame_s": t_hud, "grid_frame_s": t_pick, "burst_frames": len(burst),
                                     "burst_interval_s": (burst[-1][0] - burst[0][0]) / (len(burst) - 1),
                                     "grid_offset_s": t_pick - t_hud}
