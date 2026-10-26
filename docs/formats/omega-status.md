@@ -30,7 +30,7 @@ census this page builds on.
 | [PSARC](psarc.md) container | **yes** | Nine archives across the base package and the patch; version and flags not diffed against HD's own PS3 copies this lane. |
 | Front-end XML (`Screens::from_xml`) | **yes** | `skin.xml`, `mainmenu_definition.xml`, `cellmode_definition.xml`, `additional_definition.xml` all parse with the same `oag_ui::screen::Screens` reader HD and Pulse/Pure use - confirmed both by a docs-only sweep and by this lane's own boot (`Data\Plugins\Frontend\Gui\Skin.xml: 27 screens, 74 globals, 24 LoadXML includes`). |
 | `FEGlobals` menu layout | **yes, bit-identical to HD's** | Ten of ten authored globals match HD's own `skin.xml` to the digit, re-derived directly against `data09.psarc` in `crates/omega/src/frontend.rs` rather than copied - see that module and its ground-truth test. |
-| Boot chain shape | **declared, not measured** | Same eight redirects in the same order as HD's `DATA00`/`DATA05`/`DATA06` family, no dead `LogoFMV`. `Provenance::Declared`: no PS4 emulator exists in this project's toolchain to upgrade it the way HD's RPCS3 capture did. |
+| Boot chain shape | **declared, not measured** | Same eight redirects in the same order as HD's `DATA00`/`DATA05`/`DATA06` family, no dead `LogoFMV`. `Provenance::Declared`: no capture of Omega's boot exists to upgrade it the way HD's RPCS3 capture did (shadPS4 runs the game since 2026-10-22, `scripts/shadps4-omega-pair.py`, but it walks a fresh profile's menus to the start grid and does not record the boot chain). |
 | Campaign schema (`CellMode_Definition.xml`) | **yes, HD's own schema** | `Grid Selection`/`Cell Selection` as `FlyerSelection`/`CellSelection` screens, plain UTF-8 (not Pulse's dictionary-shortened copy). Nineteen grids where HD has sixteen (`oag_omega::campaign::GRID_COUNT`), confirmed by direct listing. Sixteen of nineteen parse (2026-09-30; twelve when this row was written) - grids 16-18 carry no `RequiredPoints` attribute and are skipped with a logged warning; the rest fail per-row the same tolerant way a bad HD grid already does (`docs/formats/hd-frontend.md`'s note on `grid_04.xml`'s own broken tag). |
 | Plugin definitions | **yes, but split three ways, like 2048's** | `Data\Plugins\teams\`, `tracks\` and `music\` each ship their own `Definition.xml`, not HD's single `Data\Plugins\Frontend\Definition.xml`. New finding, not in `omega-frontend.md`, which only opened the GUI files. |
 
@@ -194,7 +194,7 @@ translation keys on `camera1`), the `.rcsmodel` the geometry, and the two bind b
 `--menu-page main` (settled `Main Menu` row: edge 0.6, fill 0.2, width 0.5, no blur) and any other
 page (the `default` row: 0.3, 0.1, 1.5, blur 3) draw it, and `--anim-seconds` picks the moment. **The
 boot screens do not** - they are outside `Top FE Screen` in the skin, so the original has none there
-either. **Not validated against the original**: no PS4 emulator exists and HD's one capture of its HD
+either. **Not validated against the original**: no capture of Omega's menu backdrop exists (shadPS4 pairs only the race's start grid, `scripts/shadps4-omega-pair.py`) and HD's one capture of its HD
 style shows a flat white page. Chosen, not measured: the blur kernel, the linear sampling, and which
 page takes which row. The `--menu-page grid-select`/`cell-select` stills draw it too (they take the
 page's picture). **The live campaign stage draws it too, and did before this was written**
@@ -551,8 +551,8 @@ cell content (needs a grid selected first, not exercised this lane).
   HD's picture to within BC7 error (`omega_menu_blocks_ground_truth.rs`, texel for texel
   within 8/255 of HD's sheet on this engine, and a focus move eases the strip) and that the boot report reads
   `menu blocks: HD style, fill swatch alpha 0.427 then 1.000, underline decoded, arrows decoded`.
-  **Reference: HD's front end on this engine, and Omega's own shipped data. No PS4 emulator
-  exists, so nothing here is compared with the original console.** The strip is now bordered
+  **Reference: HD's front end on this engine, and Omega's own shipped data. No capture of
+  Omega's front end exists (shadPS4 pairs only the race's start grid), so nothing here is compared with the original console.** The strip is now bordered
   blocks with a chamfered landing, the selected one eased wider (`Menu::focus_of`, one sixth a
   tick) with the underline mark sliding and blinking; before, the blocks-less strip took the
   measured-tab path whose tabs are fixed to their text - the "do not animate" in the report.
@@ -1052,7 +1052,7 @@ the PS4 sampled.
 Not Omega, but found here: **Pulse and HD peak at 8.4 and 8.2 GiB, and it is
 not their assets** - it is 128 full `Drawable`s per weapon model
 (`MAX_PROJECTILES`), 1,152 on Pulse and 896 on HD, each about 7 MiB. Omega
-builds no weapon pools. See the handover thread.
+built no weapon pools when this was measured; since 2026-10-26 it builds eight bodies' worth, and a 30-tick race load peaks at 1,399 MiB resident with them against 1,392 MiB with the table empty (HD, same run: 817 MiB). See the handover thread.
 
 ### What does not draw right, or at all
 
@@ -1446,7 +1446,7 @@ Omega's executable carries 2048's opponent code with both lineages behind
 project launches maps its `Mode` to a named id below `0x17`. So the campaign's
 opponents fly HD's laws plus one of Omega's own, the lane search's coin
 (`oag_omega::race::ORIGINAL_DRIVER`, `RaceDefaults::original_opponent` on).
-Static only (no PS4 emulator): [ps4-omega-eu/ai-controls.md](../ghidra/functions/ps4-omega-eu/ai-controls.md).
+Static only (no capture of the original's AI; shadPS4 pairs only the start grid): [ps4-omega-eu/ai-controls.md](../ghidra/functions/ps4-omega-eu/ai-controls.md).
 Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
 `stats.xml`, and the field finishes on Vineta K, Talon's Junction, Ubermall
 (Phantom) and Amphiseum reversed with no respawn
@@ -1750,6 +1750,95 @@ is unmeasured. The bind-matrix placement of node-bound meshes is taken from
 `psp2::nodes` and not separately checked here. Whether Omega's new material
 groups are reused from another Omega circuit, such as `dc_rocks` on several,
 was not counted.
+
+## Weapon bodies (2026-10-26, `omega-from-hd-wire`)
+
+**What loads.** Omega's table (`oag_omega::weapons::WEAPON_MODELS`) names HD's body
+set from Omega's own `data00`: the Rocket, Mine, Bomb, the Cannon's muzzle flash,
+the Plasma blast's ring, sphere and halo, and the Missile blast, each a `.vex` with
+its PS4 `.rcsmodel` beside it. `oag-raceplay`'s weapon loader takes the PS4
+container through `mesh::rcs::psp2` (it asked `mesh::rcs::build` only, and failed on
+`version 0xedad5cca, expected 0x000a0000`, the line the shield shell still reports),
+and passes the material state word to the same back-face cull rule HD's models use
+(`load::weapon_models::cull_as_authored`; the PS4 word is HD's, inherited, not
+measured on PS4). `omega_weapon_bodies_ground_truth` pins that all eight build and
+none is reported absent.
+
+**Which root.** `Rocket_Construct` (`0x01368610`) formats `Data/Weapons/%s` when
+`DAT_01f999e4 < 0x17` and `Data/Weapons2048/%s` otherwise (decompiled again this
+lane; the mode, not the circuit, decides). Every mode the port launches is below
+`0x17`, so `Data\Weapons\` serves every race, an `environments2048` circuit
+included. The two roots ship 22 body names in common, none byte-equal (the
+rocket's `.rcsmodel` is 12,265 bytes under `Data/weapons`, 5,033 under
+`Data/weapons2048`), so a 2048-lineage mode would need a per-mode root.
+
+**Against HD, same circuit and ship.** Talon's Junction, Feisar, HD's own scenario for
+each body (`hd_weapon_scene_ground_truth`, `hd_missile_blast_ground_truth`,
+`hd_bomb_blast_ground_truth`, `hd_leach_ball_ground_truth`): the craft is at the same
+position at tick 304 on both titles (`(11.9, -51.5, -195.8)`; speed Omega 23.94, HD
+23.98), and the rocket volley is the same mesh with the same decals, darker because
+Omega's `Looks` carry none of HD's lit-output or weapon-light laws. The mine and
+bomb bodies match; the mine's green rays are thinner. The Plasma blast is the same
+dome in a darker violet. The Missile blast draws its structure without HD's
+white-out. The cannon's flash sits at the left `cannon_flash` locator, as HD's does.
+
+**Held back, and why.** The Plasma bolt's head, the Bomb's blast set and the
+LeachBeam's ball load and build, then draw wrong or not at all, and a body that
+draws invisibly makes the load report lie, so each stays `None`:
+
+| Body | What draws on Omega | HD |
+| --- | --- | --- |
+| `HD_plasma_ball` | a barely visible ghost above the nose | black core, white rim |
+| `HD_bomb_*` blast set, `HD_bomb_halo` | a brown ball with a red wash over the road, a red dome round the laid bomb | white-hot ball, pink-white shell |
+| `hd_leachbeam_ball_bloomring` | a grey bubble at the target | a white-cyan glow |
+
+HD shades them with fragment programs `mesh::rcs::rim_glow` recognises by fingerprint
+on the PS3's RSX code (`RIM_EDGE`, `RIM_GLOW`, `BOMB_FIRE`). The PS4 builder sets none
+of those bits: `rg slots:: crates/mesh/src/mesh/rcs/psp2.rs` finds three, none a
+program bit. The bloom ring paints `hd_bombfire_bloomring_fireramp_128x32` (a colour
+lookup that HD's program samples by alpha) as a diffuse. A name-keyed inheritance in
+the style of `psp2::lineage_blend` is the cheap route; the PS4 shaders are unread.
+
+**The arc wake.** HD-lineage modes build the procedural wake
+(`ships-effects.md`, "One effect or two"). Its two textures are the executable's own
+literals, `data/Tex/HD_electric_arc_8x8.gnf` (`0x01837096`) and
+`data/Tex/HD_ElectricArc_Contact.gnf` (`0x018370b7`); the loader's texture decode
+gained a `.gnf` arm, and a craft first meets a strip with the wake drawn at tick 1,115
+on Talon's Junction under the autopilot.
+
+**The LeachBeam strip: checked, differs.** Omega's `leachbeam_triangle.rcsmodel` names
+`hd_leechbeam.gnf` (128x32) and `hd_waketrail_clouds.gnf` (128x128) where HD's names
+`hd_leechbeam_glow` (256x256), a file no Omega archive holds, and the executable's
+ribbon-model table is HD's in HD's order (`0x018332bc`..`0x018332f7`). Played with HD's
+strip law, the pair draws a line the pixel difference finds and the eye does not at
+player size; the field stays `None` until the PS4 `HD_Leachbeam` material's samplers
+are read.
+
+**Adverts: parked, not a field flip.** `gantry::build` builds an external-geometry
+`.vex` through `mesh::rcs::build` only, so Omega's `321Go` files fail on the PS4
+container the way the weapon bodies did. Flipping `adverts` needs a PS4 branch there
+and a still against the shadPS4 start-grid pair.
+
+**The plume's two flags: open.** `engine_light` and `front_faces_only` stay `false`.
+Omega's loader reads `EngineLightData.xml` the way HD's does (`FUN_0130e090`: `Distance`
+to `ship+0xbc`, `Radius` to `ship+0xc0`; the `hdships` files hold HD's range, `-0.4` to
+`1.2` and `1.0` to `2.0`, not 2048's `3`/`30`), and with the light on a grid still
+gains the warm cast the original's hull has at the nozzle; its consumer is unread.
+`front_faces_only` changes nothing visible on either still, because the flame is not
+visible at these two ticks.
+
+**Effect names located, triggers not.** `WO_SHIP_SPARK_DAMAGE_WEAPON`
+(`ShipCollisionFx_Trigger`, `0x01723ae0`, `kind 1`), `WO_DAMAGE_MILD`, `_MODERATE`
+and `_CRITICAL` (`FUN_016f3ef0`), `WO_WEAPON_ABSORB` (`FUN_01722810`, a per-ship object
+built by `FUN_01307560`), `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` (`FUN_016f0f20`) and
+`WO_BOMB_RAYS` (`FUN_013594d0`, a 107 KB decompile). What raises each is unread, so none
+of HD's seven effect triggers is wired.
+
+**2048 against Omega.** **Checked, applies, not wired** for the bodies:
+`data.psarc` ships the same names under `Data/Weapons2048/` only, with its own bytes,
+so 2048 needs its own paths read off its own executable. The leach strip's texture
+names are **checked, differs** on both titles. See
+[`weapon-lineage.md`](../gameplay/weapon-lineage.md).
 
 ## See also
 

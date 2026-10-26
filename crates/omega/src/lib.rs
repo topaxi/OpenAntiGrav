@@ -53,6 +53,7 @@ pub mod frontend;
 pub mod hud;
 pub mod main_menu;
 pub mod race;
+pub mod weapons;
 
 /// Wipeout: Omega Collection, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
@@ -150,17 +151,11 @@ pub const TITLE: &Title = &Title {
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
     },
-    weapon_models: &oag_title::weapons::WeaponModels {
-        // Ships it as `.gnf`; the eboot does not name it, so Pulse's law.
-        ghost_static: Some(oag_title::weapons::GhostStatic {
-            entry: r"Data\Tex\staticglow.mip",
-            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
-        }),
-        ..oag_title::weapons::WeaponModels::EMPTY
-    },
-    // Omega's executable carries HD's weapon-spark and absorb strings, but its
-    // wiring is unread, so those triggers draw nothing (ADR-0058: `None` is the
-    // visible absence). The engine's own names are tried as Pulse's, by the
+    weapon_models: weapons::WEAPON_MODELS,
+    // Omega's executable carries HD's weapon-spark, damage-smoke, absorb and bomb-ray
+    // names (`docs/gameplay/weapon-lineage.md`, "2048 and Omega: the cross-check"),
+    // but what raises each is unread, so those triggers draw nothing (ADR-0058: `None`
+    // is the visible absence). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's, and the loader reports each
     // its disc lacks. The shield tint likewise.
     effects: &EFFECTS,
@@ -208,7 +203,8 @@ pub const TITLE: &Title = &Title {
 ///
 /// The magstrip triggers are left out too: Omega's `WO_MAGSTRIP_*` ships only under
 /// `Data/particles2048/`, and nothing here fires them (`weapon_models` has no
-/// `magstrip_pob`, the arc wake being HD's mechanism). Unread, not absent.
+/// `magstrip_pob`; the arc wake, HD's mechanism, is [`weapons::WEAPON_MODELS`]'s
+/// `magstrip_wake`). Unread, not absent.
 const EFFECTS: oag_title::Effects = {
     use oag_title::Trigger;
     let mut effects = oag_title::Effects::engine(oag_title::Origin::InheritedFrom("Wipeout Pulse"))

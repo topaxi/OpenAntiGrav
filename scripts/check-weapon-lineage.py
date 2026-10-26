@@ -62,7 +62,7 @@ MODEL_FILES = {
     "pure": ["crates/pure/src/lib.rs"],
     "hd": ["crates/hd/src/race.rs", "crates/hd/src/lib.rs"],
     "2048": ["crates/2048/src/lib.rs"],
-    "omega": ["crates/omega/src/lib.rs"],
+    "omega": ["crates/omega/src/weapons.rs", "crates/omega/src/lib.rs"],
 }
 
 

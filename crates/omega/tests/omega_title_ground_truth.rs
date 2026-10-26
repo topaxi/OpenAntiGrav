@@ -182,3 +182,53 @@ fn exhaust_and_flare_axes_name_files_omega_ships() {
         assert!(archives.locate(&path).is_some(), "{path} not served");
     }
 }
+
+/// Every body `WEAPON_MODELS` names resolves to a `.vex` and its `.rcsmodel`
+/// beside it in Omega's own archives, and every texture it names is served.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn weapon_models_resolve_against_omegas_archives() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let m = oag_omega::weapons::WEAPON_MODELS;
+    assert!(
+        std::ptr::eq(m, oag_omega::TITLE.weapon_models),
+        "the title does not carry this table"
+    );
+    let plasma = m.plasma_blast_hd.expect("the plasma blast trio");
+    let bodies = [
+        m.rocket.expect("the rocket"),
+        m.mine.expect("the mine"),
+        m.bomb.expect("the bomb"),
+        m.cannon.expect("the muzzle flash"),
+        plasma.ring,
+        plasma.sphere,
+        plasma.halo,
+        m.missile_blast_hd.expect("the missile blast"),
+    ];
+    let wake = m.magstrip_wake.expect("the arc wake's textures");
+    let look = m.cannon_look.expect("the cannon's look");
+    let mut missing = Vec::new();
+    for entry in bodies {
+        let geometry = entry.replace(".vex", ".rcsmodel");
+        for name in [entry, geometry.as_str()] {
+            if archives.read_name(name).is_err() {
+                missing.push(name.to_string());
+            }
+        }
+    }
+    for name in [
+        wake.atlas,
+        wake.contact,
+        look.bolt_texture,
+        look.flash_texture,
+    ] {
+        if archives.read_name(name).is_err() {
+            missing.push(name.to_string());
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "absent from Omega's archives: {missing:?}"
+    );
+}

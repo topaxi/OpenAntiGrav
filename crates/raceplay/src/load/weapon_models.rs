@@ -63,6 +63,38 @@ pub(super) fn load(
             ));
             return None;
         };
+        // **Omega's and 2048's `.rcsmodel` is the Vita/PS4 container**, whatever
+        // the weapon: it needs no `.vex` and is read by `mesh::rcs::psp2`, as the
+        // hull and the plume read it. Its materials carry HD's own state word, so
+        // the cull rule below reads it the same way - inherited from HD, not
+        // measured on PS4 (`oag_rcs::rcsmodel::psp2::lineage_blend`).
+        if mesh::rcs::psp2::is_psp2(&geometry) {
+            return match mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
+                archives.read_name(path).ok()
+            }) {
+                Ok((mut model, built)) => {
+                    let states = oag_rcs::rcsmodel::psp2::parse(&geometry).map(|parsed| {
+                        parsed
+                            .materials
+                            .iter()
+                            .map(|m| m.state.map(u32::from))
+                            .collect::<Vec<_>>()
+                    });
+                    let culled = cull && states.is_ok_and(|s| cull_as_authored(&mut model, &s));
+                    report.push(format!(
+                        "{entry}: {} (Vita/PS4 container){} - {fallback} is this model, \
+                         not a billboard",
+                        built.describe(),
+                        if culled { ", back faces culled" } else { "" }
+                    ));
+                    Some(model)
+                }
+                Err(error) => {
+                    report.push(format!("{entry}: its .rcsmodel does not build ({error:#})"));
+                    None
+                }
+            };
+        }
         return match mesh::rcs::build(
             entry,
             &blob,
@@ -71,7 +103,12 @@ pub(super) fn load(
             |c| c.mesh,
         ) {
             Ok((mut model, built)) => {
-                let culled = cull && cull_as_authored(&mut model, &geometry);
+                let culled = cull
+                    && oag_rcs::rcsmodel::Model::parse(&geometry).is_ok_and(|parsed| {
+                        let states: Vec<_> =
+                            parsed.materials.iter().map(|m| Some(m.state)).collect();
+                        cull_as_authored(&mut model, &states)
+                    });
                 report.push(format!(
                     "{entry}: {}{} - {fallback} is this model, not a billboard",
                     built.describe(),
@@ -119,9 +156,13 @@ pub(super) fn load(
     }
 }
 
-/// Marks every draw of a PS3 weapon model back-face culled when **every**
-/// material its `.rcsmodel` carries sets state bit 4, and says whether it
-/// did.
+/// Marks every draw of a weapon model back-face culled when **every**
+/// material its `.rcsmodel` carries sets state bit 4 (`states`, one per
+/// material, `None` where a reader found no word), and says whether it did.
+///
+/// **A Vita/PS4 model passes the same bit** from `oag_rcs::rcsmodel::psp2`'s
+/// `u16` at the header's `+0x22`: the word is HD's own, so the rule is
+/// inherited from HD and not measured on PS4.
 ///
 /// **Bit 4 is `NV4097_SET_CULL_FACE_ENABLE`, read, not guessed.**
 /// `Material_ApplyRenderState` (`0x005d8f68`) writes `state >> 4 & 1` to RSX
@@ -151,16 +192,12 @@ pub(super) fn load(
 /// inward, and the halo as one disc facing `-Z` - which only reads as the
 /// original's picture once the back faces go. See `plasma.md`'s 2026-09-23
 /// section.
-fn cull_as_authored(model: &mut Model, geometry: &[u8]) -> bool {
+fn cull_as_authored(model: &mut Model, states: &[Option<u32>]) -> bool {
     const CULL_FACE_ENABLE: u32 = 1 << 4;
-    let Ok(parsed) = oag_rcs::rcsmodel::Model::parse(geometry) else {
-        return false;
-    };
-    let culled = !parsed.materials.is_empty()
-        && parsed
-            .materials
+    let culled = !states.is_empty()
+        && states
             .iter()
-            .all(|m| m.state & CULL_FACE_ENABLE != 0);
+            .all(|state| state.is_some_and(|state| state & CULL_FACE_ENABLE != 0));
     if culled {
         for draw in model
             .draws
@@ -274,20 +311,20 @@ pub(super) fn cannon_quads(
             None,
         );
     };
-    let mut one = |entry: &str, what: &str| match super::super::assets::decode_gtf(archives, entry)
-    {
-        Ok(texture) => {
-            report.push(format!(
-                "{entry}: {}x{} .gtf - {what}'s own texture",
-                texture.width, texture.height
-            ));
-            Some(texture)
-        }
-        Err(why) => {
-            report.push(format!("{why} - {what} draws a placeholder"));
-            None
-        }
-    };
+    let mut one =
+        |entry: &str, what: &str| match super::super::assets::decode_texture(archives, entry) {
+            Ok(texture) => {
+                report.push(format!(
+                    "{entry}: {}x{} - {what}'s own texture",
+                    texture.width, texture.height
+                ));
+                Some(texture)
+            }
+            Err(why) => {
+                report.push(format!("{why} - {what} draws a placeholder"));
+                None
+            }
+        };
     (
         one(own.bolt_texture, "the cannon bolt streak"),
         one(own.flash_texture, "the cannon muzzle flash"),

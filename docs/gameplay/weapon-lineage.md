@@ -85,25 +85,25 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
 | `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
 | `weapons.quake_hit` | `WaveHeight` - measured | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited | `WaveHeight` - inherited |
-| `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
-| `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
-| `weapon_models.bomb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `none` - unread |
-| `weapon_models.cannon` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.rocket` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
+| `weapon_models.mine` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
+| `weapon_models.bomb` | `set` - measured | `set` - measured | `set` - measured | `none` - unread | `set` - inherited |
+| `weapon_models.cannon` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.plasma_ball` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.plasma_blast_pulse` | `set` - measured | `none` - unread | `none` - absent | `none` - unread | `none` - unread |
-| `weapon_models.plasma_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.plasma_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.bomb_blast_pulse` | `set` - measured | `set` - measured | `none` - absent | `none` - unread | `none` - unread |
 | `weapon_models.bomb_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
-| `weapon_models.missile_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.missile_blast_hd` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.repulser_field` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
 | `weapon_models.mag_floor` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
-| `weapon_models.magstrip_wake` | `none` - absent | `none` - absent | `set` - measured | `none` - absent | `none` - unread |
+| `weapon_models.magstrip_wake` | `none` - absent | `none` - absent | `set` - measured | `none` - absent | `set` - inherited |
 | `weapon_models.magstrip_pob` | `none` - absent | `none` - absent | `none` - absent | `set` - measured | `none` - unread |
 | `weapon_models.rocket_trail` | `none` - unread | `none` - unread | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.leach_strip` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.leachbeam_ball` | `none` - unread | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 | `weapon_models.shuriken` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
-| `weapon_models.cannon_look` | `none` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `weapon_models.cannon_look` | `none` - measured | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.ghost_static` | `set` - measured | `set` - measured | `none` - measured | `set` - inherited | `set` - inherited |
 | `effects.hit_spark` | `set` - measured | `none` - unread | `none` - unread | `none` - unread | `none` - unread |
 | `effects.leach_hit_spark` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
@@ -136,6 +136,20 @@ Notes on the cells the code does not explain by itself:
   `effects.rs` (or 2048's and Omega's `EFFECTS`). A title that shares
   `Effects::engine`'s defaults for every other trigger inherits those names
   from Pulse; the rows above are the triggers each title has to answer for itself.
+- **`weapon_models.*` on Omega is inherited, played from Omega's own archives.**
+  `data00` ships HD's `Data/weapons/HD_*.vex` set and the executable's ribbon-model
+  table is HD's, in HD's order; every law that draws the models (placement, the cull
+  rule, the cannon's look) is HD's, read off HD's executable and unconfirmed on PS4.
+  **Which root a race reads is the mode's, not the circuit's**: `Rocket_Construct`
+  (`0x01368610`) formats `Data/Weapons/%s` when `DAT_01f999e4 < 0x17` and
+  `Data/Weapons2048/%s` otherwise, and every mode this project launches on Omega is
+  below `0x17`, so one table is right for every race there is, a 2048-era circuit
+  included. **Held back**: `plasma_ball`, `bomb_blast_hd`, `leachbeam_ball` and
+  `leach_strip` stay `none` because what draws is wrong or invisible: their HD
+  materials are shaded by fragment programs `oag_mesh::mesh::rcs::rim_glow`
+  recognises by fingerprint on the PS3's RSX code (`RIM_EDGE`, `RIM_GLOW`,
+  `BOMB_FIRE`), and the PS4 builder sets none of those bits. `oag-raceplay`'s
+  `omega_weapon_bodies_ground_truth` pins both halves.
 - **`ghost_static`**: `none` on HD is a measurement (no `staticglow` string in
   its EBOOT); 2048's and Omega's entry is Pulse's name for a file they ship as
   `.gxt` and `.gnf`.
@@ -248,18 +262,18 @@ it fires, not that the rate matches any original's.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO` | M: `Rocket.vex`, its own spelling | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's | ?: same |
-| Missile | M: `WO_MISSILE_HEAD` at both anchors; twin trails not built | I:Pulse (effect names) | M: `HD_missile_explosion.vex` on its own keys | ?: effect names only | ?: effect names only |
+| Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO` | M: `Rocket.vex`, its own spelling | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's; checked, applies, not wired: `Data/Weapons2048/hd_Rocket.vex` ships | I:HD: `Data\Weapons\hd_Rocket.vex`, the root `Rocket_Construct` picks for a mode below `0x17` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)); same mesh and decals as HD's, unlit by HD's weapon lights, no ribbon trail |
+| Missile | M: `WO_MISSILE_HEAD` at both anchors; twin trails not built | I:Pulse (effect names) | M: `HD_missile_explosion.vex` on its own keys | ?: effect names only | I:HD: `HD_missile_explosion.vex`, on HD's keys; the structure draws, the white-out does not (the program bits below) |
 | Quake | M: `WO_QUAKE`, road ripple, orange tint | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
-| Cannon | M: `pulse_muzzleflash.vex` on the round, bolt and flash quads | A | M: `hd_muzzleflash.vex` at the muzzle, own textures and size range | ?: not drawn | ?: not drawn |
-| Plasma | M: charge glow, three-model blast with a baked track | ?: the three-model blast is in the executable, its key tables are unread, nothing is wired | M: `HD_plasma_ball`, ring, sphere and halo on eased scale ramps | ?: `WO_PLASMA_FLASH` is not authored there; nothing drawn | ?: same |
-| Bomb | M: hemisphere, shockwave, smoke ring | M: same pair, no alpha fade | M: fireball, white core, bloom disc, eight rings, rays | ?: not drawn | ?: not drawn |
-| Mine | M: `Pulse_Mine.vex`, spin | M: `Mine.vex` | M: `HD_Mine.vex` | ?: not drawn | ?: not drawn |
-| LeachBeam | M: ribbon, `WO_LEACHBEAM_ENERGY`, hull overlay | A | M: strip, ball (named, placement partly read), `WO_LEACHBEAM_*` | ?: `WO_LEACHBEAM_ENERGY` not authored; strip unread | ?: not drawn |
+| Cannon | M: `pulse_muzzleflash.vex` on the round, bolt and flash quads | A | M: `hd_muzzleflash.vex` at the muzzle, own textures and size range | ?: not drawn | I:HD: `hd_muzzleflash.vex` at the `cannon_flash` locator, HD's look numbers with Omega's `.gnf` textures; `CannonBullet`'s own draw is unread |
+| Plasma | M: charge glow, three-model blast with a baked track | ?: the three-model blast is in the executable, its key tables are unread, nothing is wired | M: `HD_plasma_ball`, ring, sphere and halo on eased scale ramps | ?: `WO_PLASMA_FLASH` is not authored there; nothing drawn | I:HD: ring, sphere and halo of the blast; the bolt's head (`HD_plasma_ball`) is held back, it draws as a barely visible ghost |
+| Bomb | M: hemisphere, shockwave, smoke ring | M: same pair, no alpha fade | M: fireball, white core, bloom disc, eight rings, rays | ?: not drawn | I:HD: the laid body only; the blast set (fireball, core, bloom disc, rings, halo) is held back, its bloom ring paints the fire-ramp lookup texture over the road as a red wash |
+| Mine | M: `Pulse_Mine.vex`, spin | M: `Mine.vex` | M: `HD_Mine.vex` | ?: not drawn | I:HD: `HD_Mine.vex`; the green rays are thinner than HD's |
+| LeachBeam | M: ribbon, `WO_LEACHBEAM_ENERGY`, hull overlay | A | M: strip, ball (named, placement partly read), `WO_LEACHBEAM_*` | ?: `WO_LEACHBEAM_ENERGY` not authored; strip unread | ?: not drawn; the ball and the strip are held back: the ball draws as a grey bubble, the strip as a line too faint to see (Omega's own ribbon model names `hd_leechbeam.gnf`, 128x32, where HD's names `hd_leechbeam_glow`, 256x256) |
 | Repulser | M: field model, `WO_REPULSER_BLAST`, matched to the PSP | A | ?: no field model recovered | ?: not drawn | ?: not drawn |
 | Shuriken | M: `pulse_shuriken.vex`, `WO_SHURIKEN_*` | A | ?: no blade model recovered | ?: not drawn | ?: not drawn |
 | Shield | M: three colours, shell and sphere; PS2 draws `extrashield.vex` | ?: not investigated | M: two of three colours read | I:Pulse | I:Pulse |
-| Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: unread |
+| Hit sparks | M: `Ship_Damage` branch | ?: `Ship_Damage` unread | M: `WO_SHIP_SPARK_DAMAGE_WEAPON` | ?: unread | ?: names located (`ShipCollisionFx_Trigger` `kind 1`), the event that raises it unread |
 | Disruptor | A | ?: effect blocks authored, four have no parser branch | A | A | A |
 
 **HD's blends are encoded (2026-10-22, `hd-blend-space`).** Every HD weapon visual drawn into
@@ -299,8 +313,25 @@ For weapons, as of 2026-10-19:
 - **LeachBeam**: 2048's `repair` is 30.0 against HD's and Omega's 2.0. The
   per-trip law is HD's, carried to both by inheritance, so the 30.0 meets a law
   nobody has read on 2048.
-- **Models and effects**: not checkable on Omega, which has no recovered model
-  names and no PS4 emulator in this toolchain; unread on 2048 outright.
+- **Models (2026-10-26, `omega-from-hd-wire`)**: ported to Omega (above), **checked,
+  applies, not wired** on 2048. 2048's `data.psarc` ships the same HD-named body
+  set, but only under `Data/Weapons2048/`, and the bytes are its own: of 22 names
+  present in Omega's `Data/weapons`, Omega's `Data/weapons2048` and 2048's
+  `Data/Weapons2048`, none is byte-equal between any two of the three sets (the
+  rocket's `.rcsmodel` is 12,265 bytes in Omega's HD set, 5,033 in its `Weapons2048`
+  and 4,793 in 2048's), so 2048 cannot borrow Omega's table and needs its own paths,
+  read off its own executable. Both are the Vita/PS4 container, which
+  `oag-raceplay`'s weapon loader now builds (`mesh::rcs::psp2`). Omega's textures:
+  `leachbeam_triangle.rcsmodel` names `hd_leechbeam.gnf` where HD's names
+  `hd_leechbeam_glow` (**checked, differs**; 2048 ships the same
+  `hd_leechbeam.gxt`).
+- **Effects**: unread on both. Omega's executable carries the names
+  `WO_SHIP_SPARK_DAMAGE_WEAPON` (`ShipCollisionFx_Trigger`, `0x01723ae0`, `kind 1`),
+  `WO_DAMAGE_MILD`/`_MODERATE`/`_CRITICAL` (`FUN_016f3ef0`), `WO_WEAPON_ABSORB`
+  (`FUN_01722810`, an object built per ship by `FUN_01307560`),
+  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` (`FUN_016f0f20`) and `WO_BOMB_RAYS`
+  (`FUN_013594d0`, a 107 KB decompile, not named); what raises each is unread, so
+  none of HD's seven effect triggers is carried over.
 
 ## Keeping it honest
 
