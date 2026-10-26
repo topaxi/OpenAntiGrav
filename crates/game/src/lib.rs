@@ -41,6 +41,7 @@ pub mod hud_overlay;
 pub mod hud_views;
 pub mod icon;
 pub mod pause;
+pub mod pending_race;
 pub mod touch_controls;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one

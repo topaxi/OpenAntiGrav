@@ -393,7 +393,7 @@ impl Session {
             title,
             Some(&track.entry_name()),
             mode.name(),
-            self.settings.race.class.trim(),
+            self.pending_race().class.trim(),
         );
         let record = self.records.get(&key);
         // HD's screen has no record rows in this slot: its two info rows
@@ -447,7 +447,10 @@ impl Session {
                 return false;
             }
         };
-        let laps = catalogue::race_laps(self.race_mode(), self.settings.race.class.trim());
+        let laps = {
+            let pending = self.pending_race();
+            catalogue::race_laps(pending.mode, pending.class.trim())
+        };
         let base = self
             .shell
             .as_ref()

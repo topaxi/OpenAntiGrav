@@ -1114,6 +1114,24 @@ replaced the flow with a campaign grid. It keeps a craft-selection screen
 (`team`, HD's renamed, with a `TouchList` of skins) and its only authored
 track-plus-class picker is the crossplay lobby vote.
 
+## One pending race feeds the selection screens
+
+Track Select and Ship Select read the mode and class from `oag_game::pending_race::PendingRace`:
+the campaign cell's launch options when a cell began the race, else the RACE page's settings.
+A campaign cell builds its launch options itself and leaves `race.mode` alone, so a screen that
+read the settings previewed the ordinary hull and offered hull variants on a campaign Zone tile
+(found 2026-10-26; `Session::race_mode` read `settings.race.mode`). Every path that reaches Ship
+Select with a cell - Pulse's grid, Pure's chain, HD's and Omega's Cell Selection, a 2048
+downloadable tier cell - goes through `Session::launch_campaign_cell`, so one fix covers them.
+
+- Pulse, HD/Fury, Omega: same picker, same fix (**ported**, unit test over all five titles in
+  `pending_race/tests.rs`).
+- Pure: Zone skips the team step (`skips_team_step`), so no picker is shown (**does not apply**).
+- 2048: the disc's own events launch without a picker, and a tier cell flies the campaign's craft
+  and skips it (**does not apply**). Whether each title ships a Zone cell was not censused here.
+- Not covered by a test: the `Session` wiring itself needs a GPU; checked by reading the call
+  sites only.
+
 ## Limits
 
 - **HD's chain is declared, not measured.** It is read off the front-end XML's
