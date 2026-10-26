@@ -180,11 +180,19 @@ pub const TITLE: &Title = &Title {
     // draws (ADR-0058). The engine's own names are tried as Pulse's, by the
     // rule that an unmeasured title runs Pulse's. The shield tint likewise.
     effects: &EFFECTS,
-    looks: &oag_title::Looks::unread(oag_title::ShieldPalettes {
-        ps2: oag_title::ShieldPalette::Ps2Pulse,
-        elsewhere: oag_title::ShieldPalette::Pulse,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
-    }),
+    looks: &oag_title::Looks {
+        // The race composite and its exposure, read off the eboot and its
+        // programs: `docs/ghidra/functions/vita-2048-eu-v104/exposure.md`.
+        wo_composite: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
+        ..oag_title::Looks::unread(oag_title::ShieldPalettes {
+            ps2: oag_title::ShieldPalette::Ps2Pulse,
+            elsewhere: oag_title::ShieldPalette::Pulse,
+            origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        })
+    },
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
     main_menu: main_menu::MAIN_MENU,

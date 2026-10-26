@@ -186,6 +186,27 @@ pub const ALTERNATE_FOG_DENSITY: &str = "Fog.Alternate Fog Density";
 /// measured.
 pub const PSP2_FOG_COLOUR: &str = "Lighting.Fog colour";
 
+/// 2048's `"Lighting.ExposureScale"`: the mean luminance the race composite's
+/// exposure steers a frame to, `E -> ExposureScale / a` (`Exposure_SetParams`,
+/// `docs/ghidra/functions/vita-2048-eu-v104/exposure.md`). 0.4 to 0.6 on every
+/// raced circuit.
+pub const EXPOSURE_SCALE: &str = "Lighting.ExposureScale";
+
+/// 2048's `"Lighting.ExposureMax"`: the ceiling on that exposure, 2 to 12.
+pub const EXPOSURE_MAX: &str = "Lighting.ExposureMax";
+
+/// 2048's `"Lighting.ExposureSpeed"`: the fraction of the way to its target the
+/// exposure moves in one frame, 0.03 to 0.3.
+pub const EXPOSURE_SPEED: &str = "Lighting.ExposureSpeed";
+
+/// 2048's `"Lighting.BloomFactor"`: the bloom's weight inside the composite's
+/// square root (`Bloom_SetFactorAndGate`), 0.2 to 0.7.
+pub const BLOOM_FACTOR: &str = "Lighting.BloomFactor";
+
+/// 2048's `"Lighting.BloomGate"`: the luminance under which the bloom gate
+/// passes nothing, 0.1 to 1.0.
+pub const BLOOM_GATE: &str = "Lighting.BloomGate";
+
 /// `"HDR and Bloom.Bloom adaption rate"`. One number: the per-frame lerp rate
 /// of the adapted average luminance, `adapted += rate * (luma(mean) -
 /// adapted)` (`FUN_003b4690`). The settings registrar at `0x003a83d8` ties every
