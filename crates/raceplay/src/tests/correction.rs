@@ -122,6 +122,18 @@ fn the_offset_glides_out_on_drawn_ticks_only() {
 /// off draws the craft where the replay left it.
 #[test]
 fn smoothing_changes_the_picture_and_not_the_hash() {
+    // Three races live on this stack at once; at opt-level 0 they outgrow the test thread's
+    // 2 MiB (it overflowed once the scenery plan grew, 2026-10-26), so the body runs on a
+    // thread of its own.
+    std::thread::Builder::new()
+        .stack_size(16 << 20)
+        .spawn(smoothing_changes_the_picture_and_not_the_hash_body)
+        .expect("spawning the test thread")
+        .join()
+        .expect("the test body panicked");
+}
+
+fn smoothing_changes_the_picture_and_not_the_hash_body() {
     let Scene {
         sc,
         mut client,
