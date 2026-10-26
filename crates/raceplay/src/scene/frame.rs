@@ -178,6 +178,18 @@ impl Scene {
             if whole {
                 self.run_omega(omega, device, queue, encoder, view, viewport, true);
             }
+        } else if let Some(wo) = &self.wo {
+            // 2048's gate, blurs and composite over the linear scene, at the
+            // exposure it steps once a frame. See `Self::wo`.
+            if whole {
+                wo.run(
+                    queue,
+                    encoder,
+                    view,
+                    (viewport.0, viewport.1),
+                    (viewport.2 as u32, viewport.3 as u32),
+                );
+            }
         } else if (self.bloom.is_some() || self.ps2_bloom.is_some()) && whole {
             // The recovered post-process, reading the alpha channel the scene
             // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and

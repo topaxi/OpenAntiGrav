@@ -532,9 +532,11 @@ pub(super) fn envsettings_alternate_fog(
 }
 
 mod bloom;
+mod exposure;
 mod light;
 mod probes;
 pub(super) use bloom::envsettings_bloom;
+use exposure::envsettings_exposure;
 pub(super) use light::{envsettings_light, envsettings_tonemap};
 pub(super) use probes::read_probes;
 
@@ -553,6 +555,9 @@ pub(super) struct Staging {
     pub(super) hd_bloom: Option<oag_post::hd_bloom::Params>,
     /// Omega's `Tonemap` block, where the circuit authors one.
     pub(super) omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+    /// 2048's exposure and bloom keys, on a title whose race frame ends in
+    /// the `wo_*` chain ([`oag_title::Looks::wo_composite`]).
+    pub(super) wo_composite: Option<oag_post::wo_composite::Params>,
     /// The Zone stage grade this title lays over the two above, in a Zone
     /// race on a title that ships a table. See [`zone_grade`].
     pub(super) zone_grade: Option<crate::zone_grade::ZoneGrade>,
@@ -665,11 +670,17 @@ pub(super) fn staging(
             envsettings_fog(archives, track, psp2, report)
         })
         .flatten();
+    // A title whose frame ends in 2048's `wo_*` chain runs that and never HD's,
+    // whatever `HDR and Bloom` block a front-end file it ships would carry in.
+    let wo_title = title.looks.wo_composite.applies_everywhere();
+    let wo_composite = wo_title
+        .then(|| envsettings_exposure(archives, track, title, report))
+        .flatten();
     // The circuit's `HDR and Bloom` block, which is what turns the HD race
     // onto the linear float scene target and the read FunkLayerBloom chain -
     // see `oag_post::hd_bloom` for what of that is the microcode's
     // and what is this project's. Gated to the PS3 path like the fog above.
-    let hd_bloom = ps3_geometry
+    let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
         .map(|params| oag_post::hd_bloom::Params {
@@ -689,6 +700,7 @@ pub(super) fn staging(
         authored_fog,
         hd_bloom,
         omega_tonemap,
+        wo_composite,
         zone_grade: zone_grade(archives, title.race, mode, zone_stage, track, report),
     }
 }

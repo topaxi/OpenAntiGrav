@@ -1,5 +1,5 @@
-//! A split screen runs HD's post chain and Omega's tone map per view, each with an adaptation
-//! of its own ([`Scene::run_split_post`]).
+//! A split screen runs HD's post chain, Omega's tone map and 2048's composite per view, each
+//! with an adaptation of its own ([`Scene::run_split_post`]).
 
 use super::scene_build::test_gpu;
 use super::split_blur::{AREA, drawn, hull_scene, pixels, rows, target};
@@ -40,11 +40,24 @@ fn omega_params() -> oag_post::omega_tonemap::Params {
     }
 }
 
+/// 2048's keys at Queens Mall's values, the exposure adapting.
+fn wo_params() -> oag_post::wo_composite::Params {
+    oag_post::wo_composite::Params {
+        exposure_scale: 0.4,
+        exposure_max: 12.0,
+        exposure_speed: 0.1,
+        bloom_factor: 0.2,
+        bloom_gate: 0.2,
+        exposure: oag_post::wo_composite::Exposure::Adapting,
+    }
+}
+
 /// Which post chain the scene is built with.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Chain {
     Hd,
     Omega,
+    Wo,
 }
 
 pub(super) fn scene_of(
@@ -53,14 +66,15 @@ pub(super) fn scene_of(
     race: &Race,
     chain: Chain,
 ) -> Scene {
-    let (hd, omega) = match chain {
-        Chain::Hd => (Some(params()), None),
-        Chain::Omega => (None, Some(omega_params())),
+    let (hd, omega, wo) = match chain {
+        Chain::Hd => (Some(params()), None, None),
+        Chain::Omega => (None, Some(omega_params()), None),
+        Chain::Wo => (None, None, Some(wo_params())),
     };
-    hull_scene(device, queue, race, Msaa::Off, hd, omega)
+    hull_scene(device, queue, race, Msaa::Off, hd, omega, wo)
 }
 
-pub(super) const CHAINS: [Chain; 2] = [Chain::Hd, Chain::Omega];
+pub(super) const CHAINS: [Chain; 3] = [Chain::Hd, Chain::Omega, Chain::Wo];
 
 fn draw_split(
     (device, queue): (&wgpu::Device, &wgpu::Queue),

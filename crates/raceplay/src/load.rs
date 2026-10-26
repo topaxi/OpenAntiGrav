@@ -483,6 +483,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         authored_fog,
         hd_bloom,
         omega_tonemap,
+        wo_composite,
         zone_grade,
     } = environment::staging(
         &mut archives,
@@ -493,6 +494,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    // A comparison's held exposure over the circuit's adapting one.
+    #[cfg(feature = "view")]
+    let wo_composite = wo_composite.map(|params| oag_post::wo_composite::Params {
+        exposure: options.exposure_hold.map_or(
+            oag_post::wo_composite::Exposure::Adapting,
+            oag_post::wo_composite::Exposure::Held,
+        ),
+        ..params
+    });
     #[cfg(feature = "view")]
     let probes = environment::read_probes(&mut archives, &track, &mut report);
     // `fc01_dummy`'s pixel is the circuit's fog colour, which only the staging
@@ -1234,6 +1244,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         hd_bloom,
         #[cfg(feature = "view")]
         omega_tonemap,
+        #[cfg(feature = "view")]
+        wo_composite,
         #[cfg(feature = "view")]
         zone_grade,
         #[cfg(feature = "view")]

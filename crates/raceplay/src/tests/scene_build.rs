@@ -144,11 +144,13 @@ pub(super) fn scene_over_msaa(
     liveries: &[Livery],
     msaa: oag_display::display::Msaa,
 ) -> Scene {
-    scene_over_post(device, queue, track, liveries, msaa, None, None)
+    scene_over_post(device, queue, track, liveries, msaa, None, None, None)
 }
 
-/// [`scene_over_msaa`] with Wipeout HD's post chain or Omega's tone map, as a circuit that
-/// authors an `HDR and Bloom` or a `Tonemap` block builds it.
+/// [`scene_over_msaa`] with Wipeout HD's post chain, Omega's tone map or 2048's composite,
+/// as a circuit that authors an `HDR and Bloom` block, a `Tonemap` block or the
+/// `Lighting.Exposure*` keys builds it.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn scene_over_post(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -157,6 +159,7 @@ pub(super) fn scene_over_post(
     msaa: oag_display::display::Msaa,
     hd_bloom: Option<oag_post::hd_bloom::Params>,
     omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+    wo_composite: Option<oag_post::wo_composite::Params>,
 ) -> Scene {
     Scene::new(
         device,
@@ -196,6 +199,7 @@ pub(super) fn scene_over_post(
         None,
         hd_bloom,
         omega_tonemap,
+        wo_composite,
         None,
         Vec::new(),
         Vec::new(),
@@ -294,6 +298,7 @@ fn adverts_rebound(source: &str) -> Option<(usize, usize, usize)> {
         oag_display::display::Msaa::Off,
         Vec::new(),
         mesh_render::Light::stand_in(),
+        None,
         None,
         None,
         None,

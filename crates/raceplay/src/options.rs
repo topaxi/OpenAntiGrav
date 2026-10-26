@@ -253,6 +253,16 @@ pub struct Options {
     /// Clamped to the stages the loaded file names. `None` leaves the ladder
     /// alone, which is what every non-development caller wants.
     pub zone_stage: Option<u32>,
+    /// Hold 2048's race-composite exposure at this value instead of adapting it.
+    ///
+    /// **A comparison switch, never the play default.** Vita3K never writes the
+    /// bloom gate's target back to guest memory, so the original's exposure
+    /// step reads zero and never runs there: every 2048 reference frame is drawn
+    /// at the 1.15 `Exposure_Set` resets to (`oag_post::wo_composite::Exposure`).
+    /// The compare tooling passes `--hold-exposure 1.15` so a pair compares like
+    /// with like. `None` adapts, as a Vita does. No effect on a title without the
+    /// chain.
+    pub exposure_hold: Option<f32>,
     /// Draw the driveable ribbon instead of the track's art meshes.
     ///
     /// **A development view, not a style.** The ribbon is the geometry the
@@ -999,6 +1009,9 @@ pub struct Loaded {
     /// Omega's `Tonemap` block, read into the curve its executable applies -
     /// see `oag_post::omega_tonemap`. `None` for every other title.
     pub omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+    /// 2048's exposure and bloom keys, run through its `wo_*` race chain - see
+    /// `oag_post::wo_composite`. `None` for every other title.
+    pub wo_composite: Option<oag_post::wo_composite::Params>,
     /// The Zone colour grade this title lays over the circuit, stage by
     /// stage, in a Zone race.
     ///

@@ -12,10 +12,10 @@ pub(super) const SIZE: u32 = 64;
 pub(super) const AREA: (f32, f32, f32, f32) = (0.0, 0.0, SIZE as f32, SIZE as f32);
 
 fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, msaa: Msaa) -> Scene {
-    hull_scene(device, queue, race, msaa, None, None)
+    hull_scene(device, queue, race, msaa, None, None, None)
 }
 
-/// [`scene`] under Wipeout HD's post chain or Omega's tone map when given.
+/// [`scene`] under Wipeout HD's post chain, Omega's tone map or 2048's composite when given.
 pub(super) fn hull_scene(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -23,6 +23,7 @@ pub(super) fn hull_scene(
     msaa: Msaa,
     hd_bloom: Option<oag_post::hd_bloom::Params>,
     omega_tonemap: Option<oag_post::omega_tonemap::Params>,
+    wo_composite: Option<oag_post::wo_composite::Params>,
 ) -> Scene {
     // The craft is the one thing here that draws bright (the track draws black in this
     // fixture), so each hull is a few big triangles ahead of the craft along its model's
@@ -55,6 +56,7 @@ pub(super) fn hull_scene(
         msaa,
         hd_bloom,
         omega_tonemap,
+        wo_composite,
     )
 }
 

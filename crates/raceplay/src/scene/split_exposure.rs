@@ -1,15 +1,16 @@
-//! HD's and Omega's post chains in a split screen: one run per view, each adapting to its
-//! own pixels.
+//! HD's, Omega's and 2048's post chains in a split screen: one run per view, each adapting
+//! to its own pixels.
 //!
-//! Both read the scene's average luminance and set the exposure from it
-//! (`oag_post::hd_bloom`, `oag_post::omega_tonemap`). One adaptation for a whole split would
-//! give a view in a dark tunnel and a view in daylight the same exposure, so one of them is
-//! wrong, and HD's glow (the gate, the two blurs) would bleed a few pixels across the cut.
+//! All three read the scene's average luminance and set the exposure from it
+//! (`oag_post::hd_bloom`, `oag_post::omega_tonemap`, `oag_post::wo_composite`). One
+//! adaptation for a whole split would give a view in a dark tunnel and a view in daylight
+//! the same exposure, so one of them is wrong, and HD's glow (the gate, the two blurs)
+//! would bleed a few pixels across the cut.
 //! So every view runs its own chain over its own rectangle of the finished scene target
 //! (`Chain::run_view`): its own luminance ladder, its own adaptation (a lane per seat,
 //! kept from frame to frame, forgotten on the first single-view frame after a split as the
-//! camera histories are), and its resolve into the same rectangle of `view`; HD's glow is
-//! clamped to the rectangle too. 2048 draws through HD's chain.
+//! camera histories are), and its resolve into the same rectangle of `view`; HD's and
+//! 2048's glow is clamped to the rectangle too.
 //!
 //! **Chosen, not measured**: the original has no split screen. The adaptation law itself
 //! (rates, clamps, curve) is the single-view one in every lane.
@@ -22,8 +23,8 @@
 use super::*;
 
 impl Scene {
-    /// Runs HD's chain, or Omega's tone map, over each of `rects` (view `i` follows
-    /// `slots[i]`) of the scene target, resolving into the same rectangle of `view`.
+    /// Runs HD's chain, Omega's tone map or 2048's composite over each of `rects` (view `i`
+    /// follows `slots[i]`) of the scene target, resolving into the same rectangle of `view`.
     /// Returns whether a chain ran: Pulse and Pure draw straight into the caller's view.
     pub(super) fn run_split_post(
         &self,
@@ -80,6 +81,25 @@ impl Scene {
                 queue.submit(Some(encoder.finish()));
             }
             true
+        } else if let Some(wo) = &self.wo {
+            for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race viewport wo post"),
+                });
+                wo.run_view(
+                    device,
+                    queue,
+                    &mut encoder,
+                    view,
+                    oag_post::wo_composite::View {
+                        seat: slot,
+                        rect: pixels(rect),
+                        first: index == 0,
+                    },
+                );
+                queue.submit(Some(encoder.finish()));
+            }
+            true
         } else {
             false
         }
@@ -95,6 +115,11 @@ impl Scene {
                 self.omega
                     .as_ref()
                     .map(oag_post::omega_tonemap::Chain::seat_lanes)
+            })
+            .or_else(|| {
+                self.wo
+                    .as_ref()
+                    .map(oag_post::wo_composite::Chain::seat_lanes)
             })
             .unwrap_or(0)
     }
@@ -112,6 +137,11 @@ impl Scene {
                 self.omega
                     .as_ref()
                     .map(oag_post::omega_tonemap::Chain::seat_lane_builds)
+            })
+            .or_else(|| {
+                self.wo
+                    .as_ref()
+                    .map(oag_post::wo_composite::Chain::seat_lane_builds)
             })
             .unwrap_or(0)
     }

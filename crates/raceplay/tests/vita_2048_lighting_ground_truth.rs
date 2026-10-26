@@ -85,4 +85,31 @@ fn altimas_own_sun_and_ambient_are_drawn_not_the_stand_in_rig() {
         loaded.light.nova, 0.0,
         "2048 must not take Omega's prelit combination"
     );
+    altima_draws_its_own_wo_composite(&loaded);
+}
+
+/// The same load reaches `oag_post::wo_composite` with Altima's own five
+/// keys, `"Lighting.ExposureScale"=0.400000`, `ExposureMax` 12,
+/// `ExposureSpeed` 0.03, `BloomFactor` 0.3 and `BloomGate` 0.3, adapting as
+/// the original does in play. Fails when `Looks::wo_composite` or the staging
+/// stops carrying them: the race then ends in no composite at all.
+fn altima_draws_its_own_wo_composite(loaded: &race::Loaded) {
+    use oag_post::wo_composite::{Exposure, Params};
+    assert_eq!(
+        loaded.wo_composite,
+        Some(Params {
+            exposure_scale: 0.4,
+            exposure_max: 12.0,
+            exposure_speed: 0.03,
+            bloom_factor: 0.3,
+            bloom_gate: 0.3,
+            exposure: Exposure::Adapting,
+        }),
+        "{:#?}",
+        loaded.report
+    );
+    assert!(
+        loaded.hd_bloom.is_none(),
+        "2048 ends in its own composite, not HD's FunkLayerBloom"
+    );
 }

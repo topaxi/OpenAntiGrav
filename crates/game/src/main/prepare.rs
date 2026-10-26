@@ -206,6 +206,7 @@ impl Pending {
             // `race::Options::weapons_override`.
             weapons_override: self.settings.race.weapons_override(self.mode),
             zone_stage: self.cli.zone_stage,
+            exposure_hold: self.cli.hold_exposure,
             opponent_teams,
             // Only `race::load_event`'s 2048-campaign resolution and a captured field
             // (`--field-from`, one team per row) set this. See `race::Options::grid_teams`.
