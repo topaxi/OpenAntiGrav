@@ -84,3 +84,52 @@ running stint and any `disengaging` call outside the countdown's own are unread,
 ours runs Pulse's pad gate and fire suppression there (inherited). A PPSSPP run of
 `scripts/psp-autopilot-cancel.py` adapted to this page's offsets (running byte `+0x154`,
 timer `+0x15c`) would settle the absence.
+
+## Expiry mid-corner, live (2026-10-26, `autopilot-expiry`)
+
+The pasted claim (the timer is extended in a turn zone, a bank or at high g, and it
+disengages only on a straight; its example was Chenghou Project) was run on Pure's own
+Chenghou Project, which Pure does ship. **No hold, measured live, confidence 90** (76
+expiries, two PPSSPP boots, one circuit; the timer and the running byte only, see the
+limits). Pulse's, HD's and 2048's:
+[Pulse](../psp-pulse-usa/autopilot.md#expiry-mid-corner-and-the-pasted-extended-in-a-turn-zone-claim-2026-10-26-autopilot-expiry),
+[HD](../ps3-hdfury-eu/autopilot.md#expiry-mid-corner-2026-10-26-autopilot-expiry),
+[2048](../vita-2048-eu-v104/autopilot.md).
+
+`scripts/psp-pure-autopilot-expiry.py`, PPSSPP v1.20.4 on `pure-psp-usa.chd` (disc `UCUS98612`,
+2.00), the Time Trial state `time-trial-chenghou-vector-feisar-restart`, Vector, Feisar. The
+pickup record is found at the per-craft weapons loop's tail (`0x0884d0d4`, `a1`); the craft
+is read once a frame at `Ship_UpdateCraft` (`0x0892d214`). The craft is flown on the throttle
+for 40 frames, then armed as `Autopilot_Fire` does (`+0x154 = 1`, timer `+0x15c`). Pure runs
+its simulation at 30 Hz: the timer falls `0.0333` a frame. Pure's Autopilot flies the lap
+(the natural-expiry run below covers 2,800 frames, 93 s, roughly one lap). The summary is
+`scripts/autopilot-expiry-summary.py pure <file>`.
+
+| Run | Policy | Expiries | Heading rate before them (degrees a frame; 30 Hz) |
+| --- | --- | ---: | --- |
+| boot 1 | `corner`, trigger 1.2, stint 5 s | 20, all forced | trigger 1.20 to 2.71, mean of the six frames before 0.8 to 2.2 |
+| boot 2 | `natural`, stint 3 s, over about a lap | 30 | 0.03 to 2.0, spread over the whole lap |
+| boot 2 | `corner`, trigger 1.5, stint 4 s | 16 (15 forced) | trigger 1.5 to 2.3 |
+| boot 2 | `corner`, trigger 3.5, stint 30 s | 10 (8 forced) | trigger 3.54 to 3.95: the lap's sharpest (its p99 is 4.03, its single largest frame 5.07, about 150 degrees a second) |
+
+| Over all four runs | |
+| --- | ---: |
+| Released on the first frame with the timer `<= 0` (the frame before it above 0) | 76 of 76 |
+| Frames with the byte set and the timer `<= 0` | **0** |
+| Timer rises while the byte is set | **0** |
+| Roll out of the horizontal in the six frames before the expiries | 0.06 to 31 degrees |
+
+So the static reading above holds: `Autopilot_Update` clears the byte the first time the timer
+reads `<= 0`, in the lap's sharpest corners as on its straights, and the natural expiries
+spread over the whole lap (30, a zone covering a fifth of it would have caught about six) show
+no exception anywhere. The "no hold" lines of this page's "No cancel and no hold" section are
+now measured; their confidence 70 stays only for the **absence of a cancel**.
+
+**Limits.** Only the timer and the byte were read: Pure's controls' blend and engine bits are
+not located at this tree's offsets, so the hand-back's tick count, an ease and the
+`disengaging` timing are Pulse's and HD's, not watched on Pure. The roll never passed 31
+degrees (Chenghou has no steep section), so the "banked" clause is carried by Pulse's run. A
+face-button probe (CIRCLE, TRIANGLE, then SQUARE held 10 frames against a 30 s stint) left the
+byte set and the timer falling, but the race's weapons switch in Pure is not found, so the
+buttons may never have reached a pickup path and the probe has **no positive control**: the
+cancel's absence stays static, 70.
