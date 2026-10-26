@@ -267,7 +267,7 @@ it fires, not that the rate matches any original's.
 | --- | --- | --- | --- | --- | --- |
 | Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO` | M: `Rocket.vex`, its own spelling | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's; checked, applies, not wired: `Data/Weapons2048/hd_Rocket.vex` ships | I:HD: `Data\Weapons\hd_Rocket.vex`, the root `Rocket_Construct` picks for a mode below `0x17` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)); same mesh and decals as HD's, unlit by HD's weapon lights, no ribbon trail |
 | Missile | M: `WO_MISSILE_HEAD` at both anchors; twin trails not built | I:Pulse (effect names) | M: `HD_missile_explosion.vex` on its own keys | ?: effect names only | I:HD: `HD_missile_explosion.vex`, on HD's keys; the structure draws, the white-out does not (the program bits below) |
-| Quake | M: `WO_QUAKE`, road ripple, orange tint | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
+| Quake | M: `WO_QUAKE`, road ripple, orange tint; a hit in the cockpit view also draws the `noisematt` static for 0.6 s (`CockpitHitFx`, [measured](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-10-26-why-a-quake-hit-feels-stronger-on-the-original-quake-feel-capture-lane), **not wired**) | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
 | Cannon | M: `pulse_muzzleflash.vex` on the round, bolt and flash quads | A | M: `hd_muzzleflash.vex` at the muzzle, own textures and size range | ?: not drawn | I:HD: `hd_muzzleflash.vex` at the `cannon_flash` locator, HD's look numbers with Omega's `.gnf` textures; `CannonBullet`'s own draw is unread |
 | Plasma | M: charge glow, three-model blast with a baked track | ?: the three-model blast is in the executable, its key tables are unread, nothing is wired | M: `HD_plasma_ball`, ring, sphere and halo on eased scale ramps | ?: `WO_PLASMA_FLASH` is not authored there; nothing drawn | I:HD: ring, sphere and halo of the blast; the bolt's head (`HD_plasma_ball`) is held back, it draws as a barely visible ghost |
 | Bomb | M: hemisphere, shockwave, smoke ring | M: same pair, no alpha fade | M: fireball, white core, bloom disc, eight rings, rays | ?: not drawn | I:HD: the laid body only; the blast set (fireball, core, bloom disc, rings, halo) is held back, its bloom ring paints the fire-ramp lookup texture over the road as a red wash |
@@ -304,7 +304,7 @@ simulation edge, has not been compared weapon by weapon.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired | I:Pulse; sites confirmed for the cues listed above | I:Pulse; sites not located | I:Pulse; sites not located | ?: not investigated |
+| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired; **a weapon hit also plays `.COLLISIONS` once per spark locator (two on a Quake hit), measured 2026-10-26, not wired** | I:Pulse; sites confirmed for the cues listed above | I:Pulse; sites not located | I:Pulse; sites not located | ?: not investigated |
 
 ## 2048 and Omega: the cross-check
 
