@@ -325,6 +325,7 @@ pub use field::{FireLaw, PadSeeking};
 pub use handles::EffectHandles;
 #[cfg(feature = "view")]
 pub use held_buttons::HeldButtons;
+pub use hit_sparks::{ContactSeed, HIT_SPARK_SEVERITY};
 #[cfg(feature = "view")]
 pub use hud::{hud_layout, splice_assist_indicator};
 #[cfg(feature = "view")]

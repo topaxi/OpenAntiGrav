@@ -254,6 +254,9 @@ pub struct CaptureOptions {
     /// exhaust of every craft is replayed on a straight path to its pose before the frame
     /// ([`Race::warm_up_field`]).
     pub field_warmup: Option<Vec<oag_core::math::Vec3>>,
+    /// `--pose-spark`: contact sparks the original threw before the frame, thrown that long
+    /// before it on the warmed field ([`Race::warm_up_contact_sparks`]).
+    pub pose_sparks: Vec<oag_raceplay::ContactSeed>,
     /// Capture the frame the way a **window** presents it, rather than the
     /// scene the way it is drawn.
     ///
@@ -466,6 +469,7 @@ pub fn capture(
         .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
         race.warm_up_field(velocities, race.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).

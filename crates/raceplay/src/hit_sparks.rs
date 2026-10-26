@@ -80,8 +80,19 @@ use oag_livery::SparkAnchor;
 /// `intensity * 2.0 + 0.4` at the hardcoded intensity `1.0`.
 pub const HIT_SPARK_SEVERITY: f32 = oag_fx::sparks::SEVERITY_SLOPE + oag_fx::sparks::SEVERITY_FLOOR;
 
-/// The proximity gate's squared range, `Ship_DispatchCollisionFx`'s `(0, 10000)`.
-const CAMERA_GATE_SQUARED: f32 = 10_000.0;
+/// One contact spark a posed capture recorded off the original: the locator whose gate stamp
+/// (`instance + 100`) says it fired `age` seconds before the frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContactSeed {
+    /// The craft's grid slot.
+    pub slot: usize,
+    /// The locator's index in the hull's `Ship Collision Fx` list.
+    pub node: usize,
+    /// Seconds between the fire and the frame.
+    pub age: f32,
+    /// The spawn scale, `intensity * 2 + 0.4`.
+    pub severity: f32,
+}
 
 /// The loop bound `Ship_GatherCollisionFxNodes` collects up to.
 const MAX_NODES: usize = 10;
@@ -324,18 +335,14 @@ impl Race {
     /// raises the `.COLLISIONS` cue.
     ///
     /// **Nothing for a shielded craft** (the loop's `craft + 0x1b8 & 0x10` branch skips the
-    /// dispatch, `0x0884255c`). **The proximity gate** (the squared distance from the camera
-    /// object to a stored position in `(0, 10000)`, read as the camera's, `contact-response.md`)
-    /// is applied from the person-flown seat's craft, which the chase camera sits a few units
-    /// behind: **chosen, not measured**.
+    /// dispatch, `0x0884255c`). **No distance gate:** the loop tests a value in `(0, 10000)` at
+    /// `0x08842614`-`0x0884262c` that `contact-response.md` read as a camera distance, but the
+    /// live read of `talons-boost` found the nearest-the-camera craft's locators quiet and a
+    /// craft 291 units off with a fresh stamp, so no range from the seat is applied here (the
+    /// value is two quads' dot product, not identified).
     pub(super) fn throw_contact_spark(&mut self, slot: usize, point: Vec3, impulse: f32) {
         let ship = &self.sim.world.ships[slot];
         if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
-            return;
-        }
-        let seat = self.sim.world.ships[self.player_slot()].physics.body.position;
-        let away = seat.distance_squared(point);
-        if away <= 0.0 || away >= CAMERA_GATE_SQUARED {
             return;
         }
         let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
@@ -356,6 +363,44 @@ impl Race {
         };
         let severity = oag_fx::sparks::severity(impulse);
         self.fire_locator(slot, node, Trigger::HitSpark, severity);
+    }
+
+    /// A posed capture's recorded contact sparks: each seed's locator fired `age` seconds before
+    /// the frame and the stage run on to it, the hull flying on a straight path at its captured
+    /// velocity (`velocities`, slot order) that ends on the pose it holds now - the way
+    /// [`Self::warm_up_field`] lays an exhaust trail. A capture runs no tick, so a spark the
+    /// original threw a few ticks before its frame would otherwise not exist. Only the effect
+    /// stage and the sparks' own gates move; no craft, physics or cue state is touched beyond the
+    /// `.COLLISIONS` cue the fire raises. **Chosen, not measured:** the straight path (the
+    /// original's hull curved) and each seed's severity when it is not read.
+    pub fn warm_up_contact_sparks(&mut self, velocities: &[Vec3], seeds: &[ContactSeed]) {
+        let dt = self.sim.dt;
+        let ticks_before = |seed: &ContactSeed| (seed.age / dt).round() as u32;
+        let Some(oldest) = seeds.iter().map(ticks_before).max() else {
+            return;
+        };
+        let count = (self.sim.world.ship_count as usize).min(velocities.len());
+        let at: Vec<Vec3> = (0..count)
+            .map(|slot| self.sim.world.ships[slot].physics.body.position)
+            .collect();
+        for behind in (0..=oldest).rev() {
+            for slot in 0..count {
+                self.sim.world.ships[slot].physics.body.position =
+                    at[slot] - velocities[slot] * (dt * behind as f32);
+            }
+            for seed in seeds.iter().filter(|seed| ticks_before(seed) == behind) {
+                if seed.slot < count {
+                    self.fire_locator(seed.slot, seed.node, Trigger::HitSpark, seed.severity);
+                }
+            }
+            self.advance_hit_sparks();
+            if behind > 0 {
+                self.view.stage.advance(dt, &mut self.view.stage_rng);
+            }
+        }
+        for (slot, at) in at.into_iter().enumerate() {
+            self.sim.world.ships[slot].physics.body.position = at;
+        }
     }
 
     /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)

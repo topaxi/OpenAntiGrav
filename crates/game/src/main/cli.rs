@@ -892,6 +892,16 @@ pub(crate) struct Cli {
     #[arg(long, requires = "field_from")]
     pub(crate) field_warmup: bool,
 
+    /// With `--field-warmup`: a collision spark the original threw before the frame,
+    /// `SLOT:NODE:AGE_SECONDS[:SEVERITY]`, repeatable. `NODE` is the locator's index in the hull's
+    /// `Ship Collision Fx` list and `AGE_SECONDS` how long ago its gate stamp (`instance + 100`,
+    /// minus `0.8`) says it fired (`scripts/psp-contact-fx-read.py`); the sparks are thrown
+    /// that long before the frame and the effects run on to it, which a capture that runs no tick
+    /// would otherwise never see. `SEVERITY` is the spawn scale (`intensity * 2 + 0.4`, `2.4`
+    /// when absent: chosen, not measured).
+    #[arg(long, value_name = "SLOT:NODE:AGE[:SEVERITY]", requires = "field_warmup")]
+    pub(crate) pose_spark: Vec<String>,
+
     /// With a posed craft (`--pose-from` or `--pose`): the HUD's race state as the original's frame showed it,
     /// `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]` (lap 1-based, the clocks in seconds; the last three are Zone mode's counters, written into the race's own state so the grade follows), read out of the
     /// emulator's RAM at the same stop as the pose. A posed capture runs no ticks, so without this

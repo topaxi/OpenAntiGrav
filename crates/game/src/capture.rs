@@ -516,6 +516,7 @@ pub fn run(
                 pose_hold: false,
                 pose_lean: None,
                 field_warmup: None,
+                pose_sparks: Vec::new(),
                 presented: options.presented.then_some(crate::race_capture::Presented {
                     render_scale: render_profile.render_scale,
                     presentation: oag_present::upscale::Presentation {

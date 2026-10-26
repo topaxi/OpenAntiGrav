@@ -442,3 +442,30 @@ fn a_craft_to_craft_contact_sparks_both_hulls_once_per_gate() {
         "a shielded craft threw sparks"
     );
 }
+
+/// A posed capture's recorded contact spark: thrown `age` ticks before the frame and the stage
+/// run on to it, so the frame holds live particles a capture that runs no tick would not.
+/// The craft stays where it was posed.
+#[test]
+fn a_recorded_contact_spark_is_thrown_early_and_aged_to_the_frame() {
+    let mut race = race_with_locators(six_locators());
+    let posed = race.sim.world.ships[0].physics.body.position;
+    let seed = crate::ContactSeed {
+        slot: 0,
+        node: 2,
+        age: 5.0 / 60.0,
+        severity: 0.7,
+    };
+    race.warm_up_contact_sparks(&[Vec3::new(0.0, 0.0, 100.0)], &[seed]);
+    assert_eq!(race.hit_sparks_started_for_tests(), 1);
+    assert!(
+        race.view.stage.alive_count() > 0,
+        "the spark is not alive at the frame it was aged to"
+    );
+    assert_eq!(race.sim.world.ships[0].physics.body.position, posed);
+    assert_eq!(collisions_on_the_player(&mut race), 1);
+
+    let mut none = race_with_locators(six_locators());
+    none.warm_up_contact_sparks(&[Vec3::ZERO], &[]);
+    assert_eq!(none.hit_sparks_started_for_tests(), 0);
+}
