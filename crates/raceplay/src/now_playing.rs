@@ -19,6 +19,9 @@ pub struct View {
     display: Display,
     font: oag_ui::font::Atlas,
     separator: &'static str,
+    /// The language's strings, for a title whose nodes name a key ([`oag_title::now_playing::NowPlaying::title_key`]).
+    strings: oag_ui::language::StringTable,
+    title_key: Option<&'static str>,
     serial: u32,
     /// A song that started before the lights went green, shown when they do.
     waiting: Option<(String, f32)>,
@@ -56,13 +59,24 @@ impl View {
             return None;
         };
         report.push(format!(
-            "now playing: {} bar {:?}, text from x {} clipped to {:?}",
-            authored.item, geometry.bar, geometry.origin_x, geometry.clip
+            "now playing: {} bar {:?}, text from x {} clipped to {:?} ({})",
+            authored.item,
+            geometry.bar,
+            geometry.origin_x,
+            geometry.clip,
+            match authored.origin {
+                oag_title::effects::Origin::Measured => "measured".to_string(),
+                oag_title::effects::Origin::InheritedFrom(title) =>
+                    format!("borrowed from {title}, chosen not measured"),
+                oag_title::effects::Origin::Chosen => "chosen, not measured".to_string(),
+            }
         ));
         Some(Self {
             display: Display::new(geometry, &authored),
             font: hud.small_font.clone(),
             separator: authored.separator,
+            strings: hud.strings.clone(),
+            title_key: authored.title_key,
             serial: 0,
             waiting: None,
         })
@@ -81,7 +95,22 @@ impl Race {
         };
         view.serial = song.serial;
         if let Some(name) = &song.name {
-            let text = name.text(view.separator);
+            let title = match view.title_key {
+                None => Some(name.title.clone()),
+                // The key's text is "Artist\nTitle"; a key the table lacks shows nothing.
+                Some(key) => view
+                    .strings
+                    .get(&key.replace("{}", &name.title))
+                    .and_then(|text| text.lines().last())
+                    .map(str::to_string),
+            };
+            let Some(title) = title else {
+                return;
+            };
+            let text = match &name.artist {
+                Some(artist) => format!("{artist}{}{title}", view.separator),
+                None => title,
+            };
             let width = oag_ui::font::measure(&view.font, &text) * view.display.scale();
             view.waiting = Some((text, width));
         }

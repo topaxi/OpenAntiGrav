@@ -240,7 +240,29 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         file: names::MUSIC_TRACK_FILE,
     }),
     state_tracks: None,
-    now_playing: None,
+    now_playing: Some(NOW_PLAYING),
+};
+
+/// The race screen's now-playing marquee. **Borrowed from HD through Omega, chosen not
+/// measured**: 2048's executable still looks the item up, but no layout file of the base
+/// package or the 1.04 patch holds it (`docs/formats/now-playing.md`), so the original shows no
+/// song. The layout is this project's own file in the fallback layer, HD's item halved to the
+/// Vita's grid; the names are 2048's own `PI_Music` nodes.
+pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
+    names: oag_title::DeclaredTracks {
+        declared_in: names::MUSIC_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    },
+    layout: r"Data\XML\NowPlaying_2048.xml",
+    item: "InGameMusicDisplay",
+    bar: "InGameMusicBG",
+    text: "InGameMusicText",
+    // The nodes are named `01`..`11`; `MT_01` in the language table is "Artist\nTitle".
+    title_key: Some("MT_{}"),
+    separator: " - ",
+    fade_step: 5,
+    scroll_step: 1,
+    origin: oag_title::effects::Origin::InheritedFrom("Wipeout HD"),
 };
 
 /// Paths inside the packages.

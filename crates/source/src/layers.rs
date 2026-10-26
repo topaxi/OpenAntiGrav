@@ -91,6 +91,14 @@ pub fn fallback_layer() -> Layer {
         include_bytes!("../../../assets/fallback/Data/HUD/Textures/AssistIndicator.pix"),
     );
     layer.insert_bytes(
+        "Data\\XML\\NowPlaying_2048.xml",
+        include_bytes!("../../../assets/fallback/Data/XML/NowPlaying_2048.xml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\NowPlaying_Pure.xml",
+        include_bytes!("../../../assets/fallback/Data/XML/NowPlaying_Pure.xml"),
+    );
+    layer.insert_bytes(
         "Data\\XML\\SplitHud_Pulse.toml",
         include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pulse.toml"),
     );

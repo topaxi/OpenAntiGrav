@@ -25,7 +25,11 @@ pub struct Geometry {
     /// The bar: `[x, y, width, height]`.
     pub bar: [f32; 4],
     /// The bar's authored colour as `0xAARRGGBB`; its alpha is the ceiling the fade reaches.
+    /// White where the layout authors none, as a textured bar is.
     pub bar_argb: u32,
+    /// The bar's texture, when it has one: the `Src` entry and the source rectangle
+    /// `[U, V, TxtrWidth, TxtrHeight]`. `None` is a plain fill (Pulse's).
+    pub bar_art: Option<(String, [f32; 4])>,
     /// The text's left edge when it appears, in the grid: the item's offset plus the text's own
     /// `x`, which is the viewport's width, so just past the bar's right edge.
     pub origin_x: f32,
@@ -43,6 +47,14 @@ pub struct Geometry {
 
 fn number(node: &Node, name: &str) -> Option<f32> {
     node.value(name)?.trim().parse().ok()
+}
+
+/// The widgets an item's own viewport holds, for a layout that nests them there.
+fn nested_children(item: &Node) -> impl Iterator<Item = &Node> {
+    item.children
+        .iter()
+        .filter(|child| child.name.eq_ignore_ascii_case("Viewport"))
+        .flat_map(|viewport| viewport.children.iter())
 }
 
 fn find<'a>(
@@ -69,14 +81,34 @@ pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
     let widget = |name: &str| {
         item.children
             .iter()
+            .chain(nested_children(item))
             .find(|child| child.attr("name") == Some(name))
     };
     let bar = widget(authored.bar)?;
     let text = widget(authored.text)?;
-    let clip = viewport.map_or([0.0, 0.0, 480.0, 272.0], |viewport| {
-        let values = |name| number(viewport, name).unwrap_or(0.0);
-        [values("x"), values("y"), values("width"), values("height")]
-    });
+    // Pulse's viewport holds the item, so its numbers are the grid's; HD's is a child of the
+    // item, so its `x` is from the item's corner and the text clips inside the bar.
+    let nested = item
+        .children
+        .iter()
+        .find(|child| child.name.eq_ignore_ascii_case("Viewport"));
+    let outer = viewport.filter(|parent| parent.name.eq_ignore_ascii_case("Viewport"));
+    let clip = match (outer, nested) {
+        (_, Some(inner)) => {
+            let values = |name| number(inner, name).unwrap_or(0.0);
+            [
+                item_x + values("x"),
+                item_y + values("y"),
+                values("width"),
+                values("height"),
+            ]
+        }
+        (Some(outer), None) => {
+            let values = |name| number(outer, name).unwrap_or(0.0);
+            [values("x"), values("y"), values("width"), values("height")]
+        }
+        (None, None) => [0.0, 0.0, 480.0, 272.0],
+    };
     Some(Geometry {
         bar: [
             item_x + number(bar, "x").unwrap_or(0.0),
@@ -87,7 +119,14 @@ pub fn geometry(xml: &str, authored: &NowPlaying) -> Option<Geometry> {
         bar_argb: bar
             .value("color")
             .and_then(parse_argb)
-            .unwrap_or(0xFF00_0000),
+            .unwrap_or(0xFFFF_FFFF),
+        bar_art: bar.value("src").map(|src| {
+            let uv = |name| number(bar, name).unwrap_or(0.0);
+            (
+                src.to_string(),
+                [uv("u"), uv("v"), uv("txtrwidth"), uv("txtrheight")],
+            )
+        }),
         origin_x: item_x + number(text, "x").unwrap_or(0.0),
         item_x,
         text_y: item_y + number(text, "y").unwrap_or(0.0),
@@ -214,13 +253,13 @@ impl Display {
             return None;
         }
         let geometry = &self.geometry;
-        let mut bar = argb_to_rgba(geometry.bar_argb);
-        bar[3] = self.bar_alpha as f32 / 255.0;
+        let bar = [0.0, 0.0, 0.0, self.bar_alpha as f32 / 255.0];
         let mut color = argb_to_rgba(geometry.text_argb);
         color[3] *= self.text_alpha as f32 / 255.0;
         Some(Marquee {
             bar: geometry.bar,
             bar_color: bar,
+            bar_art: geometry.bar_art.clone(),
             text: self.text.clone(),
             x: geometry.item_x + self.x,
             y: geometry.text_y,
@@ -236,8 +275,11 @@ impl Display {
 pub struct Marquee {
     /// The bar: `[x, y, width, height]`.
     pub bar: [f32; 4],
-    /// The bar's colour with the fade applied.
+    /// The bar's colour with the fade applied. The vertex colour the executable writes is
+    /// `alpha << 24`, so black: a textured bar is its shape in a translucent black, as a fill is.
     pub bar_color: [f32; 4],
+    /// The bar's texture and source rectangle, when it has one ([`Geometry::bar_art`]).
+    pub bar_art: Option<(String, [f32; 4])>,
     /// The song: `Artist - name`.
     pub text: String,
     /// The text's left edge.
@@ -280,17 +322,39 @@ impl Marquee {
 /// Adds the display to `frame`: the bar under the text, the text in the `HUDSmall` face
 /// clipped to the viewport the disc authors. `border` outlines the glyphs the way the rest of
 /// the HUD's text is.
-pub fn append(frame: &mut Frame, marquee: &Marquee, border: [f32; 4]) {
+pub fn append(
+    frame: &mut Frame,
+    marquee: &Marquee,
+    border: [f32; 4],
+    sheet: &crate::sprite::Sheet,
+) {
     if frame.spans.is_empty() {
         frame.spans.push(Span {
             clip: [-1.0e9, -1.0e9, 2.0e9, 2.0e9],
             start: [0; 5],
         });
     }
-    frame.sprites.push(Draw::Fill {
-        rect: marquee.bar,
-        color: marquee.bar_color,
-    });
+    match &marquee.bar_art {
+        None => frame.sprites.push(Draw::Fill {
+            rect: marquee.bar,
+            color: marquee.bar_color,
+        }),
+        // A texture the sheet does not hold leaves the bar out; nothing stands in for it.
+        Some((src, uv)) => {
+            if let Some(placed) = sheet.get(src) {
+                frame.sprites.push(Draw::Sprite {
+                    rect: marquee.bar,
+                    uv: [
+                        placed.x as f32 + uv[0],
+                        placed.y as f32 + uv[1],
+                        uv[2],
+                        uv[3],
+                    ],
+                    color: marquee.bar_color,
+                });
+            }
+        }
+    }
     frame.spans.push(Span {
         clip: marquee.clip,
         start: [

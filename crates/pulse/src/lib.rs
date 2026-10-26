@@ -171,10 +171,11 @@ pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playi
     item: "InGameMusicDisplay",
     bar: "InGameMusicBG",
     text: "InGameMusicText",
+    title_key: None,
     separator: " - ",
     fade_step: 5,
     scroll_step: 1,
-    provenance: oag_title::Provenance::Measured,
+    origin: oag_title::effects::Origin::Measured,
 };
 
 /// Pulse's front end: the layout its `Skin.xml` authors and the boot chain a

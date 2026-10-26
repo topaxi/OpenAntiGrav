@@ -351,7 +351,12 @@ impl Overlay {
         if let Some(marquee) = &readout.now_playing {
             let at = self.safe_area_placement();
             let marquee = at.map_or_else(|| marquee.clone(), |at| marquee.placed(&at));
-            oag_hud::now_playing::append(&mut frame, &marquee, self.layout.default_border());
+            oag_hud::now_playing::append(
+                &mut frame,
+                &marquee,
+                self.layout.default_border(),
+                &self.sheet,
+            );
         }
         let glow = frame.glow.clone();
         self.paint(device, queue, encoder, view, frame, viewport);

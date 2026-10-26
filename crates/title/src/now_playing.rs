@@ -7,7 +7,7 @@
 //! A title that does not author one has `None` in [`crate::Music::now_playing`].
 
 use crate::DeclaredTracks;
-use crate::boot::Provenance;
+use crate::effects::Origin;
 
 /// How a title shows the playing song.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,12 +25,19 @@ pub struct NowPlaying {
     pub bar: &'static str,
     /// The scrolling `Text` widget inside the item.
     pub text: &'static str,
+    /// Where the song's title is in the language's string table, when the `PI_Music` node's own
+    /// `name` is only a key into it: `{}` stands for the node's name, so 2048's `MT_{}` reads
+    /// `MT_01`, whose text is the artist and the title on two lines. The title is the last line.
+    /// `None` where the node's name is the title.
+    pub title_key: Option<&'static str>,
     /// Between the artist and the song name.
     pub separator: &'static str,
     /// Alpha steps (of 255) the text fades by on each update of the race, in and out.
     pub fade_step: u8,
     /// Whole layout units the text moves left on each update of the race.
     pub scroll_step: u8,
-    /// Whether the timing was read off the original's executable or inherited.
-    pub provenance: Provenance,
+    /// Where the behaviour (when it shows, how it fades and scrolls) comes from: read off this
+    /// title's executable, inherited from another title's, or chosen. A title that inherits
+    /// also borrows its layout, which is then this project's own file in the fallback layer.
+    pub origin: Origin,
 }

@@ -206,7 +206,28 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         file: names::MUSIC_TRACK_FILE,
     }),
     state_tracks: None,
-    now_playing: None,
+    now_playing: Some(NOW_PLAYING),
+};
+
+/// The race screen's now-playing marquee. **Borrowed from Pulse, chosen not measured**: Pure's
+/// executable has no `InGameMusic` widget and its `InGame_Definition.xml` authors no such item
+/// (checked 2026-10-26, `docs/formats/now-playing.md`), so the layout is this project's own file
+/// in the fallback layer, carrying Pulse's numbers, and the fade and scroll are Pulse's law. The
+/// names are Pure's own `PI_Music` nodes, the declaration its soundtrack is already read from.
+pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
+    names: oag_title::DeclaredTracks {
+        declared_in: names::GAME_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    },
+    layout: r"Data\XML\NowPlaying_Pure.xml",
+    item: "InGameMusicDisplay",
+    bar: "InGameMusicBG",
+    text: "InGameMusicText",
+    title_key: None,
+    separator: " - ",
+    fade_step: 5,
+    scroll_step: 1,
+    origin: oag_title::effects::Origin::InheritedFrom("Wipeout Pulse"),
 };
 
 /// Pure's front end: the layout its own `Skin.xml` authors and the boot chain a

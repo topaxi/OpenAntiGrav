@@ -50,6 +50,9 @@ pub fn names(
         return Ok(vec![None; entries.len()]);
     };
     let declared = now_playing.names;
+    if let Some(state_tracks) = music.state_tracks {
+        return Ok(state_names(archives, state_tracks.declared_in, entries));
+    }
     let nodes = crate::declared_nodes(archives, declared);
     let name_of = |node: &crate::playlist::Music| SongName {
         artist: node.artist.clone(),
@@ -72,4 +75,31 @@ pub fn names(
                 .map(name_of)
         })
         .collect())
+}
+
+/// A soundtrack addressed by Wwise state: an entry's token is its `PI_Music` location number
+/// ([`Entry::at`]), so the node is the one that declares that location.
+fn state_names(
+    archives: &mut Archives,
+    declared_in: &str,
+    entries: &[Entry],
+) -> Vec<Option<SongName>> {
+    let nodes = archives
+        .read_name(declared_in)
+        .ok()
+        .and_then(|blob| oag_tables::fexml::text(&blob).ok())
+        .map(|xml| crate::playlist::music(&xml))
+        .unwrap_or_default();
+    entries
+        .iter()
+        .map(|entry| {
+            nodes
+                .iter()
+                .find(|node| node.location.parse() == Ok(entry.at))
+                .map(|node| SongName {
+                    artist: node.artist.clone(),
+                    title: node.id.clone(),
+                })
+        })
+        .collect()
 }

@@ -277,7 +277,28 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         file: names::MUSIC_TRACK_FILE,
     }),
     state_tracks: None,
-    now_playing: None,
+    now_playing: Some(NOW_PLAYING),
+};
+
+/// The race screen's now-playing marquee: `item InGameMusicDisplay` in the front end's
+/// `ingame_definition.xml`, the strings `"%.256s - %.256s"` of the `PI_Music` node's `Artist` and
+/// name, and the timing `0x0005c638` runs per update (fade 5 of 255, scroll `1.0`, the bar's
+/// alpha climbing by `int(authored / 256 * 5)`), read off `EBOOT.elf`:
+/// `docs/ghidra/functions/ps3-hdfury-eu/now-playing.md`, the same law as Pulse's.
+pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
+    names: oag_title::DeclaredTracks {
+        declared_in: names::FRONT_END_PLUGIN_DEFINITION,
+        file: names::MUSIC_TRACK_FILE,
+    },
+    layout: r"Data\Plugins\frontend\gui\ingame_definition.xml",
+    item: "InGameMusicDisplay",
+    bar: "InGameMusicBG",
+    text: "InGameMusicText",
+    title_key: None,
+    separator: " - ",
+    fade_step: 5,
+    scroll_step: 1,
+    origin: oag_title::effects::Origin::Measured,
 };
 
 /// The seven archives a Wipeout HD / Fury disc ships, under `PS3_GAME/USRDIR/`.

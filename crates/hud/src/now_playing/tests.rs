@@ -84,7 +84,12 @@ fn the_bar_and_the_text_reach_the_frame_and_the_text_is_clipped() {
     display.step();
     let marquee = display.marquee().expect("up");
     let mut frame = Frame::default();
-    append(&mut frame, &marquee, [0.0, 0.0, 0.0, 1.0]);
+    append(
+        &mut frame,
+        &marquee,
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
     assert_eq!(frame.sprites.len(), 1);
     assert_eq!(frame.small_text.len(), 1);
     assert!(
@@ -113,4 +118,85 @@ fn placing_moves_the_bar_and_keeps_the_text_that_runs_off_the_screen() {
     let placed = marquee.placed(&at);
     assert_eq!(placed.bar, [75.0, 143.5, 75.0, 10.0]);
     assert_eq!(placed.scale, 0.5);
+}
+
+/// Shaped like HD's: a textured bar, the viewport a child of the item.
+const HD_LAYOUT: &str = r#"
+<Screen name="InGame">
+<Item name="InGameMusicDisplay" OffsetX="310" OffsetY="52" SDOffsetY="80">
+<Image name="InGameMusicBG">
+<Values width="230" height="48" U="145" V="653" TxtrWidth="230" TxtrHeight="48" src="Data\HUD\Textures\HUD_Components.gtf"></Values>
+</Image>
+<Viewport>
+<Values x="19" height="1080" width="192"></Values>
+<Text name="InGameMusicText">
+<Values idstring="IG_HUD_ARTIST" font="HUDSmall" scale="0.8" align="left" x="230" y="10" color="0xFFFFFFFF"></Values>
+</Text>
+</Viewport>
+</Item>
+</Screen>
+"#;
+
+#[test]
+fn a_textured_bar_with_a_viewport_inside_the_item_reads_too() {
+    let geometry = geometry(HD_LAYOUT, &authored()).expect("the item");
+    assert_eq!(geometry.bar, [310.0, 52.0, 230.0, 48.0]);
+    assert_eq!(
+        geometry.bar_argb, 0xFFFF_FFFF,
+        "a textured bar authors no colour"
+    );
+    assert_eq!(
+        geometry.bar_art,
+        Some((
+            r"Data\HUD\Textures\HUD_Components.gtf".to_string(),
+            [145.0, 653.0, 230.0, 48.0]
+        ))
+    );
+    assert_eq!(geometry.origin_x, 540.0, "just past the bar's right edge");
+    assert_eq!(geometry.text_y, 62.0);
+    assert_eq!(geometry.scale, 0.8);
+    assert_eq!(
+        geometry.clip,
+        [329.0, 52.0, 192.0, 1080.0],
+        "inside the bar"
+    );
+}
+
+/// The bar of 255 climbs `int(255 / 256 * 5)` = 4 a step, so it is at 204 when the text is full.
+#[test]
+fn a_textured_bar_climbs_by_the_integer_step_of_its_own_alpha() {
+    let authored = authored();
+    let mut display = Display::new(geometry(HD_LAYOUT, &authored).expect("the item"), &authored);
+    display.show("A - B".to_string(), 50.0);
+    for _ in 0..51 {
+        display.step();
+    }
+    let up = display.marquee().expect("up");
+    assert!(
+        (up.bar_color[3] - 204.0 / 255.0).abs() < 1e-6,
+        "{}",
+        up.bar_color[3]
+    );
+    assert_eq!(
+        up.bar_color[..3],
+        [0.0, 0.0, 0.0],
+        "alpha << 24 is a black tint"
+    );
+}
+
+#[test]
+fn a_bar_texture_the_sheet_lacks_is_left_out_and_the_text_stays() {
+    let authored = authored();
+    let mut display = Display::new(geometry(HD_LAYOUT, &authored).expect("the item"), &authored);
+    display.show("A - B".to_string(), 50.0);
+    display.step();
+    let mut frame = Frame::default();
+    append(
+        &mut frame,
+        &display.marquee().expect("up"),
+        [0.0, 0.0, 0.0, 1.0],
+        &crate::sprite::Sheet::default(),
+    );
+    assert!(frame.sprites.is_empty(), "no stand-in bar");
+    assert_eq!(frame.small_text.len(), 1);
 }
