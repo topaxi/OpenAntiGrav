@@ -16,6 +16,8 @@
 - Track geometry: the driveable ribbon **and** the textured art meshes both
   render. The art meshes are behind `--art` rather than being the default, for a
   reason that is [about verification, not rendering](../overview/roadmap.md#m5---full-race)
+- Pure's **sun lens flare**: law measured, not drawn; ten additive quads on a 2x2 atlas, see
+  [`lens-flare.md`](lens-flare.md)
 - Ship rendering, including team liveries - **done** for the eight teams whose
   `Ship.vex` resolves by name. HD's hull materials resolve a shipped shader
   variant disc-wide, and what each variant computes - plus a live

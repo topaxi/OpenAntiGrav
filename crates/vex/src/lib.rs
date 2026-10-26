@@ -30,6 +30,7 @@ pub mod collision;
 pub mod fog;
 pub mod grid_camera;
 pub mod kdcol;
+pub mod lensflare;
 pub mod lighting;
 pub mod mesh_coverage;
 pub mod pads;

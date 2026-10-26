@@ -33,7 +33,7 @@
 //! See `docs/formats/pure-status.md` and `docs/formats/collision.md`.
 
 use oag_tables::fexml;
-use oag_vex::{collision, fog, lighting, track, vex, world_lights};
+use oag_vex::{collision, fog, lensflare, lighting, track, vex, world_lights};
 
 const PURE: &str = "data/images/pure-psp-usa.chd";
 const PULSE: &str = "data/images/pulse-psp-usa.chd";
@@ -654,6 +654,8 @@ fn the_light_classes_are_on_every_pure_circuit() {
     let circuits = circuits(&mut archives);
     let mut read = 0;
     let mut totals = [0; 3];
+    let mut total_flares = 0;
+    let mut flare_atlas: Option<Vec<u8>> = None;
     for circuit in &circuits {
         let Ok(blob) = archives.read_name(circuit) else {
             continue;
@@ -703,6 +705,59 @@ fn the_light_classes_are_on_every_pure_circuit() {
         totals[0] += ambients;
         totals[1] += directionals;
         totals[2] += wopoints;
+        // `lensflare` (0x390): one node on seven circuits, none on the four classics,
+        // Sinucit or the four Zone circuits (`docs/rendering/lens-flare.md`).
+        let flares = lensflare::lensflares(&blob, &nodes);
+        let flare_nodes = named(v4.lensflare.expect("recovered"), "lensflare");
+        assert_eq!(
+            flares.len(),
+            flare_nodes,
+            "{circuit}: every lensflare node parses"
+        );
+        total_flares += flare_nodes;
+        if flare_nodes > 0 {
+            // Every flare circuit ships the same 64x64 atlas, `LensflareComponents.tga`,
+            // the texture the original binds for the draw (read live on Vineta K:
+            // its VRAM texels equal this decode byte for byte).
+            let atlas: Vec<_> = vex::textures(&blob)
+                .expect("texture block")
+                .into_iter()
+                .flatten()
+                .filter(|t| {
+                    t.asset_path.as_deref().is_some_and(|p| {
+                        p.to_ascii_lowercase().ends_with("lensflarecomponents.tga")
+                    })
+                })
+                .collect();
+            assert_eq!(atlas.len(), 1, "{circuit}: one LensflareComponents.tga");
+            assert_eq!(
+                (atlas[0].width, atlas[0].height, atlas[0].bits_per_pixel),
+                (64, 64, 8),
+                "{circuit}: a 2x2 atlas of 32x32 cells"
+            );
+            let rgba = atlas[0].to_rgba();
+            match &flare_atlas {
+                None => flare_atlas = Some(rgba),
+                Some(first) => {
+                    assert_eq!(first, &rgba, "{circuit}: the same atlas on every circuit")
+                }
+            }
+        }
+        if circuit.contains("01_Vineta_K") {
+            // Read live in the original: `+0x50` after the importer, `+0x60` the
+            // ring colour (0.71074 grey), the node's direction `+0x140`.
+            let [flare] = flares[..] else {
+                panic!("Vineta K authors one lensflare")
+            };
+            assert_eq!(flare.anchor, [-51.8261, 12.773_925, 23.322_824]);
+            assert_eq!(flare.colour, [0.71074; 3]);
+            let [x, y, z] = flare.direction;
+            assert!(
+                (x + 0.889_717).abs() < 1e-5
+                    && (y - 0.219_29).abs() < 1e-5
+                    && (z - 0.400_39).abs() < 1e-5
+            );
+        }
         read += 1;
     }
     // Sixteen circuits: the four classics author one ambient and no directional,
@@ -712,5 +767,9 @@ fn the_light_classes_are_on_every_pure_circuit() {
         totals,
         [21, 30, 662],
         "ambient, directional, wopoint + wospot nodes"
+    );
+    assert_eq!(
+        total_flares, 7,
+        "seven of the sixteen circuits author a lensflare"
     );
 }

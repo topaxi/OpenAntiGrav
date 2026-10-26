@@ -132,6 +132,9 @@ pub struct Classes {
     /// The track's spot light, the same list's other class
     /// ([`crate::world_lights::CLASS_WOSPOT`] in version 6).
     pub wospot: Option<u32>,
+    /// The sun's lens flare anchor ([`crate::lensflare`]). Pure authors it at
+    /// `0x390`; Pulse's name table lists `0x3de` and no Pulse file authors one.
+    pub lensflare: Option<u32>,
 }
 
 /// The table used by every file Pulse ships except one; recovered in full (see
@@ -171,6 +174,9 @@ pub const V6: Classes = Classes {
     point_light: Some(super::CLASS_POINT_LIGHT),
     wopoint: Some(crate::world_lights::CLASS_WOPOINT),
     wospot: Some(crate::world_lights::CLASS_WOSPOT),
+    // The name table's id, from `class_names.rs`; no Pulse file authors a node of it
+    // (`docs/rendering/shadows.md`), so listing it changes nothing Pulse decodes.
+    lensflare: Some(0x3de),
 };
 
 /// The table Pure's 156 version-4 files use, and Pulse's one legacy
@@ -302,6 +308,13 @@ pub const V4: Classes = Classes {
     // **90**, as for the lights above.
     wopoint: Some(0x381),
     wospot: Some(0x380),
+    // **`lensflare`**, index 35 of the run, `0x390` (the run's gap rule, `0x36b + 34 + 3`).
+    // Seven of Pure's 16 circuits author two nodes of it (`lensflare_*` and
+    // `lensflare_*shape_`), and the importer `Lensflare_ImportNode` (`0x0888c444`)
+    // registers it. Confidence **90**: exact names and 80-byte payload on every
+    // authoring circuit, the consumer read and watched live on Vineta K
+    // (`docs/ghidra/functions/psp-pure-usa/lensflare.md`).
+    lensflare: Some(0x390),
 };
 
 /// The table Pure's 15 version-3 files use. Nothing is recovered; version 3 also
@@ -338,6 +351,7 @@ pub const V3: Classes = Classes {
     point_light: None,
     wopoint: None,
     wospot: None,
+    lensflare: None,
 };
 
 /// The class table for a file's version word, or `None` for a version this

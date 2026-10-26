@@ -247,3 +247,15 @@
 # 2026-10-26 pure-render-fidelity: the hull's GE light list and the spline sample it scales by (scene-light.md)
 0x08841648	function	SceneLight_BuildLightingList	85	scene-light.md
 0x08843d1c	function	Spline_SampleSegment	80	scene-light.md
+0x0888c380	function	Lensflare_ConstructNode	85	lensflare.md
+0x0888c444	function	Lensflare_ImportNode	90	lensflare.md
+0x0888c91c	function	Lensflare_UpdateSunPosition	90	lensflare.md
+0x0888caa8	function	Lensflare_QueueOcclusionProbe	85	lensflare.md
+0x0888c248	function	Lensflare_ReadOcclusion	90	lensflare.md
+0x08936a2c	function	FxLensflare_Construct	90	lensflare.md
+0x089365c4	function	FxLensflare_UpdateIntensity	92	lensflare.md
+0x08936758	function	FxLensflare_QueueDraw	80	lensflare.md
+0x08937200	function	FxLensflare_Draw	92	lensflare.md
+0x08936794	function	FxLensflare_WriteQuad	90	lensflare.md
+0x08abe0d8	data	Lensflare_NodeVtable	90	lensflare.md
+0x08ac2754	data	FxLensflare_Vtable	90	lensflare.md

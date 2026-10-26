@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [pure]
 updated: 2026-10-26
-summary: "Read Pure's FxLensflare.cpp draw path; add lensflare at 0x390 to the V4 class table; shadows.md Pure zero in doubt"
+summary: "Pure's sun flare law is measured (docs/rendering/lens-flare.md); wire a 2D additive pass; shadows.md Pure zero in doubt; HD/2048/Omega unread"
 ---
 
 # A sun lens flare on Pure, and which titles carry it
@@ -162,53 +162,32 @@ Strings that matched the flare search but are not this effect: `WO_ROCKET_FLARE`
 
 ## What our renderer does today
 
-Nothing. No code reads class `0x390` (`crates/vex`, `crates/raceplay`, `crates/render`)
-and `Lighting.Use Lens Flare` is parsed and dropped (`crates/tables/src/envsettings.rs`,
-tests at `crates/tables/src/envsettings/tests.rs`). The viewer prints the class as
-"unnamed - not in the read table". I did not find a loader report that counts
-unread classes, so whether one exists was not checked.
+Nothing draws the flare. `oag_vex::lensflare` reads the node and `classes::V4.lensflare` is `0x390`
+(2026-10-26); `Lighting.Use Lens Flare` is still parsed and dropped (`crates/tables/src/envsettings.rs`).
+
+## Done 2026-10-26 (`pure-lens-flare-re`)
+
+The draw path, payloads, law, texture and class id are recovered and written up:
+[`docs/rendering/lens-flare.md`](../../docs/rendering/lens-flare.md) (the law, with the
+numbers) and [`docs/ghidra/functions/psp-pure-usa/lensflare.md`](../../docs/ghidra/functions/psp-pure-usa/lensflare.md)
+(the functions). `lensflare` is `0x390` in V4, `oag_vex::lensflare` reads the node, and the
+census is in `class_table_ground_truth.rs`. Where this page's census above and those differ,
+those win (the Vineta K anchor is `(-51.826, 12.774, 23.323)`; the sun is a direction, not a point).
 
 ## Open
 
-- **The Pure flare's drawing law is unread.** Nothing in the data gives the sprite
-  geometry, the ray shape, the size, the brightness, or the occlusion or fade rule.
-  The data gives the anchor (`lensflare_` payload) and the texture name only.
-- **The Pure class id is not in `V4`** (`crates/vex/src/vex/classes.rs`). Adding
-  `lensflare` at `0x390` is ready to wire, and it needs no RE to name the node.
-- **The shadows.md Pure zero is in doubt** (see "Pure's shadow census contradicts"
-  above). `docs/rendering/shadows.md` (line 100, "Wipeout Pure authors none of the
-  seven") and `crates/vex/tests/shadow_occluder_ground_truth.rs` (`CLASS_OCCLUDER`
-  is Pulse's `0x3c3`, line 73) both use Pulse's ids on Pure. Not edited here. The
-  wiring or census lane must walk Pure's `0x375` nodes on Vineta K and compare the
-  names with Pulse's occluder payloads before it trusts the zero.
-- **Pure's eight unwalked circuits and the DLC packs are not searched by path.** A
-  node with no name would not show in the name search.
-- **HD's class `0x3de` nodes are not walked** (HD's track files are PSARC entries;
-  the name search found no `lensflare` in them). **2048's and Omega's node censuses
-  are not run.** Omega's `data02.psarc` names `lensflare_sun` and
-  `lensflare_sunshape_` (circuit not mapped). The extracted Vita trees hold the
-  eboot and no flare-named data file; they may not hold every data file.
-- **The Pulse absence is checked by name** (whole `Data.wad`, uncompressed, 1,142
-  entries, zero `lensflare` hits) **and by the earlier class census**
-  (`shadows.md`, `0x3de` on 382 v6 files). Both use Pulse's own ids, which is sound
-  for Pulse.
+- **Wire the draw** (ready): a 2D additive pass after the 3D scene, the law in `lens-flare.md`. It needs the
+  camera rotation, a 4 x 4 depth sample of the sun's pixel, the atlas from the circuit's `LensflareComponents.tga`.
+  Render-side; the sun direction is per circuit data, no simulation state.
+- **Unread, own address each:** the queue ordering of key `0x4e000000` itself (the frame position is measured: after scenery, before the post passes and HUD); whether the depth
+  sample is one frame old; the random source `FUN_0882f70c` and flag `DAT_002883fc`; the sort comparator `0x08936598`.
+- **The shadows.md Pure zero is in doubt** (`0x375` `Shadow_Shape` nodes on Vineta K; `docs/rendering/shadows.md`
+  and `shadow_occluder_ground_truth.rs` use Pulse's ids on Pure). Not touched by this lane.
+- **Other titles:** HD's `LensFlare.cpp` (`0x002aee58`), 2048 and Omega are unread; they ship a rays texture and a flag
+  Pure lacks. Pure's law is not assumed for them. Pure's DLC packs and the EU disc's other circuits are not searched.
 
 ## Next Steps
 
-1. **RE-first, Pure's draw path.** Read the string xrefs of `FxLensflare.cpp`
-   (Pure `BOOT.BIN` file offset `0x276cf4`) and `Lensflare_Importer.cpp`
-   (`0x24a394`) to the function that consumes the `lensflare_` node. Name that
-   function, then read what it draws. A new Ghidra page under
-   `docs/ghidra/functions/psp-pure-usa/` is owed. Ghidra was not touched by this
-   scout.
-2. **RE-first, HD's law** (it is the readable one): start at `LensFlare.cpp`'s first
-   function, `0x002aee58`, the address `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`
-   (line 113) records for that file. Then the `LensFlare_vp`/`LensFlare_fp` shaders
-   (HD EBOOT string xrefs at vaddr `0x7a01a8` / `0x7a01b8`, file offsets
-   `0x7901a8` / `0x7901b8`) and the reader of `Lighting.Use Lens Flare` (string at
-   vaddr `0x785f80`, file offset `0x775f80`). Use it as the reference for Pure's
-   sprite shape only after the Pure read agrees with it. The string addresses are
-   for xrefs, not for direct reads.
-3. **Ready-to-wire, now:** add `lensflare` `0x390` to Pure's V4 class table, and a
-   census test over Vineta K's two nodes (`crates/pure/tests/`), so the anchor is
-   read and named. No draw yet.
+1. Wire the Pure flare (`oag-wire`): load the node and atlas, draw ten additive quads per the law, behind a settings
+   value with the original's look as default. Judge a frame pair against `pure-psp/vineta` as the maintainer saw it.
+2. Walk `0x375` on Vineta K against Pulse's occluder payloads before trusting the shadows.md zero.
