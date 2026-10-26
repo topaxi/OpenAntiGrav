@@ -328,7 +328,7 @@ that `0x12` is its multiplayer twin (the twin is read, not measured).
 | `g_game_mode` | hull built | skin applied |
 | --- | --- | --- |
 | 3, 4, 5, 7, 9, 10, `0xb` | `%s\%s.vex` (the picked `FE_TeamModel`'s `location`) | the picked `FE_ModelSkin`: `Eliminator`, else `Alternative`, else none |
-| 6 (Zone) | `%s\Zone.vex` | none (`local_40 = 0`) |
+| 6 (Zone) | `%s\Zone.vex` | none (`local_40 = 0`); the team's paint is embedded in its own `Zone.vex`, see [zone-mode.md](zone-mode.md) |
 | 8, `0x12` (Eliminator) | `%s\Ship.vex`, the team model ignored | always `Eliminator`, no unlock consulted |
 | anything else | `%s\%s.vex` | none |
 
