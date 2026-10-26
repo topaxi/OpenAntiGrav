@@ -73,6 +73,7 @@ impl Race {
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
+            self.advance_now_playing();
             self.view.contact.shake.advance(self.sim.dt);
             self.advance_seat_shakes(self.sim.dt);
             let mut shown = false;

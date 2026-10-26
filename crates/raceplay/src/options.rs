@@ -817,6 +817,9 @@ pub struct Setup {
     /// [`Options::hud`], carried through to the readout.
     #[cfg(feature = "view")]
     pub capture_hud: Option<CaptureHud>,
+    /// The song-name marquee, read at load for a title that authors one.
+    #[cfg(feature = "view")]
+    pub now_playing: Option<crate::now_playing::View>,
     /// [`Options::world_clock_offset`], carried to the scene's animation clock.
     #[cfg(feature = "view")]
     pub world_clock_offset: f32,

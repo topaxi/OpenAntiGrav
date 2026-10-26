@@ -419,6 +419,11 @@ pub fn run(
             options.settings.audio.music_source,
             &oag_source::cache::default_audio_cache_dir(),
         );
+        // The song lands on the tick the worker finishes, which a loop running faster than the
+        // disc reads would otherwise spend on the whole capture: wait for it, as a dump already
+        // does, so the music (and the now-playing marquee that follows it) is a function of the
+        // tick count on every backend, `--no-audio` included.
+        audio.settle_music();
         // The five render-profile settings, resolved against this title -
         // see `crate::settings::RenderProfile`. Read once rather than inline
         // below, since `anti_aliasing` is needed twice: once for the scene

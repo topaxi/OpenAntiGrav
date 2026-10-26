@@ -245,6 +245,29 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
         race_flow: &[("Game_FLOW", "Gameplay"), ("Gameplay_FLOW", "Race")],
         front_end_flow: &[("Game_FLOW", "Menus")],
     }),
+    now_playing: Some(NOW_PLAYING),
+};
+
+/// The race screen's now-playing marquee: the `item InGameMusicDisplay` Omega's `data00.psarc`
+/// ships in `ingame_definition.xml` is HD's, byte for byte but for a `reset` on its viewport.
+/// **Behaviour inherited from HD**: Omega's executable has not been read for the display, so
+/// HD's measured fade and scroll stand in, per the 2048/Omega lineage rule. The names are the
+/// `PI_Music` nodes of the music plugin ([`names::MUSIC_PLUGIN_DEFINITION`]); a song is
+/// addressed by Wwise state, so `names.file` is unused.
+pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
+    names: oag_title::DeclaredTracks {
+        declared_in: names::MUSIC_PLUGIN_DEFINITION,
+        file: "",
+    },
+    layout: r"Data\Plugins\frontend\gui\ingame_definition.xml",
+    item: "InGameMusicDisplay",
+    bar: "InGameMusicBG",
+    text: "InGameMusicText",
+    title_key: None,
+    separator: " - ",
+    fade_step: 5,
+    scroll_step: 1,
+    origin: oag_title::effects::Origin::InheritedFrom("Wipeout HD"),
 };
 
 /// Paths inside the packages.

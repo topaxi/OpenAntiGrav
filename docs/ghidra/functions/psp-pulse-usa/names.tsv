@@ -1412,3 +1412,7 @@
 0x088a7a5c	function	Image_Draw	80	hud-boost-smear.md
 0x0892a408	function	Trail_Submit	85	exhaust.md
 0x0883f7b8	function	Ship_UpdateBackwardCamera	80	cannon-quake-leachbeam.md
+0x08826ff4	function	RaceManager_ShowNowPlaying	85	now-playing.md
+0x0882be1c	function	RaceManager_UpdateNowPlaying	85	now-playing.md
+0x088290bc	function	RaceManager_ApplyNowPlayingAlpha	80	now-playing.md
+0x08938e70	function	MusicPlayer_StartNextSong	65	now-playing.md

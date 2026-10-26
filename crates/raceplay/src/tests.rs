@@ -363,6 +363,7 @@ fn setup(handling: Handling) -> Setup {
         pose_override: None,
         field_poses: Vec::new(),
         capture_hud: None,
+        now_playing: None,
         world_clock_offset: 0.0,
         gantry_seconds: None,
         camera_override: None,

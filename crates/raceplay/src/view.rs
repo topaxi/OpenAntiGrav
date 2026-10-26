@@ -75,6 +75,8 @@ pub struct RaceView {
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].
     pub(super) capture_hud: Option<crate::CaptureHud>,
+    /// The song-name marquee ([`crate::now_playing`]), when the title authors one.
+    pub(super) now_playing: Option<crate::now_playing::View>,
     /// Seconds added to the world meshes' animation clock. See [`crate::Options::world_clock_offset`].
     pub(super) world_clock_offset: f32,
     /// See [`crate::Options::gantry_seconds`].

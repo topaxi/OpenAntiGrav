@@ -247,6 +247,8 @@ mod magstrip_wake;
 mod missile_blast;
 #[cfg(feature = "view")]
 mod models;
+#[cfg(feature = "view")]
+pub mod now_playing;
 mod options;
 mod original_ai;
 mod original_tables;

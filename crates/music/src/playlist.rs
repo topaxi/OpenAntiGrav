@@ -13,6 +13,9 @@ pub struct Music {
     pub id: String,
     /// The directory the track lives in, e.g. `Data\Music\SomeArtist`.
     pub location: String,
+    /// The `Artist` the node's `Entry` carries, when it has one. Shown by the in-race
+    /// now-playing display ([`oag_title::NowPlaying`]).
+    pub artist: Option<String>,
 }
 
 impl Music {
@@ -35,10 +38,8 @@ impl Music {
 /// `MusicSelection` screen walks, so "the first track" means something the disc
 /// decides rather than something the archive directory happens to do.
 ///
-/// The `Artist` and `Label` an entry also carries are deliberately **not**
-/// read, the same way `teams` skips `PI_TeamModel`: nothing displays them,
-/// and a public field holding shipped text that no caller reads is worse than
-/// one that appears when it is needed.
+/// The `Artist` an entry carries is read, for the now-playing display; the `Label` is not,
+/// because nothing displays it.
 #[must_use]
 pub fn music(definition_xml: &str) -> Vec<Music> {
     let root = parse(definition_xml);
@@ -62,9 +63,14 @@ fn collect_music(node: &Node, out: &mut Vec<Music>) {
 fn read_music(node: &Node) -> Option<Music> {
     let id = node.attr("name")?.to_string();
     let values = node.children_named("Values").next()?;
+    let artist = node
+        .children_named("Entry")
+        .find_map(|entry| entry.attr("Artist"))
+        .map(str::to_string);
     Some(Music {
         id,
         location: values.attr("location")?.to_string(),
+        artist,
     })
 }
 

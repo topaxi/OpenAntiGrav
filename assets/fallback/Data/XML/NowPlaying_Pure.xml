@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The race screen's now-playing marquee for Wipeout Pure, whose disc authors none: this
+  project's own layout, in the dialect the front end's reader parses, at an entry name no
+  disc holds. Authored in the PSP's 480x272 grid.
+
+  BORROWED FROM PULSE, CHOSEN NOT MEASURED. The item, widget names and numbers are the ones
+  Pulse's own InGame_Definition.xml authors for its display (a bar along the foot of the
+  screen with the song scrolling through it from the right); Pure's executable and layout
+  carry nothing like it. The fade and scroll timing are Pulse's, in the title's
+  `NowPlaying` row.
+-->
+<Screen name="NowPlaying">
+  <Viewport>
+    <Values x="130" height="272" width="150"></Values>
+    <item name="InGameMusicDisplay" OffsetX="130" OffsetY="247">
+      <Image name="InGameMusicBG">
+        <Values width="150" height="20" color="0x50000000" blurY="1"></Values>
+      </Image>
+      <Text name="InGameMusicText">
+        <Values cached="0" idstring="IG_HUD_ARTIST" font="HUDSmall" scale="1.0" align="left" blurY="1" x="150" y="5" color="0xFFFFFFFF"></Values>
+      </Text>
+    </item>
+  </Viewport>
+</Screen>

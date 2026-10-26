@@ -47,6 +47,7 @@ pub mod at9;
 pub mod mp3;
 pub mod omega;
 pub mod playlist;
+pub mod song_names;
 pub mod wem;
 
 use anyhow::{Context, Result, bail};
@@ -154,16 +155,29 @@ fn declared(archives: &mut Archives, tracks: oag_title::DeclaredTracks) -> Vec<E
 /// costs less than holding a parsed catalogue across the two calls, which are
 /// minutes apart in a real session.
 fn declared_names(archives: &mut Archives, tracks: oag_title::DeclaredTracks) -> Vec<String> {
+    declared_nodes(archives, tracks)
+        .iter()
+        .map(|track| track.entry_name(tracks.file))
+        .collect()
+}
+
+/// The `PI_Music` nodes whose audio resolves, in file order: [`declared_names`] with the
+/// nodes kept, so a name and an index mean the same track to both.
+pub(crate) fn declared_nodes(
+    archives: &mut Archives,
+    tracks: oag_title::DeclaredTracks,
+) -> Vec<playlist::Music> {
     let Ok(definition) = archives.read_name(tracks.declared_in) else {
         return Vec::new();
     };
-    let Ok(definition) = String::from_utf8(definition) else {
+    // `text` expands the shortened dialect Pulse's definition is written in; a plain one
+    // (Pure's, HD's) passes through.
+    let Ok(definition) = oag_tables::fexml::text(&definition) else {
         return Vec::new();
     };
     playlist::music(&definition)
-        .iter()
-        .map(|track| track.entry_name(tracks.file))
-        .filter(|name| archives.locate(name).is_some())
+        .into_iter()
+        .filter(|track| archives.locate(&track.entry_name(tracks.file)).is_some())
         .collect()
 }
 

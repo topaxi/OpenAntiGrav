@@ -159,6 +159,27 @@ pub const MUSIC: &oag_title::Music = &oag_title::Music {
     front_end: Some(names::FRONT_END_MUSIC),
     tracks: None,
     state_tracks: None,
+    now_playing: Some(NOW_PLAYING),
+};
+
+/// The race screen's now-playing marquee: `item InGameMusicDisplay` in
+/// `InGame_Definition.xml`, the strings of the `PI_Music` nodes (`Artist - name`), and the
+/// timing `RaceManager_UpdateNowPlaying` (`0x0882be1c`) runs per update, read off the
+/// executable: `docs/ghidra/functions/psp-pulse-usa/now-playing.md`.
+pub const NOW_PLAYING: oag_title::now_playing::NowPlaying = oag_title::now_playing::NowPlaying {
+    names: oag_title::DeclaredTracks {
+        declared_in: names::GAME_PLUGIN_DEFINITION,
+        file: "music.at3",
+    },
+    layout: names::INGAME_DEFINITION,
+    item: "InGameMusicDisplay",
+    bar: "InGameMusicBG",
+    text: "InGameMusicText",
+    title_key: None,
+    separator: " - ",
+    fade_step: 5,
+    scroll_step: 1,
+    origin: oag_title::effects::Origin::Measured,
 };
 
 /// Pulse's front end: the layout its `Skin.xml` authors and the boot chain a

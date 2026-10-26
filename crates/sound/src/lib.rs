@@ -36,6 +36,7 @@ use oag_audio::mixer::MUSIC_MASTER_TRIM;
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
+use oag_music::song_names::SongName;
 use serde::{Deserialize, Serialize};
 
 use oag_display::percentage;
@@ -47,11 +48,13 @@ pub mod sfx;
 
 mod listings;
 mod menu_music;
+mod now_playing;
+pub use now_playing::NowPlaying;
 pub mod probe;
 mod race_music;
 mod resume;
 mod survey;
-use library::{Library, NoLibrary, listing, load_entry, load_front_end};
+use library::{Library, NoLibrary, load_entry, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
 pub use race_music::{MusicFetchWorker, RacePick};
@@ -478,6 +481,9 @@ pub struct Audio {
     /// is on. `None` until the first race starts one ([`Audio::race_music_pick`]);
     /// never reset by a visit to the menus.
     race_index: Option<usize>,
+    /// How many race songs have started this run: what the now-playing display re-triggers on
+    /// ([`Audio::now_playing`]). A resume or a source swap of the same song does not count.
+    song_serial: u32,
     /// Where the current race track was cut off, in the track's seconds
     /// ([`oag_audio::Mixer::seek`]'s unit), so the next race resumes.
     race_position: f64,
@@ -579,6 +585,7 @@ impl std::fmt::Debug for Audio {
             .field("race_voice", &self.race_voice)
             .field("race_from", &self.race_from)
             .field("race_index", &self.race_index)
+            .field("song_serial", &self.song_serial)
             .field("race_position", &self.race_position)
             .field("race_tracks", &self.race_tracks)
             .field("race_cache", &self.race_cache.is_some())
@@ -640,6 +647,7 @@ impl Audio {
             race_voice: None,
             race_from: None,
             race_index: None,
+            song_serial: 0,
             race_position: 0.0,
             race_tracks: 0,
             race_cache: None,
@@ -1028,6 +1036,9 @@ fn ps2_directory(archive: &mut MusicArchive) -> Result<ps2_music::Directory> {
 #[derive(Debug, Clone)]
 struct Soundtrack {
     tracks: Vec<Track>,
+    /// What the disc calls each track, parallel to [`Self::tracks`]; empty when this release
+    /// names none (the PS2's archive carries no names).
+    names: Vec<Option<SongName>>,
 }
 
 /// One soundtrack track, addressed the way its own disc addresses it.
@@ -1061,14 +1072,17 @@ impl Soundtrack {
     /// An archive that opens and then will not parse.
     fn read(library: &dyn Library, source: &str, platform: Platform) -> Result<Option<Self>> {
         let _work = probe::work("a soundtrack listing");
-        let tracks = match platform {
-            Platform::Ps2 => ps2_soundtrack(source)?,
+        let (tracks, names) = match platform {
+            Platform::Ps2 => (ps2_soundtrack(source)?, Vec::new()),
             Platform::Psp | Platform::Ps3 | Platform::Vita | Platform::Ps4 => {
-                archived_soundtrack(library, source)?
+                match archived_soundtrack(library, source)? {
+                    Some((tracks, names)) => (Some(tracks), names),
+                    None => (None, Vec::new()),
+                }
             }
-            Platform::Unknown => None,
+            Platform::Unknown => (None, Vec::new()),
         };
-        Ok(tracks.map(|tracks| Self { tracks }))
+        Ok(tracks.map(|tracks| Self { tracks, names }))
     }
 
     /// Whether this is the same soundtrack as `other`, one track for one track.
@@ -1144,21 +1158,27 @@ fn ps2_soundtrack(source: &str) -> Result<Option<Vec<Track>>> {
     ))
 }
 
+/// A listing's tracks and, parallel to them, what the disc calls each.
+type TrackNames = (Vec<Track>, Vec<Option<SongName>>);
+
 /// The soundtrack entries of a source whose music is inside an archive (every
 /// release but PS2).
 ///
 /// Which entries depends on the booted title, so it is asked in `oag_music`;
 /// [`Track::at`] is opaque ([`oag_music::Entry::at`]).
-fn archived_soundtrack(library: &dyn Library, source: &str) -> Result<Option<Vec<Track>>> {
-    Ok(listing(library, source)?.map(|entries| {
-        entries
-            .into_iter()
-            .map(|entry| Track {
-                at: entry.at,
-                seconds: entry.seconds,
-            })
-            .collect()
-    }))
+fn archived_soundtrack(library: &dyn Library, source: &str) -> Result<Option<TrackNames>> {
+    Ok(
+        library::named_listing(library, source)?.map(|(entries, names)| {
+            let tracks = entries
+                .into_iter()
+                .map(|entry| Track {
+                    at: entry.at,
+                    seconds: entry.seconds,
+                })
+                .collect();
+            (tracks, names)
+        }),
+    )
 }
 
 /// Reads one soundtrack track off `source` and turns it into a sound.

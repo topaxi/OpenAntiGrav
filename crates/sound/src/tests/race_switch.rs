@@ -144,6 +144,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         race_voice: None,
         race_from: Some(Platform::Ps2),
         race_index: Some(0),
+        song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         // The target platform is already decoded (as `held` for the menu row),
@@ -209,6 +210,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         race_voice: None,
         race_from: None,
         race_index: None,
+        song_serial: 0,
         race_position: 0.0,
         race_tracks: 0,
         // Nothing cached and the fake PSP path has no soundtrack, so

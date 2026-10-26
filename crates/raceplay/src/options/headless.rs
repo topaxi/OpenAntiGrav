@@ -205,6 +205,8 @@ impl Setup {
             #[cfg(feature = "view")]
             capture_hud: None,
             #[cfg(feature = "view")]
+            now_playing: None,
+            #[cfg(feature = "view")]
             world_clock_offset: 0.0,
             #[cfg(feature = "view")]
             gantry_seconds: None,

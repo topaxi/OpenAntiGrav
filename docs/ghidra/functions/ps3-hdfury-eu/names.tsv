@@ -800,3 +800,5 @@
 0x00390c68	function	Math_CosPoly	80	hull-shake.md
 0x00390ca0	function	Math_SinPoly	80	hull-shake.md
 0x0043c280	function	Libc_RandImpl	85	hull-shake.md
+0x0005c8f8	function	RaceManager_ShowNowPlaying	80	now-playing.md
+0x0005c638	function	RaceManager_UpdateNowPlaying	80	now-playing.md

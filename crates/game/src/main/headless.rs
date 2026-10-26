@@ -572,6 +572,11 @@ pub(crate) fn run_race(
             settings.audio.music_source,
             &oag_source::cache::default_audio_cache_dir(),
         );
+        // The song lands on the tick the worker finishes, which a loop running faster than the
+        // disc reads would otherwise spend on the whole capture: wait for it, as a dump already
+        // does, so the music (and the now-playing marquee that follows it) is a function of the
+        // tick count on every backend, `--no-audio` included.
+        audio.settle_music();
         // **The title's own profile**, which this leg used to have no way to
         // reach: `race::load` resolves the title to pick a default track and
         // team, and since it carries that out in `Loaded::title` there is

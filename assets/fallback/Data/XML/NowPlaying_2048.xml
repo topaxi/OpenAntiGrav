@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The race screen's now-playing marquee for Wipeout 2048, whose layouts author none: this
+  project's own layout, in the dialect the front end's reader parses, at an entry name no
+  disc holds. Authored in the Vita's 960x544 grid.
+
+  BORROWED FROM WIPEOUT HD (through Omega, which ships HD's item), CHOSEN NOT MEASURED.
+  2048's executable still looks up `InGameMusicDisplay`, `InGameMusicText` and
+  `InGameMusicBG`, but none of its layout files (base package and the 1.04 patch) holds the
+  item, so the original shows nothing. The item, widget names and shape are HD's, halved
+  from HD's 1920x1080 grid to this one; the bar is a plain translucent fill where HD's is a
+  texture of its own, and the text size is picked to sit inside the bar. The fade and scroll
+  timing are HD's, in the title's `NowPlaying` row.
+-->
+<Screen name="NowPlaying">
+  <Item name="InGameMusicDisplay" OffsetX="155" OffsetY="26">
+    <Image name="InGameMusicBG">
+      <Values width="115" height="24" color="0xA0000000"></Values>
+    </Image>
+    <Viewport>
+      <Values x="9" height="544" width="96"></Values>
+      <Text name="InGameMusicText">
+        <Values idstring="IG_HUD_ARTIST" font="HUDSmall" scale="0.5" align="left" x="115" y="5" color="0xFFFFFFFF"></Values>
+      </Text>
+    </Viewport>
+  </Item>
+</Screen>

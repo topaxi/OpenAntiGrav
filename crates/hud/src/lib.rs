@@ -57,6 +57,7 @@ mod head_to_head;
 pub mod kill_tags;
 mod lap_splits;
 pub mod messages;
+pub mod now_playing;
 mod pickup;
 mod placement;
 mod runtime;
@@ -766,6 +767,10 @@ pub struct Readout {
     /// captured from the original carries it (`CaptureHud::best_lap_centiseconds`), and it is
     /// what `BestTime` prints when set. Display only.
     pub best_lap_centiseconds: Option<u32>,
+    /// The song-name marquee, when one is up. **Not drawn by [`draw_list`]**: the host appends it
+    /// after any placement ([`now_playing::append`]), because the text runs off the left of its
+    /// clip, where a placement drops a draw whose origin is off the screen.
+    pub now_playing: Option<now_playing::Marquee>,
 }
 
 impl Readout {
