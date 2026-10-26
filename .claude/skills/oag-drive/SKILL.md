@@ -15,14 +15,17 @@ the work in isolated worktrees.
 
    | model | slots |
    | --- | --- |
-   | haiku | 0.5 |
+   | haiku, read-only `oag-scout` | 0 |
+   | haiku, anything else | 0.5 |
    | sonnet | 1 |
    | opus | 2 |
 
    Explain in one line: the budget caps *concurrent* members, an opus member
    costs two, so a budget of 3 is either three sonnets or one opus and one
-   sonnet. You are excluded from the budget. Haiku is only for purely
-   mechanical `oag-docs` sweeps (see "The roster").
+   sonnet. You are excluded from the budget, and so is a read-only haiku
+   `oag-scout` (maintainer, 2026-10-26): it runs no builds and writes only a
+   handover file, so it is spawned whenever a scout is wanted, on top of the
+   budget. Any other haiku member (a mechanical `oag-docs` sweep) costs 0.5.
 
 2. **Ask how many slots to drive** with `AskUserQuestion`. Offer 2, 3 and 4, and
    say what each means in practice (2 is easy to supervise; 3 is the usual
@@ -36,7 +39,7 @@ the work in isolated worktrees.
    lead immediately regardless of the tick, so nothing waits on it:
 
    > `1h Check subagent slot occupation and status. Run ListAgents and total the
-   > running cost (haiku 0.5 slot, sonnet 1, opus 2, budget N). For each finished member:
+   > running cost (read-only haiku oag-scout 0, other haiku 0.5, sonnet 1, opus 2, budget N). For each finished member:
    > verify its diff, merge into main, run the right gate, then remove its
    > worktree and branch. Only spawn a replacement when usage is under N, then
    > fill to N - never replace one-for-one. Keep lanes disjoint by Ghidra binary
@@ -256,7 +259,7 @@ shared machine, the `flock -o` gate, commits and the report format.
 | `oag-format` | sonnet / xhigh | a file family to decode: census, reader, every-file ground truth, format page |
 | `oag-capture` | sonnet / high | a question only the running original can answer: PPSSPP, PCSX2 or RPCS3 measurement |
 | `oag-docs` | sonnet / medium | docs and handover audits with no code logic change; spawn with `model: haiku` (0.5 slot) only for purely mechanical sweeps such as link fixes or index cleanup |
-| `oag-scout` | haiku / high | read-only opportunity sweeps (render performance, memory allocations): a ranked, measurable list in a handover thread, checked by its advisor before it reports; changes no code |
+| `oag-scout` | haiku / high | read-only opportunity sweeps (render performance, memory allocations): a ranked, measurable list in a handover thread, checked by its advisor before it reports; changes no code and runs no builds, so it costs **0 slots** |
 | `oag-compact` | sonnet / high | the standing comment compact lane: one crate per member, sequential, comments only; the checker `strip_rs_comments.py` sits beside this skill and the lead runs it before every compact merge |
 
 Pick by the lane's **main output**, not by its subject. A lane that is mostly
