@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-10-22
-summary: "HD fidelity queue: scenery items 5-8 not started, Bomb ripple rings, Moa Therma pair, exposure law, LOD bias"
+updated: 2026-10-26
+summary: "HD fidelity queue: original Bomb picture (no look-back), unlit taps of Missile/Leach/Plasma, scenery items, Moa pair, exposure, LOD"
 ---
 
 # HD fidelity lanes queued behind the cold originals
@@ -56,12 +56,17 @@ stand-in and +70 grey too bright over the start gantry (box `840,0 240x120`); th
 the whole of `hd/the-amphiseum`'s +0.42 (10.09 to 10.51). With the material skipped the box is within 9 grey of the
 original. Next: read its fragment program.
 
-**HD's unlit programs read their taps raw** (2026-10-22, `hd-blend-space`): with the scene now stored encoded, an
-additive source that was too strong shows more. `holo.wesl` was fixed from a live read (units 0-2 at gamma nibble 7);
-the Bomb's fireball (`slots::BOMB_FIRE`) and the other unlit programs in `shade.wesl` still use raw texels as light.
-The Bomb's rings now burn white at 1.8 s, with no original frame to judge them. Next: one RPCS3 frame of a Bomb blast
-at about 1.8 s with `scripts/hd-draw-dump.py`, reading the fireball and ring draws' unit nibbles, then the decode where
-the console does it (docs/rendering/hd-track-tone.md, "What is left").
+**HD's unlit programs read their taps raw** (2026-10-22, `hd-blend-space`; three closed 2026-10-26,
+`hd-render-fidelity`): with the scene stored encoded, a tap the console decodes on fetch (gamma nibble 7 in
+`SET_TEXTURE_ADDRESS`) and ours reads raw draws too pale. Read live and wired: the engine flame (rest "jewel" now blue
+with pink, no rays; nozzle box down 1.5-5.9 grey on 12 of 13 pairs), the trail tube's two colour taps
+(`hd-race/talons-pack` whole 46.47 to 46.12) and the Bomb's fireball (yellow where it was near white); the Bomb's
+shockwave ring reads raw on the console too (nibble 0), so its white burn is the console's law. Evidence:
+engine-trail.md, "The flame's colour tap is decoded on fetch" and "The trail's colour taps are decoded on fetch";
+hd-unlit-programs.md, "The Bomb's units, read live". **Still unread**: the Missile blast's three programs, the
+LeachBall and its ring, the Plasma trio, the rocket smoke, the absorb shell, the light cone. Method: one
+`rsx-draw-list.py --samplers` of a frame that draws them (the stored dumps under `data/reference/hd-flame-tap/` hold
+none of these), read unit 0's nibble, decode in `shade.wesl` on `encoded_out` only.
 
 **Fragment-stage texture budget** (2026-10-22, `hd-texture-slots`): the per-slot mesh fragment stage is at 16 sampled
 textures (group 1's six, group 2's ten) after the Zone Inner/Outer fold, which is WebGPU's and GL's ceiling. A seventh material
@@ -112,9 +117,12 @@ one), or the sky map as a layer beside the probes (different sizes today, 512x25
 The queue for the next drive, in order (written at the 2026-10-22 wind-down; each item's evidence is in the
 section above or the doc page it names). At most one lane in `crates/mesh` at a time.
 
-1. **The Bomb's ripple rings** (capture, about 10 minutes): one cold RPCS3 frame of an HD Bomb blast at about
-   1.8 s, read with `scripts/hd-draw-dump.py`. Since the encoded blend landed the rings burn white where they drew
-   yellow; the blend law is measured, the weapons' additive sources are not (docs/gameplay/weapon-lineage.md).
+1. **A WCB-on picture of the Bomb blast** at about 0.7 s and 1.8 s (the unit nibbles are read, 2026-10-26; what is
+   missing is the picture to judge the fireball's yellow and the rings' white against). The draw-list capture
+   (`rpcs3-hd-whiteout.py --bomb`) stalls reading vertex spans under load and its retries add 0.5 s each: pass
+   `--attempts 4 --delay 0.1` and take `drive.screenshot` before the dump. The bomb lands behind the chase camera:
+   holding `triangle`, `r3` or `l3` on the virtual pad in a Time Trial does not turn the view (2026-10-26), so the shot
+   needs another camera (a rival's bomb ahead of the player, or the player placed behind the dropped bomb).
 2. **`hd-tech-de-ra`** (opus, mesh): Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
    brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
    (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).

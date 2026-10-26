@@ -400,7 +400,7 @@ fn half_to_f32(bits: u16) -> f32 {
 
 /// Draws the model once into a `SIZE`x`SIZE` target of `format`, built for
 /// `store`, and reads the centre back as `0..1` values.
-fn draw_into(
+pub(crate) fn draw_into(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     model: &Model,

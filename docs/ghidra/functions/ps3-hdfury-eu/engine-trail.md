@@ -2465,3 +2465,99 @@ eye-vector dump is a different ribbon). Omega: checked, differs - its
 as PS4 shaders and its `eboot.bin` names `TrailEffectManager.cpp`, so the
 family carries forward, but `ps3-microcode.py` cannot read PS4 code; not
 wired on Omega, no PS4 capture path.
+
+## The flame's colour tap is decoded on fetch (2026-10-26, `hd-render-fidelity`)
+
+**Claim**: the `flame_test` program's colour tap reads `flame_01` sRGB-decoded on fetch; its noise
+tap's alpha is raw. **Confidence 85** (73 draws on three frames, one register field; the field's
+meaning is the one `hd-track-tone.md`, "The holographic taps are decoded on fetch", read for
+`scanlinebillboard`, and its lightmap units read 0 on the same frames).
+
+**The register read.** Every flame draw (blend `SRC_ALPHA`/`ONE`, colour mask `0x00010101`, cull
+off, unit 0 a 64x64 DXT45 with four mips, the draw state of "The flare's draw state, read live"
+above) on three RPCS3 frame dumps taken by the `hd-craft-ibl-probe` lane (two frames of one
+craft, one of a grid of eight; 73 draws) binds unit 0 with `SET_TEXTURE_ADDRESS` `0x60710101`:
+wrap repeat, and **gamma nibble 7** in bits 20-23 (RGB decoded, alpha raw). Units 1 and 2,
+bound but not read by the program, carry `0x60030303` (nibble 0). The per-draw lines are kept in
+`data/reference/hd-flame-tap/flame-draw-units.txt` with the dumps beside it; reproduce with
+`python3 scripts/rsx-draw-list.py data/reference/hd-flame-tap/c1 f --samplers`.
+
+**What it changes.** The packer encodes the program's output before the blend (`hd-track-tone.md`,
+"HD's blends combine encoded values"), so the console adds `enc(dec(t) * colour_scale / 2)`.
+Ours used the raw texel as light (the 2026-08-24 choice "not decoded on the linear target"), which
+on the encoded store drew `enc(t / 2)`: the rest flame white and clipped, with a bloom halo and
+bright spike rays, where the original's is a mid blue with pink. `shade.wesl` now decodes the
+colour tap when the scene stores encoded values (`encoded_out`, set only by HD's measured
+`Looks::blends_encoded`); every other target draws the flame as before. Pinned by
+`oag-render::it hd_flame_encoded_tap` (grey 128 stores 0.502, was 0.731).
+
+**Measured on the compare pairs** (mean grey difference against the cold originals; the nozzle
+box `900,760 120x120`; whole frame by the compare page's metric):
+
+| pair | nozzle box before | after | whole frame before | after |
+| --- | ---: | ---: | ---: | ---: |
+| `hd/anulpha-pass` | 18.89 | 12.96 | 10.08 | 10.02 |
+| `hd/chenghou-project` | 14.21 | 8.61 | 6.70 | 6.66 |
+| `hd/metropia` | 17.55 | 16.10 | 8.43 | 8.42 |
+| `hd/moa-therma` | 16.15 | 11.50 | 9.09 | 9.06 |
+| `hd/modesto-heights` | 14.87 | 10.62 | 9.76 | 9.73 |
+| `hd/sebenco-climb` | 13.13 | 9.88 | 8.21 | 8.18 |
+| `hd/sol-2` | 16.03 | 12.52 | 7.72 | 7.69 |
+| `hd/talons` | 13.01 | 7.89 | 5.90 | 5.86 |
+| `hd/talons-assegai-c1` | 9.85 | 9.50 | 6.26 | 6.26 |
+| `hd/tech-de-ra` | 16.85 | 11.58 | 8.77 | 8.73 |
+| `hd/the-amphiseum` | 10.76 | 8.94 | 10.51 | 10.49 |
+| `hd/ubermall` | 17.89 | 14.08 | 9.34 | 9.32 |
+| `hd/vineta-k` | 13.47 | 9.39 | 10.88 | 10.86 |
+| `hd-race/talons-pack` | (box off the craft) | | 46.53 | 46.47 |
+
+No pair rose. Read at player size on `hd/talons` over four ticks (1088, 1095, 1105, 1117): the
+flame is the original's blue block with pink, no rays below the opening. Under thrust
+(`hd-race/talons-pack`, Feisar Fury) the block reads red-orange where it read yellow-white. What
+stays: Sol 2's and Metropia's engine bay is black in ours and dark blue in the original (its own
+cause, hd-ship-materials.md).
+
+**Other titles.** Omega: **checked, does not discriminate, not wired.** Its flame textures
+(`Data/art/published/ships/common_textures/Flame_01.gnf` and `Flame_01_HD.gnf`, and every
+`Data/tex/EngineFlare/*.gnf`) carry `ChannelType::Srgb` in the GNF descriptor, but so does every
+other Omega texture read in the same census, the Bomb's ring ramps included, whose PS3 unit reads
+raw (hd-unlit-programs.md, "The Bomb's units, read live"); so the file does not say what Omega's
+sampler does. Omega's scene is a linear fp16 target (`hd-track-tone.md`, "checked, differs") and
+its flame program is GCN and unread, so ours keeps the raw tap there. 2048: **not checkable from the file**: the `.gxt` header this project reads carries no gamma
+field (on the Vita the gamma mode is texture-control state set at run time), and no Vita3K draw state of a 2048 flame has been read.
+
+## The trail's colour taps are decoded on fetch (2026-10-26, `hd-render-fidelity`)
+
+**Claim**: the tube's two textures (`hd_enginetrail_red_alphaisnoise.gtf` on unit 0,
+`hd_enginetrail_blue_alphaistrail.gtf` on unit 1) are read sRGB-decoded on fetch, RGB only; the
+noise and the coverage are alphas and stay raw. **Confidence 80** (ten draws on three frames;
+the draws are recognised by their shape, not by their program text).
+
+**The register read.** On three RPCS3 frame dumps of HD race frames (a gantry lane's two
+start-gantry frames and the `hd-craft-ibl-probe` lane's second craft frame) every blended draw of
+exactly **954 indices** (53 segments of three fins, two triangles each: the tube of "a three-fin
+tube extruded over a 54-sample ring") with blend `SRC_ALPHA`/`ONE`, cull off and two 256x256 DXT45
+units binds both units with `SET_TEXTURE_ADDRESS` `0x60710101`, gamma nibble 7. Kept in
+`data/reference/hd-flame-tap/trail-draw-units.txt` with the dumps beside it; reproduce with
+`python3 scripts/rsx-draw-list.py data/reference/hd-flame-tap/gantry-w2 w9.5-00 --samplers`.
+This settles the "one unread bit" the 2026-08-24 reading left: the program applies no transfer
+function, the sampler does.
+
+**Wired.** `crates/fx/shaders/exhaust.wesl` decodes both colour taps before the red mix and the
+vertex colour, on HD's encoded store only (`encoded_out`); the old "skip the decode" stays for
+every other target. Pinned by `oag-fx::it hd_trail_encoded_tap` (the ratio of a grey-128 to a
+grey-255 tube stores 0.502, was 0.731).
+
+**Measured.** `hd-race/talons-pack` (the only pair with trails): whole frame 46.47 to 46.12; the
+right-hand opponent's trail box `1100,250 400x500`, pixels with `R > 140` and `R - B > 25`:
+original 8,079 at mean RGB `(200, 119, 110)` with 775 white pixels; before 5,958 at
+`(223, 189, 172)` with 6,453 white; after 7,400 at `(225, 185, 168)` with 4,925 white. The trail
+reads redder and clips less; it is still whiter, wider and brighter at its core than the
+original's. That remainder is not this tap: candidates are the warm-up's full thrust on every
+craft (chosen), the trail brightness `+0x11d8`, and the bloom. The 13 grid pairs draw no trail
+at rest and do not move.
+
+**Other titles.** Omega: **checked, does not discriminate, not wired.** Its six
+`Data/ribboneffects/Textures/HD_EngineTrail*.gnf` are `ChannelType::Srgb`, as is every Omega
+texture read (see the flame above); its trail program is unread and ours keeps the raw taps there. 2048: **not checkable from the file**,
+as for the flame above.

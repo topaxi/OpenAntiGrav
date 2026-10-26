@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-10-21
-summary: "HD hull: Metropia and Sol 2 blue bay, Harimau livery, _n1 wing rims and rest flame size to match"
+updated: 2026-10-26
+summary: "HD hull: Metropia/Sol 2 blue bay (vertex TC1/TC2, read the hull VP constants), Harimau livery, _n1 rims, rest flame size"
 ---
 
 # HD's hull wash on boost is the original's; what is left on the hull is the Harimau livery and the `_n1` wing rims
@@ -38,6 +38,11 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
   is open**: on Sol 2 the original does not take the hull's `SVC1` branch, so it is not the engine light; ours stays black there
   ([hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "The engine bay: Assegai_c1's Fury light, and the two circuits
   that switch the SPU lights off").
+  **Narrowed 2026-10-26 (`hd-render-fidelity`)**: the Sol 2 hull's fragment program is Talon's Junction's, constants aside, and the
+  craft's live irradiance map is the probe blend ours already draws (RMS 13.7 of 255 at the pair pose); so the blue comes in
+  through the vertex program's `TC1`/`TC2` or the lookup normal. Next: the hull's vertex constants on Sol 2 against Talon's
+  Junction, already in the stored stream (`rsx-draw-list.py --const` on `data/reference/hd-sol2-bay/sol2dump`; same doc
+  section, "Narrowed 2026-10-26").
 - The drawn-hull shake (the craft offset on every HD pair) has its own thread: [hds-drawn-hull-shakes-off-its-body.md](hds-drawn-hull-shakes-off-its-body.md).
 - **Landed 2026-10-20 (`hd-craft-ibl-probe`): the pale, metallic hull.** The original's IBL variant and the environment maps it
   reads are wired: the maps are not a runtime render but a blend of the circuit's baked `track.probes`, decoded and read at

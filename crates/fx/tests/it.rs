@@ -14,6 +14,7 @@ mod cockpit_hit_draw;
 mod distort_pass;
 mod encoded_blend;
 mod exhaust_pipeline;
+mod hd_trail_encoded_tap;
 mod psys_2048_ground_truth;
 mod psys_emitter_roll_ground_truth;
 mod psys_ground_truth;

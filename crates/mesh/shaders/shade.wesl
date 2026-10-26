@@ -9,7 +9,7 @@ import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_normal};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, linear_out};
+import oag_shaders::target::{decode, encoded_out, linear_out};
 import package::shading_modes::{colour_is_light, nova_prelit};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, sample_at_slope_level, texlod_bias, texlod_slope};
@@ -1094,18 +1094,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             vec2<f32>(in.texcoord.x * 2.0, in.texcoord.y * 2.0 + flame_noise),
         );
-        let flame_rgb = flame_texel.rgb * flame_colour_scale * scene.light.output_scale;
-        // **Not decoded on the linear target, on purpose - and this is a change
-        // of mind recorded in place.** The decode used to sit here on the "what a
-        // sampler hands back is authored-space" argument, but the flame's own
-        // program is read instruction by instruction and applies no transfer
-        // function anywhere: the original multiplies the raw sample into a
-        // target the exposure resolve then scales, `ADD_SAT`s and presents with
-        // no gamma arithmetic (renderer.md, "no `1/2.2` ... exists anywhere in
-        // it"). Decoding here dimmed the flame's mid-tones by up to a third
-        // against that arithmetic - the same divergence the HD trail's path had,
-        // fixed the same day. See
-        // docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md.
+        // **The colour tap is sRGB-decoded on fetch on HD's race target; the noise
+        // tap's alpha is not.** Unit 0 of all five flame draws carries gamma nibble 7
+        // (`SET_TEXTURE_ADDRESS` `0x60710101`, bits 20-23: RGB decoded, alpha raw) on
+        // three live RPCS3 frames over two sessions (engine-trail.md, "The flame's
+        // colour tap is decoded on fetch"), and the packer encodes the program's
+        // output before the blend, so the console adds `enc(dec(t) * k / 2)`. This
+        // replaces an earlier choice, made before that read and before the encoded
+        // store, to use the raw texel as light: on the encoded store that drew the
+        // rest flame white and clipped where the original's is blue.
+        //
+        // Gated on `encoded_out`, which only HD's measured store sets
+        // (`Looks::blends_encoded`): the decode is the unit's nibble, read on HD
+        // alone, and it rides that switch so Omega's and 2048's flames (their units
+        // unread) draw as they did.
+        let flame_tap = mix(flame_texel.rgb, decode(flame_texel.rgb), encoded_out * linear_out);
+        let flame_rgb = flame_tap * flame_colour_scale * scene.light.output_scale;
         flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
     }
 
@@ -1253,14 +1257,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             albedo_sampler,
             vec2<f32>(6.0 * in.texcoord.x, 6.0 * (0.3 * fire_t + in.texcoord.y)),
         ).rgb;
+        // **Both colour taps are sRGB-decoded on fetch on HD's race target**; the
+        // two alphas (the noise and the burn) are not. The fireball's two draws bind
+        // unit 0 with gamma nibble 7 (`SET_TEXTURE_ADDRESS` `0x60710101`) on a live
+        // blast (docs/rendering/hd-unlit-programs.md, "The Bomb's units, read
+        // live"); gated on `encoded_out` (HD's measured store), as the flame's is.
+        let fire_decode = encoded_out * linear_out;
+        let fire_b_rgb = mix(fire_b.rgb, decode(fire_b.rgb), fire_decode);
+        let fire_c_rgb = mix(fire_c, decode(fire_c), fire_decode);
         let fire_rim = clamp(1.0 - dot(to_eye, n), 0.0, 1.0);
         let fire_rim_5 = fire_rim * fire_rim * fire_rim * fire_rim * fire_rim;
         let fire_h = pow(clamp(0.86 - 0.86 * fire_rim_5, 0.0, 1.0), 50.0);
         // `RCP` of a half register: held at the largest finite half where the
         // divisor reaches zero, **chosen, not measured**, as the LeachBall's is.
-        let fire_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - fire_c), vec3<f32>(65504.0));
+        let fire_expand = min(vec3<f32>(1.0) / (vec3<f32>(1.0) - fire_c_rgb), vec3<f32>(65504.0));
         let fire_boost = min(1.0 / (1.0 - uniforms.model_colour), 65504.0);
-        let fire_rgb = (fire_b.rgb + vec3<f32>(100.0 * fire_h, 100.0 * fire_h, 0.0))
+        let fire_rgb = (fire_b_rgb + vec3<f32>(100.0 * fire_h, 100.0 * fire_h, 0.0))
             * fire_expand * fire_boost;
         // `DIV_SAT`: a divisor of zero is `AlphaAnim` = 1, the blast's first
         // three quarters of a second. A numerator below zero is then `-inf`
