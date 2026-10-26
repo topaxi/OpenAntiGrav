@@ -674,6 +674,7 @@ pub(crate) fn run_race(
                     cli.wreck.force_missile_hit.as_deref(),
                     "Missile hit",
                 )?,
+                force_quake: crate::args::force_at_slot(cli.wreck.force_quake.as_deref(), "Quake")?,
                 net: net.map(std::rc::Rc::new),
                 net_overlay: cli.overlay
                     || settings.graphics.perf_overlay == oag_present::perf::Overlay::Dev,

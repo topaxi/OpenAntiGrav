@@ -98,6 +98,8 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
+    /// `--force-quake TICK:SLOT`: see [`Race::force_quake`].
+    pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
     pub remote_correction: Option<oag_raceplay::correction::Scene>,
     /// `--connect`: the race is a server's, stepped through

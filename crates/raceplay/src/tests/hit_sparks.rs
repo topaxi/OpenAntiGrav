@@ -3,10 +3,12 @@
 //! Hand-laid effect and locators, no disc: what is asserted is the trigger's
 //! own rules (one or two locators per landed hit, a 0.8 s gate per locator,
 //! nothing on an absorbed hit or a hull with no locators), and that a weapon
-//! hit landing in `Race::tick` reaches it.
+//! hit landing in `Race::tick` reaches it, with the `.COLLISIONS` cue that
+//! rides each locator's gate.
 
 use super::*;
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_livery::SparkAnchor;
 use oag_title::Trigger::{HitSpark, LeachHitSpark};
 use oag_weapons::projectile::WeaponHit;
@@ -24,6 +26,10 @@ fn six_locators() -> Vec<SparkAnchor> {
 /// A race whose slot 0 carries `locators` and whose two hit-spark effects
 /// are one-emitter stand-ins.
 fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
+    Race::start(setup_with_locators(locators))
+}
+
+fn setup_with_locators(locators: Vec<SparkAnchor>) -> Setup {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
     let mut setup = setup(handling);
@@ -34,13 +40,21 @@ fn race_with_locators(locators: Vec<SparkAnchor>) -> Race {
         setup.handles.insert(trigger, effect);
     }
     setup.hit_spark_anchors = vec![locators];
-    Race::start(setup)
+    setup
 }
 
 fn landed_on_player() -> [WeaponHit; MAX_SHIPS] {
     let mut hits = [WeaponHit::default(); MAX_SHIPS];
     hits[0].landed = true;
     hits
+}
+
+/// The `.COLLISIONS` cues raised on the player's craft since the last drain.
+fn collisions_on_the_player(race: &mut Race) -> usize {
+    race.drain_cues()
+        .into_iter()
+        .filter(|e| e.cue == Cue::Collision && e.slot == 0)
+        .count()
 }
 
 /// One landed hit: one or two locators fire (two draws, the second skipped
@@ -77,6 +91,135 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
     assert!(race.hit_sparks_started_for_tests() > before);
 }
 
+/// `ShipCollisionFx_Trigger` plays `.COLLISIONS` once per call that gets past
+/// the locator's 0.8 s gate, the same gate that lets the spark through: every
+/// spark has exactly one cue and every cue a spark, across a stream of hits.
+#[test]
+fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
+    let mut race = race_with_locators(six_locators());
+    let _ = race.drain_cues();
+    race.throw_hit_sparks(&landed_on_player(), false);
+    let first = collisions_on_the_player(&mut race);
+    assert!(
+        (1..=2).contains(&first),
+        "{first} collision cues from one hit, not one or two"
+    );
+    assert_eq!(first as u32, race.hit_sparks_started_for_tests());
+
+    let mut heard = first;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()) as usize - 2;
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::none());
+        let _ = race.drain_cues();
+        race.throw_hit_sparks(&landed_on_player(), false);
+        heard += collisions_on_the_player(&mut race);
+    }
+    assert_eq!(
+        heard as u32,
+        race.hit_sparks_started_for_tests(),
+        "a spark and its cue came apart inside the gate"
+    );
+    assert!(heard <= 6, "a locator sounded twice inside its 0.8 s gate");
+
+    // Past the gate the locators sound again.
+    for _ in 0..4 {
+        race.tick(&PlayerInputs::none());
+    }
+    let _ = race.drain_cues();
+    race.throw_hit_sparks(&landed_on_player(), false);
+    assert!(collisions_on_the_player(&mut race) > 0);
+}
+
+/// The cue is a sound, not a particle: it plays when the spark's own file did
+/// not load, and a rival's hit is placed on the rival.
+#[test]
+fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
+    let mut handling = hulled_handling();
+    handling.dimensions.shield = 100.0;
+    let mut setup = setup(handling);
+    setup.hit_spark_anchors = vec![six_locators()];
+    let mut race = Race::start(setup);
+    let _ = race.drain_cues();
+    race.throw_hit_sparks(&landed_on_player(), false);
+    assert_eq!(race.hit_sparks_started_for_tests(), 0);
+    assert!(collisions_on_the_player(&mut race) > 0);
+
+    let mut race = race_with_locators(six_locators());
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.view.hit_sparks = crate::hit_sparks::HitSparks::new(vec![six_locators(), six_locators()]);
+    let _ = race.drain_cues();
+    let mut on_rival = [WeaponHit::default(); MAX_SHIPS];
+    on_rival[1].landed = true;
+    race.throw_hit_sparks(&on_rival, false);
+    let cues = race.drain_cues();
+    assert!(
+        cues.iter().any(|e| e.cue == Cue::Collision && e.slot == 1),
+        "the rival's hit made no sound on the rival"
+    );
+    assert!(cues.iter().all(|e| e.cue != Cue::Collision || e.slot == 1));
+}
+
+/// A Quake wave reaching the player, launched by the rival through
+/// `Race::force_quake` and ticked through `Race::tick`: one `QUAKEHIT` and the
+/// hull's own one or two `.COLLISIONS`, one for every spark thrown.
+#[test]
+fn a_quake_hit_plays_quakehit_and_the_collision_pair() {
+    let mut setup = setup_with_locators(six_locators());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_quake_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.tick(&PlayerInputs::none());
+    let _ = race.drain_cues();
+
+    assert!(race.force_quake(1), "the rival's wave never launched");
+    let (mut quake_hits, mut collisions) = (0, 0);
+    // Twenty ticks, not the wave's five seconds: this fixture's synthetic
+    // circuit is a 141-unit ring, so the wave laps it and strikes the
+    // stationary craft again on tick 29.
+    for _ in 0..20 {
+        race.tick(&PlayerInputs::none());
+        for cue in race.drain_cues() {
+            match cue.cue {
+                Cue::QuakeHit if cue.slot == 0 => quake_hits += 1,
+                Cue::Collision if cue.slot == 0 => collisions += 1,
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(quake_hits, 1, "the wave hit the player {quake_hits} times");
+    assert!(
+        (1..=2).contains(&collisions),
+        "{collisions} collision cues from one Quake hit, not one or two"
+    );
+    assert_eq!(collisions as u32, race.hit_sparks_started_for_tests());
+}
+
+/// `--force-quake` launches a wave only for a rival that is racing, and only
+/// one at a time.
+#[test]
+fn force_quake_launches_one_rivals_wave_and_nothing_else() {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::SingleRace;
+    setup.weapons = Some(one_quake_table());
+    let mut race = Race::start(setup);
+    race.sim.world.ship_count = 2;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ships[1].handling = hulled_handling();
+    race.tick(&PlayerInputs::none());
+    assert!(
+        !race.force_quake(0),
+        "the player was made their own shooter"
+    );
+    assert!(!race.force_quake(5), "a craft not racing fired a Quake");
+    assert!(race.force_quake(1));
+    assert_eq!(race.sim.world.quake.map(|wave| wave.owner), Some(1));
+    assert!(!race.force_quake(1), "a second wave joined the first");
+}
+
 /// Nothing without a hit that landed, and nothing on a hull with no
 /// locators - `Ship_Damage` tests the node count first and never falls back
 /// to the craft's centre.
@@ -85,12 +228,16 @@ fn an_absorbed_hit_or_a_bare_hull_throws_nothing() {
     let mut race = race_with_locators(six_locators());
     let mut hits = [WeaponHit::default(); MAX_SHIPS];
     hits[0].absorbed = true;
+    let _ = race.drain_cues();
     race.throw_hit_sparks(&hits, false);
     assert_eq!(race.hit_sparks_started_for_tests(), 0);
+    assert_eq!(collisions_on_the_player(&mut race), 0);
 
     let mut bare = race_with_locators(Vec::new());
+    let _ = bare.drain_cues();
     bare.throw_hit_sparks(&landed_on_player(), true);
     assert_eq!(bare.hit_sparks_started_for_tests(), 0);
+    assert_eq!(collisions_on_the_player(&mut bare), 0);
 }
 
 /// A spark rides the hull while it emits and is handed back to the stage

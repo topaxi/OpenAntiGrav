@@ -24,6 +24,14 @@
 //! then refuses to fire again for `0.8` s (`ShipCollisionFx_Trigger`'s own
 //! `instance + 100` gate).
 //!
+//! **The same call plays `.COLLISIONS`** (`Sound_Play`, return `0x0892486c`),
+//! positional at the locator, once per call past that gate: the live
+//! `Sound_Play` log at a Quake hit on the player shows `QUAKEHIT` and two
+//! `.COLLISIONS`, volume `1.0` (`cannon-quake-leachbeam.md`, 2026-10-26,
+//! confidence 88). So every spark thrown here raises one [`oag_gameplay::cue::Cue::Collision`] on
+//! the struck craft, kind 1 (the LeachBeam's) included: `ShipCollisionFx_Trigger`
+//! plays it for "each surviving kind-0/1 call" (`contact-response.md`).
+//!
 //! Measured on PPSSPP (2026-09-24): a Cannon-tagged hit posted into the
 //! player's pending-damage channel stops at `ShipCollisionFx_Trigger` with
 //! `ra = 0x08844050` (inside `Ship_Damage`), kind 0, damaged 1, intensity 1.0,
@@ -48,6 +56,11 @@
 //!   own cooldown (`Race::sparks_cooldown`).
 //! - **Every craft is drawn.** `FUN_0883e37c`, the gate's first test, is a
 //!   display-mask check this project has not read.
+//! - **The cue is placed on the struck craft's centre.** The original plays it
+//!   at the locator, a few units off the hull's middle.
+//! - **A wall contact on the same locator does not share this gate.** The wall
+//!   cue keeps its own per-craft re-arm (`Race::raise_contact_cue`), so a
+//!   contact and a hit inside 0.8 s of each other can both sound.
 //! - **The picks come from a view-side generator**, not the simulation's: the
 //!   original draws them from the particle system's own `Psys_RandIntRange`.
 //!
@@ -56,7 +69,9 @@
 //! Pulse only here. HD's Cannon throws its own weapon spark from the weapon's side,
 //! a different mechanism (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`),
 //! and Pure's `Ship_Damage` is unread; both keep an empty anchor list and draw
-//! nothing here.
+//! and play nothing here, the `.COLLISIONS` cue included: it rides the same
+//! locators and the same gate, and no read of either title's weapon-hit sound
+//! exists.
 
 use super::*;
 use oag_livery::SparkAnchor;
@@ -285,9 +300,7 @@ impl Race {
         } else {
             Trigger::HitSpark
         };
-        let Some(effect) = self.view.handles.get(trigger).cloned() else {
-            return;
-        };
+        let effect = self.view.handles.get(trigger).cloned();
         let rng = &mut self.view.hit_sparks.rng;
         let first = rng.below(nodes as u32) as usize;
         let second = rng.below(nodes as u32) as usize;
@@ -301,15 +314,28 @@ impl Race {
             if sparks.cooldown[slot][node] > 0.0 {
                 continue;
             }
+            // The locator's own gate (`instance + 100`) opens the cue and the
+            // spark together, so the sound plays whether or not the spark's
+            // particle file loaded.
+            sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
+            if self.draws() {
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::Collision,
+                    slot,
+                ));
+            }
+            let Some(effect) = &effect else {
+                continue;
+            };
+            let sparks = &self.view.hit_sparks;
             let anchor = sparks.anchors[slot][node];
             let at = model.transform_point3(anchor.position);
             let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
-            let Some(playing) = self.view.stage.play_riding(&effect, at, HIT_SPARK_SEVERITY) else {
+            let Some(playing) = self.view.stage.play_riding(effect, at, HIT_SPARK_SEVERITY) else {
                 continue;
             };
             self.view.stage.orient(playing, up);
             let sparks = &mut self.view.hit_sparks;
-            sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
             sparks.riding.push(Riding {
                 slot,
                 node,

@@ -263,6 +263,14 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_missile_hit: Option<String>,
 
+    /// With `--race --screenshot`, launch craft `SLOT`'s Quake so its bump
+    /// reaches the player at the end of a tick: `TICK:SLOT`, e.g. `120:1`. The
+    /// rival's wave a headless run would otherwise never send, for what a Quake
+    /// hit shows and sounds: the cue pair, the shake, the sparks and the cockpit
+    /// static. See [`oag_raceplay::Race::force_quake`].
+    #[arg(long, value_name = "TICK:SLOT", requires = "race")]
+    pub(crate) force_quake: Option<String>,
+
     /// With `--race --screenshot`, set the player's shield to a percentage of
     /// its maximum at the end of a tick: `TICK:PERCENT`, e.g. `0:15` for a
     /// craft at 15 % from the first frame. Repeat the flag to script a drop:
