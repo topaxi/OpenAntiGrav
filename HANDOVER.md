@@ -64,9 +64,9 @@ List them with `just threads [--status S] [--title T] [--category C]` (`--counts
 
 Counts when this section was written (re-run `just threads --counts`, do not trust these):
 
-- ready-to-wire: 66
+- ready-to-wire: 65
 - re-first: 100
-- measure: 90
+- measure: 91
 - blocked-maintainer: 18
 - blocked-hardware: 15
 - parked: 14
