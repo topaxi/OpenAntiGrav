@@ -40,6 +40,8 @@ pub(crate) fn skips_team_step(title: &oag_title::Title, mode: oag_race::Mode) ->
 #[path = "picker/tests.rs"]
 mod tests;
 
+#[path = "picker/livery.rs"]
+mod livery;
 #[path = "picker/seat.rs"]
 mod seat;
 pub(crate) use seat::SeatChoice;
@@ -355,12 +357,12 @@ impl Session {
                 self.resupply_race_variant();
             }
             // What the screen opened on is what a bare Confirm races.
-            if axis == LiveryAxis::Variant
-                && let Some((id, _)) = model.variant()
-                && !self.settings.race.variant_chosen
-            {
-                self.settings.race.variant = id.clone();
-            }
+            livery::opened(
+                &mut self.settings.race,
+                axis,
+                model.variant().map(|(id, _)| id.as_str()),
+                model.fixed_livery(),
+            );
         }
         let seat_info = self.seat_of_picker(seat);
         let shared = pair.is_some();
@@ -592,19 +594,11 @@ impl Session {
                 if let Some(entry) = picker.model.selected() {
                     let team = entry.id.clone();
                     let axis = picker.livery_axis;
+                    let fixed = picker.model.fixed_livery();
                     picker.refresh_preview(&self.gpu);
                     self.settings.race.team = team;
-                    // Wipeout HD/Fury's screen keeps the model row across a
-                    // team step (`Picker::land_on`); every other picker
-                    // restarts the livery.
                     let kept = picker.model.variant().map(|(id, _)| id.clone());
-                    match (axis, kept) {
-                        (LiveryAxis::Skin, _) => self.settings.race.skin = String::new(),
-                        (LiveryAxis::Variant, Some(id)) if layout_is_hd => {
-                            self.settings.race.variant = id;
-                        }
-                        (LiveryAxis::Variant, _) => self.settings.race.variant = String::new(),
-                    }
+                    livery::stepped(&mut self.settings.race, axis, kept, layout_is_hd, fixed);
                     self.resupply_race_variant();
                 }
             }
@@ -637,11 +631,12 @@ impl Session {
             }
             (Kind::Ship, Event::Confirmed) => {
                 let chosen = picker.model.selected().map(|entry| entry.id.clone());
+                let fixed = picker.model.fixed_livery();
                 stage.picker = None;
                 if let Some(id) = chosen {
                     self.speak_name(Kind::Ship, &id);
                 }
-                self.settings.race.variant_chosen = true;
+                livery::confirmed(&mut self.settings.race, fixed);
                 // A campaign cell already built `self.race_options` in full
                 // (`Session::launch_campaign_cell`) - `launch_from_settings`
                 // would overwrite the cell's own track/mode/class with

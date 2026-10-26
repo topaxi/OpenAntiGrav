@@ -160,11 +160,12 @@ impl Session {
             .map(|(id, _)| id.clone())
             .unwrap_or_default();
         let axis = picker.livery_axis;
+        let fixed = picker.model.fixed_livery();
         if let Some(id) = &chosen {
             self.speak_name(Kind::Ship, id);
         }
         if index == 0 {
-            self.settings.race.variant_chosen = true;
+            super::livery::confirmed(&mut self.settings.race, fixed);
             self.split_picks.clear();
         } else if let Some(entry_id) = chosen {
             self.split_picks.truncate(index - 1);
@@ -206,6 +207,7 @@ impl Session {
             .map(|(id, _)| id.clone())
             .unwrap_or_default();
         let axis = held.livery_axis;
+        let fixed = held.model.fixed_livery();
         let both = stage.picker.as_ref().is_some_and(|p| p.model.is_locked())
             && stage
                 .partner
@@ -224,7 +226,7 @@ impl Session {
                 }];
             }
         } else {
-            self.settings.race.variant_chosen = true;
+            super::livery::confirmed(&mut self.settings.race, fixed);
         }
         if both {
             if let Stage::Menu(stage) = &mut self.stage {
