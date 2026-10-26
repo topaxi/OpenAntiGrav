@@ -883,6 +883,83 @@ scripts/vita3k-2048-menu-pair.py pairs --out D --oag-game target/release/oag-gam
 `walk` of `PAUSE_PLAN`. Adopt: name the `menu-*` directories, `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-2048.toml data/reference/compare-page/2048/menu-*`, then `just compare-page`.
 
+## Menu pairs: Wipeout Pulse and Wipeout Pure (PSP) front-end screens (2026-10-27, `menu-pairs-pulse-pure`)
+
+The PPSSPP counterpart of the HD, Omega and 2048 menu route (`scripts/psp-menu-pair.py`, on `compare_menu.py`). The software
+renderer at `InternalResolution = 1` (`compare_env.py ppsspp-ini`), the USA pressings the environment file pins (`compare-environment.toml`
+names `pulse-psp-usa.chd` and `pure-psp-usa.chd`; the EU preference does not override a pinned platform), muted, own Xvfb and
+debugger port, a **fresh memory stick** (Pulse's first-boot dialogs answered by `psp-drive.py`'s `FIRST_BOOT` table, Pure's profile made
+with `New`). The frame is the emulator window at 480x272 (`xdotool windowsize`), grabbed off the Xvfb root and cropped at the window
+origin: no scaling at any step. Ours is `oag-game --menu-page PAGE` (or `--screen`) at 480x272 in a private profile
+(`prepare_profile`): the compare render settings, **`[dev] unlock_everything = false`** (a debug build unlocks everything, the original's
+fresh profile does not) and, for Pulse, `records.toml`'s `campaign_difficulty` row written as `medium`.
+
+**What is read and what is declared.** Pulse's screen name is read from the game's own state machine (`0x08b31784 + 0x18c`, the same
+`Debugger.state_name` the race pairs use); every Pulse pair's `original.screen_basis` says so. Pure has no recovered state name: its
+screens are declared in `PURE_WALK` and read by eye (`original.screen_basis`), and the walk waits on a frame predicate (`pu:cross:title`,
+the orange logo) because the language and memory-stick screens swallow a fixed-sleep walk. The highlighted row of both sides is read by
+eye and declared (`selection`), so the check catches a `WALK` entry that names two rows, not a cursor that drifted; the pair images are
+the evidence.
+
+**What ours draws from the disc and what from `menu.toml`:**
+
+| Screen (the original's name) | Ours | Pulse | Pure |
+| --- | --- | --- | --- |
+| title, `Show Logo` / `Title Screen` | `--screen` (Pure `Intro Screen->Title Screen`, Pulse `Show Logo`) | pair | pair |
+| `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
+| Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
+| `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
+| `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), pause | `menu.toml`'s `main`, `race`, `options` pages; the pause menu is a `Stage::Menu` with no still route | **gap** x5 | **gap** x2 (`Main Menu`, pause; Pure's main page has no Racebox or Options row) |
+
+**The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
+Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
+control is the footer's; the original's fresh stick opens on Medium, ours is set to `medium` in `records.toml` and the frame reads Medium
+on both sides. Pure: **`Tournament Selection`** (Alpha, the only tournament open on a fresh profile, class Vector) after `Class Selection`,
+the original's route Single Player -> Tournament -> Vector. Pure shows **no difficulty control** on either side (the class is the speed
+setting), so there was none to match. The single-race path (`Class`, `League`, `Track`) is paired as well.
+
+**The pairs** (`overlap RMSE / edge correlation / mean grey`, the share of pixels differing by more than 40 grey, run 1; each pair image
+read side by side):
+
+| Pair | Overlap | Differs | Most visible difference |
+| --- | --- | --- | --- |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % | the circuit photo (stacked cards, a different view), `1/3` against `1/11` (ours does not hide the circuits a fresh profile has locked), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` against `1/12` |
+| Pulse title | 0.112 / 0.58 / 14.9 | 6.0 % | the original's teal light-ray backdrop (ours black), the wide `PRESS START BUTTON` face against `Press START button`, the legal line in the wide face |
+| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
+| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
+| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % | ours lists all 17 teams in small type (the original's fresh list is eight, large), the hull outline from another angle, the stat labels run into their values |
+| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` breadcrumb under the heading, the records read `0.00.00` against `0'00"00`, lower-case unit `m`, no description line |
+| Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | the breadcrumb is absent here; the hint line and the `BACK` prompt differ (below) |
+| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the breadcrumb `TOURNAMENT - VECTOR`, no typed description, the footer prompt |
+| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: breadcrumb, no description line, footer |
+| Pure title | 0.017 / 0.60 / 0.5 | 0.3 % | none visible (the cursor underscore blinks) |
+
+Three differences recur on every Pure chain screen: the **breadcrumb line** (ours' `SINGLE RACE - VENOM`, absent from the original), the
+**typed description** along the bottom (the original's line types in over about two seconds; ours stops at tick 0 empty or partial) and the
+**footer's BACK prompt** (the original shows a triangle and `BACK`, ours `BACK BUTTON` drawn over itself). Pulse's pairs share the footer
+ticker (scrolling in the original) and the cursor glow.
+
+**Repeat noise** (run 1 against run 2, cold boots on Pure; Pulse run 3 against run 1, three boots): ours against itself exactly 0 on
+every pair. The original against itself: Pure 0.0 mean grey and at most 0.06 % of pixels differ over 40 on every screen (the walk is
+deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turntable and the footer ticker (Track Select's photo cards
+2.5 %, the title 0.1 %).
+
+**Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
+rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`
+(Options+: GAME OPTIONS, CONTROLS, MUSIC PLAYLIST against ours' `options`) and the pause menu (`GAME PAUSED`: CONTINUE, GAME OPTIONS,
+PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure `Main Menu` (SINGLE PLAYER,
+MULTIPLAYER, PROFILE, DOWNLOAD on the white frame, against ours' dark teal `menu.toml` page) and the pause menu (CONTINUE, RESTART, QUIT
+over the dimmed race). Pure has no Options or Racebox screen in its main menu.
+
+**Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
+`source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
+scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (about 90 s on Pulse from a walked
+`Main Menu`, about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
+separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
+data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
+then `just compare-page`.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
