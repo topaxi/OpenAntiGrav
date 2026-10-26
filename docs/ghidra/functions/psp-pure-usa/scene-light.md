@@ -26,8 +26,8 @@ Maya's own shape name (`crates/pure/tests/class_table_ground_truth.rs`,
 | --- | ---: | ---: | --- | --- |
 | `AmbientLight` | `0x12c` | `0x125` | 16 bytes, `ambientLightShape1` and the like | 21 nodes, one or two per circuit |
 | `DirectionalLight` | `0x131` | `0x12a` | 16 bytes, `directionalLightShapeN` | 30 nodes, none on the four classics, up to five on Sol 2 |
-| `wospot` | `0x3ce` | `0x380` | 32 bytes, `wospotShapeN` | 8, all on Chenghou Project |
-| `wopoint` | `0x3cf` | `0x381` | 32 bytes, `wopointShapeN` | 654 over 7 circuits (130 on Modesto Heights) |
+| `wospot` | `0x3ce` | `0x380` | 32 bytes, `wospotShapeN` | 23 over 3 circuits (Blue Ridge 14, Chenghou Project 8, Sinucit 1) |
+| `wopoint` | `0x3cf` | `0x381` | 32 bytes, `wopointShapeN` | 639 over 7 circuits (130 on Modesto Heights) |
 
 The two generic Maya classes sit seven below Pulse's, as `Mesh` does (`0x125` to
 `0x11e`). The two track-light classes sit between `Reset Collision` (`0x37f`) and
@@ -91,7 +91,7 @@ original / before / after, and grey MAD over the hull region `(190..290, 175..27
 | Modesto Heights | 80 94 83 | 46 52 41 | 77 91 80 | 16.32 -> 15.73 |
 
 Modesto's yellow wing panels turn the original's orange under its warm ambient and its
-130 `wopoint`s. Pulse's output is unchanged: its tables keep the version-6 ids, and three
+130 `wopoint`s; Blue Ridge's 14 `wospot`s reach the hull too. Pulse's output is unchanged: its tables keep the version-6 ids, and three
 Pulse compare pairs (Arc Prime White, Fort Gale Black, Amphiseum White) render
 pixel-identical before and after.
 

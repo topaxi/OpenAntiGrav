@@ -111,7 +111,7 @@ from the exporter's own class-name ordering instead - see
 | `fogCube` | `0x3d3` | `0x385` | Not in the run either. 10 instances across 7/16 circuits, all 128 bytes (`fog::PAYLOAD_LEN` exact) and all `edge == 500.0` - the same figure Pulse's own shipped tracks carry | 94 |
 | `Anim Transform` | `0x3c0` | `0x372` | Table index; 332 nodes across all 16 circuits, **332/332** parse under `anim_transform`'s own bounds-checked decoder | 94 |
 | `AmbientLight`, `DirectionalLight` | `0x12c`, `0x131` | `0x125`, `0x12a` | Generic Maya classes, seven below Pulse's as `Mesh` is; 21 and 30 nodes on the 16 circuits, 16-byte payloads named `ambientLightShapeN`/`directionalLightShapeN` ([scene-light.md](../ghidra/functions/psp-pure-usa/scene-light.md)) | 90 |
-| `wospot`, `wopoint` | `0x3ce`, `0x3cf` | `0x380`, `0x381` | Between `Reset Collision` and `Ship Collision Fx` as on Pulse; 8 and 654 nodes, 32-byte payloads named `wospotShapeN`/`wopointShapeN` | 90 |
+| `wospot`, `wopoint` | `0x3ce`, `0x3cf` | `0x380`, `0x381` | Between `Reset Collision` and `Ship Collision Fx` as on Pulse; 23 and 639 nodes, 32-byte payloads named `wospotShapeN`/`wopointShapeN` | 90 |
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in
@@ -1607,7 +1607,7 @@ Measured 2026-10-22: the hull drew 0.39 to 0.78 of the original's brightness on 
 Feisar, same pose), flat across circuits where the original follows each scene, and the loader said `hull lights:
 the circuit authors none`. **The circuits do author lights**; the reader matched them against Pulse's class ids.
 Pure's are `AmbientLight` `0x125`, `DirectionalLight` `0x12a`, `wospot` `0x380` and `wopoint` `0x381`, each node keeping
-Maya's shape name, on all 16 circuits (21, 30, 8 and 654 nodes;
+Maya's shape name, on all 16 circuits (21, 30, 23 and 639 nodes;
 `crates/pure/tests/class_table_ground_truth.rs`). Pure's light-list builder (`0x08841648`) and spline sampler
 (`0x08843d1c`) are Pulse's, and its `WO Track`s are version `0x103`, so the per-point scale bytes are read too.
 `vex::classes::V4` now carries the four ids and Pure's `Looks::hull_lights` is on for the PSP. Evidence, the

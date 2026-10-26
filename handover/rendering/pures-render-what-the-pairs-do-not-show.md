@@ -20,7 +20,7 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 2. **Hull, the rest.** Still 10 to 20 % dark on Vineta K and Chenghou. Pure's twin of
    `Craft_ApplyHullLightScale` (Pulse `0x0883e444`) is unread; ours assumes Pulse's copy. Whether the
    pairs' grid points carry a scale below 255 was not checked.
-3. **Effects Pure ships that ours never loads.** Pure's executable names 25 `WO_*` effects
+3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings, one of them `WO_Game`)
    (`search_strings` over `/pure/BOOT-psp-pure-usa.BIN`, `0x08a47f50`..`0x08a7a49c`). Ours loads 12 at race
    start. Not loaded: `WO_DISRUPTOR_LAUNCH`, `_HEAD`, `_EXPLO` (no Disruptor weapon in ours),
    `WO_BOMB_GLOW`, `WO_TRACK_ROCK_DEBRIS`, `WO_SHIP_COLL_SPARK_NODAMAGE`, and the ship-death set
