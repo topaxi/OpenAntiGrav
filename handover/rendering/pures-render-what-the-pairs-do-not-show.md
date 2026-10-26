@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-10-26
-summary: "Pure render: hull canopy, sky and effect names closed; circuit chrome-map pass, 250 light scale, Modesto's light, HUD gauge open"
+summary: "Pure render: canopy, sky, effect names and the flare closed; circuit chrome-map pass, 250 light scale, Modesto light, HUD open"
 ---
 
 # Pure's render: what the pairs still show, ranked
@@ -49,11 +49,22 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    `WO_QUAKE_VR` is the VR build, not planned. Each needs its trigger read on Pure before it is wired. The
    weapon side continues in `pures-weapons-mine-bomb-wired-plasma-disruptor-open.md`.
 4. ~~**Pulse-only names in Pure's effect table.**~~ Closed: `.without`ed, with the string list as evidence.
-5. **Track and lighting.** The Vineta K and Chenghou darkness is the sun flare (wired by its own lane), plus
-   Chenghou's sky (closed here). Flare evidence (2026-10-26, `pure-lens-flare-wire`), masked mean diff vs the
-   original, flare off -> on: Vineta K -29.6/-26.2/-29.8 -> -3.3/-4.0/-6.7; Chenghou -25.9/-18.5/-14.5 ->
-   -9.9/-10.0/-8.1; Modesto and Blue Ridge unchanged (no flare in view). The original saturates near the sun
-   where ours reads about 237 (`docs/rendering/lens-flare.md`). Left, from the same four GE lists:
+5. **Track and lighting.** On Vineta K and Chenghou the whole frame read 13 to 28 grey darker in ours (sky band
+   bias -28 and -14, track band -24 and -10), Blue Ridge and Modesto near level. **Mostly the undrawn sun lens
+   flare, now wired** (`pure-lens-flare-wire`, `docs/rendering/lens-flare.md`). Those two circuits author a
+   `lensflare` node; Blue Ridge and Modesto have none in view. Masked mean diff against the original, flare off
+   -> on: Vineta K -29.6/-26.2/-29.8 -> -3.3/-4.0/-6.7; Chenghou -25.9/-18.5/-14.5 -> -9.9/-10.0/-8.1; Modesto and
+   Blue Ridge unchanged (-6.7/-2.2/-2.3 and -0.2/-0.8/-1.3). The original also saturates near the sun, where ours
+   reads about 237.
+
+   The recorded GE lists agree independently (`pure-render-fidelity-2`, `psp-pure-usa/hull-shine.md`, "The scene
+   darkness"). The flare is the one camera-space additive PRIM those two circuits draw before the post chain:
+   60 vertices (ten quads), `BLENDMODE 0xa2`, depth test off. With it removed, the replay matches ours (Vineta sky
+   153.9 -> 128.8 against ours' 126.6). Vertex colours, CLUTs, fog ranges and the post composite were ruled out.
+
+   Chenghou's -10 residual is mostly its sky cube, closed in `pure-render-fidelity-2`. The cube has no vertex
+   colours or normals, and the GE draws it unlit at white; ours ran it through the stand-in rig (top band MAD
+   49.8 -> 15.5). Re-score the pairs with both lanes merged. Left, from the same four GE lists:
    - **The circuits' chrome-map pass.** Pure draws 57, 36, 31 and 28 `TEXMAPMODE` 2 PRIMs off the craft
      (Vineta's blue windows are black in ours). Ours draws the circuit pass on Pulse's PSP only
      (`oag_raceplay::load`, `pulse_psp && track_shine`). The circuit batches carry the alpha-weight bit as well
