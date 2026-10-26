@@ -259,3 +259,11 @@
 0x08936794	function	FxLensflare_WriteQuad	90	lensflare.md
 0x08abe0d8	data	Lensflare_NodeVtable	90	lensflare.md
 0x08ac2754	data	FxLensflare_Vtable	90	lensflare.md
+
+# 2026-10-26 pure-render-fidelity-2: the hull extra pass and its alpha weight (hull-shine.md)
+0x088f0234	function	Gu_TexMapMode	88	hull-shine.md
+0x088f08dc	function	Gu_BlendFunc	85	hull-shine.md
+0x0886e144	function	Mesh_BeginTransparentPass	85	hull-shine.md
+0x0886e1c8	function	Mesh_SetBatchDrawState	85	hull-shine.md
+0x08866ecc	function	Gfx_BuildBatchStateList	85	hull-shine.md
+

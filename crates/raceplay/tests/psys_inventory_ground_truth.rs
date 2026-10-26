@@ -111,14 +111,16 @@ const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // welders confirmed live. See `oag_raceplay::scenery_fx`. `RAIN`,
 ];
 
-/// The eight the PS2 port authors, the PSP does not, and nothing triggers.
-///
-/// The port's ninth extra is `WO_SHIP_ENGINEFLARE`, which no Pulse pressing
-/// plays: the PS2 executable never requests it and a GS dump of the nozzle
-/// holds the procedural flare quad alone (`engine-trail.md`, "The engine flare
-/// is one quad"). It stays in [`oag_raceplay::RACE_EFFECTS`], a superset across
-/// sources rather than one list per disc.
+/// The nine the PS2 port authors, the PSP does not, and nothing triggers.
 const PS2_EXTRA_NO_TRIGGER: &[(&str, &str)] = &[
+    (
+        "WO_SHIP_ENGINEFLARE",
+        "no Pulse pressing plays it: the PS2 executable never requests it and a \
+         GS dump of the nozzle holds the procedural flare quad alone \
+         (`engine-trail.md`, \"The engine flare is one quad\"). It left \
+         `RACE_EFFECTS` when Pure, the last title naming it, dropped it: Pure's \
+         executable does not request it either.",
+    ),
     (
         "WO_CANNON_HIT_SHIP",
         "the PSP craft-hit path (`FUN_08857f2c`/`FUN_08857e90`, reached from \
@@ -639,7 +641,7 @@ mod hd {
 mod v2048 {
     use oag_raceplay::RACE_EFFECTS;
 
-    const ABSENT: [&str; 9] = [
+    const ABSENT: [&str; 8] = [
         "WO_PLASMA_FLASH",
         "WO_LEACHBEAM_ENERGY",
         "WO_SHIP_FXNODE_EXPLO",
@@ -648,7 +650,6 @@ mod v2048 {
         "WO_RAIN",
         "WO_RAIN_LENS",
         "WO_SNOW",
-        "WO_SHIP_ENGINEFLARE",
     ];
 
     #[test]

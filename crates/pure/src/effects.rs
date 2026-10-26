@@ -38,7 +38,28 @@ pub const EFFECTS: &Effects = &{
         // (`docs/ghidra/functions/psp-pure-usa/weapons.md`).
         .without(Trigger::LeachbeamEnergy)
         .without(Trigger::LeachbeamCharging)
-        .without(Trigger::LeachbeamAbsorb);
+        .without(Trigger::LeachbeamAbsorb)
+        // Names the engine table carries from Pulse, HD and 2048 that Pure's
+        // executable never requests: its whole `WO_*` list is 24 effect names
+        // (`0x08a47f50`..`0x08a7a49c`, `search_strings` over
+        // `/pure/BOOT-psp-pure-usa.BIN`; `docs/formats/pure-status.md`) and none
+        // of these is among them, nor in its `Data.wad`, so each load reported
+        // them absent.
+        .without(Trigger::PlasmaLightningExpand)
+        .without(Trigger::PlasmaLightningCollapse)
+        .without(Trigger::ShurikenFlare)
+        .without(Trigger::ShurikenTrail)
+        .without(Trigger::ShurikenBounce)
+        .without(Trigger::ShurikenExpire)
+        .without(Trigger::TrackBlast)
+        .without(Trigger::CannonSparks)
+        .without(Trigger::EngineFlare)
+        .without(Trigger::TrailHitship)
+        .without(Trigger::TrailHitshipRed)
+        .without(Trigger::RepulserBlast)
+        .without(Trigger::Repulser)
+        .without(Trigger::MagstripSparks)
+        .without(Trigger::MagstripZone);
     effects.extents = EXTENTS;
     effects.quake_look = QUAKE_LOOK;
     effects
@@ -109,11 +130,23 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The hull's `0x2000` extra pass, as on Pulse: Feisar's `feisarShape` mesh
+    // word and batches read `0x3001`, its materials name `envtest4.tga` as the
+    // second texture, and Pure's draw (`FUN_0886f9ec`) brackets the pass in
+    // `FUN_0886e144`, which programs what Pulse's `Mesh_BeginTransparentPass`
+    // does call for call (`Gu_TexMapMode(2, 0, 1)` included). Its fixed light
+    // pair is built from the same `-1.0`/`0.3` radian literals
+    // (`0x08a8e8ec`) in `FUN_08864018`
+    // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`).
+    hull_shine: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
-        ps2: ShieldPalette::Ps2Pulse,
-        elsewhere: ShieldPalette::Pulse,
-        origin: Origin::InheritedFrom("Wipeout Pulse"),
-    })
+    ps2: ShieldPalette::Ps2Pulse,
+    elsewhere: ShieldPalette::Pulse,
+    origin: Origin::InheritedFrom("Wipeout Pulse"),
+})
 };
 
 #[cfg(test)]
@@ -129,6 +162,32 @@ mod tests {
             Trigger::LeachbeamEnergy,
             Trigger::LeachbeamCharging,
             Trigger::LeachbeamAbsorb,
+        ] {
+            assert!(EFFECTS.on(trigger).is_none(), "{trigger:?}");
+        }
+    }
+
+    /// None of these names is in Pure's executable's `WO_*` list: dropping a
+    /// `.without` above brings an inherited engine name back, and with it a
+    /// load report line for an effect no Pure disc carries.
+    #[test]
+    fn pure_names_no_effect_its_executable_does_not() {
+        for trigger in [
+            Trigger::PlasmaLightningExpand,
+            Trigger::PlasmaLightningCollapse,
+            Trigger::ShurikenFlare,
+            Trigger::ShurikenTrail,
+            Trigger::ShurikenBounce,
+            Trigger::ShurikenExpire,
+            Trigger::TrackBlast,
+            Trigger::CannonSparks,
+            Trigger::EngineFlare,
+            Trigger::TrailHitship,
+            Trigger::TrailHitshipRed,
+            Trigger::RepulserBlast,
+            Trigger::Repulser,
+            Trigger::MagstripSparks,
+            Trigger::MagstripZone,
         ] {
             assert!(EFFECTS.on(trigger).is_none(), "{trigger:?}");
         }

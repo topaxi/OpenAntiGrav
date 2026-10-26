@@ -342,8 +342,8 @@ pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
 pub use emissive::{
-    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON, PROGRAM_SNOW, REFLECTION_RATE,
-    WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
+    Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON, PROGRAM_SHINE_MASK,
+    PROGRAM_SNOW, REFLECTION_RATE, WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
 };
 
 mod flap;
@@ -600,7 +600,7 @@ fn build_class(
     // `docs/formats/ps2-texture.md`. A node whose name resolves to nothing
     // stays `None` rather than falling back to a neighbour's texture, the way
     // a flat ordinal index used to.
-    let textures = match external {
+    let mut textures = match external {
         Some(set) => ps2_textures::resolve_texture_slots(data, &nodes, classes.texture, set),
         None => embedded,
     };
@@ -630,6 +630,9 @@ fn build_class(
     let mut alpha_tested_draws: Vec<DrawCall> = Vec::new();
     let mut transparent_draws: Vec<DrawCall> = Vec::new();
     let mut shine_draws: Vec<DrawCall> = Vec::new();
+    // Beside `textures` only for the extra pass's alpha-weighted slots - see
+    // `shine_pass::masked_slot`.
+    let mut lightmaps: TextureSlots = Vec::new();
     let mut mesh_count = 0;
     let mut airbrakes: [Option<Flap>; 2] = [None, None];
     let mut anim_tracks: Vec<AnimTrack> = Vec::new();
@@ -875,6 +878,12 @@ fn build_class(
                             .map(|t| t as usize)
                             .filter(|&t| textures.get(t).is_some_and(Option::is_some))
                     {
+                        let second = match texture {
+                            Some(base) if batch.weights_extra_pass_by_alpha() => {
+                                shine_pass::masked_slot(&mut textures, &mut lightmaps, second, base)
+                            }
+                            _ => second,
+                        };
                         shine_draws.push(DrawCall {
                             texture: Some(second),
                             ..draw.clone()
@@ -942,7 +951,7 @@ fn build_class(
         transparent_draws,
         shine_draws,
         textures,
-        lightmaps: Vec::new(),
+        lightmaps,
         pad_masks: Vec::new(),
         wave_maps: Vec::new(),
         fifth_maps: Vec::new(),

@@ -113,6 +113,25 @@ impl Batch {
         self.header_flags & 0x10 == 0
     }
 
+    /// Whether the batch's ordinary pass, drawn over the `0x2000` extra pass,
+    /// weights what that pass left by **its own texture's alpha** (`GU_SRC_ALPHA`
+    /// on the destination) rather than adding it whole (`GU_FIX` white).
+    /// Selected by `header_flags & 0x02`.
+    ///
+    /// Inside the `header_flags & 0x10` branch both executables program
+    /// `BlendFunc(ADD, FIX, flags & 0x02 ? SRC_ALPHA : FIX, white)`: Pulse's
+    /// `Gfx_BuildBatchStateList` (`0x0891f890`) and Pure's twin `FUN_08866ecc`.
+    /// The bit is the file's. Measured on Pure's Blue Ridge grid in a recorded
+    /// GE list: Feisar's hull batches draw `BLENDMODE 0x2a` after the extra
+    /// pass, and making their CLUT opaque in the replayed list turns the hull's
+    /// highlight into an unmasked wash. So the pixel is
+    /// `lit * texture + env * texture.a`. See
+    /// `docs/ghidra/functions/psp-pure-usa/hull-shine.md`.
+    #[must_use]
+    pub fn weights_extra_pass_by_alpha(&self) -> bool {
+        self.header_flags & 0x02 != 0
+    }
+
     /// The alpha-test reference the GE compares this batch's fragment alpha
     /// against, or `None` when the test is off or `GU_ALWAYS`.
     ///

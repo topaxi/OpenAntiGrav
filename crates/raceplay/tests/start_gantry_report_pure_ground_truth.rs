@@ -77,6 +77,7 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_
     );
     hull_lights_are_the_circuits_own(&report);
     sun_flare_is_the_circuits_own(&loaded);
+    the_hull_draws_its_alpha_weighted_extra_pass(&report);
 }
 
 /// Vineta K authors one `lensflare` node (`docs/rendering/lens-flare.md`): its sun direction, grey
@@ -111,6 +112,19 @@ fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
         loaded.report
     );
 }
+/// Feisar's hull authors nine `0x2000` extra-pass batches, every one with the
+/// `header_flags & 0x02` that has its ordinary pass weight the environment map
+/// by the batch texture's alpha (`BLENDMODE 0x2a` in a recorded GE list,
+/// `docs/ghidra/functions/psp-pure-usa/hull-shine.md`). Dropping
+/// `oag_pure::effects::LOOKS.hull_shine`, gating it on `applies_everywhere`
+/// again, or losing the weight changes this line.
+fn the_hull_draws_its_alpha_weighted_extra_pass(report: &str) {
+    let line = r"Data\Ships\Feisar\Ship.vex: 9 extra-pass batch(es) under their second texture, 9 weighted by their own texture's alpha";
+    assert!(
+        report.lines().any(|l| l.starts_with(line)),
+        "Pure's Feisar hull does not draw its alpha-weighted extra pass: {report}"
+    );
+}
 
 /// Vineta K's light nodes, as `SceneLight_BuildLightingList`'s Pure twin packs
 /// them at the bare scale: the ambient `(72, 78, 84)` and a first directional of
@@ -124,5 +138,30 @@ fn hull_lights_are_the_circuits_own(report: &str) {
     assert!(
         line.starts_with("hull lights: the circuit's own, ambient [0.28235295, 0.30588236, 0.32941177, 1.0], diffuse [[1.0, 1.0, 1.0, 0.0], [0.21176471, 0.21176471, 0.18039216, 0.0]"),
         "Pure's hull is not lit by Vineta K's own light nodes: {line}"
+    );
+}
+
+/// Chenghou Project's sky cube authors neither colours nor normals, and the GE draws
+/// it with lighting off at a white material (`LIGHTINGENABLE` 0, `MATERIALAMBIENT`
+/// `0xffffff` on all six faces in a recorded list). Dropping
+/// `load::environment::unlit_sky` puts it back through the stand-in rig.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn chenghous_sky_cube_draws_unlit() {
+    let Some(image) = image() else { return };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        track: Some(r"Data\Environments\04_Chenghou_Project\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l
+                == "sky: 486 vertices author no colour, drawn unlit at the GE's white material"),
+        "{}",
+        loaded.report.join("\n")
     );
 }

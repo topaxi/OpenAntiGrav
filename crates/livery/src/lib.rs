@@ -588,10 +588,18 @@ fn one(
     let shine = if ctx.hull_shine {
         let shine = mesh::shine_pass::build(&hull);
         report.push(match &shine {
-            Some(model) => format!(
-                "{hull_name}: {} extra-pass batch(es) under their second texture (oag_render::shine)",
-                model.draws.len()
-            ),
+            Some(model) => {
+                let weighted = model
+                    .draws
+                    .iter()
+                    .filter(|d| mesh::shine_pass::is_masked(model, d))
+                    .count();
+                format!(
+                    "{hull_name}: {} extra-pass batch(es) under their second texture, \
+                     {weighted} weighted by their own texture's alpha (oag_render::shine)",
+                    model.draws.len()
+                )
+            }
             None => format!("{hull_name}: no 0x2000 extra-pass batch - no shine pass"),
         });
         shine
