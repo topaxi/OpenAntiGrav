@@ -89,9 +89,13 @@ pub const TITLE: &Title = &Title {
         ai: Some(r"Data\XML\WeaponAIstats.xml"),
         // Pulse's law, inherited: Pure's own drain is unread.
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
-        // Pulse's law, inherited: Pure's ripple and gate are unread (`psp-pure-usa/quake.md`).
-        quake_hit: oag_title::weapons::QuakeHit::WaveHeight {
+        // The gate is Pulse's law, inherited: Pure's own is unread (`psp-pure-usa/quake.md`).
+        // The eye stays level, **chosen, not measured**: the maintainer, 2026-10-26, "in Pure this
+        // does not exist" - the original Pure's road does not lift under a Quake, so its cockpit
+        // eye has nothing to ride. Pure's camera path is unread.
+        quake_hit: oag_title::weapons::QuakeHit::WaveHeightEyeLevel {
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+            eye_origin: oag_title::Origin::Chosen,
         },
     },
     // **Pure's own names, read off `BOOT.BIN` (2026-10-08), not Pulse's.**
@@ -718,6 +722,23 @@ mod tests {
     fn the_two_titles_are_mutually_exclusive() {
         assert!(TITLE.foreign_title("UCUS-98712").is_some());
         assert!(oag_pulse::TITLE.foreign_title("UCUS-98612").is_some());
+    }
+
+    /// The maintainer's rule (2026-10-26): Pure's cockpit eye does not rise under a
+    /// Quake while Pulse's does. Pure keeps the hit gate it inherits from Pulse; only
+    /// the eye is held level, and it says that is chosen.
+    #[test]
+    fn pures_quake_holds_the_cockpit_eye_level_while_pulses_still_rises() {
+        use oag_title::Origin;
+        use oag_title::weapons::QuakeHit;
+
+        assert!(!TITLE.weapons.quake_hit.lifts_cockpit_eye());
+        assert!(oag_pulse::TITLE.weapons.quake_hit.lifts_cockpit_eye());
+        let QuakeHit::WaveHeightEyeLevel { origin, eye_origin } = TITLE.weapons.quake_hit else {
+            panic!("Pure's Quake law is the level-eye variant");
+        };
+        assert_eq!(origin, Origin::InheritedFrom("Wipeout Pulse"));
+        assert_eq!(eye_origin, Origin::Chosen);
     }
 
     /// A pressing's row carries the very cut its region names, so the table the
