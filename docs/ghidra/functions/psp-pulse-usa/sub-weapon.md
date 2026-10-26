@@ -28,9 +28,15 @@ widget. The buffer starts as the empty string (`0x08a7b5a8`, one NUL).
 Confidence **92** for the Autopilot half: seen live as well as read - `pulse-psp-race/talons-alongside`
 shows `5.00` under the Autopilot's hexagon, at the widget's authored place
 (`Arcade_HUD.xml`: `x=240 y=45`, `HUD` font, scale `0.6`, centred), and ours draws the same
-glyphs in the same place (`2.67` in the same crop). Confidence **88** for the Cannon half: the
-same widget, buffer and call, the number read from `pickup+0x154` in the decompile and not
-seen on a captured frame.
+glyphs in the same place (`2.67` in the same crop). Confidence **94** for the Cannon half, **seen
+live with the counter poked** (2026-10-26, PPSSPP v1.20.4 software renderer, the saved state
+`race-talons-venom-alongside`): the player's pickup object (`*(entity+0x4c)`) got `+0x1bc = 3`,
+`+0x1c0 = 3`, `+0x154 = N` and the Autopilot's running bit cleared, and the HUD showed the
+Cannon's hexagon with `30`, `17`, `9` and `1` under it for `N = 30, 17, 9, 1`, in the Autopilot
+timer's place and glyphs; with `+0x1bc = -1` the icon and the line both went. **A natural fire was
+not reproduced**: the pad's Square did not reach the restored state's `Cannon_UpdateReload` (the
+counter stayed `30` under a held button), so the live frames prove the print, its place and its
+font, and the decrement is the already-recorded `Cannon_UpdateReload`.
 
 ## The Cannon's counter is armed when the pickup is granted
 
