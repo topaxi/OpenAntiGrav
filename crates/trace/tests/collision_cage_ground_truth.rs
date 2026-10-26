@@ -305,14 +305,16 @@ fn the_originals_contacts_against_our_mesh() {
         let samples: Vec<Vec3> = (0..10).map(|k| vec(13 + 3 * k)).collect();
         // The ten sample points in the original's memory order, which is the order contacts
         // resolve in: ours must list them the same way (sample 0 is lower left front).
-        let mut body = oag_physics::Body::default();
-        body.position = centre;
-        body.orientation = orientation_of_rows(
-            vec(4),
-            vec(7),
-            vec(10),
-            oag_trace::replay::Basis::LeftUpForward,
-        );
+        let body = oag_physics::Body {
+            position: centre,
+            orientation: orientation_of_rows(
+                vec(4),
+                vec(7),
+                vec(10),
+                oag_trace::replay::Basis::LeftUpForward,
+            ),
+            ..oag_physics::Body::default()
+        };
         let ours = oag_physics::wall::hull_sample_points(&body, &c.handling);
         for (k, sample) in samples.iter().enumerate() {
             if (ours[k] - *sample).length() > 0.05 {
