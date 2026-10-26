@@ -201,12 +201,12 @@ def pose(port):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--port", type=int, default=int(os.environ.get("OAG_PPSSPP_PORT", 47810)))
-    # `ppsspp-start.sh`'s `env.sh` exports the private instance's HOME as `PP_HOME`; falling
-    # back to the shell's own HOME put a `load --file` copy into the maintainer's memstick
-    # (2026-10-21).
-    ap.add_argument("--home", default=os.environ.get("PP_HOME") or os.environ.get("HOME"),
+    # `ppsspp-start.sh`'s `env.sh` exports the private instance's HOME as `PP_HOME`. There is
+    # no fallback to the shell's own HOME: twice (2026-10-21, 2026-10-26) a `load --file` run
+    # without `env.sh` sourced copied a state over the maintainer's own memstick.
+    ap.add_argument("--home", default=os.environ.get("PP_HOME"),
                     help="the instance's HOME (its memstick is under .config/ppsspp); "
-                    "defaults to $PP_HOME, then $HOME")
+                    "defaults to $PP_HOME, required")
     ap.add_argument("command", choices=["save", "load", "check", "pose"])
     ap.add_argument("slot", type=int, nargs="?", default=1)
     ap.add_argument("--keep", help="copy the saved state to this path (under data/saves/)")
@@ -217,6 +217,11 @@ def main():
                     "deterministic run to run) and leave the CPU stopped; 0x08849618 is Ship_UpdateCraft")
     ap.add_argument("--file", help="for load: first copy this .ppst into the slot's file name")
     args = ap.parse_args()
+    if not args.home:
+        sys.exit("--home or $PP_HOME must name the private instance's HOME (source its env.sh)")
+    if os.path.realpath(args.home) == os.path.realpath(os.path.expanduser("~")):
+        sys.exit(f"--home {args.home} is the shell's own HOME, the maintainer's PPSSPP; "
+                 "use the private instance's HOME")
     if "DISPLAY" not in os.environ:
         sys.exit("DISPLAY must name the instance's own Xvfb, e.g. 127.0.0.1:93")
     with Debugger(args.port) as dbg:
