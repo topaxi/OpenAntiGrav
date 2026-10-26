@@ -280,10 +280,11 @@ pub const V4: Classes = Classes {
     quake: None,
     // **`AmbientLight` and `DirectionalLight`**, generic Maya classes outside the
     // run, seven below Pulse's `0x12c`/`0x131` as `Mesh` is (`0x125` -> `0x11e`).
-    // Every Pure circuit read carries one `0x125` and one to three `0x12a`, each a
-    // 16-byte payload under a `Transform`, and the exporter kept Maya's own shape
-    // names on them (`ambientLightShape1`, `directionalLightShape1`, ...): 8 of 8
-    // circuits in `crates/pure/tests/light_classes_ground_truth.rs`. Pure's own
+    // Every one of Pure's 16 circuits carries one or two `0x125` and up to five
+    // `0x12a` (none on the four classics), each a 16-byte payload under a
+    // `Transform`, and the exporter kept Maya's own shape names on them
+    // (`ambientLightShape1`, `directionalLightShape1`, ...):
+    // `crates/pure/tests/class_table_ground_truth.rs`. Pure's own
     // light-list builder (`FUN_08841648`) is Pulse's `SceneLight_BuildLightingList`
     // instruction for instruction, so the nodes reach the hull the same way.
     // Confidence **90**: exact names, sizes and count on every circuit, the
@@ -295,9 +296,10 @@ pub const V4: Classes = Classes {
     // **`wopoint` and `wospot`**, the run's tail: Pulse orders `Reset Collision`
     // `0x3cd`, `wospot` `0x3ce`, `wopoint` `0x3cf`, `Ship Collision Fx` `0x3d0`,
     // and Pure's `Reset Collision` `0x37f` and `Ship Collision Fx` `0x382` frame
-    // the same pair at `0x380`/`0x381`. `0x381` is measured: 32-byte payloads
-    // named `wopointShapeN` (130 on Modesto Heights). No Pure circuit read
-    // authors a `0x380`, so `wospot` is the table index alone (confidence 80).
+    // the same pair at `0x380`/`0x381`, and the nodes say so: 32-byte payloads
+    // named `wospotShapeN` (`0x380`) and `wopointShapeN` (`0x381`), on 7 of 16
+    // circuits (`crates/pure/tests/class_table_ground_truth.rs`). Confidence
+    // **90**, as for the lights above.
     wopoint: Some(0x381),
     wospot: Some(0x380),
 };
