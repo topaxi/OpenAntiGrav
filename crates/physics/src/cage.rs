@@ -150,11 +150,22 @@ pub struct Located {
     pub sibling: Option<Section>,
 }
 
+/// One corner the cage resolved: where, and how hard, for the contact ring's spark dispatch.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CageContact {
+    /// The boundary point the contact was built at.
+    pub point: Vec3,
+    /// `|p|`, the length of the impulse applied (`Body_RecordContact`'s record).
+    pub impulse: f32,
+}
+
 /// What the cage did this tick.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CageResponse {
     /// Corners resolved.
     pub contacts: u32,
+    /// The first [`Self::contacts`] entries: each resolved corner, in the box's order.
+    pub resolved: [CageContact; 8],
     /// The original sends the craft to its reset state (`Ship_SetState(3)` at `0x08842394`):
     /// the point is past [`MAX_POINT_DISTANCE`], a corner past [`MAX_DEPTH`], or a resolved
     /// normal points up past [`FLOOR_NORMAL_Y`].
@@ -241,6 +252,10 @@ pub fn resolve(
             return response;
         }
         let applied = apply(&mut state.body, boundary, normal, depth);
+        response.resolved[response.contacts as usize] = CageContact {
+            point: boundary,
+            impulse: applied.3,
+        };
         response.contacts += 1;
         response.velocity_delta += applied.0;
         response.angular_velocity_delta += applied.1;
@@ -254,7 +269,7 @@ pub fn resolve(
 
 /// One cage contact through the hull's own resolver: `Body_ResolveContact` is the same
 /// function, called at `0x08831ff0` with a contact whose `+0x34` friction is `0`.
-fn apply(body: &mut Body, point: Vec3, normal: Vec3, depth: f32) -> (Vec3, Vec3, Vec3) {
+fn apply(body: &mut Body, point: Vec3, normal: Vec3, depth: f32) -> (Vec3, Vec3, Vec3, f32) {
     let contact = WallContact {
         point,
         normal,

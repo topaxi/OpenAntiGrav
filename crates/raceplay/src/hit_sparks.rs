@@ -194,6 +194,8 @@ pub(super) struct HitSparks {
     started: u32,
     /// How many Cannon-hit bursts have started, ever - for tests.
     weapon_started: u32,
+    /// How many of [`Self::started`] were a collision cage's contact, ever - for tests.
+    cage_started: u32,
 }
 
 impl HitSparks {
@@ -206,6 +208,7 @@ impl HitSparks {
             rng: Rng::new(HIT_SPARKS_SEED),
             started: 0,
             weapon_started: 0,
+            cage_started: 0,
         }
     }
 
@@ -340,7 +343,13 @@ impl Race {
     /// live read of `talons-boost` found the nearest-the-camera craft's locators quiet and a
     /// craft 291 units off with a fresh stamp, so no range from the seat is applied here (the
     /// value is two quads' dot product, not identified).
-    pub(super) fn throw_contact_spark(&mut self, slot: usize, point: Vec3, impulse: f32) {
+    pub(super) fn throw_contact_spark(
+        &mut self,
+        slot: usize,
+        point: Vec3,
+        impulse: f32,
+        damaged: bool,
+    ) {
         let ship = &self.sim.world.ships[slot];
         if !ship.active || ship.physics.shield_pickup_timer > 0.0 {
             return;
@@ -362,7 +371,31 @@ impl Race {
             return;
         };
         let severity = oag_fx::sparks::severity(impulse);
-        self.fire_locator(slot, node, Trigger::HitSpark, severity);
+        let trigger = if damaged {
+            Trigger::HitSpark
+        } else {
+            Trigger::CollisionSparkNoDamage
+        };
+        self.fire_locator(slot, node, trigger, severity);
+    }
+
+    /// The collision cage's contacts on `slot` this tick, each through the same ring-loop dispatch
+    /// ([`Self::throw_contact_spark`]) with `damaged` clear: the cage's record carries friction `0`.
+    /// Nothing is lost to a shield (the loop's shield branch precedes the dispatch) and nothing is
+    /// charged: the damage call is the friction test's.
+    pub(super) fn throw_cage_sparks(
+        &mut self,
+        slot: usize,
+        response: &oag_physics::cage::CageResponse,
+    ) {
+        if !self.draws() {
+            return;
+        }
+        let before = self.view.hit_sparks.started;
+        for contact in &response.resolved[..response.contacts as usize] {
+            self.throw_contact_spark(slot, contact.point, contact.impulse, false);
+        }
+        self.view.hit_sparks.cage_started += self.view.hit_sparks.started - before;
     }
 
     /// A posed capture's recorded contact sparks: each seed's locator fired `age` seconds before
@@ -475,6 +508,13 @@ impl Race {
     #[must_use]
     pub fn weapon_sparks_started_for_tests(&self) -> u32 {
         self.view.hit_sparks.weapon_started
+    }
+
+    /// How many sparks a collision cage's contacts have ever started, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn cage_sparks_started_for_tests(&self) -> u32 {
+        self.view.hit_sparks.cage_started
     }
 
     /// How many hit sparks have ever started, for tests.

@@ -855,14 +855,16 @@ impl Race {
             );
             let reset_contact = self.reset_zone_contact(slot, &env, position);
             let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
-            self.sim.cage_reset[slot] = oag_gameplay::cage::pass(
+            let cage = oag_gameplay::cage::pass(
                 self.sim.spline.cage(),
                 &mut self.sim.world.ships[slot].physics,
                 &handling,
                 &evaluated.wall,
                 eliminator_route,
-            )
-            .reset;
+            );
+            self.sim.cage_reset[slot] = cage.reset;
+            #[cfg(feature = "view")]
+            self.throw_cage_sparks(slot, &cage);
             self.lay_crumb(
                 slot,
                 self.ai_sample_for(slot, index).map(|sample| sample.flags),
@@ -1201,7 +1203,7 @@ impl Race {
                     #[cfg(feature = "view")]
                     if self.draws() {
                         for slot in [a, b] {
-                            self.throw_contact_spark(slot, contact.point, contact.impulse);
+                            self.throw_contact_spark(slot, contact.point, contact.impulse, true);
                         }
                     }
                     #[cfg(not(feature = "view"))]
