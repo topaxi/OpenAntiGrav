@@ -489,3 +489,76 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
         "the explosion outlived its level"
     );
 }
+
+/// A Quake hit on the player, rendered to a WAV with the `.COLLISIONS` cues
+/// kept or held back: the samples (stereo `i16`) and the tick the wave was
+/// launched on.
+fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
+    const LAUNCH: usize = 90;
+    let (mut race, _) = race_and_audio();
+    let wav = std::env::temp_dir().join(format!(
+        "oag-quake-hit-{}-{drop_collisions}.wav",
+        std::process::id()
+    ));
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        Some(wav.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    for tick in 0..LAUNCH + 40 {
+        if tick == LAUNCH {
+            assert!(race.force_quake(1), "the rival's wave never launched");
+        }
+        race.tick(&PlayerInputs::none());
+        oag_game::sound::race_tick_keeping(&mut audio, &mut race, |event| {
+            !(drop_collisions && event.cue == oag_gameplay::cue::Cue::Collision)
+        });
+        audio.tick();
+    }
+    audio.finish().expect("writing the dump");
+    let file = std::fs::read(&wav).expect("the dump");
+    std::fs::remove_file(&wav).ok();
+    let pcm = file[44..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|b| i16::from_le_bytes(*b))
+        .collect();
+    (pcm, LAUNCH)
+}
+
+/// The `.COLLISIONS` pair is heard, not only raised: the same Quake hit
+/// rendered with the cue held back is sample-identical until the wave reaches
+/// the player and louder with it after. Dropping `Cue::Collision` from
+/// `Race::throw_hit_spark` makes the two renders identical.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quake_hit_is_louder_with_its_collision_pair() {
+    if image("pulse-psp-usa.chd").is_none() {
+        return;
+    }
+    let frames = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;
+    let (with, launch) = quake_hit_render(false);
+    let (without, _) = quake_hit_render(true);
+    assert_eq!(with.len(), without.len());
+    let hit = launch * frames * 2;
+    assert_eq!(
+        with[..hit],
+        without[..hit],
+        "the renders differ before the wave is launched"
+    );
+    let energy = |pcm: &[i16]| {
+        pcm.iter()
+            .map(|&s| f64::from(s) * f64::from(s))
+            .sum::<f64>()
+            .sqrt()
+    };
+    let (kept, held) = (energy(&with[hit..]), energy(&without[hit..]));
+    println!("energy after the hit: with the pair {kept:.0}, without {held:.0}");
+    assert!(
+        with[hit..] != without[hit..] && kept > held,
+        "the .COLLISIONS pair added nothing to the Quake hit: {kept} against {held}"
+    );
+}
