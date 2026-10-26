@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, hd]
+updated: 2026-10-26
+summary: "Race shots: run the mid-pack hunt on more circuits; try closing the pack; Pure, 2048 and Omega races open"
+---
+
 # Race shots: Pulse PSP and HD give mid-pack pairs with the whole field; a closer pack and more circuits are open
 
 The maintainer asked whether the original can be put "in the middle of the pack via automation" and shot there, with weapons off.

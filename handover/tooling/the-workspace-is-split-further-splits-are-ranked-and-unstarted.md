@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-05
+summary: "Split oag-raceplay load and scene, a profile crate and a boot cluster from oag-game; measure Race coupling first"
+---
+
 # The workspace is split into 41 crates; the next three splits are ranked and unstarted
 
 2026-10-05. Fourteen crates were extracted from `oag-game`, `oag-render`, `oag-ui`,

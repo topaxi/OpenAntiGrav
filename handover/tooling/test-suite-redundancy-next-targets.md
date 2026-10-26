@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-13
+summary: "Test-suite redundancy: maintainer's call on rcs walk files; merge magstrip_wire_hd, render repeats, GNF profiling"
+---
+
 # Test-suite redundancy: what two trims left, ranked
 
 Two redundancy passes (2026-10-12) are measured in

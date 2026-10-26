@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-09-07
+summary: "MONITOR option never run on a multi-screen machine; scale factor offset and title-bar offset unchecked"
+---
+
 # MONITOR has only ever run on a one-screen machine
 
 The *miss* path is covered; the working path is not. A wrong scale factor offsets the window by the difference on any screen not at 100 %, and it centres on the *inner* extent while setting the *outer* position, so a decorated window sits high by about a title bar (known, documented, not corrected). **Try it on two screens**: `just play`, OPTIONS -> DISPLAY -> MONITOR, windowed and borderless. A tiling compositor may refuse all of it.

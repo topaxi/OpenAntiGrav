@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse]
+updated: 2026-09-07
+summary: "What selects which of the three 260-frame reels plays, and what plays them, is unread in the boot path"
 categories: [tooling, frontend]
 ---
 

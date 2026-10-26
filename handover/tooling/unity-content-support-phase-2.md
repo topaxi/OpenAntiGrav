@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-11
+summary: "Foreign-track picker row, atlas and sky from BallisticNG tracks; Unity formats no real file exercises are untested"
+---
+
 # Unity content support: the reader, the BallisticNG layer and a raceable foreign track have landed
 
 2026-10-11: `oag-unity` reads UnityFS v6 to v8 and SerializedFile v17 to v23 (layout and census:

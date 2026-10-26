@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-09-25
+summary: "Wire or refuse --give and --autopilot in write_trace; keep script analog axes through HeldButtons::advance"
+---
+
 # `--trace-out` still ignores `--give`/`--autopilot*`; scripts lose their analog axes in `oag-game`
 
 Two residual findings from the sweep that closed the `--trace-out

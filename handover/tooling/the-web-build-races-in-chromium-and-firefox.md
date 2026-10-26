@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-19
+summary: "No gate builds the wasm target; run the Pages workflow and check crossOriginIsolated in Chrome; Firefox fps"
+---
+
 # The web build races in Chromium and Firefox
 
 2026-10-09, lanes `web-pages`, `web-next`, `web-load`, `web-audio` then `web-video`. `just web` builds

@@ -1,3 +1,10 @@
+---
+status: parked
+titles: [omega]
+updated: 2026-09-25
+summary: "Omega patch archives: the Wwise .wem and .bnk pair in data08 untouched; why data05-09 and no data06 unexplained"
+---
+
 # The Omega Collection's PS4 patch PKG adds four archives, not a merge of the base's five
 
 2026-09-15. Split out of

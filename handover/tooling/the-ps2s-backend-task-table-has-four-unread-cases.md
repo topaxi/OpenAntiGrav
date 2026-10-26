@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-25
+summary: "PS2 BackendController task cases 0-3 (Launch, Kill, Pause, Run) unread; search WADS2.WAD for another route in"
+---
+
 # The PS2's backend task table has four unread cases, and the 60 Hz answer's lifetime is unknown
 
 Split out of the closed thread "The PS2 PAL/NTSC selector's ultimate trigger",

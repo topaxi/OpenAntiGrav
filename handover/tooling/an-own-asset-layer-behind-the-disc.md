@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-11
+summary: "Record active mods in the replay header; override forms beyond a loose name (hash, archive-addressed)"
+---
+
 # Asset layers: what is left after the fallback and the override landed
 
 2026-10-11: both layers exist (`oag_assets::layers`, `oag_source::layers`, ADR-0061) and

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega]
+updated: 2026-10-12
+summary: "Omega asset-level access leftovers: race lighting, remaining unread Wwise and eboot areas"
+---
+
 # Omega Collection's PS4 build imports, decrypts and is mapped; asset-level access is not there yet
 
 2026-09-15. `omega-ps4-eu.pkg`/`omega-ps4-eu-patch.pkg` (a scene fPKG, not a

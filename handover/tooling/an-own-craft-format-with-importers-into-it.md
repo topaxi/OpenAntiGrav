@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-12
+summary: "Census BallisticNG .csf craft, then an ADR for the craft format and oag-craftfile; design only so far"
+---
+
 # An own craft format, with the originals and BallisticNG as importers into it
 
 2026-10-12, the maintainer asked for a format for custom craft, the twin of the own

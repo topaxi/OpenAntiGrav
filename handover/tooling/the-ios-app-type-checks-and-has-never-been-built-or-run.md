@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-12
+summary: "iOS app: run the release.yml ios job and sideload the .ipa; no device run, signing and gamepad unchecked"
+---
+
 # The iOS app type-checks for aarch64-apple-ios and has never been built or run
 
 2026-10-12. `release.yml`'s `ios` job (`continue-on-error`, not published) builds

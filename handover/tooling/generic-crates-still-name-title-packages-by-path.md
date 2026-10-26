@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-06
+summary: "Move 190 title-package path references to Title fields one crate per lane, starting with campaign.rs"
+---
+
 # Generic crates still name title packages by path
 
 2026-10-06. `check-title-reach` (`scripts/check-title-reach.py`) counts

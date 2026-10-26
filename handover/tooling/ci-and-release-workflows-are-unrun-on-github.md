@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-10
+summary: "Maintainer pushes the branch and watches ci.yml; decide the oag-core sinf probe reference on macOS and Windows"
+---
+
 # CI is repaired and release.yml is written, but neither has run on GitHub
 
 2026-10-07. Every `ci.yml` run on `main` from 2026-08-28 to 2026-10-06 was red,

@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-12
+summary: "macOS app never run on a Mac (the maintainer has none); first job run, Gatekeeper wording and Finder environment"
+---
+
 # The macOS app is built by the nightly and has never run on a Mac
 
 `release.yml`'s `macos` job builds `oag-game` on `macos-latest` and

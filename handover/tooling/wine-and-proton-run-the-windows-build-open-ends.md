@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-07
+summary: "Wine: windowed frame time on a real GPU, 2048 and Omega smoke, release.yml Windows zip under wine"
+---
+
 # The Windows build runs under Wine and Proton; what is left unchecked
 
 `just wine-run` / `just wine-check` (`scripts/wine-run.sh`, `docs/tools/wine.md`)

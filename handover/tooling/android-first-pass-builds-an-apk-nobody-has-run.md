@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-26
+summary: "Android on the S24: deploy the APK, push data, launch and read the first-run log; fix what shows"
+---
+
 # The Android APK builds, runs in Waydroid and on the maintainer's phone
 
 `just apk` produces `OpenAntiGrav-<v>-android-arm64.apk` (NativeActivity, arm64,

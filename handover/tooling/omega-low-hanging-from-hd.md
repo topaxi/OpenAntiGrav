@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [omega]
+updated: 2026-10-26
+summary: "Omega adverts need a psp2 branch in gantry::build; plume flags, hit-effect triggers, Looks, shadows still open"
+---
+
 # Omega lacks HD's adverts, plume flags and hit effects: what is left of the wiring list
 
 Scout lane `omega-from-hd-scout` ranked the list on 2026-10-26; wire lane

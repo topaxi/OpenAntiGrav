@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-11
+summary: "Candidate lanes (Firefox fps, web freezes, HD AI at Talon's, menu clip, CI Node bump) await the maintainer's pick"
+---
+
 # Next drive lanes, as left by the 2026-10-09 drive
 
 The 2026-10-09 `/oag-drive` session ended with an empty approved queue. These are
