@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-10-27
-summary: "Maintainer-queued perf plan for CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays with CPU fallback, and a CPU-side governor beside DRS"
+summary: "Perf plan for CPU-bound devices: GPU-driven draws, bundles, GPU particles/trails/shadow rays with CPU fallback, a CPU governor"
 categories: [rendering, tooling]
 ---
 
