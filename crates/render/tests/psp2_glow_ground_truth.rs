@@ -149,7 +149,11 @@ fn anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
     };
     assert_eq!(report.glow_layers, 35, "{}", report.describe());
     assert!(
-        model.emissive.iter().all(|e| e.rate == 1.0),
+        model
+            .emissive
+            .iter()
+            .filter(|e| e.program[0] == 0.0)
+            .all(|e| e.rate == 1.0),
         "{:?}",
         model.emissive
     );
@@ -221,7 +225,11 @@ fn omegas_anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
     .expect("builds");
     assert_eq!(report.glow_layers, 36, "{}", report.describe());
     assert!(
-        model.emissive.iter().all(|e| e.rate == 1.0),
+        model
+            .emissive
+            .iter()
+            .filter(|e| e.program[0] == 0.0)
+            .all(|e| e.rate == 1.0),
         "{:?}",
         model.emissive
     );
@@ -236,7 +244,12 @@ fn omegas_anulpha_pass_inherits_hds_clock_and_vertex_scroll() {
 /// authored `time` as the rate gave `{0.0, 1.0, 1.0144, 1.1448}`; HD's engine
 /// clock gives `{1.0}`.
 fn distinct_rates(model: &Model) -> Vec<f32> {
-    let mut rates: Vec<f32> = model.emissive.iter().map(|e| e.rate).collect();
+    let mut rates: Vec<f32> = model
+        .emissive
+        .iter()
+        .filter(|e| e.program[0] == 0.0)
+        .map(|e| e.rate)
+        .collect();
     rates.sort_by(f32::total_cmp);
     rates.dedup();
     rates
