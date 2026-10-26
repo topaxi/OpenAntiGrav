@@ -151,3 +151,76 @@ fn leaving_the_race_during_the_countdown_keeps_the_song_for_the_release() {
     step(&mut audio, false);
     assert!(audio.race_voice.is_some());
 }
+
+/// A `MUSIC SOURCE` switch made while the song waits for the light used to find no race voice
+/// to move and no menu voice either, and was ignored until the next race.
+#[test]
+fn a_source_switch_made_while_the_song_waits_changes_what_the_release_starts() {
+    let (mut audio, ..) = psp_boot_fixture();
+    audio.hold_race_song(true);
+    audio.start_race_music(&discs(), MusicSource::Auto, Path::new("unused"));
+    assert!(audio.race_voice.is_none(), "parked");
+    let index = audio
+        .race_index
+        .expect("the parked track's place in the playlist");
+
+    // The PS2 recording of the same track, as if an earlier read had it.
+    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000)));
+    audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
+    assert!(
+        audio.race_voice.is_none(),
+        "still silent: the switch is not a start"
+    );
+
+    step(&mut audio, true);
+    step(&mut audio, false);
+    assert!(audio.race_voice.is_some(), "the release starts the song");
+    assert_eq!(
+        audio.race_from,
+        Some(Platform::Ps2),
+        "and it is the release the player moved to"
+    );
+    assert_eq!(
+        audio.playhead_race(),
+        Some(0.0),
+        "from its start, as parked"
+    );
+}
+
+/// The switch that has to be fetched: queued at once, and a fetch that fails leaves the parked
+/// track to start unchanged.
+#[test]
+fn a_source_switch_that_must_be_fetched_is_queued_while_the_song_waits() {
+    let (mut audio, ..) = psp_boot_fixture();
+    audio.hold_race_song(true);
+    audio.start_race_music(&discs(), MusicSource::Auto, Path::new("unused"));
+    audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
+    assert!(
+        audio.source_switch.is_some(),
+        "fetching the other release in the background"
+    );
+    super::source_switch::wait_for_source_switch(&mut audio);
+
+    step(&mut audio, false);
+    assert_eq!(
+        audio.race_from,
+        Some(Platform::Psp),
+        "a release that will not read leaves the parked track as it was"
+    );
+}
+
+/// A switch that lands after the light has been released moves the song that is sounding, from
+/// where it has got to: the parked case does not take over the ordinary race switch.
+#[test]
+fn a_source_switch_landing_after_the_release_moves_the_sounding_song() {
+    let (mut audio, ..) = psp_boot_fixture();
+    audio.hold_race_song(true);
+    audio.start_race_music(&discs(), MusicSource::Auto, Path::new("unused"));
+    let index = audio.race_index.expect("the parked track's place");
+    step(&mut audio, false);
+    assert_eq!(audio.race_from, Some(Platform::Psp));
+
+    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000)));
+    audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
+    assert_eq!(audio.race_from, Some(Platform::Ps2));
+}

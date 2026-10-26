@@ -40,6 +40,23 @@ impl Hold {
     pub(super) fn drop_parked(&mut self) {
         self.parked = None;
     }
+
+    /// The release the parked track was read off, when a track waits for the release.
+    pub(super) fn parked_from(&self) -> Option<Option<Platform>> {
+        self.parked.as_ref().map(|parked| parked.loaded.from)
+    }
+
+    /// Swaps the parked track `index` for `loaded`, keeping the place it resumes from. `false`
+    /// when nothing is parked under that index (the song started, or the race moved on).
+    pub(super) fn replace_parked(&mut self, index: usize, loaded: Loaded) -> bool {
+        match &mut self.parked {
+            Some(parked) if parked.index == index => {
+                parked.loaded = loaded;
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Audio {

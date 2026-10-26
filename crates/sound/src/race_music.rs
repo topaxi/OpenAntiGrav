@@ -699,8 +699,12 @@ impl Audio {
         let Some((_, wanted)) = discs.pick(choice) else {
             return;
         };
-        let (Some(_), Some(from), Some(index)) = (self.race_voice, self.race_from, self.race_index)
-        else {
+        // The release of the track that sounds, or of the one parked for the green light.
+        let from = match self.race_voice {
+            Some(_) => self.race_from,
+            None => self.song_hold.parked_from().flatten(),
+        };
+        let (Some(from), Some(index)) = (from, self.race_index) else {
             return;
         };
 
@@ -804,7 +808,7 @@ impl Audio {
     /// the wrong recording under the current one. `discs`/`choice` land in
     /// [`Audio::race_context`] on success so the next advance fetches from the
     /// release this switch moved to.
-    fn apply_race_source_result(
+    pub(super) fn apply_race_source_result(
         &mut self,
         wanted: Platform,
         index: usize,
@@ -818,7 +822,11 @@ impl Audio {
                     return; // answers a question nobody is asking any more
                 }
                 let Some(playing) = self.race_voice else {
-                    return; // the race ended while this was in flight
+                    // No voice: the song is parked for the green light, and what waits is
+                    // swapped (it keeps the place a resume gave it). Otherwise the race ended
+                    // while this was in flight.
+                    self.swap_parked_track(index, loaded, discs, choice);
+                    return;
                 };
                 let at = self.playhead_race().unwrap_or(0.0);
                 self.output.with_mixer(|mixer| {
@@ -845,6 +853,32 @@ impl Audio {
             }
             Err(error) => warn_no_music("the race music stays where it is", &error),
         }
+    }
+
+    /// [`Self::apply_race_source_result`]'s case of a song still waiting for the release: the
+    /// parked track becomes the same track on the new release, and the playlist continues from
+    /// that release as it does after a switch under a sounding voice.
+    fn swap_parked_track(
+        &mut self,
+        index: usize,
+        loaded: Loaded,
+        discs: MusicDiscs,
+        choice: MusicSource,
+    ) {
+        let cache = loaded
+            .from
+            .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+        let what = loaded.what.clone();
+        if !self.song_hold.replace_parked(index, loaded) {
+            return;
+        }
+        self.race_cache = cache;
+        if let Some((cached_discs, cached_choice, ..)) = &mut self.race_context {
+            *cached_discs = discs;
+            *cached_choice = choice;
+        }
+        self.race_prefetch = None;
+        debug!("audio: parked race music is now {what}, still waiting for the green light");
     }
 
     /// Polls [`Audio::source_switch`], applying it once its worker lands. Called

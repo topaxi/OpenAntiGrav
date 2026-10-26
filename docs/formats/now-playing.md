@@ -89,8 +89,12 @@ fly-over runs no race tick, so it never releases. `Audio::now_playing` reports n
 so a race never shows the previous race's song. A resume from the menus does not re-arm: past
 the release it plays at once, before it the same hold applies.
 
-**Open:** a `MUSIC SOURCE` switch made while the song is parked finds no race voice to move and
-is ignored until the next race; the parked track plays from the source it was fetched on.
+A `MUSIC SOURCE` switch made while the song is parked swaps the parked track for the same track on
+the new release (`Audio::set_music_source` treats a parked song as the race voice), so the release
+starts the recording the player chose; a switch that has to be fetched is queued like any other and
+a release that will not read leaves the parked track as it was. One that lands after the release
+moves the sounding song from where it has got to, as before. **Chosen, not measured**: the original
+has no such row.
 
 ## The borrowed titles
 

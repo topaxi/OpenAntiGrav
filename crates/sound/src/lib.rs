@@ -810,7 +810,10 @@ impl Audio {
     /// Moves whichever voice is live: while a race plays, that is the race
     /// voice, else the menu's. Using the menu's `music_from` during a race would
     /// desync the row from the audible voice and resume the wrong recording
-    /// (see [`Self::set_race_music_source`]).
+    /// (see [`Self::set_race_music_source`]). **A song parked for the green light
+    /// counts as the race voice**: the track that will start is swapped for the
+    /// same one on the new release, so a switch made through the fly-over and the
+    /// countdown is heard at the release instead of at the next race.
     ///
     /// Never blocks: a first read used to decode synchronously (0.4 s cached
     /// PSP, 2.0 s cold PS2) on the tick thread, a freeze on a player action. A
@@ -818,7 +821,7 @@ impl Audio {
     /// a fresh one goes through a [`MusicFetchWorker`] and [`Self::tick`]
     /// applies the result.
     pub fn set_music_source(&mut self, discs: &MusicDiscs, choice: MusicSource, cache_dir: &Path) {
-        if self.race_voice.is_some() {
+        if self.race_voice.is_some() || self.song_hold.parked_from().is_some() {
             self.set_race_music_source(discs, choice, cache_dir);
         } else {
             self.set_menu_music_source(discs, choice, cache_dir);
