@@ -80,7 +80,10 @@ Census (`crates/vex/tests/alpha_test_reference_ground_truth.rs`): extra-pass bat
 by the bit are Pure `(A, 0) 406, (A, 0x02) 578, (B, 0) 58`; Pulse PSP `2,003 / 3,446 / 363`;
 Pulse PS2 `4,419 / 4,383 / 802`. Every Pure hull batch of list A carries the bit; no Pulse hull
 batch does (all eight teams' loader lines read `0 weighted`), so the weighted Pulse batches are
-its circuits' chrome maps.
+its circuits' chrome maps. Checked against every Pulse source ours draws a hull from, with the loader line
+on one pair per circuit: all 12 PSP circuits and the PS2 pair (Moa Therma) read `0 weighted`, and the PS2 pair
+plus two PSP Black layouts render pixel-identical before and after. The weight is read in the PSP executables
+only; no PS2 hull carries the bit, so the PS2 executable's reading of it is moot for now.
 
 ## What ours does
 
@@ -121,7 +124,8 @@ as it is. Ours took `mesh::build`'s defaults for a colourless vertex, the stand-
 grey `(0.75, 0.78, 0.82)` from the first model render. The sky band read 72 grey where the original
 reads 108 to 128. `oag_raceplay::load::environment::unlit_sky` draws a colourless sky vertex unlit at
 white (loader line `sky: 486 vertices author no colour, ...`). Frame MAD on Chenghou 20.64 to 13.12, top band 49.75 to
-15.47. Vineta's, Blue Ridge's and Modesto's skies author colours and do not move, and nor do three Pulse pairs.
+15.47. Vineta's, Blue Ridge's and Modesto's skies author colours and do not move. No Pulse sky has a colourless
+vertex: the loader line is absent on all 12 PSP circuits and the PS2 pair.
 
 The GE's material colour is not always white. Vineta's layered water plane at `y = -50` draws with material
 ambient `(107, 216, 255)` and `(128, 128, 128)`, and where that colour comes from is not read. A texture node's
