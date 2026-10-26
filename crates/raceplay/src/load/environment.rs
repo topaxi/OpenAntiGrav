@@ -287,6 +287,39 @@ pub(super) fn envsettings_name(vex_name: &str) -> Option<String> {
 /// searched ahead of the DLC one, per `oag_assets::source::Archives::holder_of`.
 const FRONT_END_ENVSETTINGS: &str = "/data/fe/fe.track.envsettings";
 
+/// The circuit's `.envsettings` blob and the label of the archive it came
+/// from, **an add-on pack's copy first**, else the first copy any archive holds.
+///
+/// The base `data.psarc` of 2048 ships the HD Campaign circuits' paths too and
+/// its copies disagree with the pack's (Vineta K's sun diffuse is half of the
+/// pack's); the original's setters read the pack's live on that circuit
+/// (exposure.md, "The setters carry the circuit's own file"). The one lookup
+/// every circuit-file reader here shares, so light, fog and exposure cannot
+/// read different copies of one circuit.
+pub(super) fn read_circuit_envsettings(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+) -> Option<(String, Vec<u8>)> {
+    let copies = archives.read_every_name(name);
+    let from_pack = |label: &str| {
+        let file = pack_file_name(label);
+        archives
+            .add_ons
+            .iter()
+            .any(|add_on| file.eq_ignore_ascii_case(pack_file_name(add_on.archive)))
+    };
+    let at = copies
+        .iter()
+        .position(|(label, _)| from_pack(label))
+        .unwrap_or(0);
+    copies.into_iter().nth(at)
+}
+
+/// The last path component of an archive label or name, either separator.
+fn pack_file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
+}
+
 /// Reads and parses one `.envsettings` file off the archive set, or `None`
 /// for any reason at all - not found, not UTF-8, not this format. Callers
 /// that need to tell those apart for the report read the archive themselves;
@@ -456,7 +489,7 @@ pub(super) fn envsettings_fog(
 ) -> Option<mesh_render::Fog> {
     use oag_tables::envsettings::{FOG_COLOUR, FOG_DENSITY, PSP2_FOG_COLOUR};
     let name = envsettings_name(track)?;
-    let blob = archives.read_name(&name).ok()?;
+    let (_, blob) = read_circuit_envsettings(archives, &name)?;
     let text = String::from_utf8(blob).ok()?;
     let env = EnvSettings::parse(&text).ok()?;
     let authored = if psp2 {
@@ -510,7 +543,8 @@ pub(super) fn envsettings_alternate_fog(
 ) -> Option<mesh_render::Fog> {
     use oag_tables::envsettings::{ALTERNATE_FOG_COLOUR, ALTERNATE_FOG_DENSITY};
     let name = envsettings_name(track)?;
-    let text = String::from_utf8(archives.read_name(&name).ok()?).ok()?;
+    let (_, blob) = read_circuit_envsettings(archives, &name)?;
+    let text = String::from_utf8(blob).ok()?;
     let env = EnvSettings::parse(&text).ok()?;
     let pair = env
         .vec3(ALTERNATE_FOG_COLOUR)
@@ -674,7 +708,7 @@ pub(super) fn staging(
     // whatever `HDR and Bloom` block a front-end file it ships would carry in.
     let wo_title = title.looks.wo_composite.applies_everywhere();
     let wo_composite = wo_title
-        .then(|| envsettings_exposure(archives, track, title, report))
+        .then(|| envsettings_exposure(archives, track, report))
         .flatten();
     // The circuit's `HDR and Bloom` block, which is what turns the HD race
     // onto the linear float scene target and the read FunkLayerBloom chain -
