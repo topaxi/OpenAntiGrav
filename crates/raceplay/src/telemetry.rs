@@ -272,7 +272,9 @@ impl Race {
             }
             if let Some(seconds) = hud.autopilot_seconds.filter(|&seconds| seconds > 0.0) {
                 // The same icon fallback and countdown a running Autopilot gives above.
-                readout.pickup = readout.pickup.or(Some(oag_tables::weapons::Weapon::Autopilot));
+                readout.pickup = readout
+                    .pickup
+                    .or(Some(oag_tables::weapons::Weapon::Autopilot));
                 readout.sub_weapon = Some(oag_hud::SubWeapon::Autopilot(seconds));
             }
         }
