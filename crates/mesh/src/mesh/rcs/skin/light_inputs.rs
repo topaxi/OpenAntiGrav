@@ -18,12 +18,14 @@
 //! the program: the vertex block routes `VertexColour1` into `o[TCn]` and the
 //! fragment block only ever `MOV`s or `MUL`s `f[TCn]`.
 //!
-//! # No `LG2`, no specular
+//! # No half-vector power, no specular
 //!
-//! A program with no `log2` has no `pow(N.H, e)`. The shared stand-in exponent
-//! stays for the track materials it was decided for; a hull material in this
-//! class draws no specular at all ([`crate::mesh::NO_SPECULAR`] as its
-//! exponent).
+//! A program with no `LG2` that reads a dot product has no `pow(N.H, e)`: its other
+//! `LG2`s raise a texture sample (the lightmap curve) to a power. Such a material
+//! draws no specular at all ([`crate::mesh::NO_SPECULAR`] as its exponent), whether
+//! it is a hull or a track surface (`Program::has_dot_power`). The shared stand-in
+//! exponent stays for a program whose chain is present and whose literal the
+//! decoder could not read, and for a material whose blocks do not resolve.
 
 use oag_rcs::rcsmaterial::{self, fragment::Program, vertex};
 
@@ -58,12 +60,11 @@ const EXPONENT_PARAMETERS: [u32; 3] = [
 ];
 
 /// The exponent this material's specular term is drawn with: its own chain's
-/// literal, [`crate::mesh::NO_SPECULAR`] for a [`colour_factor`] material
-/// whose program has no chain, else the shared stand-in.
+/// literal, [`crate::mesh::NO_SPECULAR`] for a program with no `LG2` reading a dot
+/// product, else the shared stand-in.
 pub(super) fn specular_exponent(
     program: Option<&Program>,
     material: &oag_rcs::rcsmodel::Material,
-    factor: bool,
     report: &mut Report,
 ) -> f32 {
     // **A resolved `0.0` is the engine's own patch, not a shininess.** `pow(x, 0) = 1` is
@@ -95,7 +96,7 @@ pub(super) fn specular_exponent(
     if let Some(value) = resolved {
         return value;
     }
-    if factor && program.is_some_and(|p| !p.has_specular_chain()) {
+    if program.is_some_and(|p| !p.has_dot_power()) {
         return crate::mesh::NO_SPECULAR;
     }
     report.specular_exponent_unresolved += 1;

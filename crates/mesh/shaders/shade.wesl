@@ -815,9 +815,10 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             0.0,
             1.0,
         );
-        // `NO_SPECULAR` (`oag_mesh::mesh::NO_SPECULAR`) is a hull program's with no
-        // `pow(N.H, e)` in it; any other draw keeps the shared stand-in there.
-        let no_specular = in.specular_exponent <= 0.0 && colour_factor;
+        // `NO_SPECULAR` (`oag_mesh::mesh::NO_SPECULAR`) is a program with no `pow(N.H, e)`
+        // in it (no `LG2` reads a dot product, `Program::has_dot_power`), hull or track
+        // surface; any other draw keeps the shared stand-in there.
+        let no_specular = in.specular_exponent <= 0.0;
         var specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
         // **`slots::LIT_ALPHA`**: the program lights the albedo's alpha and tints the
         // specular with its RGB (`light * albedo.a + spec * albedo.rgb`, read off
