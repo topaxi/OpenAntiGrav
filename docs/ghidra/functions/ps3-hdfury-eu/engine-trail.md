@@ -2522,5 +2522,5 @@ cause, hd-ship-materials.md).
 `Data/tex/EngineFlare/*.gnf`) carry `ChannelType::Srgb` in the GNF descriptor, so a GCN fetch
 decodes them; Omega's scene is a linear fp16 target (`hd-track-tone.md`, "checked, differs"), so a
 decoded tap would be added as light, but its flame program is GCN and unread and ours keeps the
-raw tap there. 2048: **not checkable from the file**: a `.gxt` carries no gamma mode (the Vita sets
-it per sampler at run time), and no Vita3K draw state of a 2048 flame has been read.
+raw tap there. 2048: **not checkable from the file**: the `.gxt` header this project reads carries no gamma
+field (on the Vita the gamma mode is texture-control state set at run time), and no Vita3K draw state of a 2048 flame has been read.
