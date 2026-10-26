@@ -10,7 +10,7 @@
 use anyhow::{Context, Result};
 use oag_tables::race_campaign::{self, Grid};
 use oag_ui::language::StringTable;
-use oag_ui_screens::campaign::Layout;
+use oag_ui_screens::campaign::{CellSelection, Layout};
 use oag_ui_screens::picker::FaceScales;
 
 use oag_hud::sprite::Sheet;
@@ -924,10 +924,52 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
     }
 }
 
+/// The rung a `Cell Selection` opens on: the rung the player last browsed to
+/// on this title's campaign if there is one, else the title's fresh-profile
+/// default. HD/Fury's default is `Easy`, not Pulse's `Medium` - see
+/// `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for the
+/// RPCS3 measurement.
+#[must_use]
+pub fn with_opening_difficulty(
+    model: CellSelection,
+    records: &crate::records::Store,
+    campaign_title: &str,
+    is_hd: bool,
+) -> CellSelection {
+    if let Some(saved) = records.campaign_difficulty(campaign_title) {
+        model.with_default_difficulty(crate::unlock::to_campaign_difficulty(saved))
+    } else if is_hd {
+        model.with_default_difficulty(race_campaign::Difficulty::Easy)
+    } else {
+        model
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{race_mode_for_cell, same_archive};
+    use super::{race_mode_for_cell, same_archive, with_opening_difficulty};
     use oag_tables::race_campaign::Mode as CampaignMode;
+
+    /// A saved rung beats the title's default; with none saved, Pulse opens
+    /// on Medium and HD on Easy; a rung saved for one title never reaches
+    /// another.
+    #[test]
+    fn the_cell_screen_opens_on_the_saved_rung_else_the_title_default() {
+        use crate::records::{Difficulty as Stored, Store};
+        use oag_tables::race_campaign::Difficulty;
+        use oag_ui_screens::campaign::CellSelection;
+        let open = |records: &Store, title: &str, hd: bool| {
+            with_opening_difficulty(CellSelection::new(Vec::new()), records, title, hd).difficulty()
+        };
+        let mut records = Store::default();
+        assert_eq!(open(&records, "pulse", false), Difficulty::Medium);
+        assert_eq!(open(&records, "hd", true), Difficulty::Easy);
+        records.set_campaign_difficulty("pulse", Stored::Hard);
+        records.set_campaign_difficulty("hd", Stored::Medium);
+        assert_eq!(open(&records, "pulse", false), Difficulty::Hard);
+        assert_eq!(open(&records, "hd", true), Difficulty::Medium);
+        assert_eq!(open(&records, "pure", false), Difficulty::Medium);
+    }
 
     #[test]
     fn the_seven_implemented_modes_map_onto_their_oag_race_mode() {

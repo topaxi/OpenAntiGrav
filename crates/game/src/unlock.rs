@@ -44,6 +44,16 @@ pub fn to_campaign_medal(medal: records::Medal) -> Medal {
     }
 }
 
+/// The campaign tables' name for a stored difficulty rung.
+#[must_use]
+pub fn to_campaign_difficulty(difficulty: records::Difficulty) -> race_campaign::Difficulty {
+    match difficulty {
+        records::Difficulty::Easy => race_campaign::Difficulty::Easy,
+        records::Difficulty::Medium => race_campaign::Difficulty::Medium,
+        records::Difficulty::Hard => race_campaign::Difficulty::Hard,
+    }
+}
+
 /// The best medal `records` holds for a campaign cell of `title`, in the
 /// shape [`race_campaign::grid_points_met`] and `Grid::points_earned` take.
 pub fn campaign_medal_of<'a>(

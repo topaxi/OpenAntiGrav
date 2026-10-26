@@ -882,3 +882,23 @@ fn campaign_progress_is_filed_per_pressing() {
         "a single-platform title is filed under its bare name"
     );
 }
+
+/// The browsed campaign rung is kept per title, never shared, and survives a
+/// write and a parse (the restart).
+#[test]
+fn the_campaign_difficulty_is_kept_per_title_and_round_trips() {
+    let mut store = Store::default();
+    assert_eq!(store.campaign_difficulty("pulse"), None);
+    store.set_campaign_difficulty("Pulse", Difficulty::Hard);
+    store.set_campaign_difficulty("hd", Difficulty::Medium);
+    store.set_campaign_difficulty("pulse", Difficulty::Easy);
+    assert_eq!(store.campaign_difficulty("pulse"), Some(Difficulty::Easy));
+    assert_eq!(store.campaign_difficulty("hd"), Some(Difficulty::Medium));
+    assert_eq!(store.campaign_difficulty("pure"), None);
+
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    let (parsed, notes) = parse(&text).expect("parses back");
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(parsed.campaign_difficulty("pulse"), Some(Difficulty::Easy));
+    assert_eq!(parsed.campaign_difficulty("hd"), Some(Difficulty::Medium));
+}

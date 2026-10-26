@@ -116,6 +116,7 @@ use anyhow::{Context, Result};
 use log::{error, warn};
 use serde::{Deserialize, Serialize};
 
+mod difficulty;
 mod loyalty;
 mod medal;
 pub use medal::{Difficulty, Medal};
@@ -500,6 +501,16 @@ impl LoyaltyRecord {
     }
 }
 
+/// The campaign difficulty rung a title's campaign screen last browsed to -
+/// see `difficulty.rs`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CampaignDifficultyRecord {
+    /// [`campaign_title`]'s string, lower-cased.
+    pub title: String,
+    /// The rung the screen opens on next time.
+    pub difficulty: Difficulty,
+}
+
 /// Every row [`load`] found or [`Store::record`] has added since, in one
 /// file.
 ///
@@ -521,6 +532,9 @@ pub struct Store {
     /// with no `[[loyalty]]` table at all parses to an empty one, the same
     /// way `campaign`'s own absence does.
     loyalty: Vec<LoyaltyRecord>,
+    /// One row per campaign title whose difficulty rung the player changed.
+    /// Absent in every file written before it existed.
+    campaign_difficulty: Vec<CampaignDifficultyRecord>,
 }
 
 impl Store {
@@ -827,11 +841,29 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
         None => {}
     }
 
+    let mut campaign_difficulty = Vec::new();
+    match table.get("campaign_difficulty") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<CampaignDifficultyRecord>() {
+                    Ok(record) => campaign_difficulty.push(record),
+                    Err(e) => notes.push(format!("campaign_difficulty[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => {
+            notes.push("`campaign_difficulty` is not an array of tables; ignoring it".to_string())
+        }
+        None => {}
+    }
+    campaign_difficulty.sort_by(|a, b| a.title.cmp(&b.title));
+
     Ok((
         Store {
             records,
             campaign,
             loyalty,
+            campaign_difficulty,
         },
         notes,
     ))
