@@ -375,11 +375,7 @@ def parse_ram_reads(items):
         addr, _, kind = rest.rpartition(":")
         if not name or not (kind in ("f32", "u32", "u8") or (kind.startswith("hex") and kind[3:].isdigit())):
             sys.exit("--ram-read wants NAME=ADDR:f32|u32|u8|hexN, got %r" % item)
-        if addr.startswith("["):
-            ptr, _, off = addr[1:].partition("]")
-            reads.append((name, (int(ptr, 16), int(off.lstrip("+") or "0", 16)), kind))
-        else:
-            reads.append((name, int(addr, 16), kind))
+        reads.append((name, parse_guest_address(addr), kind))
     return reads
 
 
@@ -403,8 +399,16 @@ def read_guest(pid, reads):
     return got
 
 
-def parse_ram_pokes(items):
-    """`--ram-poke ADDR=VALUE:f32[@FROM]` into `[(guest_address, value, from_grab)]`."""
+def parse_guest_address(text):
+    """A hex guest address, or `[PTR]+OFF` for OFF bytes past the u32 stored at PTR (resolved when it is used)."""
+    if text.startswith("["):
+        ptr, _, off = text[1:].partition("]")
+        return int(ptr, 16), int(off.lstrip("+") or "0", 16)
+    return int(text, 16)
+
+
+def parse_ram_pokes(items, fills):
+    """`--ram-poke ADDR=VALUE:f32[@FROM]` and `--ram-fill ADDR=BYTE:STEP:COUNT[@FROM]` into `[(address, kind, payload, from_grab)]`."""
     pokes = []
     for item in items:
         addr, _, rest = item.partition("=")
@@ -412,21 +416,40 @@ def parse_ram_pokes(items):
         value, _, kind = rest.partition(":")
         if kind != "f32":
             sys.exit("--ram-poke wants ADDR=VALUE:f32[@FROM], got %r" % item)
-        pokes.append((int(addr, 16), float(value), int(start or 0)))
+        pokes.append((parse_guest_address(addr), "f32", float(value), int(start or 0)))
+    for item in fills:
+        addr, _, rest = item.partition("=")
+        rest, _, start = rest.partition("@")
+        parts = rest.split(":")
+        if len(parts) != 3:
+            sys.exit("--ram-fill wants ADDR=BYTE:STEP:COUNT[@FROM], got %r" % item)
+        pokes.append((parse_guest_address(addr), "fill", tuple(int(v, 0) for v in parts), int(start or 0)))
     return pokes
 
 
 def poke_guest(pid, pokes, grab):
-    """Write every `--ram-poke` whose first grab is at or before `grab` into Vita3K's guest memory; needs a Vita3K that is this process's
-    child. Returns `{address: value}` of what was written."""
+    """Write every `--ram-poke`/`--ram-fill` whose first grab is at or before `grab` into Vita3K's guest memory; needs a Vita3K that is
+    this process's child. Returns `{address: value}` of what was written."""
     import struct
     done = {}
     with open("/proc/%d/mem" % pid, "r+b", 0) as mem:
-        for addr, value, start in pokes:
-            if grab >= start:
+        for addr, kind, payload, start in pokes:
+            if grab < start:
+                continue
+            if isinstance(addr, tuple):
+                mem.seek(HOST_WINDOW[0] + addr[0])
+                addr = struct.unpack("<I", mem.read(4))[0] + addr[1]
+            if kind == "f32":
                 mem.seek(HOST_WINDOW[0] + addr)
-                mem.write(struct.pack("<f", value))
-                done["%#x" % addr] = value
+                mem.write(struct.pack("<f", payload))
+            else:
+                byte, step, count = payload
+                mem.seek(HOST_WINDOW[0] + addr)
+                span = bytearray(mem.read(step * count))
+                span[::step] = bytes([byte]) * count
+                mem.seek(HOST_WINDOW[0] + addr)
+                mem.write(span)
+            done["%#x" % addr] = payload
     return done
 
 
@@ -548,6 +571,9 @@ def main():
     ap.add_argument("--ram-poke", action="append", default=[], metavar="ADDR=VALUE:f32[@FROM]",
                     help="with --walk: write an f32 into the guest before every burst grab from grab FROM on (default 0), recorded with the reads; "
                          "a pair made with one is a probe, not a reference")
+    ap.add_argument("--ram-fill", action="append", default=[], metavar="ADDR=BYTE:STEP:COUNT[@FROM]",
+                    help="with --walk: write BYTE at every STEP-th byte of COUNT, from ADDR (hex, or [PTR]+OFF), before every burst grab from "
+                         "grab FROM on; a probe, like --ram-poke")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -593,9 +619,9 @@ def main():
             count, pos, rows = found[0]
             original_pose = {"position": list(pos), "rows_left_up_forward_scaled": list(rows), "seen": count, "others": len(found) - 1}
     reads = parse_ram_reads(args.ram_read)
-    pokes = parse_ram_pokes(args.ram_poke)
+    pokes = parse_ram_pokes(args.ram_poke, args.ram_fill)
     if (reads or pokes) and not args.walk:
-        sys.exit("--ram-read and --ram-poke need --walk: the memory is only open to a Vita3K this script launched")
+        sys.exit("--ram-read, --ram-poke and --ram-fill need --walk: the memory is only open to a Vita3K this script launched")
 
     def sample(i):
         poked = poke_guest(args.vita_pid, pokes, i) if pokes else {}
@@ -615,6 +641,8 @@ def main():
             "at_grid_frame": burst[pick_i][2],
             "series": [{"t": round(b[0] - t_hud, 3), "frame": Path(b[1]).name, **b[2]} for b in burst[hud_i:]]}
         print("MEASURED ram at the grid frame: %s" % json.dumps(burst[pick_i][2]), file=sys.stderr)
+    pair.check("the original's memory was only read, never written by --ram-poke or --ram-fill (a probe is not a reference)", not pokes,
+               "%d write(s) per grab" % len(pokes))
     (out / "theirs.png").write_bytes(Path(frame).read_bytes())
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
     pair.rec["original"]["hull_shake"] = (
