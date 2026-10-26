@@ -43,6 +43,7 @@ pub mod omega_tonemap;
 pub mod ps2_bloom;
 pub mod screen;
 pub mod smaa;
+pub mod wo_composite;
 
 #[cfg(test)]
 mod split_fixture;
