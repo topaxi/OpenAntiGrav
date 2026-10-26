@@ -243,6 +243,14 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
 
 ## Commits
 
+- **A `git diff` or `git show` whose output is applied, parsed or saved
+  takes `--no-ext-diff`**: `git diff --no-ext-diff A B -- crates/x > p.patch`.
+  The maintainer's git config sets `diff.external = difft`, which prints a
+  structural view, not a patch, so `git diff A B | git apply -R` fails with
+  "No valid patches in input" (2026-10-26, `talons-alongside`). Never change
+  that config: difft stays the tool for reading a diff by eye. `git apply -R`
+  also fails on a file later commits touched; use `--3way`, or revert only
+  the files you need (`git checkout A -- <path>`).
 - **Read `git diff --cached --stat` before every commit** and unstage
   anything you did not mean to change. A member's commit once
   silently deleted six committed examples that docs cite as reproducers.
