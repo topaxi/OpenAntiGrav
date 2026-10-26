@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure]
+updated: 2026-09-07
+summary: "Two of five Pure particle names do not resolve; callers of the four fx functions to re-check after the relocation patch"
+---
+
 # Pure's particle effects decode and play, and two of five names do not resolve
 
 2026-08-12. `.pob` needed no change for Pure - `WO_SHIP_COLL_SPARK_DAMAGE`, `WO_ROCKET_EXPLO` and `WO_ROCKET_FLARE` all decode and play, which retires the "unknown, both" row on `docs/formats/pure-status.md`. **The content differs even where the name is shared**: `WO_ROCKET_EXPLO` is 7 emitters on Pulse and 5 on Pure. `WO_SHIP_ENGINEFLARE` resolves on **neither** disc and never has, so it is not a Pure finding. And no Pure *trigger* has been read for any of them: these fire from Pulse's recovered triggers, which is fine for a race and is not a claim about what Pure does.

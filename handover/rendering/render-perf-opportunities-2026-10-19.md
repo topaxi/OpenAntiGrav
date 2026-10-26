@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [all]
+updated: 2026-10-19
+summary: "Render CPU items: per-frame bind groups in default post passes, two empty shadow passes; measure with perf-probe"
 categories: [rendering]
 ---
 

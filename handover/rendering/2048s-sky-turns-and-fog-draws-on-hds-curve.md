@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [2048, omega]
+updated: 2026-10-19
+summary: "Read 2048's own fog term from a GXP program; sky rotation sign chosen; Sky brightness and height offset unread"
+---
+
 # 2048's sky turns and its fog draws on HD's curve; the 2048 law and two sky keys are open
 
 2026-10-06. 2048 (Vita) and Omega (PS4) circuits now turn their sky dome by the

@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pulse]
+updated: 2026-09-25
+summary: "What selects a ship skin is chosen; resolve the 0x12 comparison and six callers of Skin_LoadForTeam in Ghidra"
 categories: [rendering, tooling]
 ---
 

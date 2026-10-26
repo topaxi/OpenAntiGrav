@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-12
+summary: "Opponents, shots and trails under a wreck's results; measure a Single Race the player wrecks in on the original"
+---
+
 # A wrecked craft draws its wreck, explodes, and the player is cut to the circuit's own camera
 
 2026-10-01, lanes `pulse-wreck` and `pulse-wreck-2`. Evidence pages:

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-01
+summary: "PS2 shield: read the PS2 camera's real eye for a pixel-matched frame; an unexplained brightness gap"
+---
+
 # PS2 Pulse's shield: the model and the tint are fixed against a GS dump; what is left
 
 2026-10-01. The user reported on 2026-09-17 that the PS2 shield "renders solid and

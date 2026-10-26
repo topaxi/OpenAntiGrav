@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd, omega]
+updated: 2026-10-13
+summary: "Build the multi-view camera and anaglyph output first, then side-by-side packing; five VR-ready design constraints"
+---
+
 # Stereo 3D first, shaped so VR plugs in later
 
 2026-10-13, queued by the maintainer. No work started. HD/Fury shipped

@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-19
+summary: "Frame a two-tile advert quad on 13 and the second billboard8 quad on 14; PS2 FINAL LAP card on PCSX2"
 categories: [rendering]
 ---
 

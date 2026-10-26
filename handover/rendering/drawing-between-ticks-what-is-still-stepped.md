@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [all]
+updated: 2026-10-13
+summary: "Trail ribbons, particles and the reticle still step per tick; a 240 Hz panel watch by the maintainer"
+---
+
 # Drawing between ticks: what is still stepped
 
 2026-10-13. The window draws a race between its last two 60 Hz ticks since

@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd, omega, 2048]
+updated: 2026-10-21
+summary: "Capture a magstrip stretch before and after for mageffect08 and the sea plane; Omega and 2048 start grid orientation unread"
+---
+
 # HD's pit-box floor and Talon's start wall drew upside down: the flip came through a temporary
 
 2026-10-21 (`hd-track-materials`), **closed for the claim, open for three leads.**

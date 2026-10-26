@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [omega, hd, 2048]
+updated: 2026-10-05
+summary: "Magstrip arc wake on 2048 and Omega leftovers: which probe is FUN_012582a0's fifth call; speed ribbons, sound, rumble"
+---
+
 # Magstrip effects on Omega, HD/Fury and 2048: the arc wake, the POB, the sound, the rumble
 
 2026-10-05, magfloor-omega-re lane (shape) and magstrip-omega-law lane (the law), static reading of the PS4, PS3 and Vita

@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-21
+summary: "Vineta K: rock-to-sand mask blend (j_rockblend5) unread; the sea sheet ripple needs the paraboloid probe"
+---
+
 # Vineta K's glass refraction and arch glow: what is left
 
 2026-10-07, `hd-vineta-ceiling`, then `hd-glass-opus` and `hd-behind-glass`. The reads and the fixes are in

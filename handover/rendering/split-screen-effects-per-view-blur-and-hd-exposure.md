@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-16
+summary: "Deck numbers for split-screen per-view effects and blur are open (15 minutes each on the Deck)"
 categories: [rendering]
 ---
 

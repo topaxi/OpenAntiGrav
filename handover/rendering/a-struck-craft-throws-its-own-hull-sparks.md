@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-26
+summary: "Hull spark emitter roll unmeasured live; log particle+0x50 and +0x81 over three ticks on two effects"
 categories: [gameplay]
 ---
 

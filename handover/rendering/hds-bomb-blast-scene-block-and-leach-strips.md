@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-12
+summary: "HD LeachBeam strip draw read in part; ghost-static axis on Title so HD stops asking for a Pulse asset"
+---
+
 # HD's LeachBeam strips are unread; the ghost static WARN names a Pulse asset
 
 2026-10-06, hd-weapons; the Bomb half closed 2026-10-07 (`hd-weapon-blasts`).

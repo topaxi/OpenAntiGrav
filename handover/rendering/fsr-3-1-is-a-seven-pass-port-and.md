@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-16
+summary: "FSR 3.1 nobody has played; read FSR3 REN and OUT on the S24 and its intermediates formats from logcat"
+---
+
 # FSR 3.1 is ported, wired and selectable; nobody has played it
 
 The route was decided by

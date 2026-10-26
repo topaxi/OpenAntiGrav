@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-16
+summary: "Bindless textures on the Steam Deck (RADV): wgpu features, limits and split-frame level unchecked"
 categories: [rendering]
 ---
 

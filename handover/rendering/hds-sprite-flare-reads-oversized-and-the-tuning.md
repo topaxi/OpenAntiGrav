@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-09-15
+summary: "HD sprite flare law landed; a live confirmation against the original and the tuning rows' effect remain"
+---
+
 # HD's sprite flare reads oversized against the original, and the tuning file's other 19 rows are read
 
 2026-09-01. Started from a user report from play: the exhaust flare "too

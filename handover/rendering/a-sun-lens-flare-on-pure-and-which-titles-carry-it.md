@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure]
+updated: 2026-10-26
+summary: "Read Pure's FxLensflare.cpp draw path; add lensflare at 0x390 to the V4 class table; shadows.md Pure zero in doubt"
+---
+
 # A sun lens flare on Pure, and which titles carry it
 
 2026-10-26, `lens-flare-scout` (read-only census, no code changed). The maintainer

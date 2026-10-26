@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd, 2048]
+updated: 2026-09-15
+summary: "Zone grade draws; two narrow render questions remain on the effect settings table and cross-fader rows"
 categories: [rendering, tooling]
 ---
 

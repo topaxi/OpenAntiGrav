@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse]
+updated: 2026-10-20
+summary: "Confirm the barrel-roll gesture off the original with a capture; the chain is a static read"
+---
+
 # The barrel roll is playable; its visual is read but not drawn
 
 A headline Pulse mechanic this project did not have. Every number it needs is

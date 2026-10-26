@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-21
+summary: "HD hull: Metropia and Sol 2 blue bay, Harimau livery, _n1 wing rims and rest flame size to match"
+---
+
 # HD's hull wash on boost is the original's; what is left on the hull is the Harimau livery and the `_n1` wing rims
 
 2026-09-20, reported from play: "the light work looks amazing, but it

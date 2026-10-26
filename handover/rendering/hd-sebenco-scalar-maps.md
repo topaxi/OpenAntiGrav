@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd, omega]
+updated: 2026-10-22
+summary: "HD sea reflection probe (what renders into the runtime target) and Omega's water are open"
+---
+
 # Sebenco and Vineta K: scalar maps fixed, ice water drawn; the sea's reflection and Omega's water stay open
 
 2026-10-07, branch `hd-sebenco`. The cause and fix are in `docs/formats/rcsmaterial.md`, "A picture the program reads one

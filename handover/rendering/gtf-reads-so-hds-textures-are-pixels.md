@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [hd]
+updated: 2026-09-07
+summary: "HD Morton address function uncorroborated against the executable (88); the command-buffer write consuming +0x30 untraced"
 categories: [rendering, tooling]
 ---
 

@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [hd, pulse, pure]
+updated: 2026-10-12
+summary: "HD zoom ring triggers: a PPSSPP Pulse speed-pad frame to prove no ring there; start-boost watch; the caller unnamed"
 categories: [rendering]
 ---
 

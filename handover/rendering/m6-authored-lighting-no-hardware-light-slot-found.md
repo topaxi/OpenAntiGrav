@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-09-05
+summary: "No GE light slot found enabled and no DirectionalLight consumer found; rerun the watch script with a Missile firing"
+---
+
 # M6 authored lighting: no hardware light slot found enabled, and no `DirectionalLight` consumer found anywhere
 
 `AmbientLight`/`DirectionalLight` are registered, `PointLight` genuinely is not, and none of the mesh-draw functions read so far enables a GE light slot. The runtime direction vector recovered along the way is useful evidence for [`lighting.md`](../../docs/formats/lighting.md)'s open rotation-versus-translation question. `FUN_08a6b5bc`/`FUN_08a6b5c8` are World/Scene container class stubs, not lighting classes themselves - but `FUN_08a6b5bc` specifically is the class key that identifies the world object, so it is load-bearing for this question, not a dead end (correcting an earlier note on the page). Eight static passes (2026-08-31) ruled out every mechanism this project could identify for reaching the world object: `World_LoadTrack_q` (disassembly-verified pure epilogue after the collection call), `FUN_08886950` (structurally one hop short of the world object), the full class-key enumeration (12 call sites, 10 unique functions, none reads the fields), and `FUN_08930290` (fully characterized as a display-list-baking function, not the "second per-frame draw dispatcher" an earlier pass on this same thread mislabelled it as - retracted in the eighth pass). **A ninth pass then settled it live**: a positive-control-verified PPSSPP read watchpoint on the actual runtime addresses, across driving and three weapons, found zero reads - agreeing with all eight static passes at the strongest evidence tier this project's rubric has. Full account on [`psp-pulse-eu/lighting.md`](../../docs/ghidra/functions/psp-pulse-eu/lighting.md).

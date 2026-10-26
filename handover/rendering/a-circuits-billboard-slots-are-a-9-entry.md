@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse, pure]
+updated: 2026-10-06
+summary: "Billboard orientation needs a PPSSPP software frame of a hoarding from the front; Pure's slots unconfirmed"
 categories: [rendering, tooling]
 ---
 

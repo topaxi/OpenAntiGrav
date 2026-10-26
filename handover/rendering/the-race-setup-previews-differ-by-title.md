@@ -1,4 +1,8 @@
 ---
+status: re-first
+titles: [pure]
+updated: 2026-09-27
+summary: "Pure screen_m.xml and screen_tt.xml unread; Pure's craft preview call site 0x08951bd0 and own Layout rects"
 categories: [rendering, tooling]
 ---
 

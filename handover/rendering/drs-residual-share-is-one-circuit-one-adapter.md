@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-09-25
+summary: "Dynamic resolution RESIDUAL_SHARE has never run on the Steam Deck; race at target_fps 90 and read the trace"
 categories: [rendering, gameplay]
 ---
 

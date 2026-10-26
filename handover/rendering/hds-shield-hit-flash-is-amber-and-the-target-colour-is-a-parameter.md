@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-09-16
+summary: "HD shield target colour source (FUN_000d5610 argument) unread; per-team ShieldColour possible; flicker call arguments"
+---
+
 # HD's shield hit-flash is amber, not Pulse's cyan - and the steady-state colour is a parameter this pass did not trace to its source
 
 2026-09-16. The user, who plays the originals, reported from play that HD/Fury's

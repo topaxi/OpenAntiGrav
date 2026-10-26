@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-12
+summary: "HD accuracy pass: per-circuit luma gaps, Amphiseum floor missing light, scanline billboards and what was not compared"
+---
+
 # HD/Fury rendering accuracy pass: one defect fixed, the frame-wide darkness ranked first and still open
 
 2026-10-05, lane `hd-accuracy`. Method: `scripts/hd-frame-compare.py` over the three matched sets (`talons-matched` 00/01/03, `amphiseum-matched` 00/01/02, `sol2-matched` 00/01/02) on this tree before and after, frames read as side-by-side crops at player size. Baseline numbers (whole frame excluding HUD, ours / reference luma): Talon's Junction 0.404 / 0.618, 0.376 / 0.601, 0.404 / 0.618; Sol 2 0.493 / 0.684, 0.479 / 0.698, 0.611 / 0.911; Amphiseum 0.164 / 0.245, 0.469 / 0.457, 0.297 / 0.427. No RPCS3 boot this pass: every comparison is against the stored 2026-09-13 captures, so ships, exhaust, boost, weapons and shield hits were **not** compared (our matched renders draw no craft at these poses).

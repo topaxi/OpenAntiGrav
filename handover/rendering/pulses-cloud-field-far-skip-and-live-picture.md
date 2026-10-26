@@ -1,4 +1,8 @@
 ---
+status: measure
+titles: [pulse]
+updated: 2026-10-12
+summary: "Cloud mask by difference not obtained; the original's visible-set rule differs from ours"
 categories: [rendering]
 ---
 

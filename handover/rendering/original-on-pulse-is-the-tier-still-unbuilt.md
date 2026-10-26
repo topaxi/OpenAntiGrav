@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [2048, omega]
+updated: 2026-10-19
+summary: "Shadow mapped tier has one named gap; 2048 and Omega ambient shadow draw is unconfirmed against the executable"
+---
+
 # All four shadow tiers draw; `mapped` has one named gap and 2048 has none of it
 
 2026-09-04. Rewritten from the file that split off

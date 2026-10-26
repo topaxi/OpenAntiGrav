@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-08-31
+summary: "Material state bit 7 GPU meaning (alpha-to-coverage, 55) unconfirmed; tie it to an RSX method write; not wired"
+---
+
 # `Material::state`'s upper bits: bit 7 is measured, mode 2 is now fully decoded
 
 2026-08-25, branch `worktree-handover-texcoord-atoc-bit7`. Split off from a

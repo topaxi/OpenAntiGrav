@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-09-25
+summary: "Run the Deck command for the race scene build and put its tables on the doc page, then delete this thread"
 categories: [rendering, tooling]
 ---
 

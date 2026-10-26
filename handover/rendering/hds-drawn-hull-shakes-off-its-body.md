@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-22
+summary: "HD hull shake: speed versus thrust input, frame-time calibration, and a constant -1 px craft shift on 9 of 13 pairs"
+---
+
 # HD's drawn hull shakes off its body every frame; ours draws the body, so every HD pair's craft sits 3-13 px off
 
 2026-10-22 (`hd-hull-bay`). The largest craft difference left on the 13 HD compare pairs is placement,

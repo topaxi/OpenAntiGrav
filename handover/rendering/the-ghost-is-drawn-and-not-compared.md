@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [pulse, pure, hd, 2048]
+updated: 2026-09-23
+summary: "Ghost never compared with the original (confidence 60); capture a ghost lap on PPSSPP; ghost on/off row unbuilt"
+---
+
 # The ghost is drawn and raced, and not yet compared against the original
 
 Landed 2026-09-23 under ADR-0055 (`docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md`):

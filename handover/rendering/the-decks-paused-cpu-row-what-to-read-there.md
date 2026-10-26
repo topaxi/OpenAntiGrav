@@ -1,4 +1,8 @@
 ---
+status: blocked-maintainer
+titles: [all]
+updated: 2026-10-21
+summary: "The maintainer's 8-10 ms paused CPU row not reproduced; needs their frame-phases and clock from a Steam launch"
 categories: [rendering, tooling]
 ---
 

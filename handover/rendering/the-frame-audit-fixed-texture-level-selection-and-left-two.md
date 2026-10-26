@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pulse]
+updated: 2026-10-02
+summary: "Pulse frame audit: two differences it could not trace; the hull sheen gap is only partly closed"
+---
+
 # The Pulse frame audit fixed texture level selection and left two differences it could not trace
 
 2026-09-30, lane `pulse-frame-audit`. Full table, method and numbers:

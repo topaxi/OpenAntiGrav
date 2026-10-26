@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd, 2048, omega]
+updated: 2026-10-19
+summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect rival craft from their own sim level"
+---
+
 # Airbrake flaps: the swing sign is checked, not read, and only the player's craft moves
 
 ## Open

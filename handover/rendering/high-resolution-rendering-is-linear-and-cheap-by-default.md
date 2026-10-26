@@ -1,3 +1,10 @@
+---
+status: blocked-hardware
+titles: [pulse, pure, omega]
+updated: 2026-10-19
+summary: "Size-gated prepass for Pulse and Pure, per-view gate for Omega, and the Deck's before-after run at 4K"
+---
+
 # 4K and 8K rendering is linear and cheap by default; the opt-in chains and two gates are left
 
 2026-10-19, `hires-perf`. Evidence and numbers: `docs/rendering/high-resolution-cost.md`.

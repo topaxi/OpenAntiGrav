@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [omega]
+updated: 2026-10-02
+summary: "Three sink-less load routes keep every texture on the CPU; name the refused .gnf on amphiseum and modesto_heights"
+---
+
 # The Omega race peak no longer holds every texture on the CPU before any is uploaded
 
 2026-10-02. `lane/omega-memory` took Tech De Ra's peak RSS from 9,605 to 3,360

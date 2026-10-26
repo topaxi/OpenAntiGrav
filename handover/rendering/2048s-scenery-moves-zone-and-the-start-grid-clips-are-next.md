@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [2048]
+updated: 2026-10-19
+summary: "2048 Zone circuit never judged against the original; needs a muted Vita3K altima Zone capture; start-grid clip unwired"
+---
+
 # 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws (road = fog colour, chosen) and the start-grid clip is unwired
 
 2026-09-16. Started from "nothing on 2048 is animated at all" and found the

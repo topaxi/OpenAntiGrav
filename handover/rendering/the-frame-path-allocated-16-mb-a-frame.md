@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [all]
+updated: 2026-10-07
+summary: "Frame path allocations: wgpu encoder growth (230 KiB) and further ranked items to measure on the iGPU"
+---
+
 # The frame path allocated 1.6 MB a frame, and five of the reasons are fixed
 
 A render-performance review of the per-frame path, 2026-09-02. Everything here

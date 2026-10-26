@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [pure]
+updated: 2026-10-12
+summary: "Pure Plasma blast keys, Bomb tumble axes, Disruptor and Missile visuals unread"
+---
+
 # Pure's weapons: Mine, Bomb, the Bomb blast and the Quake are wired; Plasma, Disruptor, Missile are open
 
 2026-10-08. Evidence: `docs/ghidra/functions/psp-pure-usa/weapons-gfx.md`. Pure's table named Pulse's

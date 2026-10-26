@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-10-01
+summary: "HD absorb: a real in-play absorb on RPCS3 with the chase camera to compare against our render"
+---
+
 # The weapon-absorb effect: burst on Pulse, Pure and HD, HD's absorb shell drawn, Pulse's hull overlay drawn
 
 2026-09-17. The user, who plays the originals, reported: "the weapon absorb

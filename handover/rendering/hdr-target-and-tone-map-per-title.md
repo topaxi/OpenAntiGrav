@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd, 2048]
+updated: 2026-10-19
+summary: "Whether HD and 2048 tone-map an HDR target: one RPCS3 session for the curve test and regional measurement"
+---
+
 # HD, 2048 and Omega render to an HDR target and tone-map it; we draw into an 8-bit one
 
 2026-10-05, queued by the maintainer. No work started. Three questions, one

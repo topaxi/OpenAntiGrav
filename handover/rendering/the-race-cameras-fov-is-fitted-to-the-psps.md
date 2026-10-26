@@ -1,3 +1,10 @@
+---
+status: blocked-maintainer
+titles: [pulse]
+updated: 2026-10-21
+summary: "Design call: should the race camera reproduce the PS2's aspect widen as its own setting"
+---
+
 # The race camera's FOV is fitted to the PSP's own aspect on every title, and the PS2's own in-game widening option has no counterpart
 
 2026-09-03, found while chasing an apparent PS2-engine-flare size mismatch that turned out to be something else (see [The PS2's engine flare plays and reads as nothing on screen](the-ps2s-engine-flare-plays-and-reads-as.md)). Not a bug in the sense of contradicting a closed reading - `race::AUTHORED_ASPECT` was already closed once, deliberately, as "right whatever the disc" for the 2D/HUD/loading-screen layout math ([`ps2-front-end-layout-is-hardcoded-to-480x272.md`](../frontend/ps2-front-end-layout-is-hardcoded-to-480x272.md), 2026-08-09/08-23). This is a narrower, still-open question that closure never asked: **should the in-race 3D camera also reproduce the PS2 disc's own runtime `Aspect Ratio` option**, and today it does not, on any title.

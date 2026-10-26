@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [hd]
+updated: 2026-10-12
+summary: "HD glow: the UV set feeding f[TC3], inline-literal scroll rates of ~25 slots and what time counts are unread"
+---
+
 # HD's glow draws, and the coordinate it samples on is the one thing not read
 
 2026-08-31. Supersedes the "texture scroll is unwirable" row, whose blocker is

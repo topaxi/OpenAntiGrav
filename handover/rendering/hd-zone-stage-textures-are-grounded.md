@@ -1,3 +1,10 @@
+---
+status: measure
+titles: [hd]
+updated: 2026-09-15
+summary: "HD Zone stage textures grounded; what remains is the shader's use of them and live confirmation"
+---
+
 # HD's per-stage Zone textures are grounded now: which file feeds which sampler is read, what the shader does with them is not
 
 2026-08-31. Split out of

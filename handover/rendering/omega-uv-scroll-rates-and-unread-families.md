@@ -1,3 +1,10 @@
+---
+status: re-first
+titles: [omega, 2048]
+updated: 2026-10-06
+summary: "Omega scroll rates and sign are chosen; read a scroll shader's GCN; several families have no consumer read"
+---
+
 # Omega's glow layers scroll off 2048's rule; rates are chosen and several families are still
 
 2026-10-05. `oag_rcs::rcsmodel::psp2::material::read_ps4` left `params` and

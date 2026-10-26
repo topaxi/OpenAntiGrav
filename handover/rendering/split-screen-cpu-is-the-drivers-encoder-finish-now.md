@@ -1,4 +1,8 @@
 ---
+status: blocked-hardware
+titles: [all]
+updated: 2026-10-16
+summary: "Split-screen CPU: run the Deck commands for encoder.finish and uniform uploads on main and the encoder-finish branch"
 categories: [rendering, tooling]
 ---
 

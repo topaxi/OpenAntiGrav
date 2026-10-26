@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-22
+summary: "HD fidelity queue: scenery items 5-8 not started, Bomb ripple rings, Moa Therma pair, exposure law, LOD bias"
+---
+
 # HD fidelity lanes queued behind the cold originals
 
 2026-10-21, the render-fidelity drive's queue at wind-down, written down so it survives the session. Each
