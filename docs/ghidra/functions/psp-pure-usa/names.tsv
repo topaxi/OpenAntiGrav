@@ -244,3 +244,6 @@
 # 2026-10-26 autopilot-re: the Autopilot pickup (autopilot.md)
 0x0884c770	function	Autopilot_Fire	85	autopilot.md
 0x0884c794	function	Autopilot_Update	85	autopilot.md
+# 2026-10-26 pure-render-fidelity: the hull's GE light list and the spline sample it scales by (scene-light.md)
+0x08841648	function	SceneLight_BuildLightingList	85	scene-light.md
+0x08843d1c	function	Spline_SampleSegment	80	scene-light.md

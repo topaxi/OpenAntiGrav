@@ -135,8 +135,11 @@ is read from the builder's two scale arguments and fits the tunnel's authored
 reproduced); not confirmed live. The nearest ring point stands in for the
 blend at the craft's own parameter. Result: a Pulse craft darkens in a tunnel
 as the original's does. Checked against HD and the others: HD's darkening is
-its own sun-occlusion mechanism (`ship-sun-occlusion.md`); Pure authors no
-hull light rig, so it keeps its stand-in lighting (checked, differs).
+its own sun-occlusion mechanism (`ship-sun-occlusion.md`). **Pure: ported**
+(2026-10-26): its circuits author the same light nodes under its own class ids,
+its builder and spline sampler are these, and its hull now takes the rig and the
+scale bytes ([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)).
+An earlier "Pure authors no rig" was the reader matching Pulse's class ids.
 
 Confidence **85** for the copy and the accumulate (bodies read, writers
 named live), **75** for `Spline_SampleSegment`'s role (the basis constants
@@ -221,8 +224,9 @@ checked, applies in the data, not wired** (2026-10-20, `hull-points-ps2`). The P
 vector and colour bytes for the same `wopoint` (read live on PCSX2), but composes its own rig around
 it, and our PS2 hull has never taken any of the rig: its vertices carry a colour, so
 `lit = 0` and `mesh.wesl` skips the branch. Evidence and the open items on
-[`ps2-pulse-eu/hull-lights.md`](../ps2-pulse-eu/hull-lights.md). **Pure: checked, applies
-(data), not wired**, on the same page.
+[`ps2-pulse-eu/hull-lights.md`](../ps2-pulse-eu/hull-lights.md). **Pure: ported** 2026-10-26: its
+`wopoint` (`0x381`) and `wospot` (`0x380`) nodes reach its hull through the same slots
+([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)).
 
 ### De Konstruct, the 8-level residual (2026-10-20)
 
@@ -358,9 +362,10 @@ moving light, in both layouts. The PSP disc's twelve circuit files (01 to 07, 09
 each in both layouts, 02 authoring no light at all) and the PS2 disc's thirty-two (all sixteen
 circuits, so 08, 11, 12 and 15 as well, which the PSP sells as downloadable content) were walked;
 the PS2's Arc Prime authors the same two lights at the same places. **Pulse PS2: checked, applies
-in the data, not wired**: the PS2 hull takes none of the rig (see above). **Pure: checked,
-differs**: no Pure hull takes a circuit light (`../ps2-pulse-eu/hull-lights.md`); whether any Pure
-light sits under an `Anim Transform` was not censused. **HD: not applicable**: its hull is lit by
+in the data, not wired**: the PS2 hull takes none of the rig (see above). **Pure: ported**
+(2026-10-26): Pure's hull takes its circuit's lights
+([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)); whether any Pure light sits
+under an `Anim Transform` was not censused. **HD: not applicable**: its hull is lit by
 its authored envsettings rig (`ship-sun-occlusion.md`) and the `wopoint` class is absorbed with no
 consumer (`../ps3-hdfury-eu/vex-classes.md`). **2048 and Omega: not checked**, out of scope for a
 Pulse finding.

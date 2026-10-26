@@ -655,7 +655,7 @@ picture of those pods was not captured.
 | Title | Answer |
 | --- | --- |
 | Pulse PS2 | **ported.** The same `mesh.rs` loop reads the VIF batches' normals; 99.9% against its faces once rotated, 58.4% before. The PSP-format batches this disc also carries are rotated by the same loop but the face test could not judge them (above), so they are **ported, unverified**. The PS2 executable's mesh draw is not read (PSP is the reference). |
-| Pure PSP | **ported.** Version-4 files, same loop: 78.2% before, 99.9% after. The 15 version-3 files are not read. |
+| Pure PSP | **ported.** Version-4 files, same loop: 78.2% before, 99.9% after. Pure's `Mesh` constructor (`0x0886cf04`) packs the same full 4x3 world matrix into the GE ([`psp-pure-usa/scene-light.md`](../ghidra/functions/psp-pure-usa/scene-light.md), confidence 85), so the rotation is Pure's too. On Pure's four compare pairs it moved only the airbrake flaps, by 0.17 to 0.27 grey over the hull. The 15 version-3 files are not read. |
 | Wipeout HD, Wipeout 2048, Omega | **checked, differs.** Their geometry is `.rcsmodel`, placed by `oag_mesh::mesh::rcs`, which already carries a normal through `to_world` (PS3, `rcs.rs`) or its inverse transpose (Vita and PS4, `psp2.rs`). Their `.vex` files were not run through the batch loop changed here and are **not censused**. |
 
 ### The vertex type is not misdeclared, and `u8` texcoords really are one byte each

@@ -110,6 +110,8 @@ from the exporter's own class-name ordering instead - see
 | `LodGroup` | `0x2ee` | `0x2de` | Not in the run - a generic Maya class, like `Mesh`/`Transform`. Every one of 6 reachable ships names one node `lodGroup1` with exactly two `Transform` children, switching at 50.0 units - switched per frame by Pulse's rule, chosen rather than read here (`vex.md`, "implemented - the switch runs every frame") | 88 |
 | `fogCube` | `0x3d3` | `0x385` | Not in the run either. 10 instances across 7/16 circuits, all 128 bytes (`fog::PAYLOAD_LEN` exact) and all `edge == 500.0` - the same figure Pulse's own shipped tracks carry | 94 |
 | `Anim Transform` | `0x3c0` | `0x372` | Table index; 332 nodes across all 16 circuits, **332/332** parse under `anim_transform`'s own bounds-checked decoder | 94 |
+| `AmbientLight`, `DirectionalLight` | `0x12c`, `0x131` | `0x125`, `0x12a` | Generic Maya classes, seven below Pulse's as `Mesh` is; 21 and 30 nodes on the 16 circuits, 16-byte payloads named `ambientLightShapeN`/`directionalLightShapeN` ([scene-light.md](../ghidra/functions/psp-pure-usa/scene-light.md)) | 90 |
+| `wospot`, `wopoint` | `0x3ce`, `0x3cf` | `0x380`, `0x381` | Between `Reset Collision` and `Ship Collision Fx` as on Pulse; 8 and 654 nodes, 32-byte payloads named `wospotShapeN`/`wopointShapeN` | 90 |
 
 **The consequence for the code is smaller than it looks.** `CLASS_MESH`,
 `CLASS_TEXTURE`, `CLASS_TRANSFORM` in
@@ -1599,23 +1601,27 @@ label/time match (label 4 of 4, time exactly on 2, a tenth under on 2 from pair 
 [hud-time-ladder.md](../ghidra/functions/psp-pure-usa/hud-time-ladder.md). Silver, gold and `RECORD`
 captions follow the stored best and are unexercised on a frame (no pair holds a best).
 
-## Pure's hull is darker than the original's and does not move with the circuit (2026-10-22, measured)
+## Pure's hull takes the circuit's own lights (2026-10-26)
 
-Four Time Trial pairs (Vector, Feisar, same pose, hull offset 0 to 1 px), mean RGB over a patch of the teal body at the
-hull's centre, original then ours (ours/original on green in the last column; whole-frame mean grey of the original
-beside it):
+Measured 2026-10-22: the hull drew 0.39 to 0.78 of the original's brightness on four Time Trial pairs (Vector,
+Feisar, same pose), flat across circuits where the original follows each scene, and the loader said `hull lights:
+the circuit authors none`. **The circuits do author lights**; the reader matched them against Pulse's class ids.
+Pure's are `AmbientLight` `0x125`, `DirectionalLight` `0x12a`, `wospot` `0x380` and `wopoint` `0x381`, each node keeping
+Maya's shape name, on all 16 circuits (21, 30, 8 and 654 nodes;
+`crates/pure/tests/class_table_ground_truth.rs`). Pure's light-list builder (`0x08841648`) and spline sampler
+(`0x08843d1c`) are Pulse's, and its `WO Track`s are version `0x103`, so the per-point scale bytes are read too.
+`vex::classes::V4` now carries the four ids and Pure's `Looks::hull_lights` is on for the PSP. Evidence, the
+decompile comparison and the before/after table:
+[`psp-pure-usa/scene-light.md`](../ghidra/functions/psp-pure-usa/scene-light.md).
 
-| circuit | original | ours | ratio | frame mean grey |
-| --- | --- | --- | ---: | ---: |
-| Vineta K | 159 176 155 | 56 68 53 | 0.39 | 143.6 |
-| Chenghou Project | 156 168 138 | 61 74 58 | 0.44 | 97.4 |
-| Blue Ridge | 132 149 124 | 57 69 55 | 0.46 | 102.9 |
-| Modesto Heights | 110 94 74 | 61 73 58 | 0.78 | 72.3 |
+Teal patch, original / before / after: Vineta K `110 128 113` / `60 75 68` / `88 110 98`; Chenghou Project
+`108 121 100` / `62 71 58` / `87 107 88`; Blue Ridge `108 128 110` / `59 75 71` / `99 121 109`; Modesto Heights
+`80 94 83` / `46 52 41` / `77 91 80`. Modesto's yellow panels turn the original's orange. Still open on the hull: the
+canopy, near white in the original and dark teal in ours, and the remaining 10 to 20 % on Vineta and Chenghou,
+whose whole frames also read darker in ours (sky, track and HUD alike, so not a hull term). Other titles: 2048 and
+Omega ship no Pure hull and no `.vex` circuit light rig (not applicable).
 
-Ours is flat (56 to 61 red) on all four because the stand-in rig is fixed; the original follows the scene's own
-brightness, so the gap is a per-circuit lighting input and not the texture or the tone curve. Pure's `track.vex`
-authors no `AmbientLight`/`DirectionalLight` node (loader report: `hull lights: the circuit authors none`), and
-switching Pulse's rule (`Looks::hull_lights`) on for Pure's PSP changed no pixel on any pair (tried, reverted). A
-second patch placed by hand on the re-rendered pairs reads the same direction (ours 35 to 42 red on all four, the
-original 70 to 124, darkest on Modesto). Nothing implemented; the cause class is an inference from the flat-versus-moving pattern. Open: the executable's per-craft
-hull lighting source, not yet located. Other titles: not checkable from this lane (2048 and Omega ship no Pure hull).
+The 2026-10-26 normals change (a vertex normal carried through its node's rotation) is also right for Pure: Pure's
+`Mesh` constructor (`0x0886cf04`) packs the node's full 4x3 world matrix into the GE as Pulse's does. It moved the
+four pairs' hull region by 0.17 to 0.27 grey (MAD) under the stand-in rig, all on the airbrake flaps; under the
+circuit's lights rotated and unrotated normals score within 0.13 of each other.

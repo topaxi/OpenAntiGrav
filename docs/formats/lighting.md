@@ -261,6 +261,9 @@ Summary, so this page doesn't go stale in place:
   different binaries: the authoring class exists, nothing consumes it. Not a
   render-side gap to fill; see `renderer.md` for what would overturn this
   (mainly: a runtime trace, not attempted here).
+- **Pure.** Read under its own class ids since 2026-10-26: `AmbientLight` `0x125`,
+  `DirectionalLight` `0x12a` (`vex::classes::V4`); `PointLight` is not recovered
+  there ([`psp-pure-usa/scene-light.md`](../ghidra/functions/psp-pure-usa/scene-light.md)).
 - **PS2 parity.** Not checked. Pulse's class IDs do not carry to Pure, and the
   PS2 build's numbering is unconfirmed - the same caveat
   [`skycube.md`](skycube.md) already carries for its own two classes.

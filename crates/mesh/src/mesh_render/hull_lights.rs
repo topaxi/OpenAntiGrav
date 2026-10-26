@@ -62,7 +62,7 @@ pub struct HullLights {
 }
 
 impl HullLights {
-    /// No rig: every title but Pulse on the PSP, and a circuit that authors
+    /// No rig: every title but Pulse and Pure on the PSP, and a circuit that authors
     /// no light at all.
     pub const OFF: Self = Self {
         ambient: [0.0; 4],
