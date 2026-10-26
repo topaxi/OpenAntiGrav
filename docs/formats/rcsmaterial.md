@@ -3561,14 +3561,26 @@ Tests: `crates/render/tests/hd_twin_blend_lit_path.rs` (the shader's combine on 
 `hd_twin_blend_ground_truth.rs` (Tech de Ra's slot and Chenghou's two),
 `oag-rcs vertex::tests::the_twinblend_mask_scroll_reads_its_literal_rate`.
 
-**2048 and Omega: checked, applies, not wired.** 2048 ships `nr_twinblend.rcsmaterial` in
-DLC1's Anulpha Pass and Chenghou Project (`data.psarc`, `data/art/published/DLC1/...`) beside the
-same four textures (`ag_square01cl_glow`, `ag_square02cl_glow`, `animscaledballs`,
-`glowbars_noisy`, as `.gxt`); Omega ships `NR_twinBlend*.rcsmaterial` on Tech de Ra, Vineta K,
-Anulpha Pass, Chenghou Project, Metropia and Sebenco Climb (`data01`/`data02.psarc`) and in its
-2048 object library, with the four textures as `.gnf` under `tech_de_ra/TexturesPS4/` and a
-`BlendTexture` sampler and `barsUV_blendUV` attribute named in the material. Their
-programs are GXP and GCN, which this reader does not decode, and 2048's records author `time`
-as `19992.0` ([2048-material-params.md](2048-material-params.md)), so nothing here binds on
-either title.
+**2048 and Omega: ported, inherited from HD (2026-10-26, `twinblend-2048-omega`).** Both ship
+the material (`nr_twinblend.rcsmaterial`; 2048 in `data.psarc`, `dlc1.psarc` and `dlc2.psarc`, Omega in
+`data01`/`data02.psarc`) with HD's four sampler hashes and the same four textures (`.gxt`, `.gnf`), and
+their vertices carry HD's `v[8]` as the attribute `barsUV_blendUV` (`0x0e7ea5a8`, four halves: bars
+`.xy`, wipe `.zw`). Their programs are GXP and GCN, unread, so the draw is HD's law labelled
+**inherited from HD** (provenance, not measured on either title): `mesh::rcs::psp2::twin_blend`
+admits a material by the name `nr_twinblend` and all four sampler paths, binds first picture, second
+(`lightmaps`), wipe (`pad_masks`) and bars (`wave_maps`) at the draw's texture slot, lays the three
+pairs as HD does, and writes one glow-table entry of mode 6. **The rate is HD's 1.875**, a named
+const (`psp2::TWIN_BLEND_RATE`) pinned against HD's own `clock_rate` reading in
+`hd_twin_blend_ground_truth`; 2048's authored `time` (`19992.0`) is not a rate. The pair attribute
+is read through the record's **own** declaration pointer (`+0x28`: a `u32` on the Vita, 64 bits on
+the PS4): keyed by stride it is found on 1 of 28 Vita twin-blend submeshes, by pointer on all 28 and
+all 20 Omega ones. Census (`crates/render/tests/psp2_twin_blend_ground_truth.rs`, every model built):
+2048 `data.psarc` 6 materials (Anulpha Pass 1+1, Chenghou Project 2+2 forward and reversed),
+`dlc1.psarc` 12 (the same plus Metropia 1+1, Sebenco Climb 2+2), `dlc2.psarc` Tech de Ra 1+1; Omega
+Anulpha Pass 1+1, Chenghou Project 2+2, Metropia 1+1, Tech de Ra 1+1, Sebenco Climb 2+2; every one
+bound, none refused (`Report::twin_blend_*`). **Seen** on Omega's Tech de Ra start grid (the banner
+behind the gantry, 4,669 px of the frame): before, a saturated red AG square; after, the darker red
+with grey striped logo HD's matched original shows. No shadPS4 frame of Tech de Ra was had (the pad
+walk stayed on the main menu twice); the reference is HD's original crop, so the comparison is of
+character, not pixels. 2048's Vita DLC models are covered by the census only, no frame.
 
