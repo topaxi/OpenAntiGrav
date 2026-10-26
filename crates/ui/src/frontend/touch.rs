@@ -96,6 +96,10 @@ pub enum Launch {
     /// A campaign event by its `SP.xml` instance name: the map's own
     /// `redirect="Launch 2048"`, resolved by `oag_raceplay::load_event`.
     Event(String),
+    /// A downloadable campaign's cell by its `PI_Cell` name (`grid0_3_1`): a
+    /// node of one of [`super::Tier`]'s maps, resolved against the grids the
+    /// boot read.
+    Cell(String),
     /// This build's own race box - the `race` page of `assets/ui/menu.toml`.
     RaceBox,
     /// This build's own RACE REMIX page (ADR-0034).
@@ -397,8 +401,15 @@ impl Frontend {
         // The confirm tick on the mode grid: only a chosen mode this build
         // can follow leaves. See the module docs.
         if current == w2048::GAME_MODE_CHOICE {
-            match self.touch.chosen_mode.as_deref() {
-                Some("FE_SP_CAMPAIGN") => {}
+            let chosen = self.touch.chosen_mode.clone();
+            match chosen.as_deref() {
+                Some("FE_SP_CAMPAIGN") => {
+                    self.show_campaign_map(None);
+                }
+                // A downloadable campaign whose package is mounted: its own map.
+                Some(mode) if self.has_campaign_tier(mode) => {
+                    self.show_campaign_map(Some(mode));
+                }
                 Some(mode @ ("FE_RC_HD" | "FE_RC_FURY")) => {
                     self.notes.push(format!(
                         "{current}: {mode} is another title's campaign, which this build does not carry in 2048"
@@ -519,7 +530,11 @@ impl Frontend {
             // The three network modes are `Grey2048` on the capture, taken
             // with no PSN session - the state this build is always in.
             let colour = match &drawn.action {
-                Action::Toggle(id) if name == w2048::GAME_MODE_CHOICE && id != "FE_SP_CAMPAIGN" => {
+                Action::Toggle(id)
+                    if name == w2048::GAME_MODE_CHOICE
+                        && id != "FE_SP_CAMPAIGN"
+                        && !self.has_campaign_tier(id) =>
+                {
                     gated
                 }
                 _ => tile,

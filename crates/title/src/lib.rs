@@ -840,8 +840,17 @@ pub struct AddOn {
     /// schema [`Title::track_plugin_definition`] names, read from this archive
     /// alone.
     pub tracks: &'static str,
+    /// The entry listing the `PI_Grid` files (`Data\Plugins\grids\Definition.xml`
+    /// on 2048). The grids themselves ship in the base package and its patch;
+    /// what this package adds is the circuits they race.
+    pub grids: &'static str,
     /// The `Campaign=` value of the `PI_Grid` files this package opens.
     pub campaign: &'static str,
+    /// The `GameModeChoice` tile that enters that campaign (`FE_RC_HD`).
+    pub tile: &'static str,
+    /// The team the campaign flies when the player's own pick is not on its
+    /// roster: the id Select Team opens on in that campaign.
+    pub default_team: &'static str,
 }
 
 /// A serial positively identified as belonging to some other title.

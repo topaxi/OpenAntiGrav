@@ -741,6 +741,10 @@ pub(crate) struct Session {
     /// `None` whenever [`Self::campaign_difficulty`] is, or the resolution
     /// itself falls back (see that function's own doc for when).
     pub(crate) campaign_ai_skill_scale: Option<f32>,
+    /// The craft a downloadable campaign's cell flies in place of the player's own pick:
+    /// set around [`Session::launch_campaign_cell`] by `launch_tier_cell`, taken by
+    /// [`Session::launch_campaign_race`]. `None` for every other launch.
+    pub(crate) campaign_craft: Option<&'static str>,
     /// A Tournament cell's own leg list and running standings, from the
     /// moment `Session::launch_campaign_cell` starts one to the moment its
     /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).

@@ -467,6 +467,13 @@ impl Session {
     pub(crate) fn launch_campaign_race(&mut self) {
         if let Some(mut race_options) = self.race_options.take() {
             self.apply_race_team(&mut race_options);
+            // A downloadable campaign flies its own roster's craft: the team
+            // the player picked is a native one, which is not on it.
+            if let Some(team) = self.campaign_craft.take() {
+                race_options.team = Some(team.to_string());
+                race_options.hull_variant = None;
+                race_options.skin = None;
+            }
             self.race_options = Some(race_options);
         }
         self.finish_launch();

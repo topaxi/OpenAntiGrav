@@ -300,6 +300,8 @@ pub struct Shell {
     /// This build's own tiles on 2048's mode grid, see
     /// [`campaign2048::extra_tiles`]. Empty on every other title.
     pub extra_tiles: Vec<oag_ui::frontend::ExtraTile>,
+    /// The campaigns of 2048's mounted packages, see [`tiers2048::load`].
+    pub tiers: Vec<oag_ui::frontend::Tier>,
     /// The screens this boot walks, in the title's own order, already filtered
     /// to the ones this pressing carries and this build can drive.
     ///
@@ -577,20 +579,11 @@ pub fn load_shell(
         Vec::new()
     };
     steps.lap("menu and title fonts");
-    // The map the touch front end's campaign tile leads to, and the two
-    // tiles this build adds beside the authored four.
-    let (campaign_events, extra_tiles) = if front_end.touch.is_some() {
-        (
-            campaign2048::map_events(&mut archives, &strings, &mut report),
-            campaign2048::extra_tiles(
-                options.language.as_deref(),
-                title,
-                !archives.patch.is_empty(),
-            ),
-        )
-    } else {
-        (Vec::new(), Vec::new())
-    };
+    let (campaign_events, extra_tiles) = campaign2048::touch_menus(
+        front_end.touch.is_some(),
+        (&mut archives, &strings, &mut report),
+        (options.language.as_deref(), title),
+    );
     steps.lap("campaign map");
     let definition = title.plugin_definition;
     let documents = definitions(
@@ -617,6 +610,13 @@ pub fn load_shell(
         preferred_language,
         &strings,
         &tracks,
+        &mut report,
+    );
+    let tiers = tiers2048::load(
+        &mut archives,
+        &tracks,
+        &circuit_names,
+        &strings,
         &mut report,
     );
     steps.lap("catalogue");
@@ -649,6 +649,7 @@ pub fn load_shell(
             oag_ui::frontend::EventIcon::Elimination.texture_name(),
         ]);
         block_textures.extend(campaign2048::card_textures(&campaign_events));
+        block_textures.extend(tiers2048::card_textures(&tiers));
     }
     let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
@@ -871,6 +872,7 @@ pub fn load_shell(
             face_scales,
             campaign_events,
             extra_tiles,
+            tiers,
             walked,
             movie_name,
             second_movie_name,
@@ -1190,6 +1192,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         face_scales,
         campaign_events,
         extra_tiles,
+        tiers,
         walked,
         movie_name: _,
         second_movie_name: _,
@@ -1281,6 +1284,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     if !extra_tiles.is_empty() {
         frontend.set_extra_tiles(extra_tiles);
     }
+    frontend.set_tiers(tiers);
 
     // **Before `set_backdrop`, which bakes a rect out of it.** The PS2's `Skin.xml`
     // places widgets in a 640x448 grid rather than the PSP's 480x272, so every widget
@@ -1635,6 +1639,7 @@ mod provenance;
 pub(crate) mod roster;
 pub mod scene;
 mod screens;
+pub mod tiers2048;
 pub use screens::RaceSetup;
 pub(crate) mod sprites;
 mod steps;

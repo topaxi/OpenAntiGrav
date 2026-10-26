@@ -89,6 +89,13 @@ pub(crate) fn run_windowless(
                 records::Medal::Silver | records::Medal::Bronze => EarnedTier::Pass,
             })
     });
+    boot::tiers2048::refresh_locks(
+        &mut loaded.frontend,
+        loaded.title,
+        &options.source,
+        &saved,
+        &title_name,
+    );
     // `race_options.team` when the CLI named one (`--team`/`--variant`,
     // already combined by the time it reaches here) - the same value
     // `race::load_event` below actually races, so a `--press` capture's own

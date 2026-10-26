@@ -305,6 +305,11 @@ pub mod names {
     /// read out of the package itself - see [`oag_title::AddOn`].
     pub const DLC_TRACK_DEFINITION: &str = r"Data\art\published\DLC1\plugins\tracks\Definition.xml";
 
+    /// The list of `PI_Grid` files: Wipeout HD's own sixteen, `grid_00` to
+    /// `grid_07` tagged `Campaign="HD"` and `grid_08` to `grid_15` `"Fury"`,
+    /// shipped in the base package and revised by `data2.psarc`.
+    pub const GRIDS_DEFINITION: &str = r"Data\Plugins\grids\Definition.xml";
+
     /// The soundtrack plugin, on the same terms as [`TRACK_PLUGIN_DEFINITION`].
     pub const MUSIC_PLUGIN_DEFINITION: &str = r"Data\Plugins\music\Definition.xml";
 
@@ -406,12 +411,18 @@ const ADD_ONS: &[oag_title::AddOn] = &[
     oag_title::AddOn {
         archive: "dlc1.psarc",
         tracks: names::DLC_TRACK_DEFINITION,
+        grids: names::GRIDS_DEFINITION,
         campaign: "HD",
+        tile: "FE_RC_HD",
+        default_team: "Feisar",
     },
     oag_title::AddOn {
         archive: "dlc2.psarc",
         tracks: names::DLC_TRACK_DEFINITION,
+        grids: names::GRIDS_DEFINITION,
         campaign: "Fury",
+        tile: "FE_RC_FURY",
+        default_team: "Feisar",
     },
 ];
 

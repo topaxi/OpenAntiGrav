@@ -11,6 +11,7 @@
 
 mod aspect;
 mod backdrop;
+mod campaign_tiers;
 mod drawing;
 mod event_card;
 mod intro;

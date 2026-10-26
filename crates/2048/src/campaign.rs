@@ -446,6 +446,7 @@ pub fn engine_mode(event: &Event) -> Option<&'static str> {
 }
 
 pub mod callout;
+pub mod tier;
 
 /// The art and words of the event card's trophy page (page kind `2`,
 /// `CampaignEventCard_DrawTrophyPage_q`, `0x81052fb4`), chosen the way the
