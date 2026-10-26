@@ -56,7 +56,7 @@ page ours by design, so the main-menu gap is a decision, not a bug).
 
 Seven pairs and seven gaps of the touch front end, two cold boots each (method and numbers: `docs/tools/compare-page.md`,
 "Menu pairs: Wipeout 2048"). Ours is drawn from the disc's XML through `--until STATE --press`; 2048 has no `menu.toml` page. No
-renderer or UI code changed. The campaign pair (map plus event card pages 0 and 1, Empire Climb, fresh save both sides) is made;
+renderer or UI code changed. The campaign pair (map plus event card pages 0 and 1, Empire Climb, fresh save both sides) is made for the **base Single Player Campaign** ("2048 - Event 1") only; the HD and Fury DLC campaigns are not paired yet (their Game Mode tiles are known, HD at (477,162); pair like with like, only Fury is thought to draw the red background rect);
 2048's map and card show no difficulty control, so there was none to match. Ranked by the share of pixels that differ by more than
 40 grey:
 
