@@ -59,6 +59,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
+    eliminator_skin: None,
     // A named mode plays `ready`, `HBEAT` and `go`, an event `Go_NGP`; the spacing is Pulse's lent,
     // chosen, not measured: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),

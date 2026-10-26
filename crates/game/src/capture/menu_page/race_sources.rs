@@ -33,7 +33,7 @@ pub(super) fn supply(
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceVariant,
-        &variants(title, team),
+        &crate::livery_row::gated_variant_choices(title, team, teams, &crate::records::load()),
     );
     model.supply(
         oag_ui::menu::ValueSource::RaceModes,
@@ -62,26 +62,6 @@ pub(super) fn supply(
             crate::unlock::hud_skin_unlocked(skin, &records, title)
         }),
     );
-}
-
-/// What the VARIANT row offers for `team` (the profile's `race.team`, as the live menus read it), the live menus'
-/// own rule (`session::menus::variant_choices`) without the loyalty gate: the
-/// team's own axis, else the title's hull variants. Empty hides the row.
-fn variants(title: &'static oag_title::Title, team: &str) -> Vec<oag_ui::menu::Choice> {
-    if let Some(axis) = title.race.team_variants_for(team) {
-        return axis
-            .variants
-            .iter()
-            .map(|variant| oag_ui::menu::Choice::labelled(variant.suffix, variant.label))
-            .collect();
-    }
-    title
-        .race
-        .hull_variants
-        .into_iter()
-        .flatten()
-        .map(|variant| oag_ui::menu::Choice::labelled(variant.stem, variant.label))
-        .collect()
 }
 
 #[cfg(test)]

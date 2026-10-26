@@ -92,6 +92,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     boost: None,
     sounds: SOUND_BANKS,
     zone_announcer: None,
+    eliminator_skin: None,
     // Chosen, not measured: Pulse's start voice lent to this title, from its mode's speech bank.
     // Omega's own start is Wwise events (`_321_NGP`, `Go_NGP`) this loader cannot play.
     countdown_voice: Some(COUNTDOWN_VOICE),

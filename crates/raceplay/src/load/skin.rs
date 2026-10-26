@@ -46,6 +46,25 @@ pub(super) fn resolve(
         ));
         return None;
     }
+    // An Eliminator forces its own skin on every craft, whatever was asked: see [`forced`].
+    if mode == Mode::Eliminator && title.race.eliminator_skin.is_some() {
+        report.push(format!(
+            "--skin {asked}: ignored on an Eliminator race - every craft flies its forced skin"
+        ));
+        return None;
+    }
+    let documents = documents(archives, title, &format!("--skin {asked}"), report);
+    declared(&documents, team, asked, report)
+}
+
+/// The title's own definition and every mounted pack's manifest, as text. A definition that will
+/// not read is named in `report` under `what` and left out.
+fn documents(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    what: &str,
+    report: &mut Vec<String>,
+) -> Vec<String> {
     let definition = title.plugin_definition;
     let mut documents = Vec::new();
     match archives
@@ -55,11 +74,46 @@ pub(super) fn resolve(
     {
         Ok(xml) => documents.push(xml),
         Err(error) => report.push(format!(
-            "--skin {asked}: {definition} is unreadable ({error}) - no skin for {team}"
+            "{what}: {definition} is unreadable ({error}) - no skin"
         )),
     }
     documents.extend(archives.manifests.iter().cloned());
-    declared(&documents, team, asked, report)
+    documents
+}
+
+/// `(team id, archive entry)` of the skin an Eliminator race forces on every craft
+/// ([`oag_title::RaceDefaults::eliminator_skin`]), for each team that declares it. Empty outside
+/// Eliminator and for a title that forces none. A team that declares no such skin is absent, so
+/// it races the plain paint and the report says how many were found.
+pub(super) fn forced(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    report: &mut Vec<String>,
+) -> Vec<(String, String)> {
+    let Some(name) = title
+        .race
+        .eliminator_skin
+        .filter(|_| mode == Mode::Eliminator)
+    else {
+        return Vec::new();
+    };
+    let documents = documents(archives, title, "Eliminator skin", report);
+    let out = forced_skins(&crate::catalogue::all_teams(&documents), name);
+    report.push(format!(
+        "Eliminator: every craft flies the plain hull in its {name} skin, as Ship_LoadModel's \
+         case 8 does with no unlock checked ({} team(s) declare it)",
+        out.len()
+    ));
+    out
+}
+
+/// [`forced`]'s half that needs no archive.
+fn forced_skins(teams: &[crate::catalogue::Team], name: &str) -> Vec<(String, String)> {
+    teams
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.skin(name)?.location.clone())))
+        .collect()
 }
 
 /// [`resolve`]'s own half that needs no archive: the declared path for one

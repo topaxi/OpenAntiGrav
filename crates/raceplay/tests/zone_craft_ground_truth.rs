@@ -125,6 +125,7 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
                 hull_wreck: false,
                 absorb_shell: false,
                 zone_liveries: &liveries,
+                forced_skins: &[],
             },
             None,
             None,

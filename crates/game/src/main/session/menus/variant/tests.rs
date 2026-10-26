@@ -1,8 +1,9 @@
-//! What [`super::variant_choices`]/[`super::combine_variant`] do across the
+//! What [`oag_game::livery_row::variant_choices`]/[`super::combine_variant`] do across the
 //! three shapes a title's axis can take: [`oag_title::TeamVariants`] (HD),
 //! [`oag_title::race::HullVariant`] (Pulse) and neither (Pure).
 
 use super::*;
+use oag_game::livery_row::variant_choices;
 
 /// HD/Fury's own axis: a picked suffix becomes a new team identity, and the
 /// hull-file override is always `None` - there is nothing for it to name.

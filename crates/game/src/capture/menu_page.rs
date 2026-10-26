@@ -741,6 +741,7 @@ pub(super) fn picker_page(
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
+    let mode = oag_race::Mode::from_name(&settings.race.mode).unwrap_or_default();
     let (entries, previews): (Vec<Entry>, Vec<Option<String>>) = match kind {
         Kind::Track => {
             let (entries, previews, columns) = track_entries::track_entries(
@@ -765,52 +766,16 @@ pub(super) fn picker_page(
             teams
                 .iter()
                 .map(|team| {
-                    // The same axis rule the live screen applies - see
-                    // `session::picker::open_ship_picker`: the team's own skins
-                    // where it declares any, the title's variants otherwise.
-                    let mut variants: Vec<(String, String)> = if !team.skins.is_empty() {
-                        std::iter::once((
-                            String::new(),
-                            strings
-                                .get_or_id(oag_raceplay::catalogue::BASELINE_SKIN)
-                                .to_string(),
-                        ))
-                        .chain(
-                            team.skins
-                                .iter()
-                                .filter(|skin| {
-                                    !gates
-                                        || crate::unlock::loyalty_unlocked(
-                                            &skin.unlock,
-                                            &saved,
-                                            title,
-                                        )
-                                })
-                                .map(|skin| {
-                                    (skin.name.clone(), strings.get_or_id(&skin.name).to_string())
-                                }),
-                        )
-                        .collect()
-                    } else if let Some(team_variants) = title.race.team_variants_for(&team.id) {
-                        team_variants
-                            .variants
-                            .iter()
-                            .map(|variant| (variant.suffix.to_string(), variant.label.to_string()))
-                            .collect()
-                    } else {
-                        title
-                            .race
-                            .hull_variants
-                            .into_iter()
-                            .flatten()
-                            .map(|variant| (variant.stem.to_string(), variant.label.to_string()))
-                            .collect()
-                    };
-                    if variants.is_empty()
-                        && let Some(own) = team.own_directory_variant()
-                    {
-                        variants.push(own);
-                    }
+                    // The live screen's own rule: `session::picker::open_ship_picker`.
+                    let variants = crate::livery_row::ship_livery(
+                        title,
+                        &team.id,
+                        Some(team),
+                        strings,
+                        &saved,
+                        mode,
+                    )
+                    .variants;
                     let join = title.race.join_for(&team.id);
                     let stats =
                         team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str()));
@@ -833,7 +798,7 @@ pub(super) fn picker_page(
                                 logo: Some(oag_ui_screens::picker::hd::logo_src(&team.location)),
                             },
                         },
-                        Some(crate::preview::ship_entry(title, &team.location)),
+                        Some(crate::preview::ship_entry(title, &team.location, mode)),
                     )
                 })
                 .unzip()
@@ -862,7 +827,11 @@ pub(super) fn picker_page(
     let skin_entry = match kind {
         Kind::Ship => teams
             .get(picker.index())
-            .and_then(|team| team.skin(&settings.race.skin))
+            .and_then(|team| {
+                // What the row is on: the saved skin while it is offered, the forced one in an
+                // Eliminator race.
+                team.skin(picker.variant().map_or("", |(id, _)| id.as_str()))
+            })
             .map(|skin| skin.location.clone()),
         Kind::Track => None,
     };
@@ -880,6 +849,7 @@ pub(super) fn picker_page(
                         &team.location,
                         chosen,
                     ),
+                    oag_race::Mode::default(),
                 )
             })
         }

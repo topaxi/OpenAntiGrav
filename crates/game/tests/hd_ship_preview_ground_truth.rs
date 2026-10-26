@@ -78,7 +78,7 @@ fn each_variant_directory_has_a_hull_of_its_own() {
     for variant in ["", "_c1", "_n1"] {
         let location =
             oag_game::preview::variant::variant_location(join, r"Data\Ships\Feisar", variant);
-        let entry = oag_game::preview::ship_entry(title, &location);
+        let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
         let (model, loaded) =
             oag_game::preview::variant::model_or_default(&mut archives, &entry, None)
                 .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
@@ -155,7 +155,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
                 &team.location,
                 suffix,
             );
-            let entry = oag_game::preview::ship_entry(title, &location);
+            let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
             let mut model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
                 .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
             assert!(
@@ -186,7 +186,7 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
             r"Data\art\published\hdships\Feisar",
             variant,
         );
-        let entry = oag_game::preview::ship_entry(title, &location);
+        let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
         let (model, loaded) =
             oag_game::preview::variant::model_or_default(&mut archives, &entry, None)
                 .unwrap_or_else(|e| panic!("{entry}: {e:#}"));

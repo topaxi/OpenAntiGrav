@@ -327,6 +327,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
             hull_wreck: false,
             absorb_shell: false,
             zone_liveries: &[],
+            forced_skins: &[],
         },
         None,
         None,
@@ -530,5 +531,63 @@ fn a_zone_race_refuses_a_skin_and_says_so() {
             .any(|line| line.contains("ignored on a Zone race")),
         "{:?}",
         loaded.report
+    );
+}
+
+/// **An Eliminator race flies the plain hull in the `Eliminator` skin, on every craft, whatever
+/// the player picked.** `Ship_LoadModel`'s `case 8` builds `%s\Ship.vex` and applies
+/// `s_Eliminator_08a7ba58` with no unlock consulted (`docs/ghidra/functions/psp-pulse-usa/ship-skin.md`).
+/// The test asks for the Concept hull and an `Alternative` skin and gets neither: the player's
+/// hull is `Ship.vex`'s (the single race's triangle count), and every distinct team on the grid
+/// reports its `ship_eliminator.dat` applied while a single race reports none.
+#[test]
+#[ignore = "needs a disc image"]
+fn an_eliminator_race_forces_the_plain_hull_and_the_eliminator_skin_on_every_craft() {
+    let Some(image) = image() else {
+        return;
+    };
+    let load = |mode: oag_race::Mode, concept: bool| {
+        race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            team: Some("Assegai".to_string()),
+            hull_variant: concept.then(|| "extra".to_string()),
+            skin: concept.then(|| "Alternative".to_string()),
+            opponent_teams: Vec::new(),
+            ..race::Options::default()
+        })
+        .expect("loading the race")
+    };
+    let single = load(oag_race::Mode::SingleRace, false);
+    let eliminator = load(oag_race::Mode::Eliminator, true);
+    let triangles = |loaded: &race::Loaded| loaded.liveries[0].hull.indices.len() / 3;
+    assert_eq!(
+        triangles(&single),
+        triangles(&eliminator),
+        "the Concept hull the player asked for must not fly in an Eliminator"
+    );
+    let skins = |loaded: &race::Loaded, name: &str| {
+        loaded
+            .report
+            .iter()
+            .filter(|line| line.contains(name))
+            .count()
+    };
+    let teams: std::collections::BTreeSet<&str> = eliminator
+        .liveries
+        .iter()
+        .map(|livery| livery.team.as_str())
+        .collect();
+    assert_eq!(skins(&single, "ship_eliminator.dat"), 0);
+    assert!(
+        skins(&eliminator, "ship_eliminator.dat") >= teams.len(),
+        "every distinct craft on the grid is painted: {:#?}",
+        eliminator.report
+    );
+    assert_eq!(
+        skins(&eliminator, "ship_alt.dat"),
+        0,
+        "the picked skin is overridden"
     );
 }

@@ -291,6 +291,7 @@ pub(super) fn grid(
         report,
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
+    let forced_skins = super::skin::forced(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
     let slot_teams = teams(craft_title, options, team, available, report);
     let seat_skins: Vec<Option<String>> = options
@@ -335,6 +336,7 @@ pub(super) fn grid(
                     .applies(archives.layout.platform),
             absorb_shell: craft_title.looks.absorb_shell.applies_everywhere(),
             zone_liveries: &zone_liveries,
+            forced_skins: &forced_skins,
         },
         hull_variant,
         skin.as_deref(),

@@ -138,6 +138,14 @@ Selection's livery row therefore offers `Classic` plus only the skins the
 profile's loyalty has earned, a locked one **absent** as in the original
 (`oag_game::unlock::loyalty_unlocked`), and the RACE page's VARIANT row drops
 `Concept` the same way (`gated_variant_choices`). `--unlock-all` lifts both.
+**The livery row decides its axis on what the team declares (2026-10-26).** A Pulse team
+declares skins, so its row is `Classic` plus the earned ones whatever is locked; it used to read
+the unlocked list, and a fresh profile's empty list flipped the row to the variant table, which
+offered a locked Concept hull until the first skin unlocked. One function serves the live screen,
+its `--menu-page` still and the RACE page (`oag_game::livery_row`). In an Eliminator race the
+row holds the `Eliminator` skin alone; in Zone it holds the Zone hull alone. Concept as a hull
+choice on Pulse's Ship Select needs a mixed skin-and-hull axis and is not offered there (open).
+
 RACE REMIX's craft-side variant row is ungated by decision: RACE REMIX is
 this project's own mode, so no disc unlock applies to it (maintainer,
 2026-10-02).

@@ -52,6 +52,7 @@ fn load(wreck: bool, mode: Mode) -> Option<(Vec<livery::Livery>, Vec<String>)> {
             hull_wreck: wreck,
             absorb_shell: false,
             zone_liveries: &[],
+            forced_skins: &[],
         },
         None,
         None,
