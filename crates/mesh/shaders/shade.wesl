@@ -1165,16 +1165,19 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // light_cone's doc): it is what a matched frame favours, not something the
     // instruction set documents. `albedo` is the ramp and `lightmap` the
     // noise, `K` the glow entry's tint, `s` its scale.
-    // Raw samples, undecoded: the program applies no transfer function. **The
+    // **Both taps are sRGB-decoded on fetch**, as the live draw's sampler state says
+    // (`SET_TEXTURE_ADDRESS` `0x60710101` on the noise unit and `0x60750102` on the
+    // ramp, gamma nibble 7, Amphiseum's cone draws 724 and 730): the program itself
+    // applies no transfer function, the sampler does. **The
     // colour is saturated before it blends**, as the 8-bit surface the original
     // draws into does: `K` is 100 on Talon's Junction, so an unclamped colour
     // on this linear float target is `100 * noise` of light times the alpha, a
     // white wall, where the original's is a white of at most 1 at that alpha.
     var cone_or_floor = mag_floor;
     if (in.slots & 524288u) != 0u {
-        let noise = textureSample(lightmap, albedo_sampler, in.texcoord).r;
+        let noise = decode(vec3<f32>(textureSample(lightmap, albedo_sampler, in.texcoord).r)).r;
         let cone_facing = clamp(ramp_facing, 0.0, 1.0);
-        let ramp = textureSample(albedo, albedo_sampler, vec2<f32>(cone_facing)).r;
+        let ramp = decode(vec3<f32>(textureSample(albedo, albedo_sampler, vec2<f32>(cone_facing)).r)).r;
         let ramp_skipped = glow_scale.y > 0.5 && in.normal.y == 0.0;
         cone_or_floor = vec4<f32>(
             clamp(vec3<f32>(noise) * glow_tint_offset.rgb, vec3<f32>(0.0), vec3<f32>(1.0)),
