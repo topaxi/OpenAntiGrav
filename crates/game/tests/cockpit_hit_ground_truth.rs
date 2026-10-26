@@ -15,8 +15,10 @@
 //! arm in `oag_raceplay`; what a frame adds is that `noisematt.mip` loads off the
 //! disc, the pipeline reaches the screen through the race's own pass, and the
 //! picture has the original's shape. The scenario is `--force-quake`'s: Talon's
-//! Junction White, Assegai, Venom, eight craft, the rival's wave reaching the
-//! player on tick 301. The control is tick 301, the frame before the hit.
+//! Junction White, Assegai, Venom, eight craft, the rival's wave launched at the
+//! end of tick 300 and reaching the player on tick 301: the frame after 302 ticks
+//! is the hit (`p = 0`), the one after 304 is two frames in, and the control is the
+//! frame after 301, before the hit.
 //!
 //! The measure is the one `cannon-quake-leachbeam.md` used on the original's
 //! cockpit frames: the mean absolute vertical difference of the luma over rows

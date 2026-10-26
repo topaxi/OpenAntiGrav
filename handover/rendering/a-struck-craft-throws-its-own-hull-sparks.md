@@ -72,10 +72,10 @@ Frames are in a scratch directory, not kept (gitignored):
   player's alone. Chosen.
 - **`FUN_0883e37c`**, the display-mask gate in front of the spawn, is unread.
   Ours draws hit sparks on every craft.
-- **`CockpitHitFx_Arm_q` (`0x088eeaf8`) is not drawn.** It is a cockpit-view
-  (`craft+0x6d`) overlay armed on each weapon hit to the player: 0.6 s linear
-  decay, jittered in eighths. What it draws is unread. `Camera_ArmShake` on
-  weapon hits (`Ship_Damage`, same block) is not ported either.
+- ~~**`CockpitHitFx_Arm_q` (`0x088eeaf8`) is not drawn.**~~ Read and drawn 2026-10-26
+  (`oag_fx::cockpit_hit`, see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+  "Wired 2026-10-26 (quake-feel-wire lane)"). `Camera_ArmShake` on weapon hits
+  (`Ship_Damage`, same block) is ported too (`Race::arm_weapon_hit_shake`).
 - **HD:**
   - The Cannon sparks from the weapon side. `Cannon_ApplyCraftHit`
     (`0x0010f730`) calls `Ship_DispatchCollisionFx(..., 1)`, which spawns

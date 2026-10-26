@@ -3690,7 +3690,78 @@ craft hit again inside 0.8 s hears neither. Ours raises `Cue::Collision` from a 
 
 ### Cross-title
 
-Pulse PSP is measured. **Pure, HD, 2048, Omega: not checked** (a measurement lane; Pure's `Ship_Damage`
-and HD's `Cannon_ApplyCraftHit` calls to a cockpit overlay and a collision cue are unread). The PS2
-pressing runs the same `Ship_Damage` shape by the shared engine, **checked, applies, not
-captured**.
+Pulse PSP is measured. **Pure, HD, 2048, Omega: checked in the wiring lane below** (Pure's
+`Ship_Damage` and HD's `Cannon_ApplyCraftHit` calls to a cockpit overlay and a collision cue are
+still unread, but the executables' strings and the discs' files are censused). The PS2 pressing runs
+the same `Ship_Damage` shape by the shared engine, **checked, applies, not captured**.
+
+### Wired 2026-10-26 (quake-feel-wire lane)
+
+Rows 1 and 2 of the table above are closed in ours; row 3 (the slowdown) stays open.
+
+**`.COLLISIONS` on a weapon hit.** `Race::throw_hit_spark` (`oag_raceplay::hit_sparks`) raises
+`Cue::Collision` on the struck craft with each spark it throws, behind the same per-locator 0.8 s
+gate, for every weapon that reaches `Ship_Damage`'s `source == 2` block (the LeachBeam's kind 1
+included: `ShipCollisionFx_Trigger` plays it for each surviving kind-0/1 call). It is raised
+whether or not the spark's particle file loaded, and only on a drawn tick (a reconcile replay
+makes no sound). **Chosen, not measured:** the cue is placed on the craft's centre, where the
+original plays it at the locator, and a wall contact keeps its own per-craft gate
+(`Race::raise_contact_cue`), so a contact and a hit inside 0.8 s of each other can both sound.
+Evidence on the disc: Pulse USA, `--force-quake`'s wave reaching the player raises one `QUAKEHIT`
+and two `.COLLISIONS` on slot 0 (the original's log shows the same pair), and the whole grid's cues
+equal the sparks thrown. In the dumped WAV the same hit rendered with `Cue::Collision` held back
+is sample-identical until the wave arrives and quieter after it (root-sum-square amplitude 4.20 M
+against 5.20 M over the 40 ticks after the launch, `a_quake_hit_is_louder_with_its_collision_pair`).
+
+**`CockpitHitFx`.** `oag_fx::cockpit_hit` holds the node (`Node`: arm, advance, the 36-frame run,
+an arm while running ignored), the strips' geometry (`Node::strips`, eight vertices in the
+original's triangle-strip order) and the pipeline (alpha-over, repeat sampler, no depth, drawn
+beside the screen flash in `Drawer::draw_flash`). `oag_raceplay::cockpit_hit` arms it in
+`Race::arm_weapon_hit_shake` (so the hit sparks' and the correction's sites, every weapon, the
+player's craft only) and draws it in the internal view of the player's own view. The texture is
+`WeaponModels::cockpit_hit`, title data with provenance. The first frame after a hit is `p = 0`
+(width 288 of 480, "at the hit"), the 36th is `p = 35/36`, the 37th draws nothing. **Chosen, not
+measured:** the texture filter (linear: the draw inherits the GE's state, the state it restores
+afterwards, `Gu_TexFilter(7, 1)`, reads as linear, and the original's frames show the noise
+smooth horizontally); the order against the screen flash inside their shared layer
+`0x4f000000` (ours: flash first); the offsets are drawn once a tick from a seeded generator.
+
+**A cockpit still pair, read.** Pulse USA, Talon's Junction White, Assegai, Venom, eight craft, the
+internal camera, `--force-quake 300:1`, 960 x 544, at 301 ticks (the frame before the hit), 302 (the
+hit, `p = 0`), 304 (+2) and 306 (+4). Before: a clear cockpit frame at the GO gantry. At the hit, +2
+and +4: the red-orange Quake wash and the shake, with a streaked grey-white noise heavy at both side
+edges, fading inwards and clear in the middle, the HUD drawn over it and the energy bar gone red;
+the strips close in towards the edges frame by frame. The original's cockpit frames (the page's
+`orig_cockpit_sheet`) read the same: stretched horizontal streaks, smooth along the row. The band
+metric of the table above, ours rendered at the PSP's 480 x 272, as the lift over the frame before the
+hit (ours has a busier baseline, the grid and the HUD text at the start line, and its hit is a
+different scene, so the shape and size are what compare):
+
+| Band `x` | 0-30 | 60-90 | 120-150 | 225-255 | 330-360 | 390-420 | 450-480 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original, row -15 | 3.8 | 2.0 | 1.5 | 7.5 | 5.4 | 4.2 | 4.4 |
+| original, lift at +2 | 36.9 | 24.5 | 13.5 | 2.4 | 11.9 | 21.1 | 38.0 |
+| original, lift at +4 | 39.2 | 26.0 | 12.4 | 1.7 | 13.1 | 19.8 | 37.7 |
+| ours, frame before | 13.2 | 13.7 | 12.8 | 13.7 | 6.5 | 5.2 | 4.3 |
+| ours, lift at the hit | 40.0 | 23.2 | 13.5 | 3.3 | 9.4 | 26.0 | 46.0 |
+| ours, lift at +2 | 31.7 | 19.7 | 11.8 | -0.9 | 10.7 | 22.9 | 38.5 |
+| ours, lift at +4 | 35.9 | 17.6 | 7.4 | -1.5 | 7.2 | 22.9 | 45.0 |
+
+Edge-heavy, symmetric, clear in the middle: the same shape and size as the original's. The test
+`a_quake_hit_in_the_cockpit_view_draws_noise_at_the_screens_edges` asserts it and fails when the
+draw is dropped (the lift is then -3.0, -1.5, 1.1, -3.0, -1.0, -0.1, -0.6).
+
+**`--force-quake TICK:SLOT`** launches the rival's wave with its bump on the player at the end of
+a tick (`Race::force_quake`, in the shape of `--force-missile-hit`), so a headless capture sees
+what a Quake hit shows and sounds.
+
+#### Per title
+
+| Title | `.COLLISIONS` on a weapon hit | The cockpit static |
+| --- | --- | --- |
+| Pulse PSP | **ported**, measured | **ported**, measured |
+| Pulse PS2 | **ported** (the shared engine; same trigger and sparks), not captured | **ported**: `SCES_547.48` names `noisematt.mip`, shipped as a 64 x 64 `.pct` that loads; not captured |
+| Pure | checked, applies, not wired: the executable names `.COLLISIONS`, `Ship_Damage`'s weapon branch is unread and the hit sparks it would ride are unwired there | **ported**, inherited: `BOOT.BIN` names `noisematt.mip` (and a second, `noisemattvr.mip`), the disc ships the same pixels; the arm and the draw are Pulse's |
+| HD / Fury | checked, applies, not wired: `.COLLISIONS` is named once, reached through a data pointer at `0x008a8e34`; the call site of the Cannon's craft-hit path (`Ship_DispatchCollisionFx` kind 1) is unread | checked, differs: no `noisematt` string in `EBOOT.elf`, so it draws none |
+| 2048 | checked, applies, not wired: `.COLLISIONS` is named twice in the decrypted `eboot.elf`; no call site read | checked, differs: no `noisematt` string in the decrypted `eboot.elf`, so it draws none |
+| Omega | not checkable: the executable cannot be read here | not checkable, follows HD: draws none |

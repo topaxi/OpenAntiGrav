@@ -68,7 +68,7 @@ The table below is machine-checked by `scripts/check-weapon-lineage.py`
 (`just check-weapon-lineage`, part of the gate). Each cell is
 `` `value` - provenance ``. The script compares the value with the Rust source of
 the five title crates, and the provenance word where the code carries an
-`Origin` (`ghost_static`, and the effect rows). It also fails when a public
+`Origin` (`ghost_static`, `cockpit_hit` and the effect rows). It also fails when a public
 field of `Weapons` or `WeaponModels` has no row here, so a new axis cannot land
 unrecorded.
 
@@ -76,7 +76,7 @@ unrecorded.
 provenance of a `Weapons` axis (it lives in `//` comments, not in a field),
 the `eye_origin` of `WaveHeightEyeLevel` (Pure: chosen; the row's provenance word is
 the gate's `origin`), the
-provenance of a `WeaponModels` field other than `ghost_static`, every cell of
+provenance of a `WeaponModels` field other than `ghost_static` and `cockpit_hit`, every cell of
 the aspect tables further down, and the confidence scores on the linked pages.
 Values: a path is the exact string in the source; `set` is `Some(..)` (or
 `true`); `none` is `None` (or `false`).
@@ -108,6 +108,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `weapon_models.shuriken` | `set` - measured | `none` - absent | `none` - unread | `none` - unread | `none` - unread |
 | `weapon_models.cannon_look` | `none` - measured | `none` - absent | `set` - measured | `none` - unread | `set` - inherited |
 | `weapon_models.ghost_static` | `set` - measured | `set` - measured | `none` - measured | `set` - inherited | `set` - inherited |
+| `weapon_models.cockpit_hit` | `set` - measured | `set` - inherited | `none` - measured | `none` - measured | `none` - unread |
 | `effects.hit_spark` | `set` - measured | `none` - unread | `none` - unread | `none` - unread | `none` - unread |
 | `effects.leach_hit_spark` | `set` - measured | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 | `effects.weapon_spark` | `none` - unread | `none` - unread | `set` - measured | `none` - unread | `none` - unread |
@@ -156,6 +157,15 @@ Notes on the cells the code does not explain by itself:
 - **`ghost_static`**: `none` on HD is a measurement (no `staticglow` string in
   its EBOOT); 2048's and Omega's entry is Pulse's name for a file they ship as
   `.gxt` and `.gnf`.
+- **`cockpit_hit`**: the noise `CockpitHitFx` draws over the cockpit view on a weapon
+  hit to the player (`oag_fx::cockpit_hit`). Pulse's is measured and watched live.
+  Pure's `BOOT.BIN` names the same `noisematt.mip` (and a second, `noisemattvr.mip`,
+  that Pulse's does not), the discs ship it decoding to the same 64 by 64 pixels as Pulse's (USA and EU, both
+  games), and Pure's `Ship_Damage` is unread, so the arm and the draw are
+  Pulse's: `set - inherited`. `none` on HD and 2048 is a measurement (no `noisematt`
+  string in HD's `EBOOT.elf` or 2048's decrypted `eboot.elf`); Omega's executable cannot
+  be read, so it follows HD and draws none (`unread`). The Pulse PS2 pressing names
+  `noisematt.mip` in `SCES_547.48` and ships it as a 64 by 64 `.pct`, which loads.
 
 ## The aspect tables
 
@@ -267,7 +277,7 @@ it fires, not that the rate matches any original's.
 | --- | --- | --- | --- | --- | --- |
 | Rocket | M: `Rocket.vex`, `WO_ROCKET_FLARE`/`_EXPLO` | M: `Rocket.vex`, its own spelling | M: `hd_Rocket.vex`, ribbon trail | ?: no model named; `WO_ROCKET_FLARE` is looked up as Pulse's; checked, applies, not wired: `Data/Weapons2048/hd_Rocket.vex` ships | I:HD: `Data\Weapons\hd_Rocket.vex`, the root `Rocket_Construct` picks for a mode below `0x17` ([weapons.md](../ghidra/functions/ps4-omega-eu/weapons.md)); same mesh and decals as HD's, unlit by HD's weapon lights, no ribbon trail |
 | Missile | M: `WO_MISSILE_HEAD` at both anchors; twin trails not built | I:Pulse (effect names) | M: `HD_missile_explosion.vex` on its own keys | ?: effect names only | I:HD: `HD_missile_explosion.vex`, on HD's keys; the structure draws, the white-out does not (the program bits below) |
-| Quake | M: `WO_QUAKE`, road ripple, orange tint; a hit in the cockpit view also draws the `noisematt` static for 0.6 s (`CockpitHitFx`, [measured](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#2026-10-26-why-a-quake-hit-feels-stronger-on-the-original-quake-feel-capture-lane), **not wired**) | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
+| Quake | M: `WO_QUAKE`, road ripple, orange tint; a hit in the cockpit view also draws the `noisematt` static for 0.6 s (`CockpitHitFx`, [measured and wired](../ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md#wired-2026-10-26-quake-feel-wire-lane), on every weapon hit to the player) | M: own frame, lift, wash ([quake.md](../ghidra/functions/psp-pure-usa/quake.md)); a weapon hit in the cockpit view draws Pulse's `noisematt` static (I:Pulse, Pure's executable names the file) | M: spreads edge to edge by the extent law | I:Pulse (effect names) | I:Pulse |
 | Cannon | M: `pulse_muzzleflash.vex` on the round, bolt and flash quads | A | M: `hd_muzzleflash.vex` at the muzzle, own textures and size range | ?: not drawn | I:HD: `hd_muzzleflash.vex` at the `cannon_flash` locator, HD's look numbers with Omega's `.gnf` textures; `CannonBullet`'s own draw is unread |
 | Plasma | M: charge glow, three-model blast with a baked track | ?: the three-model blast is in the executable, its key tables are unread, nothing is wired | M: `HD_plasma_ball`, ring, sphere and halo on eased scale ramps | ?: `WO_PLASMA_FLASH` is not authored there; nothing drawn | I:HD: ring, sphere and halo of the blast; the bolt's head (`HD_plasma_ball`) is held back, it draws as a barely visible ghost |
 | Bomb | M: hemisphere, shockwave, smoke ring | M: same pair, no alpha fade | M: fireball, white core, bloom disc, eight rings, rays | ?: not drawn | I:HD: the laid body only; the blast set (fireball, core, bloom disc, rings, halo) is held back, its bloom ring paints the fire-ramp lookup texture over the road as a red wash |
@@ -304,7 +314,7 @@ simulation edge, has not been compared weapon by weapon.
 
 | Weapon | Pulse | Pure | HD / Fury | 2048 | Omega |
 | --- | --- | --- | --- | --- | --- |
-| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired; **a weapon hit also plays `.COLLISIONS` once per spark locator (two on a Quake hit), measured 2026-10-26, not wired** | I:Pulse; sites confirmed for the cues listed above | I:Pulse; sites not located | I:Pulse; sites not located | ?: not investigated |
+| Fire, travel, hit cues | M: wired for Rocket, Missile, Quake, Cannon, Plasma, Shuriken, LeachBeam and the pickups, [cue.rs](../../crates/sound/src/sfx/cue.rs); `MINERADAR` unwired; a weapon hit also plays `.COLLISIONS` once per spark locator behind the locator's 0.8 s gate (two on a Quake hit), measured 2026-10-26 and wired the same day (`Race::throw_hit_spark`) | I:Pulse; sites confirmed for the cues listed above; the weapon-hit `.COLLISIONS` is **not wired**: it rides the hit spark's locators and gate, and Pure's `Ship_Damage` weapon branch is unread (its executable names the cue) | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired**: the executable names the cue, but the call site of HD's Cannon craft-hit path is unread | I:Pulse; sites not located; the weapon-hit `.COLLISIONS` is **not wired** (the executable names the cue twice, no call site read) | ?: not investigated |
 
 ## 2048 and Omega: the cross-check
 
