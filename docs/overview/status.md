@@ -208,7 +208,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1376 (1241 fn, 135 data) | 31 (2%) | 97 | `ppsspp_debugger.py`, `psp-autopilot-trace.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-glow-mask-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+68 measurement scripts) | 2026-10-26, [autopilot.md](../ghidra/functions/psp-pulse-usa/autopilot.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 77 (76 fn, 1 data) | 3 (3%) | 9 | `ppsspp_debugger.py`, `psp-autopilot-trace.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-glow-mask-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+68 measurement scripts) | 2026-10-14, [mp-time-trial-collision.md](../ghidra/functions/psp-pure-eu/mp-time-trial-collision.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 159 (157 fn, 2 data) | 0 (0%) | 23 | `ppsspp_debugger.py`, `psp-autopilot-trace.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-glow-mask-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+68 measurement scripts) | 2026-10-22, [hud-speed-gauge.md](../ghidra/functions/psp-pure-usa/hud-speed-gauge.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 180 (167 fn, 13 data) | 14 (7%) | 33 | `vita-gxp.py`, `vita-self-decrypt.py` (+1 measurement script) | 2026-10-26, [hull-shake.md](../ghidra/functions/vita-2048-eu-v104/hull-shake.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 195 (175 fn, 20 data) | 16 (8%) | 34 | `vita-gxp.py`, `vita-self-decrypt.py` (+1 measurement script) | 2026-10-26, [exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md) |
 
 <!-- re-coverage:end -->
 
