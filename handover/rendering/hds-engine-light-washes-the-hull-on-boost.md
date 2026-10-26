@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD hull: bay blue on Metropia/Sol 2 closed (engine light reaches the hull despite the circuit switch); bay is ~1.3x too bright on every circuit, Harimau livery, _n1 rims, rest flame size"
+summary: "HD hull: Sol 2/Metropia bay closed (engine light reaches the hull); bay 1.3x too bright, Harimau livery, _n1 rims, rest flame size"
 ---
 
 # HD's hull wash on boost is the original's; what is left on the hull is the Harimau livery and the `_n1` wing rims
