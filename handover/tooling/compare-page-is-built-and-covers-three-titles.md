@@ -52,6 +52,7 @@ and its checks ([`docs/tools/compare-page.md`](../../docs/tools/compare-page.md)
   `--allow-own-camera`, its state is `4:3`): replace it with a pair made from the widescreen state.
 - **PS2 clock address `0x70EE9C`** was read on two states of one run before, and on the widescreen state live (25.1 to 26.3 s
   across three grabs, monotonic) now.
+- **Menu pairs (2026-10-26, `menu-pairs-hd-omega`)**: HD 5 and Omega 4 front-end pairs, ours from the disc's XML, gaps kept as the original's frame; shadPS4's pad input reaches Ship Select on every walk. See `docs/tools/compare-page.md`, "Menu pairs", and the frontend thread `menu-pairs-show-hd-and-omega-front-end-differences`. Open: the lead adopts the pair directories and builds `menus.toml`.
 - **Pure (PSP): four grid pairs since 2026-10-22** (`pure-pairs`, `scripts/psp-pure-pair.py`, `psp-pure-walk.py`; adopt: copy the four pair directories to `data/reference/compare-page/pure-psp/` and build `pure.toml` beside them with `compare_env.py manifest`). **2048 (Vita3K), Omega (shadPS4): not reachable** (Vita3K stops at
   an intro, shadPS4 reaches the main menu only). Their profile rows exist.
 - **Speed class and mode are declared by the state's file name, not read from RAM** (PSP and HD), PS2's class is assumed Venom.

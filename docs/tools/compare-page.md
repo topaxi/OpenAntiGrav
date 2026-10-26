@@ -747,6 +747,81 @@ and a posed frame runs no tick, so a hit that happened before the frame cannot h
 
 A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.
 
+## Menu pairs: HD/Fury and Omega front-end screens (2026-10-26, `menu-pairs-hd-omega`)
+
+A front-end screen is a still, so a menu pair has no pose, camera or race clock. What makes it a pair is the same screen,
+the same size, language and styling, the same highlighted row, and **ours drawn from the disc's own front-end XML, never
+from `assets/ui/menu.toml`'s stand-in pages**. `scripts/compare_menu.py` is the menu route (`menu_pair` builds and checks one,
+`write_gap` keeps only the original's frame where ours has no XML-driven page); `pair.json` carries `kind = "menu"`,
+`original.screen` (the name the emulator reported), `ours.page`, `ours.drawn_from` (`xml`, `menu.toml` or `none`, with the file)
+and both languages and stylings. `Pair.finish` refuses a menu pair when ours is not XML-driven, the original's screen name is
+not the one asked for, the languages differ, the highlighted row differs (a state ours cannot select ships as a named
+`Not matched` caveat instead, `selection.matched = false`), or a size is off. Provenance kind `menu` needs no presented-frame
+lag (`compare_provenance.refusals`); an HD menu pair still needs a cold boot, which a walked boot is. Tests:
+`check-compare-environment.py` (`check_menu_route`) and `compare_provenance.py selftest`.
+
+| Title | Script | How |
+| --- | --- | --- |
+| HD/Fury (RPCS3) | `scripts/rpcs3-hd-menu-pair.py` | a cold-booted `rpcs3-drive.py serve` (`OAG_COMPARE_PLATFORM=hd-fury`) on `Main Menu`, then `OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-menu-pair.py --out D --oag-game target/release/oag-game --autopilot off`. It walks `WALK` (about 110 s), the window at 1920x1080 at the origin, 3 s settle before each grab. The screen name is HD's own `Switching Screen` line in `TTY.log`. `scripts/rpcs3-hd-menu-walk.py --plan "shot:a,cross,..."` photographs any plan for exploring |
+| Omega (shadPS4) | `scripts/shadps4-omega-menu-pair.py pairs` | the `Rig` of `shadps4-omega-pair.py` (own headless `sway`, uinput pad, muted), cold boot to MAIN MENU in about 20 s, `WALK` in about 95 s. **The pad input reaches the game** (the 2026-10-26 worry that it did not was not reproduced: all four walks of this lane reached Ship Select). shadPS4 has no `TTY.log`: the screen is read by eye from the frame's SCREEN TITLE and declared in `WALK`, and `original.screen_basis` says so |
+
+**What ours draws from XML and what from `menu.toml`** (read off `crates/game/src/capture/menu_page.rs`, `campaign_page.rs`,
+`oag_hd::main_menu` and the `--screen` list; `--menu-page` is the only still route and `--screen` reaches only the boot
+screens, `Main Menu`, `Team Selection` and the rest are not among its names):
+
+| Screen (HD name) | Ours | Pair |
+| --- | --- | --- |
+| `Campaign Selection` | XML (DATA06 copy), HD only; Omega refuses (`this source has no Campaign Selection screen`) | HD yes, Omega **gap** |
+| `Grid Selection Fury`, `Cell Selection` | XML (`grid_00.xml`, `CellMode_Definition.xml`); on Omega both `grid-select` and `grid-select-hd` draw Omega's own first grid (18 points, `01_TRACK`, no flyer card), which is none of the three campaigns the original offers | HD yes, Omega pair with the state caveat |
+| `Track Creation` (Track Select) | XML (`Track_Selection_Definition.xml`) | both |
+| `Team Selection` (Ship Select) | XML (`Team_Selection_Definition.xml`) | both |
+| `Main Menu` | `menu.toml`'s `main` page with the disc's rows (`oag_title::MainMenu`, ADR-0066): title `OPENANTIGRAV`, row text from `english.toml` | **gap** |
+| `Single Player` (Racebox setup) | `menu.toml`'s `race` page | **gap** |
+| `Additional` (OPTIONS+) and Options | `menu.toml`'s `options` pages | **gap** |
+| `Race Records` | this project's records page | **gap** (original seen, not kept) |
+| pause menu | a `Stage::Menu` of `menu.toml` over the held frame; there is no `--menu-page` for it | **gap** (original not captured: needs a Racebox race) |
+| title / press start | HD has none (`Studio Logo`, then `Save Warning`, then `Main Menu`); `--until "Studio Logo"` draws ours | not paired: a boot-time animation, no settled frame |
+
+`front_end_style` (`display.front_end_style`, HD offers `HD` and `FURY`) is pinned to `FURY` in ours' profile for HD, and read
+back; the original's frames are Fury (red and black, the Fury backdrop). It only affects the loading screens in ours today
+(`args::style_of` has no other reader), so the pages' own look does not follow it. Omega offers no choice. English on both
+sides: RPCS3 `System: Language English (US)`, shadPS4 `console_language 1`, ours the default.
+
+**Confounds, not fixed.** The RPCS3 profile is a copy of the maintainer's, so the save's `Safe Area Setting` is 96 and the
+default team Feisar and first circuit Vineta K are the save's; ours is set to them (`race.team`, `race.track` in the pair's
+private `settings.toml`). Omega is a fresh profile: most craft are locked and the cursor of Ship Select sits on a locked
+hex, so ours cannot be put on the craft the original shows (caveat on the pair). The animated backdrop is not phase-matched:
+two grabs of the original differ by 0.01 to 0.11 normalised RMSE (`theirs` against `theirs`, per pair), ours by exactly 0 run
+to run (the pair's overlap moved by at most 0.003 RMSE, 0.8 mean grey between two runs).
+
+**Layout, measured on the footer and title rules** (rows and columns of bright thin rules, 1920x1080 frames): HD original rule
+`x 192..1727` (1536 px), title rule `y 131.5`, footer rule `y 961`; ours `x 160..1704`, `y 114.5` and `y 978`. So ours is
+about **27 px left** of the original's centre, 0.5 % wider and **4.1 % taller** (863.5 px between the rules against 829.5),
+centred vertically on the same line. Omega's original: `x 161..1759`, `y 112.5` and `948`; ours `x 161..1759`, `y 114.5` and
+`937`, so the columns match exactly and ours is 1.6 % shorter. One pair of rules per title, two pages each (the same numbers
+on `grid-select` and `track-select`); confidence 75.
+
+**The pairs** (run 2026-10-26, overlap `RMSE / edge correlation / mean grey`, 1920x1080, ours `--menu-page` at the same size;
+the page shows the same numbers per pair). The most visible difference is read off the pair image:
+
+| Pair | Ours drawn from | Overlap | Most visible difference |
+| --- | --- | --- | --- |
+| HD Campaign Select | DATA06 `Campaign Selection` | 0.232 / 0.07 / 27.7 | the HD card is white and cyan where the original's is a muted grey-green; the original's gold-medal hexagon icon is missing and `CAMPAIGN MODES` is a larger plain heading |
+| HD Campaign grid | `grid_00.xml` | 0.196 / 0.10 / 15.0 | the flyer card: the original tilts it with two large arrows and draws the previous and next grid arrows; `EVENT 01/08` is bold capitals there, ours small mixed case |
+| HD Campaign cell | `CellMode_Definition.xml` | 0.189 / 0.10 / 16.7 | closest pair; the selected hex has the white outline in the original, ours is flat grey; the original has a red particle haze right of the card |
+| HD Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.184 / 0.02 / 21.6 | no circuit photo, no length or distance values (`4.4KM`, `13.2KM` read `-`), the circuit model is smaller and turned differently, the original's red backdrop cloud is much fainter in ours |
+| HD Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.196 / 0.08 / 22.0 | the hull is drawn at a different pose and size, the red particle backdrop is much fainter, the statistic bars carry red markers the original lacks |
+| Omega Campaign grid | Omega's own first grid | 0.397 / 0.27 / 55.0 | state not matched: no flyer card at all (a white page with the ghosted backdrop tower), 18 points against the original's 21 |
+| Omega Campaign cell | Omega's own first grid | 0.658 / 0.10 / 129.0 | the original's dark-red panel fills about 80 % of the frame and ours is white, the largest difference of the set; `01_TRACK` against `TALON'S JUNCTION` |
+| Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` and no photo (the original names it and shows the stills), no length values, the model is turned differently |
+| Omega Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.283 / 0.26 / 34.0 | hull about twice the original's size in a different livery (dark teal and yellow against pale blue and yellow), a ringed Feisar logo against the flat one, the cursor on the top hex against the third row |
+
+Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
+(`Additional`); Omega Campaign Select, Main Menu, Racebox setup and Options. The ranked list of differences is in the
+`menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;
+the manifest is built from the main checkout with `python3 scripts/compare_env.py manifest
+data/reference/compare-page/menus.toml data/reference/compare-page/hd data/reference/compare-page/omega`, then `just compare-page`.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on

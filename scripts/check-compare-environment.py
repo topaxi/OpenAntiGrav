@@ -16,6 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
+import compare_menu as cm  # noqa: E402
+import compare_provenance as cprov  # noqa: E402
 
 spec = importlib.util.spec_from_file_location("compare_page", HERE / "compare-page.py")
 cp = importlib.util.module_from_spec(spec)
@@ -42,6 +44,46 @@ def make_pair(root, name, times, meta=True, flags=None):
     assert plat["game"]
     (d / "pair.json").write_text(json.dumps(rec))
     return d
+
+
+def check_menu_route(root):
+    """A menu pair: ours' command drops the race-only flags and takes the profile's size; a page ours draws from `menu.toml` is
+    refused by `Pair.finish` (and `write_gap` keeps only the original's frame); a page from the XML with a wrong screen or
+    language is refused naming the check; a cold-boot menu needs no presented-frame lag."""
+    plat = ce.platform("hd-fury")
+    cmd = cm.ours_menu_command("oag-game", "img.iso", plat, "track-select", "1920x1080")
+    assert cmd[2:4] == ["--menu-page", "track-select"], cmd
+    assert "--no-hull-shake" not in cmd and "--pilot-assist" not in cmd, cmd
+    assert cmd[cmd.index("--size") + 1] == "1920x1080", cmd
+    theirs = root / "theirs.png"
+    subprocess.run(["magick", "-size", "1920x1080", "xc:gray20", str(theirs)], check=True)
+
+    def refused(drawn_from, screen_seen="Track Creation", language="English"):
+        pdir = root / ("menu-%s-%s-%s" % (drawn_from.replace(".", ""), screen_seen.replace(" ", ""), language))
+        pdir.mkdir()
+        pair = ce.Pair("hd-fury", pdir)
+        pair.rec["meta"] = {"id": "t", "title": "t"}
+        pair.rec["original"]["emulator"] = dict(plat["emulator"])
+        ns = type("A", (), {"autopilot": None, "autopilot_timer": None, "ram_write": [], "accept_provenance": []})()
+        cprov.build(pair, ns, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
+        try:
+            cm.menu_pair(pair, theirs_png=theirs, oag_game=__file__, image="img", page="track-select",
+                         drawn_from=drawn_from, xml_file="x.xml", screen_seen=screen_seen, screen_wanted="Track Creation",
+                         profile_dir=pdir, size="1920x1080", front_end_style="FURY", language=language, original_language="English",
+                         selection={"original": "a", "ours": "a"})
+            pair.finish()
+        except SystemExit as exc:
+            return exc.code, json.loads((pdir / "pair.json").read_text())
+        raise AssertionError("a bad menu pair was not refused")
+
+    code, rec = refused(cm.GAP)
+    assert code == 3 and rec["refused"] and not (root / "menu-menutoml-TrackCreation-English" / "ours.png").exists(), rec
+    assert refused("xml", screen_seen="Main Menu")[0] == 3
+    assert refused("menu.toml", language="Deutsch")[0] == 3
+    assert not [c for c in cprov.refusals(rec["original"]["provenance"], "hd-fury")], "a cold-boot menu needs no lag"
+    cm.write_gap(root / "gap-x", theirs, "race", "menu.toml", "why")
+    assert (root / "gap-x" / "theirs.png").exists() and json.loads((root / "gap-x" / "gap.json").read_text())["page"] == "race"
+    assert not (root / "gap-x" / "ours.png").exists()
 
 
 def main():
@@ -78,6 +120,8 @@ def main():
             assert "meta" in str(e)
         else:
             raise AssertionError("a pair without meta was not refused")
+    with tempfile.TemporaryDirectory() as t:
+        check_menu_route(Path(t))
     print("compare environment: round trip ok")
 
 

@@ -66,7 +66,8 @@ def refusals(prov, profile, pair_kind=None):
     elif armed != True and armed is not False and pair_kind in ("race", "zone"):  # noqa: E712 - "unknown" is a string
         out.append(("autopilot_timer", "a %s state is flown on the Autopilot and its arming was not recorded" % pair_kind))
     lag = prov.get("presented_lag", {})
-    if lag.get("value") is None or lag.get("basis", "unknown") == "unknown":
+    # A menu is a still: no tick, pose or HUD text to be one frame older than the picture (`compare_menu.py`).
+    if pair_kind != "menu" and (lag.get("value") is None or lag.get("basis", "unknown") == "unknown"):
         out.append(("unknown_lag", "presented_lag %s" % json.dumps(lag)))
     accepted = {o.get("rule") for o in prov.get("overrides", []) if o.get("reason")}
     return [(r, d) for r, d in out if r not in accepted]
@@ -371,6 +372,9 @@ def selftest():
     assert [r for r, _ in refusals(dict(good_hd, pair_kind="race", autopilot={"armed": "unknown"}), "pulse-psp")] == ["autopilot_timer"], "race state, arming unrecorded"
     for lag in ({}, {"value": None}, {"value": 1, "unit": "ticks", "basis": "unknown"}):
         assert [r for r, _ in refusals(dict(good_hd, presented_lag=lag), "hd-fury")] == ["unknown_lag"], "unknown lag: %r" % lag
+    menu = dict(good_hd, pair_kind="menu", presented_lag={}, autopilot={"armed": "unknown"})
+    assert refusals(menu, "hd-fury") == [], "a menu pair from a cold boot needs no lag and no Autopilot record"
+    assert [r for r, _ in refusals(dict(menu, capture_path={"kind": "savestate_restore"}), "hd-fury")] == ["hd_savestate_scenery"], "a menu from a restore"
     over = dict(armed, overrides=[{"rule": "autopilot_timer", "reason": "state predates the field, looked at"}])
     assert refusals(over, "pulse-psp") == [], "an explicit override with a reason passes"
     assert [r for r, _ in refusals(dict(armed, overrides=[{"rule": "autopilot_timer", "reason": ""}]), "pulse-psp")] == ["autopilot_timer"], "an override needs a reason"
