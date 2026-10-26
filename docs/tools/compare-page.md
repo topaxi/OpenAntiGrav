@@ -655,11 +655,12 @@ Three faults, one cause each, all found on `pulse-psp-race/talons-alongside` (Ta
 | The neon strips on the left wall were dark | `psp-pulse-pair.py`: a race shot draws at tick 0 like Zone, but took `offset - GO_TICK / 60` (the grid formula) | the strips flicker on a 2 s square wave of the world clock: lit cyan pixels in (0,140,150,60) 0 against the original's 924; at `offset + HUD clock` 946 | left wall box 0.70 to 1.04, whole frame 0.96 to 1.00 |
 
 The first two are render-side fallbacks (`Course::locate`, `Spline::nearest`, read only: the simulation's own fix stays as the
-tick left it); a running race sets both on its first tick, so only a posed capture and a race's first frame were wrong. Tests
+tick left it); a running race sets both on its first tick, so only a posed capture and a race's first frame were wrong. The section fallback is **tick 0 only**: after a tick, a craft that reads off its sample (off the track, airborne, under a crossing stretch) stays *draw everything*, since a global scan can take it to the wrong stretch (`respawn::a_craft_no_tick_has_placed_is_found_where_it_stands_and_only_then`). Tests
 (each fails with its fix removed): `hull_light_scale_ground_truth::a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in`
 and `posed_visibility_ground_truth::a_craft_no_tick_has_located_is_in_a_section`. Checked on the other pairs rendered from
 their recorded flags: the 24 grid pairs and both Zone pairs are unchanged to the printed digit (they run ticks), `talons-boost`
-mean grey 11.25 to 10.57; Pure's four pairs read 9.2-25.9 stored against 10.1-27.2 now with **or without** this change (the stored
+mean grey 11.25 to 10.57; the 19 HD, HD race, Omega and 2048 pairs are unchanged to the printed digit (the fallbacks are generic
+`oag-raceplay` code, not gated per title: the same bug reached every title that poses a craft at tick 0, and nothing of theirs moved); Pure's four pairs read 9.2-25.9 stored against 10.1-27.2 now with **or without** this change (the stored
 ones predate other commits; not this lane's).
 
 **To adopt in the page** (a manifest or `pair.json` is never written from a worktree): `just compare-rerender-ours --only
@@ -674,7 +675,8 @@ clock and ours renders the same ([exhaust.md](../ghidra/functions/psp-pulse-usa/
 
 **Method worth keeping: bisecting the original's frame.** `psp-ge-dump.py dump` then `psp-ge-replay.py` with `--nop-prims` ranges
 of the census's `ci` chunk indices, one replay per range (about 12 s, the previous instance needs about 14 s to release its
-port, so wait between runs and **do not wrap it in `systemd-run`**: under a scope every replay came back black). It kept a
+port, so wait between runs). Run under `ulimit -v` for the memory cap: inside `systemd-run --scope ... -p TasksMax=64` every
+replay came back black on 2026-10-26 (the cause was not isolated; direct runs and `ulimit -v 12000000` were fine). It kept a
 list of 975 original PRIMs to compare with ours by world bounding box and index count; ours had a twin for every prim that
 projects onto the upper-left, which is what pointed at a visibility difference rather than missing geometry.
 PPSSPP's own toast ("turning off software rendering") lands in the top rows of some replays: leave rows 0-30 out of a box

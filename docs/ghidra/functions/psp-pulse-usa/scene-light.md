@@ -381,8 +381,8 @@ fin 1.86 to 1.03, body 1.95 to 1.04, left fin 1.43 to 1.13, whole hull box with 
 nozzle box 1.20 to 1.05; the scenery boxes were 0.93-1.01 before and are unchanged. Test:
 `hull_light_scale_ground_truth::a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in` (fails
 with the fallback removed). Other titles: HD's hull light is its own rig (`ship-sun-occlusion.md`) and
-Pure authors no hull rig (checked, differs), so the fix reaches no rig of theirs; Pulse PS2 takes none of
-this rig (not wired, see above).
+Pure authors no hull rig (checked, differs); the 19 HD, HD race, Omega and 2048 compare pairs re-rendered from their recorded flags are
+unchanged to the printed digit, so nothing of theirs moved; Pulse PS2 takes none of this rig (not wired, see above).
 
 ## Applied names
 

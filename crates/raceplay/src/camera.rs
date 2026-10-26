@@ -555,18 +555,25 @@ impl Race {
         self.section_of(index, ship.physics.body.position)
     }
 
-    /// The spline sample under a craft: the one the last tick left in `Ship::segment`, or, for a craft no tick has
-    /// located (a posed capture runs none, and a race's first frame is drawn before its first; `segment` is
-    /// still its start value, `0`, far from where the pose put it), the nearest sample to where it stands. Without
-    /// it the craft read as [`UNPLACED`] and the visible set fell to *draw everything*: on
+    /// The spline sample under a craft: the one the last tick left in `Ship::segment`, or, **before any tick has
+    /// run**, the nearest sample to where it stands. A posed capture runs no tick and a race's first frame is drawn
+    /// before its first, so `segment` is still its start value, `0`, far from where the pose put the craft; the
+    /// craft read as [`UNPLACED`] and the visible set fell to *draw everything*. On
     /// `pulse-psp-race/talons-alongside` the terrain and mountains the original's mask leaves out were drawn over
     /// the tunnel's ceiling. Read only: `segment` stays as the tick left it.
+    ///
+    /// **Only at tick 0.** Once a tick has run a craft that reads [`UNPLACED`] is off the track, airborne or under a
+    /// stretch that crosses itself, and a global scan could take it to the wrong stretch (the bridge above the
+    /// road): that stays *draw everything*, as [`Self::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
         let index = usize::from(ship.segment);
         if index < self.sim.spline.len()
             && self.section_of(index, ship.physics.body.position) != UNPLACED
         {
             return Some(index);
+        }
+        if self.sim.world.tick > 0 {
+            return None;
         }
         let (index, _, _) = self.sim.spline.nearest(ship.physics.body.position)?;
         Some(index)
