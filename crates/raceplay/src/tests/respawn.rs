@@ -695,3 +695,26 @@ fn a_craft_slightly_below_airborne_or_under_a_gap_is_not_beneath_its_line() {
     );
     assert!(!race.beneath_the_line(1));
 }
+
+/// A craft no tick has located is placed where it stands, so a posed capture's visible set is its section's and not
+/// every section; once a tick has run, a craft that reads off its sample stays *draw everything* (a global scan
+/// could take it to the wrong stretch).
+#[test]
+fn a_craft_no_tick_has_placed_is_found_where_it_stands_and_only_then() {
+    let mut race = Race::start(setup(Handling::default()));
+    // The pose lands far down the straight, with `Ship::segment` still at its start value.
+    race.sim.world.ships[0].physics.body.position = Vec3::new(60.0, 0.0, 0.0);
+    assert_eq!(race.sim.world.tick, 0);
+    assert_eq!(race.sim.world.ships[0].segment, 0);
+    assert_ne!(
+        race.visibility_sections().0,
+        UNPLACED,
+        "before any tick the craft is located by the nearest sample"
+    );
+
+    // After a tick the stale-sample case is an off-track craft, which stays unplaced.
+    race.tick(&PlayerInputs::none());
+    assert!(race.sim.world.tick > 0);
+    race.sim.world.ships[0].physics.body.position = Vec3::new(60.0, 0.0, 400.0);
+    assert_eq!(race.visibility_sections().0, UNPLACED);
+}

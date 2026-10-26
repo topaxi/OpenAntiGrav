@@ -60,3 +60,40 @@ fn the_grid_craft_reads_the_blend_the_original_holds_not_the_nearest_ring_point(
         "the point and spot bytes of the live list"
     );
 }
+
+/// Where the pair `pulse-psp-race/talons-alongside` put the player: inside Talon's Junction's tunnel.
+const TUNNEL: Vec3 = Vec3::new(-118.38782, -49.23908, -702.0541);
+
+/// A craft no tick has located reads the scale of where it stands, not the default `255`.
+///
+/// The original's GE list at that pose (a recorded frame, PPSSPP v1.20.4) lights the hull's first directional with
+/// `(122, 114, 75)` where the open road holds `(254, 237, 156)`: a scale of about `123`, the `127` the tunnel's points
+/// author blended. A posed capture runs no tick, so `standing.course_index` was `None` and the hull drew at full light,
+/// `1.9x` the original over the fins and the body.
+#[test]
+#[ignore = "needs the Pulse PSP disc in data/images/"]
+fn a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        track: Some(r"Data\Environments\16_Track\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading Talon's Junction");
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.sim.world.ships[0].physics.body.position = TUNNEL;
+    assert_eq!(
+        race.sim.world.ships[0].standing.course_index, None,
+        "the premise: nothing has located the craft"
+    );
+    let packed = race.ship_hull_scale(0);
+    assert!(packed != 0.0, "the default 255 is the bug");
+    let directional = (packed as u16 >> 8) as u8;
+    assert!(
+        (118..=130).contains(&directional),
+        "the original's list holds a directional scale near 123, the pack reads {directional}"
+    );
+}

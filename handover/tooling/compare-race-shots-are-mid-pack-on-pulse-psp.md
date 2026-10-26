@@ -19,6 +19,13 @@ the screenshot. Recipe, checks and caveats: [`docs/tools/compare-page.md`](../..
 - **Trails and plume landed (2026-10-20, `--field-warmup`)**, an exhaust-only replay of every craft on a straight path at its captured velocity.
   Still open: the original's plume is wider and brighter than ours (a bloom, not a ribbon); the ribbon is straight where the original's curved;
   an opponent's throttle and every craft's flare block (`boost_timer`, `plume_timer`) are not read from RAM (full thrust and the engine's own state are chosen).
+- **2026-10-26 (`talons-alongside`): a posed race shot was lit, culled and animated as if no tick had run** (hull at full light,
+  every section visible, the neon clock 43 s short): fixed, whole frame 14.14 to 3.29 mean grey on `pulse-psp-race/talons-alongside`;
+  `docs/tools/compare-page.md` has the table. **To adopt:** `just compare-rerender-ours --only pulse-psp-race` from the main checkout
+  (it recomputes the world clock for a stored race shot). The Pure race shots, if any are made, need the same two fallbacks checked
+  (they sit in generic `oag-raceplay` code, so they apply). **Still open here:** the Autopilot pickup row (icon and `5.00` counter) is
+  not drawn (`--give` exists; the pair script would read the held pickup at `entity+0x1bc` and its timer and pass both), the speed
+  readout (the HUD record's own value), and the ribbon's curve.
 - **PSP hull skew.** On `pulse-psp-race/talons-alongside` the original hull is about 1.5x larger than ours at the camera read from RAM; holding
   the body back one tick of its velocity (about 1.8 units) matches its size (docs: "The player's hull in a race shot"). Find which of the body
   read and the camera node is a tick off the frame the PSP presents (the screenshot is the previous frame in a PPSSPP stop), then feed ours the

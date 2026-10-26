@@ -613,8 +613,11 @@ def main():
         pair.rec["original"]["world_clock_offset_s"] = offset
         pair.rec["original"]["world_clock_note"] = ("world meshes' animation clock minus the HUD race clock, the most common "
                                                     "non-zero value (%d of %d updater hits), live" % (n, total))
-        # a Zone frame renders at tick 0, so ours' animation clock is the offset alone: the original's mesh clock
-        ours_offset = offset + clock if args.zone else offset - GO_TICK / 60
+        # a Zone frame and a race shot (`--field`) render at tick 0, so ours' animation clock is the offset alone: the
+        # original's mesh clock. (A race shot took `offset - GO_TICK / 60` until 2026-10-26, which assumes ours has run
+        # to the original's moment: 43 s off on `talons-alongside`, the neon strips of the left wall dark where the
+        # original's are lit.)
+        ours_offset = offset + clock if args.zone or args.field else offset - GO_TICK / 60
         flags += ["--world-clock-offset", "%.3f" % ours_offset]
         pair.rec["ours"]["world_clock_offset_s"] = ours_offset
     pair.rec["original"]["camera"] = {"pos": [theirs_row["cam_pos_" + a] for a in "xyz"],

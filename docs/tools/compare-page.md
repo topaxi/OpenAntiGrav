@@ -643,6 +643,46 @@ ahead). The display matrix (`entity+0x8b0`, two hops) is not the cause of a posi
 last digit for all eight craft, and its rotation rows are scaled by 0.75 with an up axis tilted about 10 degrees from the body's (a visual
 roll). Not wired: ours keeps the body as read, with the skew recorded in the handover thread.
 
+## A posed race shot was lit, culled and animated as if no tick had run (Pulse PSP, 2026-10-26, `talons-alongside`)
+
+Three faults, one cause each, all found on `pulse-psp-race/talons-alongside` (Talon's Junction, inside the tunnel,
+`--field-from --ticks 0`), whole-frame mean grey difference to `theirs.png` **14.14 to 3.29** (rmse 0.131 to 0.049):
+
+| Fault | Where | Evidence | Boxes, ours over the original's mean luma, before to after |
+| --- | --- | --- | --- |
+| The hull drew at the default light scale `255` | `Race::ship_hull_scale`: `standing.course_index` is `None` until a tick runs | the original's recorded GE list holds the first directional at `(122,114,75)` against the open road's `(254,237,156)`, a scale of about `123/255` | fins 1.92 to 1.05, right fin 1.86 to 1.03, body 1.95 to 1.04, left fin 1.43 to 1.13, hull box with the plume 1.31 to 1.05, nozzle box 1.20 to 1.05 |
+| The visible set was every section | `Race::visibility_sections`: `Ship::segment` is `0` until a tick runs, far from the pose, so the craft read `UNPLACED` | 2,102 draws submitted against 638 once located; the original's list holds none of Talon's `ground1`/mountain chunks, ours drew them over the tunnel's ceiling | upper-left box (0,0,140,90) 2.68 to 1.02, whole frame 1.13 to 0.96 |
+| The neon strips on the left wall were dark | `psp-pulse-pair.py`: a race shot draws at tick 0 like Zone, but took `offset - GO_TICK / 60` (the grid formula) | the strips flicker on a 2 s square wave of the world clock: lit cyan pixels in (0,140,150,60) 0 against the original's 924; at `offset + HUD clock` 946 | left wall box 0.70 to 1.04, whole frame 0.96 to 1.00 |
+
+The first two are render-side fallbacks (`Course::locate`, `Spline::nearest`, read only: the simulation's own fix stays as the
+tick left it); a running race sets both on its first tick, so only a posed capture and a race's first frame were wrong. The section fallback is **tick 0 only**: after a tick, a craft that reads off its sample (off the track, airborne, under a crossing stretch) stays *draw everything*, since a global scan can take it to the wrong stretch (`respawn::a_craft_no_tick_has_placed_is_found_where_it_stands_and_only_then`). Tests
+(each fails with its fix removed): `hull_light_scale_ground_truth::a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in`
+and `posed_visibility_ground_truth::a_craft_no_tick_has_located_is_in_a_section`. Checked on the other pairs rendered from
+their recorded flags: the 24 grid pairs and both Zone pairs are unchanged to the printed digit (they run ticks), `talons-boost`
+mean grey 11.25 to 10.57; the 19 HD, HD race, Omega and 2048 pairs are unchanged to the printed digit (the fallbacks are generic
+`oag-raceplay` code, not gated per title: the same bug reached every title that poses a craft at tick 0, and nothing of theirs moved); Pure's four pairs read 9.2-25.9 stored against 10.1-27.2 now with **or without** this change (the stored
+ones predate other commits; not this lane's).
+
+**To adopt in the page** (a manifest or `pair.json` is never written from a worktree): `just compare-rerender-ours --only
+pulse-psp-race` from the main checkout re-renders both race pairs; it now recomputes `--world-clock-offset` for a stored
+race shot as `original.world_clock_offset_s + original.race_clock_s` (178.078 + 38.408 = 216.486 on this pair).
+
+**Not the cause, ruled out with numbers:** `3ff1d331f` (`pulse-vex-normals`) moved 195 of 130,560 pixels by a mean of 0.018 grey
+on this pair. For the missing upper-left geometry: back-face culling off (data level, all three lists), the frustum and PVS
+flags, LOD and the animation clock changed nothing, because the set was already every section (the terrain was in front of
+the ceiling, not the ceiling absent). The pair is **not boosting**: its flare `boost_timer` is 0 and `plume_timer` 8.29 at its own
+clock and ours renders the same ([exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md), "The race pair is not boosting").
+
+**Method worth keeping: bisecting the original's frame.** `psp-ge-dump.py dump` then `psp-ge-replay.py` with `--nop-prims` ranges
+of the census's `ci` chunk indices, one replay per range (about 12 s, the previous instance needs about 14 s to release its
+port, so wait between runs). Run under `ulimit -v` for the memory cap: inside `systemd-run --scope ... -p TasksMax=64` every
+replay came back black on 2026-10-26 (the cause was not isolated; direct runs and `ulimit -v 12000000` were fine). It kept a
+list of 975 original PRIMs to compare with ours by world bounding box and index count; ours had a twin for every prim that
+projects onto the upper-left, which is what pointed at a visibility difference rather than missing geometry.
+PPSSPP's own toast ("turning off software rendering") lands in the top rows of some replays: leave rows 0-30 out of a box
+metric. A replay of the whole list reproduces the original's frame; `--nop-prims 85:8242` style ranges that remove the
+first PRIM (`ci` 75) blank it.
+
 ## Zone pairs (Pulse PSP, 2026-10-21, `zone-pairs`)
 
 A Zone frame is a mid-run state, so `psp-pulse-pair.py --zone` renders ours at tick 0 on the original's pose and camera with the zone number, score and zone seconds read from the race manager's mode object and written into the race (`--hud-state PLACE,LAP,LAP_S,RACE_S,KMH,SHIELD,BEST,ZONE,SCORE,ZONE_S`); `g_game_mode == 6` is checked. The state is made by walking `Racebox` > `Custom Race` > `RACE TYPE` right x5 (one key a second), Track Select (two circuits on a used profile: Talon's White, Moa Therma White) and flying on the Autopilot. HD's `rpcs3-hd-pair.py --zone` exists but no pair was made; see the compare-page handover thread.

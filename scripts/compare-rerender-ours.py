@@ -73,6 +73,13 @@ def rerender(pj, binary):
         flags += ["--no-hull-shake"]
     if problems:
         return "skipped: " + "; ".join(problems)
+    # A race shot (`--field-from`, drawn at tick 0) runs ours' animation on the offset alone: the original's own mesh
+    # clock, its offset over the HUD clock plus the HUD clock. Pairs recorded before 2026-10-26 carry
+    # `offset - GO_TICK / 60`, 43 s short on `pulse-psp-race/talons-alongside` (the left wall's neon strips dark).
+    orig = rec.get("original") or {}
+    if "--field-from" in flags and "--world-clock-offset" in flags and orig.get("world_clock_offset_s") is not None \
+            and orig.get("race_clock_s") is not None and rec["profile"] == "pulse-psp":
+        flags[flags.index("--world-clock-offset") + 1] = "%.3f" % (orig["world_clock_offset_s"] + orig["race_clock_s"])
     plat = ce.platform(rec["profile"])
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:

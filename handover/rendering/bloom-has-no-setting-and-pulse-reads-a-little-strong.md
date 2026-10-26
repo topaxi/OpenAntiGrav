@@ -194,3 +194,15 @@ race pair is not boosting"). So:
    `talons-boost` whole-frame RMSE 0.140 to 0.113, craft crop 0.292 to 0.179 against the same `theirs.png`.
 3. **Done:** the `--trace-out` row of a `--field-warmup` run is written with the warm-up now, so it reads ours' exhaust at
    the rendered tick.
+
+## 2026-10-26, `talons-alongside`: "ours is too bright" on the race shot was the craft's light scale, and the geometry was the visible set
+
+Not a bloom or plume term. On `pulse-psp-race/talons-alongside` a posed capture ran no tick, so `Race::ship_hull_scale` fell to the
+default `255` (the original's hull lights at about `123/255` inside the tunnel) and `visibility_sections` read `UNPLACED` (every
+section drawn, terrain over the ceiling). Both fixed render-side (`Course::locate`, `Spline::nearest`, read only); the neon strips were
+the pair script's world clock. Whole frame 14.14 to 3.29 mean grey; hull-only boxes 1.4-1.95 to 1.03-1.13; nozzle 1.20 to 1.05;
+scenery boxes 0.93-1.01 to 1.00-1.04. Full table and tests: `docs/tools/compare-page.md`, "A posed race shot was lit, culled and
+animated as if no tick had run", and `docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "A craft no tick has located".
+`3ff1d331f` (`pulse-vex-normals`) did not move this pair (195 pixels, 0.018 grey). **Open (small):** the nozzle box is still `1.05`
+and the hull's left fin `1.13` (the fin catches the strip light's point-light slot, not read per frame), the plume interior is the
+original's `rand` size/alpha phase (above).

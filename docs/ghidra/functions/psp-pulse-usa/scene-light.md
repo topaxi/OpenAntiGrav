@@ -370,6 +370,25 @@ its authored envsettings rig (`ship-sun-occlusion.md`) and the `wopoint` class i
 consumer (`../ps3-hdfury-eu/vex-classes.md`). **2048 and Omega: not checked**, out of scope for a
 Pulse finding.
 
+## A craft no tick has located (2026-10-26, `talons-alongside`)
+
+A posed capture (`--pose-from --ticks 0`, every compare pair) and a race's first frame run no tick, so
+`standing.course_index` was `None` and `Race::ship_hull_scale` / `ship_hull_points` fell to the default
+`255`: the hull drew at full light wherever it stood. On `pulse-psp-race/talons-alongside` (inside the tunnel,
+spline bytes `127`) that is the whole of "ours is too bright" on the craft. The original's recorded GE list
+(`psp-ge-dump.py dump`, light state read from the command words: ambient `0x59`, `LDC0..3` `0x90 + 3n`)
+holds the first three directionals at `(122,114,75)`, `(38,47,57)`, `(23,28,35)`; the open road's
+rig, read off another craft in the same list, is `(254,237,156)`, `(79,97,119)`, `(48,59,72)`: a scale of
+about `123/255`. Ours now locates the craft where it stands (`Course::locate(position, None)`, render-side
+and read-only, the standing's own fix is simulation state and stays as the tick left it) and reads the same
+blend a running race reads. Hull-only boxes, ours over the original's mean luma: fin 1.92 to 1.05, right
+fin 1.86 to 1.03, body 1.95 to 1.04, left fin 1.43 to 1.13, whole hull box with the plume 1.31 to 1.05;
+nozzle box 1.20 to 1.05; the scenery boxes were 0.93-1.01 before and are unchanged. Test:
+`hull_light_scale_ground_truth::a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in` (fails
+with the fallback removed). Other titles: HD's hull light is its own rig (`ship-sun-occlusion.md`) and
+Pure authors no hull rig (checked, differs); the 19 HD, HD race, Omega and 2048 compare pairs re-rendered from their recorded flags are
+unchanged to the printed digit, so nothing of theirs moved; Pulse PS2 takes none of this rig (not wired, see above).
+
 ## Applied names
 
 Mirrored in [`names.tsv`](names.tsv).

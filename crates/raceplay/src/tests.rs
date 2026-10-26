@@ -181,6 +181,9 @@ pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
         put(0x38, 1.0);
         put(0x44, left);
         put(0x48, right);
+        // The four light-scale bytes (`+0x62..+0x65`): an open road, full light. Left at zero they would
+        // read as a tunnel dark enough to black out a hull the course now locates wherever it stands.
+        out[at + 0x62..at + 0x66].fill(255);
     }
     track::parse(&out).expect("the synthetic track must parse")
 }
