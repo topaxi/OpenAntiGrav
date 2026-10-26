@@ -726,7 +726,7 @@ impl Session {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
-        let profile = self.render_profile();
+        let profile = self.governed_profile();
         let surface = screen.output.size();
         let fullscreen = crate::window::is_fullscreen(&screen.output.window);
         let rect = display::viewport(surface, crate::window::scene_aspect(&self.settings.display, fullscreen));

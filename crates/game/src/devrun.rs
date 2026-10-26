@@ -155,6 +155,8 @@ pub struct Reading<'a> {
     pub surface: (u32, u32),
     /// The render extent, when a scene was drawn.
     pub render: Option<(u32, u32)>,
+    /// How many CPU-governor knobs are held down (0 is full quality).
+    pub governor: usize,
 }
 
 /// The line, one `key=value` field after another so a script can split it.
@@ -165,7 +167,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         .render
         .map_or_else(|| "-".to_string(), |(w, h)| format!("{w}x{h}"));
     format!(
-        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={}",
+        "frame-log stage={} fps={:.1} frame_ms={:.2} p99_ms={:.2} cpu_ms={} gpu_ms={} present_ms={} target_hz={} window={}x{} surface={}x{} render={} governor={}",
         r.stage,
         r.fps,
         r.frame_ms,
@@ -179,6 +181,7 @@ pub fn format_line(r: &Reading<'_>) -> String {
         r.surface.0,
         r.surface.1,
         render,
+        r.governor,
     )
 }
 

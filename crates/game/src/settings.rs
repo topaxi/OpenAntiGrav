@@ -396,6 +396,11 @@ fn default_frustum_culling() -> bool {
     true
 }
 
+/// See [`Graphics::cpu_governor`].
+fn default_cpu_governor() -> bool {
+    true
+}
+
 /// See [`Graphics::pvs_culling`]: on, having cleared the screenshot comparison.
 fn default_pvs_culling() -> bool {
     true
@@ -541,6 +546,13 @@ pub struct Graphics {
     #[serde(default)]
     pub boost_zoom: bool,
 
+    /// Let the CPU governor turn this project's own CPU-heavy extras down at runtime while the
+    /// frame thread is over its frame budget and the GPU is not (`oag_present::governor`).
+    /// It overrides in memory only: this value and every render-profile value are never
+    /// rewritten by it, and a capture never runs it. See `docs/rendering/cpu-governor.md`.
+    #[serde(default = "default_cpu_governor")]
+    pub cpu_governor: bool,
+
     /// Which of the original's three in-race camera perspectives to fly with.
     ///
     /// **The one setting on this page a race also writes.** SELECT cycles the
@@ -584,6 +596,7 @@ impl Default for Graphics {
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
             boost_zoom: false,
+            cpu_governor: default_cpu_governor(),
             camera_view: default_camera_view(),
         }
     }
@@ -925,6 +938,14 @@ pub fn menu_seeds(
         (
             "graphics.boost_zoom",
             text(if settings.graphics.boost_zoom {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
+            "graphics.cpu_governor",
+            text(if settings.graphics.cpu_governor {
                 "on"
             } else {
                 "off"

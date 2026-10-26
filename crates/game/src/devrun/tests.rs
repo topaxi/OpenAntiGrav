@@ -55,10 +55,11 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
         window: (3840, 2160),
         surface: (3840, 2160),
         render: None,
+        governor: 0,
     });
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
-    assert!(line.contains("window=3840x2160 surface=3840x2160 render=-"));
+    assert!(line.contains("window=3840x2160 surface=3840x2160 render=- governor=0"));
 }
 
 #[test]

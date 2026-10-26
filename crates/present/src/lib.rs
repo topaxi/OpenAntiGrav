@@ -12,5 +12,6 @@
 //! menu or a settings file: the host passes plain data in.
 
 pub mod drs;
+pub mod governor;
 pub mod perf;
 pub mod upscale;

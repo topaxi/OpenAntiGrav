@@ -270,6 +270,7 @@ OAG_GRAPHICS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "FIELD OF VIEW", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "BOOST FOV KICK", human = false }
 OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST ZOOM", human = false }
+OAG_GRAPHICS_CPU_GOVERNOR = { text = "CPU GOVERNOR", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 OAG_GRAPHICS_ADVANCED = { text = "ADVANCED", human = false }
 
