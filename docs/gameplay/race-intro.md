@@ -188,8 +188,10 @@ overlay draws them for HD yet.
   hash. Not a visible gap after the first second: the original's craft is placed 2.14 below rest
   and rises to rest by about frame 50, ours is placed at rest, so both sit level from then on
   ([grid-state.md](../physics/grid-state.md#pulse-has-no-lowered-grid-state-hover-target-2026-10-11-pulse-flyby-settle)).
-- **The music**: the flyby has its own (`g_music_player` calls at the counter's 40 and 0,
-  `RaceMode_UpdateIntro` substate 1); not listened to.
+- **The music**: the flyby has its own - `MusicPlayer_StartPreRaceDialogue` at the counter's 0
+  (the circuit's `PreRaceDialogue` voice-over through the music player) and a stop when the
+  flyby ends ([now-playing.md](../ghidra/functions/psp-pulse-usa/now-playing.md#when-the-song-starts-read-2026-10-26-lane-race-music-at-green)).
+  The voice-over is not played here, so the flyby is silent; the race song waits for `go`.
 - **The screen wash** the original starts when the flyby ends (`ScreenFlash` kind 10) is not
   drawn.
 - **Demo mode** skips it (`g_game_mode == 2`), and a byte at mode object `+0x40` also does

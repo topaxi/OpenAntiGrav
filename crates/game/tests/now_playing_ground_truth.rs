@@ -65,8 +65,8 @@ fn every_pulse_soundtrack_entry_has_an_artist_and_a_name() {
 }
 
 /// What the HUD's draw list gets for Pulse's first soundtrack entry, end to end: the name off
-/// the disc, through `Race::note_song`, the lights, the scroll and the fade, into the frame
-/// `oag_hud::now_playing::append` adds to the HUD's own.
+/// the disc, through `Race::note_song` when the song starts at the release, the scroll and the
+/// fade, into the frame `oag_hud::now_playing::append` adds to the HUD's own.
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
 fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
@@ -89,14 +89,18 @@ fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
     })
     .expect("loading a Pulse race");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.note_song(Some(&oag_sound::NowPlaying {
+    let song = oag_sound::NowPlaying {
         serial: 1,
         name: Some(name),
-    }));
+    };
 
     let mut shown = Vec::new();
     for tick in 0..1500u32 {
         race.tick(&PlayerInputs::none());
+        // The sound tells the race on the step that voices `go`, which is the last gated one.
+        if u64::from(tick) == oag_race::COUNTDOWN_TICKS - 1 {
+            race.note_song(Some(&song));
+        }
         shown.push((tick, race.readout().now_playing));
     }
     let first = shown
@@ -153,13 +157,47 @@ fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd"]
 fn a_no_audio_run_shows_the_song_it_would_play() {
-    use oag_gameplay::PlayerInputs;
-
-    let Some(source) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+    let Some(beats) = timeline(
+        "data/images/pulse-psp-eu.chd",
+        oag_race::Mode::TimeTrial,
+        "VENOM",
+    ) else {
         return;
     };
-    let source = source.display().to_string();
-    let cache = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("now-playing-audio");
+    let text = beats
+        .iter()
+        .find_map(|beat| beat.shown.clone())
+        .expect("the display came up");
+    assert_eq!(
+        text, "Aphex Twin - Fenix Funk 5 (Wipeout Edit)",
+        "the first track of Pulse's soundtrack"
+    );
+}
+
+/// One step of a race as a seat sees it: whether `go` was raised in it, whether a race voice is
+/// sounding after it, and what the marquee shows.
+struct Beat {
+    go: bool,
+    sounding: bool,
+    shown: Option<String>,
+}
+
+/// Races `image` on a null audio backend with the title's own start rule, from the first step to
+/// a little past the release, and records each step.
+fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>> {
+    use oag_gameplay::PlayerInputs;
+    use oag_gameplay::cue::Cue;
+
+    let source = oag_testdata::image(image)?.display().to_string();
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.clone(),
+        mode,
+        class: class.to_string(),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("now-playing-audio");
     let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
@@ -168,36 +206,166 @@ fn a_no_audio_run_shows_the_song_it_would_play() {
         oag_audio::MIN_BUFFER,
         true,
     );
+    // What the race hand-off does: the title's rule, then the music, then the wait for the fetch
+    // (a `--screenshot` capture's seam) so the song is a function of the tick count.
+    oag_game::sound::hold_race_song(&mut audio, loaded.title);
     audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
     audio.settle_music();
-    let song = audio.now_playing().expect("the race song landed");
-    assert_eq!(
-        song.name.as_ref().map(|name| name.text(" - ")).as_deref(),
-        Some("Aphex Twin - Fenix Funk 5 (Wipeout Edit)"),
-        "the first track of Pulse's soundtrack"
-    );
+    let mut race = oag_raceplay::Race::start(loaded.setup);
 
+    let mut beats = Vec::new();
+    for _ in 0..oag_race::COUNTDOWN_TICKS + 30 {
+        race.tick(&PlayerInputs::none());
+        let go = race.pending_cues().iter().any(|event| event.cue == Cue::Go);
+        oag_game::sound::race_tick(&mut audio, &mut race);
+        beats.push(Beat {
+            go,
+            sounding: audio.playhead_race().is_some(),
+            shown: race.readout().now_playing.map(|marquee| marquee.text),
+        });
+    }
+    Some(beats)
+}
+
+/// The claim, for one title and mode: no race song and no display before the step that voices
+/// `go`; both on it.
+fn assert_the_song_starts_on_go(beats: &[Beat], name: &str) {
+    let go = beats
+        .iter()
+        .position(|beat| beat.go)
+        .unwrap_or_else(|| panic!("{name}: the start voiced no go"));
+    assert_eq!(
+        go as u64,
+        oag_race::COUNTDOWN_TICKS - 1,
+        "{name}: go's step"
+    );
+    for (tick, beat) in beats[..go].iter().enumerate() {
+        assert!(!beat.sounding, "{name}: a race song sounds in step {tick}");
+        assert!(
+            beat.shown.is_none(),
+            "{name}: the display is up in step {tick}"
+        );
+    }
+    assert!(beats[go].sounding, "{name}: the song starts on go");
+    let text = beats[go]
+        .shown
+        .as_deref()
+        .unwrap_or_else(|| panic!("{name}: the display is not up on go's step"));
+    assert!(text.contains(" - "), "{name}: {text:?}");
+    assert!(beats[go + 1..].iter().all(|beat| beat.sounding), "{name}");
+}
+
+/// Pulse starts the song on `go`, in Time Trial, a single race and Zone alike; the PS2 pressing
+/// carries the PSP's rule, which `oag_pulse::MUSIC` states once for both.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_starts_the_song_and_its_display_together_on_go() {
+    for (mode, name) in [
+        (oag_race::Mode::TimeTrial, "time trial"),
+        (oag_race::Mode::SingleRace, "single race"),
+        (oag_race::Mode::Zone, "zone"),
+    ] {
+        let Some(beats) = timeline("data/images/pulse-psp-eu.chd", mode, "VENOM") else {
+            return;
+        };
+        assert_the_song_starts_on_go(&beats, name);
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_starts_the_song_and_its_display_together_on_go() {
+    let Some(beats) = timeline(
+        "data/images/hdfury-ps3-eu-dec.iso",
+        oag_race::Mode::TimeTrial,
+        "VENOM",
+    ) else {
+        return;
+    };
+    assert_the_song_starts_on_go(&beats, "hd");
+}
+
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pure_inherits_pulses_start_and_holds_the_song_for_go() {
+    let Some(beats) = timeline(
+        "data/images/pure-psp-eu.chd",
+        oag_race::Mode::TimeTrial,
+        "VENOM",
+    ) else {
+        return;
+    };
+    assert_the_song_starts_on_go(&beats, "pure");
+}
+
+/// Omega and 2048 inherit HD's start; their songs are Wwise and plugin-declared, but a song is a
+/// decoded track on the race voice the same way.
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn omega_inherits_hds_start_and_holds_the_song_for_go() {
+    let Some(beats) = timeline("data/extracted/ps4", oag_race::Mode::TimeTrial, "VENOM") else {
+        return;
+    };
+    assert_the_song_starts_on_go(&beats, "omega");
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_inherits_hds_start_and_holds_the_song_for_go() {
+    let Some(beats) = timeline(
+        "data/extracted/vita/PCSF00007",
+        oag_race::Mode::TimeTrial,
+        "VENOM",
+    ) else {
+        return;
+    };
+    assert_the_song_starts_on_go(&beats, "2048");
+}
+
+/// The field is read: a title whose rule were `AtLoad` would have its song at step 0. Flips the
+/// hold off the way such a title's hand-off would and expects exactly that.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn a_title_that_starts_its_song_at_load_has_it_from_the_first_step() {
+    use oag_gameplay::PlayerInputs;
+
+    let Some(source) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let source = source.display().to_string();
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
-        source,
+        source: source.clone(),
         seed: Some(1),
         ..oag_raceplay::Options::default()
     })
     .expect("loading a Pulse race");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    let mut text = None;
-    for _ in 0..400 {
-        race.tick(&PlayerInputs::none());
-        oag_game::sound::race_tick(&mut audio, &mut race);
-        text = text.or_else(|| race.readout().now_playing.map(|marquee| marquee.text));
-    }
-    assert_eq!(
-        text.as_deref(),
-        Some("Aphex Twin - Fenix Funk 5 (Wipeout Edit)")
+    assert!(
+        loaded
+            .title
+            .music
+            .is_some_and(oag_title::Music::song_waits_for_go)
     );
+    let cache = Path::new(env!("CARGO_TARGET_TMPDIR")).join("now-playing-audio");
+    let discs = oag_sound::MusicDiscs::survey(&source, &GameLibrary);
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        None,
+        None,
+        oag_audio::MIN_BUFFER,
+        true,
+    );
+    audio.hold_race_song(false);
+    audio.start_race_music(&discs, oag_sound::MusicSource::Auto, &cache);
+    audio.settle_music();
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    race.tick(&PlayerInputs::none());
+    oag_game::sound::race_tick(&mut audio, &mut race);
+    assert!(audio.playhead_race().is_some(), "sounding at step 0");
+    assert!(race.readout().now_playing.is_some(), "and shown with it");
 }
 
 /// Pure authors no display, so it borrows Pulse's through the fallback layer; its own
-/// `PI_Music` nodes name the songs. Shown from the green light like Pulse's.
+/// `PI_Music` nodes name the songs. Shown with the song, as Pulse's is.
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn pure_borrows_pulses_display_and_names_its_own_songs() {

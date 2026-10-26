@@ -13,6 +13,7 @@ use super::*;
 
 mod no_audio;
 mod race_pick;
+mod race_song;
 mod race_switch;
 mod resume;
 mod source_switch;

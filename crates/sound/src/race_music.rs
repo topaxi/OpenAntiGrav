@@ -531,7 +531,10 @@ impl Audio {
                 self.race_cache = loaded
                     .from
                     .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
-                debug!("audio: race music {} waits for the green light", loaded.what);
+                debug!(
+                    "audio: race music {} waits for the green light",
+                    loaded.what
+                );
                 self.song_hold.park(index, loaded, seek);
             }
             Ok(Some(loaded)) => self.start_race_voice(index, loaded, seek),

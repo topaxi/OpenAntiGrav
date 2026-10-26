@@ -1416,3 +1416,5 @@
 0x0882be1c	function	RaceManager_UpdateNowPlaying	85	now-playing.md
 0x088290bc	function	RaceManager_ApplyNowPlayingAlpha	80	now-playing.md
 0x08938e70	function	MusicPlayer_StartNextSong	65	now-playing.md
+0x089385b4	function	MusicPlayer_Stop	75	now-playing.md
+0x089387e8	function	MusicPlayer_StartPreRaceDialogue	65	now-playing.md

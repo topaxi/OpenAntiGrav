@@ -26,6 +26,13 @@ landed), and optionally a saved place still to check. "After" and a saved place 
 the booted listing, so the worker resolves them; the frame thread never needs a listing.
 Every worker waits for a background survey before it reads (`MusicDiscs::wait_surveyed`).
 
+**A race's song is parked, not started, when it lands.** A title whose original starts the
+song at the green light (`oag_title::Music::race_song_start`, every title) has the hand-off arm
+`Audio::hold_race_song` first; a track that lands while it is armed waits decoded in `Audio` and
+`Audio::race_tick` starts it on the first step the race is no longer gated. Starting is a voice on
+a decoded `Arc<Sound>`, so no worker runs at the green light. See
+[the now-playing page](../formats/now-playing.md#when-the-song-starts).
+
 **`--dump-audio` waits.** A dump is compared sample for sample at a tick count, so with a
 dump every music start blocks until its worker lands (`Audio::settle_music`). Waiting does
 no music work on the calling thread; it only blocks it. The browser never waits: its page
