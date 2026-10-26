@@ -36,6 +36,11 @@ impl super::super::Scene {
         pipeline.upload_distort(queue, &distort);
         let flash = race.screen_wash();
         pipeline.upload_flash(queue, flash);
+        // The hit static's noise is the race's, written once; the strips are this view's.
+        if let Some(noise) = race.cockpit_hit_noise() {
+            pipeline.sync_cockpit_hit(queue, noise);
+        }
+        pipeline.upload_cockpit_hit(queue, race.cockpit_hit_strips());
     }
 }
 

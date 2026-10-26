@@ -440,6 +440,12 @@ pub const WEAPON_MODELS: &oag_title::weapons::WeaponModels = &oag_title::weapons
         entry: r"Data\Tex\staticglow.mip",
         origin: oag_title::Origin::Measured,
     }),
+    // `CockpitHitFx_LoadNoiseTexture` (`0x088ef10c`) names it; `Ship_Damage` arms
+    // the node and `CockpitHitFx_Draw` draws it, read and watched live.
+    cockpit_hit: Some(oag_title::weapons::CockpitHit {
+        entry: r"Data\Tex\noisematt.mip",
+        origin: oag_title::Origin::Measured,
+    }),
 };
 
 #[cfg(test)]

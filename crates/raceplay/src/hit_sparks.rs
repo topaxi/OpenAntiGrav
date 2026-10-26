@@ -257,6 +257,7 @@ impl Race {
                 &mut fx.shake_rng,
             );
         }
+        self.arm_cockpit_hit(slot);
     }
 
     /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls

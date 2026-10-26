@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod cloud_field_ground_truth;
+mod cockpit_hit_draw;
 mod distort_pass;
 mod encoded_blend;
 mod exhaust_pipeline;

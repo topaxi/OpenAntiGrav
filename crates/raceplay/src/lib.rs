@@ -188,6 +188,8 @@ pub mod catch_up;
 /// run in such a build, because it would keep all of that.
 pub const VIEW: bool = cfg!(feature = "view");
 #[cfg(feature = "view")]
+mod cockpit_hit;
+#[cfg(feature = "view")]
 mod contact_fx;
 #[cfg(feature = "view")]
 pub mod correction;

@@ -158,6 +158,8 @@ impl Race {
             #[cfg(feature = "view")]
             weapon_spark_anchors,
             #[cfg(feature = "view")]
+            cockpit_hit_noise,
+            #[cfg(feature = "view")]
             wreck_anchors,
             #[cfg(feature = "view")]
             magstrip_wake,
@@ -902,6 +904,7 @@ impl Race {
                 absorb_started: 0,
                 hit_sparks: super::hit_sparks::HitSparks::new(hit_spark_anchors)
                     .with_weapon_anchors(weapon_spark_anchors),
+                cockpit_hit: cockpit_hit_noise.map(super::cockpit_hit::CockpitHit::new),
                 damage_fx: Default::default(),
                 absorb_overlay: [None; MAX_SHIPS],
                 absorb_shell: Default::default(),

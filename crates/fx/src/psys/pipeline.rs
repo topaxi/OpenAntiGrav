@@ -60,6 +60,7 @@ pub struct Drawn {
     additive_count: u32,
     alpha_count: u32,
     flash: crate::flash::Drawn,
+    cockpit_hit: crate::cockpit_hit::Drawn,
 }
 
 /// What [`Pipeline::draw`] and [`Pipeline::draw_flash`] bind, cloned into a view's recording
@@ -72,6 +73,7 @@ pub struct Drawer {
     additive_vertices: wgpu::Buffer,
     alpha_vertices: wgpu::Buffer,
     flash: crate::flash::Drawer,
+    cockpit_hit: crate::cockpit_hit::Drawer,
 }
 
 /// The particle draw pipeline - two of them, one per blend class, sharing
@@ -99,6 +101,9 @@ pub struct Pipeline {
     /// The screen flash, which shares this pass's targets - see
     /// [`crate::flash`].
     flash: crate::flash::Pipeline,
+    /// The cockpit view's hit static, drawn in the flash's layer - see
+    /// [`crate::cockpit_hit`].
+    cockpit_hit: crate::cockpit_hit::Pipeline,
     /// Blend class 8's offset target - see [`distort`].
     distort: distort::Distort,
 }
@@ -294,6 +299,8 @@ impl Pipeline {
         let alpha_vertices = buffer("psys alpha-over vertices");
 
         let flash = crate::flash::Pipeline::new(device, format, store, sample_count, velocity);
+        let cockpit_hit =
+            crate::cockpit_hit::Pipeline::new(device, format, store, sample_count, velocity);
         Self {
             drawer: Drawer {
                 additive,
@@ -302,8 +309,10 @@ impl Pipeline {
                 additive_vertices,
                 alpha_vertices,
                 flash: flash.drawer().clone(),
+                cockpit_hit: cockpit_hit.drawer().clone(),
             },
             flash,
+            cockpit_hit,
             uniforms,
             sheet,
             sheet_generation: None,
@@ -430,8 +439,29 @@ impl Pipeline {
         self.flash.upload(queue, colour);
     }
 
-    /// Draws the screen flash, if one runs - **last** in the scene pass, so
-    /// it washes over everything the pass drew and nothing the HUD does.
+    /// The cockpit hit static's noise, written the first time it is handed one -
+    /// see [`crate::cockpit_hit::Pipeline::sync_texture`]. `false` for a texture
+    /// the draw cannot use.
+    pub fn sync_cockpit_hit(
+        &mut self,
+        queue: &dyn oag_gpu::writes::Writes,
+        noise: &crate::exhaust::FlareTexture,
+    ) -> bool {
+        self.cockpit_hit.sync_texture(queue, noise)
+    }
+
+    /// This frame's cockpit hit static, [`crate::cockpit_hit::Node::strips`].
+    pub fn upload_cockpit_hit(
+        &mut self,
+        queue: &dyn oag_gpu::writes::Writes,
+        strips: Option<[crate::cockpit_hit::Vertex; crate::cockpit_hit::VERTICES]>,
+    ) {
+        self.cockpit_hit.upload(queue, strips);
+    }
+
+    /// Draws the screen flash, if one runs, and the cockpit hit static in its
+    /// layer - **last** in the scene pass, so they wash over everything the pass
+    /// drew and nothing the HUD does.
     pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
         self.drawer.draw_flash(pass, drawn);
     }
@@ -443,6 +473,7 @@ impl Pipeline {
             additive_count: self.additive_count,
             alpha_count: self.alpha_count,
             flash: self.flash.drawn(),
+            cockpit_hit: self.cockpit_hit.drawn(),
         }
     }
 
@@ -459,9 +490,13 @@ impl Pipeline {
 }
 
 impl Drawer {
-    /// The screen flash: [`Pipeline::draw_flash`].
+    /// The screen flash and the cockpit hit static: [`Pipeline::draw_flash`].
+    ///
+    /// **Chosen, not measured**: the flash first. Both queue at `0x4f000000`
+    /// and which draws first within the key is unread.
     pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
         self.flash.draw(pass, drawn.flash);
+        self.cockpit_hit.draw(pass, drawn.cockpit_hit);
     }
 
     /// Draws into a pass the caller already opened.

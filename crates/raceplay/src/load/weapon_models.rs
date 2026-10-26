@@ -471,3 +471,32 @@ pub(super) fn load_ghost_static(
         report,
     )
 }
+
+/// The noise the cockpit view's hit static is drawn from,
+/// `WeaponModels::cockpit_hit`.
+///
+/// `None` on a title that binds none (HD, 2048, Omega): nothing is requested,
+/// so nothing is reported absent. A named entry that is missing, or is not the
+/// 64 by 64 the draw's extents divide by, is reported and the static draws
+/// nothing.
+pub(super) fn load_cockpit_hit(
+    archives: &mut oag_assets::Archives,
+    wm: &oag_title::weapons::WeaponModels,
+    report: &mut Vec<String>,
+) -> Option<FlareTexture> {
+    let texture = load_flare_texture(
+        archives,
+        wm.cockpit_hit?.entry,
+        "the cockpit view's hit static",
+        report,
+    )?;
+    let side = oag_fx::cockpit_hit::TEXELS;
+    if texture.width != side || texture.height != side {
+        report.push(format!(
+            "the cockpit hit static's noise is {}x{}, not {side}x{side} - it draws nothing",
+            texture.width, texture.height
+        ));
+        return None;
+    }
+    Some(texture)
+}

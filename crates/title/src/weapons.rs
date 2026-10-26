@@ -226,6 +226,29 @@ pub struct WeaponModels {
     /// and a string search of HD's `EBOOT.elf` finds no `staticglow` at all, so
     /// HD never loads one. See `docs/ghidra/functions/psp-pulse-usa/ghost.md`.
     pub ghost_static: Option<GhostStatic>,
+    /// The noise the cockpit view's hit static is drawn from, or `None` for a
+    /// title that draws no such static.
+    ///
+    /// `CockpitHitFx` (`Ship_Damage` arms it on every weapon hit to the human,
+    /// `CockpitHitFx_Draw` queues it in the internal view only) is measured on
+    /// Pulse's PSP; see `oag_fx::cockpit_hit`. **`None` is a measurement on HD
+    /// and 2048**: a string search of HD's `EBOOT.elf` and 2048's decrypted
+    /// `eboot.elf` finds no `noisematt` at all. Omega's executable cannot be
+    /// read here, so it follows HD (`None`, not measured).
+    pub cockpit_hit: Option<CockpitHit>,
+}
+
+/// The cockpit hit static's texture a title binds - see [`WeaponModels::cockpit_hit`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CockpitHit {
+    /// The archive entry, spelled as Pulse spells it (`.mip`); the loader swaps
+    /// the extension for another source's container.
+    pub entry: &'static str,
+    /// Where the entry came from: `Measured` where the title's own executable
+    /// names it and its arm and draw were read, `InheritedFrom` where the
+    /// executable names the texture but the weapon-hit call that arms it is
+    /// unread, so the law is Pulse's.
+    pub origin: crate::Origin,
 }
 
 /// The ghost static texture a title binds - see [`WeaponModels::ghost_static`].
@@ -305,6 +328,7 @@ impl WeaponModels {
         shuriken: None,
         cannon_look: None,
         ghost_static: None,
+        cockpit_hit: None,
     };
 }
 

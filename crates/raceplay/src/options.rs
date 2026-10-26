@@ -540,6 +540,11 @@ pub struct Setup {
     /// `race::hit_sparks::throw_weapon_spark`.
     #[cfg(feature = "view")]
     pub weapon_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
+    /// The noise the cockpit view's hit static is drawn from
+    /// (`WeaponModels::cockpit_hit`), or `None` on a title that draws none or
+    /// whose entry did not load. See `race::cockpit_hit`.
+    #[cfg(feature = "view")]
+    pub cockpit_hit_noise: Option<oag_fx::exhaust::FlareTexture>,
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
     #[cfg(feature = "view")]

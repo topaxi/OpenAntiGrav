@@ -171,6 +171,8 @@ pub const TITLE: &Title = &Title {
             entry: r"Data\Tex\staticglow.mip",
             origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
         }),
+        // `cockpit_hit` stays `None`: no `noisematt` string in the decrypted
+        // `eboot.elf`, and HD, which 2048's unmeasured rules follow via Omega, has none.
         ..oag_title::weapons::WeaponModels::EMPTY
     },
     // The four triggers a title answers for itself are unread on 2048, so none
