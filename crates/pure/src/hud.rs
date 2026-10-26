@@ -226,6 +226,9 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     boost_smear: None,
     sway: None,
     safe_area: None,
+    // `Options_Definition.xml` lists `Music Volume`, `SFX Volume`, `Camera`, `Language`, `Auto Load
+    // Ghost` and `Music Order`: no `Dynamic HUD` (checked on the USA disc, 2026-10-26).
+    dynamic_hud: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.

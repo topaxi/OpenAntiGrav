@@ -312,6 +312,15 @@ impl Session {
                 self.reload_loading_assets();
             }
             "display.hud_style" => self.settings.display.hud_style = text.to_string(),
+            // Applied by the next frame the race draws: the session hands the choice to the
+            // HUD overlay and the race every frame.
+            "display.dynamic_hud" => match text.parse::<display::DynamicHud>() {
+                Ok(choice) => self.settings.display.dynamic_hud = choice,
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             "audio.music_source" => match text.parse::<oag_sound::MusicSource>() {
                 Ok(source) => {
                     self.settings.audio.music_source = source;

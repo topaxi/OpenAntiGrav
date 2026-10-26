@@ -714,6 +714,7 @@ pub(crate) fn run_race(
                 motion_blur_resolution: render_profile.motion_blur_resolution,
                 hud_scale: settings.graphics.hud_scale,
                 hud_safe_area: settings.graphics.hud_safe_area,
+                dynamic_hud: settings.display.dynamic_hud,
                 shadows: render_profile.shadows,
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,

@@ -16,8 +16,11 @@ How and what differs: `docs/formats/now-playing.md`. Evidence:
   before it showed one.
 - The race song's start at the release (`docs/formats/now-playing.md`, "When the song starts")
   is read off Pulse's and HD's executables, not watched running; Pure, Omega and 2048 inherit it.
-- No `Dynamic HUD` setting to hide the display (Pulse and HD gate on it), and no marquee on a
-  split screen.
+- No marquee on a split screen.
+- Pulse's `Dynamic HUD` list also has `FE_CONCAVE` and `FE_FLAT`, which flag the HUD's two panel
+  groups (bit 1 of `+0xd0` on `hud+0x274`/`+0x278`); what they draw is undecoded, so the DYNAMIC
+  HUD row offers `default` and `off` only (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`).
+  Whether the PS2's Options screen carries the same list is unread (its archive has no names).
 - The 60 Hz step and HD's black bar tint are read from code, not confirmed on a frame of the
   original (a PPSSPP capture for Pulse, RPCS3 for HD).
 - Omega's executable has not been read for the display; HD's law stands in.

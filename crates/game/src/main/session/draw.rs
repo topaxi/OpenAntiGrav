@@ -440,6 +440,11 @@ impl Session {
                 stage.race.set_model_detail(render_profile.model_detail);
                 stage.race.set_texture_detail(render_profile.texture_detail);
                 stage.race.set_trail_order(render_profile.trail_order);
+                // And the DYNAMIC HUD row, for the same reason.
+                stage.race.set_dynamic_hud(self.settings.display.dynamic_hud);
+                if let Some(hud) = &mut stage.hud {
+                    hud.set_dynamic_hud(self.settings.display.dynamic_hud);
+                }
                 stage
                     .scene
                     .set_blur_resolution(blur_resolution);

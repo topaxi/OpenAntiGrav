@@ -309,6 +309,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     )),
     // Checked 2026-10-21: the patch front end (`data09.psarc`) authors no `Safe Area Setting`.
     safe_area: None,
+    dynamic_hud: None,
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
     // TimeTrial, SpeedLap and Elimination, with HD's names and nesting, so no

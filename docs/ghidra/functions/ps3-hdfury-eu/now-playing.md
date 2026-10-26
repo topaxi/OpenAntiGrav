@@ -39,6 +39,17 @@ Per update of the race manager, with no delta time:
 authored colour, so 255, and the bar climbs `int(255 / 256 * 5)` = 4 a step. The vertex colour
 written is `alpha << 24` (black at that alpha). Identical to Pulse's law with a textured bar.
 
+**The flag is not a setting (checked 2026-10-26).** `RaceManager_ShowNowPlaying` reads `*(g_hud) +
+0x115`. None of HD's four `additional_definition.xml` copies (`DATA02`, `DATA03`, `DATA05`,
+`DATA06`) lists a `Dynamic HUD` or any on/off HUD entry: they hold `Camera`, `Multiplayer Tags`,
+`Ghost Ship Visible`, `Pilot Assist`, `HUD Style`, `HUD Effects` (on/off, what it switches is
+undetermined), `Music Order`, `MusicFX`, `Auto Volume` and `Resume`. The byte is written by 33
+instructions in the program, among them `Hud_LoadDefinition` and `PhotoMode_Update`, which clears
+it per player while a photo is framed and sets it again on leaving (`0x0023f9fc`, `0x0023fe60`):
+a runtime "HUD shown" byte, not an option. Omega's and 2048's executables carry no `Dynamic HUD`
+string. So the display is gated on the HUD being up here, which this build's race already draws
+only while it shows a HUD.
+
 ## Layout
 
 `/data/plugins/frontend/gui/ingame_definition.xml`, `item InGameMusicDisplay OffsetX=310

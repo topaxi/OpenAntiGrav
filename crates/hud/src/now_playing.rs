@@ -195,6 +195,14 @@ impl Display {
         self.phase = Phase::Entering;
     }
 
+    /// Takes the display down at once, as the executable's `ShowNowPlaying` does when the HUD is
+    /// off: nothing is up until the next [`Self::show`].
+    pub fn hide(&mut self) {
+        self.phase = Phase::Off;
+        self.text_alpha = 0;
+        self.bar_alpha = 0;
+    }
+
     /// The text's authored size, which scales a measured width.
     #[must_use]
     pub fn scale(&self) -> f32 {

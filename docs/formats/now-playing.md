@@ -45,8 +45,15 @@ A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left thr
   the menus continues the same track, mid-way, from the green light, where the original starts
   the next song. A resume is not a new song, so its first show of the name depends on whether
   the race before it showed one.
-- Pulse and HD gate the display on the HUD setting (Pulse's `Dynamic HUD` set to `FE_OFF`
-  hides it). This build has no such setting: always on.
+- Pulse's `Dynamic HUD` option (default, concave, flat, off) is wired as a DYNAMIC HUD row on
+  Pulse's Display page, `default` or `off` (`[display] dynamic_hud`, applied live): `off` draws
+  no HUD and no song marquee, as the original's `FE_OFF` does, and a song that starts while it is
+  off is not shown late. `FE_CONCAVE` and `FE_FLAT` set a flag on the HUD's two panel groups whose
+  effect is undecoded, so they are not offered. **Checked, differs:** HD has no such option (its
+  `hud+0x115` is a runtime "HUD shown" byte Photo Mode clears), Pure's options list has none,
+  Omega and 2048 carry no string for it; those titles ignore the setting and the row is not
+  offered ([Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#dynamic-hud-read-and-poked-2026-10-26-lane-now-playing-leftovers),
+  [HD page](../ghidra/functions/ps3-hdfury-eu/now-playing.md)).
 - Single view only. A split-screen race draws no marquee.
 - The executable's per-update step is assumed to be 60 Hz; no capture of the original confirms
   it.

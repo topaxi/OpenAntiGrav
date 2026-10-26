@@ -36,6 +36,7 @@
 use serde::{Deserialize, Serialize};
 
 mod aspect;
+mod dynamic_hud;
 mod hud_scale;
 mod motion_blur;
 mod msaa;
@@ -45,8 +46,9 @@ mod shadows;
 mod trail_order;
 
 pub use {
-    aspect::Aspect, hud_scale::*, motion_blur::*, msaa::Msaa, reconstruction::Reconstruction,
-    screen_filter::FilterStrength, shadows::Shadows, trail_order::TrailOrder,
+    aspect::Aspect, dynamic_hud::DynamicHud, hud_scale::*, motion_blur::*, msaa::Msaa,
+    reconstruction::Reconstruction, screen_filter::FilterStrength, shadows::Shadows,
+    trail_order::TrailOrder,
 };
 
 /// What kind of window the game asks the compositor for.

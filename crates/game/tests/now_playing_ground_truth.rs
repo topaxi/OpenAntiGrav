@@ -419,6 +419,97 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
     assert_eq!(shown, Some(text));
 }
 
+/// A race of `image` with its first soundtrack entry's name, for the `Dynamic HUD` tests.
+fn race_with_a_named_song(
+    image: &str,
+) -> Option<(oag_raceplay::Race, oag_music::song_names::SongName)> {
+    let source = oag_testdata::image(image)?.display().to_string();
+    let (_, names) = library::named_listing(&GameLibrary, &source)
+        .expect("listing")
+        .expect("a PSP disc");
+    let name = names.into_iter().next().flatten().expect("a first name");
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the race");
+    Some((oag_raceplay::Race::start(loaded.setup), name))
+}
+
+/// Pulse's `Dynamic HUD` set to `FE_OFF` shows no song (`ShowNowPlaying` clears the display and
+/// does not show it later), takes a marquee that is up down at once, and the next song after the
+/// setting is back shows again. Dropping `Race::set_dynamic_hud` leaves the first step red.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_with_the_dynamic_hud_off_shows_no_song_and_the_next_one_shows_again() {
+    use oag_display::display::DynamicHud;
+    use oag_gameplay::PlayerInputs;
+
+    let Some((mut race, name)) = race_with_a_named_song("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let song = |serial| oag_sound::NowPlaying {
+        serial,
+        name: Some(name.clone()),
+    };
+
+    race.set_dynamic_hud(DynamicHud::Off);
+    race.note_song(Some(&song(1)));
+    for _ in 0..200 {
+        race.tick(&PlayerInputs::none());
+        assert!(race.readout().now_playing.is_none(), "up with the HUD off");
+    }
+
+    race.set_dynamic_hud(DynamicHud::Default);
+    race.note_song(Some(&song(1)));
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.readout().now_playing.is_none(),
+        "the song that started while it was off is not shown late"
+    );
+
+    race.note_song(Some(&song(2)));
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.readout().now_playing.is_some(), "the next song shows");
+
+    race.set_dynamic_hud(DynamicHud::Off);
+    assert!(
+        race.readout().now_playing.is_none(),
+        "switching it off takes the marquee down at once"
+    );
+    race.set_dynamic_hud(DynamicHud::Default);
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.readout().now_playing.is_none(),
+        "and switching it back does not bring it back"
+    );
+}
+
+/// The setting is read only by a title whose options list it: Pure borrows Pulse's marquee and
+/// has no `Dynamic HUD` list, so `off` leaves its song up.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn a_title_without_the_option_ignores_the_dynamic_hud_choice() {
+    use oag_display::display::DynamicHud;
+    use oag_gameplay::PlayerInputs;
+
+    let Some((mut race, name)) = race_with_a_named_song("data/images/pure-psp-eu.chd") else {
+        return;
+    };
+    race.set_dynamic_hud(DynamicHud::Off);
+    race.note_song(Some(&oag_sound::NowPlaying {
+        serial: 1,
+        name: Some(name),
+    }));
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.readout().now_playing.is_some());
+}
+
 /// HD authors the same item with a textured bar from `HUD_Components.gtf`, in its 1920x1080
 /// grid; the bar's art has to be in the HUD's sheet for the bar to draw.
 #[test]

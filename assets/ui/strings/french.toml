@@ -213,6 +213,7 @@ OAG_DISPLAY_CANVAS_SIZE = { text = "TAILLE DU CANVAS", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "FORMAT D'IMAGE", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "LUMINOSITÉ", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }
+OAG_DISPLAY_DYNAMIC_HUD = { text = "HUD DYNAMIQUE", human = false }
 
 # GRAPHICS's own rows. The PC-rendering jargon block (`RENDERER`,
 # `RENDER_SCALE`, `TARGET_FPS`, `RECONSTRUCTION`, `UPSCALER_SHARPNESS`,
