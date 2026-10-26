@@ -16,10 +16,13 @@
 //! - [`timing`] is whether the GPU can be asked how long it took.
 //! - [`writes`] is where a frame's writes go: the queue, or a log of them a split
 //!   screen replays before each view's submission.
+//! - [`split_finish`] closes a frame's encoder part-way and finishes the closed part on
+//!   another thread.
 
 pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;
 pub mod perfprobe;
+pub mod split_finish;
 pub mod timing;
 pub mod writes;

@@ -282,10 +282,19 @@ to 1.5, on AC. Ms per frame:
 | Anulpha, before | 0.90 | 2.92 | 5.33 | 10.12 | 75.5 | 19.8 |
 | Anulpha, arrays hold used slots | 0.83 | 2.92 | 5.11 | 9.83 | 81.0 | 17.1 |
 | Anulpha, plus pooled buffers | 0.84 | 2.94 | 4.70 | 9.49 | 82.8 | 16.1 |
+| Anulpha, plus no shadow passes for culled hulls (other runs) | 0.78 | 2.84 | 4.49 | 9.09 | 85.5 | 14.3 |
+| Anulpha, plus the trail-hit box reject (other runs) | 0.60 | 2.90 | 4.45 | 8.97 | 86.2 | 13.6 |
+| Anulpha, plus split finish (other runs) | 0.50 | 2.92 | 3.47 | 7.97 | 90.0 | 11.3 |
+| **Anulpha, before, 60 s runs** | 0.95 | 2.93 | 5.38 | 10.24 | 74.5 | 20.3 |
+| **Anulpha, after, 60 s runs** | 0.59 | 2.96 | 3.13 | 7.76 | 89.9 | 11.65 |
+| HD default circuit, before (other runs) | 0.23 | 1.61 | 2.75 | 5.59 | 90.0 | 11.2 |
+| HD default circuit, after | 0.22 | 1.46 | 1.66 | 4.31 | 90.0 | 11.3 |
+| Pulse default circuit, before (other runs) | 0.18 | 1.51 | 2.09 | 4.78 | 90.0 | 11.2 |
+| Pulse default circuit, after | 0.16 | 1.54 | 1.26 | 3.89 | 90.0 | 11.2 |
 | HD default circuit, before | 0.25 | 1.63 | 2.75 | 5.66 | 90.0 | 11.2 |
-| HD default circuit, after | 0.25 | 1.58 | 2.42 | 5.22 | 90.0 | 11.2 |
+| HD default circuit, after the first two | 0.25 | 1.58 | 2.42 | 5.22 | 90.0 | 11.2 |
 | Pulse default circuit, before | 0.19 | 1.63 | 2.14 | 5.00 | 90.0 | 11.2 |
-| Pulse default circuit, after | 0.15 | 1.39 | 1.72 | 4.19 | 90.0 | 11.2 |
+| Pulse default circuit, after the first two | 0.15 | 1.39 | 1.72 | 4.19 | 90.0 | 11.2 |
 
 ### Where `submit` goes (Deck profile, `perf record -g --call-graph fp -F 999`)
 
@@ -309,9 +318,65 @@ A frame on Anulpha opens about 54 render passes.
 2. **Projectile pool slots sub-allocate one buffer per pool** (`Drawable::instances`). There are
    128 slots per weapon model, and each slot had its own uniform buffer and three animation
    buffers, so 6,235 buffers were alive. Every pass's scope was sized to that count. Now 907.
+3. **No sun-occlusion or self-shadow pass for a craft whose hull is culled**
+   (`Scene::hull_seen`, single-view frames only). Only that hull and its wreck read the two
+   layers, and the test is the hull draw's own (`craft_cull::hull_in_view`, same frustum), so a
+   skipped layer is one no pixel reads. Against the row above, in a separate pair of runs:
+   total 9.51 to 9.09 ms, submit 4.75 to 4.49.
+4. **The trail-hit test rejects by the ribbon's bounding box first** (`Tube::bounds`). Each tick
+   tested about 10 hull anchors of every craft against every other craft's HD trail with
+   `Tube::nearest` (53 segments each); a point farther from the ring's box than the reach plus a
+   unit of slack cannot pass. Same answers. Ticks 0.79 to 0.60 ms.
+5. **Split finish** (`oag_gpu::split_finish`). The race frame's encoder is closed after the
+   early passes and after the race pass; a worker thread finishes each closed part while the
+   frame thread records the rest, and the frame submits all of them in order in one
+   submission. Total 8.94 to 7.97 ms, submit 4.44 to 3.47, 90 fps. `OAG_SPLIT_FINISH=0` turns it
+   off for an A/B.
 
-Measured and dropped: reusing `probes::mix`'s buffers, and eliding the repeated per-draw binds in
-the sun-occlusion pass. Neither moved scene or submit on the Deck (scene 2.92 against 2.93).
+In the 60 s runs, 3 of 54 one-second windows after the change still read under 90 (89.x, a
+single double-vblank frame each). Not traced.
+
+### Why `submit` is the bottleneck, and what can be done
+
+wgpu (`wgpu-core` 30) checks every command on the CPU. Rendering records passes, binds and draws
+cheaply; `encoder.finish()` then replays them through `encode_render_pass`, which for each:
+
+- **pass** builds a usage scope sized to every buffer and texture the device has alive
+  (`UsageScope::new_pooled`, `set_size`), merges into it, and clears it at the end: cost per
+  pass grows with the live object count, not with what the pass touches;
+- **bound group** merges each element's usage (`merge_bind_group`, `merge_single`) and, when the
+  group is flushed before a draw, registers each texture's init action (`register_init_action`,
+  `check_action`, a linear walk over the frame's discarded surfaces);
+- **draw** validates the pipeline, groups and vertex buffers (`is_ready`, `flush_vertex_buffers`).
+
+The Deck's Zen 2 runs this at 1.5 to 1.9 GHz with a cache several times smaller than a desktop
+part's, so the same frame costs 4 to 5 times the host.
+
+What helps, measured here: fewer live objects (buffers 6,235 to 907), fewer elements per bind
+(1,370 to 842), fewer passes (16 shadow passes skipped for culled hulls), and finishing parts of
+the frame on another core. What would help further: fewer passes in the post chain (bloom
+downsample 10 a frame, motion blur 7), shared 1x1 fallback textures (116 drawables make 11 each:
+1,276 of 1,863 textures), and a third split point if the post chain grows.
+
+What cannot be done in safe wgpu: turn the validation off. Bypassing it means `wgpu-hal`
+directly or an unsafe passthrough, which gives up the safety the renderer relies on. A patched
+`wgpu-core` works (`[patch.crates-io]`; this lane used one to count passes and objects), and
+three changes look upstreamable:
+
+- skip the init-action registration for a texture that is already fully initialised;
+- make the usage scope's size and clear sparse instead of O(live objects);
+- skip re-merging a bind group that is already merged in the same pass.
+
+A fork is a maintenance cost on every wgpu upgrade, so upstream is the better route.
+
+Measured and dropped:
+
+- reusing `probes::mix`'s buffers, and eliding the repeated per-draw binds in the sun-occlusion
+  pass: neither moved scene or submit on the Deck (scene 2.92 against 2.93);
+- drawing each still advert card once: all seven of Anulpha's cards animate, so seven passes a
+  frame remain;
+- merging back-to-back draws whose index ranges touch: submit 4.48 to 4.40, total inside the
+  run-to-run noise.
 
 The binding-array and buffer counts come from `perf-probe` (`array_binds` on the `perf frame`
 line) and from a local probe in a copy of wgpu-core (not committed). The probe counted usage

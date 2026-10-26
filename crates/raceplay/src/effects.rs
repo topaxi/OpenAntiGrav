@@ -406,17 +406,25 @@ impl Race {
 
     fn trail_touches(&self, slot: usize, owner: usize) -> bool {
         let tube = &self.view.hd_trail[owner];
+        let Some((low, high)) = tube.bounds() else {
+            return false;
+        };
+        // A point farther than `reach` from the box holding the whole ribbon is farther than
+        // `reach` from the ribbon, so `nearest` (53 segments) is asked only of a point that
+        // could pass: the same answer, and most pairs on a spread-out field are far apart.
+        // The unit of slack keeps float rounding in `nearest` on the same side.
+        let near = |point: Vec3, reach: f32| {
+            (point.clamp(low, high) - point).length() <= reach + 1.0
+                && tube.nearest(point).is_some_and(|(_, away)| away <= reach)
+        };
         let at = self.sim.world.ships[slot].physics.body.position;
         let Some(anchors) = self.view.spark_anchors.get(slot).filter(|a| !a.is_empty()) else {
-            let reach = self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH;
-            return tube.nearest(at).is_some_and(|(_, away)| away <= reach);
+            return near(at, self.view.hull_reach[slot] + exhaust::hd::FIN_HALF_WIDTH);
         };
         let matrix = model_matrix_of(&self.sim.world.ships[slot]);
-        anchors.iter().any(|local| {
-            let world = matrix.transform_point3(*local);
-            tube.nearest(world)
-                .is_some_and(|(_, away)| away <= exhaust::hd::FIN_HALF_WIDTH)
-        })
+        anchors
+            .iter()
+            .any(|local| near(matrix.transform_point3(*local), exhaust::hd::FIN_HALF_WIDTH))
     }
 
     /// The craft's own authored hull spark anchor nearest `contact`, in world

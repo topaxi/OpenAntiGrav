@@ -246,6 +246,19 @@ impl Tube {
         self.len >= 1
     }
 
+    /// A box holding every sample of the ring, and so every point of the centre line
+    /// [`Self::nearest`] measures against: a point this far from the box is at least that
+    /// far from the trail. `None` before the first push.
+    #[must_use]
+    pub fn bounds(&self) -> Option<(Vec3, Vec3)> {
+        self.ready().then(|| {
+            self.ring.iter().fold(
+                (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)),
+                |(low, high), sample| (low.min(sample.position), high.max(sample.position)),
+            )
+        })
+    }
+
     /// The samples, newest first.
     fn samples(&self) -> [Sample; SAMPLES] {
         let mut out = self.ring;
