@@ -4382,6 +4382,9 @@ Talon's Junction. So the key does keep the engine light off the hull, as ours do
 Metropia is another term
 ([hd-ship-materials.md](../../../rendering/hd-ship-materials.md), "The engine bay: Assegai_c1's Fury light, and the two circuits that
 switch the SPU lights off"). The sample is small; a longer run is open.
+**Superseded 2026-10-26 (`hd-sol2-bay`, confidence 90):** the key does *not* keep the engine light off the hull. Sol 2's and Metropia's
+hull light buffers (attribute 4) read the engine light's `(4, 10, 40)` ratio live; the zero-hit count above was a small sample (the same
+section, "Resolved 2026-10-26").
 
 ### `Enable_spu_vertex_light`, slot 1: the "exact ratio on every record" claim from the previous entry does not hold generally - it is refuted on two records this session read (2026-09-18, later still)
 

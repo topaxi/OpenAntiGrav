@@ -173,11 +173,23 @@ impl Race {
         self.view.hd_weapon_lights = on;
     }
 
-    /// Every SPU vertex light this frame: the engines', then the weapons'.
-    /// Empty off HD and on a circuit that switches the lights off.
+    /// Every SPU vertex light the **track** takes this frame: the engines',
+    /// then the weapons'. Empty off HD and on a circuit that switches the
+    /// lights off.
     #[must_use]
     pub fn hd_spu_lights(&self) -> Vec<SpuLight> {
-        let mut lights = self.hd_engine_lights();
+        self.spu_lights_with(self.hd_engine_lights())
+    }
+
+    /// Every SPU vertex light the **craft** takes: the engines' whatever the
+    /// circuit's switch says (`hd_craft_engine_lights`), then the weapons',
+    /// which the switch still gates.
+    #[must_use]
+    pub fn hd_craft_spu_lights(&self) -> Vec<SpuLight> {
+        self.spu_lights_with(self.hd_craft_engine_lights())
+    }
+
+    fn spu_lights_with(&self, mut lights: Vec<SpuLight>) -> Vec<SpuLight> {
         if !self.view.hd_trail_active || !self.view.spu_vertex_lights || !self.view.hd_weapon_lights
         {
             return lights;

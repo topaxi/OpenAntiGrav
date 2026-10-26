@@ -2,7 +2,7 @@
 status: measure
 titles: [hd]
 updated: 2026-10-26
-summary: "HD hull: Metropia/Sol 2 blue bay (vertex TC1/TC2, read the hull VP constants), Harimau livery, _n1 rims, rest flame size"
+summary: "HD hull: Sol 2/Metropia bay closed (engine light reaches the hull); bay 1.3x too bright, Harimau livery, _n1 rims, rest flame size"
 ---
 
 # HD's hull wash on boost is the original's; what is left on the hull is the Harimau livery and the `_n1` wing rims
@@ -34,15 +34,16 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 
 ## Open
 
-- **2026-10-21 (`hd-hull-bay`): Assegai_c1's engine light is Fury orange now (case-blind `_c1` test). Metropia's and Sol 2's blue bay
-  is open**: on Sol 2 the original does not take the hull's `SVC1` branch, so it is not the engine light; ours stays black there
-  ([hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "The engine bay: Assegai_c1's Fury light, and the two circuits
-  that switch the SPU lights off").
-  **Narrowed 2026-10-26 (`hd-render-fidelity`)**: the Sol 2 hull's fragment program is Talon's Junction's, constants aside, and the
-  craft's live irradiance map is the probe blend ours already draws (RMS 13.7 of 255 at the pair pose); so the blue comes in
-  through the vertex program's `TC1`/`TC2` or the lookup normal. Next: the hull's vertex constants on Sol 2 against Talon's
-  Junction, already in the stored stream (`rsx-draw-list.py --const` on `data/reference/hd-sol2-bay/sol2dump`; same doc
-  section, "Narrowed 2026-10-26").
+- **Closed 2026-10-26 (`hd-sol2-bay`, confidence 90): Metropia's and Sol 2's blue bay is the engine light on the hull.** Attribute 4
+  (the `SVC1` light buffer) of the original's hull chunks reads `0.1 : 0.25 : 1` on both circuits, `(4, 10, 40)`'s ratio, although
+  both author `Enable spu vertex lights = 0`: the switch gates the track's lights, not the craft's. Ours now binds the engine light
+  to the craft whatever the switch says (`Race::hd_craft_engine_lights`); the other eleven HD pairs are byte-identical. Evidence and
+  numbers: [hd-ship-materials.md](../../docs/rendering/hd-ship-materials.md), "The engine bay", "Resolved 2026-10-26". Assegai_c1's
+  Fury orange was fixed 2026-10-21 (case-blind `_c1` test).
+- **New: the bay is about 1.3 times too bright** in ours on every circuit (Talon's Junction box `927,785 13x20`: ours (17.2, 24.7, 45.9),
+  original (9.1, 16.0, 33.2); Sol 2 after the change (20.8, 28.8, 46.8) against (11.3, 18.7, 39.8)). Candidates: the light's `D` and
+  falloff exponent at the housing, the `256/255` round trip, the hull's vertex-colour multiplier. The original's per-vertex `TC2` at
+  rest is readable (`HOOK_TGT=f50000` and the hull's fragment-program word, attribute 4 at the draw's index list end).
 - The drawn-hull shake (the craft offset on every HD pair) has its own thread: [hds-drawn-hull-shakes-off-its-body.md](hds-drawn-hull-shakes-off-its-body.md).
 - **Landed 2026-10-20 (`hd-craft-ibl-probe`): the pale, metallic hull.** The original's IBL variant and the environment maps it
   reads are wired: the maps are not a runtime render but a blend of the circuit's baked `track.probes`, decoded and read at
@@ -73,4 +74,4 @@ The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
 3. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
    emulator-recipes.md, and read whether the wing rims are white at rest in
    the original.
-4. Metropia/Sol 2 bay: run the `0x003eb368` count longer on Sol 2, then read what the non-`SVC1` hull variant adds in the bay.
+4. Bay brightness: compare per-vertex `TC2` (original, live read as above) with ours on the same chunks to find the 1.3x.
