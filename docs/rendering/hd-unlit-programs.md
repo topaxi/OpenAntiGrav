@@ -343,6 +343,49 @@ puffs at 0.67 s, the fireball whited out at 1.17 s, then the seven rings as a
 stacked glow at 1.45 s. **No capture of the original exists to compare with.**
 Pinned by `hd_bomb_blast_ground_truth.rs`.
 
+### The Bomb's units, read live (2026-10-26, `hd-render-fidelity`)
+
+**Claim**: the fireball's texture is sRGB-decoded on fetch; the shockwave ring's is not.
+**Confidence 80** (one live blast, one frame; the draws are named by their state and order,
+which match `weapons.md`'s `bomb1` table: fireball, core, bloom disc, first ring).
+
+RPCS3, Racebox Single Race on Talon's Junction (`hd-racebox-talons-venom-weapons-grid`), the player
+standing, `scripts/rpcs3-hd-whiteout.py --bomb --delay 0.1 --attempts 4 --no-targets` (the command
+stream was read whole; the run then stalled reading vertex spans, which the unit words do not need).
+`SET_TEXTURE_ADDRESS` of unit 0, gamma nibble in bits 20-23:
+
+| draw | state | unit 0 | address word | nibble |
+| --- | --- | --- | --- | --- |
+| 584 | opaque, alpha test `LESS`, cull off | 1024x1024 DXT45 | `0x60710101` | **7**, decoded |
+| 585 | the same (the core) | the same texture | `0x60710101` | **7**, decoded |
+| 586 | `SrcAlpha`/`One`, no depth write (the bloom disc) | 256x128 DXT45 | `0x60710101` | **7**, decoded |
+| 587 | `SrcAlpha`/`One`, no depth write (the first ring) | 256x256 DXT45 | `0x60010101` | **0**, raw |
+
+The lines are kept in `data/reference/hd-flame-tap/bomb-blast-units.txt`, the command stream in
+`data/reference/hd-flame-tap/bomb-blast/` (`python3 scripts/rsx-draw-list.py
+data/reference/hd-flame-tap/bomb-blast bomb0 --samplers --from 584 --to 587`).
+
+What it changes:
+
+- **The fireball** (`BOMB_FIRE`) read its two colour taps raw and drew pale, near white, where
+  the console decodes them; `shade.wesl` now decodes `B.rgb` and `c` (the divisor's tap too) on HD's
+  encoded store (`encoded_out`), and leaves both alphas raw. Pinned by
+  `hd_bomb_blast_ground_truth` (yellow pixels at 0.67 s: 2,263 raw, 21,247 decoded; near-white
+  4,230 to 1,270). The film of 2026-10-07 (`hd-bomb-match`) showed the original's ball yellow
+  where ours was white; it was a Write-Color-Buffers-off capture, so it is direction, not a
+  number. No WCB-on frame of the blast exists yet.
+- **The bloom disc** is on the generic emissive path, which already decodes on the linear target:
+  matches, unchanged.
+- **The shockwave rings** (`BOMB_SHOCK`) read their tap raw, and so does the console: matches,
+  unchanged. So the rings burning white at 1.8 s since the encoded store is the console's law
+  applied to a raw source, not a missing decode; whether the original's rings are as white is
+  still a picture nobody has taken (a WCB-on frame at about 1.8 s).
+
+**Omega**: checked, applies, not wired: the Bomb's models re-ship on Omega and its textures are
+`.gnf` with a channel type of their own; the fireball program is GCN and unread, and its scene
+blends linearly (`hd-track-tone.md`), so nothing was ported. **2048**: no Bomb blast of this
+shape is read; not checked.
+
 ## Open
 
 - **Not written:** the Repulser field and mag floor. (The Bomb's blast is
