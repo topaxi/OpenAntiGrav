@@ -40,7 +40,7 @@ pub(super) fn read(track_blob: &[u8], report: &mut Vec<String>) -> Option<Setup>
     let levels = texture.levels_rgba();
     report.push(format!(
         "lens flare: sun direction ({:.3}, {:.3}, {:.3}), colour ({:.3}, {:.3}, {:.3}), \
-         {ATLAS} {}x{} with {} mip level(s); ten additive quads after the scene, rays \
+         {ATLAS} {}x{}, {} authored level(s); ten additive quads after the scene, rays \
          and rings as the law, random factors fixed at the engine flag's values",
         flare.direction[0],
         flare.direction[1],

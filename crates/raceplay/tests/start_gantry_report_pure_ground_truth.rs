@@ -80,7 +80,7 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_
 }
 
 /// Vineta K authors one `lensflare` node (`docs/rendering/lens-flare.md`): its sun direction, grey
-/// colour and the circuit's own 64 x 64 `LensflareComponents.tga` with its four mips. Dropping
+/// colour and the circuit's own 64 x 64 `LensflareComponents.tga`. Dropping
 /// `oag_pure::effects::LOOKS.lens_flare`, the load step or the plan field leaves no flare and no
 /// line.
 fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
@@ -100,7 +100,8 @@ fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
         flare.colour
     );
     assert_eq!((flare.atlas.width, flare.atlas.height), (64, 64));
-    assert_eq!(flare.atlas.levels.len(), 4);
+    // A version-4 file authors no levels below the base (`oag_vex::vex::textures`).
+    assert_eq!(flare.atlas.levels.len(), 1);
     assert!(
         loaded
             .report

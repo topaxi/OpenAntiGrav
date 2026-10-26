@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pure]
 updated: 2026-10-26
-summary: "Pure's sun flare law is measured (docs/rendering/lens-flare.md); wire a 2D additive pass; shadows.md Pure zero in doubt; HD/2048/Omega unread"
+summary: "Pure's sun flare is wired and matches PPSSPP (docs/rendering/lens-flare.md); open: shadows.md Pure zero, HD/2048/Omega law unread, settings row"
 ---
 
 # A sun lens flare on Pure, and which titles carry it
@@ -162,8 +162,8 @@ Strings that matched the flare search but are not this effect: `WO_ROCKET_FLARE`
 
 ## What our renderer does today
 
-Nothing draws the flare. `oag_vex::lensflare` reads the node and `classes::V4.lensflare` is `0x390`
-(2026-10-26); `Lighting.Use Lens Flare` is still parsed and dropped (`crates/tables/src/envsettings.rs`).
+Pure draws the flare (below). No other title does; `Lighting.Use Lens Flare` is still parsed and dropped
+(`crates/tables/src/envsettings.rs`).
 
 ## Done 2026-10-26 (`pure-lens-flare-re`)
 
@@ -174,11 +174,24 @@ numbers) and [`docs/ghidra/functions/psp-pure-usa/lensflare.md`](../../docs/ghid
 census is in `class_table_ground_truth.rs`. Where this page's census above and those differ,
 those win (the Vineta K anchor is `(-51.826, 12.774, 23.323)`; the sun is a direction, not a point).
 
+## Done 2026-10-26 (`pure-lens-flare-wire`)
+
+Wired: `oag_fx::lens_flare` (law and pass), the load step, `Looks::lens_flare` on Pure/PSP. Vineta K at the grid and
+at a wall shows the original's wash and its double ring at the same place; the "ours is darker" gap on Pure circuits
+with a `lensflare` node was mostly this halo. What is chosen is listed in `docs/rendering/lens-flare.md`
+("What our code has").
+
 ## Open
 
-- **Wire the draw** (ready): a 2D additive pass after the 3D scene, the law in `lens-flare.md`. It needs the
-  camera rotation, a 4 x 4 depth sample of the sun's pixel, the atlas from the circuit's `LensflareComponents.tga`.
-  Render-side; the sun direction is per circuit data, no simulation state.
+- **HD, 2048, Omega flare (not wired)**: they ship `LensflareComponents_256x256.gtf`, a `_Rays.gtf` texture and the
+  `.envsettings` key `Lighting.Use Lens Flare` (true on 29 of 32 HD circuits); Omega adds H-ray width/height/brightness and
+  a sun-scale key. Their law (`LensFlare.cpp`, `0x002aee58` on HD) is unread, so Pure's is not assumed and `Looks::lens_flare`
+  stays `Rule::UNREAD` there. Omega's archives carry `lensflare_*` nodes as well: a node is not a switch.
+- **A settings value** (the original's look as the default, off for those who dislike it) is not built; no menu row was
+  asked for in the wiring lane.
+- **Split screen** was checked on one two-player capture; the draw is per view in `finish_view`.
+- **Sub-pixel of the law**: whether `j` and `r` are redrawn each frame (we hold `1.0` and `0.7`), the previous-frame
+  depth, the sort of the queue keys (`docs/rendering/lens-flare.md`, "Open").
 - **Unread, own address each:** the queue ordering of key `0x4e000000` itself (the frame position is measured: after scenery, before the post passes and HUD); whether the depth
   sample is one frame old; the random source `FUN_0882f70c` and flag `DAT_002883fc`; the sort comparator `0x08936598`.
 - **The shadows.md Pure zero is in doubt** (`0x375` `Shadow_Shape` nodes on Vineta K; `docs/rendering/shadows.md`
@@ -188,6 +201,5 @@ those win (the Vineta K anchor is `(-51.826, 12.774, 23.323)`; the sun is a dire
 
 ## Next Steps
 
-1. Wire the Pure flare (`oag-wire`): load the node and atlas, draw ten additive quads per the law, behind a settings
-   value with the original's look as default. Judge a frame pair against `pure-psp/vineta` as the maintainer saw it.
+1. Read HD's `LensFlare.cpp` (`0x002aee58`) and its rays texture; decide per title whether the law is Pure's.
 2. Walk `0x375` on Vineta K against Pulse's occluder payloads before trusting the shadows.md zero.
