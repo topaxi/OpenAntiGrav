@@ -1029,6 +1029,25 @@ hull draws without the SPU light there, as ours does, and the blue comes from a 
 black, rather than lit by a light the original does not apply. The sample is small (rate about one stop in 12 s on the interpreter);
 a longer Sol 2 run, and what the non-`SVC1` variant reads in the bay, are the next steps.
 
+**Narrowed 2026-10-26 (`hd-render-fidelity`): not the fragment program, not the probe (confidence 75).** One RPCS3 frame of the
+Sol 2 pair's state (`hd-timetrial-sol-2-harimau-classic-start`, `scripts/hd-draw-dump.py`) draws the hull as 24 chunks (draws
+625-648) with one fragment program, and its disassembly is **instruction for instruction the program Talon's Junction's hull draws
+with** (`hd-craft-ibl-probe`'s frame `c1`, draws 500-514): the four constants that differ are the sun direction, the sun colour
+(`(4, 4, 4)` against `(2, 1.83, 0.89)`) and the fog. The units match too (hull atlas, two shadow maps, the craft's own 64x32
+irradiance and 128x64 reflection maps), and the irradiance unit is decoded on fetch (nibble 7) on both. The program is
+`albedo * TC1.rgb * (sun * shadow + 4 * irradiance[n] + TC2.rgb)`, fogged. The craft's live irradiance map, read from main memory
+at the unit's address (`0x41d1e680`, location 2), sits at RMS 7.3 of 255 from Sol 2's probe 418 and at 13.7 from ours at the pair
+pose (`0.42 * probe[416] + 0.58 * probe[418]`), and ours loads all 734 of Sol 2's probes: a map 13.7 RMS away cannot turn a navy
+bay neutral. In ours the bay's art is near black (`OAG_ALBEDO_ONLY=1`) and its light near grey: a box on the left bay wall
+(`925,800 20x40`) reads `(46, 56, 82)` in the original and `(40, 44, 52)` in ours. So the blue enters through the vertex
+program's outputs, `TC1` (a multiplier on everything) or `TC2` (an added light), not through anything the fragment program
+binds. Next: the hull's vertex program and its constants on the same frame (`rsx-draw-list.py --const`), Sol 2 against Talon's
+Junction; with the `SVC1` reading above, a `TC2` that carries the engine colour without the SPU list is the lead. The dump, both
+disassemblies, the live maps and the unit lines are kept in `data/reference/hd-sol2-bay/` (`python3
+scripts/rsx-draw-list.py data/reference/hd-sol2-bay/sol2dump s --samplers --from 625 --to 652`). The draw dump stalls reading
+vertex spans and leaves the GDB stub wedged; `HOOK_TGT=1` skips them. Omega and 2048: not reached, as above (their engine light
+is off and this is a PS3 register read); nothing ported.
+
 **Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
 them; whether their originals light the bay is not checkable (no PS4 capture) and not compared on the Vita. The case-blind Fury test
 applies to every title that reads it.

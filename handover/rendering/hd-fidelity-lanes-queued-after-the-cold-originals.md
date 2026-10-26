@@ -1,3 +1,10 @@
+---
+status: ready-to-wire
+titles: [hd]
+updated: 2026-10-26
+summary: "HD fidelity queue: original Bomb picture (no look-back), unlit taps of Missile/Leach/Plasma, scenery items, Moa pair, exposure, LOD"
+---
+
 # HD fidelity lanes queued behind the cold originals
 
 2026-10-21, the render-fidelity drive's queue at wind-down, written down so it survives the session. Each
@@ -113,7 +120,9 @@ section above or the doc page it names). At most one lane in `crates/mesh` at a 
 1. **A WCB-on picture of the Bomb blast** at about 0.7 s and 1.8 s (the unit nibbles are read, 2026-10-26; what is
    missing is the picture to judge the fireball's yellow and the rings' white against). The draw-list capture
    (`rpcs3-hd-whiteout.py --bomb`) stalls reading vertex spans under load and its retries add 0.5 s each: pass
-   `--attempts 4 --delay 0.1` and take `drive.screenshot` before the dump.
+   `--attempts 4 --delay 0.1` and take `drive.screenshot` before the dump. The bomb lands behind the chase camera:
+   holding `triangle`, `r3` or `l3` on the virtual pad in a Time Trial does not turn the view (2026-10-26), so the shot
+   needs another camera (a rival's bomb ahead of the player, or the player placed behind the dropped bomb).
 2. **`hd-tech-de-ra`** (opus, mesh): Tech de Ra's missing details by a slot-skip census, the glass road's mid and far
    brightness (the eye dump of `c[209]`), Modesto's background building texture, and Vineta's right-hand building
    (sunlit bands about 30 grey over the original; name the material with `OAG_TINT_MATERIALS=1` and `hd_slot_list`).
