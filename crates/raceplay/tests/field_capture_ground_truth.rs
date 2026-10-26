@@ -40,6 +40,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         best_lap_ticks: Some(3_380),
         best_lap_centiseconds: None,
         boost_phase: None,
+        autopilot_seconds: Some(5.0),
         zone: None,
     };
     let start = |field: Vec<Pose>, hud: Option<race::CaptureHud>| {
@@ -74,6 +75,10 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
     assert_eq!(readout.best_lap_ticks, Some(3_380));
     assert!((readout.speed_kmh - 463.0).abs() < 1e-3);
     assert!((readout.shield - readout.shield_max * 0.99).abs() < 1e-3);
+    // The running Autopilot's icon and `5.00`, on the readout alone: the race's own timer stays 0.
+    assert_eq!(readout.pickup, Some(oag_tables::weapons::Weapon::Autopilot));
+    assert_eq!(readout.sub_weapon, Some(oag_hud::SubWeapon::Autopilot(5.0)));
+    assert_eq!(world.ships[0].autopilot_timer, 0.0);
 
     // Neither is a default: with no field a posed player races alone, and with no
     // HUD state the readout is the race's own.

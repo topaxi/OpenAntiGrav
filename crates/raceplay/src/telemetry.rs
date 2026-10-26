@@ -270,6 +270,13 @@ impl Race {
             if let Some(phase) = hud.boost_phase {
                 readout.boost_phase = phase.clamp(0.0, 1.0);
             }
+            if let Some(seconds) = hud.autopilot_seconds.filter(|&seconds| seconds > 0.0) {
+                // The same icon fallback and countdown a running Autopilot gives above.
+                readout.pickup = readout
+                    .pickup
+                    .or(Some(oag_tables::weapons::Weapon::Autopilot));
+                readout.sub_weapon = Some(oag_hud::SubWeapon::Autopilot(seconds));
+            }
         }
         if finished.is_some() {
             readout.messages[oag_hud::messages::SLOTS - 1] = Some(oag_hud::messages::MessageLine {

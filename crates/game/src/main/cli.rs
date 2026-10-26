@@ -905,6 +905,13 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "PHASE", requires = "hud_state")]
     pub(crate) hud_boost_phase: Option<f32>,
 
+    /// With `--hud-state`: the seconds the player's running Autopilot pickup has left (Pulse PSP `record+0x148`),
+    /// which the HUD prints under the pickup's icon (`5.00`). Drawn on the HUD alone; the race's own timer is
+    /// untouched, so the craft is not flown by the driver. `--give` cannot stand in: a posed capture runs no tick for it,
+    /// and a held pickup shows no countdown until it runs.
+    #[arg(long, value_name = "SECONDS", requires = "hud_state")]
+    pub(crate) hud_autopilot: Option<f32>,
+
     /// Seconds added to the world meshes' texture-animation clock (scrolling surfaces, flip-book signs, the neon
     /// strips), which is the race's own tick count over 60 otherwise. The original feeds them a clock that is the
     /// HUD clock plus a per-state constant (13.6 to 24.3 s on the 24 Pulse PSP grid states; inferred to be the time

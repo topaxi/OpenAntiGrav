@@ -188,8 +188,28 @@ def restore_autopilot_timer(port, pair):
                     "the HUD shows a pickup's own countdown and every other value is the state's" % (timer, AUTOPILOT_AUTHORED_S))
     after = rail.f32s(dbg, addr, 1)[0]
     pair.rec["original"]["autopilot_timer_at_stop_s"] = after
+    held = dbg.read_u32(p["record"] + rail.HELD_WORD)
+    fire = dbg.read_u32(p["record"] + rail.FIRE_WORD)
+    # The frame's own evidence decides what draws the row: with the held id empty (-1) and `+0x1b8` carrying no 0x1000
+    # (read 0x800 on talons-alongside), the HUD still shows the Autopilot's icon and `5.00`, so the row follows the timer
+    # (`+0x148` above zero), as ours' readout does.
+    pair.rec["original"]["held_pickup"] = {
+        "held_word": held - (1 << 32) if held >= 1 << 31 else held, "fire_word": fire,
+        "autopilot_running": 0.0 < after <= AUTOPILOT_TIMER_SANE_S,
+        "source": "player record +0x1bc (held id, -1 empty), +0x1b8 (fire word), +0x148 (timer, running when above zero)"}
     pair.check("no armed-forever Autopilot timer at the stop (the HUD prints it)", after <= AUTOPILOT_TIMER_SANE_S,
                "record+0x148 reads %.3g s" % after)
+
+
+def autopilot_hud_flags(pair):
+    """`--hud-autopilot SECONDS` for the frame: the icon and countdown the HUD draws while the player's Autopilot runs
+    (the HUD draws the Autopilot's icon with the held id empty and prints `%1.2f` of `record+0x148`; read on
+    `talons-alongside`: held -1, fire word 0x800, timer 5.0, the row in `theirs.png`). Ours has no way to hold that at tick 0 (`--give` acts inside a tick and a held
+    pickup shows no countdown), so the HUD is told the value read at the stop. Empty when the original shows no row."""
+    held = pair.rec["original"].get("held_pickup") or {}
+    if not held.get("autopilot_running"):
+        return []
+    return ["--hud-autopilot", "%.4f" % pair.rec["original"]["autopilot_timer_at_stop_s"]]
 
 
 def run_to_clock(port, target):
@@ -427,15 +447,16 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
                 player["best_lap_cs"] / 100),
             "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + lean_and_boost_flags(
-                pair, theirs_row) + flags + ["--camera-fov", "%.4f" % fov]
+                pair, theirs_row) + autopilot_hud_flags(pair) + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
     pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft "
                 "flown on a straight path to its captured pose at its captured velocity (RAM, body+0x140), full "
                 "thrust for all (the player's reads 100, an opponent's is not read), the path and the heading chosen, "
                 "not measured; the HUD's place, lap and clocks are imposed from the original's RAM (%d/%d, lap %d, "
-                "%.1f s), the speed and shield bars read the original's own values; the pickup row (the Autopilot icon) "
-                "is not drawn" %
+                "%.1f s), the speed and shield bars read the original's own values; the pickup row (the running "
+                "Autopilot's icon and countdown) is drawn from the timer read at the stop (`--hud-autopilot`), on the HUD "
+                "alone, ours' own pickup state untouched" %
                 (player["place"], len(rows), lap_number, player["lap_time"]))
     ours_csv = out / "ours-trace.csv"
     # `--ticks 0` writes the one row the frame is drawn from (after the warm-up, the boost and the lean), so the display columns checked below are the picture's

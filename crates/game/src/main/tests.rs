@@ -130,9 +130,11 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             best_lap_ticks: None,
             best_lap_centiseconds: None,
             boost_phase: None,
+            autopilot_seconds: None,
             zone: None,
         }
     );
+    assert_eq!(hud.autopilot_seconds, None, "the Autopilot countdown is its own flag, not a column");
     let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
     assert_eq!((full.speed_kmh, full.shield_percent), (Some(571.5), Some(99.0)));
     let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
