@@ -3,8 +3,12 @@
 //! `GameModeChoice`. The disc-backed twin is
 //! `crates/game/tests/vita_2048_dlc_menus_ground_truth.rs`.
 
-use super::wipeout2048::{XML, boot_on, press, reach_the_grid, reach_the_shell, three_events};
+use super::wipeout2048::{
+    XML, boot_on, launch_button_tap, press, reach_the_grid, reach_the_shell, three_events, tick,
+};
 use super::*;
+
+use crate::pointer::Pointer;
 
 use oag_2048::frontend::states as w2048;
 
@@ -76,6 +80,43 @@ fn a_mounted_package_opens_its_own_map_and_a_cell_launches_by_name() {
     press(&mut frontend, &mut input, Button::Cross);
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
+    assert_eq!(
+        frontend.launch(),
+        Some(&Launch::Cell("grid0_3_1".to_string()))
+    );
+}
+
+#[test]
+fn a_pointer_opens_a_tier_from_its_tile_and_launches_one_of_its_cells() {
+    let (mut frontend, mut input) = on_the_grid(vec![hd()]);
+    let tap = |rect: [f32; 4]| Pointer {
+        at: Some((rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    let tile = [410.0, 110.0, 135.0, 135.0];
+    // Chosen, then confirmed through the tick, as every tile is.
+    assert!(frontend.pointer(&tap(tile)));
+    tick(&mut frontend, &mut input, 0);
+    assert_eq!(frontend.chosen_mode(), Some("FE_RC_HD"));
+    assert!(frontend.pointer(&tap(tile)));
+    tick(&mut frontend, &mut input, 0);
+    assert!(frontend.machine().is(w2048::NEW_FE_SHELL));
+    assert_eq!(frontend.campaign_tile(), Some("FE_RC_HD"));
+    let marker = frontend
+        .draw_list()
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(*rect),
+            _ => None,
+        })
+        .expect("a node on the map");
+    assert!(frontend.pointer(&tap(marker)));
+    tick(&mut frontend, &mut input, 0);
+    assert!(frontend.event_card_open());
+    assert!(frontend.pointer(&launch_button_tap()));
+    tick(&mut frontend, &mut input, 0);
     assert_eq!(
         frontend.launch(),
         Some(&Launch::Cell("grid0_3_1".to_string()))

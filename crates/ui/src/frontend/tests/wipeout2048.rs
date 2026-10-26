@@ -562,7 +562,7 @@ fn the_map_opens_on_the_first_seasons_first_event_and_the_pad_walks_it() {
 }
 
 /// A tap on the event card's Launch button - the centre of its hit rect.
-fn launch_button_tap() -> Pointer {
+pub(super) fn launch_button_tap() -> Pointer {
     Pointer {
         at: Some((880.0, 480.0)),
         moved: true,

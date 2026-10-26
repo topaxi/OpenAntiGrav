@@ -418,6 +418,60 @@ fn a_node_is_closed_by_an_unearned_grid_or_a_mode_this_build_cannot_race() {
     );
 }
 
+/// Progress is reachable: a medal recorded under the campaign's own title key,
+/// as the end of a race writes it, opens the grid its grid unlocks. A cell that
+/// authors targets per rung only (Time Trial, Speed Lap, Zone) is judged at
+/// `Medium`, which is what a launch with no rung falls back to, so points
+/// accrue on those too.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn medals_earned_on_one_grid_open_the_next() {
+    let Some(eu) = package("PCSF00007") else {
+        return;
+    };
+    let campaigns = Campaigns::open(&eu);
+    let key = oag_game::records::campaign_title(campaigns.title, campaigns.shell.platform);
+    let mut records = oag_game::records::Store::default();
+    let cells = campaigns.cells();
+    let (shut_grid, target) = campaigns
+        .tiers
+        .iter()
+        .flat_map(|tier| &tier.grids)
+        .find_map(|grid| Some((grid, grid.unlock_grid.as_deref()?)).filter(|_| grid.locked))
+        .expect("a grid that waits on another");
+    let behind = cells
+        .iter()
+        .find(|(_, grid, cell)| grid.name == shut_grid.name && campaigns.plan(cell).is_ok())
+        .map(|(_, _, cell)| cell.name.clone())
+        .expect("a raceable cell behind it");
+    let timed = cells
+        .iter()
+        .find(|(_, _, cell)| cell.mode == oag_tables::race_campaign::Mode::TimeTrial)
+        .map(|(_, _, cell)| *cell)
+        .expect("a Time Trial cell");
+    assert_eq!(
+        timed.evaluate_medal_for_difficulty(1, oag_tables::race_campaign::Difficulty::Medium),
+        Some(oag_tables::race_campaign::Medal::Gold),
+        "{} authors its targets per rung and is judged at Medium",
+        timed.name
+    );
+    let closed = |records: &oag_game::records::Store| {
+        boot::tiers2048::closed(&campaigns.tiers, records, &key, false, &behind)
+    };
+    assert!(closed(&records), "{behind} waits on {target}");
+
+    for (_, grid, cell) in &cells {
+        if grid.name.eq_ignore_ascii_case(target) {
+            records.record_campaign(&key, &cell.name, Some(oag_game::records::Medal::Gold), None);
+        }
+    }
+    assert!(
+        !closed(&records),
+        "three gold on every cell of {target} opens {}",
+        shut_grid.name
+    );
+}
+
 /// The label of each group the map's wordmarks are cut from - eight HD, then
 /// eight Fury, in the file's order - sits where the nodes this places for its
 /// grid start: its bottom edge within one canvas unit of the grid's first row,
