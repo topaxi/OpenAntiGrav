@@ -1,8 +1,8 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pulse, pure, 2048, omega]
-updated: 2026-10-12
-summary: "Wire Pulse's Zone speed-class ladder as ZoneSpeedClasses data; Pure's and Omega's ladders unread"
+updated: 2026-10-26
+summary: "Pulse and HD Zone ladders wired; Pure's and Omega's ladders and every non-Pulse Zone speed law unread"
 ---
 
 # Zone handling needs a speed law per title and the ladder as data
@@ -24,7 +24,5 @@ scale, not handling classes (evidence and confidence:
 
 ## Next Steps
 
-1. Wire Pulse's ladder as `ZoneSpeedClasses` data (names are on its disc as
-   `MSC_*`; Super-Phantom is 22-34 there, 27-34 on HD).
-2. Read Pure's and HD's actual Zone speed law and whether either takes handling
+1. Read Pure's and HD's actual Zone speed law and whether either takes handling
    from the class-less block; only then give Zone a handling source.
