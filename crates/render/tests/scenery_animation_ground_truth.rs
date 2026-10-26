@@ -590,3 +590,99 @@ fn no_lit_mesh_hangs_under_a_non_uniform_scale() {
          mesh.wgsl deliberately skips"
     );
 }
+
+/// The `(agree, disagree)` of every (vertex, face) pair of `model`'s draws whose
+/// node `placement` names a turned matrix for: does the built normal point to the
+/// side of its face the built positions say is outward? A mirrored node reverses
+/// the winding, so the face is read with the determinant's sign.
+fn built_normals_against_faces(
+    model: &Model,
+    placement: impl Fn(u32) -> Option<[f32; 16]>,
+) -> (usize, usize) {
+    let (mut agree, mut disagree) = (0, 0);
+    for draws in [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ] {
+        for draw in draws.iter() {
+            let Some(m) = draw.node.and_then(&placement) else {
+                continue;
+            };
+            let det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8])
+                + m[2] * (m[4] * m[9] - m[5] * m[8]);
+            let handed = if det < 0.0 { -1.0 } else { 1.0 };
+            for tri in model.indices[draw.range.start as usize..draw.range.end as usize].chunks(3) {
+                let [a, b, c] = [0, 1, 2].map(|k| &model.vertices[tri[k] as usize]);
+                let (ab, ac) = (
+                    [0, 1, 2].map(|k| b.position[k] - a.position[k]),
+                    [0, 1, 2].map(|k| c.position[k] - a.position[k]),
+                );
+                let face = [
+                    ab[1] * ac[2] - ab[2] * ac[1],
+                    ab[2] * ac[0] - ab[0] * ac[2],
+                    ab[0] * ac[1] - ab[1] * ac[0],
+                ];
+                if face.iter().map(|f| f * f).sum::<f32>() < 1.0e-12 {
+                    continue;
+                }
+                for v in [a, b, c] {
+                    let n = v.normal;
+                    if n.iter().map(|f| f * f).sum::<f32>() < 0.5 {
+                        continue;
+                    }
+                    let along: f32 = (0..3).map(|k| n[k] * face[k]).sum::<f32>() * handed;
+                    if along > 0.0 {
+                        agree += 1;
+                    } else {
+                        disagree += 1;
+                    }
+                }
+            }
+        }
+    }
+    (agree, disagree)
+}
+
+/// **A vertex normal is carried through its node's rotation, like its
+/// position**, on every circuit the disc ships.
+///
+/// `vex_node_normals_ground_truth.rs` (`oag-vex`) measures that the authored
+/// normals are node-local: under a rotated node only 76% of (vertex, face)
+/// pairs point outward as authored, against 99.5% once the node's rotation is
+/// applied. This is the other half: the **built** model, whose positions are
+/// placed, has the normals placed too - 99% or better on the draws under a
+/// turned node, which the loader met at 69% on these twelve while it left them local.
+/// The shine pass (`oag_render::shine`) reads these as world normals.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn built_normals_follow_their_nodes_rotation() {
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening archives");
+
+    let (mut agree, mut disagree) = (0usize, 0usize);
+    for &circuit in CIRCUITS {
+        let name = track_name(circuit);
+        let data = archives.read_name(&name).expect("reading track.vex");
+        let nodes = vex::nodes(&data).expect("walking the node tree");
+        let anchors = vex::anim_anchors(&data, &nodes);
+        let model = mesh::build(&name, &data).expect("decoding track.vex");
+        let (a, d) = built_normals_against_faces(&model, |node| {
+            let m = anchors[node as usize].local;
+            (!vex::leaves_directions(&m)).then_some(m)
+        });
+        println!("{name}: {a} pairs agree, {d} do not");
+        agree += a;
+        disagree += d;
+    }
+    let share = agree as f64 / (agree + disagree) as f64;
+    assert!(
+        agree + disagree > 30_000,
+        "{} pairs judged: the walk stopped reaching the turned nodes",
+        agree + disagree
+    );
+    assert!(
+        share > 0.99,
+        "{share:.4} of built normals under a turned node face outward (left node-local: 0.69)"
+    );
+}

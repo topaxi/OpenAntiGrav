@@ -39,6 +39,7 @@ mod track_ground_truth;
 mod vex_batch_layout_ground_truth;
 mod vex_class_ground_truth;
 mod vex_layer_ground_truth;
+mod vex_node_normals_ground_truth;
 mod vex_ps2_ground_truth;
 mod weather_ground_truth;
 
