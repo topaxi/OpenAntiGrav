@@ -42,7 +42,7 @@ fn row(menu: &Menu, setting: &str) -> Entry {
         .entries
         .iter()
         .find(|entry| entry.setting() == Some(setting))
-        .unwrap_or_else(|| panic!("{setting} is on the graphics page"))
+        .unwrap_or_else(|| panic!("{setting} is on the ADVANCED page"))
         .clone()
 }
 
@@ -50,7 +50,7 @@ fn row(menu: &Menu, setting: &str) -> Entry {
 /// default seeded, which is what `Session::open_menus` does.
 fn graphics() -> Menu {
     let mut menu = Menu::new(built_in());
-    assert!(menu.open("graphics"), "the graphics page exists");
+    assert!(menu.open("graphics_advanced"), "the graphics page exists");
     menu.supply(ValueSource::ScreenFilters, &Catalogue::built_in().choices());
     menu.seed(
         "graphics.screen_filter",
@@ -127,7 +127,7 @@ fn the_strength_row_is_greyed_until_a_filter_is_picked() {
 #[test]
 fn a_user_preset_the_catalogue_offers_is_on_the_row_too() {
     let mut menu = Menu::new(built_in());
-    assert!(menu.open("graphics"));
+    assert!(menu.open("graphics_advanced"));
     let mut choices = Catalogue::built_in().choices();
     choices.push(Choice::labelled("mine", "Mine"));
     menu.supply(ValueSource::ScreenFilters, &choices);
