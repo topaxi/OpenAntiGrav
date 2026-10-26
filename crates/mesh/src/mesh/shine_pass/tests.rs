@@ -81,3 +81,73 @@ fn the_pass_is_unlit_white_and_writes_no_glow() {
     }
     assert!(!model.stamps_glow);
 }
+
+fn texture(label: &str) -> Option<std::sync::Arc<crate::mesh::ModelTexture>> {
+    Some(std::sync::Arc::new(crate::mesh::ModelTexture::rgba8(
+        label.to_string(),
+        1,
+        1,
+        vec![255, 255, 255, 128],
+        None,
+    )))
+}
+
+/// Pure's hull: the extra pass of a batch whose ordinary pass blends by its own
+/// texture's alpha draws through a slot pairing the environment map with that
+/// texture, and the shader is told to weight by the pair's second alpha.
+#[test]
+fn an_alpha_weighted_batch_binds_its_own_texture_second_at_its_authored_coordinate() {
+    let mut hull = hull();
+    hull.textures = vec![texture("base"), texture("other"), texture("env")];
+    let mut lightmaps = Vec::new();
+    let slot = masked_slot(&mut hull.textures, &mut lightmaps, 2, 1);
+    assert_eq!(slot, 3, "a new slot after the model's own");
+    assert_eq!(
+        masked_slot(&mut hull.textures, &mut lightmaps, 2, 1),
+        3,
+        "one slot per pair"
+    );
+    assert_eq!(masked_slot(&mut hull.textures, &mut lightmaps, 2, 0), 4);
+    hull.lightmaps = lightmaps;
+    hull.shine_draws = vec![draw(3..6, slot), draw(0..3, 2)];
+    let model = build(&hull).unwrap();
+    assert!(std::sync::Arc::ptr_eq(
+        model.textures[3].as_ref().unwrap(),
+        model.textures[2].as_ref().unwrap()
+    ));
+    assert!(std::sync::Arc::ptr_eq(
+        model.lightmaps[3].as_ref().unwrap(),
+        model.textures[1].as_ref().unwrap()
+    ));
+    assert!(is_masked(&model, &model.draws[0]) && !is_masked(&model, &model.draws[1]));
+    assert_eq!(model.emissive.len(), 1);
+    assert_eq!(
+        model.emissive[0].program[0],
+        crate::mesh::PROGRAM_SHINE_MASK
+    );
+    for v in &model.vertices[3..6] {
+        assert_eq!(
+            v.lightmap_texcoord,
+            [0.25, 0.75],
+            "the batch's own coordinate"
+        );
+        assert_eq!(
+            slots::material_index(v.slots),
+            1,
+            "the glow table's mask entry"
+        );
+    }
+    for v in &model.vertices[0..3] {
+        assert_eq!(
+            v.slots,
+            slots::DEFAULT,
+            "an unweighted batch keeps its word"
+        );
+    }
+}
+
+#[test]
+fn a_hull_with_no_weighted_batch_carries_no_mask_entry() {
+    let model = build(&hull()).unwrap();
+    assert!(model.emissive.is_empty() && model.lightmaps.is_empty());
+}

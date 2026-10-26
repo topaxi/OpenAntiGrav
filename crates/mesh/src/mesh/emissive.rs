@@ -76,6 +76,14 @@ pub const PROGRAM_CHEVRON: f32 = 3.0;
 /// the program's constants. See `super::rcs::snow_rock`.
 pub const PROGRAM_SNOW: f32 = 4.0;
 
+/// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
+/// picture (the environment map) multiplied by the **second** texture's alpha at
+/// the second coordinate set, which carry the batch's own texture and its
+/// authored coordinate. The original's ordinary pass blends what the extra pass
+/// left by `GU_SRC_ALPHA`, its own texel's alpha; this pass draws after the hull
+/// instead, so it takes the weight itself. See `super::shine_pass::masked_slot`.
+pub const PROGRAM_SHINE_MASK: f32 = 5.0;
+
 /// The `rate` an entry of [`Model::emissive`](super::Model::emissive) carries
 /// to say "this surface takes no Zone grade": a value no material's own entry
 /// reaches (rates are `0`, `1` and the water family's `2`), read by

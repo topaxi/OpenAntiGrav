@@ -4,7 +4,7 @@
 //! pure mesh analysis, so the loader that builds a race's hulls (`oag-livery`)
 //! reaches it without depending on the renderer.
 
-use super::Model;
+use super::{Emissive, Model, TextureSlots};
 
 /// The extra pass's model for `hull`: only its [`Model::shine_draws`], on the
 /// hull's own vertices and indices, unlit and white, through the second
@@ -21,8 +21,78 @@ pub fn build(hull: &Model) -> Option<Model> {
     let mut model = hull.clone();
     model.label = format!("{} (shine pass)", hull.label);
     model.draws = std::mem::take(&mut model.shine_draws);
+    let lightmaps = std::mem::take(&mut model.lightmaps);
     plain(&mut model);
+    mask(&mut model, lightmaps);
     Some(model)
+}
+
+/// A texture slot for an extra-pass draw its ordinary pass weights by its own
+/// texture's alpha ([`oag_vex::vex::Batch::weights_extra_pass_by_alpha`]): a
+/// copy of the `second` (environment) texture's slot whose `lightmaps` entry is
+/// the batch's `base` texture, so [`build`] can bind the base as the draw's
+/// second picture. One slot per pair, reused by every batch that shares it.
+pub fn masked_slot(
+    textures: &mut TextureSlots,
+    lightmaps: &mut TextureSlots,
+    second: usize,
+    base: usize,
+) -> usize {
+    let same = |a: &Option<std::sync::Arc<super::ModelTexture>>,
+                b: &Option<std::sync::Arc<super::ModelTexture>>| match (a, b) {
+        (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+        _ => false,
+    };
+    let (env, mask) = (textures[second].clone(), textures[base].clone());
+    if let Some(slot) = (0..lightmaps.len())
+        .find(|&slot| same(&textures[slot], &env) && same(&lightmaps[slot], &mask))
+    {
+        return slot;
+    }
+    textures.push(env);
+    lightmaps.resize(textures.len(), None);
+    lightmaps[textures.len() - 1] = mask;
+    textures.len() - 1
+}
+
+/// Whether `draw` of a [`build`] result is weighted by its batch texture's alpha.
+#[must_use]
+pub fn is_masked(model: &Model, draw: &super::DrawCall) -> bool {
+    draw.texture
+        .and_then(|slot| model.lightmaps.get(slot))
+        .is_some_and(Option::is_some)
+}
+
+/// Hands the draws [`masked_slot`] paired with a base texture their weight: the
+/// base bound as the second picture, each such draw's vertices carrying their
+/// authored coordinate in `lightmap_texcoord` (the environment map overwrites
+/// `texcoord` every frame) and the glow-table entry whose
+/// [`super::PROGRAM_SHINE_MASK`] mode `shade.wesl` multiplies the picture by
+/// that texture's alpha under.
+fn mask(model: &mut Model, lightmaps: TextureSlots) {
+    let masked = |slot: Option<usize>| {
+        slot.and_then(|s| lightmaps.get(s))
+            .is_some_and(Option::is_some)
+    };
+    if !model.draws.iter().any(|d| masked(d.texture)) {
+        return;
+    }
+    model.emissive = vec![Emissive {
+        tint: [1.0; 3],
+        offset: 0.0,
+        scale: 1.0,
+        rate: 0.0,
+        program: [super::PROGRAM_SHINE_MASK, 0.0],
+    }];
+    let packed = super::slots::DEFAULT | (1 << super::slots::MATERIAL_SHIFT);
+    for draw in model.draws.iter().filter(|d| masked(d.texture)) {
+        for &index in &model.indices[draw.range.start as usize..draw.range.end as usize] {
+            let vertex = &mut model.vertices[index as usize];
+            vertex.lightmap_texcoord = vertex.texcoord;
+            vertex.slots = packed;
+        }
+    }
+    model.lightmaps = lightmaps;
 }
 
 /// Turns `model` into the extra pass's: unlit white vertices, no animation,

@@ -76,6 +76,21 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_
          re-check whether it is the gantry: {report}"
     );
     hull_lights_are_the_circuits_own(&report);
+    the_hull_draws_its_alpha_weighted_extra_pass(&report);
+}
+
+/// Feisar's hull authors nine `0x2000` extra-pass batches, every one with the
+/// `header_flags & 0x02` that has its ordinary pass weight the environment map
+/// by the batch texture's alpha (`BLENDMODE 0x2a` in a recorded GE list,
+/// `docs/ghidra/functions/psp-pure-usa/hull-shine.md`). Dropping
+/// `oag_pure::effects::LOOKS.hull_shine`, gating it on `applies_everywhere`
+/// again, or losing the weight changes this line.
+fn the_hull_draws_its_alpha_weighted_extra_pass(report: &str) {
+    let line = r"Data\Ships\Feisar\Ship.vex: 9 extra-pass batch(es) under their second texture, 9 weighted by their own texture's alpha";
+    assert!(
+        report.lines().any(|l| l.starts_with(line)),
+        "Pure's Feisar hull does not draw its alpha-weighted extra pass: {report}"
+    );
 }
 
 /// Vineta K's light nodes, as `SceneLight_BuildLightingList`'s Pure twin packs

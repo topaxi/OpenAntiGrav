@@ -247,3 +247,9 @@
 # 2026-10-26 pure-render-fidelity: the hull's GE light list and the spline sample it scales by (scene-light.md)
 0x08841648	function	SceneLight_BuildLightingList	85	scene-light.md
 0x08843d1c	function	Spline_SampleSegment	80	scene-light.md
+# 2026-10-26 pure-render-fidelity-2: the hull extra pass and its alpha weight (hull-shine.md)
+0x088f0234	function	Gu_TexMapMode	88	hull-shine.md
+0x088f08dc	function	Gu_BlendFunc	85	hull-shine.md
+0x0886e144	function	Mesh_BeginTransparentPass	85	hull-shine.md
+0x0886e1c8	function	Mesh_SetBatchDrawState	85	hull-shine.md
+0x08866ecc	function	Gfx_BuildBatchStateList	85	hull-shine.md

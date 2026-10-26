@@ -63,6 +63,9 @@ struct Census {
     texels: BTreeMap<u8, (u64, u64)>,
     /// Cutout batches whose texture loses *every* texel at its own reference.
     vanishing: BTreeMap<u8, usize>,
+    /// `(list, header_flags & 0x02) -> batches`, over the extra pass's
+    /// batches: `pass_mask & 0x2000` inside a mesh whose own word has it.
+    shine: BTreeMap<(u8, u8), usize>,
 }
 
 fn blobs(disc: &mut DiscImage, archive_name: &str) -> Vec<Vec<u8>> {
@@ -121,11 +124,19 @@ fn census(blobs: &[Vec<u8>]) -> Census {
             }
             let payload = &bytes[range];
             let materials = vex::mesh_materials(payload);
+            let mesh_word = payload
+                .get(..2)
+                .map_or(0, |b| u16::from_le_bytes([b[0], b[1]]));
             for list in 0..2 {
                 let Ok(batches) = vex::mesh_batches(payload, list) else {
                     continue;
                 };
                 for batch in &batches {
+                    if mesh_word & 0x2000 != 0 && batch.pass_mask & 0x2000 != 0 {
+                        *out.shine
+                            .entry((list, batch.header_flags & 0x02))
+                            .or_default() += 1;
+                    }
                     if batch.is_transparent() || !batch.is_alpha_tested() {
                         continue;
                     }
@@ -182,6 +193,13 @@ fn psp_pulses_cutout_batches_split_two_ways_and_the_strict_reference_hides_nothi
         return;
     };
     assert_eq!(
+        c.shine,
+        BTreeMap::from([((0, 0x00), 2_003), ((0, 0x02), 3_446), ((1, 0x00), 363)]),
+        "the extra pass's batches by list and by the bit that weights it by the texture's \
+         alpha (`Batch::weights_extra_pass_by_alpha`); Pulse's hulls carry none of the \
+         weighted ones, its circuits' chrome maps do"
+    );
+    assert_eq!(
         c.cutout,
         BTreeMap::from([(0x10, 7_823), (0x7f, 1_500)]),
         "the disc's own cutout population, by the reference each batch asks for"
@@ -225,6 +243,11 @@ fn psp_pure_authors_the_discriminating_third_pattern_on_its_speedup_pads() {
         return;
     };
     assert_eq!(
+        c.shine,
+        BTreeMap::from([((0, 0x00), 406), ((0, 0x02), 578), ((1, 0x00), 58)]),
+        "every Pure hull's list-A extra-pass batch is weighted by its texture's alpha"
+    );
+    assert_eq!(
         c.cutout,
         BTreeMap::from([(0, 349), (0x10, 1_749), (0x7f, 956)])
     );
@@ -262,6 +285,10 @@ fn ps2_pulse_authors_the_same_three_patterns() {
     let Some(c) = of("data/images/pulse-ps2-eu.chd", "WADS2.WAD") else {
         return;
     };
+    assert_eq!(
+        c.shine,
+        BTreeMap::from([((0, 0x00), 4_419), ((0, 0x02), 4_383), ((1, 0x00), 802)])
+    );
     assert_eq!(
         c.cutout,
         BTreeMap::from([(0, 20), (0x10, 14_046), (0x7f, 1_313)])

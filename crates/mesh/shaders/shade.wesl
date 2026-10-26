@@ -526,6 +526,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         picture = vec4<f32>(picture.rgb + mask * (blue - flash_c) + flash_c, picture.a);
         cell_picture = picture.rgb;
     }
+    // **A PSP hull's alpha-weighted extra pass** (`PROGRAM_SHINE_MASK`, `oag_mesh::mesh::shine_pass`):
+    // the environment map times the batch's own texture's alpha, bound second and read at
+    // the batch's authored coordinate - the `GU_SRC_ALPHA` the original's ordinary pass
+    // blends this pass's result by (`BLENDMODE 0x2a`, read off a recorded GE list of Pure).
+    let mask_entry = (in.slots >> 24u) & 127u;
+    if mask_entry != 0u && emissives.scale[mask_entry].z > 4.5 && emissives.scale[mask_entry].z < 5.5 {
+        picture = vec4<f32>(picture.rgb * material_sample(MATERIAL_LIGHTMAP, in.lightmap_texcoord.xy).a, picture.a);
+    }
     let coverage = select(first, second, (in.slots & 4u) != 0u);
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 
