@@ -39,30 +39,27 @@ pub(super) fn build(
 ) -> Result<Vec<Drawable>> {
     let mut drawables: Vec<Drawable> = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
-        for _ in 0..oag_weapons::projectile::MAX_PROJECTILES {
-            // Every slot but the first is another name for the first's GPU
-            // resources - see `Drawable::instance` for what it shares.
-            if let Some(slot) = drawables.first().map(|first| first.instance(device, queue)) {
-                drawables.push(slot);
-                continue;
-            }
-            drawables.push(Drawable::new(
-                device,
-                queue,
-                model.clone(),
-                format,
-                store,
-                anisotropy,
-                sample_count,
-                scene_depth,
-                mesh_render::TRANSPARENT_BLEND,
-                mesh_render::GlowMask::Protected,
-                zone_art,
-                shadow_maps,
-                mesh_render::ShadowReceiver::Mapped,
-                mesh_render::Velocity::Write,
-            )?);
-        }
+        let first = Drawable::new(
+            device,
+            queue,
+            model,
+            format,
+            store,
+            anisotropy,
+            sample_count,
+            scene_depth,
+            mesh_render::TRANSPARENT_BLEND,
+            mesh_render::GlowMask::Protected,
+            zone_art,
+            shadow_maps,
+            mesh_render::ShadowReceiver::Mapped,
+            mesh_render::Velocity::Write,
+        )?;
+        // Every slot but the first is another name for the first's GPU resources - see
+        // `Drawable::instances` for what it shares.
+        let rest = first.instances(device, oag_weapons::projectile::MAX_PROJECTILES - 1);
+        drawables.push(first);
+        drawables.extend(rest);
     }
     Ok(drawables)
 }

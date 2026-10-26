@@ -57,6 +57,11 @@ pub(super) struct Drawable {
     /// Which slot of the race's [`UniformBlocks`] [`Self::uniform_bind`] reads, once
     /// [`Self::share_uniforms`] moved it there; `None` while it reads [`Self::uniforms`].
     uniform_slot: Option<u32>,
+    /// Where this drawable's blocks start in [`Self::uniforms`], [`Self::anims`],
+    /// [`Self::node_anims`] and [`Self::emissive`]: zero for a drawable that owns them,
+    /// its slot's range for a projectile pool slot, whose pool shares one buffer of each
+    /// ([`Self::instances`]).
+    offsets: instance::Offsets,
     textures: Vec<wgpu::BindGroup>,
     /// Group 1 as arrays, bound once per [`Self::draw`] instead of a slot's group per
     /// draw, when this drawable was built for it and the device has it - see
@@ -371,6 +376,7 @@ impl Drawable {
             uniforms,
             uniform_bind,
             uniform_slot: None,
+            offsets: instance::Offsets::default(),
             textures,
             bindless,
             card: None,
@@ -749,7 +755,12 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::TexAnims::sample(&self.model, seconds);
-        oag_gpu::perfprobe::write_buffer(queue, &self.anims, 0, bytemuck::bytes_of(&anims));
+        oag_gpu::perfprobe::write_buffer(
+            queue,
+            &self.anims,
+            self.offsets.anims,
+            bytemuck::bytes_of(&anims),
+        );
     }
 
     /// Samples every `Anim Transform` this model carries at `seconds` and
@@ -771,7 +782,12 @@ impl Drawable {
             return;
         }
         let anims = mesh_render::NodeAnims::sample(&self.model, seconds);
-        oag_gpu::perfprobe::write_buffer(queue, &self.node_anims, 0, bytemuck::bytes_of(&anims));
+        oag_gpu::perfprobe::write_buffer(
+            queue,
+            &self.node_anims,
+            self.offsets.node_anims,
+            bytemuck::bytes_of(&anims),
+        );
     }
 
     /// Applies a texture transform to this model's **authored** UVs and
