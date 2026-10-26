@@ -173,10 +173,10 @@ fn differing_circuits(
         let base = copies
             .iter()
             .find(|(label, _)| !packs.iter().any(|p| label.to_lowercase().ends_with(p)));
-        if let (Some((_, pack)), Some((_, base))) = (pack, base) {
-            if key_values(pack) != key_values(base) {
-                out.push((entry, base.clone(), pack.clone()));
-            }
+        if let (Some((_, pack)), Some((_, base))) = (pack, base)
+            && key_values(pack) != key_values(base)
+        {
+            out.push((entry, base.clone(), pack.clone()));
         }
     }
     out
