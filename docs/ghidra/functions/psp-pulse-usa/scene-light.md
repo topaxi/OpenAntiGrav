@@ -319,14 +319,19 @@ holding the lists is `0x08fc8960` (found by scanning RAM for the `+0x3c == 1`, `
 all phases in 1 ms steps: **mean error 0.03 units, worst 0.15**, at an anim clock of the race clock
 plus 3.636 s (mod 5); the next-best distinct phase has a mean error of 0.34. That is the offset a
 different lane read for the world meshes' texture clock on this state, 23.64 s (23.64 mod 5 =
-3.64): the lights and the meshes ride one clock. The craft's colour moves with it: the same
-hull, placed at `(-248.0, 13.0, -227.6)`, reads blue-white with the light 22 units off and dark
-blue with it 75 or more away (stills, below).
+3.64): the lights and the meshes ride one clock. **The stills of the original are qualitative
+only**: the craft, placed at `(-248.0, 13.0, -227.6)`, drifted and tilted onto the wall within a few
+frames (20 to 36 km/h on the HUD), so its attitude differs from ours and from frame to frame. It
+reads blue-white in the frame where the light is 22 units off and dark blue in the frames where the
+light is 75 or more away, the change ours shows, but the claim rests on the position fit and the
+code, not on a matched frame. The hull's GE light list was not read live with a moving light in
+it: the light objects and the builder's code were.
 
-Confidence **90** that a light under an `Anim Transform` moves with it and the hull takes it where it
-is (both slot bodies read, the flag and the builder's branch read, 14 live samples to 0.15 units),
-**85** for the two names, **70** that the `wospot` twin of `WoPoint_Init` does the same (not read: no
-`wospot` moves in any shipped circuit, ours places one by the same chain).
+Confidence **85** that a light under an `Anim Transform` moves with it and the hull takes it where
+it is (both slot bodies read, the flag and the builder's branch read, 14 live samples of the light
+objects to 0.15 units; not raised to 90 for want of a live read of the hull's list), **85** for the
+two names, **50** that the `wospot` twin of `WoPoint_Init` does the same (unread; no `wospot` moves
+in any shipped circuit, and ours places one by the same chain).
 
 **Wired 2026-10-26.** `oag_vex::vex::NodeChain` (lifted out of `placed_psys`, which the placed
 particle effects use too) keeps a node's ancestry as a function of time;
@@ -348,12 +353,17 @@ the 2 s spot takes `(254, 233, 250)` at 2 s and none of it at 0 s, and the rever
 resting spot. `crates/vex/tests/world_lights_ground_truth.rs` pins the chain against
 `world_transforms_at` for every light on the disc and that exactly Arc Prime's two move.
 
-Other titles and the PS2: **Pulse PS2, checked, applies in the data, not wired**: the same two
-nodes at the same places in both layouts, and the PS2 hull takes none of the rig (see above).
-**Pure: not checkable** for this lane: its Arc Prime does not exist, and its hull takes no circuit
-light (`hull-lights.md`). **HD, 2048, Omega: not applicable**: their hulls are lit by their authored
-envsettings rig (`ship-sun-occlusion.md`), and the `wopoint` class is absorbed with no consumer
-(`../ps3-hdfury-eu/vex-classes.md`).
+Other circuits, titles and the PS2. **Every Pulse circuit**: Arc Prime is the only one with a
+moving light, in both layouts. The PSP disc's twelve circuit files (01 to 07, 09, 10, 13, 14, 16,
+each in both layouts, 02 authoring no light at all) and the PS2 disc's thirty-two (all sixteen
+circuits, so 08, 11, 12 and 15 as well, which the PSP sells as downloadable content) were walked;
+the PS2's Arc Prime authors the same two lights at the same places. **Pulse PS2: checked, applies
+in the data, not wired**: the PS2 hull takes none of the rig (see above). **Pure: checked,
+differs**: no Pure hull takes a circuit light (`../ps2-pulse-eu/hull-lights.md`); whether any Pure
+light sits under an `Anim Transform` was not censused. **HD: not applicable**: its hull is lit by
+its authored envsettings rig (`ship-sun-occlusion.md`) and the `wopoint` class is absorbed with no
+consumer (`../ps3-hdfury-eu/vex-classes.md`). **2048 and Omega: not checked**, out of scope for a
+Pulse finding.
 
 ## Applied names
 

@@ -13,7 +13,7 @@
 use oag_vex::vex::{self, Node};
 use oag_vex::world_lights::{self, CLASS_WOPOINT, CLASS_WOSPOT, PlacedLight};
 
-/// Every circuit file the disc carries: eleven circuits, each in both layouts.
+/// Every circuit the PSP disc carries, each in both layouts.
 const CIRCUITS: &[&str] = &[
     "01_Track", "02_Track", "03_Track", "04_Track", "05_Track", "06_Track", "07_Track", "09_Track",
     "10_Track", "13_Track", "14_Track", "16_Track",
