@@ -891,8 +891,9 @@ names `pulse-psp-usa.chd` and `pure-psp-usa.chd`; the EU preference does not ove
 debugger port, a **fresh memory stick** (Pulse's first-boot dialogs answered by `psp-drive.py`'s `FIRST_BOOT` table, Pure's profile made
 with `New`). The frame is the emulator window at 480x272 (`xdotool windowsize`), grabbed off the Xvfb root and cropped at the window
 origin: no scaling at any step. Ours is `oag-game --menu-page PAGE` (or `--screen`) at 480x272 in a private profile
-(`prepare_profile`): the compare render settings, **`[dev] unlock_everything = false`** (a debug build unlocks everything, the original's
-fresh profile does not) and, for Pulse, `records.toml`'s `campaign_difficulty` row written as `medium`.
+(`prepare_profile`): the compare render settings and **`[dev] unlock_everything = false`** (a debug build unlocks everything, the original's
+fresh profile does not; read back in the settings file the run rewrote). Pulse also gets `records.toml`'s `campaign_difficulty = medium`
+row, which the still **ignores** (see the campaign paragraph).
 
 **What is read and what is declared.** Pulse's screen name is read from the game's own state machine (`0x08b31784 + 0x18c`, the same
 `Debugger.state_name` the race pairs use); every Pulse pair's `original.screen_basis` says so. Pure has no recovered state name: its
@@ -905,7 +906,7 @@ the evidence.
 
 | Screen (the original's name) | Ours | Pulse | Pure |
 | --- | --- | --- | --- |
-| title, `Show Logo` / `Title Screen` | `--screen` (Pure `Intro Screen->Title Screen`, Pulse `Show Logo`) | pair | pair |
+| title, `Show Logo` / `Title Screen` | Pulse `--until "Show Logo" --press cross --ticks 200` (the sequence draws the ray backdrop; `--screen "Show Logo"` leaves it out: 14.9 mean grey, 6.0 % against 4.7, 2.6 %), Pure `--screen "Intro Screen->Title Screen"` | pair | pair |
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
@@ -913,8 +914,11 @@ the evidence.
 
 **The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
 Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
-control is the footer's; the original's fresh stick opens on Medium, ours is set to `medium` in `records.toml` and the frame reads Medium
-on both sides. Pure: **`Tournament Selection`** (Alpha, the only tournament open on a fresh profile, class Vector) after `Class Selection`,
+control is the footer's; the original's fresh stick opens on Medium and ours' default is Medium, so the frames agree. **`--menu-page
+cell-select` does not read the persisted difficulty on Pulse**: with `records.toml` set to `easy` and to `hard` (title key `wipeout pulse`)
+the footer still reads Medium, because `capture/campaign_page.rs` applies `with_opening_difficulty` only in its HD branch (checked
+2026-10-27; the live flow reads it). So the pair matches by both sides' default, not by a set value, and a non-default rung cannot be
+made to match until the still reads the row. Pure: **`Tournament Selection`** (Alpha, the only tournament open on a fresh profile, class Vector) after `Class Selection`,
 the original's route Single Player -> Tournament -> Vector. Pure shows **no difficulty control** on either side (the class is the speed
 setting), so there was none to match. The single-race path (`Class`, `League`, `Track`) is paired as well.
 
@@ -923,27 +927,28 @@ read side by side):
 
 | Pair | Overlap | Differs | Most visible difference |
 | --- | --- | --- | --- |
-| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % | the circuit photo (stacked cards, a different view), `1/3` against `1/11` (ours does not hide the circuits a fresh profile has locked), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % | the circuit photo (stacked cards, a different view), `1/3` against `1/11` (ours shows 11 circuits; checked 2026-10-27: it is the same under `race.mode` `time_trial` and `single_race`, and `[dev] unlock_everything = false` survives in the rewritten settings, so the cause is open), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` against `1/12` |
-| Pulse title | 0.112 / 0.58 / 14.9 | 6.0 % | the original's teal light-ray backdrop (ours black), the wide `PRESS START BUTTON` face against `Press START button`, the legal line in the wide face |
+| Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
 | Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
-| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % | ours lists all 17 teams in small type (the original's fresh list is eight, large), the hull outline from another angle, the stat labels run into their values |
-| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` breadcrumb under the heading, the records read `0.00.00` against `0'00"00`, lower-case unit `m`, no description line |
-| Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | the breadcrumb is absent here; the hint line and the `BACK` prompt differ (below) |
-| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the breadcrumb `TOURNAMENT - VECTOR`, no typed description, the footer prompt |
-| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: breadcrumb, no description line, footer |
+| Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % | ours lists all 17 teams in small type (the original's fresh list is eight, large; the cause is open), the hull outline from another angle, the stat labels run into their values |
+| Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % | ours adds the `SINGLE RACE - VENOM - ALPHA` context line under the heading (chosen, not measured, `docs/architecture/menus.md`), the records read `0.00.00` against `0'00"00`, lower-case unit `m`, no description line |
+| Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
+| Pure Tournament Selection (campaign) | 0.069 / 0.44 / 2.7 | 3.1 % | the context line `TOURNAMENT - VECTOR` (chosen), no description line, the footer prompt |
+| Pure League Selection, Class Selection (x2) | 0.066-0.067 / 0.44 / 2.4 | 2.8-2.9 % | the same three: context line, no description line, footer |
 | Pure title | 0.017 / 0.60 / 0.5 | 0.3 % | none visible (the cursor underscore blinks) |
 
-Three differences recur on every Pure chain screen: the **breadcrumb line** (ours' `SINGLE RACE - VENOM`, absent from the original), the
-**typed description** along the bottom (the original's line types in over about two seconds; ours stops at tick 0 empty or partial) and the
+Three differences recur on every Pure chain screen: the **context line** (ours' `SINGLE RACE - VENOM`, a known chosen stand-in of
+`docs/architecture/menus.md`, absent from the original), the **description line** along the bottom (the original types it in; ours is
+drawn settled, 5 s in, `ARRIVED` in `pure_chain_page.rs`, and still shows none, so it is a missing element, not timing) and the
 **footer's BACK prompt** (the original shows a triangle and `BACK`, ours `BACK BUTTON` drawn over itself). Pulse's pairs share the footer
 ticker (scrolling in the original) and the cursor glow.
 
-**Repeat noise** (run 1 against run 2, cold boots on Pure; Pulse run 3 against run 1, three boots): ours against itself exactly 0 on
+**Repeat noise** (run 1 against run 2, cold boots on Pure; Pulse run 3 against run 1, two boots on one instance and a fresh one, the title two further boots each): ours against itself exactly 0 on
 every pair. The original against itself: Pure 0.0 mean grey and at most 0.06 % of pixels differ over 40 on every screen (the walk is
 deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turntable and the footer ticker (Track Select's photo cards
-2.5 %, the title 0.1 %).
+2.5 %, the title 0.0 %).
 
 **Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
 rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`

@@ -195,8 +195,8 @@ PULSE_PLAN = ",".join([
 #: `screen` is the state name the game reports (Pulse) or the name read by eye (Pure); `page` is ours' `--menu-page`, `xml` where ours
 #: draws it from, `None` for a gap (ours draws it from `menu.toml`, or not at all).
 PULSE_WALK = [
-    {"id": "title", "title": "Title: Press Start", "screen": "Show Logo", "page": "show-logo", "xml": "the title screen's own XML (`--screen \"Show Logo\"`)",
-     "route": ["--screen", "Show Logo", "--ticks", "120"],
+    {"id": "title", "title": "Title: Press Start", "screen": "Show Logo", "page": "show-logo", "xml": "the title screen's own XML (`--until \"Show Logo\" --press cross --ticks 200`: the sequence draws the backdrop `--screen` leaves out)",
+     "route": ["--until", "Show Logo", "--press", "cross", "--ticks", "200"],
      "selection": {"original": "settled, the prompt", "ours": "settled, the prompt"}},
     {"id": "grid", "title": "Race Campaign: Grid Selection", "screen": "Grid Selection", "page": "grid-select",
      "xml": "CellMode_Definition.xml (Grid Selection, the tier hexes) and grid_00.xml (the card)",
