@@ -96,6 +96,18 @@
 //!
 //! The track floor and walls light up only when a craft is
 //! within `D` of them: landings, wall scrapes and banked sections.
+//!
+//! # The circuit's switch does not reach the hull (read live, 2026-10-26)
+//!
+//! `Lighting.Enable spu vertex lights` is authored `0` on Metropia and Sol 2.
+//! The original's hull still draws its `SVC1` variant there, and the
+//! attribute-4 light buffer of the hull's chunks holds the engine light: on
+//! Sol 2 (Harimau classic, at rest) the bay chunks' records decode to a
+//! blue-dominant `0.1 : 0.25 : 1` (raw `(15, 37, 148)` at exponent byte 133),
+//! the literal `(4, 10, 40)`'s ratio. So the switch gates the track's lights
+//! (and ours: [`Race::hd_engine_lights`]) and not the craft's
+//! ([`Race::hd_craft_engine_lights`]). Evidence:
+//! `docs/rendering/hd-ship-materials.md`, "The engine bay".
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
@@ -195,12 +207,26 @@ impl Race {
         self.view.engine_light_jitter[slot] = Jitter::draw(&mut self.view.engine_light_rng[slot]);
     }
 
-    /// This frame's SPU vertex lights: one per active craft with an authored
-    /// engine light, or empty off HD, on a circuit that switches them off
-    /// (`Setup::spu_vertex_lights`), and for every craft without one.
+    /// This frame's engine lights as the **track** takes them: one per active
+    /// craft with an authored engine light, or empty off HD, on a circuit that
+    /// switches the SPU vertex lights off (`Setup::spu_vertex_lights`), and for
+    /// every craft without one. The hull takes them whatever the circuit says:
+    /// [`Self::hd_craft_engine_lights`].
     #[must_use]
     pub fn hd_engine_lights(&self) -> Vec<SpuLight> {
-        if !self.view.hd_trail_active || !self.view.spu_vertex_lights {
+        if !self.view.spu_vertex_lights {
+            return Vec::new();
+        }
+        self.hd_craft_engine_lights()
+    }
+
+    /// The engine lights as the **craft** takes them: the circuit's
+    /// `Enable spu vertex lights` does not reach the hull. Sol 2 and Metropia
+    /// author `0` and the original's hull still reads a blue `(4, 10, 40)`
+    /// light buffer there (see this module's "The circuit's switch").
+    #[must_use]
+    pub fn hd_craft_engine_lights(&self) -> Vec<SpuLight> {
+        if !self.view.hd_trail_active {
             return Vec::new();
         }
         (0..MAX_SHIPS)

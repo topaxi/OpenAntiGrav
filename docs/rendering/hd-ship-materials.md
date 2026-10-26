@@ -1019,7 +1019,7 @@ passes the directory's own lower-case id, so only the command line and the pair 
 housing and its rim line turn orange like the original's (bay crop mean absolute difference 24.56 to 24.18 levels; the poses
 differ by a few pixels, see "The drawn hull is not the body", so the number moves little).
 
-**Metropia and Sol 2, open (confidence 75 on the reading, no score on the cause).** Both circuits' `.envsettings` author
+**Metropia and Sol 2 (superseded by "Resolved 2026-10-26" below; the `SVC1` branch count in this paragraph is not evidence, see there).** Both circuits' `.envsettings` author
 `Lighting.Enable spu vertex lights = 0` and ours takes the engine light off every receiver there, the hull included. The original's
 bay is blue on both pairs. Ours with the light forced onto the hull reproduces that picture (walls and yellow rim line), **but the
 original does not get it that way**: on RPCS3 (interpreter, the Sol 2 and Talon's Junction Time Trial states) the light is still
@@ -1052,8 +1052,47 @@ vertex spans and leaves the GDB stub wedged: restart RPCS3 after it (a second du
 409 draws and no hull). A new capture of the constants alone would use `HOOK_RING_ONLY=1`. Omega and 2048: not reached, as above (their engine light
 is off and this is a PS3 register read); nothing ported.
 
+**Resolved 2026-10-26 (`hd-sol2-bay`, confidence 90): the bay blue is the engine light, and the circuit's switch does not reach the hull.**
+The hull's vertex program (24 chunks on Sol 2, one program) has no colour constant of its own: `TC1` is attribute 3 (a grey vertex
+colour, mean 0.17-0.48), `TC2.xyz` is attribute 4 decoded `rgb * 2^(a - 128)` (the `SVC1` light buffer the SPU `EdgeGeom` job writes
+right behind the draw's index list), and the lookup normal is attribute 1 turned by the model matrix. Constants differ from Talon's
+Junction only in the matrices and the eye, so **the term that differs is the contents of attribute 4**. Read live on RPCS3 (the
+two kept Time Trial states, Harimau classic at rest, a hook that dumps only the hull program's index and vertex spans):
+
+| circuit | hull chunks with a lit attribute 4 | e.g. raw record | decoded `TC2` mean / max (chunk 1) | ratio |
+| --- | --- | --- | --- | --- |
+| Sol 2 | 2 chunks full (`608`, `609`), 2 partly | `(15, 37, 148, e133)` | `(1.1, 2.8, 11.4)` / `(3.3, 8.3, 32.0)` | `0.10 : 0.25 : 1` |
+| Metropia | the same 2 and 2 | `(22, 54, 217, e132)` | `(1.0, 2.5, 10.2)` / `(2.8, 6.8, 27.1)` | `0.10 : 0.25 : 1` |
+
+That ratio is `EngineFlare_SubmitSpuLight`'s classic literal `(4, 10, 40)`. The other chunks (cockpit, wings, pods: out of range) read zero
+or a trace. So the original **does** light the hull from the engine light on circuits that author
+`Lighting.Enable spu vertex lights = 0`; the key gates the track's lights (ours kept that) and not the craft's. The earlier
+"0 hits in 25 s on `0x003eb368`" is withdrawn as evidence of a missing `SVC1` branch: the hull draws the `SVC1` fragment program on
+Sol 2 and the buffer behind it is lit; one stop in about 12 s on the interpreter is a small sample (zero hits is about a one in
+seven event even at Talon's rate). What the key does gate in the original is not read; ours still switches the track and the weapon
+lights off by it.
+
+**Wired.** `Race::hd_craft_engine_lights` is the engine light without the circuit's switch, bound into the craft's scene block
+(`ship_scene`, `oag_raceplay::scene::frame`); `Race::hd_engine_lights` (the track's) keeps the switch. Test:
+`weapon_light::tests::the_circuits_switch_does_not_reach_the_hull`. HD only: `engine_lights` exist only where a title's `Flare`
+sets `engine_light`.
+
+**Before and after** (1920x1080 pairs, `data/reference/compare-page/hd/<circuit>`, ours re-rendered with the pair's own flags on
+main and on this change; box `927,785 13x20`, the left bay wall above the shield band; mean RGB):
+
+| pair | original | ours before | ours after |
+| --- | --- | --- | --- |
+| Sol 2 | (11.3, 18.7, 39.8) | (11.7, 13.7, 16.3) | (20.8, 28.8, 46.8) |
+| Metropia | (11.0, 15.1, 29.5) | (7.7, 6.8, 6.8) | (15.8, 21.3, 39.2) |
+
+The other eleven HD pairs (Talon's Junction, `Assegai_c1`, Vineta K, ...) render **byte-identical** (0 changed pixels); on the two
+changed pairs the changed pixels lie inside the craft's bounding box. The wall is now navy like the original's, with the hue right;
+ours is about 1.3 times too bright, the same overshoot Talon's Junction already has in this box (ours (17.2, 24.7, 45.9) against
+(9.1, 16.0, 33.2)), so it belongs to the engine light's strength at the hull, not to this change (open: the light's `D` or
+the falloff exponent at the housing, or the vertex colours' multiplier).
+
 **Cross-title.** Omega and 2048 keep the engine light off (`engine_light: false` in their `Flare`, chosen), so neither finding reaches
-them; whether their originals light the bay is not checkable (no PS4 capture) and not compared on the Vita. The case-blind Fury test
+them. **Omega: not checkable** for the same reason as before: the evidence is a live read of a vertex buffer in main memory, and shadPS4 has no memory readout; whether Omega's circuits author the same `0` was not read. 2048 is not compared on the Vita. The case-blind Fury test
 applies to every title that reads it.
 
 ## The drawn hull is not the body: a per-frame shake from `ship+0x6b00` (2026-10-22, `hd-hull-bay`)

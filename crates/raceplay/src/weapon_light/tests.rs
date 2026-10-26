@@ -115,3 +115,31 @@ fn the_verification_switch_drops_the_weapons_alone() {
     race.set_weapon_lights(true);
     assert_eq!(race.hd_spu_lights().len(), engines + 1);
 }
+
+/// The circuit's `Enable spu vertex lights = 0` (Sol 2, Metropia) silences the track's
+/// lights and not the hull's: the original's hull reads a blue light buffer there. Dropping
+/// `hd_craft_engine_lights` from the craft's scene fails this.
+#[test]
+fn the_circuits_switch_does_not_reach_the_hull() {
+    use oag_livery::engine_light::EngineLight;
+    use oag_tables::enginelight::EngineLightData;
+    let mut race = hd_race();
+    race.view.engine_lights = vec![Some(EngineLight {
+        data: EngineLightData {
+            distance: 0.0,
+            radius: 1.0,
+        },
+        axis: Vec3::Z,
+    })];
+    race.view.nozzles = vec![Some(Vec3::ZERO)];
+    race.view.spu_vertex_lights = false;
+    assert!(race.hd_engine_lights().is_empty());
+    assert!(race.hd_spu_lights().is_empty());
+    let craft = race.hd_craft_spu_lights();
+    assert_eq!(craft.len(), 1, "the player's craft keeps its engine light");
+    race.view.hd_trail_active = false;
+    assert!(
+        race.hd_craft_spu_lights().is_empty(),
+        "off HD there is none"
+    );
+}

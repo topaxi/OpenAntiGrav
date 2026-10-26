@@ -489,9 +489,12 @@ impl Scene {
         // The SPU lights stay - at ride height the hull is the only receiver
         // in range, and the original selects `SVC1` for the hull (read live);
         // see `race::engine_light`, "Who receives it".
+        // The circuit's `Enable spu vertex lights` gates the track's lights and not the
+        // hull's (`race::engine_light`, "The circuit's switch").
         let ship_scene = mesh_render::Scene {
             zone: mesh_render::Zone::default(),
             light,
+            spu_lights: mesh_render::SpuLights::from_slice(&race.hd_craft_spu_lights()),
             ..scene
         };
         let weapon_scene = Self::weapon_scene(&scene);
