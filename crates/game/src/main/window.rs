@@ -503,13 +503,30 @@ pub(crate) fn seat_present_modes() -> &'static [wgpu::PresentMode] {
 /// discard into, and `smooth` falling back to `Fifo` keeps three so it still
 /// never halves; both stay at wgpu's default of 2. `on` already accepts the
 /// half-rate cliff, so a second queued frame only adds latency there, and
-/// `Immediate` never waits on an image at all. **Chosen, not measured**: no
-/// input-to-photon number backs the frame this saves yet.
+/// `Immediate` never waits on an image in a window. **Chosen, not measured**: no
+/// input-to-photon number backs the frame this saves yet. A fullscreen window
+/// queues at least two whatever this says ([`queued_frames`], measured).
 pub(crate) fn frame_latency(vsync: perf::Vsync, mode: wgpu::PresentMode) -> u32 {
     match (vsync, mode) {
         (perf::Vsync::Smooth, _) | (_, wgpu::PresentMode::Mailbox) => 2,
         _ => 1,
     }
+}
+
+/// The frames a surface queues: [`frame_latency`]'s choice in a window, at least two while the
+/// window is fullscreen.
+///
+/// **A fullscreen surface needs a third image.** One frame queued is a swapchain of two
+/// images, and a display scanning a fullscreen surface out directly (macOS direct-to-display,
+/// gamescope, an X11 or Wayland unredirected window) keeps the shown image until the next one
+/// replaces it at a vblank. With two images the frame after next cannot be acquired until
+/// then, so a frame that takes longer than one refresh waits for the following vblank and the
+/// rate falls to an integer fraction of the refresh: GitHub issue 7, a 120 Hz Mac at 40 fps
+/// fullscreen and 102 fps windowed, vsync off, the same GPU time (8.85 ms in `PRESENT`
+/// fullscreen against 5.09 ms windowed). A compositor copying a window's image lets it go at
+/// once, which is why one frame was enough there. `docs/rendering/frame-pacing.md`.
+pub(crate) fn queued_frames(windowed: u32, fullscreen: bool) -> u32 {
+    if fullscreen { windowed.max(2) } else { windowed }
 }
 
 #[cfg(test)]
@@ -526,6 +543,21 @@ mod tests {
         assert_eq!(scope.len(), 1);
         assert_eq!(scope[0].value, display::Monitor::DEFAULT);
         assert_eq!(scope[0].unavailable.as_deref(), Some("why"));
+    }
+
+    #[test]
+    fn a_fullscreen_surface_queues_at_least_two_frames() {
+        use wgpu::PresentMode::{Fifo, Immediate, Mailbox};
+        for (vsync, mode) in [
+            (perf::Vsync::Off, Immediate),
+            (perf::Vsync::On, Fifo),
+            (perf::Vsync::Smooth, Mailbox),
+        ] {
+            let windowed = frame_latency(vsync, mode);
+            assert_eq!(queued_frames(windowed, false), windowed, "{vsync} windowed");
+            assert_eq!(queued_frames(windowed, true), 2, "{vsync} fullscreen");
+        }
+        assert_eq!(queued_frames(3, true), 3);
     }
 
     #[test]

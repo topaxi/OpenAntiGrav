@@ -32,6 +32,13 @@ pub(crate) struct Output {
     pub(crate) config: wgpu::SurfaceConfiguration,
     /// The present modes this surface actually has. See [`Output::present_mode`].
     offered: Vec<wgpu::PresentMode>,
+    /// The frames the present mode asks to queue in a window
+    /// ([`crate::window::frame_latency`]); [`Self::configure`] raises it while the window is
+    /// fullscreen ([`crate::window::queued_frames`]).
+    latency: u32,
+    /// The queue depth and fullscreen state the last configure logged, so the decision is said
+    /// once per change rather than on every resize.
+    logged: Option<(wgpu::PresentMode, u32, bool)>,
 }
 
 /// The window and the GPU objects, which both stages draw through.
@@ -296,6 +303,8 @@ impl Gpu {
                 surface,
                 config,
                 offered,
+                latency: 1,
+                logged: None,
             },
             instance,
             adapter,
@@ -378,6 +387,8 @@ impl Gpu {
             surface,
             config,
             offered,
+            latency: 1,
+            logged: None,
         };
         output.apply_modes(modes, 1);
         output.configure(&self.device);
@@ -440,6 +451,24 @@ impl Output {
             );
             (self.config.width, self.config.height) = (width, height);
         }
+        let fullscreen = crate::window::is_fullscreen(&self.window);
+        self.config.desired_maximum_frame_latency =
+            crate::window::queued_frames(self.latency, fullscreen);
+        let decision = (
+            self.config.present_mode,
+            self.config.desired_maximum_frame_latency,
+            fullscreen,
+        );
+        if self.logged != Some(decision) {
+            self.logged = Some(decision);
+            info!(
+                "surface: present mode {:?} (offered {:?}), {} frame(s) queued, {}",
+                decision.0,
+                self.offered,
+                decision.1,
+                if fullscreen { "fullscreen" } else { "windowed" },
+            );
+        }
         self.surface.configure(device, &self.config);
     }
 
@@ -470,8 +499,7 @@ impl Output {
     /// The present mode and queue depth `vsync` asks for, into the config.
     fn apply_vsync(&mut self, vsync: perf::Vsync) {
         self.config.present_mode = self.present_mode(present_modes(vsync), &format_args!("vsync {vsync}"));
-        self.config.desired_maximum_frame_latency =
-            frame_latency(vsync, self.config.present_mode);
+        self.latency = frame_latency(vsync, self.config.present_mode);
     }
 
     /// The first of `modes` this surface offers, with `latency` frames queued,
@@ -480,7 +508,7 @@ impl Output {
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     fn apply_modes(&mut self, modes: &[wgpu::PresentMode], latency: u32) {
         self.config.present_mode = self.present_mode(modes, &"a further window's present mode");
-        self.config.desired_maximum_frame_latency = latency;
+        self.latency = latency;
     }
 
     /// The viewport, which every stage draws into.
