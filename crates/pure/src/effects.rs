@@ -143,10 +143,10 @@ pub const LOOKS: &Looks = &Looks {
         origin: Origin::Measured,
     },
     ..Looks::unread(ShieldPalettes {
-    ps2: ShieldPalette::Ps2Pulse,
-    elsewhere: ShieldPalette::Pulse,
-    origin: Origin::InheritedFrom("Wipeout Pulse"),
-})
+        ps2: ShieldPalette::Ps2Pulse,
+        elsewhere: ShieldPalette::Pulse,
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    })
 };
 
 #[cfg(test)]
