@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-10-26
-summary: "No frame of an HD scrolled surface in motion; wire named still families; vertex clock_rate reads literal rates (nr_twinblend wired), parameter-rate MAD reader open"
+summary: "No frame of an HD scrolled surface in motion; wire named still families; clock_rate reads literal rates (nr_twinblend wired)"
 ---
 
 # HD animates a texture in two ways now; the rest of its shader families still draw still
