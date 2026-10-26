@@ -67,8 +67,8 @@ clamp is written to every craft each tick by `oag_raceplay::launch_hover` from t
 (`3.03825` on the grid, `+ 1.0` per second from the tick the grid state ends), the spring reads
 `min(base, clamp) * 0.75` (`oag_physics::hover::capped_target_height`) and the spawn height is the
 same spring's rest height under the lowered target (`oag_gameplay::spawn::capped_spawn_height`), so
-the placement pose, the flyby's held world, is already low. Pulse, Pure, Omega and 2048 carry `None`
-and their paths are unchanged. **Chosen, not measured:** the clamp is the mean of the original's
+the placement pose, the flyby's held world, is already low. Pulse and Pure carry `None`
+and their paths are unchanged (Omega and 2048 carry it since 2026-10-26, below). **Chosen, not measured:** the clamp is the mean of the original's
 `3.000 .. 3.0765` jitter (no random stream consumed), the first timer step lands on the tick the grid
 ends, and rivals take the same clamp (read in the release loop, never measured: Time Trial had no AI).
 
@@ -125,8 +125,7 @@ Frames: `ours-sheet2.png` (original flyby shot beside ours), `c2/sheet.png`
 same place on the screen through the rise, as the original's frames do. Our livery in the chase
 frames is not the dark Feisar the capture shows; not this lane's.
 
-Other titles: Omega (HD's craft code lineage, no PS4 emulator): not checkable, `None`. 2048: not
-checked, its craft is a separate build, `None`.
+Other titles: Omega: **checked, same block, wired** (2026-10-26, [ps4-omega-eu/hover-target.md](../ghidra/functions/ps4-omega-eu/hover-target.md)). 2048: **ported, inherited via Omega**, not read on its own build.
 
 ## Traps
 
@@ -138,5 +137,5 @@ checked, its craft is a separate build, `None`.
 
 ## Other titles
 
-Omega: not checkable (no PS4 emulator). 2048: not checked, no HD-style flyby wired. Pulse's flyby
+Omega and 2048: wired 2026-10-26 (see above). Pulse's flyby
 holds the world at tick 0 too; whether Pulse's original lowers its craft there is **not measured**.

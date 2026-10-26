@@ -254,7 +254,7 @@ camera's first second; a view-side rise of the drawn pose is a possible follow-u
 measured), not done here.
 
 Other titles: Pulse PS2 and Pure not checkable here (no PS2 or Pure program is open in Ghidra); HD
-differs (above); Omega and 2048 not checkable for this branch.
+differs (above); Omega: same branch read statically and wired (2026-10-26, ps4-omega-eu/hover-target.md), 2048 inherited via Omega.
 
 ## A resting craft after GO turns, in the original too (2026-10-20, `resting-yaw`)
 

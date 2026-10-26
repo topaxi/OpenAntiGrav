@@ -62,7 +62,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // A named mode plays `ready`, `HBEAT` and `go`, an event `Go_NGP`; the spacing is Pulse's lent,
     // chosen, not measured: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
-    launch_hover: None,
+    // Omega's re-shipped craft update carries HD's grid clamp, unread on this build: see `LAUNCH_HOVER`.
+    launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: None,
     zone_hover_rig: None,
     // Unread: whether this title's Zone reads a Zone file, and which (`hover-four-point.md`).
@@ -800,3 +801,28 @@ pub const COUNTDOWN_VOICE: &oag_title::CountdownVoice = &oag_title::CountdownVoi
     }),
     beat: Some("HBEAT"),
 };
+
+/// 2048's grid hover: Omega's, which is HD's ([`oag_title::launch_hover::LaunchHover`]).
+///
+/// Inherited, not read on 2048's own Vita executable: 2048 and Omega share the `Backend/...`
+/// source tree and Omega's craft update carries HD's grid clamp field for field.
+pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
+    oag_title::launch_hover::LaunchHover {
+        grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
+        release_rate: oag_title::pre_race::Sourced::inherited(1.0, "Wipeout Omega Collection"),
+        in_zone: oag_title::pre_race::Sourced::inherited(false, "Wipeout Omega Collection"),
+    };
+
+#[cfg(test)]
+mod launch_hover_tests {
+    /// 2048 holds its grid craft low through Omega's inherited law, and says whose it is.
+    #[test]
+    fn the_title_carries_omegas_grid_hover() {
+        let hover = crate::TITLE.race.launch_hover.expect("2048's grid hover");
+        assert_eq!(hover.grid_cap.value, 3.03825);
+        assert_eq!(
+            hover.release_rate.origin,
+            oag_title::Origin::InheritedFrom("Wipeout Omega Collection")
+        );
+    }
+}
