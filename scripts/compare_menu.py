@@ -52,9 +52,11 @@ def extra_settings(profile_dir, front_end_style=None, race=None):
     path.write_text(text)
 
 
-def ours_menu_command(oag_game, image, plat, page, size):
-    """`oag-game IMAGE --menu-page PAGE ...` with the profile's flags. The race-only flags (`--no-hull-shake`,
-    `--pilot-assist`) are dropped: they change nothing on a menu and the record should not claim them."""
+def ours_menu_command(oag_game, image, plat, page, size, route=None):
+    """`oag-game IMAGE --menu-page PAGE ...` with the profile's flags, or `route` (a list of oag-game arguments) instead of
+    `--menu-page PAGE` for a title whose front end is not a `menu.toml` page tree (2048's touch front end is drawn through
+    `--screen NAME` and `--until STATE --press BUTTONS`). The race-only flags (`--no-hull-shake`, `--pilot-assist`) are
+    dropped: they change nothing on a menu and the record should not claim them."""
     flags = ce.ours_flags(plat)
     drop = {"--no-hull-shake"}
     clean, skip = [], False
@@ -68,12 +70,12 @@ def ours_menu_command(oag_game, image, plat, page, size):
         else:
             clean.append(f)
     clean[clean.index("--size") + 1] = size
-    return [str(oag_game), str(image), "--menu-page", page] + clean
+    return [str(oag_game), str(image)] + (list(route) if route else ["--menu-page", page]) + clean
 
 
-def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_args=()):
+def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_args=(), route=None):
     """Render ours' page into `out_png`; returns the command that did. Runs under the pair's private XDG profile."""
-    cmd = ours_menu_command(oag_game, image, plat, page, size) + list(extra_args) + ["--screenshot", str(out_png)]
+    cmd = ours_menu_command(oag_game, image, plat, page, size, route) + list(extra_args) + ["--screenshot", str(out_png)]
     env = dict(os.environ, **ce.ours_env(profile_dir), RUST_LOG="warn")
     log("+ " + " ".join(cmd[2:]))
     subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL)
@@ -81,7 +83,8 @@ def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_a
 
 
 def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, screen_seen, screen_wanted,
-              profile_dir, size, front_end_style, language, original_language, selection, extra_args=(), notes=()):
+              profile_dir, size, front_end_style, language, original_language, selection, extra_args=(), notes=(), route=None,
+              screen_source="TTY.log, Switching Screen"):
     """Fill `pair` for one front-end screen and check it. `drawn_from` is how ours draws `page` (`DRAWN_FROM`); the
     pair is refused (exit 3 from `Pair.finish`) when it is `menu.toml`, when the screen names differ, when a size is
     off, or when the language or styling differ. `selection` records the highlighted row on both sides; `{"matched": False, "why": ...}` ships the pair with the difference
@@ -89,7 +92,7 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     out = pair.out
     plat = pair.plat
     pair.rec["kind"] = "menu"
-    pair.rec["original"]["screen"] = {"seen": screen_seen, "wanted": screen_wanted, "source": "TTY.log, Switching Screen"}
+    pair.rec["original"]["screen"] = {"seen": screen_seen, "wanted": screen_wanted, "source": screen_source}
     pair.rec["original"]["language"] = original_language
     pair.rec["original"]["front_end_style"] = front_end_style
     pair.rec["original"]["selection"] = selection["original"]
@@ -97,6 +100,8 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     pair.rec["ours"]["front_end_style"] = front_end_style
     pair.rec["ours"]["selection"] = selection["ours"]
     pair.rec["ours"]["page"] = page
+    if route:
+        pair.rec["ours"]["route"] = list(route)
     pair.rec["ours"]["drawn_from"] = {"kind": drawn_from, "xml": xml_file}
     pair.rec["ours"]["binary"] = ce.binary_record(oag_game)
     pair.check("ours draws this page from the disc's XML, not menu.toml", drawn_from == "xml",
@@ -114,7 +119,7 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     pair.check_size("original", out / "theirs.png")
     if pair.failed():
         return False  # a doomed pair is not rendered; `Pair.finish` names every failed check
-    cmd = render_ours(oag_game, image, plat, page, out / "ours.png", profile_dir, size, extra_args)
+    cmd = render_ours(oag_game, image, plat, page, out / "ours.png", profile_dir, size, extra_args, route)
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
     got, bad = ce.read_back(plat, profile_dir)
     pair.rec["ours"]["settings_readback"] = got

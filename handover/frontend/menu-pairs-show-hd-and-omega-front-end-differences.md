@@ -1,9 +1,9 @@
 ---
 status: ready-to-wire
-titles: [hd, omega]
-updated: 2026-10-26
+titles: [hd, omega, 2048]
+updated: 2026-10-27
 categories: [frontend, rendering]
-summary: "Menu pairs HD 5, Omega 4 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
+summary: "Menu pairs HD 5, Omega 4, 2048 7 on the compare page; ranked differences, Omega campaign selector, XML main/racebox/options gaps"
 ---
 
 # Menu pairs show HD's and Omega's front-end differences, ranked by visible area
@@ -49,6 +49,33 @@ Gaps that need a page before a pair: HD Main Menu (`OPENANTIGRAV`, no ONLINE, ro
 is drawn from `menu.toml` or missing, so a pair would set ours' stand-in against the disc's XML (ADR-0066 keeps the main
 page ours by design, so the main-menu gap is a decision, not a bug).
 
+## 2048 (Vita3K), `menu-pairs-2048` 2026-10-27
+
+Seven pairs and seven gaps of the touch front end, two cold boots each (method and numbers: `docs/tools/compare-page.md`,
+"Menu pairs: Wipeout 2048"). Ours is drawn from the disc's XML through `--until STATE --press`; 2048 has no `menu.toml` page. No
+renderer or UI code changed. The campaign pair (map plus event card pages 0 and 1, Empire Climb, fresh save both sides) is made;
+2048's map and card show no difficulty control, so there was none to match. Ranked by the share of pixels that differ by more than
+40 grey:
+
+1. **Select Team** (56.7 %): ours is two rows of labelled buttons and a `FE_SKIN_*` list (chosen stand-ins); the original is a 5x4 grid
+   of locked hexagons under five team badges, a hull turntable and the statistics table. Needs the grid, hull and table drawn from
+   `Team_Definition.xml` and the ship models (the screen's `<Model>` preview is not drawn, see `2048-frontend.md`).
+2. **Game Mode** (19.3 %): the RACEBOX / REMIX / MULTIPLAYER column (`oag-extras` rows) and the check mark are ours alone; the
+   original's header icon and underline are missing, Single Player is ringed on entry in ours, the rows sit about 14 px lower.
+3. **Campaign map** (12.6 %): the `A.G.R.C 2048` banner, `TOUCH TO START` tag, home button, three badges, corner buttons, scroll
+   bars and triangle ground are missing; the node layout is the known chosen mapping.
+4. **Title** (11.0 %): ours is a white frame with the legal line on the entry tick; the logo, the pulsing `PRESS ANY BUTTON TO START`
+   and the triangle pattern are missing (a capture-route limit as much as a draw gap: `--ticks` after `--until` does not advance it).
+5. **Event card** (4.9 % page 0, 4.3 % page 1): subtitle `RACE` against `NO WEAPONS` (the card's second line), the map shows through
+   ours instead of a blurred white ground, no home button or badges, `CURRENT BEST` bar grey-blue against orange.
+6. **Home** (3.8 %): the header icon and underline and the blurred map backdrop are missing; Team is ringed in ours.
+
+Gaps: PSN prompt (a system dialog), the campaign welcome panel `SPTutorial` (ours never opens it live), Options, Profile and Extras
+(ours draws them live but no still route reaches them: `--press` is one mask, `--screen` draws on black), the pause menu (`GAME
+PAUSED`, ours' pause is `menu.toml`'s). A `--script`-driven still route past Home, and a title still that settles, would close
+most of these.
+
+
 ## Next Steps
 
 1. Omega's campaign selector (2048, HD, Fury cards) and the flyer on Omega's source: one lane, the biggest area.
@@ -58,3 +85,6 @@ page ours by design, so the main-menu gap is a decision, not a bug).
 3. Re-measure the HD layout offset on a fresh RPCS3 profile (Safe Area default) to see whether the 27 px and 4.1 % are the
    save's.
 4. Capture the original's pause menu (a Racebox race, Start) and HD's `Studio Logo` for gap records.
+5. 2048: a still route for Options, Profile, Extras and the Select Team grid (a `--screen` that draws the shell around the screen, or an
+   `--until` that takes a button script), then pair them with `scripts/vita3k-2048-menu-pair.py` (move the `WALK` entries from
+   `route: None` to a route).
