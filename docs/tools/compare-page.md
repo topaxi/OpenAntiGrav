@@ -756,7 +756,10 @@ from `assets/ui/menu.toml`'s stand-in pages**. `scripts/compare_menu.py` is the 
 `original.screen` (the name the emulator reported), `ours.page`, `ours.drawn_from` (`xml`, `menu.toml` or `none`, with the file)
 and both languages and stylings. `Pair.finish` refuses a menu pair when ours is not XML-driven, the original's screen name is
 not the one asked for, the languages differ, the highlighted row differs (a state ours cannot select ships as a named
-`Not matched` caveat instead, `selection.matched = false`), or a size is off. Provenance kind `menu` needs no presented-frame
+`Not matched` caveat instead, `selection.matched = false`), or a size is off. **What is read and what is declared:** only
+HD's screen name (`TTY.log`) and the original's RPCS3 language are read; the highlighted row of both sides is read by eye and
+declared in `WALK`, ours' language is the constant it runs with, and Omega's screen name is declared on both sides. So those
+checks catch a `WALK` entry that names two different rows, not a cursor that drifted: the pair images are the evidence. Provenance kind `menu` needs no presented-frame
 lag (`compare_provenance.refusals`); an HD menu pair still needs a cold boot, which a walked boot is. Tests:
 `check-compare-environment.py` (`check_menu_route`) and `compare_provenance.py selftest`.
 
@@ -780,7 +783,7 @@ screens, `Main Menu`, `Team Selection` and the rest are not among its names):
 | `Additional` (OPTIONS+) and Options | `menu.toml`'s `options` pages | **gap** |
 | `Race Records` | this project's records page | **gap** (original seen, not kept) |
 | pause menu | a `Stage::Menu` of `menu.toml` over the held frame; there is no `--menu-page` for it | **gap** (original not captured: needs a Racebox race) |
-| title / press start | HD has none (`Studio Logo`, then `Save Warning`, then `Main Menu`); `--until "Studio Logo"` draws ours | not paired: a boot-time animation, no settled frame |
+| title / press start | neither title has one: HD goes `Studio Logo`, `Save Warning`, `Main Menu` (`--until "Studio Logo"` draws ours), Omega reaches MAIN MENU about 18 s after launch with no press | not paired: boot-time animation, no settled frame |
 
 `front_end_style` (`display.front_end_style`, HD offers `HD` and `FURY`) is pinned to `FURY` in ours' profile for HD, and read
 back; the original's frames are Fury (red and black, the Fury backdrop). It only affects the loading screens in ours today
@@ -813,14 +816,16 @@ the page shows the same numbers per pair). The most visible difference is read o
 | HD Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.196 / 0.08 / 22.0 | the hull is drawn at a different pose and size, the red particle backdrop is much fainter, the statistic bars carry red markers the original lacks |
 | Omega Campaign grid | Omega's own first grid | 0.397 / 0.27 / 55.0 | state not matched: no flyer card at all (a white page with the ghosted backdrop tower), 18 points against the original's 21 |
 | Omega Campaign cell | Omega's own first grid | 0.658 / 0.10 / 129.0 | the original's dark-red panel fills about 80 % of the frame and ours is white, the largest difference of the set; `01_TRACK` against `TALON'S JUNCTION` |
-| Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` and no photo (the original names it and shows the stills), no length values, the model is turned differently |
+| Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` (the unresolved name of Omega's entry: the load line names `Data\Environments\01_Vineta_K\screen.xml`, so the circuit is Vineta K) and no photo (the original names it and shows the stills), no length values, the model is turned differently |
 | Omega Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.283 / 0.26 / 34.0 | hull about twice the original's size in a different livery (dark teal and yellow against pale blue and yellow), a ringed Feisar logo against the flat one, the cursor on the top hex against the third row |
 
 Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
 (`Additional`); Omega Campaign Select, Main Menu, Racebox setup and Options. The ranked list of differences is in the
 `menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;
 the manifest is built from the main checkout with `python3 scripts/compare_env.py manifest
-data/reference/compare-page/menus.toml data/reference/compare-page/hd data/reference/compare-page/omega`, then `just compare-page`.
+data/reference/compare-page/menus.toml data/reference/compare-page/hd/menu-* data/reference/compare-page/omega/menu-*`
+(9 entries; **name the `menu-*` directories**: `manifest` walks every `pair.json` under a directory and `hd/` and `omega/`
+also hold the race pairs of `fresh.toml` and `omega.toml`, which would appear twice), then `just compare-page`.
 
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 

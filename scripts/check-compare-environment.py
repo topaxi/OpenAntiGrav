@@ -73,13 +73,14 @@ def check_menu_route(root):
                          selection={"original": "a", "ours": "a"})
             pair.finish()
         except SystemExit as exc:
-            return exc.code, json.loads((pdir / "pair.json").read_text())
+            return exc.code, json.loads((pdir / "pair.json").read_text()), [c["name"] for c in pair.failed()]
         raise AssertionError("a bad menu pair was not refused")
 
-    code, rec = refused(cm.GAP)
+    code, rec, _ = refused(cm.GAP)
     assert code == 3 and rec["refused"] and not (root / "menu-menutoml-TrackCreation-English" / "ours.png").exists(), rec
-    assert refused("xml", screen_seen="Main Menu")[0] == 3
-    assert refused("menu.toml", language="Deutsch")[0] == 3
+    assert refused("xml", screen_seen="Main Menu")[2] == ["original screen is the one asked for"]
+    code, _, failed = refused("xml", language="Deutsch")
+    assert code == 3 and failed == ["language"], failed
     assert not [c for c in cprov.refusals(rec["original"]["provenance"], "hd-fury")], "a cold-boot menu needs no lag"
     cm.write_gap(root / "gap-x", theirs, "race", "menu.toml", "why")
     assert (root / "gap-x" / "theirs.png").exists() and json.loads((root / "gap-x" / "gap.json").read_text())["page"] == "race"
