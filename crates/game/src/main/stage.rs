@@ -543,6 +543,12 @@ impl Stage {
                 .as_ref()
                 .and_then(|weather| weather.mist_texture.as_ref()),
         );
+        scene.attach_lens_flare(
+            gpu.device(),
+            gpu.queue(),
+            gpu.format(),
+            setup.scenery_fx.lens_flare.as_deref(),
+        );
         // Time Trial and Speed Lap race a ghost - see `oag_game::ghosts`.
         scene.prepare_ghost(
             gpu.device(),

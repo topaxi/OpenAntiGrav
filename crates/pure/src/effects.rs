@@ -103,6 +103,12 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The sun's lens flare, read off `FxLensflare` and measured live on PPSSPP
+    // (`docs/rendering/lens-flare.md`): drawn where the circuit authors a node.
+    lens_flare: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,

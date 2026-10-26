@@ -82,6 +82,11 @@ and `a = acos(c)` (`FUN_088daed0` is libm `acos`). `a <= 1.0` gives
 Vineta K live: `d = (-0.88972, 0.21929, 0.40039)`, `c = 0.88972*0.9953 - 0.21929*0.0967 =
 0.8643`, `a = 0.5264`, so `1 - a = 0.4736`; **`+0x6c` reads `0.47363`** (confidence 92).
 
+Our wiring (2026-10-26) reproduces this off the compare pair's own camera: the third row of our sheared view matrix
+(`camera.md`, "The view matrix is a shear") dotted with `d` gives `0.8649` and `1 - a = 0.4741` (`oag_fx::lens_flare`,
+`the_live_camera_gives_the_measured_intensity_and_sun_position`). The matrix's rows are not unit length, and the cosine
+is **not renormalised** (renormalised it reads `0.5137`).
+
 ### `Lensflare_QueueOcclusionProbe` and `Lensflare_ReadOcclusion`
 
 The signal callback's loop (disassembly `0x0888c2c0..0x0888c33c`): rows `y-3, y-1, y+1,

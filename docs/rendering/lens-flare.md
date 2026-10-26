@@ -4,7 +4,7 @@ Measured 2026-10-26 (lane `pure-lens-flare-re`) from Pure's `BOOT.BIN` and live 
 PPSSPP (software renderer, Vineta K, Time Trial grid). The functions, addresses and
 the live dumps are in
 [`ghidra/functions/psp-pure-usa/lensflare.md`](../ghidra/functions/psp-pure-usa/lensflare.md).
-Nothing here is drawn by our renderer yet. Confidence is per claim, rubric as in
+**Wired 2026-10-26 (lane `pure-lens-flare-wire`)**: see "What our code has". Confidence is per claim, rubric as in
 [`confidence-rubric.md`](../reverse-engineering/confidence-rubric.md).
 
 The flare is **ten additive quads on a 2x2 atlas, laid along the line from the sun's
@@ -160,15 +160,75 @@ GE-state and vertex dumps do).
 
 ## What our code has
 
-`oag_vex::lensflare` (`Lensflare`, `lensflares`) reads the node and the colour;
-`classes::V4.lensflare` is `0x390`. The census is `crates/pure/tests/class_table_ground_truth.rs`
-(`the_light_classes_are_on_every_pure_circuit`). Nothing draws it: the wire lane needs the
-camera's rotation (the sun is a direction), a depth sample of the sun's pixel and a 2D
-additive pass after the scene.
+Wired on Pure on a PSP disc, where a circuit authors a `lensflare` node (seven of them).
+
+- **Data**: `oag_vex::lensflare` reads the node (`classes::V4.lensflare` is `0x390`) and
+  `oag_raceplay::load::lens_flare` pairs it with the circuit's own `LensflareComponents.tga`
+  (`oag_vex::vex::textures`, by asset path), into `oag_fx::lens_flare::Setup`, carried by
+  `scenery_fx::Plan`. A circuit with no node, a node that will not parse or no atlas draws nothing and
+  says so in the loader report (`lens flare: ...`). The census is
+  `crates/pure/tests/class_table_ground_truth.rs` (`the_light_classes_are_on_every_pure_circuit`).
+- **Rule**: `Looks::lens_flare` (Pure, `Platforms::Only(&[Psp])`, `Origin::Measured`); Pulse, HD, 2048 and
+  Omega are `Rule::UNREAD` (`crates/game/tests/title_behaviour_data.rs`, `only_pure_on_a_psp_draws_the_sun_lens_flare`).
+  The rule is the law and the node is the trigger: Omega's archives also carry `lensflare_*` nodes and must not
+  switch Pure's law on.
+- **Law**: `oag_fx::lens_flare` (`Placement::new`, `rings`, `ring_colours`, `intensity`), tested against this
+  page's live numbers (`lens_flare/tests.rs`): ring centres and sizes of the live check, the Modesto hue list, the
+  cone, a sun behind the camera, and the pair's live camera giving `0.4736` and the sun's pixel `(131, 77)`.
+- **Draw**: `oag_fx::lens_flare::pipeline` (shader `lens_flare.wesl`), one pass per view in
+  `Scene::finish_view`, over the resolved scene, before the post chain and the HUD; placed per view in
+  `prepare_view` from that view's unjittered view and projection, clipped to the view's rectangle. The additive
+  blend is `psys::BLEND`; `crates/fx/tests/lens_flare_draw.rs` renders it over black and checks an open sun adds light
+  and a covered one none.
+
+**One law detail the live frame forced.** The cosine is the sun's component on the camera matrix's third axis **as
+the matrix holds it, not renormalised**: Pure's tripod matrix is a shear (`camera.md`), its rows a few parts in a
+thousand off unit length, and the original dots the raw row. Renormalised, Vineta K's grid reads `0.5137` instead of
+the measured `0.4736` (`0.8649` raw cosine against `0.8848`). The sun's NDC position needs no care: the live
+`(-0.4515, 0.4343)` and ours `(-0.4513, 0.4342)` agree, and `(131.7, 77.0)` is the pixel the original probed.
+
+**Chosen, not measured** (each also in the module's doc):
+
+- The random factors fixed at the engine flag's values, `j = 1.0` and `r = 0.7`. Both lie inside the measured bands, so
+  the picture is reproducible and does not flicker; whether the original redraws `j` and `r` each frame is unread.
+- A pass of its own after the scene pass instead of a draw at queue key `0x4e000000` inside it: the occlusion test
+  reads the scene's depth, which a pass cannot sample while it is attached. Cost: mist and the screen flash
+  (key `0x4f`) land before the flare here, after it in the original; neither is on Vineta K.
+- **Occlusion is a same-frame depth-sample pass, no readback**: the 16 `textureLoad`s run in the flare's vertex stage
+  (sample 0 under MSAA), counted when the depth equals the clear and sky value `1.0`; the original counts depth words
+  below `0x3b3` and may read the previous frame's. The 2 px grid pitch is scaled by `viewport height / 272`.
+- Ring 0's half-size, were it negative (a sun beyond the screen's corner), is clamped to zero.
+- The atlas is the base level alone: a version-4 `.vex` authors no mips below it (`oag_vex::vex::textures`), so
+  minify is linear where the original samples four.
+- Not drawn when the sun's pixel is beyond the 4 px margin (the original's occlusion is then `0`). Ring spacing is in
+  the original's `16/9` screen space and maps to NDC, so it holds on any aspect; the quads are squared on the viewport
+  actually drawn (`half_x = half_y * h / w`), where the original's `480 x 272` differs from `16/9` by 0.7%. A two-player
+  split's views (about 3.5:1) and a 16:10 Deck keep square rings.
+
+**Checked against the original** (PPSSPP software, Vineta K, Feisar Vector, Time Trial; ours posed from the state's own
+RAM through our own chase rig):
+
+| Moment | Original | Ours |
+| --- | --- | --- |
+| Grid, race clock 16.6 s | a hazy bright frame, no distinct ring | masked full-frame mean against the original `-29.6, -26.2, -29.8` (flare off) becomes `-3.3, -4.0, -6.7` (on); the centre patch reads `104` off, `158` on, original `160` |
+| 6 s of held thrust, against a wall | a double ring left of the pillar at about `(190, 112)` in the 480 x 272 frame | the same double ring at about `(215, 117)`; the camera is yawed a little differently (the state's hull pose is not ours), brightness `+10.5, +6.2, +0.3` against `-26, -24, -34` off |
+
+The grid frame is the finding: most of the old "ours is darker" gap on circuits with a `lensflare` node was this
+halo (ring 0, half-size `1.93` of the screen's half-height, additive at `a0`), not scene or hull lighting.
+The straight's pair cannot place the chain by position (the pair is refused: hull yaw and camera differ), but the rings seen
+are the same two: a larger and a smaller circle of atlas cell 2 (rings 4 and 5, which sit at `0.325 S` and `-0.0125 S`, the
+latter always within `0.0125 |S|` of screen centre) in both frames. A third frame at 190 km/h on the first straight has the
+sun at the cone's far edge in both, with no chain on screen in either. Controls: where no flare draws (Modesto Heights,
+Blue Ridge: sun behind or outside the view) ours is within noise of the original already (masked mean `-6.7, -2.2, -2.3` and
+`-0.2, -0.8, -1.3` before the flare existed), so the grid's `-29` was the halo; Chenghou Project, whose sun is in view,
+goes from `-25.9, -18.5, -14.5` to `-9.9, -10.0, -8.1`. Occlusion proxy at the sun's pixel: ours and the original both show
+the pole at columns 133-135 and sky at 128, 130, 132, so ours counts the original's 12 of 16.
+Multi-view: a two-player split of Vineta K shows each view's own haze inside its own rectangle. MSAA on and off
+render the same wash. Modesto Heights' sun is behind the grid camera and draws nothing in the pair, as in the original.
 
 ## Cross-title
 
-- **HD, 2048, Omega: checked, differs.** HD's strings name `LensFlare.cpp`, shaders
+- **HD, 2048, Omega: checked, differs, not wired.** HD's strings name `LensFlare.cpp`, shaders
   `LensFlare_vp`/`_fp`, `LensflareComponents_256x256.gtf` and `_Rays.gtf`, and the key
   `Lighting.Use Lens Flare` in `.envsettings`; Omega adds H-ray keys and a sun scale
   (`handover` census). So they have a ray texture and a flag, Pure has neither, and HD's track
@@ -179,6 +239,7 @@ additive pass after the scene.
 
 ## Open
 
-- Whether the depth sample is one frame old; the sort order of the queue keys themselves (the frame position is measured above).
-- The random source and the `DAT_002883fc` flag.
+- Whether the depth sample is one frame old (we read the same frame); the sort order of the queue keys themselves (the frame position is measured above).
+- The random source and the `DAT_002883fc` flag (we hold `j = 1`, `r = 0.7`).
+- A split screen's flares are checked on one capture only; the draw sits in `finish_view`, which every view runs.
 - What the node's `lensflare_shape_` child and the payload's word `187` are for (neither is read by the flare).

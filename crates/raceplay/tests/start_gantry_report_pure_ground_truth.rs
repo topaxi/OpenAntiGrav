@@ -76,6 +76,40 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_
          re-check whether it is the gantry: {report}"
     );
     hull_lights_are_the_circuits_own(&report);
+    sun_flare_is_the_circuits_own(&loaded);
+}
+
+/// Vineta K authors one `lensflare` node (`docs/rendering/lens-flare.md`): its sun direction, grey
+/// colour and the circuit's own 64 x 64 `LensflareComponents.tga`. Dropping
+/// `oag_pure::effects::LOOKS.lens_flare`, the load step or the plan field leaves no flare and no
+/// line.
+fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
+    let flare = loaded
+        .setup
+        .scenery_fx
+        .lens_flare
+        .as_ref()
+        .expect("Pure's Vineta K draws a sun flare");
+    let near = |a: f32, b: f32| (a - b).abs() < 1e-3;
+    assert!(near(flare.direction[0], -0.8897), "{:?}", flare.direction);
+    assert!(near(flare.direction[1], 0.2193), "{:?}", flare.direction);
+    assert!(near(flare.direction[2], 0.4004), "{:?}", flare.direction);
+    assert!(
+        flare.colour.iter().all(|&c| near(c, 0.7107)),
+        "{:?}",
+        flare.colour
+    );
+    assert_eq!((flare.atlas.width, flare.atlas.height), (64, 64));
+    // A version-4 file authors no levels below the base (`oag_vex::vex::textures`).
+    assert_eq!(flare.atlas.levels.len(), 1);
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.starts_with("lens flare: sun direction (-0.890, 0.219, 0.400)")),
+        "{:?}",
+        loaded.report
+    );
 }
 
 /// Vineta K's light nodes, as `SceneLight_BuildLightingList`'s Pure twin packs

@@ -164,3 +164,25 @@ fn only_pure_names_a_single_player_chain_a_class_gate_and_a_campaign_row() {
         Some(&["Vector", "Venom"][..])
     );
 }
+
+/// Pure's sun lens flare (`docs/rendering/lens-flare.md`) is the one title's: a PSP disc of Pure
+/// draws it where a circuit authors a `lensflare` node, and no other title or platform does. Omega's
+/// archives carry `lensflare_*` nodes too, so the node alone must not switch the law on; HD, 2048 and
+/// Omega ship a rays texture and a flag whose law is unread.
+#[test]
+fn only_pure_on_a_psp_draws_the_sun_lens_flare() {
+    use oag_title::Platform;
+    for title in ALL {
+        for platform in [
+            Platform::Psp,
+            Platform::Ps2,
+            Platform::Ps3,
+            Platform::Vita,
+            Platform::Ps4,
+        ] {
+            let drawn = title.looks.lens_flare.applies(platform);
+            let pure_psp = title.name == "Wipeout Pure" && platform == Platform::Psp;
+            assert_eq!(drawn, pure_psp, "{} on {platform:?}", title.name);
+        }
+    }
+}

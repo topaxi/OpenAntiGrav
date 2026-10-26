@@ -29,6 +29,8 @@ mod glow_mask;
 #[cfg(feature = "view")]
 mod intro;
 #[cfg(feature = "view")]
+mod lens_flare;
+#[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
 mod original_laws;
 #[cfg(feature = "view")]
@@ -1311,6 +1313,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &track_blob,
         (&mut archives, &track),
     );
+    #[cfg(feature = "view")]
+    if vex_geometry && title.looks.lens_flare.applies(archives.layout.platform) {
+        loaded.setup.scenery_fx.lens_flare =
+            lens_flare::read(&track_blob, &mut loaded.report).map(Box::new);
+    }
     #[cfg(feature = "view")]
     pulse_ps2::finish(
         &mut loaded,

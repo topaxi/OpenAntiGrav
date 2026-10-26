@@ -70,6 +70,9 @@ pub(super) struct History {
     /// ([`Race::lens_screen_motion`]). Kept here because a split's blur runs after every view
     /// is drawn, from this view's own value.
     pub(super) blur_lens: std::cell::Cell<Mat4>,
+    /// This view's sun flare for the frame being drawn, placed in `prepare_view` and drawn
+    /// in `finish_view` ([`Scene::encode_lens_flare`]); `None` draws nothing.
+    pub(super) lens_flare: std::cell::Cell<Option<oag_fx::lens_flare::Placement>>,
 }
 
 impl History {

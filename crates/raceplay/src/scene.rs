@@ -19,6 +19,7 @@ mod craft_cull;
 mod frame;
 mod ghost;
 mod hd_chain;
+mod lens_flare;
 mod magstrip_wake;
 mod mist;
 mod motion;
@@ -274,6 +275,8 @@ pub struct Scene {
     clouds: std::cell::RefCell<clouds::Clouds>,
     /// The weather's mist overlay, once [`Scene::attach_mist`] built it.
     mist: std::cell::RefCell<Option<oag_fx::mist::Pipeline>>,
+    /// Pure's sun lens flare, once [`Scene::attach_lens_flare`] built it.
+    lens_flare: std::cell::RefCell<Option<oag_fx::lens_flare::pipeline::Pipeline>>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
     beam: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
     /// The magstrip arc wake and the Rocket smoke, each `None` where it is not built.
@@ -1119,6 +1122,7 @@ impl Scene {
             weapon_quads,
             clouds: clouds::Clouds::build(device, queue, format, store, sample_count, cloud_layer),
             mist: std::cell::RefCell::new(None),
+            lens_flare: std::cell::RefCell::new(None),
             beam,
             ribbons,
             sparks,
