@@ -140,11 +140,14 @@ the static half of "on hardware the readback holds the gate's alpha".
 
 So **every 2048 original-side frame captured on Vita3K is drawn at E = 1.15**,
 the constant `Exposure_Set` resets to, not at the adapted value a Vita would
-reach. Inferred from the law and the frames (not measured, no score): inverting
-the composite on the three reference frames gives a mean scene luminance of
-0.24, 0.39 and 0.16, so a Vita would settle at E = `Scale / (4 * 0.24)` and so
-on, about 0.42, 0.32 and 0.78, darker than Vita3K draws. The estimate ignores
-bloom, the vignette and the HUD-free full frame the gate really averages.
+reach. **Where a Vita settles is unknown.** The naive inference (inverting the
+composite on the three reference frames gives a mean scene luminance of 0.24,
+0.39 and 0.16, so E = `Scale / (4 * L)` = about 0.42, 0.32 and 0.78) puts every
+circuit at `e` near `Scale / 4` and a frame mean of 23 to 29, nearly the same on
+all three: an implausibly dark, near-constant picture for a shipped game. That
+points at a link still unread (which channel the gate surface's byte 3 is in its
+format, or the range the 1/64 assumes), not at hardware being darker. It also
+ignores bloom, the vignette and the HUD-free full frame the gate averages.
 
 ## Omega: checked, differs
 

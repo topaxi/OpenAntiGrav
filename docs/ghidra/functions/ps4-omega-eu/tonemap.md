@@ -140,9 +140,7 @@ its four siblings was not traced).
   `FUN_01623500` with the rest of the `wo_*` set, whose CPU-side default
   `luminanceFactor` is `(0.3, 0.59, 0.11)` (`0x01fc8090`); **no code reads either
   record** outside its registrar and a teardown, so they are taken as Wipeout HD's
-  composites carried forward and unused (2026-10-26: they are Wipeout 2048's race composites, run there with E in
-  `bloomFactor.y` and read again off Vita3K's translation of 2048's own program, see
-  [vita-2048-eu-v104/exposure.md](../vita-2048-eu-v104/exposure.md)). A third, with a `colourCubeTexture`
+  composites carried forward and unused. A third, with a `colourCubeTexture`
   lookup, sits unregistered at `0x019593a0`.
 - **The `pal` exposure shader** at `0x01968180` (`m_cExposure / max(L, 0.001)`
   clamped to `[m_ExposureMin, m_ExposureMax]`) is listed in the `pal` program
@@ -188,3 +186,9 @@ texels the emulated coefficient shader produced.
   image the chain starts from.
 - The checkerboard compute resolve `0x19685a0`, beyond its constant names.
 - Every number above on a running PS4.
+
+## 2026-10-26, `2048-exposure`: `wo_composite_nocc_fp` is 2048's live race composite
+
+The `wo_*` set this page records as unused here is the post chain Wipeout 2048 runs on every race, with the
+exposure in `bloomFactor.y`; read there off Vita3K's translation of 2048's own program and checked live, see
+[vita-2048-eu-v104/exposure.md](../vita-2048-eu-v104/exposure.md).

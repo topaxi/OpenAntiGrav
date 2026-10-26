@@ -58,8 +58,10 @@ A faithful ours adapts E; the references are frozen at 1.15. Two options:
 - The vignette (`wo_composite_vp`'s third output, `vignetteTint`), the screen
   tint's source, `accumFactor`.
 - When `FUN_81071300` resets E to 1.15 (`0x81071470`).
-- What a running Vita settles at: inferred about 0.3 to 0.8 on the three pairs,
-  not measured. A capture path that performs the readback would settle it;
+- What a running Vita settles at: unknown. The naive inference (E about 0.3 to
+  0.8) gives every circuit a frame mean of 23 to 29, implausibly dark and nearly
+  constant, so a link is unread: which channel the gate surface's byte 3 is, or
+  the range the 1/64 assumes. A capture path that performs the readback would settle it;
   Vita3K's `memory-mapping: external-host` lost the device on this machine's
   RADV (2026-10-26), so do not try the mapping modes unattended.
 

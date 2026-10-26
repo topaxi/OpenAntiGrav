@@ -419,8 +419,8 @@ were the cause; if it stayed, the cause was placement or heading.
 over the mean luminance the CPU reads back from the bloom gate's quarter-resolution target
 ([vita-2048-eu-v104/exposure.md](../ghidra/functions/vita-2048-eu-v104/exposure.md)). **Vita3K never writes that target into guest memory**,
 so the readback is zero, the adaptation never runs, and E stays at the 1.15 it is reset to on every pair above (read live on all three).
-A Vita would settle elsewhere: inferred, not measured, about 0.3 to 0.8 on these three, so darker than Vita3K draws. Read the pairs' brightness
-against that: they are references for E = 1.15, not for a running Vita.
+Where a Vita settles is unknown (the naive inference gives an implausibly dark, near-constant picture, so a link is still unread). Read the pairs'
+brightness against that: they are references for E = 1.15, not for a running Vita.
 
 Three flags of `scripts/vita-2048-pair.py` read and write the guest's memory through the countdown burst, with `--walk` only (Vita3K must be the
 script's own child; Yama's `ptrace_scope` 1 refuses `/proc/<pid>/mem` to anything else):
