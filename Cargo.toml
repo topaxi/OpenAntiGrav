@@ -217,7 +217,7 @@ atrac9dec = "0.9"
 # whose failure mode is silent garbage, so this one is not worth rewriting.
 # `default-features = false` drops `with-alloc`'s `simd` and the C-shim
 # feature; `with-alloc` is what provides `decompress_to_vec_zlib`.
-miniz_oxide = { version = "0.8", default-features = false, features = [
+miniz_oxide = { version = "0.9", default-features = false, features = [
   "with-alloc",
 ] }
 
