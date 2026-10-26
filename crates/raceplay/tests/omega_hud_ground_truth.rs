@@ -368,6 +368,72 @@ fn the_2048_hud_set_omega_also_ships_composes_whole() {
     assert!(unresolved.is_empty(), "2048_hud atlases: {unresolved:?}");
 }
 
+/// 2048's `XP` and `OBJECTIVE` lines (`RaceXPTxt`, `ObjectiveTxt`) are not Omega's to draw: none of
+/// the roots a race reads, in the default skin or either retro one, authors them, and the
+/// draw list of an Omega race carries neither. The `2048_hud\` set Omega also ships does author
+/// both (`HUD_award_xp.xml` byte for byte 2048's, `HUD_objectives.xml` with the `.2x` atlas
+/// spelling) and Omega's own bind code clears `ObjectiveParent` outright (`0x012bb8a7`), so wiring
+/// that set later does not bring the objective line back. Recorded in
+/// `docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md`.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_plays_no_xp_or_objective_line() {
+    let Some(mut archives) = open() else { return };
+    let hud = oag_omega::TITLE.hud;
+    let mut roots: BTreeSet<&str> = modes().into_iter().collect();
+    for skin in hud.skins {
+        roots.extend([
+            skin.layouts.arcade,
+            skin.layouts.elimination,
+            skin.layouts.time_trial,
+            skin.layouts.speed_lap,
+            skin.layouts.zone,
+        ]);
+    }
+    for root in roots {
+        let layout = composed(&mut archives, root).layout;
+        for name in ["RaceXPTxt", "ObjectiveTxt"] {
+            assert!(layout.label(name).is_none(), "{root} authors {name}");
+        }
+    }
+
+    let lineage = composed(&mut archives, r"Data\XML\2048_hud\Arcade_HUD.xml").layout;
+    for name in ["RaceXPTxt", "ObjectiveTxt"] {
+        assert!(
+            lineage.label(name).is_some(),
+            "2048_hud Arcade lacks {name}"
+        );
+    }
+
+    let source = omega().expect("opened above");
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::SingleRace,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega race loads");
+    let readout = oag_raceplay::Race::start(loaded.setup).readout();
+    let context = loaded.hud.context().expect("the layout parses");
+    let frame = oag_hud::draw_list(&context, &readout);
+    let drawn: Vec<String> = frame
+        .hud_text
+        .iter()
+        .chain(&frame.small_text)
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect();
+    assert!(!drawn.is_empty(), "the HUD drew text");
+    assert!(
+        !drawn
+            .iter()
+            .any(|text| text.contains("XP") || text.contains("OBJECTIVE")),
+        "{drawn:?}"
+    );
+}
+
 /// `data00.psarc` (base) and `data08.psarc` (patch) both ship the HUD atlases.
 /// The patch copy carries a mip chain the base copy lacks, and `Archives`
 /// serves one of them; the base level is the same picture either way, except

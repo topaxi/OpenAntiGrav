@@ -419,6 +419,12 @@ pub struct Setup {
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     #[cfg(feature = "view")]
     pub trail_sparks: bool,
+    /// Whether the race is an event of the title's own single-player campaign: 2048's
+    /// `SP.xml`, set by [`load_event`](super::load_event) and by nothing else. It is what the HUD
+    /// reads as "an event object exists" - [`oag_hud::Readout::campaign_event`]. A DLC circuit
+    /// raced as the HD or Fury Campaign, or any `--track` race, has none.
+    #[cfg(feature = "view")]
+    pub campaign_event: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].
     pub seed: u64,
     /// The decoded spline graph, as the file has it.

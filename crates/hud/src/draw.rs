@@ -210,6 +210,23 @@ pub(super) fn text_for(
         // gated by `ALWAYS_ON` the way sprites are: a second `POS` label with
         // nothing under it, floating beside the real one.
         "PositionTxt2" => None,
+        // **2048's `XP` row is up only while an `SP.xml` event is being raced.**
+        // `Hud_BindWidgets` (`0x81192cd0`) sets `hud+4` to the current event
+        // (`DAT_81965b58`, which only the campaign's event card writes) and shows
+        // `RaceXPTxt` iff it is non-null; `FUN_8119451c` writes the value and the
+        // `+N` award into `RaceXP` and `AwardXP` under the same test. The HD and
+        // Fury Campaigns' nodes never set it, so their races carry no XP row - the
+        // DLC pair's original frame, `docs/formats/2048-hud.md`, "The HD Campaign's
+        // HUD". Nothing but 2048's `HUD_award_xp*.xml` authors these three names.
+        "RaceXPTxt" | "RaceXP" | "AwardXP" if !readout.campaign_event => None,
+        // **Drawn nothing, on any race this engine runs.** `ObjectiveParent` (the
+        // `OBJECTIVE` caption and the three `ObjectiveName` rows under it) is shown
+        // only for an event whose `m_options & 4` is set and which authors a pass
+        // objective; across `SP.xml` that bit is on the `MP_*` events alone, so a
+        // single-player race never shows it. The original's base-campaign frame
+        // (`2048 - Event 1`, which authors a pass objective and no options) has no
+        // `OBJECTIVE` line. Omega's own bind clears the parent outright.
+        "ObjectiveTxt" => None,
         // The Eliminator's kill column - `PosTag0` to `PosTag7`. See
         // [`super::kill_tags`].
         "KillsText" => super::kill_tags::header(readout, label, strings),

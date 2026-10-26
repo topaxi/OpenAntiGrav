@@ -615,6 +615,11 @@ pub struct Readout {
     /// The `SubWeapon` line under the pickup's icon: the Cannon's rounds left, or the
     /// Autopilot's seconds left, or nothing. See [`SubWeapon`].
     pub sub_weapon: Option<SubWeapon>,
+    /// Whether the race is an event of the title's own single-player campaign (2048's
+    /// `SP.xml`) - the object its HUD binds at `hud+4`. Without one the HUD draws no `RaceXPTxt`
+    /// and no `ObjectiveTxt`: the 2048 DLC's HD and Fury Campaign events carry none. See
+    /// `docs/ghidra/functions/vita-2048-eu-v104/race-hud-selection.md`.
+    pub campaign_event: bool,
     /// The lock-on reticle, or `None` for a caller that has none to draw.
     ///
     /// `Copy` state off `Race`, passed whole rather than reduced to five
@@ -1012,6 +1017,8 @@ pub fn inside_screen(rect: [f32; 4], screen: (f32, f32)) -> bool {
 mod bar_model_tests;
 #[cfg(test)]
 mod bar_tip_tests;
+#[cfg(test)]
+mod campaign_event_tests;
 #[cfg(test)]
 mod curve_bar_tests;
 #[cfg(test)]
