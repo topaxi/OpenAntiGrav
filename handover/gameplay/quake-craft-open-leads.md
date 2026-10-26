@@ -19,8 +19,9 @@ not exist", chosen) over the same inherited gate.
 1. **No rear-view camera exists in ours** (`<BackwardCamera>`), so its lift is not applicable
    until one does. When it lands it adds `h` to the eye's world `y` and builds the aim from the
    lifted eye (`Ship_UpdateBackwardCamera`, `0x0883f7b8`).
-2. **`CockpitHitFx_Arm_q`** (`0x088eeaf8`, a cockpit-only overlay on any weapon hit to the
-   human) is not in ours. Its picture is unread (shield.md, confidence 60). Not Quake-specific.
+2. ~~**`CockpitHitFx_Arm_q`** (`0x088eeaf8`) picture unread~~ - read and captured 2026-10-26: a
+   static of `noisematt.mip` in two edge strips, 0.6 s, cockpit view only, absent from ours. Ready to
+   wire in [quake-impact-feel-differences.md](quake-impact-feel-differences.md), item 1.
 3. **One-frame lag.** The original's rigs read last frame's `h`; ours reads the value after the
    tick, one tick later. Chosen, not measured, and invisible at 60 Hz; reproduce it only if a
    matched capture shows a difference.

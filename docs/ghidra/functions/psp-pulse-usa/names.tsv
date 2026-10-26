@@ -1105,7 +1105,12 @@
 0x088fcfec	function	ParticleSystem_EmitLine	85	particle-system.md
 0x088f44d8	function	ParticleSystem_SetScaleParams	80	particle-system.md
 0x088f00c0	function	ScreenFlash_Start	88	particle-system.md
-0x088eeaf8	function	CockpitHitFx_Arm	60	shield.md
+0x088eeaf8	function	CockpitHitFx_Arm	90	shield.md
+0x088eeb54	function	CockpitHitFx_Update	90	cannon-quake-leachbeam.md
+0x088eec20	function	CockpitHitFx_Enqueue	88	cannon-quake-leachbeam.md
+0x088eec8c	function	CockpitHitFx_Draw	85	cannon-quake-leachbeam.md
+0x088ef10c	function	CockpitHitFx_LoadNoiseTexture	85	cannon-quake-leachbeam.md
+0x08ab2120	data	g_cockpit_hit_fx	88	cannon-quake-leachbeam.md
 0x088ef234	function	ScreenFlash_Construct	80	particle-system.md
 0x088ef334	function	ScreenFlash_Destroy	80	particle-system.md
 0x088ef3a4	function	ScreenFlash_Update	88	particle-system.md

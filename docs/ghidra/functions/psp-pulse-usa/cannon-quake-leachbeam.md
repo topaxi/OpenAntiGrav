@@ -3530,3 +3530,167 @@ the same by construction (the hull and body are not lifted, only the road and th
 gate is unread; both inherit through HD, whose `Quake_UpdateSpan` uses Pulse's span record and
 constants but whose own gate is unread, so each carries `Origin::InheritedFrom`. `QuakeStats::radius`
 is no longer read by the hit path.
+
+## 2026-10-26: why a Quake hit feels stronger on the original (quake-feel-capture lane)
+
+The maintainer, after the lift landed: "the impact just feels stronger on the original, hard to
+explain". Treated as a reliable oracle: an opponent's Quake reaching the player was measured side
+by side, per frame, from 0.5 s before the hit to 3 s after, on both sides. **The result: the
+camera shake, the screen flash, the sparks, the damage and the picture at the hit already match; two
+channels the original has are absent from ours, and the slowdown's depth is open.**
+
+**Method.** PPSSPP v1.20.4, UCUS98712, software renderer, a private muted instance, from
+`race-talons-venom-alongside` (Talon's Junction White, Venom, Assegai, eight craft, lap 3), caught
+before the state loads so the first hull-site stop is the same on every boot
+(`scripts/psp-quake-hit.py`, trap 1). An AI 70 to 420 units behind the player fires a Quake with
+the bit set at `Weapons_DispatchFire`; one conditional breakpoint on the hull-matrix submit
+(`0x08842264`, `s2 == player`) copies the entity, craft, body, HUD object, flash node, cockpit node,
+camera and `g_camera_fov_degrees` raw, once per player frame (320 rows a run). Alignment is the
+latch's rising edge (`entity+0x860 & 0x40`, row 0 below). Two further passes: the
+`Camera_SubmitScene` entry/exit swap (`0x08878874`, `0x08878af0`) for the shaken basis, and a
+`Sound_Play` (`0x089392b0`) and `Psys_Spawn_q` (`0x08915484`) log over the window. Ours: a local,
+never committed hook that launches a Quake owned by an opponent a chosen distance behind the
+player (`Wave::launch`), the player's pose replayed from the original's recorded path where a
+picture is compared, and the ordinary trace and `--screenshot` paths. The shake series, the
+overlay's timeline, the damage and the speed series were each read on two boots and agree (the hit
+lands on row 50 to 61 of a run, the shake angles to 0.01 degree, the overlay's 36 rows exactly);
+the flash alpha, the cues and the pictures were read on one.
+
+**Three harness traps, recorded for the next run** (all in the script's docstring):
+
+1. `Weapon_FireQuake` passes `record+0x40`, four floats, to `Quake_Init`, and its sign picks the
+   wave's direction. An AI that has never fired holds zeros there, and the wave then runs
+   **backwards** from it (it struck the craft behind the shooter and never the player). Writing the
+   shooter's forward vector first gives the real behaviour: forward only.
+2. **The save state has the Autopilot running** (`record+0x1b8 & 0x800`, `record+0x148` = `1e9`):
+   the player's steering (`stick_steer` swinging 2 to 100, the right airbrake at 100), airbrakes
+   and so its speed are the Autopilot's. **Every speed, slip and hover number below is therefore
+   not a physics reference** (maintainer, 2026-10-20); the rows that do not depend on the craft's
+   motion (the shake, the overlay, the cues, the damage) are unaffected. With the bit cleared the
+   craft flies straight at 119 units/s on the pad's input and meets a wall 5 frames after the hit
+   (`vf` -15), so this straight offers no clean 1.3 s window.
+3. **The state is Weapons OFF, skill 0** (`g_weapons_enabled` 0, `g_skill_level` 0): `Ship_Damage`
+   halves every amount, so the hit costs **7.5** (132.76 to 125.26, once, on the latch row, on
+   three boots); ours, Weapons on, costs 15 of a 95 pool where the original's skill-0 pool is
+   **135** (`stats+0x84`: 135, 95, 95, 8, 5.5 by skill). A settings difference, not an engine one.
+
+### The ranked differences
+
+Ranked by what a player sees and hears: a channel present on one side only above any mismatch in
+size. Numbers are the original's and ours'.
+
+| # | Channel | Original | Ours | Gap |
+| ---: | --- | --- | --- | --- |
+| 1 | **Cockpit view: `CockpitHitFx`, a static in two edge strips** | on every weapon hit to the human, 36 frames (0.6 s); two `noisematt` strips, one from each screen edge, **288 px wide each at the hit**, opaque noise at the screen edge and fading to transparent at the strip's inner edge, shrinking linearly to 0 by 0.6 s, edge alpha `(1 - p) * 255` | **absent** | missing, cockpit view only |
+| 2 | **Audio: two `.COLLISIONS` beside `QUAKEHIT`** | per struck craft: `QUAKEHIT` once and `.COLLISIONS` once per spark trigger (two on the player's hit), each `Sound_Play` volume `1.0`, positional at the locator | `QUAKEHIT` only (`Cue::QuakeHit`); `Cue::Collision` is raised on wall contacts alone | missing, both views |
+| 3 | Slowdown depth and decay | speed 112.3 to **57.0** at +76 (0.51), thrust word 100 to 0 within 3 frames, back to 100 at +79; decel per frame `0.0077 v + 1.7e-5 v^2` (about `v^1.37`) | 110.5 to **62.6** at +79 (0.57); decel `0.0007 v + 8.1e-5 v^2` (about `v^1.91`) | **open: the original run is Autopilot-flown** (trap 2), so unattributed; the timer itself matches exactly (1.28 at +1, 0 at +79) |
+| 4 | Hover dip under the sink | probe 0 minus the control: peak **-0.88** at +25 to +28 | peak **-1.20** at +22 to +25 | ours deeper by 0.3, inside the +-0.3 noise of an Autopilot-flown craft |
+| 5 | Screen flash (kind 4) | alpha at the hit 0.406, 0.305 at -45, 0.151 at +58 | 0.431, 0.239, 0.225 | within 0.07 throughout, the wave's edge point differs (below) |
+| 6 | Camera shake | 12.512 deg at impact, 5.00 at +4, 8.66 at +7, 2.06 at +19, 0.13 at +35, over 36 frames | 12.512, 5.002, 8.669, 2.062, 0.126 | **none** |
+| 7 | Hit sparks | two `WO_SHIP_COLL_SPARK_DAMAGE` per struck craft, two locators, severity `1.0 * 2 + 0.4` = 2.4 | the same, two nodes, 0.8 s cooldown, `HIT_SPARK_SEVERITY` 2.4 | none (count and severity; the particles' own size is the effect file's) |
+| 8 | FOV and HUD jitter | none from a Quake: on eight runs no `Hud_Update` shake cycle starts on the hit row or the three after it (the cycles that do run start at wall contacts, `+67` and later in the Autopilot's run); `g_camera_fov_degrees` follows `60 + 0.075 * speed` only | the speed law only (`SPEED_FOV_GAIN_DEG`), no shake term; ours has no HUD shake at all, which a contact would need | none for a Quake |
+| 9 | The picture at the hit | mean R, G, B of the frame, rows +1 to +8: 231 to 241, 178 to 194, 67 to 73 | 229 to 239, 173 to 195, 70 to 78 | within 6 of 255 per channel; later frames diverge, the effect clocks were not aligned |
+| 10 | Damage | 7.5, once on the latch row (Weapons off) | 15 (Weapons on) | settings (trap 3) |
+
+### 1. `CockpitHitFx`: the picture, read (confidence 88)
+
+The note on [shield.md](shield.md) left it unread. `Ship_Damage` (`0x088439ac`) calls
+`CockpitHitFx_Arm(1.5, 1.5, 0.6, 1.0, DAT_08ab2120)` on every `source == 2` hit to the human
+(`+0x368 == 0`), outside game modes 2 and 12, beside `Camera_ArmShake(0.6, 0.6, cam, 1)`. Live, on
+two boots, the node ran from the hit row for exactly 36 rows with these fields:
+
+| Field | Value |
+| --- | --- |
+| `+0x58` | 1 while running, 0 after 0.6 s |
+| `+0x40`, `+0x44` | **288.0** both (`1.5 * DAT_08a84a30`, which is `192.0`) |
+| `+0x54` | `1.667` (`1 / 0.6`) |
+| `+0x50` | `p = age * 1.667`, 0.027 at +1 to 0.973 at +35 |
+| `+0x48`, `+0x4c` | `288 * (1 - p)`: 280.1 at +1, 7.9 at +35, redrawn every frame |
+| `+0x5c`, `+0x60` | `rand(0..7) / 8`, a new pair every frame (0.375 / 0.375, 0 / 0.875, 0.625 / 0.25, ...) |
+| `+0x64` | 255.0 |
+
+`CockpitHitFx_Update` (`0x088eeb54`, vtable slot 9) is the per-frame step, `CockpitHitFx_Enqueue`
+(`0x088eec20`, slot 13) queues the draw at layer `0x4f000000` (the screen flash's) only while
+`*(g_race_manager + 0x2c0) + 0x6d` is set, the internal view, and `CockpitHitFx_Draw` (`0x088eec8c`,
+slot 17) draws it: the texture `Data\Tex\noisematt.mip` (loaded by `0x088ef10c` into
+`DAT_08ab21f0`; on the disc a 64 x 64 RGBA8888 noise), **two gradient strips**, one per screen edge.
+The vertex type is `0x19f` (six words: `u`, `v`, colour, `x`, `y`, `z`), and the live vertex dump
+(`DAT_08ab2130`, `DAT_08ab2190`) with the draw's stores give, for the left strip:
+
+| Vertex | `u` | `v` | colour | `x` | `y` |
+| --- | --- | --- | --- | --- | --- |
+| top, screen edge | 0 | 0 | `0xffffff` + alpha `(1 - p) * 255` (`DAT_08ab2138`) | 0 | 0 |
+| top, inner | `+0x48 / 64` | 0 | `0x00000000` (`DAT_08ab2128`) | `+0x48` | 0 |
+| bottom, screen edge | 0 | 4.25 | as the top edge (`DAT_08ab2168`) | 0 | 272 |
+| bottom, inner | `+0x48 / 64` | 4.25 | `0x00000000` | `+0x48` | 272 |
+
+The right strip mirrors it from `x = 480` to `480 - +0x4c`. `v` is static (4.25 = 272 / 64, one
+texel to a pixel vertically); `u` runs to `+0x48 / 64` (4.5 at the hit) under a texture scale of
+`(0.125, 1.0)`, so the noise is stretched about 8:1 horizontally; the offset `(+0x5c, +0x60)`
+shifts the sample by whole eighths; wrap `(0, 0)` repeat; blend `(ADD, SRC_ALPHA,
+ONE_MINUS_SRC_ALPHA)`; depth, lighting and culling off. So each strip is **opaque noise at the
+screen's edge and clear at its inner edge**, and the strips close towards the edges as `p` grows.
+**Checked on the captured frames (cockpit run, boot 1):** the mean absolute vertical difference of
+the luma (rows 30 to 240, a measure of noise energy) per column band, before the hit (row -15) and
+at rows +2 and +4:
+
+| Band `x` | 0-30 | 60-90 | 120-150 | 225-255 | 330-360 | 390-420 | 450-480 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| row -15 | 3.8 | 2.0 | 1.5 | 7.5 | 5.4 | 4.2 | 4.4 |
+| row +2 | 40.7 | 26.5 | 15.0 | 9.9 | 17.3 | 25.3 | 42.4 |
+| row +4 | 43.0 | 28.0 | 13.9 | 9.2 | 18.5 | 24.0 | 42.1 |
+
+Edge-heavy and symmetric, near the baseline across the middle: a gradient, not a uniform wash. The
+EDRAM front buffer lags the hull-site stop by two to three frames, so the first frame with the
+static is row +1 to +2. Pure and HD were not checked.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x088eeaf8` | `CockpitHitFx_Arm` | 90 (was 60) |
+| `0x088eeb54` | `CockpitHitFx_Update` | 90 |
+| `0x088eec20` | `CockpitHitFx_Enqueue` | 88 |
+| `0x088eec8c` | `CockpitHitFx_Draw` | 85 |
+| `0x088ef10c` | `CockpitHitFx_LoadNoiseTexture` | 85 |
+| `0x08ab2120` | `g_cockpit_hit_fx` (data, the `0x68`-byte node) | 88 |
+
+### 2. The collision cues on a weapon hit (confidence 88)
+
+Per struck craft the `Sound_Play` log over a Quake's whole life shows, at the hit's frame:
+`QUAKEHIT` (return `0x08842088`, `f12` 1.0, positional) and two `.COLLISIONS` (return
+`0x0892486c`, inside `ShipCollisionFx_Trigger`, [contact-response.md](contact-response.md)),
+which `Ship_Damage` calls once per locator it picks (`Psys_RandIntRange` twice, the second skipped
+when the same). The cue is gated by the same `instance + 100` 0.8 s cooldown as the spark, so a
+craft hit again inside 0.8 s hears neither. Ours raises `Cue::Collision` from a wall contact
+(`Race::raise_contact_cue`) and nothing from `throw_hit_spark`.
+
+### Not a gap, now settled
+
+- **No FOV or HUD shake from a Quake.** `Hud_Update` (`0x0881bf50`) runs a one-cycle 4 Hz shake
+  (`phase += dt * 2 pi * 4` at `hud+0x1e0`; amplitude `clamp(entity+0x80, -30, 30)` at
+  `hud+0x1e4`; the offset `cos(phase) * a - a` and `sin(phase) * -|a|`, with `a` re-jittered every
+  frame, written to `+0x3c`/`+0x40` of the two widget groups at `hud+0x274` and `hud+0x278`) off a
+  request word `entity+0x80`. It does run in the captures: a cycle starts at every wall contact
+  (peak offsets 21, 26 and, at a crash, 95 pixels; amplitude -2.3 to -30), 15 frames each, so a
+  contact shakes the whole HUD and the FOV (`Ship_UpdateCameraRigs` adds `+0x790`). **A Quake hit
+  starts none**: over eight runs (1,650 rows) no cycle begins on the hit row or the three after it.
+  The request word reads 0.000 at every stop because it is consumed before the hull site. Its
+  writer, which [camera.md](camera.md) saw spike to 32.9, 121.3 and -30.7 on contacts, is still
+  unnamed. **Ours has no HUD shake or contact FOV shake** (hud-boost-smear.md: "ours has no
+  shake"): a contact gap, not a Quake one, left to the contact lane.
+- **The shake matches to 0.1 degree**: the original's shaken basis at magnitude 0.6, mode 1 fits
+  the recorded model to `4e-7` on rows 79 to 114 of one boot and 51 to 86 of another, and ours at
+  `0.6 / MAGNITUDE_SCALE` reproduces its angle series.
+- **The flash's edge point.** The original's `A` sits `d = 300 (1 - alpha / 0.479)` from the eye,
+  46 units at the hit (ours `left`, 30 units, which depends on where on the road the craft is);
+  which of `Quake_SampleSpan`'s two points is `A` stays unread, the 0.07 alpha gap is that and the
+  craft's lateral position.
+- **`QUAKEHIT`'s level is not measurable here**: the emulator runs muted, the call carries volume
+  1.0 as every other positional cue (`f12`), and the authored gain lives in the bank, which ours
+  reads too. A real-PSP mix level has no arbiter in this project.
+
+### Cross-title
+
+Pulse PSP is measured. **Pure, HD, 2048, Omega: not checked** (a measurement lane; Pure's `Ship_Damage`
+and HD's `Cannon_ApplyCraftHit` calls to a cockpit overlay and a collision cue are unread). The PS2
+pressing runs the same `Ship_Damage` shape by the shared engine, **checked, applies, not
+captured**.

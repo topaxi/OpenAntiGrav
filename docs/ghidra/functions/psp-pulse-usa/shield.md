@@ -270,11 +270,11 @@ The frames are in a scratch directory, not kept (gitignored): `cap-cannon/`
 (a hit every 6 frames for 60 frames), `cap-lowshield/`, and
 `cannon-orig-vs-ours.png`.
 
-#### The player-only call beside it: `CockpitHitFx_Arm_q` (`0x088eeaf8`)
+#### The player-only call beside it: `CockpitHitFx_Arm` (`0x088eeaf8`)
 
 On a `source == 2` hit to the human craft (`+0x368 == 0`) outside game modes
 2 and 12, `Ship_Damage` also calls
-`CockpitHitFx_Arm_q(1.5, 1.5, 0.6, 1.0, DAT_08ab2120)` beside `Camera_ArmShake`.
+`CockpitHitFx_Arm(1.5, 1.5, 0.6, 1.0, DAT_08ab2120)` beside `Camera_ArmShake`.
 `DAT_08ab2120` is a `0x68`-byte node that `InGame_Update` builds with
 `FUN_088eea44`, right after the screen-flash node (`DAT_08ab2200`). The arm
 does nothing while the node is already running (`+0x58`). Otherwise it stores
@@ -286,8 +286,13 @@ linearly to zero over the 0.6 s. Each frame it draws two fresh offsets in
 eighths (`Psys_RandIntRange(0, 7) * 0.125`). Its enqueue (`0x088eec20`) only
 queues a draw while the player craft's `+0x6d` is set: the internal
 (cockpit) camera flag, per [camera.md](camera.md). **So it is not in any
-chase-camera frame.** What it draws is unread. Confidence **60** for the name:
-the arm, the decay and the cockpit gate are read, the picture is not.
+chase-camera frame.** **What it draws was read and captured 2026-10-26:** a static of
+`Data\Tex\noisematt.mip` in two gradient strips from the screen edges, fading over 0.6 s
+(288 px wide each at the hit, edge alpha `(1 - p) * 255`), absent from ours; the whole law, the node's
+fields over 36 live rows and the draw state are in
+[cannon-quake-leachbeam.md](cannon-quake-leachbeam.md#2026-10-26-why-a-quake-hit-feels-stronger-on-the-original-quake-feel-capture-lane).
+Confidence **88** for the name and the picture: arm, update, enqueue and draw are read, the
+node matched the reading on two boots and the captured frames' noise energy follows the gradient.
 
 ## The two race options that reach the pool
 
