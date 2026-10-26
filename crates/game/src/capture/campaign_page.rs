@@ -423,7 +423,12 @@ pub(super) fn campaign_page(
                     .first()
                     .map(|grid| grid.cells.clone())
                     .unwrap_or_default();
-                let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of);
+                let model = crate::campaign::with_opening_difficulty(
+                    oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of),
+                    records,
+                    &campaign_title,
+                    false,
+                );
                 oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,

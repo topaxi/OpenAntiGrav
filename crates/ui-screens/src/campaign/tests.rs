@@ -916,3 +916,34 @@ fn a_tiers_medal_follows_its_points_against_required_and_maximum() {
     assert_eq!(tier(48, 0, 24), Some(Medal::Silver));
     assert_eq!(tier(48, 0, 48), Some(Medal::Gold));
 }
+
+fn pulse_difficulty_screen() -> oag_ui::screen::Screen {
+    oag_ui::screen::Screen {
+        texts: vec![oag_ui::screen::Text {
+            name: Some("DifficultyButton".to_string()),
+            x: 210.0,
+            y: 252.0,
+            ..oag_ui::screen::Text::default()
+        }],
+        ..oag_ui::screen::Screen::default()
+    }
+}
+
+/// A click on Pulse's footer text cycles the rung exactly as `Square` does
+/// and reports `DifficultyChanged`; a click elsewhere does not. Fails if the
+/// footer has no pointer route.
+#[test]
+fn a_click_on_pulses_difficulty_footer_cycles_the_rung() {
+    use oag_tables::race_campaign::Difficulty;
+    let rect = pointer::difficulty_button_rect(&pulse_difficulty_screen()).expect("on screen");
+    let mut model = CellSelection::new(Vec::new());
+    assert_eq!(model.difficulty(), Difficulty::Medium);
+    let events = model.pointer_with_difficulty(&click((250.0, 262.0)), &[], Some(rect));
+    assert_eq!(events, vec![Event::DifficultyChanged]);
+    assert_eq!(model.difficulty(), Difficulty::Hard);
+    let events = model.pointer_with_difficulty(&click((100.0, 100.0)), &[], Some(rect));
+    assert!(events.is_empty());
+    assert_eq!(model.difficulty(), Difficulty::Hard);
+    model.pointer_with_difficulty(&click((250.0, 262.0)), &[], Some(rect));
+    assert_eq!(model.difficulty(), Difficulty::Easy);
+}

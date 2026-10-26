@@ -336,7 +336,50 @@ impl GridSelection {
     }
 }
 
+/// Pulse's `DifficultyButton` footer text as a click target, in the PSP's
+/// 480x272 space. **Chosen, not measured**: the widget is a `Text` with no
+/// authored width or height. The disc authors it at `x=210 y=252`; the rect
+/// reaches left over the square glyph the footer draws beside it and right
+/// over the longest `AI difficulty (Medium)` line at the default font (a
+/// PPSSPP-resolution still shows that line spanning x 210-318, y 257-265).
+#[must_use]
+pub fn difficulty_button_rect(screen: &oag_ui::screen::Screen) -> Option<[f32; 4]> {
+    let text = screen
+        .texts
+        .iter()
+        .find(|text| text.name.as_deref() == Some("DifficultyButton"))?;
+    eprintln!(
+        "DBG {:?} {} {} {} {}",
+        text.name, text.x, text.y, text.scale, text.align
+    );
+    Some([text.x - 24.0, text.y - 4.0, 136.0, 20.0])
+}
+
 impl CellSelection {
+    /// [`Self::pointer`] plus a click on `difficulty_rect` cycling the
+    /// difficulty rung as `Square` does on the pad. Shared by Pulse's
+    /// [`difficulty_button_rect`] and HD's own.
+    pub fn pointer_with_difficulty(
+        &mut self,
+        pointer: &Pointer,
+        targets: &[Target],
+        difficulty_rect: Option<[f32; 4]>,
+    ) -> Vec<Event> {
+        if pointer.is_idle() {
+            return Vec::new();
+        }
+        if !self.help_open
+            && pointer.clicked
+            && let Some(at) = pointer.at
+            && let Some(rect) = difficulty_rect
+            && contains(rect, at)
+        {
+            self.cycle_difficulty();
+            return vec![Event::DifficultyChanged];
+        }
+        self.pointer(pointer, targets)
+    }
+
     /// Consumes a tick of pointer input against `targets` and says what
     /// happened, on the same [`Event`] terms as [`Self::update`].
     pub fn pointer(&mut self, pointer: &Pointer, targets: &[Target]) -> Vec<Event> {

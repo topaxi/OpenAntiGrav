@@ -384,6 +384,8 @@ read when a cell screen opens (`oag_game::campaign::with_opening_difficulty`),
 beating the title's fresh-profile default (Pulse Medium, HD/Fury Easy). A file
 with no such table opens on the default. Checked on Pulse (PSP EU) and HD in
 a real session: change the rung, quit, relaunch, the screen opens on it.
-Pulse has no pointer route for the button (pad/keyboard only, unchanged).
+Pulse's footer item takes a click or tap too (`oag_ui_screens::campaign::pointer::difficulty_button_rect`,
+a chosen rect around the authored `DifficultyButton` at x=210 y=252, PSP pixels), cycling and persisting the rung as the pad's Square does; the
+`--menu-page cell-select` still opens on the saved rung on Pulse as on HD.
 Omega draws HD's screen through the same stage and takes the same path (not
 walked); Pure and 2048 have no cell screen with a rung.
