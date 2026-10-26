@@ -75,6 +75,7 @@ mod split_exposure;
 mod split_shadows;
 mod split_temporal;
 mod split_windows;
+mod sub_weapon;
 mod thrust_chase;
 mod title_effects;
 mod track_stages;

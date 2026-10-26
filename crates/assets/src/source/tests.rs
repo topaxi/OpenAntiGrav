@@ -192,6 +192,7 @@ const TITLE: &Title = &Title {
         pickup_icon_uv: None,
         zone_speed_classes: None,
         shield_percent: true,
+        sub_weapon_line: true,
         speed_full_kmh: 600,
         // Unread here too - this fixture is about archive discovery, not
         // about any language plugin's own font roles.

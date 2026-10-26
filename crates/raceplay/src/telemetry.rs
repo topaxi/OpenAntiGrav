@@ -200,7 +200,14 @@ impl Race {
             // rung zero already reads as: unnamed.
             zone_stage: 0,
             zone_next_in: None,
-            pickup: ship.pickup.weapon,
+            // A running Autopilot keeps its icon up when nothing else is held:
+            // `PlayerStatus_Update` forces the icon id to the Autopilot's while the
+            // running bit is set and the held id maps to none. The timer under it is
+            // `Self::sub_weapon`.
+            pickup: ship.pickup.weapon.or_else(|| {
+                (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
+            }),
+            sub_weapon: self.sub_weapon(slot),
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed
             // unconditionally rather than gated here - the brackets are watched
@@ -306,6 +313,36 @@ impl Race {
                 .or_else(|| race.best_lap_ticks.map(u64::from))
                 .unwrap_or(0),
         })
+    }
+
+    #[cfg(feature = "view")]
+    /// The `SubWeapon` line for `slot`'s craft: the Cannon's rounds left, else the
+    /// Autopilot's seconds left, else nothing - see [`oag_hud::SubWeapon`].
+    ///
+    /// **The Cannon wins**, the order `PlayerStatus_Update` writes them in
+    /// (`docs/ghidra/functions/psp-pulse-usa/sub-weapon.md`).
+    ///
+    /// **A Cannon nobody has fired reads the full magazine.** The original arms
+    /// `craft+0x154` with `<Stats rounds>` the moment the pickup is granted
+    /// (`FUN_0885776c`), so its HUD shows `30` on the pad; this engine arms
+    /// [`oag_weapons::pickup::Held::cannon_rounds`] on the first round and holds it at
+    /// `0` until then, so the unarmed counter reads as the authored count here, which
+    /// is what the original has in it.
+    fn sub_weapon(&self, slot: usize) -> Option<oag_hud::SubWeapon> {
+        let ship = &self.sim.world.ships[slot];
+        if ship.pickup.weapon == Some(oag_tables::weapons::Weapon::Cannon) {
+            let cannon = self
+                .sim
+                .weapons
+                .as_ref()
+                .and_then(oag_tables::weapons::WeaponStats::cannon)?;
+            let rounds = match ship.pickup.cannon_rounds {
+                0 => cannon.rounds.max(0.0).round() as u32,
+                armed => u32::from(armed),
+            };
+            return Some(oag_hud::SubWeapon::Rounds(rounds));
+        }
+        (ship.autopilot_timer > 0.0).then_some(oag_hud::SubWeapon::Autopilot(ship.autopilot_timer))
     }
 
     #[cfg(feature = "view")]
