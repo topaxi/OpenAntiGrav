@@ -597,7 +597,7 @@ fn load(
 
 /// [`load`], with the file's own bytes beside the model, for a caller that
 /// reads a node the model does not carry - the billboard adverts' camera.
-pub(super) fn load_with_blob(
+pub fn load_with_blob(
     archives: &mut oag_assets::Archives,
     name: &str,
     report: &mut Vec<String>,
@@ -664,10 +664,7 @@ fn build(
             archives.read_name(path).ok()
         })
         .with_context(|| format!("{name}: {sibling} does not build"))?;
-        report.push(format!(
-            "{name}: {} (Vita/PS4 container)",
-            built.describe()
-        ));
+        report.push(format!("{name}: {} (Vita/PS4 container)", built.describe()));
         return Ok(model);
     }
     let (model, _report) = mesh::rcs::build(

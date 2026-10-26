@@ -332,7 +332,9 @@ own texture tracks (`TexAnims`) at 60 frames a second, and
   lap before the last and a chequered flag on the last; ours plays the same
   frames and culls per frame to the panel (`race::gantry::BoardWindow`,
   `PanelCull`; [gantry-clock.md](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md#the-lap-windows-played-2026-10-04-hd-gantry-laps-lane)).
-- **2048 and Omega place no gantry**, so there is no clock to set. Loaded
+- **2048 and Omega place no gantry** (Omega since 2026-10-26: the loader reads its
+  `321Go` files but the pass is off, `docs/formats/omega-status.md` "Adverts"), so
+  there is no clock to set. Loaded
   through `race::load`: all ten native 2048 circuits, **thirteen of the sixteen
   HD-ported 2048 circuits** (the base package's four - `Anulpha_Pass`,
   `Chenghou_Project`, `Moa_Therma`, `Vineta_K` - and nine of the DLC's, under

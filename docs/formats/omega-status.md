@@ -1814,10 +1814,37 @@ strip law, the pair draws a line the pixel difference finds and the eye does not
 player size; the field stays `None` until the PS4 `HD_Leachbeam` material's samplers
 are read.
 
-**Adverts: parked, not a field flip.** `gantry::build` builds an external-geometry
-`.vex` through `mesh::rcs::build` only, so Omega's `321Go` files fail on the PS4
-container the way the weapon bodies did. Flipping `adverts` needs a PS4 branch there
-and a still against the shadPS4 start-grid pair.
+**Adverts: the reader landed, the pass stays off (2026-10-26).** `gantry::build` now
+reads Omega's `321Go` files through the Vita/PS4 container (`mesh::rcs::psp2::build_with_vex`,
+the `.vex` supplying node motion): `321Go_StartFinish.vex` builds as 1530 triangles over 19
+submeshes, 19 draws textured from 5 of 5 materials, 19 moving on 19 animated nodes, and
+`321Go_Zone.vex` as 162 triangles over 16 submeshes, on Tech De Ra, Talon's Junction,
+Amphiseum and Vineta K alike (`start_gantry_omega_ground_truth.rs`; every slot's model each
+manifest names loads). Turning `adverts` on, then rendering Vineta K against the shadPS4
+start-grid capture (`data/reference/compare-page/omega/vineta-k/theirs.png`, same circuit,
+`FEISAR_C1`), gave this, read by eye on the card box:
+
+- **Placement carries over from HD**: the centre board and both side cards stand on the
+  circuit's own `billboard7/8` quads at the original's positions and sizes, so no hand
+  placement was needed.
+- **The look does not.** The countdown board draws a static red face where the original
+  shows its blank teal one before the red `3`, and cannot count down: the GO-edge finder
+  reports `no drawn vertex rides an animated texture`, because HD's digits are material
+  curves (`curve_track::material_anim_tracks`) and the PS4 material container's curves are
+  unread. The unlit side cards draw dark teal with no logo where the original's are bright
+  with a logo (`fx350_nomip` is also a `.gnf` here, a spelling `FX350_TEXTURE` does not match).
+- Omega's track labels are `.../texturesps4/billboardN.gnf`, so `oag_render::gantry`'s
+  placeholder list and `mount()` also need `.gnf` spellings (they match `.tga`/`.gtf` only);
+  without them Omega reports `no start gantry: ... no billboard8 surface`. Not added: the
+  strip of unserved placeholders is unconditional and would remove the `?`/`7`/`8` icons from
+  Omega's grid with the pass still off.
+
+So `adverts` stays `None`, as the brief required where the pair does not match. To finish:
+read the PS4 material curves (2048's and Omega's `.rcsmodel` carry them in a container
+`oag_rcs::rcsmodel::psp2` does not parse), add the `.gnf` spellings, then repeat the pair.
+**2048 (checked, applies, not wired):** its `data.psarc` ships the same `321Go_StartFinish.vex`
+and `321Go_Zone.vex` with its own bytes (`.gxt` textures) and the same branch builds them
+(`the_same_branch_reads_2048s_321go_files`); 2048 draws no card.
 
 **The plume's two flags: open.** `engine_light` and `front_faces_only` stay `false`.
 Omega's loader reads `EngineLightData.xml` the way HD's does (`FUN_0130e090`: `Distance`

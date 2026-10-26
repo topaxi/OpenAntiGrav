@@ -192,26 +192,15 @@ pub const TITLE: &Title = &Title {
     },
     pressings: None,
     pre_race: None,
-    // Omega's start grid is HD's: the same `321Go_StartFinish.vex` card and the
-    // same billboard quads, only in the Vita/PS4 container. **Inherited from HD,
-    // not re-measured on PS4**: the target, the projection and the unlit passes
-    // are HD's RPCS3 readings, judged against a shadPS4 start-grid still
-    // (`docs/formats/omega-status.md`, "Adverts"). `zone_gantry` stays `None`:
-    // Zone is unmeasured on Omega, so no mode picks `321Go_Zone.vex` yet.
-    adverts: Some(&oag_title::adverts::Adverts {
-        target: (512, 256),
-        near: 0.5,
-        far: 5500.0,
-        colour_pool: false,
-        flip_v: false,
-        wrap: true,
-        zone_shares_one_texture: true,
-        gantry_card: true,
-        adverts_unlit: true,
-        card_unlit: true,
-        zone_gantry: None,
-        origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
-    }),
+    // **Off, and why** (2026-10-26, `docs/rendering/start-gantry.md`, "Omega"):
+    // `gantry::build` now reads Omega's `321Go` files through the Vita/PS4
+    // container, but with the pass on, a start-grid still against the shadPS4
+    // pair does not match. Placement does (same quads, same sizes); the look
+    // does not: the countdown board shows a static red face where the original
+    // shows its blank teal one and then counts down, because the PS4 materials'
+    // texture curves are unread, and the unlit side cards lose their logo. The
+    // fields to set when it does are HD's, inherited, not re-measured on PS4.
+    adverts: None,
 };
 
 /// The effects Omega plays: the engine's own names, tried as Pulse's, minus
