@@ -652,7 +652,8 @@ fn a_hull_takes_the_point_light_standing_over_it() {
     let slots = race.ship_hull_points(0, 0.0);
     assert!(slots[0][1] > 0.99, "straight up: {:?}", slots[0]);
     let w = slots[0][3] as u32;
-    // Full strength, no spline under the synthetic course, so the scale is 255.
-    assert_eq!([w & 255, w >> 8 & 255, w >> 16 & 255], [254, 126, 0]);
+    // The synthetic course is an open road, `255` at every point; the spline's blend of four reads `251`
+    // (`blend_light_scale`'s double truncation, the live list's `250`), which scales `(254, 126)` to these.
+    assert_eq!([w & 255, w >> 8 & 255, w >> 16 & 255], [250, 124, 0]);
     assert_eq!(slots[1], [0.0; 4], "three directionals leave one slot");
 }
