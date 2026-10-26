@@ -13,6 +13,9 @@
 //! header attributes (f32, matched without case): ColourR, ColourG, ColourB
 //! ```
 //!
+//! Only Pure's layout is measured (`V4`'s `0x390`); `V6` lists the name table's `0x3de` and
+//! no file uses it, so a version-6 payload is read under Pure's layout, unmeasured.
+//!
 //! The importer (`Lensflare_ImportNode`, `0x0888c444`) normalises row 3 into a
 //! direction; the node's transform chain is not applied, so the anchor is a
 //! direction from the camera, not a point in the world.

@@ -9,8 +9,8 @@ Nothing here is drawn by our renderer yet. Confidence is per claim, rubric as in
 
 The flare is **ten additive quads on a 2x2 atlas, laid along the line from the sun's
 screen position through the screen centre**, faded by the angle to the sun and by how
-much of the sun's pixel is hidden behind scenery. It is drawn in 2D after the 3D scene
-(depth test off), so it overlays the track.
+much of the sun's pixel is hidden behind scenery. It is drawn in 2D after the 3D scene and before the
+post passes and the HUD (depth test off), so it overlays the track.
 
 ## What the disc authors, what the executable owns
 
@@ -120,21 +120,28 @@ the sort's key inferred from its result, 75). Cell `c` is the quad of the 2x2 at
 
 **5. Colour.** Ring 0 is `ColourR/G/B`. Each next ring converts the **previous ring's**
 colour to HSV with hue in sextants `0..6`, adds `-0.01 * k` (`k` = 1 for ring 1), wraps to
-`0..6` and converts back, so hue drifts `-0.005 k (k + 1)` sextants from ring 0 (about `-27` degrees
-at ring 9); saturation and value are unchanged, and a grey stays grey. Confidence 70 (a
-static read; Vineta K's grey colour cannot show it live). The six coloured circuits above need it.
+`0..6` and converts back, so hue drifts `-0.005 k (k + 1)` sextants from ring 0 (`-0.45` at ring 9,
+about 27 degrees); saturation and value are unchanged, and a grey stays grey. **Measured live on
+Modesto Heights** (colour `(1, 0.6, 0)`, hue `0.6` sextants): the ten ring colours read
+`G = 0.60, 0.59, 0.57, 0.54, 0.50, 0.45, 0.39, 0.32, 0.24, 0.15`, exactly `0.6 - 0.005 k (k + 1)`
+(confidence 90). Vineta K's grey shows no drift (all ten `0.7107`).
 Vertex colour is the ring's `RGB` as 8-bit (`0.7107 -> 0xb5`), vertex alpha the ring's alpha.
 
 **6. Draw state** (read from the recorded GE list, confidence 92):
 
-- additive: `out = src.rgb * src.a + dst` (`BLENDMODE 0xA2`, `FIXB 0xFFFFFF`); texture `modulate`
-  by the vertex colour (the function register is never written in the list, so the engine default);
-  linear magnify, mipmap-linear minify on the four authored mips
+- additive: `out = src.rgb * src.a + dst` (`BLENDMODE 0xA2`, `FIXB 0xFFFFFF`); texture function
+  `0x100`: modulate by the vertex colour **with the texture's alpha** (`TFUNC` is never written in the
+  recorded list; its value is the register snapshot at the dump's start, word `0xC9000100`; confidence
+  85, one frame), so `src.a = texel.a * vertex.a`; linear magnify, mipmap-linear minify on the four authored mips
 - depth test off, depth writes off, culling off, lighting off, alpha test off
 - one triangle strip of 60 vertices, ten blocks of six, in **memory block order** (not ring
   order); additive, so the order does not change the sum
-- queue key `0x4e000000` (the node's occlusion callback `0x4b000001`); where that lands
-  relative to the HUD and the ship is **unread**
+- queue key `0x4e000000` (the node's occlusion callback `0x4b000001`). **Position in the frame**,
+  from one recorded GE list (618 draws, the flare is draw 5 of the 32 after the 586 scenery draws,
+  confidence 85): after every scenery draw; then a 16-vertex through-mode sprite draw that
+  **samples the framebuffer as its texture** (`TEXADDR 0x88000` = the render target; a post pass, bloom
+  or glow, so the flare is bloomed with the scene); two 1,320-vertex through-mode sprite batches;
+  then the HUD (pixel-space ortho `0.004 / -0.007`) and nothing 3D. So: scene, **flare**, post passes, HUD
 
 ## Live check
 
@@ -143,11 +150,13 @@ Vineta K grid, one frame, the sun at NDC `(-0.4515, 0.4343)`, so `S = (-0.8026, 
 `(x / S.x)`: `1.0, 0.80, 0.70, 0.55, 0.325, -0.0125, -0.518, -1.278, -2.417, -4.126`,
 the table's. Ring 0's half-size `1.931` is `(5/3 - 0.9126) * 1.5 + 0.8 = 1.9312`;
 ring 1's `0.108` is `0.2 * 0.5476 * 0.986`. Alphas are `0x5a 0x4d 0x4c 0x50 0x4e 0x48 0x3a 0x38 0x4e
-0x33` by block. Frame, read by eye: a flare-on and flare-off pair of the same
-countdown tick (the ring alphas zeroed in the live colour buffer for the second) differs by
-soft glows around the predicted places: the large halo near the sun's pixel `(262, 154)`,
-the centre disc at `(484, 272)`, the ring-7 glow at `(757, 423)`. At 0.7 grey and alpha
-around 0.3 each ring adds a faint tint, which is why a still shows it so weakly.
+0x33` by block. Frame, read by eye: a flare-on frame and a second frame about a second later with the ring
+alphas zeroed in the live colour buffer. **The pair is not the same tick** (the race clock ran, so the HUD
+digits and the camera edges differ too). Beside those, the difference holds soft glows at the
+predicted places: the large halo near the sun's pixel `(262, 154)`, the centre disc at `(484, 272)`,
+the ring-7 glow at `(757, 423)`. At grey 0.7 and alpha around 0.3 each ring adds a faint tint, which
+is why a still shows it so weakly. This places the glows; it does not measure their brightness (the
+GE-state and vertex dumps do).
 
 ## What our code has
 
@@ -170,7 +179,6 @@ additive pass after the scene.
 
 ## Open
 
-- The queue order of key `0x4e000000` against the HUD, ship and sky, and whether the depth sample is one frame old.
-- The hue rotation on a coloured circuit, live (Modesto Heights `(1, 0.6, 0)` is the first to try).
+- Whether the depth sample is one frame old; the sort order of the queue keys themselves (the frame position is measured above).
 - The random source and the `DAT_002883fc` flag.
 - What the node's `lensflare_shape_` child and the payload's word `187` are for (neither is read by the flare).

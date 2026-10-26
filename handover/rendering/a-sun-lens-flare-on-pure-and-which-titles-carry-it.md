@@ -162,11 +162,8 @@ Strings that matched the flare search but are not this effect: `WO_ROCKET_FLARE`
 
 ## What our renderer does today
 
-Nothing. No code reads class `0x390` (`crates/vex`, `crates/raceplay`, `crates/render`)
-and `Lighting.Use Lens Flare` is parsed and dropped (`crates/tables/src/envsettings.rs`,
-tests at `crates/tables/src/envsettings/tests.rs`). The viewer prints the class as
-"unnamed - not in the read table". I did not find a loader report that counts
-unread classes, so whether one exists was not checked.
+Nothing draws the flare. `oag_vex::lensflare` reads the node and `classes::V4.lensflare` is `0x390`
+(2026-10-26); `Lighting.Use Lens Flare` is still parsed and dropped (`crates/tables/src/envsettings.rs`).
 
 ## Done 2026-10-26 (`pure-lens-flare-re`)
 
@@ -182,9 +179,8 @@ those win (the Vineta K anchor is `(-51.826, 12.774, 23.323)`; the sun is a dire
 - **Wire the draw** (ready): a 2D additive pass after the 3D scene, the law in `lens-flare.md`. It needs the
   camera rotation, a 4 x 4 depth sample of the sun's pixel, the atlas from the circuit's `LensflareComponents.tga`.
   Render-side; the sun direction is per circuit data, no simulation state.
-- **Unread, own address each:** the queue position of key `0x4e000000` against the HUD and ship; whether the depth
-  sample is one frame old; the hue rotation live on a coloured circuit (Modesto Heights `(1, 0.6, 0)`);
-  the random source `FUN_0882f70c` and flag `DAT_002883fc`; the sort comparator `0x08936598`.
+- **Unread, own address each:** the queue ordering of key `0x4e000000` itself (the frame position is measured: after scenery, before the post passes and HUD); whether the depth
+  sample is one frame old; the random source `FUN_0882f70c` and flag `DAT_002883fc`; the sort comparator `0x08936598`.
 - **The shadows.md Pure zero is in doubt** (`0x375` `Shadow_Shape` nodes on Vineta K; `docs/rendering/shadows.md`
   and `shadow_occluder_ground_truth.rs` use Pulse's ids on Pure). Not touched by this lane.
 - **Other titles:** HD's `LensFlare.cpp` (`0x002aee58`), 2048 and Omega are unread; they ship a rays texture and a flag
@@ -194,5 +190,4 @@ those win (the Vineta K anchor is `(-51.826, 12.774, 23.323)`; the sun is a dire
 
 1. Wire the Pure flare (`oag-wire`): load the node and atlas, draw ten additive quads per the law, behind a settings
    value with the original's look as default. Judge a frame pair against `pure-psp/vineta` as the maintainer saw it.
-2. Run the hue rotation live on Modesto Heights and fix `lens-flare.md` section 5 if it differs.
-3. Walk `0x375` on Vineta K against Pulse's occluder payloads before trusting the shadows.md zero.
+2. Walk `0x375` on Vineta K against Pulse's occluder payloads before trusting the shadows.md zero.

@@ -121,8 +121,8 @@ ring's colour through RGB to HSV (sextant hue `0..6`), adds `-0.01 * k` to the h
 (`k` the 1-based ring step, so the shift compounds: ring `k` is `-0.005 k (k+1)` sextants
 from ring 0), wraps into `0..6` and converts back (`0x08936ff4` is the seven-case
 switch, standard). A grey colour has no hue, so all ten are equal: Vineta K's ten colour
-entries read `(0.7107, 0.7107, 0.7107, 1.0)` live. **The hue path is a static read** (confidence 70);
-the six coloured circuits (Modesto Heights `(1, 0.6, 0)`, ...) were not run live.
+entries read `(0.7107, 0.7107, 0.7107, 1.0)` live. **Measured live on Modesto Heights** (`(1, 0.6, 0)`, hue `0.6`): the ten greens read `0.60, 0.59, 0.57,
+0.54, 0.50, 0.45, 0.39, 0.32, 0.24, 0.15`, exactly `0.6 - 0.005 k (k+1)` (confidence 90).
 
 ### `FxLensflare_Draw` (`0x08937200`)
 
@@ -140,7 +140,7 @@ the ten live quads. The state it sets, confirmed against the recorded GE list (t
 | `TEXFORMAT 0xC3` | `5` | 8-bit indexed, CLUT `RGBA8888` (`CLUTMODE 0xFF03`) |
 | `TEXSIZE0` | `0x606` | 64 x 64 |
 | `TFILTER 0xC6` | `0x107` | minify mipmap-linear, magnify linear |
-| `TFUNC 0xC9` | never written in the list | engine default |
+| `TFUNC 0xC9` | never written; the dump's start snapshot holds `0x000100` | modulate, texture alpha used (RGBA), 85 |
 | `PROJ` | `diag(0.5625, 1, -1)` | the ortho matrix `FUN_08a30a98(-16/9, 16/9, -1, 1, -1, 1)` |
 
 Which wrapper is which (`0x088ede58` disable, `0x088edb84` enable, `0x088f08dc`
