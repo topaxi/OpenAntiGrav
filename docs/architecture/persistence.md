@@ -371,3 +371,19 @@ in place of the display-only lock-glyph shortcut it used to reuse for the
 purpose. See [race-campaign.md](../formats/race-campaign.md) and
 `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..Grid14:
 what the gate actually evaluates".
+
+## The browsed campaign difficulty (2026-10-26)
+
+The rung a player last stepped to on the campaign's cell screen (the `AI
+difficulty` / `DifficultyButton` row, Square on the pad, a click on HD) is a
+`[[campaign_difficulty]]` table in `records.toml`: one row per campaign title
+(`title` is `oag_game::records::campaign_title`, lower-cased, so `wipeout
+pulse` and `wipeout hd` never share a rung; HD and Fury share one). It is written
+the moment the rung changes (`Session::handle_campaign`), not on Confirm, and
+read when a cell screen opens (`oag_game::campaign::with_opening_difficulty`),
+beating the title's fresh-profile default (Pulse Medium, HD/Fury Easy). A file
+with no such table opens on the default. Checked on Pulse (PSP EU) and HD in
+a real session: change the rung, quit, relaunch, the screen opens on it.
+Pulse has no pointer route for the button (pad/keyboard only, unchanged).
+Omega draws HD's screen through the same stage and takes the same path (not
+walked); Pure and 2048 have no cell screen with a rung.

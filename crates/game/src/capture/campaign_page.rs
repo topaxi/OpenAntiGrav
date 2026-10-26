@@ -112,21 +112,7 @@ impl FlyerShot {
     }
 }
 
-use crate::unlock::to_campaign_medal;
-
-/// [`to_campaign_medal`]'s own sibling, for
-/// [`crate::records::CampaignRecord::best_difficulty`] - **HD only**, redone
-/// here rather than shared for the identical reason (the binary crate and
-/// the library crate share nothing).
-fn to_campaign_difficulty(
-    difficulty: crate::records::Difficulty,
-) -> oag_tables::race_campaign::Difficulty {
-    match difficulty {
-        crate::records::Difficulty::Easy => oag_tables::race_campaign::Difficulty::Easy,
-        crate::records::Difficulty::Medium => oag_tables::race_campaign::Difficulty::Medium,
-        crate::records::Difficulty::Hard => oag_tables::race_campaign::Difficulty::Hard,
-    }
-}
+use crate::unlock::{to_campaign_difficulty, to_campaign_medal};
 
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
@@ -362,9 +348,13 @@ pub(super) fn campaign_page(
                 // `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
-                let model = oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of)
-                    .with_difficulty(&difficulty_of)
-                    .with_default_difficulty(oag_tables::race_campaign::Difficulty::Easy);
+                let model = crate::campaign::with_opening_difficulty(
+                    oag_ui_screens::campaign::CellSelection::with_medals(cells, &medal_of)
+                        .with_difficulty(&difficulty_of),
+                    records,
+                    &campaign_title,
+                    true,
+                );
                 let grid_summary =
                     grid.map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
                         oag_ui_screens::campaign::GridSummary::from_grid_with_medals(

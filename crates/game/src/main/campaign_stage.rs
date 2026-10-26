@@ -15,18 +15,8 @@
 use oag_tables::race_campaign;
 use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 
-use oag_game::unlock::{campaign_medal_of, to_campaign_medal};
-
-/// [`to_campaign_medal`]'s own sibling, for
-/// `oag_game::records::CampaignRecord::best_difficulty` - **HD only**;
-/// every Pulse cell's own row never has one to convert.
-fn to_campaign_difficulty(difficulty: oag_game::records::Difficulty) -> race_campaign::Difficulty {
-    match difficulty {
-        oag_game::records::Difficulty::Easy => race_campaign::Difficulty::Easy,
-        oag_game::records::Difficulty::Medium => race_campaign::Difficulty::Medium,
-        oag_game::records::Difficulty::Hard => race_campaign::Difficulty::Hard,
-    }
-}
+use oag_game::campaign::with_opening_difficulty;
+use oag_game::unlock::{campaign_medal_of, to_campaign_difficulty, to_campaign_medal};
 
 /// One open campaign screen: `Campaign Selection` (HD only), `Grid
 /// Selection`, or `Cell Selection` over one of its tiers.
@@ -380,6 +370,24 @@ impl CampaignStage {
         oag_game::records::ticker_tips(&self.strings, &self.records)
     }
 
+    /// Keeps `difficulty` as this title's browsed rung in the stage's copy of
+    /// the store, so a cell screen opened later in the same visit starts on
+    /// it; returns the title key and the record form for the caller to
+    /// persist in the session's store.
+    pub(crate) fn remember_difficulty(
+        &mut self,
+        difficulty: race_campaign::Difficulty,
+    ) -> (String, oag_game::records::Difficulty) {
+        let stored = match difficulty {
+            race_campaign::Difficulty::Easy => oag_game::records::Difficulty::Easy,
+            race_campaign::Difficulty::Medium => oag_game::records::Difficulty::Medium,
+            race_campaign::Difficulty::Hard => oag_game::records::Difficulty::Hard,
+        };
+        self.records
+            .set_campaign_difficulty(&self.campaign_title, stored);
+        (self.campaign_title.clone(), stored)
+    }
+
     /// Whether this is Wipeout HD/Fury's own campaign - what
     /// `MenuStage::render`/`session::pointer::campaign_pointer` dispatch
     /// draw/pointer functions on. See [`Self::title`]'s own doc.
@@ -599,7 +607,7 @@ impl CampaignStage {
         let campaign_title = &self.campaign_title;
         let records = &self.records;
         let by_name = cells.clone();
-        let mut model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
+        let model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
             cells,
             &|name| {
                 records
@@ -615,16 +623,8 @@ impl CampaignStage {
                 .best_difficulty
                 .map(to_campaign_difficulty)
         });
-        // HD/Fury's own fresh-profile default rung is `Easy`, not Pulse's
-        // `Medium` - see `oag_ui_screens::campaign::CellSelection::difficulty`'s own
-        // doc for the RPCS3 measurement. This only sets the *starting*
-        // browsed rung; a `records.campaign_medal` hit for the currently
-        // selected cell (not modelled here at all - this is the initial
-        // arrival value, not per-cell) would still need its own reading, the
-        // same way `with_difficulty` above is per-cell already.
-        if self.is_hd() {
-            model = model.with_default_difficulty(race_campaign::Difficulty::Easy);
-        }
+        let model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
+        let mut model = model;
         self.cell_cursor.restore(&mut model);
         self.screen = Screen::Cell { model, which };
         true

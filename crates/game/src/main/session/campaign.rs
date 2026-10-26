@@ -284,7 +284,17 @@ impl Session {
                 // already moved the model's own state before this event
                 // reached here. See `oag_ui_screens::campaign::Event::DifficultyChanged`'s
                 // own doc.
-                (_, Event::Moved | Event::Help | Event::DifficultyChanged) => {}
+                (_, Event::Moved | Event::Help) => {}
+                // The rung is the player's, so it persists on the change
+                // itself (modern saves), per title, for the next visit.
+                (Screen::Cell { model, .. }, Event::DifficultyChanged) => {
+                    let (title, stored) = campaign.remember_difficulty(model.difficulty());
+                    self.records.set_campaign_difficulty(&title, stored);
+                    if let Err(e) = oag_game::records::save(&self.records) {
+                        warn!("could not save the campaign difficulty: {e:#}");
+                    }
+                }
+                (_, Event::DifficultyChanged) => {}
             }
         }
         if let Some(cell) = confirmed_cell {
