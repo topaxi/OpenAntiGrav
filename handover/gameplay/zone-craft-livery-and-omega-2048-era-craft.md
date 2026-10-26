@@ -32,6 +32,9 @@ blocks differ).
 - **The Zone loyalty credit is read, not watched**: a finished Zone race's EndRace row was not walked
   (a Zone race is long on a software renderer). The seams are tested: the picked team reaches
   `race_options.team`, which `Records::record_loyalty` keys on.
+- **What a Zone `Team Selection` leaves for the next normal race is untraced**: the original registers the
+  Zone model's `zone01` as `FE_TeamModel` (`FUN_088ea7bc`). Ours leaves the saved model and skin alone on a
+  row the mode fixes (Zone, an Eliminator race; `session::picker::livery`), chosen, not measured.
 - 2048-era and 2048-native craft author no zone livery; the original's fallback
   (`Zoneship_Faisar` literal, entry `+0x1ac`/`+0x218`) was not read, so they keep
   the default skin. Whether the original paints them Feisar is unread.
