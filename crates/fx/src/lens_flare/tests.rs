@@ -1,7 +1,9 @@
 use super::*;
+use oag_core::math::camera;
 
 /// Vineta K's live frame (`docs/rendering/lens-flare.md`, "Live check"): the sun at NDC
 /// `(-0.4515, 0.4343)`, so `S = (-0.8026, 0.4343)`.
+#[allow(clippy::approx_constant)] // the measured sun position, not log10(e)
 const NDC: [f32; 2] = [-0.4515, 0.4343];
 
 fn live_rings() -> [Ring; RINGS] {
@@ -22,11 +24,11 @@ fn the_ten_centres_lie_on_the_line_through_the_screen_centre_at_the_measured_rat
         1.0, 0.8, 0.7, 0.55, 0.325, -0.0125, -0.51875, -1.278, -2.417, -4.126,
     ];
     for (k, (ring, ratio)) in live_rings().iter().zip(ratios).enumerate() {
-        for axis in 0..2 {
-            let want = NDC[axis] * ratio;
+        for (axis, ndc) in NDC.into_iter().enumerate() {
+            let want = ndc * ratio;
             // The ratios are read to three decimals off the vertex buffer.
             assert!(
-                (ring.centre[axis] - want).abs() < 0.002 * NDC[axis].abs() + 1e-4,
+                (ring.centre[axis] - want).abs() < 0.002 * ndc.abs() + 1e-4,
                 "ring {k} axis {axis}: {} vs {want}",
                 ring.centre[axis]
             );
@@ -86,8 +88,8 @@ fn the_hue_drifts_by_the_measured_amount() {
 }
 
 fn camera(look: Vec3) -> (Mat4, Mat4) {
-    let view = Mat4::look_to_rh(Vec3::ZERO, look, Vec3::Y);
-    let projection = Mat4::perspective_rh(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
+    let view = camera::look_at(Vec3::ZERO, look, Vec3::Y);
+    let projection = camera::perspective(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
     (view, projection)
 }
 
@@ -189,7 +191,7 @@ fn the_live_camera_gives_the_measured_intensity_and_sun_position() {
         Vec4::new(-96.187_54, -40.560_88, -53.592_377, 1.0),
     );
     // 60 degrees vertical on 16:9.
-    let projection = Mat4::perspective_rh(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
+    let projection = camera::perspective(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0);
     let sun = Vec3::new(-51.826, 12.774, 23.323).normalize();
     let placement = Placement::new(
         sun.into(),

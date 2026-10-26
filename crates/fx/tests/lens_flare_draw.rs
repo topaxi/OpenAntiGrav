@@ -7,7 +7,7 @@
 //!
 //! **Skips when there is no adapter.**
 
-use oag_core::math::{Mat4, Vec3};
+use oag_core::math::{Vec3, camera};
 use oag_fx::lens_flare::{Atlas, Placement, Random, pipeline::Pipeline};
 use oag_gpu::formats::SceneStore;
 use oag_mesh::mesh_render::DEPTH_FORMAT;
@@ -84,8 +84,8 @@ fn flare_over_black(depth: f32) -> Option<Vec<u8>> {
         multiview_mask: None,
     }));
     // A camera looking down -Z at a sun 20 degrees off axis: in the cone, on screen.
-    let view = Mat4::look_to_rh(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
-    let projection = Mat4::perspective_rh(60f32.to_radians(), 1.0, 0.1, 100.0);
+    let view = camera::look_at(Vec3::ZERO, Vec3::NEG_Z, Vec3::Y);
+    let projection = camera::perspective(60f32.to_radians(), 1.0, 0.1, 100.0);
     let sun = Vec3::new(-0.3, 0.2, -1.0).normalize();
     let placement = Placement::new(
         sun.into(),
