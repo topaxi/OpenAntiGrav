@@ -25,6 +25,9 @@ Ranked by visible area on the 1920x1080 frame (read off the pair images, each pa
    tower. Ours also draws Omega's own first grid (18 points, `01_TRACK` unresolved) for `grid-select` and `grid-select-hd`,
    neither of the original's three campaigns (2048 Cup, HD, Fury), and `campaign-select` refuses on Omega. Needs: the
    Omega campaign selector and the flyer card on Omega's source (HD's cards draw on HD).
+   **Do not confuse the HD and Fury campaigns**: the maintainer recalls (2026-10-26, from play, unverified) that only the
+   Fury campaign draws the red background rect; HD's does not. Check which campaign the original frame shows before
+   matching a panel, and pair each of Omega's three campaigns against its own original frame.
 2. **Omega Ship Select: hull and logo** (34 grey). Ours draws the hull about twice the original's size in another livery
    (dark teal and yellow against pale blue and yellow) and a ringed Feisar logo against the flat one; the cursor starts on
    the top hex where the original's fresh profile lands on the first unlocked craft.
