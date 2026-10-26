@@ -1,76 +1,26 @@
 # Member rules
 
-Every `/oag-drive` member reads this before anything else. The lead's brief
-supplies the lane-specific values used below: `<lane>` (worktree, branch and
-scratch name), `:9N` (your Xvfb display), any emulator ports, the other lanes
-you must not touch, and the gate baseline. If the brief is missing one of
-them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve from a member) rather than guessing.
+Every `/oag-drive` member reads this first. The brief supplies `<lane>`
+(worktree, branch, scratch name), `:9N` (your Xvfb display), emulator ports,
+lanes you must not touch, and the gate baseline. If one is missing, ask
+`team-lead` with `SendMessage` (`main` may not resolve from a member).
 
 ## Step zero
 
 1. `cd /home/topaxi/projects/OpenAntiGrav && git worktree add ../OpenAntiGrav-worktrees/<lane> -b <lane> main`
-2. From then on work ONLY inside `/home/topaxi/projects/OpenAntiGrav-worktrees/<lane>`:
-   `git merge main`, then `just link-data`.
-3. Never write into the main checkout, except your scratch directory
-   `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
-4. No forks, and no sub-agent that can write. A member fork once wrote into
-   the main checkout. **The one exception (maintainer, 2026-10-19): read-only
-   haiku helpers for scanning and aggregating docs, code, logs or captures.**
-   Spawn them with `subagent_type: "Explore"` (no Edit/Write tools) and
-   `model: "haiku"`; never `fork`, never a type that can edit. Give each one
-   absolute paths into **your worktree** (or `data/`), tell it to write
-   nothing and to return at most 15 lines, and check what it returns before
-   you act on it. Run them one at a time, short-lived. Nothing a helper says
-   is evidence until you have read the cited `path:line` yourself.
-5. Never use `git stash`. The stash list is shared by every worktree of the
-   repository, so `git stash pop` can apply another lane's changes onto your
-   tree (2026-10-13, `pulse-split-pages`). Commit work in progress on your own
-   branch instead.
+2. Work ONLY in `/home/topaxi/projects/OpenAntiGrav-worktrees/<lane>`: `git merge main`, then `just link-data`.
+3. Never write into the main checkout except your scratch dir `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
+4. No forks, no sub-agent that can write. **Exception (maintainer, 2026-10-19): read-only haiku helpers** for scanning docs, code, logs or captures: `subagent_type: "Explore"`, `model: "haiku"`, absolute paths into your worktree or `data/`, told to write nothing and return at most 15 lines. One at a time, short-lived. Nothing a helper says is evidence until you have read the cited `path:line`.
+5. Never `git stash`: the stash list is shared by all worktrees. Commit work in progress on your branch.
 
 ## Safety on a shared machine
 
-- **Display.** Run `oag-game` headless (`--screenshot`, `--dry-run`,
-  `--trace-out`) whenever you can. The same goes for `oag-view`: a probe flag
-  such as `--draws` without `--screenshot` still opens a window (once on
-  the maintainer's display for two minutes). Any windowed launch, emulators included,
-  uses this literal prefix inside your own Xvfb:
-  `env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:9N`.
-  `DISPLAY` alone is not enough: `WAYLAND_DISPLAY` is inherited and winit
-  prefers it, which has put member windows on the maintainer's desktop twice.
-  RADV cannot present on Xvfb (no DRI3) and draws black frames, so a windowed
-  `oag-game` there also needs software Vulkan:
-  `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json`. Expect 5-7 fps.
-  Before starting a display server on `:9N`, check it is free
-  (`test -e /tmp/.X11-unix/X9N || test -e /tmp/.X9N-lock` means taken): a
-  finished member's Xvfb has been left running before. If
-  your assigned number is taken, pick the next free one and tell the lead.
-  The maintainer's own session is `:0` (xwayland-satellite); never touch it.
-  Stop the Xvfb you started, by its PID, before you report.
-- **`--race` skips the front end.** Anything built by the front-end flow
-  (the EndRace screens, campaign state) never exists in a `--race` run. Walk
-  the menus instead, or use `--menu-page` for a still.
-- **Scope.** Stop after the steps your brief requires and gate. Stretch
-  goals come only after the gate is green, and only if the brief lists them.
-  A long wait on a race that will not finish is a signal to stop and find a
-  shorter path, not to wait longer.
-- **Profile.** Every `oag-game` run, headless or windowed, sets
-  `XDG_CONFIG_HOME` (and `XDG_DATA_HOME`/`XDG_STATE_HOME`) to a directory
-  under your scratch dir. Progress, records, ghosts and settings persist
-  automatically, so a run on the default `~/.config/oag` writes into the
-  maintainer's own saves; a member's windowed walk once shared it.
-- **Unlockables.** A debug/dev build unlocks everything by default
-  (`[dev] unlock_everything`, absent means on; release builds ignore it).
-  When you build or debug anything locked - loyalty, craft variants, HUD
-  Style skins, circuits, campaign cells - put `[dev]` /
-  `unlock_everything = false` in your own profile's `settings.toml` first,
-  or every lock reads open and the check proves nothing.
-- **Audio.** `oag-game` always gets `--no-audio`; emulators run muted. Verify
-  sound by writing WAV and inspecting it, never through the speakers. The
-  maintainer works on this host by default, so nothing a member starts may
-  make a sound. **Waydroid counts**: the Android app has no `--no-audio` and
-  plays through the host, which happened while members tested the APK. Before
-  every launch in Waydroid (and after any Waydroid restart) silence both layers,
-  and check both read silent:
+- **Display.** Run `oag-game` headless (`--screenshot`, `--dry-run`, `--trace-out`) when you can. `oag-view` too: a probe flag like `--draws` without `--screenshot` still opens a window. Any windowed launch (emulators included) uses this literal prefix inside your own Xvfb: `env -u WAYLAND_DISPLAY WINIT_UNIX_BACKEND=x11 DISPLAY=:9N` (`DISPLAY` alone lets winit pick the inherited Wayland display and put the window on the maintainer's desktop). RADV cannot present on Xvfb, so a windowed `oag-game` there also needs `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json` (5-7 fps). Before starting a display on `:9N`, check it is free (`test -e /tmp/.X11-unix/X9N || test -e /tmp/.X9N-lock` means taken); if taken, pick the next free one and tell the lead. Never touch `:0`. Stop your Xvfb by PID before you report.
+- **`--race` skips the front end**: anything the front-end flow builds (EndRace screens, campaign state) never exists in a `--race` run. Walk the menus, or use `--menu-page` for a still.
+- **Scope.** Do what the brief requires, then gate. Stretch goals only after a green gate and only if the brief lists them. A wait on a race that will not finish is a signal to find a shorter path.
+- **Profile.** Every `oag-game` run sets `XDG_CONFIG_HOME`, `XDG_DATA_HOME` and `XDG_STATE_HOME` under your scratch dir; the default `~/.config/oag` is the maintainer's saves.
+- **Unlockables.** Debug builds unlock everything (`[dev] unlock_everything`, absent means on; release ignores it). When you build or debug anything locked (loyalty, craft variants, HUD Style skins, circuits, campaign cells), set `[dev]` / `unlock_everything = false` in your profile's `settings.toml` first, or the check proves nothing.
+- **Audio.** `oag-game` always gets `--no-audio`; emulators run muted; verify sound with a WAV or log lines, never by ear. **Waydroid counts** (no `--no-audio`; it plays through the host). Before every Waydroid launch and after any restart, silence both layers and check both read silent; never raise the volume back:
 
   ```sh
   adb -s <waydroid-serial> shell cmd media_session volume --stream 3 --set 0
@@ -79,93 +29,30 @@ them, ask the lead with `SendMessage` to `team-lead` (`main` may not resolve fro
     | xargs -r -n1 -I{} pactl set-sink-input-mute {} 1
   ```
 
-  Never raise the stream volume back. Prove audio with log lines (device
-  opened, mixer running) or a WAV, not by ear.
-- **Processes.** Record the PID of everything you start, and kill only by
-  that PID. Never `pkill -f <pattern>`: one pattern kill took down every
-  member's `oag-game --race` run.
-- **Memory.** Run render loops, bisects and batch scripts sequentially, never
-  as a parallel fan-out, and cap any batch you start with `systemd-run --user
-  --scope -q -p MemoryMax=8G -p MemorySwapMax=0 <cmd>`. On 2026-10-22 the
-  machine ran out of memory twice with 986 and 1,588 `python3` processes alive.
-  The OOM killer took the lead's tmux session and `systemd --user` with them,
-  and every member died. If you see a `python3` count climbing, tell the lead
-  what spawned it.
-- **Never name a scratch script after a stdlib module** (`bisect.py`,
-  `random.py`, `test.py`, `json.py`, `math.py`, ...). Python puts the script's
-  own directory first on `sys.path`, so every other script run from that
-  directory imports yours instead of the stdlib. That was the cause of both
-  crashes above: a scratch `bisect.py` launched `python3 render.py`, whose
-  `import tempfile` pulls in `random` and then `bisect`, which imported the
-  scratch file, which launched `render.py` again. Use descriptive names
-  (`slot_bisect.py`), and run batches with `-p TasksMax=64` in the
-  `systemd-run` scope so a runaway dies alone.
-- **Profilers open windows too.** `heaptrack` launches `heaptrack_gui` on
-  the maintainer's display when `DISPLAY` is set (2026-10-19). Run every
-  profiler with `DISPLAY` and `WAYLAND_DISPLAY` unset (`env -u DISPLAY -u
-  WAYLAND_DISPLAY heaptrack ...`) and read its output with
-  `heaptrack_print`.
-- **Emulators.** Start your own instance (see "Waiting on an emulator capture" below; PPSSPP with its own `HOME` and
-  `XDG_CONFIG_HOME`, debugger port and display; RPCS3 with its own config
-  copy). Never attach to an instance another member started. PPSSPP returns
-  zeroed framebuffers to a capture unless its config sets
-  `[Graphics] SoftwareRenderer = True` (2026-10-11, `pulse-bloom`);
-  `scripts/ppsspp-start.sh` sets it since 2026-10-12, a hand-written config must too.
-  RPCS3 frames for a comparison need `Write Color Buffers: true` in the private
-  `config.yml` **and** in `custom_configs/config_BCES00664.yml`: the stock config has it
-  off, and with it off the original read about 1.74x too bright at a matched camera, which
-  was the whole of a "the original's hull is brighter" gap (2026-10-20, `hd-hull-brightness`).
-- **Ghidra.** When the GUI bridge is up it listens on `127.0.0.1:8089` and is
-  shared. Pass `program=` explicitly on every call (by path, e.g.
-  `/pulse/BOOT-psp-pulse-usa.BIN`, `/hdfury/EBOOT-ps3-hdfury-eu.elf`), and
-  never call `switch_program`. Headless `analyzeHeadless` works when no GUI
-  is up.
+- **Processes.** Record the PID of everything you start; kill only by PID. Never `pkill -f <pattern>` (it once killed every member's run).
+- **Memory.** Run render loops, bisects and batch scripts sequentially, never as a parallel fan-out. Cap any batch: `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 -p TasksMax=64 <cmd>` (986 and 1,588 runaway `python3` processes OOM-killed the lead's session on 2026-10-22). If you see a `python3` count climbing, tell the lead.
+- **Never name a scratch script after a stdlib module** (`bisect.py`, `random.py`, `test.py`, `json.py`, `math.py`): Python puts the script's directory first on `sys.path`, so other scripts import yours (the cause of that OOM, a fork bomb). Use descriptive names (`slot_bisect.py`).
+- **Profilers open windows.** Run them with `DISPLAY` and `WAYLAND_DISPLAY` unset (`env -u DISPLAY -u WAYLAND_DISPLAY heaptrack ...`), read with `heaptrack_print`.
+- **Emulators.** Start your own instance (recipes: `docs/reverse-engineering/emulator-recipes.md`): PPSSPP with its own `HOME`, `XDG_CONFIG_HOME`, debugger port and display; RPCS3 with its own config copy. Never attach to another member's. PPSSPP returns zeroed framebuffers unless its config has `[Graphics] SoftwareRenderer = True` (`scripts/ppsspp-start.sh` sets it; a hand-written config must). RPCS3 comparison frames need `Write Color Buffers: true` in the private `config.yml` **and** `custom_configs/config_BCES00664.yml` (off, the original reads about 1.74x too bright).
+- **Ghidra.** The GUI bridge is shared on `127.0.0.1:8089`. Pass `program=` explicitly on every call (by path, e.g. `/pulse/BOOT-psp-pulse-usa.BIN`, `/hdfury/EBOOT-ps3-hdfury-eu.elf`); never call `switch_program`. Headless `analyzeHeadless` works when no GUI is up.
 
 ## Waiting on an emulator capture
 
-Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
+Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
-- **Never poll a capture log for a success marker.** On 2026-10-08 that cost
-  about 9.6 h, 4 h of it in waits that hit the 10 minute tool ceiling, many on
-  runs that had stalled at a boot or a menu. A marker that never comes is a
-  wait with no end.
-- **Run the capture in the foreground under the watchdog**, with a timeout under
-  the tool ceiling (600000 ms):
-  `uv run --with evdev python3 scripts/emu-run.py --child-status <log-dir>/status.json -- python3 scripts/<capture>.py ...`.
-  It exits within 150 s of the last output (`STALLED ... last line ... child
-  stage`) and at 570 s overall; an RPCS3 `Session` also stops itself with
-  `STALLED at <stage>` (boot, `menu:<screen>`, loading, countdown, capture).
-  Read the stage it names; do not retry the same run unchanged.
-- **A run longer than ~9 minutes**: `emu-run.py --bg --status F -- ...`, then
-  `emu-run.py wait F` in a loop (it returns 4 while the run is healthy). Never end
-  a turn waiting for a notification.
-- **Keep the emulator running between captures.** Start it once
-  (`rpcs3-drive.py serve`, `scripts/ppsspp-start.sh`), set `OAG_RPCS3_ATTACH=1`,
-  and drive each next state from the current one: restart race, quit to Cell
-  Selection, save state, menu walk. Boot fresh only when the measurement needs the
-  boot. Build your private tree with `scripts/emu-env.sh`.
-- **Stop emulators by pid**: `rpcs3-drive.py stop` stops only the RPCS3 your own
-  `serve`/`Session` recorded (`--all` is for the maintainer's own machine, never
-  here); `ppsspp-start.sh <lane> stop` for PPSSPP. Never `pkill -x rpcs3`.
-- Save states live only under `data/saves/<title>/` and are never committed.
-- **`rpcs3-drive.py serve` needs a short `XDG_CACHE_HOME`** (e.g. `/tmp/oag-<lane>-cache`):
-  under a long scratch path the pad socket fails with `AF_UNIX path too long`. Run
-  its `uv` with `UV_CACHE_DIR=~/.cache/uv UV_OFFLINE=1` so the private `XDG_*` dirs
-  do not force a fresh download (found 2026-10-10).
+- **Never poll a capture log for a success marker** (it cost about 9.6 h on 2026-10-08).
+- **Run the capture in the foreground under the watchdog**, timeout under 600000 ms: `uv run --with evdev python3 scripts/emu-run.py --child-status <log-dir>/status.json -- python3 scripts/<capture>.py ...`. It exits within 150 s of the last output (`STALLED ... child stage`) and at 570 s overall; an RPCS3 `Session` stops itself with `STALLED at <stage>`. Read the stage; do not retry unchanged.
+- **Longer than ~9 minutes**: `emu-run.py --bg --status F -- ...`, then `emu-run.py wait F` in a loop (returns 4 while healthy).
+- **Keep the emulator running between captures**: start once (`rpcs3-drive.py serve`, `scripts/ppsspp-start.sh`), set `OAG_RPCS3_ATTACH=1`, drive the next state from the current one. Boot fresh only when the measurement needs the boot. Build your private tree with `scripts/emu-env.sh`.
+- **Stop emulators by pid**: `rpcs3-drive.py stop` (never `--all`; never `pkill -x rpcs3`), `ppsspp-start.sh <lane> stop`.
+- Save states live only under `data/saves/<title>/`, never committed.
+- `rpcs3-drive.py serve` needs a short `XDG_CACHE_HOME` (e.g. `/tmp/oag-<lane>-cache`; else `AF_UNIX path too long`) and its `uv` run with `UV_CACHE_DIR=~/.cache/uv UV_OFFLINE=1`.
 
 ## Build and gate
 
-- Build once. Avoid `--release` unless the lane needs it. On
-  `No space left on device` or `rustc-LLVM ERROR: IO failure on output stream`,
-  **stop and report**: these are not flaky errors, so don't retry.
-- **Run a new or changed test under a memory cap first**, before it goes
-  near the gate: `systemd-run --user --scope -q -p MemoryMax=8G -p
-  MemorySwapMax=0 cargo nextest run -p <crate> <test>`. An
-  unfinished `oag-post` test once reached 51 GB resident; the kernel's OOM
-  pressure killed two members and the lead's own session before the test
-  itself died. A capped run fails alone instead.
-- Gate before reporting, always through the shared lock, with the
-  **affected** gate:
+- Build once; avoid `--release` unless needed. On `No space left on device` or `rustc-LLVM ERROR: IO failure on output stream`, **stop and report**; do not retry.
+- **Run a new or changed test under a memory cap first**: `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 cargo nextest run -p <crate> <test>` (an unfinished test once hit 51 GB and the OOM killed two members and the lead).
+- Gate before reporting, always through the shared lock, with the **affected** gate:
 
   ```sh
   flock -o "$HOME/.cache/oag/gate.lock" just gate-affected
@@ -173,186 +60,53 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
     | tee /home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/test-data.log
   ```
 
-  Both run every check in full and the tests of the packages your branch
-  changed plus everything depending on them. They print what they selected
-  and why (`affected:` lines): **quote that selection in your report.** A
-  change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the
-  `justfile`, `.config/` or a `build.rs` makes them run the full suite on
-  their own; that is expected, not a bug. The lead runs the full `just` and
-  `test-data` once per merge batch. Run the full pair yourself only when your
-  brief says so.
+  Both run every check in full and the tests of the packages you changed plus their dependents. **Quote the printed `affected:` selection in your report.** A change to `oag-core`, a simulation crate, `Cargo.lock`, the toolchain, the `justfile`, `.config/` or a `build.rs` selects the full suite by itself; that is expected. The lead runs the full pair per merge batch; run it yourself only if the brief says so.
 
-  **On the notebook (Intel iGPU + 8 GB NVIDIA dGPU) run `test-data` on the
-  iGPU**: add `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` to the
-  `env` of the test-data line. On the NVIDIA card at the default thread count
-  HD weapon-scene tests fail with `wgpu error: Out of Memory`, a different
-  test each run; on the iGPU (system RAM) the full suite ran 8,690 of 8,690
-  green in 407 s (2026-10-15). The time ceilings are the desktop's: on the
-  notebook a red that is only `check-test-budget` time is green.
+  **Notebook (Intel iGPU + 8 GB NVIDIA): run `test-data` on the iGPU** by adding `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` to the `env` (the NVIDIA card fails HD weapon-scene tests with `wgpu error: Out of Memory`). Time ceilings are the desktop's: on the notebook a red that is only `check-test-budget` time is green.
 
-  **wgpu's GL backend (desktop GL and WebGL2) is best effort** (maintainer,
-  2026-10-15). It must never block progress on the default backends (Vulkan,
-  Metal, Dx12, WebGPU): a feature that GL cannot do is switched off on GL and
-  named in the loader report, not held back or reshaped for everyone. Do not
-  gate a change on a GL run; if GL breaks, say so in your report and move on.
+  **wgpu's GL backend is best effort** (maintainer, 2026-10-15). It must never block the default backends (Vulkan, Metal, Dx12, WebGPU): switch a feature GL cannot do off on GL and name it in the loader report. Do not gate on a GL run; if GL breaks, say so and move on.
 
-  **A render bench takes the same lock.** `just bench-render` (whole-race
-  rendering benchmark, `docs/tools/render-bench.md`) holds
-  `$HOME/.cache/oag/gate.lock` itself for the runs, so it measures on a quiet
-  machine and never overlaps a suite; do not wrap it in `flock` again, and never
-  run it from inside a gate or a gate inside it (the same lock twice is a
-  deadlock). `OAG_BENCH_NO_LOCK=1` is for a human on an idle machine, not a
-  member. Its numbers are relative: quote the load average the result file
-  records.
+  **A render bench takes the same lock itself** (`just bench-render`, `docs/tools/render-bench.md`): never wrap it in `flock`, never run it inside a gate or a gate inside it (same lock twice deadlocks), never set `OAG_BENCH_NO_LOCK=1`. Its numbers are relative: quote the load average the result file records.
 
-  Then check the exit status (`${pipestatus[1]}` in zsh, `${PIPESTATUS[0]}`
-  in bash) **in the same Bash call as the pipeline**: each tool call is a
-  fresh shell, so a separate `echo` prints blank (two members
-  could not read theirs). Append `; echo "rc=${pipestatus[1]}"` to the gate
-  command itself. Never pipe `test-data` into `tail`: it masks the exit code.
-  **The gate may sit for several minutes before it starts** because another
-  member holds the lock. That is correct, not a hang. Wait it out and never
-  fall back to running the gate outside the lock.
-- **Gate your branch as it is; do not merge `main` into it before the gate.**
-  The lead merges, runs `cargo check` and gates the merged batch, so a
-  member re-merging and re-gating every time `main` moved ran the same suite
-  several times over with two or three lanes open (maintainer, 2026-10-12).
-  Merge `main` into your branch only when the lead sends you back to resolve
-  a conflict or a red merge, then gate again.
-- A lane that changed only docs, `handover/` or `HANDOVER.md` runs
-  `just check-docs` (plus `check-names`, `check-handover` or `check-status`
-  when those files moved) instead of the gate (`gate-affected` would select
-  no tests for it anyway).
-- **A commit after your last gate that touches any `.rs` file, even one
-  test line or a doc comment, needs `just gate-affected` re-run before you
-  report.** A
-  "docs plus one test line" final commit once pushed
-  `race_ground_truth.rs` 5 lines over `check-size`'s ceiling, and `main` went
-  red. `just gate-affected` (without `test-data-affected`) is enough when no
-  logic changed.
-- The brief states the baseline failure count. Anything red beyond it is
-  yours.
-- **Never end a turn waiting for a background job to notify you.** No member
-  has ever been woken that way. Run long commands in the foreground with a
-  600000 ms timeout, or poll the job's output file yourself.
-- **No fine-grained Monitors** (maintainer, 2026-10-19). Every Monitor event
-  wakes you, and each turn you then end idle sends the lead an idle
-  notification, so a per-case or per-line Monitor wakes the lead on every
-  case. Watch only the event you actually need (the whole run or gate
-  finishing), or poll at intervals of 10 minutes or more.
+  Check the exit status **in the same Bash call as the pipeline** (each call is a fresh shell): append `; echo "rc=${pipestatus[1]}"` (zsh) or `${PIPESTATUS[0]}` (bash) to the gate command. Never pipe `test-data` into `tail` (it masks the exit code). **The gate may sit several minutes before it starts** because another member holds the lock; wait it out and never run the gate outside the lock.
+- **Gate your branch as it is; do not merge `main` into it first** (maintainer, 2026-10-12). Merge `main` only when the lead sends you back for a conflict or red merge, then gate again.
+- A docs/`handover/`/`HANDOVER.md`-only lane runs `just check-docs` (plus `check-names`, `check-handover`, `check-status` when those files moved) instead of the gate.
+- **A commit after your last gate that touches any `.rs` file, even a doc comment, needs `just gate-affected` re-run before you report** (a "docs plus one test line" commit once pushed a file over `check-size`'s ceiling and `main` went red).
+- The brief states the baseline failure count; anything red beyond it is yours.
+- **Never end a turn waiting for a background job to notify you**; no member has ever been woken that way. Run long commands in the foreground with a 600000 ms timeout, or poll the output file.
+- **No fine-grained Monitors** (maintainer, 2026-10-19): each event wakes you and your idle turn wakes the lead. Watch only the whole run or gate finishing, or poll at 10 minute intervals or more.
 
 ## Commits
 
-- **A `git diff` or `git show` whose output is applied, parsed or saved
-  takes `--no-ext-diff`**: `git diff --no-ext-diff A B -- crates/x > p.patch`.
-  The maintainer's git config sets `diff.external = difft`, which prints a
-  structural view, not a patch, so `git diff A B | git apply -R` fails with
-  "No valid patches in input" (2026-10-26, `talons-alongside`). Never change
-  that config: difft stays the tool for reading a diff by eye. `git apply -R`
-  also fails on a file later commits touched; use `--3way`, or revert only
-  the files you need (`git checkout A -- <path>`).
-- **Read `git diff --cached --stat` before every commit** and unstage
-  anything you did not mean to change. A member's commit once
-  silently deleted six committed examples that docs cite as reproducers.
-- Commit early and often. If pinentry blocks, use `git commit --no-gpg-sign`.
-  End every message with a `Co-Authored-By:` trailer naming your own model.
-  Never add a `Claude-Session:` line or any other session link (maintainer's
-  rule, also in `CLAUDE.md`).
-- Never merge into main. The lead merges.
-- Committed golden hashes are never edited to make a test pass. If behaviour
-  legitimately moves, regenerate from your own tree in a **separate** commit
-  that names the behaviour change.
+- **A `git diff`/`git show` whose output is applied, parsed or saved takes `--no-ext-diff`** (the maintainer's `diff.external = difft` prints a structural view, not a patch). Never change that config. `git apply -R` also fails on a file later commits touched; use `--3way` or `git checkout A -- <path>`.
+- **Read `git diff --cached --stat` before every commit** and unstage what you did not mean to change (a commit once silently deleted six examples that docs cite).
+- Commit early and often. If pinentry blocks, `git commit --no-gpg-sign`. End every message with a `Co-Authored-By:` trailer naming your own model; never a `Claude-Session:` line or other session link (maintainer's rule).
+- Never merge into main; the lead merges.
+- Committed golden hashes are never edited to make a test pass. If behaviour legitimately moves, regenerate from your tree in a **separate** commit naming the behaviour change.
 
 ## Project rules that bite members
 
-- **No compatibility re-exports.** None of this workspace's crates is
-  published, so when you move an item, update every call site in the same
-  change instead of leaving a `pub use old::path` behind. A re-export is
-  indirection with no consumer to protect (maintainer's decision).
-- **The maintainer may type into your pane directly.** Act on it like the
-  brief, and name it as the maintainer's instruction in your report.
-- **Never invent what the assets author.** Parse it and play it. If it won't
-  parse, draw or play nothing and say so in the loader report. Anything
-  genuinely chosen is labelled **chosen, not measured**, with no confidence
-  score; a score means measured off the original.
-- **A weapon change updates `docs/gameplay/weapon-lineage.md` in the same
-  change.** A lane that changes a weapon's law, tuning, AI use, visuals or
-  sound moves the matching cell there (measured with its evidence link,
-  inherited from X, chosen, absent, or not investigated), and a new
-  `Weapons`/`WeaponModels` field or effect trigger gets its row in "Checked
-  axes". `just check-weapon-lineage` (in the gate) fails on the checked part;
-  the aspect tables rely on you (maintainer, 2026-10-19: a Pulse law ran on HD
-  with HD's numbers and wrecked the field).
-- **A 2048 finding is checked against Omega, and the reverse, in the same
-  change** (CLAUDE.md, "A 2048 finding is checked against Omega"). Record
-  `ported`, `checked, applies, not wired`, `checked, differs` or `not
-  checkable` in the doc page and say which in your report. A quick census and
-  reader run, not a second lane.
-- **Keep a reader change from switching on what your lane did not measure.**
-  If a fix to a shared lookup (a bank's names, a table, an effect list)
-  suddenly makes cues, effects or draws resolve beyond your lane, scope the
-  change to your lane's caller and leave the rest as they were. A
-  hashed bank-name lookup once turned on every 2048 sound cue: the
-  engine was right, but the player heard noise and a perfect-lap
-  announcement mid-lap. "Load report went from 42 missing to 6" is a warning,
-  not a win.
-- `fd` and `rg` return nothing under `data/` unless you pass `--no-ignore`.
-- Judge as a player would: more than one frame, at the size a player sees,
-  read with the Read tool. A green test is not a picture.
+- **No compatibility re-exports.** No crate is published: when you move an item, update every call site in the same change; no `pub use old::path` (maintainer).
+- **The maintainer may type into your pane directly.** Act on it like the brief and name it as the maintainer's instruction in your report.
+- **Never invent what the assets author** (CLAUDE.md). Parse it and play it; if it will not parse, draw or play nothing and say so in the loader report. Anything genuinely chosen is labelled **chosen, not measured**, with no confidence score; a score means measured off the original.
+- **A weapon change updates `docs/gameplay/weapon-lineage.md` in the same change** (law, tuning, AI use, visuals or sound): move the matching cell (measured with evidence link, inherited from X, chosen, absent, not investigated); a new `Weapons`/`WeaponModels` field or effect trigger gets its row in "Checked axes". `just check-weapon-lineage` checks only part of this (maintainer, 2026-10-19: a Pulse law ran on HD with HD's numbers and wrecked the field).
+- **A 2048 finding is checked against Omega, and the reverse, in the same change** (CLAUDE.md). Record `ported`, `checked, applies, not wired`, `checked, differs` or `not checkable` in the doc page and your report. A census and reader run, not a second lane.
+- **Keep a reader change from switching on what your lane did not measure.** If a fix to a shared lookup (bank names, a table, an effect list) makes cues, effects or draws resolve beyond your lane, scope it to your lane's caller (a hashed bank-name lookup once turned on every 2048 sound cue and a perfect-lap announcement played mid-lap). "Load report went from 42 missing to 6" is a warning, not a win.
+- `fd` and `rg` return nothing under `data/` without `--no-ignore`.
+- Judge as a player would: more than one frame, at the size a player sees, read with the Read tool. A green test is not a picture.
 - A new front-end screen ships with mouse/pointer support in the same change.
-- A new `menu.toml` row needs its `string_id` and its `english.toml` text.
-- Findings go into `docs/` and the lane's `handover/` thread, not only into
-  scratch. Strike what closed; delete a thread file and its `HANDOVER.md`
-  index line together once its work has fully landed. Nothing outside
-  `handover/` and `HANDOVER.md` may link into `handover/`.
-- **No tracked file may cite `data/scratch/`** (maintainer, 2026-10-09).
-  Scratch is untracked and gets deleted wholesale once a lane merges, so a
-  doc, thread, comment, test or script pointing into it is a dead reference.
-  Put the evidence itself in the doc (the numbers, the table, the command
-  that reproduces it); a tool worth keeping moves to `scripts/`; a reference
-  frame worth keeping moves to `data/reference/` and is cited there.
-- **Never commit `docs/overview/status.md`.** Its RE-coverage block is generated, and
-  two lanes regenerating it conflicts at nearly every merge (14 of 88 commits to it were
-  bare regenerations by 2026-10-21). Run `just gen-status` so your gate passes, then
-  `git checkout docs/overview/status.md` before committing; the lead regenerates it once
-  per merge. This overrides any agent file that says to commit `gen-status`.
-- **Never write a compare-page manifest (`data/reference/compare-page/*.toml`) from your
-  worktree.** `data/` there is a symlink into the main checkout, and on 2026-10-21 a member's
-  `race-shots.toml` pointed into its own worktree and broke the maintainer's page once the
-  worktree was reaped. Keep re-made pairs and manifests in your scratch directory and give the
-  lead the commands to adopt them.
-- Avoid em and en dashes in anything you write, and write no decorative
-  separator comments.
+- A new `menu.toml` row needs its `string_id` and `english.toml` text.
+- Findings go into `docs/` and the lane's `handover/` thread, not only scratch. Strike what closed; delete a thread file and its `HANDOVER.md` index line together once it has fully landed. Nothing outside `handover/` and `HANDOVER.md` may link into `handover/`.
+- **No tracked file may cite `data/scratch/`** (maintainer, 2026-10-09): scratch is deleted after a lane merges. Put the evidence in the doc (numbers, table, reproducing command); a tool worth keeping goes to `scripts/`; a reference frame worth keeping goes to `data/reference/`.
+- **Never commit `docs/overview/status.md`.** Run `just gen-status` so your gate passes, then `git checkout docs/overview/status.md` before committing; the lead regenerates it per merge. This overrides any agent file that says to commit `gen-status`.
+- **Never write a compare-page manifest (`data/reference/compare-page/*.toml`) from your worktree**: `data/` there is a symlink into the main checkout, and a manifest pointing into a reaped worktree broke the maintainer's page (2026-10-21). Keep re-made pairs and manifests in scratch and give the lead the commands to adopt them.
+- **The original's Autopilot is not a physics reference** (maintainer, 2026-10-20). Never measure a physics law, jump, landing, wall response or speed curve off an Autopilot run. Drive the original with player input (held throttle, scripted stick via the emulator's virtual pad), run ours under the same script, aligned by track position. Autopilot is fine for getting somewhere (a mid-pack screenshot position, a state to start from).
+- No em or en dashes in anything you write; no decorative separator comments.
 
 ## Report
 
-Write full findings to
-`/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`. Include
-commits per step, the gate result you watched finish (counts and exit status),
-any regression gate quoted before and after, screenshot paths, and what is
-still open. Quote your brief's claim and say whether it came out true, false or
-unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines: long returns can
-silently fail to arrive. A negative result reported honestly is a good
-outcome, and "I could not determine X, here is its address" is a result.
+Write full findings to `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`: commits per step, the gate result you watched finish (counts and exit status), any regression gate quoted before and after, screenshot paths, what is still open. Quote your brief's claim and say whether it came out true, false or unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines (long returns can silently fail to arrive). A negative result reported honestly is a good outcome; "I could not determine X, here is its address" is a result.
 
-**Your report is the end of the lane.** After you send it, do not commit,
-merge main into your branch, or edit your worktree unless the lead sends you
-back. The lead merges and removes your worktree as soon as the report arrives.
-A member once kept committing after its report and was mid-way
-through merging main when its worktree was removed. Finish everything first,
-then report.
+**Your report is the end of the lane.** After sending it, do not commit, merge main or edit your worktree unless the lead sends you back; the lead removes the worktree as soon as the report arrives. Finish everything first.
 
-**If a message wakes you after your report**, your worktree is gone or belongs
-to someone else now. Answer in text only. Never `cd` into another lane's
-worktree, rename a branch or commit. A woken member once did all three inside
-a running lane's worktree. If the message asks for more work, say so and stop:
-the lead spawns a fresh member for it.
-
-**The original's Autopilot is not a physics reference (maintainer, 2026-10-20).**
-"Autopilot does not follow the actual physics and cannot be relied on." Never
-measure a physics law, a jump, a landing, a wall response or a speed curve off a
-run the original's Autopilot flies. Drive the original with player input (a held
-throttle and a scripted stick through the emulator's virtual pad) and run ours
-under the same input script, aligned by track position. The Autopilot is fine for
-getting somewhere: reaching a mid-pack position for a screenshot, or a state to
-start a measurement from.
+**If a message wakes you after your report**, your worktree is gone or belongs to someone else. Answer in text only: never `cd` into another lane's worktree, rename a branch or commit. If it asks for more work, say so and stop; the lead spawns a fresh member.
