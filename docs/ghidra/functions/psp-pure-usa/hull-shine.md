@@ -110,11 +110,31 @@ track band reads -22 and -8 too), not the hull.
 ## The circuits
 
 Pure draws its circuits' chrome-map pass too: the four lists carry 57, 36, 31 and 28 mode-2 PRIMs
-away from the craft (Vineta K, Chenghou, Blue Ridge, Modesto), all `BLENDMODE 0xaa`. Ours draws
-the circuit pass on Pulse's PSP only (`oag_raceplay::load`, `pulse_psp && track_shine`) and
-never weights it. **Checked, applies, not wired**, on both titles: the circuit batches carry the
-bit as well (Pulse's 3,446 weighted batches), and wiring the weight there would move Pulse's
-pairs.
+away from the craft (Vineta K, Chenghou, Blue Ridge, Modesto), all `BLENDMODE 0xaa`. The circuit batches carry the
+alpha-weight bit as the hull's do. **Wired for Pure** (lane `pure-chrome-map`): `Looks::track_shine` draws
+`oag_render::shine::build_track` and `Looks::track_shine_weighted` keeps each weighted batch's pairing of chrome
+map and its own texture, so `shade.wesl` multiplies the chrome map by that texture's alpha (the hull's
+`PROGRAM_SHINE_MASK` path). Both are Pure `Measured` on the PSP.
+
+Region MAD against the original (grey, 480x272), pass off (`--no-track-shine`) to on:
+
+| Pair | Frame | Sky band | Track band | Box |
+| --- | --- | --- | --- | --- |
+| Vineta K | 11.39 -> 8.82 | 12.16 -> 6.16 | 9.84 -> 8.45 | windows (320,45,160x105): 20.7 -> 6.5 |
+| Chenghou | 9.36 -> 8.72 | 8.83 -> 6.94 | 7.42 -> 7.29 | |
+| Blue Ridge | 8.57 -> 8.12 | 7.01 -> 6.11 | 7.09 -> 6.65 | |
+| Modesto | 9.19 -> 8.96 | 10.79 -> 10.16 | 6.02 -> 5.94 | |
+
+Vineta's window box mean reads 89.9 against the original's 89.2 (74.4 before). The weighted result was not
+separated from the unweighted one on these pairs (only the pass on/off was scored). Whether the original
+weights it was read from the batch bit and the hull's law, not from a circuit-pass-only replay.
+
+**Pulse: left unweighted, open.** Pulse PSP's circuit pass still draws unweighted (`track_shine_weighted`
+unread): 3 Pulse pairs (Talons white, Metropia black, Vertica white) render AE 0 before and after. No Pulse GE
+list was recorded for the circuit's ordinary-pass blend (`0x2a` against `0xaa`), so weighting Pulse's 3,446
+batches would be a guess. To decide: record a Pulse GE list with `scripts/psp-ge-dump.py` and read the
+ordinary pass's `BLENDMODE` at a circuit mode-2 PRIM. **Checked against Omega/2048:** not applicable, a PSP
+`.vex` rule; HD/2048/Omega circuits author no `TEXMAPMODE` pass.
 
 ## The sky
 

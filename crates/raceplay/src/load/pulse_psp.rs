@@ -29,6 +29,7 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 pub(super) fn finish(
     loaded: &mut Loaded,
     (pulse_psp, circuit_fx, road_ripple, hull_lights): (bool, bool, bool, bool),
+    track_shine: bool,
     track_blob: &[u8],
     (archives, track): (&mut oag_assets::Archives, &str),
 ) {
@@ -53,28 +54,30 @@ pub(super) fn finish(
     if hull_lights {
         light_hulls(loaded, track_blob, &nodes);
     }
+    if track_shine {
+        loaded
+            .report
+            .push(match oag_render::shine::build_track(&loaded.track_model) {
+                Some(pass) => format!(
+                    "track shine: {} chrome-map batches drawn, {} left undrawn (animated nodes or \
+                 outside the opaque list)",
+                    pass.model.draws.len(),
+                    pass.skipped
+                ),
+                None if loaded.track_model.shine_draws.is_empty() => {
+                    "track shine: off, or the circuit authors none".into()
+                }
+                None => format!(
+                    "track shine: none drawn, {} batches left undrawn (animated nodes or outside \
+                 the opaque list)",
+                    loaded.track_model.shine_draws.len()
+                ),
+            });
+    }
     if !pulse_psp {
         return;
     }
     super::glow_mask::stamp_models(loaded, false);
-    loaded
-        .report
-        .push(match oag_render::shine::build_track(&loaded.track_model) {
-            Some(pass) => format!(
-                "track shine: {} chrome-map batches drawn, {} left undrawn (animated nodes or \
-             outside the opaque list)",
-                pass.model.draws.len(),
-                pass.skipped
-            ),
-            None if loaded.track_model.shine_draws.is_empty() => {
-                "track shine: off, or the circuit authors none".into()
-            }
-            None => format!(
-                "track shine: none drawn, {} batches left undrawn (animated nodes or outside \
-             the opaque list)",
-                loaded.track_model.shine_draws.len()
-            ),
-        });
     loaded.report.push(
         "glow mask: the track, sky, pads, hulls, plumes, shields and weapon bodies stamp it as the \
          original's stencil does, a blended batch with the glow bits through a second draw"

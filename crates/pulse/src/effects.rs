@@ -104,6 +104,15 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The circuit's chrome-map pass, `oag_render::shine::build_track`, unweighted:
+    // Pulse's circuit batches carry the alpha-weight bit (3,446 on the PSP) and the
+    // original's treatment of them is unmeasured, so `track_shine_weighted` stays unread
+    // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "The circuits").
+    track_shine: Rule {
+        on: PSP,
+        origin: Origin::Measured,
+    },
+    track_shine_weighted: Rule::UNREAD,
     // GE lights, glow mask, quake: `scene-light.md`, `docs/rendering/glow-mask.md`.
     measured_draws: Rule {
         on: PSP,

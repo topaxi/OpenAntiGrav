@@ -1637,5 +1637,8 @@ lights are `ENV_BASIS_0`/`_1` to four places. One word differs: Pure's ordinary 
 the `*_shinemap` texture's alpha. Replays confirm it: an opaque CLUT turns the hull into an unmasked wash. Hull MAD
 33.8/27.2/20.5/15.7 to 20.6/14.5/12.7/5.6 (Vineta K, Chenghou, Blue Ridge, Modesto); three Pulse pairs render
 pixel-identical. Chenghou's sky cube, which has no vertex colours and no normals, now draws unlit at white as the
-GE does (frame MAD 20.6 to 13.1). Evidence and the open ends (the circuits' own chrome-map pass, the `249/255` light
-scale, Modesto's second directional): [`psp-pure-usa/hull-shine.md`](../ghidra/functions/psp-pure-usa/hull-shine.md).
+GE does (frame MAD 20.6 to 13.1). The circuits' own chrome-map pass draws on Pure too (`Looks::track_shine` and
+`track_shine_weighted`, 2026-10-26, lane `pure-chrome-map`): Vineta K's blue windows read 6.5 grey from the original in a
+160x105 box at (320,45), from 20.7 with the pass off; frame MAD 11.4/9.4/8.6/9.2 to 8.8/8.7/8.1/9.0 (Vineta K, Chenghou,
+Blue Ridge, Modesto); Pulse pairs unchanged. Evidence and the open ends (the `249/255` light scale, Modesto's second
+directional): [`psp-pure-usa/hull-shine.md`](../ghidra/functions/psp-pure-usa/hull-shine.md).

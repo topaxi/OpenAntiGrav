@@ -142,6 +142,18 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The circuits' chrome-map pass: the four recorded GE lists carry 57, 36, 31 and 28
+    // `TEXMAPMODE` 2 PRIMs off the craft, each batch's ordinary pass weighted by its own
+    // texture's alpha like the hull's
+    // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "The circuits").
+    track_shine: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
+    track_shine_weighted: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     ..Looks::unread(ShieldPalettes {
         ps2: ShieldPalette::Ps2Pulse,
         elsewhere: ShieldPalette::Pulse,

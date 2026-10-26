@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-10-26
-summary: "Pure render: canopy, sky, effect names and the flare closed; circuit chrome-map pass, 250 light scale, Modesto light, HUD open"
+summary: "Pure render: canopy, sky, effect names, flare and circuit chrome-map pass closed; 250 light scale, Modesto light, Pulse circuit weighting, HUD open"
 ---
 
 # Pure's render: what the pairs still show, ranked
@@ -65,7 +65,9 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    Chenghou's -10 residual is mostly its sky cube, closed in `pure-render-fidelity-2`. The cube has no vertex
    colours or normals, and the GE draws it unlit at white; ours ran it through the stand-in rig (top band MAD
    49.8 -> 15.5). Re-score the pairs with both lanes merged. Left, from the same four GE lists:
-   - **The circuits' chrome-map pass.** Pure draws 57, 36, 31 and 28 `TEXMAPMODE` 2 PRIMs off the craft
+   - ~~**The circuits' chrome-map pass.**~~ Closed for Pure by `pure-chrome-map` (`hull-shine.md`, "The circuits"; Vineta
+     windows 20.7 -> 6.5 grey). Pulse's circuit weighting stays open: record a Pulse GE list and read the ordinary-pass
+     `BLENDMODE` first. Original text: Pure draws 57, 36, 31 and 28 `TEXMAPMODE` 2 PRIMs off the craft
      (Vineta's blue windows are black in ours). Ours draws the circuit pass on Pulse's PSP only
      (`oag_raceplay::load`, `pulse_psp && track_shine`). The circuit batches carry the alpha-weight bit as well
      (Pulse PSP 3,446 weighted batches), and `oag_render::shine::build_track` ignores it. Wiring it on Pure is
@@ -85,9 +87,8 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 
 ## Next Steps
 
-1. Item 5, first bullet: let Pure draw `build_track` (Title data, not `pulse_psp`) and weight its
-   `header_flags & 0x02` batches as the hull's are (`oag_mesh::mesh::shine_pass::masked_slot` already pairs them).
-   Score Vineta K's windows against the pair.
+1. Pulse circuit weighting: record a Pulse GE list, read the ordinary-pass `BLENDMODE` at a circuit mode-2 PRIM, then
+   set `track_shine_weighted` on Pulse and re-score the Pulse pairs.
 2. To measure: record a GE list with `scripts/psp-ge-dump.py dump` on the pair's own save state
    (`data/saves/pure-psp/*-restart.ppst`, loaded through `scripts/psp-state.py load`). Replay an edited copy by
    opening the `.ppdmp` in PPSSPP itself; the edits that answered this lane are a register rewritten at a PRIM

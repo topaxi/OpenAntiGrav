@@ -737,6 +737,16 @@ pub struct Looks {
     /// archives also carry `lensflare_*` nodes, so a node alone must not switch it on.
     /// Keyed on the race's own archive.
     pub lens_flare: Rule,
+    /// A circuit's own chrome-map pass: its `pass_mask & 0x2000` batches drawn a second
+    /// time under `TEXMAPMODE` 2 with the circuit's second texture
+    /// (`oag_render::shine::build_track`). Keyed on the race's own archive.
+    pub track_shine: Rule,
+    /// The circuit's chrome-map batches carrying the alpha-weight bit
+    /// (`header_flags & 0x02`) weight the pass by their own texture's alpha, as the hull's
+    /// extra pass does. Only where the weighted pass was measured on the circuit; a title
+    /// whose circuit pass is drawn unweighted leaves this unread. Keyed on the race's own
+    /// archive.
+    pub track_shine_weighted: Rule,
     /// The shield tint.
     pub shield_palette: ShieldPalettes,
     /// The front end never waits at its language picker on a fresh run: the
@@ -818,6 +828,8 @@ impl Looks {
             road_ripple: Rule::UNREAD,
             hull_lights: Rule::UNREAD,
             lens_flare: Rule::UNREAD,
+            track_shine: Rule::UNREAD,
+            track_shine_weighted: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
             lit_output_halved: Rule::UNREAD,
