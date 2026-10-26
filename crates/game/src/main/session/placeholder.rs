@@ -389,7 +389,12 @@ mod tests {
                 oag_2048::names::TRACK_PLUGIN_DEFINITION,
             ],
         );
-        assert_eq!(documents.len(), 2, "both of 2048's own plugins should read");
+        // Each mounted downloadable package adds the circuit list it carries.
+        assert_eq!(
+            documents.len(),
+            2 + archives.add_ons.len(),
+            "both of 2048's own plugins should read"
+        );
 
         let declared = oag_raceplay::catalogue::all_teams(&documents);
         assert!(!declared.is_empty(), "2048 ships a real roster");
