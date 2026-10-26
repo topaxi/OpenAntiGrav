@@ -69,6 +69,10 @@
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
   redundant per-frame uploads were removed (byte-identical) - see
   [`frame-thread-cpu.md`](frame-thread-cpu.md)
+- **Fullscreen queues a third image** (2026-10-26): a two-image swapchain (vsync `off`/`on`
+  queued one frame) ran a 120 Hz Mac at 40 fps fullscreen against 102 windowed, the wait in
+  `PRESENT`; a fullscreen surface now queues at least two frames - see
+  [`frame-pacing.md`](frame-pacing.md)
 - **4K and 8K cost, per pass and per title** (2026-10-19, RX 7800 XT): everything scales
   linearly with the pixels and defaults stay under 8 ms at 8K; the one outlier, Omega's circuit
   shading 3.7 fragments a pixel with no depth prepass, now has one (pipelined 8K 9.4 to 4.9 ms,
